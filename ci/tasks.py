@@ -22,6 +22,7 @@ SOURCE_PATHS = [
 ]
 RUFF_PATHS = [
     "ci",
+    "scripts",
     "support/runtime/src",
     "support/runtime/tests",
     "support/test_harness/src",

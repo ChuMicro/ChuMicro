@@ -24,6 +24,7 @@ line-length = 100
 target-version = "py311"
 src = [
     "ci",
+    "scripts",
     "support/runtime/src",
     "support/runtime/tests",
     "support/test_harness/src",

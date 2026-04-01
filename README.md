@@ -41,21 +41,17 @@ chumicro/
 
 ```zsh
 cd /path/to/chumicro
-python -m venv .venv
-source .venv/bin/activate
-python ci/tasks.py setup
+python scripts/prepare_workspace.py
 ```
 
-Verify required CI checks pass locally:
+This creates a virtual environment, installs dev dependencies, and runs lint + tests to verify. On Windows, unix-port steps are skipped with WSL2 guidance.
+
+After preparation, activate the environment and iterate:
 
 ```zsh
-python ci/tasks.py preflight
-```
-
-Run the full cross-runtime matrix (builds unix-port binaries on first run):
-
-```zsh
-python ci/tasks.py test-runtime-matrix
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+python ci/tasks.py preflight       # verify before pushing
+python ci/tasks.py test-runtime-matrix  # full cross-runtime tests
 ```
 
 ### Windows
