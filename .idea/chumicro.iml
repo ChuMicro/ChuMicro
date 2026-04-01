@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module type="PYTHON_MODULE" version="4">
+  <component name="NewModuleRootManager">
+    <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/support/runtime/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/support/runtime/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/support/test_harness/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/support/test_harness/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/sample/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/sample/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/sample/device_tests" isTestSource="true" />
+      <excludeFolder url="file://$MODULE_DIR$/.venv" />
+    </content>
+    <orderEntry type="jdk" jdkName="Python 3.14 (chumicro)" jdkType="Python SDK" />
+    <orderEntry type="sourceFolder" forTests="false" />
+  </component>
+</module>

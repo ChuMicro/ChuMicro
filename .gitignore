@@ -1,6 +1,9 @@
 .DS_Store
 .idea/*
+!.idea/chumicro.iml
+!.idea/modules.xml
 !.idea/runConfigurations/
+!.idea/inspectionProfiles/
 .venv/
 .tools/
 __pycache__/
