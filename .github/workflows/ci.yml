@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install tooling
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build pytest pytest-cov ruff
+
+      - name: Lint
+        run: |
+          python ci/tasks.py lint
+
+      - name: Run tests with coverage
+        run: |
+          python ci/tasks.py test-host
+
+      - name: Build sample package
+        run: |
+          python ci/tasks.py build-sample
+
+  micropython-compat:
+    name: MicroPython compatibility (advisory)
+    runs-on: ubuntu-latest
+    # Advisory means this job still runs and reports a real pass/fail signal,
+    # but it does not fail the overall workflow yet.
+    continue-on-error: true
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install unix-port build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libffi-dev pkg-config
+
+      - name: Run MicroPython compatibility smoke test
+        run: |
+          python ci/tasks.py test-micropython-compat
+
+  circuitpython-compat:
+    name: CircuitPython compatibility (advisory)
+    runs-on: ubuntu-latest
+    # Advisory means this job still runs and reports a real pass/fail signal,
+    # but it does not fail the overall workflow yet.
+    continue-on-error: true
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install unix-port build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libffi-dev pkg-config
+
+      - name: Run CircuitPython compatibility smoke test
+        run: |
+          python ci/tasks.py test-circuitpython-compat
+

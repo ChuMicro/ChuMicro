@@ -1,0 +1,38 @@
+[tool.pytest.ini_options]
+addopts = "-ra --strict-config --strict-markers"
+testpaths = [
+    "support/runtime/tests",
+    "support/test_harness/tests",
+    "sample/tests",
+]
+
+[tool.coverage.run]
+branch = true
+source = [
+    "support/runtime/src/chumicro_runtime",
+    "support/test_harness/src/chumicro_test_harness",
+    "sample/src/chumicro_sample",
+]
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+skip_covered = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = [
+    "ci",
+    "support/runtime/src",
+    "support/runtime/tests",
+    "support/test_harness/src",
+    "support/test_harness/tests",
+    "sample/src",
+    "sample/tests",
+    "sample/device_tests",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+

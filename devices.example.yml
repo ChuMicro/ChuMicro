@@ -1,0 +1,17 @@
+devices:
+  - id: sample-circuitpython-board
+    description: Example CircuitPython board entry for local manual device validation.
+    runtime: circuitpython
+    connection_type: serial
+    address: /dev/cu.usbmodemEXAMPLE
+    board_type: esp32s3
+    setup_command: null
+
+  - id: sample-micropython-board
+    description: Example MicroPython board entry for local manual device validation.
+    runtime: micropython
+    connection_type: serial
+    address: /dev/cu.usbserial-EXAMPLE
+    board_type: esp32s3
+    setup_command: null
+
