@@ -17,6 +17,7 @@
 - [ ] Add the first real board transport tooling once a manual device execution path needs to move beyond direct local runs.
 - [ ] Decide whether the next sample iteration should prove digital I/O immediately after the timing slice.
 - [ ] Close stale "Feedback requested" sections in workstreams that have been answered by subsequent decisions.
+- [ ] Refactor `ci/prepare_*.py` to expose importable `main()` functions so `scripts/run.py` can call them directly instead of via subprocess. Keep subprocess only for external tools (`ruff`, `pytest`, `build`, `make`, `micropython`).
 
 ## Blocked / waiting
 
