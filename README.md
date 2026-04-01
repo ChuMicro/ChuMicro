@@ -80,8 +80,15 @@ Create or reuse a virtual environment, then install the bootstrap tooling:
 
 ```zsh
 cd /path/to/chumicro
-python -m pip install -U pip
-python -m pip install pytest pytest-cov ruff
+python -m venv .venv
+source .venv/bin/activate
+python ci/tasks.py setup
+```
+
+Verify that required CI checks pass locally before pushing:
+
+```zsh
+python ci/tasks.py preflight
 ```
 
 ### Proposed default direction
@@ -126,7 +133,7 @@ python ci/tasks.py test-circuitpython-compat
 
 This CircuitPython path is still local-first rather than a required CI lane, but in this workspace on macOS the pinned upstream `10.1.4` unix-port build now completes and the shared timing smoke test passes.
 
-Run the currently proven CPython + MicroPython test matrix with one command:
+Run the full CPython + MicroPython + CircuitPython test matrix with one command:
 
 ```zsh
 cd /path/to/chumicro
@@ -137,17 +144,19 @@ python ci/tasks.py test-runtime-matrix
 
 The repository now exposes a small, explicit command surface in `ci/tasks.py` so humans, agents, and CI can use the same entrypoints:
 
+- `python ci/tasks.py setup` — install development dependencies into the active environment
 - `python ci/tasks.py lint`
 - `python ci/tasks.py test-host`
 - `python ci/tasks.py build-sample`
+- `python ci/tasks.py preflight` — run all required CI checks locally before pushing
 - `python ci/tasks.py prepare-micropython`
 - `python ci/tasks.py prepare-circuitpython`
 - `python ci/tasks.py test-micropython-compat`
-- `python ci/tasks.py test-runtime-matrix`
 - `python ci/tasks.py test-circuitpython-compat`
+- `python ci/tasks.py test-runtime-matrix` — run host tests + MicroPython + CircuitPython compat
 - `python ci/tasks.py test-device`
 
-The CPython, package-build, MicroPython, and local CircuitPython entrypoints are now all proven in this workspace. The device task remains a manual transport placeholder.
+The CPython, package-build, MicroPython, and local CircuitPython entrypoints are now all proven in this workspace. The `preflight` task mirrors required CI checks. The `test-runtime-matrix` task runs host tests plus both compatibility smoke tests. The device task remains a manual transport placeholder.
 
 GitHub Actions keeps lint, host-side tests, coverage, and package build as the required default lane. It now also runs advisory MicroPython and CircuitPython compatibility smoke jobs so target-runtime drift is visible without making those checks required yet.
 

@@ -39,14 +39,16 @@ PYTEST_ARGS = [
     "--cov-report=term-missing",
 ]
 TASKS = (
+    "setup",
     "lint",
     "test-host",
     "build-sample",
+    "preflight",
     "prepare-micropython",
     "prepare-circuitpython",
     "test-micropython-compat",
-    "test-runtime-matrix",
     "test-circuitpython-compat",
+    "test-runtime-matrix",
     "test-device",
 )
 
@@ -109,6 +111,12 @@ def lint() -> int:
     return _run([PYTHON, "-m", "ruff", "check", *RUFF_PATHS])
 
 
+def setup() -> int:
+    """Install development dependencies into the active Python environment."""
+    packages = ["pip", "pytest", "pytest-cov", "ruff", "build"]
+    return _run([PYTHON, "-m", "pip", "install", "-U", *packages])
+
+
 def test_host() -> int:
     """Run the verified CPython test suite with coverage."""
     return _run([PYTHON, "-m", "pytest", *PYTEST_ARGS], env=_pythonpath_env())
@@ -134,20 +142,34 @@ def test_micropython_compat() -> int:
     micropython_bin = _resolve_micropython_binary()
     if micropython_bin is None:
         print(
-            "MicroPython compatibility check unavailable: run `python ci/tasks.py "
-            "prepare-micropython`, set MICROPYTHON_BIN, or install a `micropython` binary."
+            "MicroPython binary not found. Running `python ci/tasks.py prepare-micropython` "
+            "before the smoke test."
         )
-        return 2
+        prepare_result = prepare_micropython()
+        if prepare_result != 0:
+            print(
+                "MicroPython compatibility check stopped before the smoke test because "
+                "runtime preparation failed."
+            )
+            return prepare_result
+
+        micropython_bin = _resolve_micropython_binary()
+        if micropython_bin is None:
+            print(
+                "MicroPython preparation completed without the expected binary. Set "
+                "MICROPYTHON_BIN to a working interpreter path and rerun the compatibility check."
+            )
+            return 1
 
     return _run([micropython_bin, "-c", SMOKE_EXEC])
 
 
 def test_runtime_matrix() -> int:
-    """Run the currently proven CPython and MicroPython runtime test path."""
+    """Run host tests and compatibility smoke tests across all proven runtimes."""
     steps = (
         ("test-host", test_host),
-        ("prepare-micropython", prepare_micropython),
         ("test-micropython-compat", test_micropython_compat),
+        ("test-circuitpython-compat", test_circuitpython_compat),
     )
 
     for step_name, step in steps:
@@ -187,6 +209,25 @@ def test_circuitpython_compat() -> int:
     return _run([circuitpython_bin, "-c", SMOKE_EXEC])
 
 
+def preflight() -> int:
+    """Run the checks that CI requires on every pull request."""
+    steps = (
+        ("lint", lint),
+        ("test-host", test_host),
+        ("build-sample", build_sample),
+    )
+
+    for step_name, step in steps:
+        print(f"== {step_name} ==")
+        result = step()
+        if result != 0:
+            print(f"Preflight failed at: {step_name}")
+            return result
+
+    print("Preflight passed — required CI checks should pass.")
+    return 0
+
+
 def test_device() -> int:
     """Point users to the current manual-only device validation path."""
     devices_path = ROOT / "devices.yml"
@@ -211,12 +252,16 @@ def main(argv: list[str]) -> int:
         return 1
 
     task = argv[1]
+    if task == "setup":
+        return setup()
     if task == "lint":
         return lint()
     if task == "test-host":
         return test_host()
     if task == "build-sample":
         return build_sample()
+    if task == "preflight":
+        return preflight()
     if task == "prepare-micropython":
         return prepare_micropython()
     if task == "prepare-circuitpython":
