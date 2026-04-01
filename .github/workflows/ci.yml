@@ -36,9 +36,9 @@ jobs:
         run: |
           python scripts/run.py test-host
 
-      - name: Build sample package
+      - name: Build packages
         run: |
-          python scripts/run.py build-sample
+          python scripts/run.py build
 
   micropython-compat:
     name: MicroPython compatibility (advisory)

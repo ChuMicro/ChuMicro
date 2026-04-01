@@ -49,7 +49,7 @@ TASKS = (
     "setup",
     "lint",
     "test-host",
-    "build-sample",
+    "build",
     "preflight",
     "prepare-micropython",
     "prepare-circuitpython",
@@ -133,9 +133,34 @@ def test_host() -> int:
     return _run([PYTHON, "-m", "pytest", *PYTEST_ARGS], env=_pythonpath_env())
 
 
-def build_sample() -> int:
-    """Build the sample package distribution."""
-    return _run([PYTHON, "-m", "build", "sample"])
+def _find_publishable_packages() -> list[str]:
+    """Return relative paths to directories containing a VERSION file."""
+    packages = []
+    for version_file in sorted(ROOT.rglob("VERSION")):
+        package_dir = version_file.parent
+        if ".venv" in package_dir.parts or ".tools" in package_dir.parts:
+            continue
+        if (package_dir / "pyproject.toml").exists():
+            packages.append(str(package_dir.relative_to(ROOT)))
+    return packages
+
+
+def build() -> int:
+    """Build all publishable package distributions."""
+    packages = _find_publishable_packages()
+    if not packages:
+        print("No publishable packages found (no VERSION + pyproject.toml pairs).")
+        return 1
+
+    for package in packages:
+        print(f"== build {package} ==")
+        result = _run([PYTHON, "-m", "build", package])
+        if result != 0:
+            print(f"Build failed: {package}")
+            return result
+
+    print(f"Built {len(packages)} package(s): {', '.join(packages)}")
+    return 0
 
 
 def preflight() -> int:
@@ -143,7 +168,7 @@ def preflight() -> int:
     steps = (
         ("lint", lint),
         ("test-host", test_host),
-        ("build-sample", build_sample),
+        ("build", build),
     )
 
     for step_name, step in steps:
@@ -245,7 +270,7 @@ _DISPATCH = {
     "setup": setup,
     "lint": lint,
     "test-host": test_host,
-    "build-sample": build_sample,
+    "build": build,
     "preflight": preflight,
     "prepare-micropython": prepare_micropython,
     "prepare-circuitpython": prepare_circuitpython,

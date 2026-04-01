@@ -34,10 +34,10 @@
             "presentation": {"reveal": "always", "panel": "shared"}
         },
         {
-            "label": "Build Sample",
+            "label": "Build",
             "type": "shell",
             "command": "python",
-            "args": ["scripts/run.py", "build-sample"],
+            "args": ["scripts/run.py", "build"],
             "group": "build",
             "presentation": {"reveal": "always", "panel": "shared"}
         },

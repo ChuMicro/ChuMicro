@@ -76,8 +76,8 @@ All tasks are run through `scripts/run.py`:
 | `setup` | Install dev dependencies into the active environment |
 | `lint` | Run Ruff |
 | `test-host` | Run pytest with coverage |
-| `build-sample` | Build the sample package distribution |
-| `preflight` | Run all required CI checks (lint + test-host + build-sample) |
+| `build` | Build all publishable package distributions |
+| `preflight` | Run all required CI checks (lint + test-host + build) |
 | `prepare-micropython` | Build the pinned MicroPython unix-port binary under `.tools/` |
 | `prepare-circuitpython` | Build the pinned CircuitPython unix-port binary under `.tools/` |
 | `test-micropython-compat` | Smoke test under MicroPython (auto-prepares if needed) |
