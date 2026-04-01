@@ -17,7 +17,7 @@ Create a small `sample` library that proves the Chumicro ecosystem rather than j
 ## Current verified package shape
 
 ```text
-sample/
+libraries/sample/
 ├── VERSION
 ├── pyproject.toml
 ├── README.md
@@ -33,13 +33,13 @@ sample/
 
 ## Current verified slice
 
-- `sample/src/chumicro_sample/__init__.py` exports the current public API
-- `sample/src/chumicro_sample/heartbeat.py` implements the first public behavior slice
-- `sample/src/chumicro_sample/ticks.py` provides the cross-runtime timing seam
-- `sample/tests/` covers the host-side behavior with `pytest`
-- `sample/device_tests/test_heartbeat_ticks.py` exists as the first device-aware timing test
-- `sample/pyproject.toml` builds as an individual package
-- `sample/README.md` and `sample/doc/` establish the package documentation shape
+- `libraries/sample/src/chumicro_sample/__init__.py` exports the current public API
+- `libraries/sample/src/chumicro_sample/heartbeat.py` implements the first public behavior slice
+- `libraries/sample/src/chumicro_sample/ticks.py` provides the cross-runtime timing seam
+- `libraries/sample/tests/` covers the host-side behavior with `pytest`
+- `libraries/sample/device_tests/test_heartbeat_ticks.py` exists as the first device-aware timing test
+- `libraries/sample/pyproject.toml` builds as an individual package
+- `libraries/sample/README.md` and `libraries/sample/doc/` establish the package documentation shape
 
 ## Design rules
 

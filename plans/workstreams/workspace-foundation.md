@@ -28,7 +28,7 @@ Define the repo layout, shared tooling, and local developer ergonomics for a Pyt
 - root `README.md`, `.gitignore`, and `pyproject.toml` exist
 - `support/runtime/` exists as the first reusable support package
 - `support/test_harness/` exists as the first tiny on-device runner scaffold
-- `sample/` exists as the first publishable package slice
+- `sample/` exists as the first publishable package slice under `libraries/`
 - `.github/workflows/ci.yml` exists and uses the shared repo task entrypoints
 - `ci/tasks.py` exists as the current shared task interface for humans, agents, and CI
 - `ci/prepare_micropython.py` exists as the current repo-managed MicroPython runtime bootstrap path

@@ -21,7 +21,7 @@ Establish predictable PR checks and per-library release automation for a mono-wo
 - CI currently runs required host checks for lint, host-side tests with coverage, and sample package build
 - CI now also runs advisory MicroPython and CircuitPython compatibility smoke jobs via `ci/tasks.py`
 - CI now uses the shared repo task interface in `ci/tasks.py`
-- the sample package is the current single-package proof target for CI behavior
+- the sample package is the current single-package proof target under `libraries/` for CI behavior
 
 ## Proposed pipeline tiers
 

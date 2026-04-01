@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "chumicro-runtime"
-dynamic = ["version"]
-description = "Runtime detection helpers for Chumicro libraries."
+version = "0.0.0"
+description = "Runtime detection helpers for Chumicro libraries (workspace-internal)."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
@@ -22,8 +22,6 @@ classifiers = [
 [tool.setuptools]
 package-dir = {"" = "src"}
 
-[tool.setuptools.dynamic]
-version = {file = "VERSION"}
 
 [tool.setuptools.packages.find]
 where = ["src"]

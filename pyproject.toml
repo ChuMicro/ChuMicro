@@ -3,7 +3,7 @@ addopts = "-ra --strict-config --strict-markers"
 testpaths = [
     "support/runtime/tests",
     "support/test_harness/tests",
-    "sample/tests",
+    "libraries/sample/tests",
 ]
 
 [tool.coverage.run]
@@ -11,7 +11,7 @@ branch = true
 source = [
     "support/runtime/src/chumicro_runtime",
     "support/test_harness/src/chumicro_test_harness",
-    "sample/src/chumicro_sample",
+    "libraries/sample/src/chumicro_sample",
 ]
 
 [tool.coverage.report]
@@ -29,9 +29,9 @@ src = [
     "support/runtime/tests",
     "support/test_harness/src",
     "support/test_harness/tests",
-    "sample/src",
-    "sample/tests",
-    "sample/device_tests",
+    "libraries/sample/src",
+    "libraries/sample/tests",
+    "libraries/sample/device_tests",
 ]
 
 [tool.ruff.lint]

@@ -31,9 +31,10 @@ chumicro/
 │   ├── prompts/
 │   └── workstreams/
 ├── support/
-│   ├── runtime/           # Cross-runtime detection helpers
-│   └── test_harness/      # Lightweight on-device test runner
-├── sample/                # First library proof (timing/heartbeat)
+│   ├── runtime/           # Cross-runtime detection helpers (workspace-internal)
+│   └── test_harness/      # Lightweight on-device test runner (workspace-internal)
+├── libraries/
+│   └── sample/            # First library proof (timing/heartbeat)
 ├── devices.example.yml    # Template for local board registration
 └── .github/workflows/     # CI
 ```
@@ -91,7 +92,7 @@ The repo switches runtimes by running the same library code under different inte
 
 ## Device validation
 
-Real-board execution is manual-only. Copy `devices.example.yml` to `devices.yml` and fill in your board details. Use `sample/device_tests/` with `support/test_harness/` on the target board.
+Real-board execution is manual-only. Copy `devices.example.yml` to `devices.yml` and fill in your board details. Use `libraries/sample/device_tests/` with `support/test_harness/` on the target board.
 
 ## Versioning
 

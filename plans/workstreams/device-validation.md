@@ -17,7 +17,7 @@ Add a simulation-first validation path, then layer on optional hardware executio
 ## Current verified slice
 
 - `support/test_harness/` exists as the current lightweight on-device runner
-- `sample/device_tests/test_heartbeat_ticks.py` exists as the first device-facing sample test
+- `libraries/sample/device_tests/test_heartbeat_ticks.py` exists as the first device-facing sample test
 - `ci/prepare_micropython.py` exists as a repo-managed MicroPython unix-port preparation path
 - `ci/prepare_circuitpython.py` exists as a repo-managed CircuitPython unix-port preparation path
 - `ci/run_sample_device_smoke.py` exists as the canonical checked-in smoke runner entrypoint, with `ci/run_sample_device_tests.py` kept as a compatibility wrapper

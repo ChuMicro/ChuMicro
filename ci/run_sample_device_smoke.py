@@ -37,7 +37,7 @@ def _build_test_module(ticks_ms, ticks_diff):
     """Return a module-like object containing the timing smoke test."""
     namespace: dict[str, object] = {}
     namespace["__name__"] = "test_heartbeat_ticks"
-    namespace["__file__"] = "sample/device_tests/test_heartbeat_ticks.py"
+    namespace["__file__"] = "libraries/sample/device_tests/test_heartbeat_ticks.py"
     namespace["__package__"] = ""
     namespace["time"] = time
 
@@ -63,7 +63,7 @@ def _build_test_module(ticks_ms, ticks_diff):
 def main():
     """Run the checked-in timing smoke test and return a shell-style exit code."""
     ticks_namespace = _execute_source(
-        "sample/src/chumicro_sample/ticks.py",
+        "libraries/sample/src/chumicro_sample/ticks.py",
         "chumicro_sample.ticks",
         package_name="chumicro_sample",
     )

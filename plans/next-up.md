@@ -58,7 +58,7 @@
 - [x] Fix `test-micropython-compat` to auto-prepare like `test-circuitpython-compat`.
 - [x] Expand `test-runtime-matrix` to include CircuitPython (CPython + MicroPython + CircuitPython).
 - [x] Add `setup` and `preflight` tasks to `ci/tasks.py`.
-- [x] Add `VERSION` files for `support/runtime/` and `support/test_harness/`.
-- [x] Consolidate version to single source of truth: `VERSION` file per library, `pyproject.toml` reads via setuptools `dynamic`, removed hardcoded `__version__` from `chumicro_runtime`.
+- [x] Add `VERSION` files for `support/runtime/` and `support/test_harness/`.  *(later removed — support packages are workspace-internal and not published)*
+- [x] Consolidate version to single source of truth: `VERSION` file per library under `libraries/`, `pyproject.toml` reads via setuptools `dynamic`, removed hardcoded `__version__` from `chumicro_runtime`.
 - [x] Trim README to user-facing content; moved planning prose to `plans/`.
 

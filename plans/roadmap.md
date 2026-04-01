@@ -35,7 +35,7 @@ Goal: add a `sample` library that proves packaging, testing, and cross-runtime s
 
 Exit criteria:
 
-- `sample/` has `src/`, `tests/`, `device_tests/`, and `doc/`
+- `sample/` has `src/`, `tests/`, `device_tests/`, and `doc/` under `libraries/`
 - host tests pass with 90%+ coverage
 - sample package can build as an individual distribution
 - IDE-friendly stubs or mocks exist for developer ergonomics

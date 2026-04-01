@@ -24,7 +24,7 @@ SMOKE_EXEC = f'exec(open("{SMOKE_SCRIPT}").read())'
 SOURCE_PATHS = [
     ROOT / "support/runtime/src",
     ROOT / "support/test_harness/src",
-    ROOT / "sample/src",
+    ROOT / "libraries/sample/src",
 ]
 RUFF_PATHS = [
     "ci",
@@ -33,16 +33,16 @@ RUFF_PATHS = [
     "support/runtime/tests",
     "support/test_harness/src",
     "support/test_harness/tests",
-    "sample/src",
-    "sample/tests",
-    "sample/device_tests",
+    "libraries/sample/src",
+    "libraries/sample/tests",
+    "libraries/sample/device_tests",
 ]
 PYTEST_ARGS = [
     "-W",
     "error",
     "--cov=support/runtime/src/chumicro_runtime",
     "--cov=support/test_harness/src/chumicro_test_harness",
-    "--cov=sample/src/chumicro_sample",
+    "--cov=libraries/sample/src/chumicro_sample",
     "--cov-report=term-missing",
 ]
 TASKS = (
@@ -134,12 +134,13 @@ def test_host() -> int:
 
 
 def _find_publishable_packages() -> list[str]:
-    """Return relative paths to directories containing a VERSION file."""
+    """Return relative paths to publishable libraries under ``libraries/``."""
+    libraries_dir = ROOT / "libraries"
+    if not libraries_dir.is_dir():
+        return []
     packages = []
-    for version_file in sorted(ROOT.rglob("VERSION")):
+    for version_file in sorted(libraries_dir.rglob("VERSION")):
         package_dir = version_file.parent
-        if ".venv" in package_dir.parts or ".tools" in package_dir.parts:
-            continue
         if (package_dir / "pyproject.toml").exists():
             packages.append(str(package_dir.relative_to(ROOT)))
     return packages
@@ -262,7 +263,7 @@ def test_device() -> int:
             "Copy devices.example.yml to devices.yml and fill in your board details."
         )
 
-    print("Use sample/device_tests/ with support/test_harness/ on the target board.")
+    print("Use libraries/sample/device_tests/ with support/test_harness/ on the target board.")
     return 2
 
 
