@@ -95,6 +95,7 @@ def prepare_micropython() -> int:
         return 1
 
     print(f"Prepared MicroPython binary: {DEFAULT_BINARY_PATH}")
+    (ROOT / ".tools" / "micropython.path").write_text(str(DEFAULT_BINARY_PATH))
     return 0
 
 

@@ -118,6 +118,7 @@ def prepare_circuitpython() -> int:
         return 1
 
     print(f"Prepared CircuitPython binary: {DEFAULT_BINARY_PATH}")
+    (ROOT / ".tools" / "circuitpython.path").write_text(str(DEFAULT_BINARY_PATH))
     return 0
 
 

@@ -16,17 +16,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-
-# Expected binary locations for the repo-managed unix-port runtimes.
-# These must match the paths defined in ci/prepare_micropython.py and
-# ci/prepare_circuitpython.py.
 _TOOLS = ROOT / ".tools"
-DEFAULT_MICROPYTHON_BINARY_PATH = (
-    _TOOLS / "micropython-v1.26.0" / "ports" / "unix" / "build-standard" / "micropython"
-)
-DEFAULT_CIRCUITPYTHON_BINARY_PATH = (
-    _TOOLS / "circuitpython-10.1.4" / "ports" / "unix" / "build-standard" / "micropython"
-)
 
 PYTHON = sys.executable
 SMOKE_SCRIPT = "ci/run_sample_device_smoke.py"
@@ -90,13 +80,15 @@ def _run(command: list[str], env: dict[str, str] | None = None) -> int:
     return completed.returncode
 
 
-def _resolve_binary(environment_name: str, default_name: str) -> str | None:
-    """Resolve a runtime binary from an environment variable or the current PATH."""
-    configured_path = os.environ.get(environment_name)
-    if configured_path:
-        return configured_path
-
-    return shutil.which(default_name)
+def _read_prepared_binary(marker_name: str) -> str | None:
+    """Read a binary path from a marker file written by a ci/prepare_*.py script."""
+    marker = _TOOLS / marker_name
+    if not marker.exists():
+        return None
+    candidate = Path(marker.read_text().strip())
+    if candidate.exists():
+        return str(candidate)
+    return None
 
 
 def _resolve_micropython_binary() -> str | None:
@@ -105,10 +97,11 @@ def _resolve_micropython_binary() -> str | None:
     if configured_path:
         return configured_path
 
-    if DEFAULT_MICROPYTHON_BINARY_PATH.exists():
-        return str(DEFAULT_MICROPYTHON_BINARY_PATH)
+    prepared = _read_prepared_binary("micropython.path")
+    if prepared:
+        return prepared
 
-    return _resolve_binary("MICROPYTHON_BIN", "micropython")
+    return shutil.which("micropython")
 
 
 def _resolve_circuitpython_binary() -> str | None:
@@ -117,10 +110,11 @@ def _resolve_circuitpython_binary() -> str | None:
     if configured_path:
         return configured_path
 
-    if DEFAULT_CIRCUITPYTHON_BINARY_PATH.exists():
-        return str(DEFAULT_CIRCUITPYTHON_BINARY_PATH)
+    prepared = _read_prepared_binary("circuitpython.path")
+    if prepared:
+        return prepared
 
-    return _resolve_binary("CIRCUITPYTHON_BIN", "circuitpython")
+    return shutil.which("circuitpython")
 
 
 def setup() -> int:
