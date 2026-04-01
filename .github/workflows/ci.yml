@@ -30,15 +30,15 @@ jobs:
 
       - name: Lint
         run: |
-          python ci/tasks.py lint
+          python scripts/run.py lint
 
       - name: Run tests with coverage
         run: |
-          python ci/tasks.py test-host
+          python scripts/run.py test-host
 
       - name: Build sample package
         run: |
-          python ci/tasks.py build-sample
+          python scripts/run.py build-sample
 
   micropython-compat:
     name: MicroPython compatibility (advisory)
@@ -62,11 +62,11 @@ jobs:
           sudo apt-get install -y libffi-dev pkg-config
 
       - name: Prepare MicroPython unix-port runtime
-        run: python ci/tasks.py prepare-micropython
+        run: python scripts/run.py prepare-micropython
 
       - name: Run MicroPython compatibility smoke test
         run: |
-          python ci/tasks.py test-micropython-compat
+          python scripts/run.py test-micropython-compat
 
   circuitpython-compat:
     name: CircuitPython compatibility (advisory)
@@ -90,9 +90,9 @@ jobs:
           sudo apt-get install -y libffi-dev pkg-config
 
       - name: Prepare CircuitPython unix-port runtime
-        run: python ci/tasks.py prepare-circuitpython
+        run: python scripts/run.py prepare-circuitpython
 
       - name: Run CircuitPython compatibility smoke test
         run: |
-          python ci/tasks.py test-circuitpython-compat
+          python scripts/run.py test-circuitpython-compat
 

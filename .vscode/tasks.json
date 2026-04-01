@@ -13,7 +13,7 @@
             "label": "Preflight",
             "type": "shell",
             "command": "python",
-            "args": ["ci/tasks.py", "preflight"],
+            "args": ["scripts/run.py", "preflight"],
             "group": {"kind": "build", "isDefault": true},
             "presentation": {"reveal": "always", "panel": "shared"}
         },
@@ -21,7 +21,7 @@
             "label": "Lint",
             "type": "shell",
             "command": "python",
-            "args": ["ci/tasks.py", "lint"],
+            "args": ["scripts/run.py", "lint"],
             "group": "build",
             "presentation": {"reveal": "always", "panel": "shared"}
         },
@@ -29,7 +29,7 @@
             "label": "Host Tests",
             "type": "shell",
             "command": "python",
-            "args": ["ci/tasks.py", "test-host"],
+            "args": ["scripts/run.py", "test-host"],
             "group": "test",
             "presentation": {"reveal": "always", "panel": "shared"}
         },
@@ -37,7 +37,7 @@
             "label": "Build Sample",
             "type": "shell",
             "command": "python",
-            "args": ["ci/tasks.py", "build-sample"],
+            "args": ["scripts/run.py", "build-sample"],
             "group": "build",
             "presentation": {"reveal": "always", "panel": "shared"}
         },
@@ -45,7 +45,7 @@
             "label": "MicroPython Compat",
             "type": "shell",
             "command": "python",
-            "args": ["ci/tasks.py", "test-micropython-compat"],
+            "args": ["scripts/run.py", "test-micropython-compat"],
             "group": "test",
             "presentation": {"reveal": "always", "panel": "shared"}
         },
@@ -53,7 +53,7 @@
             "label": "CircuitPython Compat",
             "type": "shell",
             "command": "python",
-            "args": ["ci/tasks.py", "test-circuitpython-compat"],
+            "args": ["scripts/run.py", "test-circuitpython-compat"],
             "group": "test",
             "presentation": {"reveal": "always", "panel": "shared"}
         },
@@ -61,7 +61,7 @@
             "label": "Runtime Matrix",
             "type": "shell",
             "command": "python",
-            "args": ["ci/tasks.py", "test-runtime-matrix"],
+            "args": ["scripts/run.py", "test-runtime-matrix"],
             "group": "test",
             "presentation": {"reveal": "always", "panel": "shared"}
         }

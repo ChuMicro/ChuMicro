@@ -24,7 +24,8 @@ Chumicro is a mono-workspace for Python libraries that run across CPython, Micro
 
 ```text
 chumicro/
-├── ci/                    # Task entrypoints and runtime preparation scripts
+├── scripts/               # User-facing commands (prepare, run tasks)
+├── ci/                    # CI-internal plumbing (compile scripts, smoke runners)
 ├── plans/                 # Roadmap, workstreams, decisions, and prompts
 │   ├── decisions/
 │   ├── prompts/
@@ -64,11 +65,11 @@ Use native Windows for editing, IDE work, linting, host-side tests, and package 
 
 **VSCode**: `.vscode/tasks.json` provides the same tasks via the Command Palette → *Tasks: Run Task*. `.vscode/settings.json` configures pytest discovery and source roots.
 
-**No IDE**: all tasks are available from the command line via `python ci/tasks.py <task>`.
+**No IDE**: all tasks are available from the command line via `python scripts/run.py <task>`.
 
 ## Tasks
 
-All repo-level tasks live in `ci/tasks.py`:
+All tasks are run through `scripts/run.py`:
 
 | Task | Purpose |
 |---|---|
