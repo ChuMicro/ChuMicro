@@ -20,6 +20,7 @@ PR automation should validate that release-relevant library changes do not merge
 - version intent lives next to the library that is actually changing
 - PR review includes an explicit, concrete version edit instead of inferred label intent
 - future workflows should fail clearly when a changed library is missing the expected `VERSION` file update
-- duplicated package metadata such as `pyproject.toml` versions must be kept in sync or validated against the `VERSION` file
+- `pyproject.toml` uses setuptools `dynamic` version to read directly from `VERSION` — there is no duplicate to keep in sync
+- libraries should not maintain a separate `__version__` attribute in source code; consumers on CPython can use `importlib.metadata.version()` if needed at runtime
 
 

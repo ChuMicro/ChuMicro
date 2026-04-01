@@ -14,5 +14,4 @@ __all__ = [
     "runtime_name",
 ]
 
-__version__ = "0.1.0"
 

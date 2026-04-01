@@ -1,82 +1,43 @@
 # Chumicro
 
-Chumicro is a mono-workspace for Python libraries that aim to run across CPython, MicroPython, and CircuitPython.
+Chumicro is a mono-workspace for Python libraries that run across CPython, MicroPython, and CircuitPython.
 
-This repository is being bootstrapped around a few core ideas from `Agents.md`:
+- One workspace with many individually published libraries
+- Shared support packages for runtime detection, mocks, and test tooling
+- CPython-first development and testing, with unix-port simulation preferred over hardware when possible
+- Optional real-device validation for boards registered in a local testbed
 
-- one workspace with many individually published libraries
-- shared support packages for runtime detection, mocks, and test tooling
-- CPython-first development and testing, with simulation/emulation preferred over hardware when possible
-- optional real-device validation for boards registered in a local testbed
+## Developer workflow
 
-## How the three-platform workflow should work
-
-Chumicro should treat the three runtimes as three execution targets for the same library contract:
-
-- **CPython** is the default development target. Most coding, unit tests, linting, coverage, packaging, and IDE work happens here.
-- **MicroPython** is a target runtime. It should be validated through compatibility smoke tests, emulation where practical, and selected real-device tests.
-- **CircuitPython** is a target runtime. It should be validated through compatibility smoke tests, board-friendly mocks, and selected real-device tests.
-
-The intended developer loop is:
-
-1. write or update code against a small public API and runtime shims
-2. run host-side tests on CPython
-3. run compatibility checks for MicroPython and CircuitPython paths
-4. run on-device tests only for behavior that cannot be trusted from host-only mocks
-
-The repo now provides a small shared task interface so humans and agents do not need to remember different ad hoc commands per runtime.
+1. Write or update code against a small public API and runtime shims
+2. Run host-side tests on CPython
+3. Run compatibility checks for MicroPython and CircuitPython
+4. Run on-device tests only for behavior that mocks cannot prove
 
 ## Testing model
 
-The current direction is a three-layer test model:
-
-- **required**: CPython-hosted `pytest` tests with coverage
-- **preferred when realistic**: simulation or emulation for MicroPython and CircuitPython behavior
-- **opt-in / targeted**: real-device `device_tests/` run through a small Chumicro test harness
-
-`pytest` remains the right default for host-based development. It is likely **not** the right tool to run directly on constrained boards, so the current plan is to supplement it rather than replace it.
-
-## Current bootstrap scope
-
-This first implementation slice sets up:
-
-- repo-level Python tooling configuration in `pyproject.toml`
-- repo-level task entrypoints in `ci/tasks.py`
-- planning documents in `plans/`
-- a minimal reusable runtime support package in `support/runtime/`
-- a minimal device-test harness in `support/test_harness/`
-- a timing-first `sample/` package that proves the first cross-runtime library slice
-- a first GitHub Actions CI workflow in `.github/workflows/ci.yml`
-
-The harder pieces are intentionally deferred until the workspace foundation is stable:
-
-- target-runtime compatibility checks beyond CPython-hosted tests
-- label-driven release automation and publishing to PyPI / CircuitPython distribution targets
-- home testbed integration for hardware validation
+- **Required**: CPython-hosted `pytest` tests with coverage (90%+ gate)
+- **Advisory**: MicroPython and CircuitPython unix-port smoke tests
+- **Opt-in**: real-device `device_tests/` run through the Chumicro test harness
 
 ## Repository shape
 
 ```text
 chumicro/
-├── ci/
-├── devices.example.yml
-├── plans/
+├── ci/                    # Task entrypoints and runtime preparation scripts
+├── plans/                 # Roadmap, workstreams, decisions, and prompts
 │   ├── decisions/
 │   ├── prompts/
 │   └── workstreams/
 ├── support/
-│   ├── runtime/
-│   └── test_harness/
-├── sample/
-└── .github/
-    └── workflows/
+│   ├── runtime/           # Cross-runtime detection helpers
+│   └── test_harness/      # Lightweight on-device test runner
+├── sample/                # First library proof (timing/heartbeat)
+├── devices.example.yml    # Template for local board registration
+└── .github/workflows/     # CI
 ```
 
-## Local development
-
-### Current verified path
-
-Create or reuse a virtual environment, then install the bootstrap tooling:
+## Getting started
 
 ```zsh
 cd /path/to/chumicro
@@ -85,111 +46,53 @@ source .venv/bin/activate
 python ci/tasks.py setup
 ```
 
-Verify that required CI checks pass locally before pushing:
+Verify required CI checks pass locally:
 
 ```zsh
 python ci/tasks.py preflight
 ```
 
-### Proposed default direction
-
-For a multi-package workspace like this one, `uv` is likely the better long-term default because it can manage a repo-level tool environment and package-specific workflows more cleanly than ad hoc virtualenv commands.
-
-That said, the current repository bootstrap has only been verified with a standard virtual environment so far. The repo should not switch its documented default to `uv` until the workspace tasks and per-package dependency model are defined.
-
-### Windows host path (current phase)
-
-Windows is a supported host for general development in the current workspace phase, but unix-port validation should use WSL2 rather than native-Windows unix-port workflows.
-
-- use native Windows for editing, IDE work, linting, host-side tests, and package builds
-- use WSL2 for unix-port-based runtime checks such as `python ci/tasks.py test-micropython-compat`
-- do not assume native-Windows unix-port builds are part of the supported path in this phase
-- `python ci/tasks.py prepare-circuitpython` and `python ci/tasks.py test-circuitpython-compat` now complete successfully in this macOS workspace using the repo-managed local CircuitPython unix-port runtime, but the broader host matrix is still intentionally conservative until other hosts are exercised
-
-Run the current checks:
+Run the full cross-runtime matrix (builds unix-port binaries on first run):
 
 ```zsh
-cd /path/to/chumicro
-python ci/tasks.py lint
-python ci/tasks.py test-host
-python ci/tasks.py build-sample
-```
-
-Prepare the shared MicroPython runtime and run the current MicroPython smoke test:
-
-```zsh
-cd /path/to/chumicro
-python ci/tasks.py prepare-micropython
-python ci/tasks.py test-micropython-compat
-```
-
-Evaluate the shared CircuitPython runtime path:
-
-```zsh
-cd /path/to/chumicro
-python ci/tasks.py prepare-circuitpython
-python ci/tasks.py test-circuitpython-compat
-```
-
-This CircuitPython path is still local-first rather than a required CI lane, but in this workspace on macOS the pinned upstream `10.1.4` unix-port build now completes and the shared timing smoke test passes.
-
-Run the full CPython + MicroPython + CircuitPython test matrix with one command:
-
-```zsh
-cd /path/to/chumicro
 python ci/tasks.py test-runtime-matrix
 ```
 
-## Shared repo-level task entrypoints
+### Windows
 
-The repository now exposes a small, explicit command surface in `ci/tasks.py` so humans, agents, and CI can use the same entrypoints:
+Use native Windows for editing, IDE work, linting, host-side tests, and package builds. Use WSL2 for unix-port runtime checks.
 
-- `python ci/tasks.py setup` — install development dependencies into the active environment
-- `python ci/tasks.py lint`
-- `python ci/tasks.py test-host`
-- `python ci/tasks.py build-sample`
-- `python ci/tasks.py preflight` — run all required CI checks locally before pushing
-- `python ci/tasks.py prepare-micropython`
-- `python ci/tasks.py prepare-circuitpython`
-- `python ci/tasks.py test-micropython-compat`
-- `python ci/tasks.py test-circuitpython-compat`
-- `python ci/tasks.py test-runtime-matrix` — run host tests + MicroPython + CircuitPython compat
-- `python ci/tasks.py test-device`
+## Tasks
 
-The CPython, package-build, MicroPython, and local CircuitPython entrypoints are now all proven in this workspace. The `preflight` task mirrors required CI checks. The `test-runtime-matrix` task runs host tests plus both compatibility smoke tests. The device task remains a manual transport placeholder.
+All repo-level tasks live in `ci/tasks.py`:
 
-GitHub Actions keeps lint, host-side tests, coverage, and package build as the required default lane. It now also runs advisory MicroPython and CircuitPython compatibility smoke jobs so target-runtime drift is visible without making those checks required yet.
+| Task | Purpose |
+|---|---|
+| `setup` | Install dev dependencies into the active environment |
+| `lint` | Run Ruff |
+| `test-host` | Run pytest with coverage |
+| `build-sample` | Build the sample package distribution |
+| `preflight` | Run all required CI checks (lint + test-host + build-sample) |
+| `prepare-micropython` | Build the pinned MicroPython unix-port binary under `.tools/` |
+| `prepare-circuitpython` | Build the pinned CircuitPython unix-port binary under `.tools/` |
+| `test-micropython-compat` | Smoke test under MicroPython (auto-prepares if needed) |
+| `test-circuitpython-compat` | Smoke test under CircuitPython (auto-prepares if needed) |
+| `test-runtime-matrix` | Run host tests + MicroPython + CircuitPython compat |
+| `test-device` | Manual device validation placeholder |
 
-In this repo, **advisory** means the job still runs on CI and still reports a real pass/fail result, but it is configured not to fail the overall workflow yet. Concretely, the runtime jobs in `.github/workflows/ci.yml` use `continue-on-error: true`, so they surface signal without acting as protected-branch gates.
+## Platform switching
 
-## How platform switching works right now
+The repo switches runtimes by running the same library code under different interpreters. The compat tasks auto-prepare the unix-port binaries if they are not already built.
 
-The repo switches between runtimes by changing the interpreter used to execute the same library files and test harnesses:
+## Device validation
 
-- **CPython**: run `python ci/tasks.py test-host`
-- **MicroPython Unix port**: run `python ci/tasks.py prepare-micropython`, then run `python ci/tasks.py test-micropython-compat`
-- **CircuitPython Unix port**: run `python ci/tasks.py prepare-circuitpython`, then run `python ci/tasks.py test-circuitpython-compat`
+Real-board execution is manual-only. Copy `devices.example.yml` to `devices.yml` and fill in your board details. Use `sample/device_tests/` with `support/test_harness/` on the target board.
 
-The shared compatibility smoke logic lives in `ci/run_sample_device_smoke.py`, with `ci/run_sample_device_tests.py` kept as a small backward-compatible wrapper. It runs the sample timing smoke test through `support/test_harness/` using the same sample library code under a different interpreter. The repo-local preparation commands build pinned MicroPython and CircuitPython unix-port runtimes under `.tools/` so shared workspaces do not need machine-specific global installs.
+## Versioning
 
-For CircuitPython, the current local unix-port preparation path also documents the verified build flags in `ci/prepare_circuitpython.py`. Those flags were added only after reproducing actual local build failures and re-running the build successfully.
+Each library has a `VERSION` file at its root — that is the single source of truth. `pyproject.toml` reads from it via setuptools `dynamic` version. See [Decision 0002](plans/decisions/0002-per-library-version-files.md).
 
-## Manual device validation
+## Planning
 
-Real-board execution is still manual-only.
-
-The committed template is `devices.example.yml`. Copy it to `devices.yml`, fill in your board details, and use that as local configuration for future board tooling. The current `test-device` task intentionally does not pretend there is already an automated transport layer.
-
-## Next milestones
-
-- decide the first CircuitPython compatibility-check path beyond host-side `pytest`
-- add shared mocks and IDE stub packaging support
-- add device registry, simulation/emulation paths, and optional workflow-driven home testbed execution
-- add release workflows keyed off per-library `VERSION` files and PR validation for required version edits
-
-## Current open questions
-
-- when should `uv` replace the current `venv`-based documented workflow, if at all
-- whether the first exercised target-runtime path should be MicroPython-only at first, or whether CircuitPython compatibility should be pursued in parallel
-- when IDE-facing stubs should be introduced relative to the next sample seam
+See `plans/` for roadmap, workstreams, decisions, and next-up queue. The README is for users and contributors; `plans/` is the working state for agents and maintainers.
 

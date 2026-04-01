@@ -3,7 +3,6 @@
 ## Now
 
 - [ ] Draft the first release workflow for per-library `VERSION` file enforcement and per-library artifacts.
-- [ ] Add `VERSION` ↔ `pyproject.toml` sync validation (and `__version__` in `chumicro_runtime`) to CI or release automation.
 - [ ] Document contributor prerequisites by platform (macOS, Linux, Windows/WSL2) in the README.
 
 ## Next
@@ -59,4 +58,6 @@
 - [x] Expand `test-runtime-matrix` to include CircuitPython (CPython + MicroPython + CircuitPython).
 - [x] Add `setup` and `preflight` tasks to `ci/tasks.py`.
 - [x] Add `VERSION` files for `support/runtime/` and `support/test_harness/`.
+- [x] Consolidate version to single source of truth: `VERSION` file per library, `pyproject.toml` reads via setuptools `dynamic`, removed hardcoded `__version__` from `chumicro_runtime`.
+- [x] Trim README to user-facing content; moved planning prose to `plans/`.
 
