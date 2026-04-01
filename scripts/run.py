@@ -17,13 +17,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-# Allow importing constants from the ci/ preparation scripts.
-sys.path.insert(0, str(ROOT / "ci"))
-
-from prepare_circuitpython import (  # noqa: E402
-    DEFAULT_BINARY_PATH as DEFAULT_CIRCUITPYTHON_BINARY_PATH,
+# Expected binary locations for the repo-managed unix-port runtimes.
+# These must match the paths defined in ci/prepare_micropython.py and
+# ci/prepare_circuitpython.py.
+_TOOLS = ROOT / ".tools"
+DEFAULT_MICROPYTHON_BINARY_PATH = (
+    _TOOLS / "micropython-v1.26.0" / "ports" / "unix" / "build-standard" / "micropython"
 )
-from prepare_micropython import DEFAULT_BINARY_PATH as DEFAULT_MICROPYTHON_BINARY_PATH  # noqa: E402
+DEFAULT_CIRCUITPYTHON_BINARY_PATH = (
+    _TOOLS / "circuitpython-10.1.4" / "ports" / "unix" / "build-standard" / "micropython"
+)
 
 PYTHON = sys.executable
 SMOKE_SCRIPT = "ci/run_sample_device_smoke.py"
