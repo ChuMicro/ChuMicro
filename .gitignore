@@ -1,5 +1,6 @@
 .DS_Store
-.idea/
+.idea/*
+!.idea/runConfigurations/
 .venv/
 .tools/
 __pycache__/

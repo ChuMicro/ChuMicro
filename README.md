@@ -39,24 +39,32 @@ chumicro/
 
 ## Getting started
 
+The prepare script works with whatever Python environment you already have — IDE-managed venv, uv, conda, or system Python:
+
 ```zsh
 cd /path/to/chumicro
 python scripts/prepare_workspace.py
 ```
 
-This creates a virtual environment, installs dev dependencies, and runs lint + tests to verify. On Windows, unix-port steps are skipped with WSL2 guidance.
-
-After preparation, activate the environment and iterate:
+If you don't have an environment yet, pass `--create-venv` to create one:
 
 ```zsh
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
-python ci/tasks.py preflight       # verify before pushing
-python ci/tasks.py test-runtime-matrix  # full cross-runtime tests
+python scripts/prepare_workspace.py --create-venv
 ```
+
+The script installs dev dependencies and runs lint + tests to verify. On Windows, unix-port guidance is printed automatically.
 
 ### Windows
 
 Use native Windows for editing, IDE work, linting, host-side tests, and package builds. Use WSL2 for unix-port runtime checks.
+
+### IDE setup
+
+**PyCharm**: shared run configurations are checked into `.idea/runConfigurations/`. After opening the project you should see play buttons for Preflight, Lint, Host Tests, Build Sample, MicroPython Compat, CircuitPython Compat, and Runtime Matrix.
+
+**VSCode**: `.vscode/tasks.json` provides the same tasks via the Command Palette → *Tasks: Run Task*. `.vscode/settings.json` configures pytest discovery and source roots.
+
+**No IDE**: all tasks are available from the command line via `python ci/tasks.py <task>`.
 
 ## Tasks
 
