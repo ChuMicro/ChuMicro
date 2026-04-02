@@ -104,17 +104,14 @@ Current verified state:
 - `pytest`
 - `pytest-cov`
 - `ruff`
-- `scripts/run.py` as the current repo-level command surface
+- `scripts/run.py` as the permanent repo-level task runner
 
-Proposed direction:
-
-- use `uv` as the preferred repo-level tool runner once per-package dependency groups are defined
-- keep plain `venv` as a documented fallback so contributors are not blocked
+`scripts/run.py` is the long-term task runner for humans, agents, and CI.  It handles library discovery, scoped testing, scaffolding, IDE config generation, and compatibility smoke orchestration — none of which `uv` replaces.  `uv` is a fast package installer and environment manager; if adopted later, it would replace `pip` and `venv` creation inside `run.py`'s `setup` task, not the task runner itself.
 
 Current decision:
 
 - keep `venv` as the active documented path for now
-- reconsider `uv` only after the current `scripts/run.py` interface needs stronger environment or task management
+- `uv` may replace the environment/dependency layer later, but `scripts/run.py` stays regardless
 
 ## PyCharm and agent ergonomics
 
@@ -136,9 +133,9 @@ Keep the repo shape simple. New packages should follow a repeatable pattern rath
 
 This workstream is considered complete for the current bootstrap phase. New foundation work should reopen only if the repo layout, developer entrypoints, or IDE ergonomics materially change.
 
-## Feedback requested
+## Resolved feedback
 
-- Is the three-mode model correct, or do you want a fourth explicit mode for simulation/emulation?
-- Should `scripts/run.py` remain the long-term human/agent entrypoint, or do you want it treated as a temporary bridge until `uv` is adopted?
-- Do you want PyCharm-specific setup steps documented next, or is the current predictable `src/` layout sufficient for now?
+- **Three-mode model:** The three modes (CPython host, MicroPython target, CircuitPython target) are correct. Unix-port simulation is a verification layer within modes 2 and 3, not a separate developer posture. The distinction already shows up as separate `run.py` tasks. No fourth mode needed.
+- **`scripts/run.py` vs `uv`:** `run.py` is the permanent task runner. `uv` could only replace the environment/dependency layer, not the task orchestration. See "Tooling direction" above.
+- **IDE and editor setup documentation:** Document setup for PyCharm, VS Code, and CLI/text-editor workflows as part of the contributor prerequisites task in next-up.md.
 

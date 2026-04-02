@@ -108,9 +108,12 @@ Do not design hardware orchestration until at least one library needs it. Keep t
 
 This workstream remains active because the transport layer, automated compatibility runs, and real-board execution path are still intentionally incomplete.
 
-## Feedback requested
+## Resolved feedback
 
-- Does the verified existence of CircuitPython `ports/unix/` change how strongly you want to pursue a host-runtime path early, or should it still be treated as optional until we prove a local build?
-- Manually triggered hardware workflows are now the selected starting point. What would make you want to promote them later?
+- **CircuitPython unix-port host-runtime path:** Already pursued and verified. The pinned CircuitPython 10.1.4 unix-port builds locally on macOS and passes the timing smoke tests. It runs as an advisory CI job.
+
+## Open decisions
+
+- What would make you want to promote hardware workflows from manual-only to scheduled or protected-branch checks? (Likely: once board transport tooling exists and has proven reliable.)
 - Which real boards do you expect to be the first-class test targets in your home testbed?
 

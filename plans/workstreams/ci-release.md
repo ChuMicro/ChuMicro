@@ -78,9 +78,12 @@ The repo has already started with checks for a single package: `timing/`.
 
 Release automation is still intentionally incomplete. This workstream remains active until per-library `VERSION` file enforcement, package-aware release selection, and staged publishing are implemented.
 
-## Feedback requested
+## Resolved feedback
 
-- Which checks do you want to be required in the very first protected-branch setup?
-- Should hardware workflows block merges, or only run manually / on schedule at first?
-- Do you want release automation to stage CircuitPython artifacts immediately, or only after the timing package proves the basic build flow?
+- **Required checks for first protected-branch setup:** Tier 1 (lint, CPython tests, coverage gate, package build). Already reflected in the proposed pipeline tiers above and in CI.
+- **Hardware workflows blocking merges:** Manual/scheduled only at first. Already decided (Decision 0003, roadmap.md).
+
+## Open decisions
+
+- Should release automation stage CircuitPython artifacts immediately, or only after the timing package proves the basic PyPI build flow?
 

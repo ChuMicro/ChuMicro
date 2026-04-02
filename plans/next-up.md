@@ -4,7 +4,7 @@
 
 - [ ] Generalize the compatibility smoke runner (`ci/run_sample_device_smoke.py`) to discover and exercise device tests for any library, not just timing.
 - [ ] Draft the first release workflow for per-library `VERSION` file enforcement and per-library artifacts.
-- [ ] Document contributor prerequisites by platform (macOS, Linux, Windows/WSL2) in the README.
+- [ ] Document contributor prerequisites by platform (macOS, Linux, Windows/WSL2) and by editor (PyCharm, VS Code, CLI) in the README.
 
 ## Next
 
@@ -19,7 +19,7 @@
 - [ ] Decide whether to add a second, runtime-specific import smoke layer on top of the canonical shared runner from [Decision 0006](./decisions/0006-shared-import-free-compatibility-smoke-runner.md).
 - [ ] Add the first real board transport tooling once a manual device execution path needs to move beyond direct local runs.
 - [ ] Decide whether the next sample iteration should prove digital I/O immediately after the timing slice.
-- [ ] Close stale "Feedback requested" sections in workstreams that have been answered by subsequent decisions.
+- [x] Close stale "Feedback requested" sections in workstreams that have been answered by subsequent decisions.
 - [ ] Refactor `ci/prepare_*.py` to expose importable `main()` functions so `scripts/run.py` can call them directly instead of via subprocess. Keep subprocess only for external tools (`ruff`, `pytest`, `build`, `make`, `micropython`).
 
 ## Blocked / waiting
