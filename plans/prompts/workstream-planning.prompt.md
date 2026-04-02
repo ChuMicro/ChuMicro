@@ -4,7 +4,7 @@ Use this prompt when a future session needs to rebuild planning context without 
 
 Chumicro is a mono-workspace for Python libraries that target CPython, MicroPython, and CircuitPython, as described in [AGENTS.md](../../AGENTS.md). Keep the planning model lightweight: `roadmap + workstreams + decisions + next-up + prompts`. Avoid formal epics/stories unless a workstream actually needs them.
 
-### Current verified workspace state as of 2026-04-01
+### Current verified workspace state as of 2026-04-02
 
 1. Planning structure exists under [plans/](../README.md), including:
    - [roadmap.md](../roadmap.md)
@@ -23,6 +23,7 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
    - [0008: importlib test isolation (superseded)](../decisions/0008-importlib-test-isolation.md)
    - [0009: per-library test runs](../decisions/0009-per-library-test-runs.md)
    - [0010: library testability](../decisions/0010-library-testability.md)
+   - [0011: per-library platform targeting](../decisions/0011-platform-targeting.md)
 3. Implemented code slices:
    - `support/runtime/` for reusable runtime detection
    - `support/test_harness/` for a tiny on-device test runner
@@ -74,7 +75,8 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
 3. Release automation and per-library version bump workflows.
 4. IDE-facing stub packaging strategy.
 5. The second seam after timing/ticks.
-6. Whether the advisory runtime CI jobs should become protected-branch requirements.
+6. Per-library platform targeting implementation (Decision 0011 accepted, not yet wired into run.py).
+7. Whether the advisory runtime CI jobs should become protected-branch requirements.
 7. VS Code workspace validation (pyrightconfig.json generated but not tested in VS Code).
 8. Test ergonomics: reducing repeated boilerplate across test files.
 

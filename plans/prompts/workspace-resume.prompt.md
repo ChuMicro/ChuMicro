@@ -20,6 +20,7 @@ Use this prompt at the start of a new session when you need to rehydrate the wor
    - [0008: importlib test isolation (superseded)](../decisions/0008-importlib-test-isolation.md)
    - [0009: per-library test runs](../decisions/0009-per-library-test-runs.md)
    - [0010: library testability](../decisions/0010-library-testability.md)
+   - [0011: per-library platform targeting](../decisions/0011-platform-targeting.md)
 
 ### Design principles to preserve
 
@@ -86,6 +87,7 @@ Create a short restart brief that states:
 - Release automation and per-library version bump workflows
 - IDE stub packaging strategy
 - The compatibility smoke runner is still timing-specific (needs generalization for multi-library)
+- Per-library platform targeting implementation (Decision 0011 accepted, not yet wired into run.py)
 - Whether the advisory MicroPython and CircuitPython CI lanes should stay optional or become protected-branch requirements
 - VS Code workspace validation (pyrightconfig.json generated but not yet tested in VS Code)
 - Test ergonomics: reducing repeated boilerplate across test files

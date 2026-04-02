@@ -64,6 +64,7 @@ chumicro/
 8. Re-implement rather than depend when a library fails the cross-platform test; publish to all three channels (Decision 0007).
 9. Run pytest per-library to avoid test-directory collisions; each library must independently meet 90% coverage (Decision 0009).
 10. Design libraries for testability: constructor injection, `testing` submodules for fakes, don't mock what you don't own (Decision 0010).
+11. Libraries declare supported platforms via `[tool.chumicro].platforms` in `pyproject.toml`; default is all three runtimes (Decision 0011).
 
 ### Key technical patterns
 
