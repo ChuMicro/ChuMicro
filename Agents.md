@@ -28,15 +28,17 @@ Chumicro is organized as a **mono‑workspace**.  Each library resides in its ow
 
 ```
 chumicro/
-  ├── sample/
-  │   ├── src/            # Library source code (importable package/module)
-  │   ├── tests/          # Unit tests for CPython/PyTest
-  │   ├── device_tests/   # On‑device or compatible-runtime test files
-  │   └── doc/            # Documentation specific to the library
+  ├── libraries/
+  │   └── timing/
+  │       ├── src/            # Library source code (importable package/module)
+  │       ├── tests/          # Unit tests for CPython/PyTest
+  │       ├── device_tests/   # On‑device or compatible-runtime test files
+  │       └── doc/            # Documentation specific to the library
   ├── support/
   │   ├── runtime/        # Shared runtime detection helpers
   │   └── test_harness/   # Lightweight on‑device test runner and helpers
-  ├── ci/                 # Shared repo task entrypoints and helper scripts
+  ├── scripts/            # Task runner and workspace setup
+  ├── ci/                 # CI-specific scripts (prepare, smoke runners)
   ├── plans/              # Roadmap, workstreams, decisions, and prompts
   └── .github/workflows/  # GitHub Actions workflows
 ```
@@ -157,7 +159,7 @@ CI pipelines should enforce linting, unit tests and code coverage across all sup
 
 ## Versioning & Releases
 
-Chumicro libraries follow [Semantic Versioning](https://semver.org/).  The specification states that major versions increment for backward‑incompatible API changes, minor versions for backward‑compatible new features, and patch versions for bug fixes.  Each publishable library should own a checked-in `VERSION` file at the library root (for example, `sample/VERSION`), and agents should treat that file as the canonical published version for that library.
+Chumicro libraries follow [Semantic Versioning](https://semver.org/).  The specification states that major versions increment for backward‑incompatible API changes, minor versions for backward‑compatible new features, and patch versions for bug fixes.  Each publishable library should own a checked-in `VERSION` file at the library root (for example, `libraries/timing/VERSION`), and agents should treat that file as the canonical published version for that library.
 
 When an agent changes a library in a way that affects its released surface area, the same PR should update that library’s `VERSION` file with the smallest correct semantic-version bump:
 
@@ -224,5 +226,11 @@ Building connected devices requires attention to security and data protection.  
 2. Keep pull requests small and focused.  Each PR must include tests and documentation for the new functionality.
 3. Code review checks include style, test coverage, memory usage (avoid extra allocations), and API consistency across runtimes.  When reviewing code, explicitly reference these guidelines.
 4. Do not include build artifacts, compiled bytecode, or secret configuration files in commits.  Add appropriate `.gitignore` rules.
+5. **Commit after completing a meaningful unit of work.**  Do not leave changes uncommitted between sessions.  Each working session should end with a clean tree.
+6. **Write commit messages that aid context recovery.**  Planning docs under `plans/` can go stale between sessions.  When that happens, commit history is the primary fallback for reconstructing what changed and why.  Write commit messages accordingly:
+   - **Subject line:** summarise *what* changed in imperative mood (e.g., "Add importlib test isolation for multi-library workspace").
+   - **Body (when non-trivial):** explain *why* the change was made, what alternatives were considered or rejected, and which planning items or decisions it relates to.  Name affected libraries, decisions, or workstreams when relevant.
+   - **Scope tags:** if the commit touches planning docs, infrastructure, or a specific library, make that clear early in the message so `git log --oneline` is scannable.
+   - A future agent scanning `git log` should be able to infer the current project state, recent design choices, and the trajectory of work — even if `plans/` has not been updated yet.
 
 By following these guidelines, Chumicro aims to build a sustainable ecosystem of high‑quality, cross‑platform libraries for modern microcontrollers and Python applications.
