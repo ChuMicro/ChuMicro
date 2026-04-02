@@ -24,24 +24,16 @@ Never embed secrets; configuration such as Wi‑Fi credentials belongs in separa
 
 ## Workspace Structure
 
-Chumicro is organized as a **mono‑workspace**.  Each library resides in its own folder under the repository root.  A typical layout looks like this:
+Chumicro is organized as a **mono‑workspace**.  Each publishable library resides under `libraries/`, each with its own `src/`, `tests/`, `device_tests/`, and `doc/` subdirectories.  Shared internal packages live under `support/`.  Developer tasks are in `scripts/`, CI-specific helpers in `ci/`, and planning docs in `plans/`.
 
-```
-chumicro/
-  ├── libraries/
-  │   └── timing/
-  │       ├── src/            # Library source code (importable package/module)
-  │       ├── tests/          # Unit tests for CPython/PyTest
-  │       ├── device_tests/   # On‑device or compatible-runtime test files
-  │       └── doc/            # Documentation specific to the library
-  ├── support/
-  │   ├── runtime/        # Shared runtime detection helpers
-  │   └── test_harness/   # Lightweight on‑device test runner and helpers
-  ├── scripts/            # Task runner and workspace setup
-  ├── ci/                 # CI-specific scripts (prepare, smoke runners)
-  ├── plans/              # Roadmap, workstreams, decisions, and prompts
-  └── .github/workflows/  # GitHub Actions workflows
-```
+The live workspace structure is provided automatically at the start of each session.  For the canonical detailed layout, see `plans/prompts/workspace-rebuild.prompt.md`.
+
+Conventions:
+
+- Publishable libraries go in `libraries/<name>/` with a `pyproject.toml` and `VERSION` file.
+- Support packages go in `support/<name>/` — they are workspace-internal and not published.
+- `scripts/run.py` auto-discovers all packages by scanning for `pyproject.toml` under `libraries/` and `support/`.  No hard-coded lists exist.
+- `python scripts/run.py new-library <name>` scaffolds a new library with the correct structure and regenerates IDE configs.
 
 This mono‑repo simplifies dependency management and allows libraries to share common infrastructure.  Publishing individual packages remains possible by using per‑library `pyproject.toml` files and packaging tools (e.g., Hatchling or Setuptools).  Use a `VERSION` file or similar per‑library version to coordinate releases.
 
