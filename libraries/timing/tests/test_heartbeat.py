@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 from chumicro_timing import Heartbeat
-from mocks.fake_ticks import FakeTicks
+from chumicro_timing.testing import FakeTicks
 
 
 def test_heartbeat_rejects_non_positive_periods() -> None:

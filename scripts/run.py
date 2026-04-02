@@ -444,17 +444,6 @@ def _scaffold_library(name: str) -> int:
     # Tests conftest.py (no __init__.py — avoids module name collisions across libraries)
     (lib_dir / "tests" / "conftest.py").write_text(
         f'"""Test configuration for the chumicro-{name} package."""\n'
-        "\n"
-        "from __future__ import annotations\n"
-        "\n"
-        "import sys\n"
-        "from pathlib import Path\n"
-        "\n"
-        "_HERE = Path(__file__).resolve().parent\n"
-        'SRC_PATH = _HERE.parents[0] / "src"\n'
-        "for _p in (str(SRC_PATH), str(_HERE)):\n"
-        "    if _p not in sys.path:\n"
-        "        sys.path.insert(0, _p)\n"
     )
 
     # doc/README.md
