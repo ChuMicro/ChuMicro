@@ -8,6 +8,7 @@
 
 ## Next
 
+- [ ] Add `[tool.chumicro].platforms` reader to `scripts/run.py` and wire it into the compatibility smoke runners and release/build paths (Decision 0011).
 - [ ] Explore test ergonomics: reduce repeated boilerplate across test files.
 - [ ] Validate VS Code workspace with the generated `pyrightconfig.json`.
 - [ ] Define how IDE-facing stubs are packaged and published.
