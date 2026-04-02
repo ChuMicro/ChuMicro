@@ -24,8 +24,7 @@ chumicro/
 ├── ci/
 │   ├── prepare_micropython.py
 │   ├── prepare_circuitpython.py
-│   ├── run_sample_device_smoke.py
-│   └── run_sample_device_tests.py
+│   └── run_sample_device_smoke.py
 ├── .github/workflows/ci.yml
 ├── AGENTS.md
 ├── conftest.py             # root auto-discovery conftest
@@ -48,7 +47,6 @@ chumicro/
         ├── pyproject.toml
         ├── VERSION
         ├── README.md
-        ├── doc/
         ├── src/chumicro_timing/
         ├── tests/
         └── device_tests/
@@ -156,6 +154,6 @@ rm -rf libraries/gpio && python scripts/run.py sync-ide  # clean up
 4. Update `plans/next-up.md` and `plans/roadmap.md` after major workspace changes.
 5. Keep prompts in `plans/prompts/` focused on rebuild context or workspace history.
 6. Commit after making changes.
-7. Do not add `__init__.py` to library `tests/` directories.
+7. Use per-library pytest runs (Decision 0009) — do not collect all tests in a single invocation.
 8. Do not use editable pip installs for IDE resolution.
 9. Do not hard-code library lists — use auto-discovery.

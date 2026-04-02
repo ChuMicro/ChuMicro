@@ -62,7 +62,7 @@ Use native Windows for editing, IDE work, linting, host-side tests, and package 
 
 ### IDE setup
 
-**PyCharm**: shared run configurations are checked into `.idea/runConfigurations/`. After opening the project you should see play buttons for Preflight, Lint, Host Tests, Build, MicroPython Compat, CircuitPython Compat, and Runtime Matrix.
+**PyCharm**: shared run configurations are checked into `.idea/runConfigurations/`. After opening the project you should see play buttons for Preflight, Lint, Test, Build, MicroPython Compat, CircuitPython Compat, and Runtime Matrix.
 
 **VSCode**: `.vscode/tasks.json` provides the same tasks via the Command Palette → *Tasks: Run Task*. `.vscode/settings.json` configures pytest discovery and source roots.
 

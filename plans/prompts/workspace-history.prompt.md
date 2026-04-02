@@ -12,7 +12,7 @@ These were not written up front. They surfaced through mistakes, rejected approa
 
 3. **No pip-installed dev packages.**  IDE import resolution is handled through source root configuration (`.idea/chumicro.iml` for PyCharm, `pyrightconfig.json` for VS Code). Editable installs (`pip install -e`) were tried and explicitly rejected — they introduce uncertainty about which version of a package the runtime picks up.
 
-4. **importlib test isolation.**  `pyproject.toml` uses `--import-mode=importlib`. Library `tests/` directories do NOT have `__init__.py`. This prevents `ImportPathMismatchError` when multiple libraries each have a `tests/` directory. Mock imports use absolute paths via a per-library conftest that adds the tests directory to `sys.path`.
+4. **Per-library test runs.**  `scripts/run.py test` runs pytest once per package to avoid test-directory collisions (Decision 0009, superseding Decision 0008's `--import-mode=importlib` approach).  Shared test fakes ship as `testing` submodules in `src/`.
 
 5. **Plans and prompts are part of the workspace contract.**  They must stay current with the codebase. After significant implementation or direction changes, update the affected files under `plans/`. These documents exist so that agents and humans can recover context across sessions.
 

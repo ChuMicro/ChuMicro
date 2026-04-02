@@ -20,7 +20,7 @@ Add a simulation-first validation path, then layer on optional hardware executio
 - `libraries/timing/device_tests/test_heartbeat_ticks.py` exists as the first device-facing timing test
 - `ci/prepare_micropython.py` exists as a repo-managed MicroPython unix-port preparation path
 - `ci/prepare_circuitpython.py` exists as a repo-managed CircuitPython unix-port preparation path
-- `ci/run_sample_device_smoke.py` exists as the canonical checked-in smoke runner entrypoint, with `ci/run_sample_device_tests.py` kept as a compatibility wrapper
+- `ci/run_sample_device_smoke.py` exists as the canonical checked-in smoke runner entrypoint
 - `devices.example.yml` exists as the first committed local board registry template
 - manual-only hardware execution is the current documented starting point
 

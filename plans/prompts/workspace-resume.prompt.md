@@ -86,7 +86,6 @@ Create a short restart brief that states:
 - Release automation and per-library version bump workflows
 - IDE stub packaging strategy
 - The compatibility smoke runner is still timing-specific (needs generalization for multi-library)
-- Shared cross-library test mocks (e.g., FakeTicks for libraries that depend on timing)
 - Whether the advisory MicroPython and CircuitPython CI lanes should stay optional or become protected-branch requirements
 - VS Code workspace validation (pyrightconfig.json generated but not yet tested in VS Code)
 - Test ergonomics: reducing repeated boilerplate across test files

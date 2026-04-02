@@ -8,7 +8,7 @@ Create the `chumicro-timing` library — cross-runtime tick helpers and periodic
 
 ## Scope
 
-- publishable library layout under `libraries/timing/` with `src/`, `tests/`, `device_tests/`, and `doc/`
+- publishable library layout under `libraries/timing/` with `src/`, `tests/`, and `device_tests/`
 - cross-runtime import and shim patterns
 - host-side testability through mocks or stubs
 - IDE ergonomics for downstream developers
@@ -24,11 +24,9 @@ libraries/timing/
 ├── src/
 │   └── chumicro_timing/
 ├── tests/
-│   ├── mocks/
 │   └── test_*.py
-├── device_tests/
-│   └── test_*.py
-└── doc/
+└── device_tests/
+    └── test_*.py
 ```
 
 ## Current verified slice
@@ -39,7 +37,7 @@ libraries/timing/
 - `libraries/timing/tests/` covers the host-side behavior with `pytest`
 - `libraries/timing/device_tests/test_heartbeat_ticks.py` exists as the first device-aware timing test
 - `libraries/timing/pyproject.toml` builds as an individual package
-- `libraries/timing/README.md` and `libraries/timing/doc/` establish the package documentation shape
+- `libraries/timing/README.md` establishes the package documentation
 
 ## Design rules
 
@@ -111,7 +109,7 @@ Current verified state:
 
 - `scripts/run.py test-micropython-compat` exists as the first MicroPython compatibility entrypoint
 - `scripts/run.py prepare-micropython` exists as the repo-managed MicroPython runtime bootstrap command
-- `ci/run_sample_device_smoke.py` exists as the canonical runtime-switchable smoke script, with `ci/run_sample_device_tests.py` kept as a compatibility wrapper
+- `ci/run_sample_device_smoke.py` exists as the canonical runtime-switchable smoke script
 - the MicroPython path has been exercised successfully in this workspace with the repo-managed local Unix-port runtime and now runs as an advisory CI job
 - the CircuitPython path has been exercised successfully in this workspace with the repo-managed local Unix-port runtime and now runs as an advisory CI job
 - per [Decision 0006](../decisions/0006-shared-import-free-compatibility-smoke-runner.md), the canonical smoke path stays intentionally import-free for the current workspace phase

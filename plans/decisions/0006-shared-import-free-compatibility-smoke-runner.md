@@ -20,12 +20,10 @@ This runner should stay:
 - import-free enough to execute consistently across the supported interpreters
 - focused on one checked-in timing smoke behavior rather than pretending to be a full runtime test suite
 
-Keep `ci/run_sample_device_tests.py` as a backward-compatible wrapper so existing references do not break immediately.
-
 ## Consequences
 
-- compatibility checks in `ci/tasks.py` can use one canonical smoke path across interpreters
+- compatibility checks in `scripts/run.py` can use one canonical smoke path across interpreters
 - the smoke runner is a verified execution path, not a claim that normal package imports are already equivalent on every runtime
 - richer runtime-specific import checks can be added later without replacing this small baseline signal
-- planning and docs should refer to `ci/run_sample_device_smoke.py` as canonical and to `ci/run_sample_device_tests.py` as compatibility-only
+- planning and docs should refer to `ci/run_sample_device_smoke.py` as canonical
 

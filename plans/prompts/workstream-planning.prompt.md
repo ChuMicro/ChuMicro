@@ -64,8 +64,8 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
 5. Manual-only hardware workflows are the current starting point.
 6. The first library is timing/ticks, with digital I/O deferred as the likely next seam.
 7. IDE config generation works for both PyCharm and VS Code.
-8. `pyproject.toml` uses `importlib` import mode so test directories across libraries don't collide.
-9. Library test directories do not use `__init__.py`; mock imports use absolute paths via conftest sys.path setup.
+8. Per-library pytest runs avoid test-directory collisions (Decision 0009).
+9. Shared test fakes ship as `testing` submodules (e.g., `chumicro_timing.testing.FakeTicks`) and are importable by any library's tests.
 
 ### What is still intentionally incomplete
 
@@ -73,11 +73,10 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
 2. Real board transport tooling beyond manual-only documentation.
 3. Release automation and per-library version bump workflows.
 4. IDE-facing stub packaging strategy.
-5. Shared cross-library test mocks (e.g., FakeTicks usable from other libraries).
-6. The second seam after timing/ticks.
-7. Whether the advisory runtime CI jobs should become protected-branch requirements.
-8. VS Code workspace validation (pyrightconfig.json generated but not tested in VS Code).
-9. Test ergonomics: reducing repeated boilerplate across test files.
+5. The second seam after timing/ticks.
+6. Whether the advisory runtime CI jobs should become protected-branch requirements.
+7. VS Code workspace validation (pyrightconfig.json generated but not tested in VS Code).
+8. Test ergonomics: reducing repeated boilerplate across test files.
 
 ### How to use this prompt
 
