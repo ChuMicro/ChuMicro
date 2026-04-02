@@ -78,7 +78,7 @@ Current decision:
 Current verified state:
 
 - `devices.example.yml` is now checked in
-- the repo has a manual `test-device` entrypoint in `ci/tasks.py`
+- the repo has a manual `test-device` entrypoint in `scripts/run.py`
 - the repo can prepare a pinned local MicroPython unix-port runtime under `.tools/`
 - the first MicroPython-oriented compatibility command has been exercised successfully in this workspace with the prepared local runtime
 - the repo now has a real local `prepare-circuitpython` / `test-circuitpython-compat` evaluation path instead of a placeholder task

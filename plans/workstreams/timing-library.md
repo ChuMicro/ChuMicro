@@ -109,8 +109,8 @@ Current verified state:
 
 Current verified state:
 
-- `ci/tasks.py test-micropython-compat` exists as the first MicroPython compatibility entrypoint
-- `ci/tasks.py prepare-micropython` exists as the repo-managed MicroPython runtime bootstrap command
+- `scripts/run.py test-micropython-compat` exists as the first MicroPython compatibility entrypoint
+- `scripts/run.py prepare-micropython` exists as the repo-managed MicroPython runtime bootstrap command
 - `ci/run_sample_device_smoke.py` exists as the canonical runtime-switchable smoke script, with `ci/run_sample_device_tests.py` kept as a compatibility wrapper
 - the MicroPython path has been exercised successfully in this workspace with the repo-managed local Unix-port runtime and now runs as an advisory CI job
 - the CircuitPython path has been exercised successfully in this workspace with the repo-managed local Unix-port runtime and now runs as an advisory CI job

@@ -9,11 +9,11 @@ This runner is intentionally tiny. It is meant to complement host-side `pytest`,
 The first checked-in compatibility smoke path uses:
 
 - `support/test_harness/src/chumicro_test_harness/runner.py`
-- `sample/device_tests/test_heartbeat_ticks.py`
+- `libraries/timing/device_tests/test_heartbeat_ticks.py`
 - `ci/run_sample_device_smoke.py`
 - `ci/run_sample_device_tests.py` as a backward-compatible wrapper
 
-Today this is wired through small repo-level commands for local compatibility evaluation and advisory CI jobs.
+Today this is wired through `scripts/run.py` for local compatibility evaluation and advisory CI jobs.
 
 ### CPython smoke run
 
@@ -26,34 +26,34 @@ python ci/run_sample_device_tests.py
 
 ```zsh
 cd /path/to/chumicro
-python ci/tasks.py prepare-micropython
-python ci/tasks.py test-micropython-compat
+python scripts/run.py prepare-micropython
+python scripts/run.py test-micropython-compat
 ```
 
-If `MICROPYTHON_BIN` is not set, `ci/tasks.py` now falls back to the repo-local prepared runtime under `.tools/`, and then to a `micropython` executable on `PATH`.
+If `MICROPYTHON_BIN` is not set, `scripts/run.py` falls back to the repo-local prepared runtime under `.tools/`, and then to a `micropython` executable on `PATH`.
 
 ### CircuitPython unix-port evaluation run
 
 ```zsh
 cd /path/to/chumicro
-python ci/tasks.py prepare-circuitpython
-python ci/tasks.py test-circuitpython-compat
+python scripts/run.py prepare-circuitpython
+python scripts/run.py test-circuitpython-compat
 ```
 
-If `CIRCUITPYTHON_BIN` is not set, `ci/tasks.py` first tries the repo-local prepared runtime under `.tools/`, then a `circuitpython` executable on `PATH`, and otherwise triggers the repo-managed prepare step automatically.
+If `CIRCUITPYTHON_BIN` is not set, `scripts/run.py` first tries the repo-local prepared runtime under `.tools/`, then a `circuitpython` executable on `PATH`, and otherwise triggers the repo-managed prepare step automatically.
 
 In this workspace on macOS, the pinned upstream `10.1.4` unix-port build now completes and the shared timing smoke runner passes under both MicroPython and CircuitPython unix-port interpreters.
 
 Here, **advisory** means the runtime CI jobs still run and still report real pass/fail results, but they do not fail the overall GitHub Actions workflow yet because the workflow marks them with `continue-on-error: true`.
 
-### Combined host + MicroPython smoke run
+### Combined host + runtime smoke run
 
 ```zsh
 cd /path/to/chumicro
-python ci/tasks.py test-runtime-matrix
+python scripts/run.py test-runtime-matrix
 ```
 
-This runs the current verified CPython host test suite, prepares the repo-local MicroPython runtime if needed, and then runs the MicroPython device-test smoke path.
+This runs the current verified CPython host test suite, prepares the repo-local runtimes if needed, and then runs the MicroPython and CircuitPython device-test smoke paths.
 
 ## Device registration
 

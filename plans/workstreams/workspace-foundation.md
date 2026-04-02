@@ -30,7 +30,7 @@ Define the repo layout, shared tooling, and local developer ergonomics for a Pyt
 - `support/test_harness/` exists as the first tiny on-device runner scaffold
 - `timing/` exists as the first publishable package slice under `libraries/`
 - `.github/workflows/ci.yml` exists and uses the shared repo task entrypoints
-- `ci/tasks.py` exists as the current shared task interface for humans, agents, and CI
+- `scripts/run.py` exists as the current shared task interface for humans, agents, and CI
 - `ci/prepare_micropython.py` exists as the current repo-managed MicroPython runtime bootstrap path
 - `ci/run_sample_device_smoke.py` exists as the canonical checked-in compatibility smoke entrypoint
 - `ci/run_sample_device_tests.py` exists as a backward-compatible wrapper around the canonical smoke runner
@@ -86,7 +86,7 @@ Instead, switching should happen through:
 
 Current verified implementation:
 
-- the shared task interface lives in `ci/tasks.py`
+- the shared task interface lives in `scripts/run.py`
 - CI uses the same task interface for lint, host tests, timing package build, and advisory runtime compatibility jobs
 - compatibility and device commands exist now as honest scaffolding entrypoints rather than hidden future intent
 
@@ -98,7 +98,7 @@ Current verified state:
 - `pytest`
 - `pytest-cov`
 - `ruff`
-- `ci/tasks.py` as the current repo-level command surface
+- `scripts/run.py` as the current repo-level command surface
 
 Proposed direction:
 
@@ -108,7 +108,7 @@ Proposed direction:
 Current decision:
 
 - keep `venv` as the active documented path for now
-- reconsider `uv` only after the current `ci/tasks.py` interface needs stronger environment or task management
+- reconsider `uv` only after the current `scripts/run.py` interface needs stronger environment or task management
 
 ## PyCharm and agent ergonomics
 
@@ -133,6 +133,6 @@ This workstream is considered complete for the current bootstrap phase. New foun
 ## Feedback requested
 
 - Is the three-mode model correct, or do you want a fourth explicit mode for simulation/emulation?
-- Should `ci/tasks.py` remain the long-term human/agent entrypoint, or do you want it treated as a temporary bridge until `uv` is adopted?
+- Should `scripts/run.py` remain the long-term human/agent entrypoint, or do you want it treated as a temporary bridge until `uv` is adopted?
 - Do you want PyCharm-specific setup steps documented next, or is the current predictable `src/` layout sufficient for now?
 
