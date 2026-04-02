@@ -17,7 +17,8 @@ Use this prompt at the start of a new session when you need to rehydrate the wor
    - [0005: Windows host path for unix-port validation](../decisions/0005-windows-wsl2-unix-port-validation.md)
    - [0006: shared import-free compatibility smoke runner](../decisions/0006-shared-import-free-compatibility-smoke-runner.md)
    - [0007: cross-platform dependency and distribution strategy](../decisions/0007-cross-platform-dependency-strategy.md)
-   - [0008: importlib test isolation for multi-library workspace](../decisions/0008-importlib-test-isolation.md)
+   - [0008: importlib test isolation (superseded)](../decisions/0008-importlib-test-isolation.md)
+   - [0009: per-library test runs](../decisions/0009-per-library-test-runs.md)
 
 ### Design principles to preserve
 
@@ -26,7 +27,7 @@ These emerged from multiple working sessions and should not be re-debated withou
 1. **Auto-discover, don't enumerate.** No hard-coded library lists. All paths derived from workspace structure.
 2. **Zero-config library addition.** `new-library <name>` is the only command needed.
 3. **No pip-installed dev packages.** IDE resolution via source root configs, not editable installs.
-4. **importlib test isolation.** No `__init__.py` in `tests/` dirs. Absolute mock imports.
+4. **Per-library test runs.** `test-host` runs pytest once per package to avoid test-directory collisions. Shared fakes ship as `testing` submodules.
 5. **Plans and prompts are workspace contract.** Keep current with the codebase.
 6. **Commit after making changes.** Clean tree between sessions.
 7. **Simplicity over abstraction.** No unnecessary classes, ABCs, or indirection.

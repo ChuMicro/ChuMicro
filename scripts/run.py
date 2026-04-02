@@ -82,7 +82,11 @@ def _coverage_args_for(pkg_dirs: list[Path]) -> list[str]:
 
 
 def _test_paths_for(pkg_dirs: list[Path]) -> list[str]:
-    """Return ``tests/`` directory paths (relative to ROOT) for *pkg_dirs*."""
+    """Return ``tests/`` directory paths (relative to ROOT) for *pkg_dirs*.
+
+    .. deprecated:: Use per-library pytest runs instead of collecting
+       all test paths into a single invocation.
+    """
     paths: list[str] = []
     for pkg_dir in pkg_dirs:
         tests = pkg_dir / "tests"
@@ -480,27 +484,67 @@ def lint() -> int:
 def test_host(extra_args: list[str] | None = None) -> int:
     """Run the CPython test suite with optional library scoping.
 
+    Runs pytest separately for each package to avoid test-directory name
+    collisions, then combines and reports coverage.
+
     Accepts ``--all``, ``--libraries name,...``, and ``-- <pytest args>``.
     Default (no options): detect changed packages on branch vs origin/main.
     """
     pkg_dirs, passthrough = _parse_test_args(extra_args or [])
-    test_paths = _test_paths_for(pkg_dirs)
-    if not test_paths:
+
+    # Keep only packages that actually have a tests/ directory.
+    testable = [d for d in pkg_dirs if (d / "tests").is_dir()]
+    if not testable:
         print("No test directories found for the selected packages.")
         return 0
 
-    cov_args = _coverage_args_for(pkg_dirs)
-    pytest_args = [
-        "-W",
-        "error",
-        *cov_args,
-        "--cov-report=term-missing",
-    ]
-    # Partial runs (e.g. -k filter) should not fail the coverage gate.
-    if passthrough:
-        pytest_args.append("--cov-fail-under=0")
-    pytest_args.extend([*test_paths, *passthrough])
-    return _run([PYTHON, "-m", "pytest", *pytest_args], env=_pythonpath_env())
+    env = _pythonpath_env()
+
+    # Clean stale coverage data so combine starts fresh.
+    for f in ROOT.glob(".coverage"):
+        f.unlink()
+    for f in ROOT.glob(".coverage.*"):
+        f.unlink()
+
+    overall_rc = 0
+
+    for pkg_dir in testable:
+        cov_args = _coverage_args_for([pkg_dir])
+        test_path = str((pkg_dir / "tests").relative_to(ROOT))
+
+        # Each run writes coverage to a per-library file for later combining.
+        run_env = {**env, "COVERAGE_FILE": str(ROOT / f".coverage.{pkg_dir.name}")}
+
+        rc = _run(
+            [
+                PYTHON, "-m", "pytest",
+                "-W", "error",
+                *cov_args,
+                "--cov-report=",
+                "--cov-fail-under=0",
+                test_path,
+                *passthrough,
+            ],
+            env=run_env,
+        )
+        # Exit code 5 means no tests were collected (e.g. -k filter matched
+        # nothing in this library) — not an error.
+        if rc not in (0, 5):
+            overall_rc = rc
+
+    # Combine per-library coverage into one data file and report.
+    if list(ROOT.glob(".coverage.*")):
+        _run([PYTHON, "-m", "coverage", "combine"])
+
+        report_args = [PYTHON, "-m", "coverage", "report", "--show-missing"]
+        if passthrough:
+            report_args.append("--fail-under=0")
+
+        report_rc = _run(report_args)
+        if report_rc != 0 and overall_rc == 0:
+            overall_rc = report_rc
+
+    return overall_rc
 
 
 def _find_publishable_packages() -> list[str]:

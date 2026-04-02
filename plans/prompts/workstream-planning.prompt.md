@@ -20,7 +20,8 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
    - [0005: Windows host path for unix-port validation](../decisions/0005-windows-wsl2-unix-port-validation.md)
    - [0006: shared import-free compatibility smoke runner](../decisions/0006-shared-import-free-compatibility-smoke-runner.md)
    - [0007: cross-platform dependency and distribution strategy](../decisions/0007-cross-platform-dependency-strategy.md)
-   - [0008: importlib test isolation for multi-library workspace](../decisions/0008-importlib-test-isolation.md)
+   - [0008: importlib test isolation (superseded)](../decisions/0008-importlib-test-isolation.md)
+   - [0009: per-library test runs](../decisions/0009-per-library-test-runs.md)
 3. Implemented code slices:
    - `support/runtime/` for reusable runtime detection
    - `support/test_harness/` for a tiny on-device test runner

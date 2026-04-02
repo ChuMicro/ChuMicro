@@ -51,7 +51,7 @@ Future plan updates should preserve open questions instead of silently guessing.
 - `workstreams/timing-library.md`
 - `workstreams/ci-release.md`
 - `workstreams/device-validation.md`
-- `decisions/` (0001–0008)
+- `decisions/` (0001–0009)
 - `workstreams/timing-library.md`
 - `workstreams/ci-release.md`
 - `workstreams/device-validation.md`

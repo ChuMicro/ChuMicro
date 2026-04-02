@@ -140,14 +140,12 @@ PyTest is the primary framework for unit tests in the host environment.  It offe
 
 #### Test structure rules
 
-The workspace uses `--import-mode=importlib` for pytest (see [Decision 0008](plans/decisions/0008-importlib-test-isolation.md)).  These constraints are mandatory:
+The workspace uses per-library pytest runs to avoid test-directory name collisions (see [Decision 0009](plans/decisions/0009-per-library-test-runs.md)).  `scripts/run.py test-host` runs a separate pytest subprocess for each package, then combines coverage.
 
-- Library `tests/` directories **must not** contain `__init__.py`.  Multiple libraries each having `tests/__init__.py` causes `ImportPathMismatchError`.
-- Use **absolute** mock imports (`from mocks.fake_ticks import FakeTicks`), never relative (`from .mocks ...`).
-- Each library's `tests/conftest.py` must add the tests directory and `src/` directory to `sys.path` so absolute imports resolve.
-- The `mocks/` subdirectory inside `tests/` keeps its `__init__.py` — it is a regular package, not a test directory.
 - The root `conftest.py` auto-discovers all `src/` directories and adds them to `sys.path`, so library packages are importable without pip install.
+- Shared test fakes ship with their library as a `testing` submodule (e.g., `from chumicro_timing.testing import FakeTicks`).  Other libraries import them directly.
 - **Do not use `pip install -e`** to resolve IDE import warnings.  IDE resolution is handled through generated source root configs (`.idea/chumicro.iml` for PyCharm, `pyrightconfig.json` for VS Code).
+- Bare `pytest` from the repo root is not the supported path.  Use `python scripts/run.py test-host`.
 
 ### On‑Device Unit Tests
 

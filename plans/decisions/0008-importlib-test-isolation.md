@@ -1,6 +1,7 @@
 # Decision 0008: importlib test isolation for multi-library workspace
 
-Status: `accepted`
+Status: `superseded`
+Superseded by: [Decision 0009](0009-per-library-test-runs.md)
 Date: `2026-04-01`
 
 ## Context
@@ -33,4 +34,3 @@ Structural constraints that follow:
 - Contributors must not add `__init__.py` to `tests/` directories; doing so will break test collection when more than one library exists.
 - Relative imports inside test files are not supported under this mode.
 - This is a permanent constraint for the lifetime of the mono-workspace layout.
-
