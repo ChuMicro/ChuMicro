@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-import chumicro_sample.ticks as ticks_module
+import chumicro_timing.ticks as ticks_module
 
 # -- _try_import_supervisor --
 
@@ -133,15 +133,15 @@ def test_ticks_add_rejects_overflow() -> None:
         ticks_module.ticks_add(0, -halfperiod)
 
 
-# -- SystemTicks delegation --
+# -- _SystemTicks delegation --
 
 
 def test_system_ticks_delegates_to_module_helpers(monkeypatch) -> None:
-    """SystemTicks should delegate to the module-level functions."""
+    """_SystemTicks should delegate to the module-level functions."""
     monkeypatch.setattr(ticks_module, "ticks_ms", lambda: 4321)
     monkeypatch.setattr(ticks_module, "ticks_diff", lambda end, start: end - start + 1)
 
-    system_ticks = ticks_module.SystemTicks()
+    system_ticks = ticks_module._SystemTicks()
 
     assert system_ticks.ticks_ms() == 4321
     assert system_ticks.ticks_diff(10, 3) == 8

@@ -106,19 +106,7 @@ def ticks_diff(end, start):
     return ((diff + _TICKS_HALFPERIOD) & _TICKS_MAX) - _TICKS_HALFPERIOD
 
 
-class TickSource:
-    """Base class for injectable tick sources."""
-
-    def ticks_ms(self):
-        """Return the current tick count in milliseconds."""
-        raise NotImplementedError
-
-    def ticks_diff(self, end, start):
-        """Return the signed ms difference between two tick values."""
-        raise NotImplementedError
-
-
-class SystemTicks(TickSource):
+class _SystemTicks:
     """Default tick source using the module-level helpers."""
 
     def ticks_ms(self):

@@ -18,10 +18,10 @@ Establish predictable PR checks and per-library release automation for a mono-wo
 ## Current verified slice
 
 - `.github/workflows/ci.yml` exists and runs on `push` to `main` and on `pull_request`
-- CI currently runs required host checks for lint, host-side tests with coverage, and sample package build
+- CI currently runs required host checks for lint, host-side tests with coverage, and timing package build
 - CI now also runs advisory MicroPython and CircuitPython compatibility smoke jobs via `ci/tasks.py`
 - CI now uses the shared repo task interface in `ci/tasks.py`
-- the sample package is the current single-package proof target under `libraries/` for CI behavior
+- the timing package is the current single-package proof target under `libraries/` for CI behavior
 
 ## Proposed pipeline tiers
 
@@ -70,11 +70,11 @@ It should not be forced to be the direct execution environment on constrained bo
 - lint and coverage gates fail fast when standards are not met
 - merge to `main` can trigger release preparation for the affected library
 - release version intent comes from the changed library's checked-in `VERSION` file
-- the sample library can prove the end-to-end PR to release flow before the repo scales to more libraries
+- the timing library can prove the end-to-end PR to release flow before the repo scales to more libraries
 
 ## Notes
 
-The repo has already started with checks for a single package: `sample/`.
+The repo has already started with checks for a single package: `timing/`.
 
 Release automation is still intentionally incomplete. This workstream remains active until per-library `VERSION` file enforcement, package-aware release selection, and staged publishing are implemented.
 
@@ -82,5 +82,5 @@ Release automation is still intentionally incomplete. This workstream remains ac
 
 - Which checks do you want to be required in the very first protected-branch setup?
 - Should hardware workflows block merges, or only run manually / on schedule at first?
-- Do you want release automation to stage CircuitPython artifacts immediately, or only after the sample package proves the basic build flow?
+- Do you want release automation to stage CircuitPython artifacts immediately, or only after the timing package proves the basic build flow?
 

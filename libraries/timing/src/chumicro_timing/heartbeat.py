@@ -1,6 +1,6 @@
 """Heartbeat logic driven by an injected tick source."""
 
-from .ticks import SystemTicks
+from .ticks import _SystemTicks
 
 
 class Heartbeat:
@@ -12,7 +12,7 @@ class Heartbeat:
             raise ValueError("period_ms must be greater than zero")
 
         self._period_ms = period_ms
-        self._ticks = ticks or SystemTicks()
+        self._ticks = ticks or _SystemTicks()
         self._last_beat_ms = self._ticks.ticks_ms()
 
     @property

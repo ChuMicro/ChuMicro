@@ -1,14 +1,14 @@
-# Workstream: Sample Library
+# Workstream: Timing Library
 
 Status: `in-progress`
 
 ## Purpose
 
-Create a small `sample` library that proves the Chumicro ecosystem rather than just describing it.
+Create the `chumicro-timing` library — cross-runtime tick helpers and periodic timing utilities.
 
 ## Scope
 
-- publishable library layout with `src/`, `tests/`, `device_tests/`, and `doc/`
+- publishable library layout under `libraries/timing/` with `src/`, `tests/`, `device_tests/`, and `doc/`
 - cross-runtime import and shim patterns
 - host-side testability through mocks or stubs
 - IDE ergonomics for downstream developers
@@ -17,12 +17,12 @@ Create a small `sample` library that proves the Chumicro ecosystem rather than j
 ## Current verified package shape
 
 ```text
-libraries/sample/
+libraries/timing/
 ├── VERSION
 ├── pyproject.toml
 ├── README.md
 ├── src/
-│   └── chumicro_sample/
+│   └── chumicro_timing/
 ├── tests/
 │   ├── mocks/
 │   └── test_*.py
@@ -33,13 +33,13 @@ libraries/sample/
 
 ## Current verified slice
 
-- `libraries/sample/src/chumicro_sample/__init__.py` exports the current public API
-- `libraries/sample/src/chumicro_sample/heartbeat.py` implements the first public behavior slice
-- `libraries/sample/src/chumicro_sample/ticks.py` provides the cross-runtime timing seam
-- `libraries/sample/tests/` covers the host-side behavior with `pytest`
-- `libraries/sample/device_tests/test_heartbeat_ticks.py` exists as the first device-aware timing test
-- `libraries/sample/pyproject.toml` builds as an individual package
-- `libraries/sample/README.md` and `libraries/sample/doc/` establish the package documentation shape
+- `libraries/timing/src/chumicro_timing/__init__.py` exports the current public API
+- `libraries/timing/src/chumicro_timing/heartbeat.py` implements the first public behavior slice
+- `libraries/timing/src/chumicro_timing/ticks.py` provides the cross-runtime timing seam
+- `libraries/timing/tests/` covers the host-side behavior with `pytest`
+- `libraries/timing/device_tests/test_heartbeat_ticks.py` exists as the first device-aware timing test
+- `libraries/timing/pyproject.toml` builds as an individual package
+- `libraries/timing/README.md` and `libraries/timing/doc/` establish the package documentation shape
 
 ## Design rules
 
@@ -59,11 +59,11 @@ Immediate follow-up seam after the timing proof: **digital I/O**.
 
 Current verified implementation:
 
-- the package root currently exports `Heartbeat`, `SystemTicks`, `TickSource`, `ticks_ms()`, and `ticks_diff()`
+- the package root currently exports `Heartbeat`, `ticks_ms()`, `ticks_diff()`, and `ticks_add()`
 - the core logic is runtime-agnostic and exercised on CPython
 - the timing seam is implemented without requiring a board for the main host test path
 
-## Settled context for the first sample library
+## Settled context for the first timing library
 
 ### Option A: pure logic plus runtime detection
 
@@ -130,7 +130,7 @@ Current verified state:
 
 ## Success criteria
 
-- sample library code stays small and readable
+- timing library code stays small and readable
 - the same public API works across CPython, MicroPython, and CircuitPython where practical
 - CPython tests cover the core behavior with 90%+ coverage
 - the package can be built and prepared for release independently of the rest of the repo
@@ -138,7 +138,7 @@ Current verified state:
 
 ## Current progress against success criteria
 
-- the sample library remains small and readable
+- the timing library remains small and readable
 - the same public timing API is implemented for CPython and structured for target-runtime reuse
 - host tests and coverage are already proven in this workspace
 - the package already builds independently
@@ -153,13 +153,13 @@ Still intentionally incomplete:
 
 ## Notes
 
-The sample library should be intentionally small. Its job is to prove workspace conventions, not to be feature-rich.
+The timing library should remain small and focused. Its job is to provide a correct, cross-runtime timing foundation.
 
-The current implemented slice is a heartbeat-style library whose timing behavior is validated on CPython, exercised through repo-managed MicroPython and CircuitPython unix-port smoke paths, and represented by a first manual device-aware test path.
+The current implemented slice is a heartbeat-style utility whose timing behavior is validated on CPython, exercised through repo-managed MicroPython and CircuitPython unix-port smoke paths, and represented by a first manual device-aware test path.
 
 ## Open decisions
 
-- Should digital I/O become the immediate second seam, or should the next sample iteration stay focused on hardening the timing contract first?
+- Should digital I/O become the immediate second seam, or should the next iteration stay focused on hardening the timing contract first?
 - Should IDE-facing stubs be added before the second seam, or only after one more library slice proves the pattern?
 - Once the advisory runtime compatibility jobs have soaked in CI, should they remain optional or become part of the protected-branch policy?
 

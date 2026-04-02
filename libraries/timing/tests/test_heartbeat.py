@@ -1,10 +1,10 @@
-"""Tests for the sample heartbeat logic."""
+"""Tests for the heartbeat periodic timing logic."""
 
 from __future__ import annotations
 
 import pytest
 
-from chumicro_sample import Heartbeat
+from chumicro_timing import Heartbeat
 
 from .mocks.fake_ticks import FakeTicks
 

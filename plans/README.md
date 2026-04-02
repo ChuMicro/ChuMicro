@@ -48,7 +48,7 @@ Future plan updates should preserve open questions instead of silently guessing.
 - `next-up.md`
 - `prompts/`
 - `workstreams/workspace-foundation.md`
-- `workstreams/sample-library.md`
+- `workstreams/timing-library.md`
 - `workstreams/ci-release.md`
 - `workstreams/device-validation.md`
 - `decisions/`

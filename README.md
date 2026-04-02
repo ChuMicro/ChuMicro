@@ -34,7 +34,7 @@ chumicro/
 │   ├── runtime/           # Cross-runtime detection helpers (workspace-internal)
 │   └── test_harness/      # Lightweight on-device test runner (workspace-internal)
 ├── libraries/
-│   └── sample/            # First library proof (timing/heartbeat)
+│   └── timing/            # Cross-runtime timing library
 ├── devices.example.yml    # Template for local board registration
 └── .github/workflows/     # CI
 ```
@@ -62,7 +62,7 @@ Use native Windows for editing, IDE work, linting, host-side tests, and package 
 
 ### IDE setup
 
-**PyCharm**: shared run configurations are checked into `.idea/runConfigurations/`. After opening the project you should see play buttons for Preflight, Lint, Host Tests, Build Sample, MicroPython Compat, CircuitPython Compat, and Runtime Matrix.
+**PyCharm**: shared run configurations are checked into `.idea/runConfigurations/`. After opening the project you should see play buttons for Preflight, Lint, Host Tests, Build, MicroPython Compat, CircuitPython Compat, and Runtime Matrix.
 
 **VSCode**: `.vscode/tasks.json` provides the same tasks via the Command Palette → *Tasks: Run Task*. `.vscode/settings.json` configures pytest discovery and source roots.
 
@@ -92,7 +92,7 @@ The repo switches runtimes by running the same library code under different inte
 
 ## Device validation
 
-Real-board execution is manual-only. Copy `devices.example.yml` to `devices.yml` and fill in your board details. Use `libraries/sample/device_tests/` with `support/test_harness/` on the target board.
+Real-board execution is manual-only. Copy `devices.example.yml` to `devices.yml` and fill in your board details. Use `libraries/timing/device_tests/` with `support/test_harness/` on the target board.
 
 ## Versioning
 

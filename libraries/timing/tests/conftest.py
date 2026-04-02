@@ -1,4 +1,4 @@
-"""Test configuration for the Chumicro sample package."""
+"""Test configuration for the Chumicro timing package."""
 
 from __future__ import annotations
 

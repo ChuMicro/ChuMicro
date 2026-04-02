@@ -3,9 +3,9 @@ requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "chumicro-sample"
+name = "chumicro-timing"
 dynamic = ["version"]
-description = "Timing-first sample library for the Chumicro workspace."
+description = "Cross-runtime millisecond tick helpers and periodic timing utilities."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"

@@ -24,7 +24,7 @@ SMOKE_EXEC = f'exec(open("{SMOKE_SCRIPT}").read())'
 SOURCE_PATHS = [
     ROOT / "support/runtime/src",
     ROOT / "support/test_harness/src",
-    ROOT / "libraries/sample/src",
+    ROOT / "libraries/timing/src",
 ]
 RUFF_PATHS = [
     "ci",
@@ -33,16 +33,16 @@ RUFF_PATHS = [
     "support/runtime/tests",
     "support/test_harness/src",
     "support/test_harness/tests",
-    "libraries/sample/src",
-    "libraries/sample/tests",
-    "libraries/sample/device_tests",
+    "libraries/timing/src",
+    "libraries/timing/tests",
+    "libraries/timing/device_tests",
 ]
 PYTEST_ARGS = [
     "-W",
     "error",
     "--cov=support/runtime/src/chumicro_runtime",
     "--cov=support/test_harness/src/chumicro_test_harness",
-    "--cov=libraries/sample/src/chumicro_sample",
+    "--cov=libraries/timing/src/chumicro_timing",
     "--cov-report=term-missing",
 ]
 TASKS = (
@@ -263,7 +263,7 @@ def test_device() -> int:
             "Copy devices.example.yml to devices.yml and fill in your board details."
         )
 
-    print("Use libraries/sample/device_tests/ with support/test_harness/ on the target board.")
+    print("Use libraries/timing/device_tests/ with support/test_harness/ on the target board.")
     return 2
 
 

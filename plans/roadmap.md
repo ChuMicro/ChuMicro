@@ -20,27 +20,27 @@ Key choices to confirm:
 
 Current answer:
 
-- keep `venv` for now and revisit `uv` after `sample/` exists or later
+- keep `venv` for now and revisit `uv` after `timing/` exists or later
 
 Verified notes:
 
 - `plans/prompts/` exists for saved prompts that help rebuild workspace context or preserve workspace build-up history
 - `plans/prompts/` now includes prompt files for planning refresh, workspace rebuild, and workspace history capture
 
-## Milestone 1 — sample library proof
+## Milestone 1 — timing library proof
 
 Status: `in-progress`
 
-Goal: add a `sample` library that proves packaging, testing, and cross-runtime structure.
+Goal: add a `timing` library that proves packaging, testing, and cross-runtime structure.
 
 Exit criteria:
 
-- `sample/` has `src/`, `tests/`, `device_tests/`, and `doc/` under `libraries/`
+- `timing/` exists with `src/`, `tests/`, `device_tests/`, and `doc/` under `libraries/`
 - host tests pass with 90%+ coverage
-- sample package can build as an individual distribution
+- timing package can build as an individual distribution
 - IDE-friendly stubs or mocks exist for developer ergonomics
 
-The sample library should prove all of these:
+The timing library should prove all of these:
 
 - one public API shared by CPython, MicroPython, and CircuitPython
 - platform-specific differences hidden behind a small shim or injected adapter
@@ -49,19 +49,19 @@ The sample library should prove all of these:
 
 Key choices to confirm:
 
-- should `sample` be mostly pure logic, or intentionally include one small hardware-facing integration
+- should `timing` be mostly pure logic, or intentionally include one small hardware-facing integration
 - should library stubs be generated, hand-written, or deferred until a second package exists
 
 Current answer:
 
-- `sample` should intentionally include one small hardware-facing seam
+- `timing` should intentionally include one small hardware-facing seam
 - the first seam is timing/ticks, with digital I/O likely next
 
 Current verified progress:
 
 - `sample/` exists with `src/`, `tests/`, `device_tests/`, and `doc/`
 - host-side tests pass with coverage above the current repo threshold
-- the sample package builds as an individual distribution
+- the timing package builds as an individual distribution
 - shared repo-level task entrypoints exist in `ci/tasks.py`
 - a repo-managed MicroPython preparation command exists in `ci/prepare_micropython.py`
 - a checked-in shared compatibility smoke runner exists in `ci/run_sample_device_smoke.py`, with `ci/run_sample_device_tests.py` kept as a wrapper
@@ -101,7 +101,7 @@ Exit criteria:
 - PR checks run on GitHub Actions
 - coverage gate and lint gate are enforced
 - PR checks enforce per-library `VERSION` file updates for release-relevant changes
-- sample release artifacts are produced for PyPI and CircuitPython distribution staging
+- timing release artifacts are produced for PyPI and CircuitPython distribution staging
 
 Suggested pipeline shape:
 

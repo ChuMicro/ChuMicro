@@ -1,8 +1,8 @@
-"""Device-facing tests for the sample timing helpers."""
+"""Device-facing tests for the cross-runtime timing helpers."""
 
 import time
 
-from chumicro_sample.ticks import ticks_diff, ticks_ms
+from chumicro_timing.ticks import ticks_diff, ticks_ms
 
 
 def _sleep_ms(duration_ms):
