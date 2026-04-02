@@ -35,6 +35,15 @@ Conventions:
 - `scripts/run.py` auto-discovers all packages by scanning for `pyproject.toml` under `libraries/` and `support/`.  No hard-coded lists exist.
 - `python scripts/run.py new-library <name>` scaffolds a new library with the correct structure and regenerates IDE configs.
 
+Key task runner commands (run from repo root):
+
+- `python scripts/run.py setup` — install dependencies and regenerate IDE configs
+- `python scripts/run.py preflight` — lint + all tests + build (run before committing)
+- `python scripts/run.py test-host` — run tests for changed packages (or `--all` / `--libraries name`)
+- `python scripts/run.py lint` — run ruff across the workspace
+- `python scripts/run.py build` — build all publishable packages
+- `python scripts/run.py sync-ide` — regenerate PyCharm and VS Code configs
+
 This mono‑repo simplifies dependency management and allows libraries to share common infrastructure.  Publishing individual packages remains possible by using per‑library `pyproject.toml` files and packaging tools (e.g., Hatchling or Setuptools).  Use a `VERSION` file or similar per‑library version to coordinate releases.
 
 ## Development Guidelines
@@ -126,8 +135,19 @@ Chumicro **forbids the use of hardware interrupts (ISRs) anywhere in the codebas
 PyTest is the primary framework for unit tests in the host environment.  It offers fixtures, assertions, and code‑coverage tools.  The CircuitPython community has demonstrated that PyTest can be used alongside a `conftest.py` to mock out CircuitPython‑specific modules【900637251395569†L175-L225】.  MicroPython projects such as `micropython‑stubber` also use a `tests/mocks` folder to allow MicroPython code to run under CPython【424519180869736†L53-L77】.  When writing tests:
 
 1. Place CPython unit tests under `tests/` inside each library.  Use mocks to simulate hardware interactions.  For example, `pytest_runtest_setup` in `conftest.py` can dynamically replace `board`, `digitalio`, etc., with stub objects【900637251395569†L175-L246】.
-2. Maintain 100 % code coverage where practical.  Use `pytest-cov` to measure coverage and ensure that new code includes tests.
+2. Maintain 100 % code coverage where practical.  Use `pytest-cov` to measure coverage and ensure that new code includes tests.
 3. Keep tests simple and avoid test‑only abstractions that bloat the library.  Instead, design classes and functions to accept injected dependencies (e.g., pass in a `ticks` module or I/O interface) so tests can replace them with mocks.
+
+#### Test structure rules
+
+The workspace uses `--import-mode=importlib` for pytest (see [Decision 0008](plans/decisions/0008-importlib-test-isolation.md)).  These constraints are mandatory:
+
+- Library `tests/` directories **must not** contain `__init__.py`.  Multiple libraries each having `tests/__init__.py` causes `ImportPathMismatchError`.
+- Use **absolute** mock imports (`from mocks.fake_ticks import FakeTicks`), never relative (`from .mocks ...`).
+- Each library's `tests/conftest.py` must add the tests directory and `src/` directory to `sys.path` so absolute imports resolve.
+- The `mocks/` subdirectory inside `tests/` keeps its `__init__.py` — it is a regular package, not a test directory.
+- The root `conftest.py` auto-discovers all `src/` directories and adds them to `sys.path`, so library packages are importable without pip install.
+- **Do not use `pip install -e`** to resolve IDE import warnings.  IDE resolution is handled through generated source root configs (`.idea/chumicro.iml` for PyCharm, `pyrightconfig.json` for VS Code).
 
 ### On‑Device Unit Tests
 
@@ -143,11 +163,11 @@ Where possible, run integration tests against actual hardware.  Since hardware a
 
 CI pipelines should enforce linting, unit tests and code coverage across all supported runtimes.  A typical flow:
 
-1. **Linting:** Run `flake8` or `ruff` to ensure PEP 8 compliance.
+1. **Linting:** Run `ruff` to ensure PEP 8 compliance.
 2. **Static type checking:** Optionally run `mypy` against CPython code (use type hints where possible without breaking MicroPython/CircuitPython compatibility).
-3. **Unit tests:** Execute PyTest on a CPython interpreter.  Optionally also run tests under MicroPython’s Unix port using MicroPython’s `run‑tests.py` script【593158073270695†L93-L104】.
+3. **Unit tests:** Execute PyTest on a CPython interpreter.  Optionally also run tests under MicroPython's Unix port using MicroPython's `run‑tests.py` script【593158073270695†L93-L104】.
 4. **On‑device tests:** If configured, flash the library and test firmware to boards listed in `devices.yml` and run the on‑device test runner.  Collect results and include them in the CI report.
-5. **Coverage:** Fail the build if coverage drops below a threshold (e.g., 90 %).
+5. **Coverage:** Fail the build if coverage drops below a threshold (e.g., 90 %).
 
 ## Versioning & Releases
 
@@ -192,13 +212,15 @@ The upstream implementations of **CPython**, **MicroPython**, and **CircuitPytho
 
 ## Planning documents are part of the workspace contract
 
-The planning documents under `plans/` are part of the repository’s working state, not optional notes. Significant implementation or direction changes should be reflected in:
+The planning documents under `plans/` are part of the repository's working state, not optional notes. Significant implementation or direction changes should be reflected in:
 
 - `plans/next-up.md` for the active execution queue
 - `plans/roadmap.md` for milestone status and major direction
 - `plans/workstreams/` for durable bodies of work and higher-level scope; update them when the long-lived shape of the work changes
 - `plans/decisions/` for durable decisions that affect future work
 - `plans/prompts/` for durable prompt artifacts used to recover workspace context, restart sessions, or preserve workspace build-up history
+
+**Before proposing a change to workspace structure, testing patterns, or dependency strategy, check `plans/decisions/` for existing decisions on the topic.**  Re-proposing something that was already decided and rejected wastes time.  If new information justifies revisiting a decision, say so explicitly and reference the original decision.
 
 Keep planning docs aligned with the actual codebase, but avoid churn for tiny edits that do not change scope, status, priorities, or next steps.
 
