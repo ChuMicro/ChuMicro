@@ -68,6 +68,44 @@ Use this prompt when a future session needs to summarize what changed over time,
 3. The second sample seam after timing/ticks.
 4. Whether the advisory runtime CI jobs should stay optional or become protected-branch requirements.
 
+#### 2026-04-01
+
+1. Added multi-library foundation: auto-discovery replaces all hard-coded library lists.
+   - `scripts/run.py` discovers libraries and support packages by scanning for `pyproject.toml`.
+   - `pyproject.toml` uses broad `testpaths = ["support", "libraries"]` and `--import-mode=importlib`.
+   - Root `conftest.py` auto-discovers source roots and excludes `device_tests/`.
+2. Added scoped test running to `test-host`:
+   - Default: detect changed packages on branch vs `origin/main`.
+   - `--all`: run everything. `--libraries timing`: run specific packages.
+   - `-- -k test_name`: pytest passthrough for individual tests.
+   - Coverage gate relaxed automatically for partial runs.
+3. Added `new-library` scaffolder (`python scripts/run.py new-library <name>`):
+   - Creates full directory structure, `pyproject.toml`, `VERSION`, `conftest.py`, `__init__.py`.
+   - Regenerates IDE configs automatically.
+4. Added `sync-ide` task that generates:
+   - `.idea/chumicro.iml` (PyCharm source roots) from workspace structure.
+   - `pyrightconfig.json` (VS Code/Pyright `extraPaths`) from workspace structure.
+   - Preserves existing SDK references and user settings.
+5. Removed `__init__.py` from library `tests/` directories to avoid module name collisions across libraries when pytest runs `--import-mode=importlib`.
+6. Changed mock imports to absolute (`from mocks.fake_ticks import FakeTicks`) with conftest adding the tests dir to `sys.path`.
+7. Removed unused `_SystemTicks` class from `chumicro_timing.ticks`.
+8. Fixed `.idea/chumicro.iml` source roots (was still pointing at old `sample/` path).
+9. Updated CI workflow to use `--all` flag explicitly.
+10. Updated `preflight` and `test-runtime-matrix` to always run all tests.
+11. `setup` task now calls `sync-ide` to regenerate IDE configs.
+
+### Still open after this checkpoint
+
+1. Release automation and per-library `VERSION` file enforcement workflows.
+2. IDE stub packaging strategy.
+3. The compatibility smoke runner is still timing-specific — needs generalization for multi-library.
+4. Shared cross-library test mocks (e.g., FakeTicks usable from other libraries).
+5. The second seam after timing/ticks.
+6. Whether the advisory runtime CI jobs should stay optional or become protected-branch requirements.
+7. VS Code workspace validation (pyrightconfig.json generated but not tested).
+8. Test ergonomics: reducing repeated boilerplate across test files.
+9. Prompts under `plans/prompts/` had gone stale and were updated in this checkpoint.
+
 ### How to extend this history
 
 1. Add a new dated checkpoint instead of rewriting old ones.

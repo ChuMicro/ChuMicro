@@ -8,6 +8,9 @@
 
 ## Next
 
+- [ ] Explore shared cross-library test mocks (e.g., move FakeTicks to `support/` so libraries that depend on timing can mock ticks in their own tests).
+- [ ] Explore test ergonomics: reduce repeated boilerplate across test files.
+- [ ] Validate VS Code workspace with the generated `pyrightconfig.json`.
 - [ ] Define shared mocks for CPython-hosted tests.
 - [ ] Define how IDE-facing stubs are packaged and published.
 - [ ] Decide whether the advisory MicroPython unix-port CI job should stay optional or become part of the protected-branch policy.
@@ -37,6 +40,11 @@
 - [x] Auto-discover test paths in `pyproject.toml` — `testpaths` and coverage source are now broad patterns; `device_tests/` is excluded via `--ignore-glob`.
 - [x] Add root `conftest.py` with auto-discovery of source roots so direct `pytest` invocation works without manual PYTHONPATH.
 - [x] Remove unused `_SystemTicks` class from `chumicro_timing.ticks` (dead code — `Heartbeat` uses direct function imports).
+- [x] Add scoped `test-host` with `--all`, `--libraries`, branch-diff detection, and pytest passthrough.
+- [x] Add `new-library` scaffolder that creates directory structure + regenerates IDE configs.
+- [x] Add `sync-ide` task generating `.idea/chumicro.iml` (PyCharm) and `pyrightconfig.json` (VS Code).
+- [x] Use `importlib` import mode for pytest; remove `__init__.py` from library test directories to avoid cross-library collisions.
+- [x] Update all prompt files under `plans/prompts/` to reflect current repo state (was stale since pre-rename).
 - [x] Choose `workstreams + decisions + next-up + roadmap` as the planning model.
 - [x] Save the planning prompt for later refinement.
 - [x] Bootstrap the repo with root tooling, planning docs, a runtime support package, and a first CI workflow.
