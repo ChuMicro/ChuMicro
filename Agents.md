@@ -39,7 +39,7 @@ Key task runner commands (run from repo root):
 
 - `python scripts/run.py setup` — install dependencies and regenerate IDE configs
 - `python scripts/run.py preflight` — lint + all tests + build (run before committing)
-- `python scripts/run.py test-host` — run tests for changed packages (or `--all` / `--libraries name`)
+- `python scripts/run.py test` — run tests for changed packages (or `--all` / `--libraries name`)
 - `python scripts/run.py lint` — run ruff across the workspace
 - `python scripts/run.py build` — build all publishable packages
 - `python scripts/run.py sync-ide` — regenerate PyCharm and VS Code configs
@@ -138,14 +138,22 @@ PyTest is the primary framework for unit tests in the host environment.  It offe
 2. Maintain 100 % code coverage where practical.  Use `pytest-cov` to measure coverage and ensure that new code includes tests.
 3. Keep tests simple and avoid test‑only abstractions that bloat the library.  Instead, design classes and functions to accept injected dependencies (e.g., pass in a `ticks` module or I/O interface) so tests can replace them with mocks.
 
+#### Library testability rules
+
+Libraries must be designed for testability from the start (see [Decision 0010](plans/decisions/0010-library-testability.md)):
+
+- Accept dependencies via constructor injection — classes that depend on time, I/O, or network must take those as constructor parameters.
+- Provide fakes for things you own — libraries that expose injectable services must include a `testing` submodule (`src/chumicro_<name>/testing.py`) with ready-made fakes.
+- Don't mock what you don't own — use the upstream library's provided fakes rather than creating ad-hoc mocks.
+
 #### Test structure rules
 
-The workspace uses per-library pytest runs to avoid test-directory name collisions (see [Decision 0009](plans/decisions/0009-per-library-test-runs.md)).  `scripts/run.py test-host` runs a separate pytest subprocess for each package, then combines coverage.
+The workspace uses per-library pytest runs to avoid test-directory name collisions (see [Decision 0009](plans/decisions/0009-per-library-test-runs.md)).  `scripts/run.py test` runs a separate pytest subprocess for each package, then combines coverage.  Each library must independently meet the 90% coverage threshold.
 
 - The root `conftest.py` auto-discovers all `src/` directories and adds them to `sys.path`, so library packages are importable without pip install.
 - Shared test fakes ship with their library as a `testing` submodule (e.g., `from chumicro_timing.testing import FakeTicks`).  Other libraries import them directly.
 - **Do not use `pip install -e`** to resolve IDE import warnings.  IDE resolution is handled through generated source root configs (`.idea/chumicro.iml` for PyCharm, `pyrightconfig.json` for VS Code).
-- Bare `pytest` from the repo root is not the supported path.  Use `python scripts/run.py test-host`.
+- Bare `pytest` from the repo root is not the supported path.  Use `python scripts/run.py test`.
 
 ### On‑Device Unit Tests
 

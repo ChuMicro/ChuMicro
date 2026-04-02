@@ -89,7 +89,7 @@ Instead, switching should happen through:
 - runtime detection in shared shim code
 - dependency injection for hardware-facing pieces
 - separate test layers for host logic, compatibility checks, and device execution
-- one shared task interface for common actions such as `test-host`, `test-micropython-compat`, `test-circuitpython-compat`, and `test-device`
+- one shared task interface for common actions such as `test`, `test-micropython-compat`, `test-circuitpython-compat`, and `test-device`
 
 Current verified implementation:
 

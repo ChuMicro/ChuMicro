@@ -138,7 +138,7 @@ def install_dependencies(python: Path) -> None:
 def verify_workspace(python: Path) -> None:
     """Run lint and host tests to confirm the workspace is functional."""
     _run([python, "scripts/run.py", "lint"], "Lint")
-    _run([python, "scripts/run.py", "test-host"], "Host tests")
+    _run([python, "scripts/run.py", "test"], "Host tests")
 
 
 def print_summary(python: Path) -> None:
@@ -159,7 +159,7 @@ def print_summary(python: Path) -> None:
     print("  python scripts/run.py preflight          # verify before pushing")
     if not _is_native_windows():
         print("  python scripts/run.py test-runtime-matrix # full cross-runtime tests")
-    print("  python scripts/run.py test-host           # CPython tests only")
+    print("  python scripts/run.py test                # CPython tests only")
 
     if _is_native_windows():
         print()

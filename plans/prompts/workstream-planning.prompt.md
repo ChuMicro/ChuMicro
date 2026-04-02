@@ -22,6 +22,7 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
    - [0007: cross-platform dependency and distribution strategy](../decisions/0007-cross-platform-dependency-strategy.md)
    - [0008: importlib test isolation (superseded)](../decisions/0008-importlib-test-isolation.md)
    - [0009: per-library test runs](../decisions/0009-per-library-test-runs.md)
+   - [0010: library testability](../decisions/0010-library-testability.md)
 3. Implemented code slices:
    - `support/runtime/` for reusable runtime detection
    - `support/test_harness/` for a tiny on-device test runner
@@ -37,13 +38,13 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
    - `Heartbeat` in `libraries/timing/src/chumicro_timing/heartbeat.py`
    - cross-runtime tick helpers in `libraries/timing/src/chumicro_timing/ticks.py`
    - host-side tests in `libraries/timing/tests/`
-   - mocks in `libraries/timing/tests/mocks/`
+   - shared test fakes in `libraries/timing/src/chumicro_timing/testing.py`
    - a device-facing test in `libraries/timing/device_tests/test_heartbeat_ticks.py`
 5. Verified local commands:
    - `python scripts/run.py setup`
    - `python scripts/run.py lint`
-   - `python scripts/run.py test-host` (default: changed packages; `--all`; `--libraries timing`)
-   - `python scripts/run.py test-host -- -k test_name` (pytest passthrough)
+   - `python scripts/run.py test` (default: changed packages; `--all`; `--libraries timing`)
+   - `python scripts/run.py test -- -k test_name` (pytest passthrough)
    - `python scripts/run.py build`
    - `python scripts/run.py preflight`
    - `python scripts/run.py new-library <name>` (scaffold + IDE regen)

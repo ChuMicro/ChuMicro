@@ -8,10 +8,8 @@
 
 ## Next
 
-- [ ] Explore shared cross-library test mocks (e.g., move FakeTicks to `support/` so libraries that depend on timing can mock ticks in their own tests).
 - [ ] Explore test ergonomics: reduce repeated boilerplate across test files.
 - [ ] Validate VS Code workspace with the generated `pyrightconfig.json`.
-- [ ] Define shared mocks for CPython-hosted tests.
 - [ ] Define how IDE-facing stubs are packaged and published.
 - [ ] Decide whether the advisory MicroPython unix-port CI job should stay optional or become part of the protected-branch policy.
 - [ ] Decide whether the advisory CircuitPython unix-port CI job should stay optional or become part of the protected-branch policy.
@@ -36,6 +34,8 @@
 
 ## Done
 
+- [x] Establish shared cross-library test fakes via `testing` submodules (e.g., `chumicro_timing.testing.FakeTicks`). Decision 0010.
+- [x] Rename `test-host` → `test`. Enforce per-library 90% coverage threshold.
 - [x] Auto-discover libraries and support packages in `scripts/run.py` — lint paths, test coverage, source roots, and PYTHONPATH are now derived from the workspace structure instead of hard-coded lists.
 - [x] Auto-discover test paths in `pyproject.toml` — `testpaths` and coverage source are now broad patterns; `device_tests/` is excluded via `--ignore-glob`.
 - [x] Add root `conftest.py` with auto-discovery of source roots so direct `pytest` invocation works without manual PYTHONPATH.
@@ -43,7 +43,7 @@
 - [x] Add scoped `test-host` with `--all`, `--libraries`, branch-diff detection, and pytest passthrough.
 - [x] Add `new-library` scaffolder that creates directory structure + regenerates IDE configs.
 - [x] Add `sync-ide` task generating `.idea/chumicro.iml` (PyCharm) and `pyrightconfig.json` (VS Code).
-- [x] Use `importlib` import mode for pytest; remove `__init__.py` from library test directories to avoid cross-library collisions.
+- [x] ~~Use `importlib` import mode for pytest~~ — superseded by per-library test runs (Decision 0009).
 - [x] Update all prompt files under `plans/prompts/` to reflect current repo state (was stale since pre-rename).
 - [x] Choose `workstreams + decisions + next-up + roadmap` as the planning model.
 - [x] Save the planning prompt for later refinement.

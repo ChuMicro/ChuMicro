@@ -34,7 +34,7 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          python scripts/run.py test-host --all
+          python scripts/run.py test --all
 
       - name: Build packages
         run: |

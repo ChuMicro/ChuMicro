@@ -6,12 +6,12 @@ Usage::
 
 Run without arguments to see available tasks.
 
-test-host options::
+test options::
 
-    python scripts/run.py test-host                    # changed packages only
-    python scripts/run.py test-host --all              # all packages
-    python scripts/run.py test-host --libraries timing # specific (comma-sep)
-    python scripts/run.py test-host -- -k test_name    # pytest passthrough
+    python scripts/run.py test                    # changed packages only
+    python scripts/run.py test --all              # all packages
+    python scripts/run.py test --libraries timing # specific (comma-sep)
+    python scripts/run.py test -- -k test_name    # pytest passthrough
 """
 
 from __future__ import annotations
@@ -167,7 +167,7 @@ def _detect_changed_packages() -> list[Path] | None:
 def _parse_test_args(
     extra_args: list[str],
 ) -> tuple[list[Path], list[str]]:
-    """Parse ``test-host`` arguments into a package scope and pytest passthrough.
+    """Parse ``test`` arguments into a package scope and pytest passthrough.
 
     Returns ``(pkg_dirs, passthrough)``.
     """
@@ -224,7 +224,7 @@ TASKS = (
     "sync-ide",
     "new-library",
     "lint",
-    "test-host",
+    "test",
     "build",
     "preflight",
     "prepare-micropython",
@@ -485,7 +485,9 @@ def test_host(extra_args: list[str] | None = None) -> int:
     """Run the CPython test suite with optional library scoping.
 
     Runs pytest separately for each package to avoid test-directory name
-    collisions, then combines and reports coverage.
+    collisions, then combines and reports coverage.  Each library must
+    independently meet the coverage threshold (90%) unless passthrough
+    args are present (e.g. ``-k`` filters naturally reduce coverage).
 
     Accepts ``--all``, ``--libraries name,...``, and ``-- <pytest args>``.
     Default (no options): detect changed packages on branch vs origin/main.
@@ -506,6 +508,11 @@ def test_host(extra_args: list[str] | None = None) -> int:
     for f in ROOT.glob(".coverage.*"):
         f.unlink()
 
+    # When passthrough args are present (e.g. -k filter), skip per-library
+    # coverage gates — filtering naturally reduces coverage.  Otherwise each
+    # library must independently meet the threshold from pyproject.toml.
+    cov_gate_args = ["--cov-fail-under=0"] if passthrough else []
+
     overall_rc = 0
 
     for pkg_dir in testable:
@@ -521,7 +528,7 @@ def test_host(extra_args: list[str] | None = None) -> int:
                 "-W", "error",
                 *cov_args,
                 "--cov-report=",
-                "--cov-fail-under=0",
+                *cov_gate_args,
                 test_path,
                 *passthrough,
             ],
@@ -582,7 +589,7 @@ def preflight() -> int:
     """Run the checks that CI requires on every pull request."""
     steps: tuple[tuple[str, object], ...] = (
         ("lint", lambda: lint()),
-        ("test-host", lambda: test_host(["--all"])),
+        ("test", lambda: test_host(["--all"])),
         ("build", lambda: build()),
     )
 
@@ -652,7 +659,7 @@ def test_circuitpython_compat() -> int:
 def test_runtime_matrix() -> int:
     """Run host tests and compatibility smoke tests across all proven runtimes."""
     steps = (
-        ("test-host", lambda: test_host(["--all"])),
+        ("test", lambda: test_host(["--all"])),
         ("test-micropython-compat", test_micropython_compat),
         ("test-circuitpython-compat", test_circuitpython_compat),
     )
@@ -690,7 +697,7 @@ _DISPATCH = {
     "sync-ide": sync_ide,
     "new-library": new_library,
     "lint": lint,
-    "test-host": test_host,
+    "test": test_host,
     "build": build,
     "preflight": preflight,
     "prepare-micropython": prepare_micropython,
@@ -709,7 +716,7 @@ Tasks: {tasks}
 new-library:
   python scripts/run.py new-library <name>   Scaffold a library under libraries/
 
-test-host options:
+test options:
   --all                Run tests for all packages
   --libraries LIB,...  Run tests for specific packages (comma-separated names)
   -- PYTEST_ARGS       Forward remaining arguments to pytest
@@ -727,7 +734,7 @@ def main(argv: list[str]) -> int:
     task_name = argv[1]
     extra_args = argv[2:]
 
-    if task_name in ("test-host", "new-library"):
+    if task_name in ("test", "new-library"):
         return _DISPATCH[task_name](extra_args)
 
     if extra_args:
