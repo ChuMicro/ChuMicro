@@ -1,7 +1,0 @@
-<component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Host Tests" type="tests" factoryName="py.test">
-    <module name="chumicro" />
-    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
-    <method v="2" />
-  </configuration>
-</component>
