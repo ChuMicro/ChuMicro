@@ -13,19 +13,11 @@ Exit criteria:
 - `plans/` exists with workstreams, decisions, and `next-up.md`
 - `support/runtime/` exists with tests passing on CPython
 
-Key choices to confirm:
+Settled choices:
 
-- keep the current root layout, or add `ci/` now instead of later
-- keep plain `venv` as the short-term default, or switch the workspace to `uv` immediately
-
-Current answer:
-
-- keep `venv` for now and revisit `uv` after `timing/` exists or later
-
-Verified notes:
-
+- `venv` is the current workspace path; `uv` deferred until needed
+- `ci/` exists for CI-specific scripts; `scripts/` for developer tasks
 - `plans/prompts/` exists for saved prompts that help rebuild workspace context or preserve workspace build-up history
-- `plans/prompts/` now includes prompt files for planning refresh, workspace rebuild, and workspace history capture
 
 ## Milestone 1 — timing library proof
 
@@ -47,15 +39,11 @@ The timing library should prove all of these:
 - host-side `pytest` tests for logic and contract behavior
 - on-device tests only for runtime-specific behavior that cannot be trusted from mocks
 
-Key choices to confirm:
+Settled choices:
 
-- should `timing` be mostly pure logic, or intentionally include one small hardware-facing integration
-- should library stubs be generated, hand-written, or deferred until a second package exists
-
-Current answer:
-
-- `timing` should intentionally include one small hardware-facing seam
+- `timing` intentionally includes one small hardware-facing seam (timing/ticks)
 - the first seam is timing/ticks, with digital I/O likely next
+- library stubs are deferred until a second library proves the pattern
 
 Current verified progress:
 
@@ -137,9 +125,9 @@ Current answer:
 - CircuitPython should use the same ladder if the unix port is practical; otherwise start with mocks and then real boards
 - Windows should use native CPython for general development and WSL2 for unix-port-based validation
 
-## Feedback requested
+## Open questions
 
-- Which milestone feels under-specified?
-- Which milestone is trying to do too much?
-- Which of the key choices above already has a clear answer in your head?
+- Should the advisory MicroPython and CircuitPython CI lanes become protected-branch requirements?
+- Should hardware workflows block merges, or only run manually / on schedule?
+- Should release automation stage CircuitPython artifacts immediately, or only after the timing package proves the basic build flow?
 

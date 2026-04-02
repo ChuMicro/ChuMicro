@@ -28,10 +28,17 @@ Define the repo layout, shared tooling, and local developer ergonomics for a Pyt
 - root `README.md`, `.gitignore`, and `pyproject.toml` exist
 - `support/runtime/` exists as the first reusable support package
 - `support/test_harness/` exists as the first tiny on-device runner scaffold
-- `timing/` exists as the first publishable package slice under `libraries/`
+- `libraries/timing/` exists as the first publishable package slice under `libraries/`
 - `.github/workflows/ci.yml` exists and uses the shared repo task entrypoints
 - `scripts/run.py` exists as the current shared task interface for humans, agents, and CI
+- `scripts/run.py` auto-discovers all libraries and support packages (no hard-coded lists)
+- `scripts/run.py` provides scoped test running: `--all`, `--libraries`, branch-diff detection, pytest passthrough
+- `scripts/run.py new-library <name>` scaffolds a new library and regenerates IDE configs
+- `scripts/run.py sync-ide` generates `.idea/chumicro.iml` (PyCharm) and `pyrightconfig.json` (VS Code)
+- Root `conftest.py` auto-discovers source roots and excludes `device_tests/`
+- `pyproject.toml` uses `--import-mode=importlib` for multi-library test isolation
 - `ci/prepare_micropython.py` exists as the current repo-managed MicroPython runtime bootstrap path
+- `ci/prepare_circuitpython.py` exists as the current repo-managed CircuitPython runtime bootstrap path
 - `ci/run_sample_device_smoke.py` exists as the canonical checked-in compatibility smoke entrypoint
 - `ci/run_sample_device_tests.py` exists as a backward-compatible wrapper around the canonical smoke runner
 - `.github/workflows/ci.yml` now includes advisory runtime compatibility jobs in addition to the required host lane

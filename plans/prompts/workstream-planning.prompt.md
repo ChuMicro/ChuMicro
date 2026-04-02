@@ -19,6 +19,7 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
    - [0004: sample library first slice](../decisions/0004-sample-library-first-slice.md)
    - [0005: Windows host path for unix-port validation](../decisions/0005-windows-wsl2-unix-port-validation.md)
    - [0006: shared import-free compatibility smoke runner](../decisions/0006-shared-import-free-compatibility-smoke-runner.md)
+   - [0007: cross-platform dependency and distribution strategy](../decisions/0007-cross-platform-dependency-strategy.md)
 3. Implemented code slices:
    - `support/runtime/` for reusable runtime detection
    - `support/test_harness/` for a tiny on-device test runner
