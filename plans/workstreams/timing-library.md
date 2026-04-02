@@ -146,7 +146,6 @@ Still intentionally incomplete:
 
 - the CircuitPython compatibility path is still advisory in CI rather than a required gate
 - package-root export coverage is still strongest for `Heartbeat`; the broader package-root export surface is defined but not yet exhaustively tested as a public contract
-- IDE-facing stub packaging is still open
 - the second seam after timing/ticks is still open
 
 ## Notes

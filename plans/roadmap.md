@@ -62,7 +62,7 @@ Current verified progress:
 - the shared timing smoke runner passes under CPython, MicroPython unix-port, and CircuitPython unix-port
 - `.github/workflows/ci.yml` includes advisory MicroPython and CircuitPython compatibility jobs in addition to the required host lane
 - `devices.example.yml` exists for the first manual device-validation template
-- IDE-facing stub packaging is still open
+- `typings/` provides minimal `.pyi` stubs for `micropython` and `supervisor` modules (Decision 0012), eliminating IDE squigglies for platform-specific imports
 
 Still intentionally incomplete:
 
@@ -70,7 +70,6 @@ Still intentionally incomplete:
 - real board transport tooling is not implemented yet
 - release automation is not implemented yet
 - per-library `VERSION` file enforcement workflows are not implemented yet
-- IDE stub package strategy is not implemented yet
 - the second seam after timing/ticks is not implemented yet
 
 Best next implementation slice:

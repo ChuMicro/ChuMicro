@@ -5,7 +5,6 @@
 - [ ] Generalize the compatibility smoke runner (`ci/run_sample_device_smoke.py`) to discover and exercise device tests for any library, not just timing.
 - [ ] Draft the first release workflow for per-library `VERSION` file enforcement and per-library artifacts (PyPI, circup, mip).
 - [ ] Document contributor prerequisites by platform (macOS, Linux, Windows/WSL2) and by editor (PyCharm, VS Code, CLI) in the README. Linux and WSL2 sections are best-effort/researched until verified.
-- [ ] Prove IDE-facing stub packaging with the timing library.
 
 ## Next
 
@@ -31,6 +30,7 @@
 
 ## Done
 
+- [x] Prove IDE-facing stub packaging with the timing library. Minimal `.pyi` stubs in `typings/` (Decision 0012).
 - [x] Establish shared cross-library test fakes via `testing` submodules (e.g., `chumicro_timing.testing.FakeTicks`). Decision 0010.
 - [x] Close stale "Feedback requested" sections in workstreams that have been answered by subsequent decisions.
 - [x] Decide CircuitPython artifact staging: stage from the start via ChuMicro org circup repo, include `.py` and `.mpy`.

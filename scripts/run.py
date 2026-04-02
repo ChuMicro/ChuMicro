@@ -321,6 +321,14 @@ def _sync_pycharm_iml() -> None:
                     f' isTestSource="{is_test}" />'
                 )
 
+    # Add typings/ as a source root so PyCharm resolves platform-specific stubs.
+    typings_dir = ROOT / "typings"
+    if typings_dir.is_dir():
+        source_lines.append(
+            '      <sourceFolder url="file://$MODULE_DIR$/typings"'
+            ' isTestSource="false" />'
+        )
+
     sources = "\n".join(source_lines)
     jdk_entry = f"\n{jdk_line}" if jdk_line else ""
     content = (
