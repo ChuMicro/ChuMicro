@@ -3,30 +3,26 @@
 ## Now
 
 - [ ] Generalize the compatibility smoke runner (`ci/run_sample_device_smoke.py`) to discover and exercise device tests for any library, not just timing.
-- [ ] Draft the first release workflow for per-library `VERSION` file enforcement and per-library artifacts.
-- [ ] Document contributor prerequisites by platform (macOS, Linux, Windows/WSL2) and by editor (PyCharm, VS Code, CLI) in the README.
+- [ ] Draft the first release workflow for per-library `VERSION` file enforcement and per-library artifacts (PyPI, circup, mip).
+- [ ] Document contributor prerequisites by platform (macOS, Linux, Windows/WSL2) and by editor (PyCharm, VS Code, CLI) in the README. Linux and WSL2 sections are best-effort/researched until verified.
+- [ ] Prove IDE-facing stub packaging with the timing library.
 
 ## Next
 
 - [ ] Add `[tool.chumicro].platforms` reader to `scripts/run.py` and wire it into the compatibility smoke runners and release/build paths (Decision 0011).
+- [ ] Promote advisory MicroPython and CircuitPython CI jobs to protected-branch requirements, gated by platform targeting (Decision 0011).
+- [ ] Add digital I/O as the second library seam (alongside CI/release work, not sequentially).
 - [ ] Explore test ergonomics: reduce repeated boilerplate across test files.
 - [ ] Validate VS Code workspace with the generated `pyrightconfig.json`.
-- [ ] Define how IDE-facing stubs are packaged and published.
-- [ ] Decide whether the advisory MicroPython unix-port CI job should stay optional or become part of the protected-branch policy.
-- [ ] Decide whether the advisory CircuitPython unix-port CI job should stay optional or become part of the protected-branch policy.
-- [ ] Decide whether CircuitPython CI should stop at the unix-port validation path for now or add import-path mocks as a second signal.
-- [ ] Decide whether to keep the pinned CircuitPython `10.1.4` unix-port path as the default local runner or broaden host/runtime coverage before promoting it further.
+- [ ] Add `mpy-cross` compilation step to the release pipeline for circup and mip artifacts.
 - [ ] Decide whether to add a second, runtime-specific import smoke layer on top of the canonical shared runner from [Decision 0006](./decisions/0006-shared-import-free-compatibility-smoke-runner.md).
-- [ ] Add the first real board transport tooling once a manual device execution path needs to move beyond direct local runs.
-- [ ] Decide whether the next sample iteration should prove digital I/O immediately after the timing slice.
-- [x] Close stale "Feedback requested" sections in workstreams that have been answered by subsequent decisions.
+- [ ] Add the first real board transport tooling for ESP32-S2 (Wemos S2-Mini) once the manual device execution path needs to move beyond direct local runs.
 - [ ] Refactor `ci/prepare_*.py` to expose importable `main()` functions so `scripts/run.py` can call them directly instead of via subprocess. Keep subprocess only for external tools (`ruff`, `pytest`, `build`, `make`, `micropython`).
 
 ## Blocked / waiting
 
-- [ ] Choose the exact distribution path for CircuitPython packages (`circup`-compatible index/repo details).
-- [ ] Confirm how MicroPython distribution should be staged in the first release iteration.
-- [ ] Decide when manual-only home testbed workflows should be promoted to scheduled or protected-branch checks.
+- [ ] Confirm exact mip staging details once the CircuitPython circup path is proven.
+- [ ] Expand the device test matrix beyond ESP32-S2 once transport tooling is proven.
 
 ## Current host-path note
 
@@ -36,6 +32,15 @@
 ## Done
 
 - [x] Establish shared cross-library test fakes via `testing` submodules (e.g., `chumicro_timing.testing.FakeTicks`). Decision 0010.
+- [x] Close stale "Feedback requested" sections in workstreams that have been answered by subsequent decisions.
+- [x] Decide CircuitPython artifact staging: stage from the start via ChuMicro org circup repo, include `.py` and `.mpy`.
+- [x] Decide hardware workflow promotion: promote once board transport tooling has proven reliable.
+- [x] Decide first-class test board: ESP32-S2 (Wemos S2-Mini). Matrix expands later.
+- [x] Decide second seam: digital I/O, in parallel with CI/release hardening.
+- [x] Decide IDE stubs: prove now with the timing library.
+- [x] Decide runtime compat CI: promote to mandatory, gated by platform targeting (Decision 0011).
+- [x] Decide platform targeting default: no explicit `platforms` key when targeting all three runtimes; document only where useful.
+- [x] Decide contributor docs scope: all three OS paths (macOS, Linux, Windows/WSL2); Linux and WSL best-effort until verified.
 - [x] Rename `test-host` → `test`. Enforce per-library 90% coverage threshold.
 - [x] Auto-discover libraries and support packages in `scripts/run.py` — lint paths, test coverage, source roots, and PYTHONPATH are now derived from the workspace structure instead of hard-coded lists.
 - [x] Auto-discover test paths in `pyproject.toml` — `testpaths` and coverage source are now broad patterns; `device_tests/` is excluded via `--ignore-glob`.

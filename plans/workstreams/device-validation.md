@@ -111,9 +111,6 @@ This workstream remains active because the transport layer, automated compatibil
 ## Resolved feedback
 
 - **CircuitPython unix-port host-runtime path:** Already pursued and verified. The pinned CircuitPython 10.1.4 unix-port builds locally on macOS and passes the timing smoke tests. It runs as an advisory CI job.
-
-## Open decisions
-
-- What would make you want to promote hardware workflows from manual-only to scheduled or protected-branch checks? (Likely: once board transport tooling exists and has proven reliable.)
-- Which real boards do you expect to be the first-class test targets in your home testbed?
+- **Hardware workflow promotion:** Promote once board transport tooling exists and has proven reliable. Until then, manual-only.
+- **First-class test boards:** ESP32-S2 — specifically the [Wemos S2-Mini](https://www.wemos.cc/en/latest/s2/s2_mini.html) as the initial target. The device matrix will expand later. A future goal is CI-hosted hardware, but that is a high-security concern and will not be user-accessible. Users configure their own local test matrix via `devices.yml`.
 

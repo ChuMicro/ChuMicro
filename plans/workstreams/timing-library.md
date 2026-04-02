@@ -155,9 +155,9 @@ The timing library should remain small and focused. Its job is to provide a corr
 
 The current implemented slice is a heartbeat-style utility whose timing behavior is validated on CPython, exercised through repo-managed MicroPython and CircuitPython unix-port smoke paths, and represented by a first manual device-aware test path.
 
-## Open decisions
+## Resolved decisions
 
-- Should digital I/O become the immediate second seam, or should the next iteration stay focused on hardening the timing contract first?
-- Should IDE-facing stubs be added before the second seam, or only after one more library slice proves the pattern?
-- Once the advisory runtime compatibility jobs have soaked in CI, should they remain optional or become part of the protected-branch policy?
+- **Second seam:** Digital I/O will become the second seam, but the priority is to explore CI and release more deeply with just the timing library (and possibly one more) before adding many libraries. Both tracks proceed in parallel.
+- **IDE-facing stubs:** Prove out IDE stub packaging now, before the second seam. This is part of the timing library's remaining exit criteria.
+- **Advisory runtime compat jobs:** These should become mandatory protected-branch requirements eventually. They will be gated by platform targeting (Decision 0011) so that only libraries declaring support for MicroPython/CircuitPython are required to pass those checks.
 

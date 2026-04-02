@@ -42,8 +42,8 @@ The timing library should prove all of these:
 Settled choices:
 
 - `timing` intentionally includes one small hardware-facing seam (timing/ticks)
-- the first seam is timing/ticks, with digital I/O likely next
-- library stubs are deferred until a second library proves the pattern
+- the first seam is timing/ticks; digital I/O is the second seam (added alongside CI/release hardening, not sequentially)
+- IDE-facing stubs should be proven now as part of the timing library exit criteria
 
 Current verified progress:
 
@@ -75,10 +75,9 @@ Still intentionally incomplete:
 
 Best next implementation slice:
 
-- decide whether the advisory MicroPython unix-port CI lane should stay optional or become part of the default protected-branch policy
-- decide whether the advisory CircuitPython unix-port CI lane should stay optional or become part of the default protected-branch policy
-- decide whether to add a second runtime-specific import smoke layer on top of the canonical shared runner from Decision 0006
-- begin the first release-automation slice around per-library `VERSION` file enforcement once the compatibility entrypoints have one exercised target
+- prove IDE-facing stub packaging with the timing library
+- promote advisory runtime compat jobs to protected-branch requirements (gated by platform targeting, Decision 0011)
+- begin the first release-automation slice: per-library `VERSION` file enforcement, PyPI + circup + mip staging
 
 ## Milestone 2 — CI and release flow
 
@@ -91,13 +90,16 @@ Exit criteria:
 - PR checks run on GitHub Actions
 - coverage gate and lint gate are enforced
 - PR checks enforce per-library `VERSION` file updates for release-relevant changes
-- timing release artifacts are produced for PyPI and CircuitPython distribution staging
+- timing release artifacts are produced for PyPI, CircuitPython (circup), and MicroPython (mip) distribution staging
 
-Suggested pipeline shape:
+Settled choices:
 
 - required PR checks: lint, CPython tests, coverage, package build
-- optional or non-blocking checks: MicroPython compatibility smoke tests, CircuitPython compatibility smoke tests
-- opt-in or scheduled checks: hardware-backed `device_tests/`
+- MicroPython and CircuitPython compatibility smoke tests become required once platform targeting is wired in (gated by Decision 0011)
+- hardware-backed `device_tests/` remain manual/scheduled only
+- all three distribution targets (PyPI, circup, mip) are part of the same release pipeline
+- the ChuMicro GitHub org hosts the circup-compatible repository
+- release artifacts include both `.py` source and `.mpy` compiled bytecode for board targets
 
 ## Milestone 3 — device validation and simulation
 
@@ -120,14 +122,16 @@ Key choices to confirm:
 
 Current answer:
 
-- hardware workflows should be manual only at first
+- hardware workflows should be manual only at first; promote once board transport tooling has proven reliable
 - MicroPython should use CPython + Unix-port validation + later real-board runs
 - CircuitPython should use the same ladder if the unix port is practical; otherwise start with mocks and then real boards
 - Windows should use native CPython for general development and WSL2 for unix-port-based validation
+- first-class test target: ESP32-S2 (Wemos S2-Mini); matrix will expand later
+- CI-hosted hardware is a future goal but high-security; users configure local test matrices via `devices.yml`
 
-## Open questions
+## Settled questions
 
-- Should the advisory MicroPython and CircuitPython CI lanes become protected-branch requirements?
-- Should hardware workflows block merges, or only run manually / on schedule?
-- Should release automation stage CircuitPython artifacts immediately, or only after the timing package proves the basic build flow?
+- Advisory MicroPython and CircuitPython CI lanes should become protected-branch requirements once platform targeting (Decision 0011) is wired in.
+- Hardware workflows stay manual-only until board transport tooling exists and has proven reliable.
+- Release automation stages artifacts for all three targets (PyPI, circup, mip) from the start — do not wait for PyPI to go first.
 

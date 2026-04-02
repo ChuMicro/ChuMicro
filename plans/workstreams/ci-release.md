@@ -51,7 +51,15 @@ These should start as non-blocking if they are not yet stable enough.
 - releases are per library, not per repo
 - release intent comes from the affected library's `VERSION` file
 - versioning should update the affected package only
-- release automation should eventually build both standard Python artifacts and board-friendly distribution artifacts
+- release automation builds standard Python artifacts (PyPI) and board-friendly distribution artifacts
+
+### Distribution targets
+
+- **PyPI:** standard `sdist` and `wheel` publishing. Normal Python packaging — fewest barriers.
+- **CircuitPython (circup):** the ChuMicro GitHub org will host a circup-compatible repository. Artifacts should include both `.py` source and `.mpy` compiled bytecode (or offer both as options). `mpy-cross` compilation is part of the release pipeline.
+- **MicroPython (mip):** target the same distribution model as CircuitPython where possible. Exact mip staging details to be confirmed once the CircuitPython path is proven.
+
+Platform targeting (Decision 0011) gates which distribution targets receive artifacts for each library.
 
 ## Testing stance
 
@@ -82,8 +90,5 @@ Release automation is still intentionally incomplete. This workstream remains ac
 
 - **Required checks for first protected-branch setup:** Tier 1 (lint, CPython tests, coverage gate, package build). Already reflected in the proposed pipeline tiers above and in CI.
 - **Hardware workflows blocking merges:** Manual/scheduled only at first. Already decided (Decision 0003, roadmap.md).
-
-## Open decisions
-
-- Should release automation stage CircuitPython artifacts immediately, or only after the timing package proves the basic PyPI build flow?
+- **CircuitPython artifact staging:** Stage CircuitPython artifacts from the start — the circup repo in the ChuMicro org is the distribution channel. Include both `.py` source and `.mpy` compiled bytecode. Do not wait for PyPI to go first; all three distribution targets (PyPI, circup, mip) should be part of the same release pipeline.
 
