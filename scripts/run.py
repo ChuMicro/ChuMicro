@@ -31,6 +31,21 @@ SMOKE_SCRIPT = "ci/run_sample_device_smoke.py"
 SMOKE_EXEC = f'exec(open("{SMOKE_SCRIPT}").read())'
 
 
+def _read_circuitpython_release() -> str:
+    """Read the pinned CircuitPython release tag from the CI prepare script.
+
+    The constant lives in ``ci/prepare_circuitpython.py`` and is the single
+    source of truth for the version we clone and the stubs we install.
+    """
+    import re
+
+    text = (ROOT / "ci" / "prepare_circuitpython.py").read_text()
+    match = re.search(r'CIRCUITPYTHON_RELEASE\s*=\s*"([^"]+)"', text)
+    if not match:
+        raise RuntimeError("Could not read CIRCUITPYTHON_RELEASE from ci/prepare_circuitpython.py")
+    return match.group(1)
+
+
 # ---------------------------------------------------------------------------
 # Auto-discovery helpers
 # ---------------------------------------------------------------------------
@@ -287,7 +302,15 @@ def _resolve_circuitpython_binary() -> str | None:
 
 def setup() -> int:
     """Install development dependencies and regenerate IDE configuration."""
-    dev_packages = ["pip", "pytest", "pytest-cov", "ruff", "build"]
+    cp_version = _read_circuitpython_release()
+    dev_packages = [
+        "pip",
+        "pytest",
+        "pytest-cov",
+        "ruff",
+        "build",
+        f"circuitpython-stubs=={cp_version}",
+    ]
     result = _run([PYTHON, "-m", "pip", "install", "-U", *dev_packages])
     if result != 0:
         return result
@@ -321,13 +344,6 @@ def _sync_pycharm_iml() -> None:
                     f' isTestSource="{is_test}" />'
                 )
 
-    # Add typings/ as a source root so PyCharm resolves platform-specific stubs.
-    typings_dir = ROOT / "typings"
-    if typings_dir.is_dir():
-        source_lines.append(
-            '      <sourceFolder url="file://$MODULE_DIR$/typings"'
-            ' isTestSource="false" />'
-        )
 
     sources = "\n".join(source_lines)
     jdk_entry = f"\n{jdk_line}" if jdk_line else ""

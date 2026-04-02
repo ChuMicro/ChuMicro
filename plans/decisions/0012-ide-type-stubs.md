@@ -1,40 +1,49 @@
 # Decision 0012 — IDE type stubs for platform-specific modules
 
-Status: `accepted`
+Status: `accepted` (revised)
 
 ## Context
 
-Chumicro libraries import modules that only exist on CircuitPython or MicroPython (e.g., `micropython.const`, `supervisor.ticks_ms`).  The code uses `try/except ImportError` guards so it runs correctly on CPython, but IDEs still flag the imports as unresolved — red squigglies in PyCharm, yellow warnings in VS Code/Pyright.
+Chumicro libraries import modules that only exist on CircuitPython or MicroPython (e.g., `micropython.const`, `supervisor.ticks_ms`).  The code uses `try/except ImportError` guards so it runs correctly on CPython, but IDEs flag the imports as unresolved.
 
-The workspace constraint "no pip-installed dev packages for IDE resolution" (see workspace-history.prompt.md) rules out `pip install circuitpython-stubs`.
+An earlier draft hand-wrote minimal `.pyi` stubs in a `typings/` directory.  This was revised: Adafruit publishes `circuitpython-stubs` on PyPI, built from the same tagged source tree we already clone.
 
 ## Decision
 
-Hand-write minimal `.pyi` stub files in a `typings/` directory at the repo root.  Only stub the API surface that Chumicro code actually imports.
+Install **`circuitpython-stubs`** from PyPI, version-pinned to match `CIRCUITPYTHON_RELEASE` in `ci/prepare_circuitpython.py`.
 
-### Why `typings/`
+### Why PyPI rather than building stubs from the cloned repo
 
-- Pyright auto-discovers `typings/` as its default `stubPath` — zero configuration.
-- PyCharm resolves stubs when `typings/` is registered as a source root by `sync-ide`.
-- The name is the standard Pyright convention, so contributors familiar with the ecosystem expect it.
+The CircuitPython tree includes `tools/extract_pyi.py`, which extracts `.pyi` stubs from `//|` comment lines in C source under `shared-bindings/`.  Running it requires `isort`, `black`, and `circuitpython_typing` as build-time dependencies.  The output is byte-for-byte identical to what Adafruit publishes to PyPI from the same release tag.  Building from source would add three dependencies and a new build step for zero benefit.
 
-### What belongs in `typings/`
+### How version sync is maintained
 
-Only stubs for modules that do not exist on CPython but are imported by Chumicro libraries.  Each stub covers the minimum API surface the codebase uses.  Standard library and CPython package stubs do not belong here.
+`setup()` in `scripts/run.py` reads `CIRCUITPYTHON_RELEASE` from `ci/prepare_circuitpython.py` and pins the stubs install to `circuitpython-stubs=={version}`.  The version is defined in exactly one place; changing the pinned CircuitPython tag automatically changes the stubs version on the next `setup` run.
 
-### Current stubs
+### Coverage
 
-- `typings/micropython/__init__.pyi` — `const()`
-- `typings/supervisor/__init__.pyi` — `ticks_ms()`
+`circuitpython-stubs` is PEP 561 compliant and provides stubs for all CircuitPython built-in modules, including `micropython` (with `const()`), `supervisor` (with `ticks_ms()`), `board`, `digitalio`, etc.  Both Pyright and PyCharm auto-discover PEP 561 stubs from installed packages — no IDE configuration changes are needed.
 
-### Adding new stubs
+### MicroPython-only stubs
 
-When a new library imports a platform-specific module (e.g., `board`, `digitalio`, `machine`), add a stub with only the used symbols.  Run `sync-ide` if PyCharm hasn't picked it up (though `typings/` is already a source root).
+`circuitpython-stubs` already covers the `micropython` module APIs shared between both runtimes (e.g., `const()`).  MicroPython-specific modules like `machine`, `network`, `esp`, and `esp32` are not needed yet.  When a library first imports one, two options will be evaluated:
+
+1. **`micropython-esp32-stubs`** from PyPI (from the micropython-stubber project) — auto-generated, versioned per MicroPython release.
+2. **Introspect from the built unix port** — run the MicroPython binary we already build, enumerate modules via `dir()`, emit `.pyi` files.  This is what micropython-stubber does internally; building our own version is a significant tooling investment.
+
+Both options will be evaluated at the point of need, not speculatively.
+
+### Installation
+
+`circuitpython-stubs` is installed by `python scripts/run.py setup` alongside other dev dependencies.
 
 ## Consequences
 
 - IDE squigglies for platform-specific imports are eliminated.
-- No pip-installed stub packages needed.
-- Stubs grow incrementally as libraries add platform-specific imports.
-- If the surface area ever gets large, a `sync-stubs` task can extract modules from upstream stub packages (`circuitpython-stubs`, `micropython-stubs`) into the same `typings/` layout.
+- No hand-written stubs to maintain.
+- Stubs stay in sync with the cloned CircuitPython version automatically.
+- One additional PyPI dependency in the dev environment.
 
+## Supersedes
+
+This revision replaces the original `typings/` approach.  The `typings/` directory has been removed and `sync-ide` no longer references it.

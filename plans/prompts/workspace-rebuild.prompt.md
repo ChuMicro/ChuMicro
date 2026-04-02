@@ -65,6 +65,7 @@ chumicro/
 9. Run pytest per-library to avoid test-directory collisions; each library must independently meet 90% coverage (Decision 0009).
 10. Design libraries for testability: constructor injection, `testing` submodules for fakes, don't mock what you don't own (Decision 0010).
 11. Libraries declare supported platforms via `[tool.chumicro].platforms` in `pyproject.toml`; default is all three runtimes (Decision 0011).
+12. IDE type stubs come from upstream `circuitpython-stubs` (PEP 561, PyPI), version-pinned to match `CIRCUITPYTHON_RELEASE`.  MicroPython-only stubs deferred until needed (Decision 0012).
 
 ### Key technical patterns
 
@@ -109,10 +110,11 @@ These patterns caused real bugs when implemented incorrectly. Follow them exactl
 - No hard-coded lists to maintain.
 - Key discovery functions: `_discover_package_dirs()`, `_discover_source_roots()`, `_discover_ruff_paths()`.
 
-#### No pip-installed dev packages
+#### No editable pip installs for workspace packages
 
 - IDE import resolution uses source root configuration, not editable installs.
 - `pip install -e` was tried and explicitly rejected.
+- Third-party dev dependencies (`pytest`, `ruff`, `circuitpython-stubs`, etc.) are pip-installed normally — this is a different category.
 - The root conftest handles `sys.path` for IDE test runs; `run.py` handles it via PYTHONPATH for CLI runs.
 
 ### Required implementation slices already proven
