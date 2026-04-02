@@ -17,6 +17,7 @@ Use this prompt at the start of a new session when you need to rehydrate the wor
    - [0005: Windows host path for unix-port validation](../decisions/0005-windows-wsl2-unix-port-validation.md)
    - [0006: shared import-free compatibility smoke runner](../decisions/0006-shared-import-free-compatibility-smoke-runner.md)
    - [0007: cross-platform dependency and distribution strategy](../decisions/0007-cross-platform-dependency-strategy.md)
+   - [0008: importlib test isolation for multi-library workspace](../decisions/0008-importlib-test-isolation.md)
 
 ### Design principles to preserve
 

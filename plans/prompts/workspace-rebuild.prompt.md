@@ -64,6 +64,7 @@ chumicro/
 6. Use WSL2 as the supported Windows path for unix-port validation (Decision 0005).
 7. Keep `ci/run_sample_device_smoke.py` as the canonical shared compatibility smoke runner in the current workspace phase (Decision 0006).
 8. Re-implement rather than depend when a library fails the cross-platform test; publish to all three channels (Decision 0007).
+9. Use `--import-mode=importlib` for pytest; no `__init__.py` in `tests/` directories; absolute mock imports only (Decision 0008).
 
 ### Key technical patterns
 
