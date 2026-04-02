@@ -132,4 +132,29 @@ This was the largest single session. It addressed three areas: the workspace was
 8. Coverage gate relaxed automatically for partial runs (passthrough args trigger `--cov-fail-under=0`).
 
 **Library scaffolding and IDE config generation:**
-9. `new-library <name>` creates full directory structure with `pyproject.toml`, `VERSION`, `confe
+9. `new-library <name>` creates full directory structure with `pyproject.toml`, `VERSION`, `conftest.py`, `__init__.py`, and README.
+10. `sync-ide` generates `.idea/chumicro.iml` (PyCharm) and `pyrightconfig.json` (VS Code) from workspace structure.
+11. Both `setup` and `new-library` call `sync-ide` automatically.
+
+**Test isolation evolution:**
+12. Added Decision 0008 (`--import-mode=importlib`) as the first multi-library test isolation approach.
+13. Moved `FakeTicks` from `tests/mocks/` to `src/chumicro_timing/testing.py` — a `testing` submodule that ships with the library for cross-library reuse.
+14. Replaced importlib mode with per-library pytest runs (Decision 0009, superseding 0008) — `scripts/run.py test` runs a separate pytest subprocess per package, then combines coverage.
+15. Enforced per-library 90% coverage threshold (previously combining at the end masked individual libraries with low coverage).
+16. Renamed `test-host` → `test` — the `host` qualifier was unnecessary jargon.
+17. Formalized library testability patterns as Decision 0010: constructor injection, `testing` submodules for fakes, don't mock what you don't own.
+
+#### 2026-04-02 — Cleanup and platform targeting
+
+**Cruft removal:**
+1. Deleted `ci/run_sample_device_tests.py` (backward-compat wrapper with no callers).
+2. Deleted empty `.github/copilot-instructions.md` (AGENTS.md is the source).
+3. Removed stale `sample/src` from `.vscode/settings.json` extraPaths.
+4. Removed unused `_test_paths_for()` from `run.py`.
+5. Simplified per-library conftest files (root conftest handles discovery).
+6. Removed `doc/` directory boilerplate from the scaffold and timing library.
+7. Fixed stale references across all planning docs: `ci/tasks.py`, `run_sample_device_tests.py`, `doc/`, importlib mode, `tests/mocks/`.
+
+**Platform targeting:**
+8. Accepted Decision 0011 (per-library platform targeting): libraries can declare `[tool.chumicro].platforms` in `pyproject.toml` to restrict which runtimes they target. Default (absent) = all three. Gates release automation and compatibility smoke runners.
+9. Updated all prompt files and plans/README.md to reference Decision 0011.
