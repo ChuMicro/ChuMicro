@@ -13,6 +13,8 @@
 - [ ] Add `[tool.chumicro].platforms` reader to `scripts/run.py` and wire it into the compatibility smoke runners and release/build paths (Decision 0011).
 - [ ] Promote advisory MicroPython and CircuitPython CI jobs to protected-branch requirements, gated by platform targeting (Decision 0011).
 - [ ] Add digital I/O as the second library seam (alongside CI/release work, not sequentially).
+- [ ] Set up ReadTheDocs configuration and initial docs structure for the timing library (`libraries/timing/docs/`).
+- [ ] Add usage examples for the timing library (`libraries/timing/examples/`).
 - [ ] Explore test ergonomics: reduce repeated boilerplate across test files.
 - [ ] Validate VS Code workspace with the generated `pyrightconfig.json`.
 - [ ] Add `mpy-cross` compilation step to the release pipeline for circup and mip artifacts.

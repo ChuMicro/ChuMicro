@@ -50,7 +50,9 @@ chumicro/
         ├── README.md
         ├── src/chumicro_timing/
         ├── tests/
-        └── device_tests/
+        ├── device_tests/
+        ├── docs/              # ReadTheDocs content
+        └── examples/          # Usage examples
 ```
 
 ### Required decisions to preserve

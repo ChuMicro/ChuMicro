@@ -24,7 +24,7 @@ Never embed secrets; configuration such as Wi‑Fi credentials belongs in separa
 
 ## Workspace Structure
 
-Chumicro is organized as a **mono‑workspace**.  Each publishable library resides under `libraries/`, each with its own `src/`, `tests/`, `device_tests/`, and `doc/` subdirectories.  Shared internal packages live under `support/`.  Developer tasks are in `scripts/`, CI-specific helpers in `ci/`, and planning docs in `plans/`.
+Chumicro is organized as a **mono‑workspace**.  Each publishable library resides under `libraries/`, each with its own `src/`, `tests/`, `device_tests/`, `docs/`, and `examples/` subdirectories.  Shared internal packages live under `support/`.  Developer tasks are in `scripts/`, CI-specific helpers in `ci/`, and planning docs in `plans/`.
 
 The live workspace structure is provided automatically at the start of each session.  For the canonical detailed layout, see `plans/prompts/workspace-rebuild.prompt.md`.
 

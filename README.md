@@ -7,6 +7,12 @@ Chumicro is a mono-workspace for Python libraries that run across CPython, Micro
 - CPython-first development and testing, with unix-port simulation preferred over hardware when possible
 - Optional real-device validation for boards registered in a local testbed
 
+## Libraries
+
+| Library | Description |
+|---|---|
+| [timing](libraries/timing/) | Cross-runtime millisecond tick helpers, wraparound-safe arithmetic, and heartbeat scheduling. Works on CPython, MicroPython, and CircuitPython. |
+
 ## Developer workflow
 
 1. Write or update code against a small public API and runtime shims
@@ -35,6 +41,11 @@ chumicro/
 │   └── test_harness/      # Lightweight on-device test runner (workspace-internal)
 ├── libraries/
 │   └── timing/            # Cross-runtime timing library
+│       ├── src/
+│       ├── tests/
+│       ├── device_tests/
+│       ├── docs/          # ReadTheDocs content
+│       └── examples/      # Usage examples
 ├── devices.example.yml    # Template for local board registration
 └── .github/workflows/     # CI
 ```

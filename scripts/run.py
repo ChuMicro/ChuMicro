@@ -436,6 +436,13 @@ def _scaffold_library(name: str) -> int:
     # Create directory tree
     (lib_dir / "src" / import_name).mkdir(parents=True)
     (lib_dir / "tests").mkdir()
+    (lib_dir / "device_tests").mkdir()
+    (lib_dir / "docs").mkdir()
+    (lib_dir / "examples").mkdir()
+
+    # .gitkeep for directories that start empty
+    for subdir in ("device_tests", "docs", "examples"):
+        (lib_dir / subdir / ".gitkeep").touch()
 
     # VERSION
     (lib_dir / "VERSION").write_text("0.1.0\n")
