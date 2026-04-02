@@ -1,0 +1,7 @@
+{
+  "extraPaths": [
+    "support/runtime/src",
+    "support/test_harness/src",
+    "libraries/timing/src"
+  ]
+}

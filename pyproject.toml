@@ -1,18 +1,9 @@
 [tool.pytest.ini_options]
-addopts = "-ra --strict-config --strict-markers"
-testpaths = [
-    "support/runtime/tests",
-    "support/test_harness/tests",
-    "libraries/timing/tests",
-]
+addopts = "-ra --strict-config --strict-markers --ignore-glob=**/device_tests/** --import-mode=importlib"
+testpaths = ["support", "libraries"]
 
 [tool.coverage.run]
 branch = true
-source = [
-    "support/runtime/src/chumicro_runtime",
-    "support/test_harness/src/chumicro_test_harness",
-    "libraries/timing/src/chumicro_timing",
-]
 
 [tool.coverage.report]
 fail_under = 90
@@ -22,17 +13,6 @@ skip_covered = false
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-src = [
-    "ci",
-    "scripts",
-    "support/runtime/src",
-    "support/runtime/tests",
-    "support/test_harness/src",
-    "support/test_harness/tests",
-    "libraries/timing/src",
-    "libraries/timing/tests",
-    "libraries/timing/device_tests",
-]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]

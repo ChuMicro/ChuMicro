@@ -2,13 +2,21 @@
 
 Usage::
 
-    python scripts/run.py <task>
+    python scripts/run.py <task> [options]
 
 Run without arguments to see available tasks.
+
+test-host options::
+
+    python scripts/run.py test-host                    # changed packages only
+    python scripts/run.py test-host --all              # all packages
+    python scripts/run.py test-host --libraries timing # specific (comma-sep)
+    python scripts/run.py test-host -- -k test_name    # pytest passthrough
 """
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -21,32 +29,196 @@ _TOOLS = ROOT / ".tools"
 PYTHON = sys.executable
 SMOKE_SCRIPT = "ci/run_sample_device_smoke.py"
 SMOKE_EXEC = f'exec(open("{SMOKE_SCRIPT}").read())'
-SOURCE_PATHS = [
-    ROOT / "support/runtime/src",
-    ROOT / "support/test_harness/src",
-    ROOT / "libraries/timing/src",
-]
-RUFF_PATHS = [
-    "ci",
-    "scripts",
-    "support/runtime/src",
-    "support/runtime/tests",
-    "support/test_harness/src",
-    "support/test_harness/tests",
-    "libraries/timing/src",
-    "libraries/timing/tests",
-    "libraries/timing/device_tests",
-]
-PYTEST_ARGS = [
-    "-W",
-    "error",
-    "--cov=support/runtime/src/chumicro_runtime",
-    "--cov=support/test_harness/src/chumicro_test_harness",
-    "--cov=libraries/timing/src/chumicro_timing",
-    "--cov-report=term-missing",
-]
+
+
+# ---------------------------------------------------------------------------
+# Auto-discovery helpers
+# ---------------------------------------------------------------------------
+
+
+def _discover_package_dirs() -> list[Path]:
+    """Find directories under support/ and libraries/ that contain a pyproject.toml."""
+    dirs: list[Path] = []
+    for parent in [ROOT / "support", ROOT / "libraries"]:
+        if not parent.is_dir():
+            continue
+        for child in sorted(parent.iterdir()):
+            if child.is_dir() and (child / "pyproject.toml").exists():
+                dirs.append(child)
+    return dirs
+
+
+def _discover_source_roots() -> list[Path]:
+    """Return src/ directories for all discovered packages."""
+    return [d / "src" for d in _discover_package_dirs() if (d / "src").is_dir()]
+
+
+def _discover_ruff_paths() -> list[str]:
+    """Return paths to lint across the workspace."""
+    paths = ["ci", "scripts"]
+    for pkg_dir in _discover_package_dirs():
+        rel = str(pkg_dir.relative_to(ROOT))
+        for subdir in ["src", "tests", "device_tests"]:
+            if (pkg_dir / subdir).is_dir():
+                paths.append(f"{rel}/{subdir}")
+    return paths
+
+
+def _coverage_args_for(pkg_dirs: list[Path]) -> list[str]:
+    """Return ``--cov`` arguments for importable packages under *pkg_dirs*."""
+    args: list[str] = []
+    for pkg_dir in pkg_dirs:
+        src = pkg_dir / "src"
+        if not src.is_dir():
+            continue
+        for pkg in sorted(src.iterdir()):
+            if (
+                pkg.is_dir()
+                and (pkg / "__init__.py").exists()
+                and not pkg.name.endswith(".egg-info")
+            ):
+                args.extend(["--cov", str(pkg.relative_to(ROOT))])
+    return args
+
+
+def _test_paths_for(pkg_dirs: list[Path]) -> list[str]:
+    """Return ``tests/`` directory paths (relative to ROOT) for *pkg_dirs*."""
+    paths: list[str] = []
+    for pkg_dir in pkg_dirs:
+        tests = pkg_dir / "tests"
+        if tests.is_dir():
+            paths.append(str(tests.relative_to(ROOT)))
+    return paths
+
+
+def _resolve_named_packages(names: list[str]) -> list[Path]:
+    """Resolve package names to directories.
+
+    Accepts bare names (e.g. ``timing``) or relative paths
+    (e.g. ``libraries/timing``).
+    """
+    all_dirs = _discover_package_dirs()
+    by_name = {d.name: d for d in all_dirs}
+    by_rel = {str(d.relative_to(ROOT)): d for d in all_dirs}
+
+    resolved: list[Path] = []
+    for name in names:
+        if name in by_rel:
+            resolved.append(by_rel[name])
+        elif name in by_name:
+            resolved.append(by_name[name])
+        else:
+            available = ", ".join(sorted(by_name.keys()))
+            print(f"Unknown package: {name}")
+            print(f"Available: {available}")
+            return []
+    return resolved
+
+
+def _detect_changed_packages() -> list[Path] | None:
+    """Detect packages affected by changes on this branch vs origin/main.
+
+    Returns a list of package directories, or ``None`` when all tests
+    should run (infrastructure changed, git unavailable, or no diff).
+    """
+    try:
+        changed: set[str] = set()
+        for cmd in (
+            ["git", "diff", "--name-only", "origin/main...HEAD"],
+            ["git", "diff", "--name-only"],
+            ["git", "diff", "--name-only", "--cached"],
+        ):
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, cwd=ROOT, check=False
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                changed.update(result.stdout.strip().splitlines())
+    except (FileNotFoundError, OSError):
+        return None
+
+    if not changed:
+        return None
+
+    # Infrastructure changes → run everything
+    for path in changed:
+        if path in ("conftest.py", "pyproject.toml"):
+            return None
+        if path.startswith(("scripts/", "ci/", ".github/")):
+            return None
+
+    # Extract unique package dirs from changed file paths
+    packages: set[Path] = set()
+    for path in changed:
+        for prefix in ("libraries/", "support/"):
+            if path.startswith(prefix):
+                parts = path.split("/")
+                if len(parts) >= 2:
+                    pkg_dir = ROOT / parts[0] / parts[1]
+                    if pkg_dir.is_dir() and (pkg_dir / "pyproject.toml").exists():
+                        packages.add(pkg_dir)
+
+    return sorted(packages) if packages else None
+
+
+def _parse_test_args(
+    extra_args: list[str],
+) -> tuple[list[Path], list[str]]:
+    """Parse ``test-host`` arguments into a package scope and pytest passthrough.
+
+    Returns ``(pkg_dirs, passthrough)``.
+    """
+    scope: str | list[str] = "changed"
+    passthrough: list[str] = []
+
+    i = 0
+    while i < len(extra_args):
+        arg = extra_args[i]
+        if arg == "--all":
+            scope = "all"
+            i += 1
+        elif arg == "--libraries":
+            i += 1
+            if i >= len(extra_args):
+                print("--libraries requires a comma-separated list of package names.")
+                raise SystemExit(1)
+            scope = [n.strip() for n in extra_args[i].split(",") if n.strip()]
+            i += 1
+        elif arg == "--":
+            passthrough = extra_args[i + 1 :]
+            break
+        else:
+            passthrough = extra_args[i:]
+            break
+
+    # Resolve scope → list[Path]
+    if scope == "all":
+        return _discover_package_dirs(), passthrough
+
+    if isinstance(scope, list):
+        resolved = _resolve_named_packages(scope)
+        if not resolved:
+            raise SystemExit(1)
+        return resolved, passthrough
+
+    # "changed" — detect from git
+    detected = _detect_changed_packages()
+    if detected is None:
+        print("Running all tests (no branch diff or infrastructure changed).")
+        return _discover_package_dirs(), passthrough
+
+    names = ", ".join(d.name for d in detected)
+    print(f"Changed packages detected: {names}")
+    return detected, passthrough
+
+
+# ---------------------------------------------------------------------------
+# Shared helpers
+# ---------------------------------------------------------------------------
+
 TASKS = (
     "setup",
+    "sync-ide",
+    "new-library",
     "lint",
     "test-host",
     "build",
@@ -64,7 +236,7 @@ def _pythonpath_env() -> dict[str, str]:
     """Return an environment with the repo source roots prepended to PYTHONPATH."""
     env = os.environ.copy()
     existing_path = env.get("PYTHONPATH")
-    path_entries = [str(path) for path in SOURCE_PATHS]
+    path_entries = [str(path) for path in _discover_source_roots()]
     if existing_path:
         path_entries.append(existing_path)
 
@@ -117,20 +289,229 @@ def _resolve_circuitpython_binary() -> str | None:
     return shutil.which("circuitpython")
 
 
+# ---------------------------------------------------------------------------
+# Tasks
+# ---------------------------------------------------------------------------
+
+
 def setup() -> int:
-    """Install development dependencies into the active Python environment."""
-    packages = ["pip", "pytest", "pytest-cov", "ruff", "build"]
-    return _run([PYTHON, "-m", "pip", "install", "-U", *packages])
+    """Install development dependencies and regenerate IDE configuration."""
+    dev_packages = ["pip", "pytest", "pytest-cov", "ruff", "build"]
+    result = _run([PYTHON, "-m", "pip", "install", "-U", *dev_packages])
+    if result != 0:
+        return result
+    return sync_ide()
+
+
+# ---------------------------------------------------------------------------
+# IDE configuration generation
+# ---------------------------------------------------------------------------
+
+
+def _sync_pycharm_iml() -> None:
+    """Regenerate .idea/chumicro.iml source roots from the workspace structure."""
+    iml_path = ROOT / ".idea" / "chumicro.iml"
+
+    # Preserve the existing SDK reference so users keep their interpreter setting.
+    jdk_line = ""
+    if iml_path.exists():
+        for line in iml_path.read_text().splitlines():
+            if 'type="jdk"' in line:
+                jdk_line = line
+                break
+
+    source_lines: list[str] = []
+    for pkg_dir in _discover_package_dirs():
+        rel = pkg_dir.relative_to(ROOT)
+        for subdir, is_test in [("src", "false"), ("tests", "true"), ("device_tests", "true")]:
+            if (pkg_dir / subdir).is_dir():
+                source_lines.append(
+                    f'      <sourceFolder url="file://$MODULE_DIR$/{rel}/{subdir}"'
+                    f' isTestSource="{is_test}" />'
+                )
+
+    sources = "\n".join(source_lines)
+    jdk_entry = f"\n{jdk_line}" if jdk_line else ""
+    content = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<module type="PYTHON_MODULE" version="4">\n'
+        '  <component name="NewModuleRootManager">\n'
+        '    <content url="file://$MODULE_DIR$">\n'
+        f"{sources}\n"
+        '      <excludeFolder url="file://$MODULE_DIR$/.venv" />\n'
+        '      <excludeFolder url="file://$MODULE_DIR$/.tools" />\n'
+        "    </content>{jdk}\n"
+        '    <orderEntry type="sourceFolder" forTests="false" />\n'
+        "  </component>\n"
+        "</module>\n"
+    ).format(jdk=jdk_entry)
+
+    iml_path.parent.mkdir(parents=True, exist_ok=True)
+    iml_path.write_text(content)
+    print(f"  Updated {iml_path.relative_to(ROOT)}")
+
+
+def _sync_pyrightconfig() -> None:
+    """Regenerate pyrightconfig.json extraPaths from the workspace structure."""
+    config_path = ROOT / "pyrightconfig.json"
+
+    # Preserve any existing user settings; only overwrite extraPaths.
+    if config_path.exists():
+        config = json.loads(config_path.read_text())
+    else:
+        config = {}
+
+    config["extraPaths"] = [
+        str(r.relative_to(ROOT)) for r in _discover_source_roots()
+    ]
+
+    config_path.write_text(json.dumps(config, indent=2) + "\n")
+    print(f"  Updated {config_path.relative_to(ROOT)}")
+
+
+def sync_ide() -> int:
+    """Regenerate IDE configuration files from the workspace structure."""
+    _sync_pycharm_iml()
+    _sync_pyrightconfig()
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Library scaffolding
+# ---------------------------------------------------------------------------
+
+_PYPROJECT_TEMPLATE = """\
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chumicro-{name}"
+dynamic = ["version"]
+description = ""
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [
+    {{ name = "Chumicro" }},
+]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+]
+
+[tool.setuptools]
+package-dir = {{"" = "src"}}
+
+[tool.setuptools.dynamic]
+version = {{file = "VERSION"}}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+"""
+
+
+def _scaffold_library(name: str) -> int:
+    """Create the directory structure and template files for a new library."""
+    import_name = f"chumicro_{name.replace('-', '_')}"
+    lib_dir = ROOT / "libraries" / name
+
+    if lib_dir.exists():
+        print(f"Directory already exists: libraries/{name}")
+        return 1
+
+    # Create directory tree
+    (lib_dir / "src" / import_name).mkdir(parents=True)
+    (lib_dir / "tests").mkdir()
+    (lib_dir / "doc").mkdir()
+
+    # VERSION
+    (lib_dir / "VERSION").write_text("0.1.0\n")
+
+    # pyproject.toml
+    (lib_dir / "pyproject.toml").write_text(_PYPROJECT_TEMPLATE.format(name=name))
+
+    # README
+    (lib_dir / "README.md").write_text(f"# chumicro-{name}\n")
+
+    # Package __init__.py
+    (lib_dir / "src" / import_name / "__init__.py").write_text(
+        f'"""Public exports for the chumicro-{name} package."""\n'
+    )
+
+    # Tests conftest.py (no __init__.py — avoids module name collisions across libraries)
+    (lib_dir / "tests" / "conftest.py").write_text(
+        f'"""Test configuration for the chumicro-{name} package."""\n'
+        "\n"
+        "from __future__ import annotations\n"
+        "\n"
+        "import sys\n"
+        "from pathlib import Path\n"
+        "\n"
+        "_HERE = Path(__file__).resolve().parent\n"
+        'SRC_PATH = _HERE.parents[0] / "src"\n'
+        "for _p in (str(SRC_PATH), str(_HERE)):\n"
+        "    if _p not in sys.path:\n"
+        "        sys.path.insert(0, _p)\n"
+    )
+
+    # doc/README.md
+    (lib_dir / "doc" / "README.md").write_text(f"# chumicro-{name} documentation\n")
+
+    print(f"Created libraries/{name}/")
+    return 0
+
+
+def new_library(extra_args: list[str] | None = None) -> int:
+    """Scaffold a new library under libraries/ and regenerate IDE configs.
+
+    Usage: ``python scripts/run.py new-library <name>``
+    """
+    args = extra_args or []
+    if len(args) != 1 or args[0].startswith("-"):
+        print("Usage: python scripts/run.py new-library <name>")
+        print("Example: python scripts/run.py new-library gpio")
+        return 1
+
+    name = args[0]
+    result = _scaffold_library(name)
+    if result != 0:
+        return result
+
+    return sync_ide()
 
 
 def lint() -> int:
-    """Run Ruff across the currently tracked source and test roots."""
-    return _run([PYTHON, "-m", "ruff", "check", *RUFF_PATHS])
+    """Run Ruff across all discovered source, test, and script paths."""
+    return _run([PYTHON, "-m", "ruff", "check", *_discover_ruff_paths()])
 
 
-def test_host() -> int:
-    """Run the verified CPython test suite with coverage."""
-    return _run([PYTHON, "-m", "pytest", *PYTEST_ARGS], env=_pythonpath_env())
+def test_host(extra_args: list[str] | None = None) -> int:
+    """Run the CPython test suite with optional library scoping.
+
+    Accepts ``--all``, ``--libraries name,...``, and ``-- <pytest args>``.
+    Default (no options): detect changed packages on branch vs origin/main.
+    """
+    pkg_dirs, passthrough = _parse_test_args(extra_args or [])
+    test_paths = _test_paths_for(pkg_dirs)
+    if not test_paths:
+        print("No test directories found for the selected packages.")
+        return 0
+
+    cov_args = _coverage_args_for(pkg_dirs)
+    pytest_args = [
+        "-W",
+        "error",
+        *cov_args,
+        "--cov-report=term-missing",
+    ]
+    # Partial runs (e.g. -k filter) should not fail the coverage gate.
+    if passthrough:
+        pytest_args.append("--cov-fail-under=0")
+    pytest_args.extend([*test_paths, *passthrough])
+    return _run([PYTHON, "-m", "pytest", *pytest_args], env=_pythonpath_env())
 
 
 def _find_publishable_packages() -> list[str]:
@@ -166,10 +547,10 @@ def build() -> int:
 
 def preflight() -> int:
     """Run the checks that CI requires on every pull request."""
-    steps = (
-        ("lint", lint),
-        ("test-host", test_host),
-        ("build", build),
+    steps: tuple[tuple[str, object], ...] = (
+        ("lint", lambda: lint()),
+        ("test-host", lambda: test_host(["--all"])),
+        ("build", lambda: build()),
     )
 
     for step_name, step in steps:
@@ -238,7 +619,7 @@ def test_circuitpython_compat() -> int:
 def test_runtime_matrix() -> int:
     """Run host tests and compatibility smoke tests across all proven runtimes."""
     steps = (
-        ("test-host", test_host),
+        ("test-host", lambda: test_host(["--all"])),
         ("test-micropython-compat", test_micropython_compat),
         ("test-circuitpython-compat", test_circuitpython_compat),
     )
@@ -267,8 +648,14 @@ def test_device() -> int:
     return 2
 
 
+# ---------------------------------------------------------------------------
+# Dispatch
+# ---------------------------------------------------------------------------
+
 _DISPATCH = {
     "setup": setup,
+    "sync-ide": sync_ide,
+    "new-library": new_library,
     "lint": lint,
     "test-host": test_host,
     "build": build,
@@ -281,16 +668,40 @@ _DISPATCH = {
     "test-device": test_device,
 }
 
+_USAGE = """\
+Usage: {prog} <task> [options]
+
+Tasks: {tasks}
+
+new-library:
+  python scripts/run.py new-library <name>   Scaffold a library under libraries/
+
+test-host options:
+  --all                Run tests for all packages
+  --libraries LIB,...  Run tests for specific packages (comma-separated names)
+  -- PYTEST_ARGS       Forward remaining arguments to pytest
+
+  Default (no options): detect changed packages on branch vs origin/main.
+"""
+
 
 def main(argv: list[str]) -> int:
     """Dispatch a named repo-level task."""
-    if len(argv) != 2 or argv[1] not in TASKS:
-        available_tasks = ", ".join(TASKS)
-        print(f"Usage: {argv[0]} <task>")
-        print(f"Available tasks: {available_tasks}")
+    if len(argv) < 2 or argv[1] not in _DISPATCH:
+        print(_USAGE.format(prog=argv[0], tasks=", ".join(TASKS)))
         return 1
 
-    return _DISPATCH[argv[1]]()
+    task_name = argv[1]
+    extra_args = argv[2:]
+
+    if task_name in ("test-host", "new-library"):
+        return _DISPATCH[task_name](extra_args)
+
+    if extra_args:
+        print(f"Task '{task_name}' does not accept extra arguments.")
+        return 1
+
+    return _DISPATCH[task_name]()
 
 
 if __name__ == "__main__":

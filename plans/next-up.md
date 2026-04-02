@@ -2,6 +2,7 @@
 
 ## Now
 
+- [ ] Generalize the compatibility smoke runner (`ci/run_sample_device_smoke.py`) to discover and exercise device tests for any library, not just timing.
 - [ ] Draft the first release workflow for per-library `VERSION` file enforcement and per-library artifacts.
 - [ ] Document contributor prerequisites by platform (macOS, Linux, Windows/WSL2) in the README.
 
@@ -32,6 +33,10 @@
 
 ## Done
 
+- [x] Auto-discover libraries and support packages in `scripts/run.py` — lint paths, test coverage, source roots, and PYTHONPATH are now derived from the workspace structure instead of hard-coded lists.
+- [x] Auto-discover test paths in `pyproject.toml` — `testpaths` and coverage source are now broad patterns; `device_tests/` is excluded via `--ignore-glob`.
+- [x] Add root `conftest.py` with auto-discovery of source roots so direct `pytest` invocation works without manual PYTHONPATH.
+- [x] Remove unused `_SystemTicks` class from `chumicro_timing.ticks` (dead code — `Heartbeat` uses direct function imports).
 - [x] Choose `workstreams + decisions + next-up + roadmap` as the planning model.
 - [x] Save the planning prompt for later refinement.
 - [x] Bootstrap the repo with root tooling, planning docs, a runtime support package, and a first CI workflow.

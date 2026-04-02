@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import pytest
-
 from chumicro_timing import Heartbeat
-
-from .mocks.fake_ticks import FakeTicks
+from mocks.fake_ticks import FakeTicks
 
 
 def test_heartbeat_rejects_non_positive_periods() -> None:

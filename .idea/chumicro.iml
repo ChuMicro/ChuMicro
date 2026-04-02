@@ -6,10 +6,11 @@
       <sourceFolder url="file://$MODULE_DIR$/support/runtime/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/support/test_harness/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/support/test_harness/tests" isTestSource="true" />
-      <sourceFolder url="file://$MODULE_DIR$/sample/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/sample/tests" isTestSource="true" />
-      <sourceFolder url="file://$MODULE_DIR$/sample/device_tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/timing/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/timing/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/timing/device_tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/.venv" />
+      <excludeFolder url="file://$MODULE_DIR$/.tools" />
     </content>
     <orderEntry type="jdk" jdkName="Python 3.14 (chumicro)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />

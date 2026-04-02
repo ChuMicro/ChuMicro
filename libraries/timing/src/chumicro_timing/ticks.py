@@ -106,13 +106,4 @@ def ticks_diff(end, start):
     return ((diff + _TICKS_HALFPERIOD) & _TICKS_MAX) - _TICKS_HALFPERIOD
 
 
-class _SystemTicks:
-    """Default tick source using the module-level helpers."""
 
-    def ticks_ms(self):
-        """Return the current masked tick count."""
-        return ticks_ms()
-
-    def ticks_diff(self, end, start):
-        """Return the wraparound-safe difference."""
-        return ticks_diff(end, start)
