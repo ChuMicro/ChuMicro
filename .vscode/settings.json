@@ -5,9 +5,5 @@
         "--strict-config",
         "--strict-markers"
     ],
-    "python.analysis.extraPaths": [
-        "support/runtime/src",
-        "support/test_harness/src",
-        "sample/src"
-    ]
+    "python.analysis.extraPaths": []
 }

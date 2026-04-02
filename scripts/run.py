@@ -81,19 +81,6 @@ def _coverage_args_for(pkg_dirs: list[Path]) -> list[str]:
     return args
 
 
-def _test_paths_for(pkg_dirs: list[Path]) -> list[str]:
-    """Return ``tests/`` directory paths (relative to ROOT) for *pkg_dirs*.
-
-    .. deprecated:: Use per-library pytest runs instead of collecting
-       all test paths into a single invocation.
-    """
-    paths: list[str] = []
-    for pkg_dir in pkg_dirs:
-        tests = pkg_dir / "tests"
-        if tests.is_dir():
-            paths.append(str(tests.relative_to(ROOT)))
-    return paths
-
 
 def _resolve_named_packages(names: list[str]) -> list[Path]:
     """Resolve package names to directories.
