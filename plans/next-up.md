@@ -30,7 +30,8 @@
 
 ## Done
 
-- [x] Prove IDE-facing stub packaging with the timing library. Using upstream `circuitpython-stubs` (Decision 0012).
+- [x] Prove IDE-facing stub packaging with the timing library. Using upstream `circuitpython-stubs` + `micropython-esp32-stubs` (Decision 0012).
+- [x] Consolidate runtime version pins into `runtime-versions.toml`. CI prepare scripts, setup, and stubs all read from this single file.
 - [x] Establish shared cross-library test fakes via `testing` submodules (e.g., `chumicro_timing.testing.FakeTicks`). Decision 0010.
 - [x] Close stale "Feedback requested" sections in workstreams that have been answered by subsequent decisions.
 - [x] Decide CircuitPython artifact staging: stage from the start via ChuMicro org circup repo, include `.py` and `.mpy`.

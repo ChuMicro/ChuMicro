@@ -6,10 +6,15 @@ import os
 import shutil
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-MICROPYTHON_RELEASE = "v1.26.0"
+
+with (ROOT / "runtime-versions.toml").open("rb") as _f:
+    _versions = tomllib.load(_f)
+
+MICROPYTHON_RELEASE = _versions["micropython"]["version"]
 MICROPYTHON_REPOSITORY_URL = "https://github.com/micropython/micropython.git"
 SOURCE_DIR = ROOT / ".tools" / f"micropython-{MICROPYTHON_RELEASE}"
 DEFAULT_BINARY_PATH = SOURCE_DIR / "ports" / "unix" / "build-standard" / "micropython"

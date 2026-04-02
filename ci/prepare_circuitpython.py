@@ -6,10 +6,15 @@ import os
 import shutil
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-CIRCUITPYTHON_RELEASE = "10.1.4"
+
+with (ROOT / "runtime-versions.toml").open("rb") as _f:
+    _versions = tomllib.load(_f)
+
+CIRCUITPYTHON_RELEASE = _versions["circuitpython"]["version"]
 CIRCUITPYTHON_REPOSITORY_URL = "https://github.com/adafruit/circuitpython.git"
 SOURCE_DIR = ROOT / ".tools" / f"circuitpython-{CIRCUITPYTHON_RELEASE}"
 UNIX_VARIANT = "standard"

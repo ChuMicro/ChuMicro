@@ -4,45 +4,63 @@ Status: `accepted` (revised)
 
 ## Context
 
-Chumicro libraries import modules that only exist on CircuitPython or MicroPython (e.g., `micropython.const`, `supervisor.ticks_ms`).  The code uses `try/except ImportError` guards so it runs correctly on CPython, but IDEs flag the imports as unresolved.
+Chumicro libraries import modules that only exist on CircuitPython or MicroPython (e.g., `micropython.const`, `supervisor.ticks_ms`, `machine.Pin`).  The code uses `try/except ImportError` guards so it runs correctly on CPython, but IDEs flag the imports as unresolved.
 
-An earlier draft hand-wrote minimal `.pyi` stubs in a `typings/` directory.  This was revised: Adafruit publishes `circuitpython-stubs` on PyPI, built from the same tagged source tree we already clone.
+An earlier draft hand-wrote minimal `.pyi` stubs in a `typings/` directory.  This was revised: well-maintained upstream stub packages exist for both runtimes.
 
 ## Decision
 
-Install **`circuitpython-stubs`** from PyPI, version-pinned to match `CIRCUITPYTHON_RELEASE` in `ci/prepare_circuitpython.py`.
+Install **two upstream stub packages**, version-pinned to match the runtime versions in `runtime-versions.toml`:
 
-### Why PyPI rather than building stubs from the cloned repo
+- **`circuitpython-stubs`** — covers all CircuitPython built-in modules (`supervisor`, `board`, `digitalio`, `micropython`, etc.).  Published by Adafruit, PEP 561 compliant.
+- **`micropython-esp32-stubs`** — covers MicroPython-only modules (`machine`, `network`, `esp`, `esp32`, `btree`, `framebuf`, `uctypes`, etc.).  Published by the micropython-stubber project, auto-generated from real ESP32 hardware.
 
-The CircuitPython tree includes `tools/extract_pyi.py`, which extracts `.pyi` stubs from `//|` comment lines in C source under `shared-bindings/`.  Running it requires `isort`, `black`, and `circuitpython_typing` as build-time dependencies.  The output is byte-for-byte identical to what Adafruit publishes to PyPI from the same release tag.  Building from source would add three dependencies and a new build step for zero benefit.
+### Why PyPI rather than building stubs from source
+
+CircuitPython's tree includes `tools/extract_pyi.py` which extracts `.pyi` stubs from `//|` comment lines in C source.  Running it requires `isort`, `black`, and `circuitpython_typing`.  The output is byte-for-byte identical to what Adafruit publishes from the same release tag.  MicroPython has no in-repo stub infrastructure at all.  Both upstream packages are the right answer — no need to build our own.
 
 ### How version sync is maintained
 
-`setup()` in `scripts/run.py` reads `CIRCUITPYTHON_RELEASE` from `ci/prepare_circuitpython.py` and pins the stubs install to `circuitpython-stubs=={version}`.  The version is defined in exactly one place; changing the pinned CircuitPython tag automatically changes the stubs version on the next `setup` run.
+`runtime-versions.toml` at the repo root is the single source of truth for pinned runtime versions.  `setup()` in `scripts/run.py` reads both versions and pins:
 
-### Coverage
+- `circuitpython-stubs=={cp_version}` (exact match)
+- `micropython-esp32-stubs=={mp_version}.*` (allows post-releases)
 
-`circuitpython-stubs` is PEP 561 compliant and provides stubs for all CircuitPython built-in modules, including `micropython` (with `const()`), `supervisor` (with `ticks_ms()`), `board`, `digitalio`, etc.  Both Pyright and PyCharm auto-discover PEP 561 stubs from installed packages — no IDE configuration changes are needed.
+The same file is read by `ci/prepare_circuitpython.py` and `ci/prepare_micropython.py` for cloning.  Changing the version in one place updates stubs, cloned repos, and built binaries on the next `setup` run.
 
-### MicroPython-only stubs
+### Coverage and coexistence
 
-`circuitpython-stubs` already covers the `micropython` module APIs shared between both runtimes (e.g., `const()`).  MicroPython-specific modules like `machine`, `network`, `esp`, and `esp32` are not needed yet.  When a library first imports one, two options will be evaluated:
+The two packages use different PEP 561 layouts and coexist cleanly:
 
-1. **`micropython-esp32-stubs`** from PyPI (from the micropython-stubber project) — auto-generated, versioned per MicroPython release.
-2. **Introspect from the built unix port** — run the MicroPython binary we already build, enumerate modules via `dir()`, emit `.pyi` files.  This is what micropython-stubber does internally; building our own version is a significant tooling investment.
+- `circuitpython-stubs` installs as `-stubs` directories (e.g., `supervisor-stubs/__init__.pyi`)
+- `micropython-esp32-stubs` installs as flat `.pyi` files (e.g., `machine.pyi`)
 
-Both options will be evaluated at the point of need, not speculatively.
+Together they cover:
+- **CircuitPython-only**: `supervisor`, `board`, `digitalio`, `analogio`, `busio`, `neopixel_write`, `wifi`, `socketpool`, `storage`, `microcontroller`, `countio`, `keypad`, `pulseio`, `pwmio`, `rtc`, etc.
+- **MicroPython-only**: `machine` (Pin, I2C, SPI, UART, PWM, ADC, Timer, WDT, RTC, SDCard), `network` (WLAN, LAN, PPP), `esp`, `esp32`, `espnow`, `btree`, `cryptolib`, `deflate`, `framebuf`, `uctypes`, `vfs`, etc.
+- **Shared**: `micropython` (see conflict note below)
+
+### Known conflict: `micropython` module
+
+Both packages define stubs for the `micropython` module.  CircuitPython stubs provide `micropython-stubs/__init__.pyi` (PEP 561 `-stubs` directory, only `const()`).  MicroPython stubs provide `micropython.pyi` (flat file, 350 lines with `const`, `mem_info`, `schedule`, `heap_lock`, `opt_level`, etc.).
+
+Per PEP 561, the `-stubs` package has higher precedence, so type checkers resolve `micropython` to the CircuitPython stub.  This means the richer MicroPython `micropython` module stubs are shadowed.
+
+**Current impact**: None — our code only uses `micropython.const()`, which both stubs define.
+
+**Future mitigation** (when needed): If a library needs `micropython.schedule()` or other MP-only APIs, we can override the resolution by placing a merged stub in a `typings/micropython/` directory and adding it to the type checker's search path.  This is a targeted fix for one module, not a return to hand-writing all stubs.
 
 ### Installation
 
-`circuitpython-stubs` is installed by `python scripts/run.py setup` alongside other dev dependencies.
+Both packages are installed by `python scripts/run.py setup` alongside other dev dependencies.
 
 ## Consequences
 
-- IDE squigglies for platform-specific imports are eliminated.
+- IDE squigglies for platform-specific imports are eliminated for both runtimes.
 - No hand-written stubs to maintain.
-- Stubs stay in sync with the cloned CircuitPython version automatically.
-- One additional PyPI dependency in the dev environment.
+- Stubs stay in sync with pinned runtime versions automatically via `runtime-versions.toml`.
+- Two additional PyPI dependencies in the dev environment.
+- The `micropython` module conflict is documented and has a clear mitigation path.
 
 ## Supersedes
 

@@ -62,7 +62,8 @@ Current verified progress:
 - the shared timing smoke runner passes under CPython, MicroPython unix-port, and CircuitPython unix-port
 - `.github/workflows/ci.yml` includes advisory MicroPython and CircuitPython compatibility jobs in addition to the required host lane
 - `devices.example.yml` exists for the first manual device-validation template
-- `circuitpython-stubs` (Adafruit, PyPI) provides PEP 561 type stubs for platform-specific modules (Decision 0012), eliminating IDE squigglies without hand-written stubs
+- `circuitpython-stubs` and `micropython-esp32-stubs` (both from PyPI) provide PEP 561 type stubs for platform-specific modules (Decision 0012), eliminating IDE squigglies without hand-written stubs
+- `runtime-versions.toml` at the repo root is the single source of truth for pinned CircuitPython and MicroPython versions; CI prepare scripts, setup, and stubs all read from this file
 
 Still intentionally incomplete:
 

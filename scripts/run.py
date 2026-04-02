@@ -31,19 +31,12 @@ SMOKE_SCRIPT = "ci/run_sample_device_smoke.py"
 SMOKE_EXEC = f'exec(open("{SMOKE_SCRIPT}").read())'
 
 
-def _read_circuitpython_release() -> str:
-    """Read the pinned CircuitPython release tag from the CI prepare script.
+def _read_runtime_versions() -> dict:
+    """Read pinned runtime versions from ``runtime-versions.toml``."""
+    import tomllib
 
-    The constant lives in ``ci/prepare_circuitpython.py`` and is the single
-    source of truth for the version we clone and the stubs we install.
-    """
-    import re
-
-    text = (ROOT / "ci" / "prepare_circuitpython.py").read_text()
-    match = re.search(r'CIRCUITPYTHON_RELEASE\s*=\s*"([^"]+)"', text)
-    if not match:
-        raise RuntimeError("Could not read CIRCUITPYTHON_RELEASE from ci/prepare_circuitpython.py")
-    return match.group(1)
+    with (ROOT / "runtime-versions.toml").open("rb") as f:
+        return tomllib.load(f)
 
 
 # ---------------------------------------------------------------------------
@@ -302,7 +295,9 @@ def _resolve_circuitpython_binary() -> str | None:
 
 def setup() -> int:
     """Install development dependencies and regenerate IDE configuration."""
-    cp_version = _read_circuitpython_release()
+    versions = _read_runtime_versions()
+    cp_version = versions["circuitpython"]["version"]
+    mp_version = versions["micropython"]["version"].lstrip("v")
     dev_packages = [
         "pip",
         "pytest",
@@ -310,6 +305,7 @@ def setup() -> int:
         "ruff",
         "build",
         f"circuitpython-stubs=={cp_version}",
+        f"micropython-esp32-stubs=={mp_version}.*",
     ]
     result = _run([PYTHON, "-m", "pip", "install", "-U", *dev_packages])
     if result != 0:

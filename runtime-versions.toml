@@ -1,0 +1,12 @@
+# Pinned runtime versions for compatibility testing and IDE stubs.
+#
+# Change these when upgrading the CircuitPython or MicroPython targets.
+# The prepare scripts (ci/prepare_*.py) and setup task (scripts/run.py)
+# read from this file — no other files need version updates.
+
+[circuitpython]
+version = "10.1.4"
+
+[micropython]
+version = "v1.26.0"
+
