@@ -11,7 +11,6 @@ The first checked-in compatibility smoke path uses:
 - `support/test_harness/src/chumicro_test_harness/runner.py`
 - `libraries/timing/device_tests/test_heartbeat_ticks.py`
 - `ci/run_sample_device_smoke.py`
-- `ci/run_sample_device_tests.py` as a backward-compatible wrapper
 
 Today this is wired through `scripts/run.py` for local compatibility evaluation and advisory CI jobs.
 
@@ -19,7 +18,7 @@ Today this is wired through `scripts/run.py` for local compatibility evaluation 
 
 ```zsh
 cd /path/to/chumicro
-python ci/run_sample_device_tests.py
+python ci/run_sample_device_smoke.py
 ```
 
 ### MicroPython Unix-port smoke run

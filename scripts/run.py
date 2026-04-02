@@ -416,7 +416,6 @@ def _scaffold_library(name: str) -> int:
     # Create directory tree
     (lib_dir / "src" / import_name).mkdir(parents=True)
     (lib_dir / "tests").mkdir()
-    (lib_dir / "doc").mkdir()
 
     # VERSION
     (lib_dir / "VERSION").write_text("0.1.0\n")
@@ -437,8 +436,6 @@ def _scaffold_library(name: str) -> int:
         f'"""Test configuration for the chumicro-{name} package."""\n'
     )
 
-    # doc/README.md
-    (lib_dir / "doc" / "README.md").write_text(f"# chumicro-{name} documentation\n")
 
     print(f"Created libraries/{name}/")
     return 0
