@@ -42,6 +42,22 @@
             "presentation": {"reveal": "always", "panel": "shared"}
         },
         {
+            "label": "Verify Examples",
+            "type": "shell",
+            "command": "python",
+            "args": ["scripts/run.py", "verify-examples"],
+            "group": "test",
+            "presentation": {"reveal": "always", "panel": "shared"}
+        },
+        {
+            "label": "Docs",
+            "type": "shell",
+            "command": "python",
+            "args": ["scripts/run.py", "docs"],
+            "group": "build",
+            "presentation": {"reveal": "always", "panel": "shared"}
+        },
+        {
             "label": "MicroPython Compat",
             "type": "shell",
             "command": "python",

@@ -1,0 +1,10 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Verify Examples" type="PythonConfigurationType" factoryName="Python">
+    <module name="chumicro" />
+    <option name="SCRIPT_NAME" value="$PROJECT_DIR$/scripts/run.py" />
+    <option name="PARAMETERS" value="verify-examples" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+    <method v="2" />
+  </configuration>
+</component>
+
