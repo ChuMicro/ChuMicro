@@ -21,7 +21,7 @@ Key mechanics:
 1. Each pytest run targets a single library's `tests/` directory.
 2. `PYTHONPATH` is set to include all `src/` directories (via `_pythonpath_env()`), so cross-library imports work.
 3. `COVERAGE_FILE` is set per-run so coverage data doesn't collide.
-4. Each library must independently meet the 90% coverage threshold.  When passthrough args are present (e.g. `-k` filters), per-library gates are skipped since filtering naturally reduces coverage.
+4. Each library must independently meet the 90% coverage threshold.  When `-k` filtering is active or `--no-cov` is set, per-library gates are skipped since filtering naturally reduces coverage.
 5. Exit code 5 (no tests collected) is treated as success — it occurs when `-k` filters match nothing in a particular library.
 
 ## Consequences

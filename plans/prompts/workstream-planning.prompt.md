@@ -55,7 +55,7 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
    - `python scripts/run.py setup`
    - `python scripts/run.py lint`
    - `python scripts/run.py test` (default: changed packages; `--all`; `--libraries timing`)
-   - `python scripts/run.py test -- -k test_name` (pytest passthrough)
+   - `python scripts/run.py test -k test_name` (filter by expression)
    - `python scripts/run.py build`
    - `python scripts/run.py preflight`
    - `python scripts/run.py verify-examples`

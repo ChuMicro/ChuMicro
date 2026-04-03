@@ -85,13 +85,21 @@ def lint() -> int:
     return _run([PYTHON, "-m", "ruff", "check", *discover_ruff_paths()])
 
 
-def test_cpython(pkg_dirs: list[Path], passthrough: list[str]) -> int:
+def test_cpython(
+    pkg_dirs: list[Path],
+    *,
+    filter_expr: str | None = None,
+    exitfirst: bool = False,
+    verbose: bool = False,
+    no_cov: bool = False,
+) -> int:
     """Run the CPython test suite for the given packages.
 
     Runs pytest separately for each package to avoid test-directory name
     collisions, then combines and reports coverage.  Each library must
-    independently meet the coverage threshold (90%) unless *passthrough*
-    args are present (e.g. ``-k`` filters naturally reduce coverage).
+    independently meet the coverage threshold (90%) unless *filter_expr*
+    is set (filtering naturally reduces coverage) or *no_cov* skips
+    coverage entirely.
     """
     # Keep only packages that actually have a tests/ directory.
     testable = [d for d in pkg_dirs if (d / "tests").is_dir()]
@@ -107,15 +115,24 @@ def test_cpython(pkg_dirs: list[Path], passthrough: list[str]) -> int:
     for f in ROOT.glob(".coverage.*"):
         f.unlink()
 
-    # When passthrough args are present (e.g. -k filter), skip per-library
-    # coverage gates — filtering naturally reduces coverage.  Otherwise each
-    # library must independently meet the threshold from pyproject.toml.
-    cov_gate_args = ["--cov-fail-under=0"] if passthrough else []
+    # Build the extra pytest flags from named parameters.
+    extra_args: list[str] = []
+    if filter_expr:
+        extra_args.extend(["-k", filter_expr])
+    if exitfirst:
+        extra_args.append("-x")
+    if verbose:
+        extra_args.append("-v")
+
+    # When filtering or skipping coverage, relax per-library coverage
+    # gates — filtering naturally reduces coverage.
+    relax_coverage = bool(filter_expr) or no_cov
+    cov_gate_args = ["--cov-fail-under=0"] if relax_coverage else []
 
     overall_rc = 0
 
     for pkg_dir in testable:
-        cov_args = coverage_args_for([pkg_dir])
+        cov_args = [] if no_cov else coverage_args_for([pkg_dir])
         test_path = str((pkg_dir / "tests").relative_to(ROOT))
 
         # Each run writes coverage to a per-library file for later combining.
@@ -129,7 +146,7 @@ def test_cpython(pkg_dirs: list[Path], passthrough: list[str]) -> int:
                 "--cov-report=",
                 *cov_gate_args,
                 test_path,
-                *passthrough,
+                *extra_args,
             ],
             env=run_env,
         )
@@ -139,11 +156,11 @@ def test_cpython(pkg_dirs: list[Path], passthrough: list[str]) -> int:
             overall_rc = rc
 
     # Combine per-library coverage into one data file and report.
-    if list(ROOT.glob(".coverage.*")):
+    if not no_cov and list(ROOT.glob(".coverage.*")):
         _run([PYTHON, "-m", "coverage", "combine"])
 
         report_args = [PYTHON, "-m", "coverage", "report", "--show-missing"]
-        if passthrough:
+        if relax_coverage:
             report_args.append("--fail-under=0")
 
         report_rc = _run(report_args)
@@ -266,7 +283,7 @@ def preflight() -> int:
     all_pkgs = discover_package_dirs()
     steps: tuple[tuple[str, object], ...] = (
         ("lint", lambda: lint()),
-        ("test", lambda: test_cpython(all_pkgs, [])),
+        ("test", lambda: test_cpython(all_pkgs)),
         ("verify-examples", lambda: verify_examples(all_pkgs)),
         ("test-micropython-compat", test_micropython_compat),
         ("test-circuitpython-compat", test_circuitpython_compat),
@@ -340,7 +357,7 @@ def test_runtime_matrix() -> int:
     """Run host tests and compatibility smoke tests across all proven runtimes."""
     all_pkgs = discover_package_dirs()
     steps = (
-        ("test", lambda: test_cpython(all_pkgs, [])),
+        ("test", lambda: test_cpython(all_pkgs)),
         ("test-micropython-compat", test_micropython_compat),
         ("test-circuitpython-compat", test_circuitpython_compat),
     )
@@ -415,9 +432,25 @@ def _build_parser() -> argparse.ArgumentParser:
     sub.add_parser("test-device", help="device validation info")
 
     # Scoped tasks
-    sub.add_parser(
+    test_p = sub.add_parser(
         "test", parents=[scope],
         help="CPython tests (changed packages by default, --all for everything)",
+    )
+    test_p.add_argument(
+        "-k", dest="filter_expr", metavar="EXPRESSION",
+        help="only run tests matching this expression",
+    )
+    test_p.add_argument(
+        "-x", "--exitfirst", action="store_true",
+        help="stop on first failure",
+    )
+    test_p.add_argument(
+        "-v", "--verbose", action="store_true",
+        help="verbose test output",
+    )
+    test_p.add_argument(
+        "--no-cov", action="store_true",
+        help="skip coverage collection",
     )
     sub.add_parser("verify-examples", parents=[scope], help="import-check examples")
 
@@ -439,19 +472,10 @@ _SCOPED_TASKS = frozenset({"test", "verify-examples", "docs"})
 def main(argv: list[str]) -> int:
     """Dispatch a named repo-level task."""
     parser = _build_parser()
-    args, remaining = parser.parse_known_args(argv[1:])
+    args = parser.parse_args(argv[1:])
 
     if not args.task:
         parser.print_help()
-        return 1
-
-    # Strip bare "--" left by argparse in the extras list.
-    if remaining and remaining[0] == "--":
-        remaining = remaining[1:]
-
-    # Only test accepts passthrough args (forwarded to pytest).
-    if remaining and args.task != "test":
-        print(f"Unrecognized arguments for '{args.task}': {' '.join(remaining)}")
         return 1
 
     # --- scoped tasks ---
@@ -460,7 +484,13 @@ def main(argv: list[str]) -> int:
             all_packages=args.all_packages, libraries=args.libraries,
         )
         if args.task == "test":
-            return test_cpython(pkg_dirs, remaining)
+            return test_cpython(
+                pkg_dirs,
+                filter_expr=args.filter_expr,
+                exitfirst=args.exitfirst,
+                verbose=args.verbose,
+                no_cov=args.no_cov,
+            )
         if args.task == "verify-examples":
             return verify_examples(pkg_dirs)
         return docs(pkg_dirs, serve=args.serve)

@@ -126,10 +126,10 @@ This was the largest single session. It addressed three areas: the workspace was
 4. Lint paths, coverage sources, test paths, and PYTHONPATH are all derived from structure.
 
 **Scoped test running:**
-5. `test-host` default: detect changed packages on branch vs `origin/main`.
+5. `test` default: detect changed packages on branch vs `origin/main`.
 6. `--all`: run everything. `--libraries timing`: run specific packages.
-7. `-- -k test_name`: pytest passthrough for individual tests.
-8. Coverage gate relaxed automatically for partial runs (passthrough args trigger `--cov-fail-under=0`).
+7. `-k EXPRESSION`, `-x`, `-v`, `--no-cov`: declared test options (no raw passthrough).
+8. Coverage gate relaxed automatically when `-k` is used or `--no-cov` skips coverage entirely.
 
 **Library scaffolding and IDE config generation:**
 9. `new-library <name>` creates full directory structure with `pyproject.toml`, `VERSION`, `conftest.py`, `__init__.py`, and README.
