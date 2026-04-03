@@ -51,7 +51,7 @@ Future plan updates should preserve open questions instead of silently guessing.
 - `workstreams/timing-library.md`
 - `workstreams/ci-release.md`
 - `workstreams/device-validation.md`
-- `decisions/` (0001–0012)
+- `decisions/` (0001–0014)
 
 `prompts/` should contain only durable prompts that help future sessions rebuild workspace context or understand workspace build-up history.
 

@@ -144,7 +144,7 @@ This was the largest single session. It addressed three areas: the workspace was
 16. Renamed `test-host` → `test` — the `host` qualifier was unnecessary jargon.
 17. Formalized library testability patterns as Decision 0010: constructor injection, `testing` submodules for fakes, don't mock what you don't own.
 
-#### 2026-04-02 — Cleanup and platform targeting
+#### 2026-04-02 — Cleanup, platform targeting, stubs, docs, and serviceable pattern
 
 **Cruft removal:**
 1. Deleted `ci/run_sample_device_tests.py` (backward-compat wrapper with no callers).
@@ -158,3 +158,21 @@ This was the largest single session. It addressed three areas: the workspace was
 **Platform targeting:**
 8. Accepted Decision 0011 (per-library platform targeting): libraries can declare `[tool.chumicro].platforms` in `pyproject.toml` to restrict which runtimes they target. Default (absent) = all three. Gates release automation and compatibility smoke runners.
 9. Updated all prompt files and plans/README.md to reference Decision 0011.
+
+**IDE type stubs:**
+10. Accepted Decision 0012 (IDE type stubs): use upstream `circuitpython-stubs` and `micropython-esp32-stubs` from PyPI, version-pinned to `runtime-versions.toml`.
+11. Consolidated runtime version pins into a single `runtime-versions.toml` file.
+
+**Docs and examples standards:**
+12. Accepted Decision 0013 (docs and examples standards): MkDocs + Material + mkdocstrings for API reference (static analysis, no imports needed). Required `guide.md` section structure. Example import-verification in preflight.
+13. Added `verify-examples` and `docs` tasks to `scripts/run.py`.
+14. Timing library got user guide, API reference, testing helpers docs, and three runnable examples.
+15. New-library scaffolder generates `mkdocs.yml`, `docs/api.md` with autodoc, `docs/guide.md` template, and example with `__main__` guard.
+16. Later: strengthened Decision 0013 with strict `guide.md` section requirements, `api.md` autodoc rules (no hand-written member lists), and an AI generation prompt at `plans/prompts/guide-generation.prompt.md`.
+
+**Serviceable pattern:**
+17. Accepted Decision 0014 (serviceable pattern): standardize how active components communicate events. Components implement `service(event_sink)`, a shared `EventQueueSink` collects events, `ServiceRunner` dispatches.
+18. New library: `chumicro-serviceable` 0.1.0 with `Event`, `EventQueueSink`, `SimpleEventDispatcher`, `ServiceRunner`, and `FakeEventSink` testing helper. 100% test coverage.
+19. `Heartbeat` gained `service(event_sink)` and `EVENT_TICK` (timing 0.1.0 → 0.2.0, backward compatible). Duck-typed — timing does not import from serviceable.
+20. Serviceable library is pending maintainer audit (tracked in next-up.md).
+

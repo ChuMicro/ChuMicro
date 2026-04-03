@@ -21,6 +21,9 @@ Use this prompt at the start of a new session when you need to rehydrate the wor
    - [0009: per-library test runs](../decisions/0009-per-library-test-runs.md)
    - [0010: library testability](../decisions/0010-library-testability.md)
    - [0011: per-library platform targeting](../decisions/0011-platform-targeting.md)
+   - [0012: IDE type stubs](../decisions/0012-ide-type-stubs.md)
+   - [0013: docs and examples standards](../decisions/0013-docs-and-examples-standards.md)
+   - [0014: serviceable pattern](../decisions/0014-serviceable-pattern.md)
 
 ### Design principles to preserve
 
@@ -38,8 +41,10 @@ See [workspace-history.prompt.md](./workspace-history.prompt.md) for the full ra
 
 ### Key code anchors to inspect if implementation context is needed
 
-- `Heartbeat` in `libraries/timing/src/chumicro_timing/heartbeat.py`
+- `Heartbeat` in `libraries/timing/src/chumicro_timing/heartbeat.py` (includes `service()` and `EVENT_TICK`)
 - `ticks_ms()` and `ticks_diff()` in `libraries/timing/src/chumicro_timing/ticks.py`
+- `Event`, `EventQueueSink`, `ServiceRunner`, `SimpleEventDispatcher` in `libraries/serviceable/src/chumicro_serviceable/core.py`
+- `FakeEventSink` in `libraries/serviceable/src/chumicro_serviceable/testing.py`
 - `runtime_name()` in `support/runtime/src/chumicro_runtime/platform.py`
 - `run_module()` in `support/test_harness/src/chumicro_test_harness/runner.py`
 - `main()` in `scripts/run.py` — task runner with auto-discovery, scoped testing, scaffolding
@@ -76,16 +81,18 @@ Create a short restart brief that states:
 - `python scripts/run.py test` — auto-detect changed packages, or `--all` / `--libraries name`
 - `python scripts/run.py test -- -k test_name` — pytest passthrough for individual tests
 - `python scripts/run.py sync-ide` — regenerate PyCharm `.iml` and VS Code `pyrightconfig.json`
-- `python scripts/run.py preflight` — lint + all tests + build
+- `python scripts/run.py preflight` — lint + all tests + verify-examples + build
 - `python scripts/run.py build` — build all publishable packages under `libraries/`
+- `python scripts/run.py verify-examples` — import-check all examples
+- `python scripts/run.py docs` — build MkDocs for libraries
 - `python scripts/run.py prepare-micropython` / `prepare-circuitpython` — build unix-port runtimes
 - `python scripts/run.py test-runtime-matrix` — CPython + MicroPython + CircuitPython
 - All library/test discovery is automatic — no config files to edit when adding libraries
 
 ### Current known open areas
 
+- Serviceable library audit (Decision 0014 — pending review)
 - Release automation and per-library version bump workflows
-- IDE stub packaging strategy
 - The compatibility smoke runner is still timing-specific (needs generalization for multi-library)
 - Per-library platform targeting implementation (Decision 0011 accepted, not yet wired into run.py)
 - Whether the advisory MicroPython and CircuitPython CI lanes should stay optional or become protected-branch requirements

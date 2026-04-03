@@ -82,9 +82,7 @@ It should not be forced to be the direct execution environment on constrained bo
 
 ## Notes
 
-The repo has already started with checks for a single package: `timing/`.
-
-Release automation is still intentionally incomplete. This workstream remains active until per-library `VERSION` file enforcement, package-aware release selection, and staged publishing are implemented.
+The repo now has two publishable libraries: `timing/` and `serviceable/`. Both build and pass preflight. Release automation is still intentionally incomplete. This workstream remains active until per-library `VERSION` file enforcement, package-aware release selection, and staged publishing are implemented.
 
 ## Resolved feedback
 

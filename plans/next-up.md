@@ -2,6 +2,7 @@
 
 ## Now
 
+- [ ] Audit the `chumicro-serviceable` library implementation (Decision 0014). Review API surface, allocation patterns, and integration with Heartbeat.
 - [ ] Generalize the compatibility smoke runner (`ci/run_sample_device_smoke.py`) to discover and exercise device tests for any library, not just timing.
 - [ ] Draft the first release workflow for per-library `VERSION` file enforcement and per-library artifacts (PyPI, circup, mip).
 - [ ] Document contributor prerequisites by platform (macOS, Linux, Windows/WSL2) and by editor (PyCharm, VS Code, CLI) in the README. Linux and WSL2 sections are best-effort/researched until verified.
@@ -35,6 +36,8 @@
 
 ## Done
 
+- [x] Drop hand-written member lists from `api.md` files; codify `api.md` rules in Decision 0013 (no hand-written signatures, module-level `:::` directives only, fix docstrings not api.md).
+- [x] Add strict `guide.md` required-section structure and AI generation prompt (`plans/prompts/guide-generation.prompt.md`). Decision 0013 updated with required-section table and generation rules.
 - [x] Implement the serviceable pattern as `chumicro-serviceable` library (Decision 0014). Add `service(event_sink)` and `EVENT_TICK` to Heartbeat (timing 0.1.0 → 0.2.0).
 - [x] Wire up MkDocs + Material + mkdocstrings: per-library `mkdocs.yml`, `docs` task in `scripts/run.py`, `api.md` converted to autodoc directives (Decision 0013).
 - [x] Add per-library scoping (`--all`/`--libraries`) to `verify-examples` and `docs` tasks (shared `_parse_scope_args` helper).
@@ -97,4 +100,3 @@
 - [x] Add `VERSION` files for `support/runtime/` and `support/test_harness/`.  *(later removed — support packages are workspace-internal and not published)*
 - [x] Consolidate version to single source of truth: `VERSION` file per library under `libraries/`, `pyproject.toml` reads via setuptools `dynamic`, removed hardcoded `__version__` from `chumicro_runtime`.
 - [x] Trim README to user-facing content; moved planning prose to `plans/`.
-
