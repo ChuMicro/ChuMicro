@@ -6,6 +6,7 @@ locate packages, source roots, and changed files.
 
 from __future__ import annotations
 
+import argparse
 import os
 import subprocess
 from pathlib import Path
@@ -140,48 +141,38 @@ def parse_scope_args(extra_args: list[str]) -> tuple[list[Path], list[str]]:
     """Parse ``--all`` / ``--libraries`` into a package scope and remaining args.
 
     Returns ``(pkg_dirs, remaining)``.  Used by test, verify-examples, and docs.
+    Unrecognised arguments pass through in *remaining* (e.g. pytest flags).
     """
-    scope: str | list[str] = "changed"
-    remaining: list[str] = []
+    parser = argparse.ArgumentParser(add_help=False)
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--all", action="store_true", dest="all_packages")
+    group.add_argument("--libraries", type=str)
 
-    i = 0
-    while i < len(extra_args):
-        arg = extra_args[i]
-        if arg == "--all":
-            scope = "all"
-            i += 1
-        elif arg == "--libraries":
-            i += 1
-            if i >= len(extra_args):
-                print("--libraries requires a comma-separated list of package names.")
-                raise SystemExit(1)
-            scope = [n.strip() for n in extra_args[i].split(",") if n.strip()]
-            i += 1
-        elif arg == "--":
-            remaining = extra_args[i + 1 :]
-            break
-        else:
-            remaining = extra_args[i:]
-            break
+    namespace, remaining = parser.parse_known_args(extra_args)
 
-    # Resolve scope → list[Path]
-    if scope == "all":
+    # argparse leaves a bare "--" in remaining; strip it so callers
+    # only see the actual passthrough arguments.
+    if remaining and remaining[0] == "--":
+        remaining = remaining[1:]
+
+    if namespace.all_packages:
         return discover_package_dirs(), remaining
 
-    if isinstance(scope, list):
-        resolved = resolve_named_packages(scope)
+    if namespace.libraries:
+        names = [n.strip() for n in namespace.libraries.split(",") if n.strip()]
+        resolved = resolve_named_packages(names)
         if not resolved:
             raise SystemExit(1)
         return resolved, remaining
 
-    # "changed" — detect from git
+    # Default: detect from git
     detected = detect_changed_packages()
     if detected is None:
         print("Running for all packages (no branch diff or infrastructure changed).")
         return discover_package_dirs(), remaining
 
-    names = ", ".join(d.name for d in detected)
-    print(f"Changed packages detected: {names}")
+    pkg_names = ", ".join(d.name for d in detected)
+    print(f"Changed packages detected: {pkg_names}")
     return detected, remaining
 
 
