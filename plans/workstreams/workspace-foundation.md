@@ -93,7 +93,7 @@ Instead, switching should happen through:
 Current verified implementation:
 
 - the shared task interface lives in `scripts/run.py`
-- CI uses the same task interface for lint, host tests, timing package build, and advisory runtime compatibility jobs
+- CI uses the same task interface for lint, host tests, package builds, and advisory runtime compatibility jobs
 - compatibility and device commands exist now as honest scaffolding entrypoints rather than hidden future intent
 
 ## Tooling direction

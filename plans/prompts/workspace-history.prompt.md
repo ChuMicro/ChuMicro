@@ -36,7 +36,7 @@ These are documented so future sessions don't re-discover them:
 
 6. **`TickSource` ABC and `_SystemTicks` class** — The original design used a `TickSource` abstract base class and a `_SystemTicks` implementation. `TickSource` was removed because `FakeTicks` already duck-typed the interface. `_SystemTicks` was later removed because `Heartbeat` used direct function imports (`ticks_ms`, `ticks_diff`) and the class had no other callers.
 
-7. **`ci/tasks.py` as task runner location** — The task runner started in `ci/tasks.py`. Moved to `scripts/run.py` to separate repo-level developer commands from CI-specific helpers. The `ci/` directory now holds only CI-specific scripts (prepare scripts, smoke runners).
+7. **`ci/tasks.py` as task runner location** — The task runner started in `ci/tasks.py`. Moved to `scripts/run.py` to separate repo-level developer commands from CI-specific helpers. The `ci/` directory was later removed entirely once all logic moved into `scripts/`.
 
 ### Multi-session working pattern
 
@@ -197,4 +197,25 @@ This was the largest single session. It addressed three areas: the workspace was
 8. Merged the `.tools/` subsection into the Reference Implementations paragraph to eliminate duplication (the original paragraph pointed to GitHub repos while the subsection said to browse locally).
 9. Updated `workspace-rebuild.prompt.md` to include `.tools/` in the repo shape and Decision 0015 in the required decisions list.
 10. Fixed the stale `next-up.md` sub-bullet that described `EventQueueSink._items` as "a Python-level ring buffer on a pre-allocated list" — it already uses `deque`.
+
+**Git-commit instruction file:**
+11. Added `.github/instructions/git-commit.instructions.md` enforcing `git commit -F` via a scratch file instead of `git commit -m`, which broke on zsh special characters.
+12. Updated AGENTS.md to reference the instruction file instead of inline commit-mechanics advice.
+
+**Script modularization and `ci/` removal:**
+13. Split `scripts/run.py` (~970 lines) into focused modules: `discovery.py` (package discovery, scope parsing, change detection), `ide.py` (IDE config generation), `scaffold.py` (library scaffolding), `prepare.py` (shared build helpers, binary resolution, runtime versions), `prepare_micropython.py`, `prepare_circuitpython.py`, `prepare_workspace.py`. `run.py` is now a slim dispatch-and-task file.
+14. Moved prepare logic from `ci/prepare_*.py` into `scripts/` as importable modules.
+15. Removed `ci/` directory entirely — all logic now lives in `scripts/`.
+16. Moved smoke runner from `ci/` to `support/test_harness/run_device_smoke.py`.
+17. Generalized the compatibility smoke runner to discover and exercise device tests for all libraries, not just timing.
+18. Dropped `_` prefix from script modules (e.g., `_discovery.py` → `discovery.py`) — the `_` convention was not needed since `scripts/` is not an importable package.
+19. Centralized `VERSIONS` dict (from `runtime-versions.toml`) into `prepare.py` so all modules share one parse.
+
+**Task runner CLI improvements:**
+20. Replaced hand-rolled `parse_scope_args` with `argparse` subcommands. Each task has its own parser with proper help text.
+21. Renamed `test-host` → `test` (the `host` qualifier was unnecessary jargon). Added `--no-cov`, `-x`/`--exitfirst`, and `-v`/`--verbose` as declared CLI arguments.
+22. Replaced opaque `--` pytest passthrough with declared `-k` argument using library-scoped syntax: `-k timing/test_heartbeat`, `-k timing/test_ticks/test_add`, or comma-separated multi-library filters.
+23. Added `uv` auto-detection: `prepare_workspace.py` and `run.py setup` prefer `uv pip install` and `uv venv` when `uv` is on PATH, falling back to `pip`/stdlib `venv`.
+24. Hardened `prepare_workspace.py` to refuse running when `sys.prefix == sys.base_prefix` (system Python without venv).
+25. Removed conda from documented environment paths.
 

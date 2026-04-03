@@ -83,7 +83,7 @@ Create a short restart brief that states:
 - `python scripts/run.py test -k timing/test_ticks/test_add` — filter by library, file, and test
 - `python scripts/run.py test --no-cov -x` — quick run, stop on failure
 - `python scripts/run.py sync-ide` — regenerate PyCharm `.iml` and VS Code `pyrightconfig.json`
-- `python scripts/run.py preflight` — lint + all tests + verify-examples + build
+- `python scripts/run.py preflight` — lint + all tests + verify-examples + compat smoke tests + build
 - `python scripts/run.py build` — build all publishable packages under `libraries/`
 - `python scripts/run.py verify-examples` — import-check all examples
 - `python scripts/run.py docs` — build MkDocs for libraries
@@ -94,7 +94,6 @@ Create a short restart brief that states:
 ### Current known open areas
 
 - Release automation and per-library version bump workflows
-- The compatibility smoke runner is still timing-specific (needs generalization for multi-library)
 - Per-library platform targeting implementation (Decision 0011 accepted, not yet wired into run.py)
 - Whether the advisory MicroPython and CircuitPython CI lanes should stay optional or become protected-branch requirements
 - VS Code workspace validation (pyrightconfig.json generated but not yet tested in VS Code)

@@ -2,7 +2,7 @@
 
 ## Now
 
-- [x] Generalize the compatibility smoke runner (`ci/run_sample_device_smoke.py`) to discover and exercise device tests for any library, not just timing.
+- [x] Generalize the compatibility smoke runner to discover and exercise device tests for any library, not just timing.
 - [ ] Draft the first release workflow for per-library `VERSION` file enforcement and per-library artifacts (PyPI, circup, mip).
 - [ ] Document contributor prerequisites by platform (macOS, Linux, Windows/WSL2) and by editor (PyCharm, VS Code, CLI) in the README. Linux and WSL2 sections are best-effort/researched until verified.
   - When writing these docs, scope the AGENTS.md performance guidelines (f-strings, `const()`, `memoryview`, pre-allocated buffers, etc.) to **library code only**. Infrastructure code (`scripts/`, `support/`) runs exclusively on CPython and does not need embedded-runtime constraints.
@@ -19,7 +19,7 @@
 
 ## Next
 
-- [x] Scope AGENTS.md performance guidelines (f-strings, `const()`, `memoryview`, pre-allocated buffers) to library code only. Infrastructure code (`scripts/`, `ci/`, `support/`) runs exclusively on CPython and should not be constrained by embedded-runtime rules.
+- [x] Scope AGENTS.md performance guidelines (f-strings, `const()`, `memoryview`, pre-allocated buffers) to library code only. Infrastructure code (`scripts/`, `support/`) runs exclusively on CPython and should not be constrained by embedded-runtime rules.
 - [ ] Add `[tool.chumicro].platforms` reader to `scripts/run.py` and wire it into the compatibility smoke runners and release/build paths (Decision 0011).
 - [ ] Promote advisory MicroPython and CircuitPython CI jobs to protected-branch requirements, gated by platform targeting (Decision 0011).
 - [ ] Add digital I/O as the second library seam (alongside CI/release work, not sequentially).
@@ -30,8 +30,8 @@
 - [ ] Add `mpy-cross` compilation step to the release pipeline for circup and mip artifacts.
 - [ ] Decide whether to add a second, runtime-specific import smoke layer on top of the canonical shared runner from [Decision 0006](./decisions/0006-shared-import-free-compatibility-smoke-runner.md).
 - [ ] Add the first real board transport tooling for ESP32-S2 (Wemos S2-Mini) once the manual device execution path needs to move beyond direct local runs.
-- [x] Move prepare logic from `ci/prepare_*.py` into importable modules under `scripts/` so `scripts/run.py` can call them directly instead of subprocess. Keep `ci/prepare_*.py` as thin CLI entry points that import from `scripts/`. Dependency direction: `ci/` → `scripts/`, not the reverse. Keep subprocess only for external tools (`ruff`, `pytest`, `build`, `make`, `micropython`).
-- [x] Review `scripts/run.py` layering. The file is ~970 lines and owns too many concerns (dependency installation, IDE config generation, library scaffolding, test orchestration, docs, build, runtime preparation). The hardcoded `dev_packages` list in `setup()` should move to a declarative file (`requirements-dev.txt` or `pyproject.toml` optional-dependencies). Consider splitting the file into smaller modules under `scripts/` once the task count stabilises.
+- [x] Move prepare logic from `ci/prepare_*.py` into importable modules under `scripts/`. `ci/` was subsequently removed entirely — all logic now lives in `scripts/`.
+- [x] Review `scripts/run.py` layering. Split into focused modules: `discovery.py`, `ide.py`, `scaffold.py`, `prepare.py`, `prepare_micropython.py`, `prepare_circuitpython.py`, `prepare_workspace.py`. `run.py` is now a slim dispatch-and-task file. `dev_packages` moved to `requirements-dev.txt`.
 - [ ] Design a performance and resource benchmarking infrastructure. Goals:
   - Measure memory footprint (heap allocations, peak usage) and CPU cost of library operations.
   - Control GC explicitly during benchmarks so allocation measurements are stable and reproducible across runs.

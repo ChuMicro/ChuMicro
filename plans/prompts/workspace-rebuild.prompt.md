@@ -171,7 +171,7 @@ python scripts/run.py setup
 python scripts/run.py preflight
 python scripts/run.py test --all
 python scripts/run.py test --libraries timing
-python scripts/run.py test -- -k test_heartbeat_becomes_due
+python scripts/run.py test -k timing/test_heartbeat_becomes_due
 python scripts/run.py new-library gpio   # scaffold test
 rm -rf libraries/gpio && python scripts/run.py sync-ide  # clean up
 ```

@@ -16,7 +16,7 @@ Exit criteria:
 Settled choices:
 
 - `venv` and `pip` remain the default fallback; `uv` is auto-detected and preferred when on PATH
-- `ci/` exists for CI-specific scripts; `scripts/` for developer tasks
+- `scripts/` is the permanent home for developer tasks and CI entrypoints (the earlier `ci/` directory was removed once its logic moved into `scripts/`)
 - `plans/prompts/` exists for saved prompts that help rebuild workspace context or preserve workspace build-up history
 
 ## Milestone 1 — timing library proof
