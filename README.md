@@ -87,7 +87,7 @@ All tasks are run through `scripts/run.py`:
 |---|---|
 | `setup` | Install dev dependencies into the active environment |
 | `lint` | Run Ruff |
-| `test` | Run pytest with coverage |
+| `test` | CPython tests — changed packages by default, `--all` for everything |
 | `verify-examples` | Import-check all library examples |
 | `docs` | Build library docs with MkDocs |
 | `build` | Build all publishable package distributions |
@@ -96,7 +96,7 @@ All tasks are run through `scripts/run.py`:
 | `prepare-circuitpython` | Build the pinned CircuitPython unix-port binary under `.tools/` |
 | `test-micropython-compat` | Smoke test under MicroPython (auto-prepares if needed) |
 | `test-circuitpython-compat` | Smoke test under CircuitPython (auto-prepares if needed) |
-| `test-runtime-matrix` | Run host tests + MicroPython + CircuitPython compat |
+| `test-runtime-matrix` | Test all packages on CPython + MicroPython + CircuitPython |
 | `test-device` | Manual device validation placeholder |
 
 ## Platform switching

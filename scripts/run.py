@@ -408,11 +408,17 @@ def _build_parser() -> argparse.ArgumentParser:
     sub.add_parser("prepare-circuitpython", help="prepare CircuitPython unix-port")
     sub.add_parser("test-micropython-compat", help="MicroPython smoke test")
     sub.add_parser("test-circuitpython-compat", help="CircuitPython smoke test")
-    sub.add_parser("test-runtime-matrix", help="full cross-runtime test suite")
+    sub.add_parser(
+        "test-runtime-matrix",
+        help="test all packages on CPython + MicroPython + CircuitPython",
+    )
     sub.add_parser("test-device", help="device validation info")
 
     # Scoped tasks
-    sub.add_parser("test", parents=[scope], help="run CPython test suite")
+    sub.add_parser(
+        "test", parents=[scope],
+        help="CPython tests (changed packages by default, --all for everything)",
+    )
     sub.add_parser("verify-examples", parents=[scope], help="import-check examples")
 
     docs_p = sub.add_parser("docs", parents=[scope], help="build library docs")
