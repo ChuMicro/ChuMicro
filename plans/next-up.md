@@ -3,6 +3,7 @@
 ## Now
 
 - [ ] Audit the `chumicro-serviceable` library implementation (Decision 0014). Review API surface, allocation patterns, and integration with Heartbeat.
+  - `EventQueueSink._items` is a Python-level ring buffer on a pre-allocated list. On MicroPython/CircuitPython, `collections.deque` runs in C and would be faster and more memory-efficient for the FIFO queue. The API differences between runtimes (constructor args, missing `__len__` on MicroPython) need a thin wrapper. Evaluate during audit.
 - [ ] Generalize the compatibility smoke runner (`ci/run_sample_device_smoke.py`) to discover and exercise device tests for any library, not just timing.
 - [ ] Draft the first release workflow for per-library `VERSION` file enforcement and per-library artifacts (PyPI, circup, mip).
 - [ ] Document contributor prerequisites by platform (macOS, Linux, Windows/WSL2) and by editor (PyCharm, VS Code, CLI) in the README. Linux and WSL2 sections are best-effort/researched until verified.
@@ -31,8 +32,15 @@
 - [ ] Add `mpy-cross` compilation step to the release pipeline for circup and mip artifacts.
 - [ ] Decide whether to add a second, runtime-specific import smoke layer on top of the canonical shared runner from [Decision 0006](./decisions/0006-shared-import-free-compatibility-smoke-runner.md).
 - [ ] Add the first real board transport tooling for ESP32-S2 (Wemos S2-Mini) once the manual device execution path needs to move beyond direct local runs.
-- [ ] Refactor `ci/prepare_*.py` to expose importable `main()` functions so `scripts/run.py` can call them directly instead of via subprocess. Keep subprocess only for external tools (`ruff`, `pytest`, `build`, `make`, `micropython`).
+- [ ] Refactor `ci/prepare_*.py` to expose importable `main()` functions so `scripts/run.py` can call them directly instead of subprocess. Keep subprocess only for external tools (`ruff`, `pytest`, `build`, `make`, `micropython`).
 - [ ] Review `scripts/run.py` layering. The file is ~970 lines and owns too many concerns (dependency installation, IDE config generation, library scaffolding, test orchestration, docs, build, runtime preparation). The hardcoded `dev_packages` list in `setup()` should move to a declarative file (`requirements-dev.txt` or `pyproject.toml` optional-dependencies). Consider splitting the file into smaller modules under `scripts/` once the task count stabilises.
+- [ ] Design a performance and resource benchmarking infrastructure. Goals:
+  - Measure memory footprint (heap allocations, peak usage) and CPU cost of library operations.
+  - Control GC explicitly during benchmarks so allocation measurements are stable and reproducible across runs.
+  - Define per-benchmark thresholds that fail the run if exceeded, catching regressions over time.
+  - Benchmarks may be slow; they should not run as part of the standard `test` path. Consider a separate `bench` task or a deeper test tier that can also run in CI on a schedule.
+  - Evaluate whether MicroPython's `micropython.mem_info()` and `gc.mem_alloc()`/`gc.mem_free()` can provide the data, and what CPython equivalents (`tracemalloc`, `resource`) to use for host-side benchmarks.
+  - Keep the benchmark harness cross-runtime where possible, with runtime-specific measurement backends.
 
 ## Blocked / waiting
 

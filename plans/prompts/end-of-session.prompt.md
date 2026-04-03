@@ -16,7 +16,12 @@ uncommitted and planning docs are current.
    (new API, changed behavior, bug fix). If so, verify the library's `VERSION`
    file was bumped with the smallest correct semantic-version increment.
 
-3. **Commit with good messages.** Check for uncommitted work:
+3. **Check IDE configs.** If this session added or removed a library or support
+   package, run `python scripts/run.py sync-ide` to regenerate PyCharm and
+   VS Code configs.  (`new-library` calls this automatically, but manual
+   structural changes can leave configs stale.)
+
+4. **Commit with good messages.** Check for uncommitted work:
    ```zsh
    git status --short
    ```
@@ -25,14 +30,14 @@ uncommitted and planning docs are current.
    non-trivial, and name affected libraries or decisions. See AGENTS.md
    § Contributing for full guidance.
 
-4. **Check planning docs.** If this session made significant changes (new
+5. **Check planning docs.** If this session made significant changes (new
    library, new decision, version bump, new task), run the
    [plans-sync prompt](./plans-sync.prompt.md) to update stale docs. Even for
    smaller sessions, consider adding a one-line timeline entry to
    [workspace-history.prompt.md](./workspace-history.prompt.md) so the next
    agent can see what happened.
 
-5. **Verify clean tree one last time.**
+6. **Verify clean tree one last time.**
    ```zsh
    git status --short
    ```

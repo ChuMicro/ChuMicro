@@ -176,3 +176,11 @@ This was the largest single session. It addressed three areas: the workspace was
 19. `Heartbeat` gained `service(event_sink)` and `EVENT_TICK` (timing 0.1.0 → 0.2.0, backward compatible). Duck-typed — timing does not import from serviceable.
 20. Serviceable library is pending maintainer audit (tracked in next-up.md).
 
+#### 2026-04-03 — Planning: performance benchmarking and end-of-session hardening
+
+1. Added performance/resource benchmarking infrastructure to `next-up.md` (Next section) — memory footprint measurement, GC control for stable benchmarks, per-benchmark thresholds, separate `bench` task or deeper test tier, cross-runtime measurement backends.
+2. Expanded the serviceable audit item in `next-up.md` with a note about replacing the Python-level ring buffer in `EventQueueSink` with `collections.deque` (C-level on all three runtimes) — requires a thin wrapper for API differences (constructor args, missing `__len__` on MicroPython).
+3. Added IDE config staleness check (step 3) to the end-of-session prompt — covers the gap when structural changes happen outside `new-library`.
+4. Confirmed plans-sync prompt already covers discovery of missed decisions, prompts, and workstreams (via "Scan for new artifacts" step and "Common staleness patterns" section).
+5. Confirmed "Creating a New Library" contributor guide is already tracked in `next-up.md` with 8 sub-items covering the full lifecycle.
+
