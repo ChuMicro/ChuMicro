@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from _discovery import ROOT
-from _ide import sync_ide
+from discovery import ROOT
+from ide import sync_ide
 
 _PYPROJECT_TEMPLATE = """\
 [build-system]

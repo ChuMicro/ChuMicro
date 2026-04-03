@@ -23,23 +23,22 @@ import subprocess
 import sys
 from pathlib import Path
 
-from _discovery import (
+from discovery import (
     ROOT,
     coverage_args_for,
     discover_ruff_paths,
     find_publishable_packages,
     parse_scope_args,
     pythonpath_env,
-    read_runtime_versions,
 )
-from _ide import sync_ide
-from _prepare import resolve_circuitpython_binary, resolve_micropython_binary
-from _prepare_circuitpython import prepare_circuitpython as _prepare_circuitpython
-from _prepare_micropython import prepare_micropython as _prepare_micropython
-from _scaffold import new_library
+from ide import sync_ide
+from prepare import VERSIONS, resolve_circuitpython_binary, resolve_micropython_binary
+from prepare_circuitpython import prepare_circuitpython as _prepare_circuitpython
+from prepare_micropython import prepare_micropython as _prepare_micropython
+from scaffold import new_library
 
 PYTHON = sys.executable
-SMOKE_SCRIPT = "ci/run_sample_device_smoke.py"
+SMOKE_SCRIPT = "support/test_harness/run_device_smoke.py"
 SMOKE_EXEC = f'exec(open("{SMOKE_SCRIPT}").read())'
 
 TASKS = (
@@ -76,9 +75,8 @@ def _run(command: list[str], env: dict[str, str] | None = None) -> int:
 
 def setup() -> int:
     """Install development dependencies and regenerate IDE configuration."""
-    versions = read_runtime_versions()
-    cp_version = versions["circuitpython"]["version"]
-    mp_version = versions["micropython"]["version"].lstrip("v")
+    cp_version = VERSIONS["circuitpython"]["version"]
+    mp_version = VERSIONS["micropython"]["version"].lstrip("v")
 
     # Static deps from requirements-dev.txt, dynamic stubs appended here.
     dev_packages: list[str] = []

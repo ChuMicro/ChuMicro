@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from _discovery import ROOT, discover_package_dirs, discover_source_roots
+from discovery import ROOT, discover_package_dirs, discover_source_roots
 
 
 def _sync_pycharm_iml() -> None:

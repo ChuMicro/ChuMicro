@@ -20,13 +20,13 @@ Rebuild the smallest Chumicro workspace that preserves the currently proven arch
 chumicro/
 ├── scripts/
 │   ├── run.py              # task runner (slim dispatch + tasks)
-│   ├── _discovery.py       # package discovery, scope parsing, change detection
-│   ├── _ide.py             # IDE config generation (PyCharm, VS Code/Pyright)
-│   ├── _scaffold.py        # library scaffolding templates and logic
-│   ├── _prepare.py         # MicroPython/CircuitPython unix-port preparation
+│   ├── discovery.py        # package discovery, scope parsing, change detection
+│   ├── ide.py              # IDE config generation (PyCharm, VS Code/Pyright)
+│   ├── scaffold.py         # library scaffolding templates and logic
+│   ├── prepare.py          # shared build helpers, binary resolution, runtime versions
+│   ├── prepare_micropython.py   # MicroPython unix-port preparation
+│   ├── prepare_circuitpython.py # CircuitPython unix-port preparation
 │   └── prepare_workspace.py
-├── ci/
-│   └── run_sample_device_smoke.py  # cross-runtime smoke runner (Decision 0006)
 ├── .github/workflows/ci.yml
 ├── AGENTS.md
 ├── conftest.py             # root auto-discovery conftest
@@ -79,7 +79,7 @@ chumicro/
 4. Use an Option B sample library: mostly pure logic plus one small hardware-facing seam (Decision 0004).
 5. Keep the first seam as timing/ticks; defer digital I/O until after the timing contract is proven.
 6. Use WSL2 as the supported Windows path for unix-port validation (Decision 0005).
-7. Keep `ci/run_sample_device_smoke.py` as the canonical shared compatibility smoke runner in the current workspace phase (Decision 0006).
+7. Keep `support/test_harness/run_device_smoke.py` as the canonical shared compatibility smoke runner in the current workspace phase (Decision 0006).
 8. Re-implement rather than depend when a library fails the cross-platform test; publish to all three channels (Decision 0007).
 9. Run pytest per-library to avoid test-directory collisions; each library must independently meet 90% coverage (Decision 0009).
 10. Design libraries for testability: constructor injection, `testing` submodules for fakes, don't mock what you don't own (Decision 0010).
@@ -130,7 +130,7 @@ These patterns caused real bugs when implemented incorrectly. Follow them exactl
 - Discovers packages by scanning for `pyproject.toml` under `support/` and `libraries/`.
 - Lint paths, test paths, coverage sources, and PYTHONPATH are all derived from this scan.
 - No hard-coded lists to maintain.
-- Key discovery functions: `_discover_package_dirs()`, `_discover_source_roots()`, `_discover_ruff_paths()`.
+- Key discovery functions: `discover_package_dirs()`, `discover_source_roots()`, `discover_ruff_paths()`.
 
 #### No editable pip installs for workspace packages
 

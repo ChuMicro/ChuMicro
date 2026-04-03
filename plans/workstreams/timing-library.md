@@ -120,7 +120,7 @@ Current verified state:
 
 - `scripts/run.py test-micropython-compat` exists as the first MicroPython compatibility entrypoint
 - `scripts/run.py prepare-micropython` exists as the repo-managed MicroPython runtime bootstrap command
-- `ci/run_sample_device_smoke.py` exists as the canonical runtime-switchable smoke script
+- `support/test_harness/run_device_smoke.py` exists as the canonical runtime-switchable smoke script
 - the MicroPython path has been exercised successfully in this workspace with the repo-managed local Unix-port runtime and now runs as an advisory CI job
 - the CircuitPython path has been exercised successfully in this workspace with the repo-managed local Unix-port runtime and now runs as an advisory CI job
 - per [Decision 0006](../decisions/0006-shared-import-free-compatibility-smoke-runner.md), the canonical smoke path stays intentionally import-free for the current workspace phase

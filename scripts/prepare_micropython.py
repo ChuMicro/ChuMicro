@@ -6,11 +6,10 @@ import os
 import subprocess
 import sys
 
-from _discovery import TOOLS, read_runtime_versions
-from _prepare import build_jobs, ensure_tool, run_build_command, running_on_native_windows
+from discovery import TOOLS
+from prepare import VERSIONS, build_jobs, ensure_tool, run_build_command, running_on_native_windows
 
-_versions = read_runtime_versions()
-_RELEASE = _versions["micropython"]["version"]
+_RELEASE = VERSIONS["micropython"]["version"]
 _REPO_URL = "https://github.com/micropython/micropython.git"
 _SOURCE_DIR = TOOLS / f"micropython-{_RELEASE}"
 _BINARY = _SOURCE_DIR / "ports" / "unix" / "build-standard" / "micropython"

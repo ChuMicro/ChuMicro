@@ -12,7 +12,9 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from _discovery import ROOT, TOOLS
+from discovery import ROOT, TOOLS, read_runtime_versions
+
+VERSIONS = read_runtime_versions()
 
 
 def run_build_command(

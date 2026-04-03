@@ -41,7 +41,7 @@ def discover_source_roots() -> list[Path]:
 
 def discover_ruff_paths() -> list[str]:
     """Return paths to lint across the workspace."""
-    paths = ["ci", "scripts"]
+    paths = ["scripts"]
     for pkg_dir in discover_package_dirs():
         rel = str(pkg_dir.relative_to(ROOT))
         for subdir in ["src", "tests", "device_tests", "examples"]:
@@ -119,7 +119,7 @@ def detect_changed_packages() -> list[Path] | None:
     for path in changed:
         if path in ("conftest.py", "pyproject.toml"):
             return None
-        if path.startswith(("scripts/", "ci/", ".github/")):
+        if path.startswith(("scripts/", ".github/")):
             return None
 
     # Extract unique package dirs from changed file paths

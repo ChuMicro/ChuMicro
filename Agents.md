@@ -24,7 +24,7 @@ Never embed secrets; configuration such as Wi‑Fi credentials belongs in separa
 
 ## Workspace Structure
 
-Chumicro is organized as a **mono‑workspace**.  Each publishable library resides under `libraries/`, each with its own `src/`, `tests/`, `device_tests/`, `docs/`, and `examples/` subdirectories.  Shared internal packages live under `support/`.  Developer tasks are in `scripts/` (split into focused modules), `ci/` holds the cross‑runtime compatibility smoke runner, and planning docs are in `plans/`.
+Chumicro is organized as a **mono‑workspace**.  Each publishable library resides under `libraries/`, each with its own `src/`, `tests/`, `device_tests/`, `docs/`, and `examples/` subdirectories.  Shared internal packages live under `support/`.  Developer tasks are in `scripts/` (split into focused modules), and planning docs are in `plans/`.
 
 The live workspace structure is provided automatically at the start of each session.  For the canonical detailed layout, see `plans/prompts/workspace-rebuild.prompt.md`.
 
@@ -50,7 +50,7 @@ This mono‑repo simplifies dependency management and allows libraries to share 
 
 ### Memory & Performance (library code only)
 
-The guidelines in this section apply to **publishable library code under `libraries/`** — code that runs on microcontrollers.  Infrastructure code (`scripts/`, `ci/`, `support/`) runs exclusively on CPython and should follow standard Python conventions instead (see *Infrastructure Code* below).
+The guidelines in this section apply to **publishable library code under `libraries/`** — code that runs on microcontrollers.  Infrastructure code (`scripts/`, `support/`) runs exclusively on CPython and should follow standard Python conventions instead (see *Infrastructure Code* below).
 
 Microcontrollers have limited RAM and CPU.  To avoid heap fragmentation and excessive garbage collection, follow these practices:
 
@@ -66,7 +66,7 @@ Microcontrollers have limited RAM and CPU.  To avoid heap fragmentation and exce
 
 ### Infrastructure Code
 
-Code under `scripts/`, `ci/`, and `support/` runs **exclusively on CPython** and is never deployed to microcontrollers.  It should follow standard modern Python conventions:
+Code under `scripts/` and `support/` runs **exclusively on CPython** and is never deployed to microcontrollers.  It should follow standard modern Python conventions:
 
 - Use the **full standard library** freely — `argparse`, `pathlib`, `dataclasses`, `tomllib`, `textwrap`, `functools`, etc.  There is no chicken‑and‑egg problem because infrastructure code runs after CPython is available.
 - **f‑strings** are preferred for readability (the standard Python convention), not because of embedded‑runtime allocation concerns.  `str.format()`, `%` formatting, and deferred logging interpolation are all acceptable when they improve clarity.
