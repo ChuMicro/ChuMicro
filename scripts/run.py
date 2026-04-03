@@ -19,201 +19,31 @@ test also accepts pytest passthrough::
 
 from __future__ import annotations
 
-import json
-import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-_TOOLS = ROOT / ".tools"
+from _discovery import (
+    ROOT,
+    coverage_args_for,
+    discover_ruff_paths,
+    find_publishable_packages,
+    parse_scope_args,
+    pythonpath_env,
+    read_runtime_versions,
+)
+from _ide import sync_ide
+from _prepare import (
+    prepare_circuitpython_main,
+    prepare_micropython_main,
+    resolve_circuitpython_binary,
+    resolve_micropython_binary,
+)
+from _scaffold import new_library
 
 PYTHON = sys.executable
 SMOKE_SCRIPT = "ci/run_sample_device_smoke.py"
 SMOKE_EXEC = f'exec(open("{SMOKE_SCRIPT}").read())'
-
-
-def _read_runtime_versions() -> dict:
-    """Read pinned runtime versions from ``runtime-versions.toml``."""
-    import tomllib
-
-    with (ROOT / "runtime-versions.toml").open("rb") as f:
-        return tomllib.load(f)
-
-
-# ---------------------------------------------------------------------------
-# Auto-discovery helpers
-# ---------------------------------------------------------------------------
-
-
-def _discover_package_dirs() -> list[Path]:
-    """Find directories under support/ and libraries/ that contain a pyproject.toml."""
-    dirs: list[Path] = []
-    for parent in [ROOT / "support", ROOT / "libraries"]:
-        if not parent.is_dir():
-            continue
-        for child in sorted(parent.iterdir()):
-            if child.is_dir() and (child / "pyproject.toml").exists():
-                dirs.append(child)
-    return dirs
-
-
-def _discover_source_roots() -> list[Path]:
-    """Return src/ directories for all discovered packages."""
-    return [d / "src" for d in _discover_package_dirs() if (d / "src").is_dir()]
-
-
-def _discover_ruff_paths() -> list[str]:
-    """Return paths to lint across the workspace."""
-    paths = ["ci", "scripts"]
-    for pkg_dir in _discover_package_dirs():
-        rel = str(pkg_dir.relative_to(ROOT))
-        for subdir in ["src", "tests", "device_tests", "examples"]:
-            if (pkg_dir / subdir).is_dir():
-                paths.append(f"{rel}/{subdir}")
-    return paths
-
-
-def _coverage_args_for(pkg_dirs: list[Path]) -> list[str]:
-    """Return ``--cov`` arguments for importable packages under *pkg_dirs*."""
-    args: list[str] = []
-    for pkg_dir in pkg_dirs:
-        src = pkg_dir / "src"
-        if not src.is_dir():
-            continue
-        for pkg in sorted(src.iterdir()):
-            if (
-                pkg.is_dir()
-                and (pkg / "__init__.py").exists()
-                and not pkg.name.endswith(".egg-info")
-            ):
-                args.extend(["--cov", str(pkg.relative_to(ROOT))])
-    return args
-
-
-
-def _resolve_named_packages(names: list[str]) -> list[Path]:
-    """Resolve package names to directories.
-
-    Accepts bare names (e.g. ``timing``) or relative paths
-    (e.g. ``libraries/timing``).
-    """
-    all_dirs = _discover_package_dirs()
-    by_name = {d.name: d for d in all_dirs}
-    by_rel = {str(d.relative_to(ROOT)): d for d in all_dirs}
-
-    resolved: list[Path] = []
-    for name in names:
-        if name in by_rel:
-            resolved.append(by_rel[name])
-        elif name in by_name:
-            resolved.append(by_name[name])
-        else:
-            available = ", ".join(sorted(by_name.keys()))
-            print(f"Unknown package: {name}")
-            print(f"Available: {available}")
-            return []
-    return resolved
-
-
-def _detect_changed_packages() -> list[Path] | None:
-    """Detect packages affected by changes on this branch vs origin/main.
-
-    Returns a list of package directories, or ``None`` when all tests
-    should run (infrastructure changed, git unavailable, or no diff).
-    """
-    try:
-        changed: set[str] = set()
-        for cmd in (
-            ["git", "diff", "--name-only", "origin/main...HEAD"],
-            ["git", "diff", "--name-only"],
-            ["git", "diff", "--name-only", "--cached"],
-        ):
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, cwd=ROOT, check=False
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                changed.update(result.stdout.strip().splitlines())
-    except (FileNotFoundError, OSError):
-        return None
-
-    if not changed:
-        return None
-
-    # Infrastructure changes → run everything
-    for path in changed:
-        if path in ("conftest.py", "pyproject.toml"):
-            return None
-        if path.startswith(("scripts/", "ci/", ".github/")):
-            return None
-
-    # Extract unique package dirs from changed file paths
-    packages: set[Path] = set()
-    for path in changed:
-        for prefix in ("libraries/", "support/"):
-            if path.startswith(prefix):
-                parts = path.split("/")
-                if len(parts) >= 2:
-                    pkg_dir = ROOT / parts[0] / parts[1]
-                    if pkg_dir.is_dir() and (pkg_dir / "pyproject.toml").exists():
-                        packages.add(pkg_dir)
-
-    return sorted(packages) if packages else None
-
-
-def _parse_scope_args(extra_args: list[str]) -> tuple[list[Path], list[str]]:
-    """Parse ``--all`` / ``--libraries`` into a package scope and remaining args.
-
-    Returns ``(pkg_dirs, remaining)``.  Used by test, verify-examples, and docs.
-    """
-    scope: str | list[str] = "changed"
-    remaining: list[str] = []
-
-    i = 0
-    while i < len(extra_args):
-        arg = extra_args[i]
-        if arg == "--all":
-            scope = "all"
-            i += 1
-        elif arg == "--libraries":
-            i += 1
-            if i >= len(extra_args):
-                print("--libraries requires a comma-separated list of package names.")
-                raise SystemExit(1)
-            scope = [n.strip() for n in extra_args[i].split(",") if n.strip()]
-            i += 1
-        elif arg == "--":
-            remaining = extra_args[i + 1 :]
-            break
-        else:
-            remaining = extra_args[i:]
-            break
-
-    # Resolve scope → list[Path]
-    if scope == "all":
-        return _discover_package_dirs(), remaining
-
-    if isinstance(scope, list):
-        resolved = _resolve_named_packages(scope)
-        if not resolved:
-            raise SystemExit(1)
-        return resolved, remaining
-
-    # "changed" — detect from git
-    detected = _detect_changed_packages()
-    if detected is None:
-        print("Running for all packages (no branch diff or infrastructure changed).")
-        return _discover_package_dirs(), remaining
-
-    names = ", ".join(d.name for d in detected)
-    print(f"Changed packages detected: {names}")
-    return detected, remaining
-
-
-# ---------------------------------------------------------------------------
-# Shared helpers
-# ---------------------------------------------------------------------------
 
 TASKS = (
     "setup",
@@ -234,61 +64,12 @@ TASKS = (
 )
 
 
-def _pythonpath_env() -> dict[str, str]:
-    """Return an environment with the repo source roots prepended to PYTHONPATH."""
-    env = os.environ.copy()
-    existing_path = env.get("PYTHONPATH")
-    path_entries = [str(path) for path in _discover_source_roots()]
-    if existing_path:
-        path_entries.append(existing_path)
-
-    env["PYTHONPATH"] = os.pathsep.join(path_entries)
-    return env
-
-
 def _run(command: list[str], env: dict[str, str] | None = None) -> int:
     """Run a command from the repo root and return its exit code."""
     printable_command = " ".join(command)
     print(f"+ {printable_command}")
     completed = subprocess.run(command, cwd=ROOT, env=env, check=False)
     return completed.returncode
-
-
-def _read_prepared_binary(marker_name: str) -> str | None:
-    """Read a binary path from a marker file written by a ci/prepare_*.py script."""
-    marker = _TOOLS / marker_name
-    if not marker.exists():
-        return None
-    candidate = Path(marker.read_text().strip())
-    if candidate.exists():
-        return str(candidate)
-    return None
-
-
-def _resolve_micropython_binary() -> str | None:
-    """Resolve a MicroPython binary from env vars, repo-local tools, or PATH."""
-    configured_path = os.environ.get("MICROPYTHON_BIN")
-    if configured_path:
-        return configured_path
-
-    prepared = _read_prepared_binary("micropython.path")
-    if prepared:
-        return prepared
-
-    return shutil.which("micropython")
-
-
-def _resolve_circuitpython_binary() -> str | None:
-    """Resolve a CircuitPython binary from env vars, repo-local tools, or PATH."""
-    configured_path = os.environ.get("CIRCUITPYTHON_BIN")
-    if configured_path:
-        return configured_path
-
-    prepared = _read_prepared_binary("circuitpython.path")
-    if prepared:
-        return prepared
-
-    return shutil.which("circuitpython")
 
 
 # ---------------------------------------------------------------------------
@@ -298,326 +79,33 @@ def _resolve_circuitpython_binary() -> str | None:
 
 def setup() -> int:
     """Install development dependencies and regenerate IDE configuration."""
-    versions = _read_runtime_versions()
+    versions = read_runtime_versions()
     cp_version = versions["circuitpython"]["version"]
     mp_version = versions["micropython"]["version"].lstrip("v")
-    dev_packages = [
-        "pip",
-        "pytest",
-        "pytest-cov",
-        "ruff",
-        "build",
-        "mkdocs",
-        "mkdocs-material",
-        "mkdocstrings[python]",
+
+    # Static deps from requirements-dev.txt, dynamic stubs appended here.
+    dev_packages: list[str] = []
+    req_file = ROOT / "requirements-dev.txt"
+    if req_file.exists():
+        for line in req_file.read_text().splitlines():
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#"):
+                dev_packages.append(stripped)
+
+    dev_packages.extend([
         f"circuitpython-stubs=={cp_version}",
         f"micropython-esp32-stubs=={mp_version}.*",
-    ]
+    ])
+
     result = _run([PYTHON, "-m", "pip", "install", "-U", *dev_packages])
     if result != 0:
         return result
     return sync_ide()
 
 
-# ---------------------------------------------------------------------------
-# IDE configuration generation
-# ---------------------------------------------------------------------------
-
-
-def _sync_pycharm_iml() -> None:
-    """Regenerate .idea/chumicro.iml source roots from the workspace structure."""
-    iml_path = ROOT / ".idea" / "chumicro.iml"
-
-    # Preserve the existing SDK reference so users keep their interpreter setting.
-    jdk_line = ""
-    if iml_path.exists():
-        for line in iml_path.read_text().splitlines():
-            if 'type="jdk"' in line:
-                jdk_line = line
-                break
-
-    source_lines: list[str] = []
-    for pkg_dir in _discover_package_dirs():
-        rel = pkg_dir.relative_to(ROOT)
-        for subdir, is_test in [("src", "false"), ("tests", "true"), ("device_tests", "true")]:
-            if (pkg_dir / subdir).is_dir():
-                source_lines.append(
-                    f'      <sourceFolder url="file://$MODULE_DIR$/{rel}/{subdir}"'
-                    f' isTestSource="{is_test}" />'
-                )
-
-
-    sources = "\n".join(source_lines)
-    jdk_entry = f"\n{jdk_line}" if jdk_line else ""
-    content = (
-        '<?xml version="1.0" encoding="UTF-8"?>\n'
-        '<module type="PYTHON_MODULE" version="4">\n'
-        '  <component name="NewModuleRootManager">\n'
-        '    <content url="file://$MODULE_DIR$">\n'
-        f"{sources}\n"
-        '      <excludeFolder url="file://$MODULE_DIR$/.venv" />\n'
-        '      <excludeFolder url="file://$MODULE_DIR$/.tools" />\n'
-        "    </content>{jdk}\n"
-        '    <orderEntry type="sourceFolder" forTests="false" />\n'
-        "  </component>\n"
-        "</module>\n"
-    ).format(jdk=jdk_entry)
-
-    iml_path.parent.mkdir(parents=True, exist_ok=True)
-    iml_path.write_text(content)
-    print(f"  Updated {iml_path.relative_to(ROOT)}")
-
-
-def _sync_pyrightconfig() -> None:
-    """Regenerate pyrightconfig.json extraPaths from the workspace structure."""
-    config_path = ROOT / "pyrightconfig.json"
-
-    # Preserve any existing user settings; only overwrite extraPaths.
-    if config_path.exists():
-        config = json.loads(config_path.read_text())
-    else:
-        config = {}
-
-    config["extraPaths"] = [
-        str(r.relative_to(ROOT)) for r in _discover_source_roots()
-    ]
-
-    config_path.write_text(json.dumps(config, indent=2) + "\n")
-    print(f"  Updated {config_path.relative_to(ROOT)}")
-
-
-def sync_ide() -> int:
-    """Regenerate IDE configuration files from the workspace structure."""
-    _sync_pycharm_iml()
-    _sync_pyrightconfig()
-    return 0
-
-
-# ---------------------------------------------------------------------------
-# Library scaffolding
-# ---------------------------------------------------------------------------
-
-_PYPROJECT_TEMPLATE = """\
-[build-system]
-requires = ["setuptools>=69", "wheel"]
-build-backend = "setuptools.build_meta"
-
-[project]
-name = "chumicro-{name}"
-dynamic = ["version"]
-description = ""
-readme = "README.md"
-requires-python = ">=3.11"
-license = "MIT"
-authors = [
-    {{ name = "Chumicro" }},
-]
-classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
-    "Intended Audience :: Developers",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3 :: Only",
-]
-
-[tool.setuptools]
-package-dir = {{"" = "src"}}
-
-[tool.setuptools.dynamic]
-version = {{file = "VERSION"}}
-
-[tool.setuptools.packages.find]
-where = ["src"]
-"""
-
-_MKDOCS_TEMPLATE = """\
-site_name: chumicro-{name}
-theme:
-  name: material
-  palette:
-    scheme: default
-
-nav:
-  - Guide: guide.md
-  - API Reference: api.md
-
-plugins:
-  - search
-  - mkdocstrings:
-      handlers:
-        python:
-          paths:
-            - src
-          options:
-            show_source: false
-            show_root_heading: true
-            members_order: source
-"""
-
-_README_TEMPLATE = """\
-# chumicro-{name}
-
-## Installation
-
-```bash
-pip install chumicro-{name}
-```
-
-## Quick example
-
-```python
-from {import_name} import ...
-```
-
-## Platform support
-
-Works on CPython, MicroPython, and CircuitPython.
-
-## Docs
-
-- [User guide](docs/guide.md)
-- [API reference](docs/api.md)
-"""
-
-_GUIDE_TEMPLATE = """\
-# User Guide
-
-<!-- GENERATION INSTRUCTIONS — delete this block once the guide is written.
-
-     This guide should be generated from the library's source code, docstrings,
-     tests, and examples.  See plans/prompts/guide-generation.prompt.md for the
-     full prompt an AI agent can use.  Every section below is required unless
-     marked optional.  Do not leave placeholder comments in the final guide. -->
-
-## Overview
-
-<!-- Required. 2-4 sentences: what the library does, why it exists, the core
-     concept. Name the key classes/functions. -->
-
-## Getting started
-
-<!-- Required. The most common usage pattern as a copy-pasteable snippet.
-     Import from the public package, not internal modules. -->
-
-## Platform notes
-
-<!-- Required. Runtime-specific behavior or limitations. If the library works
-     identically on all three runtimes, say so in one line. -->
-
-## Serviceable pattern
-
-<!-- Include if the library has classes that implement service(event_sink).
-     Show how to wire them into a ServiceRunner. Omit if not applicable. -->
-
-## Memory notes
-
-<!-- Optional. Include if the library manages buffers, queues, or
-     pre-allocated structures. Explain allocation strategy and tuning. -->
-"""
-
-_API_TEMPLATE = """\
-# API Reference
-
-::: {import_name}
-"""
-
-_EXAMPLE_TEMPLATE = """\
-\"\"\"{display_name} example.
-
-Describe what this example demonstrates.
-\"\"\"
-
-
-def main():
-    \"\"\"Run the example.\"\"\"
-    print("Hello from chumicro-{name}!")
-
-
-if __name__ == "__main__":
-    main()
-"""
-
-
-def _scaffold_library(name: str) -> int:
-    """Create the directory structure and template files for a new library."""
-    import_name = f"chumicro_{name.replace('-', '_')}"
-    lib_dir = ROOT / "libraries" / name
-
-    if lib_dir.exists():
-        print(f"Directory already exists: libraries/{name}")
-        return 1
-
-    # Create directory tree
-    (lib_dir / "src" / import_name).mkdir(parents=True)
-    (lib_dir / "tests").mkdir()
-    (lib_dir / "device_tests").mkdir()
-    (lib_dir / "docs").mkdir()
-    (lib_dir / "examples").mkdir()
-
-    # .gitkeep for directories that start empty
-    (lib_dir / "device_tests" / ".gitkeep").touch()
-
-    # VERSION
-    (lib_dir / "VERSION").write_text("0.1.0\n")
-
-    # pyproject.toml
-    (lib_dir / "pyproject.toml").write_text(_PYPROJECT_TEMPLATE.format(name=name))
-
-    # mkdocs.yml
-    (lib_dir / "mkdocs.yml").write_text(_MKDOCS_TEMPLATE.format(name=name))
-
-    # README
-    (lib_dir / "README.md").write_text(
-        _README_TEMPLATE.format(name=name, import_name=import_name)
-    )
-
-    # docs/
-    (lib_dir / "docs" / "guide.md").write_text(_GUIDE_TEMPLATE)
-    (lib_dir / "docs" / "api.md").write_text(
-        _API_TEMPLATE.format(import_name=import_name)
-    )
-
-    # Example
-    display_name = name.replace("-", " ").replace("_", " ").title()
-    (lib_dir / "examples" / "hello.py").write_text(
-        _EXAMPLE_TEMPLATE.format(name=name, display_name=display_name)
-    )
-
-    # Package __init__.py
-    (lib_dir / "src" / import_name / "__init__.py").write_text(
-        f'"""Public exports for the chumicro-{name} package."""\n'
-    )
-
-    # Tests conftest.py (no __init__.py — avoids module name collisions across libraries)
-    (lib_dir / "tests" / "conftest.py").write_text(
-        f'"""Test configuration for the chumicro-{name} package."""\n'
-    )
-
-    print(f"Created libraries/{name}/")
-    return 0
-
-
-def new_library(extra_args: list[str] | None = None) -> int:
-    """Scaffold a new library under libraries/ and regenerate IDE configs.
-
-    Usage: ``python scripts/run.py new-library <name>``
-    """
-    args = extra_args or []
-    if len(args) != 1 or args[0].startswith("-"):
-        print("Usage: python scripts/run.py new-library <name>")
-        print("Example: python scripts/run.py new-library gpio")
-        return 1
-
-    name = args[0]
-    result = _scaffold_library(name)
-    if result != 0:
-        return result
-
-    return sync_ide()
-
-
 def lint() -> int:
     """Run Ruff across all discovered source, test, and script paths."""
-    return _run([PYTHON, "-m", "ruff", "check", *_discover_ruff_paths()])
+    return _run([PYTHON, "-m", "ruff", "check", *discover_ruff_paths()])
 
 
 def test_host(extra_args: list[str] | None = None) -> int:
@@ -631,7 +119,7 @@ def test_host(extra_args: list[str] | None = None) -> int:
     Accepts ``--all``, ``--libraries name,...``, and ``-- <pytest args>``.
     Default (no options): detect changed packages on branch vs origin/main.
     """
-    pkg_dirs, passthrough = _parse_scope_args(extra_args or [])
+    pkg_dirs, passthrough = parse_scope_args(extra_args or [])
 
     # Keep only packages that actually have a tests/ directory.
     testable = [d for d in pkg_dirs if (d / "tests").is_dir()]
@@ -639,7 +127,7 @@ def test_host(extra_args: list[str] | None = None) -> int:
         print("No test directories found for the selected packages.")
         return 0
 
-    env = _pythonpath_env()
+    env = pythonpath_env()
 
     # Clean stale coverage data so combine starts fresh.
     for f in ROOT.glob(".coverage"):
@@ -655,7 +143,7 @@ def test_host(extra_args: list[str] | None = None) -> int:
     overall_rc = 0
 
     for pkg_dir in testable:
-        cov_args = _coverage_args_for([pkg_dir])
+        cov_args = coverage_args_for([pkg_dir])
         test_path = str((pkg_dir / "tests").relative_to(ROOT))
 
         # Each run writes coverage to a per-library file for later combining.
@@ -693,22 +181,9 @@ def test_host(extra_args: list[str] | None = None) -> int:
     return overall_rc
 
 
-def _find_publishable_packages() -> list[str]:
-    """Return relative paths to publishable libraries under ``libraries/``."""
-    libraries_dir = ROOT / "libraries"
-    if not libraries_dir.is_dir():
-        return []
-    packages = []
-    for version_file in sorted(libraries_dir.rglob("VERSION")):
-        package_dir = version_file.parent
-        if (package_dir / "pyproject.toml").exists():
-            packages.append(str(package_dir.relative_to(ROOT)))
-    return packages
-
-
 def build() -> int:
     """Build all publishable package distributions."""
-    packages = _find_publishable_packages()
+    packages = find_publishable_packages()
     if not packages:
         print("No publishable packages found (no VERSION + pyproject.toml pairs).")
         return 1
@@ -734,8 +209,8 @@ def verify_examples(extra_args: list[str] | None = None) -> int:
     Accepts ``--all`` and ``--libraries name,...``.
     Default: detect changed packages on branch vs origin/main.
     """
-    pkg_dirs, _ = _parse_scope_args(extra_args or [])
-    env = _pythonpath_env()
+    pkg_dirs, _ = parse_scope_args(extra_args or [])
+    env = pythonpath_env()
     examples: list[tuple[str, Path]] = []
 
     for pkg_dir in pkg_dirs:
@@ -788,7 +263,7 @@ def docs(extra_args: list[str] | None = None) -> int:
         else:
             filtered_args.append(arg)
 
-    pkg_dirs, _ = _parse_scope_args(filtered_args)
+    pkg_dirs, _ = parse_scope_args(filtered_args)
 
     # Keep only packages that have a mkdocs.yml
     doc_dirs = [d for d in pkg_dirs if (d / "mkdocs.yml").exists()]
@@ -846,17 +321,17 @@ def preflight() -> int:
 
 def prepare_micropython() -> int:
     """Prepare the repo-local MicroPython unix-port runtime."""
-    return _run([PYTHON, "ci/prepare_micropython.py"])
+    return prepare_micropython_main()
 
 
 def prepare_circuitpython() -> int:
     """Prepare the repo-local CircuitPython unix-port runtime."""
-    return _run([PYTHON, "ci/prepare_circuitpython.py"])
+    return prepare_circuitpython_main()
 
 
 def test_micropython_compat() -> int:
     """Run the sample device-test smoke script with the MicroPython Unix binary."""
-    micropython_bin = _resolve_micropython_binary()
+    micropython_bin = resolve_micropython_binary()
     if micropython_bin is None:
         print("MicroPython binary not found. Preparing unix-port runtime first.")
         prepare_result = prepare_micropython()
@@ -864,7 +339,7 @@ def test_micropython_compat() -> int:
             print("MicroPython preparation failed.")
             return prepare_result
 
-        micropython_bin = _resolve_micropython_binary()
+        micropython_bin = resolve_micropython_binary()
         if micropython_bin is None:
             print(
                 "Preparation completed without the expected binary. "
@@ -877,7 +352,7 @@ def test_micropython_compat() -> int:
 
 def test_circuitpython_compat() -> int:
     """Run the shared smoke script with a configured or repo-managed CircuitPython binary."""
-    circuitpython_bin = _resolve_circuitpython_binary()
+    circuitpython_bin = resolve_circuitpython_binary()
     if circuitpython_bin is None:
         print("CircuitPython binary not found. Preparing unix-port runtime first.")
         prepare_result = prepare_circuitpython()
@@ -885,7 +360,7 @@ def test_circuitpython_compat() -> int:
             print("CircuitPython preparation failed.")
             return prepare_result
 
-        circuitpython_bin = _resolve_circuitpython_binary()
+        circuitpython_bin = resolve_circuitpython_binary()
         if circuitpython_bin is None:
             print(
                 "Preparation completed without the expected binary. "

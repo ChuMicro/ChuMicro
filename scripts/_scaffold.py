@@ -1,0 +1,224 @@
+"""Library scaffolding — templates and directory creation."""
+
+from __future__ import annotations
+
+from _discovery import ROOT
+from _ide import sync_ide
+
+_PYPROJECT_TEMPLATE = """\
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chumicro-{name}"
+dynamic = ["version"]
+description = ""
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [
+    {{ name = "Chumicro" }},
+]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+]
+
+[tool.setuptools]
+package-dir = {{"" = "src"}}
+
+[tool.setuptools.dynamic]
+version = {{file = "VERSION"}}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+"""
+
+_MKDOCS_TEMPLATE = """\
+site_name: chumicro-{name}
+theme:
+  name: material
+  palette:
+    scheme: default
+
+nav:
+  - Guide: guide.md
+  - API Reference: api.md
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths:
+            - src
+          options:
+            show_source: false
+            show_root_heading: true
+            members_order: source
+"""
+
+_README_TEMPLATE = """\
+# chumicro-{name}
+
+## Installation
+
+```bash
+pip install chumicro-{name}
+```
+
+## Quick example
+
+```python
+from {import_name} import ...
+```
+
+## Platform support
+
+Works on CPython, MicroPython, and CircuitPython.
+
+## Docs
+
+- [User guide](docs/guide.md)
+- [API reference](docs/api.md)
+"""
+
+_GUIDE_TEMPLATE = """\
+# User Guide
+
+<!-- GENERATION INSTRUCTIONS — delete this block once the guide is written.
+
+     This guide should be generated from the library's source code, docstrings,
+     tests, and examples.  See plans/prompts/guide-generation.prompt.md for the
+     full prompt an AI agent can use.  Every section below is required unless
+     marked optional.  Do not leave placeholder comments in the final guide. -->
+
+## Overview
+
+<!-- Required. 2-4 sentences: what the library does, why it exists, the core
+     concept. Name the key classes/functions. -->
+
+## Getting started
+
+<!-- Required. The most common usage pattern as a copy-pasteable snippet.
+     Import from the public package, not internal modules. -->
+
+## Platform notes
+
+<!-- Required. Runtime-specific behavior or limitations. If the library works
+     identically on all three runtimes, say so in one line. -->
+
+## Serviceable pattern
+
+<!-- Include if the library has classes that implement service(event_sink).
+     Show how to wire them into a ServiceRunner. Omit if not applicable. -->
+
+## Memory notes
+
+<!-- Optional. Include if the library manages buffers, queues, or
+     pre-allocated structures. Explain allocation strategy and tuning. -->
+"""
+
+_API_TEMPLATE = """\
+# API Reference
+
+::: {import_name}
+"""
+
+_EXAMPLE_TEMPLATE = """\
+\"\"\"{display_name} example.
+
+Describe what this example demonstrates.
+\"\"\"
+
+
+def main():
+    \"\"\"Run the example.\"\"\"
+    print("Hello from chumicro-{name}!")
+
+
+if __name__ == "__main__":
+    main()
+"""
+
+
+def _scaffold_library(name: str) -> int:
+    """Create the directory structure and template files for a new library."""
+    import_name = f"chumicro_{name.replace('-', '_')}"
+    lib_dir = ROOT / "libraries" / name
+
+    if lib_dir.exists():
+        print(f"Directory already exists: libraries/{name}")
+        return 1
+
+    # Create directory tree
+    (lib_dir / "src" / import_name).mkdir(parents=True)
+    (lib_dir / "tests").mkdir()
+    (lib_dir / "device_tests").mkdir()
+    (lib_dir / "docs").mkdir()
+    (lib_dir / "examples").mkdir()
+
+    # .gitkeep for directories that start empty
+    (lib_dir / "device_tests" / ".gitkeep").touch()
+
+    # VERSION
+    (lib_dir / "VERSION").write_text("0.1.0\n")
+
+    # pyproject.toml
+    (lib_dir / "pyproject.toml").write_text(_PYPROJECT_TEMPLATE.format(name=name))
+
+    # mkdocs.yml
+    (lib_dir / "mkdocs.yml").write_text(_MKDOCS_TEMPLATE.format(name=name))
+
+    # README
+    (lib_dir / "README.md").write_text(
+        _README_TEMPLATE.format(name=name, import_name=import_name)
+    )
+
+    # docs/
+    (lib_dir / "docs" / "guide.md").write_text(_GUIDE_TEMPLATE)
+    (lib_dir / "docs" / "api.md").write_text(
+        _API_TEMPLATE.format(import_name=import_name)
+    )
+
+    # Example
+    display_name = name.replace("-", " ").replace("_", " ").title()
+    (lib_dir / "examples" / "hello.py").write_text(
+        _EXAMPLE_TEMPLATE.format(name=name, display_name=display_name)
+    )
+
+    # Package __init__.py
+    (lib_dir / "src" / import_name / "__init__.py").write_text(
+        f'"""Public exports for the chumicro-{name} package."""\n'
+    )
+
+    # Tests conftest.py (no __init__.py — avoids module name collisions across libraries)
+    (lib_dir / "tests" / "conftest.py").write_text(
+        f'"""Test configuration for the chumicro-{name} package."""\n'
+    )
+
+    print(f"Created libraries/{name}/")
+    return 0
+
+
+def new_library(extra_args: list[str] | None = None) -> int:
+    """Scaffold a new library under libraries/ and regenerate IDE configs.
+
+    Usage: ``python scripts/run.py new-library <name>``
+    """
+    args = extra_args or []
+    if len(args) != 1 or args[0].startswith("-"):
+        print("Usage: python scripts/run.py new-library <name>")
+        print("Example: python scripts/run.py new-library gpio")
+        return 1
+
+    name = args[0]
+    result = _scaffold_library(name)
+    if result != 0:
+        return result
+
+    return sync_ide()
+

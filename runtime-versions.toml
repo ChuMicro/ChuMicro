@@ -1,7 +1,7 @@
 # Pinned runtime versions for compatibility testing and IDE stubs.
 #
 # Change these when upgrading the CircuitPython or MicroPython targets.
-# The prepare scripts (ci/prepare_*.py) and setup task (scripts/run.py)
+# The prepare module (scripts/_prepare.py) and setup task (scripts/run.py)
 # read from this file — no other files need version updates.
 
 [circuitpython]
