@@ -30,7 +30,7 @@ significant implementation changes.
    | File | What to check |
    |---|---|
    | `plans/README.md` | Decisions range, current planning set list (decisions, workstreams, prompts) |
-   | `plans/next-up.md` | New items in Now/Next, recent done items recorded |
+   | `plans/next-up.md` | New items in Now/Next, checked-off items moved to Done |
    | `plans/roadmap.md` | Milestone progress, verified progress lists, incomplete items |
    | `plans/workstreams/*.md` | Each workstream's verified slice, resolved decisions |
    | `plans/prompts/workspace-resume.prompt.md` | Decision list, code anchors, capabilities, open areas |

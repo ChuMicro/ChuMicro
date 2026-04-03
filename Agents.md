@@ -264,6 +264,8 @@ The planning documents under `plans/` are part of the repository's working state
 - `plans/decisions/` for durable decisions that affect future work
 - `plans/prompts/` for durable prompt artifacts used to recover workspace context, restart sessions, or preserve workspace build-up history
 
+**`next-up.md` housekeeping:** when you mark an item as done (`[x]`) in the Now, Next, or Blocked sections, move it to the top of the Done section in the same edit.  Do not leave checked-off items in active sections.
+
 **Before proposing a change to workspace structure, testing patterns, or dependency strategy, check `plans/decisions/` for existing decisions on the topic.**  Re-proposing something that was already decided and rejected wastes time.  If new information justifies revisiting a decision, say so explicitly and reference the original decision.
 
 Keep planning docs aligned with the actual codebase, but avoid churn for tiny edits that do not change scope, status, priorities, or next steps.
