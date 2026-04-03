@@ -21,14 +21,10 @@ Instead, **always** use the file-creation tool to write the message, then run on
    git commit -F .scratch/commit-msg.txt
    ```
 
-3. **Clean up** (single-line terminal command):
-   ```
-   rm -f .scratch/commit-msg*.txt
-   ```
+That's it. The file is overwritten on the next commit, so no cleanup is needed.
 
 ## Rules
 
 - **Never use `git commit -m "..."`** — it breaks on special characters in zsh.
 - **Never write the commit message via the terminal** — no heredocs, no `echo`, no `cat`, no `printf`. The agent terminal truncates multi-line input. Always use the file-creation tool.
-- **Always clean up** with `rm -f .scratch/commit-msg*.txt` after the commit, even if the commit fails.
 - The `.scratch/` directory is gitignored and should never be committed.
