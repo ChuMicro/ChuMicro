@@ -79,9 +79,9 @@ Create a short restart brief that states:
 
 - `python scripts/run.py new-library <name>` — scaffold a new library + regenerate IDE configs
 - `python scripts/run.py test` — auto-detect changed packages, or `--all` / `--libraries name`
-- `python scripts/run.py test -k test_name` — run specific tests by expression
-- `python scripts/run.py test -x` — stop on first failure
-- `python scripts/run.py test --no-cov` — skip coverage for quick runs
+- `python scripts/run.py test -k timing/test_heartbeat` — filter by library and test
+- `python scripts/run.py test -k timing/test_ticks/test_add` — filter by library, file, and test
+- `python scripts/run.py test --no-cov -x` — quick run, stop on failure
 - `python scripts/run.py sync-ide` — regenerate PyCharm `.iml` and VS Code `pyrightconfig.json`
 - `python scripts/run.py preflight` — lint + all tests + verify-examples + build
 - `python scripts/run.py build` — build all publishable packages under `libraries/`

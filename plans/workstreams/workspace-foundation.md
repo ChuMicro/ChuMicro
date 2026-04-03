@@ -33,7 +33,7 @@ Define the repo layout, shared tooling, and local developer ergonomics for a Pyt
 - `.github/workflows/ci.yml` exists and uses the shared repo task entrypoints
 - `scripts/run.py` exists as the current shared task interface for humans, agents, and CI
 - `scripts/run.py` auto-discovers all libraries and support packages (no hard-coded lists)
-- `scripts/run.py` provides scoped test running: `--all`, `--libraries`, branch-diff detection, `-k`/`-x`/`-v`/`--no-cov`
+- `scripts/run.py` provides scoped test running: `--all`, `--libraries`, branch-diff detection, `-k lib/test`/`-x`/`-v`/`--no-cov`
 - `scripts/run.py new-library <name>` scaffolds a new library and regenerates IDE configs
 - `scripts/run.py sync-ide` generates `.idea/chumicro.iml` (PyCharm) and `pyrightconfig.json` (VS Code)
 - Root `conftest.py` auto-discovers source roots and excludes `device_tests/`

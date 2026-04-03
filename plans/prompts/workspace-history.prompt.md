@@ -128,7 +128,7 @@ This was the largest single session. It addressed three areas: the workspace was
 **Scoped test running:**
 5. `test` default: detect changed packages on branch vs `origin/main`.
 6. `--all`: run everything. `--libraries timing`: run specific packages.
-7. `-k EXPRESSION`, `-x`, `-v`, `--no-cov`: declared test options (no raw passthrough).
+7. `-k library/test` or `-k library/file/test`: library-scoped test filtering (plain names rejected).
 8. Coverage gate relaxed automatically when `-k` is used or `--no-cov` skips coverage entirely.
 
 **Library scaffolding and IDE config generation:**

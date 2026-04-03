@@ -87,38 +87,41 @@ def lint() -> int:
 
 def _parse_library_filters(
     filter_expr: str,
-) -> dict[str, str] | None:
-    """Parse a ``-k`` expression into per-library filters.
+) -> dict[str, list[tuple[str | None, str]]]:
+    """Parse a ``-k`` expression into per-library test filters.
 
-    Returns ``None`` when the expression contains no ``/`` separators
-    (plain pytest expression applied to all libraries).
+    Every entry must be library-scoped.  Supported formats::
 
-    Returns a dict of ``{library_name: expression}`` when every entry
-    uses the ``library/expression`` form.  Multiple entries for the same
-    library are combined with ``or``.
+        library/expression              filter by name within a library
+        library/file/expression         filter within a specific test file
+        lib1/a,lib2/b                   comma-separated entries
 
-    Raises :class:`SystemExit` if scoped and unscoped entries are mixed.
+    Returns ``{library_name: [(file_or_None, expression), ...]}``.
+    Multiple unscoped entries for the same library are combined with
+    ``or`` at run time.  File-scoped entries each get their own pytest
+    invocation.
+
+    Raises :class:`SystemExit` for entries missing a library prefix.
     """
     entries = [e.strip() for e in filter_expr.split(",") if e.strip()]
+    result: dict[str, list[tuple[str | None, str]]] = {}
 
-    scoped = [e.split("/", 1) for e in entries if "/" in e]
-    plain = [e for e in entries if "/" not in e]
-
-    if not scoped:
-        return None  # All plain — apply uniformly.
-
-    if plain:
-        print("Cannot mix library-scoped (lib/test) and plain names in -k.")
-        print(f"  Scoped: {', '.join(f'{s[0]}/{s[1]}' for s in scoped)}")
-        print(f"  Plain:  {', '.join(plain)}")
-        raise SystemExit(1)
-
-    result: dict[str, str] = {}
-    for lib, expr in scoped:
-        if lib in result:
-            result[lib] = f"{result[lib]} or {expr}"
+    for entry in entries:
+        parts = entry.split("/")
+        if len(parts) == 2:
+            lib, expr = parts
+            result.setdefault(lib, []).append((None, expr))
+        elif len(parts) == 3:
+            lib, file, expr = parts
+            result.setdefault(lib, []).append((file, expr))
         else:
-            result[lib] = expr
+            print(f"Invalid -k format: {entry}")
+            print(
+                "Use library/test, library/file/test, "
+                "or comma-separated entries."
+            )
+            raise SystemExit(1)
+
     return result
 
 
@@ -138,31 +141,28 @@ def test_cpython(
     is set (filtering naturally reduces coverage) or *no_cov* skips
     coverage entirely.
 
-    *filter_expr* supports library-scoped filters using ``library/expr``
-    syntax.  When every entry is library-scoped, only those libraries
-    are tested (overriding *pkg_dirs*).  Examples::
+    *filter_expr* requires library-scoped syntax::
 
-        test_heartbeat                        # plain — all libraries
-        timing/test_heartbeat                 # scoped — timing only
-        timing/test_a,serviceable/test_b      # scoped — one filter per lib
+        timing/test_heartbeat                 # by name in a library
+        timing/test_ticks/test_add            # by file and name
+        timing/test_a,serviceable/test_b      # comma-separated
     """
     # Parse library-scoped filters from filter_expr.
-    per_library: dict[str, str] | None = None
+    per_library: dict[str, list[tuple[str | None, str]]] | None = None
     if filter_expr:
         per_library = _parse_library_filters(filter_expr)
-        if per_library is not None:
-            # Library prefixes override pkg_dirs.
-            all_dirs = discover_package_dirs()
-            by_name = {d.name: d for d in all_dirs}
-            resolved: list[Path] = []
-            for name in per_library:
-                if name not in by_name:
-                    available = ", ".join(sorted(by_name))
-                    print(f"Unknown library in -k: {name}")
-                    print(f"Available: {available}")
-                    return 1
-                resolved.append(by_name[name])
-            pkg_dirs = resolved
+        # Library prefixes override pkg_dirs.
+        all_dirs = discover_package_dirs()
+        by_name = {d.name: d for d in all_dirs}
+        resolved: list[Path] = []
+        for name in per_library:
+            if name not in by_name:
+                available = ", ".join(sorted(by_name))
+                print(f"Unknown library in -k: {name}")
+                print(f"Available: {available}")
+                return 1
+            resolved.append(by_name[name])
+        pkg_dirs = resolved
 
     # Keep only packages that actually have a tests/ directory.
     testable = [d for d in pkg_dirs if (d / "tests").is_dir()]
@@ -184,45 +184,69 @@ def test_cpython(
     cov_gate_args = ["--cov-fail-under=0"] if relax_coverage else []
 
     overall_rc = 0
+    run_counter = 0
 
     for pkg_dir in testable:
-        # Determine the filter expression for this library.
+        # Determine what pytest runs are needed for this library.
         if per_library is not None:
-            expr = per_library.get(pkg_dir.name)
+            entries = per_library.get(pkg_dir.name, [])
+
+            # Split into file-scoped and global entries.
+            global_exprs = [expr for f, expr in entries if f is None]
+            file_entries = [(f, expr) for f, expr in entries if f is not None]
+
+            # Global expressions combine into a single run.
+            runs: list[tuple[str, str]] = []
+            if global_exprs:
+                test_path = str((pkg_dir / "tests").relative_to(ROOT))
+                combined = " or ".join(global_exprs)
+                runs.append((test_path, combined))
+
+            # File-scoped entries each get their own run.
+            for file_name, expr in file_entries:
+                test_file = pkg_dir / "tests" / f"{file_name}.py"
+                if not test_file.exists():
+                    rel = test_file.relative_to(ROOT)
+                    print(f"Test file not found: {rel}")
+                    return 1
+                runs.append((str(test_file.relative_to(ROOT)), expr))
         else:
-            expr = filter_expr
+            # No filter — run the entire tests/ directory.
+            test_path = str((pkg_dir / "tests").relative_to(ROOT))
+            runs = [(test_path, "")]
 
-        # Build extra pytest flags for this library.
-        extra_args: list[str] = []
-        if expr:
-            extra_args.extend(["-k", expr])
-        if exitfirst:
-            extra_args.append("-x")
-        if verbose:
-            extra_args.append("-v")
+        for test_target, expr in runs:
+            extra_args: list[str] = []
+            if expr:
+                extra_args.extend(["-k", expr])
+            if exitfirst:
+                extra_args.append("-x")
+            if verbose:
+                extra_args.append("-v")
 
-        cov_args = [] if no_cov else coverage_args_for([pkg_dir])
-        test_path = str((pkg_dir / "tests").relative_to(ROOT))
+            cov_args = [] if no_cov else coverage_args_for([pkg_dir])
 
-        # Each run writes coverage to a per-library file for later combining.
-        run_env = {**env, "COVERAGE_FILE": str(ROOT / f".coverage.{pkg_dir.name}")}
+            # Unique coverage file per run.
+            cov_name = f".coverage.{pkg_dir.name}.{run_counter}"
+            run_env = {**env, "COVERAGE_FILE": str(ROOT / cov_name)}
+            run_counter += 1
 
-        rc = _run(
-            [
-                PYTHON, "-m", "pytest",
-                "-W", "error",
-                *cov_args,
-                "--cov-report=",
-                *cov_gate_args,
-                test_path,
-                *extra_args,
-            ],
-            env=run_env,
-        )
-        # Exit code 5 means no tests were collected (e.g. -k filter matched
-        # nothing in this library) — not an error.
-        if rc not in (0, 5):
-            overall_rc = rc
+            rc = _run(
+                [
+                    PYTHON, "-m", "pytest",
+                    "-W", "error",
+                    *cov_args,
+                    "--cov-report=",
+                    *cov_gate_args,
+                    test_target,
+                    *extra_args,
+                ],
+                env=run_env,
+            )
+            # Exit code 5 means no tests were collected (e.g. -k filter
+            # matched nothing in this library) — not an error.
+            if rc not in (0, 5):
+                overall_rc = rc
 
     # Combine per-library coverage into one data file and report.
     if not no_cov and list(ROOT.glob(".coverage.*")):
@@ -507,25 +531,25 @@ def _build_parser() -> argparse.ArgumentParser:
         help="CPython tests (changed packages by default)",
         epilog=(
             "examples:\n"
-            "  run.py test                                    "
+            "  run.py test                                       "
             "# changed packages\n"
-            "  run.py test --all                              "
+            "  run.py test --all                                 "
             "# all packages\n"
-            "  run.py test -k test_heartbeat                  "
-            "# by test name\n"
-            "  run.py test -k timing/test_heartbeat           "
+            "  run.py test -k timing/test_heartbeat              "
             "# by library and test\n"
-            "  run.py test -k timing/test_a,serviceable/test_b"
-            "   # different tests per lib\n"
-            "  run.py test --no-cov -x                        "
+            "  run.py test -k timing/test_ticks/test_add         "
+            "# by library, file, and test\n"
+            "  run.py test -k timing/test_a,serviceable/test_b   "
+            "# per-library filters\n"
+            "  run.py test --no-cov -x                           "
             "# quick, stop on failure"
         ),
     )
     test_p.add_argument(
-        "-k", dest="filter_expr", metavar="EXPRESSION",
+        "-k", dest="filter_expr", metavar="FILTER",
         help=(
-            "filter tests by name (e.g. test_heartbeat) or "
-            "library/name (e.g. timing/test_heartbeat)"
+            "library/test or library/file/test "
+            "(comma-separated for multiple)"
         ),
     )
     test_p.add_argument(
