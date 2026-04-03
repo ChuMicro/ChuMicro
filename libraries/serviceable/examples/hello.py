@@ -1,7 +1,8 @@
 """Serviceable heartbeat — standard dispatch loop.
 
-Demonstrates the serviceable pattern: a Heartbeat component emits events
-into a shared sink, and a ServiceRunner dispatches them to handlers.
+Demonstrates the serviceable pattern with two heartbeats emitting
+distinct event types into a shared sink.  A ServiceRunner dispatches
+each event to the correct handler.
 
 Runs on CPython, MicroPython, and CircuitPython without modification.
 """
@@ -13,14 +14,16 @@ from chumicro_timing import Heartbeat
 
 
 def main():
-    """Run a heartbeat through the serviceable dispatch loop."""
-    heartbeat = Heartbeat(period_ms=1000)
+    """Run two heartbeats through the serviceable dispatch loop."""
+    fast_beat = Heartbeat(period_ms=500, event_type="fast.tick")
+    slow_beat = Heartbeat(period_ms=2000, event_type="slow.tick")
 
     sink = EventQueueSink(max_size=8)
     dispatcher = SimpleEventDispatcher()
-    dispatcher.register(Heartbeat.EVENT_TICK, lambda e: print("beat!"))
+    dispatcher.register("fast.tick", lambda e: print("fast!"))
+    dispatcher.register("slow.tick", lambda e: print("  slow!"))
 
-    runner = ServiceRunner([heartbeat], sink, dispatcher)
+    runner = ServiceRunner([fast_beat, slow_beat], sink, dispatcher)
 
     print("Running serviceable heartbeat (Ctrl+C to stop)...")
 

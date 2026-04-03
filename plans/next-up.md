@@ -2,8 +2,8 @@
 
 ## Now
 
-- [ ] Audit the `chumicro-serviceable` library implementation (Decision 0014). Review API surface, allocation patterns, and integration with Heartbeat.
-  - `EventQueueSink._items` is a Python-level ring buffer on a pre-allocated list. On MicroPython/CircuitPython, `collections.deque` runs in C and would be faster and more memory-efficient for the FIFO queue. The API differences between runtimes (constructor args, missing `__len__` on MicroPython) need a thin wrapper. Evaluate during audit.
+- [x] Audit the `chumicro-serviceable` library implementation (Decision 0014). Review API surface, allocation patterns, and integration with Heartbeat.
+  - `EventQueueSink` uses `collections.deque` (C-level on MP/CP). `deque` constructor, `len()`, `bool()`, `append()`, `popleft()` all work identically across runtimes. `deque.clear()` is compiled out (`#if 0`) on both MP and CP, but `EventQueueSink.clear()` already uses a drain loop — correct. `ServiceRunner` ↔ `Heartbeat` integration verified via tests. Board architecture support for `deque` documented in Decision 0015.
 - [ ] Generalize the compatibility smoke runner (`ci/run_sample_device_smoke.py`) to discover and exercise device tests for any library, not just timing.
 - [ ] Draft the first release workflow for per-library `VERSION` file enforcement and per-library artifacts (PyPI, circup, mip).
 - [ ] Document contributor prerequisites by platform (macOS, Linux, Windows/WSL2) and by editor (PyCharm, VS Code, CLI) in the README. Linux and WSL2 sections are best-effort/researched until verified.

@@ -14,6 +14,8 @@ The pattern:
 All classes are cross-runtime compatible (CPython, MicroPython, CircuitPython).
 """
 
+from collections import deque
+
 
 class Event:
     """A single occurrence emitted by a serviceable component.
@@ -40,7 +42,10 @@ class Event:
 class EventQueueSink:
     """Fixed-capacity ring buffer that receives events from serviceable components.
 
-    The backing list is pre-allocated at init time to avoid resizing.
+    Backed by ``collections.deque`` which is implemented in C on
+    MicroPython and CircuitPython, giving O(1) append/popleft with
+    pre-allocated storage and no Python-level index bookkeeping.
+
     Individual ``Event`` objects are created on each ``emit()`` call;
     they use ``__slots__`` to minimise per-instance memory.
 
@@ -50,45 +55,40 @@ class EventQueueSink:
 
     def __init__(self, max_size=16):
         """Create a sink with room for *max_size* events."""
-        self._items = [None] * max_size
-        self._head = 0
-        self._tail = 0
-        self._count = 0
+        self._max_size = max_size
+        try:
+            # MicroPython/CircuitPython: third arg is flags;
+            # 1 = FLAG_CHECK_OVERFLOW (raises IndexError on append when full).
+            self._items = deque((), max_size, 1)
+        except TypeError:
+            # CPython: no flags argument.
+            self._items = deque((), max_size)
 
     def emit(self, source, event_type, data=None):
         """Record an event.  Returns ``False`` if the buffer is full."""
-        if self._count >= len(self._items):
+        if len(self._items) >= self._max_size:
             return False
-        self._items[self._tail] = Event(source, event_type, data)
-        self._tail = (self._tail + 1) % len(self._items)
-        self._count += 1
+        self._items.append(Event(source, event_type, data))
         return True
 
     def has_events(self):
         """Return whether there are unread events in the buffer."""
-        return self._count > 0
+        return bool(self._items)
 
     def pop(self):
         """Remove and return the oldest event, or ``None`` if empty."""
-        if self._count == 0:
+        if not self._items:
             return None
-        event = self._items[self._head]
-        self._items[self._head] = None
-        self._head = (self._head + 1) % len(self._items)
-        self._count -= 1
-        return event
+        return self._items.popleft()
 
     def clear(self):
         """Discard all pending events and reset the buffer."""
-        for i in range(len(self._items)):
-            self._items[i] = None
-        self._head = 0
-        self._tail = 0
-        self._count = 0
+        while self._items:
+            self._items.popleft()
 
     def __len__(self):
         """Return the number of pending events."""
-        return self._count
+        return len(self._items)
 
 
 class SimpleEventDispatcher:

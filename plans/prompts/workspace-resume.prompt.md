@@ -24,6 +24,7 @@ Use this prompt at the start of a new session when you need to rehydrate the wor
    - [0012: IDE type stubs](../decisions/0012-ide-type-stubs.md)
    - [0013: docs and examples standards](../decisions/0013-docs-and-examples-standards.md)
    - [0014: serviceable pattern](../decisions/0014-serviceable-pattern.md)
+   - [0015: board architecture support](../decisions/0015-board-architecture-support.md)
 
 ### Design principles to preserve
 
@@ -91,7 +92,6 @@ Create a short restart brief that states:
 
 ### Current known open areas
 
-- Serviceable library audit (Decision 0014 — pending review)
 - Release automation and per-library version bump workflows
 - The compatibility smoke runner is still timing-specific (needs generalization for multi-library)
 - Per-library platform targeting implementation (Decision 0011 accepted, not yet wired into run.py)

@@ -4,7 +4,7 @@ Use this prompt when a future session needs to rebuild planning context without 
 
 Chumicro is a mono-workspace for Python libraries that target CPython, MicroPython, and CircuitPython, as described in [AGENTS.md](../../AGENTS.md). Keep the planning model lightweight: `roadmap + workstreams + decisions + next-up + prompts`. Avoid formal epics/stories unless a workstream actually needs them.
 
-### Current verified workspace state as of 2026-04-02
+### Current verified workspace state as of 2026-04-03
 
 1. Planning structure exists under [plans/](../README.md), including:
    - [roadmap.md](../roadmap.md)
@@ -27,6 +27,7 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
    - [0012: IDE type stubs](../decisions/0012-ide-type-stubs.md)
    - [0013: docs and examples standards](../decisions/0013-docs-and-examples-standards.md)
    - [0014: serviceable pattern](../decisions/0014-serviceable-pattern.md)
+   - [0015: board architecture support](../decisions/0015-board-architecture-support.md)
 3. Implemented code slices:
    - `support/runtime/` for reusable runtime detection
    - `support/test_harness/` for a tiny on-device test runner
@@ -48,7 +49,7 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
 5. The serviceable library provides ecosystem infrastructure:
    - `Event`, `EventQueueSink`, `SimpleEventDispatcher`, `ServiceRunner` in `libraries/serviceable/src/chumicro_serviceable/core.py`
    - `FakeEventSink` in `libraries/serviceable/src/chumicro_serviceable/testing.py`
-   - 100% test coverage; pending maintainer audit
+   - 100% test coverage; audit complete (Decision 0015 documents board architecture support)
 6. Verified local commands:
    - `python scripts/run.py setup`
    - `python scripts/run.py lint`
@@ -80,16 +81,16 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
 10. Shared test fakes ship as `testing` submodules (e.g., `chumicro_timing.testing.FakeTicks`, `chumicro_serviceable.testing.FakeEventSink`) and are importable by any library's tests.
 11. Docs and examples standards are established with strict guide requirements, autodoc API reference, and AI generation prompts (Decision 0013).
 12. IDE type stubs use upstream PyPI packages pinned to runtime-versions.toml (Decision 0012).
+13. Serviceable library audit complete: deque API verified across runtimes, overflow flag added, board architecture support documented (Decision 0015).
 
 ### What is still intentionally incomplete
 
-1. Serviceable library audit (pending maintainer review).
-2. The compatibility smoke runner is still timing-specific — needs generalization.
-3. Real board transport tooling beyond manual-only documentation.
-4. Release automation and per-library version bump workflows.
-5. The second seam after timing/ticks (digital I/O).
-6. Per-library platform targeting implementation (Decision 0011 accepted, not yet wired into run.py).
-7. Whether the advisory runtime CI jobs should become protected-branch requirements.
-8. VS Code workspace validation (pyrightconfig.json generated but not tested in VS Code).
-9. Test ergonomics: reducing repeated boilerplate across test files.
-10. Contributor prerequisite documentation by platform.
+1. The compatibility smoke runner is still timing-specific — needs generalization.
+2. Real board transport tooling beyond manual-only documentation.
+3. Release automation and per-library version bump workflows.
+4. The second seam after timing/ticks (digital I/O).
+5. Per-library platform targeting implementation (Decision 0011 accepted, not yet wired into run.py).
+6. Whether the advisory runtime CI jobs should become protected-branch requirements.
+7. VS Code workspace validation (pyrightconfig.json generated but not tested in VS Code).
+8. Test ergonomics: reducing repeated boilerplate across test files.
+9. Contributor prerequisite documentation by platform.

@@ -33,6 +33,11 @@ chumicro/
 ├── devices.example.yml
 ├── pyproject.toml
 ├── README.md
+├── .tools/                 # gitignored; local CP/MP source clones + unix-port binaries
+│   ├── circuitpython-<ver>/  # full source tree, pinned to runtime-versions.toml
+│   ├── circuitpython.path    # path to built CP unix-port binary
+│   ├── micropython-<ver>/    # full source tree, pinned to runtime-versions.toml
+│   └── micropython.path      # path to built MP unix-port binary
 ├── plans/
 │   ├── README.md
 │   ├── roadmap.md
@@ -80,6 +85,7 @@ chumicro/
 12. IDE type stubs come from upstream `circuitpython-stubs` and `micropython-esp32-stubs` (both PEP 561, PyPI), version-pinned to `runtime-versions.toml`.  Both packages coexist; a known `micropython` module conflict is documented with a mitigation path (Decision 0012).
 13. Documentation and examples standards: `guide.md` has required sections (auto-generated via AI prompt), `api.md` uses mkdocstrings autodoc with no hand-written member lists, examples are import-verified in preflight (Decision 0013).
 14. Active components implement a `service(event_sink)` contract for ecosystem-standard event dispatch. `EventQueueSink` provides a pre-allocated ring buffer. Libraries use duck typing — no import dependency on `chumicro-serviceable` required (Decision 0014).
+15. Chumicro libraries require `collections.deque` (full-build CircuitPython, `EXTRA_FEATURES`+ MicroPython). Primary targets: ESP32 family, RP2040/RP2350, STM32. SAMD21 and non-full-build nRF52 are explicitly unsupported (Decision 0015).
 
 ### Key technical patterns
 

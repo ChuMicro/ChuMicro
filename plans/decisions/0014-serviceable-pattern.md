@@ -12,7 +12,7 @@ Multiple upcoming libraries (heartbeat, MQTT, buttons, digital I/O) will need pe
 Standardize on a **shared-sink serviceable pattern** for all active components:
 
 1. **Event** — a small class (`source`, `event_type`, `data`) representing something that happened.
-2. **EventQueueSink** — a fixed-capacity ring buffer that components emit events into.  The backing list is pre-allocated at init; individual `Event` objects are created per-emit (small, `__slots__`-based).
+2. **EventQueueSink** — a fixed-capacity ring buffer that components emit events into.  Backed by `collections.deque` (C-implemented on MicroPython/CircuitPython) for O(1) append/popleft with pre-allocated storage.  Individual `Event` objects are created per-emit (small, `__slots__`-based).
 3. **SimpleEventDispatcher** — routes events to registered handler functions by event type.
 4. **ServiceRunner** — iterates over a list of serviceable components, calls `service(event_sink)` on each, then drains and dispatches events.
 
@@ -33,15 +33,27 @@ This is a duck-typed contract — components do not need to import or subclass a
 
 ## Alternatives considered
 
+- **Hand-rolled list-based ring buffer** — original implementation used `[None] * max_size` with manual head/tail/count/modulo tracking.  Replaced with `collections.deque` which does the same thing in C with less Python code.  `deque.clear()` is compiled out on both runtimes (`#if 0` in `objdeque.c`), but a drain loop is trivial.
 - **Component-owned sink / `next_event()`** — less centralized, requires per-library queue logic, harder to orchestrate multiple components.  Rejected in favor of shared sink for ecosystem consistency.
 - **`ServiceContext` wrapping ticks + sink** — adds a layer of indirection that is not needed yet.  Can be added later without breaking the `service(event_sink)` signature by making the context duck-type compatible with a sink.
 - **Pre-allocated Event slots in the ring buffer** — avoids per-emit allocation but introduces a footgun (popped Event references become invalid on wrap).  Deferred; the user reports no GC problems in practice and this can be added as an opt-in variant later.
 
 ## Allocation notes
 
-- `EventQueueSink` pre-allocates the backing list (fixed size, no resizing).
+- `EventQueueSink` is backed by `collections.deque((), max_size)` which pre-allocates a fixed-size C array of object pointers.  No Python-level head/tail/count bookkeeping.
 - `Event` uses `__slots__` to minimize per-instance memory.
 - Per-emit allocation of `Event` objects is acceptable for the current scale.  If GC pressure becomes a measurable problem, a zero-allocation variant can reuse pre-allocated Event slots.
+
+## Multiple-instance disambiguation
+
+Serviceable components that may be instantiated more than once (e.g., `Heartbeat`) accept an `event_type` constructor argument so each instance emits a distinct event type.  This allows the dispatcher to route events without inspecting `event.source`.  Example:
+
+```python
+led_beat = Heartbeat(100, event_type="led.blink")
+sensor_beat = Heartbeat(5000, event_type="sensor.read")
+dispatcher.register("led.blink", handle_led)
+dispatcher.register("sensor.read", handle_sensor)
+```
 
 ## Consequences
 

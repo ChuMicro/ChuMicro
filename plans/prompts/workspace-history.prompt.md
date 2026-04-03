@@ -174,13 +174,27 @@ This was the largest single session. It addressed three areas: the workspace was
 17. Accepted Decision 0014 (serviceable pattern): standardize how active components communicate events. Components implement `service(event_sink)`, a shared `EventQueueSink` collects events, `ServiceRunner` dispatches.
 18. New library: `chumicro-serviceable` 0.1.0 with `Event`, `EventQueueSink`, `SimpleEventDispatcher`, `ServiceRunner`, and `FakeEventSink` testing helper. 100% test coverage.
 19. `Heartbeat` gained `service(event_sink)` and `EVENT_TICK` (timing 0.1.0 → 0.2.0, backward compatible). Duck-typed — timing does not import from serviceable.
-20. Serviceable library is pending maintainer audit (tracked in next-up.md).
+20. Serviceable library is pending maintainer audit (tracked in next-up.md).  *(Completed 2026-04-03 — see below.)*
 
-#### 2026-04-03 — Planning: performance benchmarking and end-of-session hardening
+#### 2026-04-03 — Serviceable audit, board architecture decision, AGENTS.md .tools docs
 
-1. Added performance/resource benchmarking infrastructure to `next-up.md` (Next section) — memory footprint measurement, GC control for stable benchmarks, per-benchmark thresholds, separate `bench` task or deeper test tier, cross-runtime measurement backends.
-2. Expanded the serviceable audit item in `next-up.md` with a note about replacing the Python-level ring buffer in `EventQueueSink` with `collections.deque` (C-level on all three runtimes) — requires a thin wrapper for API differences (constructor args, missing `__len__` on MicroPython).
-3. Added IDE config staleness check (step 3) to the end-of-session prompt — covers the gap when structural changes happen outside `new-library`.
-4. Confirmed plans-sync prompt already covers discovery of missed decisions, prompts, and workstreams (via "Scan for new artifacts" step and "Common staleness patterns" section).
-5. Confirmed "Creating a New Library" contributor guide is already tracked in `next-up.md` with 8 sub-items covering the full lifecycle.
+**Serviceable library audit (Decision 0014 — completed):**
+1. Verified `collections.deque` API compatibility across all three runtimes by inspecting the pinned source trees under `.tools/`:
+   - Constructor: `deque((), maxlen)` works positionally on CPython, MicroPython, and CircuitPython.
+   - `len()` and `bool()`: both runtimes implement `MP_UNARY_OP_LEN` and `MP_UNARY_OP_BOOL`.
+   - `deque.clear()`: compiled out (`#if 0`) on both MP and CP — but `EventQueueSink.clear()` already uses a `while/popleft()` drain loop, so this was already handled correctly.
+   - `deque.append()` / `popleft()`: core operations, available everywhere.
+2. Added `FLAG_CHECK_OVERFLOW` support: `EventQueueSink.__init__` now tries `deque((), max_size, 1)` first (MP/CP overflow protection), falling back to `deque((), max_size)` on CPython. The manual `len()` check in `emit()` remains as the primary guard; the overflow flag is a C-level safety net.
+3. Marked the audit item as done in `next-up.md`.
+
+**Board architecture support (Decision 0015):**
+4. Performed a source-level audit of `CIRCUITPY_FULL_BUILD` and `MICROPY_CONFIG_ROM_LEVEL` across all ports in both pinned source trees.
+5. Recorded Decision 0015 with full per-port tables: supported (ESP32 family, RP2040/RP2350, STM32, broadcom, etc.) vs unsupported (SAMD21, most nRF52, MicroPython `minimal`). SAMD51 is a notable edge case — supported on MicroPython but CircuitPython's `atmel-samd` port disables `deque` for the entire port.
+6. Updated AGENTS.md "Board Considerations & Feature Detection" section with a summary and link to Decision 0015.
+
+**AGENTS.md — local source clones documentation:**
+7. Added "Local source clones (`.tools/`)" content to the "Reference Implementations" section. Explains the directory layout, that `.tools/` requires `prepare-micropython`/`prepare-circuitpython` to exist, and that web search is an acceptable fallback when the directory is missing.
+8. Merged the `.tools/` subsection into the Reference Implementations paragraph to eliminate duplication (the original paragraph pointed to GitHub repos while the subsection said to browse locally).
+9. Updated `workspace-rebuild.prompt.md` to include `.tools/` in the repo shape and Decision 0015 in the required decisions list.
+10. Fixed the stale `next-up.md` sub-bullet that described `EventQueueSink._items` as "a Python-level ring buffer on a pre-allocated list" — it already uses `deque`.
 

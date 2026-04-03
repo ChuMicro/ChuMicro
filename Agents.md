@@ -205,7 +205,15 @@ Minimize external dependencies; prefer pure‑Python implementations that work o
 
 ## Board Considerations & Feature Detection
 
-Chumicro primarily targets boards in the ESP32‑S2/S3 family or similar microcontrollers with sufficient RAM and flash.  Smaller boards (e.g., SAMD21) may lack features such as the `asyncio` library【204239382498704†L176-L186】 or have tighter memory constraints.  Developers should:
+Chumicro primarily targets boards in the ESP32‑S2/S3 family or similar microcontrollers with sufficient RAM and flash.  Smaller boards (e.g., SAMD21) may lack features such as `collections.deque` or the `asyncio` library【204239382498704†L176-L186】 or have tighter memory constraints.
+
+A source-level audit ([Decision 0015](plans/decisions/0015-board-architecture-support.md)) confirmed which architectures include `collections.deque`, which Chumicro libraries require:
+
+- **Supported:** ESP32 family (S2, S3, C3, C6), RP2040/RP2350, STM32, broadcom, NXP i.MX RT, and most other full-build CircuitPython or `EXTRA_FEATURES`+ MicroPython ports.
+- **Unsupported:** SAMD21 (Trinket M0, Feather M0, etc.), most nRF52 builds (CircuitPython `FULL_BUILD = 0`), MicroPython `minimal` port.
+- **SAMD51:** supported on MicroPython (`FULL_FEATURES`), but CircuitPython's `atmel-samd` port explicitly disables `deque` for the entire port.
+
+Developers should:
 
 1. Document the minimum firmware version and memory requirements for each library.  If a library depends on a specific module (e.g., `socket`, `bluetooth`), note which ports provide it.
 2. Use `sys.platform` or feature checks (`hasattr(module, "function")`) to detect whether optional features are available.  Provide graceful fallbacks or raise clear exceptions when features are missing.  For example, check `hasattr(wifi, 'radio')` before using `wifi.radio`.
@@ -214,7 +222,26 @@ Chumicro primarily targets boards in the ESP32‑S2/S3 family or similar microco
 
 ## Reference Implementations
 
-The upstream implementations of **CPython**, **MicroPython**, and **CircuitPython** are all open‑source and hosted on GitHub.  CircuitPython’s repository is publicly available and is maintained as a fork of MicroPython【828117899337916†L163-L169】.  MicroPython’s source code is similarly public under the `micropython/micropython` repository, and the standard Python implementation is hosted in `python/cpython`【804763416686691†L163-L171】.  Examining these repositories is encouraged when you need to understand how features are implemented or to optimise memory usage—e.g., CircuitPython’s implementation of `str.format` in `py/objstr.c` uses a dynamically growing buffer to build the formatted string【700593876761682†L1099-L1123】.  Referencing the source helps ensure Chumicro libraries align with the behaviour of the underlying interpreters while remaining efficient.
+The upstream implementations of **CPython**, **MicroPython**, and **CircuitPython** are all open‑source.  Examining runtime source is encouraged when you need to understand how features are implemented or to optimise memory usage.
+
+The workspace keeps **local clones** of the pinned source trees under `.tools/`, gitignored but present after `python scripts/run.py prepare-micropython` and/or `prepare-circuitpython`.  The directory layout:
+
+```
+.tools/
+├── circuitpython-<version>/   # full CircuitPython source tree (pinned to runtime-versions.toml)
+├── circuitpython.path          # path to the built CircuitPython unix-port binary
+├── micropython-<version>/      # full MicroPython source tree (pinned to runtime-versions.toml)
+└── micropython.path            # path to the built MicroPython unix-port binary
+```
+
+**Browse these local clones first** when you need to inspect C implementations, built-in module behaviour, or runtime internals — they match the exact versions this workspace targets.  If `.tools/` is missing (workspace not yet prepared), run the prepare scripts above or fall back to a web search for the specific runtime source.
+
+Examples of useful paths:
+
+- `py/objdeque.c` — `collections.deque` implementation
+- `py/objstr.c` — `str.format` / f‑string compilation
+- `shared-bindings/` — CircuitPython hardware API bindings
+- `ports/unix/` — unix-port build system and main entry point
 
 ## Planning documents are part of the workspace contract
 

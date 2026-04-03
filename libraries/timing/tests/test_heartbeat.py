@@ -101,3 +101,56 @@ def test_heartbeat_event_tick_constant() -> None:
     assert Heartbeat.EVENT_TICK == "heartbeat.tick"
 
 
+# -- custom event_type --
+
+
+def test_heartbeat_defaults_to_event_tick() -> None:
+    """Without an explicit event_type, service() should emit EVENT_TICK."""
+    heartbeat = Heartbeat(period_ms=100, ticks=FakeTicks())
+
+    assert heartbeat.event_type == Heartbeat.EVENT_TICK
+
+
+def test_heartbeat_custom_event_type() -> None:
+    """A custom event_type should be used by service() instead of EVENT_TICK."""
+    fake_ticks = FakeTicks()
+    heartbeat = Heartbeat(period_ms=100, ticks=fake_ticks, event_type="led.blink")
+    events = []
+
+    class _ListSink:
+        def emit(self, source, event_type, data=None):
+            events.append((source, event_type))
+
+    fake_ticks.advance(100)
+    heartbeat.service(_ListSink())
+
+    assert len(events) == 1
+    assert events[0][0] is heartbeat
+    assert events[0][1] == "led.blink"
+
+
+def test_heartbeat_custom_event_type_property() -> None:
+    """The event_type property should reflect the configured value."""
+    heartbeat = Heartbeat(period_ms=50, ticks=FakeTicks(), event_type="sensor.read")
+
+    assert heartbeat.event_type == "sensor.read"
+
+
+def test_two_heartbeats_emit_distinct_event_types() -> None:
+    """Two heartbeats with different event_types should emit distinguishable events."""
+    fake_ticks = FakeTicks()
+    hb_a = Heartbeat(period_ms=100, ticks=fake_ticks, event_type="a.tick")
+    hb_b = Heartbeat(period_ms=100, ticks=fake_ticks, event_type="b.tick")
+    events = []
+
+    class _ListSink:
+        def emit(self, source, event_type, data=None):
+            events.append(event_type)
+
+    fake_ticks.advance(100)
+    hb_a.service(_ListSink())
+    hb_b.service(_ListSink())
+
+    assert events == ["a.tick", "b.tick"]
+
+

@@ -18,14 +18,24 @@ class Heartbeat:
     """
 
     EVENT_TICK = "heartbeat.tick"
-    """Event type emitted by ``service()`` when a beat is due."""
+    """Default event type emitted by ``service()`` when a beat is due."""
 
-    def __init__(self, period_ms, ticks=None):
-        """Create a heartbeat that becomes due once every *period_ms* milliseconds."""
+    def __init__(self, period_ms, ticks=None, event_type=None):
+        """Create a heartbeat that becomes due once every *period_ms* milliseconds.
+
+        Args:
+            period_ms: Interval between beats.
+            ticks: Optional tick source (must have ``ticks_ms`` and
+                ``ticks_diff`` methods).  Defaults to the real clock.
+            event_type: Event type string emitted by ``service()``.
+                Defaults to ``EVENT_TICK``.  Override this when multiple
+                heartbeats share a sink so handlers can distinguish them.
+        """
         if period_ms <= 0:
             raise ValueError("period_ms must be greater than zero")
 
         self._period_ms = period_ms
+        self._event_type = event_type if event_type is not None else self.EVENT_TICK
         if ticks is not None:
             self._ticks_ms = ticks.ticks_ms
             self._ticks_diff = ticks.ticks_diff
@@ -40,6 +50,11 @@ class Heartbeat:
     def period_ms(self):
         """Return the configured heartbeat period in milliseconds."""
         return self._period_ms
+
+    @property
+    def event_type(self):
+        """Return the event type string emitted by ``service()``."""
+        return self._event_type
 
     def reset(self):
         """Reset the heartbeat schedule to start again from the current tick."""
@@ -58,12 +73,12 @@ class Heartbeat:
         return True
 
     def service(self, event_sink):
-        """Service one tick: emit ``EVENT_TICK`` into *event_sink* if a beat is due.
+        """Service one tick: emit the configured event type into *event_sink* if due.
 
         This is the serviceable-pattern equivalent of ``poll()``.  Use it
         with ``ServiceRunner`` from ``chumicro_serviceable`` for a standard
         dispatch loop.
         """
         if self.poll():
-            event_sink.emit(self, self.EVENT_TICK)
+            event_sink.emit(self, self._event_type)
 
