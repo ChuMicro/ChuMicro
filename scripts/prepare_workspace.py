@@ -32,7 +32,7 @@ _REQUIREMENTS_FILE = ROOT / "requirements-dev.txt"
 def _read_dev_packages() -> list[str]:
     """Read static dev package names from requirements-dev.txt."""
     if not _REQUIREMENTS_FILE.exists():
-        return ["pip", "pytest", "pytest-cov", "ruff", "build"]
+        return ["pytest", "pytest-cov", "ruff", "build"]
     return [
         line.strip()
         for line in _REQUIREMENTS_FILE.read_text().splitlines()
@@ -113,16 +113,28 @@ def check_python_version() -> None:
     raise SystemExit(1)
 
 
+def _has_uv() -> bool:
+    """Return whether the ``uv`` package manager is available on PATH."""
+    return shutil.which("uv") is not None
+
+
 def resolve_python(create_venv: bool) -> Path:
     """Decide which Python interpreter to use for the remaining steps.
 
     If *create_venv* is True, create ``.venv`` (or reuse it) and return
-    its interpreter.  Otherwise return the interpreter that is running
-    this script.
+    its interpreter.  Prefers ``uv venv`` when uv is on PATH (faster,
+    no pip bootstrapping needed), falling back to stdlib ``venv``.
+    Otherwise return the interpreter that is running this script.
     """
     if create_venv:
         if _venv_python().exists():
             print(f"Virtual environment exists: {VENV_DIR}")
+        elif _has_uv():
+            _banner("Creating virtual environment (uv)")
+            print(f"  {VENV_DIR}\n")
+            subprocess.run(
+                ["uv", "venv", str(VENV_DIR)], cwd=ROOT, check=True,
+            )
         else:
             _banner("Creating virtual environment")
             print(f"  {VENV_DIR}\n")
@@ -139,11 +151,23 @@ def resolve_python(create_venv: bool) -> Path:
 
 
 def install_dependencies(python: Path) -> None:
-    """Install development dependencies using the chosen interpreter."""
-    _run(
-        [python, "-m", "pip", "install", "-U", *_read_dev_packages()],
-        "Installing development dependencies",
-    )
+    """Install development dependencies using the chosen interpreter.
+
+    Prefers ``uv pip install`` when uv is on PATH, falling back to
+    ``python -m pip install``.  The ``--python`` flag tells uv which
+    environment to target even if it has not been activated yet.
+    """
+    packages = _read_dev_packages()
+    if _has_uv():
+        _run(
+            ["uv", "pip", "install", "--python", str(python), "-U", *packages],
+            "Installing development dependencies (uv)",
+        )
+    else:
+        _run(
+            [python, "-m", "pip", "install", "-U", *packages],
+            "Installing development dependencies",
+        )
 
 
 def verify_workspace(python: Path) -> None:

@@ -52,7 +52,7 @@ chumicro/
 
 ## Getting started
 
-The prepare script works with whatever Python environment you already have — IDE-managed venv, uv, conda, or system Python:
+The prepare script works with whatever Python environment you already have — IDE-managed venv, uv, conda, or system Python.  When `uv` is on PATH it is used automatically for venv creation and package installation; otherwise stdlib `venv` and `pip` are used as fallbacks.
 
 ```zsh
 cd /path/to/chumicro
@@ -91,7 +91,7 @@ All tasks are run through `scripts/run.py`:
 | `verify-examples` | Import-check all library examples |
 | `docs` | Build library docs with MkDocs |
 | `build` | Build all publishable package distributions |
-| `preflight` | Run all required CI checks (lint + test + build) |
+| `preflight` | Full CI gate: lint + test all + examples + compat + build |
 | `prepare-micropython` | Build the pinned MicroPython unix-port binary under `.tools/` |
 | `prepare-circuitpython` | Build the pinned CircuitPython unix-port binary under `.tools/` |
 | `test-micropython-compat` | Smoke test under MicroPython (auto-prepares if needed) |

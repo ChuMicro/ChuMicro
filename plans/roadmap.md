@@ -15,7 +15,7 @@ Exit criteria:
 
 Settled choices:
 
-- `venv` is the current workspace path; `uv` deferred until needed
+- `venv` and `pip` remain the default fallback; `uv` is auto-detected and preferred when on PATH
 - `ci/` exists for CI-specific scripts; `scripts/` for developer tasks
 - `plans/prompts/` exists for saved prompts that help rebuild workspace context or preserve workspace build-up history
 

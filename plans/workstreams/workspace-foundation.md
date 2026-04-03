@@ -100,18 +100,18 @@ Current verified implementation:
 
 Current verified state:
 
-- standard virtual environment
+- `uv` auto-detected and preferred for venv creation and package installation; stdlib `venv` + `pip` as fallback
 - `pytest`
 - `pytest-cov`
 - `ruff`
 - `scripts/run.py` as the permanent repo-level task runner
 
-`scripts/run.py` is the long-term task runner for humans, agents, and CI.  It handles library discovery, scoped testing, scaffolding, IDE config generation, and compatibility smoke orchestration — none of which `uv` replaces.  `uv` is a fast package installer and environment manager; if adopted later, it would replace `pip` and `venv` creation inside `run.py`'s `setup` task, not the task runner itself.
+`scripts/run.py` is the long-term task runner for humans, agents, and CI.  It handles library discovery, scoped testing, scaffolding, IDE config generation, and compatibility smoke orchestration — none of which `uv` replaces.  `uv` is a fast package installer and environment manager; when it is on PATH, `prepare_workspace.py` and `run.py setup` auto-detect it and prefer it over `pip`/stdlib `venv`.  When uv is not available, the workspace falls back to `pip` and stdlib `venv` transparently.
 
 Current decision:
 
-- keep `venv` as the active documented path for now
-- `uv` may replace the environment/dependency layer later, but `scripts/run.py` stays regardless
+- `uv` is auto-detected and preferred when available; `pip`/`venv` are the fallback
+- `scripts/run.py` stays as the task runner regardless of which installer is used
 
 ## PyCharm and agent ergonomics
 
@@ -136,6 +136,6 @@ This workstream is considered complete for the current bootstrap phase. New foun
 ## Resolved feedback
 
 - **Three-mode model:** The three modes (CPython host, MicroPython target, CircuitPython target) are correct. Unix-port simulation is a verification layer within modes 2 and 3, not a separate developer posture. The distinction already shows up as separate `run.py` tasks. No fourth mode needed.
-- **`scripts/run.py` vs `uv`:** `run.py` is the permanent task runner. `uv` could only replace the environment/dependency layer, not the task orchestration. See "Tooling direction" above.
+- **`scripts/run.py` vs `uv`:** `run.py` is the permanent task runner. `uv` replaces the environment/dependency layer when available (auto-detected), not the task orchestration. See "Tooling direction" above.
 - **IDE and editor setup documentation:** Document setup for PyCharm, VS Code, and CLI/text-editor workflows as part of the contributor prerequisites task in next-up.md.
 
