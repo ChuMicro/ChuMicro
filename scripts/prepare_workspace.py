@@ -124,7 +124,12 @@ def resolve_python(create_venv: bool) -> Path:
     If *create_venv* is True, create ``.venv`` (or reuse it) and return
     its interpreter.  Prefers ``uv venv`` when uv is on PATH (faster,
     no pip bootstrapping needed), falling back to stdlib ``venv``.
-    Otherwise return the interpreter that is running this script.
+
+    If *create_venv* is False, the script looks for an active virtual
+    environment or conda environment first, then checks whether a
+    ``.venv`` directory already exists at the repo root.  If none of
+    these apply, the script refuses to continue rather than installing
+    into system Python.
     """
     if create_venv:
         if _venv_python().exists():
@@ -141,13 +146,24 @@ def resolve_python(create_venv: bool) -> Path:
             venv.create(str(VENV_DIR), with_pip=True)
         return _venv_python()
 
-    print(f"Using {_describe_environment()}")
-    if not _in_virtual_env() and not os.environ.get("CONDA_PREFIX"):
-        print(
-            "  Tip: pass --create-venv to create a .venv, "
-            "or activate your own environment first."
-        )
-    return Path(sys.executable)
+    # Already inside a virtual environment or conda — use it.
+    if _in_virtual_env() or os.environ.get("CONDA_PREFIX"):
+        print(f"Using {_describe_environment()}")
+        return Path(sys.executable)
+
+    # Not activated, but .venv exists at the repo root — use it.
+    if _venv_python().exists():
+        print(f"Found existing virtual environment: {VENV_DIR}")
+        return _venv_python()
+
+    # No environment available — refuse to install into system Python.
+    print("No virtual environment detected.")
+    print()
+    print("Options:")
+    print("  python scripts/prepare_workspace.py --create-venv   # create .venv")
+    print("  source .venv/bin/activate                           # activate existing")
+    print("  uv venv && source .venv/bin/activate                # create with uv")
+    raise SystemExit(1)
 
 
 def install_dependencies(python: Path) -> None:
