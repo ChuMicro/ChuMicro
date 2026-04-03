@@ -246,11 +246,15 @@ Building connected devices requires attention to security and data protection.  
 2. Keep pull requests small and focused.  Each PR must include tests and documentation for the new functionality.
 3. Code review checks include style, test coverage, memory usage (avoid extra allocations), and API consistency across runtimes.  When reviewing code, explicitly reference these guidelines.
 4. Do not include build artifacts, compiled bytecode, or secret configuration files in commits.  Add appropriate `.gitignore` rules.
-5. **Commit after completing a meaningful unit of work.**  Do not leave changes uncommitted between sessions.  Each working session should end with a clean tree.
+5. **Commit after completing a meaningful unit of work.**  Do not leave changes uncommitted between sessions.  Each working session should end with a clean tree.  Use the [end-of-session checklist](plans/prompts/end-of-session.prompt.md) before ending.
 6. **Write commit messages that aid context recovery.**  Planning docs under `plans/` can go stale between sessions.  When that happens, commit history is the primary fallback for reconstructing what changed and why.  Write commit messages accordingly:
    - **Subject line:** summarise *what* changed in imperative mood (e.g., "Add importlib test isolation for multi-library workspace").
    - **Body (when non-trivial):** explain *why* the change was made, what alternatives were considered or rejected, and which planning items or decisions it relates to.  Name affected libraries, decisions, or workstreams when relevant.
    - **Scope tags:** if the commit touches planning docs, infrastructure, or a specific library, make that clear early in the message so `git log --oneline` is scannable.
    - A future agent scanning `git log` should be able to infer the current project state, recent design choices, and the trajectory of work — even if `plans/` has not been updated yet.
+7. **Commit mechanics for agents.**  When running `git commit` from a shell:
+   - Use **single quotes** for the `-m` argument to avoid zsh double-quote interpolation issues: `git commit -m 'Subject line here'`.
+   - For multi-line messages, write the message to a temp file and use `git commit -F`: `echo 'Subject\n\nBody' > /tmp/commit-msg && git commit -F /tmp/commit-msg && rm /tmp/commit-msg`.
+   - Do **not** use multi-line double-quoted strings with `-m` — they break in zsh when the message contains special characters.
 
 By following these guidelines, Chumicro aims to build a sustainable ecosystem of high‑quality, cross‑platform libraries for modern microcontrollers and Python applications.

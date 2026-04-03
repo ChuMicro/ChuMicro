@@ -14,6 +14,9 @@ Keep prompts small, dated or clearly named, and focused on planning or workspace
 - `workspace-rebuild.prompt.md` — rebuild the current proven workspace shape from a sparse starting point; includes key technical patterns
 - `workspace-history.prompt.md` — preserve and extend the workspace build-up timeline, design principles, and rejected approaches
 - `workstream-planning.prompt.md` — refresh planning from the current verified workspace state
+- `guide-generation.prompt.md` — generate a library's `docs/guide.md` from source code (Decision 0013)
+- `plans-sync.prompt.md` — audit and update all planning docs after workspace changes
+- `end-of-session.prompt.md` — checklist for clean tree and current docs before ending a session
 
 ## When to use which prompt
 
@@ -24,3 +27,6 @@ Keep prompts small, dated or clearly named, and focused on planning or workspace
 | Need to understand why the workspace looks this way | `workspace-history` |
 | Recreating the workspace from scratch or a sparse clone | `workspace-rebuild` |
 | Planning the next slice of work | `workstream-planning` |
+| Writing or updating a library's user guide | `guide-generation` |
+| Significant changes made, planning docs may be stale | `plans-sync` |
+| End of session, need to verify clean state | `end-of-session` |
