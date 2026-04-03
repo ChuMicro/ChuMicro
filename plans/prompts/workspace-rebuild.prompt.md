@@ -19,12 +19,14 @@ Rebuild the smallest Chumicro workspace that preserves the currently proven arch
 ```text
 chumicro/
 ├── scripts/
-│   ├── run.py              # task runner with auto-discovery
+│   ├── run.py              # task runner (slim dispatch + tasks)
+│   ├── _discovery.py       # package discovery, scope parsing, change detection
+│   ├── _ide.py             # IDE config generation (PyCharm, VS Code/Pyright)
+│   ├── _scaffold.py        # library scaffolding templates and logic
+│   ├── _prepare.py         # MicroPython/CircuitPython unix-port preparation
 │   └── prepare_workspace.py
 ├── ci/
-│   ├── prepare_micropython.py
-│   ├── prepare_circuitpython.py
-│   └── run_sample_device_smoke.py
+│   └── run_sample_device_smoke.py  # cross-runtime smoke runner (Decision 0006)
 ├── .github/workflows/ci.yml
 ├── AGENTS.md
 ├── conftest.py             # root auto-discovery conftest
@@ -85,7 +87,7 @@ chumicro/
 12. IDE type stubs come from upstream `circuitpython-stubs` and `micropython-esp32-stubs` (both PEP 561, PyPI), version-pinned to `runtime-versions.toml`.  Both packages coexist; a known `micropython` module conflict is documented with a mitigation path (Decision 0012).
 13. Documentation and examples standards: `guide.md` has required sections (auto-generated via AI prompt), `api.md` uses mkdocstrings autodoc with no hand-written member lists, examples are import-verified in preflight (Decision 0013).
 14. Active components implement a `service(event_sink)` contract for ecosystem-standard event dispatch. `EventQueueSink` provides a pre-allocated ring buffer. Libraries use duck typing — no import dependency on `chumicro-serviceable` required (Decision 0014).
-15. Chumicro libraries require `collections.deque` (full-build CircuitPython, `EXTRA_FEATURES`+ MicroPython). Primary targets: ESP32 family, RP2040/RP2350, STM32. SAMD21 and non-full-build nRF52 are explicitly unsupported (Decision 0015).
+ 15. Chumicro libraries require `collections.deque` (full-build CircuitPython, `EXTRA_FEATURES`+ MicroPython). Primary targets: ESP32 family, RP2040/RP2350, STM32. SAMD21 and non-full-build nRF52 are explicitly unsupported (Decision 0015).
 
 ### Key technical patterns
 

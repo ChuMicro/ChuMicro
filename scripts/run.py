@@ -33,12 +33,9 @@ from _discovery import (
     read_runtime_versions,
 )
 from _ide import sync_ide
-from _prepare import (
-    prepare_circuitpython_main,
-    prepare_micropython_main,
-    resolve_circuitpython_binary,
-    resolve_micropython_binary,
-)
+from _prepare import prepare_circuitpython as _prepare_circuitpython
+from _prepare import prepare_micropython as _prepare_micropython
+from _prepare import resolve_circuitpython_binary, resolve_micropython_binary
 from _scaffold import new_library
 
 PYTHON = sys.executable
@@ -321,12 +318,12 @@ def preflight() -> int:
 
 def prepare_micropython() -> int:
     """Prepare the repo-local MicroPython unix-port runtime."""
-    return prepare_micropython_main()
+    return _prepare_micropython()
 
 
 def prepare_circuitpython() -> int:
     """Prepare the repo-local CircuitPython unix-port runtime."""
-    return prepare_circuitpython_main()
+    return _prepare_circuitpython()
 
 
 def test_micropython_compat() -> int:

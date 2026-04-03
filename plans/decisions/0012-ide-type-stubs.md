@@ -26,7 +26,7 @@ CircuitPython's tree includes `tools/extract_pyi.py` which extracts `.pyi` stubs
 - `circuitpython-stubs=={cp_version}` (exact match)
 - `micropython-esp32-stubs=={mp_version}.*` (allows post-releases)
 
-The same file is read by `ci/prepare_circuitpython.py` and `ci/prepare_micropython.py` for cloning.  Changing the version in one place updates stubs, cloned repos, and built binaries on the next `setup` run.
+The same file is read by `scripts/_prepare.py` for cloning.  Changing the version in one place updates stubs, cloned repos, and built binaries on the next `setup` run.
 
 ### Coverage and coexistence
 

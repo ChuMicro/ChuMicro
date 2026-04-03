@@ -1,8 +1,8 @@
 """Runtime preparation and binary resolution for MicroPython and CircuitPython.
 
-Consolidates the prepare logic previously in ``ci/prepare_micropython.py``
-and ``ci/prepare_circuitpython.py`` into one importable module.  The
-``ci/`` scripts are now thin CLI entry points that delegate here.
+Provides ``prepare_micropython()`` and ``prepare_circuitpython()`` for
+building pinned unix-port runtimes under ``.tools/``, plus binary
+resolution helpers.  Called directly by ``scripts/run.py`` tasks.
 """
 
 from __future__ import annotations
@@ -101,15 +101,22 @@ def prepare_micropython() -> int:
         )
         return 2
 
-    for tool_name in ("git", "make", "cc"):
-        _ensure_tool(tool_name)
+    try:
+        for tool_name in ("git", "make", "cc"):
+            _ensure_tool(tool_name)
 
-    _mp_ensure_source_tree()
+        _mp_ensure_source_tree()
 
-    jobs = f"-j{_build_jobs()}"
-    env = _mp_build_env()
-    _run_cmd(["make", "-C", str(_MP_SOURCE_DIR / "mpy-cross"), jobs], env=env)
-    _run_cmd(["make", "-C", str(_MP_SOURCE_DIR / "ports/unix"), jobs], env=env)
+        jobs = f"-j{_build_jobs()}"
+        env = _mp_build_env()
+        _run_cmd(["make", "-C", str(_MP_SOURCE_DIR / "mpy-cross"), jobs], env=env)
+        _run_cmd(["make", "-C", str(_MP_SOURCE_DIR / "ports/unix"), jobs], env=env)
+    except subprocess.CalledProcessError as error:
+        print(f"Command failed with exit code {error.returncode}: {error.cmd}")
+        return error.returncode or 1
+    except RuntimeError as error:
+        print(error)
+        return 1
 
     if not _MP_BINARY.exists():
         print(f"Prepared source tree does not contain the expected binary: {_MP_BINARY}")
@@ -172,24 +179,31 @@ def prepare_circuitpython() -> int:
         )
         return 2
 
-    for tool_name in ("git", "make", "cc"):
-        _ensure_tool(tool_name)
+    try:
+        for tool_name in ("git", "make", "cc"):
+            _ensure_tool(tool_name)
 
-    _cp_ensure_source_tree()
+        _cp_ensure_source_tree()
 
-    jobs = f"-j{_build_jobs()}"
-    _run_cmd(
-        [sys.executable, "tools/ci_fetch_deps.py", "mpy-cross", "tests"],
-        cwd=_CP_SOURCE_DIR,
-    )
-    _run_cmd(["make", "-C", str(_CP_SOURCE_DIR / "mpy-cross"), jobs])
-    _run_cmd(
-        [
-            "make", "-C", str(_CP_SOURCE_DIR / "ports/unix"),
-            f"VARIANT={_CP_UNIX_VARIANT}", jobs,
-        ],
-        env=_cp_build_env(),
-    )
+        jobs = f"-j{_build_jobs()}"
+        _run_cmd(
+            [sys.executable, "tools/ci_fetch_deps.py", "mpy-cross", "tests"],
+            cwd=_CP_SOURCE_DIR,
+        )
+        _run_cmd(["make", "-C", str(_CP_SOURCE_DIR / "mpy-cross"), jobs])
+        _run_cmd(
+            [
+                "make", "-C", str(_CP_SOURCE_DIR / "ports/unix"),
+                f"VARIANT={_CP_UNIX_VARIANT}", jobs,
+            ],
+            env=_cp_build_env(),
+        )
+    except subprocess.CalledProcessError as error:
+        print(f"Command failed with exit code {error.returncode}: {error.cmd}")
+        return error.returncode or 1
+    except RuntimeError as error:
+        print(error)
+        return 1
 
     if not _CP_BINARY.exists():
         print(f"Prepared source tree does not contain the expected binary: {_CP_BINARY}")
@@ -237,32 +251,4 @@ def resolve_circuitpython_binary() -> str | None:
         return prepared
     return shutil.which("circuitpython")
 
-
-# ---------------------------------------------------------------------------
-# CLI entry-point helpers (used by ci/prepare_*.py wrappers)
-# ---------------------------------------------------------------------------
-
-
-def prepare_micropython_main() -> int:
-    """Prepare MicroPython with error handling suitable for a CLI entry point."""
-    try:
-        return prepare_micropython()
-    except subprocess.CalledProcessError as error:
-        print(f"Command failed with exit code {error.returncode}: {error.cmd}")
-        return error.returncode or 1
-    except RuntimeError as error:
-        print(error)
-        return 1
-
-
-def prepare_circuitpython_main() -> int:
-    """Prepare CircuitPython with error handling suitable for a CLI entry point."""
-    try:
-        return prepare_circuitpython()
-    except subprocess.CalledProcessError as error:
-        print(f"Command failed with exit code {error.returncode}: {error.cmd}")
-        return error.returncode or 1
-    except RuntimeError as error:
-        print(error)
-        return 1
 

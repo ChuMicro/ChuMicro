@@ -49,8 +49,7 @@ See [workspace-history.prompt.md](./workspace-history.prompt.md) for the full ra
 - `runtime_name()` in `support/runtime/src/chumicro_runtime/platform.py`
 - `run_module()` in `support/test_harness/src/chumicro_test_harness/runner.py`
 - `main()` in `scripts/run.py` — task runner with auto-discovery, scoped testing, scaffolding
-- `prepare_micropython()` in `ci/prepare_micropython.py`
-- `prepare_circuitpython()` in `ci/prepare_circuitpython.py`
+- `prepare_micropython()` and `prepare_circuitpython()` in `scripts/_prepare.py`
 - `ci/run_sample_device_smoke.py` — canonical compatibility smoke runner (still timing-specific)
 - `conftest.py` — root conftest with source root auto-discovery
 - `libraries/timing/tests/conftest.py` — per-library conftest (minimal, no sys.path boilerplate needed)

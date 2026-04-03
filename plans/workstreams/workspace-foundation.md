@@ -38,8 +38,7 @@ Define the repo layout, shared tooling, and local developer ergonomics for a Pyt
 - `scripts/run.py sync-ide` generates `.idea/chumicro.iml` (PyCharm) and `pyrightconfig.json` (VS Code)
 - Root `conftest.py` auto-discovers source roots and excludes `device_tests/`
 - Per-library pytest runs avoid test-directory collisions (Decision 0009)
-- `ci/prepare_micropython.py` exists as the current repo-managed MicroPython runtime bootstrap path
-- `ci/prepare_circuitpython.py` exists as the current repo-managed CircuitPython runtime bootstrap path
+- `scripts/_prepare.py` provides MicroPython and CircuitPython unix-port preparation
 - `ci/run_sample_device_smoke.py` exists as the canonical checked-in compatibility smoke entrypoint
 - `.github/workflows/ci.yml` now includes advisory runtime compatibility jobs in addition to the required host lane
 - `devices.example.yml` exists as the first committed local device template
