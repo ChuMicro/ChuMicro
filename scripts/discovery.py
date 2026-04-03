@@ -6,7 +6,6 @@ locate packages, source roots, and changed files.
 
 from __future__ import annotations
 
-import argparse
 import os
 import subprocess
 from pathlib import Path
@@ -137,43 +136,33 @@ def detect_changed_packages() -> list[Path] | None:
     return sorted(packages) if packages else None
 
 
-def parse_scope_args(extra_args: list[str]) -> tuple[list[Path], list[str]]:
-    """Parse ``--all`` / ``--libraries`` into a package scope and remaining args.
+def resolve_scope(
+    *, all_packages: bool = False, libraries: str | None = None
+) -> list[Path]:
+    """Resolve package scope from parsed CLI flags.
 
-    Returns ``(pkg_dirs, remaining)``.  Used by test, verify-examples, and docs.
-    Unrecognised arguments pass through in *remaining* (e.g. pytest flags).
+    Called by the task runner after argparse has extracted ``--all`` /
+    ``--libraries``.  Returns the list of package directories to operate on.
     """
-    parser = argparse.ArgumentParser(add_help=False)
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument("--all", action="store_true", dest="all_packages")
-    group.add_argument("--libraries", type=str)
+    if all_packages:
+        return discover_package_dirs()
 
-    namespace, remaining = parser.parse_known_args(extra_args)
-
-    # argparse leaves a bare "--" in remaining; strip it so callers
-    # only see the actual passthrough arguments.
-    if remaining and remaining[0] == "--":
-        remaining = remaining[1:]
-
-    if namespace.all_packages:
-        return discover_package_dirs(), remaining
-
-    if namespace.libraries:
-        names = [n.strip() for n in namespace.libraries.split(",") if n.strip()]
+    if libraries:
+        names = [n.strip() for n in libraries.split(",") if n.strip()]
         resolved = resolve_named_packages(names)
         if not resolved:
             raise SystemExit(1)
-        return resolved, remaining
+        return resolved
 
     # Default: detect from git
     detected = detect_changed_packages()
     if detected is None:
         print("Running for all packages (no branch diff or infrastructure changed).")
-        return discover_package_dirs(), remaining
+        return discover_package_dirs()
 
     pkg_names = ", ".join(d.name for d in detected)
     print(f"Changed packages detected: {pkg_names}")
-    return detected, remaining
+    return detected
 
 
 def find_publishable_packages() -> list[str]:

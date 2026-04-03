@@ -4,21 +4,13 @@ Usage::
 
     python scripts/run.py <task> [options]
 
-Run without arguments to see available tasks.
-
-Scoped tasks (test, verify-examples, docs) accept::
-
-    python scripts/run.py <task>                    # changed packages only
-    python scripts/run.py <task> --all              # all packages
-    python scripts/run.py <task> --libraries timing # specific (comma-sep)
-
-test also accepts pytest passthrough::
-
-    python scripts/run.py test -- -k test_name
+Run ``python scripts/run.py -h`` to see available tasks.
 """
 
 from __future__ import annotations
 
+import argparse
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -26,10 +18,11 @@ from pathlib import Path
 from discovery import (
     ROOT,
     coverage_args_for,
+    discover_package_dirs,
     discover_ruff_paths,
     find_publishable_packages,
-    parse_scope_args,
     pythonpath_env,
+    resolve_scope,
 )
 from ide import sync_ide
 from prepare import VERSIONS, resolve_circuitpython_binary, resolve_micropython_binary
@@ -40,24 +33,6 @@ from scaffold import new_library
 PYTHON = sys.executable
 SMOKE_SCRIPT = "support/test_harness/run_device_smoke.py"
 SMOKE_EXEC = f'exec(open("{SMOKE_SCRIPT}").read())'
-
-TASKS = (
-    "setup",
-    "sync-ide",
-    "new-library",
-    "lint",
-    "test",
-    "verify-examples",
-    "docs",
-    "build",
-    "preflight",
-    "prepare-micropython",
-    "prepare-circuitpython",
-    "test-micropython-compat",
-    "test-circuitpython-compat",
-    "test-runtime-matrix",
-    "test-device",
-)
 
 
 def _run(command: list[str], env: dict[str, str] | None = None) -> int:
@@ -71,6 +46,13 @@ def _run(command: list[str], env: dict[str, str] | None = None) -> int:
 # ---------------------------------------------------------------------------
 # Tasks
 # ---------------------------------------------------------------------------
+
+
+def _install_command() -> list[str]:
+    """Return the pip-install command prefix, preferring uv when available."""
+    if shutil.which("uv"):
+        return ["uv", "pip", "install"]
+    return [PYTHON, "-m", "pip", "install"]
 
 
 def setup() -> int:
@@ -92,7 +74,7 @@ def setup() -> int:
         f"micropython-esp32-stubs=={mp_version}.*",
     ])
 
-    result = _run([PYTHON, "-m", "pip", "install", "-U", *dev_packages])
+    result = _run([*_install_command(), "-U", *dev_packages])
     if result != 0:
         return result
     return sync_ide()
@@ -103,19 +85,14 @@ def lint() -> int:
     return _run([PYTHON, "-m", "ruff", "check", *discover_ruff_paths()])
 
 
-def test_host(extra_args: list[str] | None = None) -> int:
-    """Run the CPython test suite with optional library scoping.
+def test_cpython(pkg_dirs: list[Path], passthrough: list[str]) -> int:
+    """Run the CPython test suite for the given packages.
 
     Runs pytest separately for each package to avoid test-directory name
     collisions, then combines and reports coverage.  Each library must
-    independently meet the coverage threshold (90%) unless passthrough
+    independently meet the coverage threshold (90%) unless *passthrough*
     args are present (e.g. ``-k`` filters naturally reduce coverage).
-
-    Accepts ``--all``, ``--libraries name,...``, and ``-- <pytest args>``.
-    Default (no options): detect changed packages on branch vs origin/main.
     """
-    pkg_dirs, passthrough = parse_scope_args(extra_args or [])
-
     # Keep only packages that actually have a tests/ directory.
     testable = [d for d in pkg_dirs if (d / "tests").is_dir()]
     if not testable:
@@ -194,17 +171,13 @@ def build() -> int:
     return 0
 
 
-def verify_examples(extra_args: list[str] | None = None) -> int:
+def verify_examples(pkg_dirs: list[Path]) -> int:
     """Import-check examples to catch broken imports and syntax errors.
 
     Discovers ``examples/*.py`` in each selected library, then imports each
     module in a subprocess.  Examples must use ``if __name__ == "__main__":``
     guards so that import does not trigger long-running loops.
-
-    Accepts ``--all`` and ``--libraries name,...``.
-    Default: detect changed packages on branch vs origin/main.
     """
-    pkg_dirs, _ = parse_scope_args(extra_args or [])
     env = pythonpath_env()
     examples: list[tuple[str, Path]] = []
 
@@ -243,23 +216,12 @@ def verify_examples(extra_args: list[str] | None = None) -> int:
     return 0
 
 
-def docs(extra_args: list[str] | None = None) -> int:
+def docs(pkg_dirs: list[Path], *, serve: bool = False) -> int:
     """Build docs for selected libraries using MkDocs.
 
-    Accepts ``--all``, ``--libraries name,...``, and ``--serve``.
-    ``--serve`` starts a live-reload dev server for the first selected library.
-    Default: detect changed packages on branch vs origin/main.
+    If *serve* is True, starts a live-reload dev server for the first
+    selected library instead of building static output.
     """
-    serve = False
-    filtered_args: list[str] = []
-    for arg in (extra_args or []):
-        if arg == "--serve":
-            serve = True
-        else:
-            filtered_args.append(arg)
-
-    pkg_dirs, _ = parse_scope_args(filtered_args)
-
     # Keep only packages that have a mkdocs.yml
     doc_dirs = [d for d in pkg_dirs if (d / "mkdocs.yml").exists()]
     if not doc_dirs:
@@ -295,11 +257,19 @@ def docs(extra_args: list[str] | None = None) -> int:
 
 
 def preflight() -> int:
-    """Run the checks that CI requires on every pull request."""
+    """Run the full check suite that CI requires on every pull request.
+
+    Covers lint, all CPython tests, example verification, MicroPython and
+    CircuitPython compatibility smoke tests, and package builds.  Device
+    tests are excluded — they require physical hardware.
+    """
+    all_pkgs = discover_package_dirs()
     steps: tuple[tuple[str, object], ...] = (
         ("lint", lambda: lint()),
-        ("test", lambda: test_host(["--all"])),
-        ("verify-examples", lambda: verify_examples(["--all"])),
+        ("test", lambda: test_cpython(all_pkgs, [])),
+        ("verify-examples", lambda: verify_examples(all_pkgs)),
+        ("test-micropython-compat", test_micropython_compat),
+        ("test-circuitpython-compat", test_circuitpython_compat),
         ("build", lambda: build()),
     )
 
@@ -368,8 +338,9 @@ def test_circuitpython_compat() -> int:
 
 def test_runtime_matrix() -> int:
     """Run host tests and compatibility smoke tests across all proven runtimes."""
+    all_pkgs = discover_package_dirs()
     steps = (
-        ("test", lambda: test_host(["--all"])),
+        ("test", lambda: test_cpython(all_pkgs, [])),
         ("test-micropython-compat", test_micropython_compat),
         ("test-circuitpython-compat", test_circuitpython_compat),
     )
@@ -399,64 +370,114 @@ def test_device() -> int:
 
 
 # ---------------------------------------------------------------------------
-# Dispatch
+# CLI
 # ---------------------------------------------------------------------------
 
-_DISPATCH = {
-    "setup": setup,
-    "sync-ide": sync_ide,
-    "new-library": new_library,
-    "lint": lint,
-    "test": test_host,
-    "verify-examples": verify_examples,
-    "docs": docs,
-    "build": build,
-    "preflight": preflight,
-    "prepare-micropython": prepare_micropython,
-    "prepare-circuitpython": prepare_circuitpython,
-    "test-micropython-compat": test_micropython_compat,
-    "test-circuitpython-compat": test_circuitpython_compat,
-    "test-runtime-matrix": test_runtime_matrix,
-    "test-device": test_device,
-}
 
-_USAGE = """\
-Usage: {prog} <task> [options]
+def _scope_parent() -> argparse.ArgumentParser:
+    """Parent parser providing ``--all`` / ``--libraries`` scope flags."""
+    parent = argparse.ArgumentParser(add_help=False)
+    group = parent.add_mutually_exclusive_group()
+    group.add_argument(
+        "--all", action="store_true", dest="all_packages",
+        help="run for all packages",
+    )
+    group.add_argument(
+        "--libraries", metavar="LIB,...",
+        help="run for specific packages (comma-separated names)",
+    )
+    return parent
 
-Tasks: {tasks}
 
-new-library:
-  python scripts/run.py new-library <name>   Scaffold a library under libraries/
+def _build_parser() -> argparse.ArgumentParser:
+    """Build the top-level CLI parser with subcommands."""
+    parser = argparse.ArgumentParser(
+        prog="python scripts/run.py",
+        description="Repo-level task runner for humans, agents, and CI.",
+    )
+    sub = parser.add_subparsers(dest="task")
+    scope = _scope_parent()
 
-Scoped tasks (test, verify-examples, docs):
-  --all                Run for all packages
-  --libraries LIB,...  Run for specific packages (comma-separated names)
-  -- PYTEST_ARGS       Forward remaining arguments to pytest (test only)
+    # No-arg tasks
+    sub.add_parser("setup", help="install deps and regenerate IDE config")
+    sub.add_parser("sync-ide", help="regenerate IDE config files")
+    sub.add_parser("lint", help="run Ruff across the workspace")
+    sub.add_parser("build", help="build all publishable packages")
+    sub.add_parser("preflight", help="lint + test + examples + compat + build")
+    sub.add_parser("prepare-micropython", help="prepare MicroPython unix-port")
+    sub.add_parser("prepare-circuitpython", help="prepare CircuitPython unix-port")
+    sub.add_parser("test-micropython-compat", help="MicroPython smoke test")
+    sub.add_parser("test-circuitpython-compat", help="CircuitPython smoke test")
+    sub.add_parser("test-runtime-matrix", help="full cross-runtime test suite")
+    sub.add_parser("test-device", help="device validation info")
 
-  Default (no options): detect changed packages on branch vs origin/main.
+    # Scoped tasks
+    sub.add_parser("test", parents=[scope], help="run CPython test suite")
+    sub.add_parser("verify-examples", parents=[scope], help="import-check examples")
 
-docs also accepts:
-  --serve              Start a live-reload dev server for the first selected library
-"""
+    docs_p = sub.add_parser("docs", parents=[scope], help="build library docs")
+    docs_p.add_argument(
+        "--serve", action="store_true", help="start live-reload dev server",
+    )
+
+    # new-library
+    nl = sub.add_parser("new-library", help="scaffold a new library")
+    nl.add_argument("name", help="library name (e.g. gpio)")
+
+    return parser
+
+
+_SCOPED_TASKS = frozenset({"test", "verify-examples", "docs"})
 
 
 def main(argv: list[str]) -> int:
     """Dispatch a named repo-level task."""
-    if len(argv) < 2 or argv[1] not in _DISPATCH:
-        print(_USAGE.format(prog=argv[0], tasks=", ".join(TASKS)))
+    parser = _build_parser()
+    args, remaining = parser.parse_known_args(argv[1:])
+
+    if not args.task:
+        parser.print_help()
         return 1
 
-    task_name = argv[1]
-    extra_args = argv[2:]
+    # Strip bare "--" left by argparse in the extras list.
+    if remaining and remaining[0] == "--":
+        remaining = remaining[1:]
 
-    if task_name in ("test", "new-library", "verify-examples", "docs"):
-        return _DISPATCH[task_name](extra_args)
-
-    if extra_args:
-        print(f"Task '{task_name}' does not accept extra arguments.")
+    # Only test accepts passthrough args (forwarded to pytest).
+    if remaining and args.task != "test":
+        print(f"Unrecognized arguments for '{args.task}': {' '.join(remaining)}")
         return 1
 
-    return _DISPATCH[task_name]()
+    # --- scoped tasks ---
+    if args.task in _SCOPED_TASKS:
+        pkg_dirs = resolve_scope(
+            all_packages=args.all_packages, libraries=args.libraries,
+        )
+        if args.task == "test":
+            return test_cpython(pkg_dirs, remaining)
+        if args.task == "verify-examples":
+            return verify_examples(pkg_dirs)
+        return docs(pkg_dirs, serve=args.serve)
+
+    # --- new-library ---
+    if args.task == "new-library":
+        return new_library(args.name)
+
+    # --- no-arg tasks ---
+    no_arg = {
+        "setup": setup,
+        "sync-ide": sync_ide,
+        "lint": lint,
+        "build": build,
+        "preflight": preflight,
+        "prepare-micropython": prepare_micropython,
+        "prepare-circuitpython": prepare_circuitpython,
+        "test-micropython-compat": test_micropython_compat,
+        "test-circuitpython-compat": test_circuitpython_compat,
+        "test-runtime-matrix": test_runtime_matrix,
+        "test-device": test_device,
+    }
+    return no_arg[args.task]()
 
 
 if __name__ == "__main__":

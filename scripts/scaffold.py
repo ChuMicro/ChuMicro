@@ -204,18 +204,8 @@ def _scaffold_library(name: str) -> int:
     return 0
 
 
-def new_library(extra_args: list[str] | None = None) -> int:
-    """Scaffold a new library under libraries/ and regenerate IDE configs.
-
-    Usage: ``python scripts/run.py new-library <name>``
-    """
-    args = extra_args or []
-    if len(args) != 1 or args[0].startswith("-"):
-        print("Usage: python scripts/run.py new-library <name>")
-        print("Example: python scripts/run.py new-library gpio")
-        return 1
-
-    name = args[0]
+def new_library(name: str) -> int:
+    """Scaffold a new library under libraries/ and regenerate IDE configs."""
     result = _scaffold_library(name)
     if result != 0:
         return result
