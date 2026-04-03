@@ -21,7 +21,7 @@ Settled choices:
 
 ## Milestone 1 — timing library proof
 
-Status: `in-progress`
+Status: `done`
 
 Goal: add a `timing` library that proves packaging, testing, and cross-runtime structure.
 
@@ -69,18 +69,7 @@ Current verified progress:
 - `runtime-versions.toml` at the repo root is the single source of truth for pinned CircuitPython and MicroPython versions; CI prepare scripts, setup, and stubs all read from this file
 - docs and examples contributor standards are established (Decision 0013) with strict `guide.md` section requirements, `api.md` autodoc rules, and an AI generation prompt; timing library has user guide, API reference, testing helpers docs, and three runnable examples
 
-Still intentionally incomplete:
-
-- promotion of the CircuitPython unix-port path into the default runtime matrix/CI policy is still undecided beyond this verified local macOS workspace
-- real board transport tooling is not implemented yet
-- release automation is not implemented yet
-- per-library `VERSION` file enforcement workflows are not implemented yet
-- the second seam after timing/ticks is not implemented yet
-
-Best next implementation slice:
-
-- promote advisory runtime compat jobs to protected-branch requirements (gated by platform targeting, Decision 0011)
-- begin the first release-automation slice: per-library `VERSION` file enforcement, PyPI + circup + mip staging
+Remaining items from the timing proof (runtime CI promotion, release automation, second seam, board transport) are tracked under Milestone 2 and `next-up.md`.
 
 ## Milestone 2 — CI and release flow
 
