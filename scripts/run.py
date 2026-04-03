@@ -33,9 +33,9 @@ from _discovery import (
     read_runtime_versions,
 )
 from _ide import sync_ide
-from _prepare import prepare_circuitpython as _prepare_circuitpython
-from _prepare import prepare_micropython as _prepare_micropython
 from _prepare import resolve_circuitpython_binary, resolve_micropython_binary
+from _prepare_circuitpython import prepare_circuitpython as _prepare_circuitpython
+from _prepare_micropython import prepare_micropython as _prepare_micropython
 from _scaffold import new_library
 
 PYTHON = sys.executable

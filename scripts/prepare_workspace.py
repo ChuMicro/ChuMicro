@@ -26,7 +26,18 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 VENV_DIR = ROOT / ".venv"
 MIN_PYTHON = (3, 11)
-DEV_PACKAGES = ["pip", "pytest", "pytest-cov", "ruff", "build"]
+_REQUIREMENTS_FILE = ROOT / "requirements-dev.txt"
+
+
+def _read_dev_packages() -> list[str]:
+    """Read static dev package names from requirements-dev.txt."""
+    if not _REQUIREMENTS_FILE.exists():
+        return ["pip", "pytest", "pytest-cov", "ruff", "build"]
+    return [
+        line.strip()
+        for line in _REQUIREMENTS_FILE.read_text().splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -130,7 +141,7 @@ def resolve_python(create_venv: bool) -> Path:
 def install_dependencies(python: Path) -> None:
     """Install development dependencies using the chosen interpreter."""
     _run(
-        [python, "-m", "pip", "install", "-U", *DEV_PACKAGES],
+        [python, "-m", "pip", "install", "-U", *_read_dev_packages()],
         "Installing development dependencies",
     )
 

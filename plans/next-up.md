@@ -19,7 +19,7 @@
 
 ## Next
 
-- [ ] Scope AGENTS.md performance guidelines (f-strings, `const()`, `memoryview`, pre-allocated buffers) to library code only. Infrastructure code (`scripts/`, `ci/`, `support/`) runs exclusively on CPython and should not be constrained by embedded-runtime rules.
+- [x] Scope AGENTS.md performance guidelines (f-strings, `const()`, `memoryview`, pre-allocated buffers) to library code only. Infrastructure code (`scripts/`, `ci/`, `support/`) runs exclusively on CPython and should not be constrained by embedded-runtime rules.
 - [ ] Add `[tool.chumicro].platforms` reader to `scripts/run.py` and wire it into the compatibility smoke runners and release/build paths (Decision 0011).
 - [ ] Promote advisory MicroPython and CircuitPython CI jobs to protected-branch requirements, gated by platform targeting (Decision 0011).
 - [ ] Add digital I/O as the second library seam (alongside CI/release work, not sequentially).

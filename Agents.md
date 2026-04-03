@@ -24,7 +24,7 @@ Never embed secrets; configuration such as Wi‑Fi credentials belongs in separa
 
 ## Workspace Structure
 
-Chumicro is organized as a **mono‑workspace**.  Each publishable library resides under `libraries/`, each with its own `src/`, `tests/`, `device_tests/`, `docs/`, and `examples/` subdirectories.  Shared internal packages live under `support/`.  Developer tasks are in `scripts/`, CI-specific helpers in `ci/`, and planning docs in `plans/`.
+Chumicro is organized as a **mono‑workspace**.  Each publishable library resides under `libraries/`, each with its own `src/`, `tests/`, `device_tests/`, `docs/`, and `examples/` subdirectories.  Shared internal packages live under `support/`.  Developer tasks are in `scripts/` (split into focused modules), `ci/` holds the cross‑runtime compatibility smoke runner, and planning docs are in `plans/`.
 
 The live workspace structure is provided automatically at the start of each session.  For the canonical detailed layout, see `plans/prompts/workspace-rebuild.prompt.md`.
 
@@ -48,7 +48,9 @@ This mono‑repo simplifies dependency management and allows libraries to share 
 
 ## Development Guidelines
 
-### Memory & Performance
+### Memory & Performance (library code only)
+
+The guidelines in this section apply to **publishable library code under `libraries/`** — code that runs on microcontrollers.  Infrastructure code (`scripts/`, `ci/`, `support/`) runs exclusively on CPython and should follow standard Python conventions instead (see *Infrastructure Code* below).
 
 Microcontrollers have limited RAM and CPU.  To avoid heap fragmentation and excessive garbage collection, follow these practices:
 
@@ -62,11 +64,20 @@ Microcontrollers have limited RAM and CPU.  To avoid heap fragmentation and exce
 6. **Cache frequently used attributes:** Store object references (e.g., `self.buffer`) in local variables within performance‑critical methods to avoid repeated attribute lookups【5110752449986†L199-L211】.
 7. **Control garbage collection:** For long‑running tasks, explicitly call `gc.collect()` periodically.  This pre‑emptive collection can reduce latency and fragmentation【5110752449986†L214-L228】.
 
+### Infrastructure Code
+
+Code under `scripts/`, `ci/`, and `support/` runs **exclusively on CPython** and is never deployed to microcontrollers.  It should follow standard modern Python conventions:
+
+- Use the **full standard library** freely — `argparse`, `pathlib`, `dataclasses`, `tomllib`, `textwrap`, `functools`, etc.  There is no chicken‑and‑egg problem because infrastructure code runs after CPython is available.
+- **f‑strings** are preferred for readability (the standard Python convention), not because of embedded‑runtime allocation concerns.  `str.format()`, `%` formatting, and deferred logging interpolation are all acceptable when they improve clarity.
+- Do **not** use `const()`, `memoryview`, pre‑allocated buffers, or other embedded‑runtime patterns in infrastructure code.  These patterns add complexity that only benefits constrained interpreters.
+- Keep infrastructure code idiomatic and readable.  Prioritise clarity over micro‑optimisation.
+
 ### Naming & Style
 
  Follow PEP 8 for code style and naming.  Use descriptive names (`service`, `test_device`) instead of abbreviations like `svc` or `dut`.  Keep functions short and avoid unnecessary layers of abstraction—only split a function when it improves readability or testability.  Document **all** functions and methods (including those marked as “private” with a leading underscore) with concise docstrings so that human contributors and future AI agents can understand their purpose and parameters.  When writing CircuitPython drivers, align with Adafruit’s design guide: initialize hardware in `__init__`, provide `deinit()` or context‑manager support, and avoid extraneous allocations in drivers【484622475298331†L710-L724】.
 
- Use **f‑strings exclusively** for string formatting.  Compared to older `%` formatting or `str.format`, f‑strings are compiled into a single expression and avoid intermediate allocations.  On microcontrollers, this can reduce memory footprint and fragmentation.  However, be mindful when logging (see “Logging & Instrumentation” below); some logging APIs may still require lazy formatting.
+ Use **f‑strings exclusively** for string formatting in library code.  Compared to older `%` formatting or `str.format`, f‑strings are compiled into a single expression and avoid intermediate allocations.  On microcontrollers, this can reduce memory footprint and fragmentation.  However, be mindful when logging (see "Logging & Instrumentation" below); some logging APIs may still require lazy formatting.  Infrastructure code should prefer f‑strings for readability (the standard Python convention) but is not bound by the embedded‑runtime rationale.
 
 ### API & Compatibility
 
