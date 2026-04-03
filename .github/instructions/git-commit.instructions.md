@@ -4,56 +4,31 @@ applyTo: "**"
 
 # Git Commit Mechanics
 
-When making git commits from the terminal, **always** use a temporary scratch file for the commit message. Never use `git commit -m` with inline strings — shell quoting in zsh breaks on special characters, backticks, parentheses, quotes, and multi-line messages.
+When making git commits, **never** use `git commit -m` — shell quoting in zsh breaks on special characters, backticks, parentheses, quotes, and multi-line messages. **Never** write the commit message via the terminal (heredocs, `echo`, `cat`, `printf`) — the agent terminal can truncate multi-line input and lose the closing delimiter.
+
+Instead, **always** use the file-creation tool to write the message, then run only single-line terminal commands.
 
 ## Procedure
 
-1. **Create the scratch directory** if it doesn't exist:
+1. **Write the commit message to a scratch file using the create_file tool** (not the terminal). Use a fixed path:
+
+   Path: `.scratch/commit-msg.txt`
+
+   Write the full commit message as the file content, following the project's commit-message conventions (imperative subject, body explaining *why*).
+
+2. **Commit using the file** (single-line terminal command):
    ```
-   mkdir -p .scratch
+   git commit -F .scratch/commit-msg.txt
    ```
 
-2. **Write the commit message to a unique temporary file** using a random suffix to avoid collisions with leftover files from previous failed commits:
+3. **Clean up** (single-line terminal command):
    ```
-   COMMIT_FILE=".scratch/commit-msg-$RANDOM.txt"
-   cat > "$COMMIT_FILE" << 'COMMIT_EOF'
-   Subject line here in imperative mood
-
-   Body paragraph explaining why the change was made.
-   Reference affected libraries, decisions, or workstreams.
-   COMMIT_EOF
-   ```
-   - Use a heredoc with a **single-quoted delimiter** (`<< 'COMMIT_EOF'`) so the shell performs no interpolation inside the message body.
-   - `$RANDOM` is a zsh/bash built-in that produces a different integer each invocation.
-
-3. **Commit using the file**:
-   ```
-   git commit -F "$COMMIT_FILE"
-   ```
-
-4. **Clean up all scratch commit files** (not just the one from this commit — catch any orphans from previous failures):
-   ```
-   rm -f .scratch/commit-msg-*.txt
-   ```
-
-5. Steps 2–4 as a **single copy-paste block**:
-   ```
-   COMMIT_FILE=".scratch/commit-msg-$RANDOM.txt" && \
-   mkdir -p .scratch && \
-   cat > "$COMMIT_FILE" << 'COMMIT_EOF'
-   Subject line here
-
-   Body here.
-   COMMIT_EOF
-   git commit -F "$COMMIT_FILE" && \
-   rm -f .scratch/commit-msg-*.txt
+   rm -f .scratch/commit-msg*.txt
    ```
 
 ## Rules
 
-- **Never use `git commit -m "..."`** — it is the source of repeated quoting failures.
-- **Never use double-quoted heredoc delimiters** (`<< COMMIT_EOF` without quotes) — the shell will expand `$variables` and `` `backticks` `` inside the message.
-- **Always clean up** with `rm -f .scratch/commit-msg-*.txt` after the commit, even if the commit fails. This catches orphans from previous attempts.
+- **Never use `git commit -m "..."`** — it breaks on special characters in zsh.
+- **Never write the commit message via the terminal** — no heredocs, no `echo`, no `cat`, no `printf`. The agent terminal truncates multi-line input. Always use the file-creation tool.
+- **Always clean up** with `rm -f .scratch/commit-msg*.txt` after the commit, even if the commit fails.
 - The `.scratch/` directory is gitignored and should never be committed.
-- If `git commit` fails (e.g., nothing staged), still run the cleanup step.
-
