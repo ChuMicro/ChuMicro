@@ -1,82 +1,109 @@
-"""Run the timing smoke test through the lightweight harness.
+"""Run device smoke tests for all libraries through the lightweight harness.
 
-This file is intentionally import-free enough to execute consistently under the
-current CPython, MicroPython unix-port, and CircuitPython unix-port paths.
-See `plans/decisions/0006-shared-import-free-compatibility-smoke-runner.md`.
+Discovers and exercises device_tests/ for every library under libraries/,
+not just a single hardcoded package.  Avoids ``os.path`` (unavailable on
+some CircuitPython builds) and keeps the import footprint minimal so it can
+execute under CPython, MicroPython unix-port, and CircuitPython unix-port.
+
+See ``plans/decisions/0006-shared-import-free-compatibility-smoke-runner.md``.
 """
 
-import time
+import os
+import sys
 
 
-class _ModuleNamespace:
-    """Simple object namespace for manually executed module code."""
+def _is_dir(path):
+    """Return True if *path* is an existing directory."""
+    try:
+        os.listdir(path)
+        return True
+    except OSError:
+        return False
 
 
-def _namespace_to_object(namespace):
-    """Convert an execution namespace into a plain attribute object."""
-    module = _ModuleNamespace()
-    for key in namespace:
-        setattr(module, key, namespace[key])
-    return module
+def _sorted_listdir(path):
+    """Return a sorted listing of *path*, or an empty list on failure."""
+    try:
+        entries = os.listdir(path)
+        entries.sort()
+        return entries
+    except OSError:
+        return []
 
 
-def _execute_source(file_path, module_name, package_name=""):
-    """Execute a source file and return its globals namespace."""
-    namespace: dict[str, object] = {}
-    namespace["__name__"] = module_name
-    namespace["__file__"] = file_path
-    namespace["__package__"] = package_name
-    with open(file_path) as source_file:
-        source = source_file.read()
-
-    exec(source, namespace)
-    return namespace
+def _discover_source_roots():
+    """Return src/ directories under libraries/ and support/."""
+    roots = []
+    for parent in ("libraries", "support"):
+        for name in _sorted_listdir(parent):
+            src = parent + "/" + name + "/src"
+            if _is_dir(src):
+                roots.append(src)
+    return roots
 
 
-def _build_test_module(ticks_ms, ticks_diff):
-    """Return a module-like object containing the timing smoke test."""
-    namespace: dict[str, object] = {}
-    namespace["__name__"] = "test_heartbeat_ticks"
-    namespace["__file__"] = "libraries/timing/device_tests/test_heartbeat_ticks.py"
-    namespace["__package__"] = ""
-    namespace["time"] = time
+def _discover_device_tests():
+    """Return paths to all test_*.py files under libraries/*/device_tests/."""
+    tests = []
+    for name in _sorted_listdir("libraries"):
+        dt_dir = "libraries/" + name + "/device_tests"
+        for filename in _sorted_listdir(dt_dir):
+            if filename.startswith("test_") and filename.endswith(".py"):
+                tests.append(dt_dir + "/" + filename)
+    return tests
 
-    def _sleep_ms(duration_ms):
-        runtime_sleep_ms = getattr(time, "sleep_ms", None)
-        if callable(runtime_sleep_ms):
-            runtime_sleep_ms(duration_ms)
-            return
 
-        time.sleep(duration_ms / 1000)
+def _setup_source_paths():
+    """Insert discovered source roots into sys.path so library imports resolve."""
+    for root in _discover_source_roots():
+        if root not in sys.path:
+            sys.path.insert(0, root)
 
-    def test_ticks_progress_on_runtime():
-        start_ms = ticks_ms()
-        _sleep_ms(20)
-        end_ms = ticks_ms()
-        assert ticks_diff(end_ms, start_ms) >= 1
 
-    namespace["_sleep_ms"] = _sleep_ms
-    namespace["test_ticks_progress_on_runtime"] = test_ticks_progress_on_runtime
-    return _namespace_to_object(namespace)
+class _Namespace:
+    """Attribute container for exec'd module globals."""
+
+
+def _exec_as_namespace(path, name="__main__", package=""):
+    """Execute a .py file and return a namespace object with its globals."""
+    ns = {"__name__": name, "__file__": path, "__package__": package}
+    with open(path) as fh:
+        exec(fh.read(), ns)
+    obj = _Namespace()
+    for key in ns:
+        setattr(obj, key, ns[key])
+    return obj
 
 
 def main():
-    """Run the checked-in timing smoke test and return a shell-style exit code."""
-    ticks_namespace = _execute_source(
-        "libraries/timing/src/chumicro_timing/ticks.py",
-        "chumicro_timing.ticks",
-        package_name="chumicro_timing",
-    )
-    runner_namespace = _execute_source(
+    """Discover and run all device tests, returning a shell exit code."""
+    _setup_source_paths()
+
+    test_files = _discover_device_tests()
+    if not test_files:
+        print("NO DEVICE TESTS FOUND")
+        return 0
+
+    runner = _exec_as_namespace(
         "support/test_harness/src/chumicro_test_harness/runner.py",
         "chumicro_test_harness.runner",
-        package_name="chumicro_test_harness",
+        "chumicro_test_harness",
     )
-    test_module = _build_test_module(
-        ticks_namespace["ticks_ms"],
-        ticks_namespace["ticks_diff"],
-    )
-    return runner_namespace["run_module"](test_module)
+
+    total_failed = 0
+    for path in test_files:
+        print(f"== {path} ==")
+        try:
+            test_mod = _exec_as_namespace(path)
+        except Exception as exc:
+            total_failed += 1
+            print(f"ERROR loading {path}: {exc}")
+            continue
+        result = runner.run_module(test_mod)
+        if result != 0:
+            total_failed += 1
+
+    return 1 if total_failed else 0
 
 
 raise SystemExit(main())
