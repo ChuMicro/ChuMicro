@@ -57,3 +57,47 @@ def test_heartbeat_reports_period_configuration() -> None:
 
     assert heartbeat.period_ms == 250
 
+
+# -- service() / serviceable pattern --
+
+
+def test_heartbeat_service_emits_tick_when_due() -> None:
+    """service() should emit EVENT_TICK into the sink when a beat is due."""
+    fake_ticks = FakeTicks()
+    heartbeat = Heartbeat(period_ms=100, ticks=fake_ticks)
+    events = []
+
+    class _ListSink:
+        def emit(self, source, event_type, data=None):
+            events.append((source, event_type, data))
+
+    sink = _ListSink()
+    fake_ticks.advance(100)
+    heartbeat.service(sink)
+
+    assert len(events) == 1
+    assert events[0][0] is heartbeat
+    assert events[0][1] == Heartbeat.EVENT_TICK
+    assert events[0][2] is None
+
+
+def test_heartbeat_service_does_not_emit_when_not_due() -> None:
+    """service() should emit nothing when the period has not elapsed."""
+    fake_ticks = FakeTicks()
+    heartbeat = Heartbeat(period_ms=100, ticks=fake_ticks)
+    events = []
+
+    class _ListSink:
+        def emit(self, source, event_type, data=None):
+            events.append(1)
+
+    heartbeat.service(_ListSink())
+
+    assert events == []
+
+
+def test_heartbeat_event_tick_constant() -> None:
+    """EVENT_TICK should be a stable string constant."""
+    assert Heartbeat.EVENT_TICK == "heartbeat.tick"
+
+

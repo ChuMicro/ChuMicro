@@ -110,6 +110,28 @@ The tick source is selected automatically at import time:
 
 All sources are masked to the 2²⁹ period, so behavior is identical regardless of which source is used.
 
+## Serviceable pattern
+
+`Heartbeat` also supports the ecosystem-standard serviceable pattern from `chumicro-serviceable`.  Instead of checking `poll()` manually, you can wire heartbeats into a `ServiceRunner`:
+
+```python
+from chumicro_serviceable import EventQueueSink, ServiceRunner, SimpleEventDispatcher
+from chumicro_timing import Heartbeat
+
+heartbeat = Heartbeat(period_ms=1000)
+
+sink = EventQueueSink(max_size=8)
+dispatcher = SimpleEventDispatcher()
+dispatcher.register(Heartbeat.EVENT_TICK, lambda e: print("beat!"))
+
+runner = ServiceRunner([heartbeat], sink, dispatcher)
+
+while True:
+    runner.service_once()
+```
+
+When a beat is due, `service()` emits a `Heartbeat.EVENT_TICK` event into the sink.  This is equivalent to checking `poll()` — use whichever style fits your application.
+
 ## Integration with a tick-based scheduler
 
 `Heartbeat` is designed to be polled from a main loop or tick-based scheduler — it never blocks. A typical pattern:

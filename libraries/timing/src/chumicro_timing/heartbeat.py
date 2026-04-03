@@ -6,7 +6,19 @@ class Heartbeat:
 
     By default uses the module-level ``ticks_ms`` and ``ticks_diff`` helpers.
     Pass a *ticks* object with the same two methods to override (e.g. for tests).
+
+    Supports both the simple ``poll()`` API and the serviceable pattern::
+
+        # Simple usage
+        if heartbeat.poll():
+            do_work()
+
+        # Serviceable pattern
+        heartbeat.service(event_sink)
     """
+
+    EVENT_TICK = "heartbeat.tick"
+    """Event type emitted by ``service()`` when a beat is due."""
 
     def __init__(self, period_ms, ticks=None):
         """Create a heartbeat that becomes due once every *period_ms* milliseconds."""
@@ -44,4 +56,14 @@ class Heartbeat:
 
         self._last_beat_ms = self._ticks_ms()
         return True
+
+    def service(self, event_sink):
+        """Service one tick: emit ``EVENT_TICK`` into *event_sink* if a beat is due.
+
+        This is the serviceable-pattern equivalent of ``poll()``.  Use it
+        with ``ServiceRunner`` from ``chumicro_serviceable`` for a standard
+        dispatch loop.
+        """
+        if self.poll():
+            event_sink.emit(self, self.EVENT_TICK)
 

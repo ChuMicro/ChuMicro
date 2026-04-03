@@ -35,6 +35,7 @@
 
 ## Done
 
+- [x] Implement the serviceable pattern as `chumicro-serviceable` library (Decision 0014). Add `service(event_sink)` and `EVENT_TICK` to Heartbeat (timing 0.1.0 → 0.2.0).
 - [x] Wire up MkDocs + Material + mkdocstrings: per-library `mkdocs.yml`, `docs` task in `scripts/run.py`, `api.md` converted to autodoc directives (Decision 0013).
 - [x] Add per-library scoping (`--all`/`--libraries`) to `verify-examples` and `docs` tasks (shared `_parse_scope_args` helper).
 - [x] Update `new-library` scaffolder: generates `mkdocs.yml`, `docs/api.md` with autodoc, `docs/guide.md` template, and example with `__main__` guard. No `.gitkeep` in `docs/` or `examples/` — they have real content from scaffolding.

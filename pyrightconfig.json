@@ -2,6 +2,7 @@
   "extraPaths": [
     "support/runtime/src",
     "support/test_harness/src",
+    "libraries/serviceable/src",
     "libraries/timing/src"
   ]
 }

@@ -1,0 +1,583 @@
+That makes sense. You are not asking for the smallest possible embedded pattern. You are asking for a library ecosystem standard that still fits CircuitPython/MicroPython, supports richer class design, and works well with dependency injection and mocks.
+
+In that world, I would stop thinking in terms of “callback vs poll” and instead define a small application model for all active components.
+
+The cleanest version is:
+	•	a standard service() contract
+	•	a standard EventSink contract
+	•	a standard event shape
+	•	optional shared base classes / protocols
+	•	injected dependencies for time, I/O, sockets, etc.
+
+That way:
+	•	libraries do not call user code directly
+	•	users do not write ad hoc drain helpers
+	•	tests can inject fake time and fake sinks
+	•	simple and complex libraries still follow the same model
+
+The model
+
+Think of each active library as a serviceable component.
+
+A component:
+	•	receives a chance to run
+	•	may emit zero or more events into a sink
+	•	keeps its own internal state
+	•	depends on injected collaborators like ticks, sockets, storage, transports, etc.
+
+So instead of this:
+
+if heartbeat.poll():
+    do_thing()
+
+or this:
+
+heartbeat.register_callback(on_tick)
+heartbeat.poll()
+
+you standardize on this:
+
+heartbeat.service(events)
+
+Where events is a standard sink object.
+
+Then the application has a standard dispatcher loop, not a user-written drain function each time.
+
+The best standardized shape
+
+I would recommend these concepts.
+
+1. Serviceable
+
+Anything active implements service(event_sink).
+
+2. EventSink
+
+A standard object libraries write events into.
+
+3. Event
+
+A standard representation of what happened.
+
+4. ServiceRunner or Dispatcher
+
+A reusable standard piece that services components and dispatches events.
+
+That gives you one uniform story.
+
+⸻
+
+A concrete standard
+
+Event
+
+Do not make each library invent random event shapes.
+
+Pick one standard shape. For constrained Python, a tuple is fine. If you want richer design, a tiny class is also fine.
+
+A good middle ground is:
+
+class Event:
+    def __init__(self, source, event_type, data=None):
+        self.source = source
+        self.event_type = event_type
+        self.data = data
+
+That is readable and testable.
+
+If you want less allocation pressure, use tuples:
+
+(source, event_type, data)
+
+But since you want a richer design standard, I think a small class is reasonable, especially if your libraries are not in the absolute tiniest environments.
+
+A strong event contract would be:
+	•	source: the object that emitted the event
+	•	event_type: string or int constant
+	•	data: optional payload
+
+Example:
+	•	source = heartbeat
+	•	event_type = HeartBeat.EVENT_TICK
+	•	data = None
+
+For MQTT:
+	•	source = mqtt_client
+	•	event_type = MqttClient.EVENT_MESSAGE
+	•	data = message
+
+⸻
+
+EventSink
+
+This should be a standard class users do not have to invent.
+
+Example responsibilities:
+	•	emit(source, event_type, data=None)
+	•	has_events()
+	•	pop()
+	•	maybe clear()
+
+Example:
+
+class EventSink:
+    def emit(self, source, event_type, data=None):
+        raise NotImplementedError
+
+    def pop(self):
+        raise NotImplementedError
+
+    def has_events(self):
+        raise NotImplementedError
+
+Then provide a concrete implementation like EventQueueSink.
+
+⸻
+
+Serviceable
+
+Every active library implements something like:
+
+class Serviceable:
+    def service(self, event_sink):
+        raise NotImplementedError
+
+That is the core contract.
+
+You may also want:
+
+@property
+def is_active(self):
+    return True
+
+but that is optional.
+
+⸻
+
+Why this is better than next_event()
+
+next_event() is fine, but the sink pattern is more standardized across many components.
+
+With next_event():
+	•	each library owns its own queue
+	•	each library needs queue behavior
+	•	event draining is scattered
+	•	shared coordination is harder
+
+With a shared sink:
+	•	there is one standard event path
+	•	one event queue implementation
+	•	one dispatcher model
+	•	simpler testing
+	•	simpler global ordering
+
+It is closer to a true framework standard.
+
+⸻
+
+Standard runtime flow
+
+The app owns:
+	•	a sink
+	•	a list of serviceable components
+	•	a dispatcher
+
+Then one loop iteration looks like:
+	1.	clear or continue using sink
+	2.	call service() on each component
+	3.	dispatcher drains the sink and routes events
+
+That means users do not write custom drain() functions all over the place.
+
+⸻
+
+Example design
+
+Core abstractions
+
+class Event:
+    def __init__(self, source, event_type, data=None):
+        self.source = source
+        self.event_type = event_type
+        self.data = data
+
+
+class EventSink:
+    def emit(self, source, event_type, data=None):
+        raise NotImplementedError
+
+    def has_events(self):
+        raise NotImplementedError
+
+    def pop(self):
+        raise NotImplementedError
+
+
+class Serviceable:
+    def service(self, event_sink):
+        raise NotImplementedError
+
+Fixed queue sink
+
+class EventQueueSink(EventSink):
+    def __init__(self, max_size=16):
+        self._items = [None] * max_size
+        self._head = 0
+        self._tail = 0
+        self._count = 0
+
+    def emit(self, source, event_type, data=None):
+        if self._count >= len(self._items):
+            return False
+        self._items[self._tail] = Event(source, event_type, data)
+        self._tail = (self._tail + 1) % len(self._items)
+        self._count += 1
+        return True
+
+    def has_events(self):
+        return self._count > 0
+
+    def pop(self):
+        if self._count == 0:
+            return None
+        item = self._items[self._head]
+        self._items[self._head] = None
+        self._head = (self._head + 1) % len(self._items)
+        self._count -= 1
+        return item
+
+This is reusable across all libraries.
+
+⸻
+
+HeartBeat with injected ticks
+
+This fits your injection pattern naturally.
+
+class Ticks:
+    def ticks_ms(self):
+        raise NotImplementedError
+
+    def ticks_diff(self, a, b):
+        raise NotImplementedError
+
+    def ticks_add(self, a, b):
+        raise NotImplementedError
+
+Production implementation wraps supervisor.ticks_ms() or time.ticks_ms() depending on platform.
+
+Fake implementation controls time directly in tests.
+
+Then HeartBeat:
+
+class HeartBeat(Serviceable):
+    EVENT_TICK = "heartbeat.tick"
+
+    def __init__(self, interval_ms, ticks):
+        self._interval_ms = interval_ms
+        self._ticks = ticks
+        self._next_due = None
+
+    def start(self):
+        now = self._ticks.ticks_ms()
+        self._next_due = self._ticks.ticks_add(now, self._interval_ms)
+
+    def stop(self):
+        self._next_due = None
+
+    def service(self, event_sink):
+        if self._next_due is None:
+            return
+
+        now = self._ticks.ticks_ms()
+        if self._ticks.ticks_diff(now, self._next_due) >= 0:
+            self._next_due = self._ticks.ticks_add(self._next_due, self._interval_ms)
+            event_sink.emit(self, self.EVENT_TICK)
+
+This is very clean:
+	•	no callback
+	•	no polling boolean
+	•	dependency injected time
+	•	output standardized through sink
+
+⸻
+
+Standard dispatcher
+
+This is the part that replaces user-written drain logic.
+
+class EventDispatcher:
+    def dispatch(self, event):
+        raise NotImplementedError
+
+Then provide a standard implementation:
+
+class SimpleEventDispatcher(EventDispatcher):
+    def __init__(self):
+        self._handlers = {}
+
+    def register(self, source, event_type, handler):
+        self._handlers[(source, event_type)] = handler
+
+    def dispatch(self, event):
+        handler = self._handlers.get((event.source, event.event_type))
+        if handler is not None:
+            handler(event)
+
+Or a looser version:
+
+class SimpleEventDispatcher(EventDispatcher):
+    def __init__(self):
+        self._handlers = {}
+
+    def register(self, event_type, handler):
+        self._handlers[event_type] = handler
+
+    def dispatch(self, event):
+        handler = self._handlers.get(event.event_type)
+        if handler is not None:
+            handler(event)
+
+Then the runtime loop becomes standardized.
+
+⸻
+
+Standard runner
+
+This is where you remove the need for users to write drain code.
+
+class ServiceRunner:
+    def __init__(self, services, event_sink, dispatcher):
+        self._services = services
+        self._event_sink = event_sink
+        self._dispatcher = dispatcher
+
+    def service_once(self):
+        for service in self._services:
+            service.service(self._event_sink)
+
+        while self._event_sink.has_events():
+            event = self._event_sink.pop()
+            self._dispatcher.dispatch(event)
+
+Usage:
+
+runner = ServiceRunner(
+    services=[heartbeat, mqtt_client, buttons],
+    event_sink=EventQueueSink(max_size=32),
+    dispatcher=dispatcher,
+)
+
+while True:
+    runner.service_once()
+
+That is the standardized solution.
+
+The user no longer writes custom drain methods. They use your provided runner.
+
+⸻
+
+Why this works well with DI
+
+This design is very injection-friendly.
+
+You can inject:
+	•	ticks
+	•	socket adapters
+	•	transport implementations
+	•	storage backends
+	•	message encoders
+	•	fake sinks
+	•	fake dispatchers
+
+For example, in tests:
+
+class FakeTicks:
+    def __init__(self):
+        self._now = 0
+
+    def ticks_ms(self):
+        return self._now
+
+    def ticks_diff(self, a, b):
+        return a - b
+
+    def ticks_add(self, a, b):
+        return a + b
+
+    def advance(self, ms):
+        self._now += ms
+
+Then:
+
+ticks = FakeTicks()
+sink = EventQueueSink(max_size=4)
+heartbeat = HeartBeat(interval_ms=1000, ticks=ticks)
+heartbeat.start()
+
+heartbeat.service(sink)
+assert not sink.has_events()
+
+ticks.advance(1000)
+heartbeat.service(sink)
+
+event = sink.pop()
+assert event is not None
+assert event.event_type == HeartBeat.EVENT_TICK
+assert event.source is heartbeat
+
+That is very clean for unit tests.
+
+⸻
+
+Richer class design is still supported
+
+This pattern does not force everything into flat procedural code.
+
+You can still have:
+	•	interfaces / abstract bases
+	•	mixins
+	•	composition
+	•	adapter objects
+	•	strategy injection
+	•	fake implementations
+	•	subclassing where it makes sense
+
+For example, you might have:
+	•	Serviceable
+	•	Startable
+	•	Stopable
+	•	Closable
+	•	EventSourceMixin
+	•	TicksProvider
+	•	SocketProvider
+
+You can define a pretty rich ecosystem around this.
+
+⸻
+
+A better refinement: service context
+
+If you want more standardization and less argument sprawl later, consider a ServiceContext.
+
+Instead of:
+
+service(event_sink)
+
+use:
+
+service(context)
+
+Where context contains shared runtime collaborators:
+
+class ServiceContext:
+    def __init__(self, ticks, event_sink):
+        self.ticks = ticks
+        self.event_sink = event_sink
+
+Then HeartBeat becomes:
+
+class HeartBeat(Serviceable):
+    EVENT_TICK = "heartbeat.tick"
+
+    def __init__(self, interval_ms):
+        self._interval_ms = interval_ms
+        self._next_due = None
+
+    def start(self, context):
+        now = context.ticks.ticks_ms()
+        self._next_due = context.ticks.ticks_add(now, self._interval_ms)
+
+    def service(self, context):
+        if self._next_due is None:
+            return
+
+        now = context.ticks.ticks_ms()
+        if context.ticks.ticks_diff(now, self._next_due) >= 0:
+            self._next_due = context.ticks.ticks_add(self._next_due, self._interval_ms)
+            context.event_sink.emit(self, self.EVENT_TICK)
+
+This has advantages:
+	•	easier to evolve later
+	•	can add logger, config, cancellation, metrics, etc.
+	•	avoids changing every service() signature later
+
+If you already inject dependencies directly into objects, that is still fine. But ServiceContext can be nice for runtime-scoped collaborators.
+
+⸻
+
+Recommended standard for your ecosystem
+
+Given what you described, I would recommend this exact family-wide pattern:
+
+Core interfaces
+	•	Serviceable.service(context) or service(event_sink)
+	•	EventSink.emit(source, event_type, data=None)
+	•	EventDispatcher.dispatch(event)
+
+Standard runtime helpers
+	•	EventQueueSink
+	•	ServiceRunner
+	•	SimpleEventDispatcher
+
+Dependency injection
+	•	all external dependencies injected through constructor or context
+	•	examples: ticks, sockets, SSL context, storage, random, logger
+
+State
+	•	components may also expose state properties directly
+	•	events are for transitions/notifications, state is for current truth
+
+That gives you:
+	•	strong standardization
+	•	room for simple and advanced libraries
+	•	explicit control flow
+	•	clean tests
+	•	consistent event handling
+	•	no ad hoc user drain functions
+
+⸻
+
+Two viable variants
+
+There are really two strong versions of this pattern.
+
+Variant A: shared sink
+
+service(context)
+context.event_sink.emit(...)
+
+This is the one I would choose.
+
+Variant B: component-owned sink
+
+service()
+next_event()
+
+This is okay, but less centralized and less uniform for orchestration.
+
+For an ecosystem standard, shared sink + runner + dispatcher is stronger.
+
+⸻
+
+My strongest recommendation
+
+Use this mental model:
+	•	libraries are services
+	•	services do work during service(...)
+	•	services emit standardized events into a shared sink
+	•	a standard runner drains and dispatches those events
+	•	time and other dependencies are injected
+
+That is likely the best “evolution beyond callbacks” for the kind of library family you are building.
+
+The next step I would take is to write a small concrete spec with exact names and contracts, something like:
+	•	Serviceable
+	•	ServiceContext
+	•	Event
+	•	EventSink
+	•	EventQueueSink
+	•	EventDispatcher
+	•	ServiceRunner
+
+and then show HeartBeat, Button, and MqttClient implemented against that same contract.
