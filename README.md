@@ -52,7 +52,7 @@ chumicro/
 
 ## Getting started
 
-The prepare script works with whatever Python environment you already have — IDE-managed venv, uv, conda, or system Python.  When `uv` is on PATH it is used automatically for venv creation and package installation; otherwise stdlib `venv` and `pip` are used as fallbacks.
+The prepare script works with whatever Python environment you already have — IDE-managed venv, uv, or `--create-venv` for a fresh start.  When `uv` is on PATH it is used automatically for venv creation and package installation; otherwise stdlib `venv` and `pip` are used as fallbacks.
 
 ```zsh
 cd /path/to/chumicro

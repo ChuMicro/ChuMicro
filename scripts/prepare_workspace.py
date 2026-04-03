@@ -2,7 +2,7 @@
 """Prepare the Chumicro workspace for development and testing.
 
 Uses whatever Python interpreter runs it.  Works with an IDE-managed
-virtual environment, uv, conda, or system Python.
+virtual environment, uv, or ``--create-venv`` for a fresh start.
 
 Usage::
 
