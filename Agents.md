@@ -279,9 +279,6 @@ Building connected devices requires attention to security and data protection.  
    - **Body (when non-trivial):** explain *why* the change was made, what alternatives were considered or rejected, and which planning items or decisions it relates to.  Name affected libraries, decisions, or workstreams when relevant.
    - **Scope tags:** if the commit touches planning docs, infrastructure, or a specific library, make that clear early in the message so `git log --oneline` is scannable.
    - A future agent scanning `git log` should be able to infer the current project state, recent design choices, and the trajectory of work — even if `plans/` has not been updated yet.
-7. **Commit mechanics for agents.**  When running `git commit` from a shell:
-   - Use **single quotes** for the `-m` argument to avoid zsh double-quote interpolation issues: `git commit -m 'Subject line here'`.
-   - For multi-line messages, write the message to a temp file and use `git commit -F`: `echo 'Subject\n\nBody' > /tmp/commit-msg && git commit -F /tmp/commit-msg && rm /tmp/commit-msg`.
-   - Do **not** use multi-line double-quoted strings with `-m` — they break in zsh when the message contains special characters.
+7. **Commit mechanics for agents.**  Never use `git commit -m` — it breaks in zsh on special characters, backticks, and multi-line messages.  Instead, always write the commit message to a scratch file and use `git commit -F`.  The full procedure is defined in [`.github/instructions/git-commit.instructions.md`](.github/instructions/git-commit.instructions.md); the `.scratch/` directory is gitignored.
 
 By following these guidelines, Chumicro aims to build a sustainable ecosystem of high‑quality, cross‑platform libraries for modern microcontrollers and Python applications.
