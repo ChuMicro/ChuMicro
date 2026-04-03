@@ -1,6 +1,6 @@
 # Workstream: Timing Library
 
-Status: `in-progress`
+Status: `done`
 
 ## Purpose
 
@@ -153,11 +153,7 @@ Current verified state:
 - the package already builds independently
 - at least one device-aware behavior is represented by the checked-in timing test and smoke runner scaffold
 
-Still intentionally incomplete:
-
-- the CircuitPython compatibility path is still advisory in CI rather than a required gate
-- package-root export coverage is still strongest for `Heartbeat`; the broader package-root export surface is defined but not yet exhaustively tested as a public contract
-- the second seam after timing/ticks is still open
+All success criteria are met. Remaining cross-cutting items (CI promotion, release automation, second seam) are tracked under Milestone 2 and `next-up.md`.
 
 ## Notes
 
