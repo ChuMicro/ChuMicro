@@ -85,6 +85,43 @@ def lint() -> int:
     return _run([PYTHON, "-m", "ruff", "check", *discover_ruff_paths()])
 
 
+def _parse_library_filters(
+    filter_expr: str,
+) -> dict[str, str] | None:
+    """Parse a ``-k`` expression into per-library filters.
+
+    Returns ``None`` when the expression contains no ``/`` separators
+    (plain pytest expression applied to all libraries).
+
+    Returns a dict of ``{library_name: expression}`` when every entry
+    uses the ``library/expression`` form.  Multiple entries for the same
+    library are combined with ``or``.
+
+    Raises :class:`SystemExit` if scoped and unscoped entries are mixed.
+    """
+    entries = [e.strip() for e in filter_expr.split(",") if e.strip()]
+
+    scoped = [e.split("/", 1) for e in entries if "/" in e]
+    plain = [e for e in entries if "/" not in e]
+
+    if not scoped:
+        return None  # All plain — apply uniformly.
+
+    if plain:
+        print("Cannot mix library-scoped (lib/test) and plain names in -k.")
+        print(f"  Scoped: {', '.join(f'{s[0]}/{s[1]}' for s in scoped)}")
+        print(f"  Plain:  {', '.join(plain)}")
+        raise SystemExit(1)
+
+    result: dict[str, str] = {}
+    for lib, expr in scoped:
+        if lib in result:
+            result[lib] = f"{result[lib]} or {expr}"
+        else:
+            result[lib] = expr
+    return result
+
+
 def test_cpython(
     pkg_dirs: list[Path],
     *,
@@ -100,7 +137,33 @@ def test_cpython(
     independently meet the coverage threshold (90%) unless *filter_expr*
     is set (filtering naturally reduces coverage) or *no_cov* skips
     coverage entirely.
+
+    *filter_expr* supports library-scoped filters using ``library/expr``
+    syntax.  When every entry is library-scoped, only those libraries
+    are tested (overriding *pkg_dirs*).  Examples::
+
+        test_heartbeat                        # plain — all libraries
+        timing/test_heartbeat                 # scoped — timing only
+        timing/test_a,serviceable/test_b      # scoped — one filter per lib
     """
+    # Parse library-scoped filters from filter_expr.
+    per_library: dict[str, str] | None = None
+    if filter_expr:
+        per_library = _parse_library_filters(filter_expr)
+        if per_library is not None:
+            # Library prefixes override pkg_dirs.
+            all_dirs = discover_package_dirs()
+            by_name = {d.name: d for d in all_dirs}
+            resolved: list[Path] = []
+            for name in per_library:
+                if name not in by_name:
+                    available = ", ".join(sorted(by_name))
+                    print(f"Unknown library in -k: {name}")
+                    print(f"Available: {available}")
+                    return 1
+                resolved.append(by_name[name])
+            pkg_dirs = resolved
+
     # Keep only packages that actually have a tests/ directory.
     testable = [d for d in pkg_dirs if (d / "tests").is_dir()]
     if not testable:
@@ -115,15 +178,6 @@ def test_cpython(
     for f in ROOT.glob(".coverage.*"):
         f.unlink()
 
-    # Build the extra pytest flags from named parameters.
-    extra_args: list[str] = []
-    if filter_expr:
-        extra_args.extend(["-k", filter_expr])
-    if exitfirst:
-        extra_args.append("-x")
-    if verbose:
-        extra_args.append("-v")
-
     # When filtering or skipping coverage, relax per-library coverage
     # gates — filtering naturally reduces coverage.
     relax_coverage = bool(filter_expr) or no_cov
@@ -132,6 +186,21 @@ def test_cpython(
     overall_rc = 0
 
     for pkg_dir in testable:
+        # Determine the filter expression for this library.
+        if per_library is not None:
+            expr = per_library.get(pkg_dir.name)
+        else:
+            expr = filter_expr
+
+        # Build extra pytest flags for this library.
+        extra_args: list[str] = []
+        if expr:
+            extra_args.extend(["-k", expr])
+        if exitfirst:
+            extra_args.append("-x")
+        if verbose:
+            extra_args.append("-v")
+
         cov_args = [] if no_cov else coverage_args_for([pkg_dir])
         test_path = str((pkg_dir / "tests").relative_to(ROOT))
 
@@ -434,11 +503,30 @@ def _build_parser() -> argparse.ArgumentParser:
     # Scoped tasks
     test_p = sub.add_parser(
         "test", parents=[scope],
-        help="CPython tests (changed packages by default, --all for everything)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        help="CPython tests (changed packages by default)",
+        epilog=(
+            "examples:\n"
+            "  run.py test                                    "
+            "# changed packages\n"
+            "  run.py test --all                              "
+            "# all packages\n"
+            "  run.py test -k test_heartbeat                  "
+            "# by test name\n"
+            "  run.py test -k timing/test_heartbeat           "
+            "# by library and test\n"
+            "  run.py test -k timing/test_a,serviceable/test_b"
+            "   # different tests per lib\n"
+            "  run.py test --no-cov -x                        "
+            "# quick, stop on failure"
+        ),
     )
     test_p.add_argument(
         "-k", dest="filter_expr", metavar="EXPRESSION",
-        help="only run tests matching this expression",
+        help=(
+            "filter tests by name (e.g. test_heartbeat) or "
+            "library/name (e.g. timing/test_heartbeat)"
+        ),
     )
     test_p.add_argument(
         "-x", "--exitfirst", action="store_true",
