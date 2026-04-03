@@ -25,8 +25,16 @@ libraries/timing/
 │   └── chumicro_timing/
 ├── tests/
 │   └── test_*.py
-└── device_tests/
-    └── test_*.py
+├── device_tests/
+│   └── test_*.py
+├── docs/
+│   ├── guide.md
+│   ├── api.md
+│   └── testing.md
+└── examples/
+    ├── heartbeat_blink.py
+    ├── multiple_heartbeats.py
+    └── timeout_check.py
 ```
 
 ## Current verified slice
@@ -37,7 +45,9 @@ libraries/timing/
 - `libraries/timing/tests/` covers the host-side behavior with `pytest`
 - `libraries/timing/device_tests/test_heartbeat_ticks.py` exists as the first device-aware timing test
 - `libraries/timing/pyproject.toml` builds as an individual package
-- `libraries/timing/README.md` establishes the package documentation
+- `libraries/timing/README.md` establishes the package documentation with installation, API overview, and platform notes
+- `libraries/timing/docs/` contains user guide, API reference, and testing helpers documentation (Decision 0013)
+- `libraries/timing/examples/` contains three runnable examples: heartbeat blink, multiple heartbeats, and timeout check (Decision 0013)
 
 ## Design rules
 

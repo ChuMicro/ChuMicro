@@ -13,14 +13,15 @@
 - [ ] Add `[tool.chumicro].platforms` reader to `scripts/run.py` and wire it into the compatibility smoke runners and release/build paths (Decision 0011).
 - [ ] Promote advisory MicroPython and CircuitPython CI jobs to protected-branch requirements, gated by platform targeting (Decision 0011).
 - [ ] Add digital I/O as the second library seam (alongside CI/release work, not sequentially).
-- [ ] Set up ReadTheDocs configuration and initial docs structure for the timing library (`libraries/timing/docs/`).
-- [ ] Add usage examples for the timing library (`libraries/timing/examples/`).
+- [ ] Set up ReadTheDocs hosting with `.readthedocs.yaml` and wire docs build into CI/release pipeline (Decision 0013).
+- [ ] Add docs build verification to the release pipeline (verify `docs/` is non-empty for any library being released).
 - [ ] Explore test ergonomics: reduce repeated boilerplate across test files.
 - [ ] Validate VS Code workspace with the generated `pyrightconfig.json`.
 - [ ] Add `mpy-cross` compilation step to the release pipeline for circup and mip artifacts.
 - [ ] Decide whether to add a second, runtime-specific import smoke layer on top of the canonical shared runner from [Decision 0006](./decisions/0006-shared-import-free-compatibility-smoke-runner.md).
 - [ ] Add the first real board transport tooling for ESP32-S2 (Wemos S2-Mini) once the manual device execution path needs to move beyond direct local runs.
 - [ ] Refactor `ci/prepare_*.py` to expose importable `main()` functions so `scripts/run.py` can call them directly instead of via subprocess. Keep subprocess only for external tools (`ruff`, `pytest`, `build`, `make`, `micropython`).
+- [ ] Review `scripts/run.py` layering. The file is ~970 lines and owns too many concerns (dependency installation, IDE config generation, library scaffolding, test orchestration, docs, build, runtime preparation). The hardcoded `dev_packages` list in `setup()` should move to a declarative file (`requirements-dev.txt` or `pyproject.toml` optional-dependencies). Consider splitting the file into smaller modules under `scripts/` once the task count stabilises.
 
 ## Blocked / waiting
 
@@ -34,6 +35,16 @@
 
 ## Done
 
+- [x] Wire up MkDocs + Material + mkdocstrings: per-library `mkdocs.yml`, `docs` task in `scripts/run.py`, `api.md` converted to autodoc directives (Decision 0013).
+- [x] Add per-library scoping (`--all`/`--libraries`) to `verify-examples` and `docs` tasks (shared `_parse_scope_args` helper).
+- [x] Update `new-library` scaffolder: generates `mkdocs.yml`, `docs/api.md` with autodoc, `docs/guide.md` template, and example with `__main__` guard. No `.gitkeep` in `docs/` or `examples/` — they have real content from scaffolding.
+- [x] Add mkdocs dependencies to `setup` task.
+- [x] Choose MkDocs + Material + mkdocstrings as the docs build tool. Static analysis (griffe) avoids importing modules with CircuitPython-only deps (Decision 0013).
+- [x] Add `verify-examples` task to `scripts/run.py` — import-checks all examples via subprocess. Wired into `preflight` (Decision 0013).
+- [x] Add `__main__` guards to all timing library examples so they are importable for verification.
+- [x] Add docs and examples for the timing library: user guide, API reference, testing helpers docs, and three runnable examples (Decision 0013).
+- [x] Establish docs and examples contributor standards (Decision 0013).
+- [x] Add `examples/` to lint discovery paths in `scripts/run.py`.
 - [x] Prove IDE-facing stub packaging with the timing library. Using upstream `circuitpython-stubs` + `micropython-esp32-stubs` (Decision 0012).
 - [x] Consolidate runtime version pins into `runtime-versions.toml`. CI prepare scripts, setup, and stubs all read from this single file.
 - [x] Establish shared cross-library test fakes via `testing` submodules (e.g., `chumicro_timing.testing.FakeTicks`). Decision 0010.

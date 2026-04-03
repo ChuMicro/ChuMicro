@@ -31,6 +31,7 @@ Exit criteria:
 - host tests pass with 90%+ coverage
 - timing package can build as an individual distribution
 - IDE-friendly stubs or mocks exist for developer ergonomics
+- docs and examples exist for the timing library (Decision 0013)
 
 The timing library should prove all of these:
 
@@ -64,6 +65,7 @@ Current verified progress:
 - `devices.example.yml` exists for the first manual device-validation template
 - `circuitpython-stubs` and `micropython-esp32-stubs` (both from PyPI) provide PEP 561 type stubs for platform-specific modules (Decision 0012), eliminating IDE squigglies without hand-written stubs
 - `runtime-versions.toml` at the repo root is the single source of truth for pinned CircuitPython and MicroPython versions; CI prepare scripts, setup, and stubs all read from this file
+- docs and examples contributor standards are established (Decision 0013); timing library has user guide, API reference, testing helpers docs, and three runnable examples
 
 Still intentionally incomplete:
 
@@ -90,6 +92,7 @@ Exit criteria:
 - coverage gate and lint gate are enforced
 - PR checks enforce per-library `VERSION` file updates for release-relevant changes
 - timing release artifacts are produced for PyPI, CircuitPython (circup), and MicroPython (mip) distribution staging
+- docs build and publish on version bumps (tool and hosting TBD)
 
 Settled choices:
 

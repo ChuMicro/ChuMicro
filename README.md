@@ -88,6 +88,8 @@ All tasks are run through `scripts/run.py`:
 | `setup` | Install dev dependencies into the active environment |
 | `lint` | Run Ruff |
 | `test` | Run pytest with coverage |
+| `verify-examples` | Import-check all library examples |
+| `docs` | Build library docs with MkDocs |
 | `build` | Build all publishable package distributions |
 | `preflight` | Run all required CI checks (lint + test + build) |
 | `prepare-micropython` | Build the pinned MicroPython unix-port binary under `.tools/` |

@@ -1,0 +1,90 @@
+# Decision 0013: Documentation and Examples Standards
+
+Status: `accepted`
+
+## Context
+
+Every publishable library needs user-facing documentation and runnable examples. Without a defined standard, libraries will ship with inconsistent quality, and contributors won't know what's expected. The timing library is the first candidate and should prove the pattern.
+
+## Decision
+
+### Required per library
+
+Each library under `libraries/<name>/` must include:
+
+1. **`README.md`** at the library root — the primary landing page. Must contain:
+   - One-line description
+   - Installation instructions (pip, circup, mip when available)
+   - Quick example showing the most common use case
+   - Link to full docs (once a docs site exists)
+   - Platform compatibility notes (which runtimes are supported)
+
+2. **`docs/`** directory with structured documentation:
+   - `guide.md` — getting started, usage patterns, platform notes
+   - `api.md` — API reference for every public symbol (auto-generated from docstrings once the docs build tool is in place; hand-maintained in the interim)
+   - Additional topic pages as needed (e.g., `testing.md` for libraries that ship test fakes)
+
+3. **`examples/`** directory with runnable scripts:
+   - At least one example per major public feature
+   - Examples must run on CPython without hardware (use print output or assertions to show behavior)
+   - Examples targeting real boards should note the required hardware in a comment header (e.g., `# requires: hardware`)
+   - File names should be descriptive: `heartbeat_blink.py`, not `example1.py`
+   - Examples must use `if __name__ == "__main__":` guards so they can be imported without triggering long-running loops
+
+### Documentation style
+
+- Write docs in Markdown. This works as standalone GitHub-browsable content now and will be consumed by MkDocs for the built docs site.
+- API docs should include the function/class signature, a brief description, parameter descriptions, return value, and any raised exceptions. Mirror the docstring but expand where helpful.
+- Keep examples short and self-contained. A reader should be able to copy-paste an example and run it.
+- Use fenced code blocks with language hints in Markdown docs.
+- Cross-reference other docs pages with relative links.
+
+### Docs build tool: MkDocs + Material + mkdocstrings
+
+Chosen tool: **MkDocs** with the **Material** theme and **mkdocstrings** (Python handler via griffe).
+
+Why:
+- Markdown is the native format — existing `.md` files work as-is for narrative docs.
+- `mkdocstrings` uses **static analysis** (griffe) to extract docstrings — it does not import modules, so CircuitPython-only imports (`supervisor`, `board`) don't cause build failures.
+- ReadTheDocs has first-class MkDocs support via `.readthedocs.yaml`.
+- Lowest setup complexity: one `mkdocs.yml` + three pip packages.
+
+The trade-off: `:::` autodoc directives in `api.md` appear as raw text when browsing on GitHub. Narrative pages (`guide.md`, `testing.md`, `README.md`) look perfect on GitHub. The README already contains an API summary table for GitHub readers; the full auto-generated reference lives on the built site.
+
+Not yet wired: the actual `mkdocs.yml` config, ReadTheDocs hosting setup, or the `docs` task in `scripts/run.py`. These are follow-up implementation items.
+
+### Example verification
+
+Examples are verified via import-checking in `scripts/run.py verify-examples`:
+
+1. Each example is imported as a module in a subprocess. Because examples use `if __name__ == "__main__":` guards, the import succeeds without triggering `while True` loops or `time.sleep()`.
+2. This catches the primary failure mode: API drift after refactors (renamed symbols, missing imports, syntax errors).
+3. `verify-examples` runs as part of `preflight` and should run in CI.
+
+Phase 2 (later): graduate to subprocess + timeout execution for examples that don't require hardware. Use a `# requires: hardware` comment marker to skip hardware-dependent examples.
+
+Why not full execution now: the current examples use `while True` + `time.sleep()` + `random` — full execution testing would be flaky by design. Adafruit's CircuitPython libraries also only lint examples; they don't run them in CI.
+
+### Contributor expectations
+
+- New libraries must include docs and examples before their first release. The `new-library` scaffolder already creates empty `docs/` and `examples/` directories.
+- PRs that add or change public API must update `docs/api.md` for the affected library.
+- PRs that add new features should include or update at least one example.
+- Examples must include `if __name__ == "__main__":` guards and pass `verify-examples`.
+- Docs and examples are reviewed as part of normal code review.
+
+### Release pipeline integration (future)
+
+When the release pipeline is built (Milestone 2), it should:
+- Verify that `docs/` is non-empty for any library being released.
+- Build and publish docs to the hosting platform on version bumps.
+- Include docs build as a preflight check (once `mkdocs.yml` is in place).
+
+## Alternatives considered
+
+- **Sphinx + MyST-Parser**: Powerful and the original RTD tool, but configuration is heavier and Markdown is an adapter rather than the native format. Sphinx's classic `autodoc` imports modules, which is problematic for CircuitPython-only code. `sphinx-autodoc2` avoids this but is less mature.
+- **Require RST from the start**: rejected — adds tooling complexity. Markdown is readable on GitHub and MkDocs is Markdown-native.
+- **No docs standard, let each library decide**: rejected — inconsistency is the predictable outcome.
+- **Auto-generate everything from docstrings**: rejected as the sole path — docstrings are good for API reference but not for guides, examples, or platform notes.
+- **Full execution testing for examples**: rejected for now — timing-dependent examples are inherently flaky. Import-checking catches API drift with zero flakiness.
+- **No example verification**: rejected — examples that silently break after refactors erode user trust.

@@ -15,6 +15,7 @@ coverage.xml
 htmlcov/
 build/
 dist/
+site/
 *.egg-info/
 .mypy_cache/
 devices.yml

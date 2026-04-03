@@ -6,12 +6,15 @@ Usage::
 
 Run without arguments to see available tasks.
 
-test options::
+Scoped tasks (test, verify-examples, docs) accept::
 
-    python scripts/run.py test                    # changed packages only
-    python scripts/run.py test --all              # all packages
-    python scripts/run.py test --libraries timing # specific (comma-sep)
-    python scripts/run.py test -- -k test_name    # pytest passthrough
+    python scripts/run.py <task>                    # changed packages only
+    python scripts/run.py <task> --all              # all packages
+    python scripts/run.py <task> --libraries timing # specific (comma-sep)
+
+test also accepts pytest passthrough::
+
+    python scripts/run.py test -- -k test_name
 """
 
 from __future__ import annotations
@@ -66,7 +69,7 @@ def _discover_ruff_paths() -> list[str]:
     paths = ["ci", "scripts"]
     for pkg_dir in _discover_package_dirs():
         rel = str(pkg_dir.relative_to(ROOT))
-        for subdir in ["src", "tests", "device_tests"]:
+        for subdir in ["src", "tests", "device_tests", "examples"]:
             if (pkg_dir / subdir).is_dir():
                 paths.append(f"{rel}/{subdir}")
     return paths
@@ -159,15 +162,13 @@ def _detect_changed_packages() -> list[Path] | None:
     return sorted(packages) if packages else None
 
 
-def _parse_test_args(
-    extra_args: list[str],
-) -> tuple[list[Path], list[str]]:
-    """Parse ``test`` arguments into a package scope and pytest passthrough.
+def _parse_scope_args(extra_args: list[str]) -> tuple[list[Path], list[str]]:
+    """Parse ``--all`` / ``--libraries`` into a package scope and remaining args.
 
-    Returns ``(pkg_dirs, passthrough)``.
+    Returns ``(pkg_dirs, remaining)``.  Used by test, verify-examples, and docs.
     """
     scope: str | list[str] = "changed"
-    passthrough: list[str] = []
+    remaining: list[str] = []
 
     i = 0
     while i < len(extra_args):
@@ -183,31 +184,31 @@ def _parse_test_args(
             scope = [n.strip() for n in extra_args[i].split(",") if n.strip()]
             i += 1
         elif arg == "--":
-            passthrough = extra_args[i + 1 :]
+            remaining = extra_args[i + 1 :]
             break
         else:
-            passthrough = extra_args[i:]
+            remaining = extra_args[i:]
             break
 
     # Resolve scope → list[Path]
     if scope == "all":
-        return _discover_package_dirs(), passthrough
+        return _discover_package_dirs(), remaining
 
     if isinstance(scope, list):
         resolved = _resolve_named_packages(scope)
         if not resolved:
             raise SystemExit(1)
-        return resolved, passthrough
+        return resolved, remaining
 
     # "changed" — detect from git
     detected = _detect_changed_packages()
     if detected is None:
-        print("Running all tests (no branch diff or infrastructure changed).")
-        return _discover_package_dirs(), passthrough
+        print("Running for all packages (no branch diff or infrastructure changed).")
+        return _discover_package_dirs(), remaining
 
     names = ", ".join(d.name for d in detected)
     print(f"Changed packages detected: {names}")
-    return detected, passthrough
+    return detected, remaining
 
 
 # ---------------------------------------------------------------------------
@@ -220,6 +221,8 @@ TASKS = (
     "new-library",
     "lint",
     "test",
+    "verify-examples",
+    "docs",
     "build",
     "preflight",
     "prepare-micropython",
@@ -304,6 +307,9 @@ def setup() -> int:
         "pytest-cov",
         "ruff",
         "build",
+        "mkdocs",
+        "mkdocs-material",
+        "mkdocstrings[python]",
         f"circuitpython-stubs=={cp_version}",
         f"micropython-esp32-stubs=={mp_version}.*",
     ]
@@ -423,6 +429,93 @@ version = {{file = "VERSION"}}
 where = ["src"]
 """
 
+_MKDOCS_TEMPLATE = """\
+site_name: chumicro-{name}
+theme:
+  name: material
+  palette:
+    scheme: default
+
+nav:
+  - Guide: guide.md
+  - API Reference: api.md
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths:
+            - src
+          options:
+            show_source: false
+            show_root_heading: true
+            members_order: source
+"""
+
+_README_TEMPLATE = """\
+# chumicro-{name}
+
+## Installation
+
+```bash
+pip install chumicro-{name}
+```
+
+## Quick example
+
+```python
+from {import_name} import ...
+```
+
+## Platform support
+
+Works on CPython, MicroPython, and CircuitPython.
+
+## Docs
+
+- [User guide](docs/guide.md)
+- [API reference](docs/api.md)
+"""
+
+_GUIDE_TEMPLATE = """\
+# User Guide
+
+## Overview
+
+<!-- Describe what this library does and why. -->
+
+## Getting started
+
+<!-- Show the most common usage pattern. -->
+
+## Platform notes
+
+<!-- Note any runtime-specific behavior or limitations. -->
+"""
+
+_API_TEMPLATE = """\
+# API Reference
+
+::: {import_name}
+"""
+
+_EXAMPLE_TEMPLATE = """\
+\"\"\"{display_name} example.
+
+Describe what this example demonstrates.
+\"\"\"
+
+
+def main():
+    \"\"\"Run the example.\"\"\"
+    print("Hello from chumicro-{name}!")
+
+
+if __name__ == "__main__":
+    main()
+"""
+
 
 def _scaffold_library(name: str) -> int:
     """Create the directory structure and template files for a new library."""
@@ -441,8 +534,7 @@ def _scaffold_library(name: str) -> int:
     (lib_dir / "examples").mkdir()
 
     # .gitkeep for directories that start empty
-    for subdir in ("device_tests", "docs", "examples"):
-        (lib_dir / subdir / ".gitkeep").touch()
+    (lib_dir / "device_tests" / ".gitkeep").touch()
 
     # VERSION
     (lib_dir / "VERSION").write_text("0.1.0\n")
@@ -450,8 +542,25 @@ def _scaffold_library(name: str) -> int:
     # pyproject.toml
     (lib_dir / "pyproject.toml").write_text(_PYPROJECT_TEMPLATE.format(name=name))
 
+    # mkdocs.yml
+    (lib_dir / "mkdocs.yml").write_text(_MKDOCS_TEMPLATE.format(name=name))
+
     # README
-    (lib_dir / "README.md").write_text(f"# chumicro-{name}\n")
+    (lib_dir / "README.md").write_text(
+        _README_TEMPLATE.format(name=name, import_name=import_name)
+    )
+
+    # docs/
+    (lib_dir / "docs" / "guide.md").write_text(_GUIDE_TEMPLATE)
+    (lib_dir / "docs" / "api.md").write_text(
+        _API_TEMPLATE.format(import_name=import_name)
+    )
+
+    # Example
+    display_name = name.replace("-", " ").replace("_", " ").title()
+    (lib_dir / "examples" / "hello.py").write_text(
+        _EXAMPLE_TEMPLATE.format(name=name, display_name=display_name)
+    )
 
     # Package __init__.py
     (lib_dir / "src" / import_name / "__init__.py").write_text(
@@ -462,7 +571,6 @@ def _scaffold_library(name: str) -> int:
     (lib_dir / "tests" / "conftest.py").write_text(
         f'"""Test configuration for the chumicro-{name} package."""\n'
     )
-
 
     print(f"Created libraries/{name}/")
     return 0
@@ -503,7 +611,7 @@ def test_host(extra_args: list[str] | None = None) -> int:
     Accepts ``--all``, ``--libraries name,...``, and ``-- <pytest args>``.
     Default (no options): detect changed packages on branch vs origin/main.
     """
-    pkg_dirs, passthrough = _parse_test_args(extra_args or [])
+    pkg_dirs, passthrough = _parse_scope_args(extra_args or [])
 
     # Keep only packages that actually have a tests/ directory.
     testable = [d for d in pkg_dirs if (d / "tests").is_dir()]
@@ -596,11 +704,112 @@ def build() -> int:
     return 0
 
 
+def verify_examples(extra_args: list[str] | None = None) -> int:
+    """Import-check examples to catch broken imports and syntax errors.
+
+    Discovers ``examples/*.py`` in each selected library, then imports each
+    module in a subprocess.  Examples must use ``if __name__ == "__main__":``
+    guards so that import does not trigger long-running loops.
+
+    Accepts ``--all`` and ``--libraries name,...``.
+    Default: detect changed packages on branch vs origin/main.
+    """
+    pkg_dirs, _ = _parse_scope_args(extra_args or [])
+    env = _pythonpath_env()
+    examples: list[tuple[str, Path]] = []
+
+    for pkg_dir in pkg_dirs:
+        ex_dir = pkg_dir / "examples"
+        if not ex_dir.is_dir():
+            continue
+        for py_file in sorted(ex_dir.glob("*.py")):
+            rel = py_file.relative_to(ROOT)
+            examples.append((str(rel), py_file))
+
+    if not examples:
+        print("No examples found for the selected packages.")
+        return 0
+
+    failures = 0
+    for rel_path, py_file in examples:
+        rc = _run(
+            [PYTHON, "-c", f"import importlib.util, sys; "
+             f"spec = importlib.util.spec_from_file_location('_example', '{py_file}'); "
+             f"mod = importlib.util.module_from_spec(spec); "
+             f"spec.loader.exec_module(mod)"],
+            env=env,
+        )
+        if rc != 0:
+            print(f"  FAIL: {rel_path}")
+            failures += 1
+        else:
+            print(f"  OK:   {rel_path}")
+
+    if failures:
+        print(f"\n{failures} example(s) failed import check.")
+        return 1
+
+    print(f"\nAll {len(examples)} example(s) passed import check.")
+    return 0
+
+
+def docs(extra_args: list[str] | None = None) -> int:
+    """Build docs for selected libraries using MkDocs.
+
+    Accepts ``--all``, ``--libraries name,...``, and ``--serve``.
+    ``--serve`` starts a live-reload dev server for the first selected library.
+    Default: detect changed packages on branch vs origin/main.
+    """
+    serve = False
+    filtered_args: list[str] = []
+    for arg in (extra_args or []):
+        if arg == "--serve":
+            serve = True
+        else:
+            filtered_args.append(arg)
+
+    pkg_dirs, _ = _parse_scope_args(filtered_args)
+
+    # Keep only packages that have a mkdocs.yml
+    doc_dirs = [d for d in pkg_dirs if (d / "mkdocs.yml").exists()]
+    if not doc_dirs:
+        print("No libraries with mkdocs.yml found for the selected packages.")
+        return 0
+
+    if serve:
+        # Serve the first selected library
+        pkg_dir = doc_dirs[0]
+        rel = pkg_dir.relative_to(ROOT)
+        print(f"Serving docs for {rel} (Ctrl+C to stop)...")
+        return _run(
+            [PYTHON, "-m", "mkdocs", "serve", "-f", str(pkg_dir / "mkdocs.yml")],
+        )
+
+    overall_rc = 0
+    for pkg_dir in doc_dirs:
+        rel = pkg_dir.relative_to(ROOT)
+        site_dir = pkg_dir / "site"
+        print(f"== docs {rel} ==")
+        rc = _run(
+            [PYTHON, "-m", "mkdocs", "build",
+             "-f", str(pkg_dir / "mkdocs.yml"),
+             "-d", str(site_dir)],
+        )
+        if rc != 0:
+            print(f"Docs build failed: {rel}")
+            overall_rc = rc
+        else:
+            print(f"  Built: {site_dir.relative_to(ROOT)}/")
+
+    return overall_rc
+
+
 def preflight() -> int:
     """Run the checks that CI requires on every pull request."""
     steps: tuple[tuple[str, object], ...] = (
         ("lint", lambda: lint()),
         ("test", lambda: test_host(["--all"])),
+        ("verify-examples", lambda: verify_examples(["--all"])),
         ("build", lambda: build()),
     )
 
@@ -709,6 +918,8 @@ _DISPATCH = {
     "new-library": new_library,
     "lint": lint,
     "test": test_host,
+    "verify-examples": verify_examples,
+    "docs": docs,
     "build": build,
     "preflight": preflight,
     "prepare-micropython": prepare_micropython,
@@ -727,12 +938,15 @@ Tasks: {tasks}
 new-library:
   python scripts/run.py new-library <name>   Scaffold a library under libraries/
 
-test options:
-  --all                Run tests for all packages
-  --libraries LIB,...  Run tests for specific packages (comma-separated names)
-  -- PYTEST_ARGS       Forward remaining arguments to pytest
+Scoped tasks (test, verify-examples, docs):
+  --all                Run for all packages
+  --libraries LIB,...  Run for specific packages (comma-separated names)
+  -- PYTEST_ARGS       Forward remaining arguments to pytest (test only)
 
   Default (no options): detect changed packages on branch vs origin/main.
+
+docs also accepts:
+  --serve              Start a live-reload dev server for the first selected library
 """
 
 
@@ -745,7 +959,7 @@ def main(argv: list[str]) -> int:
     task_name = argv[1]
     extra_args = argv[2:]
 
-    if task_name in ("test", "new-library"):
+    if task_name in ("test", "new-library", "verify-examples", "docs"):
         return _DISPATCH[task_name](extra_args)
 
     if extra_args:

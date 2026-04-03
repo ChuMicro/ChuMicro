@@ -1,0 +1,23 @@
+site_name: chumicro-timing
+theme:
+  name: material
+  palette:
+    scheme: default
+
+nav:
+  - Guide: guide.md
+  - API Reference: api.md
+  - Testing Helpers: testing.md
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths:
+            - src
+          options:
+            show_source: false
+            show_root_heading: true
+            members_order: source
+
