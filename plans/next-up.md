@@ -2,8 +2,6 @@
 
 ## Now
 
-- [x] Audit the `chumicro-serviceable` library implementation (Decision 0014). Review API surface, allocation patterns, and integration with Heartbeat.
-  - `EventQueueSink` uses `collections.deque` (C-level on MP/CP). `deque` constructor, `len()`, `bool()`, `append()`, `popleft()` all work identically across runtimes. `deque.clear()` is compiled out (`#if 0`) on both MP and CP, but `EventQueueSink.clear()` already uses a drain loop — correct. `ServiceRunner` ↔ `Heartbeat` integration verified via tests. Board architecture support for `deque` documented in Decision 0015.
 - [ ] Generalize the compatibility smoke runner (`ci/run_sample_device_smoke.py`) to discover and exercise device tests for any library, not just timing.
 - [ ] Draft the first release workflow for per-library `VERSION` file enforcement and per-library artifacts (PyPI, circup, mip).
 - [ ] Document contributor prerequisites by platform (macOS, Linux, Windows/WSL2) and by editor (PyCharm, VS Code, CLI) in the README. Linux and WSL2 sections are best-effort/researched until verified.
@@ -54,6 +52,7 @@
 
 ## Done
 
+- [x] Audit the `chumicro-serviceable` library implementation (Decision 0014). Review API surface, allocation patterns, and integration with Heartbeat. `EventQueueSink` uses `collections.deque` (C-level on MP/CP). Board architecture support for `deque` documented in Decision 0015.
 - [x] Drop hand-written member lists from `api.md` files; codify `api.md` rules in Decision 0013 (no hand-written signatures, module-level `:::` directives only, fix docstrings not api.md).
 - [x] Add strict `guide.md` required-section structure and AI generation prompt (`plans/prompts/guide-generation.prompt.md`). Decision 0013 updated with required-section table and generation rules.
 - [x] Implement the serviceable pattern as `chumicro-serviceable` library (Decision 0014). Add `service(event_sink)` and `EVENT_TICK` to Heartbeat (timing 0.1.0 → 0.2.0).
