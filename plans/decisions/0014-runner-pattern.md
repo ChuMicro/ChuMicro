@@ -18,7 +18,7 @@ Standardize on a **gate-based runner pattern** for all active components.
 A service checks a condition and reports whether its handler should fire:
 
 ```python
-def service(self, now_ms):
+def check(self, now_ms):
     """Check one condition; return True if the handler should fire."""
 ```
 

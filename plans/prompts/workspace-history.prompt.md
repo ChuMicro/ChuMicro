@@ -234,7 +234,7 @@ This was the largest single session. It addressed three areas: the workspace was
 **Serviceable simplification (Decision 0014 revised):**
 2. Removed the event-based path entirely: `Event`, `EventQueueSink`, `SimpleEventDispatcher`, `HandlerHandle`, priority constants all deleted.
 3. Service contract changed from `service(event_sink, now_ms)` to `check(now_ms) -> bool` — a gate-based check function that decides IF the handler fires.
-4. `Runner` simplified to `(ticks=None)` constructor.  Four registration patterns: object-based (`.service`/`.handle`), callable check + handler, handler-only, and periodic.
+4. `Runner` simplified to `(ticks=None)` constructor.  Four registration patterns: object-based (`.check`/`.handle`), callable check + handler, handler-only, and periodic.
 5. `FakeEventSink` replaced by `CallRecorder` in testing module.
 6. Examples rewritten with real-world concepts: temperature sensor, LED blink, motion detector.
 7. `chumicro-runner` 0.1.0 → 0.4.0 (three breaking changes collapsed into one session).

@@ -5,7 +5,7 @@ Date: `2026-04-03`
 
 ## Context
 
-Chumicro libraries depend on `collections.deque` (via `EventQueueSink` in the runner pattern) and other features that are not available on all CircuitPython and MicroPython board architectures.  `deque` is gated by compile-time flags that vary by port and chip family.
+Chumicro libraries may depend on `collections.deque` and other features that are not available on all CircuitPython and MicroPython board architectures.  `deque` is gated by compile-time flags that vary by port and chip family.
 
 A source-level audit of the pinned CircuitPython 10.1.4 and MicroPython v1.26.0 trees (`.tools/`) was performed to determine which architectures include `deque`.
 
