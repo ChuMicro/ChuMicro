@@ -5,11 +5,11 @@
 `chumicro-runner` provides a standard pattern for active components in the Chumicro ecosystem.  Instead of each library inventing its own `poll()` / callback API, every active component implements two methods:
 
 ```python
-def service(self, now_ms):
+def check(self, now_ms):
     """Check whether the handler should fire.  Return True or False."""
 
 def handle(self, now_ms):
-    """React to the condition detected by service()."""
+    """React to the condition detected by check()."""
 ```
 
 A shared `Runner` captures time once per tick, checks each service, and batch-fires all due handlers.  This replaces ad-hoc polling loops with a single standard contract.
@@ -40,7 +40,7 @@ class TemperatureSensor:
         # On a real board: return self._i2c_device.temperature
         return self._last_reading
 
-    def service(self, now_ms):
+    def check(self, now_ms):
         self._last_reading = self.read_temperature()
         return self._last_reading > self._threshold
 
@@ -86,7 +86,7 @@ class MotionDetector:
         # On a real board: return self._pin.value
         return False
 
-    def service(self, now_ms):
+    def check(self, now_ms):
         return self.detect_motion()
 
     def handle(self, now_ms):
@@ -158,6 +158,24 @@ handle.set_period(None)
 handle.remove()
 ```
 
+### Delayed start
+
+Pass `start_after_ms` to delay the first check.  Subsequent checks use `period_ms`:
+
+```python
+# Wait 2 seconds, then check every 5 seconds.
+runner.add(sensor, period_ms=5000, start_after_ms=2000)
+```
+
+### Limited runs
+
+Pass `run_count` to auto-remove a task after a set number of handler fires:
+
+```python
+# Fire exactly 3 times, then stop.
+runner.add_periodic(calibrate, period_ms=1000, run_count=3)
+```
+
 ## Multiple services
 
 The pattern scales to many services with no extra boilerplate:
@@ -219,6 +237,24 @@ assert recorder.calls == [100]
 ```
 
 See the [testing helpers](testing.md) page for detailed usage.
+
+## Examples
+
+The [examples](../examples/) directory contains complete runnable scripts:
+
+| Example | What it shows |
+|---|---|
+| `basic_handler.py` | Simplest handler-only registration |
+| `periodic_blink.py` | Periodic handler with `add_periodic()` |
+| `sensor_threshold.py` | Object-based check/handle with simulated sensor |
+| `multi_service.py` | Multiple services in one runner |
+| `runtime_control.py` | `TaskHandle` for dynamic period changes and removal |
+| `circuitpython_blink.py` | LED blink on CircuitPython hardware |
+| `micropython_blink.py` | LED blink on MicroPython hardware |
+| `circuitpython_button_led.py` | Button + LED gate pattern on CircuitPython |
+| `micropython_button_led.py` | Button + LED gate pattern on MicroPython |
+
+Simulated examples run on CPython.  Hardware examples (`circuitpython_*` / `micropython_*`) require a real board — see the setup notes in each file.
 
 ## Platform notes
 

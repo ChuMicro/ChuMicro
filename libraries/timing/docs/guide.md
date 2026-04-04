@@ -136,4 +136,17 @@ def on_tick():
         do_periodic_work()
 ```
 
-See the [examples](../examples/) directory for complete runnable scripts.
+## Examples
+
+The [examples](../examples/) directory contains complete runnable scripts:
+
+| Example | What it shows |
+|---|---|
+| `heartbeat_blink.py` | Basic heartbeat in a main loop (the embedded hello world) |
+| `multiple_heartbeats.py` | Several heartbeats at different rates sharing one timestamp |
+| `timeout_check.py` | Using `ticks_diff()` for deadline-based timeout detection |
+| `activity_timeout.py` | Resetting a heartbeat on external activity |
+| `circuitpython_blink.py` | LED blink on CircuitPython hardware |
+| `micropython_blink.py` | LED blink on MicroPython hardware |
+
+Simulated examples run on CPython.  Hardware examples (`circuitpython_*` / `micropython_*`) require a real board — see the setup notes in each file.
