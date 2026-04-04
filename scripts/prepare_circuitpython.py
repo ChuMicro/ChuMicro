@@ -19,24 +19,21 @@ _BINARY = _SOURCE_DIR / "ports" / "unix" / f"build-{_UNIX_VARIANT}" / "micropyth
 def _build_env() -> dict[str, str]:
     """Return environment variables for the local CircuitPython unix build.
 
-    These flags are currently the smallest verified local workaround set for the
-    pinned ``10.1.4`` unix-port build in this workspace:
+    CircuitPython 10.1.4 has a bug in ``py/py.mk``: ``objringio.c`` is listed
+    in ``py.cmake`` but missing from ``py.mk``.  The ``standard`` variant sets
+    ``MICROPY_CONFIG_ROM_LEVEL_EXTRA_FEATURES``, which enables
+    ``MICROPY_PY_MICROPYTHON_RINGIO`` by default (``mpconfig.h:1387``).
+    ``modmicropython.c`` then references ``mp_type_ringio``, but the Makefile
+    never compiles the object file that defines it, causing an unresolved-symbol
+    linker error.  MicroPython v1.26.0's ``py.mk`` includes ``objringio.o``;
+    CircuitPython's fork simply missed the line.
 
-    - ``-DMP3DEC_GENERIC`` avoids the MP3 decoder's platform guard failing on the
-      unix-port build host.
-    - ``-DMICROPY_PY_MICROPYTHON_RINGIO=0`` keeps the selected unix variant aligned
-      with the linked core objects for the local smoke-test build.
-    - ``-Wno-typedef-redefinition`` is only added on macOS to tolerate a local
-      typedef redefinition warning that otherwise becomes a hard error.
-
-    Keep this list minimal and only document flags that have been verified from
-    an actual local build failure and rerun.
+    The workaround is ``-DMICROPY_PY_MICROPYTHON_RINGIO=0``, which disables the
+    RingIO type at compile time so the missing object file is not required.
     """
     env = os.environ.copy()
     flags = env.get("CFLAGS_EXTRA", "").split()
-    required = ["-DMP3DEC_GENERIC", "-DMICROPY_PY_MICROPYTHON_RINGIO=0"]
-    if sys.platform == "darwin":
-        required.append("-Wno-typedef-redefinition")
+    required = ["-DMICROPY_PY_MICROPYTHON_RINGIO=0"]
     for flag in required:
         if flag not in flags:
             flags.append(flag)
