@@ -44,7 +44,7 @@ def discover_ruff_paths() -> list[str]:
     paths = ["scripts"]
     for pkg_dir in discover_package_dirs():
         rel = str(pkg_dir.relative_to(ROOT))
-        for subdir in ["src", "tests", "device_tests", "examples"]:
+        for subdir in ["src", "unit_tests", "functional_tests", "examples"]:
             if (pkg_dir / subdir).is_dir():
                 paths.append(f"{rel}/{subdir}")
     return paths

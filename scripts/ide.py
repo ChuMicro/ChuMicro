@@ -22,7 +22,11 @@ def _sync_pycharm_iml() -> None:
     source_lines: list[str] = []
     for pkg_dir in discover_package_dirs():
         rel = pkg_dir.relative_to(ROOT)
-        for subdir, is_test in [("src", "false"), ("tests", "true"), ("device_tests", "true")]:
+        for subdir, is_test in [
+            ("src", "false"),
+            ("unit_tests", "true"),
+            ("functional_tests", "true"),
+        ]:
             if (pkg_dir / subdir).is_dir():
                 source_lines.append(
                     f'      <sourceFolder url="file://$MODULE_DIR$/{rel}/{subdir}"'

@@ -164,8 +164,8 @@ def test_cpython(
             resolved.append(by_name[name])
         pkg_dirs = resolved
 
-    # Keep only packages that actually have a tests/ directory.
-    testable = [d for d in pkg_dirs if (d / "tests").is_dir()]
+    # Keep only packages that actually have a unit_tests/ directory.
+    testable = [d for d in pkg_dirs if (d / "unit_tests").is_dir()]
     if not testable:
         print("No test directories found for the selected packages.")
         return 0
@@ -198,21 +198,21 @@ def test_cpython(
             # Global expressions combine into a single run.
             runs: list[tuple[str, str]] = []
             if global_exprs:
-                test_path = str((pkg_dir / "tests").relative_to(ROOT))
+                test_path = str((pkg_dir / "unit_tests").relative_to(ROOT))
                 combined = " or ".join(global_exprs)
                 runs.append((test_path, combined))
 
             # File-scoped entries each get their own run.
             for file_name, expr in file_entries:
-                test_file = pkg_dir / "tests" / f"{file_name}.py"
+                test_file = pkg_dir / "unit_tests" / f"{file_name}.py"
                 if not test_file.exists():
                     rel = test_file.relative_to(ROOT)
                     print(f"Test file not found: {rel}")
                     return 1
                 runs.append((str(test_file.relative_to(ROOT)), expr))
         else:
-            # No filter — run the entire tests/ directory.
-            test_path = str((pkg_dir / "tests").relative_to(ROOT))
+            # No filter — run the entire unit_tests/ directory.
+            test_path = str((pkg_dir / "unit_tests").relative_to(ROOT))
             runs = [(test_path, "")]
 
         for test_target, expr in runs:
@@ -475,7 +475,7 @@ def test_device() -> int:
             "Copy devices.example.yml to devices.yml and fill in your board details."
         )
 
-    print("Use libraries/timing/device_tests/ with support/test_harness/ on the target board.")
+    print("Use libraries/timing/functional_tests/ with support/test_harness/ on the target board.")
     return 2
 
 
@@ -528,7 +528,7 @@ def _build_parser() -> argparse.ArgumentParser:
     test_p = sub.add_parser(
         "test", parents=[scope],
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        help="CPython tests (changed packages by default)",
+        help="CPython tests (only changed packages by default)",
         epilog=(
             "examples:\n"
             "  run.py test                                       "

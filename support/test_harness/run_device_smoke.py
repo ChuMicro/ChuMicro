@@ -1,11 +1,12 @@
-"""Run device smoke tests for all libraries through the lightweight harness.
+"""Run cross-runtime unit tests for all libraries through the lightweight harness.
 
-Discovers and exercises device_tests/ for every library under libraries/,
-not just a single hardcoded package.  Avoids ``os.path`` (unavailable on
-some CircuitPython builds) and keeps the import footprint minimal so it can
-execute under CPython, MicroPython unix-port, and CircuitPython unix-port.
+Discovers and exercises unit_tests/ for every library under libraries/,
+skipping files that fail to import (e.g. because they require pytest).
+Avoids ``os.path`` (unavailable on some CircuitPython builds) and keeps
+the import footprint minimal so it can execute under CPython, MicroPython
+unix-port, and CircuitPython unix-port.
 
-See ``plans/decisions/0006-shared-import-free-compatibility-smoke-runner.md``.
+See ``plans/decisions/0016-cross-runtime-unit-tests.md``.
 """
 
 import os
@@ -42,14 +43,14 @@ def _discover_source_roots():
     return roots
 
 
-def _discover_device_tests():
-    """Return paths to all test_*.py files under libraries/*/device_tests/."""
+def _discover_unit_tests():
+    """Return paths to all test_*.py files under libraries/*/unit_tests/."""
     tests = []
     for name in _sorted_listdir("libraries"):
-        dt_dir = "libraries/" + name + "/device_tests"
-        for filename in _sorted_listdir(dt_dir):
+        ut_dir = "libraries/" + name + "/unit_tests"
+        for filename in _sorted_listdir(ut_dir):
             if filename.startswith("test_") and filename.endswith(".py"):
-                tests.append(dt_dir + "/" + filename)
+                tests.append(ut_dir + "/" + filename)
     return tests
 
 
@@ -76,12 +77,12 @@ def _exec_as_namespace(path, name="__main__", package=""):
 
 
 def main():
-    """Discover and run all device tests, returning a shell exit code."""
+    """Discover and run all cross-runtime unit tests, returning a shell exit code."""
     _setup_source_paths()
 
-    test_files = _discover_device_tests()
+    test_files = _discover_unit_tests()
     if not test_files:
-        print("NO DEVICE TESTS FOUND")
+        print("NO UNIT TESTS FOUND")
         return 0
 
     runner = _exec_as_namespace(
@@ -91,10 +92,15 @@ def main():
     )
 
     total_failed = 0
+    skipped = 0
     for path in test_files:
         print(f"== {path} ==")
         try:
             test_mod = _exec_as_namespace(path)
+        except ImportError as exc:
+            skipped += 1
+            print(f"SKIP {path} (import failed: {exc})")
+            continue
         except Exception as exc:
             total_failed += 1
             print(f"ERROR loading {path}: {exc}")
@@ -102,6 +108,9 @@ def main():
         result = runner.run_module(test_mod)
         if result != 0:
             total_failed += 1
+
+    if skipped:
+        print(f"Skipped {skipped} file(s) (import errors, likely pytest-only)")
 
     return 1 if total_failed else 0
 

@@ -2,7 +2,7 @@
 
 Auto-discovers library and support package source roots so that
 ``pytest`` can be run directly without requiring manual PYTHONPATH
-setup.  Also excludes ``device_tests/`` from host-side collection.
+setup.  Also excludes ``functional_tests/`` from host-side collection.
 """
 
 from __future__ import annotations
@@ -12,8 +12,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 
-# Exclude on-device tests from host-side pytest collection.
-collect_ignore_glob = ["**/device_tests/**"]
+# Exclude real-device functional tests from host-side pytest collection.
+collect_ignore_glob = ["**/functional_tests/**"]
 
 
 def _discover_source_roots() -> list[str]:

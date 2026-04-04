@@ -1,4 +1,11 @@
-"""Tests for the cross-runtime tick helpers."""
+"""CPython-only tests for tick resolution and runtime simulation.
+
+These tests use ``monkeypatch`` to simulate MicroPython/CircuitPython
+runtime environments on CPython.  They do NOT run on MP/CP — that would
+be pointless since those runtimes provide the real behavior.
+
+Cross-runtime arithmetic tests live in ``test_ticks_cross.py``.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +13,6 @@ import sys
 from types import SimpleNamespace
 
 import chumicro_timing.ticks as ticks_module
-import pytest
 
 # -- _try_import_supervisor --
 
@@ -89,47 +95,6 @@ def test_ticks_ms_masks_to_period(monkeypatch) -> None:
 
     assert ticks_module.ticks_ms() == 42
 
-
-# -- ticks_diff ring arithmetic --
-
-
-def test_ticks_diff_forward() -> None:
-    """A normal forward difference should return the expected positive value."""
-    assert ticks_module.ticks_diff(150, 100) == 50
-
-
-def test_ticks_diff_handles_wraparound() -> None:
-    """A difference across the wrap boundary should be computed correctly."""
-    period = 1 << 29
-    start = period - 10
-    end = 5
-
-    assert ticks_module.ticks_diff(end, start) == 15
-
-
-# -- ticks_add --
-
-
-def test_ticks_add_normal() -> None:
-    """Adding a delta within range should return a plain sum."""
-    assert ticks_module.ticks_add(100, 50) == 150
-
-
-def test_ticks_add_wraps() -> None:
-    """Adding past the period boundary should wrap correctly."""
-    period = 1 << 29
-    assert ticks_module.ticks_add(period - 10, 20) == 10
-
-
-def test_ticks_add_rejects_overflow() -> None:
-    """Deltas at or beyond the half-period should raise OverflowError."""
-    halfperiod = 1 << 28
-
-    with pytest.raises(OverflowError):
-        ticks_module.ticks_add(0, halfperiod)
-
-    with pytest.raises(OverflowError):
-        ticks_module.ticks_add(0, -halfperiod)
 
 
 

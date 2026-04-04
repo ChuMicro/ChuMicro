@@ -1,6 +1,8 @@
-"""Tests for the core serviceable-pattern abstractions."""
+"""Tests for the core serviceable-pattern abstractions.
 
-from __future__ import annotations
+Cross-runtime: runs on CPython (via pytest), MicroPython and CircuitPython
+(via the lightweight test harness).
+"""
 
 from chumicro_serviceable import (
     Event,
@@ -13,7 +15,7 @@ from chumicro_serviceable.testing import FakeEventSink
 # -- Event --
 
 
-def test_event_stores_fields() -> None:
+def test_event_stores_fields():
     """Event should store source, event_type, and data."""
     sentinel = object()
     event = Event(source=sentinel, event_type="tick", data=42)
@@ -23,14 +25,14 @@ def test_event_stores_fields() -> None:
     assert event.data == 42
 
 
-def test_event_data_defaults_to_none() -> None:
+def test_event_data_defaults_to_none():
     """Data should default to None when omitted."""
     event = Event(source="s", event_type="t")
 
     assert event.data is None
 
 
-def test_event_repr() -> None:
+def test_event_repr():
     """Repr should include event_type, source, and data."""
     event = Event(source="src", event_type="tick", data=1)
 
@@ -42,7 +44,7 @@ def test_event_repr() -> None:
 # -- EventQueueSink --
 
 
-def test_sink_starts_empty() -> None:
+def test_sink_starts_empty():
     """A new sink should have no events."""
     sink = EventQueueSink(max_size=4)
 
@@ -51,7 +53,7 @@ def test_sink_starts_empty() -> None:
     assert sink.pop() is None
 
 
-def test_sink_emit_and_pop() -> None:
+def test_sink_emit_and_pop():
     """Emitted events should come back in FIFO order."""
     sink = EventQueueSink(max_size=4)
     sink.emit("a", "t1")
@@ -71,7 +73,7 @@ def test_sink_emit_and_pop() -> None:
     assert not sink.has_events()
 
 
-def test_sink_returns_false_when_full() -> None:
+def test_sink_returns_false_when_full():
     """Emit should return False when the buffer is at capacity."""
     sink = EventQueueSink(max_size=2)
 
@@ -81,7 +83,7 @@ def test_sink_returns_false_when_full() -> None:
     assert len(sink) == 2
 
 
-def test_sink_wraps_around() -> None:
+def test_sink_wraps_around():
     """The ring buffer should reuse slots after pop."""
     sink = EventQueueSink(max_size=2)
     sink.emit("a", "first")
@@ -94,7 +96,7 @@ def test_sink_wraps_around() -> None:
     assert sink.pop().source == "c"
 
 
-def test_sink_clear() -> None:
+def test_sink_clear():
     """Clear should discard all pending events."""
     sink = EventQueueSink(max_size=4)
     sink.emit("a", "t")
@@ -109,7 +111,7 @@ def test_sink_clear() -> None:
 # -- SimpleEventDispatcher --
 
 
-def test_dispatcher_routes_to_handler() -> None:
+def test_dispatcher_routes_to_handler():
     """Dispatch should call the handler registered for the event type."""
     received = []
     dispatcher = SimpleEventDispatcher()
@@ -122,13 +124,13 @@ def test_dispatcher_routes_to_handler() -> None:
     assert received[0] is event
 
 
-def test_dispatcher_ignores_unregistered_types() -> None:
+def test_dispatcher_ignores_unregistered_types():
     """Dispatch should silently ignore events with no handler."""
     dispatcher = SimpleEventDispatcher()
     dispatcher.dispatch(Event("src", "unknown"))  # should not raise
 
 
-def test_dispatcher_unregister() -> None:
+def test_dispatcher_unregister():
     """Unregister should remove a previously registered handler."""
     called = []
     dispatcher = SimpleEventDispatcher()
@@ -139,7 +141,7 @@ def test_dispatcher_unregister() -> None:
     assert called == []
 
 
-def test_dispatcher_unregister_missing_is_safe() -> None:
+def test_dispatcher_unregister_missing_is_safe():
     """Unregistering a type that was never registered should not raise."""
     dispatcher = SimpleEventDispatcher()
     dispatcher.unregister("nonexistent")  # should not raise
@@ -159,7 +161,7 @@ class _StubService:
         event_sink.emit(self, self._event_type)
 
 
-def test_runner_services_and_dispatches() -> None:
+def test_runner_services_and_dispatches():
     """ServiceRunner should service all components, then dispatch events."""
     received = []
     svc = _StubService("test.ping")
@@ -174,7 +176,7 @@ def test_runner_services_and_dispatches() -> None:
     assert not sink.has_events()
 
 
-def test_runner_handles_multiple_services() -> None:
+def test_runner_handles_multiple_services():
     """ServiceRunner should handle multiple services in one pass."""
     received = []
     svc_a = _StubService("a")
@@ -190,7 +192,7 @@ def test_runner_handles_multiple_services() -> None:
     assert received == ["a", "b"]
 
 
-def test_runner_handles_no_events() -> None:
+def test_runner_handles_no_events():
     """ServiceRunner should handle a pass where no events are emitted."""
 
     class _QuietService:
@@ -208,7 +210,7 @@ def test_runner_handles_no_events() -> None:
 # -- FakeEventSink --
 
 
-def test_fake_sink_records_events() -> None:
+def test_fake_sink_records_events():
     """FakeEventSink should record all emitted events in a list."""
     sink = FakeEventSink()
     sink.emit("src", "tick", data=1)
@@ -219,7 +221,7 @@ def test_fake_sink_records_events() -> None:
     assert sink.events[1].data == 2
 
 
-def test_fake_sink_pop() -> None:
+def test_fake_sink_pop():
     """FakeEventSink.pop should return events in FIFO order."""
     sink = FakeEventSink()
     sink.emit("s", "t1")
@@ -230,7 +232,7 @@ def test_fake_sink_pop() -> None:
     assert sink.pop() is None
 
 
-def test_fake_sink_clear() -> None:
+def test_fake_sink_clear():
     """FakeEventSink.clear should discard all recorded events."""
     sink = FakeEventSink()
     sink.emit("s", "t")

@@ -1,6 +1,7 @@
-"""Public exports for the lightweight device-test harness."""
+"""Public exports for the lightweight test harness."""
 
+from .assertions import raises
 from .runner import run_module
 
-__all__ = ["run_module"]
+__all__ = ["raises", "run_module"]
 
