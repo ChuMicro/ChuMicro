@@ -17,10 +17,10 @@ Each library has three test directories with clear, non-overlapping purposes:
 
 | Directory | Runner | Where it runs | Purpose |
 |---|---|---|---|
-| `unit_tests/` | pytest (CPython), lightweight harness (MP/CP) | CPython, MP/CP unix-ports, real devices | Logic verification with fakes and plain asserts |
+| `tests/` | pytest (CPython), lightweight harness (MP/CP) | CPython, MP/CP unix-ports, real devices | Logic verification with fakes and plain asserts |
 | `functional_tests/` | lightweight harness | Real hardware only | Tests requiring real I/O: GPIO, WiFi, real-time |
 
-`tests/` is renamed to `unit_tests/`.  `device_tests/` is renamed to `functional_tests/`.
+`tests/` keeps the standard Python name.  `device_tests/` is renamed to `functional_tests/`.
 
 ### Cross-runtime portability rule
 
@@ -34,7 +34,7 @@ The `import pytest` line is the automatic portability boundary.  The lightweight
 
 ### File naming convention
 
-Within `unit_tests/`, cross-runtime and CPython-only tests coexist:
+Within `tests/`, cross-runtime and CPython-only tests coexist:
 
 - `test_heartbeat.py` — cross-runtime (no pytest import, uses fakes)
 - `test_ticks.py` — cross-runtime (arithmetic, masking, overflow)
@@ -44,7 +44,7 @@ Cross-runtime is the default.  Only files that require pytest get the `_pytest` 
 
 ### Smoke runner scope change
 
-The compat tasks (`test-micropython-compat`, `test-circuitpython-compat`) now run `unit_tests/` through the lightweight harness — not `functional_tests/`.  `functional_tests/` is a separate run type for real devices only.
+The compat tasks (`test-micropython-compat`, `test-circuitpython-compat`) now run `tests/` through the lightweight harness — not `functional_tests/`.  `functional_tests/` is a separate run type for real devices only.
 
 ### Test harness additions
 
@@ -60,6 +60,6 @@ The test harness gains a `raises()` context manager (~15 lines) that checks for 
 
 - Supersedes Decision 0006 (import-free smoke runner).  The smoke runner now runs real unit tests, not just import checks.
 - Decision 0003 (test pyramid) gains a new middle tier: unit tests on MP/CP unix-ports.
-- Scaffold (`new-library`) creates `unit_tests/` and `functional_tests/` instead of `tests/` and `device_tests/`.
+- Scaffold (`new-library`) creates `tests/` and `functional_tests/` instead of `tests/` and `device_tests/`.
 - Existing tests require a one-time split and rename.
 

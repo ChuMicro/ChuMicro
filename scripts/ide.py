@@ -24,7 +24,7 @@ def _sync_pycharm_iml() -> None:
         rel = pkg_dir.relative_to(ROOT)
         for subdir, is_test in [
             ("src", "false"),
-            ("unit_tests", "true"),
+            ("tests", "true"),
             ("functional_tests", "true"),
         ]:
             if (pkg_dir / subdir).is_dir():

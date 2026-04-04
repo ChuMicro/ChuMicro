@@ -156,7 +156,7 @@ def _scaffold_library(name: str) -> int:
 
     # Create directory tree
     (lib_dir / "src" / import_name).mkdir(parents=True)
-    (lib_dir / "unit_tests").mkdir()
+    (lib_dir / "tests").mkdir()
     (lib_dir / "functional_tests").mkdir()
     (lib_dir / "docs").mkdir()
     (lib_dir / "examples").mkdir()
@@ -196,7 +196,7 @@ def _scaffold_library(name: str) -> int:
     )
 
     # Tests conftest.py (no __init__.py — avoids module name collisions across libraries)
-    (lib_dir / "unit_tests" / "conftest.py").write_text(
+    (lib_dir / "tests" / "conftest.py").write_text(
         f'"""Test configuration for the chumicro-{name} package."""\n'
     )
 

@@ -1,6 +1,6 @@
 """Run cross-runtime unit tests for all libraries through the lightweight harness.
 
-Discovers and exercises unit_tests/ for every library under libraries/,
+Discovers and exercises tests/ for every library under libraries/,
 skipping files that fail to import (e.g. because they require pytest).
 Avoids ``os.path`` (unavailable on some CircuitPython builds) and keeps
 the import footprint minimal so it can execute under CPython, MicroPython
@@ -43,14 +43,14 @@ def _discover_source_roots():
     return roots
 
 
-def _discover_unit_tests():
-    """Return paths to all test_*.py files under libraries/*/unit_tests/."""
+def _discover_tests():
+    """Return paths to all test_*.py files under libraries/*/tests/."""
     tests = []
     for name in _sorted_listdir("libraries"):
-        ut_dir = "libraries/" + name + "/unit_tests"
-        for filename in _sorted_listdir(ut_dir):
+        t_dir = "libraries/" + name + "/tests"
+        for filename in _sorted_listdir(t_dir):
             if filename.startswith("test_") and filename.endswith(".py"):
-                tests.append(ut_dir + "/" + filename)
+                tests.append(t_dir + "/" + filename)
     return tests
 
 
@@ -80,9 +80,9 @@ def main():
     """Discover and run all cross-runtime unit tests, returning a shell exit code."""
     _setup_source_paths()
 
-    test_files = _discover_unit_tests()
+    test_files = _discover_tests()
     if not test_files:
-        print("NO UNIT TESTS FOUND")
+        print("NO TESTS FOUND")
         return 0
 
     runner = _exec_as_namespace(
