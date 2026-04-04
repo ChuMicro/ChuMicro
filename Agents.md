@@ -216,13 +216,13 @@ Minimize external dependencies; prefer pure‑Python implementations that work o
 
 ## Board Considerations & Feature Detection
 
-Chumicro primarily targets boards in the ESP32‑S2/S3 family or similar microcontrollers with sufficient RAM and flash.  Smaller boards (e.g., SAMD21) may lack features such as `collections.deque` or the `asyncio` library【204239382498704†L176-L186】 or have tighter memory constraints.
+Chumicro targets boards with at least **512 KB of MCU RAM** and **4 MB of flash**.  Boards below 512 KB MCU RAM are unsupported unless the specific board adds meaningful PSRAM and still has ≥4 MB flash.  Boards with 8 MB+ flash and PSRAM are preferred for Wi‑Fi, TLS, displays, and larger buffers.
 
-A source-level audit ([Decision 0015](plans/decisions/0015-board-architecture-support.md)) confirmed which architectures include `collections.deque`, which Chumicro libraries require:
+A source-level audit ([Decision 0015](plans/decisions/0015-board-architecture-support.md)) established support tiers based on both hardware resources and compile-time feature availability (`collections.deque`):
 
-- **Supported:** ESP32 family (S2, S3, C3, C6), RP2040/RP2350, STM32, broadcom, NXP i.MX RT, and most other full-build CircuitPython or `EXTRA_FEATURES`+ MicroPython ports.
-- **Unsupported:** SAMD21 (Trinket M0, Feather M0, etc.), most nRF52 builds (CircuitPython `FULL_BUILD = 0`), MicroPython `minimal` port.
-- **SAMD51:** supported on MicroPython (`FULL_FEATURES`), but CircuitPython's `atmel-samd` port explicitly disables `deque` for the entire port.
+- **Tier 1 (recommended):** ESP32 (original), ESP32-S3, ESP32-C6, RP2350 — all have ≥512 KB MCU RAM and full runtime features.
+- **Tier 2 (exception):** ESP32-S2 and ESP32-C3 boards *with PSRAM* — base MCU is below 512 KB but PSRAM compensates.
+- **Unsupported:** SAMD21, SAMD51, RP2040, nRF52, ESP8266, ESP32-S2/C3 without PSRAM, STM32F4/F7 parts below 512 KB RAM.
 
 Developers should:
 

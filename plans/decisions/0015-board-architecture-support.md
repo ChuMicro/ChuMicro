@@ -1,13 +1,15 @@
 # Decision 0015 — Board architecture support tiers
 
 Status: `accepted`
-Date: `2026-04-03`
+Date: `2026-04-03` (revised `2026-04-04`)
 
 ## Context
 
 Chumicro libraries may depend on `collections.deque` and other features that are not available on all CircuitPython and MicroPython board architectures.  `deque` is gated by compile-time flags that vary by port and chip family.
 
 A source-level audit of the pinned CircuitPython 10.1.4 and MicroPython v1.26.0 trees (`.tools/`) was performed to determine which architectures include `deque`.
+
+Beyond compile-time feature availability, boards also vary widely in RAM and flash.  Libraries that use networking, TLS, displays, or larger buffers need meaningful memory headroom.  A hardware resource baseline was established to complement the feature-flag analysis.
 
 ## Findings
 
@@ -53,7 +55,7 @@ A source-level audit of the pinned CircuitPython 10.1.4 and MicroPython v1.26.0 
 ### Summary
 
 **Supported architectures** (deque available on both runtimes):
-- ESP32 family (ESP32, ESP32-S2, ESP32-S3, ESP32-C3, ESP32-C6) — primary target
+- ESP32 family (ESP32, ESP32-S2, ESP32-S3, ESP32-C3, ESP32-C6)
 - RP2040, RP2350 (Raspberry Pi Pico / Pico 2)
 - STM32
 - Broadcom (Raspberry Pi SBCs, CircuitPython only)
@@ -66,17 +68,45 @@ A source-level audit of the pinned CircuitPython 10.1.4 and MicroPython v1.26.0 
 
 ## Decision
 
-1. **Chumicro libraries require `collections.deque`** and therefore require a full-build CircuitPython or `EXTRA_FEATURES`+ MicroPython port.
-2. The primary target remains the **ESP32-S2/S3 family** (as already stated in AGENTS.md).
-3. **RP2040/RP2350 and STM32** are secondarily supported.
-4. **SAMD21 and non-full-build nRF52 boards are explicitly unsupported.**  Libraries should document this.
-5. If a future library needs to run on constrained boards without `deque`, it must provide a fallback implementation or be documented as requiring a full-build target.
-6. The `[tool.chumicro].platforms` key (Decision 0011) identifies runtime support (`cpython`/`micropython`/`circuitpython`), not hardware architecture.  Architecture constraints are documented per-library in the README and guide.
+### Hardware resource baseline
+
+A board is supported only if it provides at least **512 KB of MCU RAM** and at least **4 MB of flash**.  Boards with less than 512 KB of MCU RAM are unsupported unless the specific board or module includes meaningful PSRAM and still provides at least 4 MB of flash.  Boards with 8 MB or more of flash, and boards with PSRAM, are preferred.
+
+### Feature requirements
+
+Chumicro libraries require `collections.deque` and therefore require a full-build CircuitPython or `EXTRA_FEATURES`+ MicroPython port.
+
+### Support tiers
+
+**Tier 1 — Recommended:**
+- ESP32 (original, 520 KB SRAM)
+- ESP32-S3
+- ESP32-C6 (512 KB HP SRAM + 16 KB LP SRAM)
+- RP2350
+- Any MCU with ≥512 KB RAM and ≥4 MB flash; 8 MB+ flash and PSRAM strongly preferred
+
+**Tier 2 — Allowed by exception:**
+- ESP32-S2 boards *with PSRAM* (base MCU is 320 KB)
+- ESP32-C3 boards *with PSRAM* (base MCU is 400 KB)
+
+**Unsupported:**
+- SAMD21 (up to 32 KB SRAM)
+- SAMD51 (192–256 KB SRAM; CircuitPython also disables `deque` for this port)
+- RP2040 (264 KB SRAM)
+- nRF52840 (256 KB RAM), nRF52833 (128 KB RAM)
+- ESP32-S2 without PSRAM, ESP32-C3 without PSRAM
+- ESP8266 / ESP8285
+- STM32F4/F7 parts below 512 KB RAM (F401 96 KB, F405/F407 192 KB, F411 128 KB, F412 256 KB, F745/F746 ~320 KB)
+
+### Additional rules
+
+1. The `[tool.chumicro].platforms` key (Decision 0011) identifies runtime support (`cpython`/`micropython`/`circuitpython`), not hardware architecture.  Architecture constraints are documented per-library in the README and guide.
+2. If a future library needs to run on constrained boards below the baseline, it must document the lower requirements explicitly and provide fallback implementations where needed.
 
 ## Consequences
 
-- Library READMEs and guides should state the minimum board requirements (full-build CircuitPython or `EXTRA_FEATURES` MicroPython).
-- The cross-runtime compatibility runners already test against the unix port (which has `deque`), so they remain valid.
-- Future board transport tooling and `devices.yml` entries should target supported architectures.
-- If users report issues on SAMD21 or small nRF boards, the answer is "unsupported" rather than "bug".
+- Library READMEs and guides should state the minimum board requirements (512 KB RAM, 4 MB flash, full-build CircuitPython or `EXTRA_FEATURES` MicroPython).
+- The cross-runtime compatibility runners test against the unix port, which exceeds all hardware baselines.
+- Future board transport tooling and `devices.yml` entries should target Tier 1 or Tier 2 boards.
+- If users report issues on unsupported boards, the answer is "unsupported" rather than "bug".
 
