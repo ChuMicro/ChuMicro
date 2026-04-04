@@ -37,10 +37,10 @@ The `import pytest` line is the automatic portability boundary.  The lightweight
 Within `unit_tests/`, cross-runtime and CPython-only tests coexist:
 
 - `test_heartbeat.py` — cross-runtime (no pytest import, uses fakes)
-- `test_ticks_cross.py` — cross-runtime portion of ticks tests
+- `test_ticks.py` — cross-runtime (arithmetic, masking, overflow)
 - `test_ticks_pytest.py` — CPython-only (uses monkeypatch, pytest.raises)
 
-The `_pytest` suffix signals "CPython-only."  The `_cross` suffix signals "cross-runtime."  Files without a suffix are cross-runtime by default (encouraged).
+Cross-runtime is the default.  Only files that require pytest get the `_pytest` suffix.
 
 ### Smoke runner scope change
 

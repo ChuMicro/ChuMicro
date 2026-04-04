@@ -4,7 +4,7 @@ These tests use ``monkeypatch`` to simulate MicroPython/CircuitPython
 runtime environments on CPython.  They do NOT run on MP/CP — that would
 be pointless since those runtimes provide the real behavior.
 
-Cross-runtime arithmetic tests live in ``test_ticks_cross.py``.
+Cross-runtime arithmetic tests live in ``test_ticks.py``.
 """
 
 from __future__ import annotations
