@@ -75,10 +75,9 @@ class TaskHandle:
             raise ValueError("period_ms must be greater than zero")
         self._entry.period_ms = period_ms
         if period_ms is not None:
-            now_ms = self._runner._ticks_ms()
-            self._entry.next_due_ms = self._runner._ticks_add(
-                now_ms, period_ms
-            )
+            ticks = self._runner._ticks
+            now_ms = ticks.ticks_ms()
+            self._entry.next_due_ms = ticks.ticks_add(now_ms, period_ms)
         else:
             self._entry.next_due_ms = None
 
@@ -130,24 +129,18 @@ class Runner:
             Defaults to the ``chumicro_timing`` module-level functions.
     """
 
-    __slots__ = (
-        "_entries", "_pending", "_ticks_ms", "_ticks_diff", "_ticks_add",
-    )
+    __slots__ = ("_entries", "_pending", "_ticks")
 
     def __init__(self, ticks=None):
         """Create a runner."""
         self._entries = []
         self._pending = []
         if ticks is not None:
-            self._ticks_ms = ticks.ticks_ms
-            self._ticks_diff = ticks.ticks_diff
-            self._ticks_add = ticks.ticks_add
+            self._ticks = ticks
         else:
-            from chumicro_timing import ticks_add, ticks_diff, ticks_ms
+            from chumicro_timing import ticks as _ticks_mod
 
-            self._ticks_ms = ticks_ms
-            self._ticks_diff = ticks_diff
-            self._ticks_add = ticks_add
+            self._ticks = _ticks_mod
 
     def add(self, task=None, handler=None, period_ms=None,
             start_after_ms=None, run_count=None):
@@ -199,11 +192,11 @@ class Runner:
 
         next_due_ms = None
         if start_after_ms is not None:
-            now_ms = self._ticks_ms()
-            next_due_ms = self._ticks_add(now_ms, start_after_ms)
+            now_ms = self._ticks.ticks_ms()
+            next_due_ms = self._ticks.ticks_add(now_ms, start_after_ms)
         elif period_ms is not None:
-            now_ms = self._ticks_ms()
-            next_due_ms = self._ticks_add(now_ms, period_ms)
+            now_ms = self._ticks.ticks_ms()
+            next_due_ms = self._ticks.ticks_add(now_ms, period_ms)
 
         entry = _TaskEntry(
             check_fn, handler_fn, period_ms, next_due_ms, run_count,
@@ -231,11 +224,11 @@ class Runner:
         if run_count is not None and run_count <= 0:
             raise ValueError("run_count must be greater than zero")
 
-        now_ms = self._ticks_ms()
+        now_ms = self._ticks.ticks_ms()
         if start_after_ms is not None:
-            next_due_ms = self._ticks_add(now_ms, start_after_ms)
+            next_due_ms = self._ticks.ticks_add(now_ms, start_after_ms)
         else:
-            next_due_ms = self._ticks_add(now_ms, period_ms)
+            next_due_ms = self._ticks.ticks_add(now_ms, period_ms)
 
         entry = _TaskEntry(
             None, handler, period_ms, next_due_ms, run_count,
@@ -254,9 +247,10 @@ class Runner:
         Returns:
             The ``now_ms`` value used this tick.
         """
-        now_ms = self._ticks_ms()
-        ticks_diff = self._ticks_diff
-        ticks_add = self._ticks_add
+        ticks = self._ticks
+        now_ms = ticks.ticks_ms()
+        ticks_diff = ticks.ticks_diff
+        ticks_add = ticks.ticks_add
         pending = self._pending
 
         for entry in self._entries:
