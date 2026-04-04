@@ -281,11 +281,14 @@ def build() -> int:
 
 
 def verify_examples(pkg_dirs: list[Path]) -> int:
-    """Import-check examples to catch broken imports and syntax errors.
+    """Run examples briefly to catch broken imports and syntax errors.
 
-    Discovers ``examples/*.py`` in each selected library, then imports each
-    module in a subprocess.  Examples must use ``if __name__ == "__main__":``
-    guards so that import does not trigger long-running loops.
+    Discovers ``examples/*.py`` in each selected library, then runs each
+    in a subprocess with a short timeout.  Examples use top-level
+    ``while True`` loops (matching the CircuitPython/MicroPython
+    convention), so a timeout is expected and treated as success —
+    it means imports resolved and the loop started.  A non-zero exit
+    before the timeout indicates a real error.
     """
     env = pythonpath_env()
     examples: list[tuple[str, Path]] = []
@@ -302,26 +305,40 @@ def verify_examples(pkg_dirs: list[Path]) -> int:
         print("No examples found for the selected packages.")
         return 0
 
+    timeout_seconds = 3
     failures = 0
     for rel_path, py_file in examples:
-        rc = _run(
-            [PYTHON, "-c", f"import importlib.util, sys; "
-             f"spec = importlib.util.spec_from_file_location('_example', '{py_file}'); "
-             f"mod = importlib.util.module_from_spec(spec); "
-             f"spec.loader.exec_module(mod)"],
-            env=env,
-        )
-        if rc != 0:
-            print(f"  FAIL: {rel_path}")
-            failures += 1
-        else:
-            print(f"  OK:   {rel_path}")
+        printable = f"+ {PYTHON} {py_file}"
+        print(printable)
+        try:
+            completed = subprocess.run(
+                [PYTHON, str(py_file)],
+                cwd=ROOT,
+                env=env,
+                timeout=timeout_seconds,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            # Exited before timeout — check return code.
+            if completed.returncode != 0:
+                print(f"  FAIL: {rel_path}")
+                if completed.stderr:
+                    for line in completed.stderr.strip().splitlines()[-5:]:
+                        print(f"    {line}")
+                failures += 1
+            else:
+                print(f"  OK:   {rel_path}")
+        except subprocess.TimeoutExpired:
+            # Timeout means the example started successfully and
+            # entered its main loop — imports are valid.
+            print(f"  OK:   {rel_path} (ran {timeout_seconds}s)")
 
     if failures:
-        print(f"\n{failures} example(s) failed import check.")
+        print(f"\n{failures} example(s) failed.")
         return 1
 
-    print(f"\nAll {len(examples)} example(s) passed import check.")
+    print(f"\nAll {len(examples)} example(s) passed.")
     return 0
 
 

@@ -10,15 +10,15 @@ No task objects needed — just pass a callable and optionally a period.
 
 Example output::
 
-    Running... (Ctrl+C to stop)
+    Running...
 
-    [1005 ms] status report (10 ticks)
-    [2003 ms] status report (20 ticks)
-    [2003 ms] heartbeat
-    [3008 ms] status report (30 ticks)
-    [4002 ms] status report (40 ticks)
-    [4002 ms] heartbeat
-    ...
+      [1005 ms] status report (10 ticks)
+      [2003 ms] status report (20 ticks)
+      [2003 ms] heartbeat
+      [3008 ms] status report (30 ticks)
+      [4002 ms] status report (40 ticks)
+      [4002 ms] heartbeat
+      ...
 
 Runs on CPython, MicroPython, and CircuitPython.
 """
@@ -50,31 +50,26 @@ def heartbeat(now_ms):
     print(f"  [{now_ms} ms] heartbeat")
 
 
-def main():
-    """Run handlers on different schedules."""
-    runner = Runner()
+runner = Runner()
 
-    # Every-tick: fires on every tick() call.
-    runner.add(handler=poll_inputs)
+# Every-tick: fires on every tick() call.
+runner.add(handler=poll_inputs)
 
-    # Periodic: fires once per second.
-    runner.add_periodic(report_status, period_ms=1000)
+# Periodic: fires once per second.
+runner.add_periodic(report_status, period_ms=1000)
 
-    # Periodic: fires every two seconds.
-    runner.add_periodic(heartbeat, period_ms=2000)
+# Periodic: fires every two seconds.
+runner.add_periodic(heartbeat, period_ms=2000)
 
-    print("Running... (Ctrl+C to stop)\n")
+print("Running...\n")
 
-    while True:
-        # tick() captures time once, checks all tasks, and fires
-        # any that are due.  Every-tick handlers run on every call;
-        # periodic handlers run only when their interval has elapsed.
-        runner.tick()
+while True:
+    # tick() captures time once, checks all tasks, and fires
+    # any that are due.  Every-tick handlers run on every call;
+    # periodic handlers run only when their interval has elapsed.
+    runner.tick()
 
-        # In a real project, the rest of your main loop goes here.
-        # The sleep just keeps this demo from flooding the console.
-        time.sleep(0.1)
+    # In a real project, the rest of your main loop goes here.
+    # The sleep just keeps this demo from flooding the console.
+    time.sleep(0.1)
 
-
-if __name__ == "__main__":
-    main()

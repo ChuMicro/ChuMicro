@@ -13,7 +13,7 @@ speeds up and the Wi-Fi check is removed.
 
 Example output::
 
-    Running... (Ctrl+C to stop)
+    Running...
 
     [1005 ms] logged sensor data
     [2003 ms] Wi-Fi: connected
@@ -47,39 +47,34 @@ def check_wifi(now_ms):
     print(f"  [{now_ms} ms] Wi-Fi: connected")
 
 
-def main():
-    """Show runtime task control with TaskHandle and Heartbeat."""
-    runner = Runner()
+runner = Runner()
 
-    # Register tasks and keep their handles for runtime control.
-    log_handle = runner.add_periodic(log_data, period_ms=1000)
-    wifi_handle = runner.add_periodic(check_wifi, period_ms=2000)
+# Register tasks and keep their handles for runtime control.
+log_handle = runner.add_periodic(log_data, period_ms=1000)
+wifi_handle = runner.add_periodic(check_wifi, period_ms=2000)
 
-    # A Heartbeat used independently — not managed by the runner.
-    # Useful for timing decisions that don't fit the task pattern,
-    # like switching operating modes after a duration.
-    mode_timer = Heartbeat(period_ms=10000)
+# A Heartbeat used independently — not managed by the runner.
+# Useful for timing decisions that don't fit the task pattern,
+# like switching operating modes after a duration.
+mode_timer = Heartbeat(period_ms=10000)
 
-    switched = False
+switched = False
 
-    print("Running... (Ctrl+C to stop)\n")
+print("Running...\n")
 
-    while True:
-        # tick() returns the shared timestamp.
-        now = runner.tick()
+while True:
+    # tick() returns the shared timestamp.
+    now = runner.tick()
 
-        # Use now_ms with an independent Heartbeat for a timed mode switch.
-        if not switched and mode_timer.poll(now):
-            print("\n  >> Switching to fast mode: "
-                  "logging every 250 ms, Wi-Fi removed\n")
-            log_handle.set_period(250)
-            wifi_handle.remove()
-            switched = True
+    # Use now_ms with an independent Heartbeat for a timed mode switch.
+    if not switched and mode_timer.poll(now):
+        print("\n  >> Switching to fast mode: "
+              "logging every 250 ms, Wi-Fi removed\n")
+        log_handle.set_period(250)
+        wifi_handle.remove()
+        switched = True
 
-        # In a real project, the rest of your main loop goes here.
-        # The sleep just keeps this demo from flooding the console.
-        time.sleep(0.1)
+    # In a real project, the rest of your main loop goes here.
+    # The sleep just keeps this demo from flooding the console.
+    time.sleep(0.1)
 
-
-if __name__ == "__main__":
-    main()

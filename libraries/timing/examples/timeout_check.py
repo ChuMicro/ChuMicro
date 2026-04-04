@@ -10,7 +10,7 @@ non-blocking check (GPIO pin, status register, etc.).
 
 Example output::
 
-    Running timeout checks (Ctrl+C to stop)...
+    Running timeout checks...
 
       Waiting for sensor (500 ms deadline)...
       [105 ms] not ready...
@@ -85,31 +85,20 @@ def wait_for_sensor(timeout_ms):
     return -1
 
 
-def main():
-    """Run repeated deadline-enforced sensor polls."""
-    global _cycle_index  # noqa: PLW0603
+print("Running timeout checks...\n")
 
-    print("Running timeout checks (Ctrl+C to stop)...\n")
+while True:
+    print(f"  Waiting for sensor ({TIMEOUT_MS} ms deadline)...")
 
-    try:
-        while True:
-            print(f"  Waiting for sensor ({TIMEOUT_MS} ms deadline)...")
+    result = wait_for_sensor(TIMEOUT_MS)
+    if result >= 0:
+        print(f"    sensor ready after {result} ms\n")
+    else:
+        print(f"    TIMEOUT — sensor not ready after "
+              f"{TIMEOUT_MS} ms\n")
 
-            result = wait_for_sensor(TIMEOUT_MS)
-            if result >= 0:
-                print(f"    sensor ready after {result} ms\n")
-            else:
-                print(f"    TIMEOUT — sensor not ready after "
-                      f"{TIMEOUT_MS} ms\n")
+    _cycle_index += 1
 
-            _cycle_index += 1
-
-            # In a real project, the rest of your main loop goes
-            # here.  The sleep just keeps this demo readable.
-            time.sleep(1)
-    except KeyboardInterrupt:
-        print("Stopped.")
-
-
-if __name__ == "__main__":
-    main()
+    # In a real project, the rest of your main loop goes here.
+    # The sleep just keeps this demo readable.
+    time.sleep(1)

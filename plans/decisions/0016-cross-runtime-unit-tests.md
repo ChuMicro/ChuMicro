@@ -63,3 +63,7 @@ The test harness gains a `raises()` context manager (~15 lines) that checks for 
 - Scaffold (`new-library`) creates `tests/` and `functional_tests/` instead of `tests/` and `device_tests/`.
 - Existing tests require a one-time split and rename.
 
+## Open issue: on-device import destructiveness
+
+During early on-device testing, importing files directly from the workspace filesystem on CircuitPython and MicroPython was observed to delete file contents when build errors occurred.  This means on-device test execution (including `functional_tests/`) will need to **copy test files to a staging area** before running them, rather than importing directly from the workspace tree.  This applies to examples too (see Decision 0013).  The staging mechanism is not yet designed.
+

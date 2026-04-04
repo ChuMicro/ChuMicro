@@ -12,7 +12,7 @@
   3. Unit tests — per-library test runs (Decision 0009), 90% coverage threshold, constructor injection for testability
   4. Testing submodule — when and how to add `src/chumicro_<name>/testing.py` with ready-made fakes
   5. Docs — `guide.md` required sections, `api.md` autodoc rules, generation prompt (Decision 0013)
-  6. Examples — `__main__` guard, import-verified in preflight (Decision 0013)
+  6. Examples — top-level style (no `__main__` guard), verified via subprocess+timeout in preflight (Decision 0013)
   7. VERSION bumps — semantic versioning rules, when to bump
   8. Preflight — running `python scripts/run.py preflight` before committing
   - This should live in the repo (e.g., `docs/creating-a-library.md` or a top-level `CONTRIBUTING.md` section), not just in AGENTS.md or decision records.

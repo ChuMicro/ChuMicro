@@ -25,18 +25,13 @@ class TemperatureSensor(Sensor):
         return 22.5
 
 
-def main():
-    """Run the example."""
-    # Concrete class works fine.
-    sensor = TemperatureSensor()
-    print(f"Temperature: {sensor.read()} °C")
+# Concrete class works fine.
+sensor = TemperatureSensor()
+print(f"Temperature: {sensor.read()} °C")
 
-    # Abstract class raises TypeError.
-    try:
-        Sensor()
-    except TypeError as exc:
-        print(f"Expected error: {exc}")
+# Abstract class raises TypeError.
+try:
+    Sensor()
+except TypeError as exc:
+    print(f"Expected error: {exc}")
 
-
-if __name__ == "__main__":
-    main()

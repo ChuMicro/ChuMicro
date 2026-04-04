@@ -132,16 +132,11 @@ _EXAMPLE_TEMPLATE = """\
 \"\"\"{display_name} example.
 
 Describe what this example demonstrates.
+
+Runs on CPython, MicroPython, and CircuitPython.
 \"\"\"
 
-
-def main():
-    \"\"\"Run the example.\"\"\"
-    print("Hello from chumicro-{name}!")
-
-
-if __name__ == "__main__":
-    main()
+print("Hello from chumicro-{name}!")
 """
 
 

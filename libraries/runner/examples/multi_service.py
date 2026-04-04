@@ -13,7 +13,7 @@ All simulation lives inside the task objects.  On a real board,
 
 Example output::
 
-    Running services... (Ctrl+C to stop)
+    Running services...
 
     [2005 ms] health: OK
     [4001 ms] health: OK
@@ -92,46 +92,40 @@ class LightSensor:
         return 60
 
 
-def main():
-    """Run multiple task patterns in a single loop."""
-    runner = Runner()
+runner = Runner()
 
-    # 1. Periodic health check — fires every 2 seconds.
-    runner.add_periodic(
-        lambda now_ms: print(f"  [{now_ms} ms] health: OK"),
-        period_ms=2000,
-    )
+# 1. Periodic health check — fires every 2 seconds.
+runner.add_periodic(
+    lambda now_ms: print(f"  [{now_ms} ms] health: OK"),
+    period_ms=2000,
+)
 
-    # 2. Object-based motion detector — checked every tick.
-    runner.add(MotionDetector())
+# 2. Object-based motion detector — checked every tick.
+runner.add(MotionDetector())
 
-    # 3. Callable check + handler (light sensor).
-    light = LightSensor()
-    runner.add(
-        lambda now_ms: light.read_level() < 20,
-        handler=lambda now_ms: print(
-            f"  [{now_ms} ms] lights ON (level={light.read_level()})"
-        ),
-    )
+# 3. Callable check + handler (light sensor).
+light = LightSensor()
+runner.add(
+    lambda now_ms: light.read_level() < 20,
+    handler=lambda now_ms: print(
+        f"  [{now_ms} ms] lights ON (level={light.read_level()})"
+    ),
+)
 
-    # 4. Periodic data logger.
-    runner.add_periodic(
-        lambda now_ms: print(f"  [{now_ms} ms] logging data"),
-        period_ms=5000,
-    )
+# 4. Periodic data logger.
+runner.add_periodic(
+    lambda now_ms: print(f"  [{now_ms} ms] logging data"),
+    period_ms=5000,
+)
 
-    print("Running services... (Ctrl+C to stop)\n")
+print("Running services...\n")
 
-    while True:
-        # tick() checks all registered tasks — periodic, object-based,
-        # and callable — then fires any whose conditions are met.
-        runner.tick()
+while True:
+    # tick() checks all registered tasks — periodic, object-based,
+    # and callable — then fires any whose conditions are met.
+    runner.tick()
 
-        # In a real project, the rest of your main loop goes here.
-        # The sleep just keeps this demo from flooding the console.
-        time.sleep(0.1)
-
-
-if __name__ == "__main__":
-    main()
+    # In a real project, the rest of your main loop goes here.
+    # The sleep just keeps this demo from flooding the console.
+    time.sleep(0.1)
 

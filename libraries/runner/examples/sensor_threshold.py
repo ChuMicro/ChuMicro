@@ -9,7 +9,7 @@ read.  Here it cycles through simulated values.
 
 Example output::
 
-    Monitoring temperature... (Ctrl+C to stop)
+    Monitoring temperature...
 
     [3005 ms] ALERT: 31.0°C exceeds 30.0°C
     [4002 ms] ALERT: 35.0°C exceeds 30.0°C
@@ -67,25 +67,20 @@ class TemperatureSensor:
         )
 
 
-def main():
-    """Monitor temperature and alert on threshold breach."""
-    runner = Runner()
-    sensor = TemperatureSensor(threshold=30.0)
+runner = Runner()
+sensor = TemperatureSensor(threshold=30.0)
 
-    # Register the sensor as an object-based task.  The runner
-    # calls sensor.check(now_ms) on each tick (gated by period_ms);
-    # when check() returns True, sensor.handle(now_ms) fires.
-    runner.add(sensor, period_ms=1000)
+# Register the sensor as an object-based task.  The runner
+# calls sensor.check(now_ms) on each tick (gated by period_ms);
+# when check() returns True, sensor.handle(now_ms) fires.
+runner.add(sensor, period_ms=1000)
 
-    print("Monitoring temperature... (Ctrl+C to stop)\n")
+print("Monitoring temperature...\n")
 
-    while True:
-        runner.tick()
+while True:
+    runner.tick()
 
-        # In a real project, the rest of your main loop goes here.
-        # The sleep just keeps this demo from flooding the console.
-        time.sleep(0.1)
+    # In a real project, the rest of your main loop goes here.
+    # The sleep just keeps this demo from flooding the console.
+    time.sleep(0.1)
 
-
-if __name__ == "__main__":
-    main()

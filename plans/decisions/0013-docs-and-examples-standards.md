@@ -29,7 +29,7 @@ Each library under `libraries/<name>/` must include:
     - Examples must run on CPython without hardware (use print output or assertions to show behavior)
     - Examples targeting real boards should note the required hardware in a comment header (e.g., `# requires: hardware`)
     - File names should be descriptive: `heartbeat_blink.py`, not `example1.py`
-    - Examples must use `if __name__ == "__main__":` guards so they can be imported without triggering long-running loops
+    - Examples must use top-level code (no `def main()` or `if __name__ == "__main__":` guards) — this matches the CircuitPython/MicroPython convention where `code.py` runs at the top level. Verification uses subprocess + timeout instead of import.
 
 ### Example quality checklist
 
@@ -43,8 +43,7 @@ Every example must meet the requirements above *and* the quality standards below
 
 **Realism:**
 
-- Main-loop examples must use `while True` — that is what real embedded code looks like. Bounded `for` loops are acceptable only for examples demonstrating naturally bounded operations (e.g., timeout checks, calibration sequences).
-- `time.sleep()` in examples exists only to keep demo output readable.  The comment should say what the user would do here in a real project ("the rest of your main loop goes here — reading sensors, checking buttons, etc.").  Do not frame it as a CPython implementation detail ("avoid busy-spinning") — that is irrelevant to the reader.
+- Main-loop examples must use `while True` — that is what real embedded code looks like. Bounded `for` loops are acceptable only for examples demonstrating naturally bounded operations (e.g., timeout checks, calibration sequences).- `time.sleep()` in examples exists only to keep demo output readable.  The comment should say what the user would do here in a real project ("the rest of your main loop goes here — reading sensors, checking buttons, etc.").  Do not frame it as a CPython implementation detail ("avoid busy-spinning") — that is irrelevant to the reader.
 - Sleep for yield must be small (0.01–0.1 s). Large sleeps (≥ 0.5 s) negate non-blocking timing patterns and confuse readers about how the library is meant to work.
 - Simulation logic must use methods with descriptive names that explain what hardware they replace (e.g., `detect_motion()`, `read_temperature()`, `read_button()`), not bare flags or opaque counters. Include a docstring or comment showing the real-board equivalent (e.g., "On a real board: `return self._pin.value`").
 
@@ -119,22 +118,23 @@ Not yet wired: the actual `mkdocs.yml` config, ReadTheDocs hosting setup, or the
 
 ### Example verification
 
-Examples are verified via import-checking in `scripts/run.py verify-examples`:
+Examples are verified via subprocess execution with a timeout in `scripts/run.py verify-examples`:
 
-1. Each example is imported as a module in a subprocess. Because examples use `if __name__ == "__main__":` guards, the import succeeds without triggering `while True` loops or `time.sleep()`.
-2. This catches the primary failure mode: API drift after refactors (renamed symbols, missing imports, syntax errors).
+1. Each example is run as a subprocess with a 3-second timeout.  If the process exits cleanly before the timeout, the exit code is checked.  If the timeout fires, the example is treated as passing — it means imports resolved and the main loop started.
+2. This catches the primary failure modes: API drift after refactors (renamed symbols, missing imports) and syntax errors.
 3. `verify-examples` runs as part of `preflight` and should run in CI.
+4. Examples that require real hardware should include a `# requires: hardware` comment marker.  The verifier does not yet skip these, but the marker supports future filtering.
 
-Phase 2 (later): graduate to subprocess + timeout execution for examples that don't require hardware. Use a `# requires: hardware` comment marker to skip hardware-dependent examples.
+**Why subprocess + timeout instead of import checking:**  On CircuitPython and MicroPython, importing files from the workspace filesystem can be destructive — build errors were observed to delete file contents during import.  This means on-device testing will need to copy files to a temporary location anyway.  Since examples must match the standard embedded convention (top-level `while True` loop, no `def main()` or `__main__` guard), import-based checking would require either (a) wrapping examples in guards that don't belong in embedded code, or (b) source-transforming copies before import.  Subprocess + timeout is simpler and works with examples as-is.
 
-Why not full execution now: the current examples use `while True` + `time.sleep()` + `random` — full execution testing would be flaky by design. Adafruit's CircuitPython libraries also only lint examples; they don't run them in CI.
+**Why top-level style:**  CircuitPython and MicroPython run `code.py` at the top level — there is no `__name__ == "__main__"` mechanism.  Adafruit's own examples use top-level `while True` loops without guards.  Matching this convention means examples can be deployed to boards unchanged.
 
 ### Contributor expectations
 
 - New libraries must include docs and examples before their first release. The `new-library` scaffolder already creates empty `docs/` and `examples/` directories.
 - PRs that add or change public API must update `docs/api.md` for the affected library.
 - PRs that add new features should include or update at least one example.
-- Examples must include `if __name__ == "__main__":` guards and pass `verify-examples`.
+- Examples must use top-level code (no `def main()` / `__main__` guard) and pass `verify-examples`.
 - Docs and examples are reviewed as part of normal code review.
 
 ### Release pipeline integration (future)
@@ -150,5 +150,6 @@ When the release pipeline is built (Milestone 2), it should:
 - **Require RST from the start**: rejected — adds tooling complexity. Markdown is readable on GitHub and MkDocs is Markdown-native.
 - **No docs standard, let each library decide**: rejected — inconsistency is the predictable outcome.
 - **Auto-generate everything from docstrings**: rejected as the sole path — docstrings are good for API reference but not for guides, examples, or platform notes.
-- **Full execution testing for examples**: rejected for now — timing-dependent examples are inherently flaky. Import-checking catches API drift with zero flakiness.
+- **Full execution testing for examples**: adopted — subprocess + timeout handles `while True` loops gracefully; the timeout itself is the success signal.  The original concern about flakiness was about timing-dependent assertions on output; since we only check that the process starts without error, there is nothing timing-sensitive.
+- **Import-based verification with `__main__` guards**: superseded — required examples to diverge from the embedded `code.py` convention.  On-device testing revealed that imports from the workspace can be destructive on CircuitPython/MicroPython, further motivating the switch.
 - **No example verification**: rejected — examples that silently break after refactors erode user trust.

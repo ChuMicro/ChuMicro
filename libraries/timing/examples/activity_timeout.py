@@ -10,7 +10,7 @@ auto-sleep features.
 
 Example output::
 
-    Monitoring activity (Ctrl+C to stop)...
+    Monitoring activity...
 
       [tick] activity detected — resetting timeout
       [tick] activity detected — resetting timeout
@@ -39,49 +39,39 @@ def read_button():
     return False
 
 
-def main():
-    """Run an activity-timeout loop."""
-    # Use a Heartbeat as an inactivity timer.  When the user does
-    # something, call reset() to restart the countdown.  When the
-    # period elapses without a reset, the timeout has fired.
-    timeout = Heartbeat(period_ms=500)
-    tick_count = 0
+# Use a Heartbeat as an inactivity timer.  When the user does
+# something, call reset() to restart the countdown.  When the
+# period elapses without a reset, the timeout has fired.
+timeout = Heartbeat(period_ms=500)
+tick_count = 0
 
-    print("Monitoring activity (Ctrl+C to stop)...\n")
+print("Monitoring activity...\n")
 
-    try:
-        while True:
-            now = ticks_ms()
+while True:
+    now = ticks_ms()
 
-            # Simulate intermittent button presses: active for the
-            # first 3 ticks of every 11-tick cycle, idle otherwise.
-            active = tick_count % 11 < 3 or read_button()
-            tick_count += 1
+    # Simulate intermittent button presses: active for the
+    # first 3 ticks of every 11-tick cycle, idle otherwise.
+    active = tick_count % 11 < 3 or read_button()
+    tick_count += 1
 
-            if active:
-                # Any activity resets the countdown to zero.
-                timeout.reset(now)
-                print("  [tick] activity detected — resetting timeout")
-            elif timeout.is_due(now):
-                # is_due() checks whether the period has elapsed but
-                # does NOT advance the timer (unlike poll()).  This
-                # means it will keep returning True on every tick
-                # until something calls reset().
-                print(
-                    f"  [tick] TIMEOUT: no activity for "
-                    f"{timeout.period_ms} ms"
-                )
-            else:
-                print("  [tick] idle...")
+    if active:
+        # Any activity resets the countdown to zero.
+        timeout.reset(now)
+        print("  [tick] activity detected — resetting timeout")
+    elif timeout.is_due(now):
+        # is_due() checks whether the period has elapsed but
+        # does NOT advance the timer (unlike poll()).  This
+        # means it will keep returning True on every tick
+        # until something calls reset().
+        print(
+            f"  [tick] TIMEOUT: no activity for "
+            f"{timeout.period_ms} ms"
+        )
+    else:
+        print("  [tick] idle...")
 
-            # In a real project, the rest of your main loop goes
-            # here.  The sleep just keeps this demo from flooding
-            # the console.
-            time.sleep(0.1)
-    except KeyboardInterrupt:
-        print("Stopped.")
-
-
-if __name__ == "__main__":
-    main()
+    # In a real project, the rest of your main loop goes here.
+    # The sleep just keeps this demo from flooding the console.
+    time.sleep(0.1)
 
