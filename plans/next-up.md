@@ -49,7 +49,6 @@
 - [x] Review `scripts/run.py` layering. Split into focused modules: `discovery.py`, `ide.py`, `scaffold.py`, `prepare.py`, `prepare_micropython.py`, `prepare_circuitpython.py`, `prepare_workspace.py`. `run.py` is now a slim dispatch-and-task file. `dev_packages` moved to `requirements-dev.txt`.
 - [x] Accept `native CPython + WSL2 for unix-port validation` as the current Windows host model.
 - [x] Unix ports are the standard local simulation path. Docker containers are not needed at this scale. Revisit if CI build times or contributor onboarding friction justify it.
-
 - [x] Audit the `chumicro-serviceable` library implementation (Decision 0014). Review API surface, allocation patterns, and integration with Heartbeat. `EventQueueSink` uses `collections.deque` (C-level on MP/CP). Board architecture support for `deque` documented in Decision 0015.
 - [x] Drop hand-written member lists from `api.md` files; codify `api.md` rules in Decision 0013 (no hand-written signatures, module-level `:::` directives only, fix docstrings not api.md).
 - [x] Add strict `guide.md` required-section structure and AI generation prompt (`plans/prompts/guide-generation.prompt.md`). Decision 0013 updated with required-section table and generation rules.
