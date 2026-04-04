@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "chumicro-serviceable"
 dynamic = ["version"]
-description = "Tick-based service loop with shared timestamps for Chumicro applications."
+description = "Service-and-event pattern with shared timestamps for Chumicro applications."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"

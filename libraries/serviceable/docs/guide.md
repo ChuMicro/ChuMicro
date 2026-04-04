@@ -2,103 +2,161 @@
 
 ## Overview
 
-`chumicro-serviceable` provides a `ServiceRunner` for tick-based main loops. Its job is simple: **capture `ticks_ms()` once per tick and distribute the shared timestamp** to all registered components.
-
-This ensures every component in your application sees the same moment in time, preventing drift between independent clock reads on slow microcontrollers.
-
-## The shared-timestamp pattern
-
-In a main loop, you should capture `ticks_ms()` once and pass it to everything:
+`chumicro-serviceable` provides a standard pattern for active components in the Chumicro ecosystem.  Instead of each library inventing its own `poll()` / callback / `next_event()` API, every active component implements a single method:
 
 ```python
-from chumicro_timing import Heartbeat, ticks_ms
-
-led_beat = Heartbeat(period_ms=500)
-sensor_beat = Heartbeat(period_ms=5000)
-
-while True:
-    now = ticks_ms()
-    if led_beat.poll(now):
-        toggle_led()
-    if sensor_beat.poll(now):
-        read_sensor()
+def service(self, event_sink, now_ms):
+    """Do one tick of work; emit zero or more events."""
 ```
 
-This works perfectly for simple loops. As your application grows — more heartbeats, network clients, button scanners — the `ServiceRunner` handles the clock and active-component servicing for you.
+A shared `ServiceRunner` captures time once, calls `service()` on each component with the shared timestamp, drains the event sink, and dispatches events to registered handlers.  This replaces ad-hoc drain loops in user code.
 
-## Using ServiceRunner
+## The pattern
+
+1. **Components** implement `service(event_sink, now_ms)` — they do one tick of work and emit events into the sink.
+2. **EventQueueSink** is a fixed-capacity ring buffer that collects events.
+3. **SimpleEventDispatcher** routes events to handler functions by event type.
+4. **ServiceRunner** ties it together: capture time → service → drain → dispatch.
+
+## Getting started
 
 ```python
-from chumicro_serviceable import ServiceRunner
+from chumicro_serviceable import EventQueueSink, ServiceRunner, SimpleEventDispatcher
 from chumicro_timing import Heartbeat
 
-led_beat = Heartbeat(period_ms=500)
-sensor_beat = Heartbeat(period_ms=5000)
 
-runner = ServiceRunner()
+class Blinker:
+    EVENT_BLINK = "blinker.blink"
 
-while True:
-    now = runner.tick()
-    if led_beat.poll(now):
-        toggle_led()
-    if sensor_beat.poll(now):
-        read_sensor()
-```
+    def __init__(self, period_ms):
+        self._heartbeat = Heartbeat(period_ms=period_ms)
 
-`runner.tick()` captures `ticks_ms()` once and returns the shared timestamp. If any active components are registered (see below), they are serviced before the timestamp is returned.
-
-## Active components
-
-Some components need per-tick work beyond a simple poll — for example, an MQTT client must process incoming data, or a sensor driver must manage sampling state. These components implement `service(now_ms)`:
-
-```python
-class TemperatureMonitor:
-    def __init__(self, sensor, period_ms):
-        self._sensor = sensor
-        self._heartbeat = Heartbeat(period_ms)
-        self.latest_reading = None
-
-    def service(self, now_ms):
+    def service(self, event_sink, now_ms):
         if self._heartbeat.poll(now_ms):
-            self.latest_reading = self._sensor.read()
-```
+            event_sink.emit(self, self.EVENT_BLINK)
 
-Register them with the runner, and they are serviced automatically on each tick:
 
-```python
-temp_monitor = TemperatureMonitor(sensor, period_ms=5000)
-runner = ServiceRunner(services=[temp_monitor])
+blinker = Blinker(period_ms=1000)
+
+sink = EventQueueSink(max_size=16)
+dispatcher = SimpleEventDispatcher()
+dispatcher.register(Blinker.EVENT_BLINK, lambda e: print("blink!"))
+
+runner = ServiceRunner([blinker], sink, dispatcher)
 
 while True:
-    now = runner.tick()  # calls temp_monitor.service(now)
-    if temp_monitor.latest_reading is not None:
-        print(f"Temperature: {temp_monitor.latest_reading}")
+    runner.service_once()
 ```
 
-The contract is duck-typed — no base class or import from `chumicro-serviceable` is required. Any object with a `service(now_ms)` method works.
+## Shared timestamps
 
-## Testing
+`ServiceRunner.service_once()` captures `ticks_ms()` once and passes the resulting timestamp to every component.  This ensures all components in the loop see the same moment in time, preventing drift between independent clock reads on slow microcontrollers.
 
-Use `FakeTicks` from `chumicro-timing` for deterministic time, and `FakeService` from this library for verifying that a runner correctly services components:
+The method returns `now_ms` so user code can use it for passive checks alongside the dispatch loop:
 
 ```python
-from chumicro_serviceable import ServiceRunner
-from chumicro_serviceable.testing import FakeService
-from chumicro_timing.testing import FakeTicks
-
-def test_runner_services_components():
-    fake = FakeTicks()
-    svc = FakeService()
-    runner = ServiceRunner(services=[svc], ticks=fake)
-
-    fake.advance(100)
-    runner.tick()
-
-    assert svc.ticks == [100]
+while True:
+    now = runner.service_once()
+    if some_heartbeat.poll(now):
+        do_something()
 ```
 
-See the [testing helpers](testing.md) page for details.
+## Multiple components
+
+The pattern scales to many components with no extra boilerplate:
+
+```python
+runner = ServiceRunner(
+    services=[blinker, mqtt_client, button_scanner],
+    event_sink=EventQueueSink(max_size=32),
+    dispatcher=dispatcher,
+)
+
+while True:
+    runner.service_once()
+```
+
+## Using the sink directly
+
+You don't need `ServiceRunner` if you prefer manual control:
+
+```python
+from chumicro_timing import ticks_ms
+
+sink = EventQueueSink(max_size=8)
+
+now = ticks_ms()
+component.service(sink, now)
+
+while sink.has_events():
+    event = sink.pop()
+    print(f"Got {event.event_type} from {event.source}")
+```
+
+## Components that don't need time
+
+Not every component cares about the shared timestamp.  The `now_ms` parameter is always provided, but components can ignore it:
+
+```python
+class ButtonScanner:
+    EVENT_PRESS = "button.press"
+
+    def __init__(self, pin):
+        self._pin = pin
+        self._was_pressed = False
+
+    def service(self, event_sink, now_ms):
+        pressed = self._pin.value
+        if pressed and not self._was_pressed:
+            event_sink.emit(self, self.EVENT_PRESS)
+        self._was_pressed = pressed
+```
+
+## Components that use time
+
+Components that need periodic timing can use `Heartbeat` with the shared `now_ms`:
+
+```python
+from chumicro_timing import Heartbeat
+
+
+class TemperatureMonitor:
+    EVENT_HIGH = "temp.high"
+
+    def __init__(self, sensor, period_ms, threshold):
+        self._sensor = sensor
+        self._heartbeat = Heartbeat(period_ms=period_ms)
+        self._threshold = threshold
+
+    def service(self, event_sink, now_ms):
+        if self._heartbeat.poll(now_ms):
+            reading = self._sensor.read()
+            if reading > self._threshold:
+                event_sink.emit(self, self.EVENT_HIGH, reading)
+```
+
+## Memory notes
+
+- `EventQueueSink` pre-allocates its backing deque at construction time — no resizing during operation.
+- `Event` uses `__slots__` to minimise per-instance memory.
+- Individual `Event` objects are created on each `emit()`.  If GC pressure becomes measurable on your board, the sink capacity can be tuned via `max_size`.
+
+## Testing serviceable components
+
+The `chumicro_serviceable.testing` module provides `FakeEventSink` — a list-backed sink with no capacity limit, designed for assertions in host-side tests:
+
+```python
+from chumicro_serviceable.testing import FakeEventSink
+
+sink = FakeEventSink()
+component.service(sink, 0)
+
+assert len(sink.events) == 1
+assert sink.events[0].event_type == "button.press"
+```
+
+See the [testing helpers](testing.md) page for detailed usage.
 
 ## Platform notes
 
-`ServiceRunner` uses only basic Python features. Works identically on CPython, MicroPython, and CircuitPython.
+All classes use only basic Python features and work identically on CPython, MicroPython, and CircuitPython.  No `abc`, `typing`, or `asyncio` dependencies.
