@@ -39,7 +39,7 @@ Define the repo layout, shared tooling, and local developer ergonomics for a Pyt
 - Root `conftest.py` auto-discovers source roots and excludes `functional_tests/`
 - Per-library pytest runs avoid test-directory collisions (Decision 0009)
 - `scripts/prepare_micropython.py` and `scripts/prepare_circuitpython.py` provide unix-port preparation
-- `support/test_harness/run_device_smoke.py` exists as the canonical cross-runtime test runner entrypoint (Decision 0016)
+- `support/test_harness/run_cross_runtime.py` exists as the canonical cross-runtime test runner entrypoint (Decision 0016)
 - `.github/workflows/ci.yml` now includes advisory runtime compatibility jobs in addition to the required host lane
 - `devices.example.yml` exists as the first committed local device template
 

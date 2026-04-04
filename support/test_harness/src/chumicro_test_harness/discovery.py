@@ -1,7 +1,9 @@
-"""Run cross-runtime unit tests for all libraries through the lightweight harness.
+"""Cross-runtime test discovery and orchestration.
 
-Discovers and exercises tests/ for every library under libraries/,
-skipping files that fail to import (e.g. because they require pytest).
+Discovers ``tests/`` for every library under ``libraries/``, sets up
+``sys.path`` so library imports resolve, and runs each test file through
+the lightweight harness runner.
+
 Avoids ``os.path`` (unavailable on some CircuitPython builds) and keeps
 the import footprint minimal so it can execute under CPython, MicroPython
 unix-port, and CircuitPython unix-port.
@@ -11,6 +13,8 @@ See ``plans/decisions/0016-cross-runtime-unit-tests.md``.
 
 import os
 import sys
+
+from .runner import run_module
 
 
 def _is_dir(path):
@@ -32,41 +36,55 @@ def _sorted_listdir(path):
         return []
 
 
-def _discover_source_roots():
-    """Return src/ directories under libraries/ and support/."""
+def discover_source_roots(root="."):
+    """Return ``src/`` directories under ``libraries/`` and ``support/``.
+
+    *root* is the workspace root directory, defaulting to the current
+    working directory.
+    """
     roots = []
     for parent in ("libraries", "support"):
-        for name in _sorted_listdir(parent):
-            src = parent + "/" + name + "/src"
+        parent_path = root + "/" + parent if root != "." else parent
+        for name in _sorted_listdir(parent_path):
+            src = parent_path + "/" + name + "/src"
             if _is_dir(src):
                 roots.append(src)
     return roots
 
 
-def _discover_tests():
-    """Return paths to all test_*.py files under libraries/*/tests/."""
+def discover_tests(root="."):
+    """Return paths to all ``test_*.py`` files under ``libraries/*/tests/``.
+
+    *root* is the workspace root directory, defaulting to the current
+    working directory.
+    """
+    libs_path = root + "/libraries" if root != "." else "libraries"
     tests = []
-    for name in _sorted_listdir("libraries"):
-        t_dir = "libraries/" + name + "/tests"
+    for name in _sorted_listdir(libs_path):
+        t_dir = libs_path + "/" + name + "/tests"
         for filename in _sorted_listdir(t_dir):
             if filename.startswith("test_") and filename.endswith(".py"):
                 tests.append(t_dir + "/" + filename)
     return tests
 
 
-def _setup_source_paths():
-    """Insert discovered source roots into sys.path so library imports resolve."""
-    for root in _discover_source_roots():
-        if root not in sys.path:
-            sys.path.insert(0, root)
+def setup_source_paths(root="."):
+    """Insert discovered source roots into ``sys.path`` so library imports resolve."""
+    for src_root in discover_source_roots(root):
+        if src_root not in sys.path:
+            sys.path.insert(0, src_root)
 
 
 class _Namespace:
     """Attribute container for exec'd module globals."""
 
 
-def _exec_as_namespace(path, name="__main__", package=""):
-    """Execute a .py file and return a namespace object with its globals."""
+def exec_as_namespace(path, name="__main__", package=""):
+    """Execute a ``.py`` file and return a namespace object with its globals.
+
+    This avoids the standard import machinery, which behaves inconsistently
+    across MicroPython and CircuitPython unix-port builds.
+    """
     ns = {"__name__": name, "__file__": path, "__package__": package}
     with open(path) as fh:
         exec(fh.read(), ns)
@@ -76,27 +94,25 @@ def _exec_as_namespace(path, name="__main__", package=""):
     return obj
 
 
-def main():
-    """Discover and run all cross-runtime unit tests, returning a shell exit code."""
-    _setup_source_paths()
+def run_all(root="."):
+    """Discover and run all cross-runtime unit tests, returning a shell exit code.
 
-    test_files = _discover_tests()
+    *root* is the workspace root directory, defaulting to the current
+    working directory.
+    """
+    setup_source_paths(root)
+
+    test_files = discover_tests(root)
     if not test_files:
         print("NO TESTS FOUND")
         return 0
-
-    runner = _exec_as_namespace(
-        "support/test_harness/src/chumicro_test_harness/runner.py",
-        "chumicro_test_harness.runner",
-        "chumicro_test_harness",
-    )
 
     total_failed = 0
     skipped = 0
     for path in test_files:
         print(f"== {path} ==")
         try:
-            test_mod = _exec_as_namespace(path)
+            test_mod = exec_as_namespace(path)
         except ImportError as exc:
             skipped += 1
             print(f"SKIP {path} (import failed: {exc})")
@@ -105,7 +121,7 @@ def main():
             total_failed += 1
             print(f"ERROR loading {path}: {exc}")
             continue
-        result = runner.run_module(test_mod)
+        result = run_module(test_mod)
         if result != 0:
             total_failed += 1
 
@@ -114,5 +130,3 @@ def main():
 
     return 1 if total_failed else 0
 
-
-raise SystemExit(main())

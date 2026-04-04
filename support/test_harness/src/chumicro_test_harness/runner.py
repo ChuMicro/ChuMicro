@@ -1,4 +1,4 @@
-"""Minimal test discovery and execution helpers for device tests."""
+"""Minimal test discovery and execution helpers for cross-runtime tests."""
 
 import sys
 

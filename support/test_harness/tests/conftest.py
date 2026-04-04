@@ -1,3 +1,3 @@
-"""Test configuration for the Chumicro device-test harness package."""
+"""Test configuration for the Chumicro test harness package."""
 
 

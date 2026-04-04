@@ -1,16 +1,17 @@
 # chumicro-test-harness
 
-A very small test runner intended for `functional_tests/` on MicroPython and CircuitPython.
+A very small test runner and cross-runtime orchestrator for Chumicro libraries.
 
-This runner is intentionally tiny. It is meant to complement host-side `pytest`, not replace it.
+This package is intentionally tiny. It is meant to complement host-side `pytest`, not replace it.
 
 ## Current manual workflow
 
 The cross-runtime test path uses (Decision 0016):
 
-- `support/test_harness/src/chumicro_test_harness/runner.py`
+- `support/test_harness/src/chumicro_test_harness/runner.py` — lightweight runner
+- `support/test_harness/src/chumicro_test_harness/discovery.py` — test discovery and orchestration
 - `libraries/*/tests/test_*.py` (cross-runtime tests — no `import pytest`)
-- `support/test_harness/run_device_smoke.py`
+- `support/test_harness/run_cross_runtime.py` — entry point (thin bootstrapper)
 
 Today this is wired through `scripts/run.py` for local compatibility evaluation and advisory CI jobs.
 
@@ -18,7 +19,7 @@ Today this is wired through `scripts/run.py` for local compatibility evaluation 
 
 ```zsh
 cd /path/to/chumicro
-python support/test_harness/run_device_smoke.py
+python support/test_harness/run_cross_runtime.py
 ```
 
 ### MicroPython Unix-port cross-runtime run

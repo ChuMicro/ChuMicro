@@ -31,8 +31,8 @@ from prepare_micropython import prepare_micropython as _prepare_micropython
 from scaffold import new_library
 
 PYTHON = sys.executable
-SMOKE_SCRIPT = "support/test_harness/run_device_smoke.py"
-SMOKE_EXEC = f'exec(open("{SMOKE_SCRIPT}").read())'
+COMPAT_SCRIPT = "support/test_harness/run_cross_runtime.py"
+COMPAT_EXEC = f'exec(open("{COMPAT_SCRIPT}").read())'
 
 
 def _run(command: list[str], env: dict[str, str] | None = None) -> int:
@@ -370,7 +370,7 @@ def preflight() -> int:
     """Run the full check suite that CI requires on every pull request.
 
     Covers lint, all CPython tests, example verification, MicroPython and
-    CircuitPython compatibility smoke tests, and package builds.  Device
+    CircuitPython cross-runtime unit tests, and package builds.  Device
     tests are excluded — they require physical hardware.
     """
     all_pkgs = discover_package_dirs()
@@ -405,7 +405,7 @@ def prepare_circuitpython() -> int:
 
 
 def test_micropython_compat() -> int:
-    """Run the sample device-test smoke script with the MicroPython Unix binary."""
+    """Run the cross-runtime unit tests with the MicroPython Unix binary."""
     micropython_bin = resolve_micropython_binary()
     if micropython_bin is None:
         print("MicroPython binary not found. Preparing unix-port runtime first.")
@@ -422,11 +422,11 @@ def test_micropython_compat() -> int:
             )
             return 1
 
-    return _run([micropython_bin, "-c", SMOKE_EXEC])
+    return _run([micropython_bin, "-c", COMPAT_EXEC])
 
 
 def test_circuitpython_compat() -> int:
-    """Run the shared smoke script with a configured or repo-managed CircuitPython binary."""
+    """Run the cross-runtime unit tests with a configured or repo-managed CircuitPython binary."""
     circuitpython_bin = resolve_circuitpython_binary()
     if circuitpython_bin is None:
         print("CircuitPython binary not found. Preparing unix-port runtime first.")
@@ -443,11 +443,11 @@ def test_circuitpython_compat() -> int:
             )
             return 1
 
-    return _run([circuitpython_bin, "-c", SMOKE_EXEC])
+    return _run([circuitpython_bin, "-c", COMPAT_EXEC])
 
 
 def test_runtime_matrix() -> int:
-    """Run host tests and compatibility smoke tests across all proven runtimes."""
+    """Run host tests and cross-runtime unit tests across all proven runtimes."""
     all_pkgs = discover_package_dirs()
     steps = (
         ("test", lambda: test_cpython(all_pkgs)),
@@ -516,8 +516,8 @@ def _build_parser() -> argparse.ArgumentParser:
     sub.add_parser("preflight", help="lint + test + examples + compat + build")
     sub.add_parser("prepare-micropython", help="prepare MicroPython unix-port")
     sub.add_parser("prepare-circuitpython", help="prepare CircuitPython unix-port")
-    sub.add_parser("test-micropython-compat", help="MicroPython smoke test")
-    sub.add_parser("test-circuitpython-compat", help="CircuitPython smoke test")
+    sub.add_parser("test-micropython-compat", help="MicroPython cross-runtime unit tests")
+    sub.add_parser("test-circuitpython-compat", help="CircuitPython cross-runtime unit tests")
     sub.add_parser(
         "test-runtime-matrix",
         help="test all packages on CPython + MicroPython + CircuitPython",

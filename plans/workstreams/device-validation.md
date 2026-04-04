@@ -19,7 +19,7 @@ Add a simulation-first validation path, then layer on optional hardware executio
 - `support/test_harness/` exists as the current lightweight on-device runner
 - `libraries/timing/functional_tests/test_heartbeat_ticks.py` exists as the first device-facing timing test
 - `scripts/prepare_micropython.py` and `scripts/prepare_circuitpython.py` provide MicroPython and CircuitPython unix-port preparation (tasks: `prepare-micropython`, `prepare-circuitpython`)
-- `support/test_harness/run_device_smoke.py` exists as the canonical cross-runtime test runner entrypoint (runs `tests/` through the lightweight harness, see Decision 0016)
+- `support/test_harness/run_cross_runtime.py` exists as the canonical cross-runtime test runner entrypoint (runs `tests/` through the lightweight harness, see Decision 0016)
 - `devices.example.yml` exists as the first committed local board registry template
 - manual-only hardware execution is the current documented starting point
 
