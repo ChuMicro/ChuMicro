@@ -1,6 +1,6 @@
 # Decision 0018: Dispatcher evolution — handles, heartbeats, priorities, and time budgets
 
-Status: `accepted` (Phases 1–2 implemented; Phases 3–4 designed for future implementation)
+Status: `accepted` (Phase 1 implemented; Phase 2 superseded by Decision 0019; Phases 3–4 designed for future implementation)
 Date: `2026-04-03`
 
 ## Context

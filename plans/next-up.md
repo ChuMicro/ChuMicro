@@ -45,7 +45,8 @@
 
 ## Done
 
-- [x] Implement Decision 0018 Phases 1–2: handle-based registration (`HandlerHandle`), heartbeat-integrated handlers (`period_ms` on `register()`), `poll_heartbeats()`, priority constants.  `chumicro-serviceable` 0.1.0 → 0.2.0.
+- [x] Move period ownership from dispatcher to runner (Decision 0019).  Remove `poll_heartbeats()`, `period_ms` from `register()`, `ticks` from dispatcher.  Add `ServiceRunner.add()` with `period_ms` and `ServiceHandle`.  `chumicro-serviceable` 0.2.0 → 0.3.0.
+- [x] Implement Decision 0018 Phases 1–2: handle-based registration (`HandlerHandle`), heartbeat-integrated handlers (`period_ms` on `register()`), `poll_heartbeats()`, priority constants.  `chumicro-serviceable` 0.1.0 → 0.2.0.  *(Phase 2 superseded by Decision 0019.)*
 - [x] Generalize the compatibility smoke runner to discover and exercise device tests for any library, not just timing.
 - [x] Scope AGENTS.md performance guidelines (f-strings, `const()`, `memoryview`, pre-allocated buffers) to library code only. Infrastructure code (`scripts/`, `support/`) runs exclusively on CPython and should not be constrained by embedded-runtime rules.
 - [x] Move prepare logic from `ci/prepare_*.py` into importable modules under `scripts/`. `ci/` was subsequently removed entirely — all logic now lives in `scripts/`.

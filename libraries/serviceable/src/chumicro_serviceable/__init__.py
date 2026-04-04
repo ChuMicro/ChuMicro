@@ -8,6 +8,7 @@ from .core import (
     Event,
     EventQueueSink,
     HandlerHandle,
+    ServiceHandle,
     ServiceRunner,
     SimpleEventDispatcher,
 )
@@ -20,6 +21,7 @@ __all__ = [
     "PRIORITY_HIGH",
     "PRIORITY_LOW",
     "PRIORITY_NORMAL",
+    "ServiceHandle",
     "ServiceRunner",
     "SimpleEventDispatcher",
 ]

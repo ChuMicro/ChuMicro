@@ -12,6 +12,7 @@ from chumicro_serviceable import (
     Event,
     EventQueueSink,
     HandlerHandle,
+    ServiceHandle,
     ServiceRunner,
     SimpleEventDispatcher,
 )
@@ -241,14 +242,6 @@ def test_handle_set_priority():
     assert handle.priority == PRIORITY_LOW
 
 
-def test_handle_period_ms_none_by_default():
-    """period_ms should be None when no heartbeat is configured."""
-    dispatcher = SimpleEventDispatcher()
-    handle = dispatcher.register("tick", lambda e: None)
-
-    assert handle.period_ms is None
-
-
 def test_handle_repr():
     """Handle repr should include event type and status."""
     dispatcher = SimpleEventDispatcher()
@@ -290,179 +283,7 @@ def test_reregister_deactivates_old_handle():
     assert old_handle.active is False
 
 
-# -- Heartbeat-integrated handlers --
-
-
-def test_heartbeat_handler_period_ms():
-    """Handle should expose the configured heartbeat period."""
-    fake = FakeTicks()
-    dispatcher = SimpleEventDispatcher(ticks=fake)
-    handle = dispatcher.register("tick", lambda e: None, period_ms=200)
-
-    assert handle.period_ms == 200
-
-
-def test_heartbeat_handler_fires_when_due():
-    """poll_heartbeats() should emit an event when the heartbeat period elapses."""
-    fake = FakeTicks()
-    dispatcher = SimpleEventDispatcher(ticks=fake)
-    received = []
-    dispatcher.register("pulse", lambda e: received.append(e.event_type),
-                        period_ms=100)
-
-    sink = EventQueueSink(max_size=8)
-
-    # Not due yet.
-    fake.advance(50)
-    dispatcher.poll_heartbeats(fake.ticks_ms(), sink)
-    assert len(sink) == 0
-
-    # Now due.
-    fake.advance(50)
-    dispatcher.poll_heartbeats(fake.ticks_ms(), sink)
-    assert len(sink) == 1
-    assert sink.pop().event_type == "pulse"
-
-
-def test_heartbeat_handler_does_not_fire_early():
-    """poll_heartbeats() should not emit before the period elapses."""
-    fake = FakeTicks()
-    dispatcher = SimpleEventDispatcher(ticks=fake)
-    dispatcher.register("pulse", lambda e: None, period_ms=100)
-    sink = EventQueueSink(max_size=4)
-
-    fake.advance(99)
-    dispatcher.poll_heartbeats(fake.ticks_ms(), sink)
-
-    assert len(sink) == 0
-
-
-def test_heartbeat_handler_repeats():
-    """Heartbeat should fire again after another period elapses."""
-    fake = FakeTicks()
-    dispatcher = SimpleEventDispatcher(ticks=fake)
-    dispatcher.register("pulse", lambda e: None, period_ms=100)
-    sink = EventQueueSink(max_size=8)
-
-    fake.advance(100)
-    dispatcher.poll_heartbeats(fake.ticks_ms(), sink)
-    assert len(sink) == 1
-    sink.pop()
-
-    fake.advance(100)
-    dispatcher.poll_heartbeats(fake.ticks_ms(), sink)
-    assert len(sink) == 1
-
-
-def test_multiple_heartbeat_handlers():
-    """Multiple heartbeat handlers with different periods should fire independently."""
-    fake = FakeTicks()
-    dispatcher = SimpleEventDispatcher(ticks=fake)
-    dispatcher.register("fast", lambda e: None, period_ms=50)
-    dispatcher.register("slow", lambda e: None, period_ms=200)
-    sink = EventQueueSink(max_size=8)
-
-    # At 50ms: fast fires, slow does not.
-    fake.advance(50)
-    dispatcher.poll_heartbeats(fake.ticks_ms(), sink)
-    assert len(sink) == 1
-    assert sink.pop().event_type == "fast"
-
-    # At 100ms: fast fires again, slow still not.
-    fake.advance(50)
-    dispatcher.poll_heartbeats(fake.ticks_ms(), sink)
-    assert len(sink) == 1
-    assert sink.pop().event_type == "fast"
-
-    # At 200ms: both fire.
-    fake.advance(100)
-    dispatcher.poll_heartbeats(fake.ticks_ms(), sink)
-    assert len(sink) == 2
-    types = {sink.pop().event_type, sink.pop().event_type}
-    assert types == {"fast", "slow"}
-
-
-def test_handle_set_period_adds_heartbeat():
-    """set_period() should add a heartbeat to a previously non-periodic handler."""
-    fake = FakeTicks()
-    dispatcher = SimpleEventDispatcher(ticks=fake)
-    handle = dispatcher.register("tick", lambda e: None)
-
-    assert handle.period_ms is None
-
-    handle.set_period(300)
-    assert handle.period_ms == 300
-
-
-def test_handle_set_period_changes_heartbeat():
-    """set_period() should replace the existing heartbeat."""
-    fake = FakeTicks()
-    dispatcher = SimpleEventDispatcher(ticks=fake)
-    handle = dispatcher.register("tick", lambda e: None, period_ms=100)
-
-    handle.set_period(500)
-    assert handle.period_ms == 500
-
-
-def test_handle_set_period_none_removes_heartbeat():
-    """set_period(None) should remove the heartbeat."""
-    fake = FakeTicks()
-    dispatcher = SimpleEventDispatcher(ticks=fake)
-    handle = dispatcher.register("tick", lambda e: None, period_ms=100)
-
-    handle.set_period(None)
-    assert handle.period_ms is None
-
-
-def test_heartbeat_events_dispatch_through_runner():
-    """ServiceRunner should poll heartbeats and dispatch their events."""
-    fake = FakeTicks()
-    received = []
-    sink = EventQueueSink(max_size=8)
-    dispatcher = SimpleEventDispatcher(ticks=fake)
-    dispatcher.register("pulse", lambda e: received.append(e.event_type),
-                        period_ms=100)
-    runner = ServiceRunner([], sink, dispatcher, ticks=fake)
-
-    # Not due yet.
-    runner.service_once()
-    assert received == []
-
-    # Advance past the period and service again.
-    fake.advance(100)
-    runner.service_once()
-    assert received == ["pulse"]
-
-
-def test_heartbeat_and_component_events_both_dispatch():
-    """Both component events and heartbeat events should dispatch in the same tick."""
-    fake = FakeTicks()
-    received = []
-
-    class _Emitter:
-        """Component that always emits."""
-
-        def service(self, event_sink, now_ms):
-            """Emit a component event."""
-            event_sink.emit(self, "component.event")
-
-    sink = EventQueueSink(max_size=8)
-    dispatcher = SimpleEventDispatcher(ticks=fake)
-    dispatcher.register("component.event",
-                        lambda e: received.append("component"))
-    dispatcher.register("heartbeat.event",
-                        lambda e: received.append("heartbeat"),
-                        period_ms=100)
-    runner = ServiceRunner([_Emitter()], sink, dispatcher, ticks=fake)
-
-    fake.advance(100)
-    runner.service_once()
-
-    assert "component" in received
-    assert "heartbeat" in received
-
-
-# -- ServiceRunner --
+# -- Helpers --
 
 
 class _StubService:
@@ -477,6 +298,119 @@ class _StubService:
         event_sink.emit(self, self._event_type)
 
 
+# -- ServiceHandle --
+
+
+def test_add_returns_service_handle():
+    """add() should return a ServiceHandle."""
+    fake = FakeTicks()
+    runner = ServiceRunner(EventQueueSink(), SimpleEventDispatcher(), ticks=fake)
+    handle = runner.add(_StubService())
+
+    assert isinstance(handle, ServiceHandle)
+
+
+def test_service_handle_active_when_added():
+    """ServiceHandle should report active when first added."""
+    fake = FakeTicks()
+    runner = ServiceRunner(EventQueueSink(), SimpleEventDispatcher(), ticks=fake)
+    handle = runner.add(_StubService())
+
+    assert handle.active is True
+
+
+def test_service_handle_period_ms_none_by_default():
+    """period_ms should be None when no period is configured."""
+    fake = FakeTicks()
+    runner = ServiceRunner(EventQueueSink(), SimpleEventDispatcher(), ticks=fake)
+    handle = runner.add(_StubService())
+
+    assert handle.period_ms is None
+
+
+def test_service_handle_period_ms_when_set():
+    """period_ms should reflect the configured period."""
+    fake = FakeTicks()
+    runner = ServiceRunner(EventQueueSink(), SimpleEventDispatcher(), ticks=fake)
+    handle = runner.add(_StubService(), period_ms=200)
+
+    assert handle.period_ms == 200
+
+
+def test_service_handle_set_period_adds():
+    """set_period() should add a period to a previously non-periodic service."""
+    fake = FakeTicks()
+    runner = ServiceRunner(EventQueueSink(), SimpleEventDispatcher(), ticks=fake)
+    handle = runner.add(_StubService())
+
+    assert handle.period_ms is None
+    handle.set_period(300)
+    assert handle.period_ms == 300
+
+
+def test_service_handle_set_period_changes():
+    """set_period() should replace the existing period."""
+    fake = FakeTicks()
+    runner = ServiceRunner(EventQueueSink(), SimpleEventDispatcher(), ticks=fake)
+    handle = runner.add(_StubService(), period_ms=100)
+
+    handle.set_period(500)
+    assert handle.period_ms == 500
+
+
+def test_service_handle_set_period_none_removes():
+    """set_period(None) should remove the period (service runs every tick)."""
+    fake = FakeTicks()
+    runner = ServiceRunner(EventQueueSink(), SimpleEventDispatcher(), ticks=fake)
+    handle = runner.add(_StubService(), period_ms=100)
+
+    handle.set_period(None)
+    assert handle.period_ms is None
+
+
+def test_service_handle_remove():
+    """remove() should deactivate the handle."""
+    fake = FakeTicks()
+    runner = ServiceRunner(EventQueueSink(), SimpleEventDispatcher(), ticks=fake)
+    handle = runner.add(_StubService())
+    handle.remove()
+
+    assert handle.active is False
+
+
+def test_service_handle_remove_idempotent():
+    """Calling remove() twice should not raise."""
+    fake = FakeTicks()
+    runner = ServiceRunner(EventQueueSink(), SimpleEventDispatcher(), ticks=fake)
+    handle = runner.add(_StubService())
+    handle.remove()
+    handle.remove()  # should not raise
+
+
+def test_service_handle_repr():
+    """ServiceHandle repr should include period and status."""
+    fake = FakeTicks()
+    runner = ServiceRunner(EventQueueSink(), SimpleEventDispatcher(), ticks=fake)
+    handle = runner.add(_StubService(), period_ms=100)
+
+    r = repr(handle)
+    assert "100" in r
+    assert "active" in r
+
+
+def test_service_handle_repr_after_remove():
+    """ServiceHandle repr should show removed after remove()."""
+    fake = FakeTicks()
+    runner = ServiceRunner(EventQueueSink(), SimpleEventDispatcher(), ticks=fake)
+    handle = runner.add(_StubService())
+    handle.remove()
+
+    assert "removed" in repr(handle)
+
+
+# -- ServiceRunner --
+
+
 def test_runner_services_and_dispatches():
     """ServiceRunner should service all components, then dispatch events."""
     fake = FakeTicks()
@@ -486,7 +420,8 @@ def test_runner_services_and_dispatches():
     dispatcher = SimpleEventDispatcher()
     dispatcher.register("test.ping", lambda e: received.append(e.event_type))
 
-    runner = ServiceRunner([svc], sink, dispatcher, ticks=fake)
+    runner = ServiceRunner(sink, dispatcher, ticks=fake)
+    runner.add(svc)
     runner.service_once()
 
     assert received == ["test.ping"]
@@ -504,7 +439,9 @@ def test_runner_handles_multiple_services():
     dispatcher.register("a", lambda e: received.append("a"))
     dispatcher.register("b", lambda e: received.append("b"))
 
-    runner = ServiceRunner([svc_a, svc_b], sink, dispatcher, ticks=fake)
+    runner = ServiceRunner(sink, dispatcher, ticks=fake)
+    runner.add(svc_a)
+    runner.add(svc_b)
     runner.service_once()
 
     assert received == ["a", "b"]
@@ -522,7 +459,8 @@ def test_runner_handles_no_events():
     fake = FakeTicks()
     sink = EventQueueSink(max_size=4)
     dispatcher = SimpleEventDispatcher()
-    runner = ServiceRunner([_QuietService()], sink, dispatcher, ticks=fake)
+    runner = ServiceRunner(sink, dispatcher, ticks=fake)
+    runner.add(_QuietService())
     runner.service_once()  # should not raise
 
     assert not sink.has_events()
@@ -533,7 +471,7 @@ def test_runner_returns_shared_timestamp():
     fake = FakeTicks()
     sink = EventQueueSink(max_size=4)
     dispatcher = SimpleEventDispatcher()
-    runner = ServiceRunner([], sink, dispatcher, ticks=fake)
+    runner = ServiceRunner(sink, dispatcher, ticks=fake)
 
     fake.advance(42)
     assert runner.service_once() == 42
@@ -553,9 +491,10 @@ def test_runner_passes_same_timestamp_to_all():
 
     sink = EventQueueSink(max_size=4)
     dispatcher = SimpleEventDispatcher()
-    runner = ServiceRunner(
-        [_Recorder(), _Recorder(), _Recorder()], sink, dispatcher, ticks=fake
-    )
+    runner = ServiceRunner(sink, dispatcher, ticks=fake)
+    runner.add(_Recorder())
+    runner.add(_Recorder())
+    runner.add(_Recorder())
 
     fake.advance(77)
     runner.service_once()
@@ -567,12 +506,224 @@ def test_runner_defaults_to_real_ticks():
     """ServiceRunner with no ticks argument should use chumicro_timing.ticks_ms."""
     sink = EventQueueSink(max_size=4)
     dispatcher = SimpleEventDispatcher()
-    runner = ServiceRunner([], sink, dispatcher)
+    runner = ServiceRunner(sink, dispatcher)
 
     now = runner.service_once()
 
     assert isinstance(now, int)
     assert now >= 0
+
+
+# -- ServiceRunner: period gating --
+
+
+def test_runner_period_gates_service():
+    """Service with period should only be called when the period elapses."""
+    fake = FakeTicks()
+    received = []
+    svc = _StubService("pulse")
+    sink = EventQueueSink(max_size=8)
+    dispatcher = SimpleEventDispatcher()
+    dispatcher.register("pulse", lambda e: received.append(e.event_type))
+
+    runner = ServiceRunner(sink, dispatcher, ticks=fake)
+    runner.add(svc, period_ms=100)
+
+    # Not due yet.
+    runner.service_once()
+    assert received == []
+
+    # Now due.
+    fake.advance(100)
+    runner.service_once()
+    assert received == ["pulse"]
+
+
+def test_runner_period_does_not_fire_early():
+    """Service should not be called before the period elapses."""
+    fake = FakeTicks()
+    call_count = [0]
+
+    class _Counter:
+        """Count service calls."""
+
+        def service(self, event_sink, now_ms):
+            """Increment the counter."""
+            call_count[0] += 1
+
+    sink = EventQueueSink(max_size=4)
+    dispatcher = SimpleEventDispatcher()
+    runner = ServiceRunner(sink, dispatcher, ticks=fake)
+    runner.add(_Counter(), period_ms=100)
+
+    fake.advance(99)
+    runner.service_once()
+
+    assert call_count[0] == 0
+
+
+def test_runner_period_repeats():
+    """Heartbeat should fire again after another period elapses."""
+    fake = FakeTicks()
+    received = []
+    svc = _StubService("pulse")
+    sink = EventQueueSink(max_size=8)
+    dispatcher = SimpleEventDispatcher()
+    dispatcher.register("pulse", lambda e: received.append(1))
+
+    runner = ServiceRunner(sink, dispatcher, ticks=fake)
+    runner.add(svc, period_ms=100)
+
+    fake.advance(100)
+    runner.service_once()
+    assert len(received) == 1
+
+    fake.advance(100)
+    runner.service_once()
+    assert len(received) == 2
+
+
+def test_runner_multiple_periods():
+    """Multiple services with different periods should fire independently."""
+    fake = FakeTicks()
+    received = []
+    fast = _StubService("fast")
+    slow = _StubService("slow")
+    sink = EventQueueSink(max_size=8)
+    dispatcher = SimpleEventDispatcher()
+    dispatcher.register("fast", lambda e: received.append("fast"))
+    dispatcher.register("slow", lambda e: received.append("slow"))
+
+    runner = ServiceRunner(sink, dispatcher, ticks=fake)
+    runner.add(fast, period_ms=50)
+    runner.add(slow, period_ms=200)
+
+    # At 50ms: fast fires, slow does not.
+    fake.advance(50)
+    runner.service_once()
+    assert received == ["fast"]
+
+    # At 100ms: fast fires again, slow still not.
+    received.clear()
+    fake.advance(50)
+    runner.service_once()
+    assert received == ["fast"]
+
+    # At 200ms: both fire.
+    received.clear()
+    fake.advance(100)
+    runner.service_once()
+    assert set(received) == {"fast", "slow"}
+
+
+def test_runner_period_and_no_period_together():
+    """Both periodic and every-tick services should work together."""
+    fake = FakeTicks()
+    received = []
+    always = _StubService("always")
+    periodic = _StubService("periodic")
+    sink = EventQueueSink(max_size=8)
+    dispatcher = SimpleEventDispatcher()
+    dispatcher.register("always", lambda e: received.append("always"))
+    dispatcher.register("periodic", lambda e: received.append("periodic"))
+
+    runner = ServiceRunner(sink, dispatcher, ticks=fake)
+    runner.add(always)
+    runner.add(periodic, period_ms=100)
+
+    # Tick 0: always fires, periodic not due.
+    runner.service_once()
+    assert received == ["always"]
+
+    # Advance past period: both fire.
+    received.clear()
+    fake.advance(100)
+    runner.service_once()
+    assert "always" in received
+    assert "periodic" in received
+
+
+def test_runner_remove_stops_service():
+    """Removed service should no longer be called."""
+    fake = FakeTicks()
+    call_count = [0]
+
+    class _Counter:
+        """Count service calls."""
+
+        def service(self, event_sink, now_ms):
+            """Increment the counter."""
+            call_count[0] += 1
+
+    sink = EventQueueSink(max_size=4)
+    dispatcher = SimpleEventDispatcher()
+    runner = ServiceRunner(sink, dispatcher, ticks=fake)
+    handle = runner.add(_Counter())
+
+    runner.service_once()
+    assert call_count[0] == 1
+
+    handle.remove()
+    runner.service_once()
+    assert call_count[0] == 1  # not called again
+
+
+def test_runner_set_period_at_runtime():
+    """Changing a service's period at runtime should take effect."""
+    fake = FakeTicks()
+    call_count = [0]
+
+    class _Counter:
+        """Count service calls."""
+
+        def service(self, event_sink, now_ms):
+            """Increment the counter."""
+            call_count[0] += 1
+
+    sink = EventQueueSink(max_size=4)
+    dispatcher = SimpleEventDispatcher()
+    runner = ServiceRunner(sink, dispatcher, ticks=fake)
+    handle = runner.add(_Counter())
+
+    # Called every tick.
+    runner.service_once()
+    assert call_count[0] == 1
+
+    # Add a period — should stop calling until period elapses.
+    handle.set_period(200)
+    runner.service_once()
+    assert call_count[0] == 1  # not due yet
+
+    fake.advance(200)
+    runner.service_once()
+    assert call_count[0] == 2
+
+
+def test_runner_remove_period_at_runtime():
+    """Removing a service's period should make it run every tick again."""
+    fake = FakeTicks()
+    call_count = [0]
+
+    class _Counter:
+        """Count service calls."""
+
+        def service(self, event_sink, now_ms):
+            """Increment the counter."""
+            call_count[0] += 1
+
+    sink = EventQueueSink(max_size=4)
+    dispatcher = SimpleEventDispatcher()
+    runner = ServiceRunner(sink, dispatcher, ticks=fake)
+    handle = runner.add(_Counter(), period_ms=100)
+
+    # Not due yet.
+    runner.service_once()
+    assert call_count[0] == 0
+
+    # Remove the period.
+    handle.set_period(None)
+    runner.service_once()
+    assert call_count[0] == 1  # now called every tick
 
 
 # -- FakeEventSink --

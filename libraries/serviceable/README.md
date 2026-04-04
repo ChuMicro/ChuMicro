@@ -2,7 +2,7 @@
 
 A standard service-and-event pattern for Chumicro libraries.
 
-Components implement `service(event_sink, now_ms)` to do one tick of work and emit events.  A `ServiceRunner` captures time once, calls all components with a shared timestamp, and dispatches events to handlers — replacing ad-hoc polling and drain loops with a single standard contract.
+Components implement `service(event_sink, now_ms)` to do one tick of work and emit events.  A `ServiceRunner` captures time once, gates each component by its optional period, and dispatches events to handlers — replacing ad-hoc polling and drain loops with a single standard contract.
 
 ## Installation
 
@@ -18,23 +18,6 @@ pip install chumicro-serviceable
 ```
 
 ## Quick example
-
-```python
-from chumicro_serviceable import EventQueueSink, ServiceRunner, SimpleEventDispatcher
-
-sink = EventQueueSink(max_size=16)
-dispatcher = SimpleEventDispatcher()
-
-# Heartbeat-integrated handler — no component class needed.
-dispatcher.register("led.blink", lambda e: toggle_led(), period_ms=500)
-
-runner = ServiceRunner([], sink, dispatcher)
-
-while True:
-    runner.service_once()
-```
-
-For components that need their own state or logic, implement `service(event_sink, now_ms)`:
 
 ```python
 from chumicro_serviceable import EventQueueSink, ServiceRunner, SimpleEventDispatcher
@@ -58,7 +41,35 @@ sink = EventQueueSink(max_size=16)
 dispatcher = SimpleEventDispatcher()
 dispatcher.register(Blinker.EVENT_BLINK, lambda e: print("blink!"))
 
-runner = ServiceRunner([blinker], sink, dispatcher)
+runner = ServiceRunner(sink, dispatcher)
+runner.add(blinker)
+
+while True:
+    runner.service_once()
+```
+
+For simple periodic services, let the runner handle the timing:
+
+```python
+from chumicro_serviceable import EventQueueSink, ServiceRunner, SimpleEventDispatcher
+
+
+class SensorReader:
+    EVENT_READING = "sensor.reading"
+
+    def service(self, event_sink, now_ms):
+        event_sink.emit(self, self.EVENT_READING, read_sensor())
+
+
+sink = EventQueueSink(max_size=16)
+dispatcher = SimpleEventDispatcher()
+dispatcher.register(SensorReader.EVENT_READING, lambda e: log(e.data))
+
+runner = ServiceRunner(sink, dispatcher)
+handle = runner.add(SensorReader(), period_ms=5000)
+
+# Change the rate at runtime.
+handle.set_period(1000)
 
 while True:
     runner.service_once()
@@ -76,21 +87,24 @@ while True:
 | `EventQueueSink.pop()` | Remove and return the oldest event, or `None` |
 | `EventQueueSink.has_events()` | Check whether unread events exist |
 | `EventQueueSink.clear()` | Discard all pending events |
-| `SimpleEventDispatcher(ticks=None)` | Routes events to handler functions by event type |
-| `SimpleEventDispatcher.register(event_type, handler, period_ms=None, priority=PRIORITY_NORMAL)` | Register a handler; returns a `HandlerHandle` |
+| `SimpleEventDispatcher()` | Routes events to handler functions by event type |
+| `SimpleEventDispatcher.register(event_type, handler, priority=PRIORITY_NORMAL)` | Register a handler; returns a `HandlerHandle` |
 | `SimpleEventDispatcher.unregister(event_type)` | Remove a handler by event type |
 | `SimpleEventDispatcher.dispatch(event)` | Route an event to its handler |
-| `SimpleEventDispatcher.poll_heartbeats(now_ms, event_sink)` | Emit events for any due heartbeat handlers |
 | `HandlerHandle` | Opaque handle for runtime mutation of a registered handler |
-| `HandlerHandle.set_period(period_ms)` | Add, change, or remove the heartbeat (`None` to remove) |
 | `HandlerHandle.set_priority(priority)` | Change the priority level |
 | `HandlerHandle.unregister()` | Remove this handler from the dispatcher |
 | `HandlerHandle.event_type` | Read-only: the event type |
 | `HandlerHandle.priority` | Read-only: the current priority |
-| `HandlerHandle.period_ms` | Read-only: the heartbeat period, or `None` |
 | `HandlerHandle.active` | Read-only: whether the handler is still registered |
-| `ServiceRunner(services, event_sink, dispatcher, ticks=None)` | Service → drain → dispatch loop with shared timestamps |
-| `ServiceRunner.service_once()` | Capture time, service all components, poll heartbeats, drain and dispatch; returns `now_ms` |
+| `ServiceRunner(event_sink, dispatcher, ticks=None)` | Service → drain → dispatch loop with shared timestamps |
+| `ServiceRunner.add(service, period_ms=None)` | Register a service; returns a `ServiceHandle` |
+| `ServiceRunner.service_once()` | Capture time, service due components, drain and dispatch; returns `now_ms` |
+| `ServiceHandle` | Opaque handle for runtime mutation of a registered service |
+| `ServiceHandle.set_period(period_ms)` | Add, change, or remove the period (`None` to remove) |
+| `ServiceHandle.remove()` | Remove this service from the runner |
+| `ServiceHandle.period_ms` | Read-only: the service period, or `None` |
+| `ServiceHandle.active` | Read-only: whether the service is still registered |
 
 ### Constants
 
@@ -129,27 +143,34 @@ class ButtonScanner:
 
 The `now_ms` argument is a shared timestamp captured once per tick by the `ServiceRunner`.  Components that need timing (e.g., periodic heartbeats) use it; components that don't (e.g., button scanners) can ignore it.
 
-## Heartbeat-integrated handlers
+## Period-gated services
 
-For simple periodic callbacks, you don't need a component class at all.  Pass `period_ms` to `register()` and the dispatcher handles the timing internally:
+Pass `period_ms` to `runner.add()` and the runner will only call `service()` when the period elapses:
 
 ```python
-dispatcher.register("sensor.read", read_sensor, period_ms=5000)
-```
+runner = ServiceRunner(sink, dispatcher)
 
-The `ServiceRunner` calls `poll_heartbeats()` each tick.  When the period elapses, the dispatcher emits an event that flows through the normal sink → dispatch path.
+# Called every 5 seconds, not every tick.
+handle = runner.add(sensor, period_ms=5000)
+
+# Change the rate at runtime.
+handle.set_period(1000)
+
+# Remove the period — service runs every tick again.
+handle.set_period(None)
+```
 
 ## Handler handles
 
 `register()` returns a `HandlerHandle` for runtime mutation:
 
 ```python
-handle = dispatcher.register("led.blink", blink_handler, period_ms=500)
+handle = dispatcher.register("led.blink", blink_handler)
 
-# Change the blink rate at runtime.
-handle.set_period(100)
+# Change the priority.
+handle.set_priority(PRIORITY_HIGH)
 
-# Stop blinking.
+# Stop handling.
 handle.unregister()
 ```
 
@@ -175,7 +196,7 @@ All classes use only basic Python features and `collections.deque`.  Works ident
 
 - `EventQueueSink` is backed by `collections.deque` (C-level on MicroPython/CircuitPython) with a fixed max size — no list resizing during operation.
 - `Event` uses `__slots__` to minimise per-instance memory.
-- `_HandlerEntry` and `HandlerHandle` use `__slots__` to minimise per-instance memory.
+- `_HandlerEntry`, `HandlerHandle`, `_ServiceEntry`, and `ServiceHandle` use `__slots__` to minimise per-instance memory.
 - Individual `Event` objects are created per `emit()`.  Tune `max_size` if GC pressure is measurable on your board.
 
 ## Docs

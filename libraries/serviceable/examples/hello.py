@@ -1,8 +1,8 @@
 """Simple serviceable dispatch loop with handle-based registration.
 
 Demonstrates a component that participates in the serviceable dispatch
-loop, and shows how ``register()`` returns a ``HandlerHandle`` for
-inspecting and mutating the registration at runtime.
+loop, and shows how ``ServiceRunner.add()`` returns a ``ServiceHandle``
+for inspecting and mutating the registration at runtime.
 
 Runs on CPython, MicroPython, and CircuitPython without modification.
 """
@@ -36,14 +36,17 @@ def main():
     sink = EventQueueSink(max_size=8)
     dispatcher = SimpleEventDispatcher()
 
-    # register() returns a handle for runtime mutation.
+    # Register a handler for the counter's milestone event.
     handle = dispatcher.register(
         Counter.EVENT_MILESTONE,
         lambda e: print(f"  milestone reached: {e.data} ticks"),
     )
     print(f"Registered handler: {handle}")
 
-    runner = ServiceRunner([counter], sink, dispatcher)
+    # add() returns a ServiceHandle for runtime mutation.
+    runner = ServiceRunner(sink, dispatcher)
+    svc_handle = runner.add(counter)
+    print(f"Service handle: {svc_handle}")
 
     print("Running counter component (20 ticks)...")
 
@@ -51,9 +54,13 @@ def main():
         runner.service_once()
         time.sleep(0.05)
 
-    # Unregister via the handle.
+    # Unregister the handler via its handle.
     handle.unregister()
     print(f"Handler after unregister: {handle}")
+
+    # Remove the service via its handle.
+    svc_handle.remove()
+    print(f"Service after remove: {svc_handle}")
     print("Done.")
 
 

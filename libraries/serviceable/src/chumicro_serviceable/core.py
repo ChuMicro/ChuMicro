@@ -7,9 +7,9 @@ The pattern:
 
 1. Components implement ``service(event_sink, now_ms)`` — do one tick of work,
    emit zero or more events.
-2. A ``ServiceRunner`` captures time once, calls ``service()`` on each
-   component with a shared timestamp, then drains the sink and dispatches
-   events.
+2. A ``ServiceRunner`` captures time once, gates each component by its
+   optional period, calls ``service()`` only when due, then drains the
+   sink and dispatches events.
 3. User code registers handlers via ``SimpleEventDispatcher``.
 
 All classes are cross-runtime compatible (CPython, MicroPython, CircuitPython).
@@ -110,22 +110,21 @@ class EventQueueSink:
 class _HandlerEntry:
     """Internal registration record for a handler in the dispatcher."""
 
-    __slots__ = ("event_type", "handler", "priority", "heartbeat", "active")
+    __slots__ = ("event_type", "handler", "priority", "active")
 
-    def __init__(self, event_type, handler, priority, heartbeat):
+    def __init__(self, event_type, handler, priority):
         """Create a handler entry."""
         self.event_type = event_type
         self.handler = handler
         self.priority = priority
-        self.heartbeat = heartbeat
         self.active = True
 
 
 class HandlerHandle:
     """Opaque handle returned by ``SimpleEventDispatcher.register()``.
 
-    Provides runtime mutation of a registered handler: change its period,
-    priority, or unregister it entirely.
+    Provides runtime mutation of a registered handler: change its
+    priority or unregister it entirely.
 
     Read-only properties expose the current state for inspection and
     testing.
@@ -149,31 +148,9 @@ class HandlerHandle:
         return self._entry.priority
 
     @property
-    def period_ms(self):
-        """Return the heartbeat period in milliseconds, or ``None``."""
-        if self._entry.heartbeat is None:
-            return None
-        return self._entry.heartbeat.period_ms
-
-    @property
     def active(self):
         """Return whether the handler is still registered."""
         return self._entry.active
-
-    def set_period(self, period_ms):
-        """Add, change, or remove the heartbeat for this handler.
-
-        Pass ``None`` to remove an existing heartbeat.  A non-None value
-        creates a new ``Heartbeat`` (resetting the timer).
-        """
-        if period_ms is None:
-            self._entry.heartbeat = None
-            return
-        from chumicro_timing import Heartbeat
-
-        self._entry.heartbeat = Heartbeat(
-            period_ms, ticks=self._dispatcher._ticks
-        )
 
     def set_priority(self, priority):
         """Change the priority level for this handler."""
@@ -200,25 +177,14 @@ class SimpleEventDispatcher:
 
     Registration order determines execution order within equal priorities.
     Re-registering the same event type replaces the old entry.
-
-    An optional ``period_ms`` argument turns a handler into a
-    heartbeat-integrated periodic handler.  Call ``poll_heartbeats()``
-    each tick to emit events for any due heartbeats.
-
-    Args:
-        ticks: Optional tick source (must have ``ticks_ms`` and
-            ``ticks_diff`` methods).  Passed to internal ``Heartbeat``
-            instances.  Defaults to the real clock.
     """
 
-    def __init__(self, ticks=None):
+    def __init__(self):
         """Create a dispatcher with no registered handlers."""
         self._entries = []
         self._index = {}
-        self._ticks = ticks
 
-    def register(self, event_type, handler, period_ms=None,
-                 priority=PRIORITY_NORMAL):
+    def register(self, event_type, handler, priority=PRIORITY_NORMAL):
         """Register *handler* to be called for events of *event_type*.
 
         Returns a ``HandlerHandle`` for runtime mutation.
@@ -226,8 +192,6 @@ class SimpleEventDispatcher:
         Args:
             event_type: The event type string to match.
             handler: Callable invoked with the ``Event`` as sole argument.
-            period_ms: If provided, the dispatcher creates an internal
-                ``Heartbeat`` and emits events for this handler periodically.
             priority: Priority level (default ``PRIORITY_NORMAL``).
         """
         # Replace existing entry for the same event_type.
@@ -236,13 +200,7 @@ class SimpleEventDispatcher:
             old.active = False
             self._entries.remove(old)
 
-        heartbeat = None
-        if period_ms is not None:
-            from chumicro_timing import Heartbeat
-
-            heartbeat = Heartbeat(period_ms, ticks=self._ticks)
-
-        entry = _HandlerEntry(event_type, handler, priority, heartbeat)
+        entry = _HandlerEntry(event_type, handler, priority)
         self._entries.append(entry)
         self._index[event_type] = entry
         return HandlerHandle(entry, self)
@@ -260,21 +218,6 @@ class SimpleEventDispatcher:
         if entry is not None and entry.active:
             entry.handler(event)
 
-    def poll_heartbeats(self, now_ms, event_sink):
-        """Check all heartbeat-integrated handlers and emit events for any that are due.
-
-        Called by ``ServiceRunner`` each tick.  Events emitted here flow
-        through the normal sink → dispatch path.
-
-        Args:
-            now_ms: Shared timestamp for this tick.
-            event_sink: Sink to emit heartbeat events into.
-        """
-        for entry in self._entries:
-            if entry.active and entry.heartbeat is not None:
-                if entry.heartbeat.poll(now_ms):
-                    event_sink.emit(self, entry.event_type)
-
     def _remove_entry(self, entry):
         """Remove *entry* from the dispatcher (called by ``HandlerHandle``)."""
         if entry.event_type in self._index and self._index[entry.event_type] is entry:
@@ -286,37 +229,101 @@ class SimpleEventDispatcher:
             pass
 
 
+class _ServiceEntry:
+    """Internal record for a service registered with the runner."""
+
+    __slots__ = ("service", "heartbeat", "active")
+
+    def __init__(self, service, heartbeat):
+        """Create a service entry."""
+        self.service = service
+        self.heartbeat = heartbeat
+        self.active = True
+
+
+class ServiceHandle:
+    """Opaque handle returned by ``ServiceRunner.add()``.
+
+    Provides runtime mutation of a registered service: change its period
+    or remove it from the runner entirely.
+
+    Read-only properties expose the current state for inspection and
+    testing.
+    """
+
+    __slots__ = ("_entry", "_runner")
+
+    def __init__(self, entry, runner):
+        """Create a handle wrapping *entry* owned by *runner*."""
+        self._entry = entry
+        self._runner = runner
+
+    @property
+    def period_ms(self):
+        """Return the service period in milliseconds, or ``None``."""
+        if self._entry.heartbeat is None:
+            return None
+        return self._entry.heartbeat.period_ms
+
+    @property
+    def active(self):
+        """Return whether the service is still registered."""
+        return self._entry.active
+
+    def set_period(self, period_ms):
+        """Add, change, or remove the period for this service.
+
+        Pass ``None`` to remove an existing period (service runs every tick).
+        A non-None value creates a new ``Heartbeat`` (resetting the timer).
+        """
+        if period_ms is None:
+            self._entry.heartbeat = None
+            return
+        from chumicro_timing import Heartbeat
+
+        self._entry.heartbeat = Heartbeat(
+            period_ms, ticks=self._runner._ticks
+        )
+
+    def remove(self):
+        """Remove this service from the runner."""
+        self._runner._remove_entry(self._entry)
+
+    def __repr__(self):
+        """Return a developer-friendly representation."""
+        status = "active" if self._entry.active else "removed"
+        hb = self._entry.heartbeat
+        period = hb.period_ms if hb is not None else None
+        return f"ServiceHandle(period_ms={period}, {status})"
+
+
 class ServiceRunner:
     """Run serviceable components and dispatch their events.
 
     Captures ``ticks_ms()`` once per ``service_once()`` call and passes
-    the shared timestamp to every component, ensuring all components
+    the shared timestamp to every due component, ensuring all components
     see the same moment in time.
 
-    After servicing components, calls ``poll_heartbeats()`` on the
-    dispatcher (if available) to drive heartbeat-integrated handlers,
-    then drains the sink and dispatches all events.
+    Services are registered via ``add()``, which returns a
+    ``ServiceHandle`` for runtime mutation (change period, remove).
+    Services with a period are only called when their heartbeat fires;
+    services without a period are called every tick.
 
-    This replaces ad-hoc drain loops in user code with a single
-    standard call::
-
-        runner = ServiceRunner(services, sink, dispatcher)
-        # In your main loop:
-        now = runner.service_once()
+    After servicing components, drains the sink and dispatches all events.
 
     Args:
-        services: Iterable of objects that implement ``service(event_sink, now_ms)``.
         event_sink: An ``EventQueueSink`` (or duck-typed equivalent).
         dispatcher: A ``SimpleEventDispatcher`` (or duck-typed equivalent).
         ticks: Optional tick source (must have a ``ticks_ms`` method).
             Defaults to ``chumicro_timing.ticks_ms``.
     """
 
-    def __init__(self, services, event_sink, dispatcher, ticks=None):
-        """Create a runner wiring *services* → *event_sink* → *dispatcher*."""
-        self._services = services
+    def __init__(self, event_sink, dispatcher, ticks=None):
+        """Create a runner wiring services → *event_sink* → *dispatcher*."""
+        self._entries = []
         self._event_sink = event_sink
         self._dispatcher = dispatcher
+        self._ticks = ticks
         if ticks is not None:
             self._ticks_ms = ticks.ticks_ms
         else:
@@ -324,21 +331,56 @@ class ServiceRunner:
 
             self._ticks_ms = ticks_ms
 
+    def add(self, service, period_ms=None):
+        """Register a service to be called on each ``service_once()`` tick.
+
+        If *period_ms* is provided, the service is only called when the
+        period elapses.  Otherwise, it is called every tick.
+
+        Returns a ``ServiceHandle`` for runtime mutation.
+
+        Args:
+            service: Object implementing ``service(event_sink, now_ms)``.
+            period_ms: Optional interval in milliseconds.
+        """
+        heartbeat = None
+        if period_ms is not None:
+            from chumicro_timing import Heartbeat
+
+            heartbeat = Heartbeat(period_ms, ticks=self._ticks)
+        entry = _ServiceEntry(service, heartbeat)
+        self._entries.append(entry)
+        return ServiceHandle(entry, self)
+
     def service_once(self):
-        """Capture time, service all components, then drain and dispatch events.
+        """Capture time, service due components, then drain and dispatch events.
+
+        Services with a period are only called when their heartbeat fires.
+        Services without a period are called every tick.
 
         Returns:
-            The ``now_ms`` value passed to all components this tick.
+            The ``now_ms`` value passed to components this tick.
         """
         now_ms = self._ticks_ms()
-        for svc in self._services:
-            svc.service(self._event_sink, now_ms)
-
-        if hasattr(self._dispatcher, "poll_heartbeats"):
-            self._dispatcher.poll_heartbeats(now_ms, self._event_sink)
+        for entry in self._entries:
+            if not entry.active:
+                continue
+            if entry.heartbeat is not None:
+                if not entry.heartbeat.poll(now_ms):
+                    continue
+            entry.service.service(self._event_sink, now_ms)
 
         while self._event_sink.has_events():
             event = self._event_sink.pop()
             self._dispatcher.dispatch(event)
 
         return now_ms
+
+    def _remove_entry(self, entry):
+        """Remove *entry* from the runner (called by ``ServiceHandle``)."""
+        entry.active = False
+        try:
+            self._entries.remove(entry)
+        except ValueError:
+            pass
+
