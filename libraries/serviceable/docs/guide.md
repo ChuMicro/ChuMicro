@@ -2,48 +2,49 @@
 
 ## Overview
 
-`chumicro-serviceable` provides a standard pattern for active components in the Chumicro ecosystem.  Instead of each library inventing its own `poll()` / callback / `next_event()` API, every active component implements a single method:
+`chumicro-serviceable` provides a standard pattern for active components in the Chumicro ecosystem.  Instead of each library inventing its own `poll()` / callback API, every active component implements two methods:
 
 ```python
-def service(self, event_sink, now_ms):
-    """Do one tick of work; emit zero or more events."""
+def service(self, now_ms):
+    """Check whether the handler should fire.  Return True or False."""
+
+def handle(self, now_ms):
+    """React to the condition detected by service()."""
 ```
 
-A shared `ServiceRunner` captures time once, gates each component by its optional period, calls `service()` only when due, drains the event sink, and dispatches events to registered handlers.  This replaces ad-hoc drain loops in user code.
+A shared `ServiceRunner` captures time once per tick, checks each service, and batch-fires all due handlers.  This replaces ad-hoc polling loops with a single standard contract.
 
 ## The pattern
 
-1. **Components** implement `service(event_sink, now_ms)` — they do one tick of work and emit events into the sink.
-2. **EventQueueSink** is a fixed-capacity ring buffer that collects events.
-3. **SimpleEventDispatcher** routes events to handler functions by event type.
-4. **ServiceRunner** ties it together: capture time → service due components → drain → dispatch.
+1. **Services** implement `service(now_ms) -> bool` — they check a condition and return whether the handler should fire.
+2. **Handlers** implement `handle(now_ms)` — they react when the service says "go".
+3. **ServiceRunner** ties it together: capture time → check all services → batch-fire all due handlers.
+
+Services can be objects with `.service()` and `.handle()` methods, or plain callables (lambdas, functions, bound methods).
 
 ## Getting started
 
 ```python
-from chumicro_serviceable import EventQueueSink, ServiceRunner, SimpleEventDispatcher
-from chumicro_timing import Heartbeat
+from chumicro_serviceable import ServiceRunner
 
 
-class Blinker:
-    EVENT_BLINK = "blinker.blink"
+class TemperatureSensor:
+    """Alert when temperature exceeds a threshold."""
 
-    def __init__(self, period_ms):
-        self._heartbeat = Heartbeat(period_ms=period_ms)
+    def __init__(self, threshold=30.0):
+        self._threshold = threshold
+        self.reading = 20.0
 
-    def service(self, event_sink, now_ms):
-        if self._heartbeat.poll(now_ms):
-            event_sink.emit(self, self.EVENT_BLINK)
+    def service(self, now_ms):
+        return self.reading > self._threshold
+
+    def handle(self, now_ms):
+        print(f"ALERT: {self.reading}°C exceeds {self._threshold}°C")
 
 
-blinker = Blinker(period_ms=1000)
-
-sink = EventQueueSink(max_size=16)
-dispatcher = SimpleEventDispatcher()
-dispatcher.register(Blinker.EVENT_BLINK, lambda e: print("blink!"))
-
-runner = ServiceRunner(sink, dispatcher)
-runner.add(blinker)
+sensor = TemperatureSensor(threshold=30.0)
+runner = ServiceRunner()
+runner.add(sensor, period_ms=5000)
 
 while True:
     runner.service_once()
@@ -51,9 +52,9 @@ while True:
 
 ## Shared timestamps
 
-`ServiceRunner.service_once()` captures `ticks_ms()` once and passes the resulting timestamp to every component.  This ensures all components in the loop see the same moment in time, preventing drift between independent clock reads on slow microcontrollers.
+`ServiceRunner.service_once()` captures `ticks_ms()` once and passes the resulting timestamp to every service.  This ensures all services in the loop see the same moment in time, preventing drift between independent clock reads on slow microcontrollers.
 
-The method returns `now_ms` so user code can use it for passive checks alongside the dispatch loop:
+The method returns `now_ms` so user code can use it alongside the service loop:
 
 ```python
 while True:
@@ -62,14 +63,71 @@ while True:
         do_something()
 ```
 
-## Period-gated services
+## Registration patterns
 
-Pass `period_ms` to `runner.add()` and the runner will only call `service()` when the period elapses.  Services without a period are called every tick.
+### Object-based
+
+Pass an object with `.service(now_ms) -> bool` and `.handle(now_ms)`:
 
 ```python
-runner = ServiceRunner(sink, dispatcher)
+class MotionDetector:
+    def __init__(self):
+        self.motion_detected = False
 
-# Sensor is only serviced every 5 seconds.
+    def service(self, now_ms):
+        return self.motion_detected
+
+    def handle(self, now_ms):
+        print("Motion!")
+        self.motion_detected = False
+
+runner.add(MotionDetector())
+```
+
+You can override `.handle()` by passing a `handler` argument:
+
+```python
+runner.add(detector, handler=lambda now_ms: send_alert())
+```
+
+### Callable-based
+
+Pass a check function and a handler — both can be lambdas, functions, or bound methods:
+
+```python
+runner.add(
+    lambda now_ms: light_sensor.level() < 20,
+    handler=lambda now_ms: turn_on_lights(),
+)
+```
+
+### Handler-only
+
+Pass just a handler with no check — it fires every tick (or per period):
+
+```python
+runner.add(handler=lambda now_ms: scan_buttons(now_ms))
+```
+
+### Periodic
+
+No check needed — the handler fires on a schedule:
+
+```python
+runner.add_periodic(
+    lambda now_ms: print("blink!"),
+    period_ms=500,
+)
+```
+
+## Period-gated services
+
+Pass `period_ms` to `add()` and the runner will only check the service when the period elapses.  Services without a period are checked every tick.
+
+```python
+runner = ServiceRunner()
+
+# Sensor is only checked every 5 seconds.
 handle = runner.add(sensor, period_ms=5000)
 
 # Button scanner runs every tick.
@@ -89,138 +147,64 @@ handle.set_period(None)
 handle.remove()
 ```
 
-## Handler handles
+## Multiple services
 
-`register()` returns a `HandlerHandle` — a lightweight object for inspecting and mutating the registration at runtime:
-
-```python
-handle = dispatcher.register("led.blink", blink_handler)
-
-# Inspect the registration.
-print(handle.event_type)   # "led.blink"
-print(handle.priority)     # PRIORITY_NORMAL (2)
-print(handle.active)       # True
-
-# Change the priority.
-handle.set_priority(PRIORITY_HIGH)
-
-# Stop the handler entirely.
-handle.unregister()
-print(handle.active)       # False
-```
-
-The old `dispatcher.unregister(event_type)` method still works for convenience.
-
-## Priority levels
-
-Four priority constants are available: `PRIORITY_CRITICAL` (0), `PRIORITY_HIGH` (1), `PRIORITY_NORMAL` (2, default), `PRIORITY_LOW` (3).
+The pattern scales to many services with no extra boilerplate:
 
 ```python
-from chumicro_serviceable import PRIORITY_HIGH
-
-dispatcher.register("alarm", alarm_handler, priority=PRIORITY_HIGH)
-```
-
-Priority levels are stored on the handler entry and can be changed at runtime via `handle.set_priority()`.  Priority-based dispatch ordering is planned for a future release (Phase 3 of Decision 0018).
-
-## Multiple components
-
-The pattern scales to many components with no extra boilerplate:
-
-```python
-sink = EventQueueSink(max_size=32)
-dispatcher = SimpleEventDispatcher()
-
-# ... register handlers ...
-
-runner = ServiceRunner(sink, dispatcher)
-runner.add(blinker)
-runner.add(mqtt_client)
-runner.add(button_scanner)
-runner.add(sensor, period_ms=5000)
+runner = ServiceRunner()
+runner.add(motion_detector)
+runner.add(temperature_sensor, period_ms=5000)
+runner.add(
+    lambda now_ms: light_level < 20,
+    handler=lambda now_ms: turn_on_lights(),
+)
+runner.add_periodic(toggle_led, period_ms=500)
+runner.add_periodic(log_status, period_ms=10000)
 
 while True:
     runner.service_once()
 ```
 
-## Using the sink directly
+## Batch firing
 
-You don't need `ServiceRunner` if you prefer manual control:
+All services are checked first, then all due handlers fire in sequence.  This guarantees that handlers see a consistent view of the world — no handler modifies state while other services are still being checked.
 
-```python
-from chumicro_timing import ticks_ms
-
-sink = EventQueueSink(max_size=8)
-
-now = ticks_ms()
-component.service(sink, now)
-
-while sink.has_events():
-    event = sink.pop()
-    print(f"Got {event.event_type} from {event.source}")
 ```
-
-## Components that don't need time
-
-Not every component cares about the shared timestamp.  The `now_ms` parameter is always provided, but components can ignore it:
-
-```python
-class ButtonScanner:
-    EVENT_PRESS = "button.press"
-
-    def __init__(self, pin):
-        self._pin = pin
-        self._was_pressed = False
-
-    def service(self, event_sink, now_ms):
-        pressed = self._pin.value
-        if pressed and not self._was_pressed:
-            event_sink.emit(self, self.EVENT_PRESS)
-        self._was_pressed = pressed
-```
-
-## Components that use time
-
-Components that need periodic timing can use `Heartbeat` with the shared `now_ms`:
-
-```python
-from chumicro_timing import Heartbeat
-
-
-class TemperatureMonitor:
-    EVENT_HIGH = "temp.high"
-
-    def __init__(self, sensor, period_ms, threshold):
-        self._sensor = sensor
-        self._heartbeat = Heartbeat(period_ms=period_ms)
-        self._threshold = threshold
-
-    def service(self, event_sink, now_ms):
-        if self._heartbeat.poll(now_ms):
-            reading = self._sensor.read()
-            if reading > self._threshold:
-                event_sink.emit(self, self.EVENT_HIGH, reading)
+service_once():
+  1. Capture ticks_ms() → now_ms
+  2. For each entry:
+     - Period gate: skip if not due
+     - Check gate: skip if service(now_ms) returns False
+     - Queue handler
+  3. Fire all queued handlers with now_ms
 ```
 
 ## Memory notes
 
-- `EventQueueSink` pre-allocates its backing deque at construction time — no resizing during operation.
-- `Event` uses `__slots__` to minimise per-instance memory.
-- `_HandlerEntry`, `HandlerHandle`, `_ServiceEntry`, and `ServiceHandle` use `__slots__` to minimise per-instance memory.
-- Individual `Event` objects are created on each `emit()`.  If GC pressure becomes measurable on your board, the sink capacity can be tuned via `max_size`.
+- `_ServiceEntry` and `ServiceHandle` use `__slots__` to minimise per-instance memory.
+- Handlers are collected into a pre-allocated list and batch-fired, avoiding per-tick allocation.
+- No `collections.deque` or ring buffers are required.
 
 ## Testing serviceable components
 
-The `chumicro_serviceable.testing` module provides `FakeEventSink` — a list-backed sink with no capacity limit, designed for assertions in host-side tests:
+The `chumicro_serviceable.testing` module provides `CallRecorder` — a callable that records handler invocations for assertions in host-side tests:
 
 ```python
-from chumicro_serviceable.testing import FakeEventSink
+from chumicro_serviceable.testing import CallRecorder
+from chumicro_timing.testing import FakeTicks
 
-sink = FakeEventSink()
-component.service(sink, 0)
+fake = FakeTicks()
+recorder = CallRecorder()
+runner = ServiceRunner(ticks=fake)
+runner.add_periodic(recorder, period_ms=100)
 
-assert len(sink.events) == 1
-assert sink.events[0].event_type == "button.press"
+runner.service_once()
+assert len(recorder) == 0  # not due yet
+
+fake.advance(100)
+runner.service_once()
+assert recorder.calls == [100]
 ```
 
 See the [testing helpers](testing.md) page for detailed usage.

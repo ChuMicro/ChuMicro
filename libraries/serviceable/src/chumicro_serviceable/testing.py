@@ -1,52 +1,43 @@
+"""Test helpers for libraries that use chumicro-serviceable.
 
-"""Test helpers for libraries that depend on chumicro-serviceable.
-
-Provides a ``FakeEventSink`` that records emitted events for assertion
-in host-side tests, without the overhead of a ring buffer.
+Provides ``CallRecorder`` — a callable that records handler invocations
+for assertion in host-side tests.
 
 Usage::
 
-    from chumicro_serviceable.testing import FakeEventSink
+    from chumicro_serviceable.testing import CallRecorder
 
-    sink = FakeEventSink()
-    component.service(sink, 0)
-    assert len(sink.events) == 1
-    assert sink.events[0].event_type == "heartbeat.tick"
+    recorder = CallRecorder()
+    runner.add_periodic(recorder, period_ms=100)
+    # ... advance time, service_once() ...
+    assert recorder.calls == [100]
 """
 
-from .core import Event
 
+class CallRecorder:
+    """Callable that records each invocation for test assertions.
 
-class FakeEventSink:
-    """Simple list-backed event sink for tests.
+    Use as a handler passed to ``ServiceRunner.add()`` or
+    ``add_periodic()``::
 
-    Every call to ``emit()`` appends an ``Event`` to ``self.events``.
-    There is no capacity limit.
+        recorder = CallRecorder()
+        runner.add_periodic(recorder, period_ms=100)
+        runner.service_once()
+        assert len(recorder) == 0  # not due yet
     """
 
     def __init__(self):
-        """Create an empty fake sink."""
-        self.events = []
+        """Create an empty recorder."""
+        self.calls = []
 
-    def emit(self, source, event_type, data=None):
-        """Record an event.  Always returns ``True``."""
-        self.events.append(Event(source, event_type, data))
-        return True
-
-    def has_events(self):
-        """Return whether any events have been recorded."""
-        return len(self.events) > 0
-
-    def pop(self):
-        """Remove and return the oldest event, or ``None`` if empty."""
-        if not self.events:
-            return None
-        return self.events.pop(0)
-
-    def clear(self):
-        """Discard all recorded events."""
-        self.events.clear()
+    def __call__(self, now_ms):
+        """Record a call with the given timestamp."""
+        self.calls.append(now_ms)
 
     def __len__(self):
-        """Return the number of recorded events."""
-        return len(self.events)
+        """Return the number of recorded calls."""
+        return len(self.calls)
+
+    def clear(self):
+        """Discard all recorded calls."""
+        self.calls.clear()

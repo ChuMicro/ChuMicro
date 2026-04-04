@@ -18,9 +18,6 @@
   - This should live in the repo (e.g., `docs/creating-a-library.md` or a top-level `CONTRIBUTING.md` section), not just in AGENTS.md or decision records.
 
 ## Next
-
-- [ ] Implement Decision 0018 Phase 3: priority-based dispatch ordering (per-priority dispatch buckets, starvation prevention).
-- [ ] Implement Decision 0018 Phase 4: time-budget enforcement (`budget_ms` on `ServiceRunner`, graduated warn/defer/drop).
 - [ ] Add `[tool.chumicro].platforms` reader to `scripts/run.py` and wire it into the cross-runtime compatibility runners and release/build paths (Decision 0011).
 - [ ] Promote advisory MicroPython and CircuitPython CI jobs to protected-branch requirements, gated by platform targeting (Decision 0011).
 - [ ] Add digital I/O as the second library seam (alongside CI/release work, not sequentially).
@@ -45,6 +42,8 @@
 
 ## Done
 
+- [x] Simplify serviceable to gate-based pattern (Decision 0020).  Remove Event, EventQueueSink, SimpleEventDispatcher, HandlerHandle, priority constants.  Service contract changes from `service(event_sink, now_ms)` to `service(now_ms) -> bool`.  Add `CallRecorder` test helper.  `chumicro-serviceable` 0.3.0 → 0.4.0.
+- [x] Add `chumicro-compat` library with lightweight `abc` module (ABC base class, `@abstractmethod` decorator) using `__init_subclass__` — works on MicroPython ≥1.19.1, CircuitPython ≥8.x.
 - [x] Move period ownership from dispatcher to runner (Decision 0019).  Remove `poll_heartbeats()`, `period_ms` from `register()`, `ticks` from dispatcher.  Add `ServiceRunner.add()` with `period_ms` and `ServiceHandle`.  `chumicro-serviceable` 0.2.0 → 0.3.0.
 - [x] Implement Decision 0018 Phases 1–2: handle-based registration (`HandlerHandle`), heartbeat-integrated handlers (`period_ms` on `register()`), `poll_heartbeats()`, priority constants.  `chumicro-serviceable` 0.1.0 → 0.2.0.  *(Phase 2 superseded by Decision 0019.)*
 - [x] Generalize the compatibility smoke runner to discover and exercise device tests for any library, not just timing.
