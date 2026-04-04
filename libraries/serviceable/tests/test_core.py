@@ -287,7 +287,7 @@ def test_reregister_deactivates_old_handle():
 
 
 class _StubService:
-    """Minimal serviceable component for testing."""
+    """Minimal event-based serviceable component for testing."""
 
     def __init__(self, event_type="stub.event"):
         """Create a stub that emits *event_type* on each service call."""
@@ -296,6 +296,20 @@ class _StubService:
     def service(self, event_sink, now_ms):
         """Emit one event per service call."""
         event_sink.emit(self, self._event_type)
+
+
+class _GateService:
+    """Minimal gate-based serviceable component for testing."""
+
+    def __init__(self, should_fire=True):
+        """Create a stub that returns *should_fire* from service()."""
+        self.should_fire = should_fire
+        self.call_count = 0
+
+    def service(self, now_ms):
+        """Return whether the handler should fire."""
+        self.call_count += 1
+        return self.should_fire
 
 
 # -- ServiceHandle --
@@ -408,7 +422,7 @@ def test_service_handle_repr_after_remove():
     assert "removed" in repr(handle)
 
 
-# -- ServiceRunner --
+# -- ServiceRunner: event-based --
 
 
 def test_runner_services_and_dispatches():
@@ -469,9 +483,7 @@ def test_runner_handles_no_events():
 def test_runner_returns_shared_timestamp():
     """service_once() should return the captured now_ms."""
     fake = FakeTicks()
-    sink = EventQueueSink(max_size=4)
-    dispatcher = SimpleEventDispatcher()
-    runner = ServiceRunner(sink, dispatcher, ticks=fake)
+    runner = ServiceRunner(ticks=fake)
 
     fake.advance(42)
     assert runner.service_once() == 42
@@ -504,9 +516,7 @@ def test_runner_passes_same_timestamp_to_all():
 
 def test_runner_defaults_to_real_ticks():
     """ServiceRunner with no ticks argument should use chumicro_timing.ticks_ms."""
-    sink = EventQueueSink(max_size=4)
-    dispatcher = SimpleEventDispatcher()
-    runner = ServiceRunner(sink, dispatcher)
+    runner = ServiceRunner()
 
     now = runner.service_once()
 
@@ -514,7 +524,7 @@ def test_runner_defaults_to_real_ticks():
     assert now >= 0
 
 
-# -- ServiceRunner: period gating --
+# -- ServiceRunner: event-based period gating --
 
 
 def test_runner_period_gates_service():
@@ -724,6 +734,260 @@ def test_runner_remove_period_at_runtime():
     handle.set_period(None)
     runner.service_once()
     assert call_count[0] == 1  # now called every tick
+
+
+# -- ServiceRunner: gate-based --
+
+
+def test_gate_service_fires_handler_when_true():
+    """Gate-based service should fire handler when service() returns True."""
+    fake = FakeTicks()
+    received = []
+    svc = _GateService(should_fire=True)
+
+    runner = ServiceRunner(ticks=fake)
+    runner.add(svc, handler=lambda now: received.append(now))
+
+    fake.advance(10)
+    runner.service_once()
+
+    assert received == [10]
+    assert svc.call_count == 1
+
+
+def test_gate_service_skips_handler_when_false():
+    """Gate-based service should not fire handler when service() returns False."""
+    fake = FakeTicks()
+    received = []
+    svc = _GateService(should_fire=False)
+
+    runner = ServiceRunner(ticks=fake)
+    runner.add(svc, handler=lambda now: received.append(now))
+
+    runner.service_once()
+
+    assert received == []
+    assert svc.call_count == 1
+
+
+def test_gate_service_with_period():
+    """Gate-based service with period should only be checked when due."""
+    fake = FakeTicks()
+    svc = _GateService(should_fire=True)
+    received = []
+
+    runner = ServiceRunner(ticks=fake)
+    runner.add(svc, handler=lambda now: received.append(now), period_ms=100)
+
+    # Not due yet.
+    runner.service_once()
+    assert svc.call_count == 0
+    assert received == []
+
+    # Now due.
+    fake.advance(100)
+    runner.service_once()
+    assert svc.call_count == 1
+    assert received == [100]
+
+
+def test_gate_handlers_fire_in_batch():
+    """All gate handlers should fire after all services are checked."""
+    fake = FakeTicks()
+    order = []
+
+    class _OrderedGate:
+        """Gate that records when it is checked."""
+
+        def __init__(self, name):
+            """Create a gate with the given name."""
+            self._name = name
+
+        def service(self, now_ms):
+            """Record the check and return True."""
+            order.append(f"check:{self._name}")
+            return True
+
+    def make_handler(name):
+        """Create a handler that records when it fires."""
+        return lambda now_ms: order.append(f"fire:{name}")
+
+    runner = ServiceRunner(ticks=fake)
+    runner.add(_OrderedGate("a"), handler=make_handler("a"))
+    runner.add(_OrderedGate("b"), handler=make_handler("b"))
+
+    runner.service_once()
+
+    # All checks happen before any fires.
+    assert order == ["check:a", "check:b", "fire:a", "fire:b"]
+
+
+def test_gate_and_event_services_together():
+    """Gate-based and event-based services should work in the same runner."""
+    fake = FakeTicks()
+    gate_received = []
+    event_received = []
+
+    svc_gate = _GateService(should_fire=True)
+    svc_event = _StubService("evt")
+
+    sink = EventQueueSink(max_size=8)
+    dispatcher = SimpleEventDispatcher()
+    dispatcher.register("evt", lambda e: event_received.append(e.event_type))
+
+    runner = ServiceRunner(sink, dispatcher, ticks=fake)
+    runner.add(svc_gate, handler=lambda now: gate_received.append("gate"))
+    runner.add(svc_event)
+
+    runner.service_once()
+
+    assert gate_received == ["gate"]
+    assert event_received == ["evt"]
+
+
+def test_gate_service_handler_receives_now_ms():
+    """Gate handler should receive the shared now_ms timestamp."""
+    fake = FakeTicks()
+    received = []
+
+    svc = _GateService(should_fire=True)
+    runner = ServiceRunner(ticks=fake)
+    runner.add(svc, handler=lambda now: received.append(now))
+
+    fake.advance(55)
+    runner.service_once()
+
+    assert received == [55]
+
+
+def test_gate_service_remove():
+    """Removed gate service should no longer be checked."""
+    fake = FakeTicks()
+    svc = _GateService(should_fire=True)
+
+    runner = ServiceRunner(ticks=fake)
+    handle = runner.add(svc, handler=lambda now: None)
+
+    runner.service_once()
+    assert svc.call_count == 1
+
+    handle.remove()
+    runner.service_once()
+    assert svc.call_count == 1  # not called again
+
+
+# -- ServiceRunner: periodic --
+
+
+def test_periodic_fires_on_schedule():
+    """Periodic handler should fire when the period elapses."""
+    fake = FakeTicks()
+    received = []
+
+    runner = ServiceRunner(ticks=fake)
+    runner.add_periodic(lambda now: received.append(now), period_ms=100)
+
+    # Not due yet.
+    runner.service_once()
+    assert received == []
+
+    # Now due.
+    fake.advance(100)
+    runner.service_once()
+    assert received == [100]
+
+
+def test_periodic_repeats():
+    """Periodic handler should fire repeatedly."""
+    fake = FakeTicks()
+    received = []
+
+    runner = ServiceRunner(ticks=fake)
+    runner.add_periodic(lambda now: received.append(now), period_ms=50)
+
+    fake.advance(50)
+    runner.service_once()
+    assert len(received) == 1
+
+    fake.advance(50)
+    runner.service_once()
+    assert len(received) == 2
+
+
+def test_periodic_set_period_changes_rate():
+    """Changing period at runtime should take effect."""
+    fake = FakeTicks()
+    received = []
+
+    runner = ServiceRunner(ticks=fake)
+    handle = runner.add_periodic(lambda now: received.append(now), period_ms=100)
+
+    fake.advance(100)
+    runner.service_once()
+    assert len(received) == 1
+
+    # Change to faster rate.
+    handle.set_period(50)
+    fake.advance(50)
+    runner.service_once()
+    assert len(received) == 2
+
+
+def test_periodic_remove():
+    """Removed periodic handler should no longer fire."""
+    fake = FakeTicks()
+    received = []
+
+    runner = ServiceRunner(ticks=fake)
+    handle = runner.add_periodic(lambda now: received.append(1), period_ms=50)
+
+    fake.advance(50)
+    runner.service_once()
+    assert len(received) == 1
+
+    handle.remove()
+    fake.advance(50)
+    runner.service_once()
+    assert len(received) == 1  # not called again
+
+
+def test_periodic_handler_receives_now_ms():
+    """Periodic handler should receive the shared now_ms timestamp."""
+    fake = FakeTicks()
+    received = []
+
+    runner = ServiceRunner(ticks=fake)
+    runner.add_periodic(lambda now: received.append(now), period_ms=100)
+
+    fake.advance(100)
+    runner.service_once()
+
+    assert received == [100]
+
+
+def test_all_three_modes_together():
+    """Gate, event, and periodic services should all work in the same runner."""
+    fake = FakeTicks()
+    results = []
+
+    svc_gate = _GateService(should_fire=True)
+    svc_event = _StubService("evt")
+
+    sink = EventQueueSink(max_size=8)
+    dispatcher = SimpleEventDispatcher()
+    dispatcher.register("evt", lambda e: results.append("event"))
+
+    runner = ServiceRunner(sink, dispatcher, ticks=fake)
+    runner.add(svc_gate, handler=lambda now: results.append("gate"))
+    runner.add(svc_event)
+    runner.add_periodic(lambda now: results.append("periodic"), period_ms=100)
+
+    fake.advance(100)
+    runner.service_once()
+
+    assert "gate" in results
+    assert "event" in results
+    assert "periodic" in results
 
 
 # -- FakeEventSink --

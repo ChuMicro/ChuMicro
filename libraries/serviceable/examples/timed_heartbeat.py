@@ -1,41 +1,61 @@
-"""Heartbeat-integrated handlers — periodic dispatch without a component class.
+"""Periodic and gate-based handlers — no component class needed.
 
-Demonstrates heartbeat-integrated handlers: the dispatcher creates an
-internal ``Heartbeat`` and emits events automatically when the period
-elapses.  No component class is needed for simple periodic callbacks.
+Demonstrates the three registration paths on ``ServiceRunner``:
 
-For comparison, also shows the component-based approach from the
-serviceable pattern, where a component wraps a ``Heartbeat`` and emits
-events in its ``service()`` method.
+1. **Periodic** — ``add_periodic(handler, period_ms)``: fires a callback
+   every *period_ms* milliseconds.
+2. **Gate-based** — ``add(service, handler=fn)``: calls
+   ``service.service(now_ms)``, fires *fn* when the service returns True.
+3. **Event-based** — ``add(service)``: the existing event-driven pattern
+   (shown in ``hello.py``).
 
 Runs on CPython, MicroPython, and CircuitPython without modification.
 """
 
 import time
 
-from chumicro_serviceable import EventQueueSink, ServiceRunner, SimpleEventDispatcher
+from chumicro_serviceable import ServiceRunner
+
+
+class ThresholdSensor:
+    """Dummy sensor that fires when a threshold is exceeded.
+
+    A gate-based service: ``service(now_ms)`` returns ``True`` when the
+    reading crosses a threshold, ``False`` otherwise.
+    """
+
+    def __init__(self, threshold=10):
+        """Create a sensor with the given threshold."""
+        self._threshold = threshold
+        self._count = 0
+
+    def service(self, now_ms):
+        """Simulate a reading; return True when threshold is exceeded."""
+        self._count += 1
+        return self._count % self._threshold == 0
 
 
 def main():
-    """Run heartbeat-integrated handlers through the dispatch loop."""
-    sink = EventQueueSink(max_size=8)
-    dispatcher = SimpleEventDispatcher()
+    """Run periodic and gate-based handlers through the dispatch loop."""
+    runner = ServiceRunner()
 
-    # Register a periodic handler — no component class needed.
-    handle = dispatcher.register(
-        "led.blink",
-        lambda e: print("  blink!"),
+    # Periodic: blink every 500 ms.
+    blink_handle = runner.add_periodic(
+        lambda now_ms: print(f"  [{now_ms} ms] blink!"),
         period_ms=500,
     )
+    print(f"Periodic: {blink_handle}")
 
-    print(f"Registered: {handle}")
-    print(f"  period_ms = {handle.period_ms}")
-    print(f"  priority  = {handle.priority}")
+    # Gate-based: fire when the sensor crosses its threshold.
+    sensor = ThresholdSensor(threshold=10)
+    sensor_handle = runner.add(
+        sensor,
+        handler=lambda now_ms: print(f"  [{now_ms} ms] threshold reached!"),
+    )
+    print(f"Gate-based: {sensor_handle}")
+
     print()
-
-    runner = ServiceRunner([], sink, dispatcher)
-
-    print("Running heartbeat handler (Ctrl+C to stop)...")
+    print("Running (Ctrl+C to stop)...")
 
     try:
         while True:

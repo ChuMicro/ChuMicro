@@ -1,16 +1,15 @@
 """Core serviceable-pattern abstractions for the Chumicro ecosystem.
 
-Provides a standard way for active components to emit events into a shared
-sink, and for application code to dispatch those events to handlers.
+Provides three ways to register work with a ``ServiceRunner``:
 
-The pattern:
-
-1. Components implement ``service(event_sink, now_ms)`` — do one tick of work,
-   emit zero or more events.
-2. A ``ServiceRunner`` captures time once, gates each component by its
-   optional period, calls ``service()`` only when due, then drains the
-   sink and dispatches events.
-3. User code registers handlers via ``SimpleEventDispatcher``.
+1. **Gate-based** — ``add(service, handler=fn)``: the runner calls
+   ``service.service(now_ms)``; if it returns ``True``, the handler is
+   queued and fired in batch after all services are checked.
+2. **Event-based** — ``add(service)``: the runner calls
+   ``service.service(event_sink, now_ms)``; emitted events are drained
+   and dispatched after the handler batch.
+3. **Periodic** — ``add_periodic(handler, period_ms)``: the handler fires
+   every *period_ms* milliseconds with no service object.
 
 All classes are cross-runtime compatible (CPython, MicroPython, CircuitPython).
 """
@@ -232,17 +231,18 @@ class SimpleEventDispatcher:
 class _ServiceEntry:
     """Internal record for a service registered with the runner."""
 
-    __slots__ = ("service", "heartbeat", "active")
+    __slots__ = ("service", "handler", "heartbeat", "active")
 
-    def __init__(self, service, heartbeat):
+    def __init__(self, service, handler, heartbeat):
         """Create a service entry."""
         self.service = service
+        self.handler = handler
         self.heartbeat = heartbeat
         self.active = True
 
 
 class ServiceHandle:
-    """Opaque handle returned by ``ServiceRunner.add()``.
+    """Opaque handle returned by ``ServiceRunner.add()`` or ``add_periodic()``.
 
     Provides runtime mutation of a registered service: change its period
     or remove it from the runner entirely.
@@ -304,23 +304,34 @@ class ServiceRunner:
     the shared timestamp to every due component, ensuring all components
     see the same moment in time.
 
-    Services are registered via ``add()``, which returns a
-    ``ServiceHandle`` for runtime mutation (change period, remove).
-    Services with a period are only called when their heartbeat fires;
-    services without a period are called every tick.
+    Three registration paths:
 
-    After servicing components, drains the sink and dispatches all events.
+    - ``add(service, handler=fn)`` — **gate-based**: calls
+      ``service.service(now_ms)``; if ``True``, queues ``handler(now_ms)``.
+    - ``add(service)`` — **event-based**: calls
+      ``service.service(event_sink, now_ms)``; events are drained and
+      dispatched after the handler batch.
+    - ``add_periodic(handler, period_ms)`` — **periodic**: fires
+      ``handler(now_ms)`` every *period_ms* milliseconds.
+
+    ``service_once()`` processes services in three phases:
+
+    1. Check all services (period gate → service gate) and collect
+       due handlers.
+    2. Batch-fire all gate and periodic handlers.
+    3. Drain the event sink and dispatch events.
 
     Args:
-        event_sink: An ``EventQueueSink`` (or duck-typed equivalent).
-        dispatcher: A ``SimpleEventDispatcher`` (or duck-typed equivalent).
+        event_sink: Optional ``EventQueueSink`` for event-based services.
+        dispatcher: Optional ``SimpleEventDispatcher`` for event-based services.
         ticks: Optional tick source (must have a ``ticks_ms`` method).
             Defaults to ``chumicro_timing.ticks_ms``.
     """
 
-    def __init__(self, event_sink, dispatcher, ticks=None):
-        """Create a runner wiring services → *event_sink* → *dispatcher*."""
+    def __init__(self, event_sink=None, dispatcher=None, ticks=None):
+        """Create a runner.  Provide *event_sink* and *dispatcher* for event-based services."""
         self._entries = []
+        self._pending = []
         self._event_sink = event_sink
         self._dispatcher = dispatcher
         self._ticks = ticks
@@ -331,16 +342,25 @@ class ServiceRunner:
 
             self._ticks_ms = ticks_ms
 
-    def add(self, service, period_ms=None):
+    def add(self, service, handler=None, period_ms=None):
         """Register a service to be called on each ``service_once()`` tick.
 
-        If *period_ms* is provided, the service is only called when the
-        period elapses.  Otherwise, it is called every tick.
+        **Gate-based** (handler provided): ``service.service(now_ms)``
+        is called; if it returns ``True``, ``handler(now_ms)`` is queued
+        and fired in batch after all services are checked.
+
+        **Event-based** (no handler): ``service.service(event_sink, now_ms)``
+        is called; emitted events are drained and dispatched.
+
+        If *period_ms* is provided, the service is only checked when the
+        period elapses.  Otherwise, it is checked every tick.
 
         Returns a ``ServiceHandle`` for runtime mutation.
 
         Args:
-            service: Object implementing ``service(event_sink, now_ms)``.
+            service: Gate-based: object with ``service(now_ms) -> bool``.
+                Event-based: object with ``service(event_sink, now_ms)``.
+            handler: Optional callable ``handler(now_ms)`` for gate-based mode.
             period_ms: Optional interval in milliseconds.
         """
         heartbeat = None
@@ -348,31 +368,72 @@ class ServiceRunner:
             from chumicro_timing import Heartbeat
 
             heartbeat = Heartbeat(period_ms, ticks=self._ticks)
-        entry = _ServiceEntry(service, heartbeat)
+        entry = _ServiceEntry(service, handler, heartbeat)
+        self._entries.append(entry)
+        return ServiceHandle(entry, self)
+
+    def add_periodic(self, handler, period_ms):
+        """Register a periodic handler with no service object.
+
+        ``handler(now_ms)`` is called every *period_ms* milliseconds.
+        Returns a ``ServiceHandle`` for runtime mutation.
+
+        Args:
+            handler: Callable ``handler(now_ms)`` to fire periodically.
+            period_ms: Interval in milliseconds (required).
+        """
+        from chumicro_timing import Heartbeat
+
+        heartbeat = Heartbeat(period_ms, ticks=self._ticks)
+        entry = _ServiceEntry(None, handler, heartbeat)
         self._entries.append(entry)
         return ServiceHandle(entry, self)
 
     def service_once(self):
-        """Capture time, service due components, then drain and dispatch events.
+        """Capture time, service due components, then batch-fire handlers and dispatch.
 
-        Services with a period are only called when their heartbeat fires.
-        Services without a period are called every tick.
+        Processing order:
+
+        1. Check each service entry (period gate, then service gate).
+           Collect handlers that should fire.
+        2. Batch-fire all gate-based and periodic handlers.
+        3. Drain the event sink and dispatch events (if configured).
 
         Returns:
-            The ``now_ms`` value passed to components this tick.
+            The ``now_ms`` value used this tick.
         """
         now_ms = self._ticks_ms()
+        pending = self._pending
+
         for entry in self._entries:
             if not entry.active:
                 continue
             if entry.heartbeat is not None:
                 if not entry.heartbeat.poll(now_ms):
                     continue
-            entry.service.service(self._event_sink, now_ms)
 
-        while self._event_sink.has_events():
-            event = self._event_sink.pop()
-            self._dispatcher.dispatch(event)
+            if entry.handler is not None:
+                if entry.service is not None:
+                    # Gate-based: service returns True/False.
+                    if entry.service.service(now_ms):
+                        pending.append(entry.handler)
+                else:
+                    # Periodic: always fire.
+                    pending.append(entry.handler)
+            elif entry.service is not None:
+                # Event-based: call service with event_sink.
+                entry.service.service(self._event_sink, now_ms)
+
+        # Batch-fire gate and periodic handlers.
+        for handler in pending:
+            handler(now_ms)
+        pending.clear()
+
+        # Drain event sink → dispatch.
+        if self._event_sink is not None and self._dispatcher is not None:
+            while self._event_sink.has_events():
+                event = self._event_sink.pop()
+                self._dispatcher.dispatch(event)
 
         return now_ms
 
