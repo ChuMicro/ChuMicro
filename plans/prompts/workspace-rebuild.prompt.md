@@ -57,7 +57,7 @@ chumicro/
     │   ├── README.md
     │   ├── src/chumicro_timing/
     │   ├── tests/
-    │   ├── device_tests/
+    │   ├── functional_tests/
     │   ├── docs/              # ReadTheDocs content
     │   └── examples/          # Usage examples
     └── serviceable/
@@ -66,7 +66,7 @@ chumicro/
         ├── README.md
         ├── src/chumicro_serviceable/
         ├── tests/
-        ├── device_tests/
+        ├── functional_tests/
         ├── docs/
         └── examples/
 ```
@@ -79,7 +79,7 @@ chumicro/
 4. Use an Option B sample library: mostly pure logic plus one small hardware-facing seam (Decision 0004).
 5. Keep the first seam as timing/ticks; defer digital I/O until after the timing contract is proven.
 6. Use WSL2 as the supported Windows path for unix-port validation (Decision 0005).
-7. Keep `support/test_harness/run_device_smoke.py` as the canonical shared compatibility smoke runner in the current workspace phase (Decision 0006).
+7. The compat tasks run real unit tests from `tests/` through the lightweight harness, auto-skipping pytest-only files (Decision 0016, supersedes Decision 0006).
 8. Re-implement rather than depend when a library fails the cross-platform test; publish to all three channels (Decision 0007).
 9. Run pytest per-library to avoid test-directory collisions; each library must independently meet 90% coverage (Decision 0009).
 10. Design libraries for testability: constructor injection, `testing` submodules for fakes, don't mock what you don't own (Decision 0010).
@@ -87,8 +87,8 @@ chumicro/
 12. IDE type stubs come from upstream `circuitpython-stubs` and `micropython-esp32-stubs` (both PEP 561, PyPI), version-pinned to `runtime-versions.toml`.  Both packages coexist; a known `micropython` module conflict is documented with a mitigation path (Decision 0012).
 13. Documentation and examples standards: `guide.md` has required sections (auto-generated via AI prompt), `api.md` uses mkdocstrings autodoc with no hand-written member lists, examples are import-verified in preflight (Decision 0013).
 14. Active components implement a `service(event_sink)` contract for ecosystem-standard event dispatch. `EventQueueSink` provides a pre-allocated ring buffer. Libraries use duck typing — no import dependency on `chumicro-serviceable` required (Decision 0014).
- 15. Chumicro libraries require `collections.deque` (full-build CircuitPython, `EXTRA_FEATURES`+ MicroPython). Primary targets: ESP32 family, RP2040/RP2350, STM32. SAMD21 and non-full-build nRF52 are explicitly unsupported (Decision 0015).
-
+15. Chumicro libraries require `collections.deque` (full-build CircuitPython, `EXTRA_FEATURES`+ MicroPython). Primary targets: ESP32 family, RP2040/RP2350, STM32. SAMD21 and non-full-build nRF52 are explicitly unsupported (Decision 0015).
+16. Cross-runtime unit tests run `tests/` through the lightweight harness on MP/CP unix-ports. Tests use plain asserts and `raises()`; `import pytest` is the automatic skip boundary. `functional_tests/` is for real-device tests only. `_pytest` suffix marks CPython-only test files (Decision 0016).
 ### Key technical patterns
 
 These patterns caused real bugs when implemented incorrectly. Follow them exactly.
@@ -113,7 +113,7 @@ These patterns caused real bugs when implemented incorrectly. Follow them exactl
 
 - Root `conftest.py` scans `support/*/src` and `libraries/*/src` for source roots.
 - Adds them to `sys.path` so IDE "run single test" and direct pytest invocations can import library packages.
-- Sets `collect_ignore_glob = ["**/device_tests/**"]` to exclude on-device tests.
+- Sets `collect_ignore_glob = ["**/functional_tests/**"]` to exclude on-device tests.
 - `run.py test` sets PYTHONPATH independently, so the root conftest is a convenience, not a requirement for the test runner.
 
 #### IDE config generation (sync-ide)
@@ -142,7 +142,7 @@ These patterns caused real bugs when implemented incorrectly. Follow them exactl
 ### Required implementation slices already proven
 
 1. `support/runtime/` exists and has CPython tests.
-2. `support/test_harness/` provides a minimal `run_module()` runner for `device_tests/`.
+2. `support/test_harness/` provides a minimal `run_module()` runner for `functional_tests/`.
 3. `libraries/timing/` provides:
    - `Heartbeat` with `poll()`, `is_due()`, `service(event_sink)`, and `EVENT_TICK`
    - cross-runtime `ticks_ms()` / `ticks_diff()` / `ticks_add()` helpers
@@ -158,7 +158,7 @@ These patterns caused real bugs when implemented incorrectly. Follow them exactl
     - `prepare-micropython`, `prepare-circuitpython`
     - `test-micropython-compat`, `test-circuitpython-compat`, `test-runtime-matrix`
     - `test-device`
-6. `conftest.py` at root auto-discovers source roots and excludes `device_tests/`.
+6. `conftest.py` at root auto-discovers source roots and excludes `functional_tests/`.
 7. `pyproject.toml` uses broad `testpaths`; `test` runs pytest per-library for multi-library isolation.
 8. `.idea/chumicro.iml` and `pyrightconfig.json` are generated by `sync-ide`.
 9. CI runs host checks (required) plus advisory runtime compatibility jobs.

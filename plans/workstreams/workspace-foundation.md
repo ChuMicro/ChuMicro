@@ -36,10 +36,10 @@ Define the repo layout, shared tooling, and local developer ergonomics for a Pyt
 - `scripts/run.py` provides scoped test running: `--all`, `--libraries`, branch-diff detection, `-k lib/test`/`-x`/`-v`/`--no-cov`
 - `scripts/run.py new-library <name>` scaffolds a new library and regenerates IDE configs
 - `scripts/run.py sync-ide` generates `.idea/chumicro.iml` (PyCharm) and `pyrightconfig.json` (VS Code)
-- Root `conftest.py` auto-discovers source roots and excludes `device_tests/`
+- Root `conftest.py` auto-discovers source roots and excludes `functional_tests/`
 - Per-library pytest runs avoid test-directory collisions (Decision 0009)
 - `scripts/prepare_micropython.py` and `scripts/prepare_circuitpython.py` provide unix-port preparation
-- `support/test_harness/run_device_smoke.py` exists as the canonical checked-in compatibility smoke entrypoint
+- `support/test_harness/run_device_smoke.py` exists as the canonical cross-runtime test runner entrypoint (Decision 0016)
 - `.github/workflows/ci.yml` now includes advisory runtime compatibility jobs in addition to the required host lane
 - `devices.example.yml` exists as the first committed local device template
 
@@ -138,4 +138,3 @@ This workstream is considered complete for the current bootstrap phase. New foun
 - **Three-mode model:** The three modes (CPython host, MicroPython target, CircuitPython target) are correct. Unix-port simulation is a verification layer within modes 2 and 3, not a separate developer posture. The distinction already shows up as separate `run.py` tasks. No fourth mode needed.
 - **`scripts/run.py` vs `uv`:** `run.py` is the permanent task runner. `uv` replaces the environment/dependency layer when available (auto-detected), not the task orchestration. See "Tooling direction" above.
 - **IDE and editor setup documentation:** Document setup for PyCharm, VS Code, and CLI/text-editor workflows as part of the contributor prerequisites task in next-up.md.
-

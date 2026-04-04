@@ -8,7 +8,7 @@ Create the `chumicro-timing` library — cross-runtime tick helpers and periodic
 
 ## Scope
 
-- publishable library layout under `libraries/timing/` with `src/`, `tests/`, and `device_tests/`
+- publishable library layout under `libraries/timing/` with `src/`, `tests/`, and `functional_tests/`
 - cross-runtime import and shim patterns
 - host-side testability through mocks or stubs
 - IDE ergonomics for downstream developers
@@ -25,7 +25,7 @@ libraries/timing/
 │   └── chumicro_timing/
 ├── tests/
 │   └── test_*.py
-├── device_tests/
+├── functional_tests/
 │   └── test_*.py
 ├── docs/
 │   ├── guide.md
@@ -43,7 +43,7 @@ libraries/timing/
 - `libraries/timing/src/chumicro_timing/heartbeat.py` implements the first public behavior slice, including `service(event_sink)` and `EVENT_TICK` for the serviceable pattern (Decision 0014)
 - `libraries/timing/src/chumicro_timing/ticks.py` provides the cross-runtime timing seam
 - `libraries/timing/tests/` covers the host-side behavior with `pytest`
-- `libraries/timing/device_tests/test_heartbeat_ticks.py` exists as the first device-aware timing test
+- `libraries/timing/functional_tests/test_heartbeat_ticks.py` exists as the first device-aware timing test
 - `libraries/timing/pyproject.toml` builds as an individual package
 - `libraries/timing/README.md` establishes the package documentation with installation, API overview, and platform notes
 - `libraries/timing/docs/` contains user guide, API reference, and testing helpers documentation (Decision 0013)
@@ -120,18 +120,18 @@ Current verified state:
 
 - `scripts/run.py test-micropython-compat` exists as the first MicroPython compatibility entrypoint
 - `scripts/run.py prepare-micropython` exists as the repo-managed MicroPython runtime bootstrap command
-- `support/test_harness/run_device_smoke.py` exists as the canonical runtime-switchable smoke script
+- `support/test_harness/run_device_smoke.py` exists as the canonical cross-runtime test runner
 - the MicroPython path has been exercised successfully in this workspace with the repo-managed local Unix-port runtime and now runs as an advisory CI job
 - the CircuitPython path has been exercised successfully in this workspace with the repo-managed local Unix-port runtime and now runs as an advisory CI job
-- per [Decision 0006](../decisions/0006-shared-import-free-compatibility-smoke-runner.md), the canonical smoke path stays intentionally import-free for the current workspace phase
+- per [Decision 0016](../decisions/0016-cross-runtime-unit-tests.md), the compat tasks run real unit tests from `tests/` through the lightweight harness, skipping pytest-only files automatically
 
 These checks should not be treated as proof of full board behavior yet.
 
-### `device_tests/`
+### `functional_tests/`
 
 Current verified state:
 
-- `device_tests/` exists for runtime-specific behavior that host mocks cannot fully prove
+- `functional_tests/` exists for runtime-specific behavior that host mocks cannot fully prove
 - `support/test_harness/` is the current tiny runner for this layer
 - real-board execution is still manual-only
 
@@ -151,7 +151,7 @@ Current verified state:
 - the same public timing API is implemented for CPython and structured for target-runtime reuse
 - host tests and coverage are already proven in this workspace
 - the package already builds independently
-- at least one device-aware behavior is represented by the checked-in timing test and smoke runner scaffold
+- at least one device-aware behavior is represented by the checked-in timing test and cross-runtime test runner scaffold
 
 All success criteria are met. Remaining cross-cutting items (CI promotion, release automation, second seam) are tracked under Milestone 2 and `next-up.md`.
 
@@ -159,7 +159,7 @@ All success criteria are met. Remaining cross-cutting items (CI promotion, relea
 
 The timing library should remain small and focused. Its job is to provide a correct, cross-runtime timing foundation.
 
-The current implemented slice is a heartbeat-style utility whose timing behavior is validated on CPython, exercised through repo-managed MicroPython and CircuitPython unix-port smoke paths, and represented by a first manual device-aware test path.
+The current implemented slice is a heartbeat-style utility whose timing behavior is validated on CPython, exercised through repo-managed MicroPython and CircuitPython unix-port cross-runtime test paths, and represented by a first manual device-aware test path.
 
 ## Resolved decisions
 
@@ -167,4 +167,3 @@ The current implemented slice is a heartbeat-style utility whose timing behavior
 - **IDE-facing stubs:** Prove out IDE stub packaging now, before the second seam. This is part of the timing library's remaining exit criteria.
 - **Advisory runtime compat jobs:** These should become mandatory protected-branch requirements eventually. They will be gated by platform targeting (Decision 0011) so that only libraries declaring support for MicroPython/CircuitPython are required to pass those checks.
 - **Serviceable pattern:** `Heartbeat` implements `service(event_sink)` and exposes `EVENT_TICK` (Decision 0014). The serviceable contract is duck-typed — the timing library does not import from `chumicro-serviceable`. This was a minor version bump (0.1.0 → 0.2.0).
-

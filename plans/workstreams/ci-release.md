@@ -42,7 +42,7 @@ These should start as non-blocking if they are not yet stable enough.
 
 ### Tier 3: targeted hardware validation
 
-- `device_tests/` execution against configured boards
+- `functional_tests/` execution against configured boards
 - manual or scheduled workflows
 - artifact capture for logs and results
 
@@ -68,7 +68,7 @@ Platform targeting (Decision 0011) gates which distribution targets receive arti
 It should be supplemented with:
 
 - compatibility runners for target runtimes
-- a Chumicro on-device harness for `device_tests/`
+- a Chumicro on-device harness for `functional_tests/`
 
 It should not be forced to be the direct execution environment on constrained boards unless a later proof shows that is realistic and maintainable.
 

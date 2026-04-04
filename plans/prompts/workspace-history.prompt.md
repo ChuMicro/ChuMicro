@@ -122,7 +122,7 @@ This was the largest single session. It addressed three areas: the workspace was
 **Auto-discovery (replaced all hard-coded lists):**
 1. `scripts/run.py` discovers libraries and support packages by scanning for `pyproject.toml`.
 2. `pyproject.toml` uses broad `testpaths = ["support", "libraries"]`.
-3. Root `conftest.py` auto-discovers source roots and excludes `device_tests/`.
+3. Root `conftest.py` auto-discovers source roots and excludes `functional_tests/`.
 4. Lint paths, coverage sources, test paths, and PYTHONPATH are all derived from structure.
 
 **Scoped test running:**
@@ -218,4 +218,11 @@ This was the largest single session. It addressed three areas: the workspace was
 23. Added `uv` auto-detection: `prepare_workspace.py` and `run.py setup` prefer `uv pip install` and `uv venv` when `uv` is on PATH, falling back to `pip`/stdlib `venv`.
 24. Hardened `prepare_workspace.py` to refuse running when `sys.prefix == sys.base_prefix` (system Python without venv).
 25. Removed conda from documented environment paths.
+
+**Cross-runtime unit tests (Decision 0016):**
+26. Renamed `functional_tests/` to `functional_tests/` across all libraries. `functional_tests/` is for real-device tests only; `tests/` is shared between pytest and the lightweight harness.
+27. Compat tasks (`test-micropython-compat`, `test-circuitpython-compat`) now run `tests/` through the lightweight harness, not just import-level smoke checks from `functional_tests/`. Supersedes Decision 0006.
+28. Cross-runtime tests use plain `assert` and `raises()` from the test harness. `import pytest` is the automatic portability boundary — files that fail to import are logged as SKIP.
+29. `_pytest` suffix convention for CPython-only test files (e.g., `test_ticks_pytest.py`). Cross-runtime is the default.
+30. Updated Decision 0003 (test pyramid) to reflect the new required middle tier. Marked Decision 0006 as superseded.
 

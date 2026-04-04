@@ -19,12 +19,12 @@ Never embed secrets; configuration such as Wi‑Fi credentials belongs in separa
 - **Runtimes:** CircuitPython (Adafruit fork of MicroPython), MicroPython, and CPython.  CircuitPython and MicroPython constrain RAM and CPU; they support only a subset of the standard library.  Developers should use memory‑efficient patterns such as pre‑allocating buffers and using `memoryview` objects to avoid extra allocations【127994299864638†L237-L254】【5110752449986†L110-L149】.
 - **Frameworks:**
   - **PyTest** for host‑based unit tests.  PyTest can be used with CPython and, where possible, MicroPython/CircuitPython via compatibility layers.
-  - A **lightweight on‑device test runner** exists under `support/test_harness/` for executing small `device_tests/` modules directly on hardware or compatible runtimes.  It should stay tiny: discover test functions by the `test_` prefix, use minimal assertions, and report results without requiring extra memory.
+  - A **lightweight on‑device test runner** exists under `support/test_harness/` for executing `tests/` modules across runtimes and `functional_tests/` on real hardware.  It should stay tiny: discover test functions by the `test_` prefix, use minimal assertions, and report results without requiring extra memory.
   - **Mocks & stubs:** For host tests, create mock modules to simulate hardware APIs.  For CircuitPython, PyTest can run with mocks by using a `conftest.py` that replaces CircuitPython‑only modules.  The MicroPython stubber project similarly uses a `tests/mocks` folder to allow MicroPython code to run under CPython.
 
 ## Workspace Structure
 
-Chumicro is organized as a **mono‑workspace**.  Each publishable library resides under `libraries/`, each with its own `src/`, `tests/`, `device_tests/`, `docs/`, and `examples/` subdirectories.  Shared internal packages live under `support/`.  Developer tasks are in `scripts/` (split into focused modules), and planning docs are in `plans/`.
+Chumicro is organized as a **mono‑workspace**.  Each publishable library resides under `libraries/`, each with its own `src/`, `tests/`, `functional_tests/`, `docs/`, and `examples/` subdirectories.  Shared internal packages live under `support/`.  Developer tasks are in `scripts/` (split into focused modules), and planning docs are in `plans/`.
 
 The live workspace structure is provided automatically at the start of each session.  For the canonical detailed layout, see `plans/prompts/workspace-rebuild.prompt.md`.
 
@@ -170,7 +170,7 @@ The workspace uses per-library pytest runs to avoid test-directory name collisio
 
 For tests that must run on real hardware or under the actual MicroPython/CircuitPython interpreter, a lightweight on‑device test runner exists in `support/test_harness/`.  It should discover functions prefixed with `test_`, run them one by one, and report results, while keeping memory usage minimal.  Its interface and helpers (e.g., assertions) may still evolve, but it should remain intentionally tiny.
 
-Tests intended for on‑device execution should live under a `device_tests/` directory within each library and import any required mocks or helpers from the support package.  Avoid heavy imports or complex features that are unavailable on the board.
+Tests intended for on‑device execution should live under a `functional_tests/` directory within each library and import any required mocks or helpers from the support package.  Avoid heavy imports or complex features that are unavailable on the board.
 
 ### Functional & Integration Testing
 

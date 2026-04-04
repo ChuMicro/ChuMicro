@@ -17,9 +17,9 @@ Add a simulation-first validation path, then layer on optional hardware executio
 ## Current verified slice
 
 - `support/test_harness/` exists as the current lightweight on-device runner
-- `libraries/timing/device_tests/test_heartbeat_ticks.py` exists as the first device-facing timing test
+- `libraries/timing/functional_tests/test_heartbeat_ticks.py` exists as the first device-facing timing test
 - `scripts/prepare_micropython.py` and `scripts/prepare_circuitpython.py` provide MicroPython and CircuitPython unix-port preparation (tasks: `prepare-micropython`, `prepare-circuitpython`)
-- `support/test_harness/run_device_smoke.py` exists as the canonical checked-in smoke runner entrypoint
+- `support/test_harness/run_device_smoke.py` exists as the canonical cross-runtime test runner entrypoint (runs `tests/` through the lightweight harness, see Decision 0016)
 - `devices.example.yml` exists as the first committed local board registry template
 - manual-only hardware execution is the current documented starting point
 
@@ -33,19 +33,19 @@ Purpose:
 - high coverage for logic
 - no board dependency
 
-### Layer 2: compatibility smoke tests
+### Layer 2: cross-runtime unit tests
 
 Purpose:
 
-- confirm target-runtime imports and basic semantics
-- catch platform-specific module mistakes earlier than device runs
+- run real unit tests on MicroPython and CircuitPython unix-ports
+- catch platform-specific module mistakes and behavioral differences earlier than device runs
+- uses the lightweight test harness to execute `tests/` with plain asserts and constructor-injected fakes (Decision 0016)
 
 Candidate approaches:
 
 - MicroPython Unix port where it is helpful
 - CircuitPython unix port evaluation where practical, because the upstream repository does contain `ports/unix/`, but local buildability and feature parity still need to be proven for this workspace
-- CPython-driven compatibility harnesses with fake modules for CircuitPython-specific imports when the unix-port path is not yet practical
-- minimal subprocess-based smoke checks for package import contracts
+- the lightweight harness auto-skips test files that require pytest (import boundary)
 
 Windows host note:
 
@@ -82,7 +82,7 @@ Current verified state:
 - the first MicroPython-oriented compatibility command has been exercised successfully in this workspace with the prepared local runtime
 - the repo now has a real local `prepare-circuitpython` / `test-circuitpython-compat` evaluation path instead of a placeholder task
 - the pinned CircuitPython `10.1.4` unix-port path now builds successfully in this macOS workspace
-- the shared timing smoke runner now passes in this workspace under CPython, MicroPython unix-port, and CircuitPython unix-port
+- the cross-runtime unit tests now pass in this workspace under CPython, MicroPython unix-port, and CircuitPython unix-port (Decision 0016)
 
 ## Why not use `pytest` directly on device?
 
@@ -91,7 +91,7 @@ Current verified state:
 The likely right split is:
 
 - `pytest` on the host
-- a tiny `support/test_harness/` for `device_tests/`
+- a tiny `support/test_harness/` for `functional_tests/` and cross-runtime `tests/` execution
 
 ## Success criteria
 
@@ -109,7 +109,6 @@ This workstream remains active because the transport layer, automated compatibil
 
 ## Resolved feedback
 
-- **CircuitPython unix-port host-runtime path:** Already pursued and verified. The pinned CircuitPython 10.1.4 unix-port builds locally on macOS and passes the timing smoke tests. It runs as an advisory CI job.
+- **CircuitPython unix-port host-runtime path:** Already pursued and verified. The pinned CircuitPython 10.1.4 unix-port builds locally on macOS and passes the cross-runtime unit tests. It runs as an advisory CI job.
 - **Hardware workflow promotion:** Promote once board transport tooling exists and has proven reliable. Until then, manual-only.
 - **First-class test boards:** ESP32-S2 — specifically the [Wemos S2-Mini](https://www.wemos.cc/en/latest/s2/s2_mini.html) as the initial target. The device matrix will expand later. A future goal is CI-hosted hardware, but that is a high-security concern and will not be user-accessible. Users configure their own local test matrix via `devices.yml`.
-

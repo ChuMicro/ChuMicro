@@ -23,15 +23,14 @@ Chumicro is a mono-workspace for Python libraries that run across CPython, Micro
 ## Testing model
 
 - **Required**: CPython-hosted `pytest` tests with coverage (90%+ gate)
-- **Advisory**: MicroPython and CircuitPython unix-port smoke tests
-- **Opt-in**: real-device `device_tests/` run through the Chumicro test harness
+- **Advisory**: MicroPython and CircuitPython unix-port cross-runtime unit tests
+- **Opt-in**: real-device `functional_tests/` run through the Chumicro test harness
 
 ## Repository shape
 
 ```text
 chumicro/
 ├── scripts/               # User-facing commands (prepare, run tasks)
-├── ci/                    # CI-internal plumbing (compile scripts, smoke runners)
 ├── plans/                 # Roadmap, workstreams, decisions, and prompts
 │   ├── decisions/
 │   ├── prompts/
@@ -43,7 +42,7 @@ chumicro/
 │   └── timing/            # Cross-runtime timing library
 │       ├── src/
 │       ├── tests/
-│       ├── device_tests/
+│       ├── functional_tests/
 │       ├── docs/          # ReadTheDocs content
 │       └── examples/      # Usage examples
 ├── devices.example.yml    # Template for local board registration
@@ -105,7 +104,7 @@ The repo switches runtimes by running the same library code under different inte
 
 ## Device validation
 
-Real-board execution is manual-only. Copy `devices.example.yml` to `devices.yml` and fill in your board details. Use `libraries/timing/device_tests/` with `support/test_harness/` on the target board.
+Real-board execution is manual-only. Copy `devices.example.yml` to `devices.yml` and fill in your board details. Use `libraries/timing/functional_tests/` with `support/test_harness/` on the target board.
 
 ## Versioning
 

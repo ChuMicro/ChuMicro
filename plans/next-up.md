@@ -79,7 +79,7 @@
 - [x] Decide contributor docs scope: all three OS paths (macOS, Linux, Windows/WSL2); Linux and WSL best-effort until verified.
 - [x] Rename `test-host` → `test`. Enforce per-library 90% coverage threshold.
 - [x] Auto-discover libraries and support packages in `scripts/run.py` — lint paths, test coverage, source roots, and PYTHONPATH are now derived from the workspace structure instead of hard-coded lists.
-- [x] Auto-discover test paths in `pyproject.toml` — `testpaths` and coverage source are now broad patterns; `device_tests/` is excluded via `--ignore-glob`.
+- [x] Auto-discover test paths in `pyproject.toml` — `testpaths` and coverage source are now broad patterns; `functional_tests/` is excluded via `--ignore-glob`.
 - [x] Add root `conftest.py` with auto-discovery of source roots so direct `pytest` invocation works without manual PYTHONPATH.
 - [x] Remove unused `_SystemTicks` class from `chumicro_timing.ticks` (dead code — `Heartbeat` uses direct function imports).
 - [x] Add scoped `test-host` with `--all`, `--libraries`, branch-diff detection, and pytest passthrough.
