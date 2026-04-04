@@ -32,7 +32,6 @@ from scaffold import new_library
 
 PYTHON = sys.executable
 COMPAT_SCRIPT = "support/test_harness/run_cross_runtime.py"
-COMPAT_EXEC = f'exec(open("{COMPAT_SCRIPT}").read())'
 
 
 def _run(command: list[str], env: dict[str, str] | None = None) -> int:
@@ -422,7 +421,7 @@ def test_micropython_compat() -> int:
             )
             return 1
 
-    return _run([micropython_bin, "-c", COMPAT_EXEC])
+    return _run([micropython_bin, COMPAT_SCRIPT])
 
 
 def test_circuitpython_compat() -> int:
@@ -443,7 +442,7 @@ def test_circuitpython_compat() -> int:
             )
             return 1
 
-    return _run([circuitpython_bin, "-c", COMPAT_EXEC])
+    return _run([circuitpython_bin, COMPAT_SCRIPT])
 
 
 def test_runtime_matrix() -> int:
