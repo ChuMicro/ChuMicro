@@ -1,49 +1,58 @@
 """Sensor threshold alert — gate-based service pattern.
 
-A temperature sensor reads its hardware in ``service()`` and fires
-``handle()`` when the reading exceeds a threshold.  This demonstrates
-the gate-based pattern: ``service()`` performs a fast hardware check
-and returns whether the handler should fire.
+``service()`` reads the sensor and checks whether the handler should
+fire.  The runner calls ``service()`` on schedule; when it returns
+True, ``handle()`` fires.
 
 On a real board, ``read_temperature()`` would be a fast I2C or ADC
-read.  Here it pulls from a simulated sequence.
+read.  Here it cycles through simulated values.
 
-Runs on CPython, MicroPython, and CircuitPython without modification.
+Example output::
+
+    Monitoring temperature... (Ctrl+C to stop)
+
+    [3005 ms] ALERT: 31.0°C exceeds 30.0°C
+    [4002 ms] ALERT: 35.0°C exceeds 30.0°C
+    [11003 ms] ALERT: 31.0°C exceeds 30.0°C
+    [12008 ms] ALERT: 35.0°C exceeds 30.0°C
+    ...
+
+Runs on CPython, MicroPython, and CircuitPython.
 """
 
 import time
 
 from chumicro_serviceable import ServiceRunner
 
+# Simulated readings that cycle.  Replace with hardware reads.
+_READINGS = [22.0, 25.0, 28.0, 31.0, 35.0, 29.0, 24.0, 20.0]
+
 
 class TemperatureSensor:
     """Alert when temperature exceeds a threshold.
 
     ``service()`` calls ``read_temperature()`` — a fast, non-blocking
-    sensor read — and returns True when the reading exceeds the
-    threshold.  ``handle()`` reacts (here it prints; on a real board
-    it might activate a fan or send a network alert).
+    sensor read — and returns True when the threshold is exceeded.
+    ``handle()`` reacts (print here; fan or network alert on a real
+    board).
     """
 
     def __init__(self, threshold=30.0):
         """Create a sensor with the given alert threshold (°C)."""
         self._threshold = threshold
         self._last_reading = 0.0
-        # Simulated readings for this example.
-        self._sim_readings = iter(
-            [22.0, 25.0, 28.0, 31.0, 35.0, 29.0, 33.0, 27.0]
-        )
+        self._index = 0
 
     def read_temperature(self):
-        """Read the current temperature from hardware.
+        """Read temperature from hardware.
 
-        On a real board this would be a fast I2C or ADC read, e.g.:
+        On a real board::
+
             return self._i2c_device.temperature
-
-        Fast sensor reads are exactly the kind of operation that
-        belongs in ``service()``.
         """
-        return next(self._sim_readings, self._last_reading)
+        value = _READINGS[self._index % len(_READINGS)]
+        self._index += 1
+        return value
 
     def service(self, now_ms):
         """Read the sensor and check against the threshold."""
@@ -59,21 +68,18 @@ class TemperatureSensor:
 
 
 def main():
-    """Simulate a temperature sensor that triggers on threshold breach."""
+    """Monitor temperature and alert on threshold breach."""
     runner = ServiceRunner()
     sensor = TemperatureSensor(threshold=30.0)
 
-    # Check the sensor every 500 ms.
-    runner.add(sensor, period_ms=500)
+    # Check the sensor every second.
+    runner.add(sensor, period_ms=1000)
 
-    print("Monitoring temperature (simulated)...\n")
+    print("Monitoring temperature... (Ctrl+C to stop)\n")
 
-    end_time = time.monotonic() + 5
-    while time.monotonic() < end_time:
+    while True:
         runner.service_once()
-        time.sleep(0.1)  # simulate other work between ticks
-
-    print("\nDone.")
+        time.sleep(0.1)
 
 
 if __name__ == "__main__":

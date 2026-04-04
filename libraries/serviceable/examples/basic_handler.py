@@ -1,18 +1,26 @@
 """Basic handler patterns — the most common way to use ServiceRunner.
 
-Shows two fundamental patterns:
+- **Every-tick handler** — fires on every ``service_once()`` call.
+  Use for work that must run as often as possible (polling buttons,
+  reading input buffers).
+- **Periodic handler** — fires on a fixed time schedule.
+  Use for regular intervals (blinking LEDs, logging, heartbeats).
 
-1. **Every-tick handler** — runs on every call to ``service_once()``.
-   Use for work that should happen as often as possible (polling
-   buttons, updating displays, processing input).
+No service objects needed — just pass a callable and optionally a period.
 
-2. **Periodic handler** — runs on a time schedule.
-   Use for work on a fixed interval (blinking LEDs, logging data,
-   sending heartbeats).
+Example output::
 
-No service objects or check functions needed — just a callable.
+    Running... (Ctrl+C to stop)
 
-Runs on CPython, MicroPython, and CircuitPython without modification.
+    [1005 ms] status report (10 ticks)
+    [2003 ms] status report (20 ticks)
+    [2003 ms] heartbeat
+    [3008 ms] status report (30 ticks)
+    [4002 ms] status report (40 ticks)
+    [4002 ms] heartbeat
+    ...
+
+Runs on CPython, MicroPython, and CircuitPython.
 """
 
 import time
@@ -22,43 +30,44 @@ from chumicro_serviceable import ServiceRunner
 tick_count = 0
 
 
-def count_ticks(now_ms):
-    """Increment the tick counter.
+def poll_inputs(now_ms):
+    """Poll hardware inputs — runs every tick.
 
-    Runs every tick — use this pattern for work that should
-    happen as often as possible (e.g., scanning button inputs).
+    On a real board this might scan a button matrix or read
+    a UART buffer.  Here it just counts ticks.
     """
     global tick_count  # noqa: PLW0603
     tick_count += 1
 
 
 def report_status(now_ms):
-    """Print a periodic status report.
+    """Print a periodic status report."""
+    print(f"  [{now_ms} ms] status report ({tick_count} ticks)")
 
-    Runs on a fixed schedule — use this pattern for work that
-    should happen at regular intervals.
-    """
-    print(f"  [{now_ms} ms] status: {tick_count} ticks processed")
+
+def heartbeat(now_ms):
+    """Print a heartbeat."""
+    print(f"  [{now_ms} ms] heartbeat")
 
 
 def main():
-    """Run an every-tick counter alongside a periodic status report."""
+    """Run handlers on different schedules."""
     runner = ServiceRunner()
 
-    # Every-tick handler: fires on every service_once() call.
-    runner.add(handler=count_ticks)
+    # Every-tick: fires on every service_once() call.
+    runner.add(handler=poll_inputs)
 
-    # Periodic handler: fires once per second.
+    # Periodic: fires once per second.
     runner.add_periodic(report_status, period_ms=1000)
 
-    print("Running for 3 seconds...\n")
+    # Periodic: fires every two seconds.
+    runner.add_periodic(heartbeat, period_ms=2000)
 
-    end_time = time.monotonic() + 3
-    while time.monotonic() < end_time:
+    print("Running... (Ctrl+C to stop)\n")
+
+    while True:
         runner.service_once()
-        time.sleep(0.1)  # simulate other work between ticks
-
-    print(f"\nDone. Total ticks: {tick_count}")
+        time.sleep(0.1)
 
 
 if __name__ == "__main__":
