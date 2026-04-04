@@ -1,4 +1,3 @@
-# requires: hardware
 """Button-controlled LED — MicroPython gate pattern.
 
 Reads a button and toggles an LED using the runner's check/handle

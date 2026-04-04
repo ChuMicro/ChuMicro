@@ -1,4 +1,3 @@
-# requires: hardware
 """Runner LED blink — MicroPython.
 
 Toggles the onboard LED every 500 ms using a periodic runner task.

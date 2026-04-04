@@ -1,4 +1,3 @@
-# requires: hardware
 """Heartbeat LED blink — CircuitPython.
 
 Toggles the onboard LED once per second using a non-blocking

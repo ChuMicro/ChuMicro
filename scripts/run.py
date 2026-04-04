@@ -290,13 +290,16 @@ def verify_examples(pkg_dirs: list[Path]) -> int:
     3. Resolves each imported module via ``importlib`` and verifies that
        specific names (``from X import Y``) exist on the module.
 
-    Examples marked with ``# requires: hardware`` are hardware-targeted
-    and may import modules unavailable on CPython (``board``, ``digitalio``,
-    ``machine``, etc.).  For these, only ``chumicro_*`` imports are
-    verified — platform-specific imports are skipped.
+    Hardware examples (files named ``circuitpython_*.py`` or
+    ``micropython_*.py``) may import modules unavailable on CPython
+    (``board``, ``digitalio``, ``machine``, etc.).  For these, only
+    ``chumicro_*`` imports are verified — platform-specific imports are
+    skipped.
     """
     import ast
     import importlib
+
+    _HARDWARE_PREFIXES = ("circuitpython_", "micropython_")
 
     # Ensure library src/ dirs are importable.
     src_dirs = [str(d / "src") for d in pkg_dirs if (d / "src").is_dir()]
@@ -327,7 +330,7 @@ def verify_examples(pkg_dirs: list[Path]) -> int:
     for rel_path, py_file in examples:
         print(f"  checking {rel_path}")
         source = py_file.read_text(encoding="utf-8")
-        hardware = "# requires: hardware" in source
+        hardware = py_file.name.startswith(_HARDWARE_PREFIXES)
 
         # 1. Syntax check.
         try:
