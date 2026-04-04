@@ -1,64 +1,74 @@
 # Decision 0014: Serviceable pattern
 
 Status: `accepted`
-Date: `2026-04-02`
+Date: `2026-04-02` (revised `2026-04-04`)
 
 ## Context
 
-Multiple upcoming libraries (heartbeat, MQTT, buttons, digital I/O) will need periodic servicing and a way to communicate events to application code.  Without a standard contract, each library will invent its own `poll()` / callback / `next_event()` pattern, leading to inconsistent APIs and ad-hoc drain functions in user code.
+Multiple upcoming libraries (heartbeat, MQTT, buttons, digital I/O) will need periodic servicing and a way to communicate state changes to application code.  Without a standard contract, each library will invent its own `poll()` / callback / `next_event()` pattern, leading to inconsistent APIs and ad-hoc polling loops in user code.
+
+On microcontrollers, each component calling `ticks_ms()` independently sees a slightly different timestamp.  On slow boards, this drift causes components that should fire on the same tick to disagree.  The correct pattern is to capture time once per loop iteration and share that timestamp across all components.
 
 ## Decision
 
-Standardize on a **shared-sink serviceable pattern** for all active components:
+Standardize on a **gate-based serviceable pattern** for all active components.
 
-1. **Event** — a small class (`source`, `event_type`, `data`) representing something that happened.
-2. **EventQueueSink** — a fixed-capacity ring buffer that components emit events into.  Backed by `collections.deque` (C-implemented on MicroPython/CircuitPython) for O(1) append/popleft with pre-allocated storage.  Individual `Event` objects are created per-emit (small, `__slots__`-based).
-3. **SimpleEventDispatcher** — routes events to registered handler functions by event type.
-4. **ServiceRunner** — iterates over a list of serviceable components, calls `service(event_sink)` on each, then drains and dispatches events.
+### Service contract
 
-### Contract for serviceable components
-
-Any active component implements:
+A service checks a condition and reports whether its handler should fire:
 
 ```python
-def service(self, event_sink):
-    """Do one unit of work; emit zero or more events into *event_sink*."""
+def service(self, now_ms):
+    """Check one condition; return True if the handler should fire."""
 ```
 
-This is a duck-typed contract — components do not need to import or subclass anything from `chumicro_serviceable`.  They just implement the method.
+This is a duck-typed contract — components do not need to import or subclass anything from `chumicro-serviceable`.
+
+### ServiceRunner
+
+`ServiceRunner(ticks=None)` captures `ticks_ms()` once per `service_once()` call and passes the shared timestamp to every service.  It returns `now_ms` so user code can use it for passive checks alongside the dispatch loop.
+
+Three registration patterns:
+
+- **Object-based:** `add(obj)` — obj has `.service(now_ms) -> bool` and `.handle(now_ms)`.  The runner calls `.service()`; if `True`, `.handle()` is queued.
+- **Callable-based:** `add(check_fn, handler=fn)` — callable check gates callable handler.
+- **Periodic:** `add_periodic(handler, period_ms)` — handler fires on schedule, no check.
+
+All patterns accept an optional `period_ms` to gate by time.
+
+### Period ownership on the runner
+
+The runner owns period gating: `add(service, period_ms=N)` creates an internal `Heartbeat` and only calls the service when the period elapses.  `ServiceHandle` allows runtime mutation: `set_period()`, `remove()`.
+
+Components that need conditional logic beyond period gating implement it in their `.service()` method.  There is one mechanism for periodic behaviour, not two.
+
+### Batch firing
+
+`service_once()` runs in two phases:
+
+1. Check all entries (period gate → check gate) and collect due handlers.
+2. Batch-fire all collected handlers.
+
+This guarantees handlers see a consistent view of the world — no handler modifies state while other services are still being checked.
 
 ### Existing APIs remain
 
-`Heartbeat.poll()` and `Heartbeat.is_due()` stay for simple use cases.  The new `service()` method is additive.
+`Heartbeat.poll()` and `Heartbeat.is_due()` stay for simple use cases where a full serviceable component is unnecessary.
 
 ## Alternatives considered
 
-- **Hand-rolled list-based ring buffer** — original implementation used `[None] * max_size` with manual head/tail/count/modulo tracking.  Replaced with `collections.deque` which does the same thing in C with less Python code.  `deque.clear()` is compiled out on both runtimes (`#if 0` in `objdeque.c`), but a drain loop is trivial.
-- **Component-owned sink / `next_event()`** — less centralized, requires per-library queue logic, harder to orchestrate multiple components.  Rejected in favor of shared sink for ecosystem consistency.
-- **`ServiceContext` wrapping ticks + sink** — adds a layer of indirection that is not needed yet.  Can be added later without breaking the `service(event_sink)` signature by making the context duck-type compatible with a sink.
-- **Pre-allocated Event slots in the ring buffer** — avoids per-emit allocation but introduces a footgun (popped Event references become invalid on wrap).  Deferred; the user reports no GC problems in practice and this can be added as an opt-in variant later.
-
-## Allocation notes
-
-- `EventQueueSink` is backed by `collections.deque((), max_size)` which pre-allocates a fixed-size C array of object pointers.  No Python-level head/tail/count bookkeeping.
-- `Event` uses `__slots__` to minimize per-instance memory.
-- Per-emit allocation of `Event` objects is acceptable for the current scale.  If GC pressure becomes a measurable problem, a zero-allocation variant can reuse pre-allocated Event slots.
-
-## Multiple-instance disambiguation
-
-Serviceable components that may be instantiated more than once (e.g., `Heartbeat`) accept an `event_type` constructor argument so each instance emits a distinct event type.  This allows the dispatcher to route events without inspecting `event.source`.  Example:
-
-```python
-led_beat = Heartbeat(100, event_type="led.blink")
-sensor_beat = Heartbeat(5000, event_type="sensor.read")
-dispatcher.register("led.blink", handle_led)
-dispatcher.register("sensor.read", handle_sensor)
-```
+- **Event-based pattern (service → event sink → dispatcher):** The initial implementation used an event bus: components emitted `Event` objects into an `EventQueueSink`, and a `SimpleEventDispatcher` routed them to handlers by event type.  This required significant ceremony (create sink, create dispatcher, register event types, pass both to runner) for simple cases where a service just needs to check a condition and fire a callback.  Removed in favor of the simpler gate-based model.  Can be re-added as a separate module when multi-handler routing is needed.
+- **Priority-based dispatch ordering:** Priority constants were defined but never used for dispatch ordering.  Constants without behaviour create confusion.  Deferred until the ecosystem actually needs contention management.
+- **Component-owned sink / `next_event()`:** Less centralized, requires per-library queue logic, harder to orchestrate multiple components.  Rejected in favor of the runner-managed pattern.
+- **`ServiceContext` wrapping ticks + sink:** Adds a layer of indirection not needed at current scale.
+- **Period ownership on the dispatcher:** Created two parallel mechanisms for periodic behaviour (service-side and dispatcher-side) which was confusing.  Consolidated to runner-only.
 
 ## Consequences
 
-- New library: `chumicro-serviceable` under `libraries/serviceable/`.
-- `Heartbeat` gains `service(event_sink)` and accepts a caller-supplied `event_type` string.
-- Future libraries (MQTT, buttons, etc.) implement the same `service(event_sink)` contract.
-- User main loops can use `ServiceRunner` for a standard dispatch pattern, or continue using `poll()` for simple cases.
-
+- `chumicro-serviceable` library under `libraries/serviceable/`.
+- Service contract: `service(now_ms) -> bool` (gate-based).
+- `ServiceRunner` depends on `chumicro-timing` for the default tick source and `Heartbeat` for period gating.
+- `ServiceHandle` provides runtime mutation of registered services.
+- `CallRecorder` in the testing module records handler invocations for test assertions.
+- `collections.deque` is not required by this library.
+- Future libraries implementing the serviceable pattern use duck typing — no import dependency on `chumicro-serviceable` required.

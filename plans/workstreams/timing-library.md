@@ -40,7 +40,7 @@ libraries/timing/
 ## Current verified slice
 
 - `libraries/timing/src/chumicro_timing/__init__.py` exports the current public API
-- `libraries/timing/src/chumicro_timing/heartbeat.py` implements the `Heartbeat` class with `poll(now_ms)`, `is_due(now_ms)`, and `reset(now_ms)` — all requiring a shared timestamp (Decision 0017)
+- `libraries/timing/src/chumicro_timing/heartbeat.py` implements the `Heartbeat` class with `poll(now_ms)`, `is_due(now_ms)`, and `reset(now_ms)` — all requiring a shared timestamp (Decision 0014)
 - `libraries/timing/src/chumicro_timing/ticks.py` provides the cross-runtime timing seam
 - `libraries/timing/tests/` covers the host-side behavior with `pytest`
 - `libraries/timing/functional_tests/test_heartbeat_ticks.py` exists as the first device-aware timing test
@@ -166,4 +166,4 @@ The current implemented slice is a heartbeat-style utility whose timing behavior
 - **Second seam:** Digital I/O will become the second seam, but the priority is to explore CI and release more deeply with just the timing library (and possibly one more) before adding many libraries. Both tracks proceed in parallel.
 - **IDE-facing stubs:** Prove out IDE stub packaging now, before the second seam. This is part of the timing library's remaining exit criteria.
 - **Advisory runtime compat jobs:** These should become mandatory protected-branch requirements eventually. They will be gated by platform targeting (Decision 0011) so that only libraries declaring support for MicroPython/CircuitPython are required to pass those checks.
-- **Shared-timestamp pattern:** `Heartbeat.poll(now_ms)`, `is_due(now_ms)`, and `reset(now_ms)` require a shared timestamp (Decision 0017).  Heartbeat is a passive component checked via `poll()`.  Active components implement `service(event_sink, now_ms)` (Decisions 0014, 0017).
+- **Shared-timestamp pattern:** `Heartbeat.poll(now_ms)`, `is_due(now_ms)`, and `reset(now_ms)` require a shared timestamp (Decision 0014).  Heartbeat is a passive component checked via `poll()`.  Active components implement `service(now_ms) -> bool` (Decision 0014).

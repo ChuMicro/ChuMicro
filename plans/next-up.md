@@ -8,7 +8,7 @@
   - When writing these docs, scope the AGENTS.md performance guidelines (f-strings, `const()`, `memoryview`, pre-allocated buffers, etc.) to **library code only**. Infrastructure code (`scripts/`, `support/`) runs exclusively on CPython and does not need embedded-runtime constraints.
 - [ ] Write a "Creating a New Library" contributor guide. Walk through the full lifecycle from scaffolding to release-ready:
   1. `new-library` scaffolding — what it creates, what it doesn't (e.g., no `testing` submodule by default)
-2. Library code — dependency injection (Decision 0010), `service(event_sink, now_ms)` contract for active components (Decisions 0014, 0017), memory-efficient patterns for embedded targets
+ 2. Library code — dependency injection (Decision 0010), `service(now_ms) -> bool` gate-based contract for active components (Decision 0014), memory-efficient patterns for embedded targets
   3. Unit tests — per-library test runs (Decision 0009), 90% coverage threshold, constructor injection for testability
   4. Testing submodule — when and how to add `src/chumicro_<name>/testing.py` with ready-made fakes
   5. Docs — `guide.md` required sections, `api.md` autodoc rules, generation prompt (Decision 0013)
@@ -42,20 +42,18 @@
 
 ## Done
 
-- [x] Simplify serviceable to gate-based pattern (Decision 0020).  Remove Event, EventQueueSink, SimpleEventDispatcher, HandlerHandle, priority constants.  Service contract changes from `service(event_sink, now_ms)` to `service(now_ms) -> bool`.  Add `CallRecorder` test helper.  `chumicro-serviceable` 0.3.0 → 0.4.0.
+- [x] Implement and iterate `chumicro-serviceable` to gate-based pattern (Decision 0014).  Service contract: `service(now_ms) -> bool`.  `ServiceRunner` with `add()`, `add_periodic()`, `ServiceHandle`, shared timestamps, batch firing.  `CallRecorder` test helper.  `chumicro-serviceable` 0.1.0 → 0.4.0.
 - [x] Add `chumicro-compat` library with lightweight `abc` module (ABC base class, `@abstractmethod` decorator) using `__init_subclass__` — works on MicroPython ≥1.19.1, CircuitPython ≥8.x.
-- [x] Move period ownership from dispatcher to runner (Decision 0019).  Remove `poll_heartbeats()`, `period_ms` from `register()`, `ticks` from dispatcher.  Add `ServiceRunner.add()` with `period_ms` and `ServiceHandle`.  `chumicro-serviceable` 0.2.0 → 0.3.0.
-- [x] Implement Decision 0018 Phases 1–2: handle-based registration (`HandlerHandle`), heartbeat-integrated handlers (`period_ms` on `register()`), `poll_heartbeats()`, priority constants.  `chumicro-serviceable` 0.1.0 → 0.2.0.  *(Phase 2 superseded by Decision 0019.)*
 - [x] Generalize the compatibility smoke runner to discover and exercise device tests for any library, not just timing.
 - [x] Scope AGENTS.md performance guidelines (f-strings, `const()`, `memoryview`, pre-allocated buffers) to library code only. Infrastructure code (`scripts/`, `support/`) runs exclusively on CPython and should not be constrained by embedded-runtime rules.
 - [x] Move prepare logic from `ci/prepare_*.py` into importable modules under `scripts/`. `ci/` was subsequently removed entirely — all logic now lives in `scripts/`.
 - [x] Review `scripts/run.py` layering. Split into focused modules: `discovery.py`, `ide.py`, `scaffold.py`, `prepare.py`, `prepare_micropython.py`, `prepare_circuitpython.py`, `prepare_workspace.py`. `run.py` is now a slim dispatch-and-task file. `dev_packages` moved to `requirements-dev.txt`.
 - [x] Accept `native CPython + WSL2 for unix-port validation` as the current Windows host model.
 - [x] Unix ports are the standard local simulation path. Docker containers are not needed at this scale. Revisit if CI build times or contributor onboarding friction justify it.
-- [x] Audit the `chumicro-serviceable` library implementation (Decision 0014). Review API surface, allocation patterns, and integration with Heartbeat. `EventQueueSink` uses `collections.deque` (C-level on MP/CP). Board architecture support for `deque` documented in Decision 0015.
+- [x] Audit the `chumicro-serviceable` library implementation (Decision 0014). Review API surface, allocation patterns, and integration with Heartbeat.
 - [x] Drop hand-written member lists from `api.md` files; codify `api.md` rules in Decision 0013 (no hand-written signatures, module-level `:::` directives only, fix docstrings not api.md).
 - [x] Add strict `guide.md` required-section structure and AI generation prompt (`plans/prompts/guide-generation.prompt.md`). Decision 0013 updated with required-section table and generation rules.
-- [x] Implement the serviceable pattern as `chumicro-serviceable` library (Decision 0014). Add `service(event_sink)` and `EVENT_TICK` to Heartbeat (timing 0.1.0 → 0.2.0).
+- [x] Implement the serviceable pattern as `chumicro-serviceable` library (Decision 0014).
 - [x] Wire up MkDocs + Material + mkdocstrings: per-library `mkdocs.yml`, `docs` task in `scripts/run.py`, `api.md` converted to autodoc directives (Decision 0013).
 - [x] Add per-library scoping (`--all`/`--libraries`) to `verify-examples` and `docs` tasks (shared `_parse_scope_args` helper).
 - [x] Update `new-library` scaffolder: generates `mkdocs.yml`, `docs/api.md` with autodoc, `docs/guide.md` template, and example with `__main__` guard. No `.gitkeep` in `docs/` or `examples/` — they have real content from scaffolding.
