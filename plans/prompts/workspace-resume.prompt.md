@@ -26,6 +26,7 @@ Use this prompt at the start of a new session when you need to rehydrate the wor
    - [0014: serviceable pattern](../decisions/0014-serviceable-pattern.md)
    - [0015: board architecture support](../decisions/0015-board-architecture-support.md)
    - [0016: cross-runtime unit tests](../decisions/0016-cross-runtime-unit-tests.md)
+   - [0017: CircuitPython RingIO bug](../decisions/0017-circuitpython-ringio-bug.md)
 
 ### Design principles to preserve
 
@@ -43,10 +44,11 @@ See [workspace-history.prompt.md](./workspace-history.prompt.md) for the full ra
 
 ### Key code anchors to inspect if implementation context is needed
 
-- `Heartbeat` in `libraries/timing/src/chumicro_timing/heartbeat.py` (includes `service()` and `EVENT_TICK`)
+- `Heartbeat` in `libraries/timing/src/chumicro_timing/heartbeat.py` (provides `poll()`, `is_due()`, `reset()`)
 - `ticks_ms()` and `ticks_diff()` in `libraries/timing/src/chumicro_timing/ticks.py`
-- `Event`, `EventQueueSink`, `ServiceRunner`, `SimpleEventDispatcher` in `libraries/serviceable/src/chumicro_serviceable/core.py`
-- `FakeEventSink` in `libraries/serviceable/src/chumicro_serviceable/testing.py`
+- `ServiceHandle`, `ServiceRunner` in `libraries/serviceable/src/chumicro_serviceable/core.py`
+- `CallRecorder` in `libraries/serviceable/src/chumicro_serviceable/testing.py`
+- `ABC`, `abstractmethod` in `libraries/compat/src/chumicro_compat/abc.py`
 - `runtime_name()` in `support/runtime/src/chumicro_runtime/platform.py`
 - `run_module()` in `support/test_harness/src/chumicro_test_harness/runner.py`
 - `main()` in `scripts/run.py` — task runner with auto-discovery, scoped testing, scaffolding

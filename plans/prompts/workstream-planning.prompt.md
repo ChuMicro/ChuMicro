@@ -4,7 +4,7 @@ Use this prompt when a future session needs to rebuild planning context without 
 
 Chumicro is a mono-workspace for Python libraries that target CPython, MicroPython, and CircuitPython, as described in [AGENTS.md](../../AGENTS.md). Keep the planning model lightweight: `roadmap + workstreams + decisions + next-up + prompts`. Avoid formal epics/stories unless a workstream actually needs them.
 
-### Current verified workspace state as of 2026-04-03
+### Current verified workspace state as of 2026-04-04
 
 1. Planning structure exists under [plans/](../README.md), including:
    - [roadmap.md](../roadmap.md)
@@ -29,11 +29,13 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
    - [0014: serviceable pattern](../decisions/0014-serviceable-pattern.md)
    - [0015: board architecture support](../decisions/0015-board-architecture-support.md)
    - [0016: cross-runtime unit tests](../decisions/0016-cross-runtime-unit-tests.md)
+   - [0017: CircuitPython RingIO bug](../decisions/0017-circuitpython-ringio-bug.md)
 3. Implemented code slices:
    - `support/runtime/` for reusable runtime detection
    - `support/test_harness/` for a tiny on-device test runner
-   - `libraries/timing/` as the first publishable timing library (`chumicro-timing` 0.2.0)
-   - `libraries/serviceable/` as the second publishable library (`chumicro-serviceable` 0.1.0) — ecosystem-standard service-and-event pattern (Decision 0014)
+   - `libraries/timing/` as the first publishable timing library (`chumicro-timing` 0.1.0)
+   - `libraries/serviceable/` as the second publishable library (`chumicro-serviceable` 0.4.0) — gate-based service pattern with shared timestamps, period gating, and batch handler firing (Decision 0014)
+   - `libraries/compat/` as a lightweight compatibility layer (`chumicro-compat` 0.1.0) — provides `abc` module (ABC, `@abstractmethod`) for MicroPython/CircuitPython
    - `scripts/run.py` as the task runner with auto-discovery, scoped testing, library scaffolding, IDE config generation, example verification, and docs build
    - `scripts/prepare_workspace.py` for initial workspace setup
    - `conftest.py` at root for auto-discovery of source roots and functional_tests exclusion
@@ -43,16 +45,19 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
    - `support/test_harness/run_cross_runtime.py` as the canonical cross-runtime test runner (Decision 0016)
    - `.github/workflows/ci.yml` for required host checks plus advisory runtime compatibility jobs
 4. The timing library proves the first Option B seam:
-   - `Heartbeat` in `libraries/timing/src/chumicro_timing/heartbeat.py` (includes `service()` and `EVENT_TICK`)
+   - `Heartbeat` in `libraries/timing/src/chumicro_timing/heartbeat.py` (provides `poll()`, `is_due()`, `reset()`)
    - cross-runtime tick helpers in `libraries/timing/src/chumicro_timing/ticks.py`
    - host-side tests in `libraries/timing/tests/`
    - shared test fakes in `libraries/timing/src/chumicro_timing/testing.py`
    - a device-facing test in `libraries/timing/functional_tests/test_heartbeat_ticks.py`
 5. The serviceable library provides ecosystem infrastructure:
-   - `Event`, `EventQueueSink`, `SimpleEventDispatcher`, `ServiceRunner` in `libraries/serviceable/src/chumicro_serviceable/core.py`
-   - `FakeEventSink` in `libraries/serviceable/src/chumicro_serviceable/testing.py`
+   - `ServiceHandle`, `ServiceRunner` in `libraries/serviceable/src/chumicro_serviceable/core.py`
+   - `CallRecorder` in `libraries/serviceable/src/chumicro_serviceable/testing.py`
    - 100% test coverage; audit complete (Decision 0015 documents board architecture support)
-6. Verified local commands:
+6. The compat library provides cross-runtime compatibility:
+   - `ABC`, `abstractmethod` in `libraries/compat/src/chumicro_compat/abc.py`
+   - 100% test coverage
+7. Verified local commands:
    - `python scripts/run.py setup`
    - `python scripts/run.py lint`
    - `python scripts/run.py test` (default: changed packages; `--all`; `--libraries timing`)
@@ -77,13 +82,14 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
 4. `venv` remains the documented development path for now.
 5. Manual-only hardware workflows are the current starting point.
 6. The first library is timing/ticks, with digital I/O deferred as the likely next seam.
-7. The second library is serviceable — provides the ecosystem-standard service-and-event pattern.
-8. IDE config generation works for both PyCharm and VS Code.
-9. Per-library pytest runs avoid test-directory collisions (Decision 0009).
-10. Shared test fakes ship as `testing` submodules (e.g., `chumicro_timing.testing.FakeTicks`, `chumicro_serviceable.testing.FakeEventSink`) and are importable by any library's tests.
-11. Docs and examples standards are established with strict guide requirements, autodoc API reference, and AI generation prompts (Decision 0013).
-12. IDE type stubs use upstream PyPI packages pinned to runtime-versions.toml (Decision 0012).
-13. Serviceable library audit complete: deque API verified across runtimes, overflow flag added, board architecture support documented (Decision 0015).
+7. The second library is serviceable — provides the ecosystem-standard gate-based service pattern.
+8. The third library is compat — provides lightweight `abc` module for MicroPython/CircuitPython.
+9. IDE config generation works for both PyCharm and VS Code.
+10. Per-library pytest runs avoid test-directory collisions (Decision 0009).
+11. Shared test fakes ship as `testing` submodules (e.g., `chumicro_timing.testing.FakeTicks`, `chumicro_serviceable.testing.CallRecorder`) and are importable by any library's tests.
+12. Docs and examples standards are established with strict guide requirements, autodoc API reference, and AI generation prompts (Decision 0013).
+13. IDE type stubs use upstream PyPI packages pinned to runtime-versions.toml (Decision 0012).
+14. Serviceable library audit complete: deque API verified across runtimes, overflow flag added, board architecture support documented (Decision 0015).
 
 ### What is still intentionally incomplete
 
