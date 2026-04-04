@@ -5,9 +5,17 @@ Reads a button and toggles an LED using the runner's check/handle
 gate pattern.  The runner calls ``check()`` every tick; when the
 button is pressed, ``handle()`` fires and toggles the LED.
 
+Setup:
+1. Copy ``chumicro_runner`` and ``chumicro_timing`` to the board
+   (e.g., via ``mpremote``).
+2. Wire a momentary button between GPIO 0 and GND.
+3. Save this file as ``main.py`` on the board.
+
 Wiring:
-- Button on GPIO 0 to GND (uses internal pull-up).
-- Uses pin 2, the built-in LED on most ESP32 dev boards.
+- Button: one leg to ``GPIO 0``, other leg to ``GND``.
+  The internal pull-up keeps the pin high when the button is open.
+- LED: uses pin 2, the built-in LED on most ESP32 dev boards.
+  Change ``Pin(2)`` to match your board.
 
 Runs on MicroPython.
 """

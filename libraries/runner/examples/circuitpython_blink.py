@@ -2,7 +2,11 @@
 """Runner LED blink — CircuitPython.
 
 Toggles the onboard LED every 500 ms using a periodic runner task.
-Drop this file onto your board as ``code.py``.
+
+Setup:
+1. Copy ``chumicro_runner`` and ``chumicro_timing`` to the ``lib/``
+   folder on your board.
+2. Save this file as ``code.py`` on the board.
 
 Wiring: none — uses the built-in LED (``board.LED``).
 

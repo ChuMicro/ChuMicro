@@ -47,6 +47,15 @@ Every example must meet the requirements above *and* the quality standards below
 - Sleep for yield must be small (0.01–0.1 s). Large sleeps (≥ 0.5 s) negate non-blocking timing patterns and confuse readers about how the library is meant to work.
 - Simulation logic must use methods with descriptive names that explain what hardware they replace (e.g., `detect_motion()`, `read_temperature()`, `read_button()`), not bare flags or opaque counters. Include a docstring or comment showing the real-board equivalent (e.g., "On a real board: `return self._pin.value`").
 
+**Hardware examples:**
+
+- Hardware examples must include a **Setup** section in the docstring with numbered steps: (1) which library packages to copy to the board, (2) any wiring required, (3) how to deploy the file (e.g., "Save as `code.py`" or "Save as `main.py`").
+- Include a **Wiring** section listing each connection (pin to pin, pull-up/down, GND).  For examples using only the built-in LED, state "no extra wiring."
+- Note which pins may need to be changed for different boards (e.g., "Change `Pin(2)` to match your board").
+- Name hardware examples `circuitpython_*.py` or `micropython_*.py`.
+- Runner examples that depend on `chumicro_timing` must list it in the setup steps.
+- Hardware examples need not include `time.sleep()` — tight loops are normal on real hardware where the main loop does real work.
+
 **Inline documentation:**
 
 - Examples are a learning tool for new users.  Every non-obvious line or pattern should have a comment explaining *why* it is there, not just *what* it does.

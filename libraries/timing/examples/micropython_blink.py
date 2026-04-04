@@ -2,7 +2,11 @@
 """Heartbeat LED blink — MicroPython.
 
 Toggles the onboard LED once per second using a non-blocking
-``Heartbeat`` timer.  Drop this file onto your board as ``main.py``.
+``Heartbeat`` timer.
+
+Setup:
+1. Copy ``chumicro_timing`` to the board (e.g., via ``mpremote``).
+2. Save this file as ``main.py`` on the board.
 
 Wiring: none — uses pin 2, which is the built-in LED on most
 ESP32 dev boards.  Change ``Pin(2)`` to match your board.

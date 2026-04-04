@@ -5,9 +5,16 @@ Reads a button and toggles an LED using the runner's check/handle
 gate pattern.  The runner calls ``check()`` every tick; when the
 button is pressed, ``handle()`` fires and toggles the LED.
 
+Setup:
+1. Copy ``chumicro_runner`` and ``chumicro_timing`` to the ``lib/``
+   folder on your board.
+2. Wire a momentary button between ``board.D5`` and GND.
+3. Save this file as ``code.py`` on the board.
+
 Wiring:
-- Button on ``board.D5`` to GND (uses internal pull-up).
-- Uses the built-in LED (``board.LED``).
+- Button: one leg to ``D5``, other leg to ``GND``.
+  The internal pull-up keeps ``D5`` high when the button is open.
+- LED: uses the built-in LED (``board.LED``) — no extra wiring.
 
 Runs on CircuitPython.
 """
