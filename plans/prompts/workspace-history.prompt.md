@@ -226,3 +226,19 @@ This was the largest single session. It addressed three areas: the workspace was
 29. `_pytest` suffix convention for CPython-only test files (e.g., `test_ticks_pytest.py`). Cross-runtime is the default.
 30. Updated Decision 0003 (test pyramid) to reflect the new required middle tier. Marked Decision 0006 as superseded.
 
+#### 2026-04-04 — Serviceable simplification, chumicro-compat library, decision compaction
+
+**chumicro-compat library:**
+1. New library: `chumicro-compat` with lightweight `abc` module (ABC base class, `@abstractmethod` decorator).  Uses `__init_subclass__` + `__new__` enforcement — no metaclasses.  Works on MicroPython ≥1.19.1, CircuitPython ≥8.x.  12 tests, 100% coverage.
+
+**Serviceable simplification (Decision 0014 revised):**
+2. Removed the event-based path entirely: `Event`, `EventQueueSink`, `SimpleEventDispatcher`, `HandlerHandle`, priority constants all deleted.
+3. Service contract changed from `service(event_sink, now_ms)` to `service(now_ms) -> bool` — a gate-based check function that decides IF the handler fires.
+4. `ServiceRunner` simplified to `(ticks=None)` constructor.  Four registration patterns: object-based (`.service`/`.handle`), callable check + handler, handler-only, and periodic.
+5. `FakeEventSink` replaced by `CallRecorder` in testing module.
+6. Examples rewritten with real-world concepts: temperature sensor, LED blink, motion detector.
+7. `chumicro-serviceable` 0.1.0 → 0.4.0 (three breaking changes collapsed into one session).
+
+**Decision compaction:**
+8. Compacted Decisions 0017 (shared timestamps), 0018 (dispatcher evolution), 0019 (period on runner), 0020 (simplify to gate-based) into a revised Decision 0014.  Four rapid-iteration decision documents were conversational stepping stones, not durable decisions.
+9. Updated references in `next-up.md`, `roadmap.md`, and `timing-library.md` workstream.
