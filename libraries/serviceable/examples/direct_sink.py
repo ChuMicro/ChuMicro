@@ -14,7 +14,7 @@ from chumicro_timing.testing import FakeTicks
 def main():
     """Service a heartbeat manually and inspect events from the sink."""
     fake = FakeTicks()
-    heartbeat = Heartbeat(period_ms=100, ticks=fake)
+    heartbeat = Heartbeat(period_ms=100, ticks=fake, event_type=Heartbeat.EVENT_TICK)
     sink = EventQueueSink(max_size=8)
 
     print("Direct sink usage — manual service loop\n")

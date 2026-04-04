@@ -48,9 +48,9 @@ while True:
 | `Heartbeat.poll()` | Returns `True` once per period and advances the timer |
 | `Heartbeat.is_due()` | Check whether the period has elapsed (without advancing) |
 | `Heartbeat.reset()` | Restart the timer from the current moment |
-| `Heartbeat.service(event_sink)` | Serviceable-pattern: emit an event when due |
-| `Heartbeat.EVENT_TICK` | Default event type string (`"heartbeat.tick"`) |
-| `Heartbeat.event_type` | The configured event type (read-only property) |
+| `Heartbeat.service(event_sink)` | Serviceable-pattern: emit an event when due (requires `event_type`) |
+| `Heartbeat.EVENT_TICK` | Convenience constant: `"heartbeat.tick"` |
+| `Heartbeat.event_type` | The configured event type, or `None` (read-only property) |
 | `Heartbeat.period_ms` | The configured period (read-only property) |
 
 ### Testing
@@ -96,7 +96,7 @@ assert heartbeat.poll() is True
 from chumicro_serviceable import EventQueueSink, ServiceRunner, SimpleEventDispatcher
 from chumicro_timing import Heartbeat
 
-heartbeat = Heartbeat(period_ms=1000)
+heartbeat = Heartbeat(period_ms=1000, event_type=Heartbeat.EVENT_TICK)
 sink = EventQueueSink(max_size=8)
 dispatcher = SimpleEventDispatcher()
 dispatcher.register(Heartbeat.EVENT_TICK, lambda e: print("beat!"))

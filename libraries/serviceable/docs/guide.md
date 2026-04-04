@@ -25,7 +25,7 @@ from chumicro_serviceable import EventQueueSink, ServiceRunner, SimpleEventDispa
 from chumicro_timing import Heartbeat
 
 # Create components
-heartbeat = Heartbeat(period_ms=1000)
+heartbeat = Heartbeat(period_ms=1000, event_type=Heartbeat.EVENT_TICK)
 
 # Create the event infrastructure
 sink = EventQueueSink(max_size=16)

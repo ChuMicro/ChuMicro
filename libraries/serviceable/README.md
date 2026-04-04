@@ -23,7 +23,7 @@ pip install chumicro-serviceable
 from chumicro_serviceable import EventQueueSink, ServiceRunner, SimpleEventDispatcher
 from chumicro_timing import Heartbeat
 
-heartbeat = Heartbeat(period_ms=1000)
+heartbeat = Heartbeat(period_ms=1000, event_type=Heartbeat.EVENT_TICK)
 
 sink = EventQueueSink(max_size=16)
 dispatcher = SimpleEventDispatcher()

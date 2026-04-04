@@ -13,7 +13,7 @@ from chumicro_timing.testing import FakeTicks
 
 def test_heartbeat_emits_tick():
     fake_ticks = FakeTicks()
-    heartbeat = Heartbeat(period_ms=100, ticks=fake_ticks)
+    heartbeat = Heartbeat(period_ms=100, ticks=fake_ticks, event_type=Heartbeat.EVENT_TICK)
     sink = FakeEventSink()
 
     # Not due yet — no events.

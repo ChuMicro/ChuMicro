@@ -18,7 +18,7 @@ class Heartbeat:
     """
 
     EVENT_TICK = "heartbeat.tick"
-    """Default event type emitted by ``service()`` when a beat is due."""
+    """Convenience constant for the common heartbeat event type string."""
 
     def __init__(self, period_ms, ticks=None, event_type=None):
         """Create a heartbeat that becomes due once every *period_ms* milliseconds.
@@ -28,14 +28,16 @@ class Heartbeat:
             ticks: Optional tick source (must have ``ticks_ms`` and
                 ``ticks_diff`` methods).  Defaults to the real clock.
             event_type: Event type string emitted by ``service()``.
-                Defaults to ``EVENT_TICK``.  Override this when multiple
-                heartbeats share a sink so handlers can distinguish them.
+                Required when using the serviceable pattern.  Pass
+                ``Heartbeat.EVENT_TICK`` for the common case, or a
+                custom string when multiple heartbeats share a sink.
+                The ``poll()`` API does not use this parameter.
         """
         if period_ms <= 0:
             raise ValueError("period_ms must be greater than zero")
 
         self._period_ms = period_ms
-        self._event_type = event_type if event_type is not None else self.EVENT_TICK
+        self._event_type = event_type
         if ticks is not None:
             self._ticks_ms = ticks.ticks_ms
             self._ticks_diff = ticks.ticks_diff
@@ -53,7 +55,7 @@ class Heartbeat:
 
     @property
     def event_type(self):
-        """Return the event type string emitted by ``service()``."""
+        """Return the event type string emitted by ``service()``, or ``None``."""
         return self._event_type
 
     def reset(self):
@@ -78,7 +80,15 @@ class Heartbeat:
         This is the serviceable-pattern equivalent of ``poll()``.  Use it
         with ``ServiceRunner`` from ``chumicro_serviceable`` for a standard
         dispatch loop.
+
+        Raises ``RuntimeError`` if no *event_type* was provided to the
+        constructor.
         """
+        if self._event_type is None:
+            raise RuntimeError(
+                "service() requires an explicit event_type — "
+                "pass event_type to the Heartbeat constructor"
+            )
         if self.poll():
             event_sink.emit(self, self._event_type)
 

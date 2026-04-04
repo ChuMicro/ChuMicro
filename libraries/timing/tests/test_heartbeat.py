@@ -64,9 +64,11 @@ def test_heartbeat_reports_period_configuration():
 
 
 def test_heartbeat_service_emits_tick_when_due():
-    """service() should emit EVENT_TICK into the sink when a beat is due."""
+    """service() should emit the configured event_type into the sink when a beat is due."""
     fake_ticks = FakeTicks()
-    heartbeat = Heartbeat(period_ms=100, ticks=fake_ticks)
+    heartbeat = Heartbeat(
+        period_ms=100, ticks=fake_ticks, event_type=Heartbeat.EVENT_TICK,
+    )
     events = []
 
     class _ListSink:
@@ -86,7 +88,9 @@ def test_heartbeat_service_emits_tick_when_due():
 def test_heartbeat_service_does_not_emit_when_not_due():
     """service() should emit nothing when the period has not elapsed."""
     fake_ticks = FakeTicks()
-    heartbeat = Heartbeat(period_ms=100, ticks=fake_ticks)
+    heartbeat = Heartbeat(
+        period_ms=100, ticks=fake_ticks, event_type=Heartbeat.EVENT_TICK,
+    )
     events = []
 
     class _ListSink:
@@ -106,11 +110,25 @@ def test_heartbeat_event_tick_constant():
 # -- custom event_type --
 
 
-def test_heartbeat_defaults_to_event_tick():
-    """Without an explicit event_type, service() should emit EVENT_TICK."""
+def test_heartbeat_event_type_defaults_to_none():
+    """Without an explicit event_type, the property should be None."""
     heartbeat = Heartbeat(period_ms=100, ticks=FakeTicks())
 
-    assert heartbeat.event_type == Heartbeat.EVENT_TICK
+    assert heartbeat.event_type is None
+
+
+def test_heartbeat_service_raises_without_event_type():
+    """service() should raise RuntimeError when no event_type was provided."""
+    fake_ticks = FakeTicks()
+    heartbeat = Heartbeat(period_ms=100, ticks=fake_ticks)
+
+    class _ListSink:
+        def emit(self, source, event_type, data=None):
+            pass
+
+    fake_ticks.advance(100)
+    with raises(RuntimeError):
+        heartbeat.service(_ListSink())
 
 
 def test_heartbeat_custom_event_type():

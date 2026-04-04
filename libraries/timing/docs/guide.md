@@ -112,13 +112,13 @@ All sources are masked to the 2²⁹ period, so behavior is identical regardless
 
 ## Serviceable pattern
 
-`Heartbeat` also supports the ecosystem-standard serviceable pattern from `chumicro-serviceable`.  Instead of checking `poll()` manually, you can wire heartbeats into a `ServiceRunner`:
+`Heartbeat` also supports the ecosystem-standard serviceable pattern from `chumicro-serviceable`.  Instead of checking `poll()` manually, you can wire heartbeats into a `ServiceRunner`.  You must pass an explicit `event_type` when using `service()`:
 
 ```python
 from chumicro_serviceable import EventQueueSink, ServiceRunner, SimpleEventDispatcher
 from chumicro_timing import Heartbeat
 
-heartbeat = Heartbeat(period_ms=1000)
+heartbeat = Heartbeat(period_ms=1000, event_type=Heartbeat.EVENT_TICK)
 
 sink = EventQueueSink(max_size=8)
 dispatcher = SimpleEventDispatcher()
@@ -130,7 +130,7 @@ while True:
     runner.service_once()
 ```
 
-When a beat is due, `service()` emits a `Heartbeat.EVENT_TICK` event into the sink.  This is equivalent to checking `poll()` — use whichever style fits your application.
+When a beat is due, `service()` emits the configured event type into the sink.  Calling `service()` without an `event_type` raises `RuntimeError` — this prevents multiple heartbeats from silently sharing the same default event type.
 
 ## Integration with a tick-based scheduler
 
