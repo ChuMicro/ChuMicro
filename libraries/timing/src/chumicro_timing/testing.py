@@ -39,3 +39,7 @@ class FakeTicks:
         """Return the signed difference *end* − *start*."""
         return end - start
 
+    def ticks_add(self, ticks_val: int, delta: int) -> int:
+        """Add *delta* milliseconds to a tick value."""
+        return ticks_val + delta
+

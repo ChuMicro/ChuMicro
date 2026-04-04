@@ -16,13 +16,19 @@ All classes are cross-runtime compatible (CPython, MicroPython, CircuitPython).
 class _TaskEntry:
     """Internal record for a task registered with the runner."""
 
-    __slots__ = ("check_fn", "handler_fn", "heartbeat", "active")
+    __slots__ = (
+        "check_fn", "handler_fn", "period_ms", "next_due_ms",
+        "run_count", "active",
+    )
 
-    def __init__(self, check_fn, handler_fn, heartbeat):
+    def __init__(self, check_fn, handler_fn, period_ms, next_due_ms,
+                 run_count):
         """Create a task entry."""
         self.check_fn = check_fn
         self.handler_fn = handler_fn
-        self.heartbeat = heartbeat
+        self.period_ms = period_ms
+        self.next_due_ms = next_due_ms
+        self.run_count = run_count
         self.active = True
 
 
@@ -46,9 +52,12 @@ class TaskHandle:
     @property
     def period_ms(self):
         """Return the task period in milliseconds, or ``None``."""
-        if self._entry.heartbeat is None:
-            return None
-        return self._entry.heartbeat.period_ms
+        return self._entry.period_ms
+
+    @property
+    def run_count(self):
+        """Return the remaining run count, or ``None`` if unlimited."""
+        return self._entry.run_count
 
     @property
     def active(self):
@@ -59,16 +68,19 @@ class TaskHandle:
         """Add, change, or remove the period for this task.
 
         Pass ``None`` to remove an existing period (task runs every tick).
-        A non-None value creates a new ``Heartbeat`` (resetting the timer).
+        A non-None value resets the timer so the next fire is
+        *period_ms* from now.
         """
-        if period_ms is None:
-            self._entry.heartbeat = None
-            return
-        from chumicro_timing import Heartbeat
-
-        self._entry.heartbeat = Heartbeat(
-            period_ms, ticks=self._runner._ticks
-        )
+        if period_ms is not None and period_ms <= 0:
+            raise ValueError("period_ms must be greater than zero")
+        self._entry.period_ms = period_ms
+        if period_ms is not None:
+            now_ms = self._runner._ticks_ms()
+            self._entry.next_due_ms = self._runner._ticks_add(
+                now_ms, period_ms
+            )
+        else:
+            self._entry.next_due_ms = None
 
     def remove(self):
         """Remove this task from the runner."""
@@ -77,9 +89,13 @@ class TaskHandle:
     def __repr__(self):
         """Return a developer-friendly representation."""
         status = "active" if self._entry.active else "removed"
-        hb = self._entry.heartbeat
-        period = hb.period_ms if hb is not None else None
-        return f"TaskHandle(period_ms={period}, {status})"
+        period = self._entry.period_ms
+        count = self._entry.run_count
+        parts = [f"period_ms={period}"]
+        if count is not None:
+            parts.append(f"run_count={count}")
+        parts.append(status)
+        return f"TaskHandle({', '.join(parts)})"
 
 
 class Runner:
@@ -105,24 +121,36 @@ class Runner:
        due handlers.
     2. Batch-fire all collected handlers.
 
+    Period gating uses ``ticks_diff`` and ``ticks_add`` directly —
+    no ``Heartbeat`` objects are created internally.
+
     Args:
-        ticks: Optional tick source (must have a ``ticks_ms`` method).
-            Defaults to ``chumicro_timing.ticks_ms``.
+        ticks: Optional tick source (must have ``ticks_ms``,
+            ``ticks_diff``, and ``ticks_add`` methods).
+            Defaults to the ``chumicro_timing`` module-level functions.
     """
+
+    __slots__ = (
+        "_entries", "_pending", "_ticks_ms", "_ticks_diff", "_ticks_add",
+    )
 
     def __init__(self, ticks=None):
         """Create a runner."""
         self._entries = []
         self._pending = []
-        self._ticks = ticks
         if ticks is not None:
             self._ticks_ms = ticks.ticks_ms
+            self._ticks_diff = ticks.ticks_diff
+            self._ticks_add = ticks.ticks_add
         else:
-            from chumicro_timing import ticks_ms
+            from chumicro_timing import ticks_add, ticks_diff, ticks_ms
 
             self._ticks_ms = ticks_ms
+            self._ticks_diff = ticks_diff
+            self._ticks_add = ticks_add
 
-    def add(self, task=None, handler=None, period_ms=None):
+    def add(self, task=None, handler=None, period_ms=None,
+            start_after_ms=None, run_count=None):
         """Register a task with the runner.
 
         **Object-based** (task only): *task* must have
@@ -141,6 +169,11 @@ class Runner:
                 callable ``check_fn(now_ms) -> bool``.
             handler: Optional callable ``handler(now_ms)``.
             period_ms: Optional interval in milliseconds.
+            start_after_ms: Optional initial delay before the task
+                becomes eligible.  Overrides the first period;
+                subsequent fires use *period_ms* if set.
+            run_count: Optional number of times the handler may fire
+                before auto-removing.  ``None`` means unlimited.
         """
         if handler is not None:
             # Callable-based or handler-only.
@@ -159,17 +192,27 @@ class Runner:
                 "or a handler callable"
             )
 
-        heartbeat = None
-        if period_ms is not None:
-            from chumicro_timing import Heartbeat
+        if period_ms is not None and period_ms <= 0:
+            raise ValueError("period_ms must be greater than zero")
+        if run_count is not None and run_count <= 0:
+            raise ValueError("run_count must be greater than zero")
 
-            heartbeat = Heartbeat(period_ms, ticks=self._ticks)
+        next_due_ms = None
+        if start_after_ms is not None:
+            now_ms = self._ticks_ms()
+            next_due_ms = self._ticks_add(now_ms, start_after_ms)
+        elif period_ms is not None:
+            now_ms = self._ticks_ms()
+            next_due_ms = self._ticks_add(now_ms, period_ms)
 
-        entry = _TaskEntry(check_fn, handler_fn, heartbeat)
+        entry = _TaskEntry(
+            check_fn, handler_fn, period_ms, next_due_ms, run_count,
+        )
         self._entries.append(entry)
         return TaskHandle(entry, self)
 
-    def add_periodic(self, handler, period_ms):
+    def add_periodic(self, handler, period_ms, start_after_ms=None,
+                     run_count=None):
         """Register a periodic handler with no check.
 
         ``handler(now_ms)`` is called every *period_ms* milliseconds.
@@ -178,11 +221,25 @@ class Runner:
         Args:
             handler: Callable ``handler(now_ms)`` to fire periodically.
             period_ms: Interval in milliseconds (required).
+            start_after_ms: Optional initial delay before first fire.
+                Overrides the first period.
+            run_count: Optional number of times the handler may fire
+                before auto-removing.  ``None`` means unlimited.
         """
-        from chumicro_timing import Heartbeat
+        if period_ms <= 0:
+            raise ValueError("period_ms must be greater than zero")
+        if run_count is not None and run_count <= 0:
+            raise ValueError("run_count must be greater than zero")
 
-        heartbeat = Heartbeat(period_ms, ticks=self._ticks)
-        entry = _TaskEntry(None, handler, heartbeat)
+        now_ms = self._ticks_ms()
+        if start_after_ms is not None:
+            next_due_ms = self._ticks_add(now_ms, start_after_ms)
+        else:
+            next_due_ms = self._ticks_add(now_ms, period_ms)
+
+        entry = _TaskEntry(
+            None, handler, period_ms, next_due_ms, run_count,
+        )
         self._entries.append(entry)
         return TaskHandle(entry, self)
 
@@ -190,30 +247,45 @@ class Runner:
         """Capture time, check tasks, then batch-fire handlers.
 
         1. Check each entry (period gate -> check gate).
-           Collect handlers that should fire.
+           Collect entries whose handlers should fire.
         2. Batch-fire all collected handlers.
+        3. Decrement run counts; auto-remove exhausted entries.
 
         Returns:
             The ``now_ms`` value used this tick.
         """
         now_ms = self._ticks_ms()
+        ticks_diff = self._ticks_diff
+        ticks_add = self._ticks_add
         pending = self._pending
 
         for entry in self._entries:
             if not entry.active:
                 continue
-            if entry.heartbeat is not None:
-                if not entry.heartbeat.poll(now_ms):
-                    continue
 
+            # Time gate (period or start delay).
+            if entry.next_due_ms is not None:
+                if ticks_diff(now_ms, entry.next_due_ms) < 0:
+                    continue
+                # Advance: periodic → next period; one-shot → clear.
+                if entry.period_ms is not None:
+                    entry.next_due_ms = ticks_add(now_ms, entry.period_ms)
+                else:
+                    entry.next_due_ms = None
+
+            # Check gate.
             if entry.check_fn is not None:
                 if entry.check_fn(now_ms):
-                    pending.append(entry.handler_fn)
+                    pending.append(entry)
             else:
-                pending.append(entry.handler_fn)
+                pending.append(entry)
 
-        for handler in pending:
-            handler(now_ms)
+        for entry in pending:
+            entry.handler_fn(now_ms)
+            if entry.run_count is not None:
+                entry.run_count -= 1
+                if entry.run_count <= 0:
+                    self._remove_entry(entry)
         pending.clear()
 
         return now_ms
