@@ -33,13 +33,19 @@ class TemperatureSensor:
 
     def __init__(self, threshold=30.0):
         self._threshold = threshold
-        self.reading = 20.0
+        self._last_reading = 0.0
+
+    def read_temperature(self):
+        """Read from hardware — fast I2C or ADC operation."""
+        # On a real board: return self._i2c_device.temperature
+        return self._last_reading
 
     def service(self, now_ms):
-        return self.reading > self._threshold
+        self._last_reading = self.read_temperature()
+        return self._last_reading > self._threshold
 
     def handle(self, now_ms):
-        print(f"ALERT: {self.reading}°C exceeds {self._threshold}°C")
+        print(f"ALERT: {self._last_reading}°C exceeds {self._threshold}°C")
 
 
 sensor = TemperatureSensor(threshold=30.0)
@@ -72,14 +78,19 @@ Pass an object with `.service(now_ms) -> bool` and `.handle(now_ms)`:
 ```python
 class MotionDetector:
     def __init__(self):
-        self.motion_detected = False
+        # On a real board: self._pin = digitalio.DigitalInOut(board.D5)
+        pass
+
+    def detect_motion(self):
+        """Read PIR sensor pin — fast digital read."""
+        # On a real board: return self._pin.value
+        return False
 
     def service(self, now_ms):
-        return self.motion_detected
+        return self.detect_motion()
 
     def handle(self, now_ms):
         print("Motion!")
-        self.motion_detected = False
 
 runner.add(MotionDetector())
 ```
