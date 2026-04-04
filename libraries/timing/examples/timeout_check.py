@@ -63,20 +63,20 @@ def wait_for_sensor(timeout_ms):
     start = ticks_ms()
     deadline = ticks_add(start, timeout_ms)
     polls = 0
+    now = start
 
-    while True:
+    while ticks_diff(now, deadline) < 0:
         now = ticks_ms()
         elapsed = ticks_diff(now, start)
 
         if poll_sensor(polls):
             return elapsed
 
-        if ticks_diff(now, deadline) >= 0:
-            return -1
-
         print(f"    [{elapsed} ms] not ready...")
         polls += 1
         time.sleep(0.1)
+
+    return -1
 
 
 def main():
