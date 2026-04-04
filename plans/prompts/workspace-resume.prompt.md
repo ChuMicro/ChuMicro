@@ -27,6 +27,7 @@ Use this prompt at the start of a new session when you need to rehydrate the wor
    - [0015: board architecture support](../decisions/0015-board-architecture-support.md)
    - [0016: cross-runtime unit tests](../decisions/0016-cross-runtime-unit-tests.md)
    - [0017: CircuitPython RingIO bug](../decisions/0017-circuitpython-ringio-bug.md)
+   - [0018: distribution bundle repository](../decisions/0018-distribution-bundle-repo.md)
 
 ### Design principles to preserve
 

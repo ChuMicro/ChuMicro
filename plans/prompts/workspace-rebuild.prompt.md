@@ -99,6 +99,7 @@ chumicro/
 15. Chumicro libraries require `collections.deque` (full-build CircuitPython, `EXTRA_FEATURES`+ MicroPython). Primary targets: ESP32 family, RP2040/RP2350, STM32. SAMD21 and non-full-build nRF52 are explicitly unsupported (Decision 0015).
 16. Cross-runtime unit tests run `tests/` through the lightweight harness on MP/CP unix-ports. Tests use plain asserts and `raises()`; `import pytest` is the automatic skip boundary. `functional_tests/` is for functional tests only. `_pytest` suffix marks CPython-only test files (Decision 0016).
 17. The CircuitPython unix-port build requires `-DMICROPY_PY_MICROPYTHON_RINGIO=0` to work around a linker error from dead RingIO code. The `coverage` variant disables RingIO and hides the bug; `standard` variant exposes it (Decision 0017).
+18. Distribution uses a separate `ChuMicro/chumicro-bundle` repo for built artifacts (`.py` + `.mpy`). Source repo stays clean; bundle repo provides `package.json` for mip and release zips for circup (Decision 0018).
 
 ### Key technical patterns
 
@@ -163,9 +164,7 @@ These patterns caused real bugs when implemented incorrectly. Follow them exactl
    - `TaskHandle`, `Runner` (gate-based service with shared timestamps and batch firing)
    - `CallRecorder` in `testing` submodule
    - 100% test coverage
-5. `libraries/compat/` provides:
-   - `ABC`, `abstractmethod` in `abc` module (lightweight, no metaclasses)
-   - 100% test coverage
+5. `libraries/compat/` exists as a shell for future `functools` polyfills — no modules shipped yet.
 6. `scripts/run.py` provides all task entrypoints with auto-discovery:
    - `setup`, `sync-ide`, `new-library`, `lint`, `test`, `build`, `preflight`
     - `verify-examples`, `docs`

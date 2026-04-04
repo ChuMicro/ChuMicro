@@ -261,3 +261,22 @@ This was the largest single session. It addressed three areas: the workspace was
 **CircuitPython README testing instructions:**
 7. Validated that the README testing instructions the user found (`make axtls`, `make micropython`) are outdated/incorrect. `make axtls` doesn't exist as a target in either CP or MP unix ports. CP explicitly disables SSL (`MICROPY_PY_SSL = 0`). The correct test command is `make -C ports/unix test VARIANT=standard`.
 
+#### 2026-04-04 (cont. 2) — Example verification overhaul, hardware examples, abc removal, distribution decision
+
+**AST-based example verification:**
+1. Replaced subprocess+timeout `verify-examples` with AST-based import checking: `ast.parse()` for syntax, `ast.walk()` to extract imports, `importlib.import_module()` + `hasattr()` to verify symbols. Instant, deterministic, no hardware/wifi/config needed.
+
+**abc module removal:**
+2. Removed the `abc` module from `chumicro-compat` (ABC base class, `@abstractmethod`). Kept the library shell for future `functools` polyfills. Gutted `__init__.py`, deleted `abc.py`, `test_abc.py`, `hello.py`.
+
+**Hardware examples:**
+3. Added 6 hardware examples (2 timing, 4 runner) with CircuitPython and MicroPython variants: LED blink, button+LED gate pattern. Named `circuitpython_*.py` / `micropython_*.py`.
+4. Added Setup sections with numbered steps: install via `circup`/`mpremote mip install`, wiring, deploy instructions.
+
+**Hardware example detection by filename prefix:**
+5. Replaced the `# requires: hardware` content marker with filename-prefix detection (`circuitpython_*` / `micropython_*`). The naming convention was already required by Decision 0013, making the marker redundant.
+
+**Distribution bundle decision (Decision 0018):**
+6. Researched mip and circup self-hosting. Both support self-hosted repos without community submission. `mip` uses `package.json` manifests with `github:` shorthand. `circup` supports custom bundles via `circup bundle-add`.
+7. Recorded Decision 0018: separate `ChuMicro/chumicro-bundle` distribution repo for built artifacts (`.py` + `.mpy`), keeping source repo clean.
+
