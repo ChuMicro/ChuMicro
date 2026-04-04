@@ -26,7 +26,7 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
    - [0011: per-library platform targeting](../decisions/0011-platform-targeting.md)
    - [0012: IDE type stubs](../decisions/0012-ide-type-stubs.md)
    - [0013: docs and examples standards](../decisions/0013-docs-and-examples-standards.md)
-   - [0014: runner pattern](../decisions/0014-serviceable-pattern.md)
+   - [0014: runner pattern](../decisions/0014-runner-pattern.md)
    - [0015: board architecture support](../decisions/0015-board-architecture-support.md)
    - [0016: cross-runtime unit tests](../decisions/0016-cross-runtime-unit-tests.md)
    - [0017: CircuitPython RingIO bug](../decisions/0017-circuitpython-ringio-bug.md)
