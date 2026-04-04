@@ -19,7 +19,7 @@
 
 ## Next
 
-- [ ] Add `[tool.chumicro].platforms` reader to `scripts/run.py` and wire it into the compatibility smoke runners and release/build paths (Decision 0011).
+- [ ] Add `[tool.chumicro].platforms` reader to `scripts/run.py` and wire it into the cross-runtime compatibility runners and release/build paths (Decision 0011).
 - [ ] Promote advisory MicroPython and CircuitPython CI jobs to protected-branch requirements, gated by platform targeting (Decision 0011).
 - [ ] Add digital I/O as the second library seam (alongside CI/release work, not sequentially).
 - [ ] Set up ReadTheDocs hosting with `.readthedocs.yaml` and wire docs build into CI/release pipeline (Decision 0013).
@@ -27,7 +27,6 @@
 - [ ] Explore test ergonomics: reduce repeated boilerplate across test files.
 - [ ] Validate VS Code workspace with the generated `pyrightconfig.json`.
 - [ ] Add `mpy-cross` compilation step to the release pipeline for circup and mip artifacts.
-- [ ] Decide whether to add a second, runtime-specific import smoke layer on top of the canonical shared runner from [Decision 0006](./decisions/0006-shared-import-free-compatibility-smoke-runner.md).
 - [ ] Add the first real board transport tooling for ESP32-S2 (Wemos S2-Mini) once the manual device execution path needs to move beyond direct local runs.
 - [ ] Design a performance and resource benchmarking infrastructure. Goals:
   - Measure memory footprint (heap allocations, peak usage) and CPU cost of library operations.

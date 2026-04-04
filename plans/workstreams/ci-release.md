@@ -19,7 +19,7 @@ Establish predictable PR checks and per-library release automation for a mono-wo
 
 - `.github/workflows/ci.yml` exists and runs on `push` to `main` and on `pull_request`
 - CI currently runs required host checks for lint, host-side tests with coverage, and timing package build
-- CI now also runs advisory MicroPython and CircuitPython compatibility smoke jobs via `scripts/run.py`
+- CI now also runs advisory MicroPython and CircuitPython cross-runtime compatibility jobs via `scripts/run.py`
 - CI now uses the shared repo task interface in `scripts/run.py`
 - the two publishable libraries (`timing/` and `serviceable/`) are the current proof targets under `libraries/` for CI behavior
 
@@ -34,8 +34,8 @@ Establish predictable PR checks and per-library release automation for a mono-wo
 
 ### Tier 2: preferred when practical
 
-- MicroPython compatibility smoke tests
-- CircuitPython compatibility smoke tests
+- MicroPython cross-runtime unit tests
+- CircuitPython cross-runtime unit tests
 - stub or mock validation for IDE-facing packages
 
 These should start as non-blocking if they are not yet stable enough.

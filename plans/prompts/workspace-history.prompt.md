@@ -156,7 +156,7 @@ This was the largest single session. It addressed three areas: the workspace was
 7. Fixed stale references across all planning docs: `ci/tasks.py`, `run_sample_device_tests.py`, `doc/`, importlib mode, `tests/mocks/`.
 
 **Platform targeting:**
-8. Accepted Decision 0011 (per-library platform targeting): libraries can declare `[tool.chumicro].platforms` in `pyproject.toml` to restrict which runtimes they target. Default (absent) = all three. Gates release automation and compatibility smoke runners.
+8. Accepted Decision 0011 (per-library platform targeting): libraries can declare `[tool.chumicro].platforms` in `pyproject.toml` to restrict which runtimes they target. Default (absent) = all three. Gates release automation and cross-runtime compatibility runners.
 9. Updated all prompt files and plans/README.md to reference Decision 0011.
 
 **IDE type stubs:**

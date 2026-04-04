@@ -93,8 +93,8 @@ All tasks are run through `scripts/run.py`:
 | `preflight` | Full CI gate: lint + test all + examples + compat + build |
 | `prepare-micropython` | Build the pinned MicroPython unix-port binary under `.tools/` |
 | `prepare-circuitpython` | Build the pinned CircuitPython unix-port binary under `.tools/` |
-| `test-micropython-compat` | Smoke test under MicroPython (auto-prepares if needed) |
-| `test-circuitpython-compat` | Smoke test under CircuitPython (auto-prepares if needed) |
+| `test-micropython-compat` | Cross-runtime unit tests under MicroPython (auto-prepares if needed) |
+| `test-circuitpython-compat` | Cross-runtime unit tests under CircuitPython (auto-prepares if needed) |
 | `test-runtime-matrix` | Test all packages on CPython + MicroPython + CircuitPython |
 | `test-device` | Manual device validation placeholder |
 

@@ -76,7 +76,7 @@ A source-level audit of the pinned CircuitPython 10.1.4 and MicroPython v1.26.0 
 ## Consequences
 
 - Library READMEs and guides should state the minimum board requirements (full-build CircuitPython or `EXTRA_FEATURES` MicroPython).
-- The compatibility smoke runners already test against the unix port (which has `deque`), so they remain valid.
+- The cross-runtime compatibility runners already test against the unix port (which has `deque`), so they remain valid.
 - Future board transport tooling and `devices.yml` entries should target supported architectures.
 - If users report issues on SAMD21 or small nRF boards, the answer is "unsupported" rather than "bug".
 

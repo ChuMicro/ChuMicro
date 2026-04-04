@@ -64,7 +64,7 @@ This mode should be the default path for both humans and agents.
 Primary use:
 
 - compatibility validation
-- import and behavior smoke tests
+- cross-runtime unit tests
 - selected on-device tests
 
 This mode should avoid direct dependency on CPython-only libraries and should exercise the same public library API whenever possible.
@@ -74,7 +74,7 @@ This mode should avoid direct dependency on CPython-only libraries and should ex
 Primary use:
 
 - compatibility validation
-- import and behavior smoke tests
+- cross-runtime unit tests
 - selected on-device tests on mounted boards or via a transport tool
 
 This mode should validate the same public API while allowing a small shim for platform-specific modules.
@@ -106,7 +106,7 @@ Current verified state:
 - `ruff`
 - `scripts/run.py` as the permanent repo-level task runner
 
-`scripts/run.py` is the long-term task runner for humans, agents, and CI.  It handles library discovery, scoped testing, scaffolding, IDE config generation, and compatibility smoke orchestration — none of which `uv` replaces.  `uv` is a fast package installer and environment manager; when it is on PATH, `prepare_workspace.py` and `run.py setup` auto-detect it and prefer it over `pip`/stdlib `venv`.  When uv is not available, the workspace falls back to `pip` and stdlib `venv` transparently.
+`scripts/run.py` is the long-term task runner for humans, agents, and CI.  It handles library discovery, scoped testing, scaffolding, IDE config generation, and cross-runtime compatibility orchestration — none of which `uv` replaces.  `uv` is a fast package installer and environment manager; when it is on PATH, `prepare_workspace.py` and `run.py setup` auto-detect it and prefer it over `pip`/stdlib `venv`.  When uv is not available, the workspace falls back to `pip` and stdlib `venv` transparently.
 
 Current decision:
 
