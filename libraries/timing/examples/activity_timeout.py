@@ -74,8 +74,9 @@ def main():
             else:
                 print("  [tick] idle...")
 
-            # Sleep between ticks.  On a real board this would be
-            # replaced by other work in the main loop.
+            # On a real board, the rest of your main loop goes
+            # here.  The sleep just keeps this demo from flooding
+            # the console.
             time.sleep(0.1)
     except KeyboardInterrupt:
         print("Stopped.")

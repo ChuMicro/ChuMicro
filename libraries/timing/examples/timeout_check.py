@@ -78,8 +78,8 @@ def wait_for_sensor(timeout_ms):
         print(f"    [{elapsed} ms] not ready...")
         polls += 1
 
-        # Brief pause between polls.  On a real board this would
-        # be replaced by a yield to the main loop or scheduler.
+        # Brief pause between polls.  On a real board you would
+        # yield to the main loop or scheduler here instead.
         time.sleep(0.1)
 
     return -1
@@ -104,9 +104,8 @@ def main():
 
             _cycle_index += 1
 
-            # Pause between attempts so the output is readable.
-            # On a real board this would be the rest of the main
-            # loop doing other work.
+            # On a real board, the rest of your main loop goes
+            # here.  The sleep just keeps this demo readable.
             time.sleep(1)
     except KeyboardInterrupt:
         print("Stopped.")

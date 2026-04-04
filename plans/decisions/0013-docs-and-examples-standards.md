@@ -44,8 +44,16 @@ Every example must meet the requirements above *and* the quality standards below
 **Realism:**
 
 - Main-loop examples must use `while True` — that is what real embedded code looks like. Bounded `for` loops are acceptable only for examples demonstrating naturally bounded operations (e.g., timeout checks, calibration sequences).
+- `time.sleep()` in examples exists only to keep demo output readable.  The comment should say what the user would do here on a real board ("the rest of your main loop goes here — reading sensors, checking buttons, etc.").  Do not frame it as a CPython implementation detail ("avoid busy-spinning") — that is irrelevant to the reader.
 - Sleep for yield must be small (0.01–0.1 s). Large sleeps (≥ 0.5 s) negate non-blocking timing patterns and confuse readers about how the library is meant to work.
 - Simulation logic must use methods with descriptive names that explain what hardware they replace (e.g., `detect_motion()`, `read_temperature()`, `read_button()`), not bare flags or opaque counters. Include a docstring or comment showing the real-board equivalent (e.g., "On a real board: `return self._pin.value`").
+
+**Inline documentation:**
+
+- Examples are a learning tool for new users.  Every non-obvious line or pattern should have a comment explaining *why* it is there, not just *what* it does.
+- Comments should be deliberately redundant across examples.  Each example must be self-contained — a reader should not need to have read other examples first.
+- Explain library concepts inline where they first appear: what `tick()` does, what `poll()` returns, why the shared-timestamp pattern matters, what `check()` vs `handle()` means, etc.
+- Graduate explanation depth with example complexity: basic examples explain fundamental concepts in detail; advanced examples can be terser about concepts already covered but must still explain new patterns.
 
 **Coverage and progression:**
 

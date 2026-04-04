@@ -43,10 +43,10 @@ def main():
                 # On a real board: led.value = not led.value
                 print("  beat!")
 
-            # Small sleep to avoid busy-spinning on CPython.
-            # On a real board you would do other work here
-            # instead of sleeping — read sensors, check buttons,
-            # update displays, etc.
+            # On a real board, the rest of your main loop goes
+            # here — reading sensors, checking buttons, updating
+            # displays, etc.  The sleep just keeps this demo from
+            # flooding the console.
             time.sleep(0.01)
     except KeyboardInterrupt:
         print("Stopped.")

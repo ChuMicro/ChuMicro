@@ -127,8 +127,8 @@ def main():
         # and callable — then fires any whose conditions are met.
         runner.tick()
 
-        # Small sleep to avoid busy-spinning on CPython.
-        # On a real board this would be replaced by other work.
+        # On a real board, the rest of your main loop goes here.
+        # The sleep just keeps this demo from flooding the console.
         time.sleep(0.1)
 
 
