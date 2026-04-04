@@ -30,12 +30,13 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
    - [0015: board architecture support](../decisions/0015-board-architecture-support.md)
    - [0016: cross-runtime unit tests](../decisions/0016-cross-runtime-unit-tests.md)
    - [0017: CircuitPython RingIO bug](../decisions/0017-circuitpython-ringio-bug.md)
+   - [0018: distribution bundle repository](../decisions/0018-distribution-bundle-repo.md)
 3. Implemented code slices:
    - `support/runtime/` for reusable runtime detection
    - `support/test_harness/` for a tiny on-device test runner
    - `libraries/timing/` as the first publishable timing library (`chumicro-timing` 0.1.0)
    - `libraries/runner/` as the second publishable library (`chumicro-runner` 0.4.0) — gate-based service pattern with shared timestamps, period gating, and batch handler firing (Decision 0014)
-   - `libraries/compat/` as a lightweight compatibility layer (`chumicro-compat` 0.1.0) — provides `abc` module (ABC, `@abstractmethod`) for MicroPython/CircuitPython
+   - `libraries/compat/` as a compatibility layer shell (`chumicro-compat` 0.1.0) — no modules shipped yet, planned for `functools` polyfills
    - `scripts/run.py` as the task runner with auto-discovery, scoped testing, library scaffolding, IDE config generation, example verification, and docs build
    - `scripts/prepare_workspace.py` for initial workspace setup
    - `conftest.py` at root for auto-discovery of source roots and functional_tests exclusion
@@ -81,7 +82,7 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
 5. Manual-only hardware workflows are the current starting point.
 6. The first library is timing/ticks, with digital I/O deferred as the likely next seam.
 7. The second library is runner — provides the ecosystem-standard gate-based check/handle pattern.
-8. The third library is compat — provides lightweight `abc` module for MicroPython/CircuitPython.
+8. The third library is compat — empty shell awaiting `functools` polyfills.
 9. IDE config generation works for both PyCharm and VS Code.
 10. Per-library pytest runs avoid test-directory collisions (Decision 0009).
 11. Shared test fakes ship as `testing` submodules (e.g., `chumicro_timing.testing.FakeTicks`, `chumicro_runner.testing.CallRecorder`) and are importable by any library's tests.
