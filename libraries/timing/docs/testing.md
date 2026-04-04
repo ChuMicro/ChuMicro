@@ -4,7 +4,7 @@
 
 ## Usage with Heartbeat
 
-Pass a `FakeTicks` instance as the `ticks` parameter to `Heartbeat`:
+Pass a `FakeTicks` instance as the `ticks` parameter to `Heartbeat`. Then use `FakeTicks.ticks_ms()` to get timestamps for `poll()` and `FakeTicks.advance()` to move time forward:
 
 ```python
 from chumicro_timing import Heartbeat
@@ -14,15 +14,18 @@ def test_heartbeat_fires_after_period():
     fake = FakeTicks()
     heartbeat = Heartbeat(period_ms=100, ticks=fake)
 
-    assert heartbeat.poll() is False
+    now = fake.ticks_ms()
+    assert heartbeat.poll(now) is False
 
     fake.advance(99)
-    assert heartbeat.poll() is False
+    now = fake.ticks_ms()
+    assert heartbeat.poll(now) is False
 
     fake.advance(1)
-    assert heartbeat.poll() is True
+    now = fake.ticks_ms()
+    assert heartbeat.poll(now) is True
     # Timer has been reset — next poll returns False
-    assert heartbeat.poll() is False
+    assert heartbeat.poll(now) is False
 ```
 
 ## Usage from other libraries

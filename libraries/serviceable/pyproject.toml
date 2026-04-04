@@ -5,12 +5,15 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "chumicro-serviceable"
 dynamic = ["version"]
-description = ""
+description = "Tick-based service loop with shared timestamps for Chumicro applications."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [
     { name = "Chumicro" },
+]
+dependencies = [
+    "chumicro-timing",
 ]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",

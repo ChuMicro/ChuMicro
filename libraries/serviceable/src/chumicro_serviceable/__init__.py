@@ -1,15 +1,7 @@
 """Public exports for the chumicro-serviceable package."""
 
-from .core import (
-    Event,
-    EventQueueSink,
-    ServiceRunner,
-    SimpleEventDispatcher,
-)
+from .core import ServiceRunner
 
 __all__ = [
-    "Event",
-    "EventQueueSink",
     "ServiceRunner",
-    "SimpleEventDispatcher",
 ]

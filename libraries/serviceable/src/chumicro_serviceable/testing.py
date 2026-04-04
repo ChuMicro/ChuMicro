@@ -1,52 +1,29 @@
-"""Test helpers for libraries that depend on chumicro-serviceable.
+"""Test helpers for libraries that use the service loop pattern.
 
-Provides a ``FakeEventSink`` that records emitted events for assertion
-in host-side tests, without the overhead of a ring buffer.
+Provides ``FakeService`` — a stub component that records every
+``service(now_ms)`` call for assertion in host-side tests.
 
 Usage::
 
-    from chumicro_serviceable.testing import FakeEventSink
+    from chumicro_serviceable.testing import FakeService
 
-    sink = FakeEventSink()
-    component.service(sink)
-    assert len(sink.events) == 1
-    assert sink.events[0].event_type == "heartbeat.tick"
+    svc = FakeService()
+    svc.service(42)
+    assert svc.ticks == [42]
 """
 
-from .core import Event
 
+class FakeService:
+    """Stub component that records ``service(now_ms)`` calls.
 
-class FakeEventSink:
-    """Simple list-backed event sink for tests.
-
-    Every call to ``emit()`` appends an ``Event`` to ``self.events``.
-    There is no capacity limit.
+    Useful for verifying that a ``ServiceRunner`` or custom loop
+    calls ``service()`` with the expected shared timestamp.
     """
 
     def __init__(self):
-        """Create an empty fake sink."""
-        self.events = []
+        """Create a fake service with an empty tick history."""
+        self.ticks = []
 
-    def emit(self, source, event_type, data=None):
-        """Record an event.  Always returns ``True``."""
-        self.events.append(Event(source, event_type, data))
-        return True
-
-    def has_events(self):
-        """Return whether any events have been recorded."""
-        return len(self.events) > 0
-
-    def pop(self):
-        """Remove and return the oldest event, or ``None`` if empty."""
-        if not self.events:
-            return None
-        return self.events.pop(0)
-
-    def clear(self):
-        """Discard all recorded events."""
-        self.events.clear()
-
-    def __len__(self):
-        """Return the number of recorded events."""
-        return len(self.events)
-
+    def service(self, now_ms):
+        """Record *now_ms* in the tick history."""
+        self.ticks.append(now_ms)

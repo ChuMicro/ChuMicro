@@ -2,7 +2,7 @@
 
 Cross-runtime millisecond tick helpers and periodic timing utilities for CircuitPython, MicroPython, and CPython.
 
-All timing is non-blocking — nothing in this library calls `time.sleep()`.  Use `Heartbeat.poll()` in a main loop or wire heartbeats into a `ServiceRunner` from `chumicro-serviceable`.
+All timing is non-blocking — nothing in this library calls `time.sleep()`. Capture `ticks_ms()` once per loop iteration and pass the shared timestamp to `Heartbeat.poll()`.
 
 ## Installation
 
@@ -20,12 +20,13 @@ pip install chumicro-timing
 ## Quick example
 
 ```python
-from chumicro_timing import Heartbeat
+from chumicro_timing import Heartbeat, ticks_ms
 
 heartbeat = Heartbeat(period_ms=1000)
 
 while True:
-    if heartbeat.poll():
+    now = ticks_ms()
+    if heartbeat.poll(now):
         print("one second elapsed")
     # ... do other work ...
 ```
@@ -44,12 +45,10 @@ while True:
 
 | Symbol | Description |
 |---|---|
-| `Heartbeat(period_ms, ticks=None, event_type=None)` | Periodic timer that fires once per elapsed period |
-| `Heartbeat.poll()` | Returns `True` once per period and advances the timer |
-| `Heartbeat.is_due()` | Check whether the period has elapsed (without advancing) |
-| `Heartbeat.reset()` | Restart the timer from the current moment |
-| `Heartbeat.service(event_sink)` | Serviceable-pattern: emit an event when due (requires `event_type`) |
-| `Heartbeat.event_type` | The configured event type, or `None` (read-only property) |
+| `Heartbeat(period_ms, ticks=None)` | Periodic timer that fires once per elapsed period |
+| `Heartbeat.poll(now_ms)` | Returns `True` once per period and advances the timer |
+| `Heartbeat.is_due(now_ms)` | Check whether the period has elapsed (without advancing) |
+| `Heartbeat.reset(now_ms)` | Restart the timer from the given timestamp |
 | `Heartbeat.period_ms` | The configured period (read-only property) |
 
 ### Testing
@@ -83,26 +82,12 @@ from chumicro_timing.testing import FakeTicks
 fake = FakeTicks()
 heartbeat = Heartbeat(period_ms=100, ticks=fake)
 
+now = fake.ticks_ms()
+assert heartbeat.poll(now) is False
+
 fake.advance(100)
-assert heartbeat.poll() is True
-```
-
-## Serviceable pattern
-
-`Heartbeat` also implements `service(event_sink)` for use with `chumicro-serviceable`:
-
-```python
-from chumicro_serviceable import EventQueueSink, ServiceRunner, SimpleEventDispatcher
-from chumicro_timing import Heartbeat
-
-heartbeat = Heartbeat(period_ms=1000, event_type="heartbeat.tick")
-sink = EventQueueSink(max_size=8)
-dispatcher = SimpleEventDispatcher()
-dispatcher.register("heartbeat.tick", lambda e: print("beat!"))
-
-runner = ServiceRunner([heartbeat], sink, dispatcher)
-while True:
-    runner.service_once()
+now = fake.ticks_ms()
+assert heartbeat.poll(now) is True
 ```
 
 ## Docs

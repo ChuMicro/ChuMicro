@@ -1,8 +1,8 @@
 # chumicro-serviceable
 
-A standard service-and-event pattern for Chumicro libraries.
+Tick-based service loop with shared timestamps for Chumicro applications.
 
-Components implement `service(event_sink)` to do one tick of work and emit events.  A `ServiceRunner` calls all components and dispatches events to handlers — replacing ad-hoc polling and drain loops with a single standard contract.
+`ServiceRunner` captures `ticks_ms()` once per tick and distributes the shared timestamp to all registered components — ensuring every part of your main loop sees the same moment in time.
 
 ## Installation
 
@@ -20,19 +20,16 @@ pip install chumicro-serviceable
 ## Quick example
 
 ```python
-from chumicro_serviceable import EventQueueSink, ServiceRunner, SimpleEventDispatcher
+from chumicro_serviceable import ServiceRunner
 from chumicro_timing import Heartbeat
 
-heartbeat = Heartbeat(period_ms=1000, event_type=Heartbeat.EVENT_TICK)
-
-sink = EventQueueSink(max_size=16)
-dispatcher = SimpleEventDispatcher()
-dispatcher.register(Heartbeat.EVENT_TICK, lambda e: print("beat!"))
-
-runner = ServiceRunner([heartbeat], sink, dispatcher)
+led_beat = Heartbeat(period_ms=500)
+runner = ServiceRunner()
 
 while True:
-    runner.service_once()
+    now = runner.tick()
+    if led_beat.poll(now):
+        print("blink!")
 ```
 
 ## What's included
@@ -41,71 +38,49 @@ while True:
 
 | Symbol | Description |
 |---|---|
-| `Event(source, event_type, data=None)` | A single occurrence emitted by a component |
-| `EventQueueSink(max_size=16)` | Fixed-capacity ring buffer backed by `collections.deque` |
-| `EventQueueSink.emit(source, event_type, data=None)` | Record an event; returns `False` if full |
-| `EventQueueSink.pop()` | Remove and return the oldest event, or `None` |
-| `EventQueueSink.has_events()` | Check whether unread events exist |
-| `EventQueueSink.clear()` | Discard all pending events |
-| `SimpleEventDispatcher()` | Routes events to handler functions by event type |
-| `SimpleEventDispatcher.register(event_type, handler)` | Register a handler for an event type |
-| `SimpleEventDispatcher.unregister(event_type)` | Remove a handler |
-| `SimpleEventDispatcher.dispatch(event)` | Route an event to its handler |
-| `ServiceRunner(services, event_sink, dispatcher)` | Service → drain → dispatch loop |
-| `ServiceRunner.service_once()` | Service all components once, then drain and dispatch |
+| `ServiceRunner(services=None, ticks=None)` | Tick-based loop runner that captures shared timestamps |
+| `ServiceRunner.tick()` | Capture time, service all components, return `now_ms` |
+| `ServiceRunner.add(service)` | Register a component to be serviced each tick |
 
 ### Testing
 
 | Symbol | Description |
 |---|---|
-| `FakeEventSink()` | List-backed event sink for host-side tests (no capacity limit) |
-| `FakeEventSink.events` | Direct access to the list of recorded `Event` objects |
+| `FakeService()` | Stub component that records `service(now_ms)` calls |
+| `FakeService.ticks` | List of `now_ms` values passed to `service()` |
 
-## Writing your own serviceable component
+## Writing active components
 
-Any object with a `service(event_sink)` method works with `ServiceRunner`.  No base class or import from `chumicro-serviceable` is required — the contract is duck-typed:
+Any object with a `service(now_ms)` method can be registered with the runner. No base class or import is required:
 
 ```python
 class ButtonScanner:
-    EVENT_PRESS = "button.press"
-
     def __init__(self, pin):
         self._pin = pin
-        self._was_pressed = False
+        self.pressed = False
 
-    def service(self, event_sink):
-        pressed = self._pin.value
-        if pressed and not self._was_pressed:
-            event_sink.emit(self, self.EVENT_PRESS)
-        self._was_pressed = pressed
+    def service(self, now_ms):
+        self.pressed = self._pin.value
 ```
 
 ## Testing your components
 
-The `chumicro_serviceable.testing` module provides `FakeEventSink` for verifying that components emit the right events:
+Use `FakeService` to verify that a runner or loop calls components correctly:
 
 ```python
-from chumicro_serviceable.testing import FakeEventSink
+from chumicro_serviceable.testing import FakeService
 
-sink = FakeEventSink()
-component.service(sink)
-
-assert len(sink.events) == 1
-assert sink.events[0].event_type == "heartbeat.tick"
+svc = FakeService()
+svc.service(42)
+assert svc.ticks == [42]
 ```
 
 ## Platform support
 
-All classes use only basic Python features and `collections.deque`.  Works identically on CPython, MicroPython, and CircuitPython.  Requires a full-build runtime with `deque` support (see [Decision 0015](../../plans/decisions/0015-board-architecture-support.md)).
-
-## Memory notes
-
-- `EventQueueSink` is backed by `collections.deque` (C-level on MicroPython/CircuitPython) with a fixed max size — no list resizing during operation.
-- `Event` uses `__slots__` to minimise per-instance memory.
-- Individual `Event` objects are created per `emit()`.  Tune `max_size` if GC pressure is measurable on your board.
+Works identically on CPython, MicroPython, and CircuitPython. Depends on `chumicro-timing` for the default tick source.
 
 ## Docs
 
-- [User guide](docs/guide.md) — the pattern, getting started, writing components
+- [User guide](docs/guide.md) — shared timestamps, runner usage, active components
 - [API reference](docs/api.md) — full API documentation
-- [Testing helpers](docs/testing.md) — using `FakeEventSink` in your tests
+- [Testing helpers](docs/testing.md) — using `FakeService` in your tests

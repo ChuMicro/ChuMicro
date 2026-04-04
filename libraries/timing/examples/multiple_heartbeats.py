@@ -1,12 +1,13 @@
 """Multiple heartbeats at different rates.
 
-Demonstrates running several independent timers in a single main loop.
-Each timer fires at its own rate without blocking the others.
+Demonstrates the shared-timestamp pattern: capture ticks_ms() once per
+loop iteration and pass the same value to every heartbeat.  This ensures
+all components see the same moment in time — no drift between calls.
 """
 
 import time
 
-from chumicro_timing import Heartbeat
+from chumicro_timing import Heartbeat, ticks_ms
 
 
 def main():
@@ -19,11 +20,12 @@ def main():
 
     try:
         while True:
-            if fast.poll():
+            now = ticks_ms()
+            if fast.poll(now):
                 print("  fast (200 ms)")
-            if medium.poll():
+            if medium.poll(now):
                 print("  medium (1 s)")
-            if slow.poll():
+            if slow.poll(now):
                 print("  slow (5 s)")
 
             time.sleep(0.01)

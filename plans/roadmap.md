@@ -49,8 +49,8 @@ Settled choices:
 Current verified progress:
 
 - `libraries/timing/` exists with `src/`, `tests/`, and `functional_tests/`
-- `libraries/serviceable/` exists as the second publishable library (`chumicro-serviceable` 0.1.0) — provides the ecosystem-standard service-and-event pattern (Decision 0014)
-- `Heartbeat` now implements `service(event_sink)` and exposes `EVENT_TICK` (timing 0.1.0 → 0.2.0, backward compatible)
+- `libraries/serviceable/` exists as the second publishable library (`chumicro-serviceable` 0.1.0) — provides a tick-based service loop with shared timestamps (Decision 0017, superseding Decision 0014)
+- `Heartbeat` uses `poll(now_ms)`, `is_due(now_ms)`, and `reset(now_ms)` — all require a shared timestamp captured once per loop (Decision 0017)
 - host-side tests pass with coverage above the current repo threshold
 - the timing package builds as an individual distribution
 - `scripts/run.py` provides task entrypoints with auto-discovery (lint, test, build, preflight, new-library, sync-ide, verify-examples, docs, etc.)

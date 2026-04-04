@@ -8,7 +8,7 @@
   - When writing these docs, scope the AGENTS.md performance guidelines (f-strings, `const()`, `memoryview`, pre-allocated buffers, etc.) to **library code only**. Infrastructure code (`scripts/`, `support/`) runs exclusively on CPython and does not need embedded-runtime constraints.
 - [ ] Write a "Creating a New Library" contributor guide. Walk through the full lifecycle from scaffolding to release-ready:
   1. `new-library` scaffolding — what it creates, what it doesn't (e.g., no `testing` submodule by default)
-  2. Library code — dependency injection (Decision 0010), `service(event_sink)` contract for active components (Decision 0014), memory-efficient patterns for embedded targets
+2. Library code — dependency injection (Decision 0010), `service(now_ms)` contract for active components (Decision 0017), memory-efficient patterns for embedded targets
   3. Unit tests — per-library test runs (Decision 0009), 90% coverage threshold, constructor injection for testability
   4. Testing submodule — when and how to add `src/chumicro_<name>/testing.py` with ready-made fakes
   5. Docs — `guide.md` required sections, `api.md` autodoc rules, generation prompt (Decision 0013)

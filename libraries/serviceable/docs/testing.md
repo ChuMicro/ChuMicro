@@ -1,59 +1,42 @@
 # Testing Helpers
 
-`chumicro_serviceable.testing` provides `FakeEventSink` for verifying that your components emit the right events in host-side tests — no ring buffer capacity limits, no dispatch overhead.
+`chumicro_serviceable.testing` provides `FakeService` for verifying that service loops and runners call components correctly.
 
-## Usage with a component
-
-Pass a `FakeEventSink` as the `event_sink` argument to `service()`:
+## Usage with ServiceRunner
 
 ```python
-from chumicro_serviceable.testing import FakeEventSink
-from chumicro_timing import Heartbeat
+from chumicro_serviceable import ServiceRunner
+from chumicro_serviceable.testing import FakeService
 from chumicro_timing.testing import FakeTicks
 
-def test_heartbeat_emits_tick():
-    fake_ticks = FakeTicks()
-    heartbeat = Heartbeat(period_ms=100, ticks=fake_ticks, event_type=Heartbeat.EVENT_TICK)
-    sink = FakeEventSink()
+def test_runner_calls_service_with_shared_time():
+    fake = FakeTicks()
+    svc = FakeService()
+    runner = ServiceRunner(services=[svc], ticks=fake)
 
-    # Not due yet — no events.
-    heartbeat.service(sink)
-    assert len(sink.events) == 0
+    fake.advance(100)
+    runner.tick()
 
-    # Advance past the period.
-    fake_ticks.advance(100)
-    heartbeat.service(sink)
-    assert len(sink.events) == 1
-    assert sink.events[0].event_type == "heartbeat.tick"
+    assert svc.ticks == [100]
 ```
 
-## Inspecting events
+## Inspecting calls
 
-`FakeEventSink.events` is a plain list of `Event` objects.  Each event has `source`, `event_type`, and `data` attributes:
-
-```python
-event = sink.events[0]
-assert event.source is heartbeat
-assert event.event_type == "heartbeat.tick"
-assert event.data is None
-```
-
-## Clearing between tests
-
-Call `clear()` to reset the sink between test phases:
+`FakeService.ticks` is a plain list of `now_ms` values passed to `service()`:
 
 ```python
-sink.clear()
-assert len(sink.events) == 0
+svc = FakeService()
+svc.service(10)
+svc.service(20)
+assert svc.ticks == [10, 20]
 ```
 
 ## Usage from other libraries
 
-Libraries that implement the serviceable pattern can import `FakeEventSink` directly:
+Libraries that implement the `service(now_ms)` contract can import `FakeService` for testing:
 
 ```python
-# In another library's test file
-from chumicro_serviceable.testing import FakeEventSink
+from chumicro_serviceable.testing import FakeService
 ```
 
 This follows the project convention from [Decision 0010](https://github.com/chumicro/chumicro/blob/main/plans/decisions/0010-library-testability.md): libraries that expose injectable services ship their own test fakes.
@@ -63,5 +46,4 @@ This follows the project convention from [Decision 0010](https://github.com/chum
 ::: chumicro_serviceable.testing
     options:
       members:
-        - FakeEventSink
-
+        - FakeService

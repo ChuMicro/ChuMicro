@@ -1,6 +1,6 @@
 # Decision 0014: Serviceable pattern
 
-Status: `accepted`
+Status: `superseded` by [Decision 0017](0017-shared-timestamp-service-loop.md)
 Date: `2026-04-02`
 
 ## Context

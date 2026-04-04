@@ -7,7 +7,7 @@
 1. **Tick helpers** — `ticks_ms()`, `ticks_diff()`, and `ticks_add()` that handle counter wraparound correctly across all three Python runtimes.
 2. **Heartbeat** — a periodic timer that tells you when a time interval has elapsed, without blocking.
 
-These are the building blocks for non-blocking timing on microcontrollers. Instead of calling `time.sleep()` (which blocks everything), you check `heartbeat.poll()` on each pass through your main loop.
+These are the building blocks for non-blocking timing on microcontrollers. Instead of calling `time.sleep()` (which blocks everything), you capture a timestamp once per loop and check `heartbeat.poll(now)` for each component.
 
 ## Getting started
 
@@ -16,55 +16,61 @@ These are the building blocks for non-blocking timing on microcontrollers. Inste
 The most common pattern is a periodic action in a main loop:
 
 ```python
-from chumicro_timing import Heartbeat
+from chumicro_timing import Heartbeat, ticks_ms
 
 led_heartbeat = Heartbeat(period_ms=500)
 
 while True:
-    if led_heartbeat.poll():
+    now = ticks_ms()
+    if led_heartbeat.poll(now):
         # This runs twice per second
         toggle_led()
 ```
 
-`poll()` returns `True` once per elapsed period and advances the internal timer. Calling it again immediately returns `False` until the next period elapses.
+`poll(now_ms)` returns `True` once per elapsed period and advances the internal timer. Calling it again with the same timestamp returns `False` until the next period elapses.
 
-### Multiple timers
+### Shared timestamps
 
-You can run several heartbeats at different rates:
+**Always capture `ticks_ms()` once per loop iteration** and pass the same value to every component. This prevents drift between independent clock reads:
 
 ```python
-from chumicro_timing import Heartbeat
+from chumicro_timing import Heartbeat, ticks_ms
 
 fast = Heartbeat(period_ms=100)   # 10 Hz
 slow = Heartbeat(period_ms=5000)  # every 5 seconds
 
 while True:
-    if fast.poll():
+    now = ticks_ms()  # ONE reading per iteration
+    if fast.poll(now):
         read_sensor()
-    if slow.poll():
+    if slow.poll(now):
         send_report()
 ```
 
+On a slow microcontroller, calling `ticks_ms()` separately for each component would return slightly different values. A heartbeat that should fire at the same moment as another might not. Sharing the timestamp eliminates this class of bug.
+
 ### Checking without consuming
 
-`is_due()` tells you whether the period has elapsed without advancing the timer. This is useful when you need to check timing state without committing to an action:
+`is_due(now_ms)` tells you whether the period has elapsed without advancing the timer. This is useful when you need to check timing state without committing to an action:
 
 ```python
-if heartbeat.is_due():
+now = ticks_ms()
+if heartbeat.is_due(now):
     # Period has elapsed, but the timer hasn't been reset yet.
-    # Calling is_due() again will still return True.
+    # Calling is_due(now) again will still return True.
     pass
 ```
 
-Call `poll()` when you're ready to consume the beat and start the next period.
+Call `poll(now)` when you're ready to consume the beat and start the next period.
 
 ### Resetting
 
-`reset()` restarts the timer from the current moment:
+`reset(now_ms)` restarts the timer from the given timestamp:
 
 ```python
-heartbeat.reset()
-# The next beat is now period_ms from right now,
+now = ticks_ms()
+heartbeat.reset(now)
+# The next beat is now period_ms from this moment,
 # regardless of when the last beat was.
 ```
 
@@ -110,54 +116,24 @@ The tick source is selected automatically at import time:
 
 All sources are masked to the 2²⁹ period, so behavior is identical regardless of which source is used.
 
-## Serviceable pattern
+## Using with ServiceRunner
 
-The `poll()` API works well when one piece of code owns the heartbeat and acts on it directly.  But as applications grow, you often want to **decouple the thing that produces timing events from the thing that handles them**.  That's what the serviceable pattern from `chumicro-serviceable` is for.
-
-The core idea is **indirection**: instead of checking `poll()` and calling a handler inline, the heartbeat emits an event into a shared sink, and a dispatcher routes it to the right handler later.  This means:
-
-- Components don't need to know about each other — the heartbeat doesn't call your handler directly.
-- You can wire multiple independent components (heartbeats, sensors, network handlers) into a single dispatch loop.
-- Adding or removing a handler doesn't require changing the component that emits the event.
-
-To use the serviceable pattern, pass an `event_type` string to the constructor.  Each heartbeat should have a distinct event type so the dispatcher can route events correctly:
-
-```python
-from chumicro_serviceable import EventQueueSink, ServiceRunner, SimpleEventDispatcher
-from chumicro_timing import Heartbeat
-
-led_beat = Heartbeat(period_ms=500, event_type="led.blink")
-sensor_beat = Heartbeat(period_ms=5000, event_type="sensor.read")
-
-sink = EventQueueSink(max_size=8)
-dispatcher = SimpleEventDispatcher()
-dispatcher.register("led.blink", lambda e: print("blink!"))
-dispatcher.register("sensor.read", lambda e: print("reading sensor"))
-
-runner = ServiceRunner([led_beat, sensor_beat], sink, dispatcher)
-
-while True:
-    runner.service_once()
-```
-
-When a beat is due, `service()` emits the configured event type into the sink.  Calling `service()` without an `event_type` raises `RuntimeError` — this prevents accidental use without explicit routing.
-
-For simple cases where one piece of code owns the heartbeat, `poll()` is still the right choice.  Reach for the serviceable pattern when you need the decoupling.
+For applications with many components, `chumicro-serviceable` provides a `ServiceRunner` that captures the timestamp for you and services active components. See the [chumicro-serviceable docs](../../serviceable/docs/guide.md) for details.
 
 ## Integration with a tick-based scheduler
 
 `Heartbeat` is designed to be polled from a main loop or tick-based scheduler — it never blocks. A typical pattern:
 
 ```python
-from chumicro_timing import Heartbeat
+from chumicro_timing import Heartbeat, ticks_ms
 
 heartbeat = Heartbeat(period_ms=1000)
 
 def on_tick():
     """Called once per scheduler tick."""
-    if heartbeat.poll():
+    now = ticks_ms()
+    if heartbeat.poll(now):
         do_periodic_work()
 ```
 
 See the [examples](../examples/) directory for complete runnable scripts.
-

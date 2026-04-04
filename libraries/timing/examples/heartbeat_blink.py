@@ -8,7 +8,7 @@ On a real board, replace the print() with an LED toggle.
 
 import time
 
-from chumicro_timing import Heartbeat
+from chumicro_timing import Heartbeat, ticks_ms
 
 
 def main():
@@ -19,7 +19,8 @@ def main():
 
     try:
         while True:
-            if heartbeat.poll():
+            now = ticks_ms()
+            if heartbeat.poll(now):
                 print("beat!")
 
             # Simulate other work or yield time.
