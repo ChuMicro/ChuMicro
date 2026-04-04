@@ -1,7 +1,8 @@
 # Decision 0006: Shared import-free compatibility smoke runner
 
-Status: `accepted`
+Status: `superseded`
 Date: `2026-03-29`
+Superseded by: [Decision 0016](0016-cross-runtime-unit-tests.md)
 
 ## Context
 

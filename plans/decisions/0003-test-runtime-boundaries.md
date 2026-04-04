@@ -14,13 +14,13 @@ Use CPython-hosted tests as the default path, prefer simulation or emulation whe
 The working test pyramid is:
 
 - required: CPython-hosted `pytest` tests with coverage
-- preferred when realistic: compatibility smoke tests or emulation for MicroPython and CircuitPython
-- targeted: real-device `device_tests/` run through a small Chumicro harness
+- required: cross-runtime unit tests on MicroPython and CircuitPython unix-ports via the lightweight harness (see [Decision 0016](0016-cross-runtime-unit-tests.md))
+- targeted: real-device `functional_tests/` run through a small Chumicro harness
 
 ## Consequences
 
 - packages should be designed for dependency injection and host-side mocks
-- simulation/emulation should be added before mandatory hardware gates
+- cross-runtime unit tests run on unix-ports using plain asserts and constructor-injected fakes (Decision 0016)
 - real-device workflows remain important but should stay opt-in until stable
 - `pytest` remains the primary host framework, but it is not assumed to run directly on constrained boards
 
