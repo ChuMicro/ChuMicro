@@ -5,30 +5,42 @@ description: How to write and execute git commits in this workspace. Use this sk
 
 # Git Commit Mechanics
 
-When making git commits, **never** use `git commit -m` — shell quoting in zsh breaks on special characters, backticks, parentheses, quotes, and multi-line messages. **Never** write the commit message via the terminal (heredocs, `echo`, `cat`, `printf`) — the agent terminal can truncate multi-line input and lose the closing delimiter.
+**Never** use `git commit -m` — it breaks in zsh on special characters, backticks, parentheses, and multi-line messages.
 
-Instead, **always** use the file-creation tool to write the message, then run only single-line terminal commands.
+**Never** write the commit message via the terminal — no heredocs, `echo`, `cat`, or `printf`. The agent terminal truncates multi-line input and loses closing delimiters.
+
+**Always** write the message to `.scratch/commit-msg.txt` using a file tool, then commit with a single terminal command.
 
 ## Procedure
 
-1. **Write the commit message to `.scratch/commit-msg.txt`** using a file tool (not the terminal):
-   - **First commit in a session:** use `create_file` to create `.scratch/commit-msg.txt`.
-   - **Subsequent commits:** use `insert_edit_into_file` to replace the entire content of `.scratch/commit-msg.txt`.
+### Step 1 — Write the commit message
 
-   Write the full commit message as the file content, following the project's commit-message conventions (imperative subject, body explaining *why*).
+Use a **file tool** (not the terminal) to write the full commit message to `.scratch/commit-msg.txt`.
 
-   **`insert_edit_into_file` behaviour warning:** this tool tries to merge edits intelligently. If you only provide the new message, it will *append* rather than replace. You must make it clear that the entire file content is being replaced — provide only the new commit message as the complete file content with no `...existing code...` comments.
+- **First commit in a session:** use `create_file`.
+- **Subsequent commits:** use `insert_edit_into_file`.
 
-2. **Commit using the file** (single-line terminal command):
-   ```
-   git commit -F .scratch/commit-msg.txt
-   ```
+Follow the project's commit-message conventions: imperative subject line, body explaining *why*.
+
+### Step 2 — Commit
+
+```
+git commit -F .scratch/commit-msg.txt
+```
+
+## Critical: replacing the commit message file
+
+`insert_edit_into_file` **will append to the file** if it thinks the new content is an addition. This produces a commit message containing the previous commit's message concatenated with the new one. **This has happened repeatedly and must be prevented.**
+
+When using `insert_edit_into_file` to write a new commit message:
+
+1. **Provide only the new commit message as the complete file content.**
+2. **Do not use `...existing code...` comments.** There is no existing code to preserve — the entire file is being replaced.
+3. **Do not reference or include any part of the previous message.**
+
+If `create_file` fails because `.scratch/commit-msg.txt` already exists (leftover from a prior session), fall back to `insert_edit_into_file` using the same rules above.
 
 ## Rules
 
-- **Never use `git commit -m "..."`** — it breaks on special characters in zsh.
-- **Never write the commit message via the terminal** — no heredocs, no `echo`, no `cat`, no `printf`. The agent terminal truncates multi-line input. Always use a file tool.
-- **Use `create_file` for the first commit, `insert_edit_into_file` for subsequent commits** — `create_file` cannot overwrite a path it already created in the same session.
-- If `create_file` fails because the file already exists (leftover from a previous session), fall back to `insert_edit_into_file`.
-- The `.scratch/` directory is gitignored and should never be committed.
-
+- The `.scratch/` directory is gitignored — never commit it.
+- Always verify the commit succeeded before moving on.
