@@ -242,3 +242,22 @@ This was the largest single session. It addressed three areas: the workspace was
 **Decision compaction:**
 8. Compacted Decisions 0017 (shared timestamps), 0018 (dispatcher evolution), 0019 (period on runner), 0020 (simplify to gate-based) into a revised Decision 0014.  Four rapid-iteration decision documents were conversational stepping stones, not durable decisions.
 9. Updated references in `next-up.md`, `roadmap.md`, and `timing-library.md` workstream.
+
+#### 2026-04-04 (cont.) — CircuitPython unix port investigation, RingIO bug documentation
+
+**CircuitPython RingIO build bug (Decision 0017):**
+1. Investigated `tools/ci.sh` in the CircuitPython 10.1.4 source tree. Confirmed it is dead code — inherited from MicroPython, never referenced by any CircuitPython GitHub Actions workflow.
+2. Traced why CI never hits the RingIO linker error: `.github/workflows/run-tests.yml` builds `VARIANT=coverage`, and `ports/unix/variants/coverage/mpconfigvariant.h:52` explicitly sets `MICROPY_PY_MICROPYTHON_RINGIO (0)`.
+3. Full-tree search confirmed CircuitPython never uses RingIO: zero references in `shared-bindings/`, `shared-module/`, `ports/`, `py/circuitpy_mpconfig.h`, `py/circuitpy_defns.mk`, or tests. RingIO is a MicroPython-only ISR-to-main-loop ring buffer — irrelevant in CP's ISR-free architecture.
+4. Recorded findings as Decision 0017 (`plans/decisions/0017-circuitpython-ringio-bug.md`).
+
+**Coverage vs standard variant analysis:**
+5. Evaluated switching to `VARIANT=coverage` for cross-runtime testing. Rejected:
+   - Coverage disables `struct` (`MICROPY_PY_STRUCT (0)`) — unavailable on unix port since shared-bindings aren't built, but works on real boards.
+   - Coverage enables `EVERYTHING`-level features not available on real ESP32 boards (`namedtuple._asdict`, `marshal`, `re` match groups, etc.).
+   - Memory/perf profiling APIs (`gc.mem_alloc`, `micropython.mem_current/mem_peak`, `heap_lock/unlock`, `time.ticks_us`, `mem_info` with block maps) are fully available on the `standard` variant via `mpconfigvariant_common.h`. Coverage adds only `sys.getsizeof` and `micropython.heap_locked` — neither essential.
+6. Confirmed `VARIANT=standard` + `-DMICROPY_PY_MICROPYTHON_RINGIO=0` remains the correct configuration.
+
+**CircuitPython README testing instructions:**
+7. Validated that the README testing instructions the user found (`make axtls`, `make micropython`) are outdated/incorrect. `make axtls` doesn't exist as a target in either CP or MP unix ports. CP explicitly disables SSL (`MICROPY_PY_SSL = 0`). The correct test command is `make -C ports/unix test VARIANT=standard`.
+
