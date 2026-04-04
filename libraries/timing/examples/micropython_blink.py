@@ -5,11 +5,11 @@ Toggles the onboard LED once per second using a non-blocking
 ``Heartbeat`` timer.
 
 Setup:
-1. Copy ``chumicro_timing`` to the board (e.g., via ``mpremote``).
-2. Save this file as ``main.py`` on the board.
-
-Wiring: none — uses pin 2, which is the built-in LED on most
-ESP32 dev boards.  Change ``Pin(2)`` to match your board.
+1. Install ``chumicro_timing`` (``mpremote mip install chumicro-timing``
+   or copy the package to the board).
+2. No extra wiring — uses pin 2, the built-in LED on most ESP32
+   dev boards.  Change ``Pin(2)`` to match your board.
+3. Save this file as ``main.py`` on the board.
 
 Runs on MicroPython.
 """

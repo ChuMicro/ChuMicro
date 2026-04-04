@@ -4,11 +4,11 @@
 Toggles the onboard LED every 500 ms using a periodic runner task.
 
 Setup:
-1. Copy ``chumicro_runner`` and ``chumicro_timing`` to the ``lib/``
-   folder on your board.
-2. Save this file as ``code.py`` on the board.
-
-Wiring: none — uses the built-in LED (``board.LED``).
+1. Install ``chumicro_runner`` and ``chumicro_timing``
+   (``circup install chumicro-runner`` or copy both packages
+   to ``lib/``).
+2. No extra wiring — uses the built-in LED (``board.LED``).
+3. Save this file as ``code.py`` on the board.
 
 Runs on CircuitPython.
 """

@@ -49,11 +49,11 @@ Every example must meet the requirements above *and* the quality standards below
 
 **Hardware examples:**
 
-- Hardware examples must include a **Setup** section in the docstring with numbered steps: (1) which library packages to copy to the board, (2) any wiring required, (3) how to deploy the file (e.g., "Save as `code.py`" or "Save as `main.py`").
-- Include a **Wiring** section listing each connection (pin to pin, pull-up/down, GND).  For examples using only the built-in LED, state "no extra wiring."
+- Hardware examples must include a **Setup** section in the docstring with numbered steps: (1) install the library packages — show the `circup` command for CircuitPython, `mpremote mip install` for MicroPython, with "or copy to `lib/`/board" as a fallback, (2) any wiring required (inline — no separate Wiring section), (3) how to deploy the file (e.g., "Save as `code.py`" or "Save as `main.py`").
+- For examples using only the built-in LED, state "No extra wiring" inline in step 2.
 - Note which pins may need to be changed for different boards (e.g., "Change `Pin(2)` to match your board").
 - Name hardware examples `circuitpython_*.py` or `micropython_*.py`.
-- Runner examples that depend on `chumicro_timing` must list it in the setup steps.
+- Runner examples that depend on `chumicro_timing` must list it in the install step.
 - Hardware examples need not include `time.sleep()` — tight loops are normal on real hardware where the main loop does real work.
 
 **Inline documentation:**

@@ -6,15 +6,14 @@ gate pattern.  The runner calls ``check()`` every tick; when the
 button is pressed, ``handle()`` fires and toggles the LED.
 
 Setup:
-1. Copy ``chumicro_runner`` and ``chumicro_timing`` to the ``lib/``
-   folder on your board.
-2. Wire a momentary button between ``board.D5`` and GND.
+1. Install ``chumicro_runner`` and ``chumicro_timing``
+   (``circup install chumicro-runner`` or copy both packages
+   to ``lib/``).
+2. Wire a momentary button between ``D5`` and ``GND``.  The
+   internal pull-up keeps ``D5`` high when the button is open.
+   The built-in LED (``board.LED``) needs no extra wiring.
 3. Save this file as ``code.py`` on the board.
 
-Wiring:
-- Button: one leg to ``D5``, other leg to ``GND``.
-  The internal pull-up keeps ``D5`` high when the button is open.
-- LED: uses the built-in LED (``board.LED``) — no extra wiring.
 
 Runs on CircuitPython.
 """

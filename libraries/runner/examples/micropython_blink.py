@@ -4,12 +4,12 @@
 Toggles the onboard LED every 500 ms using a periodic runner task.
 
 Setup:
-1. Copy ``chumicro_runner`` and ``chumicro_timing`` to the board
-   (e.g., via ``mpremote``).
-2. Save this file as ``main.py`` on the board.
-
-Wiring: none — uses pin 2, which is the built-in LED on most
-ESP32 dev boards.  Change ``Pin(2)`` to match your board.
+1. Install ``chumicro_runner`` and ``chumicro_timing``
+   (``mpremote mip install chumicro-runner`` or copy both
+   packages to the board).
+2. No extra wiring — uses pin 2, the built-in LED on most
+   ESP32 dev boards.  Change ``Pin(2)`` to match your board.
+3. Save this file as ``main.py`` on the board.
 
 Runs on MicroPython.
 """

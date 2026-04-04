@@ -5,11 +5,11 @@ Toggles the onboard LED once per second using a non-blocking
 ``Heartbeat`` timer.
 
 Setup:
-1. Copy ``chumicro_timing`` to the ``lib/`` folder on your board.
-2. Save this file as ``code.py`` on the board.
-
-Wiring: none — uses the built-in LED (``board.LED``).  Works on
-most CircuitPython boards (Feather, QT Py, Metro, etc.).
+1. Install ``chumicro_timing`` (``circup install chumicro-timing``
+   or copy the package to ``lib/``).
+2. No extra wiring — uses the built-in LED (``board.LED``).
+   Works on most CircuitPython boards (Feather, QT Py, Metro, etc.).
+3. Save this file as ``code.py`` on the board.
 
 Runs on CircuitPython.
 """

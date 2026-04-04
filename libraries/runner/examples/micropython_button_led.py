@@ -6,16 +6,15 @@ gate pattern.  The runner calls ``check()`` every tick; when the
 button is pressed, ``handle()`` fires and toggles the LED.
 
 Setup:
-1. Copy ``chumicro_runner`` and ``chumicro_timing`` to the board
-   (e.g., via ``mpremote``).
-2. Wire a momentary button between GPIO 0 and GND.
+1. Install ``chumicro_runner`` and ``chumicro_timing``
+   (``mpremote mip install chumicro-runner`` or copy both
+   packages to the board).
+2. Wire a momentary button between ``GPIO 0`` and ``GND``.
+   The internal pull-up keeps the pin high when the button is
+   open.  Pin 2 (built-in LED on most ESP32 boards) needs no
+   extra wiring.  Change ``Pin(2)`` to match your board.
 3. Save this file as ``main.py`` on the board.
 
-Wiring:
-- Button: one leg to ``GPIO 0``, other leg to ``GND``.
-  The internal pull-up keeps the pin high when the button is open.
-- LED: uses pin 2, the built-in LED on most ESP32 dev boards.
-  Change ``Pin(2)`` to match your board.
 
 Runs on MicroPython.
 """
