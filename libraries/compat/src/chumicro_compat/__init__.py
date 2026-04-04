@@ -1,7 +1,1 @@
-"""Public exports for the chumicro-compat package.
-
-Submodules:
-
-- ``chumicro_compat.abc`` — lightweight ``ABC`` and ``abstractmethod``
-"""
-
+"""Cross-runtime compatibility polyfills for CPython, MicroPython, and CircuitPython."""

@@ -48,7 +48,6 @@ See [workspace-history.prompt.md](./workspace-history.prompt.md) for the full ra
 - `ticks_ms()` and `ticks_diff()` in `libraries/timing/src/chumicro_timing/ticks.py`
 - `TaskHandle`, `Runner` in `libraries/runner/src/chumicro_runner/core.py`
 - `CallRecorder` in `libraries/runner/src/chumicro_runner/testing.py`
-- `ABC`, `abstractmethod` in `libraries/compat/src/chumicro_compat/abc.py`
 - `runtime_name()` in `support/runtime/src/chumicro_runtime/platform.py`
 - `run_module()` in `support/test_harness/src/chumicro_test_harness/runner.py`
 - `main()` in `scripts/run.py` — task runner with auto-discovery, scoped testing, scaffolding

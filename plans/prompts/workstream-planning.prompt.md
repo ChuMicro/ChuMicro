@@ -54,9 +54,7 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
    - `TaskHandle`, `Runner` in `libraries/runner/src/chumicro_runner/core.py`
    - `CallRecorder` in `libraries/runner/src/chumicro_runner/testing.py`
    - 100% test coverage; audit complete (Decision 0015 documents board architecture support)
-6. The compat library provides cross-runtime compatibility:
-   - `ABC`, `abstractmethod` in `libraries/compat/src/chumicro_compat/abc.py`
-   - 100% test coverage
+6. The compat library (`libraries/compat/`) exists as a shell for future `functools` polyfills — no modules shipped yet.
 7. Verified local commands:
    - `python scripts/run.py setup`
    - `python scripts/run.py lint`
