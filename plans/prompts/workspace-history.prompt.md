@@ -199,7 +199,7 @@ This was the largest single session. It addressed three areas: the workspace was
 10. Fixed the stale `next-up.md` sub-bullet that described `EventQueueSink._items` as "a Python-level ring buffer on a pre-allocated list" — it already uses `deque`.
 
 **Git-commit instruction file:**
-11. Added `.github/instructions/git-commit.instructions.md` enforcing `git commit -F` via a scratch file instead of `git commit -m`, which broke on zsh special characters.
+11. Added `.github/skills/git-commit/SKILL.md` enforcing `git commit -F` via a scratch file instead of `git commit -m`, which broke on zsh special characters.
 12. Updated AGENTS.md to reference the instruction file instead of inline commit-mechanics advice.
 
 **Script modularization and `ci/` removal:**

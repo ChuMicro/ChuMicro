@@ -1,5 +1,10 @@
 ---
-applyTo: "**"
+name: git-commit
+description: >
+  How to write and execute git commits in this workspace.
+  Use this skill whenever committing code to git.
+  Covers commit-message file creation, shell-safe commit execution,
+  and the project's commit-message conventions.
 ---
 
 # Git Commit Mechanics
@@ -30,3 +35,4 @@ Instead, **always** use the file-creation tool to write the message, then run on
 - **Use `create_file` for the first commit, `insert_edit_into_file` for subsequent commits** — `create_file` cannot overwrite a path it already created in the same session.
 - If `create_file` fails because the file already exists (leftover from a previous session), fall back to `insert_edit_into_file`.
 - The `.scratch/` directory is gitignored and should never be committed.
+

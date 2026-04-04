@@ -96,7 +96,7 @@ git status --short
 If there are changes from step 5, commit them.  Write commit messages that aid
 context recovery — summarise *what* in the subject, explain *why* in the body
 when non-trivial, and name affected libraries or decisions.  See AGENTS.md
-§ Contributing and `.github/instructions/git-commit.instructions.md` for
+§ Contributing and `.github/skills/git-commit/SKILL.md` for
 commit mechanics.
 
 ### 7. Verify clean tree
