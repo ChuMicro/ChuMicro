@@ -73,9 +73,55 @@ while sink.has_events():
 
 ## Memory notes
 
-- `EventQueueSink` pre-allocates its backing list at construction time — no list resizing during operation.
+- `EventQueueSink` pre-allocates its backing deque at construction time — no resizing during operation.
 - `Event` uses `__slots__` to minimise per-instance memory.
 - Individual `Event` objects are created on each `emit()`.  If GC pressure becomes measurable on your board, the sink capacity can be tuned via `max_size`.
+
+## Writing your own serviceable component
+
+Any object with a `service(event_sink)` method works with `ServiceRunner`.  No base class or import from `chumicro-serviceable` is required — the contract is duck-typed:
+
+```python
+class TemperatureMonitor:
+    EVENT_HIGH = "temp.high"
+
+    def __init__(self, sensor, threshold):
+        self._sensor = sensor
+        self._threshold = threshold
+
+    def service(self, event_sink):
+        reading = self._sensor.read()
+        if reading > self._threshold:
+            event_sink.emit(self, self.EVENT_HIGH, reading)
+```
+
+Wire it into a runner alongside other components:
+
+```python
+runner = ServiceRunner(
+    services=[heartbeat, temp_monitor],
+    event_sink=EventQueueSink(max_size=16),
+    dispatcher=dispatcher,
+)
+```
+
+The `event_sink.emit()` signature is `emit(source, event_type, data=None)` — it returns `True` on success and `False` if the sink is full.
+
+## Testing serviceable components
+
+The `chumicro_serviceable.testing` module provides `FakeEventSink` — a list-backed sink with no capacity limit, designed for assertions in host-side tests:
+
+```python
+from chumicro_serviceable.testing import FakeEventSink
+
+sink = FakeEventSink()
+component.service(sink)
+
+assert len(sink.events) == 1
+assert sink.events[0].event_type == "heartbeat.tick"
+```
+
+See the [testing helpers](testing.md) page for detailed usage.
 
 ## Platform notes
 

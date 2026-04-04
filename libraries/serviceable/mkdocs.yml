@@ -7,6 +7,7 @@ theme:
 nav:
   - Guide: guide.md
   - API Reference: api.md
+  - Testing Helpers: testing.md
 
 plugins:
   - search
