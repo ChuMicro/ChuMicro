@@ -41,6 +41,9 @@ def read_button():
 
 def main():
     """Run an activity-timeout loop."""
+    # Use a Heartbeat as an inactivity timer.  When the user does
+    # something, call reset() to restart the countdown.  When the
+    # period elapses without a reset, the timeout has fired.
     timeout = Heartbeat(period_ms=500)
     tick_count = 0
 
@@ -56,11 +59,14 @@ def main():
             tick_count += 1
 
             if active:
+                # Any activity resets the countdown to zero.
                 timeout.reset(now)
                 print("  [tick] activity detected — resetting timeout")
             elif timeout.is_due(now):
-                # Peek: is_due() does not advance the timer.
-                # Reports timeout every tick until activity resumes.
+                # is_due() checks whether the period has elapsed but
+                # does NOT advance the timer (unlike poll()).  This
+                # means it will keep returning True on every tick
+                # until something calls reset().
                 print(
                     f"  [tick] TIMEOUT: no activity for "
                     f"{timeout.period_ms} ms"
@@ -68,6 +74,8 @@ def main():
             else:
                 print("  [tick] idle...")
 
+            # Sleep between ticks.  On a real board this would be
+            # replaced by other work in the main loop.
             time.sleep(0.1)
     except KeyboardInterrupt:
         print("Stopped.")

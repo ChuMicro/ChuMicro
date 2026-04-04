@@ -33,6 +33,8 @@ from chumicro_timing import Heartbeat, ticks_ms
 
 def main():
     """Run three heartbeats at 200 ms, 1 s, and 5 s until interrupted."""
+    # Create heartbeats at different rates.  Each one tracks its own
+    # schedule independently.
     fast = Heartbeat(period_ms=200)
     medium = Heartbeat(period_ms=1000)
     slow = Heartbeat(period_ms=5000)
@@ -41,7 +43,12 @@ def main():
 
     try:
         while True:
+            # Capture time once and share it with all heartbeats.
+            # This is the "shared-timestamp pattern" — all components
+            # see the same moment, so two heartbeats that happen to
+            # fire on the same tick will both see the same now value.
             now = ticks_ms()
+
             if fast.poll(now):
                 print("  fast (200 ms)")
             if medium.poll(now):
@@ -49,6 +56,8 @@ def main():
             if slow.poll(now):
                 print("  slow (5 s)")
 
+            # Small sleep to avoid busy-spinning on CPython.
+            # On a real board this would be replaced by other work.
             time.sleep(0.01)
     except KeyboardInterrupt:
         print("Stopped.")

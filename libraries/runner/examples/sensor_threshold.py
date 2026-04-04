@@ -72,13 +72,18 @@ def main():
     runner = Runner()
     sensor = TemperatureSensor(threshold=30.0)
 
-    # Check the sensor every second.
+    # Register the sensor as an object-based task.  The runner
+    # calls sensor.check(now_ms) on each tick (gated by period_ms);
+    # when check() returns True, sensor.handle(now_ms) fires.
     runner.add(sensor, period_ms=1000)
 
     print("Monitoring temperature... (Ctrl+C to stop)\n")
 
     while True:
         runner.tick()
+
+        # Small sleep to avoid busy-spinning on CPython.
+        # On a real board this would be replaced by other work.
         time.sleep(0.1)
 
 

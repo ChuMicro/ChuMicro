@@ -60,11 +60,14 @@ def wait_for_sensor(timeout_ms):
     Demonstrates ``ticks_add`` for computing a deadline and
     ``ticks_diff`` for checking it.
     """
+    # Record the start time and compute the absolute deadline.
     start = ticks_ms()
     deadline = ticks_add(start, timeout_ms)
     polls = 0
     now = start
 
+    # Loop until we pass the deadline.  ticks_diff handles
+    # wraparound so this works even if the tick counter wraps.
     while ticks_diff(now, deadline) < 0:
         now = ticks_ms()
         elapsed = ticks_diff(now, start)
@@ -74,6 +77,9 @@ def wait_for_sensor(timeout_ms):
 
         print(f"    [{elapsed} ms] not ready...")
         polls += 1
+
+        # Brief pause between polls.  On a real board this would
+        # be replaced by a yield to the main loop or scheduler.
         time.sleep(0.1)
 
     return -1
@@ -97,6 +103,10 @@ def main():
                       f"{TIMEOUT_MS} ms\n")
 
             _cycle_index += 1
+
+            # Pause between attempts so the output is readable.
+            # On a real board this would be the rest of the main
+            # loop doing other work.
             time.sleep(1)
     except KeyboardInterrupt:
         print("Stopped.")

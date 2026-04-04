@@ -33,13 +33,26 @@ def toggle_led(now_ms):
 def main():
     """Blink an LED every 500 ms."""
     runner = Runner()
+
+    # add_periodic registers a handler that fires on a fixed
+    # schedule.  The runner manages the timing internally —
+    # you just call tick() in your main loop.
     runner.add_periodic(toggle_led, period_ms=500)
 
     print("Blinking... (Ctrl+C to stop)\n")
 
-    while True:
-        runner.tick()
-        time.sleep(0.05)
+    try:
+        while True:
+            # tick() captures the current time, checks all
+            # registered tasks, and fires any that are due.
+            runner.tick()
+
+            # Small sleep to avoid busy-spinning on CPython.
+            # On a real board this would be replaced by other
+            # work — reading sensors, checking buttons, etc.
+            time.sleep(0.05)
+    except KeyboardInterrupt:
+        print("Stopped.")
 
 
 if __name__ == "__main__":

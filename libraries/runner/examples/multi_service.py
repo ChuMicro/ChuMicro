@@ -123,7 +123,12 @@ def main():
     print("Running services... (Ctrl+C to stop)\n")
 
     while True:
+        # tick() checks all registered tasks — periodic, object-based,
+        # and callable — then fires any whose conditions are met.
         runner.tick()
+
+        # Small sleep to avoid busy-spinning on CPython.
+        # On a real board this would be replaced by other work.
         time.sleep(0.1)
 
 

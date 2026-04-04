@@ -66,7 +66,13 @@ def main():
     print("Running... (Ctrl+C to stop)\n")
 
     while True:
+        # tick() captures time once, checks all tasks, and fires
+        # any that are due.  Every-tick handlers run on every call;
+        # periodic handlers run only when their interval has elapsed.
         runner.tick()
+
+        # Small sleep to avoid busy-spinning on CPython.
+        # On a real board this would be replaced by other work.
         time.sleep(0.1)
 
 

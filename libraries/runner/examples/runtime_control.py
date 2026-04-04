@@ -76,6 +76,8 @@ def main():
             wifi_handle.remove()
             switched = True
 
+        # Small sleep to avoid busy-spinning on CPython.
+        # On a real board this would be replaced by other work.
         time.sleep(0.1)
 
 
