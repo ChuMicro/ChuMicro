@@ -370,7 +370,7 @@ def preflight() -> int:
     """Run the full check suite that CI requires on every pull request.
 
     Covers lint, all CPython tests, example verification, MicroPython and
-    CircuitPython cross-runtime unit tests, and package builds.  Device
+    CircuitPython cross-runtime unit tests, and package builds.  Functional
     tests are excluded — they require physical hardware.
     """
     all_pkgs = discover_package_dirs()

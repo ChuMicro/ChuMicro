@@ -11,7 +11,7 @@ Add a simulation-first validation path, then layer on optional hardware executio
 - emulation and simulation options for CI
 - local device registry and templates
 - optional workflow integration for real devices
-- on-device test harness planning
+- functional test harness planning
 - transport and execution mechanics for board runs
 
 ## Current verified slice
@@ -51,7 +51,7 @@ Windows host note:
 
 - per [Decision 0005](../decisions/0005-windows-wsl2-unix-port-validation.md), Windows contributors should use WSL2 for unix-port-based MicroPython and CircuitPython validation rather than native-Windows unix-port workflows in this phase
 
-### Layer 3: real-device tests
+### Layer 3: functional tests
 
 Purpose:
 
@@ -65,7 +65,7 @@ Purpose:
 - provide `devices.example.yml`
 - use manually triggered workflows first
 - allow a local home testbed to be attached later without changing library code
-- keep the on-device test harness tiny and purpose-built
+- keep the functional test harness tiny and purpose-built
 
 Current decision:
 
@@ -98,7 +98,7 @@ The likely right split is:
 - simulation/emulation is preferred when realistic
 - real-device runs are opt-in and do not block basic contributor workflows by default
 - board registration is explicit and local configuration stays out of version control
-- device-facing tests are separated from host-only tests
+- functional tests are separated from host-only tests
 - device execution paths are simple enough for both humans and agents to run repeatedly
 
 ## Notes

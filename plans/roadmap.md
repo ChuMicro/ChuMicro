@@ -38,7 +38,7 @@ The timing library should prove all of these:
 - one public API shared by CPython, MicroPython, and CircuitPython
 - platform-specific differences hidden behind a small shim or injected adapter
 - host-side `pytest` tests for logic and contract behavior
-- on-device tests only for runtime-specific behavior that cannot be trusted from mocks
+- functional tests only for runtime-specific behavior that cannot be trusted from mocks
 
 Settled choices:
 
@@ -105,7 +105,7 @@ Exit criteria:
 - device registry template exists
 - simulation/emulation path is part of CI where practical
 - hardware workflow can target user-managed boards when configured
-- on-device test harness contract is defined and exercised
+- functional test harness contract is defined and exercised
 
 Key choices to confirm:
 

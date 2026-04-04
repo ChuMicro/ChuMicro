@@ -18,7 +18,7 @@ Chumicro is a mono-workspace for Python libraries that run across CPython, Micro
 1. Write or update code against a small public API and runtime shims
 2. Run host-side tests on CPython
 3. Run compatibility checks for MicroPython and CircuitPython
-4. Run on-device tests only for behavior that mocks cannot prove
+4. Run functional tests only for behavior that mocks cannot prove
 
 ## Testing model
 
@@ -37,7 +37,7 @@ chumicro/
 │   └── workstreams/
 ├── support/
 │   ├── runtime/           # Cross-runtime detection helpers (workspace-internal)
-│   └── test_harness/      # Lightweight on-device test runner (workspace-internal)
+│   └── test_harness/      # Lightweight cross-runtime test runner (workspace-internal)
 ├── libraries/
 │   └── timing/            # Cross-runtime timing library
 │       ├── src/

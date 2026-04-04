@@ -65,7 +65,7 @@ Primary use:
 
 - compatibility validation
 - cross-runtime unit tests
-- selected on-device tests
+- selected functional tests
 
 This mode should avoid direct dependency on CPython-only libraries and should exercise the same public library API whenever possible.
 
@@ -75,7 +75,7 @@ Primary use:
 
 - compatibility validation
 - cross-runtime unit tests
-- selected on-device tests on mounted boards or via a transport tool
+- selected functional tests on mounted boards or via a transport tool
 
 This mode should validate the same public API while allowing a small shim for platform-specific modules.
 

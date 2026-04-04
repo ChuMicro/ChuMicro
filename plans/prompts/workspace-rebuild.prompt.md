@@ -88,7 +88,7 @@ chumicro/
 13. Documentation and examples standards: `guide.md` has required sections (auto-generated via AI prompt), `api.md` uses mkdocstrings autodoc with no hand-written member lists, examples are import-verified in preflight (Decision 0013).
 14. Active components implement a `service(event_sink)` contract for ecosystem-standard event dispatch. `EventQueueSink` provides a pre-allocated ring buffer. Libraries use duck typing — no import dependency on `chumicro-serviceable` required (Decision 0014).
 15. Chumicro libraries require `collections.deque` (full-build CircuitPython, `EXTRA_FEATURES`+ MicroPython). Primary targets: ESP32 family, RP2040/RP2350, STM32. SAMD21 and non-full-build nRF52 are explicitly unsupported (Decision 0015).
-16. Cross-runtime unit tests run `tests/` through the lightweight harness on MP/CP unix-ports. Tests use plain asserts and `raises()`; `import pytest` is the automatic skip boundary. `functional_tests/` is for real-device tests only. `_pytest` suffix marks CPython-only test files (Decision 0016).
+16. Cross-runtime unit tests run `tests/` through the lightweight harness on MP/CP unix-ports. Tests use plain asserts and `raises()`; `import pytest` is the automatic skip boundary. `functional_tests/` is for functional tests only. `_pytest` suffix marks CPython-only test files (Decision 0016).
 
 ### Key technical patterns
 
@@ -114,7 +114,7 @@ These patterns caused real bugs when implemented incorrectly. Follow them exactl
 
 - Root `conftest.py` scans `support/*/src` and `libraries/*/src` for source roots.
 - Adds them to `sys.path` so IDE "run single test" and direct pytest invocations can import library packages.
-- Sets `collect_ignore_glob = ["**/functional_tests/**"]` to exclude on-device tests.
+- Sets `collect_ignore_glob = ["**/functional_tests/**"]` to exclude functional tests.
 - `run.py test` sets PYTHONPATH independently, so the root conftest is a convenience, not a requirement for the test runner.
 
 #### IDE config generation (sync-ide)

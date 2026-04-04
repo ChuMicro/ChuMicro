@@ -183,7 +183,7 @@ CI pipelines should enforce linting, unit tests and code coverage across all sup
 1. **Linting:** Run `ruff` to ensure PEP 8 compliance.
 2. **Static type checking:** Optionally run `mypy` against CPython code (use type hints where possible without breaking MicroPython/CircuitPython compatibility).
 3. **Unit tests:** Execute PyTest on a CPython interpreter.  Optionally also run tests under MicroPython's Unix port using MicroPython's `run‑tests.py` script【593158073270695†L93-L104】.
-4. **On‑device tests:** If configured, flash the library and test firmware to boards listed in `devices.yml` and run the on‑device test runner.  Collect results and include them in the CI report.
+4. **Functional tests:** If configured, flash the library and test firmware to boards listed in `devices.yml` and run the functional test runner.  Collect results and include them in the CI report.
 5. **Coverage:** Fail the build if coverage drops below a threshold (e.g., 90 %).
 
 ## Versioning & Releases
