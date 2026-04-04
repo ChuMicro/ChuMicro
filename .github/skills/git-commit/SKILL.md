@@ -1,10 +1,6 @@
 ---
 name: git-commit
-description: >
-  How to write and execute git commits in this workspace.
-  Use this skill whenever committing code to git.
-  Covers commit-message file creation, shell-safe commit execution,
-  and the project's commit-message conventions.
+description: How to write and execute git commits in this workspace. Use this skill whenever committing code to git.
 ---
 
 # Git Commit Mechanics
