@@ -70,7 +70,9 @@ Beyond compile-time feature availability, boards also vary widely in RAM and fla
 
 ### Hardware resource baseline
 
-A board is supported only if it provides at least **512 KB of MCU RAM** and at least **4 MB of flash**.  Boards with less than 512 KB of MCU RAM are unsupported unless the specific board or module includes meaningful PSRAM and still provides at least 4 MB of flash.  Boards with 8 MB or more of flash, and boards with PSRAM, are preferred.
+Chumicro libraries are tested and supported on boards with at least **512 KB of MCU RAM** and at least **4 MB of flash**.  Libraries may still run on boards below this baseline, but those boards are not tested, and issues specific to them will not be investigated.
+
+Boards with less than 512 KB of MCU RAM are unsupported unless the specific board or module includes meaningful PSRAM and still provides at least 4 MB of flash.  Boards with 8 MB or more of flash, and boards with PSRAM, are preferred.
 
 ### Feature requirements
 
@@ -89,7 +91,7 @@ Chumicro libraries require `collections.deque` and therefore require a full-buil
 - ESP32-S2 boards *with PSRAM* (base MCU is 320 KB)
 - ESP32-C3 boards *with PSRAM* (base MCU is 400 KB)
 
-**Unsupported:**
+**Unsupported (may work, but not tested or supported):**
 - SAMD21 (up to 32 KB SRAM)
 - SAMD51 (192–256 KB SRAM; CircuitPython also disables `deque` for this port)
 - RP2040 (264 KB SRAM)
@@ -108,5 +110,5 @@ Chumicro libraries require `collections.deque` and therefore require a full-buil
 - Library READMEs and guides should state the minimum board requirements (512 KB RAM, 4 MB flash, full-build CircuitPython or `EXTRA_FEATURES` MicroPython).
 - The cross-runtime compatibility runners test against the unix port, which exceeds all hardware baselines.
 - Future board transport tooling and `devices.yml` entries should target Tier 1 or Tier 2 boards.
-- If users report issues on unsupported boards, the answer is "unsupported" rather than "bug".
+- If users report issues on unsupported boards, the answer is "not tested or supported on that hardware" — not necessarily a bug, and not something we will investigate.
 
