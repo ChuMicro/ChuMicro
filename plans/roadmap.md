@@ -49,7 +49,7 @@ Settled choices:
 Current verified progress:
 
 - `libraries/timing/` exists with `src/`, `tests/`, and `functional_tests/`
-- `libraries/serviceable/` exists as the second publishable library (`chumicro-serviceable` 0.1.0) — provides the service-and-event pattern with shared timestamps (Decisions 0014, 0017)
+- `libraries/serviceable/` exists as the second publishable library (`chumicro-serviceable` 0.2.0) — provides the service-and-event pattern with shared timestamps (Decisions 0014, 0017), handle-based registration, heartbeat-integrated handlers, and priority constants (Decision 0018 Phases 1–2)
 - `Heartbeat` uses `poll(now_ms)`, `is_due(now_ms)`, and `reset(now_ms)` — all require a shared timestamp captured once per loop; the serviceable service contract is `service(event_sink, now_ms)` (Decisions 0014, 0017)
 - host-side tests pass with coverage above the current repo threshold
 - the timing package builds as an individual distribution

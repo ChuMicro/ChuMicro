@@ -19,6 +19,8 @@
 
 ## Next
 
+- [ ] Implement Decision 0018 Phase 3: priority-based dispatch ordering (per-priority dispatch buckets, starvation prevention).
+- [ ] Implement Decision 0018 Phase 4: time-budget enforcement (`budget_ms` on `ServiceRunner`, graduated warn/defer/drop).
 - [ ] Add `[tool.chumicro].platforms` reader to `scripts/run.py` and wire it into the cross-runtime compatibility runners and release/build paths (Decision 0011).
 - [ ] Promote advisory MicroPython and CircuitPython CI jobs to protected-branch requirements, gated by platform targeting (Decision 0011).
 - [ ] Add digital I/O as the second library seam (alongside CI/release work, not sequentially).
@@ -43,6 +45,7 @@
 
 ## Done
 
+- [x] Implement Decision 0018 Phases 1–2: handle-based registration (`HandlerHandle`), heartbeat-integrated handlers (`period_ms` on `register()`), `poll_heartbeats()`, priority constants.  `chumicro-serviceable` 0.1.0 → 0.2.0.
 - [x] Generalize the compatibility smoke runner to discover and exercise device tests for any library, not just timing.
 - [x] Scope AGENTS.md performance guidelines (f-strings, `const()`, `memoryview`, pre-allocated buffers) to library code only. Infrastructure code (`scripts/`, `support/`) runs exclusively on CPython and should not be constrained by embedded-runtime rules.
 - [x] Move prepare logic from `ci/prepare_*.py` into importable modules under `scripts/`. `ci/` was subsequently removed entirely — all logic now lives in `scripts/`.

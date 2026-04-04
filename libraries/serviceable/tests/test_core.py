@@ -5,8 +5,13 @@ Cross-runtime: runs on CPython (via pytest), MicroPython and CircuitPython
 """
 
 from chumicro_serviceable import (
+    PRIORITY_CRITICAL,
+    PRIORITY_HIGH,
+    PRIORITY_LOW,
+    PRIORITY_NORMAL,
     Event,
     EventQueueSink,
+    HandlerHandle,
     ServiceRunner,
     SimpleEventDispatcher,
 )
@@ -109,7 +114,15 @@ def test_sink_clear():
     assert sink.pop() is None
 
 
-# -- SimpleEventDispatcher --
+# -- Priority constants --
+
+
+def test_priority_ordering():
+    """Priority constants should be ordered: CRITICAL < HIGH < NORMAL < LOW."""
+    assert PRIORITY_CRITICAL < PRIORITY_HIGH < PRIORITY_NORMAL < PRIORITY_LOW
+
+
+# -- SimpleEventDispatcher: basic routing --
 
 
 def test_dispatcher_routes_to_handler():
@@ -146,6 +159,307 @@ def test_dispatcher_unregister_missing_is_safe():
     """Unregistering a type that was never registered should not raise."""
     dispatcher = SimpleEventDispatcher()
     dispatcher.unregister("nonexistent")  # should not raise
+
+
+# -- HandlerHandle --
+
+
+def test_register_returns_handle():
+    """register() should return a HandlerHandle."""
+    dispatcher = SimpleEventDispatcher()
+    handle = dispatcher.register("tick", lambda e: None)
+
+    assert isinstance(handle, HandlerHandle)
+
+
+def test_handle_event_type():
+    """Handle should expose the event type."""
+    dispatcher = SimpleEventDispatcher()
+    handle = dispatcher.register("tick", lambda e: None)
+
+    assert handle.event_type == "tick"
+
+
+def test_handle_default_priority():
+    """Default priority should be PRIORITY_NORMAL."""
+    dispatcher = SimpleEventDispatcher()
+    handle = dispatcher.register("tick", lambda e: None)
+
+    assert handle.priority == PRIORITY_NORMAL
+
+
+def test_handle_custom_priority():
+    """Register with a custom priority should be reflected on the handle."""
+    dispatcher = SimpleEventDispatcher()
+    handle = dispatcher.register("tick", lambda e: None, priority=PRIORITY_HIGH)
+
+    assert handle.priority == PRIORITY_HIGH
+
+
+def test_handle_active_when_registered():
+    """Handle should report active when registered."""
+    dispatcher = SimpleEventDispatcher()
+    handle = dispatcher.register("tick", lambda e: None)
+
+    assert handle.active is True
+
+
+def test_handle_inactive_after_unregister():
+    """Handle should report inactive after unregister()."""
+    dispatcher = SimpleEventDispatcher()
+    handle = dispatcher.register("tick", lambda e: None)
+    handle.unregister()
+
+    assert handle.active is False
+
+
+def test_handle_unregister_stops_dispatch():
+    """After handle.unregister(), dispatch should not call the handler."""
+    called = []
+    dispatcher = SimpleEventDispatcher()
+    handle = dispatcher.register("tick", lambda e: called.append(1))
+    handle.unregister()
+    dispatcher.dispatch(Event("src", "tick"))
+
+    assert called == []
+
+
+def test_handle_unregister_idempotent():
+    """Calling unregister() twice should not raise."""
+    dispatcher = SimpleEventDispatcher()
+    handle = dispatcher.register("tick", lambda e: None)
+    handle.unregister()
+    handle.unregister()  # should not raise
+
+
+def test_handle_set_priority():
+    """set_priority() should update the handle's priority."""
+    dispatcher = SimpleEventDispatcher()
+    handle = dispatcher.register("tick", lambda e: None)
+    handle.set_priority(PRIORITY_LOW)
+
+    assert handle.priority == PRIORITY_LOW
+
+
+def test_handle_period_ms_none_by_default():
+    """period_ms should be None when no heartbeat is configured."""
+    dispatcher = SimpleEventDispatcher()
+    handle = dispatcher.register("tick", lambda e: None)
+
+    assert handle.period_ms is None
+
+
+def test_handle_repr():
+    """Handle repr should include event type and status."""
+    dispatcher = SimpleEventDispatcher()
+    handle = dispatcher.register("tick", lambda e: None)
+
+    r = repr(handle)
+    assert "tick" in r
+    assert "active" in r
+
+
+def test_handle_repr_after_unregister():
+    """Handle repr should show inactive after unregister."""
+    dispatcher = SimpleEventDispatcher()
+    handle = dispatcher.register("tick", lambda e: None)
+    handle.unregister()
+
+    assert "inactive" in repr(handle)
+
+
+def test_reregister_replaces_handler():
+    """Re-registering the same event type should replace the handler."""
+    first_called = []
+    second_called = []
+    dispatcher = SimpleEventDispatcher()
+    dispatcher.register("tick", lambda e: first_called.append(1))
+    dispatcher.register("tick", lambda e: second_called.append(1))
+    dispatcher.dispatch(Event("src", "tick"))
+
+    assert first_called == []
+    assert second_called == [1]
+
+
+def test_reregister_deactivates_old_handle():
+    """Re-registering should deactivate the old handle."""
+    dispatcher = SimpleEventDispatcher()
+    old_handle = dispatcher.register("tick", lambda e: None)
+    dispatcher.register("tick", lambda e: None)
+
+    assert old_handle.active is False
+
+
+# -- Heartbeat-integrated handlers --
+
+
+def test_heartbeat_handler_period_ms():
+    """Handle should expose the configured heartbeat period."""
+    fake = FakeTicks()
+    dispatcher = SimpleEventDispatcher(ticks=fake)
+    handle = dispatcher.register("tick", lambda e: None, period_ms=200)
+
+    assert handle.period_ms == 200
+
+
+def test_heartbeat_handler_fires_when_due():
+    """poll_heartbeats() should emit an event when the heartbeat period elapses."""
+    fake = FakeTicks()
+    dispatcher = SimpleEventDispatcher(ticks=fake)
+    received = []
+    dispatcher.register("pulse", lambda e: received.append(e.event_type),
+                        period_ms=100)
+
+    sink = EventQueueSink(max_size=8)
+
+    # Not due yet.
+    fake.advance(50)
+    dispatcher.poll_heartbeats(fake.ticks_ms(), sink)
+    assert len(sink) == 0
+
+    # Now due.
+    fake.advance(50)
+    dispatcher.poll_heartbeats(fake.ticks_ms(), sink)
+    assert len(sink) == 1
+    assert sink.pop().event_type == "pulse"
+
+
+def test_heartbeat_handler_does_not_fire_early():
+    """poll_heartbeats() should not emit before the period elapses."""
+    fake = FakeTicks()
+    dispatcher = SimpleEventDispatcher(ticks=fake)
+    dispatcher.register("pulse", lambda e: None, period_ms=100)
+    sink = EventQueueSink(max_size=4)
+
+    fake.advance(99)
+    dispatcher.poll_heartbeats(fake.ticks_ms(), sink)
+
+    assert len(sink) == 0
+
+
+def test_heartbeat_handler_repeats():
+    """Heartbeat should fire again after another period elapses."""
+    fake = FakeTicks()
+    dispatcher = SimpleEventDispatcher(ticks=fake)
+    dispatcher.register("pulse", lambda e: None, period_ms=100)
+    sink = EventQueueSink(max_size=8)
+
+    fake.advance(100)
+    dispatcher.poll_heartbeats(fake.ticks_ms(), sink)
+    assert len(sink) == 1
+    sink.pop()
+
+    fake.advance(100)
+    dispatcher.poll_heartbeats(fake.ticks_ms(), sink)
+    assert len(sink) == 1
+
+
+def test_multiple_heartbeat_handlers():
+    """Multiple heartbeat handlers with different periods should fire independently."""
+    fake = FakeTicks()
+    dispatcher = SimpleEventDispatcher(ticks=fake)
+    dispatcher.register("fast", lambda e: None, period_ms=50)
+    dispatcher.register("slow", lambda e: None, period_ms=200)
+    sink = EventQueueSink(max_size=8)
+
+    # At 50ms: fast fires, slow does not.
+    fake.advance(50)
+    dispatcher.poll_heartbeats(fake.ticks_ms(), sink)
+    assert len(sink) == 1
+    assert sink.pop().event_type == "fast"
+
+    # At 100ms: fast fires again, slow still not.
+    fake.advance(50)
+    dispatcher.poll_heartbeats(fake.ticks_ms(), sink)
+    assert len(sink) == 1
+    assert sink.pop().event_type == "fast"
+
+    # At 200ms: both fire.
+    fake.advance(100)
+    dispatcher.poll_heartbeats(fake.ticks_ms(), sink)
+    assert len(sink) == 2
+    types = {sink.pop().event_type, sink.pop().event_type}
+    assert types == {"fast", "slow"}
+
+
+def test_handle_set_period_adds_heartbeat():
+    """set_period() should add a heartbeat to a previously non-periodic handler."""
+    fake = FakeTicks()
+    dispatcher = SimpleEventDispatcher(ticks=fake)
+    handle = dispatcher.register("tick", lambda e: None)
+
+    assert handle.period_ms is None
+
+    handle.set_period(300)
+    assert handle.period_ms == 300
+
+
+def test_handle_set_period_changes_heartbeat():
+    """set_period() should replace the existing heartbeat."""
+    fake = FakeTicks()
+    dispatcher = SimpleEventDispatcher(ticks=fake)
+    handle = dispatcher.register("tick", lambda e: None, period_ms=100)
+
+    handle.set_period(500)
+    assert handle.period_ms == 500
+
+
+def test_handle_set_period_none_removes_heartbeat():
+    """set_period(None) should remove the heartbeat."""
+    fake = FakeTicks()
+    dispatcher = SimpleEventDispatcher(ticks=fake)
+    handle = dispatcher.register("tick", lambda e: None, period_ms=100)
+
+    handle.set_period(None)
+    assert handle.period_ms is None
+
+
+def test_heartbeat_events_dispatch_through_runner():
+    """ServiceRunner should poll heartbeats and dispatch their events."""
+    fake = FakeTicks()
+    received = []
+    sink = EventQueueSink(max_size=8)
+    dispatcher = SimpleEventDispatcher(ticks=fake)
+    dispatcher.register("pulse", lambda e: received.append(e.event_type),
+                        period_ms=100)
+    runner = ServiceRunner([], sink, dispatcher, ticks=fake)
+
+    # Not due yet.
+    runner.service_once()
+    assert received == []
+
+    # Advance past the period and service again.
+    fake.advance(100)
+    runner.service_once()
+    assert received == ["pulse"]
+
+
+def test_heartbeat_and_component_events_both_dispatch():
+    """Both component events and heartbeat events should dispatch in the same tick."""
+    fake = FakeTicks()
+    received = []
+
+    class _Emitter:
+        """Component that always emits."""
+
+        def service(self, event_sink, now_ms):
+            """Emit a component event."""
+            event_sink.emit(self, "component.event")
+
+    sink = EventQueueSink(max_size=8)
+    dispatcher = SimpleEventDispatcher(ticks=fake)
+    dispatcher.register("component.event",
+                        lambda e: received.append("component"))
+    dispatcher.register("heartbeat.event",
+                        lambda e: received.append("heartbeat"),
+                        period_ms=100)
+    runner = ServiceRunner([_Emitter()], sink, dispatcher, ticks=fake)
+
+    fake.advance(100)
+    runner.service_once()
+
+    assert "component" in received
+    assert "heartbeat" in received
 
 
 # -- ServiceRunner --
@@ -294,4 +608,3 @@ def test_fake_sink_clear():
 
     assert len(sink) == 0
     assert not sink.has_events()
-

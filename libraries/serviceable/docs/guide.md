@@ -16,9 +16,27 @@ A shared `ServiceRunner` captures time once, calls `service()` on each component
 1. **Components** implement `service(event_sink, now_ms)` — they do one tick of work and emit events into the sink.
 2. **EventQueueSink** is a fixed-capacity ring buffer that collects events.
 3. **SimpleEventDispatcher** routes events to handler functions by event type.
-4. **ServiceRunner** ties it together: capture time → service → drain → dispatch.
+4. **ServiceRunner** ties it together: capture time → service → poll heartbeats → drain → dispatch.
 
 ## Getting started
+
+The simplest way to use the dispatcher is with a heartbeat-integrated handler — no component class required:
+
+```python
+from chumicro_serviceable import EventQueueSink, ServiceRunner, SimpleEventDispatcher
+
+sink = EventQueueSink(max_size=16)
+dispatcher = SimpleEventDispatcher()
+
+dispatcher.register("led.blink", lambda e: toggle_led(), period_ms=500)
+
+runner = ServiceRunner([], sink, dispatcher)
+
+while True:
+    runner.service_once()
+```
+
+For components with their own state or logic, implement the `service()` contract:
 
 ```python
 from chumicro_serviceable import EventQueueSink, ServiceRunner, SimpleEventDispatcher
@@ -60,6 +78,67 @@ while True:
     if some_heartbeat.poll(now):
         do_something()
 ```
+
+## Handler handles
+
+`register()` returns a `HandlerHandle` — a lightweight object for inspecting and mutating the registration at runtime:
+
+```python
+handle = dispatcher.register("led.blink", blink_handler, period_ms=500)
+
+# Inspect the registration.
+print(handle.event_type)   # "led.blink"
+print(handle.period_ms)    # 500
+print(handle.priority)     # PRIORITY_NORMAL (2)
+print(handle.active)       # True
+
+# Change the blink rate.
+handle.set_period(100)
+
+# Change the priority.
+handle.set_priority(PRIORITY_HIGH)
+
+# Stop the handler entirely.
+handle.unregister()
+print(handle.active)       # False
+```
+
+The old `dispatcher.unregister(event_type)` method still works for convenience.
+
+## Heartbeat-integrated handlers
+
+For simple periodic callbacks, pass `period_ms` to `register()`:
+
+```python
+dispatcher.register("sensor.read", read_sensor, period_ms=5000)
+dispatcher.register("heartbeat.tick", log_alive, period_ms=60000)
+```
+
+The `ServiceRunner` calls `poll_heartbeats()` on the dispatcher each tick.  When the heartbeat period elapses, the dispatcher emits an event into the sink that flows through the normal dispatch path.  This eliminates the need for a dedicated component class when all you want is a periodic callback.
+
+You can change or remove the heartbeat at runtime via the handle:
+
+```python
+handle = dispatcher.register("led.blink", blink, period_ms=500)
+
+# Speed up.
+handle.set_period(100)
+
+# Convert to a one-shot handler (remove the heartbeat).
+handle.set_period(None)
+```
+
+## Priority levels
+
+Four priority constants are available: `PRIORITY_CRITICAL` (0), `PRIORITY_HIGH` (1), `PRIORITY_NORMAL` (2, default), `PRIORITY_LOW` (3).
+
+```python
+from chumicro_serviceable import PRIORITY_HIGH
+
+dispatcher.register("alarm", alarm_handler, priority=PRIORITY_HIGH)
+```
+
+Priority levels are stored on the handler entry and can be changed at runtime via `handle.set_priority()`.  Priority-based dispatch ordering is planned for a future release (Phase 3 of Decision 0018).
 
 ## Multiple components
 
@@ -139,6 +218,7 @@ class TemperatureMonitor:
 
 - `EventQueueSink` pre-allocates its backing deque at construction time — no resizing during operation.
 - `Event` uses `__slots__` to minimise per-instance memory.
+- `_HandlerEntry` and `HandlerHandle` use `__slots__` to minimise per-instance memory.
 - Individual `Event` objects are created on each `emit()`.  If GC pressure becomes measurable on your board, the sink capacity can be tuned via `max_size`.
 
 ## Testing serviceable components

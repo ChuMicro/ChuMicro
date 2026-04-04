@@ -21,6 +21,23 @@ pip install chumicro-serviceable
 
 ```python
 from chumicro_serviceable import EventQueueSink, ServiceRunner, SimpleEventDispatcher
+
+sink = EventQueueSink(max_size=16)
+dispatcher = SimpleEventDispatcher()
+
+# Heartbeat-integrated handler — no component class needed.
+dispatcher.register("led.blink", lambda e: toggle_led(), period_ms=500)
+
+runner = ServiceRunner([], sink, dispatcher)
+
+while True:
+    runner.service_once()
+```
+
+For components that need their own state or logic, implement `service(event_sink, now_ms)`:
+
+```python
+from chumicro_serviceable import EventQueueSink, ServiceRunner, SimpleEventDispatcher
 from chumicro_timing import Heartbeat
 
 
@@ -59,12 +76,30 @@ while True:
 | `EventQueueSink.pop()` | Remove and return the oldest event, or `None` |
 | `EventQueueSink.has_events()` | Check whether unread events exist |
 | `EventQueueSink.clear()` | Discard all pending events |
-| `SimpleEventDispatcher()` | Routes events to handler functions by event type |
-| `SimpleEventDispatcher.register(event_type, handler)` | Register a handler for an event type |
-| `SimpleEventDispatcher.unregister(event_type)` | Remove a handler |
+| `SimpleEventDispatcher(ticks=None)` | Routes events to handler functions by event type |
+| `SimpleEventDispatcher.register(event_type, handler, period_ms=None, priority=PRIORITY_NORMAL)` | Register a handler; returns a `HandlerHandle` |
+| `SimpleEventDispatcher.unregister(event_type)` | Remove a handler by event type |
 | `SimpleEventDispatcher.dispatch(event)` | Route an event to its handler |
+| `SimpleEventDispatcher.poll_heartbeats(now_ms, event_sink)` | Emit events for any due heartbeat handlers |
+| `HandlerHandle` | Opaque handle for runtime mutation of a registered handler |
+| `HandlerHandle.set_period(period_ms)` | Add, change, or remove the heartbeat (`None` to remove) |
+| `HandlerHandle.set_priority(priority)` | Change the priority level |
+| `HandlerHandle.unregister()` | Remove this handler from the dispatcher |
+| `HandlerHandle.event_type` | Read-only: the event type |
+| `HandlerHandle.priority` | Read-only: the current priority |
+| `HandlerHandle.period_ms` | Read-only: the heartbeat period, or `None` |
+| `HandlerHandle.active` | Read-only: whether the handler is still registered |
 | `ServiceRunner(services, event_sink, dispatcher, ticks=None)` | Service → drain → dispatch loop with shared timestamps |
-| `ServiceRunner.service_once()` | Capture time, service all components, drain and dispatch; returns `now_ms` |
+| `ServiceRunner.service_once()` | Capture time, service all components, poll heartbeats, drain and dispatch; returns `now_ms` |
+
+### Constants
+
+| Symbol | Value | Description |
+|---|---|---|
+| `PRIORITY_CRITICAL` | 0 | Highest priority (Phase 3 dispatch ordering) |
+| `PRIORITY_HIGH` | 1 | High priority |
+| `PRIORITY_NORMAL` | 2 | Default priority |
+| `PRIORITY_LOW` | 3 | Lowest priority |
 
 ### Testing
 
@@ -94,6 +129,30 @@ class ButtonScanner:
 
 The `now_ms` argument is a shared timestamp captured once per tick by the `ServiceRunner`.  Components that need timing (e.g., periodic heartbeats) use it; components that don't (e.g., button scanners) can ignore it.
 
+## Heartbeat-integrated handlers
+
+For simple periodic callbacks, you don't need a component class at all.  Pass `period_ms` to `register()` and the dispatcher handles the timing internally:
+
+```python
+dispatcher.register("sensor.read", read_sensor, period_ms=5000)
+```
+
+The `ServiceRunner` calls `poll_heartbeats()` each tick.  When the period elapses, the dispatcher emits an event that flows through the normal sink → dispatch path.
+
+## Handler handles
+
+`register()` returns a `HandlerHandle` for runtime mutation:
+
+```python
+handle = dispatcher.register("led.blink", blink_handler, period_ms=500)
+
+# Change the blink rate at runtime.
+handle.set_period(100)
+
+# Stop blinking.
+handle.unregister()
+```
+
 ## Testing your components
 
 The `chumicro_serviceable.testing` module provides `FakeEventSink` for verifying that components emit the right events:
@@ -116,6 +175,7 @@ All classes use only basic Python features and `collections.deque`.  Works ident
 
 - `EventQueueSink` is backed by `collections.deque` (C-level on MicroPython/CircuitPython) with a fixed max size — no list resizing during operation.
 - `Event` uses `__slots__` to minimise per-instance memory.
+- `_HandlerEntry` and `HandlerHandle` use `__slots__` to minimise per-instance memory.
 - Individual `Event` objects are created per `emit()`.  Tune `max_size` if GC pressure is measurable on your board.
 
 ## Docs

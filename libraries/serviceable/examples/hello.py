@@ -1,8 +1,8 @@
-"""Simple serviceable dispatch loop — component that ignores the timestamp.
+"""Simple serviceable dispatch loop with handle-based registration.
 
 Demonstrates a component that participates in the serviceable dispatch
-loop without using the shared ``now_ms`` timestamp.  Not every component
-needs timing — many just do work and emit events.
+loop, and shows how ``register()`` returns a ``HandlerHandle`` for
+inspecting and mutating the registration at runtime.
 
 Runs on CPython, MicroPython, and CircuitPython without modification.
 """
@@ -35,10 +35,13 @@ def main():
 
     sink = EventQueueSink(max_size=8)
     dispatcher = SimpleEventDispatcher()
-    dispatcher.register(
+
+    # register() returns a handle for runtime mutation.
+    handle = dispatcher.register(
         Counter.EVENT_MILESTONE,
         lambda e: print(f"  milestone reached: {e.data} ticks"),
     )
+    print(f"Registered handler: {handle}")
 
     runner = ServiceRunner([counter], sink, dispatcher)
 
@@ -48,9 +51,11 @@ def main():
         runner.service_once()
         time.sleep(0.05)
 
+    # Unregister via the handle.
+    handle.unregister()
+    print(f"Handler after unregister: {handle}")
     print("Done.")
 
 
 if __name__ == "__main__":
     main()
-

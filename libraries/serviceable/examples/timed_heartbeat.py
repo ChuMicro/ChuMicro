@@ -1,9 +1,12 @@
-"""Timed component — using the shared timestamp for periodic work.
+"""Heartbeat-integrated handlers — periodic dispatch without a component class.
 
-Demonstrates a component that uses the shared ``now_ms`` timestamp
-from ``service()`` to drive a ``Heartbeat`` for periodic event emission.
-The timestamp is captured once by ``ServiceRunner`` and shared with
-all components, preventing drift.
+Demonstrates heartbeat-integrated handlers: the dispatcher creates an
+internal ``Heartbeat`` and emits events automatically when the period
+elapses.  No component class is needed for simple periodic callbacks.
+
+For comparison, also shows the component-based approach from the
+serviceable pattern, where a component wraps a ``Heartbeat`` and emits
+events in its ``service()`` method.
 
 Runs on CPython, MicroPython, and CircuitPython without modification.
 """
@@ -11,36 +14,28 @@ Runs on CPython, MicroPython, and CircuitPython without modification.
 import time
 
 from chumicro_serviceable import EventQueueSink, ServiceRunner, SimpleEventDispatcher
-from chumicro_timing import Heartbeat
-
-
-class PeriodicReporter:
-    """A component that emits a report event at a regular interval."""
-
-    EVENT_REPORT = "reporter.report"
-
-    def __init__(self, period_ms):
-        """Create a reporter that emits every *period_ms* milliseconds."""
-        self._heartbeat = Heartbeat(period_ms=period_ms)
-
-    def service(self, event_sink, now_ms):
-        """Check the heartbeat and emit a report event if due."""
-        if self._heartbeat.poll(now_ms):
-            event_sink.emit(self, self.EVENT_REPORT)
 
 
 def main():
-    """Run two timed reporters through the serviceable dispatch loop."""
-    fast = PeriodicReporter(period_ms=500)
-    slow = PeriodicReporter(period_ms=2000)
-
+    """Run heartbeat-integrated handlers through the dispatch loop."""
     sink = EventQueueSink(max_size=8)
     dispatcher = SimpleEventDispatcher()
-    dispatcher.register(PeriodicReporter.EVENT_REPORT, lambda e: print("  report!"))
 
-    runner = ServiceRunner([fast, slow], sink, dispatcher)
+    # Register a periodic handler — no component class needed.
+    handle = dispatcher.register(
+        "led.blink",
+        lambda e: print("  blink!"),
+        period_ms=500,
+    )
 
-    print("Running timed reporters (Ctrl+C to stop)...")
+    print(f"Registered: {handle}")
+    print(f"  period_ms = {handle.period_ms}")
+    print(f"  priority  = {handle.priority}")
+    print()
+
+    runner = ServiceRunner([], sink, dispatcher)
+
+    print("Running heartbeat handler (Ctrl+C to stop)...")
 
     try:
         while True:
@@ -52,4 +47,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
