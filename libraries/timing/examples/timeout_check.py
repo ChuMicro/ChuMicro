@@ -1,8 +1,28 @@
 """Timeout check using tick functions directly.
 
-Shows how to use ticks_ms / ticks_diff / ticks_add for custom timing
-logic that doesn't fit the Heartbeat pattern — for example, detecting
-whether an operation took too long.
+Shows how to use ``ticks_ms`` / ``ticks_diff`` / ``ticks_add`` for
+custom timing logic that doesn't fit the ``Heartbeat`` pattern — for
+example, detecting whether an operation took too long.
+
+On a real board, ``simulate_work()`` would be a sensor read, network
+request, or other bounded operation.
+
+Example output::
+
+    Running timeout checks with 500 ms limit...
+
+      Working for 0.35s...
+      Attempt 1: OK in 352 ms (148 ms to spare)
+
+      Working for 0.72s...
+      Attempt 2: TIMEOUT after 723 ms
+
+      Working for 0.18s...
+      Attempt 3: OK in 183 ms (317 ms to spare)
+
+      ...
+
+Runs on CPython, MicroPython, and CircuitPython.
 """
 
 import time

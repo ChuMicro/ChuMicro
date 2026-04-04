@@ -34,6 +34,7 @@ libraries/timing/
 └── examples/
     ├── heartbeat_blink.py
     ├── multiple_heartbeats.py
+    ├── activity_timeout.py
     └── timeout_check.py
 ```
 
@@ -47,7 +48,7 @@ libraries/timing/
 - `libraries/timing/pyproject.toml` builds as an individual package
 - `libraries/timing/README.md` establishes the package documentation with installation, API overview, and platform notes
 - `libraries/timing/docs/` contains user guide, API reference, and testing helpers documentation (Decision 0013)
-- `libraries/timing/examples/` contains three runnable examples: heartbeat blink, multiple heartbeats, and timeout check (Decision 0013)
+- `libraries/timing/examples/` contains four runnable examples: heartbeat blink, multiple heartbeats, activity timeout, and timeout check (Decision 0013)
 - current version: `0.1.0` (pre-release; nothing published yet)
 
 ## Design rules
