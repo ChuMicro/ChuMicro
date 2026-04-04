@@ -1,7 +1,7 @@
-"""Sensor threshold alert — gate-based service pattern.
+"""Sensor threshold alert — gate-based check/handle pattern.
 
-``service()`` reads the sensor and checks whether the handler should
-fire.  The runner calls ``service()`` on schedule; when it returns
+``check()`` reads the sensor and returns whether the handler should
+fire.  The runner calls ``check()`` on schedule; when it returns
 True, ``handle()`` fires.
 
 On a real board, ``read_temperature()`` would be a fast I2C or ADC
@@ -22,7 +22,7 @@ Runs on CPython, MicroPython, and CircuitPython.
 
 import time
 
-from chumicro_serviceable import ServiceRunner
+from chumicro_runner import Runner
 
 # Simulated readings that cycle.  Replace with hardware reads.
 _READINGS = [22.0, 25.0, 28.0, 31.0, 35.0, 29.0, 24.0, 20.0]
@@ -31,7 +31,7 @@ _READINGS = [22.0, 25.0, 28.0, 31.0, 35.0, 29.0, 24.0, 20.0]
 class TemperatureSensor:
     """Alert when temperature exceeds a threshold.
 
-    ``service()`` calls ``read_temperature()`` — a fast, non-blocking
+    ``check()`` calls ``read_temperature()`` — a fast, non-blocking
     sensor read — and returns True when the threshold is exceeded.
     ``handle()`` reacts (print here; fan or network alert on a real
     board).
@@ -54,7 +54,7 @@ class TemperatureSensor:
         self._index += 1
         return value
 
-    def service(self, now_ms):
+    def check(self, now_ms):
         """Read the sensor and check against the threshold."""
         self._last_reading = self.read_temperature()
         return self._last_reading > self._threshold
@@ -69,7 +69,7 @@ class TemperatureSensor:
 
 def main():
     """Monitor temperature and alert on threshold breach."""
-    runner = ServiceRunner()
+    runner = Runner()
     sensor = TemperatureSensor(threshold=30.0)
 
     # Check the sensor every second.
@@ -78,10 +78,9 @@ def main():
     print("Monitoring temperature... (Ctrl+C to stop)\n")
 
     while True:
-        runner.service_once()
+        runner.tick()
         time.sleep(0.1)
 
 
 if __name__ == "__main__":
     main()
-

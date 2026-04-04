@@ -111,10 +111,10 @@ _GUIDE_TEMPLATE = """\
 <!-- Required. Runtime-specific behavior or limitations. If the library works
      identically on all three runtimes, say so in one line. -->
 
-## Serviceable pattern
+## Runner pattern
 
-<!-- Include if the library has classes that implement service(event_sink).
-     Show how to wire them into a ServiceRunner. Omit if not applicable. -->
+<!-- Include if the library has classes that implement check(now_ms) -> bool.
+     Show how to wire them into a Runner. Omit if not applicable. -->
 
 ## Memory notes
 

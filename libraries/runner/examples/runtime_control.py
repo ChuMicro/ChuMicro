@@ -1,10 +1,10 @@
-"""Runtime service control — advanced ecosystem patterns.
+"""Runtime task control — advanced ecosystem patterns.
 
-Demonstrates how the serviceable and timing libraries work together:
+Demonstrates how the runner and timing libraries work together:
 
-- Adjusting service periods at runtime via ``ServiceHandle``
-- Removing services dynamically
-- Using ``Heartbeat`` alongside ``ServiceRunner`` for custom timing
+- Adjusting task periods at runtime via ``TaskHandle``
+- Removing tasks dynamically
+- Using ``Heartbeat`` alongside ``Runner`` for custom timing
   logic that lives outside the runner
 - Using the runner's ``now_ms`` return value for external decisions
 
@@ -33,7 +33,7 @@ Runs on CPython, MicroPython, and CircuitPython.
 
 import time
 
-from chumicro_serviceable import ServiceRunner
+from chumicro_runner import Runner
 from chumicro_timing import Heartbeat
 
 
@@ -48,15 +48,15 @@ def check_wifi(now_ms):
 
 
 def main():
-    """Show runtime service control with ServiceHandle and Heartbeat."""
-    runner = ServiceRunner()
+    """Show runtime task control with TaskHandle and Heartbeat."""
+    runner = Runner()
 
-    # Register services and keep their handles for runtime control.
+    # Register tasks and keep their handles for runtime control.
     log_handle = runner.add_periodic(log_data, period_ms=1000)
     wifi_handle = runner.add_periodic(check_wifi, period_ms=2000)
 
     # A Heartbeat used independently — not managed by the runner.
-    # Useful for timing decisions that don't fit the service pattern,
+    # Useful for timing decisions that don't fit the task pattern,
     # like switching operating modes after a duration.
     mode_timer = Heartbeat(period_ms=10000)
 
@@ -65,8 +65,8 @@ def main():
     print("Running... (Ctrl+C to stop)\n")
 
     while True:
-        # service_once() returns the shared timestamp.
-        now = runner.service_once()
+        # tick() returns the shared timestamp.
+        now = runner.tick()
 
         # Use now_ms with an independent Heartbeat for a timed mode switch.
         if not switched and mode_timer.poll(now):
@@ -81,4 +81,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

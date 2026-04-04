@@ -3,9 +3,9 @@ requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "chumicro-serviceable"
+name = "chumicro-runner"
 dynamic = ["version"]
-description = "Service-and-event pattern with shared timestamps for Chumicro applications."
+description = "Tick-based task runner with shared timestamps for Chumicro applications."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"

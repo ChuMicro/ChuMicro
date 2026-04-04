@@ -1,28 +1,28 @@
 # Testing Helpers
 
-`chumicro_serviceable.testing` provides `CallRecorder` for verifying that handlers fire at the right times in host-side tests — a simple callable that records invocations.
+`chumicro_runner.testing` provides `CallRecorder` for verifying that handlers fire at the right times in host-side tests — a simple callable that records invocations.
 
 ## Usage as a handler
 
-Pass a `CallRecorder` as the handler to `ServiceRunner.add()` or `add_periodic()`:
+Pass a `CallRecorder` as the handler to `Runner.add()` or `add_periodic()`:
 
 ```python
-from chumicro_serviceable import ServiceRunner
-from chumicro_serviceable.testing import CallRecorder
+from chumicro_runner import Runner
+from chumicro_runner.testing import CallRecorder
 from chumicro_timing.testing import FakeTicks
 
 fake = FakeTicks()
 recorder = CallRecorder()
-runner = ServiceRunner(ticks=fake)
+runner = Runner(ticks=fake)
 runner.add_periodic(recorder, period_ms=100)
 
 # Not due yet — no calls.
-runner.service_once()
+runner.tick()
 assert len(recorder) == 0
 
 # Advance past the period.
 fake.advance(100)
-runner.service_once()
+runner.tick()
 assert recorder.calls == [100]
 ```
 
@@ -54,24 +54,24 @@ runner.add(
     lambda now_ms: True,  # always fire
     handler=recorder,
 )
-runner.service_once()
+runner.tick()
 assert len(recorder) == 1
 ```
 
 ## Usage from other libraries
 
-Libraries that use the serviceable pattern can import `CallRecorder` directly:
+Libraries that use the runner pattern can import `CallRecorder` directly:
 
 ```python
 # In another library's test file
-from chumicro_serviceable.testing import CallRecorder
+from chumicro_runner.testing import CallRecorder
 ```
 
 This follows the project convention from [Decision 0010](https://github.com/chumicro/chumicro/blob/main/plans/decisions/0010-library-testability.md): libraries that expose injectable services ship their own test fakes.
 
 ## API Reference
 
-::: chumicro_serviceable.testing
+::: chumicro_runner.testing
     options:
       members:
         - CallRecorder

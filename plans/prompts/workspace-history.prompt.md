@@ -144,7 +144,7 @@ This was the largest single session. It addressed three areas: the workspace was
 16. Renamed `test-host` → `test` — the `host` qualifier was unnecessary jargon.
 17. Formalized library testability patterns as Decision 0010: constructor injection, `testing` submodules for fakes, don't mock what you don't own.
 
-#### 2026-04-02 — Cleanup, platform targeting, stubs, docs, and serviceable pattern
+#### 2026-04-02 — Cleanup, platform targeting, stubs, docs, and runner pattern
 
 **Cruft removal:**
 1. Deleted `ci/run_sample_device_tests.py` (backward-compat wrapper with no callers).
@@ -170,10 +170,10 @@ This was the largest single session. It addressed three areas: the workspace was
 15. New-library scaffolder generates `mkdocs.yml`, `docs/api.md` with autodoc, `docs/guide.md` template, and example with `__main__` guard.
 16. Later: strengthened Decision 0013 with strict `guide.md` section requirements, `api.md` autodoc rules (no hand-written member lists), and an AI generation prompt at `plans/prompts/guide-generation.prompt.md`.
 
-**Serviceable pattern:**
-17. Accepted Decision 0014 (serviceable pattern): standardize how active components communicate events. Components implement `service(event_sink)`, a shared `EventQueueSink` collects events, `ServiceRunner` dispatches.
-18. New library: `chumicro-serviceable` 0.1.0 with `Event`, `EventQueueSink`, `SimpleEventDispatcher`, `ServiceRunner`, and `FakeEventSink` testing helper. 100% test coverage.
-19. `Heartbeat` gained `service(event_sink)` and `EVENT_TICK` (timing 0.1.0 → 0.2.0, backward compatible). Duck-typed — timing does not import from serviceable.
+**Runner pattern:**
+17. Accepted Decision 0014 (runner pattern): standardize how active components communicate events. Components implement `check(now_ms) -> bool`, a shared `EventQueueSink` collects events, `Runner` dispatches.
+18. New library: `chumicro-runner` 0.1.0 with `Event`, `EventQueueSink`, `SimpleEventDispatcher`, `Runner`, and `FakeEventSink` testing helper. 100% test coverage.
+19. `Heartbeat` gained `check(now_ms) -> bool` and `EVENT_TICK` (timing 0.1.0 → 0.2.0, backward compatible). Duck-typed — timing does not import from runner.
 20. Serviceable library is pending maintainer audit (tracked in next-up.md).  *(Completed 2026-04-03 — see below.)*
 
 #### 2026-04-03 — Serviceable audit, board architecture decision, AGENTS.md .tools docs
@@ -233,11 +233,11 @@ This was the largest single session. It addressed three areas: the workspace was
 
 **Serviceable simplification (Decision 0014 revised):**
 2. Removed the event-based path entirely: `Event`, `EventQueueSink`, `SimpleEventDispatcher`, `HandlerHandle`, priority constants all deleted.
-3. Service contract changed from `service(event_sink, now_ms)` to `service(now_ms) -> bool` — a gate-based check function that decides IF the handler fires.
-4. `ServiceRunner` simplified to `(ticks=None)` constructor.  Four registration patterns: object-based (`.service`/`.handle`), callable check + handler, handler-only, and periodic.
+3. Service contract changed from `service(event_sink, now_ms)` to `check(now_ms) -> bool` — a gate-based check function that decides IF the handler fires.
+4. `Runner` simplified to `(ticks=None)` constructor.  Four registration patterns: object-based (`.service`/`.handle`), callable check + handler, handler-only, and periodic.
 5. `FakeEventSink` replaced by `CallRecorder` in testing module.
 6. Examples rewritten with real-world concepts: temperature sensor, LED blink, motion detector.
-7. `chumicro-serviceable` 0.1.0 → 0.4.0 (three breaking changes collapsed into one session).
+7. `chumicro-runner` 0.1.0 → 0.4.0 (three breaking changes collapsed into one session).
 
 **Decision compaction:**
 8. Compacted Decisions 0017 (shared timestamps), 0018 (dispatcher evolution), 0019 (period on runner), 0020 (simplify to gate-based) into a revised Decision 0014.  Four rapid-iteration decision documents were conversational stepping stones, not durable decisions.

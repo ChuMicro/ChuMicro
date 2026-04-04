@@ -116,9 +116,9 @@ The tick source is selected automatically at import time:
 
 All sources are masked to the 2²⁹ period, so behavior is identical regardless of which source is used.
 
-## Using with ServiceRunner
+## Using with Runner
 
-For applications with many components, `chumicro-serviceable` provides a `ServiceRunner` that captures the timestamp for you and services active components. See the [chumicro-serviceable docs](../../serviceable/docs/guide.md) for details.
+For applications with many components, `chumicro-runner` provides a `Runner` that captures the timestamp for you and services active components. See the [chumicro-runner docs](../../runner/docs/guide.md) for details.
 
 ## Integration with a tick-based scheduler
 

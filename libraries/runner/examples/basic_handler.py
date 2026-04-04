@@ -1,12 +1,12 @@
-"""Basic handler patterns — the most common way to use ServiceRunner.
+"""Basic handler patterns — the most common way to use Runner.
 
-- **Every-tick handler** — fires on every ``service_once()`` call.
+- **Every-tick handler** — fires on every ``tick()`` call.
   Use for work that must run as often as possible (polling buttons,
   reading input buffers).
 - **Periodic handler** — fires on a fixed time schedule.
   Use for regular intervals (blinking LEDs, logging, heartbeats).
 
-No service objects needed — just pass a callable and optionally a period.
+No task objects needed — just pass a callable and optionally a period.
 
 Example output::
 
@@ -25,7 +25,7 @@ Runs on CPython, MicroPython, and CircuitPython.
 
 import time
 
-from chumicro_serviceable import ServiceRunner
+from chumicro_runner import Runner
 
 tick_count = 0
 
@@ -52,9 +52,9 @@ def heartbeat(now_ms):
 
 def main():
     """Run handlers on different schedules."""
-    runner = ServiceRunner()
+    runner = Runner()
 
-    # Every-tick: fires on every service_once() call.
+    # Every-tick: fires on every tick() call.
     runner.add(handler=poll_inputs)
 
     # Periodic: fires once per second.
@@ -66,10 +66,9 @@ def main():
     print("Running... (Ctrl+C to stop)\n")
 
     while True:
-        runner.service_once()
+        runner.tick()
         time.sleep(0.1)
 
 
 if __name__ == "__main__":
     main()
-

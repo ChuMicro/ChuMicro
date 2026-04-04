@@ -144,7 +144,7 @@ def test_cpython(
 
         timing/test_heartbeat                 # by name in a library
         timing/test_ticks/test_add            # by file and name
-        timing/test_a,serviceable/test_b      # comma-separated
+        timing/test_a,runner/test_b      # comma-separated
     """
     # Parse library-scoped filters from filter_expr.
     per_library: dict[str, list[tuple[str | None, str]]] | None = None
@@ -538,7 +538,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "# by library and test\n"
             "  run.py test -k timing/test_ticks/test_add         "
             "# by library, file, and test\n"
-            "  run.py test -k timing/test_a,serviceable/test_b   "
+            "  run.py test -k timing/test_a,runner/test_b   "
             "# per-library filters\n"
             "  run.py test --no-cov -x                           "
             "# quick, stop on failure"

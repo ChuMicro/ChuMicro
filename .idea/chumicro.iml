@@ -9,9 +9,9 @@
       <sourceFolder url="file://$MODULE_DIR$/libraries/compat/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/compat/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/compat/functional_tests" isTestSource="true" />
-      <sourceFolder url="file://$MODULE_DIR$/libraries/serviceable/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/libraries/serviceable/tests" isTestSource="true" />
-      <sourceFolder url="file://$MODULE_DIR$/libraries/serviceable/functional_tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/runner/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/runner/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/runner/functional_tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/timing/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/timing/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/timing/functional_tests" isTestSource="true" />

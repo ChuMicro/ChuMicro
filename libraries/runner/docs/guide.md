@@ -2,7 +2,7 @@
 
 ## Overview
 
-`chumicro-serviceable` provides a standard pattern for active components in the Chumicro ecosystem.  Instead of each library inventing its own `poll()` / callback API, every active component implements two methods:
+`chumicro-runner` provides a standard pattern for active components in the Chumicro ecosystem.  Instead of each library inventing its own `poll()` / callback API, every active component implements two methods:
 
 ```python
 def service(self, now_ms):
@@ -12,20 +12,20 @@ def handle(self, now_ms):
     """React to the condition detected by service()."""
 ```
 
-A shared `ServiceRunner` captures time once per tick, checks each service, and batch-fires all due handlers.  This replaces ad-hoc polling loops with a single standard contract.
+A shared `Runner` captures time once per tick, checks each service, and batch-fires all due handlers.  This replaces ad-hoc polling loops with a single standard contract.
 
 ## The pattern
 
-1. **Services** implement `service(now_ms) -> bool` — they check a condition and return whether the handler should fire.
+1. **Services** implement `check(now_ms) -> bool` — they check a condition and return whether the handler should fire.
 2. **Handlers** implement `handle(now_ms)` — they react when the service says "go".
-3. **ServiceRunner** ties it together: capture time → check all services → batch-fire all due handlers.
+3. **Runner** ties it together: capture time → check all services → batch-fire all due handlers.
 
-Services can be objects with `.service()` and `.handle()` methods, or plain callables (lambdas, functions, bound methods).
+Services can be objects with `.check()` and `.handle()` methods, or plain callables (lambdas, functions, bound methods).
 
 ## Getting started
 
 ```python
-from chumicro_serviceable import ServiceRunner
+from chumicro_runner import Runner
 
 
 class TemperatureSensor:
@@ -49,22 +49,22 @@ class TemperatureSensor:
 
 
 sensor = TemperatureSensor(threshold=30.0)
-runner = ServiceRunner()
+runner = Runner()
 runner.add(sensor, period_ms=5000)
 
 while True:
-    runner.service_once()
+    runner.tick()
 ```
 
 ## Shared timestamps
 
-`ServiceRunner.service_once()` captures `ticks_ms()` once and passes the resulting timestamp to every service.  This ensures all services in the loop see the same moment in time, preventing drift between independent clock reads on slow microcontrollers.
+`Runner.tick()` captures `ticks_ms()` once and passes the resulting timestamp to every service.  This ensures all services in the loop see the same moment in time, preventing drift between independent clock reads on slow microcontrollers.
 
 The method returns `now_ms` so user code can use it alongside the service loop:
 
 ```python
 while True:
-    now = runner.service_once()
+    now = runner.tick()
     if some_heartbeat.poll(now):
         do_something()
 ```
@@ -73,7 +73,7 @@ while True:
 
 ### Object-based
 
-Pass an object with `.service(now_ms) -> bool` and `.handle(now_ms)`:
+Pass an object with `.check(now_ms) -> bool` and `.handle(now_ms)`:
 
 ```python
 class MotionDetector:
@@ -136,7 +136,7 @@ runner.add_periodic(
 Pass `period_ms` to `add()` and the runner will only check the service when the period elapses.  Services without a period are checked every tick.
 
 ```python
-runner = ServiceRunner()
+runner = Runner()
 
 # Sensor is only checked every 5 seconds.
 handle = runner.add(sensor, period_ms=5000)
@@ -145,7 +145,7 @@ handle = runner.add(sensor, period_ms=5000)
 runner.add(button_scanner)
 ```
 
-You can change or remove the period at runtime via the `ServiceHandle`:
+You can change or remove the period at runtime via the `TaskHandle`:
 
 ```python
 # Speed up.
@@ -163,7 +163,7 @@ handle.remove()
 The pattern scales to many services with no extra boilerplate:
 
 ```python
-runner = ServiceRunner()
+runner = Runner()
 runner.add(motion_detector)
 runner.add(temperature_sensor, period_ms=5000)
 runner.add(
@@ -174,7 +174,7 @@ runner.add_periodic(toggle_led, period_ms=500)
 runner.add_periodic(log_status, period_ms=10000)
 
 while True:
-    runner.service_once()
+    runner.tick()
 ```
 
 ## Batch firing
@@ -182,39 +182,39 @@ while True:
 All services are checked first, then all due handlers fire in sequence.  This guarantees that handlers see a consistent view of the world — no handler modifies state while other services are still being checked.
 
 ```
-service_once():
+tick():
   1. Capture ticks_ms() → now_ms
   2. For each entry:
      - Period gate: skip if not due
-     - Check gate: skip if service(now_ms) returns False
+     - Check gate: skip if check(now_ms) returns False
      - Queue handler
   3. Fire all queued handlers with now_ms
 ```
 
 ## Memory notes
 
-- `_ServiceEntry` and `ServiceHandle` use `__slots__` to minimise per-instance memory.
+- `_TaskEntry` and `TaskHandle` use `__slots__` to minimise per-instance memory.
 - Handlers are collected into a pre-allocated list and batch-fired, avoiding per-tick allocation.
 - No `collections.deque` or ring buffers are required.
 
-## Testing serviceable components
+## Testing tasks
 
-The `chumicro_serviceable.testing` module provides `CallRecorder` — a callable that records handler invocations for assertions in host-side tests:
+The `chumicro_runner.testing` module provides `CallRecorder` — a callable that records handler invocations for assertions in host-side tests:
 
 ```python
-from chumicro_serviceable.testing import CallRecorder
+from chumicro_runner.testing import CallRecorder
 from chumicro_timing.testing import FakeTicks
 
 fake = FakeTicks()
 recorder = CallRecorder()
-runner = ServiceRunner(ticks=fake)
+runner = Runner(ticks=fake)
 runner.add_periodic(recorder, period_ms=100)
 
-runner.service_once()
+runner.tick()
 assert len(recorder) == 0  # not due yet
 
 fake.advance(100)
-runner.service_once()
+runner.tick()
 assert recorder.calls == [100]
 ```
 

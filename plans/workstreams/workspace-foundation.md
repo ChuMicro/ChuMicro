@@ -29,7 +29,7 @@ Define the repo layout, shared tooling, and local developer ergonomics for a Pyt
 - `support/runtime/` exists as the first reusable support package
 - `support/test_harness/` exists as the first tiny on-device runner scaffold
 - `libraries/timing/` exists as the first publishable package slice under `libraries/`
-- `libraries/serviceable/` exists as the second publishable library (scaffolded via `new-library`)
+- `libraries/runner/` exists as the second publishable library (scaffolded via `new-library`)
 - `.github/workflows/ci.yml` exists and uses the shared repo task entrypoints
 - `scripts/run.py` exists as the current shared task interface for humans, agents, and CI
 - `scripts/run.py` auto-discovers all libraries and support packages (no hard-coded lists)

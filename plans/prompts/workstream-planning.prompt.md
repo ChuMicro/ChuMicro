@@ -26,7 +26,7 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
    - [0011: per-library platform targeting](../decisions/0011-platform-targeting.md)
    - [0012: IDE type stubs](../decisions/0012-ide-type-stubs.md)
    - [0013: docs and examples standards](../decisions/0013-docs-and-examples-standards.md)
-   - [0014: serviceable pattern](../decisions/0014-serviceable-pattern.md)
+   - [0014: runner pattern](../decisions/0014-serviceable-pattern.md)
    - [0015: board architecture support](../decisions/0015-board-architecture-support.md)
    - [0016: cross-runtime unit tests](../decisions/0016-cross-runtime-unit-tests.md)
    - [0017: CircuitPython RingIO bug](../decisions/0017-circuitpython-ringio-bug.md)
@@ -34,7 +34,7 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
    - `support/runtime/` for reusable runtime detection
    - `support/test_harness/` for a tiny on-device test runner
    - `libraries/timing/` as the first publishable timing library (`chumicro-timing` 0.1.0)
-   - `libraries/serviceable/` as the second publishable library (`chumicro-serviceable` 0.4.0) — gate-based service pattern with shared timestamps, period gating, and batch handler firing (Decision 0014)
+   - `libraries/runner/` as the second publishable library (`chumicro-runner` 0.4.0) — gate-based service pattern with shared timestamps, period gating, and batch handler firing (Decision 0014)
    - `libraries/compat/` as a lightweight compatibility layer (`chumicro-compat` 0.1.0) — provides `abc` module (ABC, `@abstractmethod`) for MicroPython/CircuitPython
    - `scripts/run.py` as the task runner with auto-discovery, scoped testing, library scaffolding, IDE config generation, example verification, and docs build
    - `scripts/prepare_workspace.py` for initial workspace setup
@@ -50,9 +50,9 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
    - host-side tests in `libraries/timing/tests/`
    - shared test fakes in `libraries/timing/src/chumicro_timing/testing.py`
    - a device-facing test in `libraries/timing/functional_tests/test_heartbeat_ticks.py`
-5. The serviceable library provides ecosystem infrastructure:
-   - `ServiceHandle`, `ServiceRunner` in `libraries/serviceable/src/chumicro_serviceable/core.py`
-   - `CallRecorder` in `libraries/serviceable/src/chumicro_serviceable/testing.py`
+5. The runner library provides ecosystem infrastructure:
+   - `TaskHandle`, `Runner` in `libraries/runner/src/chumicro_runner/core.py`
+   - `CallRecorder` in `libraries/runner/src/chumicro_runner/testing.py`
    - 100% test coverage; audit complete (Decision 0015 documents board architecture support)
 6. The compat library provides cross-runtime compatibility:
    - `ABC`, `abstractmethod` in `libraries/compat/src/chumicro_compat/abc.py`
@@ -82,11 +82,11 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
 4. `venv` remains the documented development path for now.
 5. Manual-only hardware workflows are the current starting point.
 6. The first library is timing/ticks, with digital I/O deferred as the likely next seam.
-7. The second library is serviceable — provides the ecosystem-standard gate-based service pattern.
+7. The second library is runner — provides the ecosystem-standard gate-based check/handle pattern.
 8. The third library is compat — provides lightweight `abc` module for MicroPython/CircuitPython.
 9. IDE config generation works for both PyCharm and VS Code.
 10. Per-library pytest runs avoid test-directory collisions (Decision 0009).
-11. Shared test fakes ship as `testing` submodules (e.g., `chumicro_timing.testing.FakeTicks`, `chumicro_serviceable.testing.CallRecorder`) and are importable by any library's tests.
+11. Shared test fakes ship as `testing` submodules (e.g., `chumicro_timing.testing.FakeTicks`, `chumicro_runner.testing.CallRecorder`) and are importable by any library's tests.
 12. Docs and examples standards are established with strict guide requirements, autodoc API reference, and AI generation prompts (Decision 0013).
 13. IDE type stubs use upstream PyPI packages pinned to runtime-versions.toml (Decision 0012).
 14. Serviceable library audit complete: deque API verified across runtimes, overflow flag added, board architecture support documented (Decision 0015).

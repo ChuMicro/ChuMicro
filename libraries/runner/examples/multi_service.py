@@ -1,14 +1,14 @@
 """Multiple services — combining patterns in one runner (advanced).
 
 Shows how object-based, callable, and periodic registration patterns
-coexist in a single ``ServiceRunner``:
+coexist in a single ``Runner``:
 
 - **Periodic** health check (every 2 s)
 - **Object-based** motion detector (gate-based, checked every tick)
 - **Callable** check + handler (light sensor)
 - **Periodic** data logger (every 5 s)
 
-All simulation lives inside the service objects.  On a real board,
+All simulation lives inside the task objects.  On a real board,
 ``detect_motion()`` and ``read_level()`` would read GPIO/ADC pins.
 
 Example output::
@@ -33,13 +33,13 @@ Runs on CPython, MicroPython, and CircuitPython.
 
 import time
 
-from chumicro_serviceable import ServiceRunner
+from chumicro_runner import Runner
 
 
 class MotionDetector:
-    """PIR motion sensor — object-based gate service.
+    """PIR motion sensor — object-based gate task.
 
-    ``service()`` performs a fast digital pin read via
+    ``check()`` performs a fast digital pin read via
     ``detect_motion()``.  On a real board this reads a GPIO input.
     Here it simulates occasional triggers.
     """
@@ -60,7 +60,7 @@ class MotionDetector:
         self._check_count += 1
         return self._check_count % 80 == 0
 
-    def service(self, now_ms):
+    def check(self, now_ms):
         """Check for motion (fast pin read)."""
         return self.detect_motion()
 
@@ -93,8 +93,8 @@ class LightSensor:
 
 
 def main():
-    """Run multiple service patterns in a single loop."""
-    runner = ServiceRunner()
+    """Run multiple task patterns in a single loop."""
+    runner = Runner()
 
     # 1. Periodic health check — fires every 2 seconds.
     runner.add_periodic(
@@ -123,7 +123,7 @@ def main():
     print("Running services... (Ctrl+C to stop)\n")
 
     while True:
-        runner.service_once()
+        runner.tick()
         time.sleep(0.1)
 
 

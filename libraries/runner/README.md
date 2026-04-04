@@ -1,26 +1,26 @@
-# chumicro-serviceable
+# chumicro-runner
 
 A tick-based service pattern for Chumicro libraries.
 
-Components implement a `service(now_ms) -> bool` check that gates when a handler fires.  A `ServiceRunner` captures time once per tick, checks each service, and batch-fires all due handlers — replacing ad-hoc polling loops with a single standard contract.
+Components implement a `check(now_ms) -> bool` check that gates when a handler fires.  A `Runner` captures time once per tick, checks each service, and batch-fires all due handlers — replacing ad-hoc polling loops with a single standard contract.
 
 ## Installation
 
 ```bash
 # CPython (pip)
-pip install chumicro-serviceable
+pip install chumicro-runner
 
 # CircuitPython (circup) — coming soon
-# circup install chumicro-serviceable
+# circup install chumicro-runner
 
 # MicroPython (mip) — coming soon
-# import mip; mip.install("chumicro-serviceable")
+# import mip; mip.install("chumicro-runner")
 ```
 
 ## Quick example
 
 ```python
-from chumicro_serviceable import ServiceRunner
+from chumicro_runner import Runner
 
 
 class TemperatureSensor:
@@ -43,24 +43,24 @@ class TemperatureSensor:
         print(f"ALERT: {self._last_reading}°C exceeds {self._threshold}°C")
 
 
-runner = ServiceRunner()
+runner = Runner()
 sensor = TemperatureSensor(threshold=30.0)
 runner.add(sensor, period_ms=5000)  # check every 5 seconds
 
 while True:
-    runner.service_once()
+    runner.tick()
 ```
 
 For simple periodic tasks, no service class is needed:
 
 ```python
-from chumicro_serviceable import ServiceRunner
+from chumicro_runner import Runner
 
-runner = ServiceRunner()
+runner = Runner()
 runner.add_periodic(lambda now_ms: print("blink!"), period_ms=500)
 
 while True:
-    runner.service_once()
+    runner.tick()
 ```
 
 ## What's included
@@ -69,15 +69,15 @@ while True:
 
 | Symbol | Description |
 |---|---|
-| `ServiceRunner(ticks=None)` | Tick-based service loop with shared timestamps |
-| `ServiceRunner.add(service, handler=None, period_ms=None)` | Register a service; returns a `ServiceHandle` |
-| `ServiceRunner.add_periodic(handler, period_ms)` | Register a periodic handler; returns a `ServiceHandle` |
-| `ServiceRunner.service_once()` | Capture time, check services, batch-fire handlers; returns `now_ms` |
-| `ServiceHandle` | Opaque handle for runtime mutation of a registered service |
-| `ServiceHandle.set_period(period_ms)` | Add, change, or remove the period (`None` to remove) |
-| `ServiceHandle.remove()` | Remove this service from the runner |
-| `ServiceHandle.period_ms` | Read-only: the service period, or `None` |
-| `ServiceHandle.active` | Read-only: whether the service is still registered |
+| `Runner(ticks=None)` | Tick-based service loop with shared timestamps |
+| `Runner.add(service, handler=None, period_ms=None)` | Register a service; returns a `TaskHandle` |
+| `Runner.add_periodic(handler, period_ms)` | Register a periodic handler; returns a `TaskHandle` |
+| `Runner.tick()` | Capture time, check services, batch-fire handlers; returns `now_ms` |
+| `TaskHandle` | Opaque handle for runtime mutation of a registered service |
+| `TaskHandle.set_period(period_ms)` | Add, change, or remove the period (`None` to remove) |
+| `TaskHandle.remove()` | Remove this service from the runner |
+| `TaskHandle.period_ms` | Read-only: the service period, or `None` |
+| `TaskHandle.active` | Read-only: whether the service is still registered |
 
 ### Testing
 
@@ -88,9 +88,9 @@ while True:
 
 ## Registration patterns
 
-### Object-based (service with `.service()` and `.handle()`)
+### Object-based (service with `.check()` and `.handle()`)
 
-Pass an object that has `service(now_ms) -> bool` and `handle(now_ms)` methods.  The runner calls `.service()`; if it returns `True`, `.handle()` is queued:
+Pass an object that has `check(now_ms) -> bool` and `handle(now_ms)` methods.  The runner calls `.check()`; if it returns `True`, `.handle()` is queued:
 
 ```python
 class MotionDetector:
@@ -142,7 +142,7 @@ handle.set_period(1000)  # change rate at runtime
 
 ## Runtime mutation
 
-`add()` and `add_periodic()` return a `ServiceHandle` for runtime changes:
+`add()` and `add_periodic()` return a `TaskHandle` for runtime changes:
 
 ```python
 handle = runner.add(sensor, period_ms=5000)
@@ -159,22 +159,22 @@ handle.remove()
 
 ## Testing your components
 
-The `chumicro_serviceable.testing` module provides `CallRecorder` for verifying that handlers fire at the right times:
+The `chumicro_runner.testing` module provides `CallRecorder` for verifying that handlers fire at the right times:
 
 ```python
-from chumicro_serviceable.testing import CallRecorder
+from chumicro_runner.testing import CallRecorder
 from chumicro_timing.testing import FakeTicks
 
 fake = FakeTicks()
 recorder = CallRecorder()
-runner = ServiceRunner(ticks=fake)
+runner = Runner(ticks=fake)
 runner.add_periodic(recorder, period_ms=100)
 
-runner.service_once()
+runner.tick()
 assert len(recorder) == 0  # not due yet
 
 fake.advance(100)
-runner.service_once()
+runner.tick()
 assert recorder.calls == [100]
 ```
 
@@ -184,7 +184,7 @@ All classes use only basic Python features.  Works identically on CPython, Micro
 
 ## Memory notes
 
-- `_ServiceEntry` and `ServiceHandle` use `__slots__` to minimise per-instance memory.
+- `_TaskEntry` and `TaskHandle` use `__slots__` to minimise per-instance memory.
 - Handlers are collected into a pre-allocated list and batch-fired, avoiding per-tick allocation.
 
 ## Docs

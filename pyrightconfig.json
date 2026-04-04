@@ -3,7 +3,7 @@
     "support/runtime/src",
     "support/test_harness/src",
     "libraries/compat/src",
-    "libraries/serviceable/src",
+    "libraries/runner/src",
     "libraries/timing/src"
   ]
 }

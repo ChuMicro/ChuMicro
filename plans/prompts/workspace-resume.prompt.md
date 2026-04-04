@@ -23,7 +23,7 @@ Use this prompt at the start of a new session when you need to rehydrate the wor
    - [0011: per-library platform targeting](../decisions/0011-platform-targeting.md)
    - [0012: IDE type stubs](../decisions/0012-ide-type-stubs.md)
    - [0013: docs and examples standards](../decisions/0013-docs-and-examples-standards.md)
-   - [0014: serviceable pattern](../decisions/0014-serviceable-pattern.md)
+   - [0014: runner pattern](../decisions/0014-serviceable-pattern.md)
    - [0015: board architecture support](../decisions/0015-board-architecture-support.md)
    - [0016: cross-runtime unit tests](../decisions/0016-cross-runtime-unit-tests.md)
    - [0017: CircuitPython RingIO bug](../decisions/0017-circuitpython-ringio-bug.md)
@@ -46,8 +46,8 @@ See [workspace-history.prompt.md](./workspace-history.prompt.md) for the full ra
 
 - `Heartbeat` in `libraries/timing/src/chumicro_timing/heartbeat.py` (provides `poll()`, `is_due()`, `reset()`)
 - `ticks_ms()` and `ticks_diff()` in `libraries/timing/src/chumicro_timing/ticks.py`
-- `ServiceHandle`, `ServiceRunner` in `libraries/serviceable/src/chumicro_serviceable/core.py`
-- `CallRecorder` in `libraries/serviceable/src/chumicro_serviceable/testing.py`
+- `TaskHandle`, `Runner` in `libraries/runner/src/chumicro_runner/core.py`
+- `CallRecorder` in `libraries/runner/src/chumicro_runner/testing.py`
 - `ABC`, `abstractmethod` in `libraries/compat/src/chumicro_compat/abc.py`
 - `runtime_name()` in `support/runtime/src/chumicro_runtime/platform.py`
 - `run_module()` in `support/test_harness/src/chumicro_test_harness/runner.py`

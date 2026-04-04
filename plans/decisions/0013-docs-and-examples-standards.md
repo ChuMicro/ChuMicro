@@ -40,7 +40,7 @@ Every library's `guide.md` must contain these sections. The scaffolder generates
 | **Overview** | Always | 2–4 sentences: what the library does, why, core concept. Name key classes/functions. |
 | **Getting started** | Always | The single most common usage as a copy-pasteable snippet. Public imports only. |
 | **Feature sections** | When >1 feature | One section per major feature/usage pattern. Descriptive title, 1–2 sentence explanation, code snippet, caveats. |
-| **Serviceable pattern** | When applicable | Show how to wire the library's components into a `ServiceRunner`. Omit if no `service()` method. |
+| **Runner pattern** | When applicable | Show how to wire the library's components into a `Runner`. Omit if no `check()` method. |
 | **Memory notes** | When applicable | Allocation strategy, buffer sizing, tuning knobs. Omit for libraries with no interesting allocation behavior. |
 | **Platform notes** | Always | Runtime-specific behavior or "works identically on all three runtimes." |
 

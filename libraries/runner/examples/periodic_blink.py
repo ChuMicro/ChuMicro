@@ -1,4 +1,4 @@
-"""Periodic LED blink — simplest serviceable example.
+"""Periodic LED blink — simplest runner example.
 
 Toggles a simulated LED every 500 ms.  On a real board, replace
 the ``print`` with a pin toggle (``led.value = not led.value``).
@@ -18,7 +18,7 @@ Runs on CPython, MicroPython, and CircuitPython.
 
 import time
 
-from chumicro_serviceable import ServiceRunner
+from chumicro_runner import Runner
 
 led_state = False
 
@@ -32,13 +32,13 @@ def toggle_led(now_ms):
 
 def main():
     """Blink an LED every 500 ms."""
-    runner = ServiceRunner()
+    runner = Runner()
     runner.add_periodic(toggle_led, period_ms=500)
 
     print("Blinking... (Ctrl+C to stop)\n")
 
     while True:
-        runner.service_once()
+        runner.tick()
         time.sleep(0.05)
 
 

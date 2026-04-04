@@ -37,11 +37,11 @@ Read the library's source code, docstrings, tests, and examples first. Then gene
      - A code snippet showing usage
      - Any important caveats or gotchas -->
 
-## Serviceable pattern
+## Runner pattern
 
-<!-- If the library's classes implement service(event_sink), show how to
-     wire them into a ServiceRunner from chumicro-serviceable. If the
-     library has no serviceable components, omit this section. -->
+<!-- If the library's classes implement check(now_ms) -> bool, show how to
+     wire them into a Runner from chumicro-runner. If the
+     library has no tasks, omit this section. -->
 
 ## Memory notes
 

@@ -1,10 +1,10 @@
-"""Core serviceable-pattern abstractions for the Chumicro ecosystem.
+"""Core tick-runner abstractions for the Chumicro ecosystem.
 
-Provides two ways to register work with a ``ServiceRunner``:
+Provides two ways to register work with a ``Runner``:
 
 1. **Gate-based** — a check function decides whether a handler fires.
    Register with ``add(check_fn, handler=fn)`` (both callables) or
-   ``add(obj)`` where *obj* has ``.service(now_ms) -> bool`` and
+   ``add(obj)`` where *obj* has ``.check(now_ms) -> bool`` and
    ``.handle(now_ms)`` methods.
 2. **Periodic** — ``add_periodic(handler, period_ms)``: the handler fires
    every *period_ms* milliseconds with no check.
@@ -13,23 +13,23 @@ All classes are cross-runtime compatible (CPython, MicroPython, CircuitPython).
 """
 
 
-class _ServiceEntry:
-    """Internal record for a service registered with the runner."""
+class _TaskEntry:
+    """Internal record for a task registered with the runner."""
 
     __slots__ = ("check_fn", "handler_fn", "heartbeat", "active")
 
     def __init__(self, check_fn, handler_fn, heartbeat):
-        """Create a service entry."""
+        """Create a task entry."""
         self.check_fn = check_fn
         self.handler_fn = handler_fn
         self.heartbeat = heartbeat
         self.active = True
 
 
-class ServiceHandle:
-    """Opaque handle returned by ``ServiceRunner.add()`` or ``add_periodic()``.
+class TaskHandle:
+    """Opaque handle returned by ``Runner.add()`` or ``add_periodic()``.
 
-    Provides runtime mutation of a registered service: change its period
+    Provides runtime mutation of a registered task: change its period
     or remove it from the runner entirely.
 
     Read-only properties expose the current state for inspection and
@@ -45,20 +45,20 @@ class ServiceHandle:
 
     @property
     def period_ms(self):
-        """Return the service period in milliseconds, or ``None``."""
+        """Return the task period in milliseconds, or ``None``."""
         if self._entry.heartbeat is None:
             return None
         return self._entry.heartbeat.period_ms
 
     @property
     def active(self):
-        """Return whether the service is still registered."""
+        """Return whether the task is still registered."""
         return self._entry.active
 
     def set_period(self, period_ms):
-        """Add, change, or remove the period for this service.
+        """Add, change, or remove the period for this task.
 
-        Pass ``None`` to remove an existing period (service runs every tick).
+        Pass ``None`` to remove an existing period (task runs every tick).
         A non-None value creates a new ``Heartbeat`` (resetting the timer).
         """
         if period_ms is None:
@@ -71,7 +71,7 @@ class ServiceHandle:
         )
 
     def remove(self):
-        """Remove this service from the runner."""
+        """Remove this task from the runner."""
         self._runner._remove_entry(self._entry)
 
     def __repr__(self):
@@ -79,27 +79,27 @@ class ServiceHandle:
         status = "active" if self._entry.active else "removed"
         hb = self._entry.heartbeat
         period = hb.period_ms if hb is not None else None
-        return f"ServiceHandle(period_ms={period}, {status})"
+        return f"TaskHandle(period_ms={period}, {status})"
 
 
-class ServiceRunner:
-    """Run serviceable components on a tick-based schedule.
+class Runner:
+    """Run tasks on a tick-based schedule.
 
-    Captures ``ticks_ms()`` once per ``service_once()`` call and passes
+    Captures ``ticks_ms()`` once per ``tick()`` call and passes
     the shared timestamp to every due component, ensuring all components
     see the same moment in time.
 
     Registration paths:
 
-    - ``add(obj)`` — *obj* has ``.service(now_ms) -> bool`` and
-      ``.handle(now_ms)``.  The runner calls ``.service()``; if ``True``,
+    - ``add(obj)`` — *obj* has ``.check(now_ms) -> bool`` and
+      ``.handle(now_ms)``.  The runner calls ``.check()``; if ``True``,
       ``.handle()`` is queued.
     - ``add(check_fn, handler=fn)`` — callable check gates callable handler.
     - ``add(handler=fn)`` — handler fires every tick (or per period).
     - ``add_periodic(handler, period_ms)`` — fires ``handler(now_ms)``
       every *period_ms* milliseconds.
 
-    ``service_once()`` runs in two phases:
+    ``tick()`` runs in two phases:
 
     1. Check all entries (period gate, then check gate) and collect
        due handlers.
@@ -122,40 +122,40 @@ class ServiceRunner:
 
             self._ticks_ms = ticks_ms
 
-    def add(self, service=None, handler=None, period_ms=None):
-        """Register a service with the runner.
+    def add(self, task=None, handler=None, period_ms=None):
+        """Register a task with the runner.
 
-        **Object-based** (service only): *service* must have
-        ``.service(now_ms) -> bool`` and ``.handle(now_ms)`` methods.
+        **Object-based** (task only): *task* must have
+        ``.check(now_ms) -> bool`` and ``.handle(now_ms)`` methods.
 
-        **Callable-based** (service + handler): *service* is a callable
+        **Callable-based** (task + handler): *task* is a callable
         ``check_fn(now_ms) -> bool`` that gates ``handler(now_ms)``.
 
-        **Handler-only** (handler, no service): ``handler(now_ms)`` fires
+        **Handler-only** (handler, no task): ``handler(now_ms)`` fires
         on every tick (or per period if *period_ms* is set).
 
-        Returns a ``ServiceHandle`` for runtime mutation.
+        Returns a ``TaskHandle`` for runtime mutation.
 
         Args:
-            service: Object with ``.service()`` and ``.handle()``, or a
+            task: Object with ``.check()`` and ``.handle()``, or a
                 callable ``check_fn(now_ms) -> bool``.
             handler: Optional callable ``handler(now_ms)``.
             period_ms: Optional interval in milliseconds.
         """
         if handler is not None:
             # Callable-based or handler-only.
-            if service is not None and not callable(service):
-                check_fn = service.service
+            if task is not None and not callable(task):
+                check_fn = task.check
             else:
-                check_fn = service  # callable or None (handler-only)
+                check_fn = task  # callable or None (handler-only)
             handler_fn = handler
-        elif service is not None:
-            # Object-based: must have .service() and .handle().
-            check_fn = service.service
-            handler_fn = service.handle
+        elif task is not None:
+            # Object-based: must have .check() and .handle().
+            check_fn = task.check
+            handler_fn = task.handle
         else:
             raise ValueError(
-                "Provide a service object (with .service() and .handle()) "
+                "Provide a task object (with .check() and .handle()) "
                 "or a handler callable"
             )
 
@@ -165,15 +165,15 @@ class ServiceRunner:
 
             heartbeat = Heartbeat(period_ms, ticks=self._ticks)
 
-        entry = _ServiceEntry(check_fn, handler_fn, heartbeat)
+        entry = _TaskEntry(check_fn, handler_fn, heartbeat)
         self._entries.append(entry)
-        return ServiceHandle(entry, self)
+        return TaskHandle(entry, self)
 
     def add_periodic(self, handler, period_ms):
-        """Register a periodic handler with no service check.
+        """Register a periodic handler with no check.
 
         ``handler(now_ms)`` is called every *period_ms* milliseconds.
-        Returns a ``ServiceHandle`` for runtime mutation.
+        Returns a ``TaskHandle`` for runtime mutation.
 
         Args:
             handler: Callable ``handler(now_ms)`` to fire periodically.
@@ -182,14 +182,14 @@ class ServiceRunner:
         from chumicro_timing import Heartbeat
 
         heartbeat = Heartbeat(period_ms, ticks=self._ticks)
-        entry = _ServiceEntry(None, handler, heartbeat)
+        entry = _TaskEntry(None, handler, heartbeat)
         self._entries.append(entry)
-        return ServiceHandle(entry, self)
+        return TaskHandle(entry, self)
 
-    def service_once(self):
-        """Capture time, check services, then batch-fire handlers.
+    def tick(self):
+        """Capture time, check tasks, then batch-fire handlers.
 
-        1. Check each entry (period gate → check gate).
+        1. Check each entry (period gate -> check gate).
            Collect handlers that should fire.
         2. Batch-fire all collected handlers.
 
@@ -219,7 +219,7 @@ class ServiceRunner:
         return now_ms
 
     def _remove_entry(self, entry):
-        """Remove *entry* from the runner (called by ``ServiceHandle``)."""
+        """Remove *entry* from the runner (called by ``TaskHandle``)."""
         entry.active = False
         try:
             self._entries.remove(entry)

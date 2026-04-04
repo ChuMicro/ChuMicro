@@ -1,15 +1,15 @@
-"""Test helpers for libraries that use chumicro-serviceable.
+"""Test helpers for libraries that use chumicro-runner.
 
 Provides ``CallRecorder`` — a callable that records handler invocations
 for assertion in host-side tests.
 
 Usage::
 
-    from chumicro_serviceable.testing import CallRecorder
+    from chumicro_runner.testing import CallRecorder
 
     recorder = CallRecorder()
     runner.add_periodic(recorder, period_ms=100)
-    # ... advance time, service_once() ...
+    # ... advance time, tick() ...
     assert recorder.calls == [100]
 """
 
@@ -17,12 +17,12 @@ Usage::
 class CallRecorder:
     """Callable that records each invocation for test assertions.
 
-    Use as a handler passed to ``ServiceRunner.add()`` or
+    Use as a handler passed to ``Runner.add()`` or
     ``add_periodic()``::
 
         recorder = CallRecorder()
         runner.add_periodic(recorder, period_ms=100)
-        runner.service_once()
+        runner.tick()
         assert len(recorder) == 0  # not due yet
     """
 

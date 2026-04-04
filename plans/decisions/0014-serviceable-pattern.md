@@ -1,4 +1,4 @@
-# Decision 0014: Serviceable pattern
+# Decision 0014: Runner pattern
 
 Status: `accepted`
 Date: `2026-04-02` (revised `2026-04-04`)
@@ -11,7 +11,7 @@ On microcontrollers, each component calling `ticks_ms()` independently sees a sl
 
 ## Decision
 
-Standardize on a **gate-based serviceable pattern** for all active components.
+Standardize on a **gate-based runner pattern** for all active components.
 
 ### Service contract
 
@@ -22,15 +22,15 @@ def service(self, now_ms):
     """Check one condition; return True if the handler should fire."""
 ```
 
-This is a duck-typed contract — components do not need to import or subclass anything from `chumicro-serviceable`.
+This is a duck-typed contract — components do not need to import or subclass anything from `chumicro-runner`.
 
-### ServiceRunner
+### Runner
 
-`ServiceRunner(ticks=None)` captures `ticks_ms()` once per `service_once()` call and passes the shared timestamp to every service.  It returns `now_ms` so user code can use it for passive checks alongside the dispatch loop.
+`Runner(ticks=None)` captures `ticks_ms()` once per `tick()` call and passes the shared timestamp to every service.  It returns `now_ms` so user code can use it for passive checks alongside the dispatch loop.
 
 Three registration patterns:
 
-- **Object-based:** `add(obj)` — obj has `.service(now_ms) -> bool` and `.handle(now_ms)`.  The runner calls `.service()`; if `True`, `.handle()` is queued.
+- **Object-based:** `add(obj)` — obj has `.check(now_ms) -> bool` and `.handle(now_ms)`.  The runner calls `.check()`; if `True`, `.handle()` is queued.
 - **Callable-based:** `add(check_fn, handler=fn)` — callable check gates callable handler.
 - **Periodic:** `add_periodic(handler, period_ms)` — handler fires on schedule, no check.
 
@@ -38,13 +38,13 @@ All patterns accept an optional `period_ms` to gate by time.
 
 ### Period ownership on the runner
 
-The runner owns period gating: `add(service, period_ms=N)` creates an internal `Heartbeat` and only calls the service when the period elapses.  `ServiceHandle` allows runtime mutation: `set_period()`, `remove()`.
+The runner owns period gating: `add(service, period_ms=N)` creates an internal `Heartbeat` and only calls the service when the period elapses.  `TaskHandle` allows runtime mutation: `set_period()`, `remove()`.
 
-Components that need conditional logic beyond period gating implement it in their `.service()` method.  There is one mechanism for periodic behaviour, not two.
+Components that need conditional logic beyond period gating implement it in their `.check()` method.  There is one mechanism for periodic behaviour, not two.
 
 ### Batch firing
 
-`service_once()` runs in two phases:
+`tick()` runs in two phases:
 
 1. Check all entries (period gate → check gate) and collect due handlers.
 2. Batch-fire all collected handlers.
@@ -53,7 +53,7 @@ This guarantees handlers see a consistent view of the world — no handler modif
 
 ### Existing APIs remain
 
-`Heartbeat.poll()` and `Heartbeat.is_due()` stay for simple use cases where a full serviceable component is unnecessary.
+`Heartbeat.poll()` and `Heartbeat.is_due()` stay for simple use cases where a full runner task is unnecessary.
 
 ## Alternatives considered
 
@@ -65,10 +65,10 @@ This guarantees handlers see a consistent view of the world — no handler modif
 
 ## Consequences
 
-- `chumicro-serviceable` library under `libraries/serviceable/`.
-- Service contract: `service(now_ms) -> bool` (gate-based).
-- `ServiceRunner` depends on `chumicro-timing` for the default tick source and `Heartbeat` for period gating.
-- `ServiceHandle` provides runtime mutation of registered services.
+- `chumicro-runner` library under `libraries/runner/`.
+- Service contract: `check(now_ms) -> bool` (gate-based).
+- `Runner` depends on `chumicro-timing` for the default tick source and `Heartbeat` for period gating.
+- `TaskHandle` provides runtime mutation of registered services.
 - `CallRecorder` in the testing module records handler invocations for test assertions.
 - `collections.deque` is not required by this library.
-- Future libraries implementing the serviceable pattern use duck typing — no import dependency on `chumicro-serviceable` required.
+- Future libraries implementing the runner pattern use duck typing — no import dependency on `chumicro-runner` required.

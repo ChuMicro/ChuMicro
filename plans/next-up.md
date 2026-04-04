@@ -8,7 +8,7 @@
   - When writing these docs, scope the AGENTS.md performance guidelines (f-strings, `const()`, `memoryview`, pre-allocated buffers, etc.) to **library code only**. Infrastructure code (`scripts/`, `support/`) runs exclusively on CPython and does not need embedded-runtime constraints.
 - [ ] Write a "Creating a New Library" contributor guide. Walk through the full lifecycle from scaffolding to release-ready:
   1. `new-library` scaffolding — what it creates, what it doesn't (e.g., no `testing` submodule by default)
- 2. Library code — dependency injection (Decision 0010), `service(now_ms) -> bool` gate-based contract for active components (Decision 0014), memory-efficient patterns for embedded targets
+ 2. Library code — dependency injection (Decision 0010), `check(now_ms) -> bool` gate-based contract for active components (Decision 0014), memory-efficient patterns for embedded targets
   3. Unit tests — per-library test runs (Decision 0009), 90% coverage threshold, constructor injection for testability
   4. Testing submodule — when and how to add `src/chumicro_<name>/testing.py` with ready-made fakes
   5. Docs — `guide.md` required sections, `api.md` autodoc rules, generation prompt (Decision 0013)
@@ -42,7 +42,7 @@
 
 ## Done
 
-- [x] Implement and iterate `chumicro-serviceable` to gate-based pattern (Decision 0014).  Service contract: `service(now_ms) -> bool`.  `ServiceRunner` with `add()`, `add_periodic()`, `ServiceHandle`, shared timestamps, batch firing.  `CallRecorder` test helper.  `chumicro-serviceable` 0.1.0 → 0.4.0.
+- [x] Implement and iterate `chumicro-runner` to gate-based pattern (Decision 0014).  Service contract: `check(now_ms) -> bool`.  `Runner` with `add()`, `add_periodic()`, `TaskHandle`, shared timestamps, batch firing.  `CallRecorder` test helper.  `chumicro-runner` 0.1.0 → 0.4.0.
 - [x] Add `chumicro-compat` library with lightweight `abc` module (ABC base class, `@abstractmethod` decorator) using `__init_subclass__` — works on MicroPython ≥1.19.1, CircuitPython ≥8.x.
 - [x] Generalize the compatibility smoke runner to discover and exercise device tests for any library, not just timing.
 - [x] Scope AGENTS.md performance guidelines (f-strings, `const()`, `memoryview`, pre-allocated buffers) to library code only. Infrastructure code (`scripts/`, `support/`) runs exclusively on CPython and should not be constrained by embedded-runtime rules.
@@ -50,10 +50,10 @@
 - [x] Review `scripts/run.py` layering. Split into focused modules: `discovery.py`, `ide.py`, `scaffold.py`, `prepare.py`, `prepare_micropython.py`, `prepare_circuitpython.py`, `prepare_workspace.py`. `run.py` is now a slim dispatch-and-task file. `dev_packages` moved to `requirements-dev.txt`.
 - [x] Accept `native CPython + WSL2 for unix-port validation` as the current Windows host model.
 - [x] Unix ports are the standard local simulation path. Docker containers are not needed at this scale. Revisit if CI build times or contributor onboarding friction justify it.
-- [x] Audit the `chumicro-serviceable` library implementation (Decision 0014). Review API surface, allocation patterns, and integration with Heartbeat.
+- [x] Audit the `chumicro-runner` library implementation (Decision 0014). Review API surface, allocation patterns, and integration with Heartbeat.
 - [x] Drop hand-written member lists from `api.md` files; codify `api.md` rules in Decision 0013 (no hand-written signatures, module-level `:::` directives only, fix docstrings not api.md).
 - [x] Add strict `guide.md` required-section structure and AI generation prompt (`plans/prompts/guide-generation.prompt.md`). Decision 0013 updated with required-section table and generation rules.
-- [x] Implement the serviceable pattern as `chumicro-serviceable` library (Decision 0014).
+- [x] Implement the runner pattern as `chumicro-runner` library (Decision 0014).
 - [x] Wire up MkDocs + Material + mkdocstrings: per-library `mkdocs.yml`, `docs` task in `scripts/run.py`, `api.md` converted to autodoc directives (Decision 0013).
 - [x] Add per-library scoping (`--all`/`--libraries`) to `verify-examples` and `docs` tasks (shared `_parse_scope_args` helper).
 - [x] Update `new-library` scaffolder: generates `mkdocs.yml`, `docs/api.md` with autodoc, `docs/guide.md` template, and example with `__main__` guard. No `.gitkeep` in `docs/` or `examples/` — they have real content from scaffolding.

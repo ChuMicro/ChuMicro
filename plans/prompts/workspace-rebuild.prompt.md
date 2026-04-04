@@ -60,11 +60,11 @@ chumicro/
     │   ├── functional_tests/
     │   ├── docs/              # ReadTheDocs content
     │   └── examples/          # Usage examples
-    └── serviceable/
+    └── runner/
         ├── pyproject.toml
         ├── VERSION
         ├── README.md
-        ├── src/chumicro_serviceable/
+        ├── src/chumicro_runner/
         ├── tests/
         ├── functional_tests/
         ├── docs/
@@ -95,7 +95,7 @@ chumicro/
 11. Libraries declare supported platforms via `[tool.chumicro].platforms` in `pyproject.toml`; default is all three runtimes (Decision 0011).
 12. IDE type stubs come from upstream `circuitpython-stubs` and `micropython-esp32-stubs` (both PEP 561, PyPI), version-pinned to `runtime-versions.toml`.  Both packages coexist; a known `micropython` module conflict is documented with a mitigation path (Decision 0012).
 13. Documentation and examples standards: `guide.md` has required sections (auto-generated via AI prompt), `api.md` uses mkdocstrings autodoc with no hand-written member lists, examples are import-verified in preflight (Decision 0013).
-14. Active components implement a `service(now_ms) -> bool` gate-based contract. `ServiceRunner` captures a shared timestamp, gates check functions, and batch-fires due handlers. Libraries use duck typing — no import dependency on `chumicro-serviceable` required (Decision 0014).
+14. Active components implement a `check(now_ms) -> bool` gate-based contract. `Runner` captures a shared timestamp, gates check functions, and batch-fires due handlers. Libraries use duck typing — no import dependency on `chumicro-runner` required (Decision 0014).
 15. Chumicro libraries require `collections.deque` (full-build CircuitPython, `EXTRA_FEATURES`+ MicroPython). Primary targets: ESP32 family, RP2040/RP2350, STM32. SAMD21 and non-full-build nRF52 are explicitly unsupported (Decision 0015).
 16. Cross-runtime unit tests run `tests/` through the lightweight harness on MP/CP unix-ports. Tests use plain asserts and `raises()`; `import pytest` is the automatic skip boundary. `functional_tests/` is for functional tests only. `_pytest` suffix marks CPython-only test files (Decision 0016).
 17. The CircuitPython unix-port build requires `-DMICROPY_PY_MICROPYTHON_RINGIO=0` to work around a linker error from dead RingIO code. The `coverage` variant disables RingIO and hides the bug; `standard` variant exposes it (Decision 0017).
@@ -159,8 +159,8 @@ These patterns caused real bugs when implemented incorrectly. Follow them exactl
    - cross-runtime `ticks_ms()` / `ticks_diff()` / `ticks_add()` helpers
    - host-side tests with mocks
    - a device-facing timing test
-4. `libraries/serviceable/` provides:
-   - `ServiceHandle`, `ServiceRunner` (gate-based service with shared timestamps and batch firing)
+4. `libraries/runner/` provides:
+   - `TaskHandle`, `Runner` (gate-based service with shared timestamps and batch firing)
    - `CallRecorder` in `testing` submodule
    - 100% test coverage
 5. `libraries/compat/` provides:

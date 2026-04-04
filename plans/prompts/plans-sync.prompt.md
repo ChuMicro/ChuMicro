@@ -42,7 +42,7 @@ significant implementation changes.
    actually stale. Avoid churn for the sake of churn.
 
 5. **Commit the sync.** A single commit is fine. Subject line should name what
-   was synced (e.g., "Update planning docs for Decision 0014 and serviceable library").
+   was synced (e.g., "Update planning docs for Decision 0014 and runner library").
 
 ## Common staleness patterns
 
