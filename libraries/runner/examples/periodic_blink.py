@@ -47,7 +47,7 @@ def main():
             # registered tasks, and fires any that are due.
             runner.tick()
 
-            # On a real board, the rest of your main loop goes
+            # In a real project, the rest of your main loop goes
             # here — reading sensors, checking buttons, etc.
             # The sleep just keeps this demo from flooding the
             # console.

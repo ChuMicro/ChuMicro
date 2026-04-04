@@ -82,7 +82,7 @@ def main():
     while True:
         runner.tick()
 
-        # On a real board, the rest of your main loop goes here.
+        # In a real project, the rest of your main loop goes here.
         # The sleep just keeps this demo from flooding the console.
         time.sleep(0.1)
 

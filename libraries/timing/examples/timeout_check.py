@@ -104,7 +104,7 @@ def main():
 
             _cycle_index += 1
 
-            # On a real board, the rest of your main loop goes
+            # In a real project, the rest of your main loop goes
             # here.  The sleep just keeps this demo readable.
             time.sleep(1)
     except KeyboardInterrupt:

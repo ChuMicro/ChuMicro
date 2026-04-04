@@ -44,7 +44,7 @@ Every example must meet the requirements above *and* the quality standards below
 **Realism:**
 
 - Main-loop examples must use `while True` — that is what real embedded code looks like. Bounded `for` loops are acceptable only for examples demonstrating naturally bounded operations (e.g., timeout checks, calibration sequences).
-- `time.sleep()` in examples exists only to keep demo output readable.  The comment should say what the user would do here on a real board ("the rest of your main loop goes here — reading sensors, checking buttons, etc.").  Do not frame it as a CPython implementation detail ("avoid busy-spinning") — that is irrelevant to the reader.
+- `time.sleep()` in examples exists only to keep demo output readable.  The comment should say what the user would do here in a real project ("the rest of your main loop goes here — reading sensors, checking buttons, etc.").  Do not frame it as a CPython implementation detail ("avoid busy-spinning") — that is irrelevant to the reader.
 - Sleep for yield must be small (0.01–0.1 s). Large sleeps (≥ 0.5 s) negate non-blocking timing patterns and confuse readers about how the library is meant to work.
 - Simulation logic must use methods with descriptive names that explain what hardware they replace (e.g., `detect_motion()`, `read_temperature()`, `read_button()`), not bare flags or opaque counters. Include a docstring or comment showing the real-board equivalent (e.g., "On a real board: `return self._pin.value`").
 
