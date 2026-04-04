@@ -220,7 +220,7 @@ This was the largest single session. It addressed three areas: the workspace was
 25. Removed conda from documented environment paths.
 
 **Cross-runtime unit tests (Decision 0016):**
-26. Renamed `functional_tests/` to `functional_tests/` across all libraries. `functional_tests/` is for real-device tests only; `tests/` is shared between pytest and the lightweight harness.
+26. Renamed `device_tests/` to `functional_tests/` across all libraries. `functional_tests/` is for real-device tests only; `tests/` is shared between pytest and the lightweight harness.
 27. Compat tasks (`test-micropython-compat`, `test-circuitpython-compat`) now run `tests/` through the lightweight harness, not just import-level smoke checks from `functional_tests/`. Supersedes Decision 0006.
 28. Cross-runtime tests use plain `assert` and `raises()` from the test harness. `import pytest` is the automatic portability boundary — files that fail to import are logged as SKIP.
 29. `_pytest` suffix convention for CPython-only test files (e.g., `test_ticks_pytest.py`). Cross-runtime is the default.
