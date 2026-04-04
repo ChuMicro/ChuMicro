@@ -28,26 +28,21 @@ import time
 
 from chumicro_timing import Heartbeat, ticks_ms
 
-# Simulated activity: True for the first 3 checks, then False for 8,
-# then repeats.
-_ACTIVITY = [True, True, True] + [False] * 8
-_activity_index = 0
 
+def read_button():
+    """Check whether the user pressed a button.
 
-def check_activity():
-    """Check whether user activity occurred.
+    On a real board::
 
-    On a real board: ``return button.value or touch.touched``
+        return not button_pin.value   # active-low button
     """
-    global _activity_index  # noqa: PLW0603
-    result = _ACTIVITY[_activity_index % len(_ACTIVITY)]
-    _activity_index += 1
-    return result
+    return False
 
 
 def main():
     """Run an activity-timeout loop."""
     timeout = Heartbeat(period_ms=500)
+    tick_count = 0
 
     print("Monitoring activity (Ctrl+C to stop)...\n")
 
@@ -55,12 +50,17 @@ def main():
         while True:
             now = ticks_ms()
 
-            if check_activity():
+            # Simulate intermittent button presses: active for the
+            # first 3 ticks of every 11-tick cycle, idle otherwise.
+            active = tick_count % 11 < 3 or read_button()
+            tick_count += 1
+
+            if active:
                 timeout.reset(now)
                 print("  [tick] activity detected — resetting timeout")
             elif timeout.is_due(now):
                 # Peek: is_due() does not advance the timer.
-                # We report timeout every tick until activity resumes.
+                # Reports timeout every tick until activity resumes.
                 print(
                     f"  [tick] TIMEOUT: no activity for "
                     f"{timeout.period_ms} ms"

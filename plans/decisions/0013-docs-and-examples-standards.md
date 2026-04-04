@@ -31,6 +31,34 @@ Each library under `libraries/<name>/` must include:
     - File names should be descriptive: `heartbeat_blink.py`, not `example1.py`
     - Examples must use `if __name__ == "__main__":` guards so they can be imported without triggering long-running loops
 
+### Example quality checklist
+
+Every example must meet the requirements above *and* the quality standards below. These were established during the runner and timing library example rewrites and apply to all libraries going forward.
+
+**Docstring requirements:**
+
+- Module docstring must include an `Example output::` block showing representative output so readers understand behavior without running the code.
+- Module docstring must include "Runs on CPython, MicroPython, and CircuitPython."
+- Module docstring must open with a one-line title and a 1–3 sentence description of what pattern the example demonstrates.
+
+**Realism:**
+
+- Main-loop examples must use `while True` — that is what real embedded code looks like. Bounded `for` loops are acceptable only for examples demonstrating naturally bounded operations (e.g., timeout checks, calibration sequences).
+- Sleep for yield must be small (0.01–0.1 s). Large sleeps (≥ 0.5 s) negate non-blocking timing patterns and confuse readers about how the library is meant to work.
+- Simulation logic must use methods with descriptive names that explain what hardware they replace (e.g., `detect_motion()`, `read_temperature()`, `read_button()`), not bare flags or opaque counters. Include a docstring or comment showing the real-board equivalent (e.g., "On a real board: `return self._pin.value`").
+
+**Coverage and progression:**
+
+- Every public method and property of the library should appear in at least one example.
+- Graduate complexity: simplest example first, advanced patterns last. Name files to make the progression obvious.
+- Separate basic examples (entry-level, one concept) from advanced examples (ecosystem integration, multiple features). They may be different files.
+
+**Code quality:**
+
+- Examples must be self-contained — a reader should be able to copy-paste and run without external setup beyond installing the library.
+- Keep examples short. A basic example should be 30–50 lines; an advanced example should be under 100 lines.
+- Do not mix loop control logic (mode switches, counter resets) into the main loop body. Extract it into clearly named functions or methods.
+
 ### User guide (`guide.md`) required structure
 
 Every library's `guide.md` must contain these sections. The scaffolder generates a template with instructions; contributors (human or AI) must replace all placeholder comments with real content derived from the source code.

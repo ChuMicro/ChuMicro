@@ -53,13 +53,12 @@ def main():
             simulate_work()
 
             now = ticks_ms()
+            elapsed = ticks_diff(now, start)
             remaining = ticks_diff(deadline, now)
 
             if remaining <= 0:
-                elapsed = ticks_diff(now, start)
                 print(f"  Attempt {attempt}: TIMEOUT after {elapsed} ms\n")
             else:
-                elapsed = ticks_diff(now, start)
                 print(f"  Attempt {attempt}: OK in {elapsed} ms ({remaining} ms to spare)\n")
     except KeyboardInterrupt:
         print("Stopped.")
