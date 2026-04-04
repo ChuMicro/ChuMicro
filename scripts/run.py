@@ -290,10 +290,10 @@ def verify_examples(pkg_dirs: list[Path]) -> int:
     3. Resolves each imported module via ``importlib`` and verifies that
        specific names (``from X import Y``) exist on the module.
 
-    This catches the primary failure modes — syntax errors, missing
-    modules after refactors, and renamed/removed symbols — without
-    executing any example code.  No timeout, subprocess, wifi, or
-    device configuration is needed.
+    Examples marked with ``# requires: hardware`` are hardware-targeted
+    and may import modules unavailable on CPython (``board``, ``digitalio``,
+    ``machine``, etc.).  For these, only ``chumicro_*`` imports are
+    verified — platform-specific imports are skipped.
     """
     import ast
     import importlib
@@ -319,10 +319,15 @@ def verify_examples(pkg_dirs: list[Path]) -> int:
         sys.path[:] = saved_path
         return 0
 
+    def _is_chumicro_module(name: str) -> bool:
+        """Return whether a module name belongs to this workspace."""
+        return name.startswith("chumicro_")
+
     failures = 0
     for rel_path, py_file in examples:
         print(f"  checking {rel_path}")
         source = py_file.read_text(encoding="utf-8")
+        hardware = "# requires: hardware" in source
 
         # 1. Syntax check.
         try:
@@ -337,6 +342,8 @@ def verify_examples(pkg_dirs: list[Path]) -> int:
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
+                    if hardware and not _is_chumicro_module(alias.name):
+                        continue
                     try:
                         importlib.import_module(alias.name)
                     except ImportError:
@@ -346,6 +353,8 @@ def verify_examples(pkg_dirs: list[Path]) -> int:
             elif isinstance(node, ast.ImportFrom):
                 if node.module is None:
                     continue  # relative import without module — skip
+                if hardware and not _is_chumicro_module(node.module):
+                    continue
                 try:
                     mod = importlib.import_module(node.module)
                 except ImportError:
@@ -363,7 +372,10 @@ def verify_examples(pkg_dirs: list[Path]) -> int:
         if not ok:
             failures += 1
         else:
-            print(f"  OK:   {rel_path}")
+            label = f"  OK:   {rel_path}"
+            if hardware:
+                label += "  (hardware)"
+            print(label)
 
     sys.path[:] = saved_path
 

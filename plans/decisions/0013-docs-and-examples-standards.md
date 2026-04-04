@@ -26,10 +26,10 @@ Each library under `libraries/<name>/` must include:
 
  3. **`examples/`** directory with runnable scripts:
     - At least one example per major public feature
-    - Examples must run on CPython without hardware (use print output or assertions to show behavior)
-    - Examples targeting real boards should note the required hardware in a comment header (e.g., `# requires: hardware`)
+    - **Simulated examples** must run on CPython without hardware (use print output to show behavior).  These demonstrate API concepts and are the primary learning path.
+    - **Hardware examples** target real boards (CircuitPython and/or MicroPython).  Mark them with `# requires: hardware` as the first line.  Name them `circuitpython_*.py` or `micropython_*.py`.  These show realistic usage with actual LEDs, buttons, sensors, etc.
     - File names should be descriptive: `heartbeat_blink.py`, not `example1.py`
-    - Examples must use top-level code (no `def main()` or `if __name__ == "__main__":` guards) — this matches the CircuitPython/MicroPython convention where `code.py` runs at the top level. Verification uses subprocess + timeout instead of import.
+    - Examples must use top-level code (no `def main()` or `if __name__ == "__main__":` guards) — this matches the CircuitPython/MicroPython convention where `code.py` runs at the top level.
 
 ### Example quality checklist
 
@@ -37,8 +37,8 @@ Every example must meet the requirements above *and* the quality standards below
 
 **Docstring requirements:**
 
-- Module docstring must include an `Example output::` block showing representative output so readers understand behavior without running the code.
-- Module docstring must include "Runs on CPython, MicroPython, and CircuitPython."
+- Module docstring must include an `Example output::` block showing representative output so readers understand behavior without running the code.  Hardware examples may omit this when the behavior is self-evident (e.g., LED blinks).
+- Simulated examples must include "Runs on CPython, MicroPython, and CircuitPython."  Hardware examples must state which runtime they target (e.g., "Runs on CircuitPython.").
 - Module docstring must open with a one-line title and a 1–3 sentence description of what pattern the example demonstrates.
 
 **Realism:**
@@ -123,9 +123,9 @@ Examples are verified via static analysis in `scripts/run.py verify-examples`:
 1. Each example is compiled to catch syntax errors.
 2. The AST is walked to extract all `import` and `from … import …` statements.
 3. Each imported module is resolved via `importlib`.  For `from X import Y`, the verifier also checks `hasattr(module, 'Y')` to catch renamed or removed symbols.
-4. No example code is executed — verification is purely static.  This means examples that need wifi, hardware, or device configuration are checked without any special skip markers.
-5. `verify-examples` runs as part of `preflight` and should run in CI.
-6. Examples that require real hardware should include a `# requires: hardware` comment marker for future filtering of on-device execution.
+4. No example code is executed — verification is purely static.
+5. **Hardware examples** (containing `# requires: hardware`) import platform-specific modules (`board`, `digitalio`, `machine`, etc.) that don't exist on CPython.  For these, only `chumicro_*` imports are verified — platform-specific imports are skipped.  This still catches API drift in our libraries while accepting that hardware modules can't be resolved on the host.
+6. `verify-examples` runs as part of `preflight` and should run in CI.
 
 **Why static verification instead of execution:**  Examples are intended for embedded devices and may depend on wifi, hardware, or device-specific configuration.  Running them as subprocesses would require timeouts (slow — 3s × N examples), skip markers for anything needing external resources, and process management.  The actual failure modes we need to catch — syntax errors, missing modules after refactors, renamed/removed symbols — are all detectable through AST inspection and import resolution.  Static verification is instant, deterministic, and works for any example regardless of its runtime dependencies.
 
