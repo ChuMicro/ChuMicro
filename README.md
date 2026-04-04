@@ -11,7 +11,9 @@ Chumicro is a mono-workspace for Python libraries that run across CPython, Micro
 
 | Library | Description |
 |---|---|
-| [timing](libraries/timing/) | Cross-runtime millisecond tick helpers, wraparound-safe arithmetic, and heartbeat scheduling. Works on CPython, MicroPython, and CircuitPython. |
+| [timing](libraries/timing/) | Cross-runtime millisecond tick helpers, wraparound-safe arithmetic, and heartbeat scheduling. |
+| [runner](libraries/runner/) | Tick-based service pattern: check/handle gates, periodic tasks, shared timestamps. |
+| [compat](libraries/compat/) | Cross-runtime compatibility polyfills (planned: `functools`). |
 
 ## Developer workflow
 
@@ -39,12 +41,9 @@ chumicro/
 │   ├── runtime/           # Cross-runtime detection helpers (workspace-internal)
 │   └── test_harness/      # Lightweight cross-runtime test runner (workspace-internal)
 ├── libraries/
-│   └── timing/            # Cross-runtime timing library
-│       ├── src/
-│       ├── tests/
-│       ├── functional_tests/
-│       ├── docs/          # ReadTheDocs content
-│       └── examples/      # Usage examples
+│   ├── timing/            # Cross-runtime timing library
+│   ├── runner/            # Tick-based service pattern
+│   └── compat/            # Compatibility polyfills (shell)
 ├── devices.example.yml    # Template for local board registration
 └── .github/workflows/     # CI
 ```
@@ -91,6 +90,8 @@ All tasks are run through `scripts/run.py`:
 | `docs` | Build library docs with MkDocs |
 | `build` | Build all publishable package distributions |
 | `preflight` | Full CI gate: lint + test all + examples + compat + build |
+| `new-library <name>` | Scaffold a new library and regenerate IDE configs |
+| `sync-ide` | Regenerate PyCharm and VS Code configs from workspace structure |
 | `prepare-micropython` | Build the pinned MicroPython unix-port binary under `.tools/` |
 | `prepare-circuitpython` | Build the pinned CircuitPython unix-port binary under `.tools/` |
 | `test-micropython-compat` | Cross-runtime unit tests under MicroPython (auto-prepares if needed) |

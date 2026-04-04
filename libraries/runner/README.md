@@ -35,7 +35,7 @@ class TemperatureSensor:
         # On a real board: return self._i2c_device.temperature
         return self._last_reading
 
-    def service(self, now_ms):
+    def check(self, now_ms):
         self._last_reading = self.read_temperature()
         return self._last_reading > self._threshold
 
@@ -70,8 +70,8 @@ while True:
 | Symbol | Description |
 |---|---|
 | `Runner(ticks=None)` | Tick-based service loop with shared timestamps |
-| `Runner.add(service, handler=None, period_ms=None)` | Register a service; returns a `TaskHandle` |
-| `Runner.add_periodic(handler, period_ms)` | Register a periodic handler; returns a `TaskHandle` |
+| `Runner.add(task, handler=None, period_ms=None, start_after_ms=None, run_count=None)` | Register a task; returns a `TaskHandle` |
+| `Runner.add_periodic(handler, period_ms, start_after_ms=None, run_count=None)` | Register a periodic handler; returns a `TaskHandle` |
 | `Runner.tick()` | Capture time, check services, batch-fire handlers; returns `now_ms` |
 | `TaskHandle` | Opaque handle for runtime mutation of a registered service |
 | `TaskHandle.set_period(period_ms)` | Add, change, or remove the period (`None` to remove) |
@@ -88,7 +88,7 @@ while True:
 
 ## Registration patterns
 
-### Object-based (service with `.check()` and `.handle()`)
+### Object-based (with `.check()` and `.handle()`)
 
 Pass an object that has `check(now_ms) -> bool` and `handle(now_ms)` methods.  The runner calls `.check()`; if it returns `True`, `.handle()` is queued:
 
@@ -103,7 +103,7 @@ class MotionDetector:
         # On a real board: return self._pin.value
         return False
 
-    def service(self, now_ms):
+    def check(self, now_ms):
         return self.detect_motion()
 
     def handle(self, now_ms):
