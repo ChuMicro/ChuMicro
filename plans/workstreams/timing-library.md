@@ -34,21 +34,22 @@ libraries/timing/
 └── examples/
     ├── heartbeat_blink.py
     ├── multiple_heartbeats.py
+    ├── serviceable_heartbeat.py
     └── timeout_check.py
 ```
 
 ## Current verified slice
 
 - `libraries/timing/src/chumicro_timing/__init__.py` exports the current public API
-- `libraries/timing/src/chumicro_timing/heartbeat.py` implements the first public behavior slice, including `service(event_sink)` and `EVENT_TICK` for the serviceable pattern (Decision 0014)
+- `libraries/timing/src/chumicro_timing/heartbeat.py` implements the first public behavior slice, including `service(event_sink)` for the serviceable pattern (Decision 0014)
 - `libraries/timing/src/chumicro_timing/ticks.py` provides the cross-runtime timing seam
 - `libraries/timing/tests/` covers the host-side behavior with `pytest`
 - `libraries/timing/functional_tests/test_heartbeat_ticks.py` exists as the first device-aware timing test
 - `libraries/timing/pyproject.toml` builds as an individual package
 - `libraries/timing/README.md` establishes the package documentation with installation, API overview, and platform notes
 - `libraries/timing/docs/` contains user guide, API reference, and testing helpers documentation (Decision 0013)
-- `libraries/timing/examples/` contains three runnable examples: heartbeat blink, multiple heartbeats, and timeout check (Decision 0013)
-- current version: `0.2.0` (bumped from 0.1.0 when `service()` and `EVENT_TICK` were added)
+- `libraries/timing/examples/` contains four runnable examples: heartbeat blink, multiple heartbeats, timeout check, and serviceable heartbeat (Decision 0013)
+- current version: `0.1.0` (pre-release; nothing published yet)
 
 ## Design rules
 
@@ -166,4 +167,4 @@ The current implemented slice is a heartbeat-style utility whose timing behavior
 - **Second seam:** Digital I/O will become the second seam, but the priority is to explore CI and release more deeply with just the timing library (and possibly one more) before adding many libraries. Both tracks proceed in parallel.
 - **IDE-facing stubs:** Prove out IDE stub packaging now, before the second seam. This is part of the timing library's remaining exit criteria.
 - **Advisory runtime compat jobs:** These should become mandatory protected-branch requirements eventually. They will be gated by platform targeting (Decision 0011) so that only libraries declaring support for MicroPython/CircuitPython are required to pass those checks.
-- **Serviceable pattern:** `Heartbeat` implements `service(event_sink)` and exposes `EVENT_TICK` (Decision 0014). The serviceable contract is duck-typed — the timing library does not import from `chumicro-serviceable`. This was a minor version bump (0.1.0 → 0.2.0).
+- **Serviceable pattern:** `Heartbeat` implements `service(event_sink)` with a caller-supplied `event_type` string (Decision 0014). The serviceable contract is duck-typed — the timing library does not import from `chumicro-serviceable`.

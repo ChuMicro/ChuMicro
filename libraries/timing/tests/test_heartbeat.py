@@ -67,7 +67,7 @@ def test_heartbeat_service_emits_tick_when_due():
     """service() should emit the configured event_type into the sink when a beat is due."""
     fake_ticks = FakeTicks()
     heartbeat = Heartbeat(
-        period_ms=100, ticks=fake_ticks, event_type=Heartbeat.EVENT_TICK,
+        period_ms=100, ticks=fake_ticks, event_type="heartbeat.tick",
     )
     events = []
 
@@ -81,7 +81,7 @@ def test_heartbeat_service_emits_tick_when_due():
 
     assert len(events) == 1
     assert events[0][0] is heartbeat
-    assert events[0][1] == Heartbeat.EVENT_TICK
+    assert events[0][1] == "heartbeat.tick"
     assert events[0][2] is None
 
 
@@ -89,7 +89,7 @@ def test_heartbeat_service_does_not_emit_when_not_due():
     """service() should emit nothing when the period has not elapsed."""
     fake_ticks = FakeTicks()
     heartbeat = Heartbeat(
-        period_ms=100, ticks=fake_ticks, event_type=Heartbeat.EVENT_TICK,
+        period_ms=100, ticks=fake_ticks, event_type="heartbeat.tick",
     )
     events = []
 
@@ -101,10 +101,6 @@ def test_heartbeat_service_does_not_emit_when_not_due():
 
     assert events == []
 
-
-def test_heartbeat_event_tick_constant():
-    """EVENT_TICK should be a stable string constant."""
-    assert Heartbeat.EVENT_TICK == "heartbeat.tick"
 
 
 # -- custom event_type --

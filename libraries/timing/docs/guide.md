@@ -112,25 +112,37 @@ All sources are masked to the 2²⁹ period, so behavior is identical regardless
 
 ## Serviceable pattern
 
-`Heartbeat` also supports the ecosystem-standard serviceable pattern from `chumicro-serviceable`.  Instead of checking `poll()` manually, you can wire heartbeats into a `ServiceRunner`.  You must pass an explicit `event_type` when using `service()`:
+The `poll()` API works well when one piece of code owns the heartbeat and acts on it directly.  But as applications grow, you often want to **decouple the thing that produces timing events from the thing that handles them**.  That's what the serviceable pattern from `chumicro-serviceable` is for.
+
+The core idea is **indirection**: instead of checking `poll()` and calling a handler inline, the heartbeat emits an event into a shared sink, and a dispatcher routes it to the right handler later.  This means:
+
+- Components don't need to know about each other — the heartbeat doesn't call your handler directly.
+- You can wire multiple independent components (heartbeats, sensors, network handlers) into a single dispatch loop.
+- Adding or removing a handler doesn't require changing the component that emits the event.
+
+To use the serviceable pattern, pass an `event_type` string to the constructor.  Each heartbeat should have a distinct event type so the dispatcher can route events correctly:
 
 ```python
 from chumicro_serviceable import EventQueueSink, ServiceRunner, SimpleEventDispatcher
 from chumicro_timing import Heartbeat
 
-heartbeat = Heartbeat(period_ms=1000, event_type=Heartbeat.EVENT_TICK)
+led_beat = Heartbeat(period_ms=500, event_type="led.blink")
+sensor_beat = Heartbeat(period_ms=5000, event_type="sensor.read")
 
 sink = EventQueueSink(max_size=8)
 dispatcher = SimpleEventDispatcher()
-dispatcher.register(Heartbeat.EVENT_TICK, lambda e: print("beat!"))
+dispatcher.register("led.blink", lambda e: print("blink!"))
+dispatcher.register("sensor.read", lambda e: print("reading sensor"))
 
-runner = ServiceRunner([heartbeat], sink, dispatcher)
+runner = ServiceRunner([led_beat, sensor_beat], sink, dispatcher)
 
 while True:
     runner.service_once()
 ```
 
-When a beat is due, `service()` emits the configured event type into the sink.  Calling `service()` without an `event_type` raises `RuntimeError` — this prevents multiple heartbeats from silently sharing the same default event type.
+When a beat is due, `service()` emits the configured event type into the sink.  Calling `service()` without an `event_type` raises `RuntimeError` — this prevents accidental use without explicit routing.
+
+For simple cases where one piece of code owns the heartbeat, `poll()` is still the right choice.  Reach for the serviceable pattern when you need the decoupling.
 
 ## Integration with a tick-based scheduler
 

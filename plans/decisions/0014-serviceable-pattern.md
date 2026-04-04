@@ -58,7 +58,7 @@ dispatcher.register("sensor.read", handle_sensor)
 ## Consequences
 
 - New library: `chumicro-serviceable` under `libraries/serviceable/`.
-- `Heartbeat` gains `service(event_sink)` and `EVENT_TICK` (minor version bump).
+- `Heartbeat` gains `service(event_sink)` and accepts a caller-supplied `event_type` string.
 - Future libraries (MQTT, buttons, etc.) implement the same `service(event_sink)` contract.
 - User main loops can use `ServiceRunner` for a standard dispatch pattern, or continue using `poll()` for simple cases.
 

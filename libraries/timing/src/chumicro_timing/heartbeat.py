@@ -4,7 +4,7 @@
 class Heartbeat:
     """Track whether a periodic heartbeat is due based on monotonic ticks.
 
-    By default uses the module-level ``ticks_ms`` and ``ticks_diff`` helpers.
+    By default, uses the module-level ``ticks_ms`` and ``ticks_diff`` helpers.
     Pass a *ticks* object with the same two methods to override (e.g. for tests).
 
     Supports both the simple ``poll()`` API and the serviceable pattern::
@@ -17,9 +17,6 @@ class Heartbeat:
         heartbeat.service(event_sink)
     """
 
-    EVENT_TICK = "heartbeat.tick"
-    """Convenience constant for the common heartbeat event type string."""
-
     def __init__(self, period_ms, ticks=None, event_type=None):
         """Create a heartbeat that becomes due once every *period_ms* milliseconds.
 
@@ -28,9 +25,9 @@ class Heartbeat:
             ticks: Optional tick source (must have ``ticks_ms`` and
                 ``ticks_diff`` methods).  Defaults to the real clock.
             event_type: Event type string emitted by ``service()``.
-                Required when using the serviceable pattern.  Pass
-                ``Heartbeat.EVENT_TICK`` for the common case, or a
-                custom string when multiple heartbeats share a sink.
+                Required when using the serviceable pattern.  Each
+                heartbeat should have a distinct string so the
+                dispatcher can route events correctly.
                 The ``poll()`` API does not use this parameter.
         """
         if period_ms <= 0:
