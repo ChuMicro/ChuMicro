@@ -281,18 +281,31 @@ def build() -> int:
 
 
 def verify_examples(pkg_dirs: list[Path]) -> int:
-    """Run examples briefly to catch broken imports and syntax errors.
+    """Verify examples have valid syntax and resolvable imports.
 
-    Discovers ``examples/*.py`` in each selected library, then runs each
-    in a subprocess with a short timeout.  Examples use top-level
-    ``while True`` loops (matching the CircuitPython/MicroPython
-    convention), so a timeout is expected and treated as success —
-    it means imports resolved and the loop started.  A non-zero exit
-    before the timeout indicates a real error.
+    Discovers ``examples/*.py`` in each selected library, then for each:
+
+    1. Compiles the source to catch syntax errors.
+    2. Walks the AST to extract ``import`` and ``from … import …`` statements.
+    3. Resolves each imported module via ``importlib`` and verifies that
+       specific names (``from X import Y``) exist on the module.
+
+    This catches the primary failure modes — syntax errors, missing
+    modules after refactors, and renamed/removed symbols — without
+    executing any example code.  No timeout, subprocess, wifi, or
+    device configuration is needed.
     """
-    env = pythonpath_env()
-    examples: list[tuple[str, Path]] = []
+    import ast
+    import importlib
 
+    # Ensure library src/ dirs are importable.
+    src_dirs = [str(d / "src") for d in pkg_dirs if (d / "src").is_dir()]
+    saved_path = sys.path[:]
+    for d in src_dirs:
+        if d not in sys.path:
+            sys.path.insert(0, d)
+
+    examples: list[tuple[str, Path]] = []
     for pkg_dir in pkg_dirs:
         ex_dir = pkg_dir / "examples"
         if not ex_dir.is_dir():
@@ -303,42 +316,62 @@ def verify_examples(pkg_dirs: list[Path]) -> int:
 
     if not examples:
         print("No examples found for the selected packages.")
+        sys.path[:] = saved_path
         return 0
 
-    timeout_seconds = 3
     failures = 0
     for rel_path, py_file in examples:
-        printable = f"+ {PYTHON} {py_file}"
-        print(printable)
+        print(f"  checking {rel_path}")
+        source = py_file.read_text(encoding="utf-8")
+
+        # 1. Syntax check.
         try:
-            completed = subprocess.run(
-                [PYTHON, str(py_file)],
-                cwd=ROOT,
-                env=env,
-                timeout=timeout_seconds,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            # Exited before timeout — check return code.
-            if completed.returncode != 0:
-                print(f"  FAIL: {rel_path}")
-                if completed.stderr:
-                    for line in completed.stderr.strip().splitlines()[-5:]:
-                        print(f"    {line}")
-                failures += 1
-            else:
-                print(f"  OK:   {rel_path}")
-        except subprocess.TimeoutExpired:
-            # Timeout means the example started successfully and
-            # entered its main loop — imports are valid.
-            print(f"  OK:   {rel_path} (ran {timeout_seconds}s)")
+            tree = ast.parse(source, filename=str(py_file))
+        except SyntaxError as exc:
+            print(f"  FAIL: {rel_path}  (syntax error: {exc})")
+            failures += 1
+            continue
+
+        # 2. Extract and verify imports.
+        ok = True
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    try:
+                        importlib.import_module(alias.name)
+                    except ImportError:
+                        print(f"  FAIL: {rel_path}  "
+                              f"(cannot import module '{alias.name}')")
+                        ok = False
+            elif isinstance(node, ast.ImportFrom):
+                if node.module is None:
+                    continue  # relative import without module — skip
+                try:
+                    mod = importlib.import_module(node.module)
+                except ImportError:
+                    print(f"  FAIL: {rel_path}  "
+                          f"(cannot import module '{node.module}')")
+                    ok = False
+                    continue
+                for alias in node.names:
+                    if not hasattr(mod, alias.name):
+                        print(f"  FAIL: {rel_path}  "
+                              f"('{node.module}' has no attribute "
+                              f"'{alias.name}')")
+                        ok = False
+
+        if not ok:
+            failures += 1
+        else:
+            print(f"  OK:   {rel_path}")
+
+    sys.path[:] = saved_path
 
     if failures:
         print(f"\n{failures} example(s) failed.")
         return 1
 
-    print(f"\nAll {len(examples)} example(s) passed.")
+    print(f"\nAll {len(examples)} example(s) verified.")
     return 0
 
 

@@ -118,14 +118,16 @@ Not yet wired: the actual `mkdocs.yml` config, ReadTheDocs hosting setup, or the
 
 ### Example verification
 
-Examples are verified via subprocess execution with a timeout in `scripts/run.py verify-examples`:
+Examples are verified via static analysis in `scripts/run.py verify-examples`:
 
-1. Each example is run as a subprocess with a 3-second timeout.  If the process exits cleanly before the timeout, the exit code is checked.  If the timeout fires, the example is treated as passing — it means imports resolved and the main loop started.
-2. This catches the primary failure modes: API drift after refactors (renamed symbols, missing imports) and syntax errors.
-3. `verify-examples` runs as part of `preflight` and should run in CI.
-4. Examples that require real hardware should include a `# requires: hardware` comment marker.  The verifier does not yet skip these, but the marker supports future filtering.
+1. Each example is compiled to catch syntax errors.
+2. The AST is walked to extract all `import` and `from … import …` statements.
+3. Each imported module is resolved via `importlib`.  For `from X import Y`, the verifier also checks `hasattr(module, 'Y')` to catch renamed or removed symbols.
+4. No example code is executed — verification is purely static.  This means examples that need wifi, hardware, or device configuration are checked without any special skip markers.
+5. `verify-examples` runs as part of `preflight` and should run in CI.
+6. Examples that require real hardware should include a `# requires: hardware` comment marker for future filtering of on-device execution.
 
-**Why subprocess + timeout instead of import checking:**  On CircuitPython and MicroPython, importing files from the workspace filesystem can be destructive — build errors were observed to delete file contents during import.  This means on-device testing will need to copy files to a temporary location anyway.  Since examples must match the standard embedded convention (top-level `while True` loop, no `def main()` or `__main__` guard), import-based checking would require either (a) wrapping examples in guards that don't belong in embedded code, or (b) source-transforming copies before import.  Subprocess + timeout is simpler and works with examples as-is.
+**Why static verification instead of execution:**  Examples are intended for embedded devices and may depend on wifi, hardware, or device-specific configuration.  Running them as subprocesses would require timeouts (slow — 3s × N examples), skip markers for anything needing external resources, and process management.  The actual failure modes we need to catch — syntax errors, missing modules after refactors, renamed/removed symbols — are all detectable through AST inspection and import resolution.  Static verification is instant, deterministic, and works for any example regardless of its runtime dependencies.
 
 **Why top-level style:**  CircuitPython and MicroPython run `code.py` at the top level — there is no `__name__ == "__main__"` mechanism.  Adafruit's own examples use top-level `while True` loops without guards.  Matching this convention means examples can be deployed to boards unchanged.
 
@@ -150,6 +152,7 @@ When the release pipeline is built (Milestone 2), it should:
 - **Require RST from the start**: rejected — adds tooling complexity. Markdown is readable on GitHub and MkDocs is Markdown-native.
 - **No docs standard, let each library decide**: rejected — inconsistency is the predictable outcome.
 - **Auto-generate everything from docstrings**: rejected as the sole path — docstrings are good for API reference but not for guides, examples, or platform notes.
-- **Full execution testing for examples**: adopted — subprocess + timeout handles `while True` loops gracefully; the timeout itself is the success signal.  The original concern about flakiness was about timing-dependent assertions on output; since we only check that the process starts without error, there is nothing timing-sensitive.
-- **Import-based verification with `__main__` guards**: superseded — required examples to diverge from the embedded `code.py` convention.  On-device testing revealed that imports from the workspace can be destructive on CircuitPython/MicroPython, further motivating the switch.
+- **Full execution testing for examples**: rejected — slow (3s timeout per example), requires skip markers for examples needing wifi/config/hardware, and the actual failure modes (syntax errors, missing imports, renamed symbols) are all detectable statically.  AST-based import verification is instant and deterministic.
+- **Import-based verification with `__main__` guards**: rejected — required examples to diverge from the embedded `code.py` convention.  On-device testing revealed that imports from the workspace can be destructive on CircuitPython/MicroPython.
+- **Subprocess + timeout**: superseded by AST-based verification — achieved the same detection of broken imports and syntax errors, but at 3s per example and with the looming problem of examples needing wifi or device configuration.
 - **No example verification**: rejected — examples that silently break after refactors erode user trust.
