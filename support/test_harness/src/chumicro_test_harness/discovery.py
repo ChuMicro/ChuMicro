@@ -64,6 +64,8 @@ def discover_tests(root="."):
         tests_dir = libs_path + "/" + name + "/tests"
         for filename in _sorted_listdir(tests_dir):
             if filename.startswith("test_") and filename.endswith(".py"):
+                if filename.endswith("_pytest.py"):
+                    continue
                 tests.append(tests_dir + "/" + filename)
     return tests
 

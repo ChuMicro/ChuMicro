@@ -4,7 +4,7 @@ Cross-runtime: runs on CPython (via pytest), MicroPython and CircuitPython
 (via the lightweight test harness).
 """
 
-import pytest
+from chumicro_test_harness import raises
 from chumicro_runner import Runner, TaskHandle
 from chumicro_runner.testing import CallRecorder
 from chumicro_timing.testing import FakeTicks
@@ -623,7 +623,7 @@ def test_add_no_args_raises():
     fake = FakeTicks()
     runner = Runner(ticks=fake)
 
-    with pytest.raises(ValueError):
+    with raises(ValueError):
         runner.add()
 
 
@@ -793,7 +793,7 @@ def test_run_count_zero_raises():
     fake = FakeTicks()
     runner = Runner(ticks=fake)
 
-    with pytest.raises(ValueError):
+    with raises(ValueError):
         runner.add(handler=lambda now: None, run_count=0)
 
 
@@ -802,7 +802,7 @@ def test_run_count_zero_raises_periodic():
     fake = FakeTicks()
     runner = Runner(ticks=fake)
 
-    with pytest.raises(ValueError):
+    with raises(ValueError):
         runner.add_periodic(lambda now: None, period_ms=100, run_count=0)
 
 
@@ -931,7 +931,7 @@ def test_period_ms_zero_raises():
     fake = FakeTicks()
     runner = Runner(ticks=fake)
 
-    with pytest.raises(ValueError):
+    with raises(ValueError):
         runner.add(handler=lambda now: None, period_ms=0)
 
 
@@ -940,7 +940,7 @@ def test_period_ms_negative_raises():
     fake = FakeTicks()
     runner = Runner(ticks=fake)
 
-    with pytest.raises(ValueError):
+    with raises(ValueError):
         runner.add(handler=lambda now: None, period_ms=-10)
 
 
@@ -950,7 +950,7 @@ def test_set_period_zero_raises():
     runner = Runner(ticks=fake)
     handle = runner.add(handler=lambda now: None)
 
-    with pytest.raises(ValueError):
+    with raises(ValueError):
         handle.set_period(0)
 
 
@@ -959,7 +959,7 @@ def test_periodic_zero_raises():
     fake = FakeTicks()
     runner = Runner(ticks=fake)
 
-    with pytest.raises(ValueError):
+    with raises(ValueError):
         runner.add_periodic(lambda now: None, period_ms=0)
 
 
