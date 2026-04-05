@@ -181,7 +181,7 @@ def _scaffold_library(name: str) -> int:
 
     # Example
     display_name = name.replace("-", " ").replace("_", " ").title()
-    (lib_dir / "examples" / "hello.py").write_text(
+    (lib_dir / "examples" / "quickstart.py").write_text(
         _EXAMPLE_TEMPLATE.format(name=name, display_name=display_name)
     )
 
