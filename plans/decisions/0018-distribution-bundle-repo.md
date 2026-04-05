@@ -27,38 +27,50 @@ A new repo, `ChuMicro/chumicro-bundle`, serves as the distribution target for bo
 
 ```
 ChuMicro/chumicro-bundle/
-├── chumicro_timing/
-│   ├── package.json          # mip manifest
-│   ├── __init__.py
-│   ├── __init__.mpy
-│   ├── heartbeat.py
-│   ├── heartbeat.mpy
-│   ├── ticks.py
-│   └── ticks.mpy
+├── chumicro_timing/                      # stable channel
+│   ├── package.json
+│   ├── __init__.py / .mpy
+│   ├── heartbeat.py / .mpy
+│   ├── ticks.py / .mpy
+│   └── testing.py                        # source-only (mock layer)
+├── chumicro_timing_experimental/         # experimental channel
+│   ├── package.json
+│   ├── __init__.py / .mpy
+│   ├── heartbeat.py / .mpy
+│   ├── ticks.py / .mpy
+│   └── testing.py
 ├── chumicro_runner/
 │   ├── package.json
-│   ├── __init__.py
-│   ├── __init__.mpy
-│   ├── core.py
-│   └── core.mpy
+│   ├── __init__.py / .mpy
+│   ├── core.py / .mpy
+│   └── testing.py
+├── chumicro_runner_experimental/
+│   └── (same structure)
 └── (GitHub Releases for circup)
 ```
 
-Each library directory contains both `.py` and `.mpy` for every module, plus a `package.json` for `mip`.
+Each library directory contains both `.py` and `.mpy` for every module (except testing modules which are `.py` only), plus a `package.json` for `mip`.  Experimental directories mirror their stable counterparts; the `package.json` inside installs files to the base import name (`chumicro_timing/`) on the device, sourcing them from the `_experimental/` directory in the repo.
 
 ### 3. `mip` installation via `package.json`
 
-Each library's `package.json` lists `.mpy` files as the default targets.  Users install with:
+Each library's `package.json` lists `.mpy` files as the default targets.  Users install the stable channel with:
 
 ```
 mpremote mip install github:ChuMicro/chumicro-bundle/chumicro_runner
 ```
 
-Or on a network-capable board:
+Or the experimental channel:
+
+```
+mpremote mip install github:ChuMicro/chumicro-bundle/chumicro_runner_experimental
+```
+
+On a network-capable board:
 
 ```python
 import mip
 mip.install("github:ChuMicro/chumicro-bundle/chumicro_runner")
+# or: mip.install("github:ChuMicro/chumicro-bundle/chumicro_runner_experimental")
 ```
 
 To install source instead of bytecode: `mip.install(..., mpy=False)`.

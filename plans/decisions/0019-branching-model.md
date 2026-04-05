@@ -22,14 +22,25 @@ The repo initially used `main` as both the integration branch and the release br
 
 All contributor PRs target `develop`. Direct pushes to `main` are blocked via branch protection.
 
-### Pre-release publishing
+### Experimental and stable release channels
 
-Releases from `develop` are tagged with `-experimental` suffix (e.g., `timing-v0.2.0-experimental`) and marked as GitHub pre-releases. Releases from `main` are stable — no suffix, no pre-release flag. The bundle repo (`ChuMicro/chumicro-bundle`) only receives artifacts from stable `main` releases.
+Both `develop` and `main` are full release branches — version bumps happen on `develop` and carry into `main` unchanged.
+
+The channels are differentiated by **package name**, not version number:
+
+| Channel | PyPI package | mip package | Bundle dir | Git tag |
+|---|---|---|---|---|
+| Experimental (develop) | `chumicro-timing-experimental` | `chumicro_timing_experimental` | `chumicro_timing_experimental/` | `timing-v0.2.0-experimental` |
+| Stable (main) | `chumicro-timing` | `chumicro_timing` | `chumicro_timing/` | `timing-v0.2.0` |
+
+On-device import paths are always the base name (`chumicro_timing`). The experimental mip `package.json` installs files to `chumicro_timing/` on the device, sourcing them from `chumicro_timing_experimental/` in the bundle repo. Users switch channels by reinstalling from the other package — they cannot have both installed simultaneously.
+
+Experimental GitHub Releases are marked as pre-releases. Bundle releases use date-based tags with the channel suffix (e.g., `20260405-experimental`).
 
 ### CI trigger changes
 
 - `ci.yml` triggers on push to `develop` and on all PRs (targeting any branch).
-- `release.yml` triggers on push to `develop` or `main` with `libraries/*/VERSION` changes. Develop releases get `-experimental` tags; main releases are stable and also publish to the bundle repo.
+- `release.yml` triggers on push to `develop` or `main` with `libraries/*/VERSION` changes. Both channels get tags, GitHub Releases, and bundle repo publishing. Develop uses `-experimental` suffix and package names; main is stable.
 - `promote.yml` is a workflow_dispatch that opens a PR from `develop` → `main`.
 
 ### Manual steps required

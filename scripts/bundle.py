@@ -80,11 +80,19 @@ def _read_chumicro_deps(lib_dir: Path) -> list[str]:
     return [d for d in deps if d.strip().startswith("chumicro-")]
 
 
-def _dep_to_mip_ref(dep: str) -> str:
-    """Convert 'chumicro-timing>=0.1' to a mip github reference."""
+def _dep_to_mip_ref(dep: str, *, experimental: bool = False) -> str:
+    """Convert 'chumicro-timing>=0.1' to a mip github reference.
+
+    When *experimental* is True, the reference points to the
+    ``_experimental`` variant so that experimental packages depend on
+    other experimental packages.
+    """
     # Strip version specifiers.
     name = dep.split(">")[0].split("<")[0].split("=")[0].split("!")[0].split(";")[0]
-    return f"github:ChuMicro/chumicro-bundle/{name.strip().replace('-', '_')}"
+    pkg = name.strip().replace("-", "_")
+    if experimental:
+        pkg = f"{pkg}_experimental"
+    return f"github:ChuMicro/chumicro-bundle/{pkg}"
 
 
 def _compile_mpy(py_file: Path, mpy_file: Path, mpy_cross: str) -> None:
@@ -104,11 +112,19 @@ def build_bundle(
     version: str,
     staging_dir: Path,
     mpy_cross: str = "mpy-cross",
+    *,
+    experimental: bool = False,
 ) -> None:
     """Stage bundle artifacts for a single library.
 
-    Creates ``<staging_dir>/<pkg_name>/`` containing .py source, .mpy
+    Creates ``<staging_dir>/<bundle_name>/`` containing .py source, .mpy
     bytecode, and a package.json manifest for mip.
+
+    When *experimental* is True the bundle directory gets an
+    ``_experimental`` suffix (e.g. ``chumicro_timing_experimental/``).
+    The mip manifest's on-device install paths still use the original
+    package name so that ``import chumicro_timing`` works regardless of
+    which channel the user installed from.
     """
     pkg_name, pkg_dir, compile_files, source_only_files = _find_bundle_modules(
         lib_dir,
@@ -117,7 +133,9 @@ def build_bundle(
     if not all_files:
         sys.exit(f"No deployable .py files found in {pkg_dir}")
 
-    out_dir = staging_dir / pkg_name
+    # Bundle directory name — suffixed for experimental channel.
+    bundle_name = f"{pkg_name}_experimental" if experimental else pkg_name
+    out_dir = staging_dir / bundle_name
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # Compilable modules get both .py and .mpy artifacts.
@@ -137,20 +155,29 @@ def build_bundle(
         shutil.copy2(f, dest_py)
 
     # Generate mip package.json manifest.
+    #
+    # Target paths (first element) use pkg_name — the on-device import name.
+    # Source URLs (second element) use bundle_name — where the file lives in
+    # the bundle repo (includes _experimental suffix when applicable).
     # Compilable modules reference .mpy; testing modules reference .py.
     urls = []
     for f in compile_files:
         rel = f.relative_to(pkg_dir)
-        mpy_path = f"{pkg_name}/{rel.with_suffix('.mpy').as_posix()}"
-        urls.append([mpy_path, f"github:ChuMicro/chumicro-bundle/{mpy_path}"])
+        mpy_rel = rel.with_suffix(".mpy").as_posix()
+        target = f"{pkg_name}/{mpy_rel}"
+        source = f"github:ChuMicro/chumicro-bundle/{bundle_name}/{mpy_rel}"
+        urls.append([target, source])
     for f in source_only_files:
         rel = f.relative_to(pkg_dir)
-        py_path = f"{pkg_name}/{rel.as_posix()}"
-        urls.append([py_path, f"github:ChuMicro/chumicro-bundle/{py_path}"])
+        py_rel = rel.as_posix()
+        target = f"{pkg_name}/{py_rel}"
+        source = f"github:ChuMicro/chumicro-bundle/{bundle_name}/{py_rel}"
+        urls.append([target, source])
 
     manifest: dict = {"urls": urls, "version": version}
     mip_deps = [
-        [_dep_to_mip_ref(d), "latest"] for d in _read_chumicro_deps(lib_dir)
+        [_dep_to_mip_ref(d, experimental=experimental), "latest"]
+        for d in _read_chumicro_deps(lib_dir)
     ]
     if mip_deps:
         manifest["deps"] = mip_deps
@@ -175,8 +202,19 @@ def main() -> None:
     parser.add_argument(
         "--mpy-cross", default="mpy-cross", help="Path to mpy-cross binary"
     )
+    parser.add_argument(
+        "--experimental",
+        action="store_true",
+        help="Stage as experimental channel (adds _experimental suffix to bundle directory)",
+    )
     args = parser.parse_args()
-    build_bundle(args.lib_dir, args.version, args.staging_dir, args.mpy_cross)
+    build_bundle(
+        args.lib_dir,
+        args.version,
+        args.staging_dir,
+        args.mpy_cross,
+        experimental=args.experimental,
+    )
 
 
 if __name__ == "__main__":

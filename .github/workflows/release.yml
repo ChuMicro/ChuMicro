@@ -154,12 +154,9 @@ jobs:
   # See Decision 0018 for the bundle repo layout and distribution model.
   # ---------------------------------------------------------------------------
   bundle:
-    name: Publish to chumicro-bundle
+    name: "Publish to chumicro-bundle${{ needs.detect.outputs.suffix }}"
     needs: [detect, release]
-    if: >-
-      needs.detect.outputs.has_releases == 'true'
-      && needs.detect.outputs.is_experimental == 'false'
-      && inputs.dry_run != true
+    if: needs.detect.outputs.has_releases == 'true' && inputs.dry_run != true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -173,15 +170,20 @@ jobs:
 
       - name: Stage bundle artifacts
         run: |
+          is_exp="${{ needs.detect.outputs.is_experimental }}"
           matrix='${{ needs.detect.outputs.matrix }}'
           echo "$matrix" | python3 -c "
           import json, sys, subprocess
+          is_exp = '$is_exp' == 'true'
           data = json.load(sys.stdin)
           for entry in data['include']:
-              subprocess.check_call([
+              cmd = [
                   sys.executable, 'scripts/bundle.py',
                   entry['lib_dir'], entry['version'], '.bundle-staging',
-              ])
+              ]
+              if is_exp:
+                  cmd.append('--experimental')
+              subprocess.check_call(cmd)
           "
 
       - name: Clone bundle repo
@@ -195,12 +197,18 @@ jobs:
           # Copy staged library directories into the bundle repo.
           cp -r .bundle-staging/* .bundle-repo/
 
-          date_tag=$(date -u +%Y%m%d)
+          suffix="${{ needs.detect.outputs.suffix }}"
+          date_tag="$(date -u +%Y%m%d)${suffix}"
           echo "date_tag=${date_tag}" >> "$GITHUB_ENV"
+
+          # Determine which package directories were staged.
+          # Experimental builds produce *_experimental/ dirs; stable produces base dirs.
+          staged_pattern=".bundle-repo/chumicro_*"
 
           # Build circup-format zip: .py source bundle.
           mkdir -p .circup-py/lib
-          for pkg_dir in .bundle-repo/chumicro_*/; do
+          for pkg_dir in $staged_pattern; do
+            [ -d "$pkg_dir" ] || continue
             pkg=$(basename "$pkg_dir")
             rsync -a --include='*/' --include='*.py' --exclude='*' "$pkg_dir/" ".circup-py/lib/${pkg}/"
           done
@@ -210,12 +218,14 @@ jobs:
           # Build circup-format zip: .mpy bytecode bundle.
           # Includes .py for testing modules (source-only, no .mpy compiled).
           mkdir -p .circup-mpy/lib
-          for pkg_dir in .bundle-repo/chumicro_*/; do
+          for pkg_dir in $staged_pattern; do
+            [ -d "$pkg_dir" ] || continue
             pkg=$(basename "$pkg_dir")
             # Copy .mpy files (compiled modules).
             rsync -a --include='*/' --include='*.mpy' --exclude='*' "$pkg_dir/" ".circup-mpy/lib/${pkg}/"
             # Copy testing modules (.py only — no .mpy counterparts).
             if [ -f "$pkg_dir/testing.py" ]; then
+              mkdir -p ".circup-mpy/lib/${pkg}"
               cp "$pkg_dir/testing.py" ".circup-mpy/lib/${pkg}/testing.py"
             fi
             if [ -d "$pkg_dir/testing" ]; then
@@ -235,18 +245,31 @@ jobs:
             exit 0
           fi
 
+          suffix="${{ needs.detect.outputs.suffix }}"
+          channel=""
+          if [ -n "$suffix" ]; then
+            channel=" (experimental)"
+          fi
+
           matrix='${{ needs.detect.outputs.matrix }}'
           msg=$(echo "$matrix" | python3 -c "
           import json, sys
           data = json.load(sys.stdin)
           libs = [e['lib_name'] + ' v' + e['version'] for e in data['include']]
-          print('Update: ' + ', '.join(libs))
+          print('Update${channel}: ' + ', '.join(libs))
           ")
           git commit -m "$msg"
           git push origin main
 
       - name: Create bundle release
         run: |
+          suffix="${{ needs.detect.outputs.suffix }}"
+          is_exp="${{ needs.detect.outputs.is_experimental }}"
+          pre_flag=""
+          if [ "$is_exp" = "true" ]; then
+            pre_flag="--prerelease"
+          fi
+
           matrix='${{ needs.detect.outputs.matrix }}'
           body=$(echo "$matrix" | python3 -c "
           import json, sys
@@ -261,6 +284,7 @@ jobs:
             --repo ChuMicro/chumicro-bundle \
             --title "Bundle ${{ env.date_tag }}" \
             --notes "$body" \
+            $pre_flag \
             .circup-zips/*.zip
         env:
           GH_TOKEN: ${{ secrets.BUNDLE_TOKEN }}
