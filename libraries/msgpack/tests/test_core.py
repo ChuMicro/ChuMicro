@@ -3,6 +3,7 @@
 from io import BytesIO
 
 from chumicro_msgpack import pack, packb, unpack, unpackb
+from chumicro_test_harness import raises
 
 # ---------------------------------------------------------------------------
 # None / bool
@@ -138,16 +139,12 @@ def test_int32_high():
 # ---------------------------------------------------------------------------
 
 def test_int_too_large_raises():
-    import pytest
-
-    with pytest.raises(OverflowError):
+    with raises(OverflowError):
         packb(2**32)
 
 
 def test_int_too_negative_raises():
-    import pytest
-
-    with pytest.raises(OverflowError):
+    with raises(OverflowError):
         packb(-(2**31) - 1)
 
 
@@ -382,17 +379,13 @@ def test_unpackb_memoryview():
 # ---------------------------------------------------------------------------
 
 def test_unsupported_type_raises():
-    import pytest
-
-    with pytest.raises(TypeError, match="unsupported type"):
+    with raises(TypeError):
         packb(object())
 
 
 def test_unsupported_decode_byte_raises():
-    import pytest
-
     # 0xc1 is never-used in msgpack spec
-    with pytest.raises(ValueError, match="unsupported msgpack type byte"):
+    with raises(ValueError):
         unpackb(b"\xc1")
 
 

@@ -18,6 +18,15 @@ try:
 except ImportError:  # pragma: no cover - gc may be absent on some CPython configs.
 	_gc = None
 
+# Cross-runtime monotonic seconds: CPython/CircuitPython expose
+# time.monotonic(); MicroPython only has time.ticks_ms().
+if hasattr(time, "monotonic"):
+	_now_seconds = time.monotonic
+else:
+	def _now_seconds():
+		"""Return monotonic seconds from MicroPython's ``ticks_ms``."""
+		return time.ticks_ms() / 1000
+
 
 def _mem_free():
 	"""Return free heap bytes, or ``None`` if unavailable."""
@@ -66,23 +75,23 @@ def run_module(module):
 	if mem_before is not None:
 		print(f"HEAP {mem_before} bytes free")
 
-	run_start = time.monotonic()
+	run_start = _now_seconds()
 
 	for name, function in _iter_test_functions(module):
 		total += 1
-		test_start = time.monotonic()
+		test_start = _now_seconds()
 		try:
 			function()
 		except Exception as exception:  # pragma: no cover - exercised indirectly by tests.
-			duration = time.monotonic() - test_start
+			duration = _now_seconds() - test_start
 			failed += 1
 			print(f"FAIL {name} ({duration:.3f}s)")
 			_print_exception(exception)
 		else:
-			duration = time.monotonic() - test_start
+			duration = _now_seconds() - test_start
 			print(f"PASS {name} ({duration:.3f}s)")
 
-	total_duration = time.monotonic() - run_start
+	total_duration = _now_seconds() - run_start
 
 	if total == 0:
 		print("NO TESTS FOUND")

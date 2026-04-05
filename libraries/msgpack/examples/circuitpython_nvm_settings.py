@@ -93,7 +93,7 @@ stored_length = (nvm[0] << 8) | nvm[1]
 # Validate: length must be positive and fit within the NVM buffer
 # (minus the 2-byte header).  A length of 0 or a value larger than
 # the buffer means NVM has not been written yet or is corrupted.
-if stored_length > 0 and stored_length <= len(nvm) - 2:
+if 0 < stored_length <= len(nvm) - 2:
     # Read exactly stored_length bytes from NVM and decode.
     # bytes() copies the slice out of NVM into a regular bytes object
     # that unpackb can parse.

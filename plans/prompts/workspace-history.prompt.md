@@ -299,3 +299,21 @@ This was the largest single session. It addressed three areas: the workspace was
 8. Fixed `testing.py` module docstring: `heartbeat.poll()` → `heartbeat.poll(fake.ticks_ms())` (missing required `now_ms` argument).
 9. Added `TaskHandle.run_count` to runner README API table (was present in code since initial implementation, missing from docs).
 
+#### 2026-04-04 (cont. 4) — functools.partial polyfill, chumicro-msgpack library
+
+**functools.partial polyfill (chumicro-compat):**
+1. Added `functools.py` to `chumicro-compat` with `_PurePythonPartial` — a pure-Python `functools.partial` for MicroPython/CircuitPython. On CPython, re-exports the real `functools.partial`.
+2. 12 tests covering frozen args, keyword override, attributes (`.func`, `.args`, `.keywords`), `repr`, and type rejection.
+3. Updated compat `__init__.py` with lazy import guidance and updated docs/examples.
+
+**chumicro-msgpack library:**
+4. New library: `chumicro-msgpack` 0.1.0. Pure-Python MessagePack encoder/decoder for embedded use.
+5. Supports: None, bool, int (32-bit), float (32-bit), str, bytes/bytearray, list/tuple, dict.
+6. Bytes API (`packb`/`unpackb`) and stream API (`pack`/`unpack`). On CircuitPython hardware, all four delegate to the native C `msgpack` module — the pure-Python encoder is never loaded, saving ~700 bytes of heap RAM.
+7. 62 tests covering all types, boundary values, error handling, buffer types, and a realistic settings-dict scenario.
+8. Four examples: basic pack/unpack, JSON size comparison, stream roundtrip, CircuitPython NVM hardware example.
+9. User guide and API reference docs.
+
+**Cross-runtime test fixes:**
+10. Fixed `time.monotonic` in `support/test_harness/runner.py` — MicroPython doesn't have it. Added a cross-runtime shim that falls back to `time.ticks_ms()`.
+11. Replaced `pytest.raises` in msgpack tests with `raises` from `chumicro_test_harness` so tests run on MicroPython compat.

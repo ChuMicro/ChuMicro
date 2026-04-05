@@ -4,7 +4,7 @@ Use this prompt when a future session needs to rebuild planning context without 
 
 Chumicro is a mono-workspace for Python libraries that target CPython, MicroPython, and CircuitPython, as described in [AGENTS.md](../../AGENTS.md). Keep the planning model lightweight: `roadmap + workstreams + decisions + next-up + prompts`. Avoid formal epics/stories unless a workstream actually needs them.
 
-### Current verified workspace state as of 2026-04-04
+### Current verified workspace state as of 2026-04-04 (updated)
 
 1. Planning structure exists under [plans/](../README.md), including:
    - [roadmap.md](../roadmap.md)
@@ -36,7 +36,8 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
    - `support/test_harness/` for a tiny on-device test runner
    - `libraries/timing/` as the first publishable timing library (`chumicro-timing` 0.1.0)
    - `libraries/runner/` as the second publishable library (`chumicro-runner` 0.1.0) — gate-based service pattern with shared timestamps, period gating, and batch handler firing (Decision 0014)
-   - `libraries/compat/` as a compatibility layer shell (`chumicro-compat` 0.1.0) — no modules shipped yet, planned for `functools` polyfills
+   - `libraries/compat/` as a cross-runtime compatibility polyfill library (`chumicro-compat` 0.1.0) — provides `functools.partial` with a pure-Python fallback for MicroPython/CircuitPython
+   - `libraries/msgpack/` as a cross-runtime MessagePack serialization library (`chumicro-msgpack` 0.1.0) — `packb`/`unpackb`/`pack`/`unpack`, delegates to native C `msgpack` on CircuitPython hardware
    - `scripts/run.py` as the task runner with auto-discovery, scoped testing, library scaffolding, IDE config generation, example verification, and docs build
    - `scripts/prepare_workspace.py` for initial workspace setup
    - `conftest.py` at root for auto-discovery of source roots and functional_tests exclusion
@@ -55,7 +56,8 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
    - `TaskHandle`, `Runner` in `libraries/runner/src/chumicro_runner/core.py`
    - `CallRecorder` in `libraries/runner/src/chumicro_runner/testing.py`
    - 100% test coverage; audit complete (Decision 0015 documents board architecture support)
-6. The compat library (`libraries/compat/`) exists as a shell for future `functools` polyfills — no modules shipped yet.
+6. The compat library (`libraries/compat/`) provides `functools.partial` with a pure-Python fallback.
+7. The msgpack library (`libraries/msgpack/`) provides cross-runtime MessagePack serialization with native C delegation on CircuitPython hardware.
 7. Verified local commands:
    - `python scripts/run.py setup`
    - `python scripts/run.py lint`
@@ -82,13 +84,14 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
 5. Manual-only hardware workflows are the current starting point.
 6. The first library is timing/ticks, with digital I/O deferred as the likely next seam.
 7. The second library is runner — provides the ecosystem-standard gate-based check/handle pattern.
-8. The third library is compat — empty shell awaiting `functools` polyfills.
-9. IDE config generation works for both PyCharm and VS Code.
-10. Per-library pytest runs avoid test-directory collisions (Decision 0009).
-11. Shared test fakes ship as `testing` submodules (e.g., `chumicro_timing.testing.FakeTicks`, `chumicro_runner.testing.CallRecorder`) and are importable by any library's tests.
-12. Docs and examples standards are established with strict guide requirements, autodoc API reference, and AI generation prompts (Decision 0013).
-13. IDE type stubs use upstream PyPI packages pinned to runtime-versions.toml (Decision 0012).
-14. Serviceable library audit complete: deque API verified across runtimes, overflow flag added, board architecture support documented (Decision 0015).
+8. The third library is compat — provides `functools.partial` polyfill for MicroPython/CircuitPython.
+9. The fourth library is msgpack — provides cross-runtime MessagePack serialization.
+10. IDE config generation works for both PyCharm and VS Code.
+11. Per-library pytest runs avoid test-directory collisions (Decision 0009).
+12. Shared test fakes ship as `testing` submodules (e.g., `chumicro_timing.testing.FakeTicks`, `chumicro_runner.testing.CallRecorder`) and are importable by any library's tests.
+13. Docs and examples standards are established with strict guide requirements, autodoc API reference, and AI generation prompts (Decision 0013).
+14. IDE type stubs use upstream PyPI packages pinned to runtime-versions.toml (Decision 0012).
+15. Serviceable library audit complete: deque API verified across runtimes, overflow flag added, board architecture support documented (Decision 0015).
 
 ### What is still intentionally incomplete
 
