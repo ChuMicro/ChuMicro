@@ -145,6 +145,7 @@ The [examples](../examples/) directory contains complete runnable scripts:
 | `heartbeat_blink.py` | Basic heartbeat in a main loop (the embedded hello world) |
 | `multiple_heartbeats.py` | Several heartbeats at different rates sharing one timestamp |
 | `timeout_check.py` | Using `ticks_diff()` for deadline-based timeout detection |
+| `debounce.py` | Button debounce using `ticks_ms()` and `ticks_diff()` |
 | `circuitpython_blink.py` | LED blink on CircuitPython hardware |
 | `micropython_blink.py` | LED blink on MicroPython hardware |
 
