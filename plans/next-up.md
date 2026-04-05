@@ -2,7 +2,11 @@
 
 ## Now
 
-- [ ] Create `develop` branch on GitHub, set as default branch, configure branch protection on both `develop` and `main` (Decision 0019).
+- [ ] Configure GitHub repo settings (manual — API tools don't support these):
+  - Set `develop` as the default branch: Settings → General → Default branch → change to `develop`.
+  - Branch protection on `develop`: require status checks (lint, test, build, version-check), require 1 approval.
+  - Branch protection on `main`: require status checks, require 1 approval, restrict pushes to maintainers only.
+  - ✅ `develop` branch created. ✅ `ChuMicro/chumicro-bundle` repo created. Still need: `BUNDLE_TOKEN` secret.
 - [ ] Document contributor prerequisites by platform (macOS, Linux, Windows/WSL2) and by editor (PyCharm, VS Code, CLI) in the README. Linux and WSL2 sections are best-effort/researched until verified.
   - When writing these docs, scope the AGENTS.md performance guidelines (f-strings, `const()`, `memoryview`, pre-allocated buffers, etc.) to **library code only**. Infrastructure code (`scripts/`, `support/`) runs exclusively on CPython and does not need embedded-runtime constraints.
 - [ ] Write a "Creating a New Library" contributor guide. Walk through the full lifecycle from scaffolding to release-ready:
