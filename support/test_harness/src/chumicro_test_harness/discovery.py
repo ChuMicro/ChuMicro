@@ -79,11 +79,13 @@ class _Namespace:
     """Attribute container for exec'd module globals."""
 
 
-def exec_as_namespace(path, name="__main__", package=""):
+def _exec_as_namespace(path, name="__main__", package=""):
     """Execute a ``.py`` file and return a namespace object with its globals.
 
-    This avoids the standard import machinery, which behaves inconsistently
-    across MicroPython and CircuitPython unix-port builds.
+    Uses ``exec()`` rather than the standard import machinery because
+    multiple libraries have test files with identical names (e.g.
+    ``test_core.py``), and MicroPython/CircuitPython lack
+    ``importlib.util`` for file-path-based imports.
     """
     namespace = {"__name__": name, "__file__": path, "__package__": package}
     with open(path) as source_file:
@@ -112,7 +114,7 @@ def run_all(root="."):
     for path in test_files:
         print(f"== {path} ==")
         try:
-            test_mod = exec_as_namespace(path)
+            test_mod = _exec_as_namespace(path)
         except ImportError as exc:
             skipped += 1
             print(f"SKIP {path} (import failed: {exc})")

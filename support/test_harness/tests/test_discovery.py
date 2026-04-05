@@ -144,7 +144,7 @@ def test_setup_source_paths_does_not_duplicate(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# exec_as_namespace
+# _exec_as_namespace
 # ---------------------------------------------------------------------------
 
 
@@ -153,7 +153,7 @@ def test_exec_as_namespace_returns_namespace_with_globals(tmp_path):
     script = tmp_path / "sample.py"
     script.write_text("VALUE = 42\ndef helper(): return 'ok'\n")
 
-    ns = discovery.exec_as_namespace(str(script))
+    ns = discovery._exec_as_namespace(str(script))
 
     assert ns.VALUE == 42
     assert ns.helper() == "ok"
@@ -164,7 +164,7 @@ def test_exec_as_namespace_sets_dunder_name(tmp_path):
     script = tmp_path / "sample.py"
     script.write_text("pass\n")
 
-    ns = discovery.exec_as_namespace(str(script), name="mymod", package="mypkg")
+    ns = discovery._exec_as_namespace(str(script), name="mymod", package="mypkg")
 
     assert ns.__name__ == "mymod"
     assert ns.__package__ == "mypkg"
