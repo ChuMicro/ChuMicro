@@ -21,7 +21,7 @@ concurrency:
 
 permissions:
   contents: write   # create tags and GitHub Releases
-  # id-token: write   # PyPI trusted publishing (OIDC) — uncomment when ready to publish
+  id-token: write   # PyPI trusted publishing (OIDC)
 
 jobs:
   detect:
@@ -117,14 +117,23 @@ jobs:
       - name: Install build tooling
         run: python -m pip install --upgrade pip build
 
+      - name: Patch package name for experimental
+        if: needs.detect.outputs.is_experimental == 'true'
+        run: |
+          # Rename the PyPI package to *-experimental in the ephemeral checkout.
+          cd ${{ matrix.lib_dir }}
+          sed -i 's/^name = "chumicro-${{ matrix.lib_name }}"/name = "chumicro-${{ matrix.lib_name }}-experimental"/' pyproject.toml
+          echo "Patched package name:"
+          grep '^name' pyproject.toml
+
       - name: Build distribution
         run: python -m build ${{ matrix.lib_dir }}
 
-      # --- PyPI publishing (disabled until trusted publisher is configured) ---
-      # - name: Publish to PyPI
-      #   uses: pypa/gh-action-pypi-publish@release/v1
-      #   with:
-      #     packages-dir: ${{ matrix.lib_dir }}/dist/
+      - name: Publish to PyPI
+        if: inputs.dry_run != true
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: ${{ matrix.lib_dir }}/dist/
 
       - name: Create git tag
         if: inputs.dry_run != true
