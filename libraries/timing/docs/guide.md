@@ -146,6 +146,7 @@ The [examples](../examples/) directory contains complete runnable scripts:
 | `multiple_heartbeats.py` | Several heartbeats at different rates sharing one timestamp |
 | `timeout_check.py` | Using `ticks_diff()` for deadline-based timeout detection |
 | `debounce.py` | Button debounce using `ticks_ms()` and `ticks_diff()` |
+| `periodic_tick.py` | Manual periodic action — what `Heartbeat` does under the hood |
 | `circuitpython_blink.py` | LED blink on CircuitPython hardware |
 | `micropython_blink.py` | LED blink on MicroPython hardware |
 

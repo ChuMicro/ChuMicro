@@ -35,7 +35,8 @@ libraries/timing/
     ├── heartbeat_blink.py
     ├── multiple_heartbeats.py
     ├── timeout_check.py
-    └── debounce.py
+    ├── debounce.py
+    └── periodic_tick.py
 ```
 
 ## Current verified slice
