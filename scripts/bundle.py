@@ -360,25 +360,6 @@ def generate_bundle_readme(root: Path, *, experimental: bool = False) -> str:
     )
     lines.append("")
 
-    # Install examples for each library.
-    lines.append("### mip install commands")
-    lines.append("")
-    lines.append("```bash")
-    for lib in libraries:
-        lines.append(
-            f"mpremote mip install "
-            f"github:{_GITHUB_ORG}/{bundle_repo}/{lib['pkg_name']}"
-        )
-    lines.append("```")
-    lines.append("")
-    lines.append("### circup install commands")
-    lines.append("")
-    lines.append("```bash")
-    lines.append(f"circup bundle-add {_GITHUB_ORG}/{bundle_repo}")
-    for lib in libraries:
-        lines.append(f"circup install chumicro-{lib['name']}")
-    lines.append("```")
-    lines.append("")
 
     # About.
     lines.append("## About")

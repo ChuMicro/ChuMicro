@@ -47,6 +47,18 @@ def _changed_files(base_ref: str) -> list[str]:
     return [line for line in result.stdout.strip().splitlines() if line]
 
 
+def _has_release_tag(lib_name: str) -> bool:
+    """Return True if *lib_name* has at least one release tag (e.g. ``timing-v0.1.0``)."""
+    result = subprocess.run(
+        ["git", "tag", "-l", f"{lib_name}-v*"],
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
+        check=False,
+    )
+    return bool(result.stdout.strip())
+
+
 def _check(base_ref: str) -> int:
     """Run the VERSION enforcement check.  Returns exit code."""
     changed = _changed_files(base_ref)
@@ -93,6 +105,18 @@ def _check(base_ref: str) -> int:
             print(f"OK: libraries/{lib}/ — VERSION updated.")
     else:
         print("No release-relevant library changes detected.")
+
+    # Warn about new libraries that have never been released.
+    # PyPI projects must be created manually before the first publish.
+    all_changed_libs = libs_needing_bump | libs_with_bump
+    for lib in sorted(all_changed_libs):
+        if not _has_release_tag(lib):
+            print(
+                f"NOTE: libraries/{lib}/ has no release tags — "
+                "this appears to be a new library.  Before merging, "
+                "ask @chux.maker to create the PyPI project "
+                f"(chumicro-{lib}) so the release workflow can publish."
+            )
 
     return 0
 
