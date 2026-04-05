@@ -7,7 +7,22 @@ on:
   pull_request:
 
 jobs:
-  checks:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install tooling
+        run: python -m pip install --upgrade pip ruff
+
+      - name: Lint
+        run: python scripts/run.py lint
+
+  test:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -15,44 +30,75 @@ jobs:
         python-version: ["3.11", "3.12", "3.13"]
 
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Install tooling
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install build pytest pytest-cov ruff
-
-      - name: Lint
-        run: |
-          python scripts/run.py lint
+        run: python -m pip install --upgrade pip pytest pytest-cov
 
       - name: Run tests with coverage
-        run: |
-          python scripts/run.py test --all
+        run: python scripts/run.py test --all
+
+  verify-examples:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Verify examples
+        run: python scripts/run.py verify-examples --all
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install tooling
+        run: python -m pip install --upgrade pip build
 
       - name: Build packages
-        run: |
-          python scripts/run.py build
+        run: python scripts/run.py build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: libraries/*/dist/
+
+  version-check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Check VERSION enforcement
+        run: python scripts/check_version.py --base origin/${{ github.base_ref }}
 
   micropython-compat:
     name: MicroPython compatibility (advisory)
     runs-on: ubuntu-latest
-    # Advisory means this job still runs and reports a real pass/fail signal,
-    # but it does not fail the overall workflow yet.
     continue-on-error: true
 
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
 
@@ -65,22 +111,17 @@ jobs:
         run: python scripts/run.py prepare-micropython
 
       - name: Run MicroPython compatibility smoke test
-        run: |
-          python scripts/run.py test-micropython-compat
+        run: python scripts/run.py test-micropython-compat
 
   circuitpython-compat:
     name: CircuitPython compatibility (advisory)
     runs-on: ubuntu-latest
-    # Advisory means this job still runs and reports a real pass/fail signal,
-    # but it does not fail the overall workflow yet.
     continue-on-error: true
 
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
 
@@ -93,6 +134,4 @@ jobs:
         run: python scripts/run.py prepare-circuitpython
 
       - name: Run CircuitPython compatibility smoke test
-        run: |
-          python scripts/run.py test-circuitpython-compat
-
+        run: python scripts/run.py test-circuitpython-compat

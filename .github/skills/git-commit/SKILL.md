@@ -17,8 +17,11 @@ description: How to write and execute git commits in this workspace. Use this sk
 
 Use a **file tool** (not the terminal) to write the full commit message to `.scratch/commit-msg.txt`.
 
-- **First commit in a session:** use `create_file`.
-- **Subsequent commits:** use `insert_edit_into_file`.
+1. Check whether `.scratch/commit-msg.txt` exists (e.g., `read_file` or `list_dir`).
+2. **If it does not exist:** use `create_file`.
+3. **If it already exists:** use `insert_edit_into_file` to **replace** the file contents (see rules below).
+
+**Never delete `.scratch/commit-msg.txt`** — not with `rm`, not from the terminal, not with any other tool. Always overwrite it in place with `insert_edit_into_file`.
 
 Follow the project's commit-message conventions: imperative subject line, body explaining *why*.
 
@@ -38,7 +41,6 @@ When using `insert_edit_into_file` to write a new commit message:
 2. **Do not use `...existing code...` comments.** There is no existing code to preserve — the entire file is being replaced.
 3. **Do not reference or include any part of the previous message.**
 
-If `create_file` fails because `.scratch/commit-msg.txt` already exists (leftover from a prior session), fall back to `insert_edit_into_file` using the same rules above.
 
 ## Rules
 

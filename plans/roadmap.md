@@ -78,7 +78,7 @@ Additional libraries built during and after Milestone 1:
 
 ## Milestone 2 — CI and release flow
 
-Status: `proposed`
+Status: `in-progress`
 
 Goal: prove branch → PR → checks → merge → release staging.
 
@@ -89,6 +89,15 @@ Exit criteria:
 - PR checks enforce per-library `VERSION` file updates for release-relevant changes
 - timing release artifacts are produced for PyPI, CircuitPython (circup), and MicroPython (mip) distribution staging
 - docs build and publish on version bumps (tool and hosting TBD)
+
+Current verified progress:
+
+- CI workflow split into dedicated jobs: lint, test (3.11/3.12/3.13 matrix), verify-examples, build, version-check
+- `version-check` job enforces per-library VERSION bumps on PRs using `scripts/check_version.py`
+- build job uploads artifacts via `actions/upload-artifact@v4`
+- release workflow (`.github/workflows/release.yml`) triggers on VERSION changes pushed to main
+- release workflow detects changed libraries, builds, publishes to PyPI (OIDC trusted publishers), creates git tags and GitHub Releases
+- `scripts/run.py check-version` available for local pre-commit verification
 
 Settled choices:
 

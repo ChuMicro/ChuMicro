@@ -17,11 +17,14 @@ Establish predictable PR checks and per-library release automation for a mono-wo
 
 ## Current verified slice
 
-- `.github/workflows/ci.yml` exists and runs on `push` to `main` and on `pull_request`
-- CI currently runs required host checks for lint, host-side tests with coverage, and timing package build
-- CI now also runs advisory MicroPython and CircuitPython cross-runtime compatibility jobs via `scripts/run.py`
-- CI now uses the shared repo task interface in `scripts/run.py`
-- the two publishable libraries (`timing/` and `runner/`) are the current proof targets under `libraries/` for CI behavior
+- `.github/workflows/ci.yml` runs on `push` to `main` and on `pull_request`
+- CI jobs are split: `lint`, `test` (matrix 3.11/3.12/3.13), `verify-examples`, `build`, `version-check` (PR only), plus advisory MicroPython and CircuitPython compat
+- `version-check` job uses `scripts/check_version.py` to enforce per-library VERSION bumps when `src/` or `pyproject.toml` changes (Decision 0002)
+- `build` job uploads artifacts via `actions/upload-artifact@v4`
+- `.github/workflows/release.yml` triggers on VERSION changes pushed to `main`
+- release workflow detects changed libraries, builds distributions, publishes to PyPI via trusted publishers (OIDC), creates per-library git tags (`<name>-v<version>`), and creates GitHub Releases
+- `scripts/check_version.py` is also available as `python scripts/run.py check-version` for local use
+- four publishable libraries (`compat/`, `msgpack/`, `runner/`, `timing/`) are the current proof targets under `libraries/`
 
 ## Proposed pipeline tiers
 
@@ -82,7 +85,7 @@ It should not be forced to be the direct execution environment on constrained bo
 
 ## Notes
 
-The repo now has two publishable libraries: `timing/` and `runner/`. Both build and pass preflight. Release automation is still intentionally incomplete. This workstream remains active until per-library `VERSION` file enforcement, package-aware release selection, and staged publishing are implemented.
+The repo has four publishable libraries: `compat/`, `msgpack/`, `runner/`, and `timing/`. All build and pass preflight. Release automation (`.github/workflows/release.yml`) is in place with per-library detection, PyPI publishing via trusted publishers, git tagging, and GitHub Releases. Remaining items: configure the `pypi` GitHub environment and trusted publishers on pypi.org, set up branch protection rules, wire in circup/mip bundle staging (Decision 0018).
 
 ## Resolved feedback
 

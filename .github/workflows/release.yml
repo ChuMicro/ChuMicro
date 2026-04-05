@@ -1,0 +1,127 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "libraries/*/VERSION"
+
+# One release at a time to avoid race conditions on tags.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # create tags and GitHub Releases
+  id-token: write   # PyPI trusted publishing (OIDC)
+
+jobs:
+  detect:
+    name: Detect changed libraries
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.detect.outputs.matrix }}
+      has_releases: ${{ steps.detect.outputs.has_releases }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: detect
+        name: Find VERSION changes
+        run: |
+          # Compare this push against the previous commit.
+          changed=$(git diff --name-only HEAD~1 HEAD -- 'libraries/*/VERSION' || true)
+          if [ -z "$changed" ]; then
+            echo "has_releases=false" >> "$GITHUB_OUTPUT"
+            echo "matrix={\"include\":[]}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          entries="["
+          first=true
+          for version_file in $changed; do
+            # version_file is e.g. libraries/timing/VERSION
+            lib_dir=$(dirname "$version_file")
+            lib_name=$(basename "$lib_dir")
+            version=$(cat "$version_file" | tr -d '[:space:]')
+            tag="${lib_name}-v${version}"
+
+            # Skip if this tag already exists (re-run safety).
+            if git rev-parse "refs/tags/${tag}" >/dev/null 2>&1; then
+              echo "Tag ${tag} already exists — skipping ${lib_name}."
+              continue
+            fi
+
+            if [ "$first" = true ]; then
+              first=false
+            else
+              entries="${entries},"
+            fi
+            entries="${entries}{\"lib_name\":\"${lib_name}\",\"lib_dir\":\"${lib_dir}\",\"version\":\"${version}\",\"tag\":\"${tag}\"}"
+          done
+          entries="${entries}]"
+
+          if [ "$entries" = "[]" ]; then
+            echo "has_releases=false" >> "$GITHUB_OUTPUT"
+            echo "matrix={\"include\":[]}" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_releases=true" >> "$GITHUB_OUTPUT"
+            echo "matrix={\"include\":${entries}}" >> "$GITHUB_OUTPUT"
+          fi
+
+  release:
+    name: "Release ${{ matrix.lib_name }} v${{ matrix.version }}"
+    needs: detect
+    if: needs.detect.outputs.has_releases == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.detect.outputs.matrix) }}
+
+    # PyPI trusted publishing requires the environment to match what is
+    # configured on pypi.org.  Create a "pypi" environment in the repo
+    # settings with the trusted publisher for each library.
+    environment: pypi
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install build tooling
+        run: python -m pip install --upgrade pip build
+
+      - name: Build distribution
+        run: python -m build ${{ matrix.lib_dir }}
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: ${{ matrix.lib_dir }}/dist/
+
+      - name: Create git tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ matrix.tag }}" -m "Release ${{ matrix.lib_name }} ${{ matrix.version }}"
+          git push origin "${{ matrix.tag }}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ matrix.tag }}
+          name: "${{ matrix.lib_name }} v${{ matrix.version }}"
+          body: |
+            Release of **chumicro-${{ matrix.lib_name }}** version **${{ matrix.version }}**.
+
+            Install from PyPI:
+            ```
+            pip install chumicro-${{ matrix.lib_name }}==${{ matrix.version }}
+            ```
+          files: ${{ matrix.lib_dir }}/dist/*
+          generate_release_notes: true
+

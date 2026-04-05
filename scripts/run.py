@@ -15,6 +15,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from check_version import main as _check_version_main
 from discovery import (
     ROOT,
     coverage_args_for,
@@ -543,6 +544,11 @@ def test_device() -> int:
     return 2
 
 
+def check_version() -> int:
+    """Check VERSION enforcement for changed libraries (PR check)."""
+    return _check_version_main([])
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -587,6 +593,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help="test all packages on CPython + MicroPython + CircuitPython",
     )
     sub.add_parser("test-device", help="device validation info")
+    sub.add_parser("check-version", help="check VERSION enforcement for changed libraries")
 
     # Scoped tasks
     test_p = sub.add_parser(
@@ -688,6 +695,7 @@ def main(argv: list[str]) -> int:
         "test-circuitpython-compat": test_circuitpython_compat,
         "test-runtime-matrix": test_runtime_matrix,
         "test-device": test_device,
+        "check-version": check_version,
     }
     return no_arg[args.task]()
 

@@ -2,7 +2,6 @@
 
 ## Now
 
-- [ ] Draft the first release workflow for per-library `VERSION` file enforcement and per-library artifacts (PyPI, circup, mip).
 - [ ] Enforce lint, coverage, and package-build checks as required status checks on the main branch (GitHub branch protection).
 - [ ] Document contributor prerequisites by platform (macOS, Linux, Windows/WSL2) and by editor (PyCharm, VS Code, CLI) in the README. Linux and WSL2 sections are best-effort/researched until verified.
   - When writing these docs, scope the AGENTS.md performance guidelines (f-strings, `const()`, `memoryview`, pre-allocated buffers, etc.) to **library code only**. Infrastructure code (`scripts/`, `support/`) runs exclusively on CPython and does not need embedded-runtime constraints.
@@ -16,6 +15,7 @@
   7. VERSION bumps — semantic versioning rules, when to bump
   8. Preflight — running `python scripts/run.py preflight` before committing
   - This should live in the repo (e.g., `docs/creating-a-library.md` or a top-level `CONTRIBUTING.md` section), not just in AGENTS.md or decision records.
+- [ ] Configure PyPI trusted publisher for each library (requires pypi.org account setup and GitHub environment `pypi`).
 
 ## Next
 - [ ] Implement `chumicro-settings` — dict-like persistent storage for microcontrollers.
@@ -50,6 +50,7 @@
 
 ## Done
 
+- [x] Draft first release workflow: `release.yml` triggers on VERSION changes pushed to main, detects changed libraries, builds, publishes to PyPI via trusted publishers (OIDC), creates git tags and GitHub Releases. `ci.yml` split into lint/test/build/verify-examples/version-check jobs. `scripts/check_version.py` enforces per-library VERSION bumps for release-relevant changes (Decision 0002).
 - [x] Add `chumicro-msgpack` library: pure-Python MessagePack encoder/decoder with native CircuitPython C delegation.  Bytes API (`packb`/`unpackb`) and stream API (`pack`/`unpack`).  Docs, examples (including CircuitPython NVM hardware example), struct-vs-msgpack guidance.
 - [x] Add `functools.partial` polyfill to `chumicro-compat`: `_PurePythonPartial` for MicroPython/CircuitPython, re-exports real `functools.partial` on CPython.  12 tests, docs, examples.
 - [x] Fix cross-runtime test harness: `time.monotonic` shim for MicroPython, replace `pytest.raises` with `chumicro_test_harness.raises` in msgpack tests.
