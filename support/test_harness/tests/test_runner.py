@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import sys
 from types import SimpleNamespace
 
@@ -92,3 +93,46 @@ def test_run_module_handles_missing_traceback_support(monkeypatch, capsys) -> No
     assert "RuntimeError: boom" in output
 
 
+def test_run_module_includes_per_test_duration(capsys) -> None:
+    """Each PASS/FAIL line should include the test duration in seconds."""
+    module = SimpleNamespace(test_ok=lambda: None)
+
+    run_module(module)
+    output = capsys.readouterr().out
+
+    assert re.search(r"PASS test_ok \(\d+\.\d{3}s\)", output)
+
+
+def test_run_module_includes_total_duration(capsys) -> None:
+    """The SUMMARY line should include total elapsed time."""
+    module = SimpleNamespace(test_ok=lambda: None)
+
+    run_module(module)
+    output = capsys.readouterr().out
+
+    assert re.search(r"time=\d+\.\d{3}s", output)
+
+
+def test_run_module_reports_heap_when_available(monkeypatch, capsys) -> None:
+    """When gc.mem_free is available, HEAP stats should appear before and after."""
+    fake_gc = SimpleNamespace(collect=lambda: None, mem_free=lambda: 50000)
+    monkeypatch.setattr(runner_module, "_gc", fake_gc)
+
+    module = SimpleNamespace(test_ok=lambda: None)
+    run_module(module)
+    output = capsys.readouterr().out
+
+    assert "HEAP 50000 bytes free" in output
+    assert "delta" in output
+
+
+def test_mem_free_returns_none_without_gc_mem_free(monkeypatch) -> None:
+    """_mem_free should return None when gc lacks mem_free."""
+    monkeypatch.setattr(runner_module, "_gc", SimpleNamespace(collect=lambda: None))
+    assert runner_module._mem_free() is None
+
+
+def test_mem_free_returns_none_without_gc(monkeypatch) -> None:
+    """_mem_free should return None when gc is not available."""
+    monkeypatch.setattr(runner_module, "_gc", None)
+    assert runner_module._mem_free() is None
