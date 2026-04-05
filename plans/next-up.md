@@ -42,7 +42,7 @@
 
 ## Done
 
-- [x] Implement and iterate `chumicro-runner` to gate-based pattern (Decision 0014).  Service contract: `check(now_ms) -> bool`.  `Runner` with `add()`, `add_periodic()`, `TaskHandle`, shared timestamps, batch firing.  `CallRecorder` test helper.  `chumicro-runner` 0.1.0 → 0.4.0.
+- [x] Implement and iterate `chumicro-runner` to gate-based pattern (Decision 0014).  Service contract: `check(now_ms) -> bool`.  `Runner` with `add()`, `add_periodic()`, `TaskHandle`, shared timestamps, batch firing.  `CallRecorder` test helper.  All library versions reset to 0.1.0.
 - [x] Add `chumicro-compat` library with lightweight `abc` module (ABC base class, `@abstractmethod` decorator) using `__init_subclass__` — works on MicroPython ≥1.19.1, CircuitPython ≥8.x.
 - [x] Generalize the compatibility smoke runner to discover and exercise device tests for any library, not just timing.
 - [x] Scope AGENTS.md performance guidelines (f-strings, `const()`, `memoryview`, pre-allocated buffers) to library code only. Infrastructure code (`scripts/`, `support/`) runs exclusively on CPython and should not be constrained by embedded-runtime rules.

@@ -293,7 +293,7 @@ This was the largest single session. It addressed three areas: the workspace was
 6. Timing library now has 9 examples: 4 simulated (heartbeat_blink, multiple_heartbeats, timeout_check, debounce, periodic_tick) + 4 hardware (circuitpython_blink, circuitpython_debounce, micropython_blink, micropython_debounce).
 
 **Cross-runtime compatibility fix:**
-7. Removed `from __future__ import annotations` from `chumicro_timing/testing.py` — not supported on CircuitPython or MicroPython.  Only used built-in types in annotations, so postponed evaluation was unnecessary. Bumped timing VERSION 0.1.0 → 0.1.1.
+7. Removed `from __future__ import annotations` from `chumicro_timing/testing.py` — not supported on CircuitPython or MicroPython.  Only used built-in types in annotations, so postponed evaluation was unnecessary.
 
 **Doc accuracy audit:**
 8. Fixed `testing.py` module docstring: `heartbeat.poll()` → `heartbeat.poll(fake.ticks_ms())` (missing required `now_ms` argument).

@@ -49,7 +49,7 @@ Settled choices:
 Current verified progress:
 
 - `libraries/timing/` exists with `src/`, `tests/`, and `functional_tests/`
-- `libraries/runner/` exists as the second publishable library (`chumicro-runner` 0.4.0) — provides a gate-based service pattern with shared timestamps, period gating on the runner, and batch handler firing (Decision 0014)
+- `libraries/runner/` exists as the second publishable library (`chumicro-runner` 0.1.0) — provides a gate-based service pattern with shared timestamps, period gating on the runner, and batch handler firing (Decision 0014)
 - `Heartbeat` uses `poll(now_ms)`, `is_due(now_ms)`, and `reset(now_ms)` — all require a shared timestamp captured once per loop; the runner check contract is `check(now_ms) -> bool` (Decision 0014)
 - host-side tests pass with coverage above the current repo threshold
 - the timing package builds as an individual distribution
