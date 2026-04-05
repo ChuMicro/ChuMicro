@@ -35,19 +35,21 @@ print(restored)              # {0: 'MyNetwork', 1: 'secret', 2: True}
 
 ## What's included
 
+### Stream-based API (preferred on microcontrollers)
+
+| Symbol | Description |
+|---|---|
+| `pack(obj, stream)` | Pack an object directly to a writable stream — no intermediate buffer |
+| `unpack(stream)` | Unpack one object from a readable stream |
+
 ### Bytes-based API
 
 | Symbol | Description |
 |---|---|
-| `packb(obj)` | Pack a Python object to msgpack bytes |
+| `packb(obj)` | Pack a Python object to msgpack bytes (allocates a temporary buffer) |
 | `unpackb(data)` | Unpack msgpack bytes (bytes, bytearray, or memoryview) to a Python object |
 
-### Stream-based API
-
-| Symbol | Description |
-|---|---|
-| `pack(obj, stream)` | Pack an object to a writable stream |
-| `unpack(stream)` | Unpack one object from a readable stream |
+Use `pack`/`unpack` when writing to files, sockets, or NVM.  Use `packb`/`unpackb` when you need the encoded bytes in memory (e.g., to measure length before framing).
 
 ### Supported types
 

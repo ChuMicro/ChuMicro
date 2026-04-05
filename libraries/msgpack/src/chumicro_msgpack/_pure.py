@@ -256,7 +256,13 @@ def _decode_map(data, offset, length):
 # ---------------------------------------------------------------------------
 
 def packb(obj):
-    """Pack *obj* to msgpack bytes."""
+    """Pack *obj* to msgpack bytes.
+
+    Allocates a temporary ``bytearray`` that grows during encoding,
+    then copies to ``bytes``.  For small payloads this is fine; for
+    larger data or tight loops, prefer ``pack(obj, stream)`` to write
+    directly to a destination without the intermediate allocation.
+    """
     buffer = bytearray()
     _encode(obj, buffer)
     return bytes(buffer)

@@ -26,7 +26,12 @@ try:
     from msgpack import pack, unpack  # noqa: F401
 
     def packb(obj):
-        """Pack *obj* to msgpack bytes using the native encoder."""
+        """Pack *obj* to msgpack bytes using the native encoder.
+
+        Allocates a ``BytesIO`` buffer internally.  For small payloads
+        this is fine; for larger data or tight loops, prefer
+        ``pack(obj, stream)`` to write directly to a destination.
+        """
         buffer = BytesIO()
         pack(obj, buffer)
         return buffer.getvalue()

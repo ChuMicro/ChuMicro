@@ -6,6 +6,19 @@
 
 The library exposes four functions: `packb` and `unpackb` for bytes-based encoding/decoding, and `pack` and `unpack` for stream-based I/O.  On CircuitPython boards with the native C `msgpack` module, all four delegate to the built-in — the pure-Python encoder is never loaded.
 
+## When to use msgpack vs `struct`
+
+Python's `struct` module and msgpack both produce compact binary data, but they solve different problems:
+
+| | `struct` | msgpack |
+|---|---|---|
+| **Schema** | Fixed layout — both sides must agree on a format string (e.g., `">HBf"`) | Self-describing — types are encoded in the data |
+| **Flexibility** | Adding or removing a field changes the layout and breaks readers | Dicts and arrays grow naturally; old readers ignore unknown keys |
+| **Size** | Smallest possible for a known fixed layout | Slightly larger due to type tags, but still much smaller than JSON |
+| **Best for** | Fixed sensor packets, register maps, wire protocols with a spec | Settings dicts, configuration storage, messages between devices that may run different firmware versions |
+
+**Use `struct`** when the data layout is fixed and both sides are compiled together (e.g., a sensor reading struct that never changes).  **Use msgpack** when the data is dict-like, may evolve over time, or when you want to inspect the data without knowing the schema.
+
 ## Getting started
 
 ```python
@@ -18,9 +31,29 @@ restored = unpackb(data)
 print(restored)      # {'ssid': 'MyNetwork', 'configured': True}
 ```
 
+## Stream-based API (preferred on microcontrollers)
+
+`pack` and `unpack` write to and read from stream objects (anything with `.write()` or `.read()`).  This matches CircuitPython's native `msgpack` API.
+
+When writing to a file, socket, or NVM wrapper, prefer `pack` over `packb` — it writes directly to the destination without building an intermediate `bytes` object in RAM.
+
+```python
+from io import BytesIO
+from chumicro_msgpack import pack, unpack
+
+buffer = BytesIO()
+pack({"key": [1, 2, 3]}, buffer)
+
+buffer.seek(0)
+result = unpack(buffer)
+print(result)  # {'key': [1, 2, 3]}
+```
+
 ## Bytes-based API
 
-`packb` and `unpackb` are the most common entry points.  They work with `bytes` objects directly — no streams needed.
+`packb` and `unpackb` work with `bytes` objects directly.  They are convenient when you need the encoded data in memory — for example, to measure its length before writing it with a framing header, or to pass it to an API that expects `bytes`.
+
+On microcontrollers, be aware that `packb` allocates a temporary `bytearray`, grows it during encoding, then copies it to `bytes`.  For small payloads (typical settings dicts) this is fine.  For larger data or tight loops, prefer the stream-based `pack` to avoid the intermediate allocation.
 
 ```python
 from chumicro_msgpack import packb, unpackb
@@ -34,22 +67,6 @@ print(original)  # [1, 'hello', None, True]
 ```
 
 `unpackb` accepts `bytes`, `bytearray`, and `memoryview`, so you can decode directly from a pre-allocated buffer without copying.
-
-## Stream-based API
-
-`pack` and `unpack` write to and read from stream objects (anything with `.write()` or `.read()`).  This matches CircuitPython's native `msgpack` API.
-
-```python
-from io import BytesIO
-from chumicro_msgpack import pack, unpack
-
-buffer = BytesIO()
-pack({"key": [1, 2, 3]}, buffer)
-
-buffer.seek(0)
-result = unpack(buffer)
-print(result)  # {'key': [1, 2, 3]}
-```
 
 ## Integer keys for compact storage
 
