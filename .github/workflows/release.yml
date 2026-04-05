@@ -1,6 +1,12 @@
 name: Release
 
 on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - "libraries/*/VERSION"
   workflow_dispatch:
     inputs:
       libraries:

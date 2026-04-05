@@ -21,8 +21,9 @@ This preserves all library code, READMEs, VERSION files, and planning docs.
 
 ## Current state quick reference
 
-- **Releases:** manual only (workflow_dispatch), inputs: `libraries` filter + `dry_run`
-- **PyPI:** OIDC trusted publishing, environment `pypi`, one pending publisher at a time
+- **Releases:** push trigger on VERSION changes (develop/main) + manual workflow_dispatch with `libraries` filter + `dry_run`
+- **PyPI:** OIDC trusted publishing, environment `pypi`, all 8 projects created
+- **CI compat jobs:** disabled (commented out) to conserve minutes
 - **Bundle:** `ChuMicro/chumicro-bundle` exists, needs `BUNDLE_TOKEN` secret
 - **Branches:** `develop` + `main` in sync, protection rules not yet configured
 - **Versions:** all libraries at 0.1.0
