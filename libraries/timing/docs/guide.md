@@ -148,6 +148,8 @@ The [examples](../examples/) directory contains complete runnable scripts:
 | `debounce.py` | Button debounce using `ticks_ms()` and `ticks_diff()` |
 | `periodic_tick.py` | Manual periodic action — what `Heartbeat` does under the hood |
 | `circuitpython_blink.py` | LED blink on CircuitPython hardware |
+| `circuitpython_debounce.py` | Button debounce on CircuitPython hardware |
 | `micropython_blink.py` | LED blink on MicroPython hardware |
+| `micropython_debounce.py` | Button debounce on MicroPython hardware |
 
 Simulated examples run on CPython.  Hardware examples (`circuitpython_*` / `micropython_*`) require a real board — see the setup notes in each file.
