@@ -15,7 +15,7 @@ Establish predictable PR checks and per-library release automation for a mono-wo
 - per-library build and release steps
 - staging targets for PyPI and CircuitPython distribution
 - package-aware workflows in a mono-workspace
-- AI-based code review (tool TBD — will be provided separately)
+- AI-based code review (GitHub Copilot code review — low priority until community contributions begin)
 - develop → main branching model (Decision 0019)
 
 ## Current verified slice
@@ -28,7 +28,7 @@ Establish predictable PR checks and per-library release automation for a mono-wo
 - **Release (`.github/workflows/release.yml`):** triggers on VERSION changes pushed to `main`, detects changed libraries, builds distributions, creates per-library git tags (`<name>-v<version>`), and creates GitHub Releases. PyPI publishing is scaffolded but disabled until trusted publisher is configured. Supports `workflow_dispatch` with dry-run option.
 - **PR template:** `.github/PULL_REQUEST_TEMPLATE.md` with checklist (description, VERSION, labels, preflight, docstrings, docs/examples, no secrets).
 - **Labels:** `.github/labels.yml` defines type, library, semver, and process labels. Synced via `label-sync.yml` workflow.
-- **AI review:** Tool TBD — will be provided separately. The CI workflow has a placeholder for an AI review required check.
+- **AI review:** Will use GitHub Copilot code review once community contributions begin. Low priority until then.
 - **Local tasks:** `python scripts/run.py check-version`, `check-api` available for pre-commit verification.
 - Four publishable libraries (`compat/`, `msgpack/`, `runner/`, `timing/`) are the current proof targets.
 
@@ -91,7 +91,7 @@ It should not be forced to be the direct execution environment on constrained bo
 
 ## Notes
 
-The repo has four publishable libraries: `compat/`, `msgpack/`, `runner/`, and `timing/`. All build and pass preflight. Release automation is in place for tagging and GitHub Releases; PyPI publishing is scaffolded but disabled. The branching model (Decision 0019) and API breakage detection (Decision 0020) are defined and wired into CI. Bundle publishing to `ChuMicro/chumicro-bundle` is wired into the release workflow (Decision 0018): `scripts/bundle.py` stages .py + .mpy + `package.json`, the `bundle` job pushes to the bundle repo and creates circup-format release zips. Remaining items: create the `develop` branch on GitHub, set it as default, configure branch protection, integrate the AI review tool (TBD), enable PyPI publishing when ready, create the `chumicro-bundle` repo and add `BUNDLE_TOKEN` secret.
+The repo has four publishable libraries: `compat/`, `msgpack/`, `runner/`, and `timing/`. All build and pass preflight. Release automation is in place for tagging and GitHub Releases; PyPI publishing is scaffolded but disabled. The branching model (Decision 0019) and API breakage detection (Decision 0020) are defined and wired into CI. Bundle publishing to `ChuMicro/chumicro-bundle` is wired into the release workflow (Decision 0018): `scripts/bundle.py` stages .py + .mpy + `package.json`, the `bundle` job pushes to the bundle repo and creates circup-format release zips. Remaining items: create the `develop` branch on GitHub, set it as default, configure branch protection, enable PyPI publishing when ready, create the `chumicro-bundle` repo and add `BUNDLE_TOKEN` secret.
 
 ## Resolved feedback
 
