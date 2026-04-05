@@ -10,11 +10,20 @@ Provides lightweight reimplementations of CPython standard-library features that
 # CPython (pip)
 pip install chumicro-compat
 
-# CircuitPython (circup) — coming soon
-# circup install chumicro-compat
+# CircuitPython (circup)
+circup bundle-add ChuMicro/chumicro-bundle
+circup install chumicro-compat
 
-# MicroPython (mip) — coming soon
-# import mip; mip.install("chumicro-compat")
+# MicroPython (mip)
+mpremote mip install github:ChuMicro/chumicro-bundle/chumicro_compat
+```
+
+For experimental (pre-release) versions from the develop branch:
+
+```bash
+pip install chumicro-compat-experimental
+circup install chumicro-compat-experimental
+mpremote mip install github:ChuMicro/chumicro-bundle/chumicro_compat_experimental
 ```
 
 ## Quick example
