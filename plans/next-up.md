@@ -37,7 +37,7 @@
 - [ ] Add docs build verification to the release pipeline (verify `docs/` is non-empty for any library being released).
 - [ ] Explore test ergonomics: reduce repeated boilerplate across test files.
 - [ ] Validate VS Code workspace with the generated `pyrightconfig.json`.
-- [ ] Create the `ChuMicro/chumicro-bundle` repo on GitHub and add `BUNDLE_TOKEN` secret (Decision 0018).
+- [ ] Add `BUNDLE_TOKEN` secret to the source repo and validate circup/mip install paths end-to-end (Decision 0018).
 - [ ] Add the first real board transport tooling for ESP32-S2 (Wemos S2-Mini) once the manual device execution path needs to move beyond direct local runs.
 - [ ] Design a performance and resource benchmarking infrastructure. Goals:
   - Measure memory footprint (heap allocations, peak usage) and CPU cost of library operations.
@@ -53,6 +53,7 @@
 
 ## Done
 
+- [x] Fix circup zip compatibility in `release.yml`: wrap zip contents in `{basename}/lib/` directory (circup's `Bundle.lib_dir()` requires it), produce per-platform mpy zips (`9.x-mpy`, `10.x-mpy`) matching circup's `SUPPORTED_PLATFORMS`. Document circup format requirements and bundle repo content policy (no examples, no per-library READMEs, no workflows) in Decision 0018.
 - [x] Add bundle publishing to release workflow: `scripts/bundle.py` stages .py + .mpy + `package.json` per library; `release.yml` `bundle` job compiles with mpy-cross, pushes to `ChuMicro/chumicro-bundle`, and creates circup-format release zips (Decision 0018).
 - [x] Confirm mip staging details: mip installs from `package.json` manifests in the bundle repo; `mip.install("github:ChuMicro/chumicro-bundle/chumicro_<name>")`. circup installs via `circup bundle-add ChuMicro/chumicro-bundle` + `circup install chumicro-<name>` (Decision 0018).
 

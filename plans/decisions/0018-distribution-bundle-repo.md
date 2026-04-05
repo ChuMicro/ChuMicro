@@ -91,19 +91,49 @@ Then install libraries normally:
 circup install chumicro-runner
 ```
 
-`circup` reads tagged GitHub Releases on the bundle repo.  Release automation produces versioned zip files in the format `circup` expects (containing `lib/` with `.mpy` and `.py` variants).
+`circup` reads tagged GitHub Releases on the bundle repo.  The `Bundle` class (in `circup/bundle.py`) constructs download URLs from the repo name:
 
-### 5. Build pipeline
+```
+https://github.com/{repo}/releases/download/{tag}/{bundle_id}-{platform}-{tag}.zip
+```
+
+Where `bundle_id` is the repo name lowercased with underscores replaced by hyphens (`chumicro-bundle`), and `{platform}` comes from circup's `PLATFORMS` dict in `circup/shared.py`.  As of circup's current release, the supported platforms are:
+
+| circup key | Zip platform string | CircuitPython version |
+|---|---|---|
+| `py` | `py` | n/a (source) |
+| `9mpy` | `9.x-mpy` | 9.x |
+| `10mpy` | `10.x-mpy` | 10.x |
+
+Each zip must contain a top-level directory named `{bundle_id}-{platform}-{tag}/` with a `lib/` subdirectory inside it.  circup's `lib_dir()` method constructs this path after extraction.  If the mpy zip for a device's platform is missing, circup falls back to the `.py` source zip.
+
+Release automation produces one `.py` zip and one `.mpy` zip per supported platform:
+
+- `chumicro-bundle-py-{tag}.zip`
+- `chumicro-bundle-9.x-mpy-{tag}.zip`
+- `chumicro-bundle-10.x-mpy-{tag}.zip`
+
+Tags use date-based format (`YYYYMMDD` for stable, `YYYYMMDD-experimental` for develop).  circup parses these via `semver.VersionInfo.parse()` with `optional_minor_and_patch=True`.
+
+### 5. Bundle repo content policy
+
+The bundle repo is an automation-maintained artifact store.  Keep it minimal:
+
+- **No examples.**  Examples live in the source repo and are linked from library READMEs and docs.  Neither `circup install` nor `mip install` puts examples on the device.  circup's `examples_dir()` support is designed for Adafruit's build-tools-generated bundles and would require additional zip layout work to use.  Defer if needed later.
+- **No per-library READMEs.**  Neither tool reads them.  A single root `README.md` with install commands and a link to the source repo is sufficient.
+- **No GitHub Actions workflows.**  All automation lives in the source repo's `release.yml`.  The source repo pushes to the bundle repo via `BUNDLE_TOKEN` (a PAT).  PAT-triggered pushes can fire workflows (unlike `GITHUB_TOKEN`), so a bundle-side `on: push` workflow would create a feedback loop.  If a `workflow_dispatch`-only trigger is ever needed, it can be added with push triggers explicitly excluded.
+
+### 6. Build pipeline
 
 Release CI in the source repo triggers the bundle update:
 
 1. A version tag on a library in `ChuMicro/ChuMicro` triggers the release workflow.
 2. CI compiles `.py` → `.mpy` using `mpy-cross` for each targeted bytecode version.
 3. CI pushes the `.py` + `.mpy` files and updated `package.json` to `ChuMicro/chumicro-bundle`.
-4. CI creates a tagged GitHub Release on the bundle repo with circup-format zip.
-5. PyPI upload happens in parallel from the source repo (standard `python -m build` + `twine`).
+4. CI creates a tagged GitHub Release on the bundle repo with circup-format zips (one `.py` zip, one `.mpy` zip per supported platform).
+5. PyPI upload happens in parallel from the source repo (standard `python -m build` + trusted publishing).
 
-### 6. PyPI is independent
+### 7. PyPI is independent
 
 CPython users install via `pip install chumicro-runner` from PyPI.  The bundle repo is not involved in PyPI publishing — that happens directly from the source repo's `pyproject.toml` and build artifacts.
 
@@ -115,4 +145,4 @@ CPython users install via `pip install chumicro-runner` from PyPI.  The bundle r
 - The bundle repo does not exist yet.  Creating it and wiring up CI is part of the ci-release workstream.
 - Platform targeting (Decision 0011) gates which libraries are included in each release.
 - Example install commands in hardware examples should use `github:ChuMicro/chumicro-bundle/...` for MicroPython and `circup install ...` for CircuitPython once the bundle exists.
-
+- When circup adds new platform entries to `SUPPORTED_PLATFORMS`, the release workflow's mpy platform loop needs updating to match.  This should be infrequent (tracks CircuitPython major releases).

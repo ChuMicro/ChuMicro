@@ -217,35 +217,45 @@ jobs:
           # Determine which package directories were staged.
           # Experimental builds produce *_experimental/ dirs; stable produces base dirs.
           staged_pattern=".bundle-repo/chumicro_*"
+          mkdir -p .circup-zips
+
+          # circup expects zip assets named {bundle_id}-{platform}-{tag}.zip
+          # containing a top-level directory {bundle_id}-{platform}-{tag}/lib/.
+          # See circup's Bundle class (url_format, lib_dir, get_bundle).
 
           # Build circup-format zip: .py source bundle.
-          mkdir -p .circup-py/lib
+          py_name="chumicro-bundle-py-${date_tag}"
+          mkdir -p ".circup-staging/${py_name}/lib"
           for pkg_dir in $staged_pattern; do
             [ -d "$pkg_dir" ] || continue
             pkg=$(basename "$pkg_dir")
-            rsync -a --include='*/' --include='*.py' --exclude='*' "$pkg_dir/" ".circup-py/lib/${pkg}/"
+            rsync -a --include='*/' --include='*.py' --exclude='*' "$pkg_dir/" ".circup-staging/${py_name}/lib/${pkg}/"
           done
-          mkdir -p .circup-zips
-          (cd .circup-py && zip -qr "../.circup-zips/chumicro-bundle-py-${date_tag}.zip" lib/)
+          (cd .circup-staging && zip -qr "../.circup-zips/${py_name}.zip" "${py_name}/")
 
-          # Build circup-format zip: .mpy bytecode bundle.
-          # Includes .py for testing modules (source-only, no .mpy compiled).
-          mkdir -p .circup-mpy/lib
-          for pkg_dir in $staged_pattern; do
-            [ -d "$pkg_dir" ] || continue
-            pkg=$(basename "$pkg_dir")
-            # Copy .mpy files (compiled modules).
-            rsync -a --include='*/' --include='*.mpy' --exclude='*' "$pkg_dir/" ".circup-mpy/lib/${pkg}/"
-            # Copy testing modules (.py only — no .mpy counterparts).
-            if [ -f "$pkg_dir/testing.py" ]; then
-              mkdir -p ".circup-mpy/lib/${pkg}"
-              cp "$pkg_dir/testing.py" ".circup-mpy/lib/${pkg}/testing.py"
-            fi
-            if [ -d "$pkg_dir/testing" ]; then
-              rsync -a --include='*/' --include='*.py' --exclude='*' "$pkg_dir/testing/" ".circup-mpy/lib/${pkg}/testing/"
-            fi
+          # Build circup-format zips: .mpy bytecode bundles.
+          # circup downloads a per-platform zip matching the device's CP version.
+          # Current mpy-cross produces format v6, used by CP 9.x and 10.x.
+          # Produce a zip for each platform in circup's SUPPORTED_PLATFORMS.
+          for mpy_platform in "9.x-mpy" "10.x-mpy"; do
+            mpy_name="chumicro-bundle-${mpy_platform}-${date_tag}"
+            mkdir -p ".circup-staging/${mpy_name}/lib"
+            for pkg_dir in $staged_pattern; do
+              [ -d "$pkg_dir" ] || continue
+              pkg=$(basename "$pkg_dir")
+              # Compiled modules (.mpy).
+              rsync -a --include='*/' --include='*.mpy' --exclude='*' "$pkg_dir/" ".circup-staging/${mpy_name}/lib/${pkg}/"
+              # Testing modules (.py only — no .mpy counterparts).
+              if [ -f "$pkg_dir/testing.py" ]; then
+                mkdir -p ".circup-staging/${mpy_name}/lib/${pkg}"
+                cp "$pkg_dir/testing.py" ".circup-staging/${mpy_name}/lib/${pkg}/testing.py"
+              fi
+              if [ -d "$pkg_dir/testing" ]; then
+                rsync -a --include='*/' --include='*.py' --exclude='*' "$pkg_dir/testing/" ".circup-staging/${mpy_name}/lib/${pkg}/testing/"
+              fi
+            done
+            (cd .circup-staging && zip -qr "../.circup-zips/${mpy_name}.zip" "${mpy_name}/")
           done
-          (cd .circup-mpy && zip -qr "../.circup-zips/chumicro-bundle-mpy-${date_tag}.zip" lib/)
 
       - name: Push to bundle repo
         run: |
