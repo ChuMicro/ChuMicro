@@ -1,0 +1,67 @@
+name: Promote to main
+
+on:
+  workflow_dispatch:
+    inputs:
+      auto_merge:
+        description: "Auto-merge if CI passes (requires admin)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create promotion PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Check if a promotion PR already exists.
+          existing=$(gh pr list --base main --head develop --state open --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            echo "Promotion PR #${existing} already exists."
+            echo "pr_number=${existing}" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          # Build a summary of VERSION changes between main and develop.
+          changes=$(git diff origin/main..origin/develop --name-only -- 'libraries/*/VERSION' || true)
+          body="## Release cut: develop → main\n\n"
+          if [ -n "$changes" ]; then
+            body="${body}### Libraries with VERSION changes\n\n"
+            for f in $changes; do
+              lib=$(basename $(dirname "$f"))
+              ver=$(cat "$f" | tr -d '[:space:]')
+              body="${body}- **${lib}** → ${ver}\n"
+            done
+          else
+            body="${body}No VERSION changes detected — this is a sync-only promotion.\n"
+          fi
+          body="${body}\n---\nAutomatically created by the promote workflow."
+
+          pr_number=$(gh pr create \
+            --base main \
+            --head develop \
+            --title "Release cut: promote develop → main" \
+            --body "$(echo -e "$body")" \
+            --label "release-cut" \
+            | grep -oP '#\K\d+' || true)
+
+          echo "Created promotion PR #${pr_number}"
+          echo "pr_number=${pr_number}" >> "$GITHUB_ENV"
+
+      - name: Enable auto-merge
+        if: inputs.auto_merge && env.pr_number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr merge "${{ env.pr_number }}" --auto --merge
+

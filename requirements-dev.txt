@@ -10,6 +10,7 @@ pytest
 pytest-cov
 ruff
 build
+griffe
 mkdocs
 mkdocs-material
 mkdocstrings[python]

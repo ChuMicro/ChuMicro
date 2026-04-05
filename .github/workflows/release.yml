@@ -6,6 +6,12 @@ on:
       - main
     paths:
       - "libraries/*/VERSION"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run — build but do not publish or tag"
+        type: boolean
+        default: false
 
 # One release at a time to avoid race conditions on tags.
 concurrency:

@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches:
+      - develop
       - main
   pull_request:
 
@@ -89,6 +90,41 @@ jobs:
 
       - name: Check VERSION enforcement
         run: python scripts/check_version.py --base origin/${{ github.base_ref }}
+
+  api-check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install tooling
+        run: python -m pip install --upgrade pip griffe
+
+      - name: Check API breakages
+        run: python scripts/check_api.py --base origin/${{ github.base_ref }}
+
+  label-check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for semver label
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          labels=$(gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/labels --jq '.[].name')
+          if echo "$labels" | grep -q "^semver:"; then
+            echo "Found semver label."
+          else
+            echo "::error::Missing required semver label (semver:patch, semver:minor, semver:major, or semver:none)."
+            echo "Add a semver label to indicate the version impact of this PR."
+            exit 1
+          fi
 
   micropython-compat:
     name: MicroPython compatibility (advisory)

@@ -92,12 +92,17 @@ Exit criteria:
 
 Current verified progress:
 
-- CI workflow split into dedicated jobs: lint, test (3.11/3.12/3.13 matrix), verify-examples, build, version-check
+- CI workflow split into dedicated jobs: lint, test (3.11/3.12/3.13 matrix), verify-examples, build, version-check, api-check, label-check
 - `version-check` job enforces per-library VERSION bumps on PRs using `scripts/check_version.py`
+- `api-check` job uses `griffe check` to detect API breakages and cross-reference with VERSION bump level (Decision 0020)
+- `label-check` job requires a `semver:*` label on every PR
 - build job uploads artifacts via `actions/upload-artifact@v4`
-- release workflow (`.github/workflows/release.yml`) triggers on VERSION changes pushed to main
-- release workflow detects changed libraries, builds, publishes to PyPI (OIDC trusted publishers), creates git tags and GitHub Releases
-- `scripts/run.py check-version` available for local pre-commit verification
+- release workflow (`.github/workflows/release.yml`) triggers on VERSION changes pushed to main; builds, publishes to PyPI (OIDC trusted publishers), creates git tags and GitHub Releases; supports `workflow_dispatch` with dry-run
+- `develop` → `main` branching model defined (Decision 0019); `promote.yml` dispatches develop → main PRs
+- PR template (`.github/PULL_REQUEST_TEMPLATE.md`) with quality checklist
+- Label definitions (`.github/labels.yml`) synced via `label-sync.yml` workflow
+- CodeRabbit AI review configured (`.coderabbit.yaml`) with path-specific instructions matching AGENTS.md conventions
+- `scripts/run.py check-version` and `check-api` available for local pre-commit verification
 
 Settled choices:
 

@@ -11,20 +11,26 @@ Establish predictable PR checks and per-library release automation for a mono-wo
 - GitHub Actions for lint, tests, and coverage
 - branch protection expectations
 - per-library `VERSION` file enforcement
+- API breakage detection with griffe
 - per-library build and release steps
 - staging targets for PyPI and CircuitPython distribution
 - package-aware workflows in a mono-workspace
+- AI-based code review (CodeRabbit)
+- develop → main branching model (Decision 0019)
 
 ## Current verified slice
 
-- `.github/workflows/ci.yml` runs on `push` to `main` and on `pull_request`
-- CI jobs are split: `lint`, `test` (matrix 3.11/3.12/3.13), `verify-examples`, `build`, `version-check` (PR only), plus advisory MicroPython and CircuitPython compat
-- `version-check` job uses `scripts/check_version.py` to enforce per-library VERSION bumps when `src/` or `pyproject.toml` changes (Decision 0002)
-- `build` job uploads artifacts via `actions/upload-artifact@v4`
-- `.github/workflows/release.yml` triggers on VERSION changes pushed to `main`
-- release workflow detects changed libraries, builds distributions, publishes to PyPI via trusted publishers (OIDC), creates per-library git tags (`<name>-v<version>`), and creates GitHub Releases
-- `scripts/check_version.py` is also available as `python scripts/run.py check-version` for local use
-- four publishable libraries (`compat/`, `msgpack/`, `runner/`, `timing/`) are the current proof targets under `libraries/`
+- **Branching model:** `develop` is the staging/default branch; `main` is the stable release branch (Decision 0019). PRs target `develop`. `promote.yml` workflow dispatches a develop → main PR for release cuts.
+- **CI (`.github/workflows/ci.yml`):** triggers on push to `develop` and `main`, and on all PRs. Jobs: `lint`, `test` (3.11/3.12/3.13 matrix), `verify-examples`, `build` (with artifact upload), plus PR-only: `version-check`, `api-check`, `label-check`. Advisory MicroPython and CircuitPython compat jobs.
+- **Version enforcement:** `scripts/check_version.py` fails PRs that change library `src/` or `pyproject.toml` without a VERSION bump (Decision 0002).
+- **API breakage detection:** `scripts/check_api.py` uses `griffe check` to compare current API against last release tag. Cross-references bump level with detected breakages — patch bump with breakages fails; minor bump suffices for 0.x libraries (Decision 0020).
+- **Label check:** `label-check` job requires a `semver:*` label on every PR.
+- **Release (`.github/workflows/release.yml`):** triggers on VERSION changes pushed to `main`, detects changed libraries, builds distributions, publishes to PyPI via trusted publishers (OIDC), creates per-library git tags (`<name>-v<version>`), and creates GitHub Releases. Supports `workflow_dispatch` with dry-run option.
+- **PR template:** `.github/PULL_REQUEST_TEMPLATE.md` with checklist (description, VERSION, labels, preflight, docstrings, docs/examples, no secrets).
+- **Labels:** `.github/labels.yml` defines type, library, semver, and process labels. Synced via `label-sync.yml` workflow.
+- **AI review:** `.coderabbit.yaml` configures CodeRabbit for assertive auto-review with path-specific instructions matching AGENTS.md conventions. Free for public repos.
+- **Local tasks:** `python scripts/run.py check-version`, `check-api` available for pre-commit verification.
+- Four publishable libraries (`compat/`, `msgpack/`, `runner/`, `timing/`) are the current proof targets.
 
 ## Proposed pipeline tiers
 
@@ -85,11 +91,10 @@ It should not be forced to be the direct execution environment on constrained bo
 
 ## Notes
 
-The repo has four publishable libraries: `compat/`, `msgpack/`, `runner/`, and `timing/`. All build and pass preflight. Release automation (`.github/workflows/release.yml`) is in place with per-library detection, PyPI publishing via trusted publishers, git tagging, and GitHub Releases. Remaining items: configure the `pypi` GitHub environment and trusted publishers on pypi.org, set up branch protection rules, wire in circup/mip bundle staging (Decision 0018).
+The repo has four publishable libraries: `compat/`, `msgpack/`, `runner/`, and `timing/`. All build and pass preflight. Release automation is in place for PyPI via trusted publishers. The branching model (Decision 0019) and API breakage detection (Decision 0020) are defined and wired into CI. Remaining items: create the `develop` branch on GitHub, set it as default, configure branch protection, configure PyPI trusted publishers and the `pypi` environment, install CodeRabbit on the repo, wire in circup/mip bundle staging (Decision 0018).
 
 ## Resolved feedback
 
 - **Required checks for first protected-branch setup:** Tier 1 (lint, CPython tests, coverage gate, package build). Already reflected in the proposed pipeline tiers above and in CI.
 - **Hardware workflows blocking merges:** Manual/scheduled only at first. Already decided (Decision 0003, roadmap.md).
 - **CircuitPython artifact staging:** Stage CircuitPython artifacts from the start — the circup repo in the ChuMicro org is the distribution channel. Include both `.py` source and `.mpy` compiled bytecode. Do not wait for PyPI to go first; all three distribution targets (PyPI, circup, mip) should be part of the same release pipeline.
-

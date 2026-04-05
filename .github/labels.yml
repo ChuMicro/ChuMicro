@@ -1,0 +1,81 @@
+# Label definitions for the ChuMicro repository.
+#
+# Sync with: crazy-max/ghaction-github-labeler or manual creation.
+# Format: each entry has name, color, and description.
+
+# --- Type labels ---
+- name: bug
+  color: "d73a4a"
+  description: "Something isn't working"
+
+- name: feature
+  color: "0075ca"
+  description: "New functionality"
+
+- name: refactor
+  color: "cfd3d7"
+  description: "Code improvement without behavior change"
+
+- name: docs
+  color: "0e8a16"
+  description: "Documentation changes"
+
+- name: infra
+  color: "e4e669"
+  description: "CI, tooling, scripts, or build system"
+
+- name: test
+  color: "bfd4f2"
+  description: "Test-only changes"
+
+# --- Library labels ---
+- name: "lib:timing"
+  color: "c5def5"
+  description: "chumicro-timing library"
+
+- name: "lib:runner"
+  color: "c5def5"
+  description: "chumicro-runner library"
+
+- name: "lib:compat"
+  color: "c5def5"
+  description: "chumicro-compat library"
+
+- name: "lib:msgpack"
+  color: "c5def5"
+  description: "chumicro-msgpack library"
+
+# --- Semver labels ---
+- name: "semver:patch"
+  color: "bfe5bf"
+  description: "Bug fix — no API change"
+
+- name: "semver:minor"
+  color: "fef2c0"
+  description: "New feature — backward-compatible"
+
+- name: "semver:major"
+  color: "f9d0c4"
+  description: "Breaking change"
+
+- name: "semver:none"
+  color: "ededed"
+  description: "No version bump needed (docs, infra, tests only)"
+
+# --- Process labels ---
+- name: "release-cut"
+  color: "5319e7"
+  description: "PR promoting develop → main for stable release"
+
+- name: breaking
+  color: "b60205"
+  description: "Contains breaking API changes"
+
+- name: "needs-review"
+  color: "fbca04"
+  description: "Awaiting code review"
+
+- name: blocked
+  color: "000000"
+  description: "Blocked on external dependency or decision"
+

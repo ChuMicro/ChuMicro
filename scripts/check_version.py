@@ -104,8 +104,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Check VERSION file enforcement.")
     parser.add_argument(
         "--base",
-        default="origin/main",
-        help="Base ref to diff against (default: origin/main)",
+        default="origin/develop",
+        help="Base ref to diff against (default: origin/develop)",
     )
     args = parser.parse_args(argv)
     return _check(args.base)
