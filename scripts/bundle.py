@@ -3,21 +3,31 @@
 Copies deployable .py source files, compiles .mpy bytecode with mpy-cross,
 and generates a mip-compatible package.json manifest.
 
-Usage:
-    python scripts/bundle.py <lib_dir> <version> <staging_dir> [--mpy-cross PATH]
+Subcommands:
+    stage        Stage a single library's bundle artifacts.
+    stage-matrix Stage artifacts for libraries in a JSON matrix (--matrix).
+    readme       Generate a bundle repo README.md.
+    stage-matrix Stage artifacts for libraries in a JSON matrix (env var).
 
-Example:
-    python scripts/bundle.py libraries/timing 0.1.0 .bundle-staging
+Examples:
+    python scripts/bundle.py stage libraries/timing 0.1.0 .bundle-staging
+    MATRIX_JSON='...' python scripts/bundle.py stage-matrix .bundle-staging
+    python scripts/bundle.py readme --experimental -o README.md
+    python scripts/bundle.py circup-zip .bundle-repo .circup-zips --repo-name ChuMicro-Bundle
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
+import re
 import shutil
 import subprocess
 import sys
 import tomllib
+import zipfile
+from datetime import UTC, datetime
 from pathlib import Path
 
 #: Bundle repo names for each channel.  Experimental uses a separate repo
@@ -26,26 +36,12 @@ STABLE_BUNDLE_REPO = "ChuMicro-Bundle"
 EXPERIMENTAL_BUNDLE_REPO = "ChuMicro-Bundle-Experimental"
 
 
-def _is_testing_module(rel: Path) -> bool:
-    """Return True if *rel* (relative to the package root) is a testing module.
+def _find_bundle_modules(lib_dir: Path) -> tuple[str, Path, list[Path]]:
+    """Discover the package name, package dir, and deployable .py files.
 
-    Testing modules (``testing.py`` at the package root and the ``testing/``
-    subpackage) ship as source-only — they provide mock/fake layers for users
-    and must not be compiled to ``.mpy``.
-    """
-    return rel.parts[0] == "testing" or (
-        len(rel.parts) == 1 and rel.name == "testing.py"
-    )
-
-
-def _find_bundle_modules(
-    lib_dir: Path,
-) -> tuple[str, Path, list[Path], list[Path]]:
-    """Discover the package name, package dir, compilable and source-only files.
-
-    Returns ``(pkg_name, pkg_dir, compile_files, source_only_files)`` where
-    *compile_files* get both ``.py`` and ``.mpy`` artifacts and
-    *source_only_files* (testing modules) are shipped as ``.py`` only.
+    Returns ``(pkg_name, pkg_dir, py_files)`` where *py_files* are all
+    ``.py`` modules to include in the bundle (both as source and compiled
+    ``.mpy``).
     """
     src_dir = lib_dir / "src"
     candidates = [
@@ -62,18 +58,12 @@ def _find_bundle_modules(
         )
 
     pkg_dir = candidates[0]
-    compile_files: list[Path] = []
-    source_only_files: list[Path] = []
-    for f in sorted(pkg_dir.rglob("*.py")):
-        rel = f.relative_to(pkg_dir)
-        if "__pycache__" in rel.parts:
-            continue
-        if _is_testing_module(rel):
-            source_only_files.append(f)
-        else:
-            compile_files.append(f)
-
-    return pkg_dir.name, pkg_dir, compile_files, source_only_files
+    py_files = [
+        f
+        for f in sorted(pkg_dir.rglob("*.py"))
+        if "__pycache__" not in f.relative_to(pkg_dir).parts
+    ]
+    return pkg_dir.name, pkg_dir, py_files
 
 
 def _read_chumicro_deps(lib_dir: Path) -> list[str]:
@@ -94,7 +84,7 @@ def _dep_to_mip_ref(dep: str) -> str:
     the developer overrides specific deps manually.
     """
     # Strip version specifiers.
-    name = dep.split(">")[0].split("<")[0].split("=")[0].split("!")[0].split(";")[0]
+    name = re.split(r"[><=!;~\[]", dep, maxsplit=1)[0]
     pkg = name.strip().replace("-", "_")
     return f"github:ChuMicro/ChuMicro-Bundle/{pkg}"
 
@@ -130,19 +120,16 @@ def build_bundle(
     by repo, not directory suffix.  This lets users swap between stable
     and experimental without changing import statements.
     """
-    pkg_name, pkg_dir, compile_files, source_only_files = _find_bundle_modules(
-        lib_dir,
-    )
-    all_files = compile_files + source_only_files
-    if not all_files:
+    pkg_name, pkg_dir, py_files = _find_bundle_modules(lib_dir)
+    if not py_files:
         sys.exit(f"No deployable .py files found in {pkg_dir}")
 
     bundle_repo = EXPERIMENTAL_BUNDLE_REPO if experimental else STABLE_BUNDLE_REPO
     out_dir = staging_dir / pkg_name
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Compilable modules get both .py and .mpy artifacts.
-    for f in compile_files:
+    # All modules get both .py source and .mpy bytecode.
+    for f in py_files:
         rel = f.relative_to(pkg_dir)
         dest_py = out_dir / rel
         dest_mpy = (out_dir / rel).with_suffix(".mpy")
@@ -150,32 +137,18 @@ def build_bundle(
         shutil.copy2(f, dest_py)
         _compile_mpy(f, dest_mpy, mpy_cross)
 
-    # Testing modules ship as .py only (mock/fake layer for users).
-    for f in source_only_files:
-        rel = f.relative_to(pkg_dir)
-        dest_py = out_dir / rel
-        dest_py.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(f, dest_py)
-
     # Generate mip package.json manifest.
     #
     # Both target and source paths use pkg_name — the on-device import name
     # is always the base package name (e.g. chumicro_timing) regardless of
     # channel.  This lets users swap between stable and experimental by
     # changing which bundle repo they use, without changing imports.
-    # Compilable modules reference .mpy; testing modules reference .py.
     urls = []
-    for f in compile_files:
+    for f in py_files:
         rel = f.relative_to(pkg_dir)
         mpy_rel = rel.with_suffix(".mpy").as_posix()
         target = f"{pkg_name}/{mpy_rel}"
         source = f"github:ChuMicro/{bundle_repo}/{pkg_name}/{mpy_rel}"
-        urls.append([target, source])
-    for f in source_only_files:
-        rel = f.relative_to(pkg_dir)
-        py_rel = rel.as_posix()
-        target = f"{pkg_name}/{py_rel}"
-        source = f"github:ChuMicro/{bundle_repo}/{pkg_name}/{py_rel}"
         urls.append([target, source])
 
     manifest: dict = {"urls": urls, "version": version}
@@ -193,6 +166,103 @@ def build_bundle(
         fh.write("\n")
 
     print(f"Staged {pkg_name} v{version} -> {out_dir}")
+
+
+def stage_matrix(
+    staging_dir: Path,
+    matrix_json: str,
+    mpy_cross: str = "mpy-cross",
+    *,
+    experimental: bool = False,
+) -> None:
+    """Stage bundle artifacts for all libraries in a JSON matrix.
+
+    Reads a GitHub Actions matrix JSON (with an ``include`` array of
+    ``{lib_dir, version, ...}`` entries) and calls :func:`build_bundle`
+    for each entry in a single process.
+    """
+    data = json.loads(matrix_json)
+    for entry in data["include"]:
+        build_bundle(
+            Path(entry["lib_dir"]),
+            entry["version"],
+            staging_dir,
+            mpy_cross,
+            experimental=experimental,
+        )
+
+
+def _derive_bundle_id(repo_name: str) -> str:
+    """Derive the circup bundle_id from a bundle repo name.
+
+    circup lowercases the repo name and replaces underscores with hyphens.
+    """
+    return repo_name.lower().replace("_", "-")
+
+
+def build_circup_zips(
+    bundle_dir: Path,
+    output_dir: Path,
+    repo_name: str,
+    *,
+    date_tag: str | None = None,
+) -> list[Path]:
+    """Build circup-format zip bundles from a bundle directory.
+
+    Scans *bundle_dir* for ``chumicro_*`` package directories, then creates
+    two zip files in *output_dir*:
+
+    - ``{bundle_id}-py-{date_tag}.zip`` — ``.py`` source bundle
+    - ``{bundle_id}-10.x-mpy-{date_tag}.zip`` — ``.mpy`` bytecode bundle
+
+    The internal structure follows circup's convention::
+
+        {bundle_id}-{platform}-{date_tag}/lib/{pkg_name}/...
+
+    Returns the list of created zip paths.
+    """
+    if date_tag is None:
+        date_tag = datetime.now(UTC).strftime("%Y%m%d")
+
+    bundle_id = _derive_bundle_id(repo_name)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    pkg_dirs = sorted(
+        d
+        for d in bundle_dir.iterdir()
+        if d.is_dir() and d.name.startswith("chumicro_")
+    )
+    if not pkg_dirs:
+        print(f"No chumicro_* packages found in {bundle_dir}")
+        return []
+
+    py_name = f"{bundle_id}-py-{date_tag}"
+    mpy_name = f"{bundle_id}-10.x-mpy-{date_tag}"
+
+    py_zip_path = output_dir / f"{py_name}.zip"
+    mpy_zip_path = output_dir / f"{mpy_name}.zip"
+
+    with (
+        zipfile.ZipFile(py_zip_path, "w", zipfile.ZIP_DEFLATED) as py_zip,
+        zipfile.ZipFile(mpy_zip_path, "w", zipfile.ZIP_DEFLATED) as mpy_zip,
+    ):
+        for pkg_dir in pkg_dirs:
+            pkg = pkg_dir.name
+
+            # .py source bundle: all .py files.
+            for f in sorted(pkg_dir.rglob("*.py")):
+                rel = f.relative_to(pkg_dir)
+                py_zip.write(f, f"{py_name}/lib/{pkg}/{rel}")
+
+            # .mpy bytecode bundle: all .mpy files.
+            for f in sorted(pkg_dir.rglob("*.mpy")):
+                rel = f.relative_to(pkg_dir)
+                mpy_zip.write(f, f"{mpy_name}/lib/{pkg}/{rel}")
+
+    created = [py_zip_path, mpy_zip_path]
+    for p in created:
+        print(f"Created {p}")
+    return created
 
 
 def _collect_library_metadata(root: Path) -> list[dict]:
@@ -425,6 +495,28 @@ def main() -> None:
         "(package.json URLs point to the experimental bundle repo)",
     )
 
+    # Batch staging from a JSON matrix (passed via environment variable).
+    sm_parser = subparsers.add_parser(
+        "stage-matrix",
+        help="Stage artifacts for libraries described in a JSON matrix",
+    )
+    sm_parser.add_argument(
+        "staging_dir", type=Path, help="Output staging directory"
+    )
+    sm_parser.add_argument(
+        "--matrix-env", default="MATRIX_JSON", metavar="VAR",
+        help="Environment variable containing the matrix JSON "
+        "(default: MATRIX_JSON)",
+    )
+    sm_parser.add_argument(
+        "--mpy-cross", default="mpy-cross", help="Path to mpy-cross binary"
+    )
+    sm_parser.add_argument(
+        "--experimental",
+        action="store_true",
+        help="Stage as experimental channel",
+    )
+
     # README generation command.
     readme_parser = subparsers.add_parser(
         "readme", help="Generate bundle repo README.md to stdout"
@@ -436,6 +528,29 @@ def main() -> None:
     )
     readme_parser.add_argument(
         "-o", "--output", type=Path, help="Write to file instead of stdout"
+    )
+
+    # circup zip generation command.
+    zip_parser = subparsers.add_parser(
+        "circup-zip", help="Build circup-format zip bundles from a bundle directory"
+    )
+    zip_parser.add_argument(
+        "bundle_dir",
+        type=Path,
+        help="Directory containing chumicro_* package directories",
+    )
+    zip_parser.add_argument(
+        "output_dir", type=Path, help="Output directory for zip files"
+    )
+    zip_parser.add_argument(
+        "--repo-name",
+        required=True,
+        help="Bundle repo name (e.g. ChuMicro-Bundle) — used to derive bundle_id",
+    )
+    zip_parser.add_argument(
+        "--date-tag",
+        default=None,
+        help="Date tag for zip filenames (default: today UTC as YYYYMMDD)",
     )
 
     args = parser.parse_args()
@@ -455,6 +570,26 @@ def main() -> None:
             args.staging_dir,
             args.mpy_cross,
             experimental=args.experimental,
+        )
+    elif args.command == "stage-matrix":
+        matrix_json = os.environ.get(args.matrix_env)
+        if not matrix_json:
+            sys.exit(
+                f"stage-matrix: environment variable {args.matrix_env} "
+                f"is not set or empty"
+            )
+        stage_matrix(
+            args.staging_dir,
+            matrix_json,
+            args.mpy_cross,
+            experimental=args.experimental,
+        )
+    elif args.command == "circup-zip":
+        build_circup_zips(
+            args.bundle_dir,
+            args.output_dir,
+            args.repo_name,
+            date_tag=args.date_tag,
         )
     else:
         parser.print_help()

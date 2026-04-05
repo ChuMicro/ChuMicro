@@ -176,6 +176,8 @@ jobs:
     needs: [detect, release]
     if: needs.detect.outputs.has_releases == 'true' && inputs.dry_run != true
     runs-on: ubuntu-latest
+    env:
+      MATRIX_JSON: ${{ needs.detect.outputs.matrix }}
     steps:
       - uses: actions/checkout@v4
 
@@ -188,30 +190,14 @@ jobs:
 
       - name: Stage bundle artifacts
         run: |
-          is_exp="${{ needs.detect.outputs.is_experimental }}"
-          matrix='${{ needs.detect.outputs.matrix }}'
-          echo "$matrix" | python3 -c "
-          import json, sys, subprocess
-          is_exp = '$is_exp' == 'true'
-          data = json.load(sys.stdin)
-          for entry in data['include']:
-              cmd = [
-                  sys.executable, 'scripts/bundle.py', 'stage',
-                  entry['lib_dir'], entry['version'], '.bundle-staging',
-              ]
-              if is_exp:
-                  cmd.append('--experimental')
-              subprocess.check_call(cmd)
-          "
+          python scripts/bundle.py stage-matrix .bundle-staging \
+            ${{ needs.detect.outputs.is_experimental == 'true' && '--experimental' || '' }}
 
       - name: Generate bundle README
         run: |
-          is_exp="${{ needs.detect.outputs.is_experimental }}"
-          if [ "$is_exp" = "true" ]; then
-            python scripts/bundle.py readme --experimental -o .bundle-staging/README.md
-          else
-            python scripts/bundle.py readme -o .bundle-staging/README.md
-          fi
+          python scripts/bundle.py readme \
+            ${{ needs.detect.outputs.is_experimental == 'true' && '--experimental' || '' }} \
+            -o .bundle-staging/README.md
 
       - name: Clone bundle repo
         run: |
@@ -220,53 +206,17 @@ jobs:
         env:
           BUNDLE_TOKEN: ${{ secrets.BUNDLE_TOKEN }}
 
-      - name: Update bundle and create circup zips
-        run: |
-          # Copy staged library directories into the bundle repo.
-          cp -r .bundle-staging/* .bundle-repo/
+      - name: Copy staging into bundle repo
+        run: cp -r .bundle-staging/* .bundle-repo/
 
+      - name: Create circup zips
+        run: |
           date_tag="$(date -u +%Y%m%d)"
           echo "date_tag=${date_tag}" >> "$GITHUB_ENV"
-
-          staged_pattern=".bundle-repo/chumicro_*"
-          mkdir -p .circup-zips
-
-          # circup derives bundle_id from the repo name (lowercased, _ → -).
-          # Zip assets must be named {bundle_id}-{platform}-{tag}.zip and
-          # contain a top-level directory {bundle_id}-{platform}-{tag}/lib/.
-          bundle_repo="${{ needs.detect.outputs.bundle_repo }}"
-          bundle_id=$(echo "${bundle_repo##*/}" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
-
-          # Build circup-format zip: .py source bundle.
-          py_name="${bundle_id}-py-${date_tag}"
-          mkdir -p ".circup-staging/${py_name}/lib"
-          for pkg_dir in $staged_pattern; do
-            [ -d "$pkg_dir" ] || continue
-            pkg=$(basename "$pkg_dir")
-            rsync -a --include='*/' --include='*.py' --exclude='*' "$pkg_dir/" ".circup-staging/${py_name}/lib/${pkg}/"
-          done
-          (cd .circup-staging && zip -qr "../.circup-zips/${py_name}.zip" "${py_name}/")
-
-          # Build circup-format zip: .mpy bytecode bundle.
-          # circup downloads a per-platform zip matching the device's CP version.
-          # Only CP 10.x is supported (mpy format v6, mpy-cross from pip).
-          mpy_name="${bundle_id}-10.x-mpy-${date_tag}"
-          mkdir -p ".circup-staging/${mpy_name}/lib"
-          for pkg_dir in $staged_pattern; do
-            [ -d "$pkg_dir" ] || continue
-            pkg=$(basename "$pkg_dir")
-            # Compiled modules (.mpy).
-            rsync -a --include='*/' --include='*.mpy' --exclude='*' "$pkg_dir/" ".circup-staging/${mpy_name}/lib/${pkg}/"
-            # Testing modules (.py only — no .mpy counterparts).
-            if [ -f "$pkg_dir/testing.py" ]; then
-              mkdir -p ".circup-staging/${mpy_name}/lib/${pkg}"
-              cp "$pkg_dir/testing.py" ".circup-staging/${mpy_name}/lib/${pkg}/testing.py"
-            fi
-            if [ -d "$pkg_dir/testing" ]; then
-              rsync -a --include='*/' --include='*.py' --exclude='*' "$pkg_dir/testing/" ".circup-staging/${mpy_name}/lib/${pkg}/testing/"
-            fi
-          done
-          (cd .circup-staging && zip -qr "../.circup-zips/${mpy_name}.zip" "${mpy_name}/")
+          repo_name="${{ needs.detect.outputs.bundle_repo }}"
+          repo_name="${repo_name##*/}"
+          python scripts/bundle.py circup-zip .bundle-repo .circup-zips \
+            --repo-name "$repo_name" --date-tag "$date_tag"
 
       - name: Push to bundle repo
         run: |
@@ -279,29 +229,14 @@ jobs:
             exit 0
           fi
 
-          matrix='${{ needs.detect.outputs.matrix }}'
-          msg=$(echo "$matrix" | python3 -c "
-          import json, sys
-          data = json.load(sys.stdin)
-          libs = [e['lib_name'] + ' v' + e['version'] for e in data['include']]
-          print('Update: ' + ', '.join(libs))
-          ")
+          msg=$(jq -r '"Update: " + ([.include[] | .lib_name + " v" + .version] | join(", "))' <<< "$MATRIX_JSON")
           git commit -m "$msg"
           git push origin main
 
       - name: Create bundle release
         run: |
           bundle_repo="${{ needs.detect.outputs.bundle_repo }}"
-
-          matrix='${{ needs.detect.outputs.matrix }}'
-          body=$(echo "$matrix" | python3 -c "
-          import json, sys
-          data = json.load(sys.stdin)
-          lines = ['## Updated libraries', '']
-          for e in data['include']:
-              lines.append('- **' + e['lib_name'] + '** v' + e['version'])
-          print('\n'.join(lines))
-          ")
+          body=$(jq -r '"## Updated libraries\n\n" + ([.include[] | "- **" + .lib_name + "** v" + .version] | join("\n"))' <<< "$MATRIX_JSON")
 
           gh release create "${{ env.date_tag }}" \
             --repo "${bundle_repo}" \
