@@ -216,13 +216,13 @@ Minimize external dependencies; prefer pure‑Python implementations that work o
 
 ## Board Considerations & Feature Detection
 
-Chumicro targets boards with at least **512 KB of MCU RAM** and **4 MB of flash**.  Libraries may run on boards below this baseline, but those configurations are not tested and issues on them will not be investigated.  Boards with 8 MB+ flash and PSRAM are preferred for Wi‑Fi, TLS, displays, and larger buffers.
+Chumicro targets boards with at least **256 KB of MCU RAM** and **4 MB of flash**.  Libraries may run on boards below this baseline, but those configurations are not tested and issues on them will not be investigated.  Boards with PSRAM are preferred for Wi‑Fi, TLS, displays, and larger buffers.
 
 A source-level audit ([Decision 0015](plans/decisions/0015-board-architecture-support.md)) established support tiers based on both hardware resources and compile-time feature availability (`collections.deque`):
 
-- **Tier 1 (recommended):** ESP32 (original), ESP32-S3, ESP32-C6, RP2350 — all have ≥512 KB MCU RAM and full runtime features.
-- **Tier 2 (exception):** ESP32-S2 and ESP32-C3 boards *with PSRAM* — base MCU is below 512 KB but PSRAM compensates.
-- **Unsupported (may work, not tested):** SAMD21, SAMD51, RP2040, nRF52, ESP8266, ESP32-S2/C3 without PSRAM, STM32F4/F7 parts below 512 KB RAM.
+- **Tier 1 (recommended):** ESP32 (original), ESP32-S3, ESP32-C6, RP2350, ESP32-S2 with PSRAM, ESP32-C3 with PSRAM — all have ≥512 KB effective RAM (MCU + PSRAM) and full runtime features.
+- **Tier 2 (supported, constrained):** RP2040, ESP32-S2 without PSRAM, ESP32-C3 without PSRAM — 256–512 KB MCU RAM, no PSRAM; networking and TLS workloads are tight.
+- **Unsupported (may work, not tested):** SAMD21, SAMD51, nRF52, ESP8266, STM32F4/F7 parts below 256 KB RAM.
 
 Developers should:
 

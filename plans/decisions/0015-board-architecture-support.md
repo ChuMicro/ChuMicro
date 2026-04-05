@@ -1,7 +1,7 @@
 # Decision 0015 — Board architecture support tiers
 
 Status: `accepted`
-Date: `2026-04-03` (revised `2026-04-04`)
+Date: `2026-04-03` (revised `2026-04-04`, baseline lowered `2026-04-04`)
 
 ## Context
 
@@ -70,9 +70,9 @@ Beyond compile-time feature availability, boards also vary widely in RAM and fla
 
 ### Hardware resource baseline
 
-Chumicro libraries are tested and supported on boards with at least **512 KB of MCU RAM** and at least **4 MB of flash**.  Libraries may still run on boards below this baseline, but those boards are not tested, and issues specific to them will not be investigated.
+Chumicro libraries are tested and supported on boards with at least **256 KB of MCU RAM** and at least **4 MB of flash**.  Libraries may still run on boards below this baseline, but those boards are not tested, and issues specific to them will not be investigated.
 
-Boards with less than 512 KB of MCU RAM are unsupported unless the specific board or module includes meaningful PSRAM and still provides at least 4 MB of flash.  Boards with 8 MB or more of flash, and boards with PSRAM, are preferred.
+Boards with PSRAM are preferred — especially for networking, TLS, displays, and larger buffers.  Boards in the 256–512 KB range without PSRAM are supported but may be constrained for memory-intensive workloads like MQTT + TLS.
 
 ### Feature requirements
 
@@ -80,25 +80,26 @@ Chumicro libraries require `collections.deque` and therefore require a full-buil
 
 ### Support tiers
 
-**Tier 1 — Recommended:**
+**Tier 1 — Recommended (≥512 KB MCU RAM, or meaningful PSRAM):**
 - ESP32 (original, 520 KB SRAM)
 - ESP32-S3
 - ESP32-C6 (512 KB HP SRAM + 16 KB LP SRAM)
-- RP2350
-- Any MCU with ≥512 KB RAM and ≥4 MB flash; 8 MB+ flash and PSRAM strongly preferred
+- RP2350 (520 KB SRAM)
+- ESP32-S2 with PSRAM (320 KB SRAM + 2 MB in-package PSRAM via FN4R2 or R2 chip variants)
+- ESP32-C3 with PSRAM (400 KB SRAM + PSRAM)
 
-**Tier 2 — Allowed by exception:**
-- ESP32-S2 boards *with PSRAM* (base MCU is 320 KB)
-- ESP32-C3 boards *with PSRAM* (base MCU is 400 KB)
+**Tier 2 — Supported, constrained (256–512 KB MCU RAM, no PSRAM):**
+- RP2040 (264 KB SRAM; no native PSRAM interface)
+- ESP32-S2 without PSRAM (320 KB SRAM; bare ESP32-S2, FH2, FH4 chip variants)
+- ESP32-C3 without PSRAM (400 KB SRAM)
+- Networking and TLS workloads are tight on Tier 2 boards; libraries should document when a feature needs more headroom than Tier 2 provides.
 
 **Unsupported (may work, but not tested or supported):**
 - SAMD21 (up to 32 KB SRAM)
 - SAMD51 (192–256 KB SRAM; CircuitPython also disables `deque` for this port)
-- RP2040 (264 KB SRAM)
-- nRF52840 (256 KB RAM), nRF52833 (128 KB RAM)
-- ESP32-S2 without PSRAM, ESP32-C3 without PSRAM
+- nRF52840 (256 KB RAM; CircuitPython `FULL_BUILD = 0`, no `deque`), nRF52833 (128 KB RAM)
 - ESP8266 / ESP8285
-- STM32F4/F7 parts below 512 KB RAM (F401 96 KB, F405/F407 192 KB, F411 128 KB, F412 256 KB, F745/F746 ~320 KB)
+- STM32F4/F7 parts below 256 KB RAM (F401 96 KB, F411 128 KB)
 
 ### Additional rules
 
@@ -107,7 +108,7 @@ Chumicro libraries require `collections.deque` and therefore require a full-buil
 
 ## Consequences
 
-- Library READMEs and guides should state the minimum board requirements (512 KB RAM, 4 MB flash, full-build CircuitPython or `EXTRA_FEATURES` MicroPython).
+- Library READMEs and guides should state the minimum board requirements (256 KB RAM, 4 MB flash, full-build CircuitPython or `EXTRA_FEATURES` MicroPython).  Libraries with heavier memory needs (networking, TLS) should note when Tier 1 boards are recommended.
 - The cross-runtime compatibility runners test against the unix port, which exceeds all hardware baselines.
 - Future board transport tooling and `devices.yml` entries should target Tier 1 or Tier 2 boards.
 - If users report issues on unsupported boards, the answer is "not tested or supported on that hardware" — not necessarily a bug, and not something we will investigate.
