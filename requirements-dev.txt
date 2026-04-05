@@ -10,6 +10,7 @@ pytest
 pytest-cov
 ruff
 build
+hatchling
 griffe
 mkdocs
 mkdocs-material

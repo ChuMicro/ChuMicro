@@ -7,8 +7,8 @@ from ide import sync_ide
 
 _PYPROJECT_TEMPLATE = """\
 [build-system]
-requires = ["setuptools>=69", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "chumicro-{name}"
@@ -27,14 +27,12 @@ classifiers = [
     "Programming Language :: Python :: 3 :: Only",
 ]
 
-[tool.setuptools]
-package-dir = {{"" = "src"}}
+[tool.hatch.version]
+path = "VERSION"
+pattern = "(?P<version>\\\\S+)"
 
-[tool.setuptools.dynamic]
-version = {{file = "VERSION"}}
-
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.hatch.build.targets.wheel]
+packages = ["src/{import_name}"]
 """
 
 _MKDOCS_TEMPLATE = """\
@@ -162,8 +160,11 @@ def _scaffold_library(name: str) -> int:
     # VERSION
     (lib_dir / "VERSION").write_text("0.1.0\n")
 
+
     # pyproject.toml
-    (lib_dir / "pyproject.toml").write_text(_PYPROJECT_TEMPLATE.format(name=name))
+    (lib_dir / "pyproject.toml").write_text(
+        _PYPROJECT_TEMPLATE.format(name=name, import_name=import_name)
+    )
 
     # mkdocs.yml
     (lib_dir / "mkdocs.yml").write_text(_MKDOCS_TEMPLATE.format(name=name))
