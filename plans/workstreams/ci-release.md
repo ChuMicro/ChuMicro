@@ -15,7 +15,7 @@ Establish predictable PR checks and per-library release automation for a mono-wo
 - per-library build and release steps
 - staging targets for PyPI and CircuitPython distribution
 - package-aware workflows in a mono-workspace
-- AI-based code review (CodeRabbit)
+- AI-based code review (tool TBD — will be provided separately)
 - develop → main branching model (Decision 0019)
 
 ## Current verified slice
@@ -25,10 +25,10 @@ Establish predictable PR checks and per-library release automation for a mono-wo
 - **Version enforcement:** `scripts/check_version.py` fails PRs that change library `src/` or `pyproject.toml` without a VERSION bump (Decision 0002).
 - **API breakage detection:** `scripts/check_api.py` uses `griffe check` to compare current API against last release tag. Cross-references bump level with detected breakages — patch bump with breakages fails; minor bump suffices for 0.x libraries (Decision 0020).
 - **Label check:** `label-check` job requires a `semver:*` label on every PR.
-- **Release (`.github/workflows/release.yml`):** triggers on VERSION changes pushed to `main`, detects changed libraries, builds distributions, publishes to PyPI via trusted publishers (OIDC), creates per-library git tags (`<name>-v<version>`), and creates GitHub Releases. Supports `workflow_dispatch` with dry-run option.
+- **Release (`.github/workflows/release.yml`):** triggers on VERSION changes pushed to `main`, detects changed libraries, builds distributions, creates per-library git tags (`<name>-v<version>`), and creates GitHub Releases. PyPI publishing is scaffolded but disabled until trusted publisher is configured. Supports `workflow_dispatch` with dry-run option.
 - **PR template:** `.github/PULL_REQUEST_TEMPLATE.md` with checklist (description, VERSION, labels, preflight, docstrings, docs/examples, no secrets).
 - **Labels:** `.github/labels.yml` defines type, library, semver, and process labels. Synced via `label-sync.yml` workflow.
-- **AI review:** `.coderabbit.yaml` configures CodeRabbit for assertive auto-review with path-specific instructions matching AGENTS.md conventions. Free for public repos.
+- **AI review:** Tool TBD — will be provided separately. The CI workflow has a placeholder for an AI review required check.
 - **Local tasks:** `python scripts/run.py check-version`, `check-api` available for pre-commit verification.
 - Four publishable libraries (`compat/`, `msgpack/`, `runner/`, `timing/`) are the current proof targets.
 
@@ -91,7 +91,7 @@ It should not be forced to be the direct execution environment on constrained bo
 
 ## Notes
 
-The repo has four publishable libraries: `compat/`, `msgpack/`, `runner/`, and `timing/`. All build and pass preflight. Release automation is in place for PyPI via trusted publishers. The branching model (Decision 0019) and API breakage detection (Decision 0020) are defined and wired into CI. Remaining items: create the `develop` branch on GitHub, set it as default, configure branch protection, configure PyPI trusted publishers and the `pypi` environment, install CodeRabbit on the repo, wire in circup/mip bundle staging (Decision 0018).
+The repo has four publishable libraries: `compat/`, `msgpack/`, `runner/`, and `timing/`. All build and pass preflight. Release automation is in place for tagging and GitHub Releases; PyPI publishing is scaffolded but disabled. The branching model (Decision 0019) and API breakage detection (Decision 0020) are defined and wired into CI. Remaining items: create the `develop` branch on GitHub, set it as default, configure branch protection, integrate the AI review tool (TBD), enable PyPI publishing when ready, wire in circup/mip bundle staging (Decision 0018).
 
 ## Resolved feedback
 

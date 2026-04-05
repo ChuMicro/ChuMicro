@@ -97,11 +97,10 @@ Current verified progress:
 - `api-check` job uses `griffe check` to detect API breakages and cross-reference with VERSION bump level (Decision 0020)
 - `label-check` job requires a `semver:*` label on every PR
 - build job uploads artifacts via `actions/upload-artifact@v4`
-- release workflow (`.github/workflows/release.yml`) triggers on VERSION changes pushed to main; builds, publishes to PyPI (OIDC trusted publishers), creates git tags and GitHub Releases; supports `workflow_dispatch` with dry-run
+- release workflow (`.github/workflows/release.yml`) triggers on VERSION changes pushed to main; builds, creates git tags and GitHub Releases (PyPI publishing scaffolded but disabled); supports `workflow_dispatch` with dry-run
 - `develop` → `main` branching model defined (Decision 0019); `promote.yml` dispatches develop → main PRs
 - PR template (`.github/PULL_REQUEST_TEMPLATE.md`) with quality checklist
 - Label definitions (`.github/labels.yml`) synced via `label-sync.yml` workflow
-- CodeRabbit AI review configured (`.coderabbit.yaml`) with path-specific instructions matching AGENTS.md conventions
 - `scripts/run.py check-version` and `check-api` available for local pre-commit verification
 
 Settled choices:

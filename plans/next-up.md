@@ -3,8 +3,7 @@
 ## Now
 
 - [ ] Create `develop` branch on GitHub, set as default branch, configure branch protection on both `develop` and `main` (Decision 0019).
-- [ ] Install CodeRabbit on the repo (free for public repos) and verify AI review runs on PRs.
-- [ ] Configure PyPI trusted publisher for each library (requires pypi.org account setup and GitHub environment `pypi`).
+- [ ] Integrate AI review tool (TBD — custom solution to be provided).
 - [ ] Document contributor prerequisites by platform (macOS, Linux, Windows/WSL2) and by editor (PyCharm, VS Code, CLI) in the README. Linux and WSL2 sections are best-effort/researched until verified.
   - When writing these docs, scope the AGENTS.md performance guidelines (f-strings, `const()`, `memoryview`, pre-allocated buffers, etc.) to **library code only**. Infrastructure code (`scripts/`, `support/`) runs exclusively on CPython and does not need embedded-runtime constraints.
 - [ ] Write a "Creating a New Library" contributor guide. Walk through the full lifecycle from scaffolding to release-ready:
@@ -51,7 +50,7 @@
 
 ## Done
 
-- [x] Establish develop → main branching model (Decision 0019), API breakage detection with griffe (Decision 0020), PR quality gates (template, labels, semver label check), AI review config (CodeRabbit `.coderabbit.yaml`), promote workflow, label sync workflow. CI split into lint/test/build/verify-examples/version-check/api-check/label-check jobs.
+- [x] Establish develop → main branching model (Decision 0019), API breakage detection with griffe (Decision 0020), PR quality gates (template, labels, semver label check), promote workflow, label sync workflow. CI split into lint/test/build/verify-examples/version-check/api-check/label-check jobs. Release workflow creates tags and GitHub Releases (PyPI publishing scaffolded but disabled).
 - [x] Draft first release workflow: `release.yml` triggers on VERSION changes pushed to main, detects changed libraries, builds, publishes to PyPI via trusted publishers (OIDC), creates git tags and GitHub Releases. `ci.yml` split into lint/test/build/verify-examples/version-check jobs. `scripts/check_version.py` enforces per-library VERSION bumps for release-relevant changes (Decision 0002).
 - [x] Add `chumicro-msgpack` library: pure-Python MessagePack encoder/decoder with native CircuitPython C delegation.  Bytes API (`packb`/`unpackb`) and stream API (`pack`/`unpack`).  Docs, examples (including CircuitPython NVM hardware example), struct-vs-msgpack guidance.
 - [x] Add `functools.partial` polyfill to `chumicro-compat`: `_PurePythonPartial` for MicroPython/CircuitPython, re-exports real `functools.partial` on CPython.  12 tests, docs, examples.

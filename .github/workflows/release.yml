@@ -20,7 +20,7 @@ concurrency:
 
 permissions:
   contents: write   # create tags and GitHub Releases
-  id-token: write   # PyPI trusted publishing (OIDC)
+  # id-token: write   # PyPI trusted publishing (OIDC) — uncomment when ready to publish
 
 jobs:
   detect:
@@ -87,9 +87,8 @@ jobs:
       matrix: ${{ fromJson(needs.detect.outputs.matrix) }}
 
     # PyPI trusted publishing requires the environment to match what is
-    # configured on pypi.org.  Create a "pypi" environment in the repo
-    # settings with the trusted publisher for each library.
-    environment: pypi
+    # configured on pypi.org.  Uncomment when ready to publish.
+    # environment: pypi
 
     steps:
       - uses: actions/checkout@v4
@@ -104,12 +103,14 @@ jobs:
       - name: Build distribution
         run: python -m build ${{ matrix.lib_dir }}
 
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: ${{ matrix.lib_dir }}/dist/
+      # --- PyPI publishing (disabled until trusted publisher is configured) ---
+      # - name: Publish to PyPI
+      #   uses: pypa/gh-action-pypi-publish@release/v1
+      #   with:
+      #     packages-dir: ${{ matrix.lib_dir }}/dist/
 
       - name: Create git tag
+        if: inputs.dry_run != true
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -117,17 +118,13 @@ jobs:
           git push origin "${{ matrix.tag }}"
 
       - name: Create GitHub Release
+        if: inputs.dry_run != true
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ matrix.tag }}
           name: "${{ matrix.lib_name }} v${{ matrix.version }}"
           body: |
             Release of **chumicro-${{ matrix.lib_name }}** version **${{ matrix.version }}**.
-
-            Install from PyPI:
-            ```
-            pip install chumicro-${{ matrix.lib_name }}==${{ matrix.version }}
-            ```
           files: ${{ matrix.lib_dir }}/dist/*
           generate_release_notes: true
 
