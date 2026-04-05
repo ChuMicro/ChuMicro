@@ -22,8 +22,9 @@ For experimental (pre-release) versions from the develop branch:
 
 ```bash
 pip install chumicro-timing-experimental
-circup install chumicro-timing-experimental
-mpremote mip install github:ChuMicro/chumicro-bundle/chumicro_timing_experimental
+circup bundle-add ChuMicro/chumicro-bundle-experimental
+circup install chumicro-timing
+mpremote mip install github:ChuMicro/chumicro-bundle-experimental/chumicro_timing
 ```
 
 ## Quick example

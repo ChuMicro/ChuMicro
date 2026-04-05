@@ -20,6 +20,11 @@ import sys
 import tomllib
 from pathlib import Path
 
+#: Bundle repo names for each channel.  Experimental uses a separate repo
+#: so that circup's latest_tag works per-channel without prerelease tag tricks.
+STABLE_BUNDLE_REPO = "chumicro-bundle"
+EXPERIMENTAL_BUNDLE_REPO = "chumicro-bundle-experimental"
+
 
 def _is_testing_module(rel: Path) -> bool:
     """Return True if *rel* (relative to the package root) is a testing module.
@@ -116,14 +121,13 @@ def build_bundle(
 ) -> None:
     """Stage bundle artifacts for a single library.
 
-    Creates ``<staging_dir>/<bundle_name>/`` containing .py source, .mpy
+    Creates ``<staging_dir>/<pkg_name>/`` containing .py source, .mpy
     bytecode, and a package.json manifest for mip.
 
-    When *experimental* is True the bundle directory gets an
-    ``_experimental`` suffix (e.g. ``chumicro_timing_experimental/``).
-    The mip manifest's on-device install paths still use the original
-    package name so that ``import chumicro_timing`` works regardless of
-    which channel the user installed from.
+    When *experimental* is True the package.json URLs point to the
+    experimental bundle repo (``chumicro-bundle-experimental``).  The
+    staging directory name is always the base package name — channel
+    separation is handled by pushing to different repos.
     """
     pkg_name, pkg_dir, compile_files, source_only_files = _find_bundle_modules(
         lib_dir,
@@ -132,9 +136,8 @@ def build_bundle(
     if not all_files:
         sys.exit(f"No deployable .py files found in {pkg_dir}")
 
-    # Bundle directory name — suffixed for experimental channel.
-    bundle_name = f"{pkg_name}_experimental" if experimental else pkg_name
-    out_dir = staging_dir / bundle_name
+    bundle_repo = EXPERIMENTAL_BUNDLE_REPO if experimental else STABLE_BUNDLE_REPO
+    out_dir = staging_dir / pkg_name
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # Compilable modules get both .py and .mpy artifacts.
@@ -155,22 +158,22 @@ def build_bundle(
 
     # Generate mip package.json manifest.
     #
-    # Target paths (first element) use pkg_name — the on-device import name.
-    # Source URLs (second element) use bundle_name — where the file lives in
-    # the bundle repo (includes _experimental suffix when applicable).
+    # Both target and source paths use pkg_name — the on-device import name
+    # matches the directory name in the bundle repo.  Channel separation is
+    # handled by the repo name, not directory names.
     # Compilable modules reference .mpy; testing modules reference .py.
     urls = []
     for f in compile_files:
         rel = f.relative_to(pkg_dir)
         mpy_rel = rel.with_suffix(".mpy").as_posix()
         target = f"{pkg_name}/{mpy_rel}"
-        source = f"github:ChuMicro/chumicro-bundle/{bundle_name}/{mpy_rel}"
+        source = f"github:ChuMicro/{bundle_repo}/{pkg_name}/{mpy_rel}"
         urls.append([target, source])
     for f in source_only_files:
         rel = f.relative_to(pkg_dir)
         py_rel = rel.as_posix()
         target = f"{pkg_name}/{py_rel}"
-        source = f"github:ChuMicro/chumicro-bundle/{bundle_name}/{py_rel}"
+        source = f"github:ChuMicro/{bundle_repo}/{pkg_name}/{py_rel}"
         urls.append([target, source])
 
     manifest: dict = {"urls": urls, "version": version}
@@ -206,7 +209,8 @@ def main() -> None:
     parser.add_argument(
         "--experimental",
         action="store_true",
-        help="Stage as experimental channel (adds _experimental suffix to bundle directory)",
+        help="Stage as experimental channel "
+        "(package.json URLs point to the experimental bundle repo)",
     )
     args = parser.parse_args()
     build_bundle(

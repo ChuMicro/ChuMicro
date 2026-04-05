@@ -24,8 +24,9 @@ For experimental (pre-release) versions from the develop branch:
 
 ```bash
 pip install chumicro-msgpack-experimental
-circup install chumicro-msgpack-experimental
-mpremote mip install github:ChuMicro/chumicro-bundle/chumicro_msgpack_experimental
+circup bundle-add ChuMicro/chumicro-bundle-experimental
+circup install chumicro-msgpack
+mpremote mip install github:ChuMicro/chumicro-bundle-experimental/chumicro_msgpack
 ```
 
 ## Quick example

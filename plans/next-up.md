@@ -6,7 +6,7 @@
   - Set `develop` as the default branch: Settings → General → Default branch → change to `develop`.
   - Branch protection on `develop`: require status checks (lint, test, build, version-check), require 1 approval.
   - Branch protection on `main`: require status checks, require 1 approval, restrict pushes to maintainers only.
-  - ✅ `develop` branch created. ✅ `ChuMicro/chumicro-bundle` repo created. Still need: `BUNDLE_TOKEN` secret.
+  - ✅ `develop` branch created. ✅ `ChuMicro/chumicro-bundle` repo created. Still need: `chumicro-bundle-experimental` repo, `BUNDLE_TOKEN` secret.
 - [ ] Document contributor prerequisites by platform (macOS, Linux, Windows/WSL2) and by editor (PyCharm, VS Code, CLI) in the README. Linux and WSL2 sections are best-effort/researched until verified.
   - When writing these docs, scope the AGENTS.md performance guidelines (f-strings, `const()`, `memoryview`, pre-allocated buffers, etc.) to **library code only**. Infrastructure code (`scripts/`, `support/`) runs exclusively on CPython and does not need embedded-runtime constraints.
 - [ ] Write a "Creating a New Library" contributor guide. Walk through the full lifecycle from scaffolding to release-ready:
@@ -37,7 +37,7 @@
 - [ ] Add docs build verification to the release pipeline (verify `docs/` is non-empty for any library being released).
 - [ ] Explore test ergonomics: reduce repeated boilerplate across test files.
 - [ ] Validate VS Code workspace with the generated `pyrightconfig.json`.
-- [ ] Add `BUNDLE_TOKEN` secret to the source repo and validate circup/mip install paths end-to-end (Decision 0018).
+- [ ] Add `BUNDLE_TOKEN` secret to the source repo. Create `ChuMicro/chumicro-bundle-experimental` repo. Validate circup/mip install paths end-to-end (Decision 0018).
 - [ ] Add the first real board transport tooling for ESP32-S2 (Wemos S2-Mini) once the manual device execution path needs to move beyond direct local runs.
 - [ ] Design a performance and resource benchmarking infrastructure. Goals:
   - Measure memory footprint (heap allocations, peak usage) and CPU cost of library operations.
