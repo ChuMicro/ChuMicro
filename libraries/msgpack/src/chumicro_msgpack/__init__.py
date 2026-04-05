@@ -19,9 +19,10 @@ all four functions delegate to the C implementation.  The pure-Python
 encoder in ``_pure`` is never imported, saving ~700 bytes of heap RAM.
 """
 
+from io import BytesIO
+
 try:
     # CircuitPython C built-in — stream-based API.
-    from io import BytesIO
 
     from msgpack import pack, unpack  # noqa: F401
 
