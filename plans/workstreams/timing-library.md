@@ -34,7 +34,6 @@ libraries/timing/
 └── examples/
     ├── heartbeat_blink.py
     ├── multiple_heartbeats.py
-    ├── activity_timeout.py
     └── timeout_check.py
 ```
 
