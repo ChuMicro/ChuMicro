@@ -317,3 +317,22 @@ This was the largest single session. It addressed three areas: the workspace was
 **Cross-runtime test fixes:**
 10. Fixed `time.monotonic` in `support/test_harness/runner.py` — MicroPython doesn't have it. Added a cross-runtime shim that falls back to `time.ticks_ms()`.
 11. Replaced `pytest.raises` in msgpack tests with `raises` from `chumicro_test_harness` so tests run on MicroPython compat.
+
+#### 2026-04-05 — CI/release infrastructure completed, bundle repo rename
+
+**Release pipeline completion:**
+1. CI workflow fully wired: lint, test (3.11/3.12/3.13 matrix), verify-examples, build, plus PR-only gates (version-check, api-check, label-check). Advisory MicroPython/CircuitPython compat jobs disabled to save CI minutes.
+2. Release workflow (`release.yml`) triggers on VERSION changes to `develop` or `main`. Detects changed libraries (scans all `libraries/*/VERSION`, skips already-tagged), builds distributions, publishes to PyPI via trusted publishing (OIDC, environment "pypi"), creates git tags and GitHub Releases. Experimental channel uses `-experimental` suffix in package names and tags.
+3. Bundle job stages `.py` + `.mpy` + `package.json` per library via `scripts/bundle.py`, pushes to channel-specific bundle repos, auto-generates rich READMEs, creates circup-format release zips (py + 10.x-mpy). Only CP 10.x bytecode produced.
+4. Promote workflow (`promote.yml`) dispatches develop → main PRs with VERSION change summaries.
+5. Label sync workflow (`label-sync.yml`) keeps repo labels in sync with `.github/labels.yml`.
+6. All four libraries published to PyPI at 0.1.0 to register them.
+
+**Branch sync and bundle repo rename:**
+7. Fixed develop/main sync issue: `main` had 8 commits ahead of `develop` (commits made directly on `main` during initial CI setup). Fast-forwarded `develop` to match `main`.
+8. Bundle repos recreated due to PII exposure: renamed from `chumicro-bundle`/`chumicro-bundle-experimental` to `ChuMicro-Bundle`/`ChuMicro-Bundle-Experimental`. Updated all references across scripts, workflows, library READMEs, and planning docs.
+
+**Infrastructure status finalized:**
+9. `BUNDLE_TOKEN` secret added. PyPI trusted publishing configured. `develop` set as default branch. Branch protection rulesets configured (enforcement deferred until repos go public).
+10. Recorded Decisions 0019 (branching model) and 0020 (API breakage detection).
+

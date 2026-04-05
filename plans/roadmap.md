@@ -97,8 +97,10 @@ Current verified progress:
 - `api-check` job uses `griffe check` to detect API breakages and cross-reference with VERSION bump level (Decision 0020)
 - `label-check` job requires a `semver:*` label on every PR
 - build job uploads artifacts via `actions/upload-artifact@v4`
-- release workflow (`.github/workflows/release.yml`) triggers on VERSION changes pushed to main; builds, creates git tags and GitHub Releases (PyPI publishing scaffolded but disabled); supports `workflow_dispatch` with dry-run
+- release workflow (`.github/workflows/release.yml`) triggers on VERSION changes pushed to `develop` or `main`; builds, publishes to PyPI via trusted publishing (OIDC), creates git tags and GitHub Releases; supports `workflow_dispatch` with dry-run and library filter
+- bundle job stages `.py` + `.mpy` + `package.json` per library, pushes to channel-specific bundle repos (`ChuMicro-Bundle` / `ChuMicro-Bundle-Experimental`), generates bundle README, creates circup-format release zips
 - `develop` → `main` branching model defined (Decision 0019); `promote.yml` dispatches develop → main PRs
+- all four libraries published to PyPI at 0.1.0; `BUNDLE_TOKEN` secret added; `develop` is default branch; branch protection rulesets configured (enforcement deferred until repos go public)
 - PR template (`.github/PULL_REQUEST_TEMPLATE.md`) with quality checklist
 - Label definitions (`.github/labels.yml`) synced via `label-sync.yml` workflow
 - `scripts/run.py check-version` and `check-api` available for local pre-commit verification
