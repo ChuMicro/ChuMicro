@@ -1,9 +1,27 @@
 # requires: hardware
 """Store and retrieve device settings in non-volatile memory (NVM).
 
-Packs a settings dict into CircuitPython's ``microcontroller.nvm``
-byte array, which persists across reboots.  A 2-byte length prefix
-tracks the payload size so the reader knows how many bytes to unpack.
+CircuitPython provides ``microcontroller.nvm`` — a small byte array
+(typically 256–8192 bytes depending on the board) that persists across
+reboots and power cycles.  It behaves like a ``bytearray``: you read
+and write individual bytes or slices.
+
+This example uses ``packb`` to convert a Python dict into compact
+msgpack bytes, writes those bytes into NVM with a 2-byte length
+header, and reads them back with ``unpackb``.  The length header is
+needed because NVM is a fixed-size buffer — without it, you would not
+know where the meaningful data ends and the unused bytes begin.
+
+**NVM layout used by this example:**
+
+.. code-block:: text
+
+    Byte 0      Byte 1      Byte 2 ...  Byte N+1
+    ┌──────────┬──────────┬───────────────────────┐
+    │ len high │ len low  │  msgpack payload ...   │
+    └──────────┴──────────┴───────────────────────┘
+
+    len = (byte_0 << 8) | byte_1   (big-endian 16-bit unsigned integer)
 
 Runs on CircuitPython.
 
@@ -23,33 +41,52 @@ Setup:
 import microcontroller
 from chumicro_msgpack import packb, unpackb
 
-# --- Save settings to NVM ---
+# --- Save settings to NVM -------------------------------------------------
 
+# Integer keys keep the msgpack payload small.  Each integer key
+# encodes in a single byte, whereas a string key like "ssid" would
+# take 5+ bytes.  Map the integers to meaningful names in your own
+# code (e.g., KEY_SSID = 0, KEY_PASSWORD = 1, ...).
 settings = {
-    0: "MyNetwork",       # Wi-Fi SSID
-    1: "secret123",       # Wi-Fi password
+    0: "MyNetwork",         # Wi-Fi SSID
+    1: "secret123",         # Wi-Fi password
     2: "living-room-lamp",  # device name
-    3: True,              # configured flag
+    3: True,                # configured flag
 }
 
+# packb converts the dict to compact binary bytes.
 data = packb(settings)
 length = len(data)
 
-# Store a 2-byte big-endian length prefix followed by the payload.
-# This tells the reader how many bytes to unpack on the next boot.
+# Get a reference to the NVM byte array.  Its size varies by board
+# (e.g., 256 bytes on ESP32-S2, 8192 on some RP2040 boards).
 nvm = microcontroller.nvm
-nvm[0] = (length >> 8) & 0xFF
-nvm[1] = length & 0xFF
+
+# Write a 2-byte big-endian length prefix so we know how many bytes
+# to read back later.  Big-endian means the high byte comes first:
+#   length = 52  →  high byte = 0, low byte = 52
+#   length = 300 →  high byte = 1, low byte = 44
+nvm[0] = (length >> 8) & 0xFF  # high byte
+nvm[1] = length & 0xFF         # low byte
+
+# Write the msgpack payload immediately after the 2-byte header.
 nvm[2:2 + length] = data
 
-print(f"saved {length} bytes to NVM")
+print(f"saved {length} bytes to NVM (total NVM size: {len(nvm)} bytes)")
 
-# --- Load settings from NVM ---
+# --- Load settings from NVM -----------------------------------------------
 
+# Reconstruct the length from the 2-byte header.
 stored_length = (nvm[0] << 8) | nvm[1]
+
+# Validate: length must be positive and fit within the NVM buffer
+# (minus the 2-byte header).  A length of 0 or a value larger than
+# the buffer means NVM has not been written yet or is corrupted.
 if stored_length > 0 and stored_length <= len(nvm) - 2:
+    # Read exactly stored_length bytes from NVM and decode.
+    # bytes() copies the slice out of NVM into a regular bytes object
+    # that unpackb can parse.
     restored = unpackb(bytes(nvm[2:2 + stored_length]))
     print(f"loaded: {restored}")
 else:
     print("no valid settings in NVM")
-
