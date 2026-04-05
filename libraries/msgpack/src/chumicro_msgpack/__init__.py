@@ -15,10 +15,28 @@ Public API
 - ``unpack(stream)`` — unpack one object from a readable stream.
 
 On CircuitPython boards that include the native ``msgpack`` module,
-``pack`` and ``unpack`` delegate to the C implementation.  ``packb``
-and ``unpackb`` always use the pure-Python encoder/decoder.
+all four functions delegate to the C implementation.  The pure-Python
+encoder in ``_pure`` is never imported, saving ~700 bytes of heap RAM.
 """
 
-from .core import pack, packb, unpack, unpackb
+try:
+    # CircuitPython C built-in — stream-based API.
+    from io import BytesIO
+
+    from msgpack import pack, unpack  # noqa: F401
+
+    def packb(obj):
+        """Pack *obj* to msgpack bytes using the native encoder."""
+        buffer = BytesIO()
+        pack(obj, buffer)
+        return buffer.getvalue()
+
+    def unpackb(data):
+        """Unpack msgpack *data* to a Python object using the native decoder."""
+        return unpack(BytesIO(data))
+
+except ImportError:
+    # No native msgpack — load the pure-Python implementation.
+    from ._pure import pack, packb, unpack, unpackb  # noqa: F401
 
 __all__ = ["pack", "packb", "unpack", "unpackb"]
