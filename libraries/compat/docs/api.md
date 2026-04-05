@@ -1,3 +1,5 @@
 # API Reference
 
-::: chumicro_compat
+## functools
+
+::: chumicro_compat.functools
