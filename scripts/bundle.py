@@ -292,32 +292,25 @@ def generate_bundle_readme(root: Path, *, experimental: bool = False) -> str:
     lines.append("")
 
     # Install instructions.
+    other_repo = STABLE_BUNDLE_REPO if experimental else EXPERIMENTAL_BUNDLE_REPO
+    other_label = "stable" if experimental else "experimental"
     lines.append("## Installation")
     lines.append("")
     lines.append("### CircuitPython (circup)")
     lines.append("")
-    lines.append("Register the bundle, then install any library:")
+    lines.append(
+        "Remove any other ChuMicro bundle first, then register this one:"
+    )
     lines.append("")
     lines.append("```bash")
+    lines.append(
+        f"circup bundle-remove {_GITHUB_ORG}/{other_repo}   "
+        f"# skip if {other_label} was never added"
+    )
     lines.append(f"circup bundle-add {_GITHUB_ORG}/{bundle_repo}")
     lines.append("circup install chumicro-timing   # example")
     lines.append("```")
     lines.append("")
-    if experimental:
-        lines.append(
-            "To switch back to stable, remove this bundle and add the "
-            "stable one:"
-        )
-        lines.append("")
-        lines.append("```bash")
-        lines.append(
-            f"circup bundle-remove {_GITHUB_ORG}/{bundle_repo}"
-        )
-        lines.append(
-            f"circup bundle-add {_GITHUB_ORG}/{STABLE_BUNDLE_REPO}"
-        )
-        lines.append("```")
-        lines.append("")
     lines.append("### MicroPython (mip)")
     lines.append("")
     lines.append("Install directly from the bundle repo:")
