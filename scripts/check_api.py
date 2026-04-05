@@ -16,46 +16,8 @@ from __future__ import annotations
 import re
 import subprocess
 import sys
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-
-# Paths within a library that trigger an API check.
-_RELEASE_RELEVANT = {"src", "pyproject.toml"}
-
-
-def _changed_files(base_ref: str) -> list[str]:
-    """Return files changed between *base_ref* and HEAD."""
-    result = subprocess.run(
-        ["git", "diff", "--name-only", f"{base_ref}...HEAD"],
-        capture_output=True,
-        text=True,
-        cwd=ROOT,
-        check=False,
-    )
-    if result.returncode != 0:
-        result = subprocess.run(
-            ["git", "diff", "--name-only", base_ref, "HEAD"],
-            capture_output=True,
-            text=True,
-            cwd=ROOT,
-            check=False,
-        )
-    if result.returncode != 0:
-        print(f"git diff failed: {result.stderr.strip()}")
-        sys.exit(2)
-    return [line for line in result.stdout.strip().splitlines() if line]
-
-
-def _changed_libraries(base_ref: str) -> set[str]:
-    """Return names of libraries with release-relevant changes."""
-    changed = _changed_files(base_ref)
-    libs: set[str] = set()
-    for path in changed:
-        parts = path.split("/")
-        if len(parts) >= 3 and parts[0] == "libraries" and parts[2] in _RELEASE_RELEVANT:
-            libs.add(parts[1])
-    return libs
+from discovery import ROOT, changed_libraries
 
 
 def _latest_tag(lib_name: str) -> str | None:
@@ -114,10 +76,9 @@ def _find_package_name(lib_name: str) -> str | None:
     return None
 
 
-
 def _check(base_ref: str) -> int:
     """Run the API breakage check.  Returns exit code."""
-    libs = _changed_libraries(base_ref)
+    libs = changed_libraries(base_ref)
     if not libs:
         print("No release-relevant library changes detected.")
         return 0

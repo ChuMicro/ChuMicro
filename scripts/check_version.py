@@ -14,37 +14,8 @@ non-release-relevant files changed).  Exits 1 when enforcement fails.
 from __future__ import annotations
 
 import subprocess
-import sys
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-
-# Paths within a library that require a VERSION bump when changed.
-_RELEASE_RELEVANT = {"src", "pyproject.toml"}
-
-
-def _changed_files(base_ref: str) -> list[str]:
-    """Return files changed between *base_ref* and HEAD."""
-    result = subprocess.run(
-        ["git", "diff", "--name-only", f"{base_ref}...HEAD"],
-        capture_output=True,
-        text=True,
-        cwd=ROOT,
-        check=False,
-    )
-    if result.returncode != 0:
-        # Fallback: diff against base_ref directly (shallow clones).
-        result = subprocess.run(
-            ["git", "diff", "--name-only", base_ref, "HEAD"],
-            capture_output=True,
-            text=True,
-            cwd=ROOT,
-            check=False,
-        )
-    if result.returncode != 0:
-        print(f"git diff failed: {result.stderr.strip()}")
-        sys.exit(2)
-    return [line for line in result.stdout.strip().splitlines() if line]
+from discovery import RELEASE_RELEVANT, ROOT, changed_files
 
 
 def _has_release_tag(lib_name: str) -> bool:
@@ -61,7 +32,7 @@ def _has_release_tag(lib_name: str) -> bool:
 
 def _check(base_ref: str) -> int:
     """Run the VERSION enforcement check.  Returns exit code."""
-    changed = _changed_files(base_ref)
+    changed = changed_files(base_ref)
     if not changed:
         print("No changed files detected.")
         return 0
@@ -85,7 +56,7 @@ def _check(base_ref: str) -> int:
 
         # Check if the changed path is release-relevant.
         # src/anything or pyproject.toml at the library root.
-        if parts[2] in _RELEASE_RELEVANT:
+        if parts[2] in RELEASE_RELEVANT:
             libs_needing_bump.add(lib_name)
 
     missing = libs_needing_bump - libs_with_bump

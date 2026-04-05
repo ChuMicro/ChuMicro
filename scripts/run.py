@@ -441,12 +441,12 @@ def preflight() -> int:
     """
     all_pkgs = discover_package_dirs()
     steps: tuple[tuple[str, object], ...] = (
-        ("lint", lambda: lint()),
+        ("lint", lint),
         ("test", lambda: test_cpython(all_pkgs)),
         ("verify-examples", lambda: verify_examples(all_pkgs)),
         ("test-micropython-compat", test_micropython_compat),
         ("test-circuitpython-compat", test_circuitpython_compat),
-        ("build", lambda: build()),
+        ("build", build),
     )
 
     for step_name, step in steps:

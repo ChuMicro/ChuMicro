@@ -189,3 +189,49 @@ def pythonpath_env() -> dict[str, str]:
     env["PYTHONPATH"] = os.pathsep.join(path_entries)
     return env
 
+
+# ---------------------------------------------------------------------------
+# Shared helpers for PR checks (check_version, check_api)
+# ---------------------------------------------------------------------------
+
+#: Paths within a library that require a VERSION bump when changed.
+RELEASE_RELEVANT = {"src", "pyproject.toml"}
+
+
+def changed_files(base_ref: str) -> list[str]:
+    """Return files changed between *base_ref* and HEAD."""
+    result = subprocess.run(
+        ["git", "diff", "--name-only", f"{base_ref}...HEAD"],
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
+        check=False,
+    )
+    if result.returncode != 0:
+        # Fallback: diff against base_ref directly (shallow clones).
+        result = subprocess.run(
+            ["git", "diff", "--name-only", base_ref, "HEAD"],
+            capture_output=True,
+            text=True,
+            cwd=ROOT,
+            check=False,
+        )
+    if result.returncode != 0:
+        import sys
+
+        print(f"git diff failed: {result.stderr.strip()}")
+        sys.exit(2)
+    return [line for line in result.stdout.strip().splitlines() if line]
+
+
+def changed_libraries(base_ref: str) -> set[str]:
+    """Return names of libraries with release-relevant changes."""
+    changed = changed_files(base_ref)
+    libs: set[str] = set()
+    for path in changed:
+        parts = path.split("/")
+        if len(parts) >= 3 and parts[0] == "libraries" and parts[2] in RELEASE_RELEVANT:
+            libs.add(parts[1])
+    return libs
+
+
