@@ -67,7 +67,7 @@ Current verified progress:
 - `devices.example.yml` exists for the first manual device-validation template
 - `circuitpython-stubs` and `micropython-esp32-stubs` (both from PyPI) provide PEP 561 type stubs for platform-specific modules (Decision 0012), eliminating IDE squigglies without hand-written stubs
 - `runtime-versions.toml` at the repo root is the single source of truth for pinned CircuitPython and MicroPython versions; CI prepare scripts, setup, and stubs all read from this file
-- docs and examples contributor standards are established (Decision 0013) with strict `guide.md` section requirements, `api.md` autodoc rules, and an AI generation prompt; timing library has user guide, API reference, testing helpers docs, and three runnable examples
+- docs and examples contributor standards are established (Decision 0013) with strict `guide.md` section requirements, `api.md` autodoc rules, and an AI generation prompt; timing and runner libraries have user guides, API references, testing helpers docs, and runnable examples (simulated + hardware)
 
 Remaining items from the timing proof (runtime CI promotion, release automation, second seam, board transport) are tracked under Milestone 2 and `next-up.md`.
 

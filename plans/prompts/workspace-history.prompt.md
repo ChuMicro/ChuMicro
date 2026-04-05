@@ -280,3 +280,22 @@ This was the largest single session. It addressed three areas: the workspace was
 6. Researched mip and circup self-hosting. Both support self-hosted repos without community submission. `mip` uses `package.json` manifests with `github:` shorthand. `circup` supports custom bundles via `circup bundle-add`.
 7. Recorded Decision 0018: separate `ChuMicro/chumicro-bundle` distribution repo for built artifacts (`.py` + `.mpy`), keeping source repo clean.
 
+#### 2026-04-04 (cont. 3) — Board baseline revision, timing examples and doc accuracy
+
+**Board baseline lowered (Decision 0015 revised):**
+1. Confirmed RP2040 (264 KB SRAM, no PSRAM) and ESP32-S2 (PSRAM is in-package, not in SoC — both with/without variants exist commercially) tier placements were correct.
+2. Lowered hardware resource baseline from 512 KB to 256 KB MCU RAM to support RP2040.  Restructured tiers: ESP32-S2/C3 with PSRAM → Tier 1; RP2040, ESP32-S2/C3 without PSRAM → Tier 2.  Removed stale "8 MB+ flash preferred" wording.
+3. Updated Decision 0015, AGENTS.md, workspace-rebuild prompt.
+
+**Timing examples:**
+4. Removed `activity_timeout.py` — using a Heartbeat (periodic timer) as a one-shot inactivity timeout was a conceptual mismatch.
+5. Added `debounce.py` (simulated button debounce), `periodic_tick.py` (manual periodic loop — what Heartbeat does under the hood), `circuitpython_debounce.py` and `micropython_debounce.py` (hardware debounce with real GPIO). Fixed CircuitPython debounce to use `board.BUTTON` instead of arbitrary `board.D5`.
+6. Timing library now has 9 examples: 4 simulated (heartbeat_blink, multiple_heartbeats, timeout_check, debounce, periodic_tick) + 4 hardware (circuitpython_blink, circuitpython_debounce, micropython_blink, micropython_debounce).
+
+**Cross-runtime compatibility fix:**
+7. Removed `from __future__ import annotations` from `chumicro_timing/testing.py` — not supported on CircuitPython or MicroPython.  Only used built-in types in annotations, so postponed evaluation was unnecessary. Bumped timing VERSION 0.1.0 → 0.1.1.
+
+**Doc accuracy audit:**
+8. Fixed `testing.py` module docstring: `heartbeat.poll()` → `heartbeat.poll(fake.ticks_ms())` (missing required `now_ms` argument).
+9. Added `TaskHandle.run_count` to runner README API table (was present in code since initial implementation, missing from docs).
+

@@ -34,7 +34,7 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
 3. Implemented code slices:
    - `support/runtime/` for reusable runtime detection
    - `support/test_harness/` for a tiny on-device test runner
-   - `libraries/timing/` as the first publishable timing library (`chumicro-timing` 0.1.0)
+   - `libraries/timing/` as the first publishable timing library (`chumicro-timing` 0.1.1)
    - `libraries/runner/` as the second publishable library (`chumicro-runner` 0.4.0) — gate-based service pattern with shared timestamps, period gating, and batch handler firing (Decision 0014)
    - `libraries/compat/` as a compatibility layer shell (`chumicro-compat` 0.1.0) — no modules shipped yet, planned for `functools` polyfills
    - `scripts/run.py` as the task runner with auto-discovery, scoped testing, library scaffolding, IDE config generation, example verification, and docs build
