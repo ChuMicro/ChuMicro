@@ -13,7 +13,6 @@ Usage from any library's tests::
     assert heartbeat.poll() is True
 """
 
-from __future__ import annotations
 
 
 class FakeTicks:
