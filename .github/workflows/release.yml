@@ -196,13 +196,22 @@ jobs:
           data = json.load(sys.stdin)
           for entry in data['include']:
               cmd = [
-                  sys.executable, 'scripts/bundle.py',
+                  sys.executable, 'scripts/bundle.py', 'stage',
                   entry['lib_dir'], entry['version'], '.bundle-staging',
               ]
               if is_exp:
                   cmd.append('--experimental')
               subprocess.check_call(cmd)
           "
+
+      - name: Generate bundle README
+        run: |
+          is_exp="${{ needs.detect.outputs.is_experimental }}"
+          if [ "$is_exp" = "true" ]; then
+            python scripts/bundle.py readme --experimental -o .bundle-staging/README.md
+          else
+            python scripts/bundle.py readme -o .bundle-staging/README.md
+          fi
 
       - name: Clone bundle repo
         run: |

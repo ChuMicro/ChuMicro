@@ -193,33 +193,281 @@ def build_bundle(
     print(f"Staged {pkg_name} v{version} -> {out_dir}")
 
 
+def _collect_library_metadata(root: Path) -> list[dict]:
+    """Collect metadata for all publishable libraries.
+
+    Returns a sorted list of dicts with keys: name, pkg_name, version,
+    description, has_readme.
+    """
+    libraries_dir = root / "libraries"
+    if not libraries_dir.is_dir():
+        return []
+    entries = []
+    for version_file in sorted(libraries_dir.rglob("VERSION")):
+        lib_dir = version_file.parent
+        if not (lib_dir / "pyproject.toml").exists():
+            continue
+        version = version_file.read_text().strip()
+        name = lib_dir.name  # e.g. "timing"
+
+        # Read description from pyproject.toml.
+        with open(lib_dir / "pyproject.toml", "rb") as f:
+            data = tomllib.load(f)
+        description = data.get("project", {}).get("description", "") or ""
+
+        # Fall back to first non-heading, non-empty line of README.
+        if not description and (lib_dir / "README.md").exists():
+            for line in (lib_dir / "README.md").read_text().splitlines():
+                stripped = line.strip()
+                if stripped and not stripped.startswith("#"):
+                    description = stripped
+                    break
+
+        # Derive the import-name from the src/ directory.
+        src_dir = lib_dir / "src"
+        pkg_name = f"chumicro_{name}"
+        if src_dir.is_dir():
+            for d in src_dir.iterdir():
+                if (
+                    d.is_dir()
+                    and d.name.startswith("chumicro_")
+                    and not d.name.endswith(".egg-info")
+                ):
+                    pkg_name = d.name
+                    break
+
+        entries.append(
+            {
+                "name": name,
+                "pkg_name": pkg_name,
+                "version": version,
+                "description": description,
+            }
+        )
+    return entries
+
+
+#: GitHub org and source repo used for README links.
+_GITHUB_ORG = "ChuMicro"
+_SOURCE_REPO = "ChuMicro"
+
+
+def generate_bundle_readme(root: Path, *, experimental: bool = False) -> str:
+    """Generate a rich README.md for a bundle repo.
+
+    Reads library metadata from the workspace and produces markdown with
+    install instructions and a library table linking back to the source repo.
+    """
+    libraries = _collect_library_metadata(root)
+    bundle_repo = EXPERIMENTAL_BUNDLE_REPO if experimental else STABLE_BUNDLE_REPO
+    channel = "Experimental" if experimental else "Stable"
+    source_url = f"https://github.com/{_GITHUB_ORG}/{_SOURCE_REPO}"
+
+    lines: list[str] = []
+
+    # Header.
+    lines.append(f"# {bundle_repo}")
+    lines.append("")
+    if experimental:
+        lines.append(
+            "> ⚠️ **Pre-release channel** — these builds come from the "
+            "`develop` branch and may contain breaking changes."
+        )
+    else:
+        lines.append(
+            "> **Stable channel** — production-ready releases from the "
+            "`main` branch."
+        )
+    lines.append("")
+    lines.append(
+        f"{channel} distribution bundle for "
+        f"[ChuMicro]({source_url}) libraries.  "
+        "Contains `.py` source, `.mpy` bytecode, and `package.json` "
+        "manifests for [mip](https://docs.micropython.org/en/latest/"
+        "reference/packages.html) and "
+        "[circup](https://github.com/adafruit/circup) installation."
+    )
+    lines.append("")
+
+    # Install instructions.
+    lines.append("## Installation")
+    lines.append("")
+    lines.append("### CircuitPython (circup)")
+    lines.append("")
+    lines.append("Register the bundle once, then install any library:")
+    lines.append("")
+    lines.append("```bash")
+    lines.append(f"circup bundle-add {_GITHUB_ORG}/{bundle_repo}")
+    lines.append("circup install chumicro-timing   # example")
+    lines.append("```")
+    lines.append("")
+    lines.append("### MicroPython (mip)")
+    lines.append("")
+    lines.append("Install directly from the bundle repo:")
+    lines.append("")
+    lines.append("```bash")
+    lines.append(
+        f"mpremote mip install github:{_GITHUB_ORG}/{bundle_repo}/chumicro_timing"
+        "   # example"
+    )
+    lines.append("```")
+    lines.append("")
+    lines.append("Or on a network-capable board:")
+    lines.append("")
+    lines.append("```python")
+    lines.append("import mip")
+    lines.append(
+        f'mip.install("github:{_GITHUB_ORG}/{bundle_repo}/chumicro_timing")'
+        "   # example"
+    )
+    lines.append("```")
+    lines.append("")
+    lines.append("### CPython (pip)")
+    lines.append("")
+    lines.append(
+        "CPython users install from PyPI — the bundle repo is not involved:"
+    )
+    lines.append("")
+    lines.append("```bash")
+    if experimental:
+        lines.append("pip install chumicro-timing-experimental   # example")
+    else:
+        lines.append("pip install chumicro-timing   # example")
+    lines.append("```")
+    lines.append("")
+
+    # Library table.
+    lines.append("## Available libraries")
+    lines.append("")
+    lines.append(
+        "| Library | Version | Description |"
+    )
+    lines.append(
+        "| --- | --- | --- |"
+    )
+    for lib in libraries:
+        pip_name = f"chumicro-{lib['name']}"
+        lib_url = f"{source_url}/tree/develop/libraries/{lib['name']}"
+        desc = lib["description"]
+        lines.append(
+            f"| [**{pip_name}**]({lib_url}) | {lib['version']} | {desc} |"
+        )
+    lines.append("")
+    lines.append(
+        "Each library directory in this repo contains a `package.json` "
+        "manifest for mip, `.py` source files, and `.mpy` compiled "
+        "bytecode (CircuitPython 10.x, mpy format v6)."
+    )
+    lines.append("")
+
+    # Install examples for each library.
+    lines.append("### mip install commands")
+    lines.append("")
+    lines.append("```bash")
+    for lib in libraries:
+        lines.append(
+            f"mpremote mip install "
+            f"github:{_GITHUB_ORG}/{bundle_repo}/{lib['pkg_name']}"
+        )
+    lines.append("```")
+    lines.append("")
+    lines.append("### circup install commands")
+    lines.append("")
+    lines.append("```bash")
+    lines.append(f"circup bundle-add {_GITHUB_ORG}/{bundle_repo}")
+    for lib in libraries:
+        lines.append(f"circup install chumicro-{lib['name']}")
+    lines.append("```")
+    lines.append("")
+
+    # About.
+    lines.append("## About")
+    lines.append("")
+    lines.append(
+        "This repository is **automatically maintained** by the "
+        f"[ChuMicro source repo]({source_url})'s release workflow.  "
+        "Do not edit it manually."
+    )
+    lines.append("")
+    lines.append(
+        f"- **Source code, docs, and examples:** [{_GITHUB_ORG}/{_SOURCE_REPO}]"
+        f"({source_url})"
+    )
+    if experimental:
+        lines.append(
+            f"- **Stable bundle:** [{_GITHUB_ORG}/{STABLE_BUNDLE_REPO}]"
+            f"(https://github.com/{_GITHUB_ORG}/{STABLE_BUNDLE_REPO})"
+        )
+    else:
+        lines.append(
+            f"- **Experimental bundle:** [{_GITHUB_ORG}/{EXPERIMENTAL_BUNDLE_REPO}]"
+            f"(https://github.com/{_GITHUB_ORG}/{EXPERIMENTAL_BUNDLE_REPO})"
+        )
+    lines.append(
+        f"- **License:** [MIT]({source_url}/blob/develop/LICENSE)"
+    )
+    lines.append("")
+    return "\n".join(lines)
+
+
 def main() -> None:
     """CLI entry point."""
     parser = argparse.ArgumentParser(
         description="Stage bundle artifacts for mip/circup distribution.",
     )
-    parser.add_argument(
+    subparsers = parser.add_subparsers(dest="command")
+
+    # Default (positional) staging command.
+    stage_parser = subparsers.add_parser("stage", help="Stage bundle artifacts")
+    stage_parser.add_argument(
         "lib_dir", type=Path, help="Library directory (e.g. libraries/timing)"
     )
-    parser.add_argument("version", help="Library version string")
-    parser.add_argument("staging_dir", type=Path, help="Output staging directory")
-    parser.add_argument(
+    stage_parser.add_argument("version", help="Library version string")
+    stage_parser.add_argument("staging_dir", type=Path, help="Output staging directory")
+    stage_parser.add_argument(
         "--mpy-cross", default="mpy-cross", help="Path to mpy-cross binary"
     )
-    parser.add_argument(
+    stage_parser.add_argument(
         "--experimental",
         action="store_true",
         help="Stage as experimental channel "
         "(package.json URLs point to the experimental bundle repo)",
     )
-    args = parser.parse_args()
-    build_bundle(
-        args.lib_dir,
-        args.version,
-        args.staging_dir,
-        args.mpy_cross,
-        experimental=args.experimental,
+
+    # README generation command.
+    readme_parser = subparsers.add_parser(
+        "readme", help="Generate bundle repo README.md to stdout"
     )
+    readme_parser.add_argument(
+        "--experimental",
+        action="store_true",
+        help="Generate for the experimental bundle repo",
+    )
+    readme_parser.add_argument(
+        "-o", "--output", type=Path, help="Write to file instead of stdout"
+    )
+
+    args = parser.parse_args()
+
+    if args.command == "readme":
+        root = Path(__file__).resolve().parent.parent
+        content = generate_bundle_readme(root, experimental=args.experimental)
+        if args.output:
+            args.output.write_text(content)
+            print(f"Wrote {args.output}")
+        else:
+            print(content)
+    elif args.command == "stage":
+        build_bundle(
+            args.lib_dir,
+            args.version,
+            args.staging_dir,
+            args.mpy_cross,
+            experimental=args.experimental,
+        )
+    else:
+        parser.print_help()
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
