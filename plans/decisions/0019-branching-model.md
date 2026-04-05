@@ -24,19 +24,19 @@ All contributor PRs target `develop`. Direct pushes to `main` are blocked via br
 
 ### Pre-release publishing
 
-Deferred. Experimental releases from `develop` are not published to PyPI until the first stable release ships and there are actual consumers. This avoids complexity before it's needed. When added, pre-release versions will use PEP 440 markers (e.g., `0.2.0.dev1`) and publish to TestPyPI or PyPI with `--pre` flag.
+Releases from `develop` are tagged with `-experimental` suffix (e.g., `timing-v0.2.0-experimental`) and marked as GitHub pre-releases. Releases from `main` are stable — no suffix, no pre-release flag. The bundle repo (`ChuMicro/chumicro-bundle`) only receives artifacts from stable `main` releases.
 
 ### CI trigger changes
 
 - `ci.yml` triggers on push to `develop` and on all PRs (targeting any branch).
-- `release.yml` triggers only on push to `main` with `libraries/*/VERSION` changes.
+- `release.yml` triggers on push to `develop` or `main` with `libraries/*/VERSION` changes. Develop releases get `-experimental` tags; main releases are stable and also publish to the bundle repo.
 - `promote.yml` is a workflow_dispatch that opens a PR from `develop` → `main`.
 
 ### Manual steps required
 
 - Set `develop` as the default branch in GitHub repo settings.
 - Configure branch protection on both `develop` and `main`:
-  - `develop`: require status checks (lint, test, build, version-check, CodeRabbit Review), require 1 approval.
+  - `develop`: require status checks (lint, test, build, version-check), require 1 approval.
   - `main`: require status checks, require 1 approval, restrict who can push (maintainers only).
 
 ## Consequences

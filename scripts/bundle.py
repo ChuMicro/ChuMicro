@@ -21,11 +21,26 @@ import tomllib
 from pathlib import Path
 
 
-def _find_bundle_modules(lib_dir: Path) -> tuple[str, Path, list[Path]]:
-    """Discover the package name, package directory, and deployable .py files.
+def _is_testing_module(rel: Path) -> bool:
+    """Return True if *rel* (relative to the package root) is a testing module.
 
-    Excludes testing modules (test fakes not intended for deployment)
-    and __pycache__ directories.
+    Testing modules (``testing.py`` at the package root and the ``testing/``
+    subpackage) ship as source-only — they provide mock/fake layers for users
+    and must not be compiled to ``.mpy``.
+    """
+    return rel.parts[0] == "testing" or (
+        len(rel.parts) == 1 and rel.name == "testing.py"
+    )
+
+
+def _find_bundle_modules(
+    lib_dir: Path,
+) -> tuple[str, Path, list[Path], list[Path]]:
+    """Discover the package name, package dir, compilable and source-only files.
+
+    Returns ``(pkg_name, pkg_dir, compile_files, source_only_files)`` where
+    *compile_files* get both ``.py`` and ``.mpy`` artifacts and
+    *source_only_files* (testing modules) are shipped as ``.py`` only.
     """
     src_dir = lib_dir / "src"
     candidates = [
@@ -42,19 +57,18 @@ def _find_bundle_modules(lib_dir: Path) -> tuple[str, Path, list[Path]]:
         )
 
     pkg_dir = candidates[0]
-    py_files = []
+    compile_files: list[Path] = []
+    source_only_files: list[Path] = []
     for f in sorted(pkg_dir.rglob("*.py")):
         rel = f.relative_to(pkg_dir)
         if "__pycache__" in rel.parts:
             continue
-        # Exclude testing.py at package root and testing/ subpackage.
-        if rel.parts[0] == "testing" or (
-            len(rel.parts) == 1 and rel.name == "testing.py"
-        ):
-            continue
-        py_files.append(f)
+        if _is_testing_module(rel):
+            source_only_files.append(f)
+        else:
+            compile_files.append(f)
 
-    return pkg_dir.name, pkg_dir, py_files
+    return pkg_dir.name, pkg_dir, compile_files, source_only_files
 
 
 def _read_chumicro_deps(lib_dir: Path) -> list[str]:
@@ -96,14 +110,18 @@ def build_bundle(
     Creates ``<staging_dir>/<pkg_name>/`` containing .py source, .mpy
     bytecode, and a package.json manifest for mip.
     """
-    pkg_name, pkg_dir, py_files = _find_bundle_modules(lib_dir)
-    if not py_files:
+    pkg_name, pkg_dir, compile_files, source_only_files = _find_bundle_modules(
+        lib_dir,
+    )
+    all_files = compile_files + source_only_files
+    if not all_files:
         sys.exit(f"No deployable .py files found in {pkg_dir}")
 
     out_dir = staging_dir / pkg_name
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    for f in py_files:
+    # Compilable modules get both .py and .mpy artifacts.
+    for f in compile_files:
         rel = f.relative_to(pkg_dir)
         dest_py = out_dir / rel
         dest_mpy = (out_dir / rel).with_suffix(".mpy")
@@ -111,12 +129,24 @@ def build_bundle(
         shutil.copy2(f, dest_py)
         _compile_mpy(f, dest_mpy, mpy_cross)
 
+    # Testing modules ship as .py only (mock/fake layer for users).
+    for f in source_only_files:
+        rel = f.relative_to(pkg_dir)
+        dest_py = out_dir / rel
+        dest_py.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(f, dest_py)
+
     # Generate mip package.json manifest.
+    # Compilable modules reference .mpy; testing modules reference .py.
     urls = []
-    for f in py_files:
+    for f in compile_files:
         rel = f.relative_to(pkg_dir)
         mpy_path = f"{pkg_name}/{rel.with_suffix('.mpy').as_posix()}"
         urls.append([mpy_path, f"github:ChuMicro/chumicro-bundle/{mpy_path}"])
+    for f in source_only_files:
+        rel = f.relative_to(pkg_dir)
+        py_path = f"{pkg_name}/{rel.as_posix()}"
+        urls.append([py_path, f"github:ChuMicro/chumicro-bundle/{py_path}"])
 
     manifest: dict = {"urls": urls, "version": version}
     mip_deps = [

@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - develop
     paths:
       - "libraries/*/VERSION"
   workflow_dispatch:
@@ -29,14 +30,30 @@ jobs:
     outputs:
       matrix: ${{ steps.detect.outputs.matrix }}
       has_releases: ${{ steps.detect.outputs.has_releases }}
+      is_experimental: ${{ steps.branch.outputs.is_experimental }}
+      suffix: ${{ steps.branch.outputs.suffix }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      - id: branch
+        name: Determine release channel
+        run: |
+          branch="${GITHUB_REF##refs/heads/}"
+          if [ "$branch" = "develop" ]; then
+            echo "is_experimental=true" >> "$GITHUB_OUTPUT"
+            echo "suffix=-experimental" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_experimental=false" >> "$GITHUB_OUTPUT"
+            echo "suffix=" >> "$GITHUB_OUTPUT"
+          fi
+
       - id: detect
         name: Find VERSION changes
         run: |
+          suffix="${{ steps.branch.outputs.suffix }}"
+
           # Compare this push against the previous commit.
           changed=$(git diff --name-only HEAD~1 HEAD -- 'libraries/*/VERSION' || true)
           if [ -z "$changed" ]; then
@@ -52,7 +69,7 @@ jobs:
             lib_dir=$(dirname "$version_file")
             lib_name=$(basename "$lib_dir")
             version=$(cat "$version_file" | tr -d '[:space:]')
-            tag="${lib_name}-v${version}"
+            tag="${lib_name}-v${version}${suffix}"
 
             # Skip if this tag already exists (re-run safety).
             if git rev-parse "refs/tags/${tag}" >/dev/null 2>&1; then
@@ -122,9 +139,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ matrix.tag }}
-          name: "${{ matrix.lib_name }} v${{ matrix.version }}"
+          name: "${{ matrix.lib_name }} v${{ matrix.version }}${{ needs.detect.outputs.suffix }}"
+          prerelease: ${{ needs.detect.outputs.is_experimental == 'true' }}
           body: |
-            Release of **chumicro-${{ matrix.lib_name }}** version **${{ matrix.version }}**.
+            Release of **chumicro-${{ matrix.lib_name }}** version **${{ matrix.version }}**${{ needs.detect.outputs.is_experimental == 'true' && ' (experimental)' || '' }}.
           files: ${{ matrix.lib_dir }}/dist/*
           generate_release_notes: true
 
@@ -138,7 +156,10 @@ jobs:
   bundle:
     name: Publish to chumicro-bundle
     needs: [detect, release]
-    if: needs.detect.outputs.has_releases == 'true' && inputs.dry_run != true
+    if: >-
+      needs.detect.outputs.has_releases == 'true'
+      && needs.detect.outputs.is_experimental == 'false'
+      && inputs.dry_run != true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -187,10 +208,19 @@ jobs:
           (cd .circup-py && zip -qr "../.circup-zips/chumicro-bundle-py-${date_tag}.zip" lib/)
 
           # Build circup-format zip: .mpy bytecode bundle.
+          # Includes .py for testing modules (source-only, no .mpy compiled).
           mkdir -p .circup-mpy/lib
           for pkg_dir in .bundle-repo/chumicro_*/; do
             pkg=$(basename "$pkg_dir")
+            # Copy .mpy files (compiled modules).
             rsync -a --include='*/' --include='*.mpy' --exclude='*' "$pkg_dir/" ".circup-mpy/lib/${pkg}/"
+            # Copy testing modules (.py only — no .mpy counterparts).
+            if [ -f "$pkg_dir/testing.py" ]; then
+              cp "$pkg_dir/testing.py" ".circup-mpy/lib/${pkg}/testing.py"
+            fi
+            if [ -d "$pkg_dir/testing" ]; then
+              rsync -a --include='*/' --include='*.py' --exclude='*' "$pkg_dir/testing/" ".circup-mpy/lib/${pkg}/testing/"
+            fi
           done
           (cd .circup-mpy && zip -qr "../.circup-zips/chumicro-bundle-mpy-${date_tag}.zip" lib/)
 
