@@ -210,11 +210,11 @@ def test_object_task_handler_override():
     assert svc.check_count == 1
 
 
-# -- Runner: callable-based (check_fn + handler) --
+# -- Runner: callable-based (check_function + handler) --
 
 
 def test_callable_check_gates_handler():
-    """Callable check_fn should gate handler_fn."""
+    """Callable check_function should gate handler_function."""
     fake = FakeTicks()
     received = []
     gate_open = [True]

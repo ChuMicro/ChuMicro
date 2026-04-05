@@ -3,7 +3,7 @@
 Provides two ways to register work with a ``Runner``:
 
 1. **Gate-based** — a check function decides whether a handler fires.
-   Register with ``add(check_fn, handler=fn)`` (both callables) or
+   Register with ``add(check_function, handler=function)`` (both callables) or
    ``add(obj)`` where *obj* has ``.check(now_ms) -> bool`` and
    ``.handle(now_ms)`` methods.
 2. **Periodic** — ``add_periodic(handler, period_ms)``: the handler fires
@@ -14,18 +14,50 @@ All classes are cross-runtime compatible (CPython, MicroPython, CircuitPython).
 
 
 class _TaskEntry:
-    """Internal record for a task registered with the runner."""
+    """Internal record for a single task registered with the runner.
+
+    Each entry holds the check/handler callables, timing state, and a
+    run counter.  The runner iterates over entries every ``tick()`` to
+    decide which handlers fire.
+
+    Attributes:
+        check_function: Optional callable ``check_function(now_ms) -> bool``
+            that gates the handler.  ``None`` means no check gate (handler
+            fires whenever the time gate passes).
+        handler_function: Callable ``handler_function(now_ms)`` invoked when
+            the task is due.
+        period_ms: Interval in milliseconds between firings, or
+            ``None`` for non-periodic tasks (fire every tick once any
+            initial delay expires).
+        next_due_ms: Tick value at which the task becomes eligible, or
+            ``None`` if it is eligible immediately.  Updated after each
+            firing for periodic tasks.
+        run_count: Remaining number of times the handler may fire, or
+            ``None`` for unlimited.  Decremented by the runner after
+            each firing; the entry is auto-removed when it reaches zero.
+        active: ``True`` while the entry is registered.  Set to
+            ``False`` by ``Runner._remove_entry`` so that in-progress
+            iteration can skip it safely.
+    """
 
     __slots__ = (
-        "check_fn", "handler_fn", "period_ms", "next_due_ms",
+        "check_function", "handler_function", "period_ms", "next_due_ms",
         "run_count", "active",
     )
 
-    def __init__(self, check_fn, handler_fn, period_ms, next_due_ms,
-                 run_count):
-        """Create a task entry."""
-        self.check_fn = check_fn
-        self.handler_fn = handler_fn
+    def __init__(self, check_function, handler_function, period_ms,
+                 next_due_ms, run_count):
+        """Create a task entry.
+
+        Args:
+            check_function: Optional check callable, or ``None``.
+            handler_function: Handler callable invoked when the task fires.
+            period_ms: Repeat interval in ms, or ``None``.
+            next_due_ms: First eligible tick value, or ``None``.
+            run_count: Remaining fires, or ``None`` for unlimited.
+        """
+        self.check_function = check_function
+        self.handler_function = handler_function
         self.period_ms = period_ms
         self.next_due_ms = next_due_ms
         self.run_count = run_count
@@ -70,6 +102,10 @@ class TaskHandle:
         Pass ``None`` to remove an existing period (task runs every tick).
         A non-None value resets the timer so the next fire is
         *period_ms* from now.
+
+        Args:
+            period_ms: New interval in milliseconds, or ``None`` to
+                clear the period.
         """
         if period_ms is not None and period_ms <= 0:
             raise ValueError("period_ms must be greater than zero")
@@ -109,8 +145,9 @@ class Runner:
     - ``add(obj)`` — *obj* has ``.check(now_ms) -> bool`` and
       ``.handle(now_ms)``.  The runner calls ``.check()``; if ``True``,
       ``.handle()`` is queued.
-    - ``add(check_fn, handler=fn)`` — callable check gates callable handler.
-    - ``add(handler=fn)`` — handler fires every tick (or per period).
+    - ``add(check_function, handler=function)`` — callable check gates
+      callable handler.
+    - ``add(handler=function)`` — handler fires every tick (or per period).
     - ``add_periodic(handler, period_ms)`` — fires ``handler(now_ms)``
       every *period_ms* milliseconds.
 
@@ -132,7 +169,13 @@ class Runner:
     __slots__ = ("_entries", "_pending", "_ticks")
 
     def __init__(self, ticks=None):
-        """Create a runner."""
+        """Create a runner.
+
+        Args:
+            ticks: Optional tick source (must have ``ticks_ms``,
+                ``ticks_diff``, and ``ticks_add`` methods).
+                Defaults to the ``chumicro_timing.ticks`` module.
+        """
         self._entries = []
         self._pending = []
         if ticks is not None:
@@ -150,7 +193,7 @@ class Runner:
         ``.check(now_ms) -> bool`` and ``.handle(now_ms)`` methods.
 
         **Callable-based** (task + handler): *task* is a callable
-        ``check_fn(now_ms) -> bool`` that gates ``handler(now_ms)``.
+        ``check_function(now_ms) -> bool`` that gates ``handler(now_ms)``.
 
         **Handler-only** (handler, no task): ``handler(now_ms)`` fires
         on every tick (or per period if *period_ms* is set).
@@ -159,7 +202,7 @@ class Runner:
 
         Args:
             task: Object with ``.check()`` and ``.handle()``, or a
-                callable ``check_fn(now_ms) -> bool``.
+                callable ``check_function(now_ms) -> bool``.
             handler: Optional callable ``handler(now_ms)``.
             period_ms: Optional interval in milliseconds.
             start_after_ms: Optional initial delay before the task
@@ -171,14 +214,14 @@ class Runner:
         if handler is not None:
             # Callable-based or handler-only.
             if task is not None and not callable(task):
-                check_fn = task.check
+                check_function = task.check
             else:
-                check_fn = task  # callable or None (handler-only)
-            handler_fn = handler
+                check_function = task  # callable or None (handler-only)
+            handler_function = handler
         elif task is not None:
             # Object-based: must have .check() and .handle().
-            check_fn = task.check
-            handler_fn = task.handle
+            check_function = task.check
+            handler_function = task.handle
         else:
             raise ValueError(
                 "Provide a task object (with .check() and .handle()) "
@@ -199,7 +242,8 @@ class Runner:
             next_due_ms = self._ticks.ticks_add(now_ms, period_ms)
 
         entry = _TaskEntry(
-            check_fn, handler_fn, period_ms, next_due_ms, run_count,
+            check_function, handler_function, period_ms, next_due_ms,
+            run_count,
         )
         self._entries.append(entry)
         return TaskHandle(entry, self)
@@ -268,14 +312,14 @@ class Runner:
                     entry.next_due_ms = None
 
             # Check gate.
-            if entry.check_fn is not None:
-                if entry.check_fn(now_ms):
+            if entry.check_function is not None:
+                if entry.check_function(now_ms):
                     pending.append(entry)
             else:
                 pending.append(entry)
 
         for entry in pending:
-            entry.handler_fn(now_ms)
+            entry.handler_function(now_ms)
             if entry.run_count is not None:
                 entry.run_count -= 1
                 if entry.run_count <= 0:

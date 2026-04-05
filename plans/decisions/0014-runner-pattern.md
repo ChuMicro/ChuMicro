@@ -31,7 +31,7 @@ This is a duck-typed contract — components do not need to import or subclass a
 Three registration patterns:
 
 - **Object-based:** `add(obj)` — obj has `.check(now_ms) -> bool` and `.handle(now_ms)`.  The runner calls `.check()`; if `True`, `.handle()` is queued.
-- **Callable-based:** `add(check_fn, handler=fn)` — callable check gates callable handler.
+- **Callable-based:** `add(check_function, handler=function)` — callable check gates callable handler.
 - **Periodic:** `add_periodic(handler, period_ms)` — handler fires on schedule, no check.
 
 All patterns accept an optional `period_ms` to gate by time.
