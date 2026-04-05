@@ -3,6 +3,10 @@ name: Release
 on:
   workflow_dispatch:
     inputs:
+      libraries:
+        description: "Libraries to release (comma-separated, e.g. 'timing,runner'). Leave empty for all."
+        type: string
+        default: ""
       dry_run:
         description: "Dry run — build but do not publish or tag"
         type: boolean
@@ -44,24 +48,26 @@ jobs:
           fi
 
       - id: detect
-        name: Find VERSION changes
+        name: Find libraries to release
         run: |
           suffix="${{ steps.branch.outputs.suffix }}"
+          filter="${{ inputs.libraries }}"
 
-          # Compare this push against the previous commit.
-          changed=$(git diff --name-only HEAD~1 HEAD -- 'libraries/*/VERSION' || true)
-          if [ -z "$changed" ]; then
-            echo "has_releases=false" >> "$GITHUB_OUTPUT"
-            echo "matrix={\"include\":[]}" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
+          # Scan all libraries with VERSION files.
           entries="["
           first=true
-          for version_file in $changed; do
-            # version_file is e.g. libraries/timing/VERSION
+          for version_file in libraries/*/VERSION; do
+            [ -f "$version_file" ] || continue
             lib_dir=$(dirname "$version_file")
             lib_name=$(basename "$lib_dir")
+
+            # Filter to requested libraries if specified.
+            if [ -n "$filter" ]; then
+              if ! echo ",$filter," | grep -q ",${lib_name},"; then
+                continue
+              fi
+            fi
+
             version=$(cat "$version_file" | tr -d '[:space:]')
             tag="${lib_name}-v${version}${suffix}"
 
