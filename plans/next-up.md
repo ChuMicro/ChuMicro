@@ -18,6 +18,14 @@
   - This should live in the repo (e.g., `docs/creating-a-library.md` or a top-level `CONTRIBUTING.md` section), not just in AGENTS.md or decision records.
 
 ## Next
+- [ ] Implement `chumicro-settings` — dict-like persistent storage for microcontrollers.
+  - Uses `chumicro-msgpack` for serialization (2-byte length prefix + msgpack payload).
+  - `Settings(backend, *, defaults=None)` with dict-like API (`__getitem__`, `__setitem__`, `get`, `__contains__`, `__len__`, `__iter__`).
+  - Explicit `load()` / `save()` — no implicit auto-save (flash wear). `is_dirty` property tracks unsaved changes.
+  - Injectable backend protocol (duck-typed): `NvmBackend(nvm)` for CircuitPython, `FileBackend(path)` for MicroPython/CPython, `MemoryBackend(size)` for tests.
+  - `testing.py` submodule with `FakeBackend` (wraps MemoryBackend + call recording).
+  - Corruption recovery: `load()` catches decode failures, resets to defaults, sets dirty.
+  - ESP32 NVS backend deferred (different semantics — per-key, not blob).
 - [ ] Add `[tool.chumicro].platforms` reader to `scripts/run.py` and wire it into the cross-runtime compatibility runners and release/build paths (Decision 0011).
 - [ ] Promote advisory MicroPython and CircuitPython CI jobs to protected-branch requirements, gated by platform targeting (Decision 0011).
 - [ ] Add digital I/O as the second library seam (alongside CI/release work, not sequentially).
@@ -42,8 +50,11 @@
 
 ## Done
 
+- [x] Add `chumicro-msgpack` library: pure-Python MessagePack encoder/decoder with native CircuitPython C delegation.  Bytes API (`packb`/`unpackb`) and stream API (`pack`/`unpack`).  Docs, examples (including CircuitPython NVM hardware example), struct-vs-msgpack guidance.
+- [x] Add `functools.partial` polyfill to `chumicro-compat`: `_PurePythonPartial` for MicroPython/CircuitPython, re-exports real `functools.partial` on CPython.  12 tests, docs, examples.
+- [x] Fix cross-runtime test harness: `time.monotonic` shim for MicroPython, replace `pytest.raises` with `chumicro_test_harness.raises` in msgpack tests.
 - [x] Implement and iterate `chumicro-runner` to gate-based pattern (Decision 0014).  Service contract: `check(now_ms) -> bool`.  `Runner` with `add()`, `add_periodic()`, `TaskHandle`, shared timestamps, batch firing.  `CallRecorder` test helper.  All library versions reset to 0.1.0.
-- [x] Add `chumicro-compat` library with lightweight `abc` module (ABC base class, `@abstractmethod` decorator) using `__init_subclass__` — works on MicroPython ≥1.19.1, CircuitPython ≥8.x.
+- [x] Add `chumicro-compat` library (initially with `abc` module, later replaced by `functools.partial` polyfill).
 - [x] Generalize the compatibility smoke runner to discover and exercise device tests for any library, not just timing.
 - [x] Scope AGENTS.md performance guidelines (f-strings, `const()`, `memoryview`, pre-allocated buffers) to library code only. Infrastructure code (`scripts/`, `support/`) runs exclusively on CPython and should not be constrained by embedded-runtime rules.
 - [x] Move prepare logic from `ci/prepare_*.py` into importable modules under `scripts/`. `ci/` was subsequently removed entirely — all logic now lives in `scripts/`.

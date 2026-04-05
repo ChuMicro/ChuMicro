@@ -71,6 +71,11 @@ Current verified progress:
 
 Remaining items from the timing proof (runtime CI promotion, release automation, second seam, board transport) are tracked under Milestone 2 and `next-up.md`.
 
+Additional libraries built during and after Milestone 1:
+
+- `libraries/compat/` — cross-runtime polyfills (`functools.partial`); `chumicro-compat` 0.1.0
+- `libraries/msgpack/` — cross-runtime MessagePack serialization with native CircuitPython C delegation; `chumicro-msgpack` 0.1.0
+
 ## Milestone 2 — CI and release flow
 
 Status: `proposed`
