@@ -85,3 +85,4 @@ print(restored)              # {0: 'MyNetwork', 1: 'secret', 2: True}
 | `packb_basic.py` | Pack and unpack a settings dict |
 | `packb_size_comparison.py` | Compare msgpack vs JSON size for the same dict |
 | `stream_roundtrip.py` | Use the stream-based `pack` / `unpack` API with `BytesIO` |
+| `circuitpython_nvm_settings.py` | Store and load settings in non-volatile memory (hardware) |
