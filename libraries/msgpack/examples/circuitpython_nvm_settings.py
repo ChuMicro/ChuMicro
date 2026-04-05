@@ -67,7 +67,11 @@ length = len(data)
 
 # Get a reference to the NVM byte array.  Its size varies by board
 # (e.g., 256 bytes on ESP32-S2, 8192 on some RP2040 boards).
+# Not all boards have NVM — check before using it.
 nvm = microcontroller.nvm
+if nvm is None:
+    print("This board does not have NVM.")
+    raise SystemExit
 
 # Write a 2-byte big-endian length prefix so we know how many bytes
 # to read back later.  Big-endian means the high byte comes first:
