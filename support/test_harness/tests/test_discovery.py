@@ -11,28 +11,28 @@ from chumicro_test_harness import discovery
 # ---------------------------------------------------------------------------
 
 
-def _make_library(tmp: str, name: str, test_files: list[str] | None = None):
-    """Create a minimal library layout under *tmp*/libraries/*name*."""
-    src = os.path.join(tmp, "libraries", name, "src", f"chumicro_{name}")
+def _make_library(root: str, name: str, test_files: list[str] | None = None):
+    """Create a minimal library layout under *root*/libraries/*name*."""
+    src = os.path.join(root, "libraries", name, "src", f"chumicro_{name}")
     os.makedirs(src, exist_ok=True)
     # Create a minimal __init__.py so the package is importable.
-    with open(os.path.join(src, "__init__.py"), "w") as fh:
-        fh.write("")
+    with open(os.path.join(src, "__init__.py"), "w") as file:
+        file.write("")
 
     if test_files:
-        tests_dir = os.path.join(tmp, "libraries", name, "tests")
+        tests_dir = os.path.join(root, "libraries", name, "tests")
         os.makedirs(tests_dir, exist_ok=True)
-        for tf in test_files:
-            with open(os.path.join(tests_dir, tf), "w") as fh:
-                fh.write("def test_placeholder(): pass\n")
+        for test_file in test_files:
+            with open(os.path.join(tests_dir, test_file), "w") as file:
+                file.write("def test_placeholder(): pass\n")
 
 
-def _make_support(tmp: str, name: str):
-    """Create a minimal support package layout under *tmp*/support/*name*."""
-    src = os.path.join(tmp, "support", name, "src", f"chumicro_{name}")
+def _make_support(root: str, name: str):
+    """Create a minimal support package layout under *root*/support/*name*."""
+    src = os.path.join(root, "support", name, "src", f"chumicro_{name}")
     os.makedirs(src, exist_ok=True)
-    with open(os.path.join(src, "__init__.py"), "w") as fh:
-        fh.write("")
+    with open(os.path.join(src, "__init__.py"), "w") as file:
+        file.write("")
 
 
 # ---------------------------------------------------------------------------
@@ -95,8 +95,8 @@ def test_discover_tests_ignores_non_test_files(tmp_path):
     _make_library(root, "mylib", ["test_ok.py"])
     # Add a non-test file.
     conftest = os.path.join(root, "libraries", "mylib", "tests", "conftest.py")
-    with open(conftest, "w") as fh:
-        fh.write("")
+    with open(conftest, "w") as file:
+        file.write("")
 
     tests = discovery.discover_tests(root)
 
@@ -197,8 +197,8 @@ def test_run_all_runs_discovered_tests(tmp_path, capsys):
     _make_library(root, "demo", ["test_demo.py"])
     # Write a real passing test.
     test_file = os.path.join(root, "libraries", "demo", "tests", "test_demo.py")
-    with open(test_file, "w") as fh:
-        fh.write("def test_pass(): assert True\n")
+    with open(test_file, "w") as file:
+        file.write("def test_pass(): assert True\n")
 
     original_path = sys.path.copy()
     try:
@@ -216,8 +216,8 @@ def test_run_all_skips_import_errors(tmp_path, capsys):
     root = str(tmp_path)
     _make_library(root, "broken", ["test_broken.py"])
     test_file = os.path.join(root, "libraries", "broken", "tests", "test_broken.py")
-    with open(test_file, "w") as fh:
-        fh.write("import nonexistent_module_xyz\n")
+    with open(test_file, "w") as file:
+        file.write("import nonexistent_module_xyz\n")
 
     original_path = sys.path.copy()
     try:
@@ -236,8 +236,8 @@ def test_run_all_reports_load_errors(tmp_path, capsys):
     root = str(tmp_path)
     _make_library(root, "bad", ["test_bad.py"])
     test_file = os.path.join(root, "libraries", "bad", "tests", "test_bad.py")
-    with open(test_file, "w") as fh:
-        fh.write("raise RuntimeError('load boom')\n")
+    with open(test_file, "w") as file:
+        file.write("raise RuntimeError('load boom')\n")
 
     original_path = sys.path.copy()
     try:

@@ -61,10 +61,10 @@ def discover_tests(root="."):
     libs_path = root + "/libraries" if root != "." else "libraries"
     tests = []
     for name in _sorted_listdir(libs_path):
-        t_dir = libs_path + "/" + name + "/tests"
-        for filename in _sorted_listdir(t_dir):
+        tests_dir = libs_path + "/" + name + "/tests"
+        for filename in _sorted_listdir(tests_dir):
             if filename.startswith("test_") and filename.endswith(".py"):
-                tests.append(t_dir + "/" + filename)
+                tests.append(tests_dir + "/" + filename)
     return tests
 
 
@@ -85,13 +85,13 @@ def exec_as_namespace(path, name="__main__", package=""):
     This avoids the standard import machinery, which behaves inconsistently
     across MicroPython and CircuitPython unix-port builds.
     """
-    ns = {"__name__": name, "__file__": path, "__package__": package}
-    with open(path) as fh:
-        exec(fh.read(), ns)
-    obj = _Namespace()
-    for key in ns:
-        setattr(obj, key, ns[key])
-    return obj
+    namespace = {"__name__": name, "__file__": path, "__package__": package}
+    with open(path) as source_file:
+        exec(source_file.read(), namespace)
+    result = _Namespace()
+    for key in namespace:
+        setattr(result, key, namespace[key])
+    return result
 
 
 def run_all(root="."):

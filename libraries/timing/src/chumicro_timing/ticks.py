@@ -57,17 +57,17 @@ def _resolve_ticks_ms():
     """
     supervisor = _try_import_supervisor()
     if supervisor is not None:
-        fn = getattr(supervisor, "ticks_ms", None)
-        if callable(fn):
-            return fn
+        candidate = getattr(supervisor, "ticks_ms", None)
+        if callable(candidate):
+            return candidate
 
-    fn = getattr(time, "ticks_ms", None)
-    if callable(fn):
-        return fn
+    candidate = getattr(time, "ticks_ms", None)
+    if callable(candidate):
+        return candidate
 
-    fn = getattr(time, "monotonic_ns", None)
-    if callable(fn):
-        return lambda: fn() // 1_000_000
+    candidate = getattr(time, "monotonic_ns", None)
+    if callable(candidate):
+        return lambda: candidate() // 1_000_000
 
     _monotonic = time.monotonic
     return lambda: int(_monotonic() * 1000)
