@@ -24,8 +24,8 @@ Key constraints:
 
 Two distribution repos serve the stable and experimental channels:
 
-- `ChuMicro/chumicro-bundle` — stable releases (from `main`)
-- `ChuMicro/chumicro-bundle-experimental` — experimental releases (from `develop`)
+- `ChuMicro/ChuMicro-Bundle` — stable releases (from `main`)
+- `ChuMicro/ChuMicro-Bundle-Experimental` — experimental releases (from `develop`)
 
 Using separate repos keeps circup's `Bundle.latest_tag` working naturally per-repo — no prerelease tag management needed.  Both repos use identical directory names (e.g. `chumicro_timing/`) so that users can swap between channels without changing any import statements in their `code.py`.  Switching channels is explicit: change which bundle is registered with circup, or change the repo URL for mip.
 
@@ -38,7 +38,7 @@ The source repo (`ChuMicro/ChuMicro`) contains only `.py` source, tests, and dev
 Both repos share the same layout; only the library versions differ:
 
 ```
-ChuMicro/chumicro-bundle/              # (or chumicro-bundle-experimental)
+ChuMicro/ChuMicro-Bundle/              # (or ChuMicro-Bundle-Experimental)
 ├── README.md
 ├── chumicro_timing/
 │   ├── package.json
@@ -57,21 +57,21 @@ Each library directory contains both `.py` and `.mpy` for every module (except t
 Each library's `package.json` lists `.mpy` files as the default targets.  Users install the stable channel with:
 
 ```
-mpremote mip install github:ChuMicro/chumicro-bundle/chumicro_runner
+mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_runner
 ```
 
 Or the experimental channel (same package name, different repo):
 
 ```
-mpremote mip install github:ChuMicro/chumicro-bundle-experimental/chumicro_runner
+mpremote mip install github:ChuMicro/ChuMicro-Bundle-Experimental/chumicro_runner
 ```
 
 On a network-capable board:
 
 ```python
 import mip
-mip.install("github:ChuMicro/chumicro-bundle/chumicro_runner")
-# experimental: mip.install("github:ChuMicro/chumicro-bundle-experimental/chumicro_runner")
+mip.install("github:ChuMicro/ChuMicro-Bundle/chumicro_runner")
+# experimental: mip.install("github:ChuMicro/ChuMicro-Bundle-Experimental/chumicro_runner")
 ```
 
 To install source instead of bytecode: `mip.install(..., mpy=False)`.
@@ -83,7 +83,7 @@ Dependencies between libraries (e.g., runner depends on timing) are declared in 
 Users register the bundle once:
 
 ```
-circup bundle-add ChuMicro/chumicro-bundle
+circup bundle-add ChuMicro/ChuMicro-Bundle
 ```
 
 Then install libraries normally:
@@ -95,8 +95,8 @@ circup install chumicro-runner
 To switch to experimental, swap the bundle registration:
 
 ```
-circup bundle-remove ChuMicro/chumicro-bundle
-circup bundle-add ChuMicro/chumicro-bundle-experimental
+circup bundle-remove ChuMicro/ChuMicro-Bundle
+circup bundle-add ChuMicro/ChuMicro-Bundle-Experimental
 circup install chumicro-runner
 ```
 
@@ -110,15 +110,15 @@ https://github.com/{repo}/releases/download/{tag}/{bundle_id}-{platform}-{tag}.z
 
 Where `bundle_id` is the repo name lowercased with underscores replaced by hyphens, and `{platform}` comes from circup's `PLATFORMS` dict in `circup/shared.py`.
 
-For the stable repo: `bundle_id = "chumicro-bundle"`.
-For the experimental repo: `bundle_id = "chumicro-bundle-experimental"`.
+For the stable repo: `bundle_id = "ChuMicro-Bundle"`.
+For the experimental repo: `bundle_id = "ChuMicro-Bundle-Experimental"`.
 
 Each zip must contain a top-level directory named `{bundle_id}-{platform}-{tag}/` with a `lib/` subdirectory inside it.  circup's `lib_dir()` method constructs this path after extraction.  If the mpy zip for a device's platform is missing, circup falls back to the `.py` source zip.
 
 Release automation produces one `.py` zip and one `.mpy` zip per repo:
 
-- Stable: `chumicro-bundle-py-{tag}.zip`, `chumicro-bundle-10.x-mpy-{tag}.zip`
-- Experimental: `chumicro-bundle-experimental-py-{tag}.zip`, `chumicro-bundle-experimental-10.x-mpy-{tag}.zip`
+- Stable: `ChuMicro-Bundle-py-{tag}.zip`, `ChuMicro-Bundle-10.x-mpy-{tag}.zip`
+- Experimental: `ChuMicro-Bundle-Experimental-py-{tag}.zip`, `ChuMicro-Bundle-Experimental-10.x-mpy-{tag}.zip`
 
 Only CircuitPython 10.x mpy bytecode is produced (mpy format v6).  CP 9.x users can install `.py` source.  Tags use date-based format (`YYYYMMDD`).
 
@@ -136,7 +136,7 @@ Release CI in the source repo triggers the bundle update:
 
 1. A version tag on a library in `ChuMicro/ChuMicro` triggers the release workflow.
 2. CI compiles `.py` → `.mpy` using `mpy-cross` (format v6, CP 10.x).
-3. CI pushes the `.py` + `.mpy` files and updated `package.json` to the appropriate bundle repo (`chumicro-bundle` for `main`, `chumicro-bundle-experimental` for `develop`).
+3. CI pushes the `.py` + `.mpy` files and updated `package.json` to the appropriate bundle repo (`ChuMicro-Bundle` for `main`, `ChuMicro-Bundle-Experimental` for `develop`).
 4. CI creates a tagged GitHub Release on the bundle repo with circup-format zips.
 5. PyPI upload happens in parallel from the source repo (standard `python -m build` + trusted publishing).
 
@@ -152,5 +152,5 @@ CPython users install via `pip install chumicro-runner` from PyPI.  The bundle r
 - Users always have access to both `.py` (debugging, older runtimes) and `.mpy` (production).
 - Both bundle repos need to exist.  Creating them and wiring up CI is part of the ci-release workstream.
 - Platform targeting (Decision 0011) gates which libraries are included in each release.
-- Example install commands in hardware examples should use `github:ChuMicro/chumicro-bundle/...` for MicroPython and `circup install ...` for CircuitPython.
+- Example install commands in hardware examples should use `github:ChuMicro/ChuMicro-Bundle/...` for MicroPython and `circup install ...` for CircuitPython.
 - When circup adds new platform entries to `SUPPORTED_PLATFORMS`, the release workflow's mpy zip step needs updating to match.

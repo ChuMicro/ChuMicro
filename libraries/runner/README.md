@@ -11,20 +11,20 @@ Components implement a `check(now_ms) -> bool` check that gates when a handler f
 pip install chumicro-runner
 
 # CircuitPython (circup)
-circup bundle-add ChuMicro/chumicro-bundle
+circup bundle-add ChuMicro/ChuMicro-Bundle
 circup install chumicro-runner
 
 # MicroPython (mip)
-mpremote mip install github:ChuMicro/chumicro-bundle/chumicro_runner
+mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_runner
 ```
 
 For experimental (pre-release) versions from the develop branch:
 
 ```bash
 pip install chumicro-runner-experimental
-circup bundle-add ChuMicro/chumicro-bundle-experimental
+circup bundle-add ChuMicro/ChuMicro-Bundle-Experimental
 circup install chumicro-runner
-mpremote mip install github:ChuMicro/chumicro-bundle-experimental/chumicro_runner
+mpremote mip install github:ChuMicro/ChuMicro-Bundle-Experimental/chumicro_runner
 ```
 
 ## Quick example

@@ -278,7 +278,7 @@ This was the largest single session. It addressed three areas: the workspace was
 
 **Distribution bundle decision (Decision 0018):**
 6. Researched mip and circup self-hosting. Both support self-hosted repos without community submission. `mip` uses `package.json` manifests with `github:` shorthand. `circup` supports custom bundles via `circup bundle-add`.
-7. Recorded Decision 0018: separate `ChuMicro/chumicro-bundle` distribution repo for built artifacts (`.py` + `.mpy`), keeping source repo clean.
+7. Recorded Decision 0018: separate `ChuMicro/ChuMicro-Bundle` distribution repo for built artifacts (`.py` + `.mpy`), keeping source repo clean.
 
 #### 2026-04-04 (cont. 3) — Board baseline revision, timing examples and doc accuracy
 

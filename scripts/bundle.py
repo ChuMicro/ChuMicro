@@ -22,8 +22,8 @@ from pathlib import Path
 
 #: Bundle repo names for each channel.  Experimental uses a separate repo
 #: so that circup's latest_tag works per-channel without prerelease tag tricks.
-STABLE_BUNDLE_REPO = "chumicro-bundle"
-EXPERIMENTAL_BUNDLE_REPO = "chumicro-bundle-experimental"
+STABLE_BUNDLE_REPO = "ChuMicro-Bundle"
+EXPERIMENTAL_BUNDLE_REPO = "ChuMicro-Bundle-Experimental"
 
 
 def _is_testing_module(rel: Path) -> bool:
@@ -96,7 +96,7 @@ def _dep_to_mip_ref(dep: str) -> str:
     # Strip version specifiers.
     name = dep.split(">")[0].split("<")[0].split("=")[0].split("!")[0].split(";")[0]
     pkg = name.strip().replace("-", "_")
-    return f"github:ChuMicro/chumicro-bundle/{pkg}"
+    return f"github:ChuMicro/ChuMicro-Bundle/{pkg}"
 
 
 def _compile_mpy(py_file: Path, mpy_file: Path, mpy_cross: str) -> None:

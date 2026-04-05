@@ -49,11 +49,11 @@ jobs:
           if [ "$branch" = "develop" ]; then
             echo "is_experimental=true" >> "$GITHUB_OUTPUT"
             echo "suffix=-experimental" >> "$GITHUB_OUTPUT"
-            echo "bundle_repo=ChuMicro/chumicro-bundle-experimental" >> "$GITHUB_OUTPUT"
+            echo "bundle_repo=ChuMicro/ChuMicro-Bundle-Experimental" >> "$GITHUB_OUTPUT"
           else
             echo "is_experimental=false" >> "$GITHUB_OUTPUT"
             echo "suffix=" >> "$GITHUB_OUTPUT"
-            echo "bundle_repo=ChuMicro/chumicro-bundle" >> "$GITHUB_OUTPUT"
+            echo "bundle_repo=ChuMicro/ChuMicro-Bundle" >> "$GITHUB_OUTPUT"
           fi
 
       - id: detect
@@ -164,8 +164,8 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Publish to the channel-specific bundle repo for mip and circup distribution.
-  # Stable pushes to ChuMicro/chumicro-bundle.
-  # Experimental pushes to ChuMicro/chumicro-bundle-experimental.
+  # Stable pushes to ChuMicro/ChuMicro-Bundle.
+  # Experimental pushes to ChuMicro/ChuMicro-Bundle-Experimental.
   # Prerequisites:
   #   1. Both bundle repos must exist (can be empty).
   #   2. A PAT with repo scope stored as the BUNDLE_TOKEN secret.

@@ -13,20 +13,20 @@ On CircuitPython boards with the native `msgpack` C module, all functions delega
 pip install chumicro-msgpack
 
 # CircuitPython (circup)
-circup bundle-add ChuMicro/chumicro-bundle
+circup bundle-add ChuMicro/ChuMicro-Bundle
 circup install chumicro-msgpack
 
 # MicroPython (mip)
-mpremote mip install github:ChuMicro/chumicro-bundle/chumicro_msgpack
+mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_msgpack
 ```
 
 For experimental (pre-release) versions from the develop branch:
 
 ```bash
 pip install chumicro-msgpack-experimental
-circup bundle-add ChuMicro/chumicro-bundle-experimental
+circup bundle-add ChuMicro/ChuMicro-Bundle-Experimental
 circup install chumicro-msgpack
-mpremote mip install github:ChuMicro/chumicro-bundle-experimental/chumicro_msgpack
+mpremote mip install github:ChuMicro/ChuMicro-Bundle-Experimental/chumicro_msgpack
 ```
 
 ## Quick example

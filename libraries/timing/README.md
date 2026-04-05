@@ -11,20 +11,20 @@ All timing is non-blocking — nothing in this library calls `time.sleep()`. Cap
 pip install chumicro-timing
 
 # CircuitPython (circup)
-circup bundle-add ChuMicro/chumicro-bundle
+circup bundle-add ChuMicro/ChuMicro-Bundle
 circup install chumicro-timing
 
 # MicroPython (mip)
-mpremote mip install github:ChuMicro/chumicro-bundle/chumicro_timing
+mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_timing
 ```
 
 For experimental (pre-release) versions from the develop branch:
 
 ```bash
 pip install chumicro-timing-experimental
-circup bundle-add ChuMicro/chumicro-bundle-experimental
+circup bundle-add ChuMicro/ChuMicro-Bundle-Experimental
 circup install chumicro-timing
-mpremote mip install github:ChuMicro/chumicro-bundle-experimental/chumicro_timing
+mpremote mip install github:ChuMicro/ChuMicro-Bundle-Experimental/chumicro_timing
 ```
 
 ## Quick example

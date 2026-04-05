@@ -108,7 +108,7 @@ chumicro/
 15. Boards require ≥256 KB MCU RAM and ≥4 MB flash.  Tier 1: ESP32, ESP32-S3, ESP32-C6, RP2350, ESP32-S2/C3 with PSRAM.  Tier 2 (constrained): RP2040, ESP32-S2/C3 without PSRAM.  Unsupported: SAMD21, SAMD51, nRF52, ESP8266, STM32F4/F7 <256 KB (Decision 0015).
 16. Cross-runtime unit tests run `tests/` through the lightweight harness on MP/CP unix-ports. Tests use plain asserts and `raises()`; `import pytest` is the automatic skip boundary. `functional_tests/` is for functional tests only. `_pytest` suffix marks CPython-only test files (Decision 0016).
 17. The CircuitPython unix-port build requires `-DMICROPY_PY_MICROPYTHON_RINGIO=0` to work around a linker error from dead RingIO code. The `coverage` variant disables RingIO and hides the bug; `standard` variant exposes it (Decision 0017).
-18. Distribution uses a separate `ChuMicro/chumicro-bundle` repo for built artifacts (`.py` + `.mpy`). Source repo stays clean; bundle repo provides `package.json` for mip and release zips for circup (Decision 0018).
+18. Distribution uses a separate `ChuMicro/ChuMicro-Bundle` repo for built artifacts (`.py` + `.mpy`). Source repo stays clean; bundle repo provides `package.json` for mip and release zips for circup (Decision 0018).
 
 ### Key technical patterns
 
