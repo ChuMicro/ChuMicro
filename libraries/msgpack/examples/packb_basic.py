@@ -1,7 +1,8 @@
 """Pack and unpack a settings dictionary.
 
-Demonstrates the most common use case: converting a Python dict to
-compact binary bytes with ``packb`` and restoring it with ``unpackb``.
+Converts a Python dict to compact binary bytes with ``packb`` and
+restores it with ``unpackb``.  The bytes-based API is the simplest
+way to serialize data when you don't need a stream.
 
 Runs on CPython, MicroPython, and CircuitPython.
 
