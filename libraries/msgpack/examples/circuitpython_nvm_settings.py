@@ -41,17 +41,24 @@ Setup:
 import microcontroller
 from chumicro_msgpack import packb, unpackb
 
-# --- Save settings to NVM -------------------------------------------------
+# --- Key definitions -------------------------------------------------------
 
 # Integer keys keep the msgpack payload small.  Each integer key
 # encodes in a single byte, whereas a string key like "ssid" would
-# take 5+ bytes.  Map the integers to meaningful names in your own
-# code (e.g., KEY_SSID = 0, KEY_PASSWORD = 1, ...).
+# take 5+ bytes.  Define named constants so the rest of your code
+# reads clearly without sacrificing compactness on the wire.
+KEY_SSID = 0
+KEY_PASSWORD = 1
+KEY_DEVICE_NAME = 2
+KEY_CONFIGURED = 3
+
+# --- Save settings to NVM -------------------------------------------------
+
 settings = {
-    0: "MyNetwork",         # Wi-Fi SSID
-    1: "secret123",         # Wi-Fi password
-    2: "living-room-lamp",  # device name
-    3: True,                # configured flag
+    KEY_SSID: "MyNetwork",
+    KEY_PASSWORD: "secret123",
+    KEY_DEVICE_NAME: "living-room-lamp",
+    KEY_CONFIGURED: True,
 }
 
 # packb converts the dict to compact binary bytes.
