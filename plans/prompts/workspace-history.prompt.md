@@ -336,3 +336,15 @@ This was the largest single session. It addressed three areas: the workspace was
 9. `BUNDLE_TOKEN` secret added. PyPI trusted publishing configured. `develop` set as default branch. Branch protection rulesets configured (enforcement deferred until repos go public).
 10. Recorded Decisions 0019 (branching model) and 0020 (API breakage detection).
 
+#### 2026-04-05 (cont.) — Infrastructure cleanup and bundle improvements
+
+**Script deduplication:**
+1. Extracted `changed_files()`, `changed_libraries()`, and `RELEASE_RELEVANT` from `check_api.py` and `check_version.py` into `discovery.py` to eliminate duplication.  Both scripts now import from `discovery` instead of defining their own versions.
+2. Removed unnecessary lambda wrappers in `run.py` preflight steps (`lambda: lint()` → `lint`, `lambda: build()` → `build`).
+
+**Bundle tooling improvements:**
+3. Added `stage-matrix` subcommand to `bundle.py`: reads a JSON matrix from the `MATRIX_JSON` environment variable and stages all libraries in one invocation, replacing the inline Python script in the workflow.
+4. Added `circup-zip` subcommand to `bundle.py`: builds circup-format release zips (py + mpy per platform) from the staged bundle repo, replacing ~40 lines of inline shell in `release.yml`.
+5. Simplified `_find_bundle_modules()`: removed the testing-module special case — all `.py` files are now compiled to `.mpy` (testing modules are useful on-device too).
+6. Simplified `release.yml` bundle job: uses `stage-matrix`, `circup-zip`, and env vars instead of inline shell/Python; reduced from ~80 lines to ~20.
+
