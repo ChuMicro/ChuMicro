@@ -97,3 +97,23 @@ def test_heartbeat_poll_fires_exactly_at_period():
     fake.advance(100)
     now = fake.ticks_ms()
     assert heartbeat.poll(now) is True
+
+
+def test_heartbeat_default_ticks_uses_real_clock():
+    """Creating a Heartbeat without ticks= should use the real clock."""
+    heartbeat = Heartbeat(period_ms=1000)
+
+    # The real clock path sets _ticks_diff to the module-level ticks_diff
+    # and _last_beat_ms to a live ticks_ms() reading.
+    assert heartbeat._ticks_diff is not None
+    assert isinstance(heartbeat._last_beat_ms, int)
+    assert heartbeat.period_ms == 1000
+
+
+def test_fake_ticks_add():
+    """FakeTicks.ticks_add should return a simple sum."""
+    fake = FakeTicks()
+    assert fake.ticks_add(100, 50) == 150
+    assert fake.ticks_add(0, 0) == 0
+    assert fake.ticks_add(200, -50) == 150
+
