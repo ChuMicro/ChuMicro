@@ -4,9 +4,9 @@ Cross-runtime: runs on CPython (via pytest), MicroPython and CircuitPython
 (via the lightweight test harness).
 """
 
-from chumicro_test_harness import raises
 from chumicro_runner import Runner, TaskHandle
 from chumicro_runner.testing import CallRecorder
+from chumicro_test_harness import raises
 from chumicro_timing.testing import FakeTicks
 
 # -- Helpers --
