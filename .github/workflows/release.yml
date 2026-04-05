@@ -128,3 +128,110 @@ jobs:
           files: ${{ matrix.lib_dir }}/dist/*
           generate_release_notes: true
 
+  # ---------------------------------------------------------------------------
+  # Publish to ChuMicro/chumicro-bundle for mip and circup distribution.
+  # Prerequisites:
+  #   1. The ChuMicro/chumicro-bundle repo must exist (can be empty).
+  #   2. A PAT with repo scope stored as the BUNDLE_TOKEN secret.
+  # See Decision 0018 for the bundle repo layout and distribution model.
+  # ---------------------------------------------------------------------------
+  bundle:
+    name: Publish to chumicro-bundle
+    needs: [detect, release]
+    if: needs.detect.outputs.has_releases == 'true' && inputs.dry_run != true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install mpy-cross
+        run: pip install mpy-cross
+
+      - name: Stage bundle artifacts
+        run: |
+          matrix='${{ needs.detect.outputs.matrix }}'
+          echo "$matrix" | python3 -c "
+          import json, sys, subprocess
+          data = json.load(sys.stdin)
+          for entry in data['include']:
+              subprocess.check_call([
+                  sys.executable, 'scripts/bundle.py',
+                  entry['lib_dir'], entry['version'], '.bundle-staging',
+              ])
+          "
+
+      - name: Clone bundle repo
+        run: |
+          git clone "https://x-access-token:${BUNDLE_TOKEN}@github.com/ChuMicro/chumicro-bundle.git" .bundle-repo
+        env:
+          BUNDLE_TOKEN: ${{ secrets.BUNDLE_TOKEN }}
+
+      - name: Update bundle and create circup zips
+        run: |
+          # Copy staged library directories into the bundle repo.
+          cp -r .bundle-staging/* .bundle-repo/
+
+          date_tag=$(date -u +%Y%m%d)
+          echo "date_tag=${date_tag}" >> "$GITHUB_ENV"
+
+          # Build circup-format zip: .py source bundle.
+          mkdir -p .circup-py/lib
+          for pkg_dir in .bundle-repo/chumicro_*/; do
+            pkg=$(basename "$pkg_dir")
+            rsync -a --include='*/' --include='*.py' --exclude='*' "$pkg_dir/" ".circup-py/lib/${pkg}/"
+          done
+          mkdir -p .circup-zips
+          (cd .circup-py && zip -qr "../.circup-zips/chumicro-bundle-py-${date_tag}.zip" lib/)
+
+          # Build circup-format zip: .mpy bytecode bundle.
+          mkdir -p .circup-mpy/lib
+          for pkg_dir in .bundle-repo/chumicro_*/; do
+            pkg=$(basename "$pkg_dir")
+            rsync -a --include='*/' --include='*.mpy' --exclude='*' "$pkg_dir/" ".circup-mpy/lib/${pkg}/"
+          done
+          (cd .circup-mpy && zip -qr "../.circup-zips/chumicro-bundle-mpy-${date_tag}.zip" lib/)
+
+      - name: Push to bundle repo
+        run: |
+          cd .bundle-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          matrix='${{ needs.detect.outputs.matrix }}'
+          msg=$(echo "$matrix" | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          libs = [e['lib_name'] + ' v' + e['version'] for e in data['include']]
+          print('Update: ' + ', '.join(libs))
+          ")
+          git commit -m "$msg"
+          git push origin main
+
+      - name: Create bundle release
+        run: |
+          matrix='${{ needs.detect.outputs.matrix }}'
+          body=$(echo "$matrix" | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          lines = ['## Updated libraries', '']
+          for e in data['include']:
+              lines.append('- **' + e['lib_name'] + '** v' + e['version'])
+          print('\n'.join(lines))
+          ")
+
+          gh release create "${{ env.date_tag }}" \
+            --repo ChuMicro/chumicro-bundle \
+            --title "Bundle ${{ env.date_tag }}" \
+            --notes "$body" \
+            .circup-zips/*.zip
+        env:
+          GH_TOKEN: ${{ secrets.BUNDLE_TOKEN }}
+

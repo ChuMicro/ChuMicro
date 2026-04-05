@@ -33,7 +33,7 @@
 - [ ] Add docs build verification to the release pipeline (verify `docs/` is non-empty for any library being released).
 - [ ] Explore test ergonomics: reduce repeated boilerplate across test files.
 - [ ] Validate VS Code workspace with the generated `pyrightconfig.json`.
-- [ ] Add `mpy-cross` compilation step to the release pipeline for circup and mip artifacts.
+- [ ] Create the `ChuMicro/chumicro-bundle` repo on GitHub and add `BUNDLE_TOKEN` secret (Decision 0018).
 - [ ] Add the first real board transport tooling for ESP32-S2 (Wemos S2-Mini) once the manual device execution path needs to move beyond direct local runs.
 - [ ] Design a performance and resource benchmarking infrastructure. Goals:
   - Measure memory footprint (heap allocations, peak usage) and CPU cost of library operations.
@@ -45,10 +45,12 @@
 
 ## Blocked / waiting
 
-- [ ] Confirm exact mip staging details once the CircuitPython circup path is proven.
 - [ ] Expand the device test matrix beyond ESP32-S2 once transport tooling is proven.
 
 ## Done
+
+- [x] Add bundle publishing to release workflow: `scripts/bundle.py` stages .py + .mpy + `package.json` per library; `release.yml` `bundle` job compiles with mpy-cross, pushes to `ChuMicro/chumicro-bundle`, and creates circup-format release zips (Decision 0018).
+- [x] Confirm mip staging details: mip installs from `package.json` manifests in the bundle repo; `mip.install("github:ChuMicro/chumicro-bundle/chumicro_<name>")`. circup installs via `circup bundle-add ChuMicro/chumicro-bundle` + `circup install chumicro-<name>` (Decision 0018).
 
 - [x] Establish develop → main branching model (Decision 0019), API breakage detection with griffe (Decision 0020), PR quality gates (template, labels, semver label check), promote workflow, label sync workflow. CI split into lint/test/build/verify-examples/version-check/api-check/label-check jobs. Release workflow creates tags and GitHub Releases (PyPI publishing scaffolded but disabled).
 - [x] Draft first release workflow: `release.yml` triggers on VERSION changes pushed to main, detects changed libraries, builds, publishes to PyPI via trusted publishers (OIDC), creates git tags and GitHub Releases. `ci.yml` split into lint/test/build/verify-examples/version-check jobs. `scripts/check_version.py` enforces per-library VERSION bumps for release-relevant changes (Decision 0002).

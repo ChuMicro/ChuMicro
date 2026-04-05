@@ -91,7 +91,7 @@ It should not be forced to be the direct execution environment on constrained bo
 
 ## Notes
 
-The repo has four publishable libraries: `compat/`, `msgpack/`, `runner/`, and `timing/`. All build and pass preflight. Release automation is in place for tagging and GitHub Releases; PyPI publishing is scaffolded but disabled. The branching model (Decision 0019) and API breakage detection (Decision 0020) are defined and wired into CI. Remaining items: create the `develop` branch on GitHub, set it as default, configure branch protection, integrate the AI review tool (TBD), enable PyPI publishing when ready, wire in circup/mip bundle staging (Decision 0018).
+The repo has four publishable libraries: `compat/`, `msgpack/`, `runner/`, and `timing/`. All build and pass preflight. Release automation is in place for tagging and GitHub Releases; PyPI publishing is scaffolded but disabled. The branching model (Decision 0019) and API breakage detection (Decision 0020) are defined and wired into CI. Bundle publishing to `ChuMicro/chumicro-bundle` is wired into the release workflow (Decision 0018): `scripts/bundle.py` stages .py + .mpy + `package.json`, the `bundle` job pushes to the bundle repo and creates circup-format release zips. Remaining items: create the `develop` branch on GitHub, set it as default, configure branch protection, integrate the AI review tool (TBD), enable PyPI publishing when ready, create the `chumicro-bundle` repo and add `BUNDLE_TOKEN` secret.
 
 ## Resolved feedback
 
