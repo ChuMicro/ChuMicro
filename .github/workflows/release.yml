@@ -103,9 +103,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.detect.outputs.matrix) }}
 
-    # PyPI trusted publishing requires the environment to match what is
-    # configured on pypi.org.  Uncomment when ready to publish.
-    # environment: pypi
+    environment: pypi
 
     steps:
       - uses: actions/checkout@v4
