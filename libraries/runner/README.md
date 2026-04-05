@@ -23,8 +23,8 @@ For experimental (pre-release) versions from the develop branch:
 ```bash
 pip install chumicro-runner-experimental
 circup bundle-add ChuMicro/chumicro-bundle-experimental
-circup install chumicro-runner
-mpremote mip install github:ChuMicro/chumicro-bundle-experimental/chumicro_runner
+circup install chumicro-runner-experimental
+mpremote mip install github:ChuMicro/chumicro-bundle-experimental/chumicro_runner_experimental
 ```
 
 ## Quick example
