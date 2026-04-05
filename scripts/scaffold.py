@@ -31,6 +31,10 @@ classifiers = [
 path = "VERSION"
 pattern = "(?P<version>\\\\S+)"
 
+[tool.hatch.build.targets.sdist]
+include = ["src/", "VERSION", "README.md"]
+exclude = [".gitignore"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/{import_name}"]
 """
