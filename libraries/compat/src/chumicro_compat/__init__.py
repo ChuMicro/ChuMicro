@@ -1,7 +1,12 @@
-"""Cross-runtime compatibility polyfills for CPython, MicroPython, and CircuitPython."""
+"""Cross-runtime compatibility polyfills for CPython, MicroPython, and CircuitPython.
 
-from .functools import partial
+Import polyfills from their submodules directly to avoid loading
+modules you do not need on constrained boards::
 
-__all__ = [
-    "partial",
-]
+    from chumicro_compat.functools import partial
+
+Available modules
+-----------------
+- ``chumicro_compat.functools`` — ``partial``
+"""
+
