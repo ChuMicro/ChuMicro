@@ -35,6 +35,8 @@ The channels are differentiated by **package name**, not version number:
 
 On-device import paths are always the base name (`chumicro_timing`). The experimental mip `package.json` installs files to `chumicro_timing/` on the device, sourcing them from `chumicro_timing_experimental/` in the bundle repo. Users switch channels by reinstalling from the other package — they cannot have both installed simultaneously.
 
+**Dependency model:** experimental packages depend on **stable** (production) releases by default. Installing one experimental library does not cascade into pulling experimental versions of its transitive dependencies. This means a user can run stable `chumicro-timing` alongside experimental `chumicro-mqtt` without conflict. When coordinated experimental changes across libraries are needed, the developer explicitly overrides specific dependencies in that library's build.
+
 Experimental GitHub Releases are marked as pre-releases. Bundle releases use date-based tags with the channel suffix (e.g., `20260405-experimental`).
 
 ### CI trigger changes

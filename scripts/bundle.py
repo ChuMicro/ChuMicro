@@ -80,18 +80,17 @@ def _read_chumicro_deps(lib_dir: Path) -> list[str]:
     return [d for d in deps if d.strip().startswith("chumicro-")]
 
 
-def _dep_to_mip_ref(dep: str, *, experimental: bool = False) -> str:
+def _dep_to_mip_ref(dep: str) -> str:
     """Convert 'chumicro-timing>=0.1' to a mip github reference.
 
-    When *experimental* is True, the reference points to the
-    ``_experimental`` variant so that experimental packages depend on
-    other experimental packages.
+    Dependencies always reference the stable (production) variant.
+    An experimental library depends on production releases by default.
+    If coordinated experimental changes across libraries are needed,
+    the developer overrides specific deps manually.
     """
     # Strip version specifiers.
     name = dep.split(">")[0].split("<")[0].split("=")[0].split("!")[0].split(";")[0]
     pkg = name.strip().replace("-", "_")
-    if experimental:
-        pkg = f"{pkg}_experimental"
     return f"github:ChuMicro/chumicro-bundle/{pkg}"
 
 
@@ -175,9 +174,11 @@ def build_bundle(
         urls.append([target, source])
 
     manifest: dict = {"urls": urls, "version": version}
+    # Dependencies always reference stable variants so that installing
+    # one experimental library does not cascade into pulling experimental
+    # versions of all transitive dependencies.
     mip_deps = [
-        [_dep_to_mip_ref(d, experimental=experimental), "latest"]
-        for d in _read_chumicro_deps(lib_dir)
+        [_dep_to_mip_ref(d), "latest"] for d in _read_chumicro_deps(lib_dir)
     ]
     if mip_deps:
         manifest["deps"] = mip_deps
