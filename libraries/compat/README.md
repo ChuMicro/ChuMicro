@@ -23,8 +23,8 @@ For experimental (pre-release) versions from the develop branch:
 ```bash
 pip install chumicro-compat-experimental
 circup bundle-add ChuMicro/chumicro-bundle-experimental
-circup install chumicro-compat-experimental
-mpremote mip install github:ChuMicro/chumicro-bundle-experimental/chumicro_compat_experimental
+circup install chumicro-compat
+mpremote mip install github:ChuMicro/chumicro-bundle-experimental/chumicro_compat
 ```
 
 ## Quick example

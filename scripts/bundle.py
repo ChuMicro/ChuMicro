@@ -121,15 +121,14 @@ def build_bundle(
 ) -> None:
     """Stage bundle artifacts for a single library.
 
-    Creates ``<staging_dir>/<bundle_pkg>/`` containing .py source, .mpy
+    Creates ``<staging_dir>/<pkg_name>/`` containing .py source, .mpy
     bytecode, and a package.json manifest for mip.
 
-    When *experimental* is True the directory and mip paths use an
-    ``_experimental`` suffix (e.g. ``chumicro_timing_experimental``).
-    This lets circup disambiguate when both stable and experimental
-    bundles are registered: ``circup install chumicro-timing`` vs.
-    ``circup install chumicro-timing-experimental``.  Cross-package
-    dependencies still reference stable variants (no cascade).
+    When *experimental* is True the package.json URLs point to the
+    experimental bundle repo.  Directory names are always the base
+    package name (e.g. ``chumicro_timing``) — channel separation is
+    by repo, not directory suffix.  This lets users swap between stable
+    and experimental without changing import statements.
     """
     pkg_name, pkg_dir, compile_files, source_only_files = _find_bundle_modules(
         lib_dir,
@@ -139,8 +138,7 @@ def build_bundle(
         sys.exit(f"No deployable .py files found in {pkg_dir}")
 
     bundle_repo = EXPERIMENTAL_BUNDLE_REPO if experimental else STABLE_BUNDLE_REPO
-    bundle_pkg = f"{pkg_name}_experimental" if experimental else pkg_name
-    out_dir = staging_dir / bundle_pkg
+    out_dir = staging_dir / pkg_name
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # Compilable modules get both .py and .mpy artifacts.
@@ -161,22 +159,23 @@ def build_bundle(
 
     # Generate mip package.json manifest.
     #
-    # Target paths use bundle_pkg so the on-device package name matches the
-    # circup/mip install name (e.g. chumicro_timing_experimental).  Source
-    # paths reference the same directory in the bundle repo.
+    # Both target and source paths use pkg_name — the on-device import name
+    # is always the base package name (e.g. chumicro_timing) regardless of
+    # channel.  This lets users swap between stable and experimental by
+    # changing which bundle repo they use, without changing imports.
     # Compilable modules reference .mpy; testing modules reference .py.
     urls = []
     for f in compile_files:
         rel = f.relative_to(pkg_dir)
         mpy_rel = rel.with_suffix(".mpy").as_posix()
-        target = f"{bundle_pkg}/{mpy_rel}"
-        source = f"github:ChuMicro/{bundle_repo}/{bundle_pkg}/{mpy_rel}"
+        target = f"{pkg_name}/{mpy_rel}"
+        source = f"github:ChuMicro/{bundle_repo}/{pkg_name}/{mpy_rel}"
         urls.append([target, source])
     for f in source_only_files:
         rel = f.relative_to(pkg_dir)
         py_rel = rel.as_posix()
-        target = f"{bundle_pkg}/{py_rel}"
-        source = f"github:ChuMicro/{bundle_repo}/{bundle_pkg}/{py_rel}"
+        target = f"{pkg_name}/{py_rel}"
+        source = f"github:ChuMicro/{bundle_repo}/{pkg_name}/{py_rel}"
         urls.append([target, source])
 
     manifest: dict = {"urls": urls, "version": version}
@@ -193,7 +192,7 @@ def build_bundle(
         json.dump(manifest, fh, indent=2)
         fh.write("\n")
 
-    print(f"Staged {bundle_pkg} v{version} -> {out_dir}")
+    print(f"Staged {pkg_name} v{version} -> {out_dir}")
 
 
 def _collect_library_metadata(root: Path) -> list[dict]:
@@ -293,28 +292,39 @@ def generate_bundle_readme(root: Path, *, experimental: bool = False) -> str:
     lines.append("")
 
     # Install instructions.
-    exp_suffix = "_experimental" if experimental else ""
-    exp_dash = "-experimental" if experimental else ""
-    example_pkg = f"chumicro_timing{exp_suffix}"
-    example_pip = f"chumicro-timing{exp_dash}"
     lines.append("## Installation")
     lines.append("")
     lines.append("### CircuitPython (circup)")
     lines.append("")
-    lines.append("Register the bundle once, then install any library:")
+    lines.append("Register the bundle, then install any library:")
     lines.append("")
     lines.append("```bash")
     lines.append(f"circup bundle-add {_GITHUB_ORG}/{bundle_repo}")
-    lines.append(f"circup install {example_pip}   # example")
+    lines.append("circup install chumicro-timing   # example")
     lines.append("```")
     lines.append("")
+    if experimental:
+        lines.append(
+            "To switch back to stable, remove this bundle and add the "
+            "stable one:"
+        )
+        lines.append("")
+        lines.append("```bash")
+        lines.append(
+            f"circup bundle-remove {_GITHUB_ORG}/{bundle_repo}"
+        )
+        lines.append(
+            f"circup bundle-add {_GITHUB_ORG}/{STABLE_BUNDLE_REPO}"
+        )
+        lines.append("```")
+        lines.append("")
     lines.append("### MicroPython (mip)")
     lines.append("")
     lines.append("Install directly from the bundle repo:")
     lines.append("")
     lines.append("```bash")
     lines.append(
-        f"mpremote mip install github:{_GITHUB_ORG}/{bundle_repo}/{example_pkg}"
+        f"mpremote mip install github:{_GITHUB_ORG}/{bundle_repo}/chumicro_timing"
         "   # example"
     )
     lines.append("```")
@@ -324,7 +334,7 @@ def generate_bundle_readme(root: Path, *, experimental: bool = False) -> str:
     lines.append("```python")
     lines.append("import mip")
     lines.append(
-        f'mip.install("github:{_GITHUB_ORG}/{bundle_repo}/{example_pkg}")'
+        f'mip.install("github:{_GITHUB_ORG}/{bundle_repo}/chumicro_timing")'
         "   # example"
     )
     lines.append("```")
@@ -336,7 +346,10 @@ def generate_bundle_readme(root: Path, *, experimental: bool = False) -> str:
     )
     lines.append("")
     lines.append("```bash")
-    lines.append(f"pip install {example_pip}   # example")
+    if experimental:
+        lines.append("pip install chumicro-timing-experimental   # example")
+    else:
+        lines.append("pip install chumicro-timing   # example")
     lines.append("```")
     lines.append("")
 
@@ -350,7 +363,7 @@ def generate_bundle_readme(root: Path, *, experimental: bool = False) -> str:
         "| --- | --- | --- |"
     )
     for lib in libraries:
-        pip_name = f"chumicro-{lib['name']}{exp_dash}"
+        pip_name = f"chumicro-{lib['name']}"
         lib_url = f"{source_url}/tree/develop/libraries/{lib['name']}"
         desc = lib["description"]
         lines.append(

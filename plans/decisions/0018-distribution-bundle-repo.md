@@ -27,30 +27,27 @@ Two distribution repos serve the stable and experimental channels:
 - `ChuMicro/chumicro-bundle` — stable releases (from `main`)
 - `ChuMicro/chumicro-bundle-experimental` — experimental releases (from `develop`)
 
-Using separate repos keeps circup's `Bundle.latest_tag` working naturally per-repo — no prerelease tag management needed.  Within the experimental repo, library directories use an `_experimental` suffix (e.g. `chumicro_timing_experimental/`) so that users who register both bundles can choose between `circup install chumicro-timing` (stable) and `circup install chumicro-timing-experimental` (experimental).  This matches the PyPI naming convention where experimental packages are published as `chumicro-timing-experimental`.
+Using separate repos keeps circup's `Bundle.latest_tag` working naturally per-repo — no prerelease tag management needed.  Both repos use identical directory names (e.g. `chumicro_timing/`) so that users can swap between channels without changing any import statements in their `code.py`.  Switching channels is explicit: change which bundle is registered with circup, or change the repo URL for mip.
 
-Cross-package dependencies reference the stable repo so that installing one experimental library does not cascade into pulling experimental versions of all transitive dependencies.  Internal (relative) imports within a package work regardless of the directory suffix.
+The `-experimental` suffix only exists on PyPI (where two packages cannot share the same name).  On-device, the package name is always the base name (e.g. `chumicro_timing`), and swapping is a drop-in replacement.
 
 The source repo (`ChuMicro/ChuMicro`) contains only `.py` source, tests, and development infrastructure.
 
 ### 2. Bundle repo layout
 
-Both repos share the same layout structure; the experimental repo uses `_experimental` suffixed directory names:
+Both repos share the same layout; only the library versions differ:
 
 ```
-ChuMicro/chumicro-bundle/               # stable
+ChuMicro/chumicro-bundle/              # (or chumicro-bundle-experimental)
 ├── README.md
 ├── chumicro_timing/
 │   ├── package.json
 │   ├── __init__.py / .mpy
+│   ├── ticks.py / .mpy
+│   └── testing.py                      # source-only (mock layer)
+├── chumicro_runner/
 │   └── ...
-
-ChuMicro/chumicro-bundle-experimental/  # experimental
-├── README.md
-├── chumicro_timing_experimental/
-│   ├── package.json
-│   ├── __init__.py / .mpy
-│   └── ...
+└── (GitHub Releases for circup)
 ```
 
 Each library directory contains both `.py` and `.mpy` for every module (except testing modules which are `.py` only), plus a `package.json` for `mip`.
@@ -63,10 +60,10 @@ Each library's `package.json` lists `.mpy` files as the default targets.  Users 
 mpremote mip install github:ChuMicro/chumicro-bundle/chumicro_runner
 ```
 
-Or the experimental channel (note the `_experimental` suffix):
+Or the experimental channel (same package name, different repo):
 
 ```
-mpremote mip install github:ChuMicro/chumicro-bundle-experimental/chumicro_runner_experimental
+mpremote mip install github:ChuMicro/chumicro-bundle-experimental/chumicro_runner
 ```
 
 On a network-capable board:
@@ -74,7 +71,7 @@ On a network-capable board:
 ```python
 import mip
 mip.install("github:ChuMicro/chumicro-bundle/chumicro_runner")
-# experimental: mip.install("github:ChuMicro/chumicro-bundle-experimental/chumicro_runner_experimental")
+# experimental: mip.install("github:ChuMicro/chumicro-bundle-experimental/chumicro_runner")
 ```
 
 To install source instead of bytecode: `mip.install(..., mpy=False)`.
@@ -95,12 +92,15 @@ Then install libraries normally:
 circup install chumicro-runner
 ```
 
-Users can register both bundles simultaneously.  The `_experimental` suffix disambiguates:
+To switch to experimental, swap the bundle registration:
 
 ```
+circup bundle-remove ChuMicro/chumicro-bundle
 circup bundle-add ChuMicro/chumicro-bundle-experimental
-circup install chumicro-runner-experimental
+circup install chumicro-runner
 ```
+
+No import changes are needed — the on-device package name is always `chumicro_runner` regardless of channel.  Do not register both bundles simultaneously (circup may pick either version for a given package name).
 
 `circup` reads tagged GitHub Releases on the bundle repo.  The `Bundle` class (in `circup/bundle.py`) constructs download URLs from the repo name:
 
@@ -147,7 +147,7 @@ CPython users install via `pip install chumicro-runner` from PyPI.  The bundle r
 ## Consequences
 
 - The source repo stays clean: no `.mpy` files, no distribution manifests.
-- Stable and experimental channels have separate bundle repos.  Experimental directories use `_experimental` suffixed names so both bundles can be registered in circup simultaneously without name collisions.
+- Stable and experimental channels have separate bundle repos with identical directory names.  Users swap channels by changing their bundle registration — no import changes needed.  Do not register both bundles simultaneously.
 - Both `mip` and `circup` install from the same bundle repo per channel, reducing maintenance.
 - Users always have access to both `.py` (debugging, older runtimes) and `.mpy` (production).
 - Both bundle repos need to exist.  Creating them and wiring up CI is part of the ci-release workstream.
