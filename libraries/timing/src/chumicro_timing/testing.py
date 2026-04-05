@@ -10,7 +10,7 @@ Usage from any library's tests::
     fake = FakeTicks()
     heartbeat = Heartbeat(period_ms=100, ticks=fake)
     fake.advance(100)
-    assert heartbeat.poll() is True
+    assert heartbeat.poll(fake.ticks_ms()) is True
 """
 
 

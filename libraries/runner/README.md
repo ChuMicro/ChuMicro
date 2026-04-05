@@ -77,6 +77,7 @@ while True:
 | `TaskHandle.set_period(period_ms)` | Add, change, or remove the period (`None` to remove) |
 | `TaskHandle.remove()` | Remove this service from the runner |
 | `TaskHandle.period_ms` | Read-only: the service period, or `None` |
+| `TaskHandle.run_count` | Read-only: remaining run count, or `None` if unlimited |
 | `TaskHandle.active` | Read-only: whether the service is still registered |
 
 ### Testing
