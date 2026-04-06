@@ -9,4 +9,3 @@ __all__ = [
 	"ticks_diff",
 	"ticks_ms",
 ]
-

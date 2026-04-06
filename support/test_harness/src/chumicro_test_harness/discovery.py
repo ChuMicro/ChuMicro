@@ -145,4 +145,3 @@ def run_all(root=".", libraries=None):
         print(f"Skipped {skipped} file(s) (import errors, likely pytest-only)")
 
     return 1 if total_failed else 0
-

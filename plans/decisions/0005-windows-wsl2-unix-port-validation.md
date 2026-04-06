@@ -26,4 +26,3 @@ For the current phase:
 - MicroPython compatibility work can assume a Unix-like shell on Windows instead of supporting native-Windows unix-port workflows immediately
 - CircuitPython unix-port evaluation on Windows should target WSL2 rather than native Windows first
 - the repo can stay cross-platform for general development without overcommitting to native-Windows parity for Unix-port runtime checks too early
-

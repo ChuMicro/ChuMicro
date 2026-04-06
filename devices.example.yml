@@ -14,4 +14,3 @@ devices:
     address: /dev/cu.usbserial-EXAMPLE
     board_type: esp32s3
     setup_command: null
-

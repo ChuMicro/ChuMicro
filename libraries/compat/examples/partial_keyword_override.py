@@ -25,4 +25,3 @@ connect_api = partial(connect, "api.example.com", port=443)
 
 connect_api()             # uses default timeout=5
 connect_api(timeout=10)   # overrides timeout to 10
-

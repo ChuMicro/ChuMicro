@@ -31,4 +31,3 @@ runner.add_periodic(toggle_led, period_ms=500)
 
 while True:
     runner.tick()
-

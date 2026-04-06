@@ -30,4 +30,3 @@ buffer.seek(0)
 # unpack reads one object from the stream.
 result = unpack(buffer)
 print(f"unpacked: {result}")
-

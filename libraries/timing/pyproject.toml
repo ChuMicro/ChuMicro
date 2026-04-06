@@ -43,4 +43,3 @@ exclude = [".gitignore"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/chumicro_timing"]
-

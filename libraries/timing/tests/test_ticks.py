@@ -65,4 +65,3 @@ def test_ticks_ms_fits_in_period():
     period = 1 << 29
     result = ticks_module.ticks_ms()
     assert 0 <= result < period
-

@@ -39,4 +39,3 @@ def is_micropython():
 def is_circuitpython():
     """Return whether the active runtime is CircuitPython."""
     return runtime_name() == "circuitpython"
-

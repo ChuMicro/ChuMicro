@@ -21,4 +21,3 @@ from chumicro_test_harness.discovery import run_all  # noqa: E402
 
 libraries = sys.argv[1:] if len(sys.argv) > 1 else None
 raise SystemExit(run_all(libraries=libraries))
-

@@ -126,4 +126,3 @@ Browse on GitHub:
 **PyPI:** [chumicro-msgpack](https://pypi.org/project/chumicro-msgpack/)
 **Bundle:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) (CircuitPython & MicroPython)
 **Source:** [ChuMicro/ChuMicro](https://github.com/ChuMicro/ChuMicro) — cross-runtime Python libraries for ESP32, RP2040, and other microcontrollers.
-

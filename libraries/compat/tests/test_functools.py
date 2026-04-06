@@ -114,4 +114,3 @@ def test_partial_returns_function_result():
     """The return value of the wrapped function should be passed through."""
     p = partial(str.upper)
     assert p("hello") == "HELLO"
-

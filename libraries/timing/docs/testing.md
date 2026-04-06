@@ -45,3 +45,13 @@ This follows the project convention from [Decision 0010](https://github.com/ChuM
     options:
       members:
         - FakeTicks
+
+---
+
+<div class="chumicro-footer" markdown>
+
+[← Home](index.md)
+
+[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing) · [PyPI](https://pypi.org/project/chumicro-timing/) · [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · [Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
+
+</div>

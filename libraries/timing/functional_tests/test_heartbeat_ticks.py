@@ -22,4 +22,3 @@ def test_ticks_progress_on_runtime():
 	end_ms = ticks_ms()
 
 	assert ticks_diff(end_ms, start_ms) >= 1
-

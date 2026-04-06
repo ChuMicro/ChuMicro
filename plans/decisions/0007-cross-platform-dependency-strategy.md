@@ -75,4 +75,3 @@ Chumicro is not locked into zero-dependency mode. When an external library passe
 - The release workstream should include tooling to publish to all three channels.
 - Blinka remains useful as a development-time reference or for running CircuitPython code on Linux SBCs, but it is never a Chumicro runtime dependency.
 - When evaluating a new external dependency, apply the three-criterion test from this decision before adding it.
-

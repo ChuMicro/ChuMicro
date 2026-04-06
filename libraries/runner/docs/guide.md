@@ -27,7 +27,6 @@ Services can be objects with `.check()` and `.handle()` methods, or plain callab
 ```python
 from chumicro_runner import Runner
 
-
 class TemperatureSensor:
     """Alert when temperature exceeds a threshold."""
 
@@ -46,7 +45,6 @@ class TemperatureSensor:
 
     def handle(self, now_ms):
         print(f"ALERT: {self._last_reading}°C exceeds {self._threshold}°C")
-
 
 sensor = TemperatureSensor(threshold=30.0)
 runner = Runner()
@@ -259,3 +257,13 @@ Simulated examples run on CPython.  Hardware examples (`circuitpython_*` / `micr
 ## Platform notes
 
 All classes use only basic Python features and work identically on CPython, MicroPython, and CircuitPython.  No `abc`, `typing`, or `asyncio` dependencies.
+
+---
+
+<div class="chumicro-footer" markdown>
+
+[← Home](index.md)
+
+[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner) · [PyPI](https://pypi.org/project/chumicro-runner/) · [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · [Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
+
+</div>

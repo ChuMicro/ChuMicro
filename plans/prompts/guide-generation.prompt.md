@@ -85,4 +85,3 @@ After generating, check:
 - [ ] All code snippets use public imports only
 - [ ] No placeholder comments remain (`<!-- ... -->`)
 - [ ] The guide is ≤200 lines for a small library
-

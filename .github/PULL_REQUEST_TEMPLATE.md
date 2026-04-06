@@ -31,4 +31,3 @@
 
 <!-- Describe any breaking changes here. Confirm the VERSION bump is
      major (or minor for 0.x libraries). Delete if not applicable. -->
-

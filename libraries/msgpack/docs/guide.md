@@ -110,3 +110,13 @@ Unsupported types raise `TypeError`.  Integers outside the 32-bit range raise `O
 | CPython | Pure-Python encoder (CPython's `msgpack` is a third-party PyPI package, not stdlib). |
 
 The wire format is identical regardless of which implementation is used — data packed on one runtime can be unpacked on any other.
+
+---
+
+<div class="chumicro-footer" markdown>
+
+[← Home](index.md)
+
+[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/msgpack) · [PyPI](https://pypi.org/project/chumicro-msgpack/) · [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · [Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
+
+</div>

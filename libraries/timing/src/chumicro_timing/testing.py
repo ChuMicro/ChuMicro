@@ -17,7 +17,6 @@ Usage from any library's tests::
 """
 
 
-
 class FakeTicks:
     """Deterministic tick source for host-side tests.
 
@@ -44,4 +43,3 @@ class FakeTicks:
     def ticks_add(self, ticks_val: int, delta: int) -> int:
         """Add *delta* milliseconds to a tick value."""
         return ticks_val + delta
-

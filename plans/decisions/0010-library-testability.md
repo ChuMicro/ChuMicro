@@ -53,4 +53,3 @@ When testing code that uses another library, use that library's provided fakes r
 - Downstream libraries import fakes directly (`from chumicro_timing.testing import FakeTicks`) with no additional setup beyond PYTHONPATH.
 - Test fakes are covered by the library's own test suite (they are production code in `src/`).
 - This pattern makes libraries extractable: the `testing` submodule travels with the library when it leaves the mono-workspace.
-

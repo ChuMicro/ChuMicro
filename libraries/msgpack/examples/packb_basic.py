@@ -31,4 +31,3 @@ print(f"packed {len(data)} bytes")
 # unpackb accepts bytes, bytearray, or memoryview.
 restored = unpackb(data)
 print(f"restored: {restored}")
-

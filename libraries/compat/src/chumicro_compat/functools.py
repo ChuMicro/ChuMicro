@@ -61,4 +61,3 @@ try:
     from functools import partial  # noqa: F401 — CPython; re-exported.
 except ImportError:
     partial = _PurePythonPartial
-

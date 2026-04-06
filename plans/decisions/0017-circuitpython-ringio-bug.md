@@ -99,4 +99,3 @@ has no effect.
 - The workaround is self-removing: upgrading to a fixed CircuitPython version
   requires no changes on our side.
 - We continue building `VARIANT=standard` for cross-runtime testing.
-

@@ -22,5 +22,3 @@ PR automation should validate that release-relevant library changes do not merge
 - future workflows should fail clearly when a changed library is missing the expected `VERSION` file update
 - `pyproject.toml` uses hatchling's `[tool.hatch.version]` to read directly from `VERSION` — there is no duplicate to keep in sync
 - libraries should not maintain a separate `__version__` attribute in source code; consumers on CPython can use `importlib.metadata.version()` if needed at runtime
-
-

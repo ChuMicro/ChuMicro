@@ -7,7 +7,7 @@
   - When writing these docs, scope the AGENTS.md performance guidelines (f-strings, `const()`, `memoryview`, pre-allocated buffers, etc.) to **library code only**. Infrastructure code (`scripts/`, `support/`) runs exclusively on CPython and does not need embedded-runtime constraints.
 - [ ] Write a "Creating a New Library" contributor guide. Walk through the full lifecycle from scaffolding to release-ready:
   1. `new-library` scaffolding — what it creates, what it doesn't (e.g., no `testing` submodule by default)
- 2. Library code — dependency injection (Decision 0010), `check(now_ms) -> bool` gate-based contract for active components (Decision 0014), memory-efficient patterns for embedded targets
+  2. Library code — dependency injection (Decision 0010), `check(now_ms) -> bool` gate-based contract for active components (Decision 0014), memory-efficient patterns for embedded targets
   3. Unit tests — per-library test runs (Decision 0009), 90% coverage threshold, constructor injection for testability
   4. Testing submodule — when and how to add `src/chumicro_<name>/testing.py` with ready-made fakes
   5. Docs — `guide.md` required sections, `api.md` autodoc rules, generation prompt (Decision 0013)
@@ -17,6 +17,7 @@
   - This should live in the repo (e.g., `docs/creating-a-library.md` or a top-level `CONTRIBUTING.md` section), not just in AGENTS.md or decision records.
 
 ## Next
+
 - [ ] Enable GitHub Copilot code review as a PR quality gate (low priority — defer until community contributions begin).
 - [ ] Implement `chumicro-settings` — dict-like persistent storage for microcontrollers.
   - Uses `chumicro-msgpack` for serialization (2-byte length prefix + msgpack payload).
@@ -52,7 +53,6 @@
 - [x] Fix circup zip compatibility in `release.yml`: wrap zip contents in `{basename}/lib/` directory (circup's `Bundle.lib_dir()` requires it), produce per-platform mpy zips (`9.x-mpy`, `10.x-mpy`) matching circup's `SUPPORTED_PLATFORMS`. Document circup format requirements and bundle repo content policy (no examples, no per-library READMEs, no workflows) in Decision 0018.
 - [x] Add bundle publishing to release workflow: `scripts/bundle.py` stages .py + .mpy + `package.json` per library; `release.yml` `bundle` job compiles with mpy-cross, pushes to `ChuMicro/ChuMicro-Bundle`, and creates circup-format release zips (Decision 0018).
 - [x] Confirm mip staging details: mip installs from `package.json` manifests in the bundle repo; `mip.install("github:ChuMicro/ChuMicro-Bundle/chumicro_<name>")`. circup installs via `circup bundle-add ChuMicro/ChuMicro-Bundle` + `circup install chumicro-<name>` (Decision 0018).
-
 - [x] Establish develop → main branching model (Decision 0019), API breakage detection with griffe (Decision 0020), PR quality gates (template, labels, semver label check), promote workflow, label sync workflow. CI split into lint/test/build/verify-examples/version-check/api-check/label-check jobs. Release workflow creates tags and GitHub Releases (PyPI publishing scaffolded but disabled).
 - [x] Draft first release workflow: `release.yml` triggers on VERSION changes pushed to main, detects changed libraries, builds, publishes to PyPI via trusted publishers (OIDC), creates git tags and GitHub Releases. `ci.yml` split into lint/test/build/verify-examples/version-check jobs. `scripts/check_version.py` enforces per-library VERSION bumps for release-relevant changes (Decision 0002).
 - [x] Add `chumicro-msgpack` library: pure-Python MessagePack encoder/decoder with native CircuitPython C delegation.  Bytes API (`packb`/`unpackb`) and stream API (`pack`/`unpack`).  Docs, examples (including CircuitPython NVM hardware example), struct-vs-msgpack guidance.

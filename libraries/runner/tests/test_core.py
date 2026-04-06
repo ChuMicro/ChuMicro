@@ -961,5 +961,3 @@ def test_periodic_zero_raises():
 
     with raises(ValueError):
         runner.add_periodic(lambda now: None, period_ms=0)
-
-

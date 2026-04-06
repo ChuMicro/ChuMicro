@@ -47,4 +47,3 @@ def test_runtime_name_returns_unknown_when_no_signal_exists(monkeypatch) -> None
     monkeypatch.setattr(platform, "_platform_name", lambda: "")
 
     assert platform.runtime_name() == "unknown"
-

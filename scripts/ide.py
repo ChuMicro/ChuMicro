@@ -82,6 +82,8 @@ def _sync_run_configurations() -> None:
     # the list.  Only delete files whose name matches the managed naming
     # pattern (Name_With_Underscores.xml) and that are NOT in the current
     # managed set.  This avoids touching user-created configs.
+    # The heuristic: a file is "managed" if its stem equals its own
+    # title-cased, underscore-separated form — user configs rarely match.
     for existing in sorted(rc_dir.iterdir()):
         if existing.suffix == ".xml" and existing.name not in managed_filenames:
             stem = existing.stem
@@ -233,4 +235,3 @@ def sync_ide() -> int:
     _sync_vscode_tasks()
     _sync_vscode_settings()
     return 0
-

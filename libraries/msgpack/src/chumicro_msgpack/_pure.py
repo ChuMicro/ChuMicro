@@ -290,4 +290,3 @@ except ImportError:
     def unpack(stream):
         """Unpack one object from *stream*."""
         return unpackb(stream.read())
-

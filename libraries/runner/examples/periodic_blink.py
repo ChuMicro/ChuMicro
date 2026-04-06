@@ -48,4 +48,3 @@ while True:
     # reading sensors, checking buttons, etc.
     # The sleep just keeps this demo from flooding the console.
     time.sleep(0.05)
-

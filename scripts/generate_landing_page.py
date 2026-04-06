@@ -109,38 +109,42 @@ def generate() -> str:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ChuMicro — Documentation</title>
+  <link rel="icon" href="./assets/images/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   <style>
     :root {{
-      --bg: #1e1e2e;
-      --card-bg: #27273a;
+      --bg: #0e0f10;
+      --card-bg: #15171c;
       --text: #e6edf3;
       --muted: #8b949e;
-      --accent: #9d7cd8;
-      --accent-hover: #b4a0e0;
-      --border: #3a3a52;
-      --tag-bg: #1e1e3a;
+      --accent: #9576d7;
+      --accent-hover: #d93cf8;
+      --border: #2a2a3a;
+      --tag-bg: #15171c;
       --tag-text: #7aa2f7;
-      --green-bg: #0d2818;
+      --green-bg: #0f1a12;
       --green-text: #3fb950;
-      --purple-bg: #2a1f4e;
-      --purple-text: #b4a0e0;
+      --purple-bg: #231327;
+      --purple-text: #d93cf8;
     }}
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
     body {{
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
       background: var(--bg); color: var(--text);
-      line-height: 1.6;
+      font-size: 1rem; line-height: 1.75;
     }}
     .container {{ max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem; }}
 
     /* Header */
     header {{ text-align: center; padding: 3rem 0 2rem; }}
-    header h1 {{ font-size: 2rem; font-weight: 700; margin-bottom: .5rem; }}
+    header h1 {{ font-size: 2em; font-weight: 700; margin-bottom: .5rem; }}
     header p {{ font-size: 1.1rem; color: var(--muted); max-width: 600px; margin: 0 auto; }}
     .badges {{ margin-top: 1rem; display: flex; gap: .5rem; justify-content: center; flex-wrap: wrap; }}
     .badge {{
-      display: inline-block; font-size: .75rem; font-weight: 600;
-      padding: .2rem .6rem; border-radius: 1rem;
+      display: inline-block; font-size: .8rem; font-weight: 600;
+      padding: .25rem .65rem; border-radius: 1rem;
     }}
     .badge-blue {{ background: var(--tag-bg); color: var(--tag-text); }}
     .badge-green {{ background: var(--green-bg); color: var(--green-text); }}
@@ -154,27 +158,27 @@ def generate() -> str:
       transition: border-color .15s;
     }}
     .card:hover {{ border-color: var(--accent); }}
-    .card h2 {{ font-size: 1.1rem; margin-bottom: .35rem; }}
+    .card h2 {{ font-size: 1.15rem; margin-bottom: .35rem; }}
     .card h2 a {{ color: var(--accent); text-decoration: none; }}
     .card h2 a:hover {{ text-decoration: underline; }}
-    .card p {{ color: var(--muted); font-size: .9rem; margin-bottom: .75rem; }}
-    .card-links {{ display: flex; gap: .5rem; font-size: .8rem; flex-wrap: wrap; }}
+    .card p {{ color: var(--muted); font-size: .95rem; margin-bottom: .75rem; }}
+    .card-links {{ display: flex; gap: .5rem; font-size: .85rem; flex-wrap: wrap; }}
     .card-links a {{ color: var(--accent); text-decoration: none; }}
     .card-links a:hover {{ text-decoration: underline; }}
     .card-links .sep {{ color: var(--border); }}
 
     /* Install section */
     .install {{ margin: 2.5rem 0; }}
-    .install h2 {{ font-size: 1.2rem; margin-bottom: 1rem; }}
+    .install h2 {{ font-size: 1.3rem; margin-bottom: 1rem; }}
     .install-block {{ margin-bottom: 1rem; }}
     .install-block:last-child {{ margin-bottom: 0; }}
-    .install-block h3 {{ font-size: .85rem; color: var(--muted); margin-bottom: .4rem; font-weight: 600; }}
+    .install-block h3 {{ font-size: .9rem; color: var(--muted); margin-bottom: .4rem; font-weight: 600; }}
     pre {{
       background: var(--card-bg); border: 1px solid var(--border);
       border-radius: .5rem; padding: .75rem 1rem;
-      font-size: .8rem; overflow-x: auto; color: var(--text);
-      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-      white-space: pre-wrap; word-break: break-all;
+      font-size: .88rem; overflow-x: auto; color: var(--text);
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      line-height: 1.65; white-space: pre-wrap; word-break: break-all;
     }}
 
     /* Channels */
@@ -182,17 +186,17 @@ def generate() -> str:
       background: var(--card-bg); border: 1px solid var(--border);
       border-radius: .75rem; padding: 1.25rem 1.5rem; margin: 2rem 0;
     }}
-    .channels h2 {{ font-size: 1rem; margin-bottom: .5rem; }}
-    .channels table {{ width: 100%; font-size: .85rem; border-collapse: collapse; }}
-    .channels th, .channels td {{ text-align: left; padding: .4rem .5rem; }}
+    .channels h2 {{ font-size: 1.1rem; margin-bottom: .5rem; }}
+    .channels table {{ width: 100%; font-size: .9rem; border-collapse: collapse; }}
+    .channels th, .channels td {{ text-align: left; padding: .5rem .6rem; }}
     .channels th {{ color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--border); }}
     .channels td {{ border-bottom: 1px solid var(--border); }}
     .channels a {{ color: var(--accent); text-decoration: none; }}
     .channels a:hover {{ text-decoration: underline; }}
-    code {{ font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; font-size: .85em; }}
+    code {{ font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; font-size: .88em; }}
 
     /* Footer */
-    footer {{ text-align: center; padding: 2rem 0 3rem; color: var(--muted); font-size: .85rem; }}
+    footer {{ text-align: center; padding: 2rem 0 3rem; color: var(--muted); font-size: .9rem; }}
     footer a {{ color: var(--accent); text-decoration: none; }}
     footer a:hover {{ text-decoration: underline; }}
   </style>
@@ -234,18 +238,16 @@ circup install {first_pkg}</pre>
       <h2>Release channels</h2>
       <table>
         <thead>
-          <tr><th>Channel</th><th>Branch</th><th>Bundle</th><th>Description</th></tr>
+          <tr><th>Channel</th><th>Bundle</th><th>Description</th></tr>
         </thead>
         <tbody>
           <tr>
             <td><strong>Stable</strong></td>
-            <td><code>main</code></td>
             <td><a href="https://github.com/ChuMicro/ChuMicro-Bundle">ChuMicro-Bundle</a></td>
             <td>Released, tested versions &mdash; recommended for production</td>
           </tr>
           <tr>
             <td><strong>Experimental</strong></td>
-            <td><code>main</code></td>
             <td><a href="https://github.com/ChuMicro/ChuMicro-Bundle-Experimental">ChuMicro-Bundle-Experimental</a></td>
             <td>Pre-release &mdash; latest features, may contain breaking changes</td>
           </tr>

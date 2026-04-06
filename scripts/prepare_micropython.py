@@ -76,4 +76,3 @@ def prepare_micropython() -> int:
     print(f"Prepared MicroPython binary: {_BINARY}")
     (TOOLS / "micropython.path").write_text(str(_BINARY))
     return 0
-

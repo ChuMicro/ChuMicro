@@ -16,4 +16,3 @@ Use a mono-workspace with shared root tooling and per-package directories for pu
 - shared tooling lives at the repo root
 - each library can keep its own packaging metadata
 - workspace conventions matter because many packages will coexist here
-

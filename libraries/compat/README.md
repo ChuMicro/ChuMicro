@@ -50,10 +50,8 @@ pip install chumicro-compat-experimental
 ```python
 from chumicro_compat.functools import partial
 
-
 def set_led(pin, brightness):
     print(f"pin {pin} → {brightness}%")
-
 
 # Freeze the pin, vary the brightness later.
 set_status_led = partial(set_led, 13)
@@ -104,4 +102,3 @@ Browse on GitHub:
 **PyPI:** [chumicro-compat](https://pypi.org/project/chumicro-compat/)
 **Bundle:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) (CircuitPython & MicroPython)
 **Source:** [ChuMicro/ChuMicro](https://github.com/ChuMicro/ChuMicro) — cross-runtime Python libraries for ESP32, RP2040, and other microcontrollers.
-

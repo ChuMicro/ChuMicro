@@ -47,7 +47,13 @@ def build_jobs() -> str:
 
 
 def _read_prepared_binary(marker_name: str) -> str | None:
-    """Read a binary path from a marker file written by a prepare step."""
+    """Read a binary path from a marker file written by a prepare step.
+
+    The prepare-micropython and prepare-circuitpython scripts write the
+    absolute path of the compiled binary to a marker file (e.g.
+    ``.tools/micropython.path``) so other commands can find it without
+    recompiling.
+    """
     marker = TOOLS / marker_name
     if not marker.exists():
         return None
@@ -61,7 +67,7 @@ def resolve_micropython_binary(binary: str | None = None) -> str | None:
     """Resolve a MicroPython binary from an explicit path, repo-local tools, or PATH.
 
     Resolution order (first match wins):
-      1. *binary* — explicit override from CLI (``--micropython-bin``).
+      1. *binary* — explicit override from CLI (``--micropython-binary``).
       2. Marker file from ``prepare-micropython`` — local repo-managed build.
       3. System PATH lookup — globally installed binary as last resort.
     """
@@ -77,7 +83,7 @@ def resolve_circuitpython_binary(binary: str | None = None) -> str | None:
     """Resolve a CircuitPython binary from an explicit path, repo-local tools, or PATH.
 
     Resolution order (first match wins):
-      1. *binary* — explicit override from CLI (``--circuitpython-bin``).
+      1. *binary* — explicit override from CLI (``--circuitpython-binary``).
       2. Marker file from ``prepare-circuitpython`` — local repo-managed build.
       3. System PATH lookup — globally installed binary as last resort.
     """
@@ -87,4 +93,3 @@ def resolve_circuitpython_binary(binary: str | None = None) -> str | None:
     if prepared:
         return prepared
     return shutil.which("circuitpython")
-

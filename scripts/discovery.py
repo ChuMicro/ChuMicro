@@ -236,9 +236,12 @@ def find_publishable_packages() -> list[str]:
     return packages
 
 
-
 def pythonpath_env() -> dict[str, str]:
-    """Return an environment with the repo source roots prepended to PYTHONPATH."""
+    """Return an environment with the repo source roots prepended to PYTHONPATH.
+
+    Prepending all ``src/`` directories lets pytest discover library
+    packages without ``pip install -e`` (Decision 0008).
+    """
     env = os.environ.copy()
     existing_path = env.get("PYTHONPATH")
     path_entries = [str(path) for path in discover_source_roots()]
@@ -302,5 +305,3 @@ def changed_libraries(base_ref: str) -> set[str]:
         if len(parts) >= 3 and parts[0] == "libraries" and parts[2] in RELEASE_RELEVANT:
             libs.add(parts[1])
     return libs
-
-

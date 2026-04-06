@@ -339,4 +339,3 @@ class Runner:
             self._entries.remove(entry)
         except ValueError:
             pass
-

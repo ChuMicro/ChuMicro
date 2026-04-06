@@ -161,7 +161,6 @@ ReadTheDocs remains a viable option if the project goes public and wants built-i
 
 The trade-off: `:::` autodoc directives in `api.md` appear as raw text when browsing on GitHub. Narrative pages (`guide.md`, `testing.md`, `README.md`) look perfect on GitHub. The README already contains an API summary table for GitHub readers; the full auto-generated reference lives on the built site.
 
-
 ### Example verification
 
 Examples are verified via static analysis in `scripts/run.py verify-examples`:

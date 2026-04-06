@@ -28,4 +28,3 @@ The agent terminal can get stuck when a command has unclosed quotes, broken here
 - **Always disable pagers** — use `git --no-pager`, pipe through `| cat`, or set `GIT_PAGER=cat`.
 - **Quote variables** — use `"$var"` not `$var` to prevent word splitting.
 - **Prefer single-line commands.** If a command must span lines, chain with `&&` or `;` on one line rather than using backslash continuations.
-

@@ -49,4 +49,3 @@ The canonical platform identifiers are:
 - Release automation checks the platforms list before publishing to each channel.
 - Cross-runtime compatibility runners skip libraries not targeting the runtime under test.
 - Support packages (under `support/`) are workspace-internal and not published, so the platforms key is irrelevant for them unless they need to be tested against a specific runtime.
-

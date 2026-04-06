@@ -72,4 +72,3 @@ while True:
     # In a real project, the rest of your main loop goes here.
     # The sleep just keeps this demo from flooding the console.
     time.sleep(0.1)
-

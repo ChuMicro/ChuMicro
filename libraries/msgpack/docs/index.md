@@ -25,6 +25,10 @@ print(restored)              # {0: 'MyNetwork', 1: 'secret', 2: True}
 
 ---
 
-[← All ChuMicro Libraries](https://chumicro.github.io/ChuMicro/)
+<div class="chumicro-footer" markdown>
+
+[← All ChuMicro Libraries](../../)
 
 [Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/msgpack) · [PyPI](https://pypi.org/project/chumicro-msgpack/) · [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · [Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
+
+</div>

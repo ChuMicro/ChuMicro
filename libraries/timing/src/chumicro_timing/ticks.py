@@ -104,6 +104,3 @@ def ticks_diff(end, start):
     """
     diff = (end - start) & _TICKS_MAX
     return ((diff + _TICKS_HALFPERIOD) & _TICKS_MAX) - _TICKS_HALFPERIOD
-
-
-

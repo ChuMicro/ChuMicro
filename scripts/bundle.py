@@ -135,6 +135,12 @@ def build_bundle(
 
     # Generate mip package.json manifest.
     #
+    # mip (MicroPython's package installer) reads package.json to know
+    # which files to download and where to place them on-device.  Each
+    # entry in "urls" is [target_path, source_url]:
+    #   - target_path: on-device path relative to /lib/ (e.g. chumicro_timing/__init__.mpy)
+    #   - source_url:  github: URI pointing to the .mpy file in this bundle repo
+    #
     # Both target and source paths use pkg_name — the on-device import name
     # is always the base package name (e.g. chumicro_timing) regardless of
     # channel.  This lets users swap between stable and experimental by
@@ -486,21 +492,21 @@ def main() -> None:
     )
 
     # Batch staging from a JSON matrix.
-    sm_parser = subparsers.add_parser(
+    stage_matrix_parser = subparsers.add_parser(
         "stage-matrix",
         help="Stage artifacts for libraries described in a JSON matrix",
     )
-    sm_parser.add_argument(
+    stage_matrix_parser.add_argument(
         "staging_dir", type=Path, help="Output staging directory"
     )
-    sm_parser.add_argument(
+    stage_matrix_parser.add_argument(
         "--matrix", required=True,
         help='JSON matrix string (e.g. \'{"include": [{"lib_dir": "...", "version": "..."}]}\')',
     )
-    sm_parser.add_argument(
+    stage_matrix_parser.add_argument(
         "--mpy-cross", default="mpy-cross", help="Path to mpy-cross binary"
     )
-    sm_parser.add_argument(
+    stage_matrix_parser.add_argument(
         "--experimental",
         action="store_true",
         help="Stage as experimental channel",
@@ -580,4 +586,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

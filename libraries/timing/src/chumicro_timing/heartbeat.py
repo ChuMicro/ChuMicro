@@ -56,4 +56,3 @@ class Heartbeat:
 
         self._last_beat_ms = now_ms
         return True
-

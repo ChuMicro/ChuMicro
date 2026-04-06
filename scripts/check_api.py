@@ -99,11 +99,14 @@ def _check(base_ref: str) -> int:
 
         bump = _bump_level(old_version, new_version)
 
-        # Run griffe check.
+        # Run griffe to compare the current public API against the tagged
+        # release.  griffe parses Python source statically and detects
+        # removed/renamed symbols, changed signatures, etc.
         # --search must point at the library's src/ directory so griffe
         # can find the package for import resolution.  We capture both
         # stdout and stderr because griffe emits breakage details on
-        # different streams depending on version.
+        # different streams depending on version.  A non-zero exit code
+        # indicates at least one breaking change was detected.
         src_dir = str(ROOT / "libraries" / lib_name / "src")
         result = subprocess.run(
             [
@@ -182,4 +185,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

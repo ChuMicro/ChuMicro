@@ -9,10 +9,8 @@ Provides lightweight reimplementations of CPython standard-library features that
 ```python
 from chumicro_compat.functools import partial
 
-
 def set_led(pin, brightness):
     print(f"pin {pin} → {brightness}%")
-
 
 # Freeze the pin, vary the brightness later.
 set_status_led = partial(set_led, 13)
@@ -27,6 +25,10 @@ set_status_led(100)  # pin 13 → 100%
 
 ---
 
-[← All ChuMicro Libraries](https://chumicro.github.io/ChuMicro/)
+<div class="chumicro-footer" markdown>
+
+[← All ChuMicro Libraries](../../)
 
 [Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/compat) · [PyPI](https://pypi.org/project/chumicro-compat/) · [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · [Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
+
+</div>

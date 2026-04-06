@@ -13,5 +13,3 @@ __all__ = [
     "is_micropython",
     "runtime_name",
 ]
-
-

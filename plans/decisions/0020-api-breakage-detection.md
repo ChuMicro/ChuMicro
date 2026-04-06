@@ -50,4 +50,3 @@ The check is also available locally via `python scripts/run.py check-api`.
 - Reduces the risk of accidentally publishing breaking changes as patch releases.
 - `griffe` becomes an explicit dev dependency (added to `requirements-dev.txt`).
 - The check is advisory for `0.x` libraries in the sense that a minor bump satisfies it.
-

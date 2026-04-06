@@ -2,7 +2,6 @@
 
 Cross-runtime Python libraries for CircuitPython, MicroPython, and CPython — built for ESP32, RP2040, and other microcontrollers.
 
-
 - One workspace with many individually published libraries
 - Shared support packages for runtime detection, mocks, and test tooling
 - CPython-first development and testing, with unix-port simulation preferred over hardware when possible
@@ -163,4 +162,3 @@ Each library has a `VERSION` file at its root — that is the single source of t
 ## Planning
 
 See `plans/` for roadmap, workstreams, decisions, and next-up queue. The README is for users and contributors; `plans/` is the working state for agents and maintainers.
-

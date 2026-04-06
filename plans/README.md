@@ -54,4 +54,3 @@ Future plan updates should preserve open questions instead of silently guessing.
 - `decisions/` (0001–0020)
 
 `prompts/` should contain only durable prompts that help future sessions rebuild workspace context or understand workspace build-up history.
-

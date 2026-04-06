@@ -24,4 +24,3 @@ set_status_led = partial(set_led, 13)
 
 set_status_led(50)
 set_status_led(100)
-

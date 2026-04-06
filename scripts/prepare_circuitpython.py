@@ -102,4 +102,3 @@ def prepare_circuitpython() -> int:
     print(f"Prepared CircuitPython binary: {_BINARY}")
     (TOOLS / "circuitpython.path").write_text(str(_BINARY))
     return 0
-

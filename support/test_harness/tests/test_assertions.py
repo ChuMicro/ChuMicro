@@ -37,4 +37,3 @@ def test_raises_catches_subclass():
     """raises() should catch subclasses of the expected type."""
     with raises(Exception):
         raise ValueError("subclass of Exception")
-

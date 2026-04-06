@@ -116,4 +116,3 @@ def test_fake_ticks_add():
     assert fake.ticks_add(100, 50) == 150
     assert fake.ticks_add(0, 0) == 0
     assert fake.ticks_add(200, -50) == 150
-

@@ -9,4 +9,3 @@ Available modules
 -----------------
 - ``chumicro_compat.functools`` — ``partial``
 """
-

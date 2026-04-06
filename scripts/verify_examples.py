@@ -147,4 +147,3 @@ def verify_examples(pkg_dirs: list[Path]) -> int:
 
     print(f"\nAll {len(examples)} example(s) verified.")
     return 0
-

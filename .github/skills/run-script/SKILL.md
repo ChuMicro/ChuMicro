@@ -74,4 +74,3 @@ When using `insert_edit_into_file` to replace a scratch file:
 - The `.scratch/` directory is gitignored — never commit it.
 - Use descriptive filenames: `.scratch/write_config.py`, not `.scratch/tmp.py`.
 - Clean up is optional — `.scratch/` files do no harm.
-

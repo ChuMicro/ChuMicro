@@ -35,4 +35,3 @@ def _discover_source_roots() -> list[str]:
 for _src_root in _discover_source_roots():
     if _src_root not in sys.path:
         sys.path.insert(0, _src_root)
-

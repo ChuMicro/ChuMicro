@@ -30,9 +30,9 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
    - [0015: board architecture support](../decisions/0015-board-architecture-support.md)
    - [0016: cross-runtime unit tests](../decisions/0016-cross-runtime-unit-tests.md)
    - [0017: CircuitPython RingIO bug](../decisions/0017-circuitpython-ringio-bug.md)
-    - [0018: distribution bundle repository](../decisions/0018-distribution-bundle-repo.md)
-    - [0019: branching model — single branch with tags](../decisions/0019-branching-model.md)
-    - [0020: API breakage detection](../decisions/0020-api-breakage-detection.md)
+   - [0018: distribution bundle repository](../decisions/0018-distribution-bundle-repo.md)
+   - [0019: branching model — single branch with tags](../decisions/0019-branching-model.md)
+   - [0020: API breakage detection](../decisions/0020-api-breakage-detection.md)
 3. Implemented code slices:
    - `support/runtime/` for reusable runtime detection
    - `support/test_harness/` for a tiny on-device test runner
@@ -47,14 +47,14 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
    - `scripts/prepare.py` for shared runtime preparation helpers
    - `scripts/prepare_micropython.py` and `scripts/prepare_circuitpython.py` for unix-port preparation
    - `support/test_harness/run_cross_runtime.py` as the canonical cross-runtime test runner (Decision 0016)
-    - `.github/workflows/ci.yml` for required host checks plus advisory runtime compatibility jobs
-    - `.github/workflows/release.yml` for per-library release pipeline (PyPI, tags, GitHub Releases, bundle publishing)
-    - `.github/workflows/promote.yml` for selective stable library promotion
-    - `.github/workflows/label-sync.yml` for syncing repo labels
-    - `.github/workflows/docs-deploy.yml` for per-library docs deployment to GitHub Pages via mike
-    - `scripts/check_version.py` for VERSION enforcement on PRs
-    - `scripts/check_api.py` for API breakage detection via griffe
-    - `scripts/bundle.py` for bundle staging, mpy compilation, and README generation
+   - `.github/workflows/ci.yml` for required host checks plus advisory runtime compatibility jobs
+   - `.github/workflows/release.yml` for per-library release pipeline (PyPI, tags, GitHub Releases, bundle publishing)
+   - `.github/workflows/promote.yml` for selective stable library promotion
+   - `.github/workflows/label-sync.yml` for syncing repo labels
+   - `.github/workflows/docs-deploy.yml` for per-library docs deployment to GitHub Pages via mike
+   - `scripts/check_version.py` for VERSION enforcement on PRs
+   - `scripts/check_api.py` for API breakage detection via griffe
+   - `scripts/bundle.py` for bundle staging, mpy compilation, and README generation
 4. The timing library proves the first Option B seam:
    - `Heartbeat` in `libraries/timing/src/chumicro_timing/heartbeat.py` (provides `poll()`, `is_due()`, `reset()`)
    - cross-runtime tick helpers in `libraries/timing/src/chumicro_timing/ticks.py`
@@ -67,7 +67,7 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
    - 100% test coverage; audit complete (Decision 0015 documents board architecture support)
 6. The compat library (`libraries/compat/`) provides `functools.partial` with a pure-Python fallback.
 7. The msgpack library (`libraries/msgpack/`) provides cross-runtime MessagePack serialization with native C delegation on CircuitPython hardware.
-7. Verified local commands:
+8. Verified local commands:
    - `python scripts/run.py setup`
    - `python scripts/run.py lint`
    - `python scripts/run.py test` (default: changed packages; `--all`; `--libraries timing`)

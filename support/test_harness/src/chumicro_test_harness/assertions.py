@@ -38,4 +38,3 @@ class raises:
             self.exception = exc_val
             return True  # suppress the expected exception
         return False  # let unexpected exceptions propagate
-

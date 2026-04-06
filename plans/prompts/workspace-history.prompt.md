@@ -398,4 +398,3 @@ This was the largest single session. It addressed three areas: the workspace was
 5. Added VS Code task generation (`.vscode/tasks.json`): mirrors `run.py` commands as VS Code tasks with proper labels and groups.
 6. Added VS Code settings generation (`.vscode/settings.json`): `python.analysis.extraPaths` auto-populated from workspace source roots for Pylance import resolution.
 7. `sync-ide` now generates five outputs: `.idea/chumicro.iml`, `.idea/runConfigurations/`, `pyrightconfig.json`, `.vscode/tasks.json`, `.vscode/settings.json`.
-

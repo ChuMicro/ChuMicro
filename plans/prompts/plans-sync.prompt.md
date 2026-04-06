@@ -54,4 +54,3 @@ significant implementation changes.
 - Version bumps not reflected in workstream verified slices
 - Resolved open areas still listed as incomplete
 - workspace-history missing the current session's entry
-

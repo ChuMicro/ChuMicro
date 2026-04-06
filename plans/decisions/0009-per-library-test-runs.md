@@ -33,4 +33,3 @@ Key mechanics:
 - Each library's test setup looks like a standard standalone Python project.
 - Extracting a library from the mono-workspace requires no test infrastructure changes.
 - Bare `pytest` from the repo root is no longer the supported path; use `python scripts/run.py test`.
-

@@ -50,7 +50,6 @@ pip install chumicro-runner-experimental
 ```python
 from chumicro_runner import Runner
 
-
 class TemperatureSensor:
     """Alert when temperature exceeds a threshold."""
 
@@ -69,7 +68,6 @@ class TemperatureSensor:
 
     def handle(self, now_ms):
         print(f"ALERT: {self._last_reading}°C exceeds {self._threshold}°C")
-
 
 runner = Runner()
 sensor = TemperatureSensor(threshold=30.0)
@@ -245,4 +243,3 @@ Browse on GitHub:
 **PyPI:** [chumicro-runner](https://pypi.org/project/chumicro-runner/)
 **Bundle:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) (CircuitPython & MicroPython)
 **Source:** [ChuMicro/ChuMicro](https://github.com/ChuMicro/ChuMicro) — cross-runtime Python libraries for ESP32, RP2040, and other microcontrollers.
-

@@ -78,4 +78,3 @@
 - name: blocked
   color: "000000"
   description: "Blocked on external dependency or decision"
-

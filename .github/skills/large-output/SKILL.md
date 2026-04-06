@@ -50,4 +50,3 @@ Then read `.scratch/preflight.log` with a file tool if more context is needed.
 - **Use `2>&1`** to capture stderr alongside stdout — pytest and ruff both write to stderr in some modes.
 - **Use `python -u`** for Python scripts that produce incremental output — disables buffering so partial results are visible.
 - **Redirect to `.scratch/`** when you need to inspect the full output — the directory is gitignored.
-

@@ -27,6 +27,14 @@ from discovery import (
     pythonpath_env,
     resolve_scope,
 )
+from docs_deploy import (
+    MIKE,
+    copy_shared_docs_css,
+    inject_landing_page,
+)
+from docs_deploy import (
+    docs_deploy as _docs_deploy,
+)
 from ide import sync_ide
 from prepare import VERSIONS, resolve_circuitpython_binary, resolve_micropython_binary
 from prepare_circuitpython import prepare_circuitpython as _prepare_circuitpython
@@ -35,6 +43,8 @@ from scaffold import new_library
 from verify_examples import verify_examples
 
 PYTHON = sys.executable
+# Script that runs a library's tests/ directory under a non-CPython interpreter
+# (MicroPython or CircuitPython unix-port) to verify cross-runtime compatibility.
 COMPAT_SCRIPT = "support/test_harness/run_cross_runtime.py"
 
 
@@ -60,14 +70,17 @@ def _install_command() -> list[str]:
 
 def setup() -> int:
     """Install development dependencies and regenerate IDE configuration."""
-    cp_version = VERSIONS["circuitpython"]["version"]
-    mp_version = VERSIONS["micropython"]["version"].lstrip("v")
+    circuitpython_version = VERSIONS["circuitpython"]["version"]
+    micropython_version = VERSIONS["micropython"]["version"].lstrip("v")
 
-    # Static deps from requirements-dev.txt, dynamic stubs appended here.
+    # Static deps come from requirements-dev.txt.  Type stubs for
+    # CircuitPython and MicroPython are pinned to the runtime versions
+    # in target-runtimes.toml so IDE type-checking matches the actual
+    # runtime APIs (Decision 0012).
     req_file = str(ROOT / "requirements-dev.txt")
     stubs = [
-        f"circuitpython-stubs=={cp_version}",
-        f"micropython-esp32-stubs=={mp_version}.*",
+        f"circuitpython-stubs=={circuitpython_version}",
+        f"micropython-esp32-stubs=={micropython_version}.*",
     ]
 
     result = _run([*_install_command(), "-U", "-r", req_file, *stubs])
@@ -186,7 +199,7 @@ def test_cpython(
     relax_coverage = bool(filter_expr) or no_cov
     cov_gate_args = ["--cov-fail-under=0"] if relax_coverage else []
 
-    overall_rc = 0
+    overall_exit_code = 0
     run_counter = 0
 
     for pkg_dir in testable:
@@ -243,7 +256,7 @@ def test_cpython(
             run_env = {**env, "COVERAGE_FILE": str(ROOT / cov_name)}
             run_counter += 1
 
-            rc = _run(
+            exit_code = _run(
                 [
                     PYTHON, "-m", "pytest",
                     "-W", "error",
@@ -257,8 +270,8 @@ def test_cpython(
             )
             # Exit code 5 means no tests were collected (e.g. -k filter
             # matched nothing in this library) — not an error.
-            if rc not in (0, 5):
-                overall_rc = rc
+            if exit_code not in (0, 5):
+                overall_exit_code = exit_code
 
     # Combine per-library coverage into one data file and report.
     if not no_cov and list(ROOT.glob(".coverage.*")):
@@ -268,11 +281,11 @@ def test_cpython(
         if relax_coverage:
             report_args.append("--fail-under=0")
 
-        report_rc = _run(report_args)
-        if report_rc != 0 and overall_rc == 0:
-            overall_rc = report_rc
+        report_exit_code = _run(report_args)
+        if report_exit_code != 0 and overall_exit_code == 0:
+            overall_exit_code = report_exit_code
 
-    return overall_rc
+    return overall_exit_code
 
 
 def build() -> int:
@@ -293,24 +306,6 @@ def build() -> int:
     return 0
 
 
-
-def _copy_shared_docs_css(pkg_dirs: list[Path]) -> None:
-    """Copy ``support/docs/extra.css`` into each library's ``docs/stylesheets/``.
-
-    Zensical does not support mkdocs hooks, so we handle the copy here
-    before building.  The generated copies are gitignored.
-    """
-    import shutil
-
-    shared = ROOT / "support" / "docs" / "extra.css"
-    if not shared.exists():
-        return
-    for pkg_dir in pkg_dirs:
-        dest = pkg_dir / "docs" / "stylesheets" / "extra.css"
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(shared, dest)
-
-
 def docs(pkg_dirs: list[Path], *, serve: bool = False) -> int:
     """Build docs for selected libraries using Zensical.
 
@@ -323,7 +318,7 @@ def docs(pkg_dirs: list[Path], *, serve: bool = False) -> int:
         print("No libraries with mkdocs.yml found for the selected packages.")
         return 0
 
-    _copy_shared_docs_css(doc_dirs)
+    copy_shared_docs_css(doc_dirs)
 
     if serve:
         # Serve the first selected library
@@ -335,73 +330,106 @@ def docs(pkg_dirs: list[Path], *, serve: bool = False) -> int:
              "-f", str(pkg_dir / "mkdocs.yml")],
         )
 
-    overall_rc = 0
+    overall_exit_code = 0
     for pkg_dir in doc_dirs:
         rel = pkg_dir.relative_to(ROOT)
         site_dir = pkg_dir / "site"
         print(f"== docs {rel} ==")
-        rc = _run(
+        exit_code = _run(
             [PYTHON, "-m", "zensical", "build",
              "-f", str(pkg_dir / "mkdocs.yml")],
         )
-        if rc != 0:
+        if exit_code != 0:
             print(f"Docs build failed: {rel}")
-            overall_rc = rc
+            overall_exit_code = exit_code
         else:
             print(f"  Built: {site_dir.relative_to(ROOT)}/")
 
-    return overall_rc
+    return overall_exit_code
 
 
 def docs_preview(pkg_dirs: list[Path]) -> int:
-    """Deploy docs to the local ``gh-pages`` branch and start a preview server.
+    """Build docs from the current working tree and serve a local preview.
 
-    Runs ``mike deploy`` for each selected library (no push), then starts
-    ``mike serve`` so the full versioned site is browsable at localhost.
-    This mirrors the CI docs-deploy workflow locally.
+    The preview branch is seeded from ``gh-pages`` (if it exists) so that
+    already-deployed stable versions appear alongside the current working
+    tree content.  The working tree is then deployed on top as
+    ``dev`` / ``experimental``.
+
+    For each library, ``mike deploy`` with ``--deploy-prefix`` mirrors the
+    production layout (Decision 0013).  The landing page is injected via a
+    git-plumbing commit.  ``mike serve`` then serves the result.
     """
+    preview_branch = "_docs-preview"
+    source_branch = "gh-pages"
+
     doc_dirs = [d for d in pkg_dirs if (d / "mkdocs.yml").exists()]
     if not doc_dirs:
         print("No libraries with mkdocs.yml found for the selected packages.")
         return 0
 
-    _copy_shared_docs_css(doc_dirs)
+    copy_shared_docs_css(doc_dirs)
+
+    # Delete any previous preview branch so we start fresh.
+    subprocess.run(
+        ["git", "branch", "-D", preview_branch],
+        capture_output=True, cwd=ROOT,
+    )
+
+    # Seed from gh-pages so existing stable/versioned deploys are present.
+    # If gh-pages doesn't exist yet, mike's --allow-empty will create the
+    # branch from scratch (first-time setup).
+    has_source = subprocess.run(
+        ["git", "rev-parse", "--verify", source_branch],
+        capture_output=True, cwd=ROOT,
+    ).returncode == 0
+
+    if has_source:
+        subprocess.run(
+            ["git", "branch", preview_branch, source_branch],
+            capture_output=True, cwd=ROOT, check=True,
+        )
+        print(f"Seeded {preview_branch} from {source_branch}.")
 
     for pkg_dir in doc_dirs:
         rel = pkg_dir.relative_to(ROOT)
         lib_name = pkg_dir.name
-        version = "dev"
-        version_file = pkg_dir / "VERSION"
-        if version_file.exists():
-            version = version_file.read_text().strip()
-        print(f"== mike deploy {rel} ({version}) ==")
-        rc = _run([
-            PYTHON, "-m", "mike", "deploy",
+        print(f"== deploy {rel} ==")
+        # --deploy-prefix puts each library's docs in a subdirectory
+        # (e.g. /timing/) matching the production gh-pages layout.
+        # --allow-empty lets mike create the branch from scratch when
+        # gh-pages doesn't exist yet.  "dev" is the version label,
+        # "experimental" is the URL alias.
+        deploy_args = [
+            MIKE, "deploy",
             "--deploy-prefix", lib_name,
+            "-b", preview_branch,
             "-F", str(pkg_dir / "mkdocs.yml"),
             "--alias-type", "redirect",
             "--update-aliases",
-            version, "latest",
-        ])
-        if rc != 0:
-            print(f"mike deploy failed: {rel}")
-            return rc
+            "dev", "experimental",
+        ]
+        # Only needed when gh-pages doesn't exist and the branch is new.
+        if not has_source:
+            deploy_args.append("--allow-empty")
 
-    print()
-    print("Serving versioned docs at http://localhost:8000/")
-    print("  Libraries deployed to local gh-pages (not pushed).")
-    print("  Press Ctrl+C to stop.")
-    print()
-    # mike serve uses the first library's config but serves the whole gh-pages tree
+        exit_code = _run(deploy_args)
+        if exit_code != 0:
+            print(f"Docs deploy failed: {rel}")
+            return exit_code
+
+    inject_landing_page(preview_branch)
+
     return _run([
-        PYTHON, "-m", "mike", "serve",
+        MIKE, "serve",
+        "-b", preview_branch,
         "-F", str(doc_dirs[0] / "mkdocs.yml"),
     ])
 
 
 def preflight(
-    mp_binary: str | None = None,
-    cp_binary: str | None = None,
+    micropython_binary: str | None = None,
+    circuitpython_binary: str | None = None,
 ) -> int:
     """Run the full check suite that CI requires on every pull request.
 
@@ -414,8 +442,14 @@ def preflight(
         ("lint", lint),
         ("test", lambda: test_cpython(all_pkgs)),
         ("verify-examples", lambda: verify_examples(all_pkgs)),
-        ("test-micropython-compatibility", lambda: test_micropython_compatibility(mp_binary)),
-        ("test-circuitpython-compatibility", lambda: test_circuitpython_compatibility(cp_binary)),
+        (
+            "test-micropython-compatibility",
+            lambda: test_micropython_compatibility(micropython_binary),
+        ),
+        (
+            "test-circuitpython-compatibility",
+            lambda: test_circuitpython_compatibility(circuitpython_binary),
+        ),
         ("build", build),
     )
 
@@ -453,6 +487,8 @@ def _test_runtime_compat(
     auto-prepares when missing, then runs the compat script for libraries
     that target *platform*.
     """
+    # Try to find an existing binary (CLI override → repo-local build → PATH).
+    # If none is found, build the unix-port automatically on first use.
     binary = resolve_binary()
     if binary is None:
         print(f"{label} binary not found. Preparing unix-port runtime first.")
@@ -501,15 +537,21 @@ def test_circuitpython_compatibility(binary: str | None = None) -> int:
 
 
 def test_runtime_matrix(
-    mp_binary: str | None = None,
-    cp_binary: str | None = None,
+    micropython_binary: str | None = None,
+    circuitpython_binary: str | None = None,
 ) -> int:
     """Run host tests and cross-runtime unit tests across all proven runtimes."""
     all_pkgs = discover_package_dirs()
     steps = (
         ("test", lambda: test_cpython(all_pkgs)),
-        ("test-micropython-compatibility", lambda: test_micropython_compatibility(mp_binary)),
-        ("test-circuitpython-compatibility", lambda: test_circuitpython_compatibility(cp_binary)),
+        (
+            "test-micropython-compatibility",
+            lambda: test_micropython_compatibility(micropython_binary),
+        ),
+        (
+            "test-circuitpython-compatibility",
+            lambda: test_circuitpython_compatibility(circuitpython_binary),
+        ),
     )
 
     for step_name, step in steps:
@@ -570,11 +612,11 @@ def _binary_parent() -> argparse.ArgumentParser:
     """Parent parser providing runtime binary override flags."""
     parent = argparse.ArgumentParser(add_help=False)
     parent.add_argument(
-        "--micropython-bin", metavar="PATH",
+        "--micropython-binary", metavar="PATH",
         help="path to MicroPython binary (overrides auto-detection)",
     )
     parent.add_argument(
-        "--circuitpython-bin", metavar="PATH",
+        "--circuitpython-binary", metavar="PATH",
         help="path to CircuitPython binary (overrides auto-detection)",
     )
     return parent
@@ -586,39 +628,52 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="python scripts/run.py",
         description="Repo-level task runner for humans, agents, and CI.",
     )
-    sub = parser.add_subparsers(dest="task")
+    subparsers = parser.add_subparsers(dest="task")
     scope = _scope_parent()
     binary = _binary_parent()
 
     # No-arg tasks
-    sub.add_parser("setup", help="install deps and regenerate IDE config")
-    sub.add_parser("sync-ide", help="regenerate IDE config files")
-    sub.add_parser("lint", help="run Ruff across the workspace")
-    sub.add_parser("build", help="build all publishable packages")
-    sub.add_parser("preflight", parents=[binary], help="lint + test + examples + compat + build")
-    sub.add_parser("prepare-micropython", help="prepare MicroPython unix-port")
-    sub.add_parser("prepare-circuitpython", help="prepare CircuitPython unix-port")
-    sub.add_parser(
+    subparsers.add_parser("setup", help="install deps and regenerate IDE config")
+    subparsers.add_parser("sync-ide", help="regenerate IDE config files")
+    subparsers.add_parser("lint", help="run Ruff across the workspace")
+    subparsers.add_parser("build", help="build all publishable packages")
+    subparsers.add_parser(
+        "preflight", parents=[binary],
+        help="lint + test + examples + compat + build",
+    )
+    subparsers.add_parser("prepare-micropython", help="prepare MicroPython unix-port")
+    subparsers.add_parser("prepare-circuitpython", help="prepare CircuitPython unix-port")
+    subparsers.add_parser(
         "test-micropython-compatibility",
         parents=[binary],
         help="MicroPython cross-runtime unit tests",
     )
-    sub.add_parser(
+    subparsers.add_parser(
         "test-circuitpython-compatibility",
         parents=[binary],
         help="CircuitPython cross-runtime unit tests",
     )
-    sub.add_parser(
+    subparsers.add_parser(
         "test-runtime-matrix",
         parents=[binary],
         help="test all packages on CPython + MicroPython + CircuitPython",
     )
-    sub.add_parser("test-device", help="device validation info")
-    sub.add_parser("check-version", help="check VERSION enforcement for changed libraries")
-    sub.add_parser("check-api", help="check API breakages against last release tag")
+    subparsers.add_parser("test-device", help="device validation info")
+    subparsers.add_parser("check-version", help="check VERSION enforcement for changed libraries")
+    subparsers.add_parser("check-api", help="check API breakages against last release tag")
+
+    deploy_parser = subparsers.add_parser(
+        "docs-deploy",
+        help="deploy versioned docs to gh-pages (used by CI)",
+    )
+    deploy_parser.add_argument(
+        "--channel", choices=["experimental", "stable"],
+        required=True,
+        help="docs channel to deploy",
+    )
 
     # Scoped tasks
-    test_p = sub.add_parser(
+    test_parser = subparsers.add_parser(
         "test", parents=[scope],
         formatter_class=argparse.RawDescriptionHelpFormatter,
         help="CPython tests (only changed packages by default)",
@@ -638,40 +693,40 @@ def _build_parser() -> argparse.ArgumentParser:
             "# quick, stop on failure"
         ),
     )
-    test_p.add_argument(
+    test_parser.add_argument(
         "-k", dest="filter_expr", metavar="FILTER",
         help=(
             "library/test or library/file/test "
             "(comma-separated for multiple)"
         ),
     )
-    test_p.add_argument(
+    test_parser.add_argument(
         "-x", "--exitfirst", action="store_true",
         help="stop on first failure",
     )
-    test_p.add_argument(
+    test_parser.add_argument(
         "-v", "--verbose", action="store_true",
         help="verbose test output",
     )
-    test_p.add_argument(
+    test_parser.add_argument(
         "--no-cov", action="store_true",
         help="skip coverage collection",
     )
-    sub.add_parser("verify-examples", parents=[scope], help="import-check examples")
+    subparsers.add_parser("verify-examples", parents=[scope], help="import-check examples")
 
-    docs_p = sub.add_parser("docs", parents=[scope], help="build library docs")
-    docs_p.add_argument(
+    docs_parser = subparsers.add_parser("docs", parents=[scope], help="build library docs")
+    docs_parser.add_argument(
         "--serve", action="store_true", help="start live-reload dev server",
     )
 
-    sub.add_parser(
+    subparsers.add_parser(
         "docs-preview", parents=[scope],
         help="deploy docs to local gh-pages and serve versioned site",
     )
 
     # new-library
-    nl = sub.add_parser("new-library", help="scaffold a new library")
-    nl.add_argument("name", help="library name (e.g. gpio)")
+    new_library_parser = subparsers.add_parser("new-library", help="scaffold a new library")
+    new_library_parser.add_argument("name", help="library name (e.g. gpio)")
 
     return parser
 
@@ -711,20 +766,24 @@ def main(argv: list[str]) -> int:
     if args.task == "new-library":
         return new_library(args.name)
 
+    # --- docs-deploy ---
+    if args.task == "docs-deploy":
+        return _docs_deploy(args.channel)
+
     # --- tasks that accept runtime binary overrides ---
     if args.task in {
         "preflight", "test-micropython-compatibility",
         "test-circuitpython-compatibility", "test-runtime-matrix",
     }:
-        mp_bin = args.micropython_bin
-        cp_bin = args.circuitpython_bin
+        micropython_binary = args.micropython_binary
+        circuitpython_binary = args.circuitpython_binary
         if args.task == "test-micropython-compatibility":
-            return test_micropython_compatibility(mp_bin)
+            return test_micropython_compatibility(micropython_binary)
         if args.task == "test-circuitpython-compatibility":
-            return test_circuitpython_compatibility(cp_bin)
+            return test_circuitpython_compatibility(circuitpython_binary)
         if args.task == "test-runtime-matrix":
-            return test_runtime_matrix(mp_bin, cp_bin)
-        return preflight(mp_bin, cp_bin)
+            return test_runtime_matrix(micropython_binary, circuitpython_binary)
+        return preflight(micropython_binary, circuitpython_binary)
 
     # --- no-arg tasks ---
     no_arg = {

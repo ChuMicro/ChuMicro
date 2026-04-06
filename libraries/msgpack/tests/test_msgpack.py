@@ -408,4 +408,3 @@ def test_settings_dict_roundtrip():
     import json
     json_size = len(json.dumps(settings))
     assert len(packed) < json_size
-

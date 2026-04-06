@@ -46,4 +46,3 @@ while True:
 
         if not raw:  # button just pressed
             led.value = not led.value
-

@@ -25,6 +25,10 @@ while True:
 
 ---
 
-[← All ChuMicro Libraries](https://chumicro.github.io/ChuMicro/)
+<div class="chumicro-footer" markdown>
+
+[← All ChuMicro Libraries](../../)
 
 [Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner) · [PyPI](https://pypi.org/project/chumicro-runner/) · [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · [Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
+
+</div>

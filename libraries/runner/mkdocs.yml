@@ -5,15 +5,17 @@ repo_name: Source
 theme:
   name: material
   palette:
-    scheme: default
+    scheme: slate
     primary: deep purple
     accent: purple
+  font:
+    text: Inter
+    code: JetBrains Mono
   icon:
     repo: fontawesome/brands/github
 
 extra_css:
   - stylesheets/extra.css
-
 
 extra:
   version:
@@ -21,8 +23,7 @@ extra:
     default:
       - stable
       - experimental
-  homepage: https://chumicro.github.io/ChuMicro/
-
+  homepage: ../../
 
 nav:
   - Home: index.md

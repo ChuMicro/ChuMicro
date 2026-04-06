@@ -18,4 +18,3 @@ The first seam will be timing / ticks. Digital I/O is the likely next seam once 
 - the first sample package should stay small and readable
 - the package should prove host-side `pytest` tests, compatibility-minded runtime code, and at least one device-aware test path
 - networking, storage, and other higher-risk seams remain deferred until the smaller timing contract is stable
-

@@ -153,3 +153,13 @@ The [examples](../examples/) directory contains complete runnable scripts:
 | `micropython_debounce.py` | Button debounce on MicroPython hardware |
 
 Simulated examples run on CPython.  Hardware examples (`circuitpython_*` / `micropython_*`) require a real board — see the setup notes in each file.
+
+---
+
+<div class="chumicro-footer" markdown>
+
+[← Home](index.md)
+
+[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing) · [PyPI](https://pypi.org/project/chumicro-timing/) · [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · [Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
+
+</div>

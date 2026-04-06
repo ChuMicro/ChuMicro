@@ -14,4 +14,3 @@ Each decision file should include:
 - consequences
 
 Keep decisions brief. They exist to preserve reasoning, not to become design documents.
-

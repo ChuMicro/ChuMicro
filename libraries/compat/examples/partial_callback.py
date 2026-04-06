@@ -28,4 +28,3 @@ handle_button_4 = partial(on_button_press, 4)
 # Simulate the runner calling each handler with a timestamp.
 handle_button_0(1000)
 handle_button_4(2500)
-

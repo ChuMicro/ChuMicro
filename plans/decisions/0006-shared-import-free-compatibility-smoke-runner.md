@@ -27,4 +27,3 @@ This runner should stay:
 - the smoke runner is a verified execution path, not a claim that normal package imports are already equivalent on every runtime
 - richer runtime-specific import checks can be added later without replacing this small baseline signal
 - planning and docs should refer to `support/test_harness/run_device_smoke.py` as canonical
-

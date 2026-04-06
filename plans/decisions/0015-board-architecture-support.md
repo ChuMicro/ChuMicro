@@ -112,4 +112,3 @@ Chumicro libraries require `collections.deque` and therefore require a full-buil
 - The cross-runtime compatibility runners test against the unix port, which exceeds all hardware baselines.
 - Future board transport tooling and `devices.yml` entries should target Tier 1 or Tier 2 boards.
 - If users report issues on unsupported boards, the answer is "not tested or supported on that hardware" — not necessarily a bug, and not something we will investigate.
-

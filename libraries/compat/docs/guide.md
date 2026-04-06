@@ -15,11 +15,9 @@ On CPython, the real C implementations are re-exported for zero overhead.  On Mi
 ```python
 from chumicro_compat.functools import partial
 
-
 def set_led(pin, brightness):
     """Set an LED pin to a brightness level."""
     print(f"pin {pin} → {brightness}%")
-
 
 # Freeze the pin number.  Now set_status_led only needs brightness.
 set_status_led = partial(set_led, 13)
@@ -34,11 +32,9 @@ Keyword arguments can be frozen and overridden at call time:
 ```python
 from chumicro_compat.functools import partial
 
-
 def connect(host, port=80, timeout=5):
     """Simulate a connection."""
     print(f"connecting to {host}:{port} (timeout={timeout}s)")
-
 
 # Freeze host and port; timeout can still be overridden.
 connect_api = partial(connect, "api.example.com", port=443)
@@ -53,11 +49,9 @@ A common embedded pattern is binding a hardware pin or device reference into a c
 ```python
 from chumicro_compat.functools import partial
 
-
 def on_button_press(pin_number, event_ms):
     """Handle a button press on *pin_number* at *event_ms*."""
     print(f"button on pin {pin_number} pressed at {event_ms} ms")
-
 
 # Wire pin 0 into the callback.  The runner passes event_ms at call time.
 handler = partial(on_button_press, 0)
@@ -97,3 +91,13 @@ The [examples](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/compat/e
 | `partial_basic.py` | Freeze one positional argument to a function |
 | `partial_keyword_override.py` | Freeze keyword args, override at call time |
 | `partial_callback.py` | Wire a callback with frozen context (embedded pattern) |
+
+---
+
+<div class="chumicro-footer" markdown>
+
+[← Home](index.md)
+
+[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/compat) · [PyPI](https://pypi.org/project/chumicro-compat/) · [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · [Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
+
+</div>

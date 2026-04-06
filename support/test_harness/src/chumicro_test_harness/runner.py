@@ -102,4 +102,3 @@ def run_module(module):
 
 	print(f"SUMMARY total={total} failed={failed} time={total_duration:.3f}s")
 	return 1 if failed else 0
-

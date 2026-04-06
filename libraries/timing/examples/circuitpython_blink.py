@@ -30,4 +30,3 @@ while True:
     # poll() returns True once per period, then resets.
     if heartbeat.poll(now):
         led.value = not led.value
-

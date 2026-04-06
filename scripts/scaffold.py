@@ -61,9 +61,12 @@ repo_name: Source
 theme:
   name: material
   palette:
-    scheme: default
+    scheme: slate
     primary: deep purple
     accent: purple
+  font:
+    text: Inter
+    code: JetBrains Mono
   icon:
     repo: fontawesome/brands/github
 
@@ -77,7 +80,7 @@ extra:
     default:
       - stable
       - experimental
-  homepage: https://chumicro.github.io/ChuMicro/
+  homepage: ../../
 
 
 nav:
@@ -119,12 +122,16 @@ from {import_name} import ...
 
 ---
 
-[← All ChuMicro Libraries](https://chumicro.github.io/ChuMicro/)
+<div class="chumicro-footer" markdown>
+
+[← All ChuMicro Libraries](../../)
 
 [Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/{name})
 · [PyPI](https://pypi.org/project/chumicro-{name}/)
 · [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle)
 · [Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
+
+</div>
 """
 
 _README_TEMPLATE = """\
@@ -252,6 +259,19 @@ _GUIDE_TEMPLATE = """\
 
 <!-- Optional. Include if the library manages buffers, queues, or
      pre-allocated structures. Explain allocation strategy and tuning. -->
+
+---
+
+<div class="chumicro-footer" markdown>
+
+[← Home](index.md)
+
+[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/{name})
+· [PyPI](https://pypi.org/project/chumicro-{name}/)
+· [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle)
+· [Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
+
+</div>
 """
 
 _TESTING_DOC_TEMPLATE = """\
@@ -314,6 +334,19 @@ services ship their own test fakes.
 ## API Reference
 
 ::: {import_name}.testing
+
+---
+
+<div class="chumicro-footer" markdown>
+
+[← Home](index.md)
+
+[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/{name})
+· [PyPI](https://pypi.org/project/chumicro-{name}/)
+· [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle)
+· [Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
+
+</div>
 """
 
 _TESTING_PY_TEMPLATE = """\
@@ -351,6 +384,19 @@ _API_TEMPLATE = """\
 # API Reference
 
 ::: {import_name}
+
+---
+
+<div class="chumicro-footer" markdown>
+
+[← Home](index.md)
+
+[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/{name})
+· [PyPI](https://pypi.org/project/chumicro-{name}/)
+· [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle)
+· [Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
+
+</div>
 """
 
 _EXAMPLE_TEMPLATE = """\
@@ -409,7 +455,7 @@ def _scaffold_library(name: str) -> int:
 
 
     (lib_dir / "docs" / "api.md").write_text(
-        _API_TEMPLATE.format(import_name=import_name)
+        _API_TEMPLATE.format(name=name, import_name=import_name)
     )
 
     # docs/testing.md
@@ -450,4 +496,3 @@ def new_library(name: str) -> int:
         return result
 
     return sync_ide()
-

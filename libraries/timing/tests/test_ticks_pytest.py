@@ -94,8 +94,3 @@ def test_ticks_ms_masks_to_period(monkeypatch) -> None:
     monkeypatch.setattr(ticks_module, "_raw_ticks_ms", lambda: (1 << 29) + 42)
 
     assert ticks_module.ticks_ms() == 42
-
-
-
-
-
