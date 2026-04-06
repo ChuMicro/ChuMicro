@@ -28,12 +28,12 @@ Both `develop` and `main` are full release branches — version bumps happen on 
 
 The channels are differentiated by **package name**, not version number:
 
-| Channel | PyPI package | mip package | Bundle dir | Git tag |
+| Channel | PyPI package | mip package | Bundle repo | Git tag |
 |---|---|---|---|---|
-| Experimental (develop) | `chumicro-timing-experimental` | `chumicro_timing_experimental` | `chumicro_timing_experimental/` | `timing-v0.2.0-experimental` |
-| Stable (main) | `chumicro-timing` | `chumicro_timing` | `chumicro_timing/` | `timing-v0.2.0` |
+| Experimental (develop) | `chumicro-timing-experimental` | `chumicro_timing` | `ChuMicro-Bundle-Experimental` | `timing-v0.2.0-experimental` |
+| Stable (main) | `chumicro-timing` | `chumicro_timing` | `ChuMicro-Bundle` | `timing-v0.2.0` |
 
-On-device import paths are always the base name (`chumicro_timing`). The experimental mip `package.json` installs files to `chumicro_timing/` on the device, sourcing them from `chumicro_timing_experimental/` in the bundle repo. Users switch channels by reinstalling from the other package — they cannot have both installed simultaneously.
+On-device import paths are always the base name (`chumicro_timing`). Both bundle repos use the same directory names (no `_experimental` suffix) — channel separation is by repo, not by directory name (Decision 0018). Users switch channels by reinstalling from the other package — they cannot have both installed simultaneously.
 
 **Dependency model:** experimental packages depend on **stable** (production) releases by default. Installing one experimental library does not cascade into pulling experimental versions of its transitive dependencies. This means a user can run stable `chumicro-timing` alongside experimental `chumicro-mqtt` without conflict. When coordinated experimental changes across libraries are needed, the developer explicitly overrides specific dependencies in that library's build.
 
