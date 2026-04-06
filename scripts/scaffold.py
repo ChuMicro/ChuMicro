@@ -79,8 +79,8 @@ extra:
 nav:
   - Home: index.md
   - Guide: guide.md
-  - Testing Helpers: testing.md
   - API Reference: api.md
+  - Testing Helpers: testing.md
 
 plugins:
   - search
@@ -109,8 +109,9 @@ from {import_name} import ...
 ## Documentation
 
 - [User Guide](guide.md) — getting started and usage patterns
-- [Testing Helpers](testing.md) — fakes for downstream test suites
 - [API Reference](api.md) — full API documentation
+<!-- If this library has a testing submodule, uncomment the next line: -->
+<!-- - [Testing Helpers](testing.md) — fakes for downstream test suites -->
 
 ---
 
@@ -125,10 +126,49 @@ from {import_name} import ...
 _README_TEMPLATE = """\
 # chumicro-{name}
 
+<!-- TODO: Add a one-line description of what the library does. -->
+
 ## Installation
+
+### CircuitPython (circup)
+
+Register the ChuMicro bundle (remove the other channel first if switching):
+
+```bash
+circup bundle-remove ChuMicro/ChuMicro-Bundle-Experimental   # skip if never added
+circup bundle-add ChuMicro/ChuMicro-Bundle
+circup install chumicro-{name}
+```
+
+### MicroPython (mip)
+
+```bash
+mpremote mip install github:ChuMicro/ChuMicro-Bundle/{import_name}
+```
+
+### CPython (pip)
 
 ```bash
 pip install chumicro-{name}
+```
+
+### Experimental (pre-release) versions
+
+Pre-release builds are published automatically when a library version is bumped.\
+  Do not register both bundles simultaneously — circup may pick either version\
+ for a given package.
+
+```bash
+# CircuitPython
+circup bundle-remove ChuMicro/ChuMicro-Bundle              # skip if never added
+circup bundle-add ChuMicro/ChuMicro-Bundle-Experimental
+circup install chumicro-{name}
+
+# MicroPython
+mpremote mip install github:ChuMicro/ChuMicro-Bundle-Experimental/{import_name}
+
+# CPython
+pip install chumicro-{name}-experimental
 ```
 
 ## Quick example
@@ -137,19 +177,41 @@ pip install chumicro-{name}
 from {import_name} import ...
 ```
 
+## What's included
+
+<!-- TODO: Add API summary tables (see other library READMEs for format). -->
+
 ## Platform support
 
 Works on CPython, MicroPython, and CircuitPython.
 
+## Examples
+
+<!-- TODO: Add an examples table once examples are written.
+| Example | What it shows |
+|---|---|
+| `example.py` | Description |
+-->
+
 ## Docs
 
-📖 **[Stable docs](https://chumicro.github.io/ChuMicro/{name}/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/{name}/experimental/)**
+📖 **[Stable docs](https://chumicro.github.io/ChuMicro/{name}/stable/)** · \
+**[Experimental docs](https://chumicro.github.io/ChuMicro/{name}/experimental/)**
 
 Browse on GitHub:
 
 - [User guide](docs/guide.md)
-- [Testing helpers](docs/testing.md)
 - [API reference](docs/api.md)
+<!-- If this library has a testing submodule, uncomment the next line: -->
+<!-- - [Testing helpers](docs/testing.md) -->
+
+## Find this library
+
+**PyPI:** [chumicro-{name}](https://pypi.org/project/chumicro-{name}/)
+**Bundle:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle)\
+ (CircuitPython & MicroPython)
+**Source:** [ChuMicro/ChuMicro](https://github.com/ChuMicro/ChuMicro) —\
+ cross-runtime Python libraries for ESP32, RP2040, and other microcontrollers.
 """
 
 _GUIDE_TEMPLATE = """\
@@ -243,7 +305,7 @@ from {import_name}.testing import Fake...
 This follows [Decision 0010][d0010]: libraries that expose injectable
 services ship their own test fakes.
 
-[d0010]: https://github.com/chumicro/chumicro/blob/main/plans/decisions/0010-library-testability.md
+[d0010]: https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0010-library-testability.md
 
 ## API Reference
 

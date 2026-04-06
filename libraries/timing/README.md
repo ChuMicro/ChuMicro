@@ -118,6 +118,20 @@ now = fake.ticks_ms()
 assert heartbeat.poll(now) is True
 ```
 
+## Examples
+
+| Example | What it shows |
+|---|---|
+| `heartbeat_blink.py` | Basic periodic timer loop |
+| `multiple_heartbeats.py` | Multiple heartbeats at different rates |
+| `timeout_check.py` | One-shot timeout using `is_due` |
+| `debounce.py` | Simulated button debounce |
+| `periodic_tick.py` | Manual periodic loop (what Heartbeat does under the hood) |
+| `circuitpython_blink.py` | LED blink on CircuitPython hardware |
+| `circuitpython_debounce.py` | GPIO button debounce on CircuitPython |
+| `micropython_blink.py` | LED blink on MicroPython hardware |
+| `micropython_debounce.py` | GPIO button debounce on MicroPython |
+
 ## Docs
 
 📖 **[Stable docs](https://chumicro.github.io/ChuMicro/timing/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/timing/experimental/)**

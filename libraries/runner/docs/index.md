@@ -8,18 +8,10 @@ Components implement a `check(now_ms) -> bool` check that gates when a handler f
 
 ```python
 from chumicro_runner import Runner
-from chumicro_timing import Heartbeat
 
 runner = Runner()
-
-runner.add(
-    task=Heartbeat(period_ms=1000),
-    handler=lambda: print("one second"),
-)
-runner.add(
-    task=Heartbeat(period_ms=5000),
-    handler=lambda: print("five seconds"),
-)
+runner.add_periodic(lambda now_ms: print("one second"), period_ms=1000)
+runner.add_periodic(lambda now_ms: print("five seconds"), period_ms=5000)
 
 while True:
     runner.tick()

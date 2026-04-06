@@ -37,7 +37,7 @@ Libraries that depend on `chumicro-timing` can import `FakeTicks` directly:
 from chumicro_timing.testing import FakeTicks
 ```
 
-This follows the project convention from [Decision 0010](https://github.com/chumicro/chumicro/blob/main/plans/decisions/0010-library-testability.md): libraries that expose injectable services ship their own test fakes.
+This follows the project convention from [Decision 0010](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0010-library-testability.md): libraries that expose injectable services ship their own test fakes.
 
 ## API Reference
 

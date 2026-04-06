@@ -216,6 +216,20 @@ All classes use only basic Python features.  Works identically on CPython, Micro
 - `_TaskEntry` and `TaskHandle` use `__slots__` to minimise per-instance memory.
 - Handlers are collected into a pre-allocated list and batch-fired, avoiding per-tick allocation.
 
+## Examples
+
+| Example | What it shows |
+|---|---|
+| `sensor_threshold.py` | Object-based check/handle with a temperature sensor |
+| `periodic_blink.py` | Periodic handler with no service class |
+| `basic_handler.py` | Handler-only task (fires every tick) |
+| `multi_service.py` | Multiple services at different rates |
+| `runtime_control.py` | TaskHandle: change period, limit runs, remove at runtime |
+| `circuitpython_blink.py` | LED blink on CircuitPython hardware |
+| `circuitpython_button_led.py` | Button-gated LED on CircuitPython |
+| `micropython_blink.py` | LED blink on MicroPython hardware |
+| `micropython_button_led.py` | Button-gated LED on MicroPython |
+
 ## Docs
 
 📖 **[Stable docs](https://chumicro.github.io/ChuMicro/runner/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/runner/experimental/)**
