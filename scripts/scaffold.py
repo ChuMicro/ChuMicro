@@ -56,10 +56,16 @@ packages = ["src/{import_name}"]
 _MKDOCS_TEMPLATE = """\
 site_name: chumicro-{name}
 site_url: https://chumicro.github.io/ChuMicro/{name}/
+repo_url: https://github.com/ChuMicro/ChuMicro/tree/develop/libraries/{name}
+repo_name: Source
 theme:
   name: material
   palette:
-    scheme: default
+    scheme: slate
+    primary: deep purple
+    accent: purple
+  icon:
+    repo: fontawesome/brands/github
 
 extra:
   version:
@@ -67,6 +73,7 @@ extra:
     default:
       - stable
       - experimental
+  homepage: https://chumicro.github.io/ChuMicro/
 
 nav:
   - Home: index.md
@@ -89,8 +96,26 @@ plugins:
 _INDEX_TEMPLATE = """\
 # chumicro-{name}
 
+<!-- Replace this with a one-line description of the library. -->
+
+## Quick example
+
+```python
+from {import_name} import ...
+```
+
+## Documentation
+
 - [User Guide](guide.md) — getting started and usage patterns
 - [API Reference](api.md) — full API documentation
+
+## Links
+
+[**← All ChuMicro Libraries**](https://chumicro.github.io/ChuMicro/){{ .md-button }}
+
+[Source on GitHub](https://github.com/ChuMicro/ChuMicro/tree/develop/libraries/{name})
+· [PyPI](https://pypi.org/project/chumicro-{name}/)
+· [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle)
 """
 
 _README_TEMPLATE = """\
@@ -214,7 +239,7 @@ def _scaffold_library(name: str) -> int:
 
     # docs/
     (lib_dir / "docs" / "index.md").write_text(
-        _INDEX_TEMPLATE.format(name=name)
+        _INDEX_TEMPLATE.format(name=name, import_name=import_name)
     )
     (lib_dir / "docs" / "guide.md").write_text(_GUIDE_TEMPLATE)
     (lib_dir / "docs" / "api.md").write_text(

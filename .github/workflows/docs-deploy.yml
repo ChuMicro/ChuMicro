@@ -59,6 +59,7 @@ jobs:
             mike deploy \
               --deploy-prefix "$lib_name" \
               -F "${lib_dir}mkdocs.yml" \
+              --alias-type redirect \
               --update-aliases \
               "$version" "$alias"
           done
@@ -77,6 +78,15 @@ jobs:
               stable
           done
 
+      - name: Generate landing page
+        run: |
+          python scripts/generate_landing_page.py > /tmp/landing.html
+          # Splice the generated landing page into gh-pages
+          git checkout gh-pages
+          cp /tmp/landing.html index.html
+          git add index.html
+          git diff --cached --quiet || git commit -m "Regenerate landing page"
+          git checkout -
+
       - name: Push to gh-pages
         run: git push origin gh-pages
-

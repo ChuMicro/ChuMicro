@@ -4,10 +4,6 @@ Cross-runtime millisecond tick helpers and periodic timing utilities for Circuit
 
 All timing is non-blocking — nothing in this library calls `time.sleep()`.
 
-- [User Guide](guide.md) — getting started, usage patterns, platform notes
-- [API Reference](api.md) — full API documentation
-- [Testing Helpers](testing.md) — using `FakeTicks` in your tests
-
 ## Quick example
 
 ```python
@@ -22,3 +18,14 @@ while True:
     # ... do other work ...
 ```
 
+## Documentation
+
+- [User Guide](guide.md) — getting started, usage patterns, platform notes
+- [API Reference](api.md) — full API documentation
+- [Testing Helpers](testing.md) — using `FakeTicks` in your tests
+
+## Links
+
+[**← All ChuMicro Libraries**](https://chumicro.github.io/ChuMicro/){ .md-button }
+
+[Source on GitHub](https://github.com/ChuMicro/ChuMicro/tree/develop/libraries/timing) · [PyPI](https://pypi.org/project/chumicro-timing/) · [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle)

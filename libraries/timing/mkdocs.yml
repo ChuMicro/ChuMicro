@@ -1,9 +1,15 @@
 site_name: chumicro-timing
 site_url: https://chumicro.github.io/ChuMicro/timing/
+repo_url: https://github.com/ChuMicro/ChuMicro/tree/develop/libraries/timing
+repo_name: Source
 theme:
   name: material
   palette:
-    scheme: default
+    scheme: slate
+    primary: deep purple
+    accent: purple
+  icon:
+    repo: fontawesome/brands/github
 
 extra:
   version:
@@ -11,6 +17,7 @@ extra:
     default:
       - stable
       - experimental
+  homepage: https://chumicro.github.io/ChuMicro/
 
 nav:
   - Home: index.md
@@ -29,4 +36,3 @@ plugins:
             show_source: false
             show_root_heading: true
             members_order: source
-
