@@ -25,8 +25,6 @@ set_status_led(100)  # pin 13 → 100%
 - [User Guide](guide.md) — what's polyfilled and why, usage patterns
 - [API Reference](api.md) — full API documentation
 
-## Links
+---
 
-[**← All ChuMicro Libraries**](https://chumicro.github.io/ChuMicro/){ .md-button }
-
-[Source on GitHub](https://github.com/ChuMicro/ChuMicro/tree/develop/libraries/compat) · [PyPI](https://pypi.org/project/chumicro-compat/) · [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle)
+[← All ChuMicro Libraries](https://chumicro.github.io/ChuMicro/) · [Source](https://github.com/ChuMicro/ChuMicro/tree/develop/libraries/compat) · [PyPI](https://pypi.org/project/chumicro-compat/) · [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle)

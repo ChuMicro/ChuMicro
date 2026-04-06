@@ -31,8 +31,6 @@ while True:
 - [API Reference](api.md) — full API documentation
 - [Testing Helpers](testing.md) — using fakes in your tests
 
-## Links
+---
 
-[**← All ChuMicro Libraries**](https://chumicro.github.io/ChuMicro/){ .md-button }
-
-[Source on GitHub](https://github.com/ChuMicro/ChuMicro/tree/develop/libraries/runner) · [PyPI](https://pypi.org/project/chumicro-runner/) · [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle)
+[← All ChuMicro Libraries](https://chumicro.github.io/ChuMicro/) · [Source](https://github.com/ChuMicro/ChuMicro/tree/develop/libraries/runner) · [PyPI](https://pypi.org/project/chumicro-runner/) · [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle)

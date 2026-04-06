@@ -2,7 +2,6 @@
 
 Cross-runtime Python libraries for CircuitPython, MicroPython, and CPython — built for ESP32, RP2040, and other microcontrollers.
 
-📖 **[Documentation site](https://chumicro.github.io/ChuMicro/)** — browse all library docs, guides, and API references.
 
 - One workspace with many individually published libraries
 - Shared support packages for runtime detection, mocks, and test tooling
@@ -20,7 +19,9 @@ Cross-runtime Python libraries for CircuitPython, MicroPython, and CPython — b
 
 ## Documentation
 
-📖 Docs are published per-library with a version selector powered by [mike](https://github.com/jimporter/mike):
+📖 **[Browse documentation](https://chumicro.github.io/ChuMicro/)** — all library docs, guides, and API references.
+
+Docs are published per-library with a version selector powered by [mike](https://github.com/jimporter/mike):
 
 | Library | Stable | Experimental |
 |---|---|---|

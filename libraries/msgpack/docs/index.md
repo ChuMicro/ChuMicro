@@ -23,8 +23,6 @@ print(restored)              # {0: 'MyNetwork', 1: 'secret', 2: True}
 - [User Guide](guide.md) — getting started, usage patterns, size comparison
 - [API Reference](api.md) — full API documentation
 
-## Links
+---
 
-[**← All ChuMicro Libraries**](https://chumicro.github.io/ChuMicro/){ .md-button }
-
-[Source on GitHub](https://github.com/ChuMicro/ChuMicro/tree/develop/libraries/msgpack) · [PyPI](https://pypi.org/project/chumicro-msgpack/) · [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle)
+[← All ChuMicro Libraries](https://chumicro.github.io/ChuMicro/) · [Source](https://github.com/ChuMicro/ChuMicro/tree/develop/libraries/msgpack) · [PyPI](https://pypi.org/project/chumicro-msgpack/) · [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle)

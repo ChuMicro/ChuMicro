@@ -109,11 +109,10 @@ from {import_name} import ...
 - [User Guide](guide.md) — getting started and usage patterns
 - [API Reference](api.md) — full API documentation
 
-## Links
+---
 
-[**← All ChuMicro Libraries**](https://chumicro.github.io/ChuMicro/){{ .md-button }}
-
-[Source on GitHub](https://github.com/ChuMicro/ChuMicro/tree/develop/libraries/{name})
+[← All ChuMicro Libraries](https://chumicro.github.io/ChuMicro/)
+· [Source](https://github.com/ChuMicro/ChuMicro/tree/develop/libraries/{name})
 · [PyPI](https://pypi.org/project/chumicro-{name}/)
 · [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle)
 """

@@ -112,15 +112,15 @@ def generate() -> str:
       --card-bg: #27273a;
       --text: #e6edf3;
       --muted: #8b949e;
-      --accent: #b48ead;
-      --accent-hover: #d0a9c5;
+      --accent: #9d7cd8;
+      --accent-hover: #b4a0e0;
       --border: #3a3a52;
       --tag-bg: #1e1e3a;
       --tag-text: #7aa2f7;
       --green-bg: #0d2818;
       --green-text: #3fb950;
-      --purple-bg: #2d1b46;
-      --purple-text: #d0a9c5;
+      --purple-bg: #2a1f4e;
+      --purple-text: #b4a0e0;
     }}
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
     body {{
@@ -163,13 +163,15 @@ def generate() -> str:
     /* Install section */
     .install {{ margin: 2.5rem 0; }}
     .install h2 {{ font-size: 1.2rem; margin-bottom: 1rem; }}
-    .install-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; }}
+    .install-block {{ margin-bottom: 1rem; }}
+    .install-block:last-child {{ margin-bottom: 0; }}
     .install-block h3 {{ font-size: .85rem; color: var(--muted); margin-bottom: .4rem; font-weight: 600; }}
     pre {{
       background: var(--card-bg); border: 1px solid var(--border);
       border-radius: .5rem; padding: .75rem 1rem;
       font-size: .8rem; overflow-x: auto; color: var(--text);
       font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      white-space: pre-wrap; word-break: break-all;
     }}
 
     /* Channels */
@@ -210,21 +212,18 @@ def generate() -> str:
 
     <div class="install">
       <h2>Install</h2>
-      <div class="install-grid">
-        <div class="install-block">
-          <h3>pip (CPython)</h3>
-          <pre>pip install {first_pkg}</pre>
-        </div>
-        <div class="install-block">
-          <h3>circup (CircuitPython)</h3>
-          <pre>circup bundle-add ChuMicro/ChuMicro-Bundle
+      <div class="install-block">
+        <h3>pip (CPython)</h3>
+        <pre>pip install {first_pkg}</pre>
+      </div>
+      <div class="install-block">
+        <h3>circup (CircuitPython)</h3>
+        <pre>circup bundle-add ChuMicro/ChuMicro-Bundle
 circup install {first_pkg}</pre>
-        </div>
-        <div class="install-block">
-          <h3>mip (MicroPython)</h3>
-          <pre>mpremote mip install \\
-  github:ChuMicro/ChuMicro-Bundle/{first_import}</pre>
-        </div>
+      </div>
+      <div class="install-block">
+        <h3>mip (MicroPython)</h3>
+        <pre>mpremote mip install github:ChuMicro/ChuMicro-Bundle/{first_import}</pre>
       </div>
     </div>
 
@@ -232,17 +231,19 @@ circup install {first_pkg}</pre>
       <h2>Release channels</h2>
       <table>
         <thead>
-          <tr><th>Channel</th><th>Branch</th><th>Description</th></tr>
+          <tr><th>Channel</th><th>Branch</th><th>Bundle</th><th>Description</th></tr>
         </thead>
         <tbody>
           <tr>
             <td><strong>Stable</strong></td>
             <td><code>main</code></td>
+            <td><a href="https://github.com/ChuMicro/ChuMicro-Bundle">ChuMicro-Bundle</a></td>
             <td>Released, tested versions &mdash; recommended for production</td>
           </tr>
           <tr>
             <td><strong>Experimental</strong></td>
             <td><code>develop</code></td>
+            <td><a href="https://github.com/ChuMicro/ChuMicro-Bundle-Experimental">ChuMicro-Bundle-Experimental</a></td>
             <td>Pre-release &mdash; latest features, may contain breaking changes</td>
           </tr>
         </tbody>
@@ -257,7 +258,9 @@ circup install {first_pkg}</pre>
       &nbsp;&middot;&nbsp;
       <a href="https://pypi.org/search/?q=chumicro">PyPI</a>
       &nbsp;&middot;&nbsp;
-      <a href="https://github.com/ChuMicro/ChuMicro-Bundle">Bundle repo</a>
+      <a href="https://github.com/ChuMicro/ChuMicro-Bundle">Bundle</a>
+      &nbsp;&middot;&nbsp;
+      <a href="https://github.com/ChuMicro/ChuMicro-Bundle-Experimental">Experimental Bundle</a>
       <br>
       MIT License &middot; Built with <a href="https://zensical.org">Zensical</a> + <a href="https://github.com/jimporter/mike">mike</a>
     </footer>
@@ -269,4 +272,3 @@ circup install {first_pkg}</pre>
 
 if __name__ == "__main__":
     print(generate(), end="")
-
