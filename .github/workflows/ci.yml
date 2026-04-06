@@ -127,40 +127,42 @@ jobs:
           fi
 
   # -------------------------------------------------------------------------
-  # Compat jobs disabled to conserve CI minutes. Re-enable when needed.
+  # Runtime compatibility — PR only to conserve CI minutes.
   # -------------------------------------------------------------------------
-  # micropython-compat:
-  #   name: MicroPython compatibility (advisory)
-  #   runs-on: ubuntu-latest
-  #   continue-on-error: true
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: actions/setup-python@v5
-  #       with:
-  #         python-version: "3.13"
-  #     - name: Install unix-port build dependencies
-  #       run: |
-  #         sudo apt-get update
-  #         sudo apt-get install -y libffi-dev pkg-config
-  #     - name: Prepare MicroPython unix-port runtime
-  #       run: python scripts/run.py prepare-micropython
-  #     - name: Run MicroPython compatibility smoke test
-  #       run: python scripts/run.py test-micropython-compat
+  micropython-compatibility:
+    if: github.event_name == 'pull_request'
+    name: MicroPython compatibility (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install unix-port build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libffi-dev pkg-config
+      - name: Prepare MicroPython unix-port runtime
+        run: python scripts/run.py prepare-micropython
+      - name: Run MicroPython compatibility tests
+        run: python scripts/run.py test-micropython-compatibility
 
-  # circuitpython-compat:
-  #   name: CircuitPython compatibility (advisory)
-  #   runs-on: ubuntu-latest
-  #   continue-on-error: true
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: actions/setup-python@v5
-  #       with:
-  #         python-version: "3.13"
-  #     - name: Install unix-port build dependencies
-  #       run: |
-  #         sudo apt-get update
-  #         sudo apt-get install -y libffi-dev pkg-config
-  #     - name: Prepare CircuitPython unix-port runtime
-  #       run: python scripts/run.py prepare-circuitpython
-  #     - name: Run CircuitPython compatibility smoke test
-  #       run: python scripts/run.py test-circuitpython-compat
+  circuitpython-compatibility:
+    if: github.event_name == 'pull_request'
+    name: CircuitPython compatibility (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install unix-port build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libffi-dev pkg-config
+      - name: Prepare CircuitPython unix-port runtime
+        run: python scripts/run.py prepare-circuitpython
+      - name: Run CircuitPython compatibility tests
+        run: python scripts/run.py test-circuitpython-compatibility

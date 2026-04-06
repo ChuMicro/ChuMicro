@@ -27,7 +27,7 @@ python support/test_harness/run_cross_runtime.py
 ```zsh
 cd /path/to/chumicro
 python scripts/run.py prepare-micropython
-python scripts/run.py test-micropython-compat
+python scripts/run.py test-micropython-compatibility
 ```
 
 If `MICROPYTHON_BIN` is not set, `scripts/run.py` falls back to the repo-local prepared runtime under `.tools/`, and then to a `micropython` executable on `PATH`.
@@ -37,7 +37,7 @@ If `MICROPYTHON_BIN` is not set, `scripts/run.py` falls back to the repo-local p
 ```zsh
 cd /path/to/chumicro
 python scripts/run.py prepare-circuitpython
-python scripts/run.py test-circuitpython-compat
+python scripts/run.py test-circuitpython-compatibility
 ```
 
 If `CIRCUITPYTHON_BIN` is not set, `scripts/run.py` first tries the repo-local prepared runtime under `.tools/`, then a `circuitpython` executable on `PATH`, and otherwise triggers the repo-managed prepare step automatically.

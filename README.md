@@ -125,8 +125,8 @@ All tasks are run through `scripts/run.py`:
 | `sync-ide` | Regenerate PyCharm and VS Code configs from workspace structure |
 | `prepare-micropython` | Build the pinned MicroPython unix-port binary under `.tools/` |
 | `prepare-circuitpython` | Build the pinned CircuitPython unix-port binary under `.tools/` |
-| `test-micropython-compat` | Cross-runtime unit tests under MicroPython (auto-prepares if needed) |
-| `test-circuitpython-compat` | Cross-runtime unit tests under CircuitPython (auto-prepares if needed) |
+| `test-micropython-compatibility` | Cross-runtime unit tests under MicroPython (auto-prepares if needed) |
+| `test-circuitpython-compatibility` | Cross-runtime unit tests under CircuitPython (auto-prepares if needed) |
 | `test-runtime-matrix` | Test all packages on CPython + MicroPython + CircuitPython |
 | `test-device` | Manual device validation placeholder |
 

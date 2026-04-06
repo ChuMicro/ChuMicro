@@ -78,9 +78,9 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
    - `python scripts/run.py new-library <name>` (scaffold + IDE regen)
    - `python scripts/run.py sync-ide`
    - `python scripts/run.py prepare-micropython`
-   - `python scripts/run.py test-micropython-compat`
+   - `python scripts/run.py test-micropython-compatibility`
    - `python scripts/run.py prepare-circuitpython`
-   - `python scripts/run.py test-circuitpython-compat`
+   - `python scripts/run.py test-circuitpython-compatibility`
    - `python scripts/run.py test-runtime-matrix`
 
 ### What is already done

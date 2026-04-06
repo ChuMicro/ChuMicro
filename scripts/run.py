@@ -445,8 +445,8 @@ def preflight() -> int:
         ("lint", lint),
         ("test", lambda: test_cpython(all_pkgs)),
         ("verify-examples", lambda: verify_examples(all_pkgs)),
-        ("test-micropython-compat", test_micropython_compat),
-        ("test-circuitpython-compat", test_circuitpython_compat),
+        ("test-micropython-compatibility", test_micropython_compatibility),
+        ("test-circuitpython-compatibility", test_circuitpython_compatibility),
         ("build", build),
     )
 
@@ -471,7 +471,7 @@ def prepare_circuitpython() -> int:
     return _prepare_circuitpython()
 
 
-def test_micropython_compat() -> int:
+def test_micropython_compatibility() -> int:
     """Run the cross-runtime unit tests with the MicroPython Unix binary.
 
     Skips libraries that do not target MicroPython.
@@ -498,7 +498,7 @@ def test_micropython_compat() -> int:
     return _run([micropython_bin, COMPAT_SCRIPT, *lib_names])
 
 
-def test_circuitpython_compat() -> int:
+def test_circuitpython_compatibility() -> int:
     """Run the cross-runtime unit tests with a configured or repo-managed CircuitPython binary.
 
     Skips libraries that do not target CircuitPython.
@@ -530,8 +530,8 @@ def test_runtime_matrix() -> int:
     all_pkgs = discover_package_dirs()
     steps = (
         ("test", lambda: test_cpython(all_pkgs)),
-        ("test-micropython-compat", test_micropython_compat),
-        ("test-circuitpython-compat", test_circuitpython_compat),
+        ("test-micropython-compatibility", test_micropython_compatibility),
+        ("test-circuitpython-compatibility", test_circuitpython_compatibility),
     )
 
     for step_name, step in steps:
@@ -605,8 +605,14 @@ def _build_parser() -> argparse.ArgumentParser:
     sub.add_parser("preflight", help="lint + test + examples + compat + build")
     sub.add_parser("prepare-micropython", help="prepare MicroPython unix-port")
     sub.add_parser("prepare-circuitpython", help="prepare CircuitPython unix-port")
-    sub.add_parser("test-micropython-compat", help="MicroPython cross-runtime unit tests")
-    sub.add_parser("test-circuitpython-compat", help="CircuitPython cross-runtime unit tests")
+    sub.add_parser(
+        "test-micropython-compatibility",
+        help="MicroPython cross-runtime unit tests",
+    )
+    sub.add_parser(
+        "test-circuitpython-compatibility",
+        help="CircuitPython cross-runtime unit tests",
+    )
     sub.add_parser(
         "test-runtime-matrix",
         help="test all packages on CPython + MicroPython + CircuitPython",
@@ -711,8 +717,8 @@ def main(argv: list[str]) -> int:
         "preflight": preflight,
         "prepare-micropython": prepare_micropython,
         "prepare-circuitpython": prepare_circuitpython,
-        "test-micropython-compat": test_micropython_compat,
-        "test-circuitpython-compat": test_circuitpython_compat,
+        "test-micropython-compatibility": test_micropython_compatibility,
+        "test-circuitpython-compatibility": test_circuitpython_compatibility,
         "test-runtime-matrix": test_runtime_matrix,
         "test-device": test_device,
         "check-version": check_version,

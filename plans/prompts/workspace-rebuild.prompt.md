@@ -188,7 +188,7 @@ These patterns caused real bugs when implemented incorrectly. Follow them exactl
    - `setup`, `sync-ide`, `new-library`, `lint`, `test`, `build`, `preflight`
     - `verify-examples`, `docs`
     - `prepare-micropython`, `prepare-circuitpython`
-    - `test-micropython-compat`, `test-circuitpython-compat`, `test-runtime-matrix`
+    - `test-micropython-compatibility`, `test-circuitpython-compatibility`, `test-runtime-matrix`
     - `test-device`
 8. `conftest.py` at root auto-discovers source roots and excludes `functional_tests/`.
 9. `pyproject.toml` uses broad `testpaths`; `test` runs pytest per-library for multi-library isolation.
