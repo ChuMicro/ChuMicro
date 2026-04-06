@@ -273,7 +273,6 @@ jobs:
           bundle_repo="${{ needs.detect.outputs.bundle_repo }}"
           body=$(jq -r '"## Updated libraries\n\n" + ([.include[] | "- **" + .lib_name + "** v" + .version] | join("\n"))' <<< "$MATRIX_JSON")
 
-
           gh release create "${{ env.date_tag }}" \
             --repo "${bundle_repo}" \
             --title "Bundle ${{ env.date_tag }}" \
