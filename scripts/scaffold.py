@@ -20,11 +20,18 @@ license = "MIT"
 authors = [
     {{ name = "Chumicro" }},
 ]
+keywords = [
+    "circuitpython", "micropython", "microcontroller", "embedded",
+    "esp32", "rp2040",
+]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Software Development :: Embedded Systems",
+    "Topic :: System :: Hardware",
+    "Operating System :: OS Independent",
 ]
 
 [tool.hatch.version]

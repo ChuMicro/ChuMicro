@@ -6,25 +6,43 @@ All timing is non-blocking — nothing in this library calls `time.sleep()`. Cap
 
 ## Installation
 
-```bash
-# CPython (pip)
-pip install chumicro-timing
+### CircuitPython (circup)
 
-# CircuitPython (circup)
+Register the ChuMicro bundle (remove the other channel first if switching):
+
+```bash
+circup bundle-remove ChuMicro/ChuMicro-Bundle-Experimental   # skip if never added
 circup bundle-add ChuMicro/ChuMicro-Bundle
 circup install chumicro-timing
+```
 
-# MicroPython (mip)
+### MicroPython (mip)
+
+```bash
 mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_timing
 ```
 
-For experimental (pre-release) versions from the develop branch:
+### CPython (pip)
 
 ```bash
-pip install chumicro-timing-experimental
+pip install chumicro-timing
+```
+
+### Experimental (pre-release) versions
+
+Pre-release builds come from the `develop` branch.  Do not register both bundles simultaneously — circup may pick either version for a given package.
+
+```bash
+# CircuitPython
+circup bundle-remove ChuMicro/ChuMicro-Bundle              # skip if never added
 circup bundle-add ChuMicro/ChuMicro-Bundle-Experimental
 circup install chumicro-timing
+
+# MicroPython
 mpremote mip install github:ChuMicro/ChuMicro-Bundle-Experimental/chumicro_timing
+
+# CPython
+pip install chumicro-timing-experimental
 ```
 
 ## Quick example
@@ -105,3 +123,12 @@ assert heartbeat.poll(now) is True
 - [User guide](docs/guide.md) — getting started, usage patterns, platform notes
 - [API reference](docs/api.md) — full API documentation
 - [Testing helpers](docs/testing.md) — using `FakeTicks` in your tests
+
+## Find this library
+
+**PyPI:** [chumicro-timing](https://pypi.org/project/chumicro-timing/)
+· **CircuitPython & MicroPython:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle)
+· **Source:** [ChuMicro/ChuMicro](https://github.com/ChuMicro/ChuMicro)
+
+Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) ecosystem — cross-runtime Python libraries for ESP32, RP2040, and other microcontrollers.
+

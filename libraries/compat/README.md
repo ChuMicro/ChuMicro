@@ -1,30 +1,48 @@
 # chumicro-compat
 
-Cross-runtime compatibility polyfills for CPython, MicroPython, and CircuitPython.
+Cross-runtime compatibility polyfills for CircuitPython, MicroPython, and CPython.
 
 Provides lightweight reimplementations of CPython standard-library features that are missing or incomplete on microcontroller runtimes.  On CPython, re-exports the real C implementations for zero overhead.
 
 ## Installation
 
-```bash
-# CPython (pip)
-pip install chumicro-compat
+### CircuitPython (circup)
 
-# CircuitPython (circup)
+Register the ChuMicro bundle (remove the other channel first if switching):
+
+```bash
+circup bundle-remove ChuMicro/ChuMicro-Bundle-Experimental   # skip if never added
 circup bundle-add ChuMicro/ChuMicro-Bundle
 circup install chumicro-compat
+```
 
-# MicroPython (mip)
+### MicroPython (mip)
+
+```bash
 mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_compat
 ```
 
-For experimental (pre-release) versions from the develop branch:
+### CPython (pip)
 
 ```bash
-pip install chumicro-compat-experimental
+pip install chumicro-compat
+```
+
+### Experimental (pre-release) versions
+
+Pre-release builds come from the `develop` branch.  Do not register both bundles simultaneously — circup may pick either version for a given package.
+
+```bash
+# CircuitPython
+circup bundle-remove ChuMicro/ChuMicro-Bundle              # skip if never added
 circup bundle-add ChuMicro/ChuMicro-Bundle-Experimental
 circup install chumicro-compat
+
+# MicroPython
 mpremote mip install github:ChuMicro/ChuMicro-Bundle-Experimental/chumicro_compat
+
+# CPython
+pip install chumicro-compat-experimental
 ```
 
 ## Quick example
@@ -76,3 +94,12 @@ The public API (`.func`, `.args`, `.keywords`, `__call__`, `__repr__`) is identi
 | `partial_basic.py` | Freeze one argument to a function |
 | `partial_keyword_override.py` | Freeze keyword args, override at call time |
 | `partial_callback.py` | Wire a callback with frozen context (embedded pattern) |
+
+## Find this library
+
+**PyPI:** [chumicro-compat](https://pypi.org/project/chumicro-compat/)
+· **CircuitPython & MicroPython:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle)
+· **Source:** [ChuMicro/ChuMicro](https://github.com/ChuMicro/ChuMicro)
+
+Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) ecosystem — cross-runtime Python libraries for ESP32, RP2040, and other microcontrollers.
+

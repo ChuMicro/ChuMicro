@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "chumicro-runner"
 dynamic = ["version"]
-description = "Tick-based task runner with shared timestamps for Chumicro applications."
+description = "Tick-based task runner for CircuitPython, MicroPython, and CPython — non-blocking check/handle scheduling without async."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
@@ -15,11 +15,18 @@ authors = [
 dependencies = [
     "chumicro-timing",
 ]
+keywords = [
+    "circuitpython", "micropython", "microcontroller", "embedded",
+    "esp32", "rp2040", "scheduler", "tick", "task-runner",
+]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Software Development :: Embedded Systems",
+    "Topic :: System :: Hardware",
+    "Operating System :: OS Independent",
 ]
 
 [tool.hatch.version]

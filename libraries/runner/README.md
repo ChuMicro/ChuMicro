@@ -1,30 +1,48 @@
 # chumicro-runner
 
-A tick-based service pattern for Chumicro libraries.
+A tick-based task runner for CircuitPython, MicroPython, and CPython — no async required.
 
 Components implement a `check(now_ms) -> bool` check that gates when a handler fires.  A `Runner` captures time once per tick, checks each service, and batch-fires all due handlers — replacing ad-hoc polling loops with a single standard contract.
 
 ## Installation
 
-```bash
-# CPython (pip)
-pip install chumicro-runner
+### CircuitPython (circup)
 
-# CircuitPython (circup)
+Register the ChuMicro bundle (remove the other channel first if switching):
+
+```bash
+circup bundle-remove ChuMicro/ChuMicro-Bundle-Experimental   # skip if never added
 circup bundle-add ChuMicro/ChuMicro-Bundle
 circup install chumicro-runner
+```
 
-# MicroPython (mip)
+### MicroPython (mip)
+
+```bash
 mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_runner
 ```
 
-For experimental (pre-release) versions from the develop branch:
+### CPython (pip)
 
 ```bash
-pip install chumicro-runner-experimental
+pip install chumicro-runner
+```
+
+### Experimental (pre-release) versions
+
+Pre-release builds come from the `develop` branch.  Do not register both bundles simultaneously — circup may pick either version for a given package.
+
+```bash
+# CircuitPython
+circup bundle-remove ChuMicro/ChuMicro-Bundle              # skip if never added
 circup bundle-add ChuMicro/ChuMicro-Bundle-Experimental
 circup install chumicro-runner
+
+# MicroPython
 mpremote mip install github:ChuMicro/ChuMicro-Bundle-Experimental/chumicro_runner
+
+# CPython
+pip install chumicro-runner-experimental
 ```
 
 ## Quick example
@@ -203,3 +221,12 @@ All classes use only basic Python features.  Works identically on CPython, Micro
 - [User guide](docs/guide.md) — the pattern, getting started, writing components
 - [API reference](docs/api.md) — full API documentation
 - [Testing helpers](docs/testing.md) — using `CallRecorder` in your tests
+
+## Find this library
+
+**PyPI:** [chumicro-runner](https://pypi.org/project/chumicro-runner/)
+· **CircuitPython & MicroPython:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle)
+· **Source:** [ChuMicro/ChuMicro](https://github.com/ChuMicro/ChuMicro)
+
+Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) ecosystem — cross-runtime Python libraries for ESP32, RP2040, and other microcontrollers.
+

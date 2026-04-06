@@ -1,6 +1,6 @@
 # Chumicro
 
-Chumicro is a mono-workspace for Python libraries that run across CPython, MicroPython, and CircuitPython.
+Cross-runtime Python libraries for CircuitPython, MicroPython, and CPython — built for ESP32, RP2040, and other microcontrollers.
 
 - One workspace with many individually published libraries
 - Shared support packages for runtime detection, mocks, and test tooling
@@ -11,9 +11,39 @@ Chumicro is a mono-workspace for Python libraries that run across CPython, Micro
 
 | Library | Description |
 |---|---|
-| [timing](libraries/timing/) | Cross-runtime millisecond tick helpers, wraparound-safe arithmetic, and heartbeat scheduling. |
-| [runner](libraries/runner/) | Tick-based service pattern: check/handle gates, periodic tasks, shared timestamps. |
-| [compat](libraries/compat/) | Cross-runtime compatibility polyfills (planned: `functools`). |
+| [timing](libraries/timing/) | Wraparound-safe millisecond tick helpers, heartbeat scheduling, and deterministic test fakes. |
+| [runner](libraries/runner/) | Tick-based task runner: check/handle gates, periodic tasks, shared timestamps — no async required. |
+| [compat](libraries/compat/) | Cross-runtime compatibility polyfills — functools.partial and more. |
+| [msgpack](libraries/msgpack/) | Compact MessagePack serialization with native CircuitPython C module delegation. |
+
+## Distribution
+
+Libraries are published to **PyPI** for CPython and to **bundle repos** for CircuitPython (circup) and MicroPython (mip).
+
+| Channel | Repo | Branch |
+|---|---|---|
+| **Stable** | [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) | `main` |
+| **Experimental** | [ChuMicro-Bundle-Experimental](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental) | `develop` |
+
+Install with circup (remove the other channel first if switching):
+
+```bash
+circup bundle-remove ChuMicro/ChuMicro-Bundle-Experimental   # skip if never added
+circup bundle-add ChuMicro/ChuMicro-Bundle
+circup install chumicro-timing
+```
+
+Install with mip:
+
+```bash
+mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_timing
+```
+
+Install with pip (CPython):
+
+```bash
+pip install chumicro-timing
+```
 
 ## Developer workflow
 
@@ -42,8 +72,9 @@ chumicro/
 │   └── test_harness/      # Lightweight cross-runtime test runner (workspace-internal)
 ├── libraries/
 │   ├── timing/            # Cross-runtime timing library
-│   ├── runner/            # Tick-based service pattern
-│   └── compat/            # Compatibility polyfills (shell)
+│   ├── runner/            # Tick-based task runner
+│   ├── compat/            # Compatibility polyfills
+│   └── msgpack/           # MessagePack serialization
 ├── devices.example.yml    # Template for local board registration
 └── .github/workflows/     # CI
 ```
@@ -109,7 +140,7 @@ Real-board execution is manual-only. Copy `devices.example.yml` to `devices.yml`
 
 ## Versioning
 
-Each library has a `VERSION` file at its root — that is the single source of truth. `pyproject.toml` reads from it via setuptools `dynamic` version. See [Decision 0002](plans/decisions/0002-per-library-version-files.md).
+Each library has a `VERSION` file at its root — that is the single source of truth. `pyproject.toml` reads from it via hatchling's dynamic version. See [Decision 0002](plans/decisions/0002-per-library-version-files.md).
 
 ## Planning
 

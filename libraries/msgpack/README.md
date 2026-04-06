@@ -8,25 +8,43 @@ On CircuitPython boards with the native `msgpack` C module, all functions delega
 
 ## Installation
 
-```bash
-# CPython (pip)
-pip install chumicro-msgpack
+### CircuitPython (circup)
 
-# CircuitPython (circup)
+Register the ChuMicro bundle (remove the other channel first if switching):
+
+```bash
+circup bundle-remove ChuMicro/ChuMicro-Bundle-Experimental   # skip if never added
 circup bundle-add ChuMicro/ChuMicro-Bundle
 circup install chumicro-msgpack
+```
 
-# MicroPython (mip)
+### MicroPython (mip)
+
+```bash
 mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_msgpack
 ```
 
-For experimental (pre-release) versions from the develop branch:
+### CPython (pip)
 
 ```bash
-pip install chumicro-msgpack-experimental
+pip install chumicro-msgpack
+```
+
+### Experimental (pre-release) versions
+
+Pre-release builds come from the `develop` branch.  Do not register both bundles simultaneously — circup may pick either version for a given package.
+
+```bash
+# CircuitPython
+circup bundle-remove ChuMicro/ChuMicro-Bundle              # skip if never added
 circup bundle-add ChuMicro/ChuMicro-Bundle-Experimental
 circup install chumicro-msgpack
+
+# MicroPython
 mpremote mip install github:ChuMicro/ChuMicro-Bundle-Experimental/chumicro_msgpack
+
+# CPython
+pip install chumicro-msgpack-experimental
 ```
 
 ## Quick example
@@ -98,3 +116,12 @@ Use `pack`/`unpack` when writing to files, sockets, or NVM.  Use `packb`/`unpack
 | `packb_size_comparison.py` | Compare msgpack vs JSON size for the same dict |
 | `stream_roundtrip.py` | Use the stream-based `pack` / `unpack` API with `BytesIO` |
 | `circuitpython_nvm_settings.py` | Store and load settings in non-volatile memory (hardware) |
+
+## Find this library
+
+**PyPI:** [chumicro-msgpack](https://pypi.org/project/chumicro-msgpack/)
+· **CircuitPython & MicroPython:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle)
+· **Source:** [ChuMicro/ChuMicro](https://github.com/ChuMicro/ChuMicro)
+
+Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) ecosystem — cross-runtime Python libraries for ESP32, RP2040, and other microcontrollers.
+
