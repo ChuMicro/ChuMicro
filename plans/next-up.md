@@ -28,8 +28,7 @@
   - ESP32 NVS backend deferred (different semantics — per-key, not blob).
 - [ ] Promote advisory MicroPython and CircuitPython CI jobs to protected-branch requirements, gated by platform targeting (Decision 0011).
 - [ ] Add digital I/O as the second library seam (alongside CI/release work, not sequentially).
-- [ ] Set up ReadTheDocs hosting with `.readthedocs.yaml` and wire docs build into CI/release pipeline (Decision 0013).
-- [ ] Add docs build verification to the release pipeline (verify `docs/` is non-empty for any library being released).
+- [ ] Set up ReadTheDocs hosting with `.readthedocs.yaml` (Decision 0013). Docs build verification is already a CI gate; RTD pulls from the repo and builds/hosts independently.
 - [ ] Explore test ergonomics: reduce repeated boilerplate across test files.
 - [ ] Validate VS Code workspace with the generated `pyrightconfig.json`.
 - [ ] Validate circup/mip install paths end-to-end once bundle repos are public (Decision 0018).
@@ -48,6 +47,7 @@
 
 ## Done
 
+- [x] Add docs build verification as a PR-only CI gate (`docs-build` job). Migrated from MkDocs to Zensical (Decision 0013 updated). Existing `mkdocs.yml` configs work with zero changes. ReadTheDocs hosting is a separate follow-up.
 - [x] Implement `[tool.chumicro].platforms` reader in `scripts/discovery.py` and wire into cross-runtime compat runners (Decision 0011). Libraries default to all three runtimes when the key is absent. Compat runners pass filtered library names to the test harness.
 - [x] Complete CI/release infrastructure: `BUNDLE_TOKEN` secret added, PyPI trusted publishing configured (environment "pypi"), all four libraries published to PyPI at 0.1.0, `develop` set as default branch, branch protection rulesets configured (enforcement deferred until repos go public). Bundle repos (`ChuMicro-Bundle`, `ChuMicro-Bundle-Experimental`) created and wired.
 - [x] Create `ChuMicro/ChuMicro-Bundle-Experimental` repo. Add `generate_bundle_readme()` to `scripts/bundle.py` that auto-generates rich READMEs (library table with descriptions and source links, install commands for mip/circup/pip) from workspace metadata. Wire into `release.yml` so READMEs stay current on every release without manual updates. Push initial READMEs to both bundle repos (Decision 0018).

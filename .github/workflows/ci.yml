@@ -55,6 +55,22 @@ jobs:
       - name: Verify examples
         run: python scripts/run.py verify-examples --all
 
+  docs-build:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install tooling
+        run: python -m pip install --upgrade pip zensical mkdocstrings[python]
+
+      - name: Build docs
+        run: python scripts/run.py docs --all
+
   build:
     runs-on: ubuntu-latest
     steps:
