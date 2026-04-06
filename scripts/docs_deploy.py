@@ -30,19 +30,27 @@ def discover_doc_dirs() -> list[Path]:
     ]
 
 
-def copy_shared_docs_css(doc_dirs: list[Path]) -> None:
-    """Copy ``support/docs/extra.css`` into each library's ``docs/stylesheets/``.
+def copy_shared_docs_assets(doc_dirs: list[Path]) -> None:
+    """Copy shared doc assets into each library's ``docs/`` tree.
 
-    Zensical does not support mkdocs hooks, so we handle the copy
-    before building.  The generated copies are gitignored.
+    Copies ``support/docs/extra.css`` to ``docs/stylesheets/`` and
+    ``support/docs/favicon.png`` to ``docs/assets/images/``.
+    Zensical does not support mkdocs hooks, so we handle this before building.
+    The generated copies are gitignored.
     """
-    shared = ROOT / "support" / "docs" / "extra.css"
-    if not shared.exists():
-        return
+    shared_dir = ROOT / "support" / "docs"
     for pkg_dir in doc_dirs:
-        dest = pkg_dir / "docs" / "stylesheets" / "extra.css"
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(shared, dest)
+        css_src = shared_dir / "extra.css"
+        if css_src.exists():
+            css_dest = pkg_dir / "docs" / "stylesheets" / "extra.css"
+            css_dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(css_src, css_dest)
+
+        favicon_src = shared_dir / "favicon.png"
+        if favicon_src.exists():
+            fav_dest = pkg_dir / "docs" / "assets" / "images" / "favicon.png"
+            fav_dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(favicon_src, fav_dest)
 
 
 def inject_landing_page(branch: str) -> None:
@@ -159,7 +167,7 @@ def docs_deploy(channel: str, *, branch: str = "gh-pages") -> int:
         print("No libraries with mkdocs.yml found.")
         return 1
 
-    copy_shared_docs_css(doc_dirs)
+    copy_shared_docs_assets(doc_dirs)
 
     for lib_dir in doc_dirs:
         lib_name = lib_dir.name

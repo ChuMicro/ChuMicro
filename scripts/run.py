@@ -29,7 +29,7 @@ from discovery import (
 )
 from docs_deploy import (
     MIKE,
-    copy_shared_docs_css,
+    copy_shared_docs_assets,
     inject_landing_page,
 )
 from docs_deploy import (
@@ -318,7 +318,7 @@ def docs(pkg_dirs: list[Path], *, serve: bool = False) -> int:
         print("No libraries with mkdocs.yml found for the selected packages.")
         return 0
 
-    copy_shared_docs_css(doc_dirs)
+    copy_shared_docs_assets(doc_dirs)
 
     if serve:
         # Serve the first selected library
@@ -368,7 +368,7 @@ def docs_preview(pkg_dirs: list[Path]) -> int:
         print("No libraries with mkdocs.yml found for the selected packages.")
         return 0
 
-    copy_shared_docs_css(doc_dirs)
+    copy_shared_docs_assets(doc_dirs)
 
     # Delete any previous preview branch so we start fresh.
     subprocess.run(
