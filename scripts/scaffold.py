@@ -34,6 +34,12 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 
+[project.urls]
+Homepage = "https://github.com/ChuMicro/ChuMicro"
+Source = "https://github.com/ChuMicro/ChuMicro/tree/develop/libraries/{name}"
+Issues = "https://github.com/ChuMicro/ChuMicro/issues"
+Bundle = "https://github.com/ChuMicro/ChuMicro-Bundle"
+
 [tool.hatch.version]
 path = "VERSION"
 pattern = "(?P<version>\\\\S+)"

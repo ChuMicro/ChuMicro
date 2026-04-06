@@ -127,8 +127,6 @@ assert heartbeat.poll(now) is True
 ## Find this library
 
 **PyPI:** [chumicro-timing](https://pypi.org/project/chumicro-timing/)
-· **CircuitPython & MicroPython:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle)
-· **Source:** [ChuMicro/ChuMicro](https://github.com/ChuMicro/ChuMicro)
-
-Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) ecosystem — cross-runtime Python libraries for ESP32, RP2040, and other microcontrollers.
+**Bundle:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) (CircuitPython & MicroPython)
+**Source:** [ChuMicro/ChuMicro](https://github.com/ChuMicro/ChuMicro) — cross-runtime Python libraries for ESP32, RP2040, and other microcontrollers.
 

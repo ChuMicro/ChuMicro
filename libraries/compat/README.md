@@ -98,8 +98,6 @@ The public API (`.func`, `.args`, `.keywords`, `__call__`, `__repr__`) is identi
 ## Find this library
 
 **PyPI:** [chumicro-compat](https://pypi.org/project/chumicro-compat/)
-· **CircuitPython & MicroPython:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle)
-· **Source:** [ChuMicro/ChuMicro](https://github.com/ChuMicro/ChuMicro)
-
-Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) ecosystem — cross-runtime Python libraries for ESP32, RP2040, and other microcontrollers.
+**Bundle:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) (CircuitPython & MicroPython)
+**Source:** [ChuMicro/ChuMicro](https://github.com/ChuMicro/ChuMicro) — cross-runtime Python libraries for ESP32, RP2040, and other microcontrollers.
 
