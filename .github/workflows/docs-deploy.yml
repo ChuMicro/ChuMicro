@@ -1,0 +1,82 @@
+name: Deploy docs
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+
+# Avoid concurrent deployments that could conflict on gh-pages.
+concurrency:
+  group: docs-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install tooling
+        run: |
+          python -m pip install --upgrade pip zensical mkdocstrings[python]
+          pip install "git+https://github.com/squidfunk/mike.git"
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch gh-pages branch
+        run: git fetch origin gh-pages:gh-pages 2>/dev/null || true
+
+      - name: Deploy docs for all libraries
+        run: |
+          branch="${GITHUB_REF##refs/heads/}"
+
+          for lib_dir in libraries/*/; do
+            [ -f "${lib_dir}mkdocs.yml" ] || continue
+            lib_name=$(basename "$lib_dir")
+
+            if [ "$branch" = "main" ] && [ -f "${lib_dir}VERSION" ]; then
+              version=$(cat "${lib_dir}VERSION" | tr -d '[:space:]')
+              alias="stable"
+            else
+              version="dev"
+              alias="experimental"
+            fi
+
+            echo "== Deploying ${lib_name} ${version} (${alias}) =="
+            mike deploy \
+              --deploy-prefix "$lib_name" \
+              -F "${lib_dir}mkdocs.yml" \
+              --update-aliases \
+              "$version" "$alias"
+          done
+
+      # Set stable as the default redirect for /<lib>/ -> /<lib>/stable/.
+      # Only on main — develop deploys should not override the default.
+      - name: Set stable as default
+        if: github.ref == 'refs/heads/main'
+        run: |
+          for lib_dir in libraries/*/; do
+            [ -f "${lib_dir}mkdocs.yml" ] || continue
+            lib_name=$(basename "$lib_dir")
+            mike set-default \
+              --deploy-prefix "$lib_name" \
+              -F "${lib_dir}mkdocs.yml" \
+              stable
+          done
+
+      - name: Push to gh-pages
+        run: git push origin gh-pages
+

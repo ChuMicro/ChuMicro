@@ -66,9 +66,7 @@ jobs:
           python-version: "3.13"
 
       - name: Install tooling
-        run: |
-          python -m pip install --upgrade pip zensical mkdocstrings[python]
-          pip install "git+https://github.com/squidfunk/mike.git"
+        run: python -m pip install --upgrade pip zensical mkdocstrings[python]
 
       - name: Build docs
         run: python scripts/run.py docs --all

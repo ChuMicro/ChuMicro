@@ -38,8 +38,7 @@
   - Control GC explicitly during benchmarks so allocation measurements are stable and reproducible across runs.
   - Define per-benchmark thresholds that fail the run if exceeded, catching regressions over time.
   - Benchmarks may be slow; they should not run as part of the standard `test` path. Consider a separate `bench` task or a deeper test tier that can also run in CI on a schedule.
-  - Evaluate whether MicroPython's `micropython.mem_info()` and `gc.mem_alloc()`/`gc.mem_free()` can provide the data, and what CPython equivalents (`tracemalloc`, `resource`) to use for host-side benchmarks.
-  - Keep the benchmark harness cross-runtime where possible, with runtime-specific measurement backends.
+- [ ] Explore test ergonomics: reduce repeated boilerplate across test files.
 
 ## Blocked / waiting
 
@@ -47,6 +46,7 @@
 
 ## Done
 
+- [x] Deploy docs to GitHub Pages via mike (`docs-deploy.yml`).  Each library deploys independently with `--deploy-prefix`.  Push to `main` deploys `<version> stable`; push to `develop` deploys `dev experimental`.  Version selector dropdown enabled in all `mkdocs.yml` configs.  GitHub Pages must be configured to serve from `gh-pages` branch (repo setting).
 - [x] Add docs build verification as a PR-only CI gate (`docs-build` job). Migrated from MkDocs to Zensical (Decision 0013 updated). Existing `mkdocs.yml` configs work with zero changes. ReadTheDocs hosting is a separate follow-up.
 - [x] Implement `[tool.chumicro].platforms` reader in `scripts/discovery.py` and wire into cross-runtime compat runners (Decision 0011). Libraries default to all three runtimes when the key is absent. Compat runners pass filtered library names to the test harness.
 - [x] Complete CI/release infrastructure: `BUNDLE_TOKEN` secret added, PyPI trusted publishing configured (environment "pypi"), all four libraries published to PyPI at 0.1.0, `develop` set as default branch, branch protection rulesets configured (enforcement deferred until repos go public). Bundle repos (`ChuMicro-Bundle`, `ChuMicro-Bundle-Experimental`) created and wired.

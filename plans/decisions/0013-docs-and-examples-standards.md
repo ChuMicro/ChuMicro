@@ -186,8 +186,13 @@ Examples are verified via static analysis in `scripts/run.py verify-examples`:
 ### Release pipeline integration
 
 - `docs-build` CI job verifies all library docs build on every PR (Zensical).
-- Docs are deployed to GitHub Pages on release (follow-up implementation item).
+- `docs-deploy.yml` workflow deploys docs on every push to `main` or `develop`:
+  - **main**: deploys each library at its VERSION (e.g., `0.1.0`) with alias `stable`, sets `stable` as the default redirect for `/<lib>/`.
+  - **develop**: deploys each library at version `dev` with alias `experimental`.
+  - Uses mike with `--deploy-prefix <lib>` per library, pushing to the `gh-pages` branch.
+  - Concurrency group prevents conflicting deploys.
 - The `mkdocs.yml` configs, `docs` task in `scripts/run.py`, and the `new-library` scaffolder are all wired.
+- GitHub Pages must be configured to serve from the `gh-pages` branch (repository setting).
 
 ## Alternatives considered
 
