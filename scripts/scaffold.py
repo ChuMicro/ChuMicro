@@ -449,10 +449,13 @@ def _scaffold_library(name: str) -> int:
     (lib_dir / "docs" / "index.md").write_text(
         _INDEX_TEMPLATE.format(name=name, import_name=import_name)
     )
+
+    # docs/guide.md
     (lib_dir / "docs" / "guide.md").write_text(
         _GUIDE_TEMPLATE.format(name=name)
     )
 
+    # docs/api.md
     (lib_dir / "docs" / "api.md").write_text(
         _API_TEMPLATE.format(name=name, import_name=import_name)
     )
