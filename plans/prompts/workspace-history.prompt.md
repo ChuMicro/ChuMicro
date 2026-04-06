@@ -359,3 +359,18 @@ This was the largest single session. It addressed three areas: the workspace was
 4. Added `[project.urls]` to all four library `pyproject.toml` files (Homepage, Source, Issues, Changelog) for PyPI sidebar links.
 5. Cleaned up README footers across all libraries: standardised install/docs/license links and removed redundant badge markup.
 
+#### 2026-04-05 (cont. 3) — Docs site theme iteration and polish
+
+**Initial dark theme CSS and site unification:**
+1. Built MkDocs Material docs with dark (slate) theme, auto-generated landing page, mike-versioned deployment to GitHub Pages with per-library `--deploy-prefix`.
+2. Added custom `extra.css` per library to improve text contrast on the slate theme (secondary text, code blocks, table borders).
+
+**Dark theme abandoned in favour of light:**
+3. Attempted to deduplicate `extra.css` across libraries via symlinks (zensical doesn't follow symlinks) and MkDocs hooks (zensical doesn't support hooks). Both approaches failed.
+4. Switched all libraries to Material `scheme: default` (light), which has excellent contrast out of the box. Removed all `extra.css` files, `extra_css` mkdocs.yml references, and the `support/docs-theme/` infrastructure (~188 lines deleted).
+
+**Footer layout and links:**
+5. Split library `docs/index.md` footers: back-link (`← All ChuMicro Libraries`) on its own line, then `Source · PyPI · Bundle` links below.
+6. Added `Experimental Bundle` link to all four library footers and the scaffold template, matching the main landing page.
+7. Updated scaffold `_MKDOCS_TEMPLATE` and `_INDEX_TEMPLATE` to match.
+

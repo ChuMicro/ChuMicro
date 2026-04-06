@@ -29,7 +29,8 @@ chumicro/
 │   ├── prepare_workspace.py
 │   ├── bundle.py           # bundle staging, mpy compilation, README generation
 │   ├── check_version.py    # VERSION enforcement for PRs
-│   └── check_api.py        # API breakage detection via griffe
+│   ├── check_api.py        # API breakage detection via griffe
+│   └── generate_landing_page.py  # root landing page for GitHub Pages
 ├── .github/workflows/
 │   ├── ci.yml              # lint, test, build, version-check, api-check, label-check
 │   ├── release.yml         # per-library release pipeline (PyPI, tags, GitHub Releases, bundles)
@@ -65,9 +66,9 @@ chumicro/
     │   ├── src/chumicro_timing/
     │   ├── tests/
     │   ├── functional_tests/
-    │   ├── docs/              # ReadTheDocs content
-    │   └── examples/          # Usage examples
-    └── runner/
+│   ├── docs/              # MkDocs / GitHub Pages docs
+│   └── examples/          # Usage examples
+└── runner/
         ├── pyproject.toml
         ├── VERSION
         ├── README.md
