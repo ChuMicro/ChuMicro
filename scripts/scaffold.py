@@ -74,7 +74,6 @@ theme:
 extra_css:
   - stylesheets/extra.css
 
-
 extra:
   version:
     provider: mike
@@ -82,7 +81,6 @@ extra:
       - stable
       - experimental
   homepage: ../../
-
 
 nav:
   - Home: index.md
@@ -434,7 +432,6 @@ def _scaffold_library(name: str) -> int:
     # VERSION
     (lib_dir / "VERSION").write_text("0.1.0\n")
 
-
     # pyproject.toml
     (lib_dir / "pyproject.toml").write_text(
         _PYPROJECT_TEMPLATE.format(name=name, import_name=import_name)
@@ -452,8 +449,9 @@ def _scaffold_library(name: str) -> int:
     (lib_dir / "docs" / "index.md").write_text(
         _INDEX_TEMPLATE.format(name=name, import_name=import_name)
     )
-    (lib_dir / "docs" / "guide.md").write_text(_GUIDE_TEMPLATE)
-
+    (lib_dir / "docs" / "guide.md").write_text(
+        _GUIDE_TEMPLATE.format(name=name)
+    )
 
     (lib_dir / "docs" / "api.md").write_text(
         _API_TEMPLATE.format(name=name, import_name=import_name)
@@ -463,7 +461,6 @@ def _scaffold_library(name: str) -> int:
     (lib_dir / "docs" / "testing.md").write_text(
         _TESTING_DOC_TEMPLATE.format(name=name, import_name=import_name)
     )
-
 
     # Example
     display_name = name.replace("-", " ").replace("_", " ").title()

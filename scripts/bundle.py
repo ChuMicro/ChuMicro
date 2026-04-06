@@ -436,7 +436,6 @@ def generate_bundle_readme(root: Path, *, experimental: bool = False) -> str:
     )
     lines.append("")
 
-
     # About.
     lines.append("## About")
     lines.append("")
