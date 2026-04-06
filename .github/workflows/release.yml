@@ -44,7 +44,7 @@ jobs:
       suffix: ${{ steps.channel.outputs.suffix }}
       bundle_repo: ${{ steps.channel.outputs.bundle_repo }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -128,9 +128,9 @@ jobs:
     environment: pypi
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
 
@@ -196,9 +196,9 @@ jobs:
     env:
       MATRIX_JSON: ${{ needs.detect.outputs.matrix }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
 
