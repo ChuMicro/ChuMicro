@@ -49,7 +49,7 @@ Settled choices:
 Current verified progress:
 
 - `libraries/timing/` exists with `src/`, `tests/`, and `functional_tests/`
-- `libraries/runner/` exists as the second publishable library (`chumicro-runner` 0.1.0) — provides a gate-based service pattern with shared timestamps, period gating on the runner, and batch handler firing (Decision 0014)
+- `libraries/runner/` exists as the second publishable library (`chumicro-runner` 0.1.8) — provides a gate-based service pattern with shared timestamps, period gating on the runner, and batch handler firing (Decision 0014)
 - `Heartbeat` uses `poll(now_ms)`, `is_due(now_ms)`, and `reset(now_ms)` — all require a shared timestamp captured once per loop; the runner check contract is `check(now_ms) -> bool` (Decision 0014)
 - host-side tests pass with coverage above the current repo threshold
 - the timing package builds as an individual distribution
@@ -73,8 +73,8 @@ Remaining items from the timing proof (runtime CI promotion, release automation,
 
 Additional libraries built during and after Milestone 1:
 
-- `libraries/compat/` — cross-runtime polyfills (`functools.partial`); `chumicro-compat` 0.1.0
-- `libraries/msgpack/` — cross-runtime MessagePack serialization with native CircuitPython C delegation; `chumicro-msgpack` 0.1.0
+- `libraries/compat/` — cross-runtime polyfills (`functools.partial`); `chumicro-compat` 0.1.8
+- `libraries/msgpack/` — cross-runtime MessagePack serialization with native CircuitPython C delegation; `chumicro-msgpack` 0.1.8
 
 ## Milestone 2 — CI and release flow
 
@@ -88,7 +88,7 @@ Exit criteria:
 - coverage gate and lint gate are enforced
 - PR checks enforce per-library `VERSION` file updates for release-relevant changes
 - timing release artifacts are produced for PyPI, CircuitPython (circup), and MicroPython (mip) distribution staging
-- docs build and publish on version bumps (Zensical → GitHub Pages)
+- docs build and publish on version bumps (Zensical → GitHub Pages via `docs-deploy.yml` — done)
 
 Current verified progress:
 
@@ -100,7 +100,7 @@ Current verified progress:
 - release workflow (`.github/workflows/release.yml`) triggers on VERSION changes pushed to `develop` or `main`; builds, publishes to PyPI via trusted publishing (OIDC), creates git tags and GitHub Releases; supports `workflow_dispatch` with dry-run and library filter
 - bundle job stages `.py` + `.mpy` + `package.json` per library, pushes to channel-specific bundle repos (`ChuMicro-Bundle` / `ChuMicro-Bundle-Experimental`), generates bundle README, creates circup-format release zips
 - `develop` → `main` branching model defined (Decision 0019); `promote.yml` dispatches develop → main PRs
-- all four libraries published to PyPI at 0.1.0; `BUNDLE_TOKEN` secret added; `develop` is default branch; branch protection rulesets configured (enforcement deferred until repos go public)
+- all four libraries published to PyPI at 0.1.0; subsequently iterated through 0.1.8; `BUNDLE_TOKEN` secret added; `develop` is default branch; branch protection rulesets configured (enforcement deferred until repos go public)
 - PR template (`.github/PULL_REQUEST_TEMPLATE.md`) with quality checklist
 - Label definitions (`.github/labels.yml`) synced via `label-sync.yml` workflow
 - `scripts/run.py check-version` and `check-api` available for local pre-commit verification

@@ -36,10 +36,10 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
 3. Implemented code slices:
    - `support/runtime/` for reusable runtime detection
    - `support/test_harness/` for a tiny on-device test runner
-   - `libraries/timing/` as the first publishable timing library (`chumicro-timing` 0.1.0)
-   - `libraries/runner/` as the second publishable library (`chumicro-runner` 0.1.0) — gate-based service pattern with shared timestamps, period gating, and batch handler firing (Decision 0014)
-   - `libraries/compat/` as a cross-runtime compatibility polyfill library (`chumicro-compat` 0.1.0) — provides `functools.partial` with a pure-Python fallback for MicroPython/CircuitPython
-   - `libraries/msgpack/` as a cross-runtime MessagePack serialization library (`chumicro-msgpack` 0.1.0) — `packb`/`unpackb`/`pack`/`unpack`, delegates to native C `msgpack` on CircuitPython hardware
+   - `libraries/timing/` as the first publishable timing library (`chumicro-timing` 0.1.8)
+   - `libraries/runner/` as the second publishable library (`chumicro-runner` 0.1.8) — gate-based service pattern with shared timestamps, period gating, and batch handler firing (Decision 0014)
+   - `libraries/compat/` as a cross-runtime compatibility polyfill library (`chumicro-compat` 0.1.8) — provides `functools.partial` with a pure-Python fallback for MicroPython/CircuitPython
+   - `libraries/msgpack/` as a cross-runtime MessagePack serialization library (`chumicro-msgpack` 0.1.8) — `packb`/`unpackb`/`pack`/`unpack`, delegates to native C `msgpack` on CircuitPython hardware
    - `scripts/run.py` as the task runner with auto-discovery, scoped testing, library scaffolding, IDE config generation, example verification, and docs build
    - `scripts/prepare_workspace.py` for initial workspace setup
    - `conftest.py` at root for auto-discovery of source roots and functional_tests exclusion
@@ -51,6 +51,7 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
     - `.github/workflows/release.yml` for per-library release pipeline (PyPI, tags, GitHub Releases, bundle publishing)
     - `.github/workflows/promote.yml` for develop → main release cuts
     - `.github/workflows/label-sync.yml` for syncing repo labels
+    - `.github/workflows/docs-deploy.yml` for per-library docs deployment to GitHub Pages via mike
     - `scripts/check_version.py` for VERSION enforcement on PRs
     - `scripts/check_api.py` for API breakage detection via griffe
     - `scripts/bundle.py` for bundle staging, mpy compilation, and README generation
@@ -82,6 +83,8 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
    - `python scripts/run.py prepare-circuitpython`
    - `python scripts/run.py test-circuitpython-compatibility`
    - `python scripts/run.py test-runtime-matrix`
+   - `python scripts/run.py check-version`
+   - `python scripts/run.py check-api`
 
 ### What is already done
 
@@ -100,7 +103,7 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
 13. Docs and examples standards are established with strict guide requirements, autodoc API reference, and AI generation prompts (Decision 0013).
 14. IDE type stubs use upstream PyPI packages pinned to runtime-versions.toml (Decision 0012).
 15. Serviceable library audit complete: deque API verified across runtimes, overflow flag added, board architecture support documented (Decision 0015).
-16. CI/release pipeline is live: PyPI trusted publishing, git tags, GitHub Releases, bundle repo publishing (`.py` + `.mpy` + `package.json`), circup-format zips. `develop` → `main` branching model with promote workflow (Decisions 0018, 0019, 0020). All four libraries published at 0.1.0.
+16. CI/release pipeline is live: PyPI trusted publishing, git tags, GitHub Releases, bundle repo publishing (`.py` + `.mpy` + `package.json`), circup-format zips. `develop` → `main` branching model with promote workflow (Decisions 0018, 0019, 0020). All four libraries published to PyPI. Docs deployed to GitHub Pages via mike (`docs-deploy.yml`).
 
 ### What is still intentionally incomplete
 

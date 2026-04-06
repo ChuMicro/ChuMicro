@@ -64,10 +64,12 @@ See [workspace-history.prompt.md](./workspace-history.prompt.md) for the full ra
 - `.github/workflows/ci.yml` for the required host lane plus advisory runtime jobs
 - `.github/workflows/release.yml` for per-library release pipeline (PyPI, tags, GitHub Releases, bundle publishing)
 - `.github/workflows/promote.yml` for develop → main release cuts
+- `.github/workflows/docs-deploy.yml` for per-library docs deployment to GitHub Pages via mike
 - `scripts/check_version.py` — VERSION enforcement for PRs
 - `scripts/check_api.py` — API breakage detection via griffe
 - `scripts/bundle.py` — bundle staging, mpy compilation, README generation
 - `scripts/discovery.py` — package discovery, scope parsing, change detection, `get_library_platforms()`
+- `scripts/generate_landing_page.py` — root landing page for GitHub Pages docs site
 
 ### What to produce at the start of the session
 
