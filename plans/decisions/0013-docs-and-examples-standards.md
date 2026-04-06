@@ -16,7 +16,8 @@ Each library under `libraries/<name>/` must include:
    - One-line description
    - Installation instructions (pip, circup, mip when available)
    - Quick example showing the most common use case
-   - Link to full docs (once a docs site exists)
+   - Links to hosted docs for both stable and experimental channels (e.g., `https://chumicro.github.io/ChuMicro/stable/<name>/`)
+   - Links to GitHub-browsable docs (`docs/guide.md`, `docs/api.md`) under a "Browse on GitHub" subheading
    - Platform compatibility notes (which runtimes are supported)
 
  2. **`docs/`** directory with structured documentation:
@@ -127,12 +128,20 @@ Why:
 
 Docs are published to **GitHub Pages** via GitHub Actions.  The release workflow builds all library docs with Zensical, combines them into a single site with a landing page and per-library subdirectories, and deploys to GitHub Pages.
 
-Why GitHub Pages over ReadTheDocs:
-- **Free for private repos.**  ReadTheDocs requires a paid Business plan ($50/month minimum) for private repositories.  GitHub Pages is included at no extra cost.
-- **No external account.**  Deploys directly from GitHub Actions — no additional service to configure or maintain.
-- **Mono-repo friendly.**  Each library's docs build into a subdirectory of one combined site, served at the org domain.
+The site uses path-based channel separation:
 
-ReadTheDocs remains a viable option if the project moves to public repos and wants versioned docs or search analytics.  The Zensical build is compatible with both hosts.
+- `/stable/<library>/` — built from `main` (released versions)
+- `/experimental/<library>/` — built from `develop` (pre-release)
+
+Each deploy writes only its channel's subdirectory and preserves the other channel's content on the `gh-pages` branch.
+
+Why GitHub Pages over ReadTheDocs:
+- **Free for both private and public repos.**  ReadTheDocs Community is free for public repos (ad-supported) but requires a paid Business plan for private repos.
+- **No external account.**  Deploys directly from GitHub Actions — no additional service to configure or maintain.
+- **Mono-repo friendly.**  Each library's docs build into a subdirectory of one combined site, served at the org domain.  RTD's model is one project = one docs build, requiring either a combined build (losing per-library version independence) or subprojects (admin overhead per library).
+- **Full control over site structure.**  Channel separation, version switching, and URL layout are all under our control.
+
+ReadTheDocs remains a viable option if the project goes public and wants built-in versioned docs dropdown, server-side search, or analytics without additional tooling.  The Zensical build is compatible with both hosts.  If RTD is revisited, create a new decision that updates this one.
 
 The trade-off: `:::` autodoc directives in `api.md` appear as raw text when browsing on GitHub. Narrative pages (`guide.md`, `testing.md`, `README.md`) look perfect on GitHub. The README already contains an API summary table for GitHub readers; the full auto-generated reference lives on the built site.
 

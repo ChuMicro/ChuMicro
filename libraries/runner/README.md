@@ -218,6 +218,10 @@ All classes use only basic Python features.  Works identically on CPython, Micro
 
 ## Docs
 
+📖 **[Stable docs](https://chumicro.github.io/ChuMicro/stable/runner/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/experimental/runner/)**
+
+Browse on GitHub:
+
 - [User guide](docs/guide.md) — the pattern, getting started, writing components
 - [API reference](docs/api.md) — full API documentation
 - [Testing helpers](docs/testing.md) — using `CallRecorder` in your tests

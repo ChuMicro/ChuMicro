@@ -105,6 +105,10 @@ Use `pack`/`unpack` when writing to files, sockets, or NVM.  Use `packb`/`unpack
 
 ## Docs
 
+📖 **[Stable docs](https://chumicro.github.io/ChuMicro/stable/msgpack/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/experimental/msgpack/)**
+
+Browse on GitHub:
+
 - [User guide](docs/guide.md) — getting started, usage patterns, size comparison
 - [API reference](docs/api.md) — full API documentation
 

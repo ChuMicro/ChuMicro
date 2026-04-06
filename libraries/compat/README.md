@@ -84,6 +84,10 @@ The public API (`.func`, `.args`, `.keywords`, `__call__`, `__repr__`) is identi
 
 ## Docs
 
+📖 **[Stable docs](https://chumicro.github.io/ChuMicro/stable/compat/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/experimental/compat/)**
+
+Browse on GitHub:
+
 - [User guide](docs/guide.md) — what's polyfilled and why, usage patterns
 - [API reference](docs/api.md) — full API documentation
 

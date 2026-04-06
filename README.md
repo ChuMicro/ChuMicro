@@ -16,6 +16,12 @@ Cross-runtime Python libraries for CircuitPython, MicroPython, and CPython — b
 | [compat](libraries/compat/) | Cross-runtime compatibility polyfills — functools.partial and more. |
 | [msgpack](libraries/msgpack/) | Compact MessagePack serialization with native CircuitPython C module delegation. |
 
+## Documentation
+
+📖 **[Stable docs](https://chumicro.github.io/ChuMicro/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/experimental/)**
+
+Stable docs track `main` (released versions).  Experimental docs track `develop` (pre-release).
+
 ## Distribution
 
 Libraries are published to **PyPI** for CPython and to **bundle repos** for CircuitPython (circup) and MicroPython (mip).

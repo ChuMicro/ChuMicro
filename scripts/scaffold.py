@@ -36,6 +36,7 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://github.com/ChuMicro/ChuMicro"
+Documentation = "https://chumicro.github.io/ChuMicro/stable/{name}/"
 Source = "https://github.com/ChuMicro/ChuMicro/tree/develop/libraries/{name}"
 Issues = "https://github.com/ChuMicro/ChuMicro/issues"
 Bundle = "https://github.com/ChuMicro/ChuMicro-Bundle"
@@ -96,6 +97,10 @@ from {import_name} import ...
 Works on CPython, MicroPython, and CircuitPython.
 
 ## Docs
+
+📖 **[Stable docs](https://chumicro.github.io/ChuMicro/stable/{name}/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/experimental/{name}/)**
+
+Browse on GitHub:
 
 - [User guide](docs/guide.md)
 - [API reference](docs/api.md)
