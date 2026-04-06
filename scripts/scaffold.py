@@ -69,6 +69,7 @@ extra:
       - experimental
 
 nav:
+  - Home: index.md
   - Guide: guide.md
   - API Reference: api.md
 
@@ -83,6 +84,13 @@ plugins:
             show_source: false
             show_root_heading: true
             members_order: source
+"""
+
+_INDEX_TEMPLATE = """\
+# chumicro-{name}
+
+- [User Guide](guide.md) — getting started and usage patterns
+- [API Reference](api.md) — full API documentation
 """
 
 _README_TEMPLATE = """\
@@ -205,6 +213,9 @@ def _scaffold_library(name: str) -> int:
     )
 
     # docs/
+    (lib_dir / "docs" / "index.md").write_text(
+        _INDEX_TEMPLATE.format(name=name)
+    )
     (lib_dir / "docs" / "guide.md").write_text(_GUIDE_TEMPLATE)
     (lib_dir / "docs" / "api.md").write_text(
         _API_TEMPLATE.format(import_name=import_name)

@@ -128,11 +128,11 @@ Why:
 
 Docs are published to **GitHub Pages** via GitHub Actions, with version management handled by **mike** (Zensical's fork: `git+https://github.com/squidfunk/mike.git`).  Mike manages the `gh-pages` branch, deploying each version to a subdirectory and maintaining a `versions.json` that powers the Material theme's version selector dropdown.
 
-Each library is deployed independently using mike's `--deploy-prefix` flag:
+Each library is deployed independently using mike's `--deploy-prefix` flag.  **`--alias-type redirect` is required** — the default `symlink` creates git symlinks that GitHub Pages serves as plain text files (producing 404s).  The `redirect` type creates proper HTML redirect pages for each alias path:
 
 ```
-mike deploy --deploy-prefix timing -F libraries/timing/mkdocs.yml 0.1.0 stable --push
-mike deploy --deploy-prefix runner -F libraries/runner/mkdocs.yml 0.1.0 stable --push
+mike deploy --deploy-prefix timing -F libraries/timing/mkdocs.yml --alias-type redirect 0.1.0 stable --push
+mike deploy --deploy-prefix runner -F libraries/runner/mkdocs.yml --alias-type redirect 0.1.0 stable --push
 ```
 
 This produces a URL structure of `/<library>/<version>/`:
@@ -143,9 +143,11 @@ This produces a URL structure of `/<library>/<version>/`:
 
 Each library has its own `versions.json` under its prefix, so version selectors are independent per library.
 
+Each library's `docs/` directory must include an `index.md` that serves as the landing page (linked from the `Home` nav entry in `mkdocs.yml`).  Without it, the version root URL (e.g., `/timing/0.1.8/`) has no `index.html` and GitHub Pages returns a 404.
+
 Channel mapping in CI:
-- Push to `main` (release): `mike deploy --deploy-prefix <lib> <version> stable`
-- Push to `develop`: `mike deploy --deploy-prefix <lib> dev experimental`
+- Push to `main` (release): `mike deploy --deploy-prefix <lib> --alias-type redirect <version> stable`
+- Push to `develop`: `mike deploy --deploy-prefix <lib> --alias-type redirect dev experimental`
 
 Each library's `mkdocs.yml` includes `extra.version.provider: mike` and `extra.version.default: [stable, experimental]` so that both current channels suppress the "outdated version" warning.  Pinned old versions show the warning.
 
