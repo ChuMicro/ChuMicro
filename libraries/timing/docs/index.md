@@ -28,4 +28,4 @@ while True:
 
 [← All ChuMicro Libraries](https://chumicro.github.io/ChuMicro/)
 
-[Source](https://github.com/ChuMicro/ChuMicro/tree/develop/libraries/timing) · [PyPI](https://pypi.org/project/chumicro-timing/) · [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle)
+[Source](https://github.com/ChuMicro/ChuMicro/tree/develop/libraries/timing) · [PyPI](https://pypi.org/project/chumicro-timing/) · [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · [Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)

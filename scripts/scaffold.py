@@ -117,6 +117,7 @@ from {import_name} import ...
 [Source](https://github.com/ChuMicro/ChuMicro/tree/develop/libraries/{name})
 · [PyPI](https://pypi.org/project/chumicro-{name}/)
 · [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle)
+· [Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
 """
 
 _README_TEMPLATE = """\
