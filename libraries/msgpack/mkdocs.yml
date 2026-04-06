@@ -5,7 +5,7 @@ repo_name: Source
 theme:
   name: material
   palette:
-    scheme: slate
+    scheme: default
     primary: deep purple
     accent: purple
   icon:
@@ -19,8 +19,6 @@ extra:
       - experimental
   homepage: https://chumicro.github.io/ChuMicro/
 
-extra_css:
-  - extra.css
 
 nav:
   - Home: index.md
