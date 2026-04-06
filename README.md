@@ -33,7 +33,7 @@ Stable tracks tagged releases.  Experimental tracks `main` (pre-release).
 
 ## Distribution
 
-Libraries are published to **PyPI** for CPython and to **bundle repos** for CircuitPython (circup) and MicroPython (mip).
+Libraries are published to **[PyPI](https://pypi.org/search/?q=chumicro)** for CPython and to **bundle repos** for CircuitPython (circup) and MicroPython (mip).
 
 | Channel | Repo | Source |
 |---|---|---|
