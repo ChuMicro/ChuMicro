@@ -146,9 +146,8 @@ jobs:
   # -------------------------------------------------------------------------
   micropython-compatibility:
     if: github.event_name == 'pull_request'
-    name: MicroPython compatibility (advisory)
+    name: MicroPython compatibility
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -165,9 +164,8 @@ jobs:
 
   circuitpython-compatibility:
     if: github.event_name == 'pull_request'
-    name: CircuitPython compatibility (advisory)
+    name: CircuitPython compatibility
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
