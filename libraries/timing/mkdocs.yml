@@ -19,6 +19,9 @@ extra:
       - experimental
   homepage: https://chumicro.github.io/ChuMicro/
 
+extra_css:
+  - extra.css
+
 nav:
   - Home: index.md
   - Guide: guide.md

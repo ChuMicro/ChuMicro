@@ -75,6 +75,9 @@ extra:
       - experimental
   homepage: https://chumicro.github.io/ChuMicro/
 
+extra_css:
+  - extra.css
+
 nav:
   - Home: index.md
   - Guide: guide.md
@@ -241,6 +244,16 @@ def _scaffold_library(name: str) -> int:
         _INDEX_TEMPLATE.format(name=name, import_name=import_name)
     )
     (lib_dir / "docs" / "guide.md").write_text(_GUIDE_TEMPLATE)
+
+    # Copy shared extra.css from an existing library (or create a stub)
+    extra_css_src = ROOT / "libraries" / "timing" / "docs" / "extra.css"
+    if extra_css_src.exists():
+        (lib_dir / "docs" / "extra.css").write_text(extra_css_src.read_text())
+    else:
+        (lib_dir / "docs" / "extra.css").write_text(
+            "/* ChuMicro docs theme overrides — see an existing library for reference. */\n"
+        )
+
     (lib_dir / "docs" / "api.md").write_text(
         _API_TEMPLATE.format(import_name=import_name)
     )
