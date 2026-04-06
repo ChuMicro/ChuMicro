@@ -2,7 +2,7 @@
   <configuration default="false" name="CircuitPython Compat" type="PythonConfigurationType" factoryName="Python">
     <module name="chumicro" />
     <option name="SCRIPT_NAME" value="$PROJECT_DIR$/scripts/run.py" />
-    <option name="PARAMETERS" value="test-circuitpython-compat" />
+    <option name="PARAMETERS" value="test-circuitpython-compatibility" />
     <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
     <method v="2" />
   </configuration>
