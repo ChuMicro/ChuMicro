@@ -115,18 +115,27 @@ The scaffolder template (`_GUIDE_TEMPLATE` in `scripts/run.py`) includes generat
 
 Chosen tool: **Zensical** with **mkdocstrings** (Python handler via griffe).
 
-Originally MkDocs + Material + mkdocstrings.  Migrated to Zensical (2026-04-05) because MkDocs 1.x is unmaintained (no releases in 18 months) and MkDocs 2.0 breaks all plugins, themes, and overrides with no migration path.  Zensical is from the Material for MkDocs team, reads existing `mkdocs.yml` files natively, and has first-class ReadTheDocs support.  The mkdocstrings author is on the Zensical team.
+Originally MkDocs + Material + mkdocstrings.  Migrated to Zensical (2026-04-05) because MkDocs 1.x is unmaintained (no releases in 18 months) and MkDocs 2.0 breaks all plugins, themes, and overrides with no migration path.  Zensical is from the Material for MkDocs team, reads existing `mkdocs.yml` files natively, and the mkdocstrings author is on the Zensical team.
 
 Why:
 - Markdown is the native format — existing `.md` files work as-is for narrative docs.
 - `mkdocstrings` uses **static analysis** (griffe) to extract docstrings — it does not import modules, so CircuitPython-only imports (`supervisor`, `board`) don't cause build failures.
-- ReadTheDocs has first-class Zensical support.
 - Existing `mkdocs.yml` configs work with zero changes.
 - Rust-core differential builds are near-instant.
 
+### Docs hosting: GitHub Pages
+
+Docs are published to **GitHub Pages** via GitHub Actions.  The release workflow builds all library docs with Zensical, combines them into a single site with a landing page and per-library subdirectories, and deploys to GitHub Pages.
+
+Why GitHub Pages over ReadTheDocs:
+- **Free for private repos.**  ReadTheDocs requires a paid Business plan ($50/month minimum) for private repositories.  GitHub Pages is included at no extra cost.
+- **No external account.**  Deploys directly from GitHub Actions — no additional service to configure or maintain.
+- **Mono-repo friendly.**  Each library's docs build into a subdirectory of one combined site, served at the org domain.
+
+ReadTheDocs remains a viable option if the project moves to public repos and wants versioned docs or search analytics.  The Zensical build is compatible with both hosts.
+
 The trade-off: `:::` autodoc directives in `api.md` appear as raw text when browsing on GitHub. Narrative pages (`guide.md`, `testing.md`, `README.md`) look perfect on GitHub. The README already contains an API summary table for GitHub readers; the full auto-generated reference lives on the built site.
 
-The `mkdocs.yml` configs, `docs` task in `scripts/run.py`, and the `new-library` scaffolder are all wired.  ReadTheDocs hosting setup is a follow-up implementation item.
 
 ### Example verification
 
@@ -151,12 +160,11 @@ Examples are verified via static analysis in `scripts/run.py verify-examples`:
 - Examples must use top-level code (no `def main()` / `__main__` guard) and pass `verify-examples`.
 - Docs and examples are reviewed as part of normal code review.
 
-### Release pipeline integration (future)
+### Release pipeline integration
 
-When the release pipeline is built (Milestone 2), it should:
-- Verify that `docs/` is non-empty for any library being released.
-- Build and publish docs to the hosting platform on version bumps.
-- Include docs build as a preflight check (once `mkdocs.yml` is in place).
+- `docs-build` CI job verifies all library docs build on every PR (Zensical).
+- Docs are deployed to GitHub Pages on release (follow-up implementation item).
+- The `mkdocs.yml` configs, `docs` task in `scripts/run.py`, and the `new-library` scaffolder are all wired.
 
 ## Alternatives considered
 

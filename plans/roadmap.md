@@ -88,7 +88,7 @@ Exit criteria:
 - coverage gate and lint gate are enforced
 - PR checks enforce per-library `VERSION` file updates for release-relevant changes
 - timing release artifacts are produced for PyPI, CircuitPython (circup), and MicroPython (mip) distribution staging
-- docs build and publish on version bumps (tool and hosting TBD)
+- docs build and publish on version bumps (Zensical → GitHub Pages)
 
 Current verified progress:
 
