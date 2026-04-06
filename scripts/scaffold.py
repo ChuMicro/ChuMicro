@@ -69,7 +69,7 @@ theme:
     code: JetBrains Mono
   icon:
     repo: fontawesome/brands/github
-  favicon: assets/images/favicon.png
+  favicon: img/favicon.png
 
 extra_css:
   - stylesheets/extra.css

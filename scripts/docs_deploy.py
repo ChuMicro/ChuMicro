@@ -34,7 +34,7 @@ def copy_shared_docs_assets(doc_dirs: list[Path]) -> None:
     """Copy shared doc assets into each library's ``docs/`` tree.
 
     Copies ``support/docs/extra.css`` to ``docs/stylesheets/`` and
-    ``support/docs/favicon.png`` to ``docs/assets/images/``.
+    ``support/docs/favicon.png`` to ``docs/img/``.
     Zensical does not support mkdocs hooks, so we handle this before building.
     The generated copies are gitignored.
     """
@@ -48,7 +48,7 @@ def copy_shared_docs_assets(doc_dirs: list[Path]) -> None:
 
         favicon_src = shared_dir / "favicon.png"
         if favicon_src.exists():
-            fav_dest = pkg_dir / "docs" / "assets" / "images" / "favicon.png"
+            fav_dest = pkg_dir / "docs" / "img" / "favicon.png"
             fav_dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(favicon_src, fav_dest)
 
