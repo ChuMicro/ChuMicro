@@ -1,4 +1,4 @@
-name: Release
+dname: Release
 
 on:
   push:
@@ -251,6 +251,10 @@ jobs:
         run: |
           bundle_repo="${{ needs.detect.outputs.bundle_repo }}"
           body=$(jq -r '"## Updated libraries\n\n" + ([.include[] | "- **" + .lib_name + "** v" + .version] | join("\n"))' <<< "$MATRIX_JSON")
+
+          # Remove any existing release for this date (same-day re-release).
+          gh release delete "${{ env.date_tag }}" \
+            --repo "${bundle_repo}" --yes --cleanup-tag 2>/dev/null || true
 
           gh release create "${{ env.date_tag }}" \
             --repo "${bundle_repo}" \
