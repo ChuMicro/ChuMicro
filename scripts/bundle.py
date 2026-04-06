@@ -455,8 +455,8 @@ def generate_bundle_readme(root: Path, *, experimental: bool = False) -> str:
         f"({source_url})"
     )
     lines.append(
-        f"- **Documentation:** [chumicro.github.io/ChuMicro]"
-        f"(https://chumicro.github.io/ChuMicro/)"
+        "- **Documentation:** [chumicro.github.io/ChuMicro]"
+        "(https://chumicro.github.io/ChuMicro/)"
     )
     if experimental:
         lines.append(
