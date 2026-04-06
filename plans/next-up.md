@@ -28,7 +28,6 @@
   - ESP32 NVS backend deferred (different semantics — per-key, not blob).
 - [ ] Promote advisory MicroPython and CircuitPython CI jobs to protected-branch requirements, gated by platform targeting (Decision 0011).
 - [ ] Add digital I/O as the second library seam (alongside CI/release work, not sequentially).
-- [ ] Deploy docs to GitHub Pages: wire mike into the release workflow — `mike deploy --deploy-prefix <lib> <version> stable` on `main`, `mike deploy --deploy-prefix <lib> dev experimental` on `develop` (Decision 0013).  Config and URL patterns are in place; CI integration is the remaining step.
 - [ ] Explore test ergonomics: reduce repeated boilerplate across test files.
 - [ ] Validate VS Code workspace with the generated `pyrightconfig.json`.
 - [ ] Validate circup/mip install paths end-to-end once bundle repos are public (Decision 0018).
@@ -38,7 +37,6 @@
   - Control GC explicitly during benchmarks so allocation measurements are stable and reproducible across runs.
   - Define per-benchmark thresholds that fail the run if exceeded, catching regressions over time.
   - Benchmarks may be slow; they should not run as part of the standard `test` path. Consider a separate `bench` task or a deeper test tier that can also run in CI on a schedule.
-- [ ] Explore test ergonomics: reduce repeated boilerplate across test files.
 
 ## Blocked / waiting
 

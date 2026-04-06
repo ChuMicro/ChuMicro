@@ -145,6 +145,8 @@ All tasks are run through `scripts/run.py`:
 | `test-circuitpython-compatibility` | Cross-runtime unit tests under CircuitPython (auto-prepares if needed) |
 | `test-runtime-matrix` | Test all packages on CPython + MicroPython + CircuitPython |
 | `test-device` | Manual device validation placeholder |
+| `check-version` | Check VERSION bumps for changed libraries (CI gate) |
+| `check-api` | Detect API breakages against the last release tag (CI gate) |
 
 ## Platform switching
 
