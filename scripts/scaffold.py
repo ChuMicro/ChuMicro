@@ -67,6 +67,9 @@ theme:
   icon:
     repo: fontawesome/brands/github
 
+extra_css:
+  - stylesheets/extra.css
+
 extra:
   version:
     provider: mike
@@ -412,6 +415,11 @@ def _scaffold_library(name: str) -> int:
     (lib_dir / "docs" / "testing.md").write_text(
         _TESTING_DOC_TEMPLATE.format(name=name, import_name=import_name)
     )
+
+    # docs/stylesheets/extra.css — shared readability overrides
+    (lib_dir / "docs" / "stylesheets").mkdir()
+    _extra_css = (ROOT / "libraries" / "timing" / "docs" / "stylesheets" / "extra.css")
+    (lib_dir / "docs" / "stylesheets" / "extra.css").write_text(_extra_css.read_text())
 
     # Example
     display_name = name.replace("-", " ").replace("_", " ").title()

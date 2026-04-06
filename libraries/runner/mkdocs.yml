@@ -11,6 +11,9 @@ theme:
   icon:
     repo: fontawesome/brands/github
 
+extra_css:
+  - stylesheets/extra.css
+
 extra:
   version:
     provider: mike
