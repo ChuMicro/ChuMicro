@@ -13,6 +13,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 TOOLS = ROOT / ".tools"
 
+#: Canonical platform identifiers.
+ALL_PLATFORMS = ("cpython", "micropython", "circuitpython")
+
 
 def read_runtime_versions() -> dict:
     """Read pinned runtime versions from ``runtime-versions.toml``."""
@@ -20,6 +23,30 @@ def read_runtime_versions() -> dict:
 
     with (ROOT / "runtime-versions.toml").open("rb") as f:
         return tomllib.load(f)
+
+
+def read_platforms(pkg_dir: Path) -> tuple[str, ...]:
+    """Read ``[tool.chumicro].platforms`` from a package's ``pyproject.toml``.
+
+    Returns :data:`ALL_PLATFORMS` when the key or section is absent —
+    libraries default to targeting all three runtimes.
+    """
+    import tomllib
+
+    pyproject = pkg_dir / "pyproject.toml"
+    if not pyproject.exists():
+        return ALL_PLATFORMS
+    with pyproject.open("rb") as f:
+        data = tomllib.load(f)
+    platforms = data.get("tool", {}).get("chumicro", {}).get("platforms")
+    if platforms is None:
+        return ALL_PLATFORMS
+    return tuple(platforms)
+
+
+def filter_by_platform(pkg_dirs: list[Path], platform: str) -> list[Path]:
+    """Return only packages that target *platform*."""
+    return [d for d in pkg_dirs if platform in read_platforms(d)]
 
 
 def discover_package_dirs() -> list[Path]:

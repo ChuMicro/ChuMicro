@@ -6,7 +6,7 @@ This package is intentionally tiny. It is meant to complement host-side `pytest`
 
 ## Current manual workflow
 
-The cross-runtime test path uses (Decision 0016):
+The cross-runtime test path uses:
 
 - `support/test_harness/src/chumicro_test_harness/runner.py` — lightweight runner
 - `support/test_harness/src/chumicro_test_harness/discovery.py` — test discovery and orchestration

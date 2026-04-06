@@ -10,17 +10,25 @@
 
 <!-- List the key changes. Group by library if multiple are affected. -->
 
-## Checklist
+## How to verify
 
-- [ ] Description explains *what* and *why*
-- [ ] `VERSION` bumped for changed libraries (patch / minor / major)
-- [ ] Labels applied: type (`bug`, `feature`, `refactor`, `docs`, `infra`) + library (`lib:*`) + semver (`semver:*`)
-- [ ] `python scripts/run.py preflight` passes locally
-- [ ] New/changed public API has docstrings
-- [ ] Documentation and examples updated (if applicable)
-- [ ] No secrets, credentials, or personal data in the diff
+<!-- How can a reviewer confirm this works? Examples:
+     - "Run `python scripts/run.py test --libraries timing` and see X"
+     - "Check the PyPI project page for updated metadata"
+     - "Look at the diff — docs-only change"
+     Keep it concrete. -->
+
+## Version impact
+
+<!-- Which libraries are affected and do they need a VERSION bump?
+     - No bump needed: docs, tests, infra, or internal-only changes
+     - Patch: bug fix, no API change
+     - Minor: new feature, backward-compatible
+     - Major: breaking change (describe in Breaking Changes below)
+     Delete this section for non-library changes. -->
 
 ## Breaking changes
 
-<!-- If this PR introduces breaking changes, describe them here and confirm the VERSION bump is major (or minor for 0.x libraries). Delete this section if not applicable. -->
+<!-- Describe any breaking changes here. Confirm the VERSION bump is
+     major (or minor for 0.x libraries). Delete if not applicable. -->
 

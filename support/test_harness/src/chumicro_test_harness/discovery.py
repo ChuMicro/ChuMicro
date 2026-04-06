@@ -52,15 +52,22 @@ def discover_source_roots(root="."):
     return roots
 
 
-def discover_tests(root="."):
+def discover_tests(root=".", libraries=None):
     """Return paths to all ``test_*.py`` files under ``libraries/*/tests/``.
 
     *root* is the workspace root directory, defaulting to the current
     working directory.
+
+    *libraries* is an optional list of library names to include.  When
+    ``None``, all libraries are discovered.  Used by platform targeting
+    to skip libraries that don't target the current runtime.
     """
     libs_path = root + "/libraries" if root != "." else "libraries"
+    lib_filter = set(libraries) if libraries else None
     tests = []
     for name in _sorted_listdir(libs_path):
+        if lib_filter is not None and name not in lib_filter:
+            continue
         tests_dir = libs_path + "/" + name + "/tests"
         for filename in _sorted_listdir(tests_dir):
             if filename.startswith("test_") and filename.endswith(".py"):
@@ -98,15 +105,17 @@ def _exec_as_namespace(path, name="__main__", package=""):
     return result
 
 
-def run_all(root="."):
+def run_all(root=".", libraries=None):
     """Discover and run all cross-runtime unit tests, returning a shell exit code.
 
     *root* is the workspace root directory, defaulting to the current
     working directory.
+
+    *libraries* is an optional list of library names to include.
     """
     setup_source_paths(root)
 
-    test_files = discover_tests(root)
+    test_files = discover_tests(root, libraries=libraries)
     if not test_files:
         print("NO TESTS FOUND")
         return 0

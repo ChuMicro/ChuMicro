@@ -22,6 +22,7 @@ from discovery import (
     coverage_args_for,
     discover_package_dirs,
     discover_ruff_paths,
+    filter_by_platform,
     find_publishable_packages,
     pythonpath_env,
     resolve_scope,
@@ -471,7 +472,10 @@ def prepare_circuitpython() -> int:
 
 
 def test_micropython_compat() -> int:
-    """Run the cross-runtime unit tests with the MicroPython Unix binary."""
+    """Run the cross-runtime unit tests with the MicroPython Unix binary.
+
+    Skips libraries that do not target MicroPython.
+    """
     micropython_bin = resolve_micropython_binary()
     if micropython_bin is None:
         print("MicroPython binary not found. Preparing unix-port runtime first.")
@@ -488,11 +492,17 @@ def test_micropython_compat() -> int:
             )
             return 1
 
-    return _run([micropython_bin, COMPAT_SCRIPT])
+    lib_dirs = [d for d in discover_package_dirs() if d.parent.name == "libraries"]
+    mp_libs = filter_by_platform(lib_dirs, "micropython")
+    lib_names = [d.name for d in mp_libs]
+    return _run([micropython_bin, COMPAT_SCRIPT, *lib_names])
 
 
 def test_circuitpython_compat() -> int:
-    """Run the cross-runtime unit tests with a configured or repo-managed CircuitPython binary."""
+    """Run the cross-runtime unit tests with a configured or repo-managed CircuitPython binary.
+
+    Skips libraries that do not target CircuitPython.
+    """
     circuitpython_bin = resolve_circuitpython_binary()
     if circuitpython_bin is None:
         print("CircuitPython binary not found. Preparing unix-port runtime first.")
@@ -509,7 +519,10 @@ def test_circuitpython_compat() -> int:
             )
             return 1
 
-    return _run([circuitpython_bin, COMPAT_SCRIPT])
+    lib_dirs = [d for d in discover_package_dirs() if d.parent.name == "libraries"]
+    cp_libs = filter_by_platform(lib_dirs, "circuitpython")
+    lib_names = [d.name for d in cp_libs]
+    return _run([circuitpython_bin, COMPAT_SCRIPT, *lib_names])
 
 
 def test_runtime_matrix() -> int:
