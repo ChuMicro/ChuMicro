@@ -195,8 +195,12 @@ _TESTING_DOC_TEMPLATE = """\
 
      This page documents the fakes in the library's `testing` submodule.
      If this library does NOT expose injectable services that downstream
-     consumers need to fake, delete this file AND remove the Testing Helpers
-     entry from mkdocs.yml nav.  Also delete `src/{import_name}/testing.py`.
+     consumers need to fake, delete all testing-helper references:
+       1. Delete this file (`docs/testing.md`)
+       2. Delete `src/{import_name}/testing.py`
+       3. Remove the `- Testing Helpers: testing.md` line from `mkdocs.yml` nav
+       4. Remove the Testing Helpers link from `docs/index.md`
+       5. Remove the Testing helpers link from `README.md`
 
      Libraries that accept dependencies via constructor injection (time,
      I/O, network) should provide ready-made fakes so downstream tests
@@ -251,8 +255,12 @@ _TESTING_PY_TEMPLATE = """\
 
 Delete this file if the library does not expose injectable services
 that downstream consumers need to fake.  If you delete this file, also
-delete ``docs/testing.md`` and remove the Testing Helpers nav entry
-from ``mkdocs.yml``.
+remove all testing-helper references:
+
+  1. Delete ``docs/testing.md``
+  2. Remove the ``- Testing Helpers: testing.md`` line from ``mkdocs.yml`` nav
+  3. Remove the Testing Helpers link from ``docs/index.md``
+  4. Remove the Testing helpers link from ``README.md``
 
 When keeping this file, replace this docstring and the placeholder
 class below with real fakes.  A good fake:

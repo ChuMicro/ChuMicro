@@ -138,10 +138,10 @@ def test_cpython(
     """Run the CPython test suite for the given packages.
 
     Runs pytest separately for each package to avoid test-directory name
-    collisions, then combines and reports coverage.  Each library must
-    independently meet the coverage threshold (90%) unless *filter_expr*
-    is set (filtering naturally reduces coverage) or *no_cov* skips
-    coverage entirely.
+    collisions (Decision 0009), then combines and reports coverage.  Each
+    library must independently meet the coverage threshold (90%) unless
+    *filter_expr* is set (filtering naturally reduces coverage) or *no_cov*
+    skips coverage entirely.
 
     *filter_expr* requires library-scoped syntax::
 
@@ -285,6 +285,9 @@ def build() -> int:
 
 def verify_examples(pkg_dirs: list[Path]) -> int:
     """Verify examples have valid syntax and resolvable imports.
+
+    Uses static analysis (AST parsing + ``importlib`` resolution) rather
+    than executing examples — see ``plans/decisions/0013-docs-and-examples-standards.md``.
 
     Discovers ``examples/*.py`` in each selected library, then for each:
 

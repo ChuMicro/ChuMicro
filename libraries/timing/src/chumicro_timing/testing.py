@@ -3,6 +3,9 @@
 Provides deterministic fakes that replace the real tick functions,
 allowing host-side tests to control time without wall-clock waits.
 
+Ships with the library per Decision 0010 so downstream consumers
+import ready-made fakes rather than inventing ad-hoc mocks.
+
 Usage from any library's tests::
 
     from chumicro_timing.testing import FakeTicks

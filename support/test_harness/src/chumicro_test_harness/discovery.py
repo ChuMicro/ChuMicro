@@ -71,6 +71,9 @@ def discover_tests(root=".", libraries=None):
         tests_dir = libs_path + "/" + name + "/tests"
         for filename in _sorted_listdir(tests_dir):
             if filename.startswith("test_") and filename.endswith(".py"):
+                # Skip pytest-only tests — they use fixtures or assertions
+                # that don't exist on MicroPython/CircuitPython runtimes.
+                # See Decision 0016 (referenced in module docstring).
                 if filename.endswith("_pytest.py"):
                     continue
                 tests.append(tests_dir + "/" + filename)

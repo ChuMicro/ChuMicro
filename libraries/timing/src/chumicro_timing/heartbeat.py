@@ -20,8 +20,8 @@ class Heartbeat:
             period_ms: Interval between beats.
             ticks: Optional tick source (must have ``ticks_ms`` and
                 ``ticks_diff`` methods).  Defaults to the real clock.
-                Used at construction time to capture the starting timestamp
-                and for wraparound-safe comparison in ``poll()``/``is_due()``.
+                Constructor injection per Decision 0010; pass
+                ``FakeTicks`` from ``chumicro_timing.testing`` in tests.
         """
         if period_ms <= 0:
             raise ValueError("period_ms must be greater than zero")

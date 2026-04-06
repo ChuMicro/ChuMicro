@@ -3,6 +3,9 @@
 Copies deployable .py source files, compiles .mpy bytecode with mpy-cross,
 and generates a mip-compatible package.json manifest.
 
+The two-repo bundle strategy (stable vs. experimental) is defined in
+``plans/decisions/0018-distribution-bundle-repo.md``.
+
 Subcommands:
     stage        Stage a single library's bundle artifacts.
     stage-matrix Stage artifacts for libraries in a JSON matrix (--matrix).

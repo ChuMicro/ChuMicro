@@ -1,4 +1,8 @@
-"""IDE configuration generation (PyCharm and VS Code/Pyright)."""
+"""IDE configuration generation (PyCharm and VS Code/Pyright).
+
+Regenerates source-root configs so libraries are importable in the IDE
+without ``pip install -e``.  See ``plans/decisions/0012-ide-type-stubs.md``.
+"""
 
 from __future__ import annotations
 

@@ -30,6 +30,8 @@ def _build_env() -> dict[str, str]:
 
     The workaround is ``-DMICROPY_PY_MICROPYTHON_RINGIO=0``, which disables the
     RingIO type at compile time so the missing object file is not required.
+
+    See ``plans/decisions/0017-circuitpython-ringio-bug.md``.
     """
     env = os.environ.copy()
     flags = env.get("CFLAGS_EXTRA", "").split()

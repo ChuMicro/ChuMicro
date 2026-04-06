@@ -30,6 +30,8 @@ def read_platforms(pkg_dir: Path) -> tuple[str, ...]:
 
     Returns :data:`ALL_PLATFORMS` when the key or section is absent —
     libraries default to targeting all three runtimes.
+
+    See ``plans/decisions/0011-platform-targeting.md``.
     """
     import tomllib
 
@@ -222,6 +224,7 @@ def pythonpath_env() -> dict[str, str]:
 # ---------------------------------------------------------------------------
 
 #: Paths within a library that require a VERSION bump when changed.
+#: See ``plans/decisions/0002-per-library-version-files.md``.
 RELEASE_RELEVANT = {"src", "pyproject.toml"}
 
 

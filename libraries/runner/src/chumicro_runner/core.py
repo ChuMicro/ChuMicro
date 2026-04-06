@@ -10,6 +10,8 @@ Provides two ways to register work with a ``Runner``:
    every *period_ms* milliseconds with no check.
 
 All classes are cross-runtime compatible (CPython, MicroPython, CircuitPython).
+
+See ``plans/decisions/0014-runner-pattern.md`` for the design rationale.
 """
 
 
@@ -175,6 +177,8 @@ class Runner:
             ticks: Optional tick source (must have ``ticks_ms``,
                 ``ticks_diff``, and ``ticks_add`` methods).
                 Defaults to the ``chumicro_timing.ticks`` module.
+                Constructor injection per Decision 0010; pass
+                ``FakeTicks`` from ``chumicro_timing.testing`` in tests.
         """
         self._entries = []
         self._pending = []
