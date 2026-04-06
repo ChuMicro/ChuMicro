@@ -3,8 +3,8 @@ name: Deploy docs
 on:
   push:
     branches:
-      - main
       - develop
+  workflow_dispatch:    # called by promote.yml on main to deploy stable docs
 
 # Avoid concurrent deployments that could conflict on gh-pages.
 concurrency:

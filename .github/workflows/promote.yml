@@ -1,16 +1,31 @@
-name: Promote to main
+name: Promote libraries to stable
+
+# Releases selected libraries from experimental (develop) to stable (main).
+#
+# Flow:
+#   1. Ensures main is in sync with develop (idempotent fast-forward).
+#   2. Validates the requested libraries exist and have unreleased versions.
+#   3. Triggers release.yml on main for the specified libraries.
+#   4. Triggers docs-deploy.yml on main to update stable docs.
+#
+# If no libraries are specified, this is a sync-only run (step 4 still
+# deploys docs so stable docs stay current).
 
 on:
   workflow_dispatch:
     inputs:
-      auto_merge:
-        description: "Auto-merge if CI passes (requires admin)"
+      libraries:
+        description: "Libraries to release as stable (comma-separated, e.g. 'timing,runner'). Leave empty for sync + docs only."
+        type: string
+        default: ""
+      dry_run:
+        description: "Dry run — validate and sync but do not publish or tag"
         type: boolean
         default: false
 
 permissions:
   contents: write
-  pull-requests: write
+  actions: write          # required to trigger other workflows
 
 jobs:
   promote:
@@ -20,48 +35,51 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Create promotion PR
+      - name: Sync main with develop
+        run: |
+          if ! git push origin HEAD:refs/heads/main; then
+            echo "::error::Fast-forward failed — main has diverged from develop."
+            exit 1
+          fi
+          echo "✓ Main is in sync with develop."
+
+      - name: Validate libraries
+        if: inputs.libraries != ''
+        run: |
+          IFS=',' read -ra libs <<< "${{ inputs.libraries }}"
+          for lib in "${libs[@]}"; do
+            lib=$(echo "$lib" | xargs)
+            version_file="libraries/${lib}/VERSION"
+            if [ ! -f "$version_file" ]; then
+              echo "::error::Library '${lib}' not found (no ${version_file})."
+              exit 1
+            fi
+            version=$(cat "$version_file" | tr -d '[:space:]')
+            tag="${lib}-v${version}"
+            if git rev-parse "refs/tags/${tag}" >/dev/null 2>&1; then
+              echo "::warning::${lib} v${version} already has stable tag ${tag}."
+            else
+              echo "  ${lib} v${version} → ${tag}"
+            fi
+          done
+
+      - name: Trigger stable release
+        if: inputs.libraries != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Check if a promotion PR already exists.
-          existing=$(gh pr list --base main --head develop --state open --json number --jq '.[0].number // empty')
-          if [ -n "$existing" ]; then
-            echo "Promotion PR #${existing} already exists."
-            echo "pr_number=${existing}" >> "$GITHUB_ENV"
-            exit 0
+          args=(--ref main -f "libraries=${{ inputs.libraries }}")
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            args+=(-f "dry_run=true")
           fi
+          gh workflow run release.yml "${args[@]}"
+          echo "✓ Stable release triggered for: ${{ inputs.libraries }}"
+          echo "  Monitor: ${{ github.server_url }}/${{ github.repository }}/actions/workflows/release.yml"
 
-          # Build a summary of VERSION changes between main and develop.
-          changes=$(git diff origin/main..origin/develop --name-only -- 'libraries/*/VERSION' || true)
-          body="## Release cut: develop → main\n\n"
-          if [ -n "$changes" ]; then
-            body="${body}### Libraries with VERSION changes\n\n"
-            for f in $changes; do
-              lib=$(basename $(dirname "$f"))
-              ver=$(cat "$f" | tr -d '[:space:]')
-              body="${body}- **${lib}** → ${ver}\n"
-            done
-          else
-            body="${body}No VERSION changes detected — this is a sync-only promotion.\n"
-          fi
-          body="${body}\n---\nAutomatically created by the promote workflow."
-
-          pr_number=$(gh pr create \
-            --base main \
-            --head develop \
-            --title "Release cut: promote develop → main" \
-            --body "$(echo -e "$body")" \
-            --label "release-cut" \
-            | grep -oP '#\K\d+' || true)
-
-          echo "Created promotion PR #${pr_number}"
-          echo "pr_number=${pr_number}" >> "$GITHUB_ENV"
-
-      - name: Enable auto-merge
-        if: inputs.auto_merge && env.pr_number != ''
+      - name: Trigger stable docs deploy
+        if: inputs.dry_run != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh pr merge "${{ env.pr_number }}" --auto --merge
-
+          gh workflow run docs-deploy.yml --ref main
+          echo "✓ Stable docs deploy triggered."
