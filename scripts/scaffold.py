@@ -79,6 +79,7 @@ extra:
 nav:
   - Home: index.md
   - Guide: guide.md
+  - Testing Helpers: testing.md
   - API Reference: api.md
 
 plugins:
@@ -108,6 +109,7 @@ from {import_name} import ...
 ## Documentation
 
 - [User Guide](guide.md) — getting started and usage patterns
+- [Testing Helpers](testing.md) — fakes for downstream test suites
 - [API Reference](api.md) — full API documentation
 
 ---
@@ -146,6 +148,7 @@ Works on CPython, MicroPython, and CircuitPython.
 Browse on GitHub:
 
 - [User guide](docs/guide.md)
+- [Testing helpers](docs/testing.md)
 - [API reference](docs/api.md)
 """
 
@@ -183,6 +186,91 @@ _GUIDE_TEMPLATE = """\
 
 <!-- Optional. Include if the library manages buffers, queues, or
      pre-allocated structures. Explain allocation strategy and tuning. -->
+"""
+
+_TESTING_DOC_TEMPLATE = """\
+# Testing Helpers
+
+<!-- GENERATION INSTRUCTIONS — delete this block once the page is written.
+
+     This page documents the fakes in the library's `testing` submodule.
+     If this library does NOT expose injectable services that downstream
+     consumers need to fake, delete this file AND remove the Testing Helpers
+     entry from mkdocs.yml nav.  Also delete `src/{import_name}/testing.py`.
+
+     Libraries that accept dependencies via constructor injection (time,
+     I/O, network) should provide ready-made fakes so downstream tests
+     don't have to invent their own mocks (Decision 0010).
+
+     To fill this in, read:
+       1. `src/{import_name}/testing.py` — the fake classes/functions
+       2. `tests/` — see how the fakes are used in this library's own tests
+       3. Existing examples: libraries/timing/docs/testing.md,
+          libraries/runner/docs/testing.md
+
+     Structure:
+       - Open with one sentence: what the module provides and why.
+       - One section per fake class, showing a realistic test snippet.
+       - A "Usage from other libraries" section with a cross-library import.
+       - An "API Reference" section with a ::: autodoc directive. -->
+
+`{import_name}.testing` provides ...
+
+## Usage
+
+<!-- Show a realistic test snippet using the fake.  Import from the public
+     testing submodule.  Use descriptive variable names. -->
+
+```python
+from {import_name}.testing import Fake...
+
+def test_example():
+    ...
+```
+
+## Usage from other libraries
+
+Libraries that depend on `chumicro-{name}` can import the fakes directly:
+
+```python
+from {import_name}.testing import Fake...
+```
+
+This follows [Decision 0010][d0010]: libraries that expose injectable
+services ship their own test fakes.
+
+[d0010]: https://github.com/chumicro/chumicro/blob/main/plans/decisions/0010-library-testability.md
+
+## API Reference
+
+::: {import_name}.testing
+"""
+
+_TESTING_PY_TEMPLATE = """\
+\"\"\"Test helpers for libraries that depend on chumicro-{name}.
+
+Delete this file if the library does not expose injectable services
+that downstream consumers need to fake.  If you delete this file, also
+delete ``docs/testing.md`` and remove the Testing Helpers nav entry
+from ``mkdocs.yml``.
+
+When keeping this file, replace this docstring and the placeholder
+class below with real fakes.  A good fake:
+
+- Mirrors the interface that production code injects (same method
+  names, same call signature).
+- Lets tests control behavior deterministically (e.g., ``advance()``
+  for time, ``enqueue()`` for I/O buffers).
+- Records calls so tests can assert what happened.
+
+See ``libraries/timing/src/chumicro_timing/testing.py`` (FakeTicks)
+and ``libraries/runner/src/chumicro_runner/testing.py`` (CallRecorder)
+for real examples.
+
+Usage from any library's tests::
+
+    from {import_name}.testing import Fake...
+\"\"\"
 """
 
 _API_TEMPLATE = """\
@@ -250,6 +338,11 @@ def _scaffold_library(name: str) -> int:
         _API_TEMPLATE.format(import_name=import_name)
     )
 
+    # docs/testing.md
+    (lib_dir / "docs" / "testing.md").write_text(
+        _TESTING_DOC_TEMPLATE.format(name=name, import_name=import_name)
+    )
+
     # Example
     display_name = name.replace("-", " ").replace("_", " ").title()
     (lib_dir / "examples" / "quickstart.py").write_text(
@@ -259,6 +352,11 @@ def _scaffold_library(name: str) -> int:
     # Package __init__.py
     (lib_dir / "src" / import_name / "__init__.py").write_text(
         f'"""Public exports for the chumicro-{name} package."""\n'
+    )
+
+    # testing.py stub — delete if the library has no injectable services
+    (lib_dir / "src" / import_name / "testing.py").write_text(
+        _TESTING_PY_TEMPLATE.format(name=name, import_name=import_name)
     )
 
     # Tests conftest.py (no __init__.py — avoids module name collisions across libraries)
