@@ -2,6 +2,9 @@
  *
  * Material defaults to 0.8rem body text which is small on most displays.
  * These overrides increase the base font size and widen the content area.
+ *
+ * This is the single source of truth.  A mkdocs hook copies it into each
+ * library's docs/stylesheets/ at build time — do not duplicate this file.
  */
 
 /* Bump body text from 0.8rem → 1rem */
