@@ -239,9 +239,9 @@ The workspace keeps **local clones** of the pinned source trees under `.tools/`,
 
 ```
 .tools/
-├── circuitpython-<version>/   # full CircuitPython source tree (pinned to runtime-versions.toml)
+├── circuitpython-<version>/   # full CircuitPython source tree (pinned to target-runtimes.toml)
 ├── circuitpython.path          # path to the built CircuitPython unix-port binary
-├── micropython-<version>/      # full MicroPython source tree (pinned to runtime-versions.toml)
+├── micropython-<version>/      # full MicroPython source tree (pinned to target-runtimes.toml)
 └── micropython.path            # path to the built MicroPython unix-port binary
 ```
 

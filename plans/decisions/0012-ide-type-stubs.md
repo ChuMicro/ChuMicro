@@ -10,7 +10,7 @@ An earlier draft hand-wrote minimal `.pyi` stubs in a `typings/` directory.  Thi
 
 ## Decision
 
-Install **two upstream stub packages**, version-pinned to match the runtime versions in `runtime-versions.toml`:
+Install **two upstream stub packages**, version-pinned to match the runtime versions in `target-runtimes.toml`:
 
 - **`circuitpython-stubs`** — covers all CircuitPython built-in modules (`supervisor`, `board`, `digitalio`, `micropython`, etc.).  Published by Adafruit, PEP 561 compliant.
 - **`micropython-esp32-stubs`** — covers MicroPython-only modules (`machine`, `network`, `esp`, `esp32`, `btree`, `framebuf`, `uctypes`, etc.).  Published by the micropython-stubber project, auto-generated from real ESP32 hardware.
@@ -21,7 +21,7 @@ CircuitPython's tree includes `tools/extract_pyi.py` which extracts `.pyi` stubs
 
 ### How version sync is maintained
 
-`runtime-versions.toml` at the repo root is the single source of truth for pinned runtime versions.  `setup()` in `scripts/run.py` reads both versions and pins:
+`target-runtimes.toml` at the repo root is the single source of truth for pinned runtime versions.  `setup()` in `scripts/run.py` reads both versions and pins:
 
 - `circuitpython-stubs=={cp_version}` (exact match)
 - `micropython-esp32-stubs=={mp_version}.*` (allows post-releases)
@@ -58,7 +58,7 @@ Both packages are installed by `python scripts/run.py setup` alongside other dev
 
 - IDE squigglies for platform-specific imports are eliminated for both runtimes.
 - No hand-written stubs to maintain.
-- Stubs stay in sync with pinned runtime versions automatically via `runtime-versions.toml`.
+- Stubs stay in sync with pinned runtime versions automatically via `target-runtimes.toml`.
 - Two additional PyPI dependencies in the dev environment.
 - The `micropython` module conflict is documented and has a clear mitigation path.
 

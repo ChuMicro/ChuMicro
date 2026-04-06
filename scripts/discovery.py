@@ -23,9 +23,9 @@ ALL_PLATFORMS = ("cpython", "micropython", "circuitpython")
 
 
 def read_runtime_versions() -> dict:
-    """Read pinned runtime versions from ``runtime-versions.toml``."""
+    """Read pinned target runtime versions from ``target-runtimes.toml``."""
 
-    with (ROOT / "runtime-versions.toml").open("rb") as f:
+    with (ROOT / "target-runtimes.toml").open("rb") as f:
         return tomllib.load(f)
 
 

@@ -101,7 +101,7 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
 11. Per-library pytest runs avoid test-directory collisions (Decision 0009).
 12. Shared test fakes ship as `testing` submodules (e.g., `chumicro_timing.testing.FakeTicks`, `chumicro_runner.testing.CallRecorder`) and are importable by any library's tests.
 13. Docs and examples standards are established with strict guide requirements, autodoc API reference, and AI generation prompts (Decision 0013).
-14. IDE type stubs use upstream PyPI packages pinned to runtime-versions.toml (Decision 0012).
+14. IDE type stubs use upstream PyPI packages pinned to target-runtimes.toml (Decision 0012).
 15. Serviceable library audit complete: deque API verified across runtimes, overflow flag added, board architecture support documented (Decision 0015).
 16. CI/release pipeline is live: PyPI trusted publishing, git tags, GitHub Releases, bundle repo publishing (`.py` + `.mpy` + `package.json`), circup-format zips. Single-branch model (`main`) with tag-based stable releases and selective promote workflow (Decisions 0018, 0019, 0020). All four libraries published to PyPI. Docs deployed to GitHub Pages via mike (`docs-deploy.yml`).
 

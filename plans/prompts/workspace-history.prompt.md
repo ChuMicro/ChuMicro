@@ -160,8 +160,8 @@ This was the largest single session. It addressed three areas: the workspace was
 9. Updated all prompt files and plans/README.md to reference Decision 0011.
 
 **IDE type stubs:**
-10. Accepted Decision 0012 (IDE type stubs): use upstream `circuitpython-stubs` and `micropython-esp32-stubs` from PyPI, version-pinned to `runtime-versions.toml`.
-11. Consolidated runtime version pins into a single `runtime-versions.toml` file.
+10. Accepted Decision 0012 (IDE type stubs): use upstream `circuitpython-stubs` and `micropython-esp32-stubs` from PyPI, version-pinned to `target-runtimes.toml`.
+11. Consolidated runtime version pins into a single `target-runtimes.toml` file.
 
 **Docs and examples standards:**
 12. Accepted Decision 0013 (docs and examples standards): MkDocs + Material + mkdocstrings for API reference (static analysis, no imports needed). Required `guide.md` section structure. Example import-verification in preflight.
@@ -209,7 +209,7 @@ This was the largest single session. It addressed three areas: the workspace was
 16. Moved smoke runner from `ci/` to `support/test_harness/run_device_smoke.py`.
 17. Generalized the compatibility smoke runner to discover and exercise device tests for all libraries, not just timing.
 18. Dropped `_` prefix from script modules (e.g., `_discovery.py` → `discovery.py`) — the `_` convention was not needed since `scripts/` is not an importable package.
-19. Centralized `VERSIONS` dict (from `runtime-versions.toml`) into `prepare.py` so all modules share one parse.
+19. Centralized `VERSIONS` dict (from `target-runtimes.toml`) into `prepare.py` so all modules share one parse.
 
 **Task runner CLI improvements:**
 20. Replaced hand-rolled `parse_scope_args` with `argparse` subcommands. Each task has its own parser with proper help text.
