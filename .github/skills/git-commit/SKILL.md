@@ -31,17 +31,6 @@ Follow the project's commit-message conventions: imperative subject line, body e
 git commit -F .scratch/commit-msg.txt
 ```
 
-## Critical: replacing the commit message file
-
-`insert_edit_into_file` **will append to the file** if it thinks the new content is an addition. This produces a commit message containing the previous commit's message concatenated with the new one. **This has happened repeatedly and must be prevented.**
-
-When using `insert_edit_into_file` to write a new commit message:
-
-1. **Provide only the new commit message as the complete file content.**
-2. **Do not use `...existing code...` comments.** There is no existing code to preserve — the entire file is being replaced.
-3. **Do not reference or include any part of the previous message.**
-
-
 ## Rules
 
 - The `.scratch/` directory is gitignored — never commit it.
