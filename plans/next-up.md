@@ -29,7 +29,7 @@
 - [ ] Promote advisory MicroPython and CircuitPython CI jobs to protected-branch requirements, gated by platform targeting (Decision 0011).
 - [ ] Add digital I/O as the second library seam (alongside CI/release work, not sequentially).
 - [ ] Explore test ergonomics: reduce repeated boilerplate across test files.
-- [ ] Validate VS Code workspace with the generated `pyrightconfig.json`.
+- [ ] Validate VS Code workspace end-to-end (generated `pyrightconfig.json`, `settings.json`, `tasks.json` — not yet tested in a live VS Code session).
 - [ ] Validate circup/mip install paths end-to-end once bundle repos are public (Decision 0018).
 - [ ] Add the first real board transport tooling for ESP32-S2 (Wemos S2-Mini) once the manual device execution path needs to move beyond direct local runs.
 - [ ] Design a performance and resource benchmarking infrastructure. Goals:

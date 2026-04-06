@@ -385,3 +385,17 @@ This was the largest single session. It addressed three areas: the workspace was
 4. Updated `docs-deploy.yml` to deploy experimental docs on push to `main` and stable docs on `workflow_dispatch` from `promote.yml`.
 5. Updated all planning docs, prompts, and READMEs to remove stale `develop` references.
 6. Deleted the `develop` branch (migration step).
+
+#### 2026-04-06 (cont.) — Script renames and IDE config expansion
+
+**File renames for clarity:**
+1. Renamed `runtime-versions.toml` → `target-runtimes.toml` (reflects that the file pins target runtimes, not just versions).  Updated all references across scripts, workflows, AGENTS.md, and planning docs.
+2. Renamed `scripts/verify.py` → `scripts/verify_examples.py` (disambiguates from other verification scripts like `check_version.py`).
+3. Renamed `Agents.md` → `AGENTS.md` (conventional uppercase for repo-level docs).
+
+**Expanded sync-ide:**
+4. Added PyCharm run configuration generation (`.idea/runConfigurations/`): auto-generates XML run configs for all `run.py` tasks (preflight, test, lint, build, etc.) from a shared task table.
+5. Added VS Code task generation (`.vscode/tasks.json`): mirrors `run.py` commands as VS Code tasks with proper labels and groups.
+6. Added VS Code settings generation (`.vscode/settings.json`): `python.analysis.extraPaths` auto-populated from workspace source roots for Pylance import resolution.
+7. `sync-ide` now generates five outputs: `.idea/chumicro.iml`, `.idea/runConfigurations/`, `pyrightconfig.json`, `.vscode/tasks.json`, `.vscode/settings.json`.
+
