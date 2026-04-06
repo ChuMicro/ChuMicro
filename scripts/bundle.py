@@ -461,7 +461,7 @@ def generate_bundle_readme(root: Path, *, experimental: bool = False) -> str:
             f"(https://github.com/{_GITHUB_ORG}/{EXPERIMENTAL_BUNDLE_REPO})"
         )
     lines.append(
-        f"- **License:** [MIT]({source_url}/blob/main/LICENSE)"
+        "- **License:** [MIT](LICENSE)"
     )
     lines.append("")
     return "\n".join(lines)

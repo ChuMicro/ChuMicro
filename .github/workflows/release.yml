@@ -1,4 +1,4 @@
-dname: Release
+name: Release
 
 on:
   push:
@@ -221,7 +221,9 @@ jobs:
           BUNDLE_TOKEN: ${{ secrets.BUNDLE_TOKEN }}
 
       - name: Copy staging into bundle repo
-        run: cp -r .bundle-staging/* .bundle-repo/
+        run: |
+          cp -r .bundle-staging/* .bundle-repo/
+          cp LICENSE .bundle-repo/LICENSE
 
       - name: Create circup zips
         run: |
