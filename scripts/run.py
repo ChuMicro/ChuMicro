@@ -294,6 +294,23 @@ def build() -> int:
 
 
 
+def _copy_shared_docs_css(pkg_dirs: list[Path]) -> None:
+    """Copy ``support/docs/extra.css`` into each library's ``docs/stylesheets/``.
+
+    Zensical does not support mkdocs hooks, so we handle the copy here
+    before building.  The generated copies are gitignored.
+    """
+    import shutil
+
+    shared = ROOT / "support" / "docs" / "extra.css"
+    if not shared.exists():
+        return
+    for pkg_dir in pkg_dirs:
+        dest = pkg_dir / "docs" / "stylesheets" / "extra.css"
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(shared, dest)
+
+
 def docs(pkg_dirs: list[Path], *, serve: bool = False) -> int:
     """Build docs for selected libraries using Zensical.
 
@@ -305,6 +322,8 @@ def docs(pkg_dirs: list[Path], *, serve: bool = False) -> int:
     if not doc_dirs:
         print("No libraries with mkdocs.yml found for the selected packages.")
         return 0
+
+    _copy_shared_docs_css(doc_dirs)
 
     if serve:
         # Serve the first selected library

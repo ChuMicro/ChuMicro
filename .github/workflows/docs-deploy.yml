@@ -47,6 +47,16 @@ jobs:
       - name: Fetch gh-pages branch
         run: git fetch origin gh-pages:gh-pages 2>/dev/null || true
 
+      - name: Copy shared docs CSS
+        run: |
+          shared="support/docs/extra.css"
+          for lib_dir in libraries/*/; do
+            [ -f "${lib_dir}mkdocs.yml" ] || continue
+            dest="${lib_dir}docs/stylesheets/"
+            mkdir -p "$dest"
+            cp "$shared" "$dest"
+          done
+
       - name: Deploy docs for all libraries
         run: |
           # Push trigger → experimental.  workflow_dispatch → use channel input.
