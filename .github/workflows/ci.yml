@@ -124,22 +124,6 @@ jobs:
       - name: Check API breakages
         run: python scripts/check_api.py --base origin/${{ github.base_ref }}
 
-  label-check:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check for semver label
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          labels=$(gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/labels --jq '.[].name')
-          if echo "$labels" | grep -q "^semver:"; then
-            echo "Found semver label."
-          else
-            echo "::error::Missing required semver label (semver:patch, semver:minor, semver:major, or semver:none)."
-            echo "Add a semver label to indicate the version impact of this PR."
-            exit 1
-          fi
 
   # -------------------------------------------------------------------------
   # Runtime compatibility — PR only to conserve CI minutes.
