@@ -118,11 +118,20 @@ def inject_landing_page(branch: str) -> None:
     finally:
         Path(temp_index).unlink(missing_ok=True)
 
-    # Create a commit and fast-forward the branch.
+    # Create a commit and fast-forward the branch — only if the tree changed.
     parent = subprocess.run(
         ["git", "rev-parse", branch],
         capture_output=True, cwd=ROOT,
     ).stdout.strip().decode()
+
+    old_tree = subprocess.run(
+        ["git", "rev-parse", f"{branch}^{{tree}}"],
+        capture_output=True, cwd=ROOT,
+    ).stdout.strip().decode()
+
+    if new_tree == old_tree:
+        print("  Landing page unchanged — skipping commit.")
+        return
 
     commit = subprocess.run(
         ["git", "commit-tree", new_tree, "-p", parent,
