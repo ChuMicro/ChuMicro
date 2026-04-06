@@ -398,3 +398,23 @@ This was the largest single session. It addressed three areas: the workspace was
 5. Added VS Code task generation (`.vscode/tasks.json`): mirrors `run.py` commands as VS Code tasks with proper labels and groups.
 6. Added VS Code settings generation (`.vscode/settings.json`): `python.analysis.extraPaths` auto-populated from workspace source roots for Pylance import resolution.
 7. `sync-ide` now generates five outputs: `.idea/chumicro.iml`, `.idea/runConfigurations/`, `pyrightconfig.json`, `.vscode/tasks.json`, `.vscode/settings.json`.
+
+#### 2026-04-06 (cont. 2) — Docs polish, release fixes, and bundle hardening
+
+**Docs theme polish:**
+1. Built custom CSS for Material dark theme, then abandoned it in favour of the default (light) theme due to symlink/hook limitations in zensical.
+2. Consolidated `extra.css` into a single shared file, then removed CSS overrides entirely once the light theme was adopted.
+3. Added custom favicons to library docs and the landing page.  Moved favicons to `docs/img/` to avoid zensical/Material path collision.
+4. Added `docs-preview` command to `scripts/run.py` for local versioned docs preview.
+5. Fixed label-sync workflow for private repos (token permissions).
+
+**Release workflow fixes and version bumps:**
+6. Patch bumped all libraries to 0.1.9 (first successful experimental release with full pipeline: PyPI, tags, docs, bundles).
+7. Bumped to 0.1.10 and fixed same-day bundle release collision (delete-before-recreate in `release.yml`).
+8. Fixed `release.yml` name typo (`dname:` → `name:`) that prevented the 0.1.10 release from triggering.
+9. Added `cp LICENSE .bundle-repo/LICENSE` to the bundle job, but the LICENSE file itself was missing from the repo root — the error persisted.
+10. Bumped to 0.1.11 to retrigger the release after the workflow typo fix.
+11. Created the missing `LICENSE` (MIT) file at repo root.
+12. Patched the experimental release step to also update PyPI `[project.urls]`: Bundle URL → experimental bundle repo, Documentation URL → `/experimental/` docs channel.  Previously, experimental PyPI packages linked to the stable bundle and stable docs.
+13. Fixed double blank lines in scaffold templates and bundle README generator (whitespace linting).
+
