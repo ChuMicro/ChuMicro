@@ -231,7 +231,22 @@ jobs:
 
       - name: Create circup zips
         run: |
-          date_tag="$(date -u +%Y%m%d)"
+          today="$(date -u +%Y%m%d)"
+
+          # Find the next available tag for today.  The cloned bundle repo
+          # has all existing tags.  First release of the day uses YYYYMMDD;
+          # subsequent releases append .1, .2, etc. so history is preserved.
+          existing=$(git -C .bundle-repo tag -l "${today}*" | sort -V | tail -1)
+
+          if [ -z "$existing" ]; then
+            date_tag="${today}"
+          elif [ "$existing" = "$today" ]; then
+            date_tag="${today}.1"
+          else
+            n="${existing#${today}.}"
+            date_tag="${today}.$((n + 1))"
+          fi
+
           echo "date_tag=${date_tag}" >> "$GITHUB_ENV"
           repo_name="${{ needs.detect.outputs.bundle_repo }}"
           repo_name="${repo_name##*/}"
@@ -258,9 +273,6 @@ jobs:
           bundle_repo="${{ needs.detect.outputs.bundle_repo }}"
           body=$(jq -r '"## Updated libraries\n\n" + ([.include[] | "- **" + .lib_name + "** v" + .version] | join("\n"))' <<< "$MATRIX_JSON")
 
-          # Remove any existing release for this date (same-day re-release).
-          gh release delete "${{ env.date_tag }}" \
-            --repo "${bundle_repo}" --yes --cleanup-tag 2>/dev/null || true
 
           gh release create "${{ env.date_tag }}" \
             --repo "${bundle_repo}" \

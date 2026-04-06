@@ -120,7 +120,7 @@ Release automation produces one `.py` zip and one `.mpy` zip per repo:
 - Stable: `ChuMicro-Bundle-py-{tag}.zip`, `ChuMicro-Bundle-10.x-mpy-{tag}.zip`
 - Experimental: `ChuMicro-Bundle-Experimental-py-{tag}.zip`, `ChuMicro-Bundle-Experimental-10.x-mpy-{tag}.zip`
 
-Only CircuitPython 10.x mpy bytecode is produced (mpy format v6).  CP 9.x users can install `.py` source.  Tags use date-based format (`YYYYMMDD`).
+Only CircuitPython 10.x mpy bytecode is produced (mpy format v6).  CP 9.x users can install `.py` source.  Tags use date-based format (`YYYYMMDD`) for the first release of a day, with a semver-compatible sequence suffix (`.1`, `.2`, etc.) for subsequent releases on the same day.  This preserves release history across multiple pushes per day while remaining parseable by circup's `semver.VersionInfo.parse(tag, optional_minor_and_patch=True)`.
 
 ### 5. Bundle repo content policy
 
