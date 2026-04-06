@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     branches:
-      - develop
+      - main
     paths:
       - "libraries/*/VERSION"
   workflow_dispatch:
@@ -12,6 +12,13 @@ on:
         description: "Libraries to release (comma-separated, e.g. 'timing,runner'). Leave empty for all."
         type: string
         default: ""
+      channel:
+        description: "Release channel"
+        type: choice
+        options:
+          - experimental
+          - stable
+        default: experimental
       dry_run:
         description: "Dry run — build but do not publish or tag"
         type: boolean
@@ -33,19 +40,26 @@ jobs:
     outputs:
       matrix: ${{ steps.detect.outputs.matrix }}
       has_releases: ${{ steps.detect.outputs.has_releases }}
-      is_experimental: ${{ steps.branch.outputs.is_experimental }}
-      suffix: ${{ steps.branch.outputs.suffix }}
-      bundle_repo: ${{ steps.branch.outputs.bundle_repo }}
+      is_experimental: ${{ steps.channel.outputs.is_experimental }}
+      suffix: ${{ steps.channel.outputs.suffix }}
+      bundle_repo: ${{ steps.channel.outputs.bundle_repo }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - id: branch
+      - id: channel
         name: Determine release channel
         run: |
-          branch="${GITHUB_REF##refs/heads/}"
-          if [ "$branch" = "develop" ]; then
+          # Push trigger → always experimental (auto-release on VERSION bump).
+          # workflow_dispatch → use the channel input.
+          if [ "${{ github.event_name }}" = "push" ]; then
+            channel="experimental"
+          else
+            channel="${{ inputs.channel }}"
+          fi
+
+          if [ "$channel" = "experimental" ]; then
             echo "is_experimental=true" >> "$GITHUB_OUTPUT"
             echo "suffix=-experimental" >> "$GITHUB_OUTPUT"
             echo "bundle_repo=ChuMicro/ChuMicro-Bundle-Experimental" >> "$GITHUB_OUTPUT"
@@ -58,7 +72,7 @@ jobs:
       - id: detect
         name: Find libraries to release
         run: |
-          suffix="${{ steps.branch.outputs.suffix }}"
+          suffix="${{ steps.channel.outputs.suffix }}"
           filter="${{ inputs.libraries }}"
 
           # Scan all libraries with VERSION files.
@@ -245,4 +259,3 @@ jobs:
             .circup-zips/*.zip
         env:
           GH_TOKEN: ${{ secrets.BUNDLE_TOKEN }}
-

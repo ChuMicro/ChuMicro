@@ -1,6 +1,6 @@
 site_name: chumicro-timing
 site_url: https://chumicro.github.io/ChuMicro/timing/
-repo_url: https://github.com/ChuMicro/ChuMicro/tree/develop/libraries/timing
+repo_url: https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing
 repo_name: Source
 theme:
   name: material

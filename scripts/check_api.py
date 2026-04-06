@@ -173,8 +173,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--base",
-        default="origin/develop",
-        help="Base ref to detect changed libraries (default: origin/develop)",
+        default="origin/main",
+        help="Base ref to detect changed libraries (default: origin/main)",
     )
     args = parser.parse_args(argv)
     return _check(args.base)

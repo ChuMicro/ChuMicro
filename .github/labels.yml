@@ -65,7 +65,7 @@
 # --- Process labels ---
 - name: "release-cut"
   color: "5319e7"
-  description: "PR promoting develop → main for stable release"
+  description: "Stable release promotion"
 
 - name: breaking
   color: "b60205"

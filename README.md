@@ -30,16 +30,16 @@ Docs are published per-library with a version selector powered by [mike](https:/
 | compat | [stable](https://chumicro.github.io/ChuMicro/compat/stable/) | [experimental](https://chumicro.github.io/ChuMicro/compat/experimental/) |
 | msgpack | [stable](https://chumicro.github.io/ChuMicro/msgpack/stable/) | [experimental](https://chumicro.github.io/ChuMicro/msgpack/experimental/) |
 
-Stable tracks `main` (released versions).  Experimental tracks `develop` (pre-release).
+Stable tracks tagged releases.  Experimental tracks `main` (pre-release).
 
 ## Distribution
 
 Libraries are published to **PyPI** for CPython and to **bundle repos** for CircuitPython (circup) and MicroPython (mip).
 
-| Channel | Repo | Branch |
+| Channel | Repo | Source |
 |---|---|---|
-| **Stable** | [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) | `main` |
-| **Experimental** | [ChuMicro-Bundle-Experimental](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental) | `develop` |
+| **Stable** | [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) | tagged releases |
+| **Experimental** | [ChuMicro-Bundle-Experimental](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental) | `main` |
 
 Install with circup (remove the other channel first if switching):
 

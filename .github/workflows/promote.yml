@@ -1,30 +1,26 @@
 name: Promote libraries to stable
 
-# Releases selected libraries from experimental (develop) to stable (main).
+# Releases selected libraries as stable.  Triggers release.yml with
+# channel=stable for the named libraries, then deploys stable docs.
 #
-# Flow:
-#   1. Ensures main is in sync with develop (idempotent fast-forward).
-#   2. Validates the requested libraries exist and have unreleased versions.
-#   3. Triggers release.yml on main for the specified libraries.
-#   4. Triggers docs-deploy.yml on main to update stable docs.
-#
-# If no libraries are specified, this is a sync-only run (step 4 still
-# deploys docs so stable docs stay current).
+# Release branches: for hotfixes against an older version, create a branch
+# from the stable tag (e.g. `release/timing-v0.2.x`) and run release.yml
+# manually on that ref.
 
 on:
   workflow_dispatch:
     inputs:
       libraries:
-        description: "Libraries to release as stable (comma-separated, e.g. 'timing,runner'). Leave empty for sync + docs only."
+        description: "Libraries to release as stable (comma-separated, e.g. 'timing,runner')."
         type: string
-        default: ""
+        required: true
       dry_run:
-        description: "Dry run — validate and sync but do not publish or tag"
+        description: "Dry run — validate but do not publish or tag"
         type: boolean
         default: false
 
 permissions:
-  contents: write
+  contents: read
   actions: write          # required to trigger other workflows
 
 jobs:
@@ -35,16 +31,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Sync main with develop
-        run: |
-          if ! git push origin HEAD:refs/heads/main; then
-            echo "::error::Fast-forward failed — main has diverged from develop."
-            exit 1
-          fi
-          echo "✓ Main is in sync with develop."
-
       - name: Validate libraries
-        if: inputs.libraries != ''
         run: |
           IFS=',' read -ra libs <<< "${{ inputs.libraries }}"
           for lib in "${libs[@]}"; do
@@ -64,11 +51,10 @@ jobs:
           done
 
       - name: Trigger stable release
-        if: inputs.libraries != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          args=(--ref main -f "libraries=${{ inputs.libraries }}")
+          args=(-f "channel=stable" -f "libraries=${{ inputs.libraries }}")
           if [ "${{ inputs.dry_run }}" = "true" ]; then
             args+=(-f "dry_run=true")
           fi
@@ -81,5 +67,5 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh workflow run docs-deploy.yml --ref main
+          gh workflow run docs-deploy.yml -f channel=stable
           echo "✓ Stable docs deploy triggered."

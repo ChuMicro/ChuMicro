@@ -118,7 +118,7 @@ All sources are masked to the 2²⁹ period, so behavior is identical regardless
 
 ## Using with Runner
 
-For applications with many components, `chumicro-runner` provides a `Runner` that captures the timestamp for you and services active components. See the [chumicro-runner guide](https://github.com/ChuMicro/ChuMicro/blob/develop/libraries/runner/docs/guide.md) for details.
+For applications with many components, `chumicro-runner` provides a `Runner` that captures the timestamp for you and services active components. See the [chumicro-runner guide](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/runner/docs/guide.md) for details.
 
 ## Integration with a tick-based scheduler
 

@@ -333,7 +333,7 @@ def generate_bundle_readme(root: Path, *, experimental: bool = False) -> str:
     if experimental:
         lines.append(
             "> ⚠️ **Pre-release channel** — these builds come from the "
-            "`develop` branch and may contain breaking changes."
+            "`main` branch and may contain breaking changes."
         )
     else:
         lines.append(
@@ -417,7 +417,7 @@ def generate_bundle_readme(root: Path, *, experimental: bool = False) -> str:
     )
     for lib in libraries:
         pip_name = f"chumicro-{lib['name']}"
-        lib_url = f"{source_url}/tree/develop/libraries/{lib['name']}"
+        lib_url = f"{source_url}/tree/main/libraries/{lib['name']}"
         desc = lib["description"]
         lines.append(
             f"| [**{pip_name}**]({lib_url}) | {lib['version']} | {desc} |"
@@ -455,7 +455,7 @@ def generate_bundle_readme(root: Path, *, experimental: bool = False) -> str:
             f"(https://github.com/{_GITHUB_ORG}/{EXPERIMENTAL_BUNDLE_REPO})"
         )
     lines.append(
-        f"- **License:** [MIT]({source_url}/blob/develop/LICENSE)"
+        f"- **License:** [MIT]({source_url}/blob/main/LICENSE)"
     )
     lines.append("")
     return "\n".join(lines)

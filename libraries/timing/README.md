@@ -30,7 +30,7 @@ pip install chumicro-timing
 
 ### Experimental (pre-release) versions
 
-Pre-release builds come from the `develop` branch.  Do not register both bundles simultaneously — circup may pick either version for a given package.
+Pre-release builds are published automatically when a library version is bumped.  Do not register both bundles simultaneously — circup may pick either version for a given package.
 
 ```bash
 # CircuitPython

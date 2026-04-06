@@ -90,7 +90,7 @@ The public API is identical across all runtimes.  Code that imports `partial` fr
 
 ## Examples
 
-The [examples](https://github.com/ChuMicro/ChuMicro/tree/develop/libraries/compat/examples) directory contains complete runnable scripts:
+The [examples](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/compat/examples) directory contains complete runnable scripts:
 
 | Example | What it shows |
 |---|---|

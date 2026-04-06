@@ -29,4 +29,4 @@ set_status_led(100)  # pin 13 → 100%
 
 [← All ChuMicro Libraries](https://chumicro.github.io/ChuMicro/)
 
-[Source](https://github.com/ChuMicro/ChuMicro/tree/develop/libraries/compat) · [PyPI](https://pypi.org/project/chumicro-compat/) · [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · [Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
+[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/compat) · [PyPI](https://pypi.org/project/chumicro-compat/) · [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · [Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)

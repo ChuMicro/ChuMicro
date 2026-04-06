@@ -3,8 +3,16 @@ name: Deploy docs
 on:
   push:
     branches:
-      - develop
-  workflow_dispatch:    # called by promote.yml on main to deploy stable docs
+      - main
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Docs channel to deploy"
+        type: choice
+        options:
+          - experimental
+          - stable
+        default: experimental
 
 # Avoid concurrent deployments that could conflict on gh-pages.
 concurrency:
@@ -41,13 +49,18 @@ jobs:
 
       - name: Deploy docs for all libraries
         run: |
-          branch="${GITHUB_REF##refs/heads/}"
+          # Push trigger → experimental.  workflow_dispatch → use channel input.
+          if [ "${{ github.event_name }}" = "push" ]; then
+            channel="experimental"
+          else
+            channel="${{ inputs.channel }}"
+          fi
 
           for lib_dir in libraries/*/; do
             [ -f "${lib_dir}mkdocs.yml" ] || continue
             lib_name=$(basename "$lib_dir")
 
-            if [ "$branch" = "main" ] && [ -f "${lib_dir}VERSION" ]; then
+            if [ "$channel" = "stable" ] && [ -f "${lib_dir}VERSION" ]; then
               version=$(cat "${lib_dir}VERSION" | tr -d '[:space:]')
               alias="stable"
             else
@@ -65,9 +78,9 @@ jobs:
           done
 
       # Set stable as the default redirect for /<lib>/ -> /<lib>/stable/.
-      # Only on main — develop deploys should not override the default.
+      # Only when deploying the stable channel.
       - name: Set stable as default
-        if: github.ref == 'refs/heads/main'
+        if: inputs.channel == 'stable'
         run: |
           for lib_dir in libraries/*/; do
             [ -f "${lib_dir}mkdocs.yml" ] || continue

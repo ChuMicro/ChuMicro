@@ -37,7 +37,7 @@ classifiers = [
 [project.urls]
 Homepage = "https://github.com/ChuMicro/ChuMicro"
 Documentation = "https://chumicro.github.io/ChuMicro/{name}/stable/"
-Source = "https://github.com/ChuMicro/ChuMicro/tree/develop/libraries/{name}"
+Source = "https://github.com/ChuMicro/ChuMicro/tree/main/libraries/{name}"
 Issues = "https://github.com/ChuMicro/ChuMicro/issues"
 Bundle = "https://github.com/ChuMicro/ChuMicro-Bundle"
 
@@ -56,7 +56,7 @@ packages = ["src/{import_name}"]
 _MKDOCS_TEMPLATE = """\
 site_name: chumicro-{name}
 site_url: https://chumicro.github.io/ChuMicro/{name}/
-repo_url: https://github.com/ChuMicro/ChuMicro/tree/develop/libraries/{name}
+repo_url: https://github.com/ChuMicro/ChuMicro/tree/main/libraries/{name}
 repo_name: Source
 theme:
   name: material
@@ -116,7 +116,7 @@ from {import_name} import ...
 
 [← All ChuMicro Libraries](https://chumicro.github.io/ChuMicro/)
 
-[Source](https://github.com/ChuMicro/ChuMicro/tree/develop/libraries/{name})
+[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/{name})
 · [PyPI](https://pypi.org/project/chumicro-{name}/)
 · [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle)
 · [Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)

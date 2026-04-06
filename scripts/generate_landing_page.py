@@ -77,7 +77,7 @@ def _library_card(lib: dict) -> str:
         links.append(f'<a href="{name}/stable/testing/">Testing</a>')
     links.append(f'<a href="{name}/experimental/">Experimental</a>')
     links.append(
-        f'<a href="https://github.com/ChuMicro/ChuMicro/tree/develop/libraries/{name}">Source</a>'
+        f'<a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/{name}">Source</a>'
     )
 
     sep = '\n          <span class="sep">&middot;</span>\n          '
@@ -245,7 +245,7 @@ circup install {first_pkg}</pre>
           </tr>
           <tr>
             <td><strong>Experimental</strong></td>
-            <td><code>develop</code></td>
+            <td><code>main</code></td>
             <td><a href="https://github.com/ChuMicro/ChuMicro-Bundle-Experimental">ChuMicro-Bundle-Experimental</a></td>
             <td>Pre-release &mdash; latest features, may contain breaking changes</td>
           </tr>

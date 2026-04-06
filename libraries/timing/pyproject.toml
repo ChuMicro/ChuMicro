@@ -29,7 +29,7 @@ classifiers = [
 [project.urls]
 Homepage = "https://github.com/ChuMicro/ChuMicro"
 Documentation = "https://chumicro.github.io/ChuMicro/timing/stable/"
-Source = "https://github.com/ChuMicro/ChuMicro/tree/develop/libraries/timing"
+Source = "https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing"
 Issues = "https://github.com/ChuMicro/ChuMicro/issues"
 Bundle = "https://github.com/ChuMicro/ChuMicro-Bundle"
 

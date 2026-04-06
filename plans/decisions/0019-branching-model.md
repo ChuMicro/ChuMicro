@@ -1,66 +1,67 @@
-# Decision 0019: Branching model — develop → main
+# Decision 0019: Branching model — single branch with tags
 
 Status: `accepted`
-Date: `2026-04-05`
+Date: `2026-04-06` (revised from `2026-04-05`)
 
 ## Context
 
-The repo initially used `main` as both the integration branch and the release branch. As the project prepares for community contributions, this creates two problems:
+The repo initially used a two-branch model (`develop` + `main`) where `main` was the stable release branch and `develop` was the integration branch (Decision 0019 v1). This created problems:
 
-1. Every merge to `main` is a potential release trigger. Contributors must be careful not to bump VERSION prematurely.
-2. There is no staging area where changes can be tested together before being promoted to a stable release.
+1. Auto-syncing `main` with `develop` pushed all library code to `main`, even for libraries that hadn't been promoted — so `main` didn't actually reflect stable releases.
+2. Selectively merging library code to `main` is impractical in a mono-repo: the commit graph diverges on library paths, and future merges produce conflicts.
+3. The stable release artifact (PyPI package, bundle repo, git tag) already exists independently of any branch. No consumer tool looks at a git branch.
 
 ## Decision
 
-### Two-branch model
+### Single-branch model
 
-- **`develop`** is the default branch and the target for all PRs. CI runs full checks (lint, all tests, verify-examples, build, version-check, API breakage detection, AI review) on every PR to `develop`.
-- **`main`** is the stable release branch. It is kept **automatically in sync** with `develop` — every push to `develop` fast-forwards `main` via `sync-main.yml`. This means non-library work (scripts, plans, support, CI workflows, docs) is always current on both branches.
-- **Stable releases are selective.** The `promote.yml` workflow dispatch accepts a comma-separated list of library names and triggers `release.yml` on `main` for only those libraries. Libraries stabilize at different rates; promoting one library does not force-release others.
-- Running `promote.yml` with no libraries performs a sync-only run that also deploys stable docs.
+- **`main`** is the only branch. All PRs target `main`. CI runs on every PR and push to `main`.
+- **Stable releases are tag-based.** The `promote.yml` workflow triggers `release.yml` with `channel=stable` for named libraries. This creates stable git tags (`timing-v0.2.0`), publishes to stable PyPI, and updates the stable bundle repo. The tag points to the exact commit that was promoted.
+- **Experimental releases are automatic.** When a VERSION file changes on push to `main`, `release.yml` fires with `channel=experimental`, creating `-experimental` tags and publishing to the experimental PyPI package and bundle repo.
+- **"What code is stable?"** → `git checkout timing-v0.2.0`. The tag is the artifact.
 
-### PR targets
+### Release branches (when needed)
 
-All contributor PRs target `develop`. Direct pushes to `main` are blocked via branch protection (with a bypass for the GitHub Actions bot, which performs the auto-sync).
+For hotfixes against an older stable version (e.g., `main` has breaking changes in progress but `timing-v0.2.0` needs a patch):
+
+1. Branch from the stable tag: `git checkout -b release/timing-v0.2.x timing-v0.2.0`
+2. Fix the bug, bump VERSION to `0.2.1`.
+3. Run `release.yml` manually on that ref with `channel=stable`.
+4. Cherry-pick the fix back to `main`.
+
+Release branches are created only when needed and deleted after the patch is released. They are not long-lived.
 
 ### Experimental and stable release channels
 
-Both `develop` and `main` are full release branches — version bumps happen on `develop` and carry into `main` unchanged.
+Channels are differentiated by **package name**, not version number or branch:
 
-The channels are differentiated by **package name**, not version number:
+| Channel | PyPI package | Bundle repo | Git tag |
+|---|---|---|---|
+| Experimental | `chumicro-timing-experimental` | `ChuMicro-Bundle-Experimental` | `timing-v0.2.0-experimental` |
+| Stable | `chumicro-timing` | `ChuMicro-Bundle` | `timing-v0.2.0` |
 
-| Channel | PyPI package | mip package | Bundle repo | Git tag |
-|---|---|---|---|---|
-| Experimental (develop) | `chumicro-timing-experimental` | `chumicro_timing` | `ChuMicro-Bundle-Experimental` | `timing-v0.2.0-experimental` |
-| Stable (main) | `chumicro-timing` | `chumicro_timing` | `ChuMicro-Bundle` | `timing-v0.2.0` |
+On-device import paths are always the base name (`chumicro_timing`). Channel separation is by repo and package name, not by directory name (Decision 0018).
 
-On-device import paths are always the base name (`chumicro_timing`). Both bundle repos use the same directory names (no `_experimental` suffix) — channel separation is by repo, not by directory name (Decision 0018). Users switch channels by reinstalling from the other package — they cannot have both installed simultaneously.
-
-**Dependency model:** experimental packages depend on **stable** (production) releases by default. Installing one experimental library does not cascade into pulling experimental versions of its transitive dependencies. This means a user can run stable `chumicro-timing` alongside experimental `chumicro-mqtt` without conflict. When coordinated experimental changes across libraries are needed, the developer explicitly overrides specific dependencies in that library's build.
-
-Experimental GitHub Releases are marked as pre-releases. Bundle releases use date-based tags with the channel suffix (e.g., `20260405-experimental`).
+**Dependency model:** experimental packages depend on stable releases by default. Installing one experimental library does not cascade into pulling experimental versions of transitive dependencies.
 
 ### CI trigger changes
 
-- `sync-main.yml` triggers on push to `develop` and fast-forwards `main`. Uses `GITHUB_TOKEN` (push-event suppression prevents downstream workflow triggers — this is intentional).
-- `ci.yml` triggers on push to `develop` and on all PRs. Does not trigger on `main` push (redundant since main = develop).
-- `release.yml` triggers on push to `develop` with `libraries/*/VERSION` changes (experimental auto-release). Stable releases on `main` are triggered only via `workflow_dispatch` from `promote.yml`.
-- `promote.yml` is a `workflow_dispatch` that syncs main, then triggers `release.yml` and `docs-deploy.yml` on `main` for the specified libraries.
-- `docs-deploy.yml` triggers on push to `develop` (experimental docs) and via `workflow_dispatch` on `main` (stable docs, called by `promote.yml`).
+- `ci.yml` triggers on push to `main` and on all PRs.
+- `release.yml` triggers on push to `main` with `libraries/*/VERSION` changes (experimental auto-release). Also accepts `workflow_dispatch` with `channel` and `libraries` inputs for stable releases and manual re-runs.
+- `promote.yml` is a `workflow_dispatch` that triggers `release.yml` with `channel=stable` for named libraries, then triggers `docs-deploy.yml` with `channel=stable`.
+- `docs-deploy.yml` triggers on push to `main` (experimental docs) and via `workflow_dispatch` with `channel=stable` (stable docs, called by `promote.yml`).
 
-### Manual steps required
+### Manual steps for migration
 
-- Set `develop` as the default branch in GitHub repo settings.
-- Configure branch protection on both `develop` and `main`:
-  - `develop`: require status checks (lint, test, build, version-check), require 1 approval.
-  - `main`: allow GitHub Actions bot to bypass (for `sync-main.yml` auto-push). No required status checks needed (code already passed CI on `develop`).
+- Set `main` as the default branch in GitHub repo settings.
+- Delete the `develop` branch.
+- Update branch protection on `main`: require status checks (lint, test, build, version-check), require 1 approval.
 
 ## Consequences
 
-- Contributors have a clear, low-friction path: fork → PR to `develop` → CI gates → merge.
-- `main` never falls behind `develop` — auto-sync keeps non-library code (scripts, CI, plans, support) current at all times.
-- Stable releases are deliberate and selective: someone must explicitly promote specific libraries via `promote.yml`. Libraries stabilize independently.
-- No single maintainer bottleneck: any approved contributor can merge to `develop`; release promotion can be done by any maintainer.
-- `check_version.py` default base ref is `origin/develop` (not `origin/main`).
-- The `GITHUB_TOKEN` push-event suppression is load-bearing: `sync-main.yml`'s push to `main` must *not* trigger `release.yml`. The `workflow_dispatch` exception is also load-bearing: `promote.yml` relies on it to trigger `release.yml` and `docs-deploy.yml`.
-
+- One branch eliminates all sync complexity — no `sync-main.yml`, no divergence risk, no GITHUB_TOKEN push-event suppression dependency.
+- Stable releases are deliberate and selective: `promote.yml` with library names.
+- Libraries stabilize independently. Promoting `timing` does not release `runner`.
+- The "stable code" for any library is a tag, not a branch — unambiguous and immutable.
+- Hotfixes use short-lived release branches from stable tags — standard Git workflow.
+- Contributors have the simplest possible path: fork → PR to `main` → CI → merge.
