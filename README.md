@@ -118,7 +118,7 @@ All tasks are run through `scripts/run.py`:
 | `lint` | Run Ruff |
 | `test` | CPython tests — changed packages by default, `--all` for everything |
 | `verify-examples` | Import-check all library examples |
-| `docs` | Build library docs with MkDocs |
+| `docs` | Build library docs with Zensical |
 | `build` | Build all publishable package distributions |
 | `preflight` | Full CI gate: lint + test all + examples + compat + build |
 | `new-library <name>` | Scaffold a new library and regenerate IDE configs |

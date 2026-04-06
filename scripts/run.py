@@ -394,7 +394,7 @@ def verify_examples(pkg_dirs: list[Path]) -> int:
 
 
 def docs(pkg_dirs: list[Path], *, serve: bool = False) -> int:
-    """Build docs for selected libraries using MkDocs.
+    """Build docs for selected libraries using Zensical.
 
     If *serve* is True, starts a live-reload dev server for the first
     selected library instead of building static output.
@@ -411,7 +411,8 @@ def docs(pkg_dirs: list[Path], *, serve: bool = False) -> int:
         rel = pkg_dir.relative_to(ROOT)
         print(f"Serving docs for {rel} (Ctrl+C to stop)...")
         return _run(
-            [PYTHON, "-m", "mkdocs", "serve", "-f", str(pkg_dir / "mkdocs.yml")],
+            [PYTHON, "-m", "zensical", "serve",
+             "-f", str(pkg_dir / "mkdocs.yml")],
         )
 
     overall_rc = 0
@@ -420,9 +421,8 @@ def docs(pkg_dirs: list[Path], *, serve: bool = False) -> int:
         site_dir = pkg_dir / "site"
         print(f"== docs {rel} ==")
         rc = _run(
-            [PYTHON, "-m", "mkdocs", "build",
-             "-f", str(pkg_dir / "mkdocs.yml"),
-             "-d", str(site_dir)],
+            [PYTHON, "-m", "zensical", "build",
+             "-f", str(pkg_dir / "mkdocs.yml")],
         )
         if rc != 0:
             print(f"Docs build failed: {rel}")

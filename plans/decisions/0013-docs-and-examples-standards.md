@@ -111,19 +111,22 @@ The scaffolder template (`_GUIDE_TEMPLATE` in `scripts/run.py`) includes generat
 - Use fenced code blocks with language hints in Markdown docs.
 - Cross-reference other docs pages with relative links.
 
-### Docs build tool: MkDocs + Material + mkdocstrings
+### Docs build tool: Zensical + mkdocstrings
 
-Chosen tool: **MkDocs** with the **Material** theme and **mkdocstrings** (Python handler via griffe).
+Chosen tool: **Zensical** with **mkdocstrings** (Python handler via griffe).
+
+Originally MkDocs + Material + mkdocstrings.  Migrated to Zensical (2026-04-05) because MkDocs 1.x is unmaintained (no releases in 18 months) and MkDocs 2.0 breaks all plugins, themes, and overrides with no migration path.  Zensical is from the Material for MkDocs team, reads existing `mkdocs.yml` files natively, and has first-class ReadTheDocs support.  The mkdocstrings author is on the Zensical team.
 
 Why:
 - Markdown is the native format — existing `.md` files work as-is for narrative docs.
 - `mkdocstrings` uses **static analysis** (griffe) to extract docstrings — it does not import modules, so CircuitPython-only imports (`supervisor`, `board`) don't cause build failures.
-- ReadTheDocs has first-class MkDocs support via `.readthedocs.yaml`.
-- Lowest setup complexity: one `mkdocs.yml` + three pip packages.
+- ReadTheDocs has first-class Zensical support.
+- Existing `mkdocs.yml` configs work with zero changes.
+- Rust-core differential builds are near-instant.
 
 The trade-off: `:::` autodoc directives in `api.md` appear as raw text when browsing on GitHub. Narrative pages (`guide.md`, `testing.md`, `README.md`) look perfect on GitHub. The README already contains an API summary table for GitHub readers; the full auto-generated reference lives on the built site.
 
-Not yet wired: the actual `mkdocs.yml` config, ReadTheDocs hosting setup, or the `docs` task in `scripts/run.py`. These are follow-up implementation items.
+The `mkdocs.yml` configs, `docs` task in `scripts/run.py`, and the `new-library` scaffolder are all wired.  ReadTheDocs hosting setup is a follow-up implementation item.
 
 ### Example verification
 

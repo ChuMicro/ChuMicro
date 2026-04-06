@@ -12,7 +12,6 @@ ruff
 build
 hatchling
 griffe
-mkdocs>=1.6,<2
-mkdocs-material
+zensical
 mkdocstrings[python]
 
