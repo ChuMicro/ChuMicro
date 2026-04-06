@@ -6,36 +6,19 @@
   <title>ChuMicro — Documentation</title>
   <style>
     :root {
-      --bg: #fafafa;
-      --card-bg: #fff;
-      --text: #24292f;
-      --muted: #656d76;
-      --accent: #0969da;
-      --accent-hover: #0550ae;
-      --border: #d0d7de;
-      --tag-bg: #ddf4ff;
-      --tag-text: #0550ae;
-      --green-bg: #dafbe1;
-      --green-text: #116329;
-      --purple-bg: #fbefff;
-      --purple-text: #6639ba;
-    }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #0d1117;
-        --card-bg: #161b22;
-        --text: #e6edf3;
-        --muted: #8b949e;
-        --accent: #58a6ff;
-        --accent-hover: #79c0ff;
-        --border: #30363d;
-        --tag-bg: #121d2f;
-        --tag-text: #58a6ff;
-        --green-bg: #0d2818;
-        --green-text: #3fb950;
-        --purple-bg: #1e0d2d;
-        --purple-text: #bc8cff;
-      }
+      --bg: #1e1e2e;
+      --card-bg: #27273a;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #b48ead;
+      --accent-hover: #d0a9c5;
+      --border: #3a3a52;
+      --tag-bg: #1e1e3a;
+      --tag-text: #7aa2f7;
+      --green-bg: #0d2818;
+      --green-text: #3fb950;
+      --purple-bg: #2d1b46;
+      --purple-text: #d0a9c5;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -70,7 +53,7 @@
     .card h2 a { color: var(--accent); text-decoration: none; }
     .card h2 a:hover { text-decoration: underline; }
     .card p { color: var(--muted); font-size: .9rem; margin-bottom: .75rem; }
-    .card-links { display: flex; gap: 1rem; font-size: .8rem; }
+    .card-links { display: flex; gap: .5rem; font-size: .8rem; flex-wrap: wrap; }
     .card-links a { color: var(--accent); text-decoration: none; }
     .card-links a:hover { text-decoration: underline; }
     .card-links .sep { color: var(--border); }
@@ -83,7 +66,7 @@
     pre {
       background: var(--card-bg); border: 1px solid var(--border);
       border-radius: .5rem; padding: .75rem 1rem;
-      font-size: .8rem; overflow-x: auto;
+      font-size: .8rem; overflow-x: auto; color: var(--text);
       font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
     }
 
@@ -121,54 +104,62 @@
 
     <div class="libraries">
       <div class="card">
-        <h2><a href="timing/stable/">chumicro-timing</a></h2>
-        <p>Wraparound-safe millisecond tick helpers, heartbeat scheduling, and deterministic test fakes. The foundation that other libraries build on.</p>
-        <div class="card-links">
-          <a href="timing/stable/guide/">Guide</a>
-          <span class="sep">|</span>
-          <a href="timing/stable/api/">API</a>
-          <span class="sep">|</span>
-          <a href="timing/stable/testing/">Testing</a>
-          <span class="sep">|</span>
-          <a href="timing/experimental/">Experimental</a>
-        </div>
-      </div>
-
-      <div class="card">
-        <h2><a href="runner/stable/">chumicro-runner</a></h2>
-        <p>Tick-based task runner with check/handle gates, periodic tasks, and shared timestamps. No async required &mdash; deterministic scheduling for real-time embedded loops.</p>
-        <div class="card-links">
-          <a href="runner/stable/guide/">Guide</a>
-          <span class="sep">|</span>
-          <a href="runner/stable/api/">API</a>
-          <span class="sep">|</span>
-          <a href="runner/stable/testing/">Testing</a>
-          <span class="sep">|</span>
-          <a href="runner/experimental/">Experimental</a>
-        </div>
-      </div>
-
-      <div class="card">
         <h2><a href="compat/stable/">chumicro-compat</a></h2>
-        <p>Cross-runtime compatibility polyfills. Provides <code>functools.partial</code> for MicroPython and CircuitPython where it&rsquo;s missing, with the same API as CPython.</p>
+        <p>Cross-runtime compatibility polyfills for CircuitPython, MicroPython, and CPython.</p>
         <div class="card-links">
           <a href="compat/stable/guide/">Guide</a>
-          <span class="sep">|</span>
+          <span class="sep">&middot;</span>
           <a href="compat/stable/api/">API</a>
-          <span class="sep">|</span>
+          <span class="sep">&middot;</span>
           <a href="compat/experimental/">Experimental</a>
+          <span class="sep">&middot;</span>
+          <a href="https://github.com/ChuMicro/ChuMicro/tree/develop/libraries/compat">Source</a>
         </div>
       </div>
 
       <div class="card">
         <h2><a href="msgpack/stable/">chumicro-msgpack</a></h2>
-        <p>Compact MessagePack serialization with native CircuitPython C module delegation. Bytes and stream APIs for settings storage, IPC, and network payloads.</p>
+        <p>Cross-runtime MessagePack serialization for CircuitPython, MicroPython, and CPython.</p>
         <div class="card-links">
           <a href="msgpack/stable/guide/">Guide</a>
-          <span class="sep">|</span>
+          <span class="sep">&middot;</span>
           <a href="msgpack/stable/api/">API</a>
-          <span class="sep">|</span>
+          <span class="sep">&middot;</span>
           <a href="msgpack/experimental/">Experimental</a>
+          <span class="sep">&middot;</span>
+          <a href="https://github.com/ChuMicro/ChuMicro/tree/develop/libraries/msgpack">Source</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><a href="runner/stable/">chumicro-runner</a></h2>
+        <p>A tick-based task runner for CircuitPython, MicroPython, and CPython — no async required.</p>
+        <div class="card-links">
+          <a href="runner/stable/guide/">Guide</a>
+          <span class="sep">&middot;</span>
+          <a href="runner/stable/api/">API</a>
+          <span class="sep">&middot;</span>
+          <a href="runner/stable/testing/">Testing</a>
+          <span class="sep">&middot;</span>
+          <a href="runner/experimental/">Experimental</a>
+          <span class="sep">&middot;</span>
+          <a href="https://github.com/ChuMicro/ChuMicro/tree/develop/libraries/runner">Source</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><a href="timing/stable/">chumicro-timing</a></h2>
+        <p>Cross-runtime millisecond tick helpers and periodic timing utilities for CircuitPython, MicroPython, and CPython.</p>
+        <div class="card-links">
+          <a href="timing/stable/guide/">Guide</a>
+          <span class="sep">&middot;</span>
+          <a href="timing/stable/api/">API</a>
+          <span class="sep">&middot;</span>
+          <a href="timing/stable/testing/">Testing</a>
+          <span class="sep">&middot;</span>
+          <a href="timing/experimental/">Experimental</a>
+          <span class="sep">&middot;</span>
+          <a href="https://github.com/ChuMicro/ChuMicro/tree/develop/libraries/timing">Source</a>
         </div>
       </div>
     </div>
@@ -178,17 +169,17 @@
       <div class="install-grid">
         <div class="install-block">
           <h3>pip (CPython)</h3>
-          <pre>pip install chumicro-timing</pre>
+          <pre>pip install chumicro-compat</pre>
         </div>
         <div class="install-block">
           <h3>circup (CircuitPython)</h3>
           <pre>circup bundle-add ChuMicro/ChuMicro-Bundle
-circup install chumicro-timing</pre>
+circup install chumicro-compat</pre>
         </div>
         <div class="install-block">
           <h3>mip (MicroPython)</h3>
           <pre>mpremote mip install \
-  github:ChuMicro/ChuMicro-Bundle/chumicro_timing</pre>
+  github:ChuMicro/ChuMicro-Bundle/chumicro_compat</pre>
         </div>
       </div>
     </div>
