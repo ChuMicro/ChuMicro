@@ -1,0 +1,980 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://chumicro.github.io/ChuMicro/msgpack/dev/api/">
+      
+      
+        <link rel="prev" href="../guide/">
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="zensical-0.0.31">
+    
+    
+      
+        <title>API Reference - chumicro-msgpack</title>
+      
+    
+    
+      
+        
+      
+      <link rel="stylesheet" href="../assets/stylesheets/modern/main.53a7feaf.min.css">
+      
+        
+          
+        
+        <link rel="stylesheet" href="../assets/stylesheets/modern/palette.dfe2e883.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,500,500i,700,700i%7CJetBrains+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,t)=>(e<<5)-e+t.charCodeAt(0)),0),__md_get=(e,t=localStorage,a=__md_scope)=>JSON.parse(t.getItem(a.pathname+"."+e)),__md_set=(e,t,a=localStorage,_=__md_scope)=>{try{a.setItem(_.pathname+"."+e,JSON.stringify(t))}catch(e){}},document.documentElement.setAttribute("data-platform",navigator.platform)</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer" aria-label="Navigation"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#api-reference" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="./.." title="chumicro-msgpack" class="md-header__button md-logo" aria-label="chumicro-msgpack" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-book-open" viewBox="0 0 24 24"><path d="M12 7v14M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer" aria-label="Navigation">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-menu" viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h16"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            chumicro-msgpack
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              API Reference
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="none" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search" aria-label="Search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-search" viewBox="0 0 24 24"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog" aria-label="Search">
+  <button type="button" class="md-search__button">
+    Search
+  </button>
+</div>
+      
+    
+    <div class="md-header__source">
+      
+    </div>
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="./.." title="chumicro-msgpack" class="md-nav__button md-logo" aria-label="chumicro-msgpack" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-book-open" viewBox="0 0 24 24"><path d="M12 7v14M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>
+
+    </a>
+    chumicro-msgpack
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="././" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      On this page
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#chumicro_msgpack_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        chumicro_msgpack
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#chumicro_msgpack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        chumicro_msgpack
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="chumicro_msgpack">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_msgpack--public-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Public API
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_msgpack.pack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        pack
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_msgpack.unpack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        unpack
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_msgpack.packb" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        packb
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_msgpack.unpackb" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        unpackb
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#chumicro_msgpack_pure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        chumicro_msgpack._pure
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#chumicro_msgpack._pure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        _pure
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="_pure">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_msgpack._pure.packb" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        packb
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_msgpack._pure.unpackb" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        unpackb
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_msgpack._pure.pack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        pack
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_msgpack._pure.unpack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        unpack
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  
+                    
+                    
+                    
+                      
+                    
+                    
+                      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+                      <div class="md-sidebar-button__wrapper">
+                        <label class="md-sidebar-button" for="__toc"></label>
+                      </div>
+                    
+                  
+                  <div class="md-sidebar__inner">
+                    
+
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      On this page
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#chumicro_msgpack_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        chumicro_msgpack
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#chumicro_msgpack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        chumicro_msgpack
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="chumicro_msgpack">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_msgpack--public-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Public API
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_msgpack.pack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        pack
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_msgpack.unpack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        unpack
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_msgpack.packb" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        packb
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_msgpack.unpackb" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        unpackb
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#chumicro_msgpack_pure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        chumicro_msgpack._pure
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#chumicro_msgpack._pure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        _pure
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="_pure">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_msgpack._pure.packb" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        packb
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_msgpack._pure.unpackb" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        unpackb
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_msgpack._pure.pack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        pack
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chumicro_msgpack._pure.unpack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        unpack
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+<h1 id="api-reference">API Reference<a class="headerlink" href="#api-reference" title="Permanent link">&para;</a></h1>
+<h2 id="chumicro_msgpack_1">chumicro_msgpack<a class="headerlink" href="#chumicro_msgpack_1" title="Permanent link">&para;</a></h2>
+
+
+<div class="doc doc-object doc-module">
+
+
+
+<h2 id="chumicro_msgpack" class="doc doc-heading">
+            <code>chumicro_msgpack</code>
+
+
+<a href="#chumicro_msgpack" class="headerlink" title="Permanent link">&para;</a></h2>
+
+    <div class="doc doc-contents first">
+
+        <p>MessagePack serialization for CircuitPython, MicroPython, and CPython.</p>
+<p>Implements a subset of the <code>msgpack specification &lt;https://msgpack.org&gt;</code>_
+suitable for embedded use: integers (up to 32-bit), floats (32-bit),
+strings, bytes, booleans, None, lists, tuples, and dicts.</p>
+<p>64-bit integers and floats are not supported, matching CircuitPython's
+built-in <code>msgpack</code> module limitation.</p>
+<h4 id="chumicro_msgpack--public-api">Public API<a class="headerlink" href="#chumicro_msgpack--public-api" title="Permanent link">&para;</a></h4>
+<ul>
+<li><code>packb(obj)</code> — pack a Python object to msgpack bytes.</li>
+<li><code>unpackb(data)</code> — unpack msgpack bytes to a Python object.</li>
+<li><code>pack(obj, stream)</code> — pack to a writable stream.</li>
+<li><code>unpack(stream)</code> — unpack one object from a readable stream.</li>
+</ul>
+<p>On CircuitPython boards that include the native <code>msgpack</code> module,
+all four functions delegate to the C implementation.  The pure-Python
+encoder in <code>_pure</code> is never imported, saving ~700 bytes of heap RAM.</p>
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="chumicro_msgpack.pack" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">pack</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">stream</span><span class="p">)</span></code>
+
+<a href="#chumicro_msgpack.pack" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Pack <em>obj</em> to <em>stream</em> in msgpack format.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="chumicro_msgpack.unpack" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">unpack</span><span class="p">(</span><span class="n">stream</span><span class="p">)</span></code>
+
+<a href="#chumicro_msgpack.unpack" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Unpack one object from <em>stream</em>.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="chumicro_msgpack.packb" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">packb</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span></code>
+
+<a href="#chumicro_msgpack.packb" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Pack <em>obj</em> to msgpack bytes.</p>
+<p>Allocates a temporary <code>bytearray</code> that grows during encoding,
+then copies to <code>bytes</code>.  For small payloads this is fine; for
+larger data or tight loops, prefer <code>pack(obj, stream)</code> to write
+directly to a destination without the intermediate allocation.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="chumicro_msgpack.unpackb" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">unpackb</span><span class="p">(</span><span class="n">data</span><span class="p">)</span></code>
+
+<a href="#chumicro_msgpack.unpackb" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Unpack msgpack <em>data</em> (bytes, bytearray, or memoryview) to a Python object.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div><h2 id="chumicro_msgpack_pure">chumicro_msgpack._pure<a class="headerlink" href="#chumicro_msgpack_pure" title="Permanent link">&para;</a></h2>
+
+
+<div class="doc doc-object doc-module">
+
+
+
+<h2 id="chumicro_msgpack._pure" class="doc doc-heading">
+            <code>chumicro_msgpack._pure</code>
+
+
+<a href="#chumicro_msgpack._pure" class="headerlink" title="Permanent link">&para;</a></h2>
+
+    <div class="doc doc-contents first">
+
+        <p>Pure-Python msgpack encoder/decoder with native CircuitPython fallback.</p>
+<p>Supports: None, bool, int (32-bit), float (32-bit), str, bytes,
+bytearray, list, tuple, and dict.</p>
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="chumicro_msgpack._pure.packb" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">packb</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span></code>
+
+<a href="#chumicro_msgpack._pure.packb" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Pack <em>obj</em> to msgpack bytes.</p>
+<p>Allocates a temporary <code>bytearray</code> that grows during encoding,
+then copies to <code>bytes</code>.  For small payloads this is fine; for
+larger data or tight loops, prefer <code>pack(obj, stream)</code> to write
+directly to a destination without the intermediate allocation.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="chumicro_msgpack._pure.unpackb" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">unpackb</span><span class="p">(</span><span class="n">data</span><span class="p">)</span></code>
+
+<a href="#chumicro_msgpack._pure.unpackb" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Unpack msgpack <em>data</em> (bytes, bytearray, or memoryview) to a Python object.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="chumicro_msgpack._pure.pack" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">pack</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">stream</span><span class="p">)</span></code>
+
+<a href="#chumicro_msgpack._pure.pack" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Pack <em>obj</em> to <em>stream</em> in msgpack format.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="chumicro_msgpack._pure.unpack" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">unpack</span><span class="p">(</span><span class="n">stream</span><span class="p">)</span></code>
+
+<a href="#chumicro_msgpack._pure.unpack" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Unpack one object from <em>stream</em>.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://zensical.org/" target="_blank" rel="noopener">
+      Zensical
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate":null,"base":"..","features":[],"search":"../assets/javascripts/workers/search.e2d2d235.min.js","tags":null,"translations":{"clipboard.copied":"Copied to clipboard","clipboard.copy":"Copy to clipboard","search.result.more.one":"1 more on this page","search.result.more.other":"# more on this page","search.result.none":"No matching documents","search.result.one":"1 matching document","search.result.other":"# matching documents","search.result.placeholder":"Type to start searching","search.result.term.missing":"Missing","select.version":"Select version"},"version":{"default":["stable","experimental"],"provider":"mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.91a19a9e.min.js"></script>
+      
+    
+  </body>
+</html>
