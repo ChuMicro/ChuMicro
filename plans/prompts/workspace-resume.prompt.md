@@ -67,6 +67,7 @@ See [workspace-history.prompt.md](./workspace-history.prompt.md) for the full ra
 - `scripts/check_version.py` — VERSION enforcement for PRs
 - `scripts/check_api.py` — API breakage detection via griffe
 - `scripts/bundle.py` — bundle staging, mpy compilation, README generation
+- `scripts/discovery.py` — package discovery, scope parsing, change detection, `get_library_platforms()`
 
 ### What to produce at the start of the session
 
@@ -105,8 +106,7 @@ Create a short restart brief that states:
 
 ### Current known open areas
 
-- Per-library platform targeting implementation (Decision 0011 accepted, not yet wired into run.py)
-- Whether the advisory MicroPython and CircuitPython CI lanes should stay optional or become protected-branch requirements
+- Per-library platform targeting: `[tool.chumicro].platforms` reader is wired into `discovery.py` and compat runners (Decision 0011). Promoting advisory CI lanes to required is the remaining step.
 - VS Code workspace validation (pyrightconfig.json generated but not yet tested in VS Code)
 - Test ergonomics: reducing repeated boilerplate across test files
 - Contributor prerequisite documentation by platform

@@ -348,3 +348,14 @@ This was the largest single session. It addressed three areas: the workspace was
 5. Simplified `_find_bundle_modules()`: removed the testing-module special case — all `.py` files are now compiled to `.mpy` (testing modules are useful on-device too).
 6. Simplified `release.yml` bundle job: uses `stage-matrix`, `circup-zip`, and env vars instead of inline shell/Python; reduced from ~80 lines to ~20.
 
+#### 2026-04-05 (cont. 2) — Platform targeting wiring and PyPI discoverability
+
+**Platform targeting (Decision 0011 — wired):**
+1. Implemented `[tool.chumicro].platforms` reader in `scripts/discovery.py`: `get_library_platforms(lib_dir)` reads the key from `pyproject.toml` and returns a set of platform strings (default: all three runtimes when key is absent).
+2. Wired platform filtering into cross-runtime compat runners: `run_cross_runtime.py` and `discovery.py` in `support/test_harness/` now accept a `--libraries` list, and `run.py` passes only libraries that target the runtime under test.
+3. `new-library` scaffolder generates a `[tool.chumicro]` section with a commented-out `platforms` example.
+
+**PyPI discoverability:**
+4. Added `[project.urls]` to all four library `pyproject.toml` files (Homepage, Source, Issues, Changelog) for PyPI sidebar links.
+5. Cleaned up README footers across all libraries: standardised install/docs/license links and removed redundant badge markup.
+

@@ -106,10 +106,9 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
 
 1. Real board transport tooling beyond manual-only documentation.
 2. The second seam after timing/ticks (digital I/O).
-3. Per-library platform targeting implementation (Decision 0011 accepted, not yet wired into run.py).
-4. Whether the advisory runtime CI jobs should become protected-branch requirements.
-5. VS Code workspace validation (pyrightconfig.json generated but not tested in VS Code).
-6. Test ergonomics: reducing repeated boilerplate across test files.
-7. Contributor prerequisite documentation by platform.
-8. Branch protection rulesets configured but not enforced until repos go public.
-9. End-to-end circup/mip install validation once bundle repos are public.
+3. Promoting advisory runtime CI jobs to protected-branch requirements (platform targeting is now wired via `[tool.chumicro].platforms` in `discovery.py`; Decision 0011).
+4. VS Code workspace validation (pyrightconfig.json generated but not tested in VS Code).
+5. Test ergonomics: reducing repeated boilerplate across test files.
+6. Contributor prerequisite documentation by platform.
+7. Branch protection rulesets configured but not enforced until repos go public.
+8. End-to-end circup/mip install validation once bundle repos are public.
