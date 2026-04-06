@@ -57,22 +57,32 @@ def _read_prepared_binary(marker_name: str) -> str | None:
     return None
 
 
-def resolve_micropython_binary() -> str | None:
-    """Resolve a MicroPython binary from env vars, repo-local tools, or PATH."""
-    configured = os.environ.get("MICROPYTHON_BIN")
-    if configured:
-        return configured
+def resolve_micropython_binary(binary: str | None = None) -> str | None:
+    """Resolve a MicroPython binary from an explicit path, repo-local tools, or PATH.
+
+    Resolution order (first match wins):
+      1. *binary* — explicit override from CLI (``--micropython-bin``).
+      2. Marker file from ``prepare-micropython`` — local repo-managed build.
+      3. System PATH lookup — globally installed binary as last resort.
+    """
+    if binary:
+        return binary
     prepared = _read_prepared_binary("micropython.path")
     if prepared:
         return prepared
     return shutil.which("micropython")
 
 
-def resolve_circuitpython_binary() -> str | None:
-    """Resolve a CircuitPython binary from env vars, repo-local tools, or PATH."""
-    configured = os.environ.get("CIRCUITPYTHON_BIN")
-    if configured:
-        return configured
+def resolve_circuitpython_binary(binary: str | None = None) -> str | None:
+    """Resolve a CircuitPython binary from an explicit path, repo-local tools, or PATH.
+
+    Resolution order (first match wins):
+      1. *binary* — explicit override from CLI (``--circuitpython-bin``).
+      2. Marker file from ``prepare-circuitpython`` — local repo-managed build.
+      3. System PATH lookup — globally installed binary as last resort.
+    """
+    if binary:
+        return binary
     prepared = _read_prepared_binary("circuitpython.path")
     if prepared:
         return prepared

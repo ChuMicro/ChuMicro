@@ -30,7 +30,7 @@ python scripts/run.py prepare-micropython
 python scripts/run.py test-micropython-compatibility
 ```
 
-If `MICROPYTHON_BIN` is not set, `scripts/run.py` falls back to the repo-local prepared runtime under `.tools/`, and then to a `micropython` executable on `PATH`.
+If no explicit binary is given, `scripts/run.py` falls back to the repo-local prepared runtime under `.tools/`, and then to a `micropython` executable on `PATH`.  To override, pass `--micropython-bin /path/to/binary`.
 
 ### CircuitPython unix-port evaluation run
 
@@ -40,7 +40,7 @@ python scripts/run.py prepare-circuitpython
 python scripts/run.py test-circuitpython-compatibility
 ```
 
-If `CIRCUITPYTHON_BIN` is not set, `scripts/run.py` first tries the repo-local prepared runtime under `.tools/`, then a `circuitpython` executable on `PATH`, and otherwise triggers the repo-managed prepare step automatically.
+If no explicit binary is given, `scripts/run.py` first tries the repo-local prepared runtime under `.tools/`, then a `circuitpython` executable on `PATH`, and otherwise triggers the repo-managed prepare step automatically.  To override, pass `--circuitpython-bin /path/to/binary`.
 
 In this workspace on macOS, the pinned upstream `10.1.4` unix-port build now completes and the cross-runtime unit tests pass under both MicroPython and CircuitPython unix-port interpreters.
 
@@ -58,4 +58,3 @@ This runs the current verified CPython host test suite, prepares the repo-local 
 ## Device registration
 
 Real-board execution is still manual-only. Use `devices.example.yml` as the starting point for your local `devices.yml` file. Keep `devices.yml` out of version control.
-

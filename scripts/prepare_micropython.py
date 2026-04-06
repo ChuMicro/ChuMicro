@@ -18,6 +18,9 @@ _BINARY = _SOURCE_DIR / "ports" / "unix" / "build-standard" / "micropython"
 def _build_env() -> dict[str, str]:
     """Return environment variables for the MicroPython build."""
     env = os.environ.copy()
+    # macOS Clang treats gnu-folding-constant as an error by default,
+    # which breaks the MicroPython build.  Suppress it here so the
+    # build succeeds.  Not needed on Linux/GCC.
     if sys.platform == "darwin":
         flag = "-Wno-error=gnu-folding-constant"
         existing = env.get("CFLAGS_EXTRA", "").split()

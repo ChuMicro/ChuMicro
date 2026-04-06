@@ -49,13 +49,18 @@ def _check(base_ref: str) -> int:
 
         lib_name = parts[1]
 
-        # Check if VERSION itself was changed.
+        # Check if VERSION itself was changed.  The len==3 guard ensures
+        # we only match the root-level VERSION file (libraries/<name>/VERSION)
+        # and not a hypothetical nested file like libraries/<name>/src/VERSION.
         if parts[2] == "VERSION" and len(parts) == 3:
             libs_with_bump.add(lib_name)
             continue
 
         # Check if the changed path is release-relevant.
-        # src/anything or pyproject.toml at the library root.
+        # RELEASE_RELEVANT = {"src", "pyproject.toml"}.  For "src",
+        # parts[2] matches the directory name so any file under src/
+        # qualifies (len(parts) >= 3 already holds).  For "pyproject.toml",
+        # it matches the filename directly at the library root.
         if parts[2] in RELEASE_RELEVANT:
             libs_needing_bump.add(lib_name)
 

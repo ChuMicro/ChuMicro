@@ -17,7 +17,7 @@ import re
 import subprocess
 import sys
 
-from discovery import ROOT, changed_libraries
+from discovery import ROOT, changed_libraries, find_package_dir
 
 
 def _latest_tag(lib_name: str) -> str | None:
@@ -65,17 +65,6 @@ def _bump_level(old_version: str, new_version: str) -> str | None:
     return None
 
 
-def _find_package_name(lib_name: str) -> str | None:
-    """Find the importable package name under a library's src/ directory."""
-    src_dir = ROOT / "libraries" / lib_name / "src"
-    if not src_dir.is_dir():
-        return None
-    for child in src_dir.iterdir():
-        if child.is_dir() and (child / "__init__.py").exists():
-            return child.name
-    return None
-
-
 def _check(base_ref: str) -> int:
     """Run the API breakage check.  Returns exit code."""
     libs = changed_libraries(base_ref)
@@ -91,10 +80,11 @@ def _check(base_ref: str) -> int:
             print(f"SKIP: {lib_name} — no previous release tag found.")
             continue
 
-        package_name = _find_package_name(lib_name)
-        if package_name is None:
+        pkg = find_package_dir(ROOT / "libraries" / lib_name)
+        if pkg is None:
             print(f"SKIP: {lib_name} — no importable package under src/.")
             continue
+        package_name = pkg.name
 
         new_version = _read_version(lib_name)
         if new_version is None:
@@ -110,7 +100,10 @@ def _check(base_ref: str) -> int:
         bump = _bump_level(old_version, new_version)
 
         # Run griffe check.
-        # Search path must include the library's src/ directory.
+        # --search must point at the library's src/ directory so griffe
+        # can find the package for import resolution.  We capture both
+        # stdout and stderr because griffe emits breakage details on
+        # different streams depending on version.
         src_dir = str(ROOT / "libraries" / lib_name / "src")
         result = subprocess.run(
             [
@@ -131,7 +124,10 @@ def _check(base_ref: str) -> int:
             print(f"OK: {lib_name} — no API breakages detected.")
             continue
 
-        # Breakages detected — check bump level.
+        # Breakages detected — check whether the VERSION bump level is
+        # sufficient.  SemVer pre-1.0 semantics (major == 0) allow
+        # breaking changes on a minor bump; post-1.0 requires a major
+        # bump.  See Decision 0020.
         major_version = _parse_version(new_version)
         is_pre_1 = major_version is not None and major_version[0] == 0
 

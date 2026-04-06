@@ -9,8 +9,15 @@ Usage::
     python scripts/prepare_workspace.py              # install deps + verify
     python scripts/prepare_workspace.py --create-venv  # create .venv first
 
-The script uses only the standard library so it can run on a fresh
-clone before any packages are installed.
+This script is deliberately standalone — it imports only the standard
+library so it can run on a fresh clone before any packages are installed.
+Its own code is compatible with Python 3.7+, so it can deliver a
+friendly version error on older interpreters before anything breaks.
+``discovery.py`` is currently stdlib-only too, but coupling this
+bootstrap entry point to it would make ``check_python_version()``
+fragile: any future module-level import in ``discovery.py`` that
+requires 3.11+ (e.g. ``tomllib``) would replace the friendly message
+with a confusing ``ModuleNotFoundError``.
 """
 
 from __future__ import annotations
@@ -25,19 +32,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 VENV_DIR = ROOT / ".venv"
-MIN_PYTHON = (3, 11)
-_REQUIREMENTS_FILE = ROOT / "requirements-dev.txt"
-
-
-def _read_dev_packages() -> list[str]:
-    """Read static dev package names from requirements-dev.txt."""
-    if not _REQUIREMENTS_FILE.exists():
-        return ["pytest", "pytest-cov", "ruff", "build"]
-    return [
-        line.strip()
-        for line in _REQUIREMENTS_FILE.read_text().splitlines()
-        if line.strip() and not line.strip().startswith("#")
-    ]
+#: Minimum Python for the workspace (pytest 8, hatchling, griffe need 3.8+;
+#: 3.9 is the oldest version with broad community support).  tomllib was
+#: the previous hard 3.11 floor — now covered by the tomli backport.
+#: The version check runs against the *resolved* interpreter after venv
+#: creation — not the system Python.  This lets uv create a suitable venv
+#: even when the system default is older.  This script itself runs on
+#: 3.7+ so it can deliver a friendly error on any interpreter.
+MIN_PYTHON = (3, 9)
 
 
 # ---------------------------------------------------------------------------
@@ -101,10 +103,31 @@ def _missing_unix_port_tools() -> list[str]:
 # ---------------------------------------------------------------------------
 
 
-def check_python_version() -> None:
-    """Fail fast if the interpreter is too old."""
-    version = ".".join(str(v) for v in sys.version_info[:3])
-    if sys.version_info >= MIN_PYTHON:
+def _check_python_version(python: Path | None = None) -> None:
+    """Verify that an interpreter meets the minimum workspace version.
+
+    When *python* is ``None``, checks the running interpreter directly
+    (fast, no subprocess).  When *python* is a path, shells out to query
+    the target interpreter — needed after creating a venv whose Python
+    may differ from the one running this script.
+    """
+    if python is None:
+        version = ".".join(str(v) for v in sys.version_info[:3])
+        ok = sys.version_info[:2] >= MIN_PYTHON
+    else:
+        result = subprocess.run(
+            [str(python), "-c",
+             "import sys; print('.'.join(str(v) for v in sys.version_info[:3]))"],
+            capture_output=True, text=True, cwd=ROOT,
+        )
+        if result.returncode != 0:
+            print(f"Cannot determine Python version: {python}")
+            raise SystemExit(1)
+        version = result.stdout.strip()
+        parts = tuple(int(x) for x in version.split(".")[:2])
+        ok = parts >= MIN_PYTHON
+
+    if ok:
         print(f"Python {version} — OK")
         return
 
@@ -135,12 +158,18 @@ def resolve_python(create_venv: bool) -> Path:
         if _venv_python().exists():
             print(f"Virtual environment exists: {VENV_DIR}")
         elif _has_uv():
+            min_ver = ".".join(str(v) for v in MIN_PYTHON)
             _banner("Creating virtual environment (uv)")
             print(f"  {VENV_DIR}\n")
             subprocess.run(
-                ["uv", "venv", str(VENV_DIR)], cwd=ROOT, check=True,
+                ["uv", "venv", "--python", f">={min_ver}",
+                 str(VENV_DIR)],
+                cwd=ROOT, check=True,
             )
         else:
+            # stdlib venv inherits the running interpreter's version —
+            # check it first to avoid creating a useless venv.
+            _check_python_version()
             _banner("Creating virtual environment")
             print(f"  {VENV_DIR}\n")
             venv.create(str(VENV_DIR), with_pip=True)
@@ -173,15 +202,16 @@ def install_dependencies(python: Path) -> None:
     ``python -m pip install``.  The ``--python`` flag tells uv which
     environment to target even if it has not been activated yet.
     """
-    packages = _read_dev_packages()
+    req_file = str(ROOT / "requirements-dev.txt")
     if _has_uv():
         _run(
-            ["uv", "pip", "install", "--python", str(python), "-U", *packages],
+            ["uv", "pip", "install", "--python", str(python), "-U",
+             "-r", req_file],
             "Installing development dependencies (uv)",
         )
     else:
         _run(
-            [python, "-m", "pip", "install", "-U", *packages],
+            [python, "-m", "pip", "install", "-U", "-r", req_file],
             "Installing development dependencies",
         )
 
@@ -244,8 +274,8 @@ def main() -> None:
     _banner("Preparing Chumicro workspace")
     print()
 
-    check_python_version()
     python = resolve_python(args.create_venv)
+    _check_python_version(python)
     install_dependencies(python)
     verify_workspace(python)
     print_summary(python)

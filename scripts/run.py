@@ -63,20 +63,13 @@ def setup() -> int:
     mp_version = VERSIONS["micropython"]["version"].lstrip("v")
 
     # Static deps from requirements-dev.txt, dynamic stubs appended here.
-    dev_packages: list[str] = []
-    req_file = ROOT / "requirements-dev.txt"
-    if req_file.exists():
-        for line in req_file.read_text().splitlines():
-            stripped = line.strip()
-            if stripped and not stripped.startswith("#"):
-                dev_packages.append(stripped)
-
-    dev_packages.extend([
+    req_file = str(ROOT / "requirements-dev.txt")
+    stubs = [
         f"circuitpython-stubs=={cp_version}",
         f"micropython-esp32-stubs=={mp_version}.*",
-    ])
+    ]
 
-    result = _run([*_install_command(), "-U", *dev_packages])
+    result = _run([*_install_command(), "-U", "-r", req_file, *stubs])
     if result != 0:
         return result
     return sync_ide()
@@ -150,6 +143,9 @@ def test_cpython(
         timing/test_a,runner/test_b      # comma-separated
     """
     # Parse library-scoped filters from filter_expr.
+    # When -k is set, library names extracted from the filter expression
+    # completely replace pkg_dirs (from --all / --libraries / change
+    # detection).  -k takes precedence over scope flags.
     per_library: dict[str, list[tuple[str | None, str]]] | None = None
     if filter_expr:
         per_library = _parse_library_filters(filter_expr)
@@ -174,14 +170,18 @@ def test_cpython(
 
     env = pythonpath_env()
 
-    # Clean stale coverage data so combine starts fresh.
+    # Clean stale coverage data so combine starts fresh.  Two globs are
+    # needed: `.coverage` (the default combined file) and `.coverage.*`
+    # (the per-run files we create below with unique suffixes).
     for f in ROOT.glob(".coverage"):
         f.unlink()
     for f in ROOT.glob(".coverage.*"):
         f.unlink()
 
-    # When filtering or skipping coverage, relax per-library coverage
-    # gates — filtering naturally reduces coverage.
+    # Relax coverage gates when either:
+    #   - filter_expr is set (selecting a subset of tests naturally
+    #     reduces branch coverage below the 90% threshold), or
+    #   - no_cov is set (user explicitly opted out of coverage).
     relax_coverage = bool(filter_expr) or no_cov
     cov_gate_args = ["--cov-fail-under=0"] if relax_coverage else []
 
@@ -190,6 +190,15 @@ def test_cpython(
 
     for pkg_dir in testable:
         # Determine what pytest runs are needed for this library.
+        #
+        # Filter entries split into two categories:
+        #   - "global" (no file specified): combined with `or` into a
+        #     single pytest invocation across the whole tests/ dir.
+        #   - "file-scoped" (library/file/expr): each gets its own
+        #     pytest invocation targeting a specific test file.
+        #
+        # Each invocation writes to a unique COVERAGE_FILE to avoid
+        # overwriting coverage data from other runs.
         if per_library is not None:
             entries = per_library.get(pkg_dir.name, [])
 
@@ -436,7 +445,10 @@ def docs(pkg_dirs: list[Path], *, serve: bool = False) -> int:
     return overall_rc
 
 
-def preflight() -> int:
+def preflight(
+    mp_binary: str | None = None,
+    cp_binary: str | None = None,
+) -> int:
     """Run the full check suite that CI requires on every pull request.
 
     Covers lint, all CPython tests, example verification, MicroPython and
@@ -448,8 +460,8 @@ def preflight() -> int:
         ("lint", lint),
         ("test", lambda: test_cpython(all_pkgs)),
         ("verify-examples", lambda: verify_examples(all_pkgs)),
-        ("test-micropython-compatibility", test_micropython_compatibility),
-        ("test-circuitpython-compatibility", test_circuitpython_compatibility),
+        ("test-micropython-compatibility", lambda: test_micropython_compatibility(mp_binary)),
+        ("test-circuitpython-compatibility", lambda: test_circuitpython_compatibility(cp_binary)),
         ("build", build),
     )
 
@@ -474,67 +486,76 @@ def prepare_circuitpython() -> int:
     return _prepare_circuitpython()
 
 
-def test_micropython_compatibility() -> int:
+def _test_runtime_compat(
+    platform: str,
+    label: str,
+    resolve_binary,
+    prepare_fn,
+) -> int:
+    """Run cross-runtime unit tests for a single runtime.
+
+    Shared implementation for :func:`test_micropython_compatibility` and
+    :func:`test_circuitpython_compatibility`.  Resolves the binary,
+    auto-prepares when missing, then runs the compat script for libraries
+    that target *platform*.
+    """
+    binary = resolve_binary()
+    if binary is None:
+        print(f"{label} binary not found. Preparing unix-port runtime first.")
+        prepare_result = prepare_fn()
+        if prepare_result != 0:
+            print(f"{label} preparation failed.")
+            return prepare_result
+
+        binary = resolve_binary()
+        if binary is None:
+            print(
+                f"Preparation completed without the expected binary. "
+                f"Pass --{platform}-bin <path> and retry."
+            )
+            return 1
+
+    # Only publishable libraries under libraries/ are tested against
+    # non-CPython runtimes.  support/ packages are CPython-only
+    # infrastructure and are excluded from cross-runtime validation.
+    lib_dirs = [d for d in discover_package_dirs() if d.parent.name == "libraries"]
+    platform_libs = filter_by_platform(lib_dirs, platform)
+    lib_names = [d.name for d in platform_libs]
+    return _run([binary, COMPAT_SCRIPT, *lib_names])
+
+
+def test_micropython_compatibility(binary: str | None = None) -> int:
     """Run the cross-runtime unit tests with the MicroPython Unix binary.
 
     Skips libraries that do not target MicroPython.
     """
-    micropython_bin = resolve_micropython_binary()
-    if micropython_bin is None:
-        print("MicroPython binary not found. Preparing unix-port runtime first.")
-        prepare_result = prepare_micropython()
-        if prepare_result != 0:
-            print("MicroPython preparation failed.")
-            return prepare_result
-
-        micropython_bin = resolve_micropython_binary()
-        if micropython_bin is None:
-            print(
-                "Preparation completed without the expected binary. "
-                "Set MICROPYTHON_BIN and retry."
-            )
-            return 1
-
-    lib_dirs = [d for d in discover_package_dirs() if d.parent.name == "libraries"]
-    mp_libs = filter_by_platform(lib_dirs, "micropython")
-    lib_names = [d.name for d in mp_libs]
-    return _run([micropython_bin, COMPAT_SCRIPT, *lib_names])
+    return _test_runtime_compat(
+        "micropython", "MicroPython",
+        lambda: resolve_micropython_binary(binary), prepare_micropython,
+    )
 
 
-def test_circuitpython_compatibility() -> int:
+def test_circuitpython_compatibility(binary: str | None = None) -> int:
     """Run the cross-runtime unit tests with a configured or repo-managed CircuitPython binary.
 
     Skips libraries that do not target CircuitPython.
     """
-    circuitpython_bin = resolve_circuitpython_binary()
-    if circuitpython_bin is None:
-        print("CircuitPython binary not found. Preparing unix-port runtime first.")
-        prepare_result = prepare_circuitpython()
-        if prepare_result != 0:
-            print("CircuitPython preparation failed.")
-            return prepare_result
-
-        circuitpython_bin = resolve_circuitpython_binary()
-        if circuitpython_bin is None:
-            print(
-                "Preparation completed without the expected binary. "
-                "Set CIRCUITPYTHON_BIN and retry."
-            )
-            return 1
-
-    lib_dirs = [d for d in discover_package_dirs() if d.parent.name == "libraries"]
-    cp_libs = filter_by_platform(lib_dirs, "circuitpython")
-    lib_names = [d.name for d in cp_libs]
-    return _run([circuitpython_bin, COMPAT_SCRIPT, *lib_names])
+    return _test_runtime_compat(
+        "circuitpython", "CircuitPython",
+        lambda: resolve_circuitpython_binary(binary), prepare_circuitpython,
+    )
 
 
-def test_runtime_matrix() -> int:
+def test_runtime_matrix(
+    mp_binary: str | None = None,
+    cp_binary: str | None = None,
+) -> int:
     """Run host tests and cross-runtime unit tests across all proven runtimes."""
     all_pkgs = discover_package_dirs()
     steps = (
         ("test", lambda: test_cpython(all_pkgs)),
-        ("test-micropython-compatibility", test_micropython_compatibility),
-        ("test-circuitpython-compatibility", test_circuitpython_compatibility),
+        ("test-micropython-compatibility", lambda: test_micropython_compatibility(mp_binary)),
+        ("test-circuitpython-compatibility", lambda: test_circuitpython_compatibility(cp_binary)),
     )
 
     for step_name, step in steps:
@@ -591,6 +612,20 @@ def _scope_parent() -> argparse.ArgumentParser:
     return parent
 
 
+def _binary_parent() -> argparse.ArgumentParser:
+    """Parent parser providing runtime binary override flags."""
+    parent = argparse.ArgumentParser(add_help=False)
+    parent.add_argument(
+        "--micropython-bin", metavar="PATH",
+        help="path to MicroPython binary (overrides auto-detection)",
+    )
+    parent.add_argument(
+        "--circuitpython-bin", metavar="PATH",
+        help="path to CircuitPython binary (overrides auto-detection)",
+    )
+    return parent
+
+
 def _build_parser() -> argparse.ArgumentParser:
     """Build the top-level CLI parser with subcommands."""
     parser = argparse.ArgumentParser(
@@ -599,25 +634,29 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     sub = parser.add_subparsers(dest="task")
     scope = _scope_parent()
+    binary = _binary_parent()
 
     # No-arg tasks
     sub.add_parser("setup", help="install deps and regenerate IDE config")
     sub.add_parser("sync-ide", help="regenerate IDE config files")
     sub.add_parser("lint", help="run Ruff across the workspace")
     sub.add_parser("build", help="build all publishable packages")
-    sub.add_parser("preflight", help="lint + test + examples + compat + build")
+    sub.add_parser("preflight", parents=[binary], help="lint + test + examples + compat + build")
     sub.add_parser("prepare-micropython", help="prepare MicroPython unix-port")
     sub.add_parser("prepare-circuitpython", help="prepare CircuitPython unix-port")
     sub.add_parser(
         "test-micropython-compatibility",
+        parents=[binary],
         help="MicroPython cross-runtime unit tests",
     )
     sub.add_parser(
         "test-circuitpython-compatibility",
+        parents=[binary],
         help="CircuitPython cross-runtime unit tests",
     )
     sub.add_parser(
         "test-runtime-matrix",
+        parents=[binary],
         help="test all packages on CPython + MicroPython + CircuitPython",
     )
     sub.add_parser("test-device", help="device validation info")
@@ -711,18 +750,29 @@ def main(argv: list[str]) -> int:
     if args.task == "new-library":
         return new_library(args.name)
 
+    # --- tasks that accept runtime binary overrides ---
+    if args.task in {
+        "preflight", "test-micropython-compatibility",
+        "test-circuitpython-compatibility", "test-runtime-matrix",
+    }:
+        mp_bin = args.micropython_bin
+        cp_bin = args.circuitpython_bin
+        if args.task == "test-micropython-compatibility":
+            return test_micropython_compatibility(mp_bin)
+        if args.task == "test-circuitpython-compatibility":
+            return test_circuitpython_compatibility(cp_bin)
+        if args.task == "test-runtime-matrix":
+            return test_runtime_matrix(mp_bin, cp_bin)
+        return preflight(mp_bin, cp_bin)
+
     # --- no-arg tasks ---
     no_arg = {
         "setup": setup,
         "sync-ide": sync_ide,
         "lint": lint,
         "build": build,
-        "preflight": preflight,
         "prepare-micropython": prepare_micropython,
         "prepare-circuitpython": prepare_circuitpython,
-        "test-micropython-compatibility": test_micropython_compatibility,
-        "test-circuitpython-compatibility": test_circuitpython_compatibility,
-        "test-runtime-matrix": test_runtime_matrix,
         "test-device": test_device,
         "check-version": check_version,
         "check-api": check_api,

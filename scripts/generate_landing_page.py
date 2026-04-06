@@ -15,9 +15,8 @@ The docs-deploy workflow calls this to regenerate the page on every push.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+from discovery import ROOT
 
 
 def _strip_markdown_links(text: str) -> str:
@@ -40,14 +39,18 @@ def _discover_libraries() -> list[dict]:
         description = ""
         if readme.exists():
             text = readme.read_text()
-            # First non-heading, non-blank paragraph
+            # Extract the first "real" paragraph line from the README.
+            # Skip headings (#), blank lines, and table rows (|) — some
+            # READMEs have a metadata or badge table near the top.
             for line in text.splitlines():
                 stripped = line.strip()
                 if stripped and not stripped.startswith("#") and not stripped.startswith("|"):
                     description = _strip_markdown_links(stripped)
                     break
 
-        # Detect nav entries from mkdocs.yml to know if testing.md exists
+        # Detect whether the library's docs include a testing page.
+        # A plain text search in mkdocs.yml is a pragmatic shortcut —
+        # YAML parsing would be heavier for this single boolean check.
         mkdocs_text = (child / "mkdocs.yml").read_text()
         has_testing = "testing.md" in mkdocs_text
 

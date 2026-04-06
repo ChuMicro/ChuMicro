@@ -15,7 +15,13 @@ def _sync_pycharm_iml() -> None:
     """Regenerate .idea/chumicro.iml source roots from the workspace structure."""
     iml_path = ROOT / ".idea" / "chumicro.iml"
 
-    # Preserve the existing SDK reference so users keep their interpreter setting.
+    # Preserve the existing SDK reference so users keep their interpreter
+    # setting across regenerations.  PyCharm stores the project SDK as a
+    # line containing type="jdk" (its internal name for the Python
+    # interpreter entry).  We scan for it with text search rather than
+    # XML parsing to avoid adding a dependency on lxml/ElementTree for
+    # this single line.  Losing this entry would reset the user's
+    # interpreter selection in the IDE.
     jdk_line = ""
     if iml_path.exists():
         for line in iml_path.read_text().splitlines():
@@ -40,6 +46,9 @@ def _sync_pycharm_iml() -> None:
 
     sources = "\n".join(source_lines)
     jdk_entry = f"\n{jdk_line}" if jdk_line else ""
+    # Two-phase interpolation: the template uses f-string for {sources}
+    # but defers {jdk} to .format() because the XML content contains
+    # literal curly braces that would conflict with f-string syntax.
     content = (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<module type="PYTHON_MODULE" version="4">\n'

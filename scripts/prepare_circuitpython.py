@@ -13,6 +13,8 @@ _RELEASE = VERSIONS["circuitpython"]["version"]
 _REPO_URL = "https://github.com/adafruit/circuitpython.git"
 _SOURCE_DIR = TOOLS / f"circuitpython-{_RELEASE}"
 _UNIX_VARIANT = "standard"
+# The CircuitPython unix-port binary is named "micropython" — inherited
+# from the MicroPython fork.  This is expected, not a misconfiguration.
 _BINARY = _SOURCE_DIR / "ports" / "unix" / f"build-{_UNIX_VARIANT}" / "micropython"
 
 
@@ -69,6 +71,11 @@ def prepare_circuitpython() -> int:
         _ensure_source_tree()
 
         jobs = f"-j{build_jobs()}"
+        # Build steps must run in this exact order:
+        #   1. ci_fetch_deps.py — fetches git submodules and vendored deps
+        #      that mpy-cross and the unix-port Makefile both depend on.
+        #   2. mpy-cross — the bytecode compiler, needed before the port.
+        #   3. ports/unix make — the actual unix-port binary.
         run_build_command(
             [sys.executable, "tools/ci_fetch_deps.py", "mpy-cross", "tests"],
             cwd=_SOURCE_DIR,

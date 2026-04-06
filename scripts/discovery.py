@@ -10,6 +10,11 @@ import os
 import subprocess
 from pathlib import Path
 
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib  # type: ignore[import-not-found,no-redef]
+
 ROOT = Path(__file__).resolve().parent.parent
 TOOLS = ROOT / ".tools"
 
@@ -19,7 +24,6 @@ ALL_PLATFORMS = ("cpython", "micropython", "circuitpython")
 
 def read_runtime_versions() -> dict:
     """Read pinned runtime versions from ``runtime-versions.toml``."""
-    import tomllib
 
     with (ROOT / "runtime-versions.toml").open("rb") as f:
         return tomllib.load(f)
@@ -33,7 +37,6 @@ def read_platforms(pkg_dir: Path) -> tuple[str, ...]:
 
     See ``plans/decisions/0011-platform-targeting.md``.
     """
-    import tomllib
 
     pyproject = pkg_dir / "pyproject.toml"
     if not pyproject.exists():
@@ -49,6 +52,27 @@ def read_platforms(pkg_dir: Path) -> tuple[str, ...]:
 def filter_by_platform(pkg_dirs: list[Path], platform: str) -> list[Path]:
     """Return only packages that target *platform*."""
     return [d for d in pkg_dirs if platform in read_platforms(d)]
+
+
+def find_package_dir(lib_dir: Path) -> Path | None:
+    """Find the single importable package directory under a library's ``src/``.
+
+    Returns the first directory inside ``<lib_dir>/src/`` that contains
+    an ``__init__.py`` and is not a dot-prefixed or egg-info directory.
+    Returns ``None`` when no importable package is found.
+    """
+    src = lib_dir / "src"
+    if not src.is_dir():
+        return None
+    for child in sorted(src.iterdir()):
+        if (
+            child.is_dir()
+            and (child / "__init__.py").exists()
+            and not child.name.startswith(".")
+            and not child.name.endswith(".egg-info")
+        ):
+            return child
+    return None
 
 
 def discover_package_dirs() -> list[Path]:
@@ -83,16 +107,9 @@ def coverage_args_for(pkg_dirs: list[Path]) -> list[str]:
     """Return ``--cov`` arguments for importable packages under *pkg_dirs*."""
     args: list[str] = []
     for pkg_dir in pkg_dirs:
-        src = pkg_dir / "src"
-        if not src.is_dir():
-            continue
-        for pkg in sorted(src.iterdir()):
-            if (
-                pkg.is_dir()
-                and (pkg / "__init__.py").exists()
-                and not pkg.name.endswith(".egg-info")
-            ):
-                args.extend(["--cov", str(pkg.relative_to(ROOT))])
+        pkg = find_package_dir(pkg_dir)
+        if pkg is not None:
+            args.extend(["--cov", str(pkg.relative_to(ROOT))])
     return args
 
 
@@ -128,6 +145,11 @@ def detect_changed_packages() -> list[Path] | None:
     """
     try:
         changed: set[str] = set()
+        # Union three diffs to catch all local work:
+        #   1. Committed changes on this branch vs origin/main
+        #   2. Unstaged working-tree changes
+        #   3. Staged but uncommitted changes
+        # This ensures we never miss files regardless of commit state.
         for cmd in (
             ["git", "diff", "--name-only", "origin/main...HEAD"],
             ["git", "diff", "--name-only"],
@@ -139,12 +161,19 @@ def detect_changed_packages() -> list[Path] | None:
             if result.returncode == 0 and result.stdout.strip():
                 changed.update(result.stdout.strip().splitlines())
     except (FileNotFoundError, OSError):
+        # git unavailable (e.g. no .git dir) — caller treats None as
+        # "run everything" to be safe.
         return None
 
     if not changed:
+        # No changes at all — also means "run everything" so the default
+        # invocation always does useful work.
         return None
 
-    # Infrastructure changes → run everything
+    # Infrastructure changes affect all packages.  Root conftest.py
+    # configures sys.path for all tests; root pyproject.toml controls
+    # shared tooling; scripts/ and .github/ define CI and task-runner
+    # behavior.  Any change here invalidates per-library scoping.
     for path in changed:
         if path in ("conftest.py", "pyproject.toml"):
             return None
@@ -207,6 +236,7 @@ def find_publishable_packages() -> list[str]:
     return packages
 
 
+
 def pythonpath_env() -> dict[str, str]:
     """Return an environment with the repo source roots prepended to PYTHONPATH."""
     env = os.environ.copy()
@@ -230,6 +260,11 @@ RELEASE_RELEVANT = {"src", "pyproject.toml"}
 
 def changed_files(base_ref: str) -> list[str]:
     """Return files changed between *base_ref* and HEAD."""
+    # Three-dot syntax finds changes since the merge-base, which is the
+    # standard PR diff.  It fails in shallow clones (CI) where the
+    # merge-base commit is not fetched.  The two-arg fallback gives a
+    # full diff between the two refs — a superset that may include extra
+    # files, but is safe (we'd rather over-test than under-test).
     result = subprocess.run(
         ["git", "diff", "--name-only", f"{base_ref}...HEAD"],
         capture_output=True,
@@ -238,7 +273,6 @@ def changed_files(base_ref: str) -> list[str]:
         check=False,
     )
     if result.returncode != 0:
-        # Fallback: diff against base_ref directly (shallow clones).
         result = subprocess.run(
             ["git", "diff", "--name-only", base_ref, "HEAD"],
             capture_output=True,
@@ -260,6 +294,11 @@ def changed_libraries(base_ref: str) -> set[str]:
     libs: set[str] = set()
     for path in changed:
         parts = path.split("/")
+        # parts[2] is checked against RELEASE_RELEVANT = {"src", "pyproject.toml"}.
+        # "src" acts as a directory prefix (any file under src/ qualifies),
+        # while "pyproject.toml" is an exact match (len(parts)==3 for the
+        # root-level file).  Both work because we only need to know whether
+        # the library was touched — not which specific file changed.
         if len(parts) >= 3 and parts[0] == "libraries" and parts[2] in RELEASE_RELEVANT:
             libs.add(parts[1])
     return libs

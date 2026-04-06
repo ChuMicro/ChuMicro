@@ -191,6 +191,7 @@ jobs:
       - name: Stage bundle artifacts
         run: |
           python scripts/bundle.py stage-matrix .bundle-staging \
+            --matrix "$MATRIX_JSON" \
             ${{ needs.detect.outputs.is_experimental == 'true' && '--experimental' || '' }}
 
       - name: Generate bundle README

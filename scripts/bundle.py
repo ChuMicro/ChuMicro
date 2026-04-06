@@ -10,11 +10,10 @@ Subcommands:
     stage        Stage a single library's bundle artifacts.
     stage-matrix Stage artifacts for libraries in a JSON matrix (--matrix).
     readme       Generate a bundle repo README.md.
-    stage-matrix Stage artifacts for libraries in a JSON matrix (env var).
 
 Examples:
     python scripts/bundle.py stage libraries/timing 0.1.0 .bundle-staging
-    MATRIX_JSON='...' python scripts/bundle.py stage-matrix .bundle-staging
+    python scripts/bundle.py stage-matrix .bundle-staging --matrix '{"include": [...]}'
     python scripts/bundle.py readme --experimental -o README.md
     python scripts/bundle.py circup-zip .bundle-repo .circup-zips --repo-name ChuMicro-Bundle
 """
@@ -23,15 +22,20 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import shutil
 import subprocess
 import sys
-import tomllib
 import zipfile
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib  # type: ignore[import-not-found,no-redef]
+
+from discovery import ROOT, find_package_dir
 
 #: Bundle repo names for each channel.  Experimental uses a separate repo
 #: so that circup's latest_tag works per-channel without prerelease tag tricks.
@@ -46,21 +50,10 @@ def _find_bundle_modules(lib_dir: Path) -> tuple[str, Path, list[Path]]:
     ``.py`` modules to include in the bundle (both as source and compiled
     ``.mpy``).
     """
-    src_dir = lib_dir / "src"
-    candidates = [
-        d
-        for d in src_dir.iterdir()
-        if d.is_dir()
-        and not d.name.startswith((".", "_"))
-        and not d.name.endswith(".egg-info")
-    ]
-    if len(candidates) != 1:
-        sys.exit(
-            f"Expected exactly one package under {src_dir}, "
-            f"found {len(candidates)}: {[c.name for c in candidates]}"
-        )
+    pkg_dir = find_package_dir(lib_dir)
+    if pkg_dir is None:
+        sys.exit(f"No importable package under {lib_dir / 'src'}")
 
-    pkg_dir = candidates[0]
     py_files = [
         f
         for f in sorted(pkg_dir.rglob("*.py"))
@@ -225,7 +218,7 @@ def build_circup_zips(
     Returns the list of created zip paths.
     """
     if date_tag is None:
-        date_tag = datetime.now(UTC).strftime("%Y%m%d")
+        date_tag = datetime.now(timezone.utc).strftime("%Y%m%d")  # noqa: UP017
 
     bundle_id = _derive_bundle_id(repo_name)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -240,6 +233,9 @@ def build_circup_zips(
         return []
 
     py_name = f"{bundle_id}-py-{date_tag}"
+    # "10.x" refers to CircuitPython 10.x's mpy bytecode format (v6).
+    # circup parses this pattern to match bundles to the running firmware
+    # version on the board — the naming convention is a circup contract.
     mpy_name = f"{bundle_id}-10.x-mpy-{date_tag}"
 
     py_zip_path = output_dir / f"{py_name}.zip"
@@ -299,17 +295,8 @@ def _collect_library_metadata(root: Path) -> list[dict]:
                     break
 
         # Derive the import-name from the src/ directory.
-        src_dir = lib_dir / "src"
-        pkg_name = f"chumicro_{name}"
-        if src_dir.is_dir():
-            for d in src_dir.iterdir():
-                if (
-                    d.is_dir()
-                    and d.name.startswith("chumicro_")
-                    and not d.name.endswith(".egg-info")
-                ):
-                    pkg_name = d.name
-                    break
+        pkg = find_package_dir(lib_dir)
+        pkg_name = pkg.name if pkg else f"chumicro_{name}"
 
         entries.append(
             {
@@ -498,7 +485,7 @@ def main() -> None:
         "(package.json URLs point to the experimental bundle repo)",
     )
 
-    # Batch staging from a JSON matrix (passed via environment variable).
+    # Batch staging from a JSON matrix.
     sm_parser = subparsers.add_parser(
         "stage-matrix",
         help="Stage artifacts for libraries described in a JSON matrix",
@@ -507,9 +494,8 @@ def main() -> None:
         "staging_dir", type=Path, help="Output staging directory"
     )
     sm_parser.add_argument(
-        "--matrix-env", default="MATRIX_JSON", metavar="VAR",
-        help="Environment variable containing the matrix JSON "
-        "(default: MATRIX_JSON)",
+        "--matrix", required=True,
+        help='JSON matrix string (e.g. \'{"include": [{"lib_dir": "...", "version": "..."}]}\')',
     )
     sm_parser.add_argument(
         "--mpy-cross", default="mpy-cross", help="Path to mpy-cross binary"
@@ -559,8 +545,7 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "readme":
-        root = Path(__file__).resolve().parent.parent
-        content = generate_bundle_readme(root, experimental=args.experimental)
+        content = generate_bundle_readme(ROOT, experimental=args.experimental)
         if args.output:
             args.output.write_text(content)
             print(f"Wrote {args.output}")
@@ -575,15 +560,9 @@ def main() -> None:
             experimental=args.experimental,
         )
     elif args.command == "stage-matrix":
-        matrix_json = os.environ.get(args.matrix_env)
-        if not matrix_json:
-            sys.exit(
-                f"stage-matrix: environment variable {args.matrix_env} "
-                f"is not set or empty"
-            )
         stage_matrix(
             args.staging_dir,
-            matrix_json,
+            args.matrix,
             args.mpy_cross,
             experimental=args.experimental,
         )

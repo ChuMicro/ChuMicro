@@ -12,6 +12,7 @@ ruff
 build
 hatchling
 griffe
+tomli; python_version < "3.11"
 zensical
 mike @ git+https://github.com/squidfunk/mike.git
 mkdocstrings[python]
