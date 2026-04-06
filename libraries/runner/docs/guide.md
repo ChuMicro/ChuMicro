@@ -240,7 +240,7 @@ See the [testing helpers](testing.md) page for detailed usage.
 
 ## Examples
 
-The [examples](../examples/) directory contains complete runnable scripts:
+The [examples](https://github.com/ChuMicro/ChuMicro/tree/develop/libraries/runner/examples) directory contains complete runnable scripts:
 
 | Example | What it shows |
 |---|---|

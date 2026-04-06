@@ -4,12 +4,13 @@ On CPython, re-exports the C-implemented ``functools.partial`` directly.
 On MicroPython and CircuitPython (where ``functools.partial`` is absent),
 provides a pure-Python implementation that matches CPython's public API.
 
-Usage::
-
+Example:
+    ```python
     from chumicro_compat.functools import partial
 
     greet = partial(print, "hello")
     greet("world")  # prints: hello world
+    ```
 """
 
 
