@@ -356,6 +356,11 @@ def generate_bundle_readme(root: Path, *, experimental: bool = False) -> str:
         "[circup](https://github.com/adafruit/circup) installation."
     )
     lines.append("")
+    docs_url = "https://chumicro.github.io/ChuMicro/"
+    lines.append(
+        f"📖 **[Documentation, guides, and API reference]({docs_url})**"
+    )
+    lines.append("")
 
     # Install instructions.
     other_repo = STABLE_BUNDLE_REPO if experimental else EXPERIMENTAL_BUNDLE_REPO
@@ -446,8 +451,12 @@ def generate_bundle_readme(root: Path, *, experimental: bool = False) -> str:
     )
     lines.append("")
     lines.append(
-        f"- **Source code, docs, and examples:** [{_GITHUB_ORG}/{_SOURCE_REPO}]"
+        f"- **Source code and examples:** [{_GITHUB_ORG}/{_SOURCE_REPO}]"
         f"({source_url})"
+    )
+    lines.append(
+        f"- **Documentation:** [chumicro.github.io/ChuMicro]"
+        f"(https://chumicro.github.io/ChuMicro/)"
     )
     if experimental:
         lines.append(
