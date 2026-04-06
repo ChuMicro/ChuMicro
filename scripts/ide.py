@@ -1,7 +1,7 @@
 """IDE configuration generation (PyCharm and VS Code/Pyright).
 
-Regenerates source-root configs, run configurations, and Pyright paths
-so libraries are importable in the IDE without ``pip install -e``.
+Regenerates source-root configs, run/task configurations, and Pyright
+paths so libraries are importable in the IDE without ``pip install -e``.
 See ``plans/decisions/0012-ide-type-stubs.md``.
 """
 
@@ -12,27 +12,34 @@ import json
 from discovery import ROOT, discover_package_dirs, discover_source_roots
 
 # ---------------------------------------------------------------------------
-# Managed PyCharm run configurations
+# Managed task definitions — shared between PyCharm and VS Code
 # ---------------------------------------------------------------------------
-# Each entry: (display_name, script_path, parameters).
-# script_path is relative to $PROJECT_DIR$.  sync-ide overwrites these
-# on every run so they stay in sync with run.py commands.
+# Each entry: (display_name, script_path, parameters, vscode_group).
+# script_path is relative to the project root.  sync-ide overwrites
+# both PyCharm run configs and VS Code tasks from this single list.
 
-_RUN_CONFIGS: list[tuple[str, str, str]] = [
-    ("Build", "scripts/run.py", "build"),
-    ("Check API", "scripts/run.py", "check-api"),
-    ("Check Version", "scripts/run.py", "check-version"),
-    ("CircuitPython Compat", "scripts/run.py", "test-circuitpython-compatibility"),
-    ("Docs", "scripts/run.py", "docs --all"),
-    ("Lint", "scripts/run.py", "lint"),
-    ("MicroPython Compat", "scripts/run.py", "test-micropython-compatibility"),
-    ("Preflight", "scripts/run.py", "preflight"),
-    ("Prepare Workspace", "scripts/prepare_workspace.py", ""),
-    ("Runtime Matrix", "scripts/run.py", "test-runtime-matrix"),
-    ("Setup", "scripts/run.py", "setup"),
-    ("Test", "scripts/run.py", "test --all"),
-    ("Verify Examples", "scripts/run.py", "verify-examples --all"),
+_TASKS: list[tuple[str, str, str, str]] = [
+    ("Build", "scripts/run.py", "build", "build"),
+    ("Check API", "scripts/run.py", "check-api", "build"),
+    ("Check Version", "scripts/run.py", "check-version", "build"),
+    ("CircuitPython Compat", "scripts/run.py", "test-circuitpython-compatibility", "test"),
+    ("Docs", "scripts/run.py", "docs --all", "build"),
+    ("Lint", "scripts/run.py", "lint", "build"),
+    ("MicroPython Compat", "scripts/run.py", "test-micropython-compatibility", "test"),
+    ("Preflight", "scripts/run.py", "preflight", "build"),
+    ("Prepare Workspace", "scripts/prepare_workspace.py", "", "build"),
+    ("Runtime Matrix", "scripts/run.py", "test-runtime-matrix", "test"),
+    ("Setup", "scripts/run.py", "setup", "build"),
+    ("Test", "scripts/run.py", "test --all", "test"),
+    ("Verify Examples", "scripts/run.py", "verify-examples --all", "test"),
 ]
+
+#: The task that becomes the default build command (Ctrl+Shift+B in VS Code).
+_DEFAULT_BUILD_TASK = "Preflight"
+
+# ---------------------------------------------------------------------------
+# PyCharm run configurations
+# ---------------------------------------------------------------------------
 
 _RUN_CONFIG_TEMPLATE = """\
 <component name="ProjectRunConfigurationManager">
@@ -53,16 +60,16 @@ def _config_filename(name: str) -> str:
 
 
 def _sync_run_configurations() -> None:
-    """Regenerate PyCharm run configurations from the managed list.
+    """Regenerate PyCharm run configurations from the managed task list.
 
-    Writes one XML file per entry in :data:`_RUN_CONFIGS`.  Removes stale
+    Writes one XML file per entry in :data:`_TASKS`.  Removes stale
     managed configs that no longer appear in the list.
     """
     rc_dir = ROOT / ".idea" / "runConfigurations"
     rc_dir.mkdir(parents=True, exist_ok=True)
 
     managed_filenames: set[str] = set()
-    for name, script, parameters in _RUN_CONFIGS:
+    for name, script, parameters, _group in _TASKS:
         filename = _config_filename(name)
         managed_filenames.add(filename)
         content = _RUN_CONFIG_TEMPLATE.format(
@@ -76,15 +83,70 @@ def _sync_run_configurations() -> None:
     # managed set.  This avoids touching user-created configs.
     for existing in sorted(rc_dir.iterdir()):
         if existing.suffix == ".xml" and existing.name not in managed_filenames:
-            # Safety: only remove if we previously generated it (all our
-            # names use Title_Case with underscores — skip anything that
-            # looks hand-created, e.g. lowercase or special chars).
             stem = existing.stem
             if stem == stem.replace(" ", "_").title().replace(" ", "_"):
                 existing.unlink()
 
-    count = len(_RUN_CONFIGS)
-    print(f"  Updated .idea/runConfigurations/ ({count} configs)")
+    print(f"  Updated .idea/runConfigurations/ ({len(_TASKS)} configs)")
+
+# ---------------------------------------------------------------------------
+# VS Code tasks and settings
+# ---------------------------------------------------------------------------
+
+
+def _sync_vscode_tasks() -> None:
+    """Regenerate ``.vscode/tasks.json`` from the managed task list."""
+    vscode_dir = ROOT / ".vscode"
+    vscode_dir.mkdir(parents=True, exist_ok=True)
+
+    tasks = []
+    for name, script, parameters, group in _TASKS:
+        args = [script]
+        if parameters:
+            args.extend(parameters.split())
+
+        # Preflight is the default build task (Ctrl+Shift+B).
+        if name == _DEFAULT_BUILD_TASK:
+            task_group: dict | str = {"kind": group, "isDefault": True}
+        else:
+            task_group = group
+
+        tasks.append({
+            "label": name,
+            "type": "shell",
+            "command": "python",
+            "args": args,
+            "group": task_group,
+            "presentation": {"reveal": "always", "panel": "shared"},
+        })
+
+    content = {"version": "2.0.0", "tasks": tasks}
+    tasks_path = vscode_dir / "tasks.json"
+    tasks_path.write_text(json.dumps(content, indent=4) + "\n")
+    print(f"  Updated .vscode/tasks.json ({len(tasks)} tasks)")
+
+
+def _sync_vscode_settings() -> None:
+    """Sync ``python.analysis.extraPaths`` in ``.vscode/settings.json``.
+
+    Preserves all existing user settings; only overwrites the extraPaths
+    key so Pylance resolves library imports the same way pyrightconfig
+    does.
+    """
+    vscode_dir = ROOT / ".vscode"
+    settings_path = vscode_dir / "settings.json"
+
+    if settings_path.exists():
+        settings = json.loads(settings_path.read_text())
+    else:
+        settings = {}
+
+    settings["python.analysis.extraPaths"] = [
+        str(r.relative_to(ROOT)) for r in discover_source_roots()
+    ]
+
+    settings_path.write_text(json.dumps(settings, indent=4) + "\n")
+    print("  Updated .vscode/settings.json")
 
 
 def _sync_pycharm_iml() -> None:
@@ -167,5 +229,7 @@ def sync_ide() -> int:
     _sync_pycharm_iml()
     _sync_run_configurations()
     _sync_pyrightconfig()
+    _sync_vscode_tasks()
+    _sync_vscode_settings()
     return 0
 

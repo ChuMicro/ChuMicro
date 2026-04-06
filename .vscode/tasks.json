@@ -2,84 +2,191 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Prepare Workspace",
-            "type": "shell",
-            "command": "python",
-            "args": ["scripts/prepare_workspace.py"],
-            "group": "build",
-            "presentation": {"reveal": "always", "panel": "shared"}
-        },
-        {
-            "label": "Preflight",
-            "type": "shell",
-            "command": "python",
-            "args": ["scripts/run.py", "preflight"],
-            "group": {"kind": "build", "isDefault": true},
-            "presentation": {"reveal": "always", "panel": "shared"}
-        },
-        {
-            "label": "Lint",
-            "type": "shell",
-            "command": "python",
-            "args": ["scripts/run.py", "lint"],
-            "group": "build",
-            "presentation": {"reveal": "always", "panel": "shared"}
-        },
-        {
-            "label": "Test",
-            "type": "shell",
-            "command": "python",
-            "args": ["scripts/run.py", "test"],
-            "group": "test",
-            "presentation": {"reveal": "always", "panel": "shared"}
-        },
-        {
             "label": "Build",
             "type": "shell",
             "command": "python",
-            "args": ["scripts/run.py", "build"],
+            "args": [
+                "scripts/run.py",
+                "build"
+            ],
             "group": "build",
-            "presentation": {"reveal": "always", "panel": "shared"}
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
         },
         {
-            "label": "Verify Examples",
+            "label": "Check API",
             "type": "shell",
             "command": "python",
-            "args": ["scripts/run.py", "verify-examples"],
-            "group": "test",
-            "presentation": {"reveal": "always", "panel": "shared"}
-        },
-        {
-            "label": "Docs",
-            "type": "shell",
-            "command": "python",
-            "args": ["scripts/run.py", "docs"],
+            "args": [
+                "scripts/run.py",
+                "check-api"
+            ],
             "group": "build",
-            "presentation": {"reveal": "always", "panel": "shared"}
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
         },
         {
-            "label": "MicroPython Compat",
+            "label": "Check Version",
             "type": "shell",
             "command": "python",
-            "args": ["scripts/run.py", "test-micropython-compat"],
-            "group": "test",
-            "presentation": {"reveal": "always", "panel": "shared"}
+            "args": [
+                "scripts/run.py",
+                "check-version"
+            ],
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
         },
         {
             "label": "CircuitPython Compat",
             "type": "shell",
             "command": "python",
-            "args": ["scripts/run.py", "test-circuitpython-compat"],
+            "args": [
+                "scripts/run.py",
+                "test-circuitpython-compatibility"
+            ],
             "group": "test",
-            "presentation": {"reveal": "always", "panel": "shared"}
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Docs",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "scripts/run.py",
+                "docs",
+                "--all"
+            ],
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Lint",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "scripts/run.py",
+                "lint"
+            ],
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "MicroPython Compat",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "scripts/run.py",
+                "test-micropython-compatibility"
+            ],
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Preflight",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "scripts/run.py",
+                "preflight"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Prepare Workspace",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "scripts/prepare_workspace.py"
+            ],
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
         },
         {
             "label": "Runtime Matrix",
             "type": "shell",
             "command": "python",
-            "args": ["scripts/run.py", "test-runtime-matrix"],
+            "args": [
+                "scripts/run.py",
+                "test-runtime-matrix"
+            ],
             "group": "test",
-            "presentation": {"reveal": "always", "panel": "shared"}
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Setup",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "scripts/run.py",
+                "setup"
+            ],
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Test",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "scripts/run.py",
+                "test",
+                "--all"
+            ],
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Verify Examples",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "scripts/run.py",
+                "verify-examples",
+                "--all"
+            ],
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
         }
     ]
 }
