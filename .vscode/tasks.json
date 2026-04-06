@@ -73,6 +73,21 @@
             }
         },
         {
+            "label": "Docs Preview",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "scripts/run.py",
+                "docs-preview",
+                "--all"
+            ],
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
             "label": "Lint",
             "type": "shell",
             "command": "python",

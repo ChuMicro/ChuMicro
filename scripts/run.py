@@ -353,6 +353,52 @@ def docs(pkg_dirs: list[Path], *, serve: bool = False) -> int:
     return overall_rc
 
 
+def docs_preview(pkg_dirs: list[Path]) -> int:
+    """Deploy docs to the local ``gh-pages`` branch and start a preview server.
+
+    Runs ``mike deploy`` for each selected library (no push), then starts
+    ``mike serve`` so the full versioned site is browsable at localhost.
+    This mirrors the CI docs-deploy workflow locally.
+    """
+    doc_dirs = [d for d in pkg_dirs if (d / "mkdocs.yml").exists()]
+    if not doc_dirs:
+        print("No libraries with mkdocs.yml found for the selected packages.")
+        return 0
+
+    _copy_shared_docs_css(doc_dirs)
+
+    for pkg_dir in doc_dirs:
+        rel = pkg_dir.relative_to(ROOT)
+        lib_name = pkg_dir.name
+        version = "dev"
+        version_file = pkg_dir / "VERSION"
+        if version_file.exists():
+            version = version_file.read_text().strip()
+        print(f"== mike deploy {rel} ({version}) ==")
+        rc = _run([
+            PYTHON, "-m", "mike", "deploy",
+            "--deploy-prefix", lib_name,
+            "-F", str(pkg_dir / "mkdocs.yml"),
+            "--alias-type", "redirect",
+            "--update-aliases",
+            version, "latest",
+        ])
+        if rc != 0:
+            print(f"mike deploy failed: {rel}")
+            return rc
+
+    print()
+    print("Serving versioned docs at http://localhost:8000/")
+    print("  Libraries deployed to local gh-pages (not pushed).")
+    print("  Press Ctrl+C to stop.")
+    print()
+    # mike serve uses the first library's config but serves the whole gh-pages tree
+    return _run([
+        PYTHON, "-m", "mike", "serve",
+        "-F", str(doc_dirs[0] / "mkdocs.yml"),
+    ])
+
+
 def preflight(
     mp_binary: str | None = None,
     cp_binary: str | None = None,
@@ -618,6 +664,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--serve", action="store_true", help="start live-reload dev server",
     )
 
+    sub.add_parser(
+        "docs-preview", parents=[scope],
+        help="deploy docs to local gh-pages and serve versioned site",
+    )
+
     # new-library
     nl = sub.add_parser("new-library", help="scaffold a new library")
     nl.add_argument("name", help="library name (e.g. gpio)")
@@ -625,7 +676,7 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-_SCOPED_TASKS = frozenset({"test", "verify-examples", "docs"})
+_SCOPED_TASKS = frozenset({"test", "verify-examples", "docs", "docs-preview"})
 
 
 def main(argv: list[str]) -> int:
@@ -652,6 +703,8 @@ def main(argv: list[str]) -> int:
             )
         if args.task == "verify-examples":
             return verify_examples(pkg_dirs)
+        if args.task == "docs-preview":
+            return docs_preview(pkg_dirs)
         return docs(pkg_dirs, serve=args.serve)
 
     # --- new-library ---

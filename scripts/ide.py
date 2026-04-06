@@ -24,6 +24,7 @@ _TASKS: list[tuple[str, str, str, str]] = [
     ("Check Version", "scripts/run.py", "check-version", "build"),
     ("CircuitPython Compat", "scripts/run.py", "test-circuitpython-compatibility", "test"),
     ("Docs", "scripts/run.py", "docs --all", "build"),
+    ("Docs Preview", "scripts/run.py", "docs-preview --all", "build"),
     ("Lint", "scripts/run.py", "lint", "build"),
     ("MicroPython Compat", "scripts/run.py", "test-micropython-compatibility", "test"),
     ("Preflight", "scripts/run.py", "preflight", "build"),
