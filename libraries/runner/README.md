@@ -218,7 +218,7 @@ All classes use only basic Python features.  Works identically on CPython, Micro
 
 ## Docs
 
-📖 **[Stable docs](https://chumicro.github.io/ChuMicro/stable/runner/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/experimental/runner/)**
+📖 **[Stable docs](https://chumicro.github.io/ChuMicro/runner/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/runner/experimental/)**
 
 Browse on GitHub:
 

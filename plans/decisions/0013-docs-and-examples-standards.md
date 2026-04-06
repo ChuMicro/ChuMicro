@@ -16,7 +16,7 @@ Each library under `libraries/<name>/` must include:
    - One-line description
    - Installation instructions (pip, circup, mip when available)
    - Quick example showing the most common use case
-   - Links to hosted docs for both stable and experimental channels (e.g., `https://chumicro.github.io/ChuMicro/stable/<name>/`)
+   - Links to hosted docs for both stable and experimental channels (e.g., `https://chumicro.github.io/ChuMicro/<name>/stable/`)
    - Links to GitHub-browsable docs (`docs/guide.md`, `docs/api.md`) under a "Browse on GitHub" subheading
    - Platform compatibility notes (which runtimes are supported)
 
@@ -124,16 +124,30 @@ Why:
 - Existing `mkdocs.yml` configs work with zero changes.
 - Rust-core differential builds are near-instant.
 
-### Docs hosting: GitHub Pages
+### Docs hosting: GitHub Pages with mike versioning
 
-Docs are published to **GitHub Pages** via GitHub Actions.  The release workflow builds all library docs with Zensical, combines them into a single site with a landing page and per-library subdirectories, and deploys to GitHub Pages.
+Docs are published to **GitHub Pages** via GitHub Actions, with version management handled by **mike** (Zensical's fork: `git+https://github.com/squidfunk/mike.git`).  Mike manages the `gh-pages` branch, deploying each version to a subdirectory and maintaining a `versions.json` that powers the Material theme's version selector dropdown.
 
-The site uses path-based channel separation:
+Each library is deployed independently using mike's `--deploy-prefix` flag:
 
-- `/stable/<library>/` — built from `main` (released versions)
-- `/experimental/<library>/` — built from `develop` (pre-release)
+```
+mike deploy --deploy-prefix timing -F libraries/timing/mkdocs.yml 0.1.0 stable --push
+mike deploy --deploy-prefix runner -F libraries/runner/mkdocs.yml 0.1.0 stable --push
+```
 
-Each deploy writes only its channel's subdirectory and preserves the other channel's content on the `gh-pages` branch.
+This produces a URL structure of `/<library>/<version>/`:
+
+- `chumicro.github.io/ChuMicro/timing/stable/` — alias to latest released version
+- `chumicro.github.io/ChuMicro/timing/0.1.0/` — pinned version
+- `chumicro.github.io/ChuMicro/timing/experimental/` — pre-release from `develop`
+
+Each library has its own `versions.json` under its prefix, so version selectors are independent per library.
+
+Channel mapping in CI:
+- Push to `main` (release): `mike deploy --deploy-prefix <lib> <version> stable`
+- Push to `develop`: `mike deploy --deploy-prefix <lib> dev experimental`
+
+Each library's `mkdocs.yml` includes `extra.version.provider: mike` and `extra.version.default: [stable, experimental]` so that both current channels suppress the "outdated version" warning.  Pinned old versions show the warning.
 
 Why GitHub Pages over ReadTheDocs:
 - **Free for both private and public repos.**  ReadTheDocs Community is free for public repos (ad-supported) but requires a paid Business plan for private repos.

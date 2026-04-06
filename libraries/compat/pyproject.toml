@@ -28,7 +28,7 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://github.com/ChuMicro/ChuMicro"
-Documentation = "https://chumicro.github.io/ChuMicro/stable/compat/"
+Documentation = "https://chumicro.github.io/ChuMicro/compat/stable/"
 Source = "https://github.com/ChuMicro/ChuMicro/tree/develop/libraries/compat"
 Issues = "https://github.com/ChuMicro/ChuMicro/issues"
 Bundle = "https://github.com/ChuMicro/ChuMicro-Bundle"

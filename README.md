@@ -18,9 +18,16 @@ Cross-runtime Python libraries for CircuitPython, MicroPython, and CPython — b
 
 ## Documentation
 
-📖 **[Stable docs](https://chumicro.github.io/ChuMicro/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/experimental/)**
+📖 Docs are published per-library with a version selector powered by [mike](https://github.com/jimporter/mike):
 
-Stable docs track `main` (released versions).  Experimental docs track `develop` (pre-release).
+| Library | Stable | Experimental |
+|---|---|---|
+| timing | [stable](https://chumicro.github.io/ChuMicro/timing/stable/) | [experimental](https://chumicro.github.io/ChuMicro/timing/experimental/) |
+| runner | [stable](https://chumicro.github.io/ChuMicro/runner/stable/) | [experimental](https://chumicro.github.io/ChuMicro/runner/experimental/) |
+| compat | [stable](https://chumicro.github.io/ChuMicro/compat/stable/) | [experimental](https://chumicro.github.io/ChuMicro/compat/experimental/) |
+| msgpack | [stable](https://chumicro.github.io/ChuMicro/msgpack/stable/) | [experimental](https://chumicro.github.io/ChuMicro/msgpack/experimental/) |
+
+Stable tracks `main` (released versions).  Experimental tracks `develop` (pre-release).
 
 ## Distribution
 

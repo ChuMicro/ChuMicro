@@ -1,8 +1,16 @@
 site_name: chumicro-msgpack
+site_url: https://chumicro.github.io/ChuMicro/msgpack/
 theme:
   name: material
   palette:
     scheme: default
+
+extra:
+  version:
+    provider: mike
+    default:
+      - stable
+      - experimental
 
 nav:
   - Guide: guide.md

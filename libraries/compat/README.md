@@ -84,7 +84,7 @@ The public API (`.func`, `.args`, `.keywords`, `__call__`, `__repr__`) is identi
 
 ## Docs
 
-📖 **[Stable docs](https://chumicro.github.io/ChuMicro/stable/compat/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/experimental/compat/)**
+📖 **[Stable docs](https://chumicro.github.io/ChuMicro/compat/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/compat/experimental/)**
 
 Browse on GitHub:
 

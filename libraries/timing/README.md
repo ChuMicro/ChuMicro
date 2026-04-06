@@ -120,7 +120,7 @@ assert heartbeat.poll(now) is True
 
 ## Docs
 
-📖 **[Stable docs](https://chumicro.github.io/ChuMicro/stable/timing/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/experimental/timing/)**
+📖 **[Stable docs](https://chumicro.github.io/ChuMicro/timing/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/timing/experimental/)**
 
 Browse on GitHub:
 

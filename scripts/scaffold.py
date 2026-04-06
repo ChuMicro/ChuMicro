@@ -36,7 +36,7 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://github.com/ChuMicro/ChuMicro"
-Documentation = "https://chumicro.github.io/ChuMicro/stable/{name}/"
+Documentation = "https://chumicro.github.io/ChuMicro/{name}/stable/"
 Source = "https://github.com/ChuMicro/ChuMicro/tree/develop/libraries/{name}"
 Issues = "https://github.com/ChuMicro/ChuMicro/issues"
 Bundle = "https://github.com/ChuMicro/ChuMicro-Bundle"
@@ -55,10 +55,18 @@ packages = ["src/{import_name}"]
 
 _MKDOCS_TEMPLATE = """\
 site_name: chumicro-{name}
+site_url: https://chumicro.github.io/ChuMicro/{name}/
 theme:
   name: material
   palette:
     scheme: default
+
+extra:
+  version:
+    provider: mike
+    default:
+      - stable
+      - experimental
 
 nav:
   - Guide: guide.md
@@ -98,7 +106,7 @@ Works on CPython, MicroPython, and CircuitPython.
 
 ## Docs
 
-📖 **[Stable docs](https://chumicro.github.io/ChuMicro/stable/{name}/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/experimental/{name}/)**
+📖 **[Stable docs](https://chumicro.github.io/ChuMicro/{name}/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/{name}/experimental/)**
 
 Browse on GitHub:
 

@@ -13,5 +13,6 @@ build
 hatchling
 griffe
 zensical
+mike @ git+https://github.com/squidfunk/mike.git
 mkdocstrings[python]
 
