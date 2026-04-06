@@ -2,7 +2,7 @@
 
 ## Now
 
-- [ ] Enforce branch protection rulesets once repos are made public. Rulesets are configured but not enforced while repos are private. Rules: `main` requires status checks (lint, test, build, version-check) + 1 approval.
+- [ ] Validate PR flow end-to-end against branch protection rulesets. Rulesets are now active on the paid private repo (main requires status checks + 1 approval). Admin bypass confirmed working. Next step: open a PR and verify checks, label enforcement, and merge flow without bypass.
 - [ ] Document contributor prerequisites by platform (macOS, Linux, Windows/WSL2) and by editor (PyCharm, VS Code, CLI) in the README. Linux and WSL2 sections are best-effort/researched until verified.
   - When writing these docs, scope the AGENTS.md performance guidelines (f-strings, `const()`, `memoryview`, pre-allocated buffers, etc.) to **library code only**. Infrastructure code (`scripts/`, `support/`) runs exclusively on CPython and does not need embedded-runtime constraints.
 - [ ] Write a "Creating a New Library" contributor guide. Walk through the full lifecycle from scaffolding to release-ready:
