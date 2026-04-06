@@ -374,3 +374,14 @@ This was the largest single session. It addressed three areas: the workspace was
 6. Added `Experimental Bundle` link to all four library footers and the scaffold template, matching the main landing page.
 7. Updated scaffold `_MKDOCS_TEMPLATE` and `_INDEX_TEMPLATE` to match.
 
+#### 2026-04-06 — Branching model revised: single branch with tags (Decision 0019 v2)
+
+**Problem:** The two-branch model (`develop` + `main`) introduced friction without benefit. Auto-syncing pushed all library code to `main` even for libraries that hadn't been individually promoted, so `main` didn't actually reflect stable releases. The promote workflow required whole-repo merges, making per-library release independence impossible.
+
+**Resolution:**
+1. Revised Decision 0019 to a single-branch model: `main` is the only long-lived branch. PRs target `main`. Experimental releases auto-publish on VERSION bump; stable releases are tag-based via `promote.yml` with named libraries.
+2. Rewrote `promote.yml` as a `workflow_dispatch` that creates per-library stable tags (`<lib>/v<version>-stable`) without branch merges.
+3. Updated `release.yml` to trigger on both push-to-main (experimental channel) and stable tags (stable channel), routing to the correct bundle repo and PyPI package name.
+4. Updated `docs-deploy.yml` to deploy experimental docs on push to `main` and stable docs on `workflow_dispatch` from `promote.yml`.
+5. Updated all planning docs, prompts, and READMEs to remove stale `develop` references.
+6. Deleted the `develop` branch (migration step).

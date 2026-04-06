@@ -34,7 +34,7 @@ chumicro/
 ├── .github/workflows/
 │   ├── ci.yml              # lint, test, build, version-check, api-check, label-check
 │   ├── release.yml         # per-library release pipeline (PyPI, tags, GitHub Releases, bundles)
-│   ├── promote.yml         # develop → main release cut workflow
+│   ├── promote.yml         # selective stable release promotion workflow
 │   ├── label-sync.yml      # sync .github/labels.yml to repo labels
 │   └── docs-deploy.yml     # per-library docs deployment to GitHub Pages via mike
 ├── AGENTS.md
@@ -118,7 +118,7 @@ chumicro/
 16. Cross-runtime unit tests run `tests/` through the lightweight harness on MP/CP unix-ports. Tests use plain asserts and `raises()`; `import pytest` is the automatic skip boundary. `functional_tests/` is for functional tests only. `_pytest` suffix marks CPython-only test files (Decision 0016).
 17. The CircuitPython unix-port build requires `-DMICROPY_PY_MICROPYTHON_RINGIO=0` to work around a linker error from dead RingIO code. The `coverage` variant disables RingIO and hides the bug; `standard` variant exposes it (Decision 0017).
 18. Distribution uses a separate `ChuMicro/ChuMicro-Bundle` repo for built artifacts (`.py` + `.mpy`). Source repo stays clean; bundle repo provides `package.json` for mip and release zips for circup (Decision 0018).
-19. Two-branch model: `develop` is the default/integration branch, `main` is stable release. PRs target `develop`; merges to `main` are release cuts. Experimental releases use `-experimental` suffix in package names and tags (Decision 0019).
+19. Single-branch model: `main` is the only branch. PRs target `main`. Experimental releases auto-publish on VERSION bump; stable releases are tag-based, triggered by `promote.yml` with named libraries. Release branches from stable tags for hotfixes (Decision 0019 revised).
 20. API breakage detection uses `griffe check` against the last release tag. Breakages require a major bump (or minor for 0.x libraries). Cross-referenced with VERSION bump level in CI (Decision 0020).
 
 ### Key technical patterns

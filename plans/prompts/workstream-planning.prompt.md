@@ -31,7 +31,7 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
    - [0016: cross-runtime unit tests](../decisions/0016-cross-runtime-unit-tests.md)
    - [0017: CircuitPython RingIO bug](../decisions/0017-circuitpython-ringio-bug.md)
     - [0018: distribution bundle repository](../decisions/0018-distribution-bundle-repo.md)
-    - [0019: branching model — develop → main](../decisions/0019-branching-model.md)
+    - [0019: branching model — single branch with tags](../decisions/0019-branching-model.md)
     - [0020: API breakage detection](../decisions/0020-api-breakage-detection.md)
 3. Implemented code slices:
    - `support/runtime/` for reusable runtime detection
@@ -49,7 +49,7 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
    - `support/test_harness/run_cross_runtime.py` as the canonical cross-runtime test runner (Decision 0016)
     - `.github/workflows/ci.yml` for required host checks plus advisory runtime compatibility jobs
     - `.github/workflows/release.yml` for per-library release pipeline (PyPI, tags, GitHub Releases, bundle publishing)
-    - `.github/workflows/promote.yml` for develop → main release cuts
+    - `.github/workflows/promote.yml` for selective stable library promotion
     - `.github/workflows/label-sync.yml` for syncing repo labels
     - `.github/workflows/docs-deploy.yml` for per-library docs deployment to GitHub Pages via mike
     - `scripts/check_version.py` for VERSION enforcement on PRs
@@ -103,7 +103,7 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
 13. Docs and examples standards are established with strict guide requirements, autodoc API reference, and AI generation prompts (Decision 0013).
 14. IDE type stubs use upstream PyPI packages pinned to runtime-versions.toml (Decision 0012).
 15. Serviceable library audit complete: deque API verified across runtimes, overflow flag added, board architecture support documented (Decision 0015).
-16. CI/release pipeline is live: PyPI trusted publishing, git tags, GitHub Releases, bundle repo publishing (`.py` + `.mpy` + `package.json`), circup-format zips. `develop` → `main` branching model with promote workflow (Decisions 0018, 0019, 0020). All four libraries published to PyPI. Docs deployed to GitHub Pages via mike (`docs-deploy.yml`).
+16. CI/release pipeline is live: PyPI trusted publishing, git tags, GitHub Releases, bundle repo publishing (`.py` + `.mpy` + `package.json`), circup-format zips. Single-branch model (`main`) with tag-based stable releases and selective promote workflow (Decisions 0018, 0019, 0020). All four libraries published to PyPI. Docs deployed to GitHub Pages via mike (`docs-deploy.yml`).
 
 ### What is still intentionally incomplete
 

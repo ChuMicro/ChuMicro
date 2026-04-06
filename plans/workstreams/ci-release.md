@@ -84,7 +84,7 @@ It should not be forced to be the direct execution environment on constrained bo
 
 ## Success criteria
 
-- opening a PR to `develop` runs expected checks
+- opening a PR to `main` runs expected checks
 - lint and coverage gates fail fast when standards are not met
 - merge to `main` can trigger release preparation for the affected library
 - release version intent comes from the changed library's checked-in `VERSION` file

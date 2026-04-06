@@ -24,8 +24,8 @@ Key constraints:
 
 Two distribution repos serve the stable and experimental channels:
 
-- `ChuMicro/ChuMicro-Bundle` — stable releases (from `main`)
-- `ChuMicro/ChuMicro-Bundle-Experimental` — experimental releases (from `develop`)
+- `ChuMicro/ChuMicro-Bundle` — stable releases (promoted via `promote.yml`)
+- `ChuMicro/ChuMicro-Bundle-Experimental` — experimental releases (auto-published on VERSION bump)
 
 Using separate repos keeps circup's `Bundle.latest_tag` working naturally per-repo — no prerelease tag management needed.  Both repos use identical directory names (e.g. `chumicro_timing/`) so that users can swap between channels without changing any import statements in their `code.py`.  Switching channels is explicit: change which bundle is registered with circup, or change the repo URL for mip.
 
@@ -136,7 +136,7 @@ Release CI in the source repo triggers the bundle update:
 
 1. A version tag on a library in `ChuMicro/ChuMicro` triggers the release workflow.
 2. CI compiles `.py` → `.mpy` using `mpy-cross` (format v6, CP 10.x).
-3. CI pushes the `.py` + `.mpy` files and updated `package.json` to the appropriate bundle repo (`ChuMicro-Bundle` for `main`, `ChuMicro-Bundle-Experimental` for `develop`).
+3. CI pushes the `.py` + `.mpy` files and updated `package.json` to the appropriate bundle repo (`ChuMicro-Bundle` for stable channel, `ChuMicro-Bundle-Experimental` for experimental channel).
 4. CI creates a tagged GitHub Release on the bundle repo with circup-format zips.
 5. PyPI upload happens in parallel from the source repo (standard `python -m build` + trusted publishing).
 

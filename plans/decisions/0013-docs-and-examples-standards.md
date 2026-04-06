@@ -139,15 +139,15 @@ This produces a URL structure of `/<library>/<version>/`:
 
 - `chumicro.github.io/ChuMicro/timing/stable/` — alias to latest released version
 - `chumicro.github.io/ChuMicro/timing/0.1.0/` — pinned version
-- `chumicro.github.io/ChuMicro/timing/experimental/` — pre-release from `develop`
+- `chumicro.github.io/ChuMicro/timing/experimental/` — pre-release from `main`
 
 Each library has its own `versions.json` under its prefix, so version selectors are independent per library.
 
 Each library's `docs/` directory must include an `index.md` that serves as the landing page (linked from the `Home` nav entry in `mkdocs.yml`).  Without it, the version root URL (e.g., `/timing/0.1.8/`) has no `index.html` and GitHub Pages returns a 404.
 
 Channel mapping in CI:
-- Push to `main` (release): `mike deploy --deploy-prefix <lib> --alias-type redirect <version> stable`
-- Push to `develop`: `mike deploy --deploy-prefix <lib> --alias-type redirect dev experimental`
+- Push to `main`: `mike deploy --deploy-prefix <lib> --alias-type redirect dev experimental`
+- Promote (stable): `mike deploy --deploy-prefix <lib> --alias-type redirect <version> stable`
 
 Each library's `mkdocs.yml` includes `extra.version.provider: mike` and `extra.version.default: [stable, experimental]` so that both current channels suppress the "outdated version" warning.  Pinned old versions show the warning.
 
@@ -188,9 +188,9 @@ Examples are verified via static analysis in `scripts/run.py verify-examples`:
 ### Release pipeline integration
 
 - `docs-build` CI job verifies all library docs build on every PR (Zensical).
-- `docs-deploy.yml` workflow deploys docs on every push to `main` or `develop`:
-  - **main**: deploys each library at its VERSION (e.g., `0.1.0`) with alias `stable`, sets `stable` as the default redirect for `/<lib>/`.
-  - **develop**: deploys each library at version `dev` with alias `experimental`.
+- `docs-deploy.yml` workflow deploys docs on push to `main` (experimental) and via `workflow_dispatch` with `channel=stable` (stable, called by `promote.yml`):
+  - **push to main**: deploys each library at version `dev` with alias `experimental`.
+  - **promote (stable)**: deploys each library at its VERSION (e.g., `0.1.0`) with alias `stable`, sets `stable` as the default redirect for `/<lib>/`.
   - Uses mike with `--deploy-prefix <lib>` per library, pushing to the `gh-pages` branch.
   - Concurrency group prevents conflicting deploys.
 - The `mkdocs.yml` configs, `docs` task in `scripts/run.py`, and the `new-library` scaffolder are all wired.
