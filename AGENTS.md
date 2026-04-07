@@ -1,297 +1,206 @@
 # Chumicro Development Ecosystem
 
-## Project Overview
+## Quick reference
 
-Chumicro is a family of open‑source Python libraries that target three different Python runtimes:
+Hard rules an agent must never violate:
 
-- **CircuitPython** and **MicroPython** for embedded boards (e.g., ESP32‑S2, ESP32‑S3).
-- **CPython** for standard desktop Python.  CPython support allows easy unit testing and enables use of familiar tools such as PyTest.
+- **No `async`/`await`, no ISRs** — use the tick-based runner pattern (Decision 0014).
+- **Per-library pytest** via `python scripts/run.py test` — never bare `pytest` from root.
+- **90 % coverage gate** per library.
+- **Constructor injection** for time, I/O, network — fakes in `testing.py` submodule (Decision 0010).
+- **f-strings everywhere**, `const()` / `memoryview` / pre-allocated buffers in library code only.
+- **`git commit -F .scratch/commit-msg.txt`** — never `git commit -m` (see `.github/skills/git-commit/SKILL.md`).
+- **Check `plans/decisions/`** before proposing structural or pattern changes.
+- **Never hard-code secrets.**
+- **No `pip install -e`** — IDE resolution uses generated configs (`sync-ide`).
+- **Minimize dependencies** — prefer pure-Python implementations compatible with all three runtimes.
 
- The goal is to provide robust, modern drivers and utility libraries that are efficient enough for constrained microcontrollers while still maintaining a familiar Python API.  Libraries must be compatible across all three environments.  If an existing third‑party library does not support CircuitPython/MicroPython, the code should be re‑implemented rather than imported.
+Common pitfalls:
 
-Chumicro code is released under the **MIT License**, which grants broad permission to use, copy, modify, merge, publish, distribute, sublicense and/or sell copies of the software【824420635613462†L74-L83】.  The only condition is that the copyright notice and permission notice must appear in all copies or substantial portions of the software【824420635613462†L85-L86】.  The software is provided “as is”, without warranty【824420635613462†L88-L93】.
+- Don't run bare `pytest` from root — use `python scripts/run.py test`.
+- Don't add `pip install -e` to fix imports — run `python scripts/run.py sync-ide`.
+- Don't propose `asyncio`-based solutions — the project forbids `async`/`await`.
+- Don't apply embedded patterns (`const()`, `memoryview`) to infrastructure code under `scripts/` or `support/`.
+- Don't modify unrelated code when fixing a bug.
+- Don't re-propose something already decided in `plans/decisions/` without referencing the original decision.
 
-Never embed secrets; configuration such as Wi‑Fi credentials belongs in separate files on the device.
+## Project overview
 
-## Tech Stack & Platforms
+Chumicro is a family of open-source Python libraries targeting three runtimes:
 
-- **Language:** Python 3 (subset compatible with CircuitPython & MicroPython).  Use PEP 8 naming conventions and docstrings.
-- **Runtimes:** CircuitPython (Adafruit fork of MicroPython), MicroPython, and CPython.  CircuitPython and MicroPython constrain RAM and CPU; they support only a subset of the standard library.  Developers should use memory‑efficient patterns such as pre‑allocating buffers and using `memoryview` objects to avoid extra allocations【127994299864638†L237-L254】【5110752449986†L110-L149】.
-- **Frameworks:**
-  - **PyTest** for host‑based unit tests.  PyTest can be used with CPython and, where possible, MicroPython/CircuitPython via compatibility layers.
-  - A **lightweight on‑device test runner** exists under `support/test_harness/` for executing `tests/` modules across runtimes and `functional_tests/` on real hardware.  It should stay tiny: discover test functions by the `test_` prefix, use minimal assertions, and report results without requiring extra memory.
-  - **Mocks & stubs:** For host tests, create mock modules to simulate hardware APIs.  For CircuitPython, PyTest can run with mocks by using a `conftest.py` that replaces CircuitPython‑only modules.  The MicroPython stubber project similarly uses a `tests/mocks` folder to allow MicroPython code to run under CPython.
+- **CircuitPython** and **MicroPython** for embedded boards (ESP32-S2, ESP32-S3, RP2040, etc.).
+- **CPython** for desktop development, testing (PyTest), and standard tooling.
 
-## Workspace Structure
+Libraries must be compatible across all three runtimes.  If a third-party library doesn't support CircuitPython/MicroPython, re-implement the functionality rather than importing it.
 
-Chumicro is organized as a **mono‑workspace**.  Each publishable library resides under `libraries/`, each with its own `src/`, `tests/`, `functional_tests/`, `docs/`, and `examples/` subdirectories.  Shared internal packages live under `support/`.  Developer tasks are in `scripts/` (split into focused modules), and planning docs are in `plans/`.
+## Libraries
 
-The live workspace structure is provided automatically at the start of each session.  For the canonical detailed layout, see `plans/prompts/workspace-rebuild.prompt.md`.
+| Library | Version | Description |
+|---------|---------|-------------|
+| [timing](libraries/timing/) | 0.1.15 | Wraparound-safe millisecond tick helpers, heartbeat scheduling, deterministic test fakes |
+| [runner](libraries/runner/) | 0.1.15 | Tick-based task runner: check/handle gates, periodic tasks, shared timestamps — no async |
+| [compat](libraries/compat/) | 0.1.15 | Cross-runtime compatibility polyfills — `functools.partial` and more |
+| [msgpack](libraries/msgpack/) | 0.1.15 | Compact MessagePack serialization with native CircuitPython C module delegation |
+
+## Tech stack
+
+- **Language:** Python 3 (subset compatible with CircuitPython & MicroPython).  PEP 8 naming.
+- **Runtimes:** CircuitPython, MicroPython, CPython.  Pinned versions in `target-runtimes.toml`.
+- **Testing:** PyTest (host), lightweight on-device runner in `support/test_harness/`.
+- **Docs:** MkDocs + Material + mkdocstrings.  Per-library `mkdocs.yml`.  Versioned with [mike](https://github.com/jimporter/mike) via `docs-deploy.yml`.  Preview locally with `python scripts/run.py docs-preview`.
+
+## Workspace structure
+
+Mono-workspace.  Each publishable library lives under `libraries/<name>/` with `src/`, `tests/`, `functional_tests/`, `docs/`, and `examples/`.  Shared internal packages live under `support/`.  Developer tasks in `scripts/`.  Planning docs in `plans/`.
 
 Conventions:
 
-- Publishable libraries go in `libraries/<name>/` with a `pyproject.toml` and `VERSION` file.
-- Support packages go in `support/<name>/` — they are workspace-internal and not published.
-- `scripts/run.py` auto-discovers all packages by scanning for `pyproject.toml` under `libraries/` and `support/`.  No hard-coded lists exist.
-- `python scripts/run.py new-library <name>` scaffolds a new library with the correct structure and regenerates IDE configs.
+- Publishable libraries: `libraries/<name>/` with `pyproject.toml` and `VERSION` file.
+- Support packages: `support/<name>/` — workspace-internal, not published.
+- `scripts/run.py` auto-discovers all packages by scanning for `pyproject.toml`.  No hard-coded lists.
+- `python scripts/run.py new-library <name>` scaffolds a new library and regenerates IDE configs.
 
-Key task runner commands (run from repo root):
+### File routing
 
-- `python scripts/run.py setup` — install dependencies and regenerate IDE configs
-- `python scripts/run.py preflight` — lint + all tests + build (run before committing)
-- `python scripts/run.py test` — run tests for changed packages (or `--all` / `--libraries name`)
-- `python scripts/run.py lint` — run ruff across the workspace
-- `python scripts/run.py build` — build all publishable packages
-- `python scripts/run.py sync-ide` — regenerate PyCharm and VS Code configs
+| Task | Where it goes |
+|------|--------------|
+| New library | `python scripts/run.py new-library <name>` |
+| Shared infra | `support/` |
+| Build / CI tooling | `scripts/` |
+| Design decision | `plans/decisions/NNNN-<slug>.md` |
+| Docs assets (CSS, favicon) | `support/docs/` |
 
-This mono‑repo simplifies dependency management and allows libraries to share common infrastructure.  Publishing individual packages remains possible by using per‑library `pyproject.toml` files and packaging tools (e.g., Hatchling or Setuptools).  Use a `VERSION` file or similar per‑library version to coordinate releases.
+### Key commands
 
-## Development Guidelines
+| Command | Purpose |
+|---------|---------|
+| `python scripts/run.py setup` | Install dependencies and regenerate IDE configs |
+| `python scripts/run.py preflight` | Lint + all tests + examples + compat + build |
+| `python scripts/run.py test` | CPython tests (changed packages, or `--all` / `--libraries name`) |
+| `python scripts/run.py lint` | Ruff across workspace |
+| `python scripts/run.py build` | Build all publishable packages |
+| `python scripts/run.py sync-ide` | Regenerate PyCharm / VS Code configs |
+| `python scripts/run.py docs` | Build library docs |
+| `python scripts/run.py docs-preview` | Deploy to local gh-pages and serve versioned preview |
+| `python scripts/run.py docs-deploy --channel <ch>` | Deploy versioned docs (CI) |
+| `python scripts/run.py new-library <name>` | Scaffold a new library |
 
-### Memory & Performance (library code only)
+## Development guidelines
 
-The guidelines in this section apply to **publishable library code under `libraries/`** — code that runs on microcontrollers.  Infrastructure code (`scripts/`, `support/`) runs exclusively on CPython and should follow standard Python conventions instead (see *Infrastructure Code* below).
+### Memory & performance (library code only)
 
-Microcontrollers have limited RAM and CPU.  To avoid heap fragmentation and excessive garbage collection, follow these practices:
+These rules apply to **publishable library code under `libraries/`** — code that runs on microcontrollers.  Infrastructure code (`scripts/`, `support/`) should follow standard Python conventions instead (see next section).
 
-1. **Pre‑allocate buffers:** When interacting with I/O streams (UART, SPI, I2C), allocate a bytearray once in the constructor and reuse it.  MicroPython’s documentation shows that reading into a pre‑allocated buffer (`readinto`) avoids creating new objects on each call【127994299864638†L237-L254】.  Similarly, the MicroPython speed guide notes that stream objects often provide `readinto()` for this purpose【5110752449986†L110-L120】.
-2. **Use `memoryview` for slicing:** Passing a slice of a `bytearray` creates a copy.  A `memoryview` provides a view into the buffer without copying and uses a small, fixed‑size object【5110752449986†L110-L150】.
-3. **Avoid dynamic string building in loops:** Concatenate constant strings at compile time or use `format()`/`f`‑strings outside performance‑critical sections.  Repeated string concatenation fragments memory【127994299864638†L214-L233】.
+1. **Pre-allocate buffers:** Allocate a `bytearray` once in the constructor and reuse it with `readinto()`.
+2. **Use `memoryview` for slicing:** Avoids copies; use instead of `bytearray` slicing.
+3. **Avoid dynamic string building in loops.**
+4. **f-strings exclusively** for string formatting.  `%`-style only when f-strings are unavailable.
+5. **`const()` for numeric constants:** Import from `micropython`.  Prefix internal constants with `_`.
+6. **Cache frequently used attributes** in local variables within performance-critical methods.
+7. **Control garbage collection:** Call `gc.collect()` periodically in long-running tasks.
 
-4. **Prefer f‑strings over `str.format`:**  On CPython, f‑strings are compiled at import time and avoid the overhead of parsing the `str.format` mini‑language; they are the most readable and efficient form of string interpolation【600036924127677†L109-L120】.  CircuitPython’s implementation of `str.format` is written in C and builds the result by incrementally growing a virtual string buffer: it initialises a `vstr` structure and then loops over the format string, appending literal characters or parsed replacement fields one by one【700593876761682†L1099-L1123】.  Additional loops handle nested braces and format specifiers【700593876761682†L1174-L1194】.  This dynamic parsing and buffer growth consumes heap memory and adds runtime overhead, whereas an f‑string is compiled into a series of constants and expressions, assembled without extra parsing.  Therefore, when f‑strings are available, use them exclusively; if f‑strings are disabled on a very small build, `%`‑style formatting is the next most efficient option.  When using the CPython `logging` module, remember that f‑strings cause eager evaluation, but this trade‑off is acceptable on embedded boards where logging APIs lack deferred formatting.
+### Infrastructure code
 
-5. **Use `const()` for constants:** CircuitPython’s design guide recommends using `const()` imported from `micropython` for numeric constants【484622475298331†L733-L746】.  Prefix internal constants with an underscore to prevent them from occupying globals【127994299864638†L155-L162】.
-6. **Cache frequently used attributes:** Store object references (e.g., `self.buffer`) in local variables within performance‑critical methods to avoid repeated attribute lookups【5110752449986†L199-L211】.
-7. **Control garbage collection:** For long‑running tasks, explicitly call `gc.collect()` periodically.  This pre‑emptive collection can reduce latency and fragmentation【5110752449986†L214-L228】.
+Code under `scripts/` and `support/` runs **exclusively on CPython**.  Use the full standard library freely.  Do **not** use `const()`, `memoryview`, pre-allocated buffers, or other embedded patterns.  Prefer f-strings for readability.
 
-### Infrastructure Code
+### Naming & style
 
-Code under `scripts/` and `support/` runs **exclusively on CPython** and is never deployed to microcontrollers.  It should follow standard modern Python conventions:
+PEP 8.  Descriptive names (`service`, `test_device`), not abbreviations (`svc`, `dut`).  Document **all** functions and methods with concise docstrings.  When writing CircuitPython drivers: initialize hardware in `__init__`, provide `deinit()` or context-manager support.
 
-- Use the **full standard library** freely — `argparse`, `pathlib`, `dataclasses`, `tomllib`, `textwrap`, `functools`, etc.  There is no chicken‑and‑egg problem because infrastructure code runs after CPython is available.
-- **f‑strings** are preferred for readability (the standard Python convention), not because of embedded‑runtime allocation concerns.  `str.format()`, `%` formatting, and deferred logging interpolation are all acceptable when they improve clarity.
-- Do **not** use `const()`, `memoryview`, pre‑allocated buffers, or other embedded‑runtime patterns in infrastructure code.  These patterns add complexity that only benefits constrained interpreters.
-- Keep infrastructure code idiomatic and readable.  Prioritise clarity over micro‑optimisation.
+### API & compatibility
 
-### Naming & Style
+Follow CPython's API names for portable functionality.  Do not add non-CPython APIs to the same module — create separate modules for microcontroller-specific features.  Avoid the `u*` prefix convention (e.g., `usocket`); choose a distinct name.
 
- Follow PEP 8 for code style and naming.  Use descriptive names (`service`, `test_device`) instead of abbreviations like `svc` or `dut`.  Keep functions short and avoid unnecessary layers of abstraction—only split a function when it improves readability or testability.  Document **all** functions and methods (including those marked as “private” with a leading underscore) with concise docstrings so that human contributors and future AI agents can understand their purpose and parameters.  When writing CircuitPython drivers, align with Adafruit’s design guide: initialize hardware in `__init__`, provide `deinit()` or context‑manager support, and avoid extraneous allocations in drivers【484622475298331†L710-L724】.
+### Platform abstraction & shims
 
- Use **f‑strings exclusively** for string formatting in library code.  Compared to older `%` formatting or `str.format`, f‑strings are compiled into a single expression and avoid intermediate allocations.  On microcontrollers, this can reduce memory footprint and fragmentation.  However, be mindful when logging (see "Logging & Instrumentation" below); some logging APIs may still require lazy formatting.  Infrastructure code should prefer f‑strings for readability (the standard Python convention) but is not bound by the embedded‑runtime rationale.
+Prefer a single implementation across all runtimes.  When platform differences exist, write a thin shim that detects the runtime (via `sys.platform` or feature checks) and imports the correct backend.  Keep function names aligned with CPython's standard library.  Minimize dependencies.
 
-### API & Compatibility
+### Networking & non-blocking I/O
 
-*Libraries must be compatible with CPython, MicroPython and CircuitPython.*  When exposing CPython‑compatible functionality, follow CPython’s API names so that code is easily portable【484622475298331†L250-L270】.  Do not add non‑CPython APIs to the same module; instead, create separate modules for microcontroller‑specific functionality【484622475298331†L250-L270】.  Avoid the MicroPython convention of prefixing modules with `u*` to distinguish them; choose a distinct name instead【484622475298331†L261-L266】.
+All network operations must be non-blocking.  Use `sock.setblocking(False)` and `select.Poll` to multiplex I/O.  Handle `POLLHUP`/`POLLERR` immediately.  Read and write incrementally into pre-allocated buffers.  Integrate with the tick scheduler — poll once per tick, return quickly.
 
-### Platform Abstraction & Shims
+### Long operations & storage
 
-Whenever possible, **prefer a single library implementation that works across all three runtimes**.  If a third‑party library has different implementations for CircuitPython, MicroPython and CPython, consider writing a thin **shim layer** that abstracts away the platform‑specific details.  The shim should:
+Batch writes and defer them to idle periods.  Do not write to flash in tight loops (flash wear).  Break long computations into smaller steps across multiple ticks.
 
-1. **Detect the current runtime** using `sys.platform` or feature checks and import the appropriate underlying module.  For example, CPython uses the standard `socket` module, while CircuitPython wraps networking in `socketpool` and MicroPython exposes `usocket`.  Provide a unified API that delegates to the correct backend at import time.
-2. **Maintain consistent function names and semantics** aligned with CPython’s standard library【484622475298331†L250-L270】.  If CircuitPython or MicroPython expose additional methods, do not surface them through the shim; instead, create separate modules for microcontroller‑specific functionality.
-3. **Fallback to re‑implementation** when an equivalent library is not available.  If no existing library supports all three runtimes, implement the required functionality in Chumicro following the memory and performance guidelines outlined above.  Always respect upstream licenses and avoid copying code verbatim without preserving license notices.
-4. **Minimise dependencies**.  Each additional external dependency increases flash usage and maintenance burden.  Only include third‑party packages when they provide significant functionality that cannot reasonably be re‑implemented.
+### Scheduling & concurrency
 
-By centralising platform differences into a shim layer, application code can remain agnostic to the underlying runtime, improving readability and reducing duplication.
+No `async`/`await`.  No ISRs.  Use the tick-based runner pattern (Decision 0014): services implement `check(now_ms) -> bool`, the `Runner` captures time once per tick and dispatches handlers in batch.  Use polling and helper modules like `countio`/`keypad` for state change detection.
 
-### Secrets & Configuration
+### Secrets & configuration
 
-Never hard‑code secrets (Wi‑Fi SSIDs, passwords, tokens) in the library code.  Provide configuration hooks so users can store credentials in a separate file on the device.  A common pattern is to create a `config.py` that exports variables such as `wifi_ssid` and `wifi_password`; this file lives on the device’s filesystem and is not checked into version control.  Tutorials for Raspberry Pi Pico W show how to create a `config.py` with credentials and import it into the application【433245353756076†L29-L86】.  Libraries should look up credentials via a helper function or environment variables, allowing the user to override them.
+Never hard-code secrets.  Provide configuration hooks so users store credentials in a separate file on the device (e.g., `config.py` with `wifi_ssid` / `wifi_password`).
 
-### Logging & Instrumentation
+### Logging
 
-Microcontrollers and embedded applications benefit from consistent logging to aid debugging and telemetry.  Chumicro libraries should:
+Provide a lightweight logging facility with levels (`ERROR`, `WARNING`, `INFO`, `DEBUG`).  Use f-strings.  Don't log in tight loops.
 
-1. Provide a **lightweight logging facility** that works across CPython, MicroPython and CircuitPython.  On CPython, this may wrap the standard `logging` module; on microcontrollers, implement a simple logger that writes to the console or a designated output buffer.  Support log levels (e.g., `ERROR`, `WARNING`, `INFO`, `DEBUG`) and a global mechanism to adjust the verbosity at runtime.
-2. Use **f‑strings** for composing log messages.  While CPython’s logging API encourages `%`‑style formatting for deferred interpolation, on resource‑constrained devices it is acceptable to build the message eagerly with an f‑string since the overhead of the logging call dominates and there is no lazy evaluation facility.  If adopting the standard `logging` API for CPython, consider implementing a thin adapter that accepts f‑strings but defers formatting internally.
-3. Keep log messages short and avoid logging inside tight loops unless necessary.  Where detailed diagnostics are needed, gate them behind a debug log level so they can be disabled on production builds.
+## Testing strategy
 
-Well‑instrumented libraries improve diagnosability without imposing undue memory or CPU costs.
+### Host-based unit tests (PyTest)
 
-### Networking & Non‑Blocking I/O
+1. Tests go under `tests/` inside each library.
+2. Per-library pytest runs avoid test-directory collisions (Decision 0009).  `scripts/run.py test` runs a separate subprocess per package.
+3. 90 % coverage threshold per library.
+4. Root `conftest.py` auto-discovers `src/` directories and adds them to `sys.path`.
+5. Shared test fakes ship as `testing` submodules (e.g., `from chumicro_timing.testing import FakeTicks`).
 
-Embedded applications often communicate over Wi‑Fi, TCP or other sockets.  To keep the main loop responsive (e.g., to toggle an LED or service other tasks), **all network operations must be non‑blocking**.  Blocking on a `connect()`, `read()` or `write()` call will starve the tick‑based scheduler and defeat the purpose of this ecosystem.  The following guidelines apply:
+### Library testability rules (Decision 0010)
 
-1. **Enable non‑blocking mode** on sockets.  In MicroPython and CircuitPython, call `sock.setblocking(False)` (equivalent to `sock.settimeout(0)`) to ensure that operations return immediately rather than waiting【992409882259005†L354-L364】.  Avoid using `read()` or `write()` on a blocking socket.
-2. **Use the `select` module to multiplex I/O**.  Instantiate a `select.Poll` object and register sockets for `POLLIN` and `POLLOUT` events.  Call `poll.poll(timeout)` to obtain a list of `(obj, event)` tuples, or use `poll.ipoll(timeout)` which returns an iterator that yields “callee‑owned” tuples and is an allocation‑free way to wait for events【287491311677333†L131-L136】.  The returned event mask combines flags such as `POLLIN` (readable), `POLLOUT` (writable), `POLLHUP` (hang‑up) and `POLLERR` (error)【287491311677333†L110-L123】.
-3. **Handle error and hang‑up flags immediately**.  `POLLHUP` and `POLLERR` may be returned at any time—even if you did not request them—and must be acted on promptly; failing to close or unregister the socket will result in subsequent `poll()` calls returning instantly with these flags【287491311677333†L110-L123】.
-4. **Read and write incrementally**.  When `POLLIN` is set, read incoming data using `sock.readinto()` or similar functions into a pre‑allocated buffer.  When `POLLOUT` is set, send queued data in small chunks.  Maintain transmit and receive queues so that the network stack never blocks.  After sending, if there is still data pending, update a timeout or state flag so the next tick will attempt to send again.  Avoid calling `sock.read()` or `sock.write()` without first checking readiness.
-5. **Integrate with the tick scheduler**.  The network handler should run once per scheduler tick, poll sockets with a small timeout, and process any events.  If no events occur, return quickly so other tasks can run.  Do not spin inside network handlers; instead, rely on the scheduler to call the handler again on the next tick.
+- **Constructor injection** — classes that depend on time, I/O, or network accept those as constructor parameters.
+- **Provide fakes for things you own** — `src/chumicro_<name>/testing.py` with ready-made fakes.
+- **Don't mock what you don't own** — use the upstream library's provided fakes.
 
-By following these patterns, Chumicro libraries can perform network communication without blocking other tasks or consuming excessive memory, enabling truly responsive applications on constrained devices.
+### On-device tests
 
-### Long Operations & Storage
+Lightweight runner in `support/test_harness/`.  Tests under `functional_tests/` per library.
 
-Certain operations—such as writing to the on‑device filesystem, erasing flash sectors or performing lengthy computations—can block the interpreter for tens or hundreds of milliseconds.  Flash memory must be erased before it can be written, and this erasure happens automatically prior to writing to a region【603081405923325†L140-L144】.  Because erasing and writing flash can take time and wear out the memory if repeated frequently【603081405923325†L140-L149】, design libraries to minimise file writes and avoid performing them inside tight loops.  Where persistent storage is needed:
+### CI pipeline
 
-1. **Batch writes and defer them to idle periods.**  Accumulate data in RAM and write it to the filesystem in a single operation when the application can tolerate a pause.  Do not call `open().write()` repeatedly in a high‑frequency loop.
-2. **Use ring buffers or logs to amortise erases.**  If the library must store data continuously, allocate a fixed‑size log file and write new records in a circular fashion, erasing and rewriting sectors infrequently.
-3. **Expose configuration for write intervals.**  Allow users to configure how often the library flushes data to storage, so they can balance durability with responsiveness.
-4. **Warn about flash wear.**  Document that frequent writes can reduce flash lifetime and encourage users to offload large logs to an SD card or external storage when possible.
+PRs and pushes to `main` run: lint (Ruff), test (CPython 3.11/3.12/3.13), verify-examples, docs-build (PRs), build, version-check, api-check, MicroPython compat, CircuitPython compat.
 
-5. **Use an idle work queue.**  Implement the scheduler so that it supports an **idle queue** of deferred tasks.  Operations that are required but not time‑critical (such as flushing buffered data to disk) should enqueue a small callable into this queue.  The scheduler runs idle tasks only when no other tasks are runnable and no I/O events are pending, ensuring that they execute during otherwise unused time slices without blocking interactive logic.  This mechanism helps maintain responsiveness while still completing background work.
+## Versioning & releases
 
-Similarly, avoid other long‑running operations—e.g., heavy computations or sensor reads that take milliseconds—in the main loop.  Break them into smaller steps, run them across multiple ticks, or offload them to dedicated hardware peripherals.  Following these practices preserves the responsiveness of the tick‑based scheduler and ensures your application can continue to service other tasks.
+[Semantic Versioning](https://semver.org/).  Each library's `VERSION` file is the single source of truth.  `pyproject.toml` reads from it dynamically.
 
-### Scheduling & Concurrency
+Bump rules: `major` for breaking changes, `minor` for new features, `patch` for bug fixes.  Bump only affected libraries.
 
-To maximise predictability and minimise overhead, Chumicro **does not rely on Python’s `async`/`await` syntax** or the built‑in asynchronous schedulers (`asyncio`/`uasyncio`).  MicroPython’s and CircuitPython’s asynchronous engines are limited and not available on some small boards【204239382498704†L176-L186】.  Instead, a **tick‑based scheduler** will be provided in the support package.  This scheduler will run tasks sequentially on each tick or time slice, and tasks must return control quickly so that other tasks can run.  Developers should pre‑allocate task objects and buffers to avoid heap fragmentation, and the scheduler should expose a configurable tick rate while keeping per‑tick overhead minimal.
+Releases are automated: bump `VERSION` and merge to `main` for experimental; run `promote.yml` for stable.  Release workflow publishes to PyPI, creates tags, deploys to bundle repos, and publishes docs.
 
-Chumicro **forbids the use of hardware interrupts (ISRs) anywhere in the codebase**.  Libraries must not attach callbacks to GPIO interrupts or rely on `micropython.schedule()` to run code outside the main loop.  Instead, use polling in the tick‑based scheduler or helper modules like `countio` and `keypad` to detect state changes.  Avoiding ISRs ensures deterministic timing, eliminates hidden heap usage and simplifies debugging across all supported runtimes.
+Keep code as plain `.py` during development.  `.mpy` compilation happens in the release pipeline via `mpy-cross`.
 
-## Testing Strategy
+## Board support
 
-### Host‑Based Unit Tests (PyTest)
+Minimum: 256 KB MCU RAM, 4 MB flash.  See Decision 0015 for tier details.
 
-PyTest is the primary framework for unit tests in the host environment.  It offers fixtures, assertions, and code‑coverage tools.  The CircuitPython community has demonstrated that PyTest can be used alongside a `conftest.py` to mock out CircuitPython‑specific modules【900637251395569†L175-L225】.  MicroPython projects such as `micropython‑stubber` also use a `tests/mocks` folder to allow MicroPython code to run under CPython【424519180869736†L53-L77】.  When writing tests:
+- **Tier 1:** ESP32, ESP32-S3, ESP32-C6, RP2350, ESP32-S2/C3 with PSRAM.
+- **Tier 2:** RP2040, ESP32-S2/C3 without PSRAM.
+- **Unsupported:** SAMD21, SAMD51, nRF52, ESP8266, small STM32.
 
-1. Place CPython unit tests under `tests/` inside each library.  Use mocks to simulate hardware interactions.  For example, `pytest_runtest_setup` in `conftest.py` can dynamically replace `board`, `digitalio`, etc., with stub objects【900637251395569†L175-L246】.
-2. Maintain 100 % code coverage where practical.  Use `pytest-cov` to measure coverage and ensure that new code includes tests.
-3. Keep tests simple and avoid test‑only abstractions that bloat the library.  Instead, design classes and functions to accept injected dependencies (e.g., pass in a `ticks` module or I/O interface) so tests can replace them with mocks.
+Use `sys.platform` or feature checks for runtime detection.  Provide fallbacks or clear errors when features are missing.
 
-#### Library testability rules
+## Reference implementations
 
-Libraries must be designed for testability from the start (see [Decision 0010](plans/decisions/0010-library-testability.md)):
+Local clones of pinned runtime source trees live under `.tools/` (gitignored).  Run `python scripts/run.py prepare-micropython` / `prepare-circuitpython` to set them up.  Browse these first when inspecting C implementations or built-in module behavior.
 
-- Accept dependencies via constructor injection — classes that depend on time, I/O, or network must take those as constructor parameters.
-- Provide fakes for things you own — libraries that expose injectable services must include a `testing` submodule (`src/chumicro_<name>/testing.py`) with ready-made fakes.
-- Don't mock what you don't own — use the upstream library's provided fakes rather than creating ad-hoc mocks.
+## Planning documents
 
-#### Test structure rules
+Planning docs under `plans/` are part of the repository's working state.  See `plans/README.md` for the full index.
 
-The workspace uses per-library pytest runs to avoid test-directory name collisions (see [Decision 0009](plans/decisions/0009-per-library-test-runs.md)).  `scripts/run.py test` runs a separate pytest subprocess for each package, then combines coverage.  Each library must independently meet the 90% coverage threshold.
+- `plans/decisions/` — durable decisions affecting future work
+- `plans/history.md` — design principles, rejected approaches, build-up timeline
+- `plans/next-up.md` — active execution queue
+- `plans/roadmap.md` — milestone status
 
-- The root `conftest.py` auto-discovers all `src/` directories and adds them to `sys.path`, so library packages are importable without pip install.
-- Shared test fakes ship with their library as a `testing` submodule (e.g., `from chumicro_timing.testing import FakeTicks`).  Other libraries import them directly.
-- **Do not use `pip install -e`** to resolve IDE import warnings.  IDE resolution is handled through generated source root configs (`.idea/chumicro.iml` for PyCharm, `pyrightconfig.json` for VS Code).
-- Bare `pytest` from the repo root is not the supported path.  Use `python scripts/run.py test`.
+**`next-up.md` housekeeping:** move checked-off items from Now/Next/Blocked to the top of Done in the same edit.
 
-### On‑Device Unit Tests
+**Before proposing structural changes**, check `plans/decisions/` for existing decisions.  If revisiting, reference the original decision explicitly.
 
-For tests that must run on real hardware or under the actual MicroPython/CircuitPython interpreter, a lightweight on‑device test runner exists in `support/test_harness/`.  It should discover functions prefixed with `test_`, run them one by one, and report results, while keeping memory usage minimal.  Its interface and helpers (e.g., assertions) may still evolve, but it should remain intentionally tiny.
+## Contributing & code review
 
-Tests intended for on‑device execution should live under a `functional_tests/` directory within each library and import any required mocks or helpers from the support package.  Avoid heavy imports or complex features that are unavailable on the board.
-
-### Functional & Integration Testing
-
-Where possible, run integration tests against actual hardware.  Since hardware access varies, the framework allows users to register their own devices via a configuration file (e.g., `devices.yml`).  Each entry defines the serial port or network address of a board, its family (e.g., ESP32‑S2), and any environment setup commands.  CI can read this file to run functional tests on connected devices.
-
-### Continuous Integration
-
-CI pipelines should enforce linting, unit tests and code coverage across all supported runtimes.  A typical flow:
-
-1. **Linting:** Run `ruff` to ensure PEP 8 compliance.
-2. **Static type checking:** Optionally run `mypy` against CPython code (use type hints where possible without breaking MicroPython/CircuitPython compatibility).
-3. **Unit tests:** Execute PyTest on a CPython interpreter.  Optionally also run tests under MicroPython's Unix port using MicroPython's `run‑tests.py` script【593158073270695†L93-L104】.
-4. **Functional tests:** If configured, flash the library and test firmware to boards listed in `devices.yml` and run the functional test runner.  Collect results and include them in the CI report.
-5. **Coverage:** Fail the build if coverage drops below a threshold (e.g., 90 %).
-
-## Versioning & Releases
-
-Chumicro libraries follow [Semantic Versioning](https://semver.org/).  The specification states that major versions increment for backward‑incompatible API changes, minor versions for backward‑compatible new features, and patch versions for bug fixes.  Each publishable library should own a checked-in `VERSION` file at the library root (for example, `libraries/timing/VERSION`), and agents should treat that file as the canonical published version for that library.
-
-When an agent changes a library in a way that affects its released surface area, the same PR should update that library’s `VERSION` file with the smallest correct semantic-version bump:
-
-- `major` – introducing breaking changes.
-- `minor` – adding new functionality in a backward-compatible way.
-- `patch` – fixing bugs without API changes.
-
-Do not bump unrelated libraries.  PR checks should fail when a publishable library changes without the corresponding `VERSION` file being reviewed and updated when required.  Release automation should read the library version from that file, and any duplicated version metadata (for example in `pyproject.toml`) should be kept in sync or validated against it before publishing.  Releases are automatically published (e.g., to PyPI or a CircuitPython bundle) only after tests pass and a human/AI review is complete.
-
-### Bytecode Compilation
-
-During everyday development, keep library code in plain `.py` files to maximise readability and allow inspection by AI agents and human developers.  When creating a release, compile modules to `.mpy` bytecode using `mpy-cross` or an equivalent tool.  The `.mpy` format reduces code size and speeds import on boards but is harder to debug.  Release automation should handle this compilation step so developers do not need to commit `.mpy` files to the repository.
-
-Chumicro plans to provide its own package index for installation via tools like `circup`, alongside publishing to PyPI.  Once the ecosystem is mature, developers will be able to install or update libraries from this repository directly on their boards.
-
-## Device Registration & Test Bed Setup
-
-To run functional tests, users must register their own devices.  Provide a template file (e.g., `devices.example.yml`) with keys such as `id`, `description`, `connection_type` (`serial`, `tcp`), `address`, and `board_type`.  Users copy this to `devices.yml`, fill in their devices, and the test harness reads the file to know which devices to target.  Default assumptions are ESP32‑S2/S3 boards with enough RAM and flash.
-
-For CircuitPython boards, ensure they have the appropriate firmware version installed and a filesystem with enough space for the library and tests.  Tools like Adafruit’s `mpremote` or `adafruit-nrfutil` can automate flashing.  For MicroPython boards, use the `pyboard.py` or `mpremote` utilities.
-
-## Dependencies & Licensing
-
-Minimize external dependencies; prefer pure‑Python implementations that work on CircuitPython and MicroPython.  If a dependency is required, verify that it supports the target runtimes.  When re‑implementing functionality, respect the licenses of upstream code.  CircuitPython and MicroPython core libraries are licensed under MIT【204597493819549†L36-L50】, which permits copying, modifying, and distributing code provided the license notice is retained【204597493819549†L38-L50】.
-
-## Board Considerations & Feature Detection
-
-Chumicro targets boards with at least **256 KB of MCU RAM** and **4 MB of flash**.  Libraries may run on boards below this baseline, but those configurations are not tested and issues on them will not be investigated.  Boards with PSRAM are preferred for Wi‑Fi, TLS, displays, and larger buffers.
-
-A source-level audit ([Decision 0015](plans/decisions/0015-board-architecture-support.md)) established support tiers based on both hardware resources and compile-time feature availability (`collections.deque`):
-
-- **Tier 1 (recommended):** ESP32 (original), ESP32-S3, ESP32-C6, RP2350, ESP32-S2 with PSRAM, ESP32-C3 with PSRAM — all have ≥512 KB effective RAM (MCU + PSRAM) and full runtime features.
-- **Tier 2 (supported, constrained):** RP2040, ESP32-S2 without PSRAM, ESP32-C3 without PSRAM — 256–512 KB MCU RAM, no PSRAM; networking and TLS workloads are tight.
-- **Unsupported (may work, not tested):** SAMD21, SAMD51, nRF52, ESP8266, STM32F4/F7 parts below 256 KB RAM.
-
-Developers should:
-
-1. Document the minimum firmware version and memory requirements for each library.  If a library depends on a specific module (e.g., `socket`, `bluetooth`), note which ports provide it.
-2. Use `sys.platform` or feature checks (`hasattr(module, "function")`) to detect whether optional features are available.  Provide graceful fallbacks or raise clear exceptions when features are missing.  For example, check `hasattr(wifi, 'radio')` before using `wifi.radio`.
-3. Consider differences between CircuitPython and MicroPython—e.g., CircuitPython includes higher‑level networking APIs like `socketpool`, while MicroPython exposes lower‑level `usocket`.  Abstract platform differences behind a consistent API when possible.
-4. Test libraries on the supported boards listed in `devices.yml` and update documentation when new boards are added.
-
-## Reference Implementations
-
-The upstream implementations of **CPython**, **MicroPython**, and **CircuitPython** are all open‑source.  Examining runtime source is encouraged when you need to understand how features are implemented or to optimise memory usage.
-
-The workspace keeps **local clones** of the pinned source trees under `.tools/`, gitignored but present after `python scripts/run.py prepare-micropython` and/or `prepare-circuitpython`.  The directory layout:
-
-```
-.tools/
-├── circuitpython-<version>/   # full CircuitPython source tree (pinned to target-runtimes.toml)
-├── circuitpython.path          # path to the built CircuitPython unix-port binary
-├── micropython-<version>/      # full MicroPython source tree (pinned to target-runtimes.toml)
-└── micropython.path            # path to the built MicroPython unix-port binary
-```
-
-**Browse these local clones first** when you need to inspect C implementations, built-in module behaviour, or runtime internals — they match the exact versions this workspace targets.  If `.tools/` is missing (workspace not yet prepared), run the prepare scripts above or fall back to a web search for the specific runtime source.
-
-Examples of useful paths:
-
-- `py/objdeque.c` — `collections.deque` implementation
-- `py/objstr.c` — `str.format` / f‑string compilation
-- `shared-bindings/` — CircuitPython hardware API bindings
-- `ports/unix/` — unix-port build system and main entry point
-
-## Planning documents are part of the workspace contract
-
-The planning documents under `plans/` are part of the repository's working state, not optional notes. Significant implementation or direction changes should be reflected in:
-
-- `plans/next-up.md` for the active execution queue
-- `plans/roadmap.md` for milestone status and major direction
-- `plans/workstreams/` for durable bodies of work and higher-level scope; update them when the long-lived shape of the work changes
-- `plans/decisions/` for durable decisions that affect future work
-- `plans/prompts/` for durable prompt artifacts used to recover workspace context, restart sessions, or preserve workspace build-up history
-
-**`next-up.md` housekeeping:** when you mark an item as done (`[x]`) in the Now, Next, or Blocked sections, move it to the top of the Done section in the same edit.  Do not leave checked-off items in active sections.
-
-**Before proposing a change to workspace structure, testing patterns, or dependency strategy, check `plans/decisions/` for existing decisions on the topic.**  Re-proposing something that was already decided and rejected wastes time.  If new information justifies revisiting a decision, say so explicitly and reference the original decision.
-
-Keep planning docs aligned with the actual codebase, but avoid churn for tiny edits that do not change scope, status, priorities, or next steps.
-
-## Security & Compliance
-
-Building connected devices requires attention to security and data protection.  In addition to keeping secrets out of the codebase (see *Secrets & Configuration*), developers should:
-
-1. **Use encrypted protocols:** When communicating over networks, prefer TLS/SSL.  CircuitPython provides `ssl`/`ussl` wrappers for sockets; ensure certificates are validated where possible.
-2. **Avoid weak cryptography:** Use modern hashing (e.g., SHA‑256) and encryption algorithms supported by your runtime.  Do not implement your own cryptography.
-3. **Maintain dependencies:** Keep third‑party libraries up to date and audit them for vulnerabilities.  When importing code from upstream projects, review their licenses and security posture.
-4. **Protect personal data:** Do not collect or transmit personal or sensitive data unless absolutely necessary.  Provide configuration options to disable or anonymise telemetry.
-5. **Harden devices:** Disable unused network services, validate inputs from untrusted sources, and restrict access to configuration interfaces.  Follow established IoT security best practices to minimise attack surfaces.
-
-## Contributing & Code Review
-
-1. Discuss design proposals with the maintainers or AI agent before starting large features.  Surface trade‑offs and uncertainties early.
-2. Keep pull requests small and focused.  Each PR must include tests and documentation for the new functionality.
-3. Code review checks include style, test coverage, memory usage (avoid extra allocations), and API consistency across runtimes.  When reviewing code, explicitly reference these guidelines.
-4. Do not include build artifacts, compiled bytecode, or secret configuration files in commits.  Add appropriate `.gitignore` rules.
-5. **Commit after completing a meaningful unit of work.**  Do not leave changes uncommitted between sessions.  Each working session should end with a clean tree.  Use the [end-of-session checklist](plans/prompts/end-of-session.prompt.md) before ending.
-6. **Write commit messages that aid context recovery.**  Planning docs under `plans/` can go stale between sessions.  When that happens, commit history is the primary fallback for reconstructing what changed and why.  Write commit messages accordingly:
-   - **Subject line:** summarise *what* changed in imperative mood (e.g., "Add importlib test isolation for multi-library workspace").
-   - **Body (when non-trivial):** explain *why* the change was made, what alternatives were considered or rejected, and which planning items or decisions it relates to.  Name affected libraries, decisions, or workstreams when relevant.
-   - **Scope tags:** if the commit touches planning docs, infrastructure, or a specific library, make that clear early in the message so `git log --oneline` is scannable.
-   - A future agent scanning `git log` should be able to infer the current project state, recent design choices, and the trajectory of work — even if `plans/` has not been updated yet.
-7. **Commit mechanics for agents.**  Never use `git commit -m` — it breaks in zsh on special characters, backticks, and multi-line messages.  Instead, always write the commit message to a scratch file and use `git commit -F`.  The full procedure is defined in [`.github/skills/git-commit/SKILL.md`](.github/skills/git-commit/SKILL.md); the `.scratch/` directory is gitignored.
-
-By following these guidelines, Chumicro aims to build a sustainable ecosystem of high‑quality, cross‑platform libraries for modern microcontrollers and Python applications.
+1. Keep PRs small and focused.  Include tests and documentation.
+2. Code review checks: style, coverage, memory usage, API consistency across runtimes.
+3. Do not commit build artifacts, bytecode, or secret configuration files.
+4. **Commit after completing a meaningful unit of work.**  End sessions with a clean tree.  Use the [end-of-session checklist](plans/end-of-session.md).
+5. **Write commit messages that aid context recovery** — imperative subject, body explaining *why*, name affected libraries/decisions.
+6. **Commit mechanics:** Never `git commit -m`.  Write to `.scratch/commit-msg.txt` and use `git commit -F`.  See `.github/skills/git-commit/SKILL.md`.
