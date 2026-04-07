@@ -2,10 +2,14 @@
 
 Cross-runtime Python libraries for CircuitPython, MicroPython, and CPython — built for ESP32, RP2040, and other microcontrollers.
 
+**License:** MIT · **CPython:** ≥ 3.11 · **CircuitPython:** 10.1.4 · **MicroPython:** v1.26.0
+
 - One workspace with many individually published libraries
 - Shared support packages for cross-runtime test tooling and docs assets
 - CPython-first development and testing, with unix-port simulation preferred over hardware when possible
 - Optional real-device validation for boards registered in a local testbed
+
+Target runtime versions are pinned in [`target-runtimes.toml`](target-runtimes.toml). Board support tiers (Tier 1 recommended, Tier 2 constrained) are documented in [Decision 0015](plans/decisions/0015-board-architecture-support.md).
 
 ## Libraries
 
@@ -64,11 +68,32 @@ pip install chumicro-timing
 - **Required**: MicroPython and CircuitPython unix-port cross-runtime unit tests
 - **Opt-in**: real-device `functional_tests/` run through the Chumicro test harness
 
+## CI & release pipeline
+
+PRs and pushes to `main` run the full CI suite via GitHub Actions:
+
+- **lint** — Ruff
+- **test** — pytest on CPython 3.11, 3.12, 3.13 with 90% coverage gate
+- **verify-examples** — AST-based import check of all examples
+- **docs-build** — verify docs build without errors (PRs only)
+- **build** — build all publishable packages
+- **version-check** — enforce VERSION bumps for release-relevant changes
+- **api-check** — detect API breakages via griffe against the last release tag
+- **MicroPython compat** — cross-runtime unit tests on MicroPython unix-port
+- **CircuitPython compat** — cross-runtime unit tests on CircuitPython unix-port
+
+Releases are automated:
+
+1. **Experimental** — bump a library's `VERSION` file and merge to `main`. The release workflow publishes to PyPI (experimental package name), creates a git tag, deploys to the experimental bundle repo, and publishes experimental docs.
+2. **Stable** — run the `promote.yml` workflow for specific libraries. It creates stable tags, publishes to PyPI (production name), deploys to the stable bundle repo, and publishes stable docs.
+
+See [Decision 0019](plans/decisions/0019-branching-model.md) for the single-branch model and [Decision 0018](plans/decisions/0018-distribution-bundle-repo.md) for bundle repo layout.
+
 ## Repository shape
 
 ```text
 chumicro/
-├── scripts/               # User-facing commands (prepare, run tasks)
+├── scripts/               # Developer tasks (run.py is the main entry point)
 ├── plans/                 # Roadmap, workstreams, decisions, and prompts
 │   ├── decisions/
 │   ├── prompts/
@@ -81,8 +106,12 @@ chumicro/
 │   ├── runner/            # Tick-based task runner
 │   ├── compat/            # Compatibility polyfills
 │   └── msgpack/           # MessagePack serialization
+├── .github/
+│   ├── workflows/         # CI, release, promote, docs-deploy, label-sync
+│   └── skills/            # Agent skill instructions
+├── target-runtimes.toml   # Pinned CircuitPython/MicroPython versions
 ├── devices.example.yml    # Template for local board registration
-└── .github/workflows/     # CI
+└── LICENSE                # MIT
 ```
 
 ## Getting started
@@ -127,7 +156,7 @@ All tasks are run through `scripts/run.py`:
 | `docs` | Build library docs with Zensical |
 | `docs --serve` | Start a live-reload docs dev server |
 | `docs-preview` | Deploy docs to a local branch and serve a versioned preview |
-| `docs-deploy` | Deploy versioned docs to gh-pages (used by CI) |
+| `docs-deploy --channel <ch>` | Deploy versioned docs to gh-pages (`experimental` or `stable`, used by CI) |
 | `build` | Build all publishable package distributions |
 | `preflight` | Full CI gate: lint + test all + examples + compat + build |
 | `new-library <name>` | Scaffold a new library and regenerate IDE configs |
@@ -140,6 +169,8 @@ All tasks are run through `scripts/run.py`:
 | `test-device` | Manual device validation placeholder |
 | `check-version` | Check VERSION bumps for changed libraries (CI gate) |
 | `check-api` | Detect API breakages against the last release tag (CI gate) |
+
+Tasks that operate on libraries (`test`, `verify-examples`, `docs`, `docs-preview`) accept `--all` or `--libraries name` to control scope. By default, `test` auto-detects changed packages.
 
 ## Platform switching
 
