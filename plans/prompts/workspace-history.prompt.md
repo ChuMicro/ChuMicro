@@ -418,3 +418,21 @@ This was the largest single session. It addressed three areas: the workspace was
 12. Patched the experimental release step to also update PyPI `[project.urls]`: Bundle URL → experimental bundle repo, Documentation URL → `/experimental/` docs channel.  Previously, experimental PyPI packages linked to the stable bundle and stable docs.
 13. Fixed double blank lines in scaffold templates and bundle README generator (whitespace linting).
 
+#### 2026-04-06 (cont. 3) — CI hardening and Milestone 2 completion
+
+**Runtime compatibility promoted to required:**
+1. Promoted MicroPython and CircuitPython compatibility checks from advisory to required PR status checks.  Platform targeting (Decision 0011) gates which libraries must pass.
+2. Removed `label-check` CI job — label enforcement handled by the PR template only.
+
+**Bundle repo auth hardened:**
+3. Switched bundle repo authentication from a broad PAT (`BUNDLE_TOKEN`) to per-repo SSH deploy keys (`BUNDLE_DEPLOY_KEY`, `EXPERIMENTAL_BUNDLE_DEPLOY_KEY`).  `BUNDLE_TOKEN` retained only for GitHub API release creation.
+4. Added `GH_PAGES_DEPLOY_KEY` for docs-deploy gh-pages push, replacing default `GITHUB_TOKEN` for private repo Pages publishing.
+5. Scoped bundle README regeneration and docs deployment to only libraries included in the promote workflow, avoiding unnecessary churn for unaffected libraries.
+
+**Version bumps and release fixes:**
+6. Bumped all libraries through 0.1.12, 0.1.13, and 0.1.14 to exercise the release pipeline and fix incremental issues (bundle README links, favicon deployment, landing page deduplication).
+7. Updated GitHub Actions to Node.js 24 compatible versions (`actions/checkout@v6`, `actions/setup-python@v6`, `actions/upload-artifact@v7`).
+
+**Milestone 2 marked done:**
+8. All CI/release exit criteria met.  Marked Milestone 2 as `done` in `roadmap.md`.
+9. Removed stale inline version numbers from planning and workstream docs — the canonical version lives in each library's `VERSION` file.

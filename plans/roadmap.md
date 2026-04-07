@@ -63,7 +63,7 @@ Current verified progress:
 - a repo-managed CircuitPython preparation command exists in `scripts/prepare_circuitpython.py` (task: `prepare-circuitpython`)
 - the pinned local CircuitPython `10.1.4` unix-port build completes successfully on macOS
 - the cross-runtime unit tests pass under CPython, MicroPython unix-port, and CircuitPython unix-port (Decision 0016)
-- `.github/workflows/ci.yml` includes advisory MicroPython and CircuitPython compatibility jobs in addition to the required host lane
+- `.github/workflows/ci.yml` includes required MicroPython and CircuitPython compatibility jobs in addition to the host lane
 - `devices.example.yml` exists for the first manual device-validation template
 - `circuitpython-stubs` and `micropython-esp32-stubs` (both from PyPI) provide PEP 561 type stubs for platform-specific modules (Decision 0012), eliminating IDE squigglies without hand-written stubs
 - `target-runtimes.toml` at the repo root is the single source of truth for pinned CircuitPython and MicroPython versions; CI prepare scripts, setup, and stubs all read from this file
@@ -92,7 +92,7 @@ Exit criteria:
 
 All exit criteria met.  Additional capabilities beyond the original scope:
 
-- CI workflow: lint, test (3.11/3.12/3.13 matrix), verify-examples, docs-build, build, version-check, api-check, MicroPython compat, CircuitPython compat
+- CI workflow: lint, test (3.11/3.12/3.13 matrix), verify-examples, docs-build, build, version-check, api-check, MicroPython compat (required), CircuitPython compat (required)
 - release workflow with experimental (auto on VERSION push) and stable (manual promote) channels
 - bundle job: `.py` + `.mpy` + `package.json` per library, circup zips, auto-generated bundle README
 - per-repo SSH deploy keys for bundle repos and gh-pages (branch protections active)
@@ -102,8 +102,7 @@ All exit criteria met.  Additional capabilities beyond the original scope:
 
 Settled choices:
 
-- required PR checks: lint, CPython tests, coverage, package build
-- MicroPython and CircuitPython cross-runtime unit tests become required once platform targeting is wired in (gated by Decision 0011)
+- required PR checks: lint, CPython tests, coverage, package build, MicroPython compat, CircuitPython compat, version-check, api-check
 - hardware-backed `functional_tests/` remain manual/scheduled only
 - all three distribution targets (PyPI, circup, mip) are part of the same release pipeline
 - the ChuMicro GitHub org hosts the circup-compatible repository
@@ -140,6 +139,6 @@ Current answer:
 
 ## Settled questions
 
-- Advisory MicroPython and CircuitPython CI lanes should become protected-branch requirements once platform targeting (Decision 0011) is wired in.
+- MicroPython and CircuitPython CI compatibility checks are now required status checks on PRs, gated by platform targeting (Decision 0011).
 - Hardware workflows stay manual-only until board transport tooling exists and has proven reliable.
 - Release automation stages artifacts for all three targets (PyPI, circup, mip) from the start — do not wait for PyPI to go first.
