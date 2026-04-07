@@ -2,7 +2,6 @@
 
 ## Now
 
-- [ ] Validate PR flow end-to-end against branch protection rulesets. Rulesets are now active on the paid private repo (main requires status checks + 1 approval). Admin bypass confirmed working. Next step: open a PR and verify checks, label enforcement, and merge flow without bypass.
 - [ ] Document contributor prerequisites by platform (macOS, Linux, Windows/WSL2) and by editor (PyCharm, VS Code, CLI) in the README. Linux and WSL2 sections are best-effort/researched until verified.
   - When writing these docs, scope the AGENTS.md performance guidelines (f-strings, `const()`, `memoryview`, pre-allocated buffers, etc.) to **library code only**. Infrastructure code (`scripts/`, `support/`) runs exclusively on CPython and does not need embedded-runtime constraints.
 - [ ] Write a "Creating a New Library" contributor guide. Walk through the full lifecycle from scaffolding to release-ready:
@@ -45,10 +44,11 @@
 
 ## Done
 
+- [x] Validate PR flow and branch protection rulesets end-to-end.  Rulesets active on main (status checks + approval required).  Admin bypass confirmed.  Deploy keys for bundle repos (`BUNDLE_DEPLOY_KEY`, `EXPERIMENTAL_BUNDLE_DEPLOY_KEY`) and gh-pages (`GH_PAGES_DEPLOY_KEY`) replace broad PAT for git operations.  `BUNDLE_TOKEN` retained only for GitHub API release creation.  No tag protection rules needed — tags are only created by CI workflows.  Milestone 2 (CI and release flow) is done.
 - [x] Deploy docs to GitHub Pages via mike (`docs-deploy.yml`).  Each library deploys independently with `--deploy-prefix`.  Push to `main` deploys `dev experimental`; promote triggers `<version> stable`.  Version selector dropdown enabled in all `mkdocs.yml` configs.  GitHub Pages must be configured to serve from `gh-pages` branch (repo setting).
 - [x] Add docs build verification as a PR-only CI gate (`docs-build` job). Migrated from MkDocs to Zensical (Decision 0013 updated). Existing `mkdocs.yml` configs work with zero changes.
 - [x] Implement `[tool.chumicro].platforms` reader in `scripts/discovery.py` and wire into cross-runtime compat runners (Decision 0011). Libraries default to all three runtimes when the key is absent. Compat runners pass filtered library names to the test harness.
-- [x] Complete CI/release infrastructure: `BUNDLE_TOKEN` secret added, PyPI trusted publishing configured (environment "pypi"), all four libraries published to PyPI (0.1.11 as of latest release), `main` is the only branch (single-branch model, Decision 0019), branch protection rulesets configured (enforcement deferred until repos go public). Bundle repos (`ChuMicro-Bundle`, `ChuMicro-Bundle-Experimental`) created and wired.
+- [x] Complete CI/release infrastructure: PyPI trusted publishing (OIDC), all four libraries published to PyPI, `main` is the only branch (single-branch model, Decision 0019), branch protection rulesets enforced.  Bundle repos (`ChuMicro-Bundle`, `ChuMicro-Bundle-Experimental`) created and wired with per-repo deploy keys.
 - [x] Create `ChuMicro/ChuMicro-Bundle-Experimental` repo. Add `generate_bundle_readme()` to `scripts/bundle.py` that auto-generates rich READMEs (library table with descriptions and source links, install commands for mip/circup/pip) from workspace metadata. Wire into `release.yml` so READMEs stay current on every release without manual updates. Push initial READMEs to both bundle repos (Decision 0018).
 - [x] Fix circup zip compatibility in `release.yml`: wrap zip contents in `{basename}/lib/` directory (circup's `Bundle.lib_dir()` requires it), produce per-platform mpy zips (`9.x-mpy`, `10.x-mpy`) matching circup's `SUPPORTED_PLATFORMS`. Document circup format requirements and bundle repo content policy (no examples, no per-library READMEs, no workflows) in Decision 0018.
 - [x] Add bundle publishing to release workflow: `scripts/bundle.py` stages .py + .mpy + `package.json` per library; `release.yml` `bundle` job compiles with mpy-cross, pushes to `ChuMicro/ChuMicro-Bundle`, and creates circup-format release zips (Decision 0018).
