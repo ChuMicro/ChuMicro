@@ -1,15 +1,21 @@
 name: Promote to stable
 
-# Promotes an experimental release to stable.  Select the experimental tag
-# (e.g. timing-v0.3.0-experimental) in the branch/tag dropdown when running
-# this workflow.  The library name and version are parsed from the tag.
+# Promotes an experimental release to stable.  Enter the experimental tag
+# (e.g. timing-v0.3.0-experimental) in the ref field.  The library name
+# and version are parsed from the tag automatically.
 #
 # The release runs inline via workflow_call so the full build, publish, and
-# bundle work is visible in this single workflow run.
+# bundle work is visible in this single workflow run.  The workflow itself
+# runs from main (latest scripts/workflows) while the library source is
+# checked out from the tag.
 
 on:
   workflow_dispatch:
     inputs:
+      ref:
+        description: "Experimental tag to promote (e.g. timing-v0.3.0-experimental)"
+        type: string
+        required: true
       dry_run:
         description: "Dry run — validate but do not publish or tag"
         type: boolean
@@ -35,7 +41,7 @@ jobs:
       - name: Parse experimental tag
         id: parse
         run: |
-          tag="${{ github.ref_name }}"
+          tag="${{ inputs.ref }}"
           echo "Tag: ${tag}"
 
           # Expect: <lib>-v<version>-experimental
@@ -47,13 +53,13 @@ jobs:
             echo "✓ Promoting ${lib_name} v${version} from experimental to stable"
           else
             echo "::error::Expected an experimental tag like 'timing-v0.3.0-experimental', got '${tag}'."
-            echo "::error::Select the experimental tag in the branch/tag dropdown when running this workflow."
             exit 1
           fi
 
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          ref: ${{ inputs.ref }}
 
       - name: Validate VERSION matches tag
         run: |
@@ -88,6 +94,7 @@ jobs:
       libraries: ${{ needs.validate.outputs.lib_name }}
       channel: stable
       dry_run: ${{ inputs.dry_run }}
+      checkout_ref: ${{ inputs.ref }}
     secrets: inherit
 
   docs:

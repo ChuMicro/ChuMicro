@@ -37,6 +37,10 @@ on:
         description: "Dry run — build but do not publish or tag."
         type: boolean
         default: false
+      checkout_ref:
+        description: "Git ref to check out for library source. Defaults to the caller's ref."
+        type: string
+        default: ""
 
 # One release at a time to avoid race conditions on tags.
 concurrency:
@@ -61,6 +65,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          ref: ${{ inputs.checkout_ref || github.ref }}
 
       - id: channel
         name: Determine release channel
@@ -143,6 +148,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.checkout_ref || github.ref }}
 
       - uses: actions/setup-python@v6
         with:
@@ -218,6 +225,8 @@ jobs:
       MATRIX_JSON: ${{ needs.detect.outputs.matrix }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.checkout_ref || github.ref }}
 
       - uses: actions/setup-python@v6
         with:
