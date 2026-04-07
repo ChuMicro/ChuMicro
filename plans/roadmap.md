@@ -11,7 +11,6 @@ Exit criteria:
 - root repo has a shared `pyproject.toml`
 - root repo has CI for lint + tests + coverage
 - `plans/` exists with workstreams, decisions, and `next-up.md`
-- `support/runtime/` exists with tests passing on CPython
 
 Settled choices:
 

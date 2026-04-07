@@ -53,7 +53,6 @@ See [workspace-history.prompt.md](./workspace-history.prompt.md) for the full ra
 - `CallRecorder` in `libraries/runner/src/chumicro_runner/testing.py`
 - `_PurePythonPartial` and `partial` in `libraries/compat/src/chumicro_compat/functools.py`
 - `packb`, `unpackb`, `pack`, `unpack` in `libraries/msgpack/src/chumicro_msgpack/__init__.py` (native C delegation) and `_pure.py` (pure-Python encoder/decoder)
-- `runtime_name()` in `support/runtime/src/chumicro_runtime/platform.py`
 - `run_module()` in `support/test_harness/src/chumicro_test_harness/runner.py`
 - `main()` in `scripts/run.py` — task runner with auto-discovery, scoped testing, scaffolding
 - `prepare_micropython()` in `scripts/prepare_micropython.py` and `prepare_circuitpython()` in `scripts/prepare_circuitpython.py`
