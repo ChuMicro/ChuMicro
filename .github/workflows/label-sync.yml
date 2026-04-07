@@ -1,5 +1,9 @@
 name: Sync labels
 
+# Reconcile GitHub issue labels with the declarative definition in
+# .github/labels.yml.  Runs on every push that touches the file and
+# can be triggered manually to force a full sync.
+
 on:
   push:
     branches:
@@ -23,4 +27,6 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           yaml-file: .github/labels.yml
+          # Keep labels that were created manually or by other tooling.
+          # Only additions and renames are applied; nothing is deleted.
           skip-delete: true

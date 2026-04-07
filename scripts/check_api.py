@@ -20,10 +20,10 @@ import sys
 from discovery import ROOT, changed_libraries, find_package_dir
 
 
-def _latest_tag(lib_name: str) -> str | None:
-    """Find the latest git tag matching ``<lib_name>-v*``."""
+def _latest_tag(library_name: str) -> str | None:
+    """Find the latest git tag matching ``<library_name>-v*``."""
     result = subprocess.run(
-        ["git", "tag", "--list", f"{lib_name}-v*", "--sort=-v:refname"],
+        ["git", "tag", "--list", f"{library_name}-v*", "--sort=-v:refname"],
         capture_output=True,
         text=True,
         cwd=ROOT,
@@ -34,9 +34,9 @@ def _latest_tag(lib_name: str) -> str | None:
     return result.stdout.strip().splitlines()[0]
 
 
-def _read_version(lib_name: str) -> str | None:
+def _read_version(library_name: str) -> str | None:
     """Read the current VERSION file for a library."""
-    version_file = ROOT / "libraries" / lib_name / "VERSION"
+    version_file = ROOT / "libraries" / library_name / "VERSION"
     if not version_file.exists():
         return None
     return version_file.read_text().strip()
@@ -52,49 +52,49 @@ def _parse_version(version: str) -> tuple[int, int, int] | None:
 
 def _bump_level(old_version: str, new_version: str) -> str | None:
     """Determine the bump level between two versions."""
-    old = _parse_version(old_version)
-    new = _parse_version(new_version)
-    if old is None or new is None:
+    old_parsed = _parse_version(old_version)
+    new_parsed = _parse_version(new_version)
+    if old_parsed is None or new_parsed is None:
         return None
-    if new[0] > old[0]:
+    if new_parsed[0] > old_parsed[0]:
         return "major"
-    if new[1] > old[1]:
+    if new_parsed[1] > old_parsed[1]:
         return "minor"
-    if new[2] > old[2]:
+    if new_parsed[2] > old_parsed[2]:
         return "patch"
     return None
 
 
 def _check(base_ref: str) -> int:
     """Run the API breakage check.  Returns exit code."""
-    libs = changed_libraries(base_ref)
-    if not libs:
+    libraries = changed_libraries(base_ref)
+    if not libraries:
         print("No release-relevant library changes detected.")
         return 0
 
     overall_ok = True
 
-    for lib_name in sorted(libs):
-        tag = _latest_tag(lib_name)
+    for library_name in sorted(libraries):
+        tag = _latest_tag(library_name)
         if tag is None:
-            print(f"SKIP: {lib_name} — no previous release tag found.")
+            print(f"SKIP: {library_name} — no previous release tag found.")
             continue
 
-        pkg = find_package_dir(ROOT / "libraries" / lib_name)
-        if pkg is None:
-            print(f"SKIP: {lib_name} — no importable package under src/.")
+        package_dir = find_package_dir(ROOT / "libraries" / library_name)
+        if package_dir is None:
+            print(f"SKIP: {library_name} — no importable package under src/.")
             continue
-        package_name = pkg.name
+        package_name = package_dir.name
 
-        new_version = _read_version(lib_name)
+        new_version = _read_version(library_name)
         if new_version is None:
-            print(f"SKIP: {lib_name} — no VERSION file.")
+            print(f"SKIP: {library_name} — no VERSION file.")
             continue
 
         # Extract old version from tag (e.g., timing-v0.1.0 → 0.1.0).
         old_version = tag.split("-v", 1)[1] if "-v" in tag else None
         if old_version is None:
-            print(f"SKIP: {lib_name} — cannot parse version from tag {tag}.")
+            print(f"SKIP: {library_name} — cannot parse version from tag {tag}.")
             continue
 
         bump = _bump_level(old_version, new_version)
@@ -107,7 +107,7 @@ def _check(base_ref: str) -> int:
         # stdout and stderr because griffe emits breakage details on
         # different streams depending on version.  A non-zero exit code
         # indicates at least one breaking change was detected.
-        src_dir = str(ROOT / "libraries" / lib_name / "src")
+        src_dir = str(ROOT / "libraries" / library_name / "src")
         result = subprocess.run(
             [
                 sys.executable, "-m", "griffe", "check",
@@ -124,7 +124,7 @@ def _check(base_ref: str) -> int:
         has_breakages = result.returncode != 0
 
         if not has_breakages:
-            print(f"OK: {lib_name} — no API breakages detected.")
+            print(f"OK: {library_name} — no API breakages detected.")
             continue
 
         # Breakages detected — check whether the VERSION bump level is
@@ -135,14 +135,14 @@ def _check(base_ref: str) -> int:
         is_pre_1 = major_version is not None and major_version[0] == 0
 
         if bump == "major":
-            print(f"OK: {lib_name} — breakages detected, major bump acknowledged.")
+            print(f"OK: {library_name} — breakages detected, major bump acknowledged.")
             if griffe_output:
                 print(f"     {griffe_output}")
             continue
 
         if bump == "minor" and is_pre_1:
             print(
-                f"OK: {lib_name} — breakages detected, minor bump "
+                f"OK: {library_name} — breakages detected, minor bump "
                 "sufficient for 0.x (SemVer pre-1.0 semantics)."
             )
             if griffe_output:
@@ -152,7 +152,7 @@ def _check(base_ref: str) -> int:
         # Insufficient bump.
         bump_label = bump or "unchanged"
         print(
-            f"FAIL: {lib_name} — API breakages detected but VERSION "
+            f"FAIL: {library_name} — API breakages detected but VERSION "
             f"bump is only '{bump_label}'."
         )
         if griffe_output:

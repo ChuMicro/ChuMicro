@@ -1,4 +1,4 @@
-"""Repo-level task runner for humans, agents, and CI.
+"""Repository-level task runner for humans, agents, and CI.
 
 Usage::
 
@@ -49,7 +49,7 @@ COMPAT_SCRIPT = "support/test_harness/run_cross_runtime.py"
 
 
 def _run(command: list[str], env: dict[str, str] | None = None) -> int:
-    """Run a command from the repo root and return its exit code."""
+    """Run a command from the repository root and return its exit code."""
     printable_command = " ".join(command)
     print(f"+ {printable_command}")
     completed = subprocess.run(command, cwd=ROOT, env=env, check=False)
@@ -73,17 +73,17 @@ def setup() -> int:
     circuitpython_version = VERSIONS["circuitpython"]["version"]
     micropython_version = VERSIONS["micropython"]["version"].lstrip("v")
 
-    # Static deps come from requirements-dev.txt.  Type stubs for
+    # Static dependencies come from requirements-dev.txt.  Type stubs for
     # CircuitPython and MicroPython are pinned to the runtime versions
     # in target-runtimes.toml so IDE type-checking matches the actual
     # runtime APIs (Decision 0012).
-    req_file = str(ROOT / "requirements-dev.txt")
+    requirements_file = str(ROOT / "requirements-dev.txt")
     stubs = [
         f"circuitpython-stubs=={circuitpython_version}",
         f"micropython-esp32-stubs=={micropython_version}.*",
     ]
 
-    result = _run([*_install_command(), "-U", "-r", req_file, *stubs])
+    result = _run([*_install_command(), "-U", "-r", requirements_file, *stubs])
     if result != 0:
         return result
     return sync_ide()
@@ -95,7 +95,7 @@ def lint() -> int:
 
 
 def _parse_library_filters(
-    filter_expr: str,
+    filter_expression: str,
 ) -> dict[str, list[tuple[str | None, str]]]:
     """Parse a ``-k`` expression into per-library test filters.
 
@@ -112,17 +112,17 @@ def _parse_library_filters(
 
     Raises :class:`SystemExit` for entries missing a library prefix.
     """
-    entries = [e.strip() for e in filter_expr.split(",") if e.strip()]
+    entries = [entry.strip() for entry in filter_expression.split(",") if entry.strip()]
     result: dict[str, list[tuple[str | None, str]]] = {}
 
     for entry in entries:
         parts = entry.split("/")
         if len(parts) == 2:
-            lib, expr = parts
-            result.setdefault(lib, []).append((None, expr))
+            library_name, expression = parts
+            result.setdefault(library_name, []).append((None, expression))
         elif len(parts) == 3:
-            lib, file, expr = parts
-            result.setdefault(lib, []).append((file, expr))
+            library_name, file_name, expression = parts
+            result.setdefault(library_name, []).append((file_name, expression))
         else:
             print(f"Invalid -k format: {entry}")
             print(
@@ -135,10 +135,10 @@ def _parse_library_filters(
 
 
 def test_cpython(
-    pkg_dirs: list[Path],
+    package_dirs: list[Path],
     *,
-    filter_expr: str | None = None,
-    exitfirst: bool = False,
+    filter_expression: str | None = None,
+    exit_first: bool = False,
     verbose: bool = False,
     no_cov: bool = False,
 ) -> int:
@@ -147,25 +147,25 @@ def test_cpython(
     Runs pytest separately for each package to avoid test-directory name
     collisions (Decision 0009), then combines and reports coverage.  Each
     library must independently meet the coverage threshold (90%) unless
-    *filter_expr* is set (filtering naturally reduces coverage) or *no_cov*
+    *filter_expression* is set (filtering naturally reduces coverage) or *no_cov*
     skips coverage entirely.
 
-    *filter_expr* requires library-scoped syntax::
+    *filter_expression* requires library-scoped syntax::
 
         timing/test_heartbeat                 # by name in a library
         timing/test_ticks/test_add            # by file and name
         timing/test_a,runner/test_b      # comma-separated
     """
-    # Parse library-scoped filters from filter_expr.
+    # Parse library-scoped filters from filter_expression.
     # When -k is set, library names extracted from the filter expression
-    # completely replace pkg_dirs (from --all / --libraries / change
+    # completely replace package_dirs (from --all / --libraries / change
     # detection).  -k takes precedence over scope flags.
     per_library: dict[str, list[tuple[str | None, str]]] | None = None
-    if filter_expr:
-        per_library = _parse_library_filters(filter_expr)
-        # Library prefixes override pkg_dirs.
-        all_dirs = discover_package_dirs()
-        by_name = {d.name: d for d in all_dirs}
+    if filter_expression:
+        per_library = _parse_library_filters(filter_expression)
+        # Library prefixes override package_dirs.
+        all_package_dirs = discover_package_dirs()
+        by_name = {package_dir.name: package_dir for package_dir in all_package_dirs}
         resolved: list[Path] = []
         for name in per_library:
             if name not in by_name:
@@ -174,10 +174,10 @@ def test_cpython(
                 print(f"Available: {available}")
                 return 1
             resolved.append(by_name[name])
-        pkg_dirs = resolved
+        package_dirs = resolved
 
     # Keep only packages that actually have a tests/ directory.
-    testable = [d for d in pkg_dirs if (d / "tests").is_dir()]
+    testable = [package_dir for package_dir in package_dirs if (package_dir / "tests").is_dir()]
     if not testable:
         print("No test directories found for the selected packages.")
         return 0
@@ -187,73 +187,79 @@ def test_cpython(
     # Clean stale coverage data so combine starts fresh.  Two globs are
     # needed: `.coverage` (the default combined file) and `.coverage.*`
     # (the per-run files we create below with unique suffixes).
-    for f in ROOT.glob(".coverage"):
-        f.unlink()
-    for f in ROOT.glob(".coverage.*"):
-        f.unlink()
+    for coverage_file in ROOT.glob(".coverage"):
+        coverage_file.unlink()
+    for coverage_file in ROOT.glob(".coverage.*"):
+        coverage_file.unlink()
 
     # Relax coverage gates when either:
-    #   - filter_expr is set (selecting a subset of tests naturally
+    #   - filter_expression is set (selecting a subset of tests naturally
     #     reduces branch coverage below the 90% threshold), or
     #   - no_cov is set (user explicitly opted out of coverage).
-    relax_coverage = bool(filter_expr) or no_cov
+    relax_coverage = bool(filter_expression) or no_cov
     cov_gate_args = ["--cov-fail-under=0"] if relax_coverage else []
 
     overall_exit_code = 0
     run_counter = 0
 
-    for pkg_dir in testable:
+    for package_dir in testable:
         # Determine what pytest runs are needed for this library.
         #
         # Filter entries split into two categories:
         #   - "global" (no file specified): combined with `or` into a
         #     single pytest invocation across the whole tests/ dir.
-        #   - "file-scoped" (library/file/expr): each gets its own
+        #   - "file-scoped" (library/file/expression): each gets its own
         #     pytest invocation targeting a specific test file.
         #
         # Each invocation writes to a unique COVERAGE_FILE to avoid
         # overwriting coverage data from other runs.
         if per_library is not None:
-            entries = per_library.get(pkg_dir.name, [])
+            entries = per_library.get(package_dir.name, [])
 
             # Split into file-scoped and global entries.
-            global_exprs = [expr for f, expr in entries if f is None]
-            file_entries = [(f, expr) for f, expr in entries if f is not None]
+            global_expressions = [
+                expression for file_name, expression in entries
+                if file_name is None
+            ]
+            file_entries = [
+                (file_name, expression) for file_name, expression in entries
+                if file_name is not None
+            ]
 
             # Global expressions combine into a single run.
             runs: list[tuple[str, str]] = []
-            if global_exprs:
-                test_path = str((pkg_dir / "tests").relative_to(ROOT))
-                combined = " or ".join(global_exprs)
+            if global_expressions:
+                test_path = str((package_dir / "tests").relative_to(ROOT))
+                combined = " or ".join(global_expressions)
                 runs.append((test_path, combined))
 
             # File-scoped entries each get their own run.
-            for file_name, expr in file_entries:
-                test_file = pkg_dir / "tests" / f"{file_name}.py"
+            for file_name, expression in file_entries:
+                test_file = package_dir / "tests" / f"{file_name}.py"
                 if not test_file.exists():
-                    rel = test_file.relative_to(ROOT)
-                    print(f"Test file not found: {rel}")
+                    relative_path = test_file.relative_to(ROOT)
+                    print(f"Test file not found: {relative_path}")
                     return 1
-                runs.append((str(test_file.relative_to(ROOT)), expr))
+                runs.append((str(test_file.relative_to(ROOT)), expression))
         else:
             # No filter — run the entire tests/ directory.
-            test_path = str((pkg_dir / "tests").relative_to(ROOT))
+            test_path = str((package_dir / "tests").relative_to(ROOT))
             runs = [(test_path, "")]
 
-        for test_target, expr in runs:
+        for test_target, expression in runs:
             extra_args: list[str] = []
-            if expr:
-                extra_args.extend(["-k", expr])
-            if exitfirst:
+            if expression:
+                extra_args.extend(["-k", expression])
+            if exit_first:
                 extra_args.append("-x")
             if verbose:
                 extra_args.append("-v")
 
-            cov_args = [] if no_cov else coverage_args_for([pkg_dir])
+            cov_args = [] if no_cov else coverage_args_for([package_dir])
 
             # Unique coverage file per run.
-            cov_name = f".coverage.{pkg_dir.name}.{run_counter}"
-            run_env = {**env, "COVERAGE_FILE": str(ROOT / cov_name)}
+            coverage_name = f".coverage.{package_dir.name}.{run_counter}"
+            run_env = {**env, "COVERAGE_FILE": str(ROOT / coverage_name)}
             run_counter += 1
 
             exit_code = _run(
@@ -306,14 +312,17 @@ def build() -> int:
     return 0
 
 
-def docs(pkg_dirs: list[Path], *, serve: bool = False) -> int:
+def docs(package_dirs: list[Path], *, serve: bool = False) -> int:
     """Build docs for selected libraries using Zensical.
 
     If *serve* is True, starts a live-reload dev server for the first
     selected library instead of building static output.
     """
     # Keep only packages that have a mkdocs.yml
-    doc_dirs = [d for d in pkg_dirs if (d / "mkdocs.yml").exists()]
+    doc_dirs = [
+        package_dir for package_dir in package_dirs
+        if (package_dir / "mkdocs.yml").exists()
+    ]
     if not doc_dirs:
         print("No libraries with mkdocs.yml found for the selected packages.")
         return 0
@@ -322,25 +331,25 @@ def docs(pkg_dirs: list[Path], *, serve: bool = False) -> int:
 
     if serve:
         # Serve the first selected library
-        pkg_dir = doc_dirs[0]
-        rel = pkg_dir.relative_to(ROOT)
-        print(f"Serving docs for {rel} (Ctrl+C to stop)...")
+        library_dir = doc_dirs[0]
+        relative_path = library_dir.relative_to(ROOT)
+        print(f"Serving docs for {relative_path} (Ctrl+C to stop)...")
         return _run(
             [PYTHON, "-m", "zensical", "serve",
-             "-f", str(pkg_dir / "mkdocs.yml")],
+             "-f", str(library_dir / "mkdocs.yml")],
         )
 
     overall_exit_code = 0
-    for pkg_dir in doc_dirs:
-        rel = pkg_dir.relative_to(ROOT)
-        site_dir = pkg_dir / "site"
-        print(f"== docs {rel} ==")
+    for library_dir in doc_dirs:
+        relative_path = library_dir.relative_to(ROOT)
+        site_dir = library_dir / "site"
+        print(f"== docs {relative_path} ==")
         exit_code = _run(
             [PYTHON, "-m", "zensical", "build",
-             "-f", str(pkg_dir / "mkdocs.yml")],
+             "-f", str(library_dir / "mkdocs.yml")],
         )
         if exit_code != 0:
-            print(f"Docs build failed: {rel}")
+            print(f"Docs build failed: {relative_path}")
             overall_exit_code = exit_code
         else:
             print(f"  Built: {site_dir.relative_to(ROOT)}/")
@@ -348,7 +357,7 @@ def docs(pkg_dirs: list[Path], *, serve: bool = False) -> int:
     return overall_exit_code
 
 
-def docs_preview(pkg_dirs: list[Path]) -> int:
+def docs_preview(package_dirs: list[Path]) -> int:
     """Build docs from the current working tree and serve a local preview.
 
     The preview branch is seeded from ``gh-pages`` (if it exists) so that
@@ -363,7 +372,10 @@ def docs_preview(pkg_dirs: list[Path]) -> int:
     preview_branch = "_docs-preview"
     source_branch = "gh-pages"
 
-    doc_dirs = [d for d in pkg_dirs if (d / "mkdocs.yml").exists()]
+    doc_dirs = [
+        package_dir for package_dir in package_dirs
+        if (package_dir / "mkdocs.yml").exists()
+    ]
     if not doc_dirs:
         print("No libraries with mkdocs.yml found for the selected packages.")
         return 0
@@ -391,10 +403,10 @@ def docs_preview(pkg_dirs: list[Path]) -> int:
         )
         print(f"Seeded {preview_branch} from {source_branch}.")
 
-    for pkg_dir in doc_dirs:
-        rel = pkg_dir.relative_to(ROOT)
-        lib_name = pkg_dir.name
-        print(f"== deploy {rel} ==")
+    for library_dir in doc_dirs:
+        relative_path = library_dir.relative_to(ROOT)
+        library_name = library_dir.name
+        print(f"== deploy {relative_path} ==")
         # --deploy-prefix puts each library's docs in a subdirectory
         # (e.g. /timing/) matching the production gh-pages layout.
         # --allow-empty lets mike create the branch from scratch when
@@ -402,9 +414,9 @@ def docs_preview(pkg_dirs: list[Path]) -> int:
         # "experimental" is the URL alias.
         deploy_args = [
             MIKE, "deploy",
-            "--deploy-prefix", lib_name,
+            "--deploy-prefix", library_name,
             "-b", preview_branch,
-            "-F", str(pkg_dir / "mkdocs.yml"),
+            "-F", str(library_dir / "mkdocs.yml"),
             "--alias-type", "redirect",
             "--update-aliases",
             "dev", "experimental",
@@ -415,7 +427,7 @@ def docs_preview(pkg_dirs: list[Path]) -> int:
 
         exit_code = _run(deploy_args)
         if exit_code != 0:
-            print(f"Docs deploy failed: {rel}")
+            print(f"Docs deploy failed: {relative_path}")
             return exit_code
 
     inject_landing_page(preview_branch)
@@ -437,11 +449,11 @@ def preflight(
     CircuitPython cross-runtime unit tests, and package builds.  Functional
     tests are excluded — they require physical hardware.
     """
-    all_pkgs = discover_package_dirs()
+    all_packages = discover_package_dirs()
     steps: tuple[tuple[str, object], ...] = (
         ("lint", lint),
-        ("test", lambda: test_cpython(all_pkgs)),
-        ("verify-examples", lambda: verify_examples(all_pkgs)),
+        ("test", lambda: test_cpython(all_packages)),
+        ("verify-examples", lambda: verify_examples(all_packages)),
         (
             "test-micropython-compatibility",
             lambda: test_micropython_compatibility(micropython_binary),
@@ -465,12 +477,12 @@ def preflight(
 
 
 def prepare_micropython() -> int:
-    """Prepare the repo-local MicroPython unix-port runtime."""
+    """Prepare the repository-local MicroPython unix-port runtime."""
     return _prepare_micropython()
 
 
 def prepare_circuitpython() -> int:
-    """Prepare the repo-local CircuitPython unix-port runtime."""
+    """Prepare the repository-local CircuitPython unix-port runtime."""
     return _prepare_circuitpython()
 
 
@@ -484,10 +496,10 @@ def _test_runtime_compat(
 
     Shared implementation for :func:`test_micropython_compatibility` and
     :func:`test_circuitpython_compatibility`.  Resolves the binary,
-    auto-prepares when missing, then runs the compat script for libraries
+    auto-prepares when missing, then runs the compatibility script for libraries
     that target *platform*.
     """
-    # Try to find an existing binary (CLI override → repo-local build → PATH).
+    # Try to find an existing binary (CLI override → repository-local build → PATH).
     # If none is found, build the unix-port automatically on first use.
     binary = resolve_binary()
     if binary is None:
@@ -501,17 +513,20 @@ def _test_runtime_compat(
         if binary is None:
             print(
                 f"Preparation completed without the expected binary. "
-                f"Pass --{platform}-bin <path> and retry."
+                f"Pass --{platform}-binary <path> and retry."
             )
             return 1
 
     # Only publishable libraries under libraries/ are tested against
     # non-CPython runtimes.  support/ packages are CPython-only
     # infrastructure and are excluded from cross-runtime validation.
-    lib_dirs = [d for d in discover_package_dirs() if d.parent.name == "libraries"]
-    platform_libs = filter_by_platform(lib_dirs, platform)
-    lib_names = [d.name for d in platform_libs]
-    return _run([binary, COMPAT_SCRIPT, *lib_names])
+    library_dirs = [
+        package_dir for package_dir in discover_package_dirs()
+        if package_dir.parent.name == "libraries"
+    ]
+    platform_libraries = filter_by_platform(library_dirs, platform)
+    library_names = [library_dir.name for library_dir in platform_libraries]
+    return _run([binary, COMPAT_SCRIPT, *library_names])
 
 
 def test_micropython_compatibility(binary: str | None = None) -> int:
@@ -541,9 +556,9 @@ def test_runtime_matrix(
     circuitpython_binary: str | None = None,
 ) -> int:
     """Run host tests and cross-runtime unit tests across all proven runtimes."""
-    all_pkgs = discover_package_dirs()
+    all_packages = discover_package_dirs()
     steps = (
-        ("test", lambda: test_cpython(all_pkgs)),
+        ("test", lambda: test_cpython(all_packages)),
         (
             "test-micropython-compatibility",
             lambda: test_micropython_compatibility(micropython_binary),
@@ -566,9 +581,9 @@ def test_runtime_matrix(
 
 def test_device() -> int:
     """Point users to the current manual-only device validation path."""
-    devices_path = ROOT / "devices.yml"
-    if devices_path.exists():
-        print(f"Manual device validation remains user-driven. Config: {devices_path}")
+    devices_file = ROOT / "devices.yml"
+    if devices_file.exists():
+        print(f"Manual device validation remains user-driven. Config: {devices_file}")
     else:
         print(
             "Copy devices.example.yml to devices.yml and fill in your board details."
@@ -626,20 +641,20 @@ def _build_parser() -> argparse.ArgumentParser:
     """Build the top-level CLI parser with subcommands."""
     parser = argparse.ArgumentParser(
         prog="python scripts/run.py",
-        description="Repo-level task runner for humans, agents, and CI.",
+        description="Repository-level task runner for humans, agents, and CI.",
     )
     subparsers = parser.add_subparsers(dest="task")
     scope = _scope_parent()
     binary = _binary_parent()
 
     # No-arg tasks
-    subparsers.add_parser("setup", help="install deps and regenerate IDE config")
-    subparsers.add_parser("sync-ide", help="regenerate IDE config files")
+    subparsers.add_parser("setup", help="install dependencies and regenerate IDE configuration")
+    subparsers.add_parser("sync-ide", help="regenerate IDE configuration files")
     subparsers.add_parser("lint", help="run Ruff across the workspace")
     subparsers.add_parser("build", help="build all publishable packages")
     subparsers.add_parser(
         "preflight", parents=[binary],
-        help="lint + test + examples + compat + build",
+        help="lint + test + examples + compatibility + build",
     )
     subparsers.add_parser("prepare-micropython", help="prepare MicroPython unix-port")
     subparsers.add_parser("prepare-circuitpython", help="prepare CircuitPython unix-port")
@@ -658,7 +673,7 @@ def _build_parser() -> argparse.ArgumentParser:
         parents=[binary],
         help="test all packages on CPython + MicroPython + CircuitPython",
     )
-    subparsers.add_parser("test-device", help="device validation info")
+    subparsers.add_parser("test-device", help="device validation information")
     subparsers.add_parser("check-version", help="check VERSION enforcement for changed libraries")
     subparsers.add_parser("check-api", help="check API breakages against last release tag")
 
@@ -698,14 +713,14 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     test_parser.add_argument(
-        "-k", dest="filter_expr", metavar="FILTER",
+        "-k", dest="filter_expression", metavar="FILTER",
         help=(
             "library/test or library/file/test "
             "(comma-separated for multiple)"
         ),
     )
     test_parser.add_argument(
-        "-x", "--exitfirst", action="store_true",
+        "-x", "--exit-first", action="store_true",
         help="stop on first failure",
     )
     test_parser.add_argument(
@@ -735,11 +750,13 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+#: Tasks that accept ``--all`` / ``--libraries`` scope flags and operate
+#: on a resolved list of package directories rather than the entire workspace.
 _SCOPED_TASKS = frozenset({"test", "verify-examples", "docs", "docs-preview"})
 
 
 def main(argv: list[str]) -> int:
-    """Dispatch a named repo-level task."""
+    """Dispatch a named repository-level task."""
     parser = _build_parser()
     args = parser.parse_args(argv[1:])
 
@@ -749,22 +766,22 @@ def main(argv: list[str]) -> int:
 
     # --- scoped tasks ---
     if args.task in _SCOPED_TASKS:
-        pkg_dirs = resolve_scope(
+        package_dirs = resolve_scope(
             all_packages=args.all_packages, libraries=args.libraries,
         )
         if args.task == "test":
             return test_cpython(
-                pkg_dirs,
-                filter_expr=args.filter_expr,
-                exitfirst=args.exitfirst,
+                package_dirs,
+                filter_expression=args.filter_expression,
+                exit_first=args.exit_first,
                 verbose=args.verbose,
                 no_cov=args.no_cov,
             )
         if args.task == "verify-examples":
-            return verify_examples(pkg_dirs)
+            return verify_examples(package_dirs)
         if args.task == "docs-preview":
-            return docs_preview(pkg_dirs)
-        return docs(pkg_dirs, serve=args.serve)
+            return docs_preview(package_dirs)
+        return docs(package_dirs, serve=args.serve)
 
     # --- new-library ---
     if args.task == "new-library":
@@ -772,8 +789,8 @@ def main(argv: list[str]) -> int:
 
     # --- docs-deploy ---
     if args.task == "docs-deploy":
-        lib_filter = args.libraries.split(",") if args.libraries else None
-        return _docs_deploy(args.channel, libraries=lib_filter)
+        library_filter = args.libraries.split(",") if args.libraries else None
+        return _docs_deploy(args.channel, libraries=library_filter)
 
     # --- tasks that accept runtime binary overrides ---
     if args.task in {

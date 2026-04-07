@@ -28,9 +28,12 @@ else:
 		return time.ticks_ms() / 1000
 
 
-def _mem_free():
+def _memory_free():
 	"""Return free heap bytes, or ``None`` if unavailable."""
 	if _gc is not None and hasattr(_gc, "mem_free"):
+		# Collect first so the reading reflects actually-available memory
+		# rather than including reclaimable garbage.  This makes before/after
+		# comparisons meaningful for detecting real leaks.
 		_gc.collect()
 		return _gc.mem_free()
 	return None
@@ -48,15 +51,28 @@ def _iter_test_functions(module: object):
 
 
 def _print_exception(exception):
-	"""Print an exception using the best runtime-specific mechanism available."""
+	"""Print an exception using the best runtime-specific mechanism available.
+
+	Three tiers, in priority order:
+
+	1. ``sys.print_exception`` — MicroPython/CircuitPython native hook.
+	2. ``traceback.print_exception`` — CPython standard library fallback.
+	3. Bare class-name + message — always works, no traceback.
+	"""
 	print(f"{exception.__class__.__name__}: {exception}")
 
+	# Tier 1: MicroPython / CircuitPython native hook.
 	if hasattr(sys, "print_exception"):
 		sys.print_exception(exception)
 		return
 
+	# Tier 2: CPython's traceback module (may have been set to None at
+	# import time if the module was unavailable).
 	if traceback is not None:
 		traceback.print_exception(exception.__class__, exception, exception.__traceback__)
+
+	# Tier 3: the bare print() at the top of this function already ran,
+	# so the caller at least sees the exception class and message.
 
 
 def run_module(module):
@@ -67,13 +83,23 @@ def run_module(module):
 	before and after the run to help detect memory leaks.
 
 	Returns a shell-style exit code: 0 for all-pass, 1 for any failure.
+
+	**Output format contract** — each line uses a fixed prefix so the
+	cross-runtime entry point (``run_cross_runtime.py``) and CI can
+	parse results reliably::
+
+		PASS <name> (<duration>s)
+		FAIL <name> (<duration>s)
+		HEAP <bytes> bytes free [optional delta]
+		SUMMARY total=<n> failed=<n> time=<seconds>s
+		NO TESTS FOUND
 	"""
 	total = 0
 	failed = 0
 
-	mem_before = _mem_free()
-	if mem_before is not None:
-		print(f"HEAP {mem_before} bytes free")
+	memory_before = _memory_free()
+	if memory_before is not None:
+		print(f"HEAP {memory_before} bytes free")
 
 	run_start = _now_seconds()
 
@@ -96,9 +122,9 @@ def run_module(module):
 	if total == 0:
 		print("NO TESTS FOUND")
 
-	mem_after = _mem_free()
-	if mem_after is not None:
-		print(f"HEAP {mem_after} bytes free (delta {mem_after - mem_before})")
+	memory_after = _memory_free()
+	if memory_after is not None:
+		print(f"HEAP {memory_after} bytes free (delta {memory_after - memory_before})")
 
 	print(f"SUMMARY total={total} failed={failed} time={total_duration:.3f}s")
 	return 1 if failed else 0

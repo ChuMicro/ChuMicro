@@ -6,7 +6,7 @@ virtual environment, uv, or ``--create-venv`` for a fresh start.
 
 Usage::
 
-    python scripts/prepare_workspace.py              # install deps + verify
+    python scripts/prepare_workspace.py              # install dependencies + verify
     python scripts/prepare_workspace.py --create-venv  # create .venv first
 
 This script is deliberately standalone — it imports only the standard
@@ -61,11 +61,11 @@ def _banner(text: str) -> None:
 
 
 def _run(command: list[str | Path], label: str) -> None:
-    """Run a command from the repo root and abort on failure."""
+    """Run a command from the repository root and abort on failure."""
     _banner(label)
-    printable = " ".join(str(c) for c in command)
+    printable = " ".join(str(arg) for arg in command)
     print(f"+ {printable}\n")
-    result = subprocess.run([str(c) for c in command], cwd=ROOT)
+    result = subprocess.run([str(arg) for arg in command], cwd=ROOT)
     if result.returncode != 0:
         print(f"\nFailed: {label}")
         raise SystemExit(result.returncode)
@@ -95,7 +95,7 @@ def _describe_environment() -> str:
 
 def _missing_unix_port_tools() -> list[str]:
     """Return names of tools needed for unix-port builds that are not on PATH."""
-    return [t for t in ("git", "make", "cc") if shutil.which(t) is None]
+    return [tool for tool in ("git", "make", "cc") if shutil.which(tool) is None]
 
 
 # ---------------------------------------------------------------------------
@@ -112,7 +112,7 @@ def _check_python_version(python: Path | None = None) -> None:
     may differ from the one running this script.
     """
     if python is None:
-        version = ".".join(str(v) for v in sys.version_info[:3])
+        version = ".".join(str(part) for part in sys.version_info[:3])
         ok = sys.version_info[:2] >= MIN_PYTHON
     else:
         result = subprocess.run(
@@ -124,14 +124,14 @@ def _check_python_version(python: Path | None = None) -> None:
             print(f"Cannot determine Python version: {python}")
             raise SystemExit(1)
         version = result.stdout.strip()
-        parts = tuple(int(x) for x in version.split(".")[:2])
+        parts = tuple(int(part) for part in version.split(".")[:2])
         ok = parts >= MIN_PYTHON
 
     if ok:
         print(f"Python {version} — OK")
         return
 
-    required = ".".join(str(v) for v in MIN_PYTHON)
+    required = ".".join(str(part) for part in MIN_PYTHON)
     print(f"Python {required}+ is required. Found {version}.")
     raise SystemExit(1)
 
@@ -150,7 +150,7 @@ def resolve_python(create_venv: bool) -> Path:
 
     If *create_venv* is False, the script looks for an active virtual
     environment or conda environment first, then checks whether a
-    ``.venv`` directory already exists at the repo root.  If none of
+    ``.venv`` directory already exists at the repository root.  If none of
     these apply, the script refuses to continue rather than installing
     into system Python.
     """
@@ -158,11 +158,11 @@ def resolve_python(create_venv: bool) -> Path:
         if _venv_python().exists():
             print(f"Virtual environment exists: {VENV_DIR}")
         elif _has_uv():
-            min_ver = ".".join(str(v) for v in MIN_PYTHON)
+            minimum_version = ".".join(str(part) for part in MIN_PYTHON)
             _banner("Creating virtual environment (uv)")
             print(f"  {VENV_DIR}\n")
             subprocess.run(
-                ["uv", "venv", "--python", f">={min_ver}",
+                ["uv", "venv", "--python", f">={minimum_version}",
                  str(VENV_DIR)],
                 cwd=ROOT, check=True,
             )
@@ -180,7 +180,7 @@ def resolve_python(create_venv: bool) -> Path:
         print(f"Using {_describe_environment()}")
         return Path(sys.executable)
 
-    # Not activated, but .venv exists at the repo root — use it.
+    # Not activated, but .venv exists at the repository root — use it.
     if _venv_python().exists():
         print(f"Found existing virtual environment: {VENV_DIR}")
         return _venv_python()
@@ -202,16 +202,16 @@ def install_dependencies(python: Path) -> None:
     ``python -m pip install``.  The ``--python`` flag tells uv which
     environment to target even if it has not been activated yet.
     """
-    req_file = str(ROOT / "requirements-dev.txt")
+    requirements_file = str(ROOT / "requirements-dev.txt")
     if _has_uv():
         _run(
             ["uv", "pip", "install", "--python", str(python), "-U",
-             "-r", req_file],
+             "-r", requirements_file],
             "Installing development dependencies (uv)",
         )
     else:
         _run(
-            [python, "-m", "pip", "install", "-U", "-r", req_file],
+            [python, "-m", "pip", "install", "-U", "-r", requirements_file],
             "Installing development dependencies",
         )
 

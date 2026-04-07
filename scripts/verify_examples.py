@@ -57,7 +57,7 @@ def _check_imports(
             if hardware and not _is_chumicro_module(node.module):
                 continue
             try:
-                mod = importlib.import_module(node.module)
+                module = importlib.import_module(node.module)
             except ImportError:
                 print(
                     f"  FAIL: {rel_path}  "
@@ -66,7 +66,7 @@ def _check_imports(
                 ok = False
                 continue
             for alias in node.names:
-                if not hasattr(mod, alias.name):
+                if not hasattr(module, alias.name):
                     print(
                         f"  FAIL: {rel_path}  "
                         f"('{node.module}' has no attribute "
@@ -76,7 +76,7 @@ def _check_imports(
     return ok
 
 
-def verify_examples(pkg_dirs: list[Path]) -> int:
+def verify_examples(package_dirs: list[Path]) -> int:
     """Verify examples have valid syntax and resolvable imports.
 
     Uses static analysis (AST parsing + ``importlib`` resolution) rather
@@ -96,20 +96,23 @@ def verify_examples(pkg_dirs: list[Path]) -> int:
     skipped.
     """
     # Ensure library src/ dirs are importable.
-    src_dirs = [str(d / "src") for d in pkg_dirs if (d / "src").is_dir()]
+    src_dirs = [
+        str(package_dir / "src") for package_dir in package_dirs
+        if (package_dir / "src").is_dir()
+    ]
     saved_path = sys.path[:]
-    for d in src_dirs:
-        if d not in sys.path:
-            sys.path.insert(0, d)
+    for src_dir in src_dirs:
+        if src_dir not in sys.path:
+            sys.path.insert(0, src_dir)
 
     examples: list[tuple[str, Path]] = []
-    for pkg_dir in pkg_dirs:
-        ex_dir = pkg_dir / "examples"
-        if not ex_dir.is_dir():
+    for package_dir in package_dirs:
+        examples_dir = package_dir / "examples"
+        if not examples_dir.is_dir():
             continue
-        for py_file in sorted(ex_dir.glob("*.py")):
-            rel = py_file.relative_to(ROOT)
-            examples.append((str(rel), py_file))
+        for py_file in sorted(examples_dir.glob("*.py")):
+            relative_path = py_file.relative_to(ROOT)
+            examples.append((str(relative_path), py_file))
 
     if not examples:
         print("No examples found for the selected packages.")

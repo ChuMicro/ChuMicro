@@ -1,4 +1,22 @@
-"""CircuitPython unix-port preparation."""
+"""CircuitPython unix-port preparation.
+
+Clones the pinned CircuitPython source tree (version from
+``target-runtimes.toml``) into ``.tools/`` and compiles the unix-port
+binary used for cross-runtime unit tests.
+
+Prerequisites: ``git``, ``make``, and a C compiler (``cc``) on PATH.
+
+Usage (via task runner)::
+
+    python scripts/run.py prepare-circuitpython
+
+The compiled binary path is written to ``.tools/circuitpython.path`` so
+that ``resolve_circuitpython_binary()`` can find it without recompiling.
+
+Note: CircuitPython is an Adafruit fork of MicroPython.  The unix-port
+binary is named ``micropython`` (inherited from the upstream project),
+which is expected — see ``_BINARY_FILE`` below.
+"""
 
 from __future__ import annotations
 
@@ -15,7 +33,7 @@ _SOURCE_DIR = TOOLS / f"circuitpython-{_RELEASE}"
 _UNIX_VARIANT = "standard"
 # The CircuitPython unix-port binary is named "micropython" — inherited
 # from the MicroPython fork.  This is expected, not a misconfiguration.
-_BINARY = _SOURCE_DIR / "ports" / "unix" / f"build-{_UNIX_VARIANT}" / "micropython"
+_BINARY_FILE = _SOURCE_DIR / "ports" / "unix" / f"build-{_UNIX_VARIANT}" / "micropython"
 
 
 def _build_env() -> dict[str, str]:
@@ -72,7 +90,7 @@ def prepare_circuitpython() -> int:
 
         jobs = f"-j{build_jobs()}"
         # Build steps must run in this exact order:
-        #   1. ci_fetch_deps.py — fetches git submodules and vendored deps
+        #   1. ci_fetch_deps.py — fetches git submodules and vendored dependencies
         #      that mpy-cross and the unix-port Makefile both depend on.
         #   2. mpy-cross — the bytecode compiler, needed before the port.
         #   3. ports/unix make — the actual unix-port binary.
@@ -95,10 +113,10 @@ def prepare_circuitpython() -> int:
         print(error)
         return 1
 
-    if not _BINARY.exists():
-        print(f"Prepared source tree does not contain the expected binary: {_BINARY}")
+    if not _BINARY_FILE.exists():
+        print(f"Prepared source tree does not contain the expected binary: {_BINARY_FILE}")
         return 1
 
-    print(f"Prepared CircuitPython binary: {_BINARY}")
-    (TOOLS / "circuitpython.path").write_text(str(_BINARY))
+    print(f"Prepared CircuitPython binary: {_BINARY_FILE}")
+    (TOOLS / "circuitpython.path").write_text(str(_BINARY_FILE))
     return 0

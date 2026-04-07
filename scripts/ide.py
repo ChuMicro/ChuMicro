@@ -1,8 +1,16 @@
 """IDE configuration generation (PyCharm and VS Code/Pyright).
 
-Regenerates source-root configs, run/task configurations, and Pyright
+Regenerates source-root configurations, run/task configurations, and Pyright
 paths so libraries are importable in the IDE without ``pip install -e``.
 See ``plans/decisions/0012-ide-type-stubs.md``.
+
+This module is idempotent — running it multiple times produces the same
+output.  It preserves user settings (e.g. PyCharm SDK selection,
+VS Code settings outside ``extraPaths``) while overwriting only the
+managed sections.
+
+Called via ``python scripts/run.py sync-ide`` or automatically after
+``python scripts/run.py setup`` and ``python scripts/run.py new-library``.
 """
 
 from __future__ import annotations
@@ -16,17 +24,18 @@ from discovery import ROOT, discover_package_dirs, discover_source_roots
 # ---------------------------------------------------------------------------
 # Each entry: (display_name, script_path, parameters, vscode_group).
 # script_path is relative to the project root.  sync-ide overwrites
-# both PyCharm run configs and VS Code tasks from this single list.
+# both PyCharm run configurations and VS Code tasks from this single list
+# so the two IDEs always stay in sync.
 
 _TASKS: list[tuple[str, str, str, str]] = [
     ("Build", "scripts/run.py", "build", "build"),
     ("Check API", "scripts/run.py", "check-api", "build"),
     ("Check Version", "scripts/run.py", "check-version", "build"),
-    ("CircuitPython Compat", "scripts/run.py", "test-circuitpython-compatibility", "test"),
+    ("CircuitPython Compatibility", "scripts/run.py", "test-circuitpython-compatibility", "test"),
     ("Docs", "scripts/run.py", "docs --all", "build"),
     ("Docs Preview", "scripts/run.py", "docs-preview --all", "build"),
     ("Lint", "scripts/run.py", "lint", "build"),
-    ("MicroPython Compat", "scripts/run.py", "test-micropython-compatibility", "test"),
+    ("MicroPython Compatibility", "scripts/run.py", "test-micropython-compatibility", "test"),
     ("Preflight", "scripts/run.py", "preflight", "build"),
     ("Prepare Workspace", "scripts/prepare_workspace.py", "", "build"),
     ("Runtime Matrix", "scripts/run.py", "test-runtime-matrix", "test"),
@@ -64,10 +73,10 @@ def _sync_run_configurations() -> None:
     """Regenerate PyCharm run configurations from the managed task list.
 
     Writes one XML file per entry in :data:`_TASKS`.  Removes stale
-    managed configs that no longer appear in the list.
+    managed configurations that no longer appear in the list.
     """
-    rc_dir = ROOT / ".idea" / "runConfigurations"
-    rc_dir.mkdir(parents=True, exist_ok=True)
+    run_config_dir = ROOT / ".idea" / "runConfigurations"
+    run_config_dir.mkdir(parents=True, exist_ok=True)
 
     managed_filenames: set[str] = set()
     for name, script, parameters, _group in _TASKS:
@@ -76,21 +85,21 @@ def _sync_run_configurations() -> None:
         content = _RUN_CONFIG_TEMPLATE.format(
             name=name, script=script, parameters=parameters,
         )
-        (rc_dir / filename).write_text(content)
+        (run_config_dir / filename).write_text(content)
 
-    # Remove stale configs that were previously managed but dropped from
-    # the list.  Only delete files whose name matches the managed naming
-    # pattern (Name_With_Underscores.xml) and that are NOT in the current
-    # managed set.  This avoids touching user-created configs.
-    # The heuristic: a file is "managed" if its stem equals its own
-    # title-cased, underscore-separated form — user configs rarely match.
-    for existing in sorted(rc_dir.iterdir()):
+    # Remove stale configurations that were previously managed but dropped
+    # from the list.  Only delete files whose name matches the managed
+    # naming pattern (Title_Case_Underscored.xml).  The heuristic: a file
+    # is "managed" if its stem equals the title-cased, underscore-joined
+    # form of itself.  User-created configs (e.g. "my debug run.xml") won't
+    # match this pattern and are left untouched.
+    for existing in sorted(run_config_dir.iterdir()):
         if existing.suffix == ".xml" and existing.name not in managed_filenames:
             stem = existing.stem
             if stem == stem.replace(" ", "_").title().replace(" ", "_"):
                 existing.unlink()
 
-    print(f"  Updated .idea/runConfigurations/ ({len(_TASKS)} configs)")
+    print(f"  Updated .idea/runConfigurations/ ({len(_TASKS)} configurations)")
 
 # ---------------------------------------------------------------------------
 # VS Code tasks and settings
@@ -124,8 +133,8 @@ def _sync_vscode_tasks() -> None:
         })
 
     content = {"version": "2.0.0", "tasks": tasks}
-    tasks_path = vscode_dir / "tasks.json"
-    tasks_path.write_text(json.dumps(content, indent=4) + "\n")
+    tasks_file = vscode_dir / "tasks.json"
+    tasks_file.write_text(json.dumps(content, indent=4) + "\n")
     print(f"  Updated .vscode/tasks.json ({len(tasks)} tasks)")
 
 
@@ -137,24 +146,24 @@ def _sync_vscode_settings() -> None:
     does.
     """
     vscode_dir = ROOT / ".vscode"
-    settings_path = vscode_dir / "settings.json"
+    settings_file = vscode_dir / "settings.json"
 
-    if settings_path.exists():
-        settings = json.loads(settings_path.read_text())
+    if settings_file.exists():
+        settings = json.loads(settings_file.read_text())
     else:
         settings = {}
 
     settings["python.analysis.extraPaths"] = [
-        str(r.relative_to(ROOT)) for r in discover_source_roots()
+        str(source_dir.relative_to(ROOT)) for source_dir in discover_source_roots()
     ]
 
-    settings_path.write_text(json.dumps(settings, indent=4) + "\n")
+    settings_file.write_text(json.dumps(settings, indent=4) + "\n")
     print("  Updated .vscode/settings.json")
 
 
 def _sync_pycharm_iml() -> None:
     """Regenerate .idea/chumicro.iml source roots from the workspace structure."""
-    iml_path = ROOT / ".idea" / "chumicro.iml"
+    iml_file = ROOT / ".idea" / "chumicro.iml"
 
     # Preserve the existing SDK reference so users keep their interpreter
     # setting across regenerations.  PyCharm stores the project SDK as a
@@ -164,23 +173,23 @@ def _sync_pycharm_iml() -> None:
     # this single line.  Losing this entry would reset the user's
     # interpreter selection in the IDE.
     jdk_line = ""
-    if iml_path.exists():
-        for line in iml_path.read_text().splitlines():
+    if iml_file.exists():
+        for line in iml_file.read_text().splitlines():
             if 'type="jdk"' in line:
                 jdk_line = line
                 break
 
     source_lines: list[str] = []
-    for pkg_dir in discover_package_dirs():
-        rel = pkg_dir.relative_to(ROOT)
+    for package_dir in discover_package_dirs():
+        relative_path = package_dir.relative_to(ROOT)
         for subdir, is_test in [
             ("src", "false"),
             ("tests", "true"),
             ("functional_tests", "true"),
         ]:
-            if (pkg_dir / subdir).is_dir():
+            if (package_dir / subdir).is_dir():
                 source_lines.append(
-                    f'      <sourceFolder url="file://$MODULE_DIR$/{rel}/{subdir}"'
+                    f'      <sourceFolder url="file://$MODULE_DIR$/{relative_path}/{subdir}"'
                     f' isTestSource="{is_test}" />'
                 )
 
@@ -204,27 +213,27 @@ def _sync_pycharm_iml() -> None:
         "</module>\n"
     ).format(jdk=jdk_entry)
 
-    iml_path.parent.mkdir(parents=True, exist_ok=True)
-    iml_path.write_text(content)
-    print(f"  Updated {iml_path.relative_to(ROOT)}")
+    iml_file.parent.mkdir(parents=True, exist_ok=True)
+    iml_file.write_text(content)
+    print(f"  Updated {iml_file.relative_to(ROOT)}")
 
 
 def _sync_pyrightconfig() -> None:
     """Regenerate pyrightconfig.json extraPaths from the workspace structure."""
-    config_path = ROOT / "pyrightconfig.json"
+    config_file = ROOT / "pyrightconfig.json"
 
     # Preserve any existing user settings; only overwrite extraPaths.
-    if config_path.exists():
-        config = json.loads(config_path.read_text())
+    if config_file.exists():
+        config = json.loads(config_file.read_text())
     else:
         config = {}
 
     config["extraPaths"] = [
-        str(r.relative_to(ROOT)) for r in discover_source_roots()
+        str(source_dir.relative_to(ROOT)) for source_dir in discover_source_roots()
     ]
 
-    config_path.write_text(json.dumps(config, indent=2) + "\n")
-    print(f"  Updated {config_path.relative_to(ROOT)}")
+    config_file.write_text(json.dumps(config, indent=2) + "\n")
+    print(f"  Updated {config_file.relative_to(ROOT)}")
 
 
 def sync_ide() -> int:

@@ -1,4 +1,4 @@
-name: CI
+name: Continuous Integration
 
 on:
   push:
@@ -25,6 +25,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
+      # Run all Python versions even if one fails so the full
+      # compatibility picture is visible in a single CI run.
       fail-fast: false
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
@@ -42,6 +44,8 @@ jobs:
       - name: Run tests with coverage
         run: python scripts/run.py test --all
 
+  # Syntax-check every examples/ file to catch import errors and typos
+  # before they reach users.
   verify-examples:
     runs-on: ubuntu-latest
     steps:
@@ -54,7 +58,9 @@ jobs:
       - name: Verify examples
         run: python scripts/run.py verify-examples --all
 
-  docs-build:
+  # Build documentation on PRs to catch rendering errors before merge.
+  # Actual deployment happens in docs-deploy.yml on push to main.
+  documentation-build:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -67,7 +73,7 @@ jobs:
       - name: Install tooling
         run: python -m pip install --upgrade pip zensical mkdocstrings[python]
 
-      - name: Build docs
+      - name: Build documentation
         run: python scripts/run.py docs --all
 
   build:
@@ -88,15 +94,17 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: dist
+          name: distribution
           path: libraries/*/dist/
 
+  # Enforce that any library with source changes also bumps its VERSION file.
   version-check:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
+          # Full history needed to diff against the base branch.
           fetch-depth: 0
 
       - uses: actions/setup-python@v6
@@ -106,12 +114,15 @@ jobs:
       - name: Check VERSION enforcement
         run: python scripts/check_version.py --base origin/${{ github.base_ref }}
 
+  # Detect backwards-incompatible API changes by comparing the PR branch
+  # against the base branch using griffe.
   api-check:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
+          # Full history needed to diff against the base branch.
           fetch-depth: 0
 
       - uses: actions/setup-python@v6
@@ -126,7 +137,7 @@ jobs:
 
 
   # -------------------------------------------------------------------------
-  # Runtime compatibility — PR only to conserve CI minutes.
+  # Runtime compatibility — pull request only to conserve CI minutes.
   # -------------------------------------------------------------------------
   micropython-compatibility:
     if: github.event_name == 'pull_request'

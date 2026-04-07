@@ -60,7 +60,7 @@ jobs:
       has_releases: ${{ steps.detect.outputs.has_releases }}
       is_experimental: ${{ steps.channel.outputs.is_experimental }}
       suffix: ${{ steps.channel.outputs.suffix }}
-      bundle_repo: ${{ steps.channel.outputs.bundle_repo }}
+      bundle_repository: ${{ steps.channel.outputs.bundle_repository }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -81,11 +81,11 @@ jobs:
           if [ "$channel" = "experimental" ]; then
             echo "is_experimental=true" >> "$GITHUB_OUTPUT"
             echo "suffix=-experimental" >> "$GITHUB_OUTPUT"
-            echo "bundle_repo=ChuMicro/ChuMicro-Bundle-Experimental" >> "$GITHUB_OUTPUT"
+            echo "bundle_repository=ChuMicro/ChuMicro-Bundle-Experimental" >> "$GITHUB_OUTPUT"
           else
             echo "is_experimental=false" >> "$GITHUB_OUTPUT"
             echo "suffix=" >> "$GITHUB_OUTPUT"
-            echo "bundle_repo=ChuMicro/ChuMicro-Bundle" >> "$GITHUB_OUTPUT"
+            echo "bundle_repository=ChuMicro/ChuMicro-Bundle" >> "$GITHUB_OUTPUT"
           fi
 
       - id: detect
@@ -99,22 +99,22 @@ jobs:
           first=true
           for version_file in libraries/*/VERSION; do
             [ -f "$version_file" ] || continue
-            lib_dir=$(dirname "$version_file")
-            lib_name=$(basename "$lib_dir")
+            library_dir=$(dirname "$version_file")
+            library_name=$(basename "$library_dir")
 
             # Filter to requested libraries if specified.
             if [ -n "$filter" ]; then
-              if ! echo ",$filter," | grep -q ",${lib_name},"; then
+              if ! echo ",$filter," | grep -q ",${library_name},"; then
                 continue
               fi
             fi
 
             version=$(cat "$version_file" | tr -d '[:space:]')
-            tag="${lib_name}-v${version}${suffix}"
+            tag="${library_name}-v${version}${suffix}"
 
             # Skip if this tag already exists (re-run safety).
             if git rev-parse "refs/tags/${tag}" >/dev/null 2>&1; then
-              echo "Tag ${tag} already exists — skipping ${lib_name}."
+              echo "Tag ${tag} already exists — skipping ${library_name}."
               continue
             fi
 
@@ -123,7 +123,7 @@ jobs:
             else
               entries="${entries},"
             fi
-            entries="${entries}{\"lib_name\":\"${lib_name}\",\"lib_dir\":\"${lib_dir}\",\"version\":\"${version}\",\"tag\":\"${tag}\"}"
+            entries="${entries}{\"library_name\":\"${library_name}\",\"library_dir\":\"${library_dir}\",\"version\":\"${version}\",\"tag\":\"${tag}\"}"
           done
           entries="${entries}]"
 
@@ -136,7 +136,7 @@ jobs:
           fi
 
   release:
-    name: "Release ${{ matrix.lib_name }} v${{ matrix.version }}"
+    name: "Release ${{ matrix.library_name }} v${{ matrix.version }}"
     needs: detect
     if: needs.detect.outputs.has_releases == 'true'
     runs-on: ubuntu-latest
@@ -144,6 +144,8 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.detect.outputs.matrix) }}
 
+    # The "pypi" environment must be configured in repository settings with
+    # trusted-publisher (OIDC) credentials so the publish step can authenticate.
     environment: pypi
 
     steps:
@@ -162,30 +164,30 @@ jobs:
         if: needs.detect.outputs.is_experimental == 'true'
         run: |
           # Rename the PyPI package to *-experimental in the ephemeral checkout.
-          cd ${{ matrix.lib_dir }}
-          sed -i 's/^name = "chumicro-${{ matrix.lib_name }}"/name = "chumicro-${{ matrix.lib_name }}-experimental"/' pyproject.toml
-          # Point Bundle URL to the experimental bundle repo.
+          cd ${{ matrix.library_dir }}
+          sed -i 's/^name = "chumicro-${{ matrix.library_name }}"/name = "chumicro-${{ matrix.library_name }}-experimental"/' pyproject.toml
+          # Point Bundle URL to the experimental bundle repository.
           sed -i 's|ChuMicro-Bundle"|ChuMicro-Bundle-Experimental"|' pyproject.toml
-          # Point Documentation URL to the experimental docs channel.
+          # Point Documentation URL to the experimental documentation channel.
           sed -i 's|/stable/"|/experimental/"|' pyproject.toml
           echo "Patched pyproject.toml URLs:"
           grep -E '^(name|Bundle|Documentation)' pyproject.toml
 
       - name: Build distribution
-        run: python -m build ${{ matrix.lib_dir }}
+        run: python -m build ${{ matrix.library_dir }}
 
       - name: Publish to PyPI
         if: inputs.dry_run != true
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: ${{ matrix.lib_dir }}/dist/
+          packages-dir: ${{ matrix.library_dir }}/dist/
 
       - name: Create git tag
         if: inputs.dry_run != true
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "${{ matrix.tag }}" -m "Release ${{ matrix.lib_name }} ${{ matrix.version }}"
+          git tag -a "${{ matrix.tag }}" -m "Release ${{ matrix.library_name }} ${{ matrix.version }}"
           git push origin "${{ matrix.tag }}"
 
       - name: Create GitHub Release
@@ -193,31 +195,32 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ matrix.tag }}
-          name: "${{ matrix.lib_name }} v${{ matrix.version }}${{ needs.detect.outputs.suffix }}"
+          name: "${{ matrix.library_name }} v${{ matrix.version }}${{ needs.detect.outputs.suffix }}"
           prerelease: ${{ needs.detect.outputs.is_experimental == 'true' }}
           body: |
-            Release of **chumicro-${{ matrix.lib_name }}** version **${{ matrix.version }}**${{ needs.detect.outputs.is_experimental == 'true' && ' (experimental)' || '' }}.
-          files: ${{ matrix.lib_dir }}/dist/*
+            Release of **chumicro-${{ matrix.library_name }}** version **${{ matrix.version }}**${{ needs.detect.outputs.is_experimental == 'true' && ' (experimental)' || '' }}.
+          files: ${{ matrix.library_dir }}/dist/*
           generate_release_notes: true
 
   # ---------------------------------------------------------------------------
-  # Publish to the channel-specific bundle repo for mip and circup distribution.
+  # Publish to the channel-specific bundle repository for mip and circup
+  # distribution.
   # Stable pushes to ChuMicro/ChuMicro-Bundle.
   # Experimental pushes to ChuMicro/ChuMicro-Bundle-Experimental.
   # Prerequisites:
-  #   1. Both bundle repos must exist (can be empty).
-  #   2. Per-repo SSH deploy keys with write access, stored as secrets:
+  #   1. Both bundle repositories must exist (can be empty).
+  #   2. Per-repository SSH deploy keys with write access, stored as secrets:
   #        BUNDLE_DEPLOY_KEY              → ChuMicro-Bundle (stable)
   #        EXPERIMENTAL_BUNDLE_DEPLOY_KEY → ChuMicro-Bundle-Experimental
-  #      Deploy keys are single-repo scoped (least privilege) and can be
-  #      added to branch-protection bypass lists.
+  #      Deploy keys are single-repository scoped (least privilege) and can
+  #      be added to branch-protection bypass lists.
   #   3. BUNDLE_TOKEN (PAT) for GitHub API calls (release creation).
   #      Deploy keys only grant git-level access; API operations still
   #      need a token.
-  # See Decision 0018 for the bundle repo layout and distribution model.
+  # See Decision 0018 for the bundle repository layout and distribution model.
   # ---------------------------------------------------------------------------
   bundle:
-    name: "Publish to ${{ needs.detect.outputs.bundle_repo }}"
+    name: "Publish to ${{ needs.detect.outputs.bundle_repository }}"
     needs: [detect, release]
     if: needs.detect.outputs.has_releases == 'true' && inputs.dry_run != true
     runs-on: ubuntu-latest
@@ -236,22 +239,26 @@ jobs:
         run: pip install mpy-cross
 
       - name: Stage bundle artifacts
+        # Compiles .py → .mpy and arranges library files into the bundle
+        # directory layout expected by mip and circup.
         run: |
           python scripts/bundle.py stage-matrix .bundle-staging \
             --matrix "$MATRIX_JSON" \
             ${{ needs.detect.outputs.is_experimental == 'true' && '--experimental' || '' }}
 
-      - name: Configure SSH for bundle repo
+      - name: Configure SSH for bundle repository
         uses: webfactory/ssh-agent@v0.9.1
         with:
           ssh-private-key: ${{ needs.detect.outputs.is_experimental == 'true' && secrets.EXPERIMENTAL_BUNDLE_DEPLOY_KEY || secrets.BUNDLE_DEPLOY_KEY }}
 
-      - name: Clone bundle repo
+      - name: Clone bundle repository
         run: |
-          bundle_repo="${{ needs.detect.outputs.bundle_repo }}"
-          git clone "git@github.com:${bundle_repo}.git" .bundle-repo
+          bundle_repository="${{ needs.detect.outputs.bundle_repository }}"
+          git clone "git@github.com:${bundle_repository}.git" .bundle-repo
 
-      - name: Copy staging into bundle repo
+      - name: Copy staging into bundle repository
+        # Overlay staged artifacts onto the bundle checkout.  The LICENSE
+        # is copied so the bundle repository always carries the license.
         run: |
           cp -r .bundle-staging/* .bundle-repo/
           cp LICENSE .bundle-repo/LICENSE
@@ -267,8 +274,8 @@ jobs:
         run: |
           today="$(date -u +%Y%m%d)"
 
-          # Find the next available tag for today.  The cloned bundle repo
-          # has all existing tags.  First release of the day uses YYYYMMDD;
+          # Find the next available tag for today.  The cloned bundle
+          # repository has all existing tags.  First release of the day uses YYYYMMDD;
           # subsequent releases append .1, .2, etc. so history is preserved.
           existing=$(git -C .bundle-repo tag -l "${today}*" | sort -V | tail -1)
 
@@ -277,29 +284,31 @@ jobs:
           elif [ "$existing" = "$today" ]; then
             date_tag="${today}.1"
           else
-            n="${existing#${today}.}"
-            date_tag="${today}.$((n + 1))"
+            suffix_number="${existing#${today}.}"
+            date_tag="${today}.$((suffix_number + 1))"
           fi
 
           echo "date_tag=${date_tag}" >> "$GITHUB_ENV"
-          repo_name="${{ needs.detect.outputs.bundle_repo }}"
-          repo_name="${repo_name##*/}"
+          repository_name="${{ needs.detect.outputs.bundle_repository }}"
+          repository_name="${repository_name##*/}"
           python scripts/bundle.py circup-zip .bundle-repo .circup-zips \
-            --repo-name "$repo_name" --date-tag "$date_tag"
+            --repo-name "$repository_name" --date-tag "$date_tag"
 
-      - name: Push to bundle repo
+      - name: Push to bundle repository
         run: |
           cd .bundle-repo
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
+          # Nothing to push if the staging content is identical to what
+          # was already in the bundle (e.g. a no-op re-run).
           if git diff --cached --quiet; then
             echo "No changes to commit."
             exit 0
           fi
 
-          msg=$(jq -r '"Update: " + ([.include[] | .lib_name + " v" + .version] | join(", "))' <<< "$MATRIX_JSON")
-          git commit -m "$msg"
+          message=$(jq -r '"Update: " + ([.include[] | .library_name + " v" + .version] | join(", "))' <<< "$MATRIX_JSON")
+          git commit -m "$message"
 
           # Tag the bundle release commit before pushing.  The tag is
           # pushed via SSH (deploy key) so it works with tag protection
@@ -309,11 +318,14 @@ jobs:
 
       - name: Create bundle release
         run: |
-          bundle_repo="${{ needs.detect.outputs.bundle_repo }}"
-          body=$(jq -r '"## Updated libraries\n\n" + ([.include[] | "- **" + .lib_name + "** v" + .version] | join("\n"))' <<< "$MATRIX_JSON")
+          bundle_repository="${{ needs.detect.outputs.bundle_repository }}"
+          body=$(jq -r '"## Updated libraries\n\n" + ([.include[] | "- **" + .library_name + "** v" + .version] | join("\n"))' <<< "$MATRIX_JSON")
 
+          # Create a GitHub Release in the bundle repository.  --verify-tag
+          # ensures the tag was pushed in the previous step; it prevents
+          # creating an orphaned release if the push failed.
           gh release create "${{ env.date_tag }}" \
-            --repo "${bundle_repo}" \
+            --repo "${bundle_repository}" \
             --verify-tag \
             --title "Bundle ${{ env.date_tag }}" \
             --notes "$body" \

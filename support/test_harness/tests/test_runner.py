@@ -126,13 +126,13 @@ def test_run_module_reports_heap_when_available(monkeypatch, capsys) -> None:
     assert "delta" in output
 
 
-def test_mem_free_returns_none_without_gc_mem_free(monkeypatch) -> None:
-    """_mem_free should return None when gc lacks mem_free."""
+def test_memory_free_returns_none_without_gc_mem_free(monkeypatch) -> None:
+    """_memory_free should return None when gc lacks mem_free."""
     monkeypatch.setattr(runner_module, "_gc", SimpleNamespace(collect=lambda: None))
-    assert runner_module._mem_free() is None
+    assert runner_module._memory_free() is None
 
 
-def test_mem_free_returns_none_without_gc(monkeypatch) -> None:
-    """_mem_free should return None when gc is not available."""
+def test_memory_free_returns_none_without_gc(monkeypatch) -> None:
+    """_memory_free should return None when gc is not available."""
     monkeypatch.setattr(runner_module, "_gc", None)
-    assert runner_module._mem_free() is None
+    assert runner_module._memory_free() is None
