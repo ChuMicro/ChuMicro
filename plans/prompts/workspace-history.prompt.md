@@ -436,3 +436,19 @@ This was the largest single session. It addressed three areas: the workspace was
 **Milestone 2 marked done:**
 8. All CI/release exit criteria met.  Marked Milestone 2 as `done` in `roadmap.md`.
 9. Removed stale inline version numbers from planning and workstream docs — the canonical version lives in each library's `VERSION` file.
+
+#### 2026-04-06 (cont. 4) — Promote workflow rework, script docs, docs-preview fix
+
+**Promote workflow simplified:**
+1. Reworked `promote.yml` from a `workflow_call` delegation to an inline `workflow_dispatch` with a tag selector input (replacing free-text ref input).  This simplified the release trigger chain and removed the concurrency deadlock between promote and release workflows.
+2. Fixed concurrency group collision between promote and release that could cause one to cancel the other.
+
+**Script documentation:**
+3. Expanded docstrings and inline comments across `scripts/` modules (`prepare_micropython.py`, `prepare_circuitpython.py`, `scaffold.py`, `discovery.py`, `docs_deploy.py`, `ide.py`, `bundle.py`, `generate_landing_page.py`, `run.py`) where documentation was sparse or intent was unclear.
+
+**docs-preview local freshness fix:**
+4. `docs_preview()` in `scripts/run.py` now fetches `gh-pages` from origin before seeding the preview branch.  Previously the local `gh-pages` copy could be stale, causing the preview to show old versions instead of recently promoted stable releases.
+
+**Version bumps:**
+5. Bumped all libraries to 0.1.15 (current).
+
