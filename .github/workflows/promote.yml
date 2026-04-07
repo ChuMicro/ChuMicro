@@ -1,21 +1,17 @@
 name: Promote to stable
 
-# Promotes an experimental release to stable.  Enter the experimental tag
-# (e.g. timing-v0.3.0-experimental) in the ref field.  The library name
-# and version are parsed from the tag automatically.
+# Promotes an experimental release to stable.
+#
+# HOW TO USE: in the "Use workflow from" dropdown above, select the
+# experimental tag to promote (e.g. timing-v0.1.15-experimental).
+# The library name and version are parsed from the tag automatically.
 #
 # The release runs inline via workflow_call so the full build, publish, and
-# bundle work is visible in this single workflow run.  The workflow itself
-# runs from main (latest scripts/workflows) while the library source is
-# checked out from the tag.
+# bundle work is visible in this single workflow run.
 
 on:
   workflow_dispatch:
     inputs:
-      ref:
-        description: "Experimental tag to promote (e.g. timing-v0.3.0-experimental)"
-        type: string
-        required: true
       dry_run:
         description: "Dry run — validate but do not publish or tag"
         type: boolean
@@ -41,7 +37,7 @@ jobs:
       - name: Parse experimental tag
         id: parse
         run: |
-          tag="${{ inputs.ref }}"
+          tag="${{ github.ref_name }}"
           echo "Tag: ${tag}"
 
           # Expect: <lib>-v<version>-experimental
@@ -52,14 +48,13 @@ jobs:
             echo "version=${version}" >> "$GITHUB_OUTPUT"
             echo "✓ Promoting ${lib_name} v${version} from experimental to stable"
           else
-            echo "::error::Expected an experimental tag like 'timing-v0.3.0-experimental', got '${tag}'."
+            echo "::error::Expected an experimental tag in 'Use workflow from' (e.g. timing-v0.3.0-experimental), got '${tag}'."
             exit 1
           fi
 
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          ref: ${{ inputs.ref }}
 
       - name: Validate VERSION matches tag
         run: |
@@ -94,7 +89,6 @@ jobs:
       libraries: ${{ needs.validate.outputs.lib_name }}
       channel: stable
       dry_run: ${{ inputs.dry_run }}
-      checkout_ref: ${{ inputs.ref }}
     secrets: inherit
 
   docs:
