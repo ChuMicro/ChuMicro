@@ -47,7 +47,7 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
    - `scripts/prepare.py` for shared runtime preparation helpers
    - `scripts/prepare_micropython.py` and `scripts/prepare_circuitpython.py` for unix-port preparation
    - `support/test_harness/run_cross_runtime.py` as the canonical cross-runtime test runner (Decision 0016)
-   - `.github/workflows/ci.yml` for required host checks plus advisory runtime compatibility jobs
+   - `.github/workflows/ci.yml` for required host checks plus required runtime compatibility jobs
    - `.github/workflows/release.yml` for per-library release pipeline (PyPI, tags, GitHub Releases, bundle publishing)
    - `.github/workflows/promote.yml` for selective stable library promotion
    - `.github/workflows/label-sync.yml` for syncing repo labels
@@ -76,6 +76,9 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
    - `python scripts/run.py preflight`
    - `python scripts/run.py verify-examples`
    - `python scripts/run.py docs`
+   - `python scripts/run.py docs --serve`
+   - `python scripts/run.py docs-preview`
+   - `python scripts/run.py docs-deploy --channel experimental`
    - `python scripts/run.py new-library <name>` (scaffold + IDE regen)
    - `python scripts/run.py sync-ide`
    - `python scripts/run.py prepare-micropython`
@@ -104,14 +107,13 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
 14. IDE type stubs use upstream PyPI packages pinned to target-runtimes.toml (Decision 0012).
 15. Serviceable library audit complete: deque API verified across runtimes, overflow flag added, board architecture support documented (Decision 0015).
 16. CI/release pipeline is live: PyPI trusted publishing, git tags, GitHub Releases, bundle repo publishing (`.py` + `.mpy` + `package.json`), circup-format zips. Single-branch model (`main`) with tag-based stable releases and selective promote workflow (Decisions 0018, 0019, 0020). All four libraries published to PyPI. Docs deployed to GitHub Pages via mike (`docs-deploy.yml`).
+17. MicroPython and CircuitPython compatibility checks are required CI status checks, gated by platform targeting (Decision 0011). Branch protection rulesets active on `main`.
 
 ### What is still intentionally incomplete
 
 1. Real board transport tooling beyond manual-only documentation.
 2. The second seam after timing/ticks (digital I/O).
-3. Promoting advisory runtime CI jobs to protected-branch requirements (platform targeting is now wired via `[tool.chumicro].platforms` in `discovery.py`; Decision 0011).
-4. VS Code workspace validation (`pyrightconfig.json`, `settings.json`, `tasks.json` generated but not end-to-end tested in VS Code).
-5. Test ergonomics: reducing repeated boilerplate across test files.
-6. Contributor prerequisite documentation by platform.
-7. Branch protection rulesets configured but not enforced until repos go public.
-8. End-to-end circup/mip install validation once bundle repos are public.
+3. VS Code workspace validation (`pyrightconfig.json`, `settings.json`, `tasks.json` generated but not end-to-end tested in VS Code).
+4. Test ergonomics: reducing repeated boilerplate across test files.
+5. Contributor prerequisite documentation by platform.
+6. End-to-end circup/mip install validation once bundle repos are public.

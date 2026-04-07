@@ -123,8 +123,8 @@ Current verified state:
 - `scripts/run.py test-micropython-compat` exists as the first MicroPython compatibility entrypoint
 - `scripts/run.py prepare-micropython` exists as the repo-managed MicroPython runtime bootstrap command
 - `support/test_harness/run_cross_runtime.py` exists as the canonical cross-runtime test runner
-- the MicroPython path has been exercised successfully in this workspace with the repo-managed local Unix-port runtime and now runs as an advisory CI job
-- the CircuitPython path has been exercised successfully in this workspace with the repo-managed local Unix-port runtime and now runs as an advisory CI job
+- the MicroPython path has been exercised successfully in this workspace with the repo-managed local Unix-port runtime and now runs as a required CI job
+- the CircuitPython path has been exercised successfully in this workspace with the repo-managed local Unix-port runtime and now runs as a required CI job
 - per [Decision 0016](../decisions/0016-cross-runtime-unit-tests.md), the compat tasks run real unit tests from `tests/` through the lightweight harness, skipping pytest-only files automatically
 
 These checks should not be treated as proof of full board behavior yet.
@@ -167,5 +167,5 @@ The current implemented slice is a heartbeat-style utility whose timing behavior
 
 - **Second seam:** Digital I/O will become the second seam, but the priority is to explore CI and release more deeply with just the timing library (and possibly one more) before adding many libraries. Both tracks proceed in parallel.
 - **IDE-facing stubs:** Prove out IDE stub packaging now, before the second seam. This is part of the timing library's remaining exit criteria.
-- **Advisory runtime compat jobs:** These should become mandatory protected-branch requirements eventually. They will be gated by platform targeting (Decision 0011) so that only libraries declaring support for MicroPython/CircuitPython are required to pass those checks.
+- **Advisory runtime compat jobs:** These are now required status checks on PRs, gated by platform targeting (Decision 0011).
 - **Shared-timestamp pattern:** `Heartbeat.poll(now_ms)`, `is_due(now_ms)`, and `reset(now_ms)` require a shared timestamp (Decision 0014).  Heartbeat is a passive component checked via `poll()`.  Active components implement `check(now_ms) -> bool` (Decision 0014).

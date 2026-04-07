@@ -26,7 +26,6 @@
   - `testing.py` submodule with `FakeBackend` (wraps MemoryBackend + call recording).
   - Corruption recovery: `load()` catches decode failures, resets to defaults, sets dirty.
   - ESP32 NVS backend deferred (different semantics — per-key, not blob).
-- [ ] Promote advisory MicroPython and CircuitPython CI jobs to protected-branch requirements, gated by platform targeting (Decision 0011).
 - [ ] Add digital I/O as the second library seam (alongside CI/release work, not sequentially).
 - [ ] Explore test ergonomics: reduce repeated boilerplate across test files.
 - [ ] Validate VS Code workspace end-to-end (generated `pyrightconfig.json`, `settings.json`, `tasks.json` — not yet tested in a live VS Code session).
@@ -44,6 +43,7 @@
 
 ## Done
 
+- [x] Promote MicroPython and CircuitPython CI jobs to required status checks, gated by platform targeting (Decision 0011).  Label-check CI job removed (labels enforced by PR template only).
 - [x] Validate PR flow and branch protection rulesets end-to-end.  Rulesets active on main (status checks + approval required).  Admin bypass confirmed.  Deploy keys for bundle repos (`BUNDLE_DEPLOY_KEY`, `EXPERIMENTAL_BUNDLE_DEPLOY_KEY`) and gh-pages (`GH_PAGES_DEPLOY_KEY`) replace broad PAT for git operations.  `BUNDLE_TOKEN` retained only for GitHub API release creation.  No tag protection rules needed — tags are only created by CI workflows.  Milestone 2 (CI and release flow) is done.
 - [x] Deploy docs to GitHub Pages via mike (`docs-deploy.yml`).  Each library deploys independently with `--deploy-prefix`.  Push to `main` deploys `dev experimental`; promote triggers `<version> stable`.  Version selector dropdown enabled in all `mkdocs.yml` configs.  GitHub Pages must be configured to serve from `gh-pages` branch (repo setting).
 - [x] Add docs build verification as a PR-only CI gate (`docs-build` job). Migrated from MkDocs to Zensical (Decision 0013 updated). Existing `mkdocs.yml` configs work with zero changes.

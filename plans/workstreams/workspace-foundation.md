@@ -40,7 +40,7 @@ Define the repo layout, shared tooling, and local developer ergonomics for a Pyt
 - Per-library pytest runs avoid test-directory collisions (Decision 0009)
 - `scripts/prepare_micropython.py` and `scripts/prepare_circuitpython.py` provide unix-port preparation
 - `support/test_harness/run_cross_runtime.py` exists as the canonical cross-runtime test runner entrypoint (Decision 0016)
-- `.github/workflows/ci.yml` now includes advisory runtime compatibility jobs in addition to the required host lane
+- `.github/workflows/ci.yml` now includes required MicroPython and CircuitPython compatibility jobs in addition to the host lane
 - `devices.example.yml` exists as the first committed local device template
 
 ## Developer modes
@@ -93,7 +93,7 @@ Instead, switching should happen through:
 Current verified implementation:
 
 - the shared task interface lives in `scripts/run.py`
-- CI uses the same task interface for lint, host tests, package builds, and advisory runtime compatibility jobs
+- CI uses the same task interface for lint, host tests, package builds, and required runtime compatibility jobs
 - compatibility and device commands exist now as honest scaffolding entrypoints rather than hidden future intent
 
 ## Tooling direction
