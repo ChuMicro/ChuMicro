@@ -2,7 +2,7 @@
 #
 # Read by `python scripts/run.py setup`.  Runtime-pinned stubs
 # (circuitpython-stubs, micropython-esp32-stubs) are appended
-# dynamically from runtime-versions.toml and are not listed here.
+# dynamically from target-runtimes.toml and are not listed here.
 #
 # pip/uv are assumed to be available already (bootstrapped by the
 # virtual environment or installed by the user).
