@@ -61,7 +61,7 @@ pip install chumicro-timing
 ## Testing model
 
 - **Required**: CPython-hosted `pytest` tests with coverage (90%+ gate)
-- **Advisory**: MicroPython and CircuitPython unix-port cross-runtime unit tests
+- **Required**: MicroPython and CircuitPython unix-port cross-runtime unit tests
 - **Opt-in**: real-device `functional_tests/` run through the Chumicro test harness
 
 ## Repository shape
@@ -74,6 +74,7 @@ chumicro/
 │   ├── prompts/
 │   └── workstreams/
 ├── support/
+│   ├── docs/              # Shared docs assets (CSS, favicon)
 │   ├── runtime/           # Cross-runtime detection helpers (workspace-internal)
 │   └── test_harness/      # Lightweight cross-runtime test runner (workspace-internal)
 ├── libraries/
@@ -125,6 +126,9 @@ All tasks are run through `scripts/run.py`:
 | `test` | CPython tests — changed packages by default, `--all` for everything |
 | `verify-examples` | Import-check all library examples |
 | `docs` | Build library docs with Zensical |
+| `docs --serve` | Start a live-reload docs dev server |
+| `docs-preview` | Deploy docs to a local branch and serve a versioned preview |
+| `docs-deploy` | Deploy versioned docs to gh-pages (used by CI) |
 | `build` | Build all publishable package distributions |
 | `preflight` | Full CI gate: lint + test all + examples + compat + build |
 | `new-library <name>` | Scaffold a new library and regenerate IDE configs |

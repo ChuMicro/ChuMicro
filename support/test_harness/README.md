@@ -13,7 +13,7 @@ The cross-runtime test path uses:
 - `libraries/*/tests/test_*.py` (cross-runtime tests — no `import pytest`)
 - `support/test_harness/run_cross_runtime.py` — entry point (thin bootstrapper)
 
-Today this is wired through `scripts/run.py` for local compatibility evaluation and advisory CI jobs.
+Today this is wired through `scripts/run.py` for local compatibility evaluation and required CI jobs.
 
 ### CPython cross-runtime run
 
@@ -42,9 +42,7 @@ python scripts/run.py test-circuitpython-compatibility
 
 If no explicit binary is given, `scripts/run.py` first tries the repo-local prepared runtime under `.tools/`, then a `circuitpython` executable on `PATH`, and otherwise triggers the repo-managed prepare step automatically.  To override, pass `--circuitpython-binary /path/to/binary`.
 
-In this workspace on macOS, the pinned upstream `10.1.4` unix-port build now completes and the cross-runtime unit tests pass under both MicroPython and CircuitPython unix-port interpreters.
-
-Here, **advisory** means the runtime CI jobs still run and still report real pass/fail results, but they do not fail the overall GitHub Actions workflow yet because the workflow marks them with `continue-on-error: true`.
+In this workspace on macOS, the pinned upstream `10.1.4` unix-port build completes and the cross-runtime unit tests pass under both MicroPython and CircuitPython unix-port interpreters.  Both runtime compatibility checks are required CI status checks.
 
 ### Combined host + runtime run
 
