@@ -50,7 +50,7 @@ libraries/timing/
 - `libraries/timing/README.md` establishes the package documentation with installation, API overview, and platform notes
 - `libraries/timing/docs/` contains user guide, API reference, and testing helpers documentation (Decision 0013)
 - `libraries/timing/examples/` contains nine runnable examples: five simulated (heartbeat blink, multiple heartbeats, timeout check, debounce, periodic tick) and four hardware (CircuitPython blink, CircuitPython debounce, MicroPython blink, MicroPython debounce) (Decision 0013)
-- current version: `0.1.11` (published to PyPI)
+- published to PyPI
 
 ## Design rules
 
