@@ -9,6 +9,12 @@ After scaffolding, IDE configurations are regenerated automatically so
 the new library's ``src/`` is immediately importable without any manual
 setup.  See ``plans/decisions/0013-docs-and-examples-standards.md`` for
 the documentation structure conventions.
+
+**Template synchronization:** These templates produce a point-in-time
+starting state.  When a template changes (e.g., new mkdocs settings,
+new README section, new pyproject fields), apply the same structural
+change to all existing libraries.  Template updates do not propagate
+retroactively.
 """
 
 from __future__ import annotations
@@ -257,7 +263,7 @@ _GUIDE_TEMPLATE = """\
      This guide should be generated from the library's source code, docstrings,
      tests, and examples.  See plans/guide-generation.md for the
      full prompt an AI agent can use.  Every section below is required unless
-     marked optional.  Do not leave placeholder comments in the final guide. -->
+     marked conditional.  Do not leave placeholder comments in the final guide. -->
 
 ## Overview
 
@@ -269,20 +275,27 @@ _GUIDE_TEMPLATE = """\
 <!-- Required. The most common usage pattern as a copy-pasteable snippet.
      Import from the public package, not internal modules. -->
 
+## Runner pattern
+
+<!-- Conditional. Include if the library has classes that implement
+     check(now_ms) -> bool. Show how to wire them into a Runner.
+     Omit if not applicable. -->
+
+## Memory notes
+
+<!-- Conditional. Include if the library manages buffers, queues, or
+     pre-allocated structures. Explain allocation strategy and tuning. -->
+
 ## Platform notes
 
 <!-- Required. Runtime-specific behavior or limitations. If the library works
      identically on all three runtimes, say so in one line. -->
 
-## Runner pattern
+## Examples
 
-<!-- Include if the library has classes that implement check(now_ms) -> bool.
-     Show how to wire them into a Runner. Omit if not applicable. -->
-
-## Memory notes
-
-<!-- Optional. Include if the library manages buffers, queues, or
-     pre-allocated structures. Explain allocation strategy and tuning. -->
+<!-- Required. List all examples from the examples/ directory in a table:
+     | Example | What it shows |
+     Note which are simulated (CPython) vs hardware. -->
 
 ---
 
