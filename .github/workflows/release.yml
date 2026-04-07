@@ -185,7 +185,14 @@ jobs:
   # Experimental pushes to ChuMicro/ChuMicro-Bundle-Experimental.
   # Prerequisites:
   #   1. Both bundle repos must exist (can be empty).
-  #   2. A PAT with repo scope stored as the BUNDLE_TOKEN secret.
+  #   2. Per-repo SSH deploy keys with write access, stored as secrets:
+  #        BUNDLE_DEPLOY_KEY              → ChuMicro-Bundle (stable)
+  #        EXPERIMENTAL_BUNDLE_DEPLOY_KEY → ChuMicro-Bundle-Experimental
+  #      Deploy keys are single-repo scoped (least privilege) and can be
+  #      added to branch-protection bypass lists.
+  #   3. BUNDLE_TOKEN (PAT) for GitHub API calls (release creation).
+  #      Deploy keys only grant git-level access; API operations still
+  #      need a token.
   # See Decision 0018 for the bundle repo layout and distribution model.
   # ---------------------------------------------------------------------------
   bundle:
@@ -211,12 +218,15 @@ jobs:
             --matrix "$MATRIX_JSON" \
             ${{ needs.detect.outputs.is_experimental == 'true' && '--experimental' || '' }}
 
+      - name: Configure SSH for bundle repo
+        uses: webfactory/ssh-agent@v0.9.1
+        with:
+          ssh-private-key: ${{ needs.detect.outputs.is_experimental == 'true' && secrets.EXPERIMENTAL_BUNDLE_DEPLOY_KEY || secrets.BUNDLE_DEPLOY_KEY }}
+
       - name: Clone bundle repo
         run: |
           bundle_repo="${{ needs.detect.outputs.bundle_repo }}"
-          git clone "https://x-access-token:${BUNDLE_TOKEN}@github.com/${bundle_repo}.git" .bundle-repo
-        env:
-          BUNDLE_TOKEN: ${{ secrets.BUNDLE_TOKEN }}
+          git clone "git@github.com:${bundle_repo}.git" .bundle-repo
 
       - name: Copy staging into bundle repo
         run: |
@@ -267,7 +277,12 @@ jobs:
 
           msg=$(jq -r '"Update: " + ([.include[] | .lib_name + " v" + .version] | join(", "))' <<< "$MATRIX_JSON")
           git commit -m "$msg"
-          git push origin main
+
+          # Tag the bundle release commit before pushing.  The tag is
+          # pushed via SSH (deploy key) so it works with tag protection
+          # rules.  gh release create then references the existing tag.
+          git tag "${{ env.date_tag }}"
+          git push origin main "${{ env.date_tag }}"
 
       - name: Create bundle release
         run: |
@@ -276,6 +291,7 @@ jobs:
 
           gh release create "${{ env.date_tag }}" \
             --repo "${bundle_repo}" \
+            --verify-tag \
             --title "Bundle ${{ env.date_tag }}" \
             --notes "$body" \
             .circup-zips/*.zip
