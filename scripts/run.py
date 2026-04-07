@@ -388,6 +388,19 @@ def docs_preview(package_dirs: list[Path]) -> int:
         capture_output=True, cwd=ROOT,
     )
 
+    # Fetch the latest gh-pages from origin so the preview reflects
+    # recently promoted versions (CI pushes directly to gh-pages).
+    fetch_result = subprocess.run(
+        ["git", "fetch", "origin", source_branch],
+        capture_output=True, cwd=ROOT,
+    )
+    if fetch_result.returncode == 0:
+        # Fast-forward the local tracking branch to match the remote.
+        subprocess.run(
+            ["git", "branch", "-f", source_branch, f"origin/{source_branch}"],
+            capture_output=True, cwd=ROOT,
+        )
+
     # Seed from gh-pages so existing stable/versioned deploys are present.
     # If gh-pages doesn't exist yet, mike's --allow-empty will create the
     # branch from scratch (first-time setup).
