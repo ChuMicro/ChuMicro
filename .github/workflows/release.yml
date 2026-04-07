@@ -23,6 +23,20 @@ on:
         description: "Dry run — build but do not publish or tag"
         type: boolean
         default: false
+  workflow_call:
+    inputs:
+      libraries:
+        description: "Libraries to release (comma-separated)."
+        type: string
+        required: true
+      channel:
+        description: "Release channel (experimental or stable)."
+        type: string
+        required: true
+      dry_run:
+        description: "Dry run — build but do not publish or tag."
+        type: boolean
+        default: false
 
 # One release at a time to avoid race conditions on tags.
 concurrency:
