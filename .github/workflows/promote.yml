@@ -17,9 +17,6 @@ on:
         type: boolean
         default: false
 
-concurrency:
-  group: release
-  cancel-in-progress: false
 
 permissions:
   contents: write    # tags + GitHub Releases (release.yml)
