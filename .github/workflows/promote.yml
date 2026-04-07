@@ -67,5 +67,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh workflow run docs-deploy.yml -f channel=stable
+          gh workflow run docs-deploy.yml \
+            -f channel=stable \
+            -f "libraries=${{ inputs.libraries }}"
           echo "✓ Stable docs deploy triggered."

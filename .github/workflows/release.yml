@@ -211,12 +211,6 @@ jobs:
             --matrix "$MATRIX_JSON" \
             ${{ needs.detect.outputs.is_experimental == 'true' && '--experimental' || '' }}
 
-      - name: Generate bundle README
-        run: |
-          python scripts/bundle.py readme \
-            ${{ needs.detect.outputs.is_experimental == 'true' && '--experimental' || '' }} \
-            -o .bundle-staging/README.md
-
       - name: Clone bundle repo
         run: |
           bundle_repo="${{ needs.detect.outputs.bundle_repo }}"
@@ -228,6 +222,13 @@ jobs:
         run: |
           cp -r .bundle-staging/* .bundle-repo/
           cp LICENSE .bundle-repo/LICENSE
+
+      - name: Generate bundle README
+        run: |
+          python scripts/bundle.py readme \
+            ${{ needs.detect.outputs.is_experimental == 'true' && '--experimental' || '' }} \
+            --bundle-dir .bundle-repo \
+            -o .bundle-repo/README.md
 
       - name: Create circup zips
         run: |

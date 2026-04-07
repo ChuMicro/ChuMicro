@@ -13,6 +13,10 @@ on:
           - experimental
           - stable
         default: experimental
+      libraries:
+        description: "Comma-separated libraries to deploy (empty = all)"
+        type: string
+        default: ""
 
 # Avoid concurrent deployments that could conflict on gh-pages.
 concurrency:
@@ -55,7 +59,13 @@ jobs:
           else
             channel="${{ inputs.channel }}"
           fi
-          python scripts/run.py docs-deploy --channel "$channel"
+
+          lib_flag=""
+          if [ -n "${{ inputs.libraries }}" ]; then
+            lib_flag="--libraries ${{ inputs.libraries }}"
+          fi
+
+          python scripts/run.py docs-deploy --channel "$channel" $lib_flag
 
       - name: Push to gh-pages
         run: git push origin gh-pages
