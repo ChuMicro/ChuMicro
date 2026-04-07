@@ -34,7 +34,6 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
    - [0019: branching model — single branch with tags](../decisions/0019-branching-model.md)
    - [0020: API breakage detection](../decisions/0020-api-breakage-detection.md)
 3. Implemented code slices:
-   - `support/runtime/` for reusable runtime detection
    - `support/test_harness/` for a tiny on-device test runner
    - `libraries/timing/` as the first publishable timing library
    - `libraries/runner/` as the second publishable library — gate-based service pattern with shared timestamps, period gating, and batch handler firing (Decision 0014)

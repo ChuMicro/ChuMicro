@@ -26,8 +26,7 @@ Define the repo layout, shared tooling, and local developer ergonomics for a Pyt
 ## Current verified deliverables
 
 - root `README.md`, `.gitignore`, and `pyproject.toml` exist
-- `support/runtime/` exists as the first reusable support package
-- `support/test_harness/` exists as the first tiny on-device runner scaffold
+- `support/test_harness/` exists as the lightweight cross-runtime test runner
 - `libraries/timing/` exists as the first publishable package slice under `libraries/`
 - `libraries/runner/` exists as the second publishable library (scaffolded via `new-library`)
 - `.github/workflows/ci.yml` exists and uses the shared repo task entrypoints
