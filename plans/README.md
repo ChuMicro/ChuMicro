@@ -1,16 +1,32 @@
 # Plans
 
-This directory is the long-lived planning area for Chumicro.
+Knowledge base for the Chumicro workspace.  Captures decisions, history, and
+active work that would otherwise live in people's heads or get lost between
+sessions.
 
-## Planning model
+## What's here
 
-Chumicro uses a lightweight planning structure:
+| File / folder | Purpose | When to read it |
+|---|---|---|
+| `decisions/` | Durable decision records (ADRs) — *why* the workspace has its current shape | Before proposing structural or pattern changes |
+| `history.md` | Design principles, rejected approaches, build-up timeline | When you need to understand *why* something is the way it is, or to check whether an approach was already tried |
+| `next-up.md` | Active work queue (Now / Next / Blocked) | When picking up work or checking priorities |
+| `roadmap.md` | Milestone status and trajectory | When you need the big picture of project phases |
+| `end-of-session.md` | Checklist for clean tree and current docs | At the end of every working session |
+| `guide-generation.md` | Template for generating library `docs/guide.md` | When writing or updating a library's user guide |
+| `workstreams/` | Active bodies of work (only in-progress workstreams live here) | When working on a tracked initiative |
 
-- `roadmap.md` for milestone sequencing
-- `next-up.md` for the active kanban-style queue
-- `workstreams/` for durable bodies of work
-- `decisions/` for short decision records that explain why the workspace is shaped a certain way
-- `prompts/` for useful prompts that help rebuild the workspace context or preserve build-up history
+## Rules
+
+- **Decisions are append-only.**  Record a new decision when tradeoffs matter
+  or when future agents would otherwise have to rediscover context.  Use the
+  format in `decisions/README.md`.
+- **`next-up.md` is the working queue.**  Move checked-off items to Done in
+  the same edit.  Keep it focused on active work.
+- **Don't duplicate.**  If something is already in `decisions/` or AGENTS.md,
+  link to it — don't repeat it.
+- **Keep history current.**  Add a timeline entry to `history.md` after
+  sessions that make significant changes.
 
 ## Status vocabulary
 
@@ -21,36 +37,3 @@ Use these states consistently in planning documents:
 - `blocked`
 - `done`
 - `deferred`
-
-## Update rules
-
-- Keep documents small and link between them instead of repeating detail.
-- Record decisions when tradeoffs matter or when future agents will otherwise have to rediscover context.
-- Use `next-up.md` as the working queue; workstreams should stay stable and higher level.
-- Prefer milestone language over formal scrum ceremony.
-
-## Review loop
-
-These plans are expected to evolve with direct maintainer feedback.
-
-When a plan is enhanced, review should explicitly answer:
-
-- what is right and should stay
-- what is wrong and should change
-- what is missing
-- what is too detailed or not detailed enough
-
-Future plan updates should preserve open questions instead of silently guessing.
-
-## Current planning set
-
-- `roadmap.md`
-- `next-up.md`
-- `prompts/`
-- `workstreams/workspace-foundation.md`
-- `workstreams/timing-library.md`
-- `workstreams/ci-release.md`
-- `workstreams/device-validation.md`
-- `decisions/` (0001–0020)
-
-`prompts/` should contain only durable prompts that help future sessions rebuild workspace context or understand workspace build-up history.

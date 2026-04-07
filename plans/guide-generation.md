@@ -1,6 +1,6 @@
-# Prompt: Generate a library user guide
+# Guide generation template
 
-Use this prompt to generate or update `docs/guide.md` for a Chumicro library.
+Use this template to generate or update `docs/guide.md` for a Chumicro library.
 
 ## When to use
 
@@ -85,3 +85,4 @@ After generating, check:
 - [ ] All code snippets use public imports only
 - [ ] No placeholder comments remain (`<!-- ... -->`)
 - [ ] The guide is ≤200 lines for a small library
+
