@@ -17,7 +17,6 @@ on:
         type: boolean
         default: false
 
-
 permissions:
   contents: write    # tags + GitHub Releases (release.yml)
   id-token: write    # PyPI trusted publishing (release.yml)
@@ -37,7 +36,8 @@ jobs:
           tag="${{ github.ref_name }}"
           echo "Tag: ${tag}"
 
-          # Expect: <lib>-v<version>-experimental
+          # Match the tag format: <library>-v<semver>-experimental
+          # Capture group 1 = library name, capture group 2 = version.
           if [[ "$tag" =~ ^([a-z][a-z0-9_-]*)-v([0-9]+\.[0-9]+\.[0-9]+)-experimental$ ]]; then
             lib_name="${BASH_REMATCH[1]}"
             version="${BASH_REMATCH[2]}"
@@ -51,9 +51,14 @@ jobs:
 
       - uses: actions/checkout@v6
         with:
+          # Full history needed to check whether the stable tag already exists.
           fetch-depth: 0
 
       - name: Validate VERSION matches tag
+        # Three safety checks before proceeding:
+        #   1. The library directory and VERSION file must exist.
+        #   2. The VERSION file content must match the tag's version.
+        #   3. A stable tag for this version must not already exist.
         run: |
           lib_name="${{ steps.parse.outputs.lib_name }}"
           version="${{ steps.parse.outputs.version }}"
@@ -78,6 +83,9 @@ jobs:
 
           echo "✓ ${lib_name} v${version} ready for stable promotion"
 
+  # Delegate to the shared release workflow in stable mode.  Using
+  # workflow_call keeps all build/publish/bundle steps visible in this
+  # single workflow run rather than spawning a separate run.
   release:
     name: Release
     needs: validate
@@ -88,6 +96,9 @@ jobs:
       dry_run: ${{ inputs.dry_run }}
     secrets: inherit
 
+  # Trigger docs deployment as a separate workflow_dispatch rather than
+  # workflow_call because docs-deploy.yml has its own concurrency group
+  # and push-to-gh-pages logic that should not nest inside this run.
   docs:
     name: Deploy stable docs
     needs: [validate, release]

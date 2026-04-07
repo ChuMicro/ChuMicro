@@ -1,7 +1,8 @@
 """Workspace discovery, scope parsing, and change detection.
 
 Provides the shared helpers that other ``scripts/`` modules use to
-locate packages, source roots, and changed files.
+locate packages, source roots, and changed files.  This is the
+foundational module — nearly every other script imports from here.
 """
 
 from __future__ import annotations
@@ -10,12 +11,16 @@ import os
 import subprocess
 from pathlib import Path
 
+# tomllib is stdlib from Python 3.11+.  The tomli backport covers 3.9–3.10
+# so this module can run on the full range of supported workspace Pythons.
 try:
     import tomllib
 except ModuleNotFoundError:
     import tomli as tomllib  # type: ignore[import-not-found,no-redef]
 
+#: Absolute path to the repository root (parent of the scripts/ directory).
 ROOT = Path(__file__).resolve().parent.parent
+#: Directory where prepared runtime source trees and binaries are stored.
 TOOLS = ROOT / ".tools"
 
 #: Canonical platform identifiers.
@@ -25,11 +30,11 @@ ALL_PLATFORMS = ("cpython", "micropython", "circuitpython")
 def read_runtime_versions() -> dict:
     """Read pinned target runtime versions from ``target-runtimes.toml``."""
 
-    with (ROOT / "target-runtimes.toml").open("rb") as f:
-        return tomllib.load(f)
+    with (ROOT / "target-runtimes.toml").open("rb") as runtimes_file:
+        return tomllib.load(runtimes_file)
 
 
-def read_platforms(pkg_dir: Path) -> tuple[str, ...]:
+def read_platforms(package_dir: Path) -> tuple[str, ...]:
     """Read ``[tool.chumicro].platforms`` from a package's ``pyproject.toml``.
 
     Returns :data:`ALL_PLATFORMS` when the key or section is absent —
@@ -38,33 +43,33 @@ def read_platforms(pkg_dir: Path) -> tuple[str, ...]:
     See ``plans/decisions/0011-platform-targeting.md``.
     """
 
-    pyproject = pkg_dir / "pyproject.toml"
-    if not pyproject.exists():
+    pyproject_file = package_dir / "pyproject.toml"
+    if not pyproject_file.exists():
         return ALL_PLATFORMS
-    with pyproject.open("rb") as f:
-        data = tomllib.load(f)
+    with pyproject_file.open("rb") as toml_file:
+        data = tomllib.load(toml_file)
     platforms = data.get("tool", {}).get("chumicro", {}).get("platforms")
     if platforms is None:
         return ALL_PLATFORMS
     return tuple(platforms)
 
 
-def filter_by_platform(pkg_dirs: list[Path], platform: str) -> list[Path]:
+def filter_by_platform(package_dirs: list[Path], platform: str) -> list[Path]:
     """Return only packages that target *platform*."""
-    return [d for d in pkg_dirs if platform in read_platforms(d)]
+    return [package_dir for package_dir in package_dirs if platform in read_platforms(package_dir)]
 
 
-def find_package_dir(lib_dir: Path) -> Path | None:
+def find_package_dir(library_dir: Path) -> Path | None:
     """Find the single importable package directory under a library's ``src/``.
 
-    Returns the first directory inside ``<lib_dir>/src/`` that contains
+    Returns the first directory inside ``<library_dir>/src/`` that contains
     an ``__init__.py`` and is not a dot-prefixed or egg-info directory.
     Returns ``None`` when no importable package is found.
     """
-    src = lib_dir / "src"
-    if not src.is_dir():
+    src_dir = library_dir / "src"
+    if not src_dir.is_dir():
         return None
-    for child in sorted(src.iterdir()):
+    for child in sorted(src_dir.iterdir()):
         if (
             child.is_dir()
             and (child / "__init__.py").exists()
@@ -76,40 +81,59 @@ def find_package_dir(lib_dir: Path) -> Path | None:
 
 
 def discover_package_dirs() -> list[Path]:
-    """Find directories under support/ and libraries/ that contain a pyproject.toml."""
-    dirs: list[Path] = []
-    for parent in [ROOT / "support", ROOT / "libraries"]:
-        if not parent.is_dir():
+    """Find directories under support/ and libraries/ that contain a pyproject.toml.
+
+    This is the primary discovery function — it defines which packages
+    exist in the workspace.  The task runner, IDE sync, and coverage
+    tools all derive their package lists from this function.  No
+    hard-coded package lists exist anywhere in the codebase.
+    """
+    package_dirs: list[Path] = []
+    for parent_dir in [ROOT / "support", ROOT / "libraries"]:
+        if not parent_dir.is_dir():
             continue
-        for child in sorted(parent.iterdir()):
+        for child in sorted(parent_dir.iterdir()):
             if child.is_dir() and (child / "pyproject.toml").exists():
-                dirs.append(child)
-    return dirs
+                package_dirs.append(child)
+    return package_dirs
 
 
 def discover_source_roots() -> list[Path]:
-    """Return src/ directories for all discovered packages."""
-    return [d / "src" for d in discover_package_dirs() if (d / "src").is_dir()]
+    """Return src/ directories for all discovered packages.
+
+    Used to build ``PYTHONPATH`` for pytest and IDE ``extraPaths``
+    so libraries are importable without ``pip install -e``.
+    """
+    return [
+        package_dir / "src"
+        for package_dir in discover_package_dirs()
+        if (package_dir / "src").is_dir()
+    ]
 
 
 def discover_ruff_paths() -> list[str]:
-    """Return paths to lint across the workspace."""
+    """Return paths to lint across the workspace.
+
+    Includes ``scripts/`` itself and the ``src/``, ``tests/``,
+    ``functional_tests/``, and ``examples/`` subdirectories of every
+    discovered package.  Directories that don't exist are skipped.
+    """
     paths = ["scripts"]
-    for pkg_dir in discover_package_dirs():
-        rel = str(pkg_dir.relative_to(ROOT))
+    for package_dir in discover_package_dirs():
+        relative_path = str(package_dir.relative_to(ROOT))
         for subdir in ["src", "tests", "functional_tests", "examples"]:
-            if (pkg_dir / subdir).is_dir():
-                paths.append(f"{rel}/{subdir}")
+            if (package_dir / subdir).is_dir():
+                paths.append(f"{relative_path}/{subdir}")
     return paths
 
 
-def coverage_args_for(pkg_dirs: list[Path]) -> list[str]:
-    """Return ``--cov`` arguments for importable packages under *pkg_dirs*."""
+def coverage_args_for(package_dirs: list[Path]) -> list[str]:
+    """Return ``--cov`` arguments for importable packages under *package_dirs*."""
     args: list[str] = []
-    for pkg_dir in pkg_dirs:
-        pkg = find_package_dir(pkg_dir)
-        if pkg is not None:
-            args.extend(["--cov", str(pkg.relative_to(ROOT))])
+    for package_dir in package_dirs:
+        importable_dir = find_package_dir(package_dir)
+        if importable_dir is not None:
+            args.extend(["--cov", str(importable_dir.relative_to(ROOT))])
     return args
 
 
@@ -119,14 +143,17 @@ def resolve_named_packages(names: list[str]) -> list[Path]:
     Accepts bare names (e.g. ``timing``) or relative paths
     (e.g. ``libraries/timing``).
     """
-    all_dirs = discover_package_dirs()
-    by_name = {d.name: d for d in all_dirs}
-    by_rel = {str(d.relative_to(ROOT)): d for d in all_dirs}
+    all_package_dirs = discover_package_dirs()
+    by_name = {package_dir.name: package_dir for package_dir in all_package_dirs}
+    by_relative_path = {
+        str(package_dir.relative_to(ROOT)): package_dir
+        for package_dir in all_package_dirs
+    }
 
     resolved: list[Path] = []
     for name in names:
-        if name in by_rel:
-            resolved.append(by_rel[name])
+        if name in by_relative_path:
+            resolved.append(by_relative_path[name])
         elif name in by_name:
             resolved.append(by_name[name])
         else:
@@ -181,17 +208,17 @@ def detect_changed_packages() -> list[Path] | None:
             return None
 
     # Extract unique package dirs from changed file paths
-    packages: set[Path] = set()
+    package_dirs: set[Path] = set()
     for path in changed:
         for prefix in ("libraries/", "support/"):
             if path.startswith(prefix):
                 parts = path.split("/")
                 if len(parts) >= 2:
-                    pkg_dir = ROOT / parts[0] / parts[1]
-                    if pkg_dir.is_dir() and (pkg_dir / "pyproject.toml").exists():
-                        packages.add(pkg_dir)
+                    package_dir = ROOT / parts[0] / parts[1]
+                    if package_dir.is_dir() and (package_dir / "pyproject.toml").exists():
+                        package_dirs.add(package_dir)
 
-    return sorted(packages) if packages else None
+    return sorted(package_dirs) if package_dirs else None
 
 
 def resolve_scope(
@@ -218,13 +245,19 @@ def resolve_scope(
         print("Running for all packages (no branch diff or infrastructure changed).")
         return discover_package_dirs()
 
-    pkg_names = ", ".join(d.name for d in detected)
-    print(f"Changed packages detected: {pkg_names}")
+    package_names = ", ".join(package_dir.name for package_dir in detected)
+    print(f"Changed packages detected: {package_names}")
     return detected
 
 
 def find_publishable_packages() -> list[str]:
-    """Return relative paths to publishable libraries under ``libraries/``."""
+    """Return relative paths to publishable libraries under ``libraries/``.
+
+    A library is publishable when it has both a ``VERSION`` file (which
+    provides the release version) and a ``pyproject.toml`` (which
+    defines build metadata).  Support packages under ``support/`` are
+    workspace-internal and are never published.
+    """
     libraries_dir = ROOT / "libraries"
     if not libraries_dir.is_dir():
         return []
@@ -237,14 +270,14 @@ def find_publishable_packages() -> list[str]:
 
 
 def pythonpath_env() -> dict[str, str]:
-    """Return an environment with the repo source roots prepended to PYTHONPATH.
+    """Return an environment with the repository source roots prepended to PYTHONPATH.
 
     Prepending all ``src/`` directories lets pytest discover library
     packages without ``pip install -e`` (Decision 0008).
     """
     env = os.environ.copy()
     existing_path = env.get("PYTHONPATH")
-    path_entries = [str(path) for path in discover_source_roots()]
+    path_entries = [str(source_dir) for source_dir in discover_source_roots()]
     if existing_path:
         path_entries.append(existing_path)
 
@@ -257,7 +290,9 @@ def pythonpath_env() -> dict[str, str]:
 # ---------------------------------------------------------------------------
 
 #: Paths within a library that require a VERSION bump when changed.
-#: See ``plans/decisions/0002-per-library-version-files.md``.
+#: ``"src"`` matches as a directory prefix (any file under ``src/``),
+#: while ``"pyproject.toml"`` matches as an exact filename at the
+#: library root.  See ``plans/decisions/0002-per-library-version-files.md``.
 RELEASE_RELEVANT = {"src", "pyproject.toml"}
 
 
@@ -294,7 +329,7 @@ def changed_files(base_ref: str) -> list[str]:
 def changed_libraries(base_ref: str) -> set[str]:
     """Return names of libraries with release-relevant changes."""
     changed = changed_files(base_ref)
-    libs: set[str] = set()
+    libraries: set[str] = set()
     for path in changed:
         parts = path.split("/")
         # parts[2] is checked against RELEASE_RELEVANT = {"src", "pyproject.toml"}.
@@ -303,5 +338,5 @@ def changed_libraries(base_ref: str) -> set[str]:
         # root-level file).  Both work because we only need to know whether
         # the library was touched — not which specific file changed.
         if len(parts) >= 3 and parts[0] == "libraries" and parts[2] in RELEASE_RELEVANT:
-            libs.add(parts[1])
-    return libs
+            libraries.add(parts[1])
+    return libraries

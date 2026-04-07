@@ -1,10 +1,31 @@
-"""Library scaffolding — templates and directory creation."""
+"""Library scaffolding — templates and directory creation.
+
+Creates the full directory layout, configuration files, docs skeleton,
+and starter source for a new chumicro library.  Called via::
+
+    python scripts/run.py new-library <name>
+
+After scaffolding, IDE configurations are regenerated automatically so
+the new library's ``src/`` is immediately importable without any manual
+setup.  See ``plans/decisions/0013-docs-and-examples-standards.md`` for
+the documentation structure conventions.
+"""
 
 from __future__ import annotations
 
 from discovery import ROOT
 from ide import sync_ide
 
+# ---------------------------------------------------------------------------
+# Template strings
+# ---------------------------------------------------------------------------
+# Each constant below is a format-string template written to the new
+# library's directory tree.  Placeholders:
+#   {name}        — the library short name (e.g. "gpio")
+#   {import_name} — the Python package name (e.g. "chumicro_gpio")
+
+#: Hatchling-based build configuration.  ``dynamic = ["version"]`` reads
+#: the version from the ``VERSION`` file at build time.
 _PYPROJECT_TEMPLATE = """\
 [build-system]
 requires = ["hatchling"]
@@ -53,6 +74,7 @@ exclude = [".gitignore"]
 packages = ["src/{import_name}"]
 """
 
+#: MkDocs Material configuration for the library's documentation site.
 _MKDOCS_TEMPLATE = """\
 site_name: chumicro-{name}
 site_url: https://chumicro.github.io/ChuMicro/{name}/
@@ -101,6 +123,7 @@ plugins:
             members_order: source
 """
 
+#: Landing page for the library's docs site.
 _INDEX_TEMPLATE = """\
 # chumicro-{name}
 
@@ -133,6 +156,7 @@ from {import_name} import ...
 </div>
 """
 
+#: Top-level README shown on GitHub and PyPI.
 _README_TEMPLATE = """\
 # chumicro-{name}
 
@@ -224,6 +248,7 @@ Browse on GitHub:
  cross-runtime Python libraries for ESP32, RP2040, and other microcontrollers.
 """
 
+#: User guide skeleton with required section headings.
 _GUIDE_TEMPLATE = """\
 # User Guide
 
@@ -273,6 +298,7 @@ _GUIDE_TEMPLATE = """\
 </div>
 """
 
+#: Documentation page for the library's ``testing`` submodule fakes.
 _TESTING_DOC_TEMPLATE = """\
 # Testing Helpers
 
@@ -348,6 +374,7 @@ services ship their own test fakes.
 </div>
 """
 
+#: Starter ``testing.py`` module with instructions for creating fakes.
 _TESTING_PY_TEMPLATE = """\
 \"\"\"Test helpers for libraries that depend on chumicro-{name}.
 
@@ -379,6 +406,7 @@ Usage from any library's tests::
 \"\"\"
 """
 
+#: API reference page — delegates to mkdocstrings autodoc.
 _API_TEMPLATE = """\
 # API Reference
 
@@ -398,6 +426,7 @@ _API_TEMPLATE = """\
 </div>
 """
 
+#: Minimal example script included as ``examples/quickstart.py``.
 _EXAMPLE_TEMPLATE = """\
 \"\"\"{display_name} example.
 
@@ -411,78 +440,98 @@ print("Hello from chumicro-{name}!")
 
 
 def _scaffold_library(name: str) -> int:
-    """Create the directory structure and template files for a new library."""
-    import_name = f"chumicro_{name.replace('-', '_')}"
-    lib_dir = ROOT / "libraries" / name
+    """Create the directory structure and template files for a new library.
 
-    if lib_dir.exists():
+    The resulting layout matches the workspace convention::
+
+        libraries/<name>/
+        ├── VERSION                       # semver, starts at 0.1.0
+        ├── pyproject.toml                # Hatchling build config
+        ├── mkdocs.yml                    # docs site config
+        ├── README.md                     # GitHub/PyPI readme
+        ├── src/chumicro_<name>/
+        │   ├── __init__.py               # public exports
+        │   └── testing.py                # test fakes stub
+        ├── tests/
+        │   └── conftest.py               # per-library pytest config
+        ├── functional_tests/             # on-device tests (empty)
+        ├── docs/                         # MkDocs source pages
+        │   ├── index.md, guide.md, api.md, testing.md
+        └── examples/
+            └── quickstart.py
+    """
+    import_name = f"chumicro_{name.replace('-', '_')}"
+
+    library_dir = ROOT / "libraries" / name
+
+    if library_dir.exists():
         print(f"Directory already exists: libraries/{name}")
         return 1
 
     # Create directory tree
-    (lib_dir / "src" / import_name).mkdir(parents=True)
-    (lib_dir / "tests").mkdir()
-    (lib_dir / "functional_tests").mkdir()
-    (lib_dir / "docs").mkdir()
-    (lib_dir / "examples").mkdir()
+    (library_dir / "src" / import_name).mkdir(parents=True)
+    (library_dir / "tests").mkdir()
+    (library_dir / "functional_tests").mkdir()
+    (library_dir / "docs").mkdir()
+    (library_dir / "examples").mkdir()
 
     # .gitkeep for directories that start empty
-    (lib_dir / "functional_tests" / ".gitkeep").touch()
+    (library_dir / "functional_tests" / ".gitkeep").touch()
 
     # VERSION
-    (lib_dir / "VERSION").write_text("0.1.0\n")
+    (library_dir / "VERSION").write_text("0.1.0\n")
 
     # pyproject.toml
-    (lib_dir / "pyproject.toml").write_text(
+    (library_dir / "pyproject.toml").write_text(
         _PYPROJECT_TEMPLATE.format(name=name, import_name=import_name)
     )
 
     # mkdocs.yml
-    (lib_dir / "mkdocs.yml").write_text(_MKDOCS_TEMPLATE.format(name=name))
+    (library_dir / "mkdocs.yml").write_text(_MKDOCS_TEMPLATE.format(name=name))
 
     # README
-    (lib_dir / "README.md").write_text(
+    (library_dir / "README.md").write_text(
         _README_TEMPLATE.format(name=name, import_name=import_name)
     )
 
     # docs/
-    (lib_dir / "docs" / "index.md").write_text(
+    (library_dir / "docs" / "index.md").write_text(
         _INDEX_TEMPLATE.format(name=name, import_name=import_name)
     )
 
     # docs/guide.md
-    (lib_dir / "docs" / "guide.md").write_text(
+    (library_dir / "docs" / "guide.md").write_text(
         _GUIDE_TEMPLATE.format(name=name)
     )
 
     # docs/api.md
-    (lib_dir / "docs" / "api.md").write_text(
+    (library_dir / "docs" / "api.md").write_text(
         _API_TEMPLATE.format(name=name, import_name=import_name)
     )
 
     # docs/testing.md
-    (lib_dir / "docs" / "testing.md").write_text(
+    (library_dir / "docs" / "testing.md").write_text(
         _TESTING_DOC_TEMPLATE.format(name=name, import_name=import_name)
     )
 
     # Example
     display_name = name.replace("-", " ").replace("_", " ").title()
-    (lib_dir / "examples" / "quickstart.py").write_text(
+    (library_dir / "examples" / "quickstart.py").write_text(
         _EXAMPLE_TEMPLATE.format(name=name, display_name=display_name)
     )
 
     # Package __init__.py
-    (lib_dir / "src" / import_name / "__init__.py").write_text(
+    (library_dir / "src" / import_name / "__init__.py").write_text(
         f'"""Public exports for the chumicro-{name} package."""\n'
     )
 
     # testing.py stub — delete if the library has no injectable services
-    (lib_dir / "src" / import_name / "testing.py").write_text(
+    (library_dir / "src" / import_name / "testing.py").write_text(
         _TESTING_PY_TEMPLATE.format(name=name, import_name=import_name)
     )
 
     # Tests conftest.py (no __init__.py — avoids module name collisions across libraries)
-    (lib_dir / "tests" / "conftest.py").write_text(
+    (library_dir / "tests" / "conftest.py").write_text(
         f'"""Test configuration for the chumicro-{name} package."""\n'
     )
 
@@ -491,7 +540,7 @@ def _scaffold_library(name: str) -> int:
 
 
 def new_library(name: str) -> int:
-    """Scaffold a new library under libraries/ and regenerate IDE configs."""
+    """Scaffold a new library under libraries/ and regenerate IDE configurations."""
     result = _scaffold_library(name)
     if result != 0:
         return result

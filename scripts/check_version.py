@@ -18,10 +18,10 @@ import subprocess
 from discovery import RELEASE_RELEVANT, ROOT, changed_files
 
 
-def _has_release_tag(lib_name: str) -> bool:
-    """Return True if *lib_name* has at least one release tag (e.g. ``timing-v0.1.0``)."""
+def _has_release_tag(library_name: str) -> bool:
+    """Return True if *library_name* has at least one release tag (e.g. ``timing-v0.1.0``)."""
     result = subprocess.run(
-        ["git", "tag", "-l", f"{lib_name}-v*"],
+        ["git", "tag", "-l", f"{library_name}-v*"],
         capture_output=True,
         text=True,
         cwd=ROOT,
@@ -39,21 +39,21 @@ def _check(base_ref: str) -> int:
 
     # Group changed files by library.
     # Libraries live at libraries/<name>/...
-    libs_needing_bump: set[str] = set()
-    libs_with_bump: set[str] = set()
+    libraries_needing_bump: set[str] = set()
+    libraries_with_bump: set[str] = set()
 
     for path in changed:
         parts = path.split("/")
         if len(parts) < 3 or parts[0] != "libraries":
             continue
 
-        lib_name = parts[1]
+        library_name = parts[1]
 
         # Check if VERSION itself was changed.  The len==3 guard ensures
         # we only match the root-level VERSION file (libraries/<name>/VERSION)
         # and not a hypothetical nested file like libraries/<name>/src/VERSION.
         if parts[2] == "VERSION" and len(parts) == 3:
-            libs_with_bump.add(lib_name)
+            libraries_with_bump.add(library_name)
             continue
 
         # Check if the changed path is release-relevant.
@@ -62,13 +62,13 @@ def _check(base_ref: str) -> int:
         # qualifies (len(parts) >= 3 already holds).  For "pyproject.toml",
         # it matches the filename directly at the library root.
         if parts[2] in RELEASE_RELEVANT:
-            libs_needing_bump.add(lib_name)
+            libraries_needing_bump.add(library_name)
 
-    missing = libs_needing_bump - libs_with_bump
+    missing = libraries_needing_bump - libraries_with_bump
     if missing:
-        for lib in sorted(missing):
+        for library_name in sorted(missing):
             print(
-                f"FAIL: libraries/{lib}/ has release-relevant changes "
+                f"FAIL: libraries/{library_name}/ has release-relevant changes "
                 "but VERSION was not updated."
             )
         print()
@@ -76,22 +76,22 @@ def _check(base_ref: str) -> int:
         print("If only internal changes occurred (no API/behavior change), a patch bump suffices.")
         return 1
 
-    if libs_needing_bump:
-        for lib in sorted(libs_needing_bump):
-            print(f"OK: libraries/{lib}/ — VERSION updated.")
+    if libraries_needing_bump:
+        for library_name in sorted(libraries_needing_bump):
+            print(f"OK: libraries/{library_name}/ — VERSION updated.")
     else:
         print("No release-relevant library changes detected.")
 
     # Warn about new libraries that have never been released.
     # PyPI projects must be created manually before the first publish.
-    all_changed_libs = libs_needing_bump | libs_with_bump
-    for lib in sorted(all_changed_libs):
-        if not _has_release_tag(lib):
+    all_changed_libraries = libraries_needing_bump | libraries_with_bump
+    for library_name in sorted(all_changed_libraries):
+        if not _has_release_tag(library_name):
             print(
-                f"NOTE: libraries/{lib}/ has no release tags — "
+                f"NOTE: libraries/{library_name}/ has no release tags — "
                 "this appears to be a new library.  Before merging, "
                 "ask @chux.maker to create the PyPI project "
-                f"(chumicro-{lib}) so the release workflow can publish."
+                f"(chumicro-{library_name}) so the release workflow can publish."
             )
 
     return 0

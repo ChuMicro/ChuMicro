@@ -120,6 +120,8 @@ def test_setup_source_paths_adds_roots_to_sys_path(tmp_path):
     _make_library(root, "mylib")
     expected = f"{root}/libraries/mylib/src"
 
+    # Save and restore sys.path so that entries injected by
+    # setup_source_paths / run_all don't leak into other tests.
     original_path = sys.path.copy()
     try:
         discovery.setup_source_paths(root)

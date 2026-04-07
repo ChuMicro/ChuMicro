@@ -1,10 +1,10 @@
 """Generate the docs landing page (index.html) for the gh-pages branch.
 
 Auto-discovers all libraries under ``libraries/`` and produces an HTML
-landing page with cards, install snippets, and release channel info.
+landing page with cards, install snippets, and release channel information.
 The generated page follows the dark-mode design used across the site.
 
-Usage (from repo root)::
+Usage (from repository root)::
 
     python scripts/generate_landing_page.py > /tmp/index.html
 
@@ -30,19 +30,19 @@ def _discover_libraries() -> list[dict]:
     if not libraries_dir.is_dir():
         return []
 
-    libs = []
+    libraries = []
     for child in sorted(libraries_dir.iterdir()):
         if not child.is_dir() or not (child / "mkdocs.yml").exists():
             continue
         name = child.name
-        readme = child / "README.md"
+        readme_file = child / "README.md"
         description = ""
-        if readme.exists():
-            text = readme.read_text()
+        if readme_file.exists():
+            readme_text = readme_file.read_text()
             # Extract the first "real" paragraph line from the README.
             # Skip headings (#), blank lines, and table rows (|) — some
             # READMEs have a metadata or badge table near the top.
-            for line in text.splitlines():
+            for line in readme_text.splitlines():
                 stripped = line.strip()
                 if stripped and not stripped.startswith("#") and not stripped.startswith("|"):
                     description = _strip_markdown_links(stripped)
@@ -54,39 +54,44 @@ def _discover_libraries() -> list[dict]:
         mkdocs_text = (child / "mkdocs.yml").read_text()
         has_testing = "testing.md" in mkdocs_text
 
-        libs.append({
+        libraries.append({
             "name": name,
-            "pkg": f"chumicro-{name}",
+            "package": f"chumicro-{name}",
             "description": description,
             "has_testing": has_testing,
         })
-    return libs
+    return libraries
 
 
-def _library_card(lib: dict) -> str:
-    """Return the HTML for a single library card."""
-    name = lib["name"]
-    pkg = lib["pkg"]
-    desc = lib["description"]
+def _library_card(library: dict) -> str:
+    """Return the HTML for a single library card.
+
+    Links are ordered: Guide → API → Testing (if present) → Experimental → Source.
+    The testing link is only shown for libraries whose ``mkdocs.yml``
+    references a ``testing.md`` page.
+    """
+    name = library["name"]
+    package = library["package"]
+    description = library["description"]
 
     links = [
         f'<a href="{name}/stable/guide/">Guide</a>',
         f'<a href="{name}/stable/api/">API</a>',
     ]
-    if lib["has_testing"]:
+    if library["has_testing"]:
         links.append(f'<a href="{name}/stable/testing/">Testing</a>')
     links.append(f'<a href="{name}/experimental/">Experimental</a>')
     links.append(
         f'<a href="https://github.com/ChuMicro/ChuMicro/tree/main/libraries/{name}">Source</a>'
     )
 
-    sep = '\n          <span class="sep">&middot;</span>\n          '
-    card_links = sep.join(links)
+    separator = '\n          <span class="sep">&middot;</span>\n          '
+    card_links = separator.join(links)
 
     return f"""\
       <div class="card">
-        <h2><a href="{name}/stable/">{pkg}</a></h2>
-        <p>{desc}</p>
+        <h2><a href="{name}/stable/">{package}</a></h2>
+        <p>{description}</p>
         <div class="card-links">
           {card_links}
         </div>
@@ -95,12 +100,14 @@ def _library_card(lib: dict) -> str:
 
 def generate() -> str:
     """Return the full landing page HTML."""
-    libs = _discover_libraries()
-    cards = "\n\n".join(_library_card(lib) for lib in libs)
+    libraries = _discover_libraries()
+    cards = "\n\n".join(_library_card(library) for library in libraries)
 
     # Use the first library name for install examples
-    first_pkg = libs[0]["pkg"] if libs else "chumicro-timing"
-    first_import = re.sub(r"-", "_", first_pkg)
+    first_package = libraries[0]["package"] if libraries else "chumicro-timing"
+    # Convert the pip package name (chumicro-timing) to a Python import name
+    # (chumicro_timing) for the mip install example.
+    first_import = re.sub(r"-", "_", first_package)
 
     return f"""\
 <!DOCTYPE html>
@@ -221,12 +228,12 @@ def generate() -> str:
       <h2>Install</h2>
       <div class="install-block">
         <h3>pip (CPython)</h3>
-        <pre>pip install {first_pkg}</pre>
+        <pre>pip install {first_package}</pre>
       </div>
       <div class="install-block">
         <h3>circup (CircuitPython)</h3>
         <pre>circup bundle-add ChuMicro/ChuMicro-Bundle
-circup install {first_pkg}</pre>
+circup install {first_package}</pre>
       </div>
       <div class="install-block">
         <h3>mip (MicroPython)</h3>

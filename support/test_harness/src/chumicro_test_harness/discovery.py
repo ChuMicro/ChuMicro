@@ -18,7 +18,11 @@ from .runner import run_module
 
 
 def _is_dir(path):
-    """Return True if *path* is an existing directory."""
+    """Return True if *path* is an existing directory.
+
+    Uses ``os.listdir`` instead of ``os.path.isdir`` because ``os.path``
+    is not available on all CircuitPython builds.
+    """
     try:
         os.listdir(path)
         return True
@@ -27,7 +31,12 @@ def _is_dir(path):
 
 
 def _sorted_listdir(path):
-    """Return a sorted listing of *path*, or an empty list on failure."""
+    """Return a sorted listing of *path*, or an empty list on failure.
+
+    Sorting guarantees deterministic test ordering across runtimes and
+    filesystems.  Returns an empty list rather than raising when the
+    directory does not exist, which simplifies callers.
+    """
     try:
         entries = os.listdir(path)
         entries.sort()
@@ -36,39 +45,41 @@ def _sorted_listdir(path):
         return []
 
 
-def discover_source_roots(root="."):
+def discover_source_roots(root_dir="."):
     """Return ``src/`` directories under ``libraries/`` and ``support/``.
 
-    *root* is the workspace root directory, defaulting to the current
+    *root_dir* is the workspace root directory, defaulting to the current
     working directory.
     """
-    roots = []
+    source_roots = []
     for parent in ("libraries", "support"):
-        parent_path = root + "/" + parent if root != "." else parent
-        for name in _sorted_listdir(parent_path):
-            src = parent_path + "/" + name + "/src"
-            if _is_dir(src):
-                roots.append(src)
-    return roots
+        # String concatenation instead of os.path.join — os.path may not
+        # exist on CircuitPython (see module docstring).
+        parent_dir = root_dir + "/" + parent if root_dir != "." else parent
+        for name in _sorted_listdir(parent_dir):
+            src_dir = parent_dir + "/" + name + "/src"
+            if _is_dir(src_dir):
+                source_roots.append(src_dir)
+    return source_roots
 
 
-def discover_tests(root=".", libraries=None):
+def discover_tests(root_dir=".", libraries=None):
     """Return paths to all ``test_*.py`` files under ``libraries/*/tests/``.
 
-    *root* is the workspace root directory, defaulting to the current
+    *root_dir* is the workspace root directory, defaulting to the current
     working directory.
 
     *libraries* is an optional list of library names to include.  When
     ``None``, all libraries are discovered.  Used by platform targeting
     to skip libraries that don't target the current runtime.
     """
-    libs_path = root + "/libraries" if root != "." else "libraries"
-    lib_filter = set(libraries) if libraries else None
-    tests = []
-    for name in _sorted_listdir(libs_path):
-        if lib_filter is not None and name not in lib_filter:
+    libraries_dir = root_dir + "/libraries" if root_dir != "." else "libraries"
+    library_filter = set(libraries) if libraries else None
+    test_files = []
+    for name in _sorted_listdir(libraries_dir):
+        if library_filter is not None and name not in library_filter:
             continue
-        tests_dir = libs_path + "/" + name + "/tests"
+        tests_dir = libraries_dir + "/" + name + "/tests"
         for filename in _sorted_listdir(tests_dir):
             if filename.startswith("test_") and filename.endswith(".py"):
                 # Skip pytest-only tests — they use fixtures or assertions
@@ -76,22 +87,27 @@ def discover_tests(root=".", libraries=None):
                 # See Decision 0016 (referenced in module docstring).
                 if filename.endswith("_pytest.py"):
                     continue
-                tests.append(tests_dir + "/" + filename)
-    return tests
+                test_files.append(tests_dir + "/" + filename)
+    return test_files
 
 
-def setup_source_paths(root="."):
+def setup_source_paths(root_dir="."):
     """Insert discovered source roots into ``sys.path`` so library imports resolve."""
-    for src_root in discover_source_roots(root):
-        if src_root not in sys.path:
-            sys.path.insert(0, src_root)
+    for source_root_dir in discover_source_roots(root_dir):
+        if source_root_dir not in sys.path:
+            sys.path.insert(0, source_root_dir)
 
 
 class _Namespace:
-    """Attribute container for exec'd module globals."""
+    """Attribute container that mimics a module object for ``exec``'d code.
+
+    ``exec()`` populates a plain ``dict``, but :func:`run_module` iterates
+    over attributes via ``dir()`` and ``getattr()``.  This class bridges the
+    two by copying dict entries into object attributes.
+    """
 
 
-def _exec_as_namespace(path, name="__main__", package=""):
+def _exec_as_namespace(file_path, name="__main__", package=""):
     """Execute a ``.py`` file and return a namespace object with its globals.
 
     Uses ``exec()`` rather than the standard import machinery because
@@ -99,45 +115,53 @@ def _exec_as_namespace(path, name="__main__", package=""):
     ``test_core.py``), and MicroPython/CircuitPython lack
     ``importlib.util`` for file-path-based imports.
     """
-    namespace = {"__name__": name, "__file__": path, "__package__": package}
-    with open(path) as source_file:
+    # Seed the exec namespace with dunder attributes so the file "feels"
+    # like a real module to any code that inspects __name__ or __package__.
+    namespace = {"__name__": name, "__file__": file_path, "__package__": package}
+    with open(file_path) as source_file:
         exec(source_file.read(), namespace)
+    # Convert dict → attribute object so run_module can use dir()/getattr().
     result = _Namespace()
     for key in namespace:
         setattr(result, key, namespace[key])
     return result
 
 
-def run_all(root=".", libraries=None):
+def run_all(root_dir=".", libraries=None):
     """Discover and run all cross-runtime unit tests, returning a shell exit code.
 
-    *root* is the workspace root directory, defaulting to the current
+    *root_dir* is the workspace root directory, defaulting to the current
     working directory.
 
     *libraries* is an optional list of library names to include.
     """
-    setup_source_paths(root)
+    setup_source_paths(root_dir)
 
-    test_files = discover_tests(root, libraries=libraries)
+    test_files = discover_tests(root_dir, libraries=libraries)
     if not test_files:
         print("NO TESTS FOUND")
         return 0
 
     total_failed = 0
     skipped = 0
-    for path in test_files:
-        print(f"== {path} ==")
+    for test_file in test_files:
+        print(f"== {test_file} ==")
         try:
-            test_mod = _exec_as_namespace(path)
-        except ImportError as exc:
+            test_module = _exec_as_namespace(test_file)
+        except ImportError as error:
+            # ImportError usually means the file depends on a pytest-only
+            # fixture or a CPython-only module.  Skip gracefully so the
+            # remaining test files still run.
             skipped += 1
-            print(f"SKIP {path} (import failed: {exc})")
+            print(f"SKIP {test_file} (import failed: {error})")
             continue
-        except Exception as exc:
+        except Exception as error:
+            # Non-import errors (SyntaxError, RuntimeError, etc.) indicate
+            # a genuine problem in the test file — count as a failure.
             total_failed += 1
-            print(f"ERROR loading {path}: {exc}")
+            print(f"ERROR loading {test_file}: {error}")
             continue
-        result = run_module(test_mod)
+        result = run_module(test_module)
         if result != 0:
             total_failed += 1
 

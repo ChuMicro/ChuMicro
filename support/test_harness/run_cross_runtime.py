@@ -15,6 +15,9 @@ Run from the repo root::
 
 import sys
 
+# Bootstrap: the harness package isn't pip-installed, so add its src/
+# directory to sys.path manually before importing.  This script is always
+# invoked from the repo root, making the relative path stable.
 sys.path.insert(0, "support/test_harness/src")
 
 from chumicro_test_harness.discovery import run_all  # noqa: E402

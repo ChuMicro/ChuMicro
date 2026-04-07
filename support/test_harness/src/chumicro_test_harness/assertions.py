@@ -28,13 +28,13 @@ class raises:
         """Enter the assertion context."""
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_value, exc_traceback):
         """Check that the expected exception was raised."""
         if exc_type is None:
             raise AssertionError(
                 f"Expected {self.expected.__name__} but no exception was raised"
             )
         if issubclass(exc_type, self.expected):
-            self.exception = exc_val
+            self.exception = exc_value
             return True  # suppress the expected exception
         return False  # let unexpected exceptions propagate

@@ -54,21 +54,21 @@ def _read_prepared_binary(marker_name: str) -> str | None:
     ``.tools/micropython.path``) so other commands can find it without
     recompiling.
     """
-    marker = TOOLS / marker_name
-    if not marker.exists():
+    marker_file = TOOLS / marker_name
+    if not marker_file.exists():
         return None
-    candidate = Path(marker.read_text().strip())
-    if candidate.exists():
-        return str(candidate)
+    candidate_file = Path(marker_file.read_text().strip())
+    if candidate_file.exists():
+        return str(candidate_file)
     return None
 
 
 def resolve_micropython_binary(binary: str | None = None) -> str | None:
-    """Resolve a MicroPython binary from an explicit path, repo-local tools, or PATH.
+    """Resolve a MicroPython binary from an explicit path, repository-local tools, or PATH.
 
     Resolution order (first match wins):
       1. *binary* — explicit override from CLI (``--micropython-binary``).
-      2. Marker file from ``prepare-micropython`` — local repo-managed build.
+      2. Marker file from ``prepare-micropython`` — local repository-managed build.
       3. System PATH lookup — globally installed binary as last resort.
     """
     if binary:
@@ -80,11 +80,11 @@ def resolve_micropython_binary(binary: str | None = None) -> str | None:
 
 
 def resolve_circuitpython_binary(binary: str | None = None) -> str | None:
-    """Resolve a CircuitPython binary from an explicit path, repo-local tools, or PATH.
+    """Resolve a CircuitPython binary from an explicit path, repository-local tools, or PATH.
 
     Resolution order (first match wins):
       1. *binary* — explicit override from CLI (``--circuitpython-binary``).
-      2. Marker file from ``prepare-circuitpython`` — local repo-managed build.
+      2. Marker file from ``prepare-circuitpython`` — local repository-managed build.
       3. System PATH lookup — globally installed binary as last resort.
     """
     if binary:

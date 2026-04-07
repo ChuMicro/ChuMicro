@@ -4,6 +4,11 @@ Centralises library discovery, shared-CSS copy, mike deploy loop, and
 landing-page injection that the CI workflow and local preview share.
 
 Called as ``python scripts/run.py docs-deploy --channel <channel>``.
+
+This module manages the ``gh-pages`` branch layout where each library
+gets its own deploy prefix (subdirectory).  For example, the timing
+library's stable docs live at ``/timing/stable/`` on gh-pages.  The
+``mike`` tool handles versioned deployments within each prefix.
 """
 
 from __future__ import annotations
@@ -19,14 +24,16 @@ from discovery import ROOT, discover_package_dirs
 
 # Absolute path to the mike CLI installed alongside the active interpreter.
 # mike manages versioned MkDocs deployments on a git branch (gh-pages).
+# We use the absolute path rather than just "mike" to ensure we pick up
+# the correct installation even when the venv is not activated.
 MIKE = str(Path(sys.executable).parent / "mike")
 
 
 def discover_doc_dirs() -> list[Path]:
     """Return publishable library directories that contain a ``mkdocs.yml``."""
     return [
-        d for d in discover_package_dirs()
-        if d.parent.name == "libraries" and (d / "mkdocs.yml").exists()
+        package_dir for package_dir in discover_package_dirs()
+        if package_dir.parent.name == "libraries" and (package_dir / "mkdocs.yml").exists()
     ]
 
 
@@ -39,26 +46,29 @@ def copy_shared_docs_assets(doc_dirs: list[Path]) -> None:
     The generated copies are gitignored.
     """
     shared_dir = ROOT / "support" / "docs"
-    for pkg_dir in doc_dirs:
-        css_src = shared_dir / "extra.css"
-        if css_src.exists():
-            css_dest = pkg_dir / "docs" / "stylesheets" / "extra.css"
-            css_dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(css_src, css_dest)
+    for library_dir in doc_dirs:
+        css_source_file = shared_dir / "extra.css"
+        if css_source_file.exists():
+            css_dest_file = library_dir / "docs" / "stylesheets" / "extra.css"
+            css_dest_file.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(css_source_file, css_dest_file)
 
-        favicon_src = shared_dir / "favicon.png"
-        if favicon_src.exists():
-            fav_dest = pkg_dir / "docs" / "img" / "favicon.png"
-            fav_dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(favicon_src, fav_dest)
+        favicon_source_file = shared_dir / "favicon.png"
+        if favicon_source_file.exists():
+            favicon_dest_file = library_dir / "docs" / "img" / "favicon.png"
+            favicon_dest_file.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(favicon_source_file, favicon_dest_file)
 
 
 def inject_landing_page(branch: str) -> None:
     """Generate the landing page and commit it to *branch*.
 
-    Uses a temporary git index to add ``index.html`` and
+    Uses git plumbing commands (hash-object, update-index, write-tree,
+    commit-tree, update-ref) to add ``index.html`` and
     ``assets/images/favicon.png`` to the root of *branch* without
-    touching the working tree or requiring a checkout.
+    touching the working tree or requiring a checkout.  This approach
+    avoids disrupting the user's current branch while modifying the
+    gh-pages branch in-place.
     """
     try:
         from generate_landing_page import generate
@@ -75,19 +85,22 @@ def inject_landing_page(branch: str) -> None:
     ).stdout.strip().decode()
 
     # Hash the favicon if it exists.
-    favicon_src = ROOT / "support" / "docs" / "favicon.png"
+    favicon_source_file = ROOT / "support" / "docs" / "favicon.png"
     favicon_blob = None
-    if favicon_src.exists():
+    if favicon_source_file.exists():
         favicon_blob = subprocess.run(
-            ["git", "hash-object", "-w", str(favicon_src)],
+            ["git", "hash-object", "-w", str(favicon_source_file)],
             capture_output=True, cwd=ROOT,
         ).stdout.strip().decode()
 
     # Build an updated tree using a temporary index so nested paths
-    # (assets/images/favicon.png) are handled automatically.
-    fd, temp_index = tempfile.mkstemp(suffix=".idx")
-    os.close(fd)
-    env = {**os.environ, "GIT_INDEX_FILE": temp_index}
+    # (assets/images/favicon.png) are handled automatically.  A temporary
+    # index file isolates these operations from the user's working tree
+    # — git commands that read GIT_INDEX_FILE operate on this file instead
+    # of the default .git/index.
+    file_descriptor, temp_index_file = tempfile.mkstemp(suffix=".idx")
+    os.close(file_descriptor)
+    env = {**os.environ, "GIT_INDEX_FILE": temp_index_file}
     try:
         # Seed the temp index with the current branch tree.
         subprocess.run(
@@ -116,10 +129,10 @@ def inject_landing_page(branch: str) -> None:
             env=env, capture_output=True, cwd=ROOT, check=True,
         ).stdout.strip().decode()
     finally:
-        Path(temp_index).unlink(missing_ok=True)
+        Path(temp_index_file).unlink(missing_ok=True)
 
     # Create a commit and fast-forward the branch — only if the tree changed.
-    parent = subprocess.run(
+    parent_commit = subprocess.run(
         ["git", "rev-parse", branch],
         capture_output=True, cwd=ROOT,
     ).stdout.strip().decode()
@@ -133,27 +146,27 @@ def inject_landing_page(branch: str) -> None:
         print("  Landing page unchanged — skipping commit.")
         return
 
-    commit = subprocess.run(
-        ["git", "commit-tree", new_tree, "-p", parent,
+    new_commit = subprocess.run(
+        ["git", "commit-tree", new_tree, "-p", parent_commit,
          "-m", "Regenerate landing page"],
         capture_output=True, cwd=ROOT,
     ).stdout.strip().decode()
 
     subprocess.run(
-        ["git", "update-ref", f"refs/heads/{branch}", commit],
+        ["git", "update-ref", f"refs/heads/{branch}", new_commit],
         cwd=ROOT, check=True,
     )
 
 
 def _run(command: list[str]) -> int:
-    """Run a command from the repo root and return its exit code."""
+    """Run a command from the repository root and return its exit code."""
     print(f"+ {' '.join(command)}")
     return subprocess.run(command, cwd=ROOT, check=False).returncode
 
 
-def _read_version(lib_dir: Path) -> str | None:
+def _read_version(library_dir: Path) -> str | None:
     """Read a library's ``VERSION`` file, or return ``None``."""
-    version_file = lib_dir / "VERSION"
+    version_file = library_dir / "VERSION"
     if not version_file.exists():
         return None
     return version_file.read_text().strip() or None
@@ -181,21 +194,21 @@ def docs_deploy(
     """
     doc_dirs = discover_doc_dirs()
     if libraries:
-        doc_dirs = [d for d in doc_dirs if d.name in libraries]
+        doc_dirs = [doc_dir for doc_dir in doc_dirs if doc_dir.name in libraries]
     if not doc_dirs:
         print("No libraries with mkdocs.yml found.")
         return 1
 
     copy_shared_docs_assets(doc_dirs)
 
-    for lib_dir in doc_dirs:
-        lib_name = lib_dir.name
+    for library_dir in doc_dirs:
+        library_name = library_dir.name
 
         # Determine the version label and URL alias for this library.
         # Stable channel reads the actual version from the VERSION file;
         # experimental always deploys as "dev" with an "experimental" alias.
         if channel == "stable":
-            version = _read_version(lib_dir)
+            version = _read_version(library_dir)
             if version:
                 alias = "stable"
             else:
@@ -205,35 +218,35 @@ def docs_deploy(
             version = "dev"
             alias = "experimental"
 
-        print(f"== deploy {lib_name} {version} ({alias}) ==")
+        print(f"== deploy {library_name} {version} ({alias}) ==")
         exit_code = _run([
             MIKE, "deploy",
-            "--deploy-prefix", lib_name,
+            "--deploy-prefix", library_name,
             "-b", branch,
-            "-F", str(lib_dir / "mkdocs.yml"),
+            "-F", str(library_dir / "mkdocs.yml"),
             "--alias-type", "redirect",
             "--update-aliases",
             version, alias,
         ])
         if exit_code != 0:
-            print(f"Docs deploy failed: {lib_name}")
+            print(f"Docs deploy failed: {library_name}")
             return exit_code
 
     # For stable deploys, set the "stable" alias as the default landing
     # page for each library so bare URLs (e.g. /timing/) redirect to the
     # latest stable version.
     if channel == "stable":
-        for lib_dir in doc_dirs:
-            lib_name = lib_dir.name
+        for library_dir in doc_dirs:
+            library_name = library_dir.name
             exit_code = _run([
                 MIKE, "set-default",
-                "--deploy-prefix", lib_name,
+                "--deploy-prefix", library_name,
                 "-b", branch,
-                "-F", str(lib_dir / "mkdocs.yml"),
+                "-F", str(library_dir / "mkdocs.yml"),
                 "stable",
             ])
             if exit_code != 0:
-                print(f"set-default failed: {lib_name}")
+                print(f"set-default failed: {library_name}")
                 return exit_code
 
     inject_landing_page(branch)
