@@ -190,8 +190,8 @@ These patterns caused real bugs when implemented incorrectly. Follow them exactl
    - `TaskHandle`, `Runner` (gate-based service with shared timestamps and batch firing)
    - `CallRecorder` in `testing` submodule
    - 100% test coverage
-5. `libraries/compat/` provides cross-runtime polyfills (`chumicro-compat` 0.1.11): `functools.partial` with a pure-Python fallback for MicroPython/CircuitPython.
-6. `libraries/msgpack/` provides cross-runtime MessagePack serialization (`chumicro-msgpack` 0.1.11): `packb`, `unpackb`, `pack`, `unpack`. Delegates to CircuitPython's native C `msgpack` when available; otherwise uses a pure-Python encoder/decoder.
+5. `libraries/compat/` provides cross-runtime polyfills: `functools.partial` with a pure-Python fallback for MicroPython/CircuitPython.
+6. `libraries/msgpack/` provides cross-runtime MessagePack serialization: `packb`, `unpackb`, `pack`, `unpack`. Delegates to CircuitPython's native C `msgpack` when available; otherwise uses a pure-Python encoder/decoder.
 7. `scripts/run.py` provides all task entrypoints with auto-discovery:
    - `setup`, `sync-ide`, `new-library`, `lint`, `test`, `build`, `preflight`
    - `verify-examples`, `docs`

@@ -36,10 +36,10 @@ Chumicro is a mono-workspace for Python libraries that target CPython, MicroPyth
 3. Implemented code slices:
    - `support/runtime/` for reusable runtime detection
    - `support/test_harness/` for a tiny on-device test runner
-   - `libraries/timing/` as the first publishable timing library (`chumicro-timing` 0.1.11)
-   - `libraries/runner/` as the second publishable library (`chumicro-runner` 0.1.11) — gate-based service pattern with shared timestamps, period gating, and batch handler firing (Decision 0014)
-   - `libraries/compat/` as a cross-runtime compatibility polyfill library (`chumicro-compat` 0.1.11) — provides `functools.partial` with a pure-Python fallback for MicroPython/CircuitPython
-   - `libraries/msgpack/` as a cross-runtime MessagePack serialization library (`chumicro-msgpack` 0.1.11) — `packb`/`unpackb`/`pack`/`unpack`, delegates to native C `msgpack` on CircuitPython hardware
+   - `libraries/timing/` as the first publishable timing library
+   - `libraries/runner/` as the second publishable library — gate-based service pattern with shared timestamps, period gating, and batch handler firing (Decision 0014)
+   - `libraries/compat/` as a cross-runtime compatibility polyfill library — provides `functools.partial` with a pure-Python fallback for MicroPython/CircuitPython
+   - `libraries/msgpack/` as a cross-runtime MessagePack serialization library — `packb`/`unpackb`/`pack`/`unpack`, delegates to native C `msgpack` on CircuitPython hardware
    - `scripts/run.py` as the task runner with auto-discovery, scoped testing, library scaffolding, IDE config generation, example verification, and docs build
    - `scripts/prepare_workspace.py` for initial workspace setup
    - `conftest.py` at root for auto-discovery of source roots and functional_tests exclusion
