@@ -159,8 +159,13 @@ def _read_version(lib_dir: Path) -> str | None:
     return version_file.read_text().strip() or None
 
 
-def docs_deploy(channel: str, *, branch: str = "gh-pages") -> int:
-    """Deploy docs for all libraries to *branch*.
+def docs_deploy(
+    channel: str,
+    *,
+    branch: str = "gh-pages",
+    libraries: list[str] | None = None,
+) -> int:
+    """Deploy docs for libraries to *branch*.
 
     *channel* is ``"experimental"`` or ``"stable"``:
 
@@ -169,9 +174,14 @@ def docs_deploy(channel: str, *, branch: str = "gh-pages") -> int:
       alias ``stable``.  Libraries without a ``VERSION`` deploy as
       ``dev`` / ``experimental``.
 
+    When *libraries* is provided, only deploy those library names
+    (e.g. ``["timing", "runner"]``).  When ``None``, deploy all.
+
     After deploying, injects the generated landing page into *branch*.
     """
     doc_dirs = discover_doc_dirs()
+    if libraries:
+        doc_dirs = [d for d in doc_dirs if d.name in libraries]
     if not doc_dirs:
         print("No libraries with mkdocs.yml found.")
         return 1

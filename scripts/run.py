@@ -671,6 +671,10 @@ def _build_parser() -> argparse.ArgumentParser:
         required=True,
         help="docs channel to deploy",
     )
+    deploy_parser.add_argument(
+        "--libraries",
+        help="comma-separated list of libraries to deploy (default: all)",
+    )
 
     # Scoped tasks
     test_parser = subparsers.add_parser(
@@ -768,7 +772,8 @@ def main(argv: list[str]) -> int:
 
     # --- docs-deploy ---
     if args.task == "docs-deploy":
-        return _docs_deploy(args.channel)
+        lib_filter = args.libraries.split(",") if args.libraries else None
+        return _docs_deploy(args.channel, libraries=lib_filter)
 
     # --- tasks that accept runtime binary overrides ---
     if args.task in {

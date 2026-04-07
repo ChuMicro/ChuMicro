@@ -315,18 +315,72 @@ def _collect_library_metadata(root: Path) -> list[dict]:
     return entries
 
 
+def _collect_bundle_metadata(root: Path, bundle_dir: Path) -> list[dict]:
+    """Collect metadata only for libraries present in *bundle_dir*.
+
+    Scans *bundle_dir* for ``chumicro_*`` package directories with a
+    ``package.json``, reads the version from each manifest, and pulls
+    the description from the source workspace.
+    """
+    pkg_dirs = sorted(
+        d for d in bundle_dir.iterdir()
+        if d.is_dir() and d.name.startswith("chumicro_") and (d / "package.json").exists()
+    )
+    if not pkg_dirs:
+        return []
+
+    # Build a description lookup from the source workspace.
+    all_metadata = {m["pkg_name"]: m for m in _collect_library_metadata(root)}
+
+    entries = []
+    for pkg_dir in pkg_dirs:
+        pkg_name = pkg_dir.name  # e.g. "chumicro_timing"
+        with open(pkg_dir / "package.json") as f:
+            manifest = json.load(f)
+        version = manifest.get("version", "unknown")
+
+        # Derive the short name (e.g. "timing" from "chumicro_timing").
+        name = pkg_name.removeprefix("chumicro_")
+
+        source = all_metadata.get(pkg_name, {})
+        description = source.get("description", "")
+
+        entries.append(
+            {
+                "name": name,
+                "pkg_name": pkg_name,
+                "version": version,
+                "description": description,
+            }
+        )
+    return entries
+
+
 #: GitHub org and source repo used for README links.
 _GITHUB_ORG = "ChuMicro"
 _SOURCE_REPO = "ChuMicro"
 
 
-def generate_bundle_readme(root: Path, *, experimental: bool = False) -> str:
+def generate_bundle_readme(
+    root: Path,
+    *,
+    experimental: bool = False,
+    bundle_dir: Path | None = None,
+) -> str:
     """Generate a rich README.md for a bundle repo.
 
     Reads library metadata from the workspace and produces markdown with
     install instructions and a library table linking back to the source repo.
+
+    When *bundle_dir* is provided, only libraries whose packages actually
+    exist in that directory are included (with versions from their
+    ``package.json``).  This prevents the README from referencing
+    libraries that haven't been published to the bundle repo yet.
     """
-    libraries = _collect_library_metadata(root)
+    if bundle_dir is not None:
+        libraries = _collect_bundle_metadata(root, bundle_dir)
+    else:
+        libraries = _collect_library_metadata(root)
     bundle_repo = EXPERIMENTAL_BUNDLE_REPO if experimental else STABLE_BUNDLE_REPO
     channel = "Experimental" if experimental else "Stable"
     source_url = f"https://github.com/{_GITHUB_ORG}/{_SOURCE_REPO}"
@@ -532,6 +586,11 @@ def main() -> None:
     readme_parser.add_argument(
         "-o", "--output", type=Path, help="Write to file instead of stdout"
     )
+    readme_parser.add_argument(
+        "--bundle-dir", type=Path, default=None,
+        help="Only include libraries present in this directory "
+        "(reads versions from package.json)",
+    )
 
     # circup zip generation command.
     zip_parser = subparsers.add_parser(
@@ -559,7 +618,9 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "readme":
-        content = generate_bundle_readme(ROOT, experimental=args.experimental)
+        content = generate_bundle_readme(
+            ROOT, experimental=args.experimental, bundle_dir=args.bundle_dir,
+        )
         if args.output:
             args.output.write_text(content)
             print(f"Wrote {args.output}")
