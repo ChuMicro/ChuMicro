@@ -13,14 +13,15 @@ This skill covers the full workflow from scaffolding a new library through makin
 python scripts/run.py new-library <name>
 ```
 
-This creates `libraries/<name>/` with the full directory tree, regenerates IDE configs, and prints what was created. Verify:
+This creates `libraries/<name>/` with the full directory tree (including a starter class in `core.py`, a passing test file, and a working example), regenerates IDE configs, and prints what was created. The scaffold is immediately runnable — tests pass at 100% coverage, lint is clean, and the example executes. Verify:
 
 ```bash
-ls libraries/<name>/VERSION
-ls libraries/<name>/src/chumicro_<name>/__init__.py
+python scripts/run.py test --libraries <name> 2>&1 | tail -5
 ```
 
 ## 2. Write the implementation
+
+The scaffold creates a starter class in `src/chumicro_<name>/core.py` that demonstrates constructor injection, Google-style docstrings, and a `check(now_ms)` method. Replace it with your real code.
 
 Put production code in `src/chumicro_<name>/`.
 
