@@ -47,6 +47,23 @@ def test_resolve_prefers_supervisor_ticks_ms(monkeypatch) -> None:
     assert resolved() == 5678
 
 
+def test_resolve_skips_non_callable_supervisor_ticks_ms(monkeypatch) -> None:
+    """supervisor.ticks_ms should be skipped when it exists but is not callable."""
+    monkeypatch.setattr(
+        ticks_module,
+        "_try_import_supervisor",
+        lambda: SimpleNamespace(ticks_ms=42),  # int, not callable
+    )
+    monkeypatch.setattr(
+        ticks_module,
+        "time",
+        SimpleNamespace(ticks_ms=lambda: 9999, monotonic=lambda: 0.0),
+    )
+
+    resolved = ticks_module._resolve_ticks_ms()
+    assert resolved() == 9999
+
+
 def test_resolve_falls_back_to_time_ticks_ms(monkeypatch) -> None:
     """time.ticks_ms should be used when supervisor is unavailable."""
     monkeypatch.setattr(ticks_module, "_try_import_supervisor", lambda: None)

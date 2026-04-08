@@ -124,6 +124,7 @@ plugins:
           paths:
             - src
           options:
+            docstring_style: google
             show_source: false
             show_root_heading: true
             members_order: source

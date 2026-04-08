@@ -32,7 +32,7 @@ class _PurePythonPartial:
         """Create a partial object.
 
         Args:
-            func: Callable to wrap.  Raises ``TypeError`` if not
+            func (callable): Callable to wrap.  Raises ``TypeError`` if not
                 callable.
             *args: Positional arguments to freeze.
             **keywords: Keyword arguments to freeze.
@@ -59,5 +59,5 @@ class _PurePythonPartial:
 
 try:
     from functools import partial  # noqa: F401 — CPython; re-exported.
-except ImportError:
+except ImportError:  # pragma: no cover — MicroPython/CircuitPython fallback
     partial = _PurePythonPartial

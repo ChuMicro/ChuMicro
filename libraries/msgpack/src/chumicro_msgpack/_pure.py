@@ -262,6 +262,12 @@ def packb(obj):
     then copies to ``bytes``.  For small payloads this is fine; for
     larger data or tight loops, prefer ``pack(obj, stream)`` to write
     directly to a destination without the intermediate allocation.
+
+    Args:
+        obj (object): Python object to serialize.
+
+    Returns:
+        data (bytes): Msgpack-encoded data.
     """
     buffer = bytearray()
     _encode(obj, buffer)
@@ -269,7 +275,14 @@ def packb(obj):
 
 
 def unpackb(data):
-    """Unpack msgpack *data* (bytes, bytearray, or memoryview) to a Python object."""
+    """Unpack msgpack *data* to a Python object.
+
+    Args:
+        data (bytes | bytearray | memoryview): Msgpack-encoded data.
+
+    Returns:
+        result (object): Deserialized Python object.
+    """
     if not isinstance(data, memoryview):
         data = memoryview(data)
     result, _ = _decode(data, 0)
@@ -284,9 +297,21 @@ try:
     from msgpack import pack, unpack  # CircuitPython C built-in
 except ImportError:
     def pack(obj, stream):
-        """Pack *obj* to *stream* in msgpack format."""
+        """Pack *obj* to *stream* in msgpack format.
+
+        Args:
+            obj (object): Python object to serialize.
+            stream (object): Writable stream with a ``write()`` method.
+        """
         stream.write(packb(obj))
 
     def unpack(stream):
-        """Unpack one object from *stream*."""
+        """Unpack one object from *stream*.
+
+        Args:
+            stream (object): Readable stream with a ``read()`` method.
+
+        Returns:
+            result (object): Deserialized Python object.
+        """
         return unpackb(stream.read())

@@ -22,7 +22,7 @@ except ImportError:  # pragma: no cover - gc may be absent on some CPython confi
 # time.monotonic(); MicroPython only has time.ticks_ms().
 if hasattr(time, "monotonic"):
 	_now_seconds = time.monotonic
-else:
+else:  # pragma: no cover — MicroPython fallback; time.monotonic always exists on CPython.
 	def _now_seconds():
 		"""Return monotonic seconds from MicroPython's ``ticks_ms``."""
 		return time.ticks_ms() / 1000
@@ -90,7 +90,8 @@ def run_module(module):
 
 		PASS <name> (<duration>s)
 		FAIL <name> (<duration>s)
-		HEAP <bytes> bytes free [optional delta]
+		HEAP <bytes> bytes free
+		HEAP <bytes> bytes free (delta <+/-bytes> bytes)
 		SUMMARY total=<n> failed=<n> time=<seconds>s
 		NO TESTS FOUND
 	"""
@@ -124,7 +125,9 @@ def run_module(module):
 
 	memory_after = _memory_free()
 	if memory_after is not None:
-		print(f"HEAP {memory_after} bytes free (delta {memory_after - memory_before})")
+		delta = memory_after - memory_before
+		sign = "+" if delta >= 0 else ""
+		print(f"HEAP {memory_after} bytes free (delta {sign}{delta} bytes)")
 
 	print(f"SUMMARY total={total} failed={failed} time={total_duration:.3f}s")
 	return 1 if failed else 0

@@ -123,7 +123,20 @@ def test_run_module_reports_heap_when_available(monkeypatch, capsys) -> None:
     output = capsys.readouterr().out
 
     assert "HEAP 50000 bytes free" in output
-    assert "delta" in output
+    assert "delta +0 bytes" in output
+
+
+def test_run_module_skips_non_callable_test_attributes(capsys) -> None:
+    """Attributes named test_* that are not callable should be silently skipped."""
+    module = SimpleNamespace(test_value=42, test_ok=lambda: None)
+
+    result = run_module(module)
+    output = capsys.readouterr().out
+
+    assert result == 0
+    assert "PASS test_ok" in output
+    assert "test_value" not in output
+    assert "SUMMARY total=1 failed=0" in output
 
 
 def test_memory_free_returns_none_without_gc_mem_free(monkeypatch) -> None:

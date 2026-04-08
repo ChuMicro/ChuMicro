@@ -146,7 +146,7 @@ def test_cpython(
 
     Runs pytest separately for each package to avoid test-directory name
     collisions (Decision 0009), then combines and reports coverage.  Each
-    library must independently meet the coverage threshold (90%) unless
+    library must independently meet the coverage threshold (94%) unless
     *filter_expression* is set (filtering naturally reduces coverage) or *no_cov*
     skips coverage entirely.
 
@@ -194,7 +194,7 @@ def test_cpython(
 
     # Relax coverage gates when either:
     #   - filter_expression is set (selecting a subset of tests naturally
-    #     reduces branch coverage below the 90% threshold), or
+    #     reduces branch coverage below the 94% threshold), or
     #   - no_cov is set (user explicitly opted out of coverage).
     relax_coverage = bool(filter_expression) or no_cov
     cov_gate_args = ["--cov-fail-under=0"] if relax_coverage else []
@@ -317,6 +317,10 @@ def docs(package_dirs: list[Path], *, serve: bool = False) -> int:
 
     If *serve* is True, starts a live-reload dev server for the first
     selected library instead of building static output.
+
+    The build captures stderr and fails if griffe emits any warnings
+    (e.g. missing or malformed docstring type annotations).  This
+    enforces Decision 0021 (docstring type policy).
     """
     # Keep only packages that have a mkdocs.yml
     doc_dirs = [
@@ -344,15 +348,37 @@ def docs(package_dirs: list[Path], *, serve: bool = False) -> int:
         relative_path = library_dir.relative_to(ROOT)
         site_dir = library_dir / "site"
         print(f"== docs {relative_path} ==")
-        exit_code = _run(
-            [PYTHON, "-m", "zensical", "build",
-             "-f", str(library_dir / "mkdocs.yml")],
+        command = [
+            PYTHON, "-m", "zensical", "build",
+            "-f", str(library_dir / "mkdocs.yml"),
+        ]
+        printable_command = " ".join(command)
+        print(f"+ {printable_command}")
+        completed = subprocess.run(
+            command, cwd=ROOT, capture_output=True, text=True,
         )
-        if exit_code != 0:
+        # Print stdout/stderr so the user sees build progress.
+        if completed.stdout:
+            print(completed.stdout, end="")
+        if completed.stderr:
+            print(completed.stderr, end="")
+
+        if completed.returncode != 0:
             print(f"Docs build failed: {relative_path}")
-            overall_exit_code = exit_code
+            overall_exit_code = completed.returncode
         else:
-            print(f"  Built: {site_dir.relative_to(ROOT)}/")
+            # Fail on griffe warnings (Decision 0021).
+            griffe_warnings = [
+                line for line in completed.stderr.splitlines()
+                if "griffe" in line.lower()
+            ]
+            if griffe_warnings:
+                print(f"Docs build has griffe warnings: {relative_path}")
+                for warning in griffe_warnings:
+                    print(f"  {warning}")
+                overall_exit_code = 1
+            else:
+                print(f"  Built: {site_dir.relative_to(ROOT)}/")
 
     return overall_exit_code
 
@@ -452,21 +478,48 @@ def docs_preview(package_dirs: list[Path]) -> int:
     ])
 
 
+def _base_ref_reachable(base_ref: str) -> bool:
+    """Return True if *base_ref* is a valid git ref that can be diffed against."""
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", base_ref],
+        capture_output=True, cwd=ROOT, check=False,
+    )
+    return result.returncode == 0
+
+
 def preflight(
     micropython_binary: str | None = None,
     circuitpython_binary: str | None = None,
 ) -> int:
     """Run the full check suite that CI requires on every pull request.
 
-    Covers lint, all CPython tests, example verification, MicroPython and
-    CircuitPython cross-runtime unit tests, and package builds.  Functional
-    tests are excluded — they require physical hardware.
+    Mirrors the CI matrix as closely as possible on the local machine:
+    lint, build, docs (with griffe warning detection), CPython tests,
+    example verification, version-check, api-check, MicroPython and
+    CircuitPython cross-runtime unit tests.
+
+    Tests run once with the current Python interpreter (CI runs 3.11,
+    3.12, and 3.13 separately).  Version-check and api-check require
+    ``origin/main`` to be reachable; they skip gracefully if it is not.
+    Functional tests are excluded — they require physical hardware.
     """
+    python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
     all_packages = discover_package_dirs()
-    steps: tuple[tuple[str, object], ...] = (
+
+    # version-check and api-check need a base ref to diff against.
+    # If origin/main isn't reachable (detached HEAD, no remote, etc.),
+    # skip them with a warning rather than crashing preflight.
+    base_ref = "origin/main"
+    can_diff = _base_ref_reachable(base_ref)
+
+    steps: list[tuple[str, object]] = [
         ("lint", lint),
-        ("test", lambda: test_cpython(all_packages)),
+        ("build", build),
+        ("docs", lambda: docs(all_packages)),
+        (f"test (python {python_version})", lambda: test_cpython(all_packages)),
         ("verify-examples", lambda: verify_examples(all_packages)),
+        ("check-version", check_version),
+        ("check-api", check_api),
         (
             "test-micropython-compatibility",
             lambda: test_micropython_compatibility(micropython_binary),
@@ -475,10 +528,15 @@ def preflight(
             "test-circuitpython-compatibility",
             lambda: test_circuitpython_compatibility(circuitpython_binary),
         ),
-        ("build", build),
-    )
+    ]
 
     for step_name, step in steps:
+        # Skip diff-based checks when the base ref is unreachable.
+        if step_name in ("check-version", "check-api") and not can_diff:
+            print(f"== {step_name} ==")
+            print(f"  SKIP: {base_ref} not reachable (fetch or set --base).")
+            continue
+
         print(f"== {step_name} ==")
         result = step()
         if result != 0:

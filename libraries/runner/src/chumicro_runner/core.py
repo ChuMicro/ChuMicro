@@ -52,11 +52,11 @@ class _TaskEntry:
         """Create a task entry.
 
         Args:
-            check_function: Optional check callable, or ``None``.
-            handler_function: Handler callable invoked when the task fires.
-            period_ms: Repeat interval in ms, or ``None``.
-            next_due_ms: First eligible tick value, or ``None``.
-            run_count: Remaining fires, or ``None`` for unlimited.
+            check_function (callable | None): Optional check callable, or ``None``.
+            handler_function (callable): Handler callable invoked when the task fires.
+            period_ms (int | None): Repeat interval in ms, or ``None``.
+            next_due_ms (int | None): First eligible tick value, or ``None``.
+            run_count (int | None): Remaining fires, or ``None`` for unlimited.
         """
         self.check_function = check_function
         self.handler_function = handler_function
@@ -79,7 +79,12 @@ class TaskHandle:
     __slots__ = ("_entry", "_runner")
 
     def __init__(self, entry, runner):
-        """Create a handle wrapping *entry* owned by *runner*."""
+        """Create a handle wrapping *entry* owned by *runner*.
+
+        Args:
+            entry (_TaskEntry): Internal task record.
+            runner (Runner): Owning runner instance.
+        """
         self._entry = entry
         self._runner = runner
 
@@ -106,7 +111,7 @@ class TaskHandle:
         *period_ms* from now.
 
         Args:
-            period_ms: New interval in milliseconds, or ``None`` to
+            period_ms (int | None): New interval in milliseconds, or ``None`` to
                 clear the period.
         """
         if period_ms is not None and period_ms <= 0:
@@ -163,7 +168,7 @@ class Runner:
     no ``Heartbeat`` objects are created internally.
 
     Args:
-        ticks: Optional tick source (must have ``ticks_ms``,
+        ticks (object | None): Optional tick source (must have ``ticks_ms``,
             ``ticks_diff``, and ``ticks_add`` methods).
             Defaults to the ``chumicro_timing`` module-level functions.
     """
@@ -174,7 +179,7 @@ class Runner:
         """Create a runner.
 
         Args:
-            ticks: Optional tick source (must have ``ticks_ms``,
+            ticks (object | None): Optional tick source (must have ``ticks_ms``,
                 ``ticks_diff``, and ``ticks_add`` methods).
                 Defaults to the ``chumicro_timing.ticks`` module.
                 Constructor injection per Decision 0010; pass
@@ -205,14 +210,14 @@ class Runner:
         Returns a ``TaskHandle`` for runtime mutation.
 
         Args:
-            task: Object with ``.check()`` and ``.handle()``, or a
+            task (object | callable | None): Object with ``.check()`` and ``.handle()``, or a
                 callable ``check_function(now_ms) -> bool``.
-            handler: Optional callable ``handler(now_ms)``.
-            period_ms: Optional interval in milliseconds.
-            start_after_ms: Optional initial delay before the task
+            handler (callable | None): Optional callable ``handler(now_ms)``.
+            period_ms (int | None): Optional interval in milliseconds.
+            start_after_ms (int | None): Optional initial delay before the task
                 becomes eligible.  Overrides the first period;
                 subsequent fires use *period_ms* if set.
-            run_count: Optional number of times the handler may fire
+            run_count (int | None): Optional number of times the handler may fire
                 before auto-removing.  ``None`` means unlimited.
         """
         if handler is not None:
@@ -260,11 +265,11 @@ class Runner:
         Returns a ``TaskHandle`` for runtime mutation.
 
         Args:
-            handler: Callable ``handler(now_ms)`` to fire periodically.
-            period_ms: Interval in milliseconds (required).
-            start_after_ms: Optional initial delay before first fire.
+            handler (callable): Callable ``handler(now_ms)`` to fire periodically.
+            period_ms (int): Interval in milliseconds (required).
+            start_after_ms (int | None): Optional initial delay before first fire.
                 Overrides the first period.
-            run_count: Optional number of times the handler may fire
+            run_count (int | None): Optional number of times the handler may fire
                 before auto-removing.  ``None`` means unlimited.
         """
         if period_ms <= 0:
@@ -293,7 +298,7 @@ class Runner:
         3. Decrement run counts; auto-remove exhausted entries.
 
         Returns:
-            The ``now_ms`` value used this tick.
+            now_ms (int): The tick timestamp used this cycle.
         """
         ticks = self._ticks
         now_ms = ticks.ticks_ms()
@@ -302,7 +307,7 @@ class Runner:
         pending = self._pending
 
         for entry in self._entries:
-            if not entry.active:
+            if not entry.active:  # pragma: no cover — safety guard; _remove_entry clears from list
                 continue
 
             # Time gate (period or start delay).
