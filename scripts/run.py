@@ -153,8 +153,8 @@ def test_cpython(
     *filter_expression* requires library-scoped syntax::
 
         timing/test_heartbeat                 # by name in a library
-        timing/test_ticks/test_add            # by file and name
-        timing/test_a,runner/test_b      # comma-separated
+        timing/test_ticks/ticks_add           # by file and name
+        timing/ticks_diff,runner/task_handle  # comma-separated
     """
     # Parse library-scoped filters from filter_expression.
     # When -k is set, library names extracted from the filter expression
@@ -711,17 +711,17 @@ def _build_parser() -> argparse.ArgumentParser:
         help="CPython tests (only changed packages by default)",
         epilog=(
             "examples:\n"
-            "  run.py test                                       "
+            "  run.py test                                                "
             "# changed packages\n"
-            "  run.py test --all                                 "
+            "  run.py test --all                                          "
             "# all packages\n"
-            "  run.py test -k timing/test_heartbeat              "
+            "  run.py test -k timing/test_heartbeat                      "
             "# by library and test\n"
-            "  run.py test -k timing/test_ticks/test_add         "
+            "  run.py test -k timing/test_ticks/ticks_add                "
             "# by library, file, and test\n"
-            "  run.py test -k timing/test_a,runner/test_b   "
+            "  run.py test -k timing/ticks_diff,runner/task_handle  "
             "# per-library filters\n"
-            "  run.py test --no-cov -x                           "
+            "  run.py test --no-cov -x                                   "
             "# quick, stop on failure"
         ),
     )
@@ -779,9 +779,15 @@ def main(argv: list[str]) -> int:
 
     # --- scoped tasks ---
     if args.task in _SCOPED_TASKS:
-        package_dirs = resolve_scope(
-            all_packages=args.all_packages, libraries=args.libraries,
-        )
+        if args.task == "test" and args.filter_expression:
+            # -k provides its own library scope via the filter expression,
+            # so skip resolve_scope() to avoid a misleading "Running for
+            # all packages" message that would immediately be overridden.
+            package_dirs = []
+        else:
+            package_dirs = resolve_scope(
+                all_packages=args.all_packages, libraries=args.libraries,
+            )
         if args.task == "test":
             return test_cpython(
                 package_dirs,

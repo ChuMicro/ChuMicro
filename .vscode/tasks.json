@@ -44,7 +44,7 @@
             }
         },
         {
-            "label": "CircuitPython Compat",
+            "label": "CircuitPython Compatibility",
             "type": "shell",
             "command": "python",
             "args": [
@@ -102,7 +102,7 @@
             }
         },
         {
-            "label": "MicroPython Compat",
+            "label": "MicroPython Compatibility",
             "type": "shell",
             "command": "python",
             "args": [
