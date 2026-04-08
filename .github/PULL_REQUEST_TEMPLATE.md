@@ -20,21 +20,19 @@
 
 ## Device testing
 
-<!-- Required for library code changes (unless exception applies).
-     Include ALL of the following:
+<!-- Delete this section if your change is:
+     - Docs-only, test-only, or infra-only
+     - A trivial fix (typo, comment correction)
+     - In support/ or scripts/ (CPython-only code)
+     - In a library with no hardware interaction (e.g., compat, msgpack)
 
-     1. Screenshot or video of the code running on a device
-     2. Console output (scrub any PII — WiFi credentials, IPs, etc.)
-     3. Board and chip used (e.g., "Adafruit QT Py ESP32-S3")
-     4. Runtime and version (e.g., "CircuitPython 10.1.4")
-     5. What manual tests were run and their results
+     For library source changes, include:
+     1. Console output from running on a device (scrub PII)
+     2. Board used (e.g., "Adafruit QT Py ESP32-S3")
+     3. Runtime and version (e.g., "CircuitPython 10.1.4")
+     4. What was tested and results
 
-     Exceptions (delete this section and note why):
-     - Docs-only, test-only, or infra-only changes
-     - Trivial fixes (typos, comment corrections)
-     - Changes to support/ or scripts/ (CPython-only code)
-     - The library has no hardware interaction (e.g., compat, msgpack)
-
+     Screenshots or video are welcome but not required.
      If you don't have a device, say so — a maintainer can help test. -->
 
 ## Version impact
