@@ -6,7 +6,7 @@ Hard rules an agent must never violate:
 
 - **No `async`/`await`, no ISRs** — use the tick-based runner pattern (Decision 0014).
 - **Per-library pytest** via `python scripts/run.py test` — never bare `pytest` from root.
-- **90 % coverage gate** per library.
+- **94 % coverage gate** per library.
 - **Constructor injection** for time, I/O, network — fakes in `testing.py` submodule (Decision 0010).
 - **f-strings everywhere**, `const()` / `memoryview` / pre-allocated buffers in library code only.
 - **`git commit -F .scratch/commit-msg.txt`** — never `git commit -m` (see `.github/skills/git-commit/SKILL.md`).
@@ -14,6 +14,7 @@ Hard rules an agent must never violate:
 - **Never hard-code secrets.**
 - **No `pip install -e`** — IDE resolution uses generated configs (`sync-ide`).
 - **Minimize dependencies** — prefer pure-Python implementations compatible with all three runtimes.
+- **Docstring types, not annotations** — document types in Google-style docstrings (`param (type):`), not function annotations (Decision 0021).
 
 Common pitfalls:
 
@@ -75,7 +76,7 @@ Conventions:
 | Command | Purpose |
 |---------|---------|
 | `python scripts/run.py setup` | Install dependencies and regenerate IDE configs |
-| `python scripts/run.py preflight` | Lint + all tests + examples + compat + build |
+| `python scripts/run.py preflight` | Full CI mirror: lint, build, docs, test, examples, version-check, api-check, compat |
 | `python scripts/run.py test` | CPython tests (changed packages, or `--all` / `--libraries name`) |
 | `python scripts/run.py lint` | Ruff across workspace |
 | `python scripts/run.py build` | Build all publishable packages |
@@ -105,7 +106,7 @@ Code under `scripts/` and `support/` runs **exclusively on CPython**.  Use the f
 
 ### Naming & style
 
-PEP 8.  Descriptive names (`service`, `test_device`), not abbreviations (`svc`, `dut`).  Document **all** functions and methods with concise docstrings.  When writing CircuitPython drivers: initialize hardware in `__init__`, provide `deinit()` or context-manager support.
+PEP 8.  Descriptive names (`service`, `test_device`), not abbreviations (`svc`, `dut`).  Document **all** functions and methods with concise docstrings.  Document types in Google-style docstring sections (`Args:`, `Returns:`, `Raises:`) using `param_name (type): description` format — do not use Python type annotations on function signatures in library code (Decision 0021).  When writing CircuitPython drivers: initialize hardware in `__init__`, provide `deinit()` or context-manager support.
 
 ### API & compatibility
 
@@ -141,7 +142,7 @@ Provide a lightweight logging facility with levels (`ERROR`, `WARNING`, `INFO`, 
 
 1. Tests go under `tests/` inside each library.
 2. Per-library pytest runs avoid test-directory collisions (Decision 0009).  `scripts/run.py test` runs a separate subprocess per package.
-3. 90 % coverage threshold per library.
+3. 94 % coverage threshold per library.
 4. Root `conftest.py` auto-discovers `src/` directories and adds them to `sys.path`.
 5. Shared test fakes ship as `testing` submodules (e.g., `from chumicro_timing.testing import FakeTicks`).
 

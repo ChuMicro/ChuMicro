@@ -73,7 +73,7 @@ pip install chumicro-timing
 PRs and pushes to `main` run the full CI suite via GitHub Actions:
 
 - **lint** — Ruff
-- **test** — pytest on CPython 3.11, 3.12, 3.13 with 90% coverage gate
+- **test** — pytest on CPython 3.11, 3.12, 3.13 with 94% coverage gate
 - **verify-examples** — AST-based import check of all examples
 - **docs-build** — verify docs build without errors (PRs only)
 - **build** — build all publishable packages

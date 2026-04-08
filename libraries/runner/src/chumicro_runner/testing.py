@@ -35,7 +35,11 @@ class CallRecorder:
         self.calls = []
 
     def __call__(self, now_ms):
-        """Record a call with the given timestamp."""
+        """Record a call with the given timestamp.
+
+        Args:
+            now_ms (int): Tick value passed by the runner.
+        """
         self.calls.append(now_ms)
 
     def __len__(self):

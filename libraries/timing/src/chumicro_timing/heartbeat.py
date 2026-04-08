@@ -17,8 +17,8 @@ class Heartbeat:
         """Create a heartbeat that becomes due once every *period_ms* milliseconds.
 
         Args:
-            period_ms: Interval between beats.
-            ticks: Optional tick source (must have ``ticks_ms`` and
+            period_ms (int): Interval between beats.
+            ticks (object | None): Optional tick source (must have ``ticks_ms`` and
                 ``ticks_diff`` methods).  Defaults to the real clock.
                 Constructor injection per Decision 0010; pass
                 ``FakeTicks`` from ``chumicro_timing.testing`` in tests.
@@ -42,15 +42,33 @@ class Heartbeat:
         return self._period_ms
 
     def reset(self, now_ms):
-        """Reset the heartbeat schedule to start counting from *now_ms*."""
+        """Reset the heartbeat schedule to start counting from *now_ms*.
+
+        Args:
+            now_ms (int): Current tick value.
+        """
         self._last_beat_ms = now_ms
 
     def is_due(self, now_ms):
-        """Return whether the heartbeat period has elapsed since the last beat."""
+        """Return whether the heartbeat period has elapsed since the last beat.
+
+        Args:
+            now_ms (int): Current tick value.
+
+        Returns:
+            result (bool): ``True`` if the period has elapsed.
+        """
         return self._ticks_diff(now_ms, self._last_beat_ms) >= self._period_ms
 
     def poll(self, now_ms):
-        """Return ``True`` once per elapsed period and advance the heartbeat state."""
+        """Return ``True`` once per elapsed period and advance the heartbeat state.
+
+        Args:
+            now_ms (int): Current tick value.
+
+        Returns:
+            result (bool): ``True`` if the period elapsed and the heartbeat advanced.
+        """
         if not self.is_due(now_ms):
             return False
 

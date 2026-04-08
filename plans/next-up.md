@@ -7,7 +7,7 @@
 - [ ] Write a "Creating a New Library" contributor guide. Walk through the full lifecycle from scaffolding to release-ready:
   1. `new-library` scaffolding — what it creates, what it doesn't (e.g., no `testing` submodule by default)
   2. Library code — dependency injection (Decision 0010), `check(now_ms) -> bool` gate-based contract for active components (Decision 0014), memory-efficient patterns for embedded targets
-  3. Unit tests — per-library test runs (Decision 0009), 90% coverage threshold, constructor injection for testability
+   3. Unit tests — per-library test runs (Decision 0009), 94% coverage threshold, constructor injection for testability
   4. Testing submodule — when and how to add `src/chumicro_<name>/testing.py` with ready-made fakes
   5. Docs — `guide.md` required sections, `api.md` autodoc rules, generation prompt (Decision 0013)
   6. Examples — top-level style (no `__main__` guard), verified via AST-based import checking in preflight (Decision 0013)

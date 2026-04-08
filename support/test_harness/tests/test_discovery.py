@@ -109,6 +109,29 @@ def test_discover_tests_empty_when_no_libraries(tmp_path):
     assert discovery.discover_tests(str(tmp_path)) == []
 
 
+def test_discover_tests_filters_by_library_name(tmp_path):
+    """Only libraries in the filter list should be included."""
+    root = str(tmp_path)
+    _make_library(root, "alpha", ["test_alpha.py"])
+    _make_library(root, "beta", ["test_beta.py"])
+
+    tests = discovery.discover_tests(root, libraries=["alpha"])
+
+    assert len(tests) == 1
+    assert tests[0].endswith("test_alpha.py")
+
+
+def test_discover_tests_skips_pytest_only_files(tmp_path):
+    """Files ending in _pytest.py should be excluded from cross-runtime discovery."""
+    root = str(tmp_path)
+    _make_library(root, "mylib", ["test_core.py", "test_core_pytest.py"])
+
+    tests = discovery.discover_tests(root)
+
+    assert len(tests) == 1
+    assert tests[0].endswith("test_core.py")
+
+
 # ---------------------------------------------------------------------------
 # setup_source_paths
 # ---------------------------------------------------------------------------
@@ -250,3 +273,23 @@ def test_run_all_reports_load_errors(tmp_path, capsys):
     assert result == 1
     output = capsys.readouterr().out
     assert "ERROR loading" in output
+
+
+def test_run_all_counts_failed_test_modules(tmp_path, capsys):
+    """run_all should return 1 when a test module contains a failing test."""
+    root = str(tmp_path)
+    _make_library(root, "failing", ["test_fail.py"])
+    test_file = os.path.join(root, "libraries", "failing", "tests", "test_fail.py")
+    with open(test_file, "w") as file:
+        file.write("def test_boom(): raise AssertionError('nope')\n")
+
+    original_path = sys.path.copy()
+    try:
+        result = discovery.run_all(root)
+    finally:
+        sys.path[:] = original_path
+
+    assert result == 1
+    output = capsys.readouterr().out
+    assert "FAIL test_boom" in output
+

@@ -89,7 +89,15 @@ def ticks_ms():
 def ticks_add(ticks, delta):
     """Add *delta* milliseconds to a tick value, wrapping at 2**29.
 
-    Raises ``OverflowError`` if *delta* is outside (-2**28 .. 2**28).
+    Args:
+        ticks (int): Base tick value.
+        delta (int): Milliseconds to add.
+
+    Returns:
+        result (int): Wrapped tick value.
+
+    Raises:
+        OverflowError: If *delta* is outside (-2**28 .. 2**28).
     """
     if -_TICKS_HALFPERIOD < delta < _TICKS_HALFPERIOD:
         return (ticks + delta) % _TICKS_PERIOD
@@ -101,6 +109,13 @@ def ticks_diff(end, start):
 
     Correct as long as *end* and *start* are no more than
     2**28 ms (~3.1 days) apart.
+
+    Args:
+        end (int): Later tick value.
+        start (int): Earlier tick value.
+
+    Returns:
+        result (int): Signed difference in milliseconds.
     """
     diff = (end - start) & _TICKS_MAX
     return ((diff + _TICKS_HALFPERIOD) & _TICKS_MAX) - _TICKS_HALFPERIOD
