@@ -26,122 +26,29 @@ Target runtime versions are pinned in [`target-runtimes.toml`](target-runtimes.t
 
 Docs are versioned per-library with [mike](https://github.com/jimporter/mike). Stable tracks tagged releases; experimental tracks `main`.
 
-## Distribution
-
-Libraries are published to **[PyPI](https://pypi.org/search/?q=chumicro)** for CPython and to **bundle repos** for CircuitPython (circup) and MicroPython (mip).
-
-| Channel | Repo | Source |
-|---|---|---|
-| **Stable** | [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) | tagged releases |
-| **Experimental** | [ChuMicro-Bundle-Experimental](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental) | `main` |
-
-Install with circup (remove the other channel first if switching):
-
-```bash
-circup bundle-remove ChuMicro/ChuMicro-Bundle-Experimental   # skip if never added
-circup bundle-add ChuMicro/ChuMicro-Bundle
-circup install chumicro-timing
-```
-
-Install with mip:
-
-```bash
-mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_timing
-```
-
-Install with pip (CPython):
-
-```bash
-pip install chumicro-timing
-```
-
-## Developer workflow
-
-1. Write or update code against a small public API and runtime shims
-2. Run host-side tests on CPython
-3. Run compatibility checks for MicroPython and CircuitPython
-4. Run functional tests only for behavior that mocks cannot prove
-
-## Testing model
-
-- **Required**: CPython-hosted `pytest` tests with coverage (90%+ gate)
-- **Required**: MicroPython and CircuitPython unix-port cross-runtime unit tests
-- **Opt-in**: real-device `functional_tests/` run through the Chumicro test harness
-
-## CI & release pipeline
-
-PRs and pushes to `main` run the full CI suite via GitHub Actions:
-
-- **lint** — Ruff
-- **test** — pytest on CPython 3.11, 3.12, 3.13 with 94% coverage gate
-- **verify-examples** — AST-based import check of all examples
-- **docs-build** — verify docs build without errors (PRs only)
-- **build** — build all publishable packages
-- **version-check** — enforce VERSION bumps for release-relevant changes
-- **api-check** — detect API breakages via griffe against the last release tag
-- **MicroPython compat** — cross-runtime unit tests on MicroPython unix-port
-- **CircuitPython compat** — cross-runtime unit tests on CircuitPython unix-port
-
-Releases are automated:
-
-1. **Experimental** — bump a library's `VERSION` file and merge to `main`. The release workflow publishes to PyPI (experimental package name), creates a git tag, deploys to the experimental bundle repo, and publishes experimental docs.
-2. **Stable** — run the `promote.yml` workflow for specific libraries. It creates stable tags, publishes to PyPI (production name), deploys to the stable bundle repo, and publishes stable docs.
-
-See [Decision 0019](plans/decisions/0019-branching-model.md) for the single-branch model and [Decision 0018](plans/decisions/0018-distribution-bundle-repo.md) for bundle repo layout.
-
-## Repository shape
-
-```text
-chumicro/
-├── scripts/               # Developer tasks (run.py is the main entry point)
-├── plans/                 # Roadmap, workstreams, decisions, and prompts
-│   ├── decisions/
-│   ├── prompts/
-│   └── workstreams/
-├── support/
-│   ├── docs/              # Shared docs assets (CSS, favicon)
-│   └── test_harness/      # Lightweight cross-runtime test runner (workspace-internal)
-├── libraries/
-│   ├── timing/            # Cross-runtime timing library
-│   ├── runner/            # Tick-based task runner
-│   ├── compat/            # Compatibility polyfills
-│   └── msgpack/           # MessagePack serialization
-├── .github/
-│   ├── workflows/         # CI, release, promote, docs-deploy, label-sync
-│   └── skills/            # Agent skill instructions
-├── target-runtimes.toml   # Pinned CircuitPython/MicroPython versions
-├── devices.example.yml    # Template for local board registration
-└── LICENSE                # MIT
-```
-
 ## Getting started
 
 The prepare script works with whatever Python environment you already have — IDE-managed venv, uv, or `--create-venv` for a fresh start.  When `uv` is on PATH it is used automatically for venv creation and package installation; otherwise stdlib `venv` and `pip` are used as fallbacks.
 
 ```zsh
 cd /path/to/chumicro
-python scripts/prepare_workspace.py
-```
-
-If you don't have an environment yet, pass `--create-venv` to create one:
-
-```zsh
-python scripts/prepare_workspace.py --create-venv
+python scripts/prepare_workspace.py            # existing venv
+python scripts/prepare_workspace.py --create-venv  # create one first
 ```
 
 The script installs dev dependencies and runs lint + tests to verify. On Windows, unix-port guidance is printed automatically.
 
-### Windows
-
-Use native Windows for editing, IDE work, linting, host-side tests, and package builds. Use WSL2 for unix-port runtime checks.
-
 ### IDE setup
 
-**PyCharm**: shared run configurations are checked into `.idea/runConfigurations/`. After opening the project you should see play buttons for Preflight, Lint, Test, Build, Verify Examples, Docs, MicroPython Compat, CircuitPython Compat, and Runtime Matrix.
+**PyCharm**: shared run configurations are checked into `.idea/runConfigurations/`. After opening the project you should see play buttons for Preflight, Lint, Test, Build, and more.
 
 **VSCode**: `.vscode/tasks.json` provides the same tasks via the Command Palette → *Tasks: Run Task*. `.vscode/settings.json` configures pytest discovery and source roots.
 
 **No IDE**: all tasks are available from the command line via `python scripts/run.py <task>`.
+
+### Windows
+
+Use native Windows for editing, IDE work, linting, host-side tests, and package builds. Use WSL2 for unix-port runtime checks.
 
 ## Tasks
 
@@ -172,17 +79,68 @@ All tasks are run through `scripts/run.py`:
 
 Tasks that operate on libraries (`test`, `verify-examples`, `docs`, `docs-preview`) accept `--all` or `--libraries name` to control scope. By default, `test` auto-detects changed packages.
 
-## Platform switching
+## Distribution
 
-The repo switches runtimes by running the same library code under different interpreters. The compat tasks auto-prepare the unix-port binaries if they are not already built.
+Libraries are published to **[PyPI](https://pypi.org/search/?q=chumicro)** for CPython and to **bundle repos** for CircuitPython (circup) and MicroPython (mip).
 
-## Device validation
+| Channel | Repo | Source |
+|---|---|---|
+| **Stable** | [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) | tagged releases |
+| **Experimental** | [ChuMicro-Bundle-Experimental](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental) | `main` |
 
-Real-board execution is manual-only. Copy `devices.example.yml` to `devices.yml` and fill in your board details. Use `libraries/timing/functional_tests/` with `support/test_harness/` on the target board.
+Install with circup (remove the other channel first if switching):
 
-## Versioning
+```bash
+circup bundle-remove ChuMicro/ChuMicro-Bundle-Experimental   # skip if never added
+circup bundle-add ChuMicro/ChuMicro-Bundle
+circup install chumicro-timing
+```
+
+Install with mip:
+
+```bash
+mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_timing
+```
+
+Install with pip (CPython):
+
+```bash
+pip install chumicro-timing
+```
+
+## Development
+
+### Testing
+
+- **Required:** CPython-hosted `pytest` tests with 94% coverage gate
+- **Required:** MicroPython and CircuitPython unix-port cross-runtime unit tests
+- **Opt-in:** real-device `functional_tests/` via `support/test_harness/` — copy `devices.example.yml` to `devices.yml` and fill in your board details
+
+### CI & releases
+
+PRs and pushes to `main` run the full CI suite via GitHub Actions: lint, test (CPython 3.11/3.12/3.13), verify-examples, docs-build (PRs), build, version-check, api-check, and cross-runtime compat checks.
+
+Releases are automated. Bump a library's `VERSION` file and merge to `main` for an **experimental** release. Run the `promote.yml` workflow to create a **stable** release. Both publish to PyPI, create git tags, deploy to the appropriate bundle repo, and publish docs. See [Decision 0019](plans/decisions/0019-branching-model.md) and [Decision 0018](plans/decisions/0018-distribution-bundle-repo.md).
+
+### Versioning
 
 Each library has a `VERSION` file at its root — that is the single source of truth. `pyproject.toml` reads from it via hatchling's dynamic version. See [Decision 0002](plans/decisions/0002-per-library-version-files.md).
+
+## Repository layout
+
+```text
+chumicro/
+├── libraries/             # Publishable libraries (one folder each)
+├── support/               # Workspace-internal packages (docs assets, test harness)
+├── scripts/               # Developer tasks (run.py is the main entry point)
+├── plans/                 # Roadmap, workstreams, decisions
+├── .github/
+│   ├── workflows/         # CI, release, promote, docs-deploy, label-sync
+│   └── skills/            # Agent skill instructions
+├── target-runtimes.toml   # Pinned CircuitPython/MicroPython versions
+├── devices.example.yml    # Template for local board registration
+└── LICENSE                # MIT
+```
 
 ## Planning
 
