@@ -18,6 +18,25 @@
      - "Look at the diff — docs-only change"
      Keep it concrete. -->
 
+## Device testing
+
+<!-- Required for library code changes (unless exception applies).
+     Include ALL of the following:
+
+     1. Screenshot or video of the code running on a device
+     2. Console output (scrub any PII — WiFi credentials, IPs, etc.)
+     3. Board and chip used (e.g., "Adafruit QT Py ESP32-S3")
+     4. Runtime and version (e.g., "CircuitPython 10.1.4")
+     5. What manual tests were run and their results
+
+     Exceptions (delete this section and note why):
+     - Docs-only, test-only, or infra-only changes
+     - Trivial fixes (typos, comment corrections)
+     - Changes to support/ or scripts/ (CPython-only code)
+     - The library has no hardware interaction (e.g., compat, msgpack)
+
+     If you don't have a device, say so — a maintainer can help test. -->
+
 ## Version impact
 
 <!-- Which libraries are affected and do they need a VERSION bump?
