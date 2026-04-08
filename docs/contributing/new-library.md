@@ -106,6 +106,62 @@ Library code runs on boards with as little as 256 KB RAM:
 
 These patterns are required in `libraries/` code. They are *not* required in `scripts/` or `support/` (those only run on CPython).
 
+#### `const()` — compile-time constants
+
+On MicroPython and CircuitPython, `const()` tells the compiler to inline the value instead of creating a runtime object. On CPython it doesn't exist, so every library that uses it needs a try/except fallback:
+
+```python
+try:
+    from micropython import const
+except ImportError:
+
+    def const(x):
+        """Identity fallback so const() works on CPython."""
+        return x
+
+# ❌ Without const — these are regular variables, allocated on the heap
+_PERIOD = 1 << 29
+_MAX = _PERIOD - 1
+
+# ✅ With const — inlined at compile time, no heap allocation
+_PERIOD = const(1 << 29)
+_MAX = const(_PERIOD - 1)
+```
+
+Prefix internal constants with `_` (they're module-private). See `libraries/timing/src/chumicro_timing/ticks.py` for a real example.
+
+#### `memoryview` — zero-copy slicing
+
+Normal `bytearray` slicing creates a new copy every time. On a 256 KB board, that adds up fast. `memoryview` gives you a slice that points to the original data:
+
+```python
+# ❌ Without memoryview — each slice copies data
+def process_packet(data):
+    header = data[0:4]      # new bytearray allocated
+    payload = data[4:20]    # another new bytearray allocated
+    return header, payload
+
+# ✅ With memoryview — slices share the original buffer
+def process_packet(data):
+    view = memoryview(data)
+    header = view[0:4]      # no copy — points into data
+    payload = view[4:20]    # no copy — points into data
+    return header, payload
+```
+
+Combine with pre-allocated buffers for the full pattern:
+
+```python
+class PacketReader:
+    def __init__(self, buffer_size=64):
+        self._buf = bytearray(buffer_size)  # allocated once
+        self._view = memoryview(self._buf)  # reusable view
+
+    def read_into(self, source):
+        source.readinto(self._buf)
+        return self._view[0:4]  # zero-copy slice
+```
+
 ### Public API
 
 Export your public API from `__init__.py`:
