@@ -77,21 +77,26 @@ These are enforced by CI — your PR won't merge without them:
 
 ### Commit messages
 
-Write commit messages to a file — never use `git commit -m` (breaks on special characters in zsh):
+Write commit messages to a file — never use `git commit -m` (breaks on special characters):
 
 ```bash
-# Write the message
-cat > .scratch/commit-msg.txt << 'EOF'
+# Write the message with your editor
+nano .scratch/commit-msg.txt
+# (or vim, code, etc.)
+
+# Commit
+git add -A && git commit -F .scratch/commit-msg.txt
+```
+
+Example message:
+
+```
 Fix wraparound bug in ticks_diff
 
 The previous implementation didn't handle the case where ticks_ms
 wraps past 2^30. Added boundary tests to verify.
 
 Affects: timing
-EOF
-
-# Commit
-git add -A && git commit -F .scratch/commit-msg.txt
 ```
 
 Use imperative mood in the subject line. Name affected libraries in the body.

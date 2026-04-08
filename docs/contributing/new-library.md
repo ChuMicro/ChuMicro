@@ -36,14 +36,14 @@ libraries/my-thing/
 │   ├── __init__.py                  # public exports
 │   └── testing.py                   # test fakes (keep or delete)
 ├── tests/
-│   ├── conftest.py                  # pytest config
-│   └── test_placeholder.py          # starter test
+│   └── conftest.py                  # pytest config
 ├── docs/
 │   ├── index.md                     # docs landing page
 │   ├── guide.md                     # user guide (fill in)
 │   ├── api.md                       # API reference (auto-generated)
 │   └── testing.md                   # testing helpers docs
-├── examples/                        # example scripts
+├── examples/
+│   └── quickstart.py                # starter example
 └── functional_tests/                # on-device tests
 ```
 
@@ -71,7 +71,7 @@ class MySensor:
     """Reads from a sensor on a schedule.
 
     Args:
-        i2c: I2C bus instance.
+        i2c (busio.I2C): I2C bus instance.
         interval_ms (int): Read interval in milliseconds.
     """
 
