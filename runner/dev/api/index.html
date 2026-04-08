@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../img/favicon.png">
-      <meta name="generator" content="zensical-0.0.31">
+      <meta name="generator" content="zensical-0.0.32">
     
     
       
@@ -1149,6 +1149,53 @@ testing.</p>
         <p>Create a handle wrapping <em>entry</em> owned by <em>runner</em>.</p>
 
 
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>entry</code>
+            </td>
+            <td>
+                  <code><span title="chumicro_runner.core._TaskEntry">_TaskEntry</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Internal task record.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>runner</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" href="./#chumicro_runner.core.Runner">Runner</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Owning runner instance.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
     </div>
 
 </div>
@@ -1186,6 +1233,7 @@ A non-None value resets the timer so the next fire is
                 <code>period_ms</code>
             </td>
             <td>
+                  <code><span title="int">int</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1305,6 +1353,7 @@ no <code>Heartbeat</code> objects are created internally.</p>
                 <code>ticks</code>
             </td>
             <td>
+                  <code><span title="object">object</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1371,6 +1420,7 @@ Defaults to the <code>chumicro_timing</code> module-level functions.</p>
                 <code>ticks</code>
             </td>
             <td>
+                  <code><span title="object">object</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1430,6 +1480,7 @@ on every tick (or per period if <em>period_ms</em> is set).</p>
                 <code>task</code>
             </td>
             <td>
+                  <code><span title="object">object</span> | <span title="callable">callable</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1446,6 +1497,7 @@ callable <code>check_function(now_ms) -&gt; bool</code>.</p>
                 <code>handler</code>
             </td>
             <td>
+                  <code><span title="callable">callable</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1461,6 +1513,7 @@ callable <code>check_function(now_ms) -&gt; bool</code>.</p>
                 <code>period_ms</code>
             </td>
             <td>
+                  <code><span title="int">int</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1476,6 +1529,7 @@ callable <code>check_function(now_ms) -&gt; bool</code>.</p>
                 <code>start_after_ms</code>
             </td>
             <td>
+                  <code><span title="int">int</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1493,6 +1547,7 @@ subsequent fires use <em>period_ms</em> if set.</p>
                 <code>run_count</code>
             </td>
             <td>
+                  <code><span title="int">int</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1544,6 +1599,7 @@ Returns a <code>TaskHandle</code> for runtime mutation.</p>
                 <code>handler</code>
             </td>
             <td>
+                  <code><span title="callable">callable</span></code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1559,6 +1615,7 @@ Returns a <code>TaskHandle</code> for runtime mutation.</p>
                 <code>period_ms</code>
             </td>
             <td>
+                  <code><span title="int">int</span></code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1574,6 +1631,7 @@ Returns a <code>TaskHandle</code> for runtime mutation.</p>
                 <code>start_after_ms</code>
             </td>
             <td>
+                  <code><span title="int">int</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1590,6 +1648,7 @@ Overrides the first period.</p>
                 <code>run_count</code>
             </td>
             <td>
+                  <code><span title="int">int</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1633,17 +1692,18 @@ before auto-removing.  <code>None</code> means unlimited.</p>
     <table>
       <thead>
         <tr>
-          <th>Type</th>
+<th>Name</th>          <th>Type</th>
           <th>Description</th>
         </tr>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td>
+<td><code>now_ms</code></td>            <td>
+                  <code><span title="int">int</span></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The <code>now_ms</code> value used this tick.</p>
+                <p>The tick timestamp used this cycle.</p>
               </div>
             </td>
           </tr>
@@ -1796,6 +1856,37 @@ assert len(recorder) == 0  # not due yet
     <div class="doc doc-contents ">
 
         <p>Record a call with the given timestamp.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>now_ms</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Tick value passed by the runner.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
 
 
     </div>
