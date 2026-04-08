@@ -87,7 +87,7 @@ Use imperative mood in the subject line. Name affected libraries in the body.
 
 ## Pull request workflow
 
-> **Detailed walkthrough:** See [Creating a Pull Request](docs/contributing/first-pr.md) for a step-by-step guide with expected output at each stage.
+> **Detailed walkthrough:** See [Creating a Pull Request](docs/contributing/pull-requests.md) for a step-by-step guide with expected output at each stage.
 
 1. Push your branch: `git push -u origin feature/my-change`
 2. Open a PR on GitHub targeting `main`
