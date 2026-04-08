@@ -2,6 +2,7 @@
 
 **Status:** accepted
 **Date:** 2026-04-07
+**Revised:** 2026-04-08
 
 ## Context
 
@@ -15,8 +16,34 @@ developer readability.
 ## Decision
 
 1. **Document types in Google-style docstrings**, not function
-   annotations.  Use the `param_name (type):` format in `Args:`,
-   `Returns:`, `Raises:`, and `Attributes:` sections.
+   annotations.  The format differs by section — this follows the
+   [standard Google-style convention][google-style]:
+
+   - **`Args:`** — `param_name (type): description`
+   - **`Returns:`** — `type: description` (no name, just the type)
+   - **`Raises:`** — `ExceptionType: description`
+   - **`Attributes:`** — `attr_name (type): description`
+
+   The `Returns:` section is the one most people get wrong.  Standard
+   Google-style does **not** put a name before the type in Returns.
+
+   ```python
+   # ✅ Correct
+   def ticks_diff(end, start):
+       """Signed difference between two tick values.
+
+       Args:
+           end (int): Later tick value.
+           start (int): Earlier tick value.
+
+       Returns:
+           int: Signed difference in milliseconds.
+       """
+
+   # ❌ Wrong — do not name the return value
+   #     Returns:
+   #         result (int): Signed difference in milliseconds.
+   ```
 
 2. **Do not add Python type annotations** (`: int`, `-> bool`) to
    function or method signatures in library code under `libraries/`.
@@ -26,13 +53,17 @@ developer readability.
    CPython.  Prefer docstring types for consistency unless a tool
    requires annotations.
 
-4. **Pin `docstring_style: google`** in every library's `mkdocs.yml`
-   under `plugins.mkdocstrings.handlers.python.options` so griffe
-   parses types deterministically.
+4. **Pin `docstring_style: google`** and
+   **`docstring_options: { returns_named_value: false }`** in every
+   library's `mkdocs.yml` under
+   `plugins.mkdocstrings.handlers.python.options` so griffe parses
+   the standard `type: description` Returns format correctly.
 
 5. **Enforce zero griffe warnings** in the `docs` task and in
    `preflight`.  The docs build captures stderr and fails if griffe
    reports any warnings about missing or malformed docstring sections.
+
+[google-style]: https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings
 
 ## Consequences
 

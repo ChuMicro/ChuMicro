@@ -56,7 +56,7 @@ class Heartbeat:
             now_ms (int): Current tick value.
 
         Returns:
-            result (bool): ``True`` if the period has elapsed.
+            bool: ``True`` if the period has elapsed.
         """
         return self._ticks_diff(now_ms, self._last_beat_ms) >= self._period_ms
 
@@ -67,7 +67,7 @@ class Heartbeat:
             now_ms (int): Current tick value.
 
         Returns:
-            result (bool): ``True`` if the period elapsed and the heartbeat advanced.
+            bool: ``True`` if the period elapsed and the heartbeat advanced.
         """
         if not self.is_due(now_ms):
             return False

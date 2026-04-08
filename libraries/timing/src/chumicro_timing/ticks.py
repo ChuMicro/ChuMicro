@@ -94,7 +94,7 @@ def ticks_add(ticks, delta):
         delta (int): Milliseconds to add.
 
     Returns:
-        result (int): Wrapped tick value.
+        int: Wrapped tick value.
 
     Raises:
         OverflowError: If *delta* is outside (-2**28 .. 2**28).
@@ -115,7 +115,7 @@ def ticks_diff(end, start):
         start (int): Earlier tick value.
 
     Returns:
-        result (int): Signed difference in milliseconds.
+        int: Signed difference in milliseconds.
     """
     diff = (end - start) & _TICKS_MAX
     return ((diff + _TICKS_HALFPERIOD) & _TICKS_MAX) - _TICKS_HALFPERIOD

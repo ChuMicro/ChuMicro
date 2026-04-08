@@ -298,7 +298,7 @@ class Runner:
         3. Decrement run counts; auto-remove exhausted entries.
 
         Returns:
-            now_ms (int): The tick timestamp used this cycle.
+            int: The tick timestamp used this cycle.
         """
         ticks = self._ticks
         now_ms = ticks.ticks_ms()

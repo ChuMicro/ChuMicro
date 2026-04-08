@@ -37,7 +37,7 @@ try:
             obj (object): Python object to serialize.
 
         Returns:
-            data (bytes): Msgpack-encoded data.
+            bytes: Msgpack-encoded data.
         """
         buffer = BytesIO()
         pack(obj, buffer)
@@ -50,7 +50,7 @@ try:
             data (bytes | bytearray | memoryview): Msgpack-encoded data.
 
         Returns:
-            result (object): Deserialized Python object.
+            object: Deserialized Python object.
         """
         return unpack(BytesIO(data))
 

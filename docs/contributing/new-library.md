@@ -213,13 +213,19 @@ def ticks_diff(end, start):
         start (int): The earlier tick value.
 
     Returns:
-        result (int): Signed difference in milliseconds. Positive if ``end``
+        int: Signed difference in milliseconds. Positive if ``end``
             is after ``start``.
 
     Raises:
         OverflowError: If the difference exceeds the tick range.
     """
 ```
+
+> **`Args:` vs `Returns:` format:** `Args:` uses `name (type): description`.
+> `Returns:` uses `type: description` — no name, just the type.  This is
+> standard Google-style.  See [Decision 0021][d0021] for details.
+
+[d0021]: https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0021-docstring-type-policy.md
 
 ## 5. Write examples
 
