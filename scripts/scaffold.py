@@ -442,14 +442,118 @@ _API_TEMPLATE = """\
 
 #: Minimal example script included as ``examples/quickstart.py``.
 _EXAMPLE_TEMPLATE = """\
-\"\"\"{display_name} example.
+\"\"\"{display_name} quickstart.
 
-Describe what this example demonstrates.
+Shows basic usage of the {display_name} class.
 
 Runs on CPython, MicroPython, and CircuitPython.
+
+Example output::
+
+    Created {display_name} with value=42
+    Current value: 42
+    Value after update: 100
 \"\"\"
 
-print("Hello from chumicro-{name}!")
+from {import_name} import {class_name}
+
+thing = {class_name}(value=42)
+print(f"Created {display_name} with value={{thing.value}}")
+
+print(f"Current value: {{thing.value}}")
+
+thing.update(100)
+print(f"Value after update: {{thing.value}}")
+"""
+
+#: Starter implementation module demonstrating project patterns.
+_CORE_TEMPLATE = """\
+\"\"\"Core implementation for chumicro-{name}.\"\"\"
+
+
+class {class_name}:
+    \"\"\"A starter class demonstrating Chumicro library patterns.
+
+    Replace this with your real implementation.  This placeholder shows:
+
+    - Constructor injection (Decision 0010)
+    - Google-style docstrings with types (Decision 0021)
+    - A ``check(now_ms)`` method for Runner integration (Decision 0014)
+
+    Args:
+        value (int): Initial value.
+    \"\"\"
+
+    def __init__(self, value=0):
+        \"\"\"Create a new {class_name}.
+
+        Args:
+            value (int): Initial value.
+        \"\"\"
+        self._value = value
+
+    @property
+    def value(self):
+        \"\"\"Return the current value.
+
+        Returns:
+            int: The current value.
+        \"\"\"
+        return self._value
+
+    def update(self, new_value):
+        \"\"\"Update the stored value.
+
+        Args:
+            new_value (int): The new value to store.
+        \"\"\"
+        self._value = new_value
+
+    def check(self, now_ms):
+        \"\"\"Tick-based check for Runner integration.
+
+        Called once per tick by the Runner.  Replace this with real
+        logic or remove if the library has no active components.
+
+        Args:
+            now_ms (int): Current tick value in milliseconds.
+
+        Returns:
+            bool: ``True`` if something happened this tick.
+        \"\"\"
+        return False
+"""
+
+#: Starter test file demonstrating testing patterns.
+_TEST_TEMPLATE = """\
+\"\"\"Tests for {import_name}.\"\"\"
+
+import {import_name}
+
+
+class Test{class_name}:
+    \"\"\"Tests for the {class_name} class.\"\"\"
+
+    def test_default_value(self):
+        \"\"\"Default value is zero.\"\"\"
+        thing = {import_name}.{class_name}()
+        assert thing.value == 0
+
+    def test_initial_value(self):
+        \"\"\"{class_name} stores the initial value.\"\"\"
+        thing = {import_name}.{class_name}(value=42)
+        assert thing.value == 42
+
+    def test_update(self):
+        \"\"\"update() changes the stored value.\"\"\"
+        thing = {import_name}.{class_name}(value=1)
+        thing.update(99)
+        assert thing.value == 99
+
+    def test_check_returns_false(self):
+        \"\"\"Placeholder check always returns False.\"\"\"
+        thing = {import_name}.{class_name}()
+        assert thing.check(now_ms=0) is False
 """
 
 
@@ -465,16 +569,22 @@ def _scaffold_library(name: str) -> int:
         ├── README.md                     # GitHub/PyPI readme
         ├── src/chumicro_<name>/
         │   ├── __init__.py               # public exports
+        │   ├── core.py                   # starter implementation
         │   └── testing.py                # test fakes stub
         ├── tests/
-        │   └── conftest.py               # per-library pytest config
+        │   ├── conftest.py               # per-library pytest config
+        │   └── test_<name>.py            # starter tests
         ├── functional_tests/             # on-device tests (empty)
         ├── docs/                         # MkDocs source pages
         │   ├── index.md, guide.md, api.md, testing.md
         └── examples/
-            └── quickstart.py
+            └── quickstart.py             # starter example
     """
     import_name = f"chumicro_{name.replace('-', '_')}"
+    # Class name: "my-thing" → "MyThing"
+    class_name = "".join(
+        part.capitalize() for part in name.replace("-", "_").split("_")
+    )
 
     library_dir = ROOT / "libraries" / name
 
@@ -531,12 +641,26 @@ def _scaffold_library(name: str) -> int:
     # Example
     display_name = name.replace("-", " ").replace("_", " ").title()
     (library_dir / "examples" / "quickstart.py").write_text(
-        _EXAMPLE_TEMPLATE.format(name=name, display_name=display_name)
+        _EXAMPLE_TEMPLATE.format(
+            name=name,
+            display_name=display_name,
+            import_name=import_name,
+            class_name=class_name,
+        )
     )
 
-    # Package __init__.py
+    # Package __init__.py — exports the starter class
     (library_dir / "src" / import_name / "__init__.py").write_text(
         f'"""Public exports for the chumicro-{name} package."""\n'
+        f"\n"
+        f"from .core import {class_name}\n"
+        f"\n"
+        f'__all__ = ["{class_name}"]\n'
+    )
+
+    # core.py — starter implementation with project patterns
+    (library_dir / "src" / import_name / "core.py").write_text(
+        _CORE_TEMPLATE.format(name=name, class_name=class_name)
     )
 
     # testing.py stub — delete if the library has no injectable services
@@ -547,6 +671,12 @@ def _scaffold_library(name: str) -> int:
     # Tests conftest.py (no __init__.py — avoids module name collisions across libraries)
     (library_dir / "tests" / "conftest.py").write_text(
         f'"""Test configuration for the chumicro-{name} package."""\n'
+    )
+
+    # Starter test file demonstrating test patterns
+    test_name = name.replace("-", "_")
+    (library_dir / "tests" / f"test_{test_name}.py").write_text(
+        _TEST_TEMPLATE.format(import_name=import_name, class_name=class_name)
     )
 
     print(f"Created libraries/{name}/")
