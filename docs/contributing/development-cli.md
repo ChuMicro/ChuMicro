@@ -1,6 +1,6 @@
 # Development with the Command Line
 
-This guide covers the full development workflow using only the terminal. No IDE required.
+This guide covers the full development workflow using only the terminal — no IDE required. It shows what to run, what the output looks like when things work, and what to do when they don't.
 
 ## Setup
 
@@ -9,15 +9,11 @@ This guide covers the full development workflow using only the terminal. No IDE 
 git clone https://github.com/ChuMicro/ChuMicro.git
 cd ChuMicro
 
-# Create a virtual environment and install dependencies
+# Install dependencies, run lint + tests to verify
 python scripts/prepare_workspace.py --create-venv
 ```
 
-If you already have an active virtual environment:
-
-```bash
-python scripts/prepare_workspace.py
-```
+The `--create-venv` flag creates a `.venv` if one doesn't already exist. Omit it if you have a virtual environment already activated — the script will use whichever environment is active.
 
 **Expected output:**
 
@@ -35,13 +31,17 @@ If setup fails, check that Python ≥ 3.11 is installed: `python --version`.
 
 ## Running tasks
 
-All tasks go through `scripts/run.py`. The task name is the first argument:
+Everything goes through a single entry point: `scripts/run.py`. You don't need to remember separate tool commands — just the task name:
 
 ```bash
 python scripts/run.py <task> [options]
 ```
 
+Here's what each task does and how to read its output.
+
 ### Lint
+
+Checks code style across the entire workspace using [Ruff](https://docs.astral.sh/ruff/). Fast and usually the first thing to run.
 
 ```bash
 python scripts/run.py lint
@@ -71,6 +71,8 @@ Found 1 error.
 | `E302` | Expected 2 blank lines | Add blank lines between top-level definitions |
 
 ### Test
+
+Runs pytest for one or more libraries. Each library is tested in its own subprocess to avoid import collisions, and every library must hit **94% branch coverage** independently.
 
 ```bash
 # Test one library
@@ -134,6 +136,8 @@ FAIL Required test coverage of 94.0% not reached. Total coverage: 87.50%
 
 ### Verify examples
 
+Checks that every example script in a library has valid syntax and resolvable imports. Quick to run — catches copy-paste mistakes before they reach users.
+
 ```bash
 python scripts/run.py verify-examples --libraries timing
 ```
@@ -158,6 +162,8 @@ All 9 example(s) verified.
 **How to fix:** Open the example file and fix the syntax error at the reported line.
 
 ### Build docs
+
+Builds the MkDocs documentation site for a library. Docstrings are rendered into API reference pages by mkdocstrings, so this also catches malformed docstrings.
 
 ```bash
 python scripts/run.py docs --libraries timing
@@ -220,6 +226,8 @@ Look for lines starting with `FAIL` or `ERROR`. Fix the issue and run preflight 
 
 ### Build
 
+Builds distributable packages (`.tar.gz` and `.whl`) for all libraries. You rarely need this during development — preflight runs it for you — but it's useful to verify packaging independently.
+
 ```bash
 python scripts/run.py build
 ```
@@ -234,18 +242,11 @@ python scripts/run.py build
 
 ## Commit workflow
 
-Never use `git commit -m`. Write the message to `.scratch/commit-msg.txt`:
+Stage your changes and commit. Git opens your default editor for the message:
 
 ```bash
-# Create the message (use your editor, or redirect)
-nano .scratch/commit-msg.txt
-
-# Stage and commit
 git add -A
-git commit -F .scratch/commit-msg.txt
-
-# Verify
-git log --oneline -1
+git commit
 ```
 
 The commit message format:
@@ -258,6 +259,8 @@ Name affected libraries.
 
 Affects: timing, runner
 ```
+
+Use imperative mood in the subject — "Fix wraparound bug", not "Fixed" or "Fixes".
 
 ## Validation checklist
 

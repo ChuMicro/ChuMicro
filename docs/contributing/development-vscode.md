@@ -1,6 +1,6 @@
 # Development with VS Code
 
-This guide covers the full development workflow in Visual Studio Code. The project includes shared task definitions and settings that work out of the box.
+This guide covers the full development workflow in Visual Studio Code. The project includes shared task definitions and settings that work out of the box — no manual configuration needed beyond selecting a Python interpreter.
 
 ## Setup
 
@@ -61,7 +61,7 @@ Workspace is ready.
 
 ## Import resolution
 
-VS Code resolves imports through two generated config files:
+The mono-workspace layout means each library has its own `src/` directory. VS Code resolves imports through two generated config files:
 
 - **`pyrightconfig.json`** — sets `extraPaths` for each library's `src/` directory
 - **`.vscode/settings.json`** — sets `python.analysis.extraPaths` for Pylance
@@ -168,7 +168,7 @@ python scripts/run.py test -k timing/test_heartbeat -x -v --no-cov
 
 ## What "valid" means
 
-Every check enforces a specific quality gate. Here's what each one verifies:
+Every check enforces a specific quality gate. Here's what each one verifies and what a typical failure looks like:
 
 | Check | Pass condition | Typical output on failure |
 |-------|---------------|--------------------------|

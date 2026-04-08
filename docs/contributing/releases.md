@@ -77,7 +77,7 @@ What maintainers look for:
 
 ## Channels and package names
 
-The experimental and stable channels use **different package names** on PyPI but **identical import paths** on-device:
+This is the key thing to understand: the experimental and stable channels use **different package names** on PyPI but **identical import paths** on-device. Your code doesn't change when upgrading from experimental to stable:
 
 | | Experimental | Stable |
 |---|---|---|

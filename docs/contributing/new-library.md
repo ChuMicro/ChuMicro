@@ -33,21 +33,23 @@ libraries/my-thing/
 ├── README.md                        # package README (fill in TODOs)
 ├── mkdocs.yml                       # docs config
 ├── src/chumicro_my_thing/
-│   ├── __init__.py                  # public exports
+│   ├── __init__.py                  # public exports (imports MyThing)
+│   ├── core.py                      # starter class with patterns
 │   └── testing.py                   # test fakes (keep or delete)
 ├── tests/
-│   └── conftest.py                  # pytest config
+│   ├── conftest.py                  # pytest config
+│   └── test_my_thing.py             # starter tests (100% coverage)
 ├── docs/
 │   ├── index.md                     # docs landing page
 │   ├── guide.md                     # user guide (fill in)
-│   ├── api.md                       # API reference (auto-generated)
+│   ├── api.md                       # API reference (mkdocstrings renders it; curate sections as you add modules)
 │   └── testing.md                   # testing helpers docs
 ├── examples/
-│   └── quickstart.py                # starter example
+│   └── quickstart.py                # working example using MyThing
 └── functional_tests/                # on-device tests
 ```
 
-It also regenerates IDE configs so imports resolve immediately.
+The scaffold is immediately runnable — tests pass at 100% coverage, lint is clean, and the example executes.  Start by replacing the starter `MyThing` class in `core.py` with your real implementation.
 
 ## 2. Implement
 
@@ -196,7 +198,7 @@ python scripts/run.py docs --libraries my-thing --serve
 
 ### API reference (`docs/api.md`)
 
-This is auto-generated from docstrings by mkdocstrings. You don't edit this file directly — write good docstrings and the API docs will be good.
+mkdocstrings renders API docs from your docstrings — the scaffold starts with a single `::: chumicro_my_thing` directive that covers the starter class. As you add modules, add section headings and per-module directives (e.g., `::: chumicro_my_thing.core`). See `libraries/timing/docs/api.md` for an example.
 
 Every public function, method, and class needs a Google-style docstring:
 
