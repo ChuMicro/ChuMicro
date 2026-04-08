@@ -2,18 +2,7 @@
 
 ## Now
 
-- [ ] Document contributor prerequisites by platform (macOS, Linux, Windows/WSL2) and by editor (PyCharm, VS Code, CLI) in the README. Linux and WSL2 sections are best-effort/researched until verified.
-  - When writing these docs, scope the AGENTS.md performance guidelines (f-strings, `const()`, `memoryview`, pre-allocated buffers, etc.) to **library code only**. Infrastructure code (`scripts/`, `support/`) runs exclusively on CPython and does not need embedded-runtime constraints.
-- [ ] Write a "Creating a New Library" contributor guide. Walk through the full lifecycle from scaffolding to release-ready:
-  1. `new-library` scaffolding — what it creates, what it doesn't (e.g., no `testing` submodule by default)
-  2. Library code — dependency injection (Decision 0010), `check(now_ms) -> bool` gate-based contract for active components (Decision 0014), memory-efficient patterns for embedded targets
-   3. Unit tests — per-library test runs (Decision 0009), 94% coverage threshold, constructor injection for testability
-  4. Testing submodule — when and how to add `src/chumicro_<name>/testing.py` with ready-made fakes
-  5. Docs — `guide.md` required sections, `api.md` autodoc rules, generation prompt (Decision 0013)
-  6. Examples — top-level style (no `__main__` guard), verified via AST-based import checking in preflight (Decision 0013)
-  7. VERSION bumps — semantic versioning rules, when to bump
-  8. Preflight — running `python scripts/run.py preflight` before committing
-  - This should live in the repo (e.g., `docs/creating-a-library.md` or a top-level `CONTRIBUTING.md` section), not just in AGENTS.md or decision records.
+(empty)
 
 ## Next
 
@@ -43,6 +32,7 @@
 
 ## Done (recent)
 
+- [x] Create CONTRIBUTING.md, contributor sub-guides (first-pr, new-library, releases), and GitHub issue templates (bug report, feature request, stable promotion).
 - [x] Rationalize `plans/` folder: remove duplicated prompt files, transform workspace-history into a knowledge document, trim done workstreams, simplify end-of-session checklist.
 - [x] Promote MicroPython and CircuitPython CI jobs to required status checks, gated by platform targeting (Decision 0011).
 - [x] Validate PR flow and branch protection rulesets end-to-end.

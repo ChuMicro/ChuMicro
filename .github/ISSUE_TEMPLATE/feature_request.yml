@@ -1,0 +1,63 @@
+name: Feature Request
+description: Suggest a new feature or improvement
+labels: ["feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have an idea for Chumicro? Describe it here. We welcome feature requests for existing libraries and proposals for new ones.
+
+  - type: dropdown
+    id: library
+    attributes:
+      label: Library
+      description: Which library does this relate to?
+      options:
+        - timing
+        - runner
+        - compat
+        - msgpack
+        - New library
+        - Infrastructure / tooling
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What problem does this solve? What are you trying to do that you can't do today?
+      placeholder: |
+        I'm building a weather station and need to store calibration settings
+        persistently across reboots, but there's no Chumicro library for
+        persistent key-value storage.
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How do you think this should work? Code examples are welcome.
+      placeholder: |
+        A Settings class that wraps NVM on CircuitPython and files on
+        MicroPython/CPython, with a dict-like API and explicit save/load.
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Have you looked at other approaches? What are the tradeoffs?
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Would you like to implement this?
+      options:
+        - label: I'm willing to submit a PR for this feature
+
