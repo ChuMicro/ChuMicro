@@ -43,6 +43,7 @@ Use this template:
 
 Status: `accepted`
 Date: `YYYY-MM-DD`
+Related: <!-- Decision numbers, open questions, or "none" -->
 
 ## Context
 
@@ -65,6 +66,7 @@ Date: `YYYY-MM-DD`
 
 | Status | Meaning |
 |---|---|
+| `proposed` | Written up for review — not yet committed to |
 | `accepted` | Active and enforced |
 | `superseded` | Replaced by a newer decision (link to it) |
 | `revised` | Updated in-place (note the revision date) |
@@ -90,9 +92,10 @@ If the decision affects an existing decision, add a note to the old one:
 - [ ] File exists at `plans/decisions/NNNN-<slug>.md`
 - [ ] Number is sequential (no gaps, no duplicates)
 - [ ] Has all three sections: Context, Decision, Consequences
-- [ ] Status and date are present
+- [ ] Status, date, and Related field are present
 - [ ] `AGENTS.md` updated if the decision adds hard rules or pitfalls
 - [ ] Referenced from related decisions if applicable
+- [ ] If the decision resolves an open question, update `plans/open-questions.md`
 
 ## Style notes
 
