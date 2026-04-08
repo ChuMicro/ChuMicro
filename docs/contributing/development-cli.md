@@ -15,16 +15,12 @@ python scripts/prepare_workspace.py --create-venv
 
 The `--create-venv` flag creates a `.venv` if one doesn't already exist. Omit it if you have a virtual environment already activated — the script will use whichever environment is active.
 
-**Expected output:**
+The setup script installs dependencies, then runs lint and tests to verify the workspace. It produces a lot of output — look for this at the end:
 
 ```
-Creating virtual environment (.venv) ...
-Installing dev dependencies ...
-✓ Dependencies installed
-Running initial verification ...
-✓ Lint passed
-✓ Tests passed
-Workspace is ready.
+============================================================
+  Workspace is ready
+============================================================
 ```
 
 If setup fails, check that Python ≥ 3.11 is installed: `python --version`.
@@ -236,8 +232,9 @@ python scripts/run.py build
 
 ```
 == build libraries/timing ==
-  Built: libraries/timing/dist/chumicro_timing-0.1.15.tar.gz
-  Built: libraries/timing/dist/chumicro_timing-0.1.15-py3-none-any.whl
+...
+Successfully built chumicro_timing-0.1.15.tar.gz and chumicro_timing-0.1.15-py3-none-any.whl
+Built 4 package(s): libraries/compat, libraries/msgpack, libraries/runner, libraries/timing
 ```
 
 ## Commit workflow
