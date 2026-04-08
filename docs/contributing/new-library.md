@@ -213,7 +213,7 @@ def ticks_diff(end, start):
         start (int): The earlier tick value.
 
     Returns:
-        int: Signed difference in milliseconds. Positive if ``end``
+        result (int): Signed difference in milliseconds. Positive if ``end``
             is after ``start``.
 
     Raises:
