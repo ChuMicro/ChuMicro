@@ -144,7 +144,14 @@ chumicro/
 
 ## Contributing
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full guide — from first PR to publishing your own library. The project welcomes contributors of all experience levels.
+Start with [`CONTRIBUTING.md`](CONTRIBUTING.md) — it covers setup, rules, and workflow, then links to the right guide for your task:
+
+- **[Command Line](docs/contributing/development-cli.md)**, **[PyCharm](docs/contributing/development-pycharm.md)**, or **[VS Code](docs/contributing/development-vscode.md)** — pick your environment
+- **[Creating a Pull Request](docs/contributing/pull-requests.md)** — submitting your work
+- **[Adding a New Library](docs/contributing/new-library.md)** — publishing your own library
+- **[Releases and Promotion](docs/contributing/releases.md)** — how publishing works
+
+Contributors of all experience levels are welcome.
 
 ## Planning
 
