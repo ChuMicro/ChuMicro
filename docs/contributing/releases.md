@@ -1,4 +1,4 @@
-# Releases
+# Releases and Promotion
 
 Chumicro uses a two-channel release model: **experimental** (automatic) and **stable** (promoted by a maintainer). This page explains how releases work and how to request a stable promotion.
 

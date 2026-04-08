@@ -87,7 +87,7 @@ Use imperative mood in the subject line. Name affected libraries in the body.
 
 ## Pull request workflow
 
-> **Detailed walkthrough:** See [Your First PR](docs/contributing/first-pr.md) for a step-by-step guide with expected output at each stage.
+> **Detailed walkthrough:** See [Creating a Pull Request](docs/contributing/first-pr.md) for a step-by-step guide with expected output at each stage.
 
 1. Push your branch: `git push -u origin feature/my-change`
 2. Open a PR on GitHub targeting `main`
@@ -109,7 +109,7 @@ CI enforces this — if you change source files without bumping VERSION, `check-
 
 ## Publishing and releases
 
-> **Full details:** See [Releases](docs/contributing/releases.md) for the complete release pipeline.
+> **Full details:** See [Releases and Promotion](docs/contributing/releases.md) for the complete release pipeline.
 
 When your PR merges to `main` with a VERSION bump, the library is **automatically published as an experimental release** — to PyPI, the experimental bundle repo, and experimental docs. No manual steps needed.
 
@@ -119,9 +119,9 @@ When your PR merges to `main` with a VERSION bump, the library is **automaticall
 2. A maintainer verifies and runs the promotion workflow
 3. The library is published to the stable PyPI package, stable bundle repo, and stable docs
 
-## Contributing a new library
+## Adding a new library
 
-> **Full guide:** See [Contributing a New Library](docs/contributing/new-library.md) for the complete lifecycle from idea to published package.
+> **Full guide:** See [Adding a New Library](docs/contributing/new-library.md) for the complete lifecycle from idea to published package.
 
 The short version:
 
