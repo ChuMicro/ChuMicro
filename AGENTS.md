@@ -202,6 +202,6 @@ Planning docs under `plans/` are part of the repository's working state.  See `p
 1. Keep PRs small and focused.  Include tests and documentation.
 2. Code review checks: style, coverage, memory usage, API consistency across runtimes.
 3. Do not commit build artifacts, bytecode, or secret configuration files.
-4. **Commit after completing a meaningful unit of work.**  End sessions with a clean tree.  Use the [end-of-session checklist](plans/end-of-session.md).
+4. **Commit after completing a meaningful unit of work.**  End sessions with a clean tree.  Use the `end-of-session` skill.
 5. **Write commit messages that aid context recovery** — imperative subject, body explaining *why*, name affected libraries/decisions.
 6. **Commit mechanics:** Never `git commit -m`.  Write to `.scratch/commit-msg.txt` and use `git commit -F`.  See `.github/skills/git-commit/SKILL.md`.

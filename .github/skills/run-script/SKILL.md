@@ -12,16 +12,13 @@ The agent terminal **cannot reliably handle** multi-line input. This includes:
 - Heredocs (`<< EOF ... EOF`) for creating files
 - `echo` / `printf` / `cat` with embedded newlines
 
-**Always write the content to a `.scratch/` file using a file tool, then run or use it from the terminal.**
+**Always write the content to a `.scratch/` file using `create_file`, then run or use it from the terminal.**
 
 ## Running Python code
 
 ### Step 1 — Write the script
 
-Use a **file tool** to write the Python code to `.scratch/<descriptive-name>.py`.
-
-- **First time:** use `create_file`.
-- **Replacing an existing scratch file:** use `insert_edit_into_file`.
+Use `create_file` to write the Python code to `.scratch/<descriptive-name>.py`. This overwrites any previous content.
 
 ### Step 2 — Run it
 
@@ -58,16 +55,6 @@ Path("output.yml").write_text("key: value\n")
 ```
 
 Then run it: `python .scratch/gen_config.py`
-
-## Critical: replacing scratch files
-
-`insert_edit_into_file` **will append** if it thinks the new content is an addition. This produces a script containing the previous script concatenated with the new one.
-
-When using `insert_edit_into_file` to replace a scratch file:
-
-1. **Provide only the new file content.**
-2. **Do not use `...existing code...` comments.** The entire file is being replaced.
-3. **Do not reference or include any part of the previous content.**
 
 ## Rules
 
