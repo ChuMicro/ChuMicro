@@ -164,9 +164,31 @@ Fill in the PR template:
 - **Motivation:** Why this change is needed
 - **Changes:** List the files changed
 - **How to verify:** Concrete steps (`python scripts/run.py test --libraries timing`)
+- **Device testing:** Screenshot/video + console output from a real device (see below)
 - **Version impact:** For test-only changes, select "No bump needed"
 
-## 9. CI runs
+## 9. Device testing
+
+For library code changes, your PR must include evidence of on-device testing:
+
+1. **Screenshot or video** of the code running on a device
+2. **Console output** (scrub any PII — WiFi credentials, IP addresses, etc.)
+3. **Board used** (e.g., "Adafruit QT Py ESP32-S3")
+4. **Runtime and version** (e.g., "CircuitPython 10.1.4" or "MicroPython v1.26.0")
+5. **What manual tests were run** and their results
+
+Drag images/videos directly into the PR description on GitHub — they upload automatically.
+
+**Exceptions** (note the reason in the PR and delete the Device Testing section):
+
+- Docs-only, test-only, or infrastructure-only changes
+- Trivial fixes (typos, comment corrections)
+- Changes to `support/` or `scripts/` (CPython-only code)
+- Libraries with no hardware interaction (e.g., `compat`, `msgpack`)
+
+**Don't have a device?** Say so in the PR — a maintainer can help test.
+
+## 10. CI runs
 
 After you open the PR, GitHub Actions runs the full CI suite:
 
@@ -197,7 +219,7 @@ Common failures:
 | `version-check` | Changed source without bumping VERSION | Edit `libraries/<name>/VERSION` |
 | `api-check` | Removed or renamed a public function | Bump VERSION to next minor/major |
 
-## 10. Review and merge
+## 11. Review and merge
 
 A maintainer will review your PR. They may:
 

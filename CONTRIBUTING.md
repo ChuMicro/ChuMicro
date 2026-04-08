@@ -73,6 +73,7 @@ These are enforced by CI — your PR won't merge without them:
 - **Docs must build.** Run: `python scripts/run.py docs --libraries <name>`
 - **No API breakage** without a VERSION bump. CI runs `check-api` and `check-version` automatically.
 - **Cross-runtime compatibility.** CI runs your code under MicroPython and CircuitPython unix ports.
+- **Device testing evidence.** PRs that change library code must include a screenshot/video and console output from a real device, plus board and runtime details. See [Creating a Pull Request](docs/contributing/pull-requests.md#9-device-testing) for exceptions.
 
 ### Commit messages
 
