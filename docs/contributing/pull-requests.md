@@ -117,13 +117,14 @@ For IDE-specific ways to run these checks, see the [PyCharm](development-pycharm
 
 ## 6. Commit
 
-Never use `git commit -m`. Write the message to `.scratch/commit-msg.txt` with your editor:
+Stage your changes and commit:
 
 ```bash
-nano .scratch/commit-msg.txt
+git add -A
+git commit
 ```
 
-Example message:
+Git opens your editor. Write a message like:
 
 ```
 Add edge-case test for ticks_add with zero delta
@@ -133,24 +134,7 @@ Verifies that ticks_add(x, 0) returns x unchanged.
 Affects: timing
 ```
 
-Then commit:
-
-```bash
-git add -A
-git commit -F .scratch/commit-msg.txt
-```
-
-Verify:
-
-```bash
-git log --oneline -1
-```
-
-Expected:
-
-```
-a1b2c3d Add edge-case test for ticks_add with zero delta
-```
+Use imperative mood in the subject — "Add test", not "Added" or "Adds".
 
 ## 7. Push
 
@@ -259,7 +243,7 @@ git push origin main
 | Run tests | `python scripts/run.py test --libraries <name>` |
 | Run lint | `python scripts/run.py lint` |
 | Full check | `python scripts/run.py preflight 2>&1 \| tail -5` |
-| Commit | `git add -A && git commit -F .scratch/commit-msg.txt` |
+| Commit | `git add -A && git commit` |
 | Push | `git push -u origin <branch>` |
 | Open PR | `gh pr create` or GitHub UI |
 

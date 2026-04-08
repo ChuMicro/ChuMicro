@@ -18,13 +18,13 @@ Welcome! Chumicro is an open platform for cross-runtime Python libraries targeti
 
 ## Development environment
 
-Choose your environment and follow the setup guide:
+The project supports three workflows — pick whichever you're comfortable with:
 
 - **[Command Line](docs/contributing/development-cli.md)** — setup, all tasks, output examples for success and failure, validation checklist
 - **[PyCharm](docs/contributing/development-pycharm.md)** — interpreter setup, run configurations, test explorer, import resolution
 - **[VS Code](docs/contributing/development-vscode.md)** — extensions, tasks, test explorer, Pylance configuration
 
-Each guide covers the full workflow: setup → running tasks → interpreting output → troubleshooting failures.
+Each guide covers the full workflow: setup → running tasks → interpreting output → troubleshooting failures. You only need one.
 
 ## Quick start
 
@@ -65,7 +65,7 @@ git checkout -b feature/my-change
 
 ### Key rules
 
-These are enforced by CI — your PR won't merge without them:
+Don't worry about memorizing these — CI enforces them all automatically. Your PR won't merge until they pass:
 
 - **94% test coverage** per library. Run: `python scripts/run.py test --libraries <name>`
 - **No lint errors.** Run: `python scripts/run.py lint`
@@ -77,15 +77,11 @@ These are enforced by CI — your PR won't merge without them:
 
 ### Commit messages
 
-Write commit messages to a file — never use `git commit -m` (breaks on special characters):
+Write clear commit messages that explain *why*, not just *what*. Git opens your default editor when you run `git commit`:
 
 ```bash
-# Write the message with your editor
-nano .scratch/commit-msg.txt
-# (or vim, code, etc.)
-
-# Commit
-git add -A && git commit -F .scratch/commit-msg.txt
+git add -A
+git commit
 ```
 
 Example message:
@@ -113,7 +109,7 @@ Use imperative mood in the subject line. Name affected libraries in the body.
 
 ### VERSION bumps
 
-If your PR changes library source code (not just tests, docs, or infra), bump the `VERSION` file:
+Libraries use [semantic versioning](https://semver.org/). If your PR changes library source code (not just tests, docs, or infra), bump the `VERSION` file:
 
 | Change type | Bump | Example |
 |---|---|---|
@@ -152,6 +148,8 @@ python scripts/run.py preflight              # must pass
 Libraries must work on all three runtimes (CircuitPython, MicroPython, CPython) unless platform-restricted via `pyproject.toml`. The tooling checks this automatically.
 
 ## Project rules (quick reference)
+
+These aren't arbitrary — each one traces to a design decision with rationale. Browse `plans/decisions/` if you're curious about the reasoning.
 
 | Rule | Why |
 |---|---|
