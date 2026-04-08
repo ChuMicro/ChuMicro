@@ -1,5 +1,5 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="CircuitPython Compat" type="PythonConfigurationType" factoryName="Python">
+  <configuration default="false" name="CircuitPython Compatibility" type="PythonConfigurationType" factoryName="Python">
     <module name="chumicro" />
     <option name="SCRIPT_NAME" value="$PROJECT_DIR$/scripts/run.py" />
     <option name="PARAMETERS" value="test-circuitpython-compatibility" />

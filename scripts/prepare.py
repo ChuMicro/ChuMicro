@@ -70,8 +70,13 @@ def resolve_micropython_binary(binary: str | None = None) -> str | None:
       1. *binary* — explicit override from CLI (``--micropython-binary``).
       2. Marker file from ``prepare-micropython`` — local repository-managed build.
       3. System PATH lookup — globally installed binary as last resort.
+
+    Raises :class:`SystemExit` if *binary* is given but does not exist.
     """
     if binary:
+        if not Path(binary).exists():
+            print(f"MicroPython binary not found: {binary}")
+            raise SystemExit(1)
         return binary
     prepared = _read_prepared_binary("micropython.path")
     if prepared:
@@ -86,8 +91,13 @@ def resolve_circuitpython_binary(binary: str | None = None) -> str | None:
       1. *binary* — explicit override from CLI (``--circuitpython-binary``).
       2. Marker file from ``prepare-circuitpython`` — local repository-managed build.
       3. System PATH lookup — globally installed binary as last resort.
+
+    Raises :class:`SystemExit` if *binary* is given but does not exist.
     """
     if binary:
+        if not Path(binary).exists():
+            print(f"CircuitPython binary not found: {binary}")
+            raise SystemExit(1)
         return binary
     prepared = _read_prepared_binary("circuitpython.path")
     if prepared:

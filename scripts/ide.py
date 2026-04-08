@@ -89,14 +89,14 @@ def _sync_run_configurations() -> None:
 
     # Remove stale configurations that were previously managed but dropped
     # from the list.  Only delete files whose name matches the managed
-    # naming pattern (Title_Case_Underscored.xml).  The heuristic: a file
-    # is "managed" if its stem equals the title-cased, underscore-joined
-    # form of itself.  User-created configs (e.g. "my debug run.xml") won't
-    # match this pattern and are left untouched.
+    # naming pattern.  The heuristic: a file is "managed" if every
+    # underscore-separated part of its stem starts with an uppercase letter
+    # (e.g. ``CircuitPython_Compatibility.xml``).  User-created configs
+    # (e.g. ``my_debug_run.xml``) won't match and are left untouched.
     for existing in sorted(run_config_dir.iterdir()):
         if existing.suffix == ".xml" and existing.name not in managed_filenames:
-            stem = existing.stem
-            if stem == stem.replace(" ", "_").title().replace(" ", "_"):
+            parts = existing.stem.split("_")
+            if all(part and part[0].isupper() for part in parts):
                 existing.unlink()
 
     print(f"  Updated .idea/runConfigurations/ ({len(_TASKS)} configurations)")
