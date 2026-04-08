@@ -1,6 +1,6 @@
-# Your First Pull Request
+# Creating a Pull Request
 
-This guide walks you through making your first contribution — from fork to merged PR. Every step shows the commands and what to expect.
+Step-by-step guide to contributing a change — from fork to merged PR. Every step shows the commands and expected output.
 
 ## 1. Fork and clone
 

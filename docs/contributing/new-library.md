@@ -1,4 +1,4 @@
-# Contributing a New Library
+# Adding a New Library
 
 This guide walks you through the full lifecycle of adding a new library to Chumicro — from idea to published package. It's written for humans; if you're working with an AI agent, point it at the [`new-library` skill](../../.github/skills/new-library/SKILL.md) for the condensed version.
 
