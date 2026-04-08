@@ -32,9 +32,7 @@ Expected output (last few lines):
 Workspace is ready.
 ```
 
-**PyCharm users:** Open the project folder. Shared run configurations appear automatically — look for Preflight, Lint, Test, Build in the run dropdown.
-
-**VS Code users:** Open the folder. Tasks are available via Command Palette → *Tasks: Run Task*.
+For IDE-specific setup, see the [PyCharm](development-pycharm.md) or [VS Code](development-vscode.md) development guides.
 
 ## 3. Create a branch
 
@@ -111,9 +109,7 @@ Expected:
 Preflight passed — required CI checks should pass.
 ```
 
-**PyCharm:** click the ▶ button next to "Preflight" in the run dropdown.
-
-**VS Code:** Command Palette → *Tasks: Run Task* → Preflight.
+For IDE-specific ways to run these checks, see the [PyCharm](development-pycharm.md) or [VS Code](development-vscode.md) guides. For detailed output examples (including failures), see the [CLI guide](development-cli.md#validation-checklist).
 
 ## 6. Commit
 

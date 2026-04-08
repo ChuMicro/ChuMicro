@@ -16,6 +16,16 @@ Welcome! Chumicro is an open platform for cross-runtime Python libraries targeti
 
 **Windows users:** use native Windows for editing, linting, and tests. Use WSL2 for unix-port cross-runtime checks. See [Getting started](README.md#getting-started) in the README.
 
+## Development environment
+
+Choose your environment and follow the setup guide:
+
+- **[Command Line](docs/contributing/development-cli.md)** — setup, all tasks, output examples for success and failure, validation checklist
+- **[PyCharm](docs/contributing/development-pycharm.md)** — interpreter setup, run configurations, test explorer, import resolution
+- **[VS Code](docs/contributing/development-vscode.md)** — extensions, tasks, test explorer, Pylance configuration
+
+Each guide covers the full workflow: setup → running tasks → interpreting output → troubleshooting failures.
+
 ## Quick start
 
 ```bash
@@ -31,7 +41,7 @@ python scripts/run.py preflight 2>&1 | tail -5
 # Expected: "Preflight passed — required CI checks should pass."
 ```
 
-If preflight passes, you're ready. If not, check the output for missing dependencies.
+If preflight passes, you're ready. If not, see your environment guide above for troubleshooting.
 
 ## Branching conventions
 
