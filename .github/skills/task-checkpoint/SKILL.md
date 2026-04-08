@@ -34,9 +34,9 @@ Run the **narrowest check** that covers your changes:
 
 Don't run full preflight here — save that for end-of-session.
 
-## 3. Commit if the work is meaningful
+## 3. Commit and push if the work is meaningful
 
-If the changes form a coherent unit, commit them. Use the `git-commit` skill.
+If the changes form a coherent unit, commit and push them. Use the `git-commit` skill, then `git push`.
 
 A coherent unit = one logical change that could be described in a single commit message subject line. Examples:
 - "Add FakeBackend to settings testing module"
@@ -53,6 +53,6 @@ If you couldn't complete something, or noticed something that needs follow-up, s
 
 - **This is fast.** Steps 1-3 should take under 30 seconds. If it's taking longer, you're running too broad a check.
 - **Don't skip step 1.** A `git status` catches surprises — files you forgot, files you didn't mean to change, merge artifacts.
-- **Commit early.** Small commits are easier to review and revert than large ones. If you've done something useful, commit it.
+- **Commit and push early.** Small commits are easier to review and revert than large ones. If you've done something useful, commit and push it.
 - **Don't run preflight.** That's for `end-of-session`. Here you just want to catch obvious breakage.
 
