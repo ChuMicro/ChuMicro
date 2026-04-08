@@ -263,7 +263,7 @@ Preflight runs everything CI runs: lint, tests (94% coverage), docs build, examp
 git push -u origin feature/my-thing-library
 ```
 
-Open a PR on GitHub targeting `main`. CI runs automatically. See [Your First PR](first-pr.md) for the full walkthrough.
+Open a PR on GitHub targeting `main`. CI runs automatically. See [Creating a Pull Request](pull-requests.md) for the full walkthrough.
 
 ## 9. After merge — experimental release
 
