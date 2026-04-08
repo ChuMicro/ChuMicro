@@ -176,7 +176,7 @@ These aren't arbitrary — each one traces to a design decision with rationale. 
 | Constructor injection for I/O | Testability without mocking things you don't own ([Decision 0010](plans/decisions/0010-library-testability.md)) |
 | Per-library `pytest` runs | Avoids test-directory collisions ([Decision 0009](plans/decisions/0009-per-library-test-runs.md)) |
 | Docstring types, not annotations | CircuitPython/MicroPython don't reliably support annotations ([Decision 0021](plans/decisions/0021-docstring-type-policy.md)) |
-| f-strings for formatting | Consistency and readability |
+| f-strings for formatting | Use `f"value={x}"` — not `%` or `.format()`. Consistent and readable across all three runtimes |
 | `const()` / `memoryview` in library code | Memory efficiency on microcontrollers — see [examples](docs/contributing/new-library.md#memory-efficient-patterns) (not required in `scripts/` or `support/`) |
 
 ## Getting help
