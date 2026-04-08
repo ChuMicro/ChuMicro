@@ -96,7 +96,11 @@ Required coverage of 94% reached. ✓
 python scripts/run.py lint
 ```
 
-Expected: no output (clean lint = silence).
+Expected:
+
+```
+All checks passed!
+```
 
 ```bash
 # Full preflight (runs everything CI runs)
@@ -113,17 +117,25 @@ For IDE-specific ways to run these checks, see the [PyCharm](development-pycharm
 
 ## 6. Commit
 
-Never use `git commit -m`. Write the message to a file:
+Never use `git commit -m`. Write the message to `.scratch/commit-msg.txt` with your editor:
 
 ```bash
-cat > .scratch/commit-msg.txt << 'EOF'
+nano .scratch/commit-msg.txt
+```
+
+Example message:
+
+```
 Add edge-case test for ticks_add with zero delta
 
 Verifies that ticks_add(x, 0) returns x unchanged.
 
 Affects: timing
-EOF
+```
 
+Then commit:
+
+```bash
 git add -A
 git commit -F .scratch/commit-msg.txt
 ```

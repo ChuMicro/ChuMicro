@@ -72,7 +72,7 @@ These patterns caused real bugs when implemented incorrectly. Follow them exactl
 - `scripts/run.py test` runs a separate pytest subprocess for each package.
 - Each run targets a single library's `tests/` directory — no collision between identically named directories.
 - `PYTHONPATH` is set to include all `src/` directories so cross-library imports work.
-- Each library must independently meet the 90% coverage threshold.  Coverage data is written per-library (`.coverage.<name>`), then `coverage combine` merges them for a combined report.
+- Each library must independently meet the 94% coverage threshold.  Coverage data is written per-library (`.coverage.<name>`), then `coverage combine` merges them for a combined report.
 - This replaced `--import-mode=importlib` (Decision 0008, now superseded) which imposed constraints on test directory structure.
 - Bare `pytest` from the repo root is not the supported path — use `run.py test`.
 
