@@ -26,10 +26,9 @@ python scripts/prepare_workspace.py --create-venv
 Expected output (last few lines):
 
 ```
-✓ Dependencies installed
-✓ Lint passed
-✓ Tests passed
-Workspace is ready.
+============================================================
+  Workspace is ready
+============================================================
 ```
 
 For IDE-specific setup, see the [PyCharm](development-pycharm.md) or [VS Code](development-vscode.md) development guides.
@@ -83,12 +82,8 @@ python scripts/run.py test --libraries timing
 Expected output (last few lines):
 
 ```
----------- coverage: ... ----------
-Name                              Stmts   Miss Branch BrPart  Cover
-...
-TOTAL                               ...    ...    ...    ...    95%
-
-Required coverage of 94% reached. ✓
+Required test coverage of 94.0% reached. Total coverage: 100.00%
+============================== 24 passed in 0.04s ==============================
 ```
 
 ```bash

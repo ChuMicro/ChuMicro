@@ -34,13 +34,12 @@ Open the built-in terminal (**View → Tool Windows → Terminal**, or `⌥F12` 
 python scripts/prepare_workspace.py
 ```
 
-This installs dependencies and verifies the workspace. Expected output:
+This installs dependencies and verifies the workspace. It produces a lot of output — look for this at the end:
 
 ```
-✓ Dependencies installed
-✓ Lint passed
-✓ Tests passed
-Workspace is ready.
+============================================================
+  Workspace is ready
+============================================================
 ```
 
 ## Import resolution

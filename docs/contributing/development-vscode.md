@@ -50,13 +50,12 @@ Open the integrated terminal (`⌃\`` / `` Ctrl+` ``) and run:
 python scripts/prepare_workspace.py
 ```
 
-Expected output:
+The script produces a lot of output — look for this at the end:
 
 ```
-✓ Dependencies installed
-✓ Lint passed
-✓ Tests passed
-Workspace is ready.
+============================================================
+  Workspace is ready
+============================================================
 ```
 
 ## Import resolution
