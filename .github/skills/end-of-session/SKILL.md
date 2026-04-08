@@ -1,3 +1,8 @@
+---
+name: end-of-session
+description: Checklist to run at the end of every working session. Use this skill before finishing work to ensure a clean tree and current planning docs.
+---
+
 # End-of-session checklist
 
 Use this checklist at the end of every working session to ensure the workspace
@@ -5,21 +10,15 @@ is clean and planning docs are current.
 
 ## 1. Run preflight
 
-```zsh
-python scripts/run.py preflight
+```bash
+python scripts/run.py preflight 2>&1 | tail -5
 ```
 
-Do not commit code that fails lint, tests, or build.
+Must show: `Preflight passed — required CI checks should pass.`
 
-## 2. Check for uncommitted work
+If it fails, fix the issue before continuing. Use the `debug-test-failure` skill if tests fail.
 
-```zsh
-git status --short
-```
-
-If there are uncommitted changes, stage and commit them before proceeding.
-
-## 3. Check VERSION bumps
+## 2. Check VERSION bumps
 
 If any library under `libraries/` was changed (this session or in unpushed
 commits from a prior session), check whether the change affects the published
@@ -27,18 +26,30 @@ surface area (new API, changed behavior, bug fix).  If so, verify the
 library's `VERSION` file was bumped with the smallest correct semantic-version
 increment.
 
-## 4. Check IDE configs
+## 3. Check IDE configs
 
 If any library or support package was added or removed, run
 `python scripts/run.py sync-ide` to regenerate PyCharm and VS Code configs.
 (`new-library` calls this automatically, but manual structural changes can
 leave configs stale.)
 
-## 5. Audit planning docs
+## 4. Audit planning docs
 
-Scan `git log --oneline -20` for commits that added, removed, or renamed
-libraries, APIs, decisions, or workspace structure.  For each significant
-change, verify:
+Review recent commit history for context — we move fast, so look back far enough
+to catch anything that slipped:
+
+```bash
+git --no-pager log --oneline -50
+```
+
+Then read the full messages for any commits that look like they touched
+structure, APIs, decisions, or workspace layout:
+
+```bash
+git --no-pager log -50 --format="%h %s%n%b" | cat
+```
+
+For each significant change, verify:
 
 | File | What to verify |
 |---|---|
@@ -47,18 +58,18 @@ change, verify:
 | `plans/history.md` | Timeline entry added for the current session (if significant) |
 | `plans/decisions/` | New decisions recorded if tradeoffs were made |
 
-## 6. Commit with good messages
+## 5. Commit remaining work
+
+Stage and commit any uncommitted changes. Use the `git-commit` skill.
 
 Write commit messages that aid context recovery — summarise *what* in the
 subject, explain *why* in the body when non-trivial, and name affected
-libraries or decisions.  See `.github/skills/git-commit/SKILL.md` for
-commit mechanics.
+libraries or decisions.
 
-## 7. Verify clean tree
+## 6. Verify clean tree
 
-```zsh
+```bash
 git status --short
 ```
 
 Should produce no output.
-

@@ -1,6 +1,11 @@
-# Guide generation template
+---
+name: guide-generation
+description: How to generate or update docs/guide.md for a Chumicro library. Use this skill when a library needs its user guide written or refreshed.
+---
 
-Use this template to generate or update `docs/guide.md` for a Chumicro library.
+# Guide generation
+
+Use this procedure to generate or update `docs/guide.md` for a Chumicro library.
 
 ## When to use
 
@@ -10,11 +15,18 @@ Use this template to generate or update `docs/guide.md` for a Chumicro library.
 
 Keep this document and `_GUIDE_TEMPLATE` in `scripts/scaffold.py` synchronized — they define the same section order and requirements.
 
-## Instructions for the AI agent
+## Inputs to read before generating
 
-Read the library's source code, docstrings, tests, and examples first. Then generate `docs/guide.md` following the required structure below. Do not use placeholder comments — write real content derived from the actual code.
+For library `libraries/<name>/`:
 
-### Required structure
+1. `src/chumicro_<name>/__init__.py` — public exports
+2. `src/chumicro_<name>/*.py` — all source modules (read docstrings)
+3. `src/chumicro_<name>/testing.py` — test fakes (if present)
+4. `tests/` — test files show usage patterns and edge cases
+5. `examples/` — runnable examples to reference and list in the Examples table
+6. `README.md` — quick example to stay consistent with
+
+## Required structure
 
 Sections marked *conditional* should be included when they apply and omitted otherwise.
 
@@ -87,7 +99,7 @@ Sections marked *conditional* should be included when they apply and omitted oth
 </div>
 ```
 
-### Rules
+## Rules
 
 1. **Derive everything from code.** Do not invent features or parameters that don't exist in the source. Check the `__init__.py` exports for the public API surface.
 2. **Code snippets must be copy-pasteable.** Import from the public package (`from chumicro_timing import Heartbeat`), not internal modules. Use realistic variable names.
@@ -98,18 +110,7 @@ Sections marked *conditional* should be included when they apply and omitted oth
 7. **Include the footer.** Every guide ends with the `chumicro-footer` div containing Source, PyPI, Bundle, and Experimental Bundle links. The scaffold template generates this — preserve it.
 8. **Delete scaffold placeholders.** If the guide was scaffolded, remove all `<!-- ... -->` comment blocks. The final guide should have no HTML comments.
 
-### Inputs to read before generating
-
-For library `libraries/<name>/`:
-
-1. `src/chumicro_<name>/__init__.py` — public exports
-2. `src/chumicro_<name>/*.py` — all source modules (read docstrings)
-3. `src/chumicro_<name>/testing.py` — test fakes (if present)
-4. `tests/` — test files show usage patterns and edge cases
-5. `examples/` — runnable examples to reference and list in the Examples table
-6. `README.md` — quick example to stay consistent with
-
-### Verification
+## Verification
 
 After generating, check:
 
@@ -119,3 +120,4 @@ After generating, check:
 - [ ] No placeholder comments remain (`<!-- ... -->`)
 - [ ] Examples table lists all files from `examples/`
 - [ ] Footer div with Source/PyPI/Bundle links is present
+

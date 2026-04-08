@@ -15,20 +15,27 @@ description: How to write and execute git commits in this workspace. Use this sk
 
 ### Step 1 — Write the commit message
 
-Use a **file tool** (not the terminal) to write the full commit message to `.scratch/commit-msg.txt`.
+Use `create_file` to write the full commit message to `.scratch/commit-msg.txt`. This overwrites any previous content.
 
-1. Check whether `.scratch/commit-msg.txt` exists (e.g., `read_file` or `list_dir`).
-2. **If it does not exist:** use `create_file`.
-3. **If it already exists:** use `insert_edit_into_file` to **replace** the file contents (see rules below).
+Follow the project's commit-message conventions: imperative subject line, body explaining *why*, name affected libraries or decisions.
 
-**Never delete `.scratch/commit-msg.txt`** — not with `rm`, not from the terminal, not with any other tool. Always overwrite it in place with `insert_edit_into_file`.
+### Step 2 — Stage and commit
 
-Follow the project's commit-message conventions: imperative subject line, body explaining *why*.
-
-### Step 2 — Commit
-
+```bash
+git add -A && git commit -F .scratch/commit-msg.txt
 ```
+
+Or stage selectively first, then commit:
+
+```bash
+git add <files>
 git commit -F .scratch/commit-msg.txt
+```
+
+### Step 3 — Verify
+
+```bash
+git log --oneline -1
 ```
 
 ## Rules

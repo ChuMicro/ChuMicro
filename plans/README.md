@@ -12,8 +12,6 @@ sessions.
 | `history.md` | Design principles, rejected approaches, build-up timeline | When you need to understand *why* something is the way it is, or to check whether an approach was already tried |
 | `next-up.md` | Active work queue (Now / Next / Blocked) | When picking up work or checking priorities |
 | `roadmap.md` | Milestone status and trajectory | When you need the big picture of project phases |
-| `end-of-session.md` | Checklist for clean tree and current docs | At the end of every working session |
-| `guide-generation.md` | Template for generating library `docs/guide.md` | When writing or updating a library's user guide |
 | `workstreams/` | Active bodies of work (only in-progress workstreams live here) | When working on a tracked initiative |
 
 ## Rules

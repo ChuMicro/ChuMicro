@@ -262,7 +262,7 @@ _GUIDE_TEMPLATE = """\
 <!-- GENERATION INSTRUCTIONS — delete this block once the guide is written.
 
      This guide should be generated from the library's source code, docstrings,
-     tests, and examples.  See plans/guide-generation.md for the
+     tests, and examples.  See the guide-generation skill for the
      full prompt an AI agent can use.  Every section below is required unless
      marked conditional.  Do not leave placeholder comments in the final guide. -->
 
