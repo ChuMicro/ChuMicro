@@ -497,7 +497,7 @@ class {class_name}:
         \"\"\"Return the current value.
 
         Returns:
-            int: The current value.
+            value (int): The current value.
         \"\"\"
         return self._value
 
@@ -519,7 +519,7 @@ class {class_name}:
             now_ms (int): Current tick value in milliseconds.
 
         Returns:
-            bool: ``True`` if something happened this tick.
+            active (bool): ``True`` if something happened this tick.
         \"\"\"
         return False
 """
