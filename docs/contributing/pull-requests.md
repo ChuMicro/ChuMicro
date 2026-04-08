@@ -1,104 +1,19 @@
 # Creating a Pull Request
 
-Step-by-step guide to contributing a change — from fork to merged PR. Every step shows the commands and expected output.
+This guide covers what happens once you have changes ready to submit. For environment setup and running tasks, see [CONTRIBUTING.md](../../CONTRIBUTING.md) and your [development environment guide](../../CONTRIBUTING.md#development-environment).
 
-## 1. Fork and clone
+## Before you start
 
-Fork the repo on GitHub, then clone your fork:
+Make sure you've:
 
-```bash
-git clone https://github.com/<your-username>/ChuMicro.git
-cd ChuMicro
-```
+1. Forked and cloned the repository
+2. Set up your development environment (see [Quick start](../../CONTRIBUTING.md#quick-start))
+3. Created a branch (see [Branching conventions](../../CONTRIBUTING.md#branching-conventions))
+4. Made your changes and validated them
 
-Add the upstream remote so you can pull future changes:
-
-```bash
-git remote add upstream https://github.com/ChuMicro/ChuMicro.git
-```
-
-## 2. Set up the environment
+If you haven't validated yet, run preflight:
 
 ```bash
-python scripts/prepare_workspace.py --create-venv
-```
-
-Expected output (last few lines):
-
-```
-============================================================
-  Workspace is ready
-============================================================
-```
-
-For IDE-specific setup, see the [PyCharm](development-pycharm.md) or [VS Code](development-vscode.md) development guides.
-
-## 3. Create a branch
-
-```bash
-git checkout main
-git pull upstream main
-git checkout -b fix/my-first-change
-```
-
-Use the [branching conventions](../CONTRIBUTING.md#branching-conventions):
-- `fix/` for bug fixes
-- `feature/` for new features
-- `docs/` for documentation changes
-
-## 4. Make your change
-
-Pick something small for your first PR. Good first contributions:
-
-- Fix a typo in docs or docstrings
-- Add a missing test case
-- Improve an example
-- Add a missing docstring
-
-### Example: adding a test
-
-Say you want to add a test to the `timing` library. Create or edit a file in `libraries/timing/tests/`:
-
-```python
-"""Tests for ticks_add edge cases."""
-
-from chumicro_timing import ticks_add
-
-
-def test_ticks_add_zero():
-    """Adding zero returns the original value."""
-    assert ticks_add(1000, 0) == 1000
-```
-
-## 5. Run checks
-
-Run the checks that CI will run. Start narrow and expand:
-
-```bash
-# Test just the library you changed
-python scripts/run.py test --libraries timing
-```
-
-Expected output (last few lines):
-
-```
-Required test coverage of 94.0% reached. Total coverage: 100.00%
-============================== 24 passed in 0.04s ==============================
-```
-
-```bash
-# Lint
-python scripts/run.py lint
-```
-
-Expected:
-
-```
-All checks passed!
-```
-
-```bash
-# Full preflight (runs everything CI runs)
 python scripts/run.py preflight 2>&1 | tail -5
 ```
 
@@ -108,18 +23,16 @@ Expected:
 Preflight passed — required CI checks should pass.
 ```
 
-For IDE-specific ways to run these checks, see the [PyCharm](development-pycharm.md) or [VS Code](development-vscode.md) guides. For detailed output examples (including failures), see the [CLI guide](development-cli.md#validation-checklist).
+## Commit your changes
 
-## 6. Commit
-
-Stage your changes and commit:
+Stage and commit. Git opens your default editor for the message:
 
 ```bash
 git add -A
 git commit
 ```
 
-Git opens your editor. Write a message like:
+Write a message like:
 
 ```
 Add edge-case test for ticks_add with zero delta
@@ -129,19 +42,15 @@ Verifies that ticks_add(x, 0) returns x unchanged.
 Affects: timing
 ```
 
-Use imperative mood in the subject — "Add test", not "Added" or "Adds".
+Use imperative mood in the subject — "Add test", not "Added" or "Adds". Name affected libraries in the body.
 
-## 7. Push
+## Push and open the PR
 
 ```bash
 git push -u origin fix/my-first-change
 ```
 
-## 8. Open the PR
-
-**Option A — GitHub UI:**
-
-Go to your fork on GitHub. You'll see a banner: "fix/my-first-change had recent pushes — Compare & pull request." Click it.
+**Option A — GitHub UI:** Go to your fork on GitHub. You'll see a banner: "fix/my-first-change had recent pushes — Compare & pull request." Click it.
 
 **Option B — GitHub CLI:**
 
@@ -155,31 +64,43 @@ Fill in the PR template:
 - **Motivation:** Why this change is needed
 - **Changes:** List the files changed
 - **How to verify:** Concrete steps (`python scripts/run.py test --libraries timing`)
-- **Device testing:** Screenshot/video + console output from a real device (see below)
+- **Device testing:** Evidence of on-device testing, if applicable (see below)
 - **Version impact:** For test-only changes, select "No bump needed"
 
-## 9. Device testing
+## Device testing
 
-For library code changes, your PR must include evidence of on-device testing:
+CI runs your code under unix-port builds of CircuitPython and MicroPython, which catches most cross-runtime issues. But some problems only surface on real hardware — memory constraints, timing behavior, peripheral interaction. Device testing provides that final layer of confidence.
 
-1. **Screenshot or video** of the code running on a device
-2. **Console output** (scrub any PII — WiFi credentials, IP addresses, etc.)
-3. **Board used** (e.g., "Adafruit QT Py ESP32-S3")
-4. **Runtime and version** (e.g., "CircuitPython 10.1.4" or "MicroPython v1.26.0")
-5. **What manual tests were run** and their results
+### What doesn't need device testing
 
-Drag images/videos directly into the PR description on GitHub — they upload automatically.
+Most contributions are exempt. Skip this section if your PR is:
 
-**Exceptions** (note the reason in the PR and delete the Device Testing section):
+- **Docs-only, test-only, or infrastructure-only** (changes to `docs/`, `tests/`, `scripts/`, `support/`)
+- **Trivial fixes** (typos, comment corrections, formatting)
+- **Libraries with no hardware interaction** (e.g., `compat`, `msgpack`)
 
-- Docs-only, test-only, or infrastructure-only changes
-- Trivial fixes (typos, comment corrections)
-- Changes to `support/` or `scripts/` (CPython-only code)
-- Libraries with no hardware interaction (e.g., `compat`, `msgpack`)
+Note the exemption in the PR and delete the Device Testing section from the template.
 
-**Don't have a device?** Say so in the PR — a maintainer can help test.
+### What does need device testing
 
-## 10. CI runs
+PRs that change library source code under `src/` — especially code that interacts with hardware, timing, or I/O — should include evidence that the code works on a real device.
+
+**What to include:**
+
+1. **Console output** from running the library on a device (scrub any PII — WiFi passwords, IP addresses)
+2. **Board name** (e.g., "Adafruit QT Py ESP32-S3")
+3. **Runtime and version** (e.g., "CircuitPython 10.1.4" or "MicroPython v1.26.0")
+4. **What was tested** — which examples or functional tests you ran, and their results
+
+Screenshots or short videos of the device in action are welcome but not required — console output showing the code executing successfully is the primary evidence.
+
+Paste the output directly in the PR description or as a comment. Drag images/videos into the PR on GitHub — they upload automatically.
+
+### Don't have a device?
+
+Say so in the PR. A maintainer can help test on available hardware. This won't block your contribution — it just means the merge may take a bit longer while someone verifies on-device.
+
+## CI checks
 
 After you open the PR, GitHub Actions runs the full CI suite:
 
@@ -205,12 +126,14 @@ Common failures:
 
 | Check | Typical cause | Fix |
 |---|---|---|
-| `test` | Coverage below 94% | Add more tests |
+| `test` | Coverage below 94% | Add more tests — check the `Missing` column in the coverage report |
 | `lint` | Formatting issue | Run `python scripts/run.py lint` locally and fix |
 | `version-check` | Changed source without bumping VERSION | Edit `libraries/<name>/VERSION` |
 | `api-check` | Removed or renamed a public function | Bump VERSION to next minor/major |
 
-## 11. Review and merge
+For detailed output examples (success and failure), see your [development environment guide](../../CONTRIBUTING.md#development-environment).
+
+## Review and merge
 
 A maintainer will review your PR. They may:
 
@@ -218,7 +141,7 @@ A maintainer will review your PR. They may:
 - Request changes (you'll get a notification)
 - Leave comments for discussion
 
-After merge, your change is on `main`. If you bumped a VERSION file, an experimental release publishes automatically.
+After merge, your change is on `main`. If you bumped a VERSION file, an experimental release publishes automatically. See [Releases and Promotion](releases.md) for how that works.
 
 ## Keeping your fork up to date
 
@@ -228,6 +151,12 @@ Before starting new work:
 git checkout main
 git pull upstream main
 git push origin main
+```
+
+If you haven't added the upstream remote yet:
+
+```bash
+git remote add upstream https://github.com/ChuMicro/ChuMicro.git
 ```
 
 ## Quick reference

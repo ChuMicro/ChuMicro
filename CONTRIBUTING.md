@@ -6,6 +6,19 @@ Welcome! Chumicro is an open platform for cross-runtime Python libraries targeti
 
 **Agents are welcome too.** If you're working with an AI coding agent, point it at [`AGENTS.md`](AGENTS.md) for the full rule set. Agents are especially helpful for writing tests (the 94% coverage gate is real) and generating documentation.
 
+## Reading guide
+
+Start here, then pick the guide that matches your task:
+
+| What you want to do | Read this |
+|---|---|
+| **Set up and develop** | This page → then your [development environment guide](#development-environment) |
+| **Open a pull request** | [Creating a Pull Request](docs/contributing/pull-requests.md) |
+| **Add a new library** | [Adding a New Library](docs/contributing/new-library.md) |
+| **Understand releases** | [Releases and Promotion](docs/contributing/releases.md) |
+
+Each page is self-contained for its topic. You don't need to read all of them — just the ones relevant to what you're doing.
+
 ## Prerequisites
 
 | Tool | Version | Notes |
@@ -18,13 +31,13 @@ Welcome! Chumicro is an open platform for cross-runtime Python libraries targeti
 
 ## Development environment
 
-The project supports three workflows — pick whichever you're comfortable with:
+The project supports three workflows — pick whichever you're comfortable with. Each guide covers setup, running tasks, interpreting output (both success and failure), and a validation checklist:
 
-- **[Command Line](docs/contributing/development-cli.md)** — setup, all tasks, output examples for success and failure, validation checklist
-- **[PyCharm](docs/contributing/development-pycharm.md)** — interpreter setup, run configurations, test explorer, import resolution
-- **[VS Code](docs/contributing/development-vscode.md)** — extensions, tasks, test explorer, Pylance configuration
+- **[Command Line](docs/contributing/development-cli.md)** — no IDE required, full control
+- **[PyCharm](docs/contributing/development-pycharm.md)** — run configurations, test explorer, source root management
+- **[VS Code](docs/contributing/development-vscode.md)** — tasks, extensions, Pylance integration
 
-Each guide covers the full workflow: setup → running tasks → interpreting output → troubleshooting failures. You only need one.
+You only need one. All three reach the same place.
 
 ## Quick start
 
@@ -41,7 +54,7 @@ python scripts/run.py preflight 2>&1 | tail -5
 # Expected: "Preflight passed — required CI checks should pass."
 ```
 
-If preflight passes, you're ready. If not, see your environment guide above for troubleshooting.
+If preflight passes, you're ready. If not, see your development environment guide for troubleshooting.
 
 ## Branching conventions
 
@@ -73,7 +86,12 @@ Don't worry about memorizing these — CI enforces them all automatically. Your 
 - **Docs must build.** Run: `python scripts/run.py docs --libraries <name>`
 - **No API breakage** without a VERSION bump. CI runs `check-api` and `check-version` automatically.
 - **Cross-runtime compatibility.** CI runs your code under MicroPython and CircuitPython unix ports.
-- **Device testing evidence.** PRs that change library code must include a screenshot/video and console output from a real device, plus board and runtime details. See [Creating a Pull Request](docs/contributing/pull-requests.md#9-device-testing) for exceptions.
+
+### Device testing
+
+PRs that change library code need evidence that the code works on a real device — console output from running on hardware, plus the board and runtime version used. This is how we catch issues that CI's unix-port checks can't.
+
+**Most contributions don't need this.** Docs-only, test-only, infrastructure, and trivial fixes are exempt. Libraries with no hardware interaction (like `compat` and `msgpack`) are also exempt. See [Device Testing](docs/contributing/pull-requests.md#device-testing) in the PR guide for full details.
 
 ### Commit messages
 
@@ -99,13 +117,14 @@ Use imperative mood in the subject line. Name affected libraries in the body.
 
 ## Pull request workflow
 
-> **Detailed walkthrough:** See [Creating a Pull Request](docs/contributing/pull-requests.md) for a step-by-step guide with expected output at each stage.
+> **Full walkthrough:** See [Creating a Pull Request](docs/contributing/pull-requests.md) for step-by-step instructions.
+
+The short version:
 
 1. Push your branch: `git push -u origin feature/my-change`
 2. Open a PR on GitHub targeting `main`
-3. Fill in the [PR template](.github/PULL_REQUEST_TEMPLATE.md) — Summary, Motivation, Changes, How to verify, Version impact
-4. CI runs automatically (lint, test, build, docs, cross-runtime checks, version-check, api-check)
-5. A maintainer reviews and merges
+3. CI runs automatically — all checks must pass
+4. A maintainer reviews and merges
 
 ### VERSION bumps
 
@@ -170,4 +189,3 @@ These aren't arbitrary — each one traces to a design decision with rationale. 
 ## License
 
 By contributing, you agree that your contributions will be licensed under the [MIT License](LICENSE).
-
