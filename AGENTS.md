@@ -24,6 +24,49 @@ Common pitfalls:
 - Don't apply embedded patterns (`const()`, `memoryview`) to infrastructure code under `scripts/` or `support/`.
 - Don't modify unrelated code when fixing a bug.
 - Don't re-propose something already decided in `plans/decisions/` without referencing the original decision.
+- Don't use heredocs, `echo`, `printf`, or `cat` to create multi-line content in the terminal — write files with file tools instead (see `run-script` skill).
+- Don't run large-output commands (`preflight`, `test --all`, `lint`) without piping through `tail`, `head`, or `grep` (see `large-output` skill).
+
+## Agent operations
+
+### Skills
+
+Procedural knowledge lives in `.github/skills/`.  **Read the relevant skill file before performing the task** — the rules there override general knowledge.
+
+| Skill | When to read it |
+|-------|-----------------|
+| `git-commit` | **Every commit.** Never `git commit -m`.  The skill defines the full write → stage → commit procedure. |
+| `end-of-session` | Before finishing work — preflight, VERSION bumps, planning doc audit, clean tree. |
+| `task-checkpoint` | After completing a unit of work — quick validation and optional commit before yielding. |
+| `debug-test-failure` | When tests fail — isolation, re-run, coverage gaps, cross-runtime diagnostics. |
+| `large-output` | When running commands whose output may exceed the terminal buffer — pipe patterns. |
+| `run-script` | When you need multi-line Python or structured file content — never use heredocs or terminal input. |
+| `terminal-recovery` | When a terminal command hangs or shows a continuation prompt — Ctrl-C and retry. |
+| `new-library` | Full lifecycle for adding a library — scaffolding through release-ready. |
+| `new-decision` | Recording a structural or pattern tradeoff in `plans/decisions/`. |
+| `guide-generation` | Writing or refreshing `docs/guide.md` for a library. |
+| `validate-scripts` | Writing and running validation tests for `scripts/` infrastructure. |
+
+### Context recovery
+
+At the start of a session, orient yourself:
+
+1. `git --no-pager log --oneline -20` — what changed recently.
+2. Read `plans/next-up.md` — active work, priorities, blockers.
+3. Check `plans/sessions/` for recent session logs — what was discussed, what's unfinished.
+4. Read `plans/roadmap.md` if you need the big picture.
+5. Check `plans/decisions/` before proposing structural changes — the decision may already exist.
+6. Check `plans/open-questions.md` for unresolved threads relevant to your task.
+
+Commit history is the primary fallback when planning docs are stale.  Write commit messages accordingly (see Contributing below).
+
+### Terminal rules
+
+- **`.scratch/` is agent scratch space** — gitignored, safe for temporary files, commit messages, and log captures.
+- **Never use heredocs, `echo`, `printf`, or `cat`** to create multi-line content.  Write files with file tools, then reference them from the terminal.
+- **Pipe large output** through `tail`, `head`, or `grep`.  Redirect to `.scratch/` when full output is needed.
+- **Disable pagers:** `git --no-pager`, `| cat`.
+- If a terminal hangs, send Ctrl-C.  See the `terminal-recovery` skill.
 
 ## Project overview
 
@@ -191,17 +234,23 @@ Planning docs under `plans/` are part of the repository's working state.  See `p
 - `plans/decisions/` — durable decisions affecting future work
 - `plans/history.md` — design principles, rejected approaches, build-up timeline
 - `plans/next-up.md` — active execution queue
+- `plans/open-questions.md` — unresolved questions that need thought but aren't blocking
+- `plans/patterns.md` — reusable implementation patterns with code examples
 - `plans/roadmap.md` — milestone status
+- `plans/sessions/` — session logs for context that doesn't survive in commits alone
 
 **`next-up.md` housekeeping:** move checked-off items from Now/Next/Blocked to the top of Done in the same edit.
 
 **Before proposing structural changes**, check `plans/decisions/` for existing decisions.  If revisiting, reference the original decision explicitly.
+
+**When a decision resolves an open question**, update `plans/open-questions.md` — move the question to Resolved with a one-line answer and link.
 
 ## Contributing & code review
 
 1. Keep PRs small and focused.  Include tests and documentation.
 2. Code review checks: style, coverage, memory usage, API consistency across runtimes.
 3. Do not commit build artifacts, bytecode, or secret configuration files.
-4. **Commit after completing a meaningful unit of work.**  End sessions with a clean tree.  Use the `end-of-session` skill.
-5. **Write commit messages that aid context recovery** — imperative subject, body explaining *why*, name affected libraries/decisions.
-6. **Commit mechanics:** Never `git commit -m`.  Write to `.scratch/commit-msg.txt` and use `git commit -F`.  See `.github/skills/git-commit/SKILL.md`.
+4. **After completing a unit of work**, run the `task-checkpoint` skill — validate, commit, push.
+5. **Before ending a session**, run the `end-of-session` skill — preflight, VERSION bumps, planning doc audit, clean tree.
+6. **Write commit messages that aid context recovery** — imperative subject, body explaining *why*, name affected libraries/decisions/workstreams.  A future agent scanning `git log` should be able to reconstruct project state.
+7. **Commit mechanics:** Read the `git-commit` skill before every commit.  Never `git commit -m`.  Write the message to `.scratch/commit-msg.txt` with a file tool, then `git commit -F .scratch/commit-msg.txt`.
