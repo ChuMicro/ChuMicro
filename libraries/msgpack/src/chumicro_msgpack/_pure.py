@@ -267,7 +267,7 @@ def packb(obj):
         obj (object): Python object to serialize.
 
     Returns:
-        data (bytes): Msgpack-encoded data.
+        bytes: Msgpack-encoded data.
     """
     buffer = bytearray()
     _encode(obj, buffer)
@@ -281,7 +281,7 @@ def unpackb(data):
         data (bytes | bytearray | memoryview): Msgpack-encoded data.
 
     Returns:
-        result (object): Deserialized Python object.
+        object: Deserialized Python object.
     """
     if not isinstance(data, memoryview):
         data = memoryview(data)
@@ -312,6 +312,6 @@ except ImportError:
             stream (object): Readable stream with a ``read()`` method.
 
         Returns:
-            result (object): Deserialized Python object.
+            object: Deserialized Python object.
         """
         return unpackb(stream.read())

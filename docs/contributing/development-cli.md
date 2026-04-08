@@ -193,8 +193,15 @@ def my_func(interval_ms):
 
     Args:
         interval_ms (int): Interval in milliseconds.  ← add the (int) part
+
+    Returns:
+        int: The computed value.  ← type only, no name
     """
 ```
+
+> **Heads up:** `Args:` uses `name (type): description`, but `Returns:` uses
+> `type: description` — no name before the type.  Mixing these up is the most
+> common docstring error.
 
 ### Preflight
 

@@ -14,7 +14,7 @@ Hard rules an agent must never violate:
 - **Never hard-code secrets.**
 - **No `pip install -e`** — IDE resolution uses generated configs (`sync-ide`).
 - **Minimize dependencies** — prefer pure-Python implementations compatible with all three runtimes.
-- **Docstring types, not annotations** — document types in Google-style docstrings (`param (type):`), not function annotations (Decision 0021).
+- **Docstring types, not annotations** — document types in Google-style docstrings, not function annotations (Decision 0021). **`Args:`** uses `name (type): description`. **`Returns:`** uses `type: description` (no name — this is standard Google-style).
 
 Common pitfalls:
 
@@ -106,7 +106,7 @@ Code under `scripts/` and `support/` runs **exclusively on CPython**.  Use the f
 
 ### Naming & style
 
-PEP 8.  Descriptive names (`service`, `test_device`), not abbreviations (`svc`, `dut`).  Document **all** functions and methods with concise docstrings.  Document types in Google-style docstring sections (`Args:`, `Returns:`, `Raises:`) using `param_name (type): description` format — do not use Python type annotations on function signatures in library code (Decision 0021).  When writing CircuitPython drivers: initialize hardware in `__init__`, provide `deinit()` or context-manager support.
+PEP 8.  Descriptive names (`service`, `test_device`), not abbreviations (`svc`, `dut`).  Document **all** functions and methods with concise docstrings.  Document types in Google-style docstring sections — `Args:` uses `name (type): description`, `Returns:` uses `type: description` (no name), `Raises:` uses `ExceptionType: description`.  Do not use Python type annotations on function signatures in library code (Decision 0021).  When writing CircuitPython drivers: initialize hardware in `__init__`, provide `deinit()` or context-manager support.
 
 ### API & compatibility
 

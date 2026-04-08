@@ -143,7 +143,7 @@ Preflight passed — required CI checks should pass.
 |---|---|---|
 | `Required test coverage of 94.0% not reached` | Tests don't cover enough code | Check the `Missing` column — it shows uncovered line numbers |
 | `ruff check` errors with file:line | Code style violation | `Ctrl+click` / `⌘+click` the file:line link to jump there |
-| `griffe warnings detected` | Bad or missing docstrings | Add types to docstring params: `param (type): description` |
+| `griffe warnings detected` | Bad or missing docstrings | Add types to docstrings: `Args:` uses `param (type): desc`, `Returns:` uses `type: desc` (no name) |
 | `check-version` failure | Source changed without VERSION bump | Edit `libraries/<name>/VERSION` |
 
 ### Step-by-step validation

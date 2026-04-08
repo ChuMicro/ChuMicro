@@ -125,6 +125,8 @@ plugins:
             - src
           options:
             docstring_style: google
+            docstring_options:
+              returns_named_value: false
             show_source: false
             show_root_heading: true
             members_order: source
@@ -497,7 +499,7 @@ class {class_name}:
         \"\"\"Return the current value.
 
         Returns:
-            value (int): The current value.
+            int: The current value.
         \"\"\"
         return self._value
 
@@ -519,7 +521,7 @@ class {class_name}:
             now_ms (int): Current tick value in milliseconds.
 
         Returns:
-            active (bool): ``True`` if something happened this tick.
+            bool: ``True`` if something happened this tick.
         \"\"\"
         return False
 """

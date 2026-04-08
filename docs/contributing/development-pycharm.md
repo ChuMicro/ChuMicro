@@ -122,7 +122,7 @@ Process finished with exit code 0
 |---|---|---|
 | `Required test coverage of 94.0% not reached` | Tests don't cover enough code | Check the `Missing` column in the coverage report for uncovered lines |
 | `ruff check` errors | Code style violation | Click the file:line link in the output to jump to the issue |
-| `griffe warnings detected` | Bad or missing docstrings | Add types to docstring params: `param (type): description` |
+| `griffe warnings detected` | Bad or missing docstrings | Add types to docstrings: `Args:` uses `param (type): desc`, `Returns:` uses `type: desc` (no name) |
 | `check-version` failure | Source changed without VERSION bump | Edit `libraries/<name>/VERSION` |
 
 ### Step-by-step validation
