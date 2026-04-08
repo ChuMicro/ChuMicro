@@ -1,0 +1,85 @@
+name: Bug Report
+description: Report a bug in a Chumicro library
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug! Fill in the details below so we can reproduce and fix it.
+
+  - type: dropdown
+    id: library
+    attributes:
+      label: Library
+      description: Which library is affected?
+      options:
+        - timing
+        - runner
+        - compat
+        - msgpack
+        - Other / not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the bug. What did you expect, and what happened instead?
+      placeholder: |
+        Expected: ticks_diff returns a positive value when end > start
+        Actual: returns a negative value when ticks_ms wraps past 2^30
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Minimal code or steps to trigger the bug.
+      placeholder: |
+        ```python
+        from chumicro_timing import ticks_diff
+        result = ticks_diff(100, 1073741800)
+        print(result)  # expected positive, got negative
+        ```
+    validations:
+      required: true
+
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: Runtime
+      description: Which runtime are you using?
+      options:
+        - CircuitPython
+        - MicroPython
+        - CPython
+        - Multiple
+    validations:
+      required: true
+
+  - type: input
+    id: runtime-version
+    attributes:
+      label: Runtime version
+      description: "e.g., CircuitPython 10.1.4, MicroPython v1.26.0, Python 3.13.2"
+    validations:
+      required: false
+
+  - type: input
+    id: board
+    attributes:
+      label: Board (if applicable)
+      description: "e.g., ESP32-S3, RP2040, desktop"
+    validations:
+      required: false
+
+  - type: input
+    id: library-version
+    attributes:
+      label: Library version
+      description: "Check your VERSION file or pip show output"
+    validations:
+      required: false
+

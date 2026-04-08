@@ -142,6 +142,10 @@ chumicro/
 └── LICENSE                # MIT
 ```
 
+## Contributing
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full guide — from first PR to publishing your own library. The project welcomes contributors of all experience levels.
+
 ## Planning
 
 See `plans/` for roadmap, workstreams, decisions, and next-up queue. The README is for users and contributors; `plans/` is the working state for agents and maintainers.
