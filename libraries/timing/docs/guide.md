@@ -129,7 +129,7 @@ from chumicro_timing import Heartbeat, ticks_ms
 
 heartbeat = Heartbeat(period_ms=1000)
 
-def on_tick():
+def on_tick() -> None:
     """Called once per scheduler tick."""
     now = ticks_ms()
     if heartbeat.poll(now):

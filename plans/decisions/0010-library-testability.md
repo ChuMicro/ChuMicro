@@ -18,17 +18,17 @@ Classes that depend on external services (time, I/O, network) must accept those 
 ```python
 # Good — testable
 class Heartbeat:
-    def __init__(self, interval_ms, ticks_ms, ticks_diff):
+    def __init__(self, interval_ms: int, ticks_ms: object, ticks_diff: object) -> None:
         self._interval_ms = interval_ms
         self._ticks_ms = ticks_ms
         self._ticks_diff = ticks_diff
 
 # Bad — not testable without monkeypatching
 class Heartbeat:
-    def __init__(self, interval_ms):
+    def __init__(self, interval_ms: int) -> None:
         self._interval_ms = interval_ms
 
-    def is_due(self):
+    def is_due(self) -> bool:
         now = time.monotonic_ns()  # hard-wired
 ```
 
