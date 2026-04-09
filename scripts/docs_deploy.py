@@ -20,7 +20,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from discovery import ROOT, discover_package_dirs
+from discovery import ROOT, discover_package_dirs, read_version
 from workspace import run_command
 
 # Absolute path to the mike CLI installed alongside the active interpreter.
@@ -86,7 +86,7 @@ def inject_landing_page(branch: str) -> None:
     # Hash the landing-page HTML as a git blob.
     html_blob = subprocess.run(
         ["git", "hash-object", "-w", "--stdin"],
-        input=html.encode(), capture_output=True, cwd=ROOT,
+        input=html.encode(), capture_output=True, cwd=ROOT, check=True,
     ).stdout.strip().decode()
 
     # Hash the favicon if it exists.
@@ -95,7 +95,7 @@ def inject_landing_page(branch: str) -> None:
     if favicon_source_file.exists():
         favicon_blob = subprocess.run(
             ["git", "hash-object", "-w", str(favicon_source_file)],
-            capture_output=True, cwd=ROOT,
+            capture_output=True, cwd=ROOT, check=True,
         ).stdout.strip().decode()
 
     # Build an updated tree using a temporary index so nested paths
@@ -139,12 +139,12 @@ def inject_landing_page(branch: str) -> None:
     # Create a commit and fast-forward the branch — only if the tree changed.
     parent_commit = subprocess.run(
         ["git", "rev-parse", branch],
-        capture_output=True, cwd=ROOT,
+        capture_output=True, cwd=ROOT, check=True,
     ).stdout.strip().decode()
 
     old_tree = subprocess.run(
         ["git", "rev-parse", f"{branch}^{{tree}}"],
-        capture_output=True, cwd=ROOT,
+        capture_output=True, cwd=ROOT, check=True,
     ).stdout.strip().decode()
 
     if new_tree == old_tree:
@@ -154,7 +154,7 @@ def inject_landing_page(branch: str) -> None:
     new_commit = subprocess.run(
         ["git", "commit-tree", new_tree, "-p", parent_commit,
          "-m", "Regenerate landing page"],
-        capture_output=True, cwd=ROOT,
+        capture_output=True, cwd=ROOT, check=True,
     ).stdout.strip().decode()
 
     subprocess.run(
@@ -163,17 +163,6 @@ def inject_landing_page(branch: str) -> None:
     )
 
 
-
-def _read_version(library_dir: Path) -> str | None:
-    """Read a library's ``VERSION`` file, or return ``None``.
-
-    Args:
-        library_dir: Root directory of the library.
-    """
-    version_file = library_dir / "VERSION"
-    if not version_file.exists():
-        return None
-    return version_file.read_text().strip() or None
 
 
 def docs_deploy(
@@ -217,7 +206,7 @@ def docs_deploy(
         # Stable channel reads the actual version from the VERSION file;
         # experimental always deploys as "dev" with an "experimental" alias.
         if channel == "stable":
-            version = _read_version(library_dir)
+            version = read_version(library_dir)
             if version:
                 alias = "stable"
             else:

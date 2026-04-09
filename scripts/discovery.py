@@ -7,6 +7,7 @@ foundational module — nearly every other script imports from here.
 
 from __future__ import annotations
 
+import functools
 import os
 import subprocess
 from pathlib import Path
@@ -41,6 +42,7 @@ def read_runtime_versions() -> dict:
         return tomllib.load(runtimes_file)
 
 
+@functools.cache
 def read_platforms(package_dir: Path) -> tuple[str, ...]:
     """Read ``[tool.chumicro].platforms`` from a package's ``pyproject.toml``.
 
@@ -99,6 +101,9 @@ def find_package_dir(library_dir: Path) -> Path | None:
     return None
 
 
+_package_dirs_cache: list[Path] | None = None
+
+
 def discover_package_dirs() -> list[Path]:
     """Find directories under support/ and libraries/ that contain a pyproject.toml.
 
@@ -106,7 +111,12 @@ def discover_package_dirs() -> list[Path]:
     exist in the workspace.  The task runner, IDE sync, and coverage
     tools all derive their package lists from this function.  No
     hard-coded package lists exist anywhere in the codebase.
+
+    Results are cached for the lifetime of the process.
     """
+    global _package_dirs_cache
+    if _package_dirs_cache is not None:
+        return list(_package_dirs_cache)
     package_dirs: list[Path] = []
     for parent_dir in [ROOT / "support", ROOT / "libraries"]:
         if not parent_dir.is_dir():
@@ -114,6 +124,7 @@ def discover_package_dirs() -> list[Path]:
         for child in sorted(parent_dir.iterdir()):
             if child.is_dir() and (child / "pyproject.toml").exists():
                 package_dirs.append(child)
+    _package_dirs_cache = package_dirs
     return package_dirs
 
 
@@ -288,6 +299,36 @@ def find_publishable_packages() -> list[str]:
     return packages
 
 
+def read_version(library_dir: Path) -> str | None:
+    """Read a library's ``VERSION`` file.
+
+    Args:
+        library_dir: Root directory of the library.
+
+    Returns:
+        The version string, or ``None`` if the file is missing or empty.
+    """
+    version_file = library_dir / "VERSION"
+    if not version_file.exists():
+        return None
+    return version_file.read_text().strip() or None
+
+
+def release_tags(library_name: str) -> list[str]:
+    """Return release tags for a library, sorted newest first.
+
+    Args:
+        library_name: Library name (e.g. ``"timing"``).
+    """
+    result = subprocess.run(
+        ["git", "tag", "--list", f"{library_name}-v*", "--sort=-v:refname"],
+        capture_output=True, text=True, cwd=ROOT, check=False,
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        return []
+    return result.stdout.strip().splitlines()
+
+
 
 def pythonpath_env() -> dict[str, str]:
     """Return an environment with the repository source roots prepended to PYTHONPATH.
@@ -339,10 +380,7 @@ def changed_files(base_ref: str) -> list[str]:
             check=False,
         )
     if result.returncode != 0:
-        import sys
-
-        print(f"git diff failed: {result.stderr.strip()}")
-        sys.exit(2)
+        raise RuntimeError(f"git diff failed: {result.stderr.strip()}")
     return [line for line in result.stdout.strip().splitlines() if line]
 
 
