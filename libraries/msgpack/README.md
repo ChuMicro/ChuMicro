@@ -103,15 +103,6 @@ Use `pack`/`unpack` when writing to files, sockets, or NVM.  Use `packb`/`unpack
 | MicroPython | Pure-Python encoder/decoder |
 | CPython | Pure-Python encoder/decoder |
 
-## Docs
-
-📖 **[Stable docs](https://chumicro.github.io/ChuMicro/msgpack/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/msgpack/experimental/)**
-
-Browse on GitHub:
-
-- [User guide](docs/guide.md) — getting started, usage patterns, size comparison
-- [API reference](docs/api.md) — full API documentation
-
 ## Examples
 
 | Example | What it shows |
@@ -121,8 +112,17 @@ Browse on GitHub:
 | `stream_roundtrip.py` | Use the stream-based `pack` / `unpack` API with `BytesIO` |
 | `circuitpython_nvm_settings.py` | Store and load settings in non-volatile memory (hardware) |
 
+## Docs
+
+📖 **[Stable docs](https://chumicro.github.io/ChuMicro/msgpack/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/msgpack/experimental/)**
+
+Browse on GitHub:
+
+- [User guide](docs/guide.md) — getting started, usage patterns, size comparison
+- [API reference](docs/api.md) — full API documentation
+
 ## Find this library
 
-**PyPI:** [chumicro-msgpack](https://pypi.org/project/chumicro-msgpack/)
-**Bundle:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) (CircuitPython & MicroPython)
-**Source:** [ChuMicro/ChuMicro](https://github.com/ChuMicro/ChuMicro) — cross-runtime Python libraries for ESP32, RP2040, and other microcontrollers.
+- **PyPI:** [chumicro-msgpack](https://pypi.org/project/chumicro-msgpack/)
+- **Bundle:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) (CircuitPython & MicroPython)
+- **Source:** [ChuMicro/ChuMicro](https://github.com/ChuMicro/ChuMicro) — cross-runtime Python libraries for ESP32, RP2040, and other microcontrollers.

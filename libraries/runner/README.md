@@ -50,6 +50,18 @@ pip install chumicro-runner-experimental
 ```python
 from chumicro_runner import Runner
 
+runner = Runner()
+runner.add_periodic(lambda now_ms: print("blink!"), period_ms=500)
+
+while True:
+    runner.tick()
+```
+
+For services with conditional logic, implement `check()` and `handle()`:
+
+```python
+from chumicro_runner import Runner
+
 class TemperatureSensor:
     """Alert when temperature exceeds a threshold.
 
@@ -90,17 +102,6 @@ runner = Runner()
 sensor = TemperatureSensor(threshold=30.0)
 runner.add(sensor, period_ms=5000)  # check every 5 seconds
 
-while True:
-    runner.tick()
-```
-
-For simple periodic tasks, no service class is needed:
-
-```python
-from chumicro_runner import Runner
-
-runner = Runner()
-runner.add_periodic(lambda now_ms: print("blink!"), period_ms=500)
 
 while True:
     runner.tick()
@@ -239,11 +240,7 @@ assert recorder.calls == [100]
 
 ## Dependencies
 
-Runner depends on [timing](../timing/) for its tick source and tick arithmetic (`ticks_diff`, `ticks_add`). Install both:
-
-```bash
-pip install chumicro-runner chumicro-timing
-```
+Runner depends on [timing](../timing/) for its tick source and tick arithmetic (`ticks_diff`, `ticks_add`). All three package managers resolve this automatically — just install `chumicro-runner` and timing comes along.
 
 ## Platform support
 
@@ -280,6 +277,6 @@ Browse on GitHub:
 
 ## Find this library
 
-**PyPI:** [chumicro-runner](https://pypi.org/project/chumicro-runner/)
-**Bundle:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) (CircuitPython & MicroPython)
-**Source:** [ChuMicro/ChuMicro](https://github.com/ChuMicro/ChuMicro) — cross-runtime Python libraries for ESP32, RP2040, and other microcontrollers.
+- **PyPI:** [chumicro-runner](https://pypi.org/project/chumicro-runner/)
+- **Bundle:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) (CircuitPython & MicroPython)
+- **Source:** [ChuMicro/ChuMicro](https://github.com/ChuMicro/ChuMicro) — cross-runtime Python libraries for ESP32, RP2040, and other microcontrollers.
