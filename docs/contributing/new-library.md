@@ -73,11 +73,11 @@ class MySensor:
     """Reads from a sensor on a schedule.
 
     Args:
-        i2c (busio.I2C): I2C bus instance.
-        interval_ms (int): Read interval in milliseconds.
+        i2c: I2C bus instance.
+        interval_ms: Read interval in milliseconds.
     """
 
-    def __init__(self, i2c, interval_ms=1000):
+    def __init__(self, i2c: object, interval_ms: int = 1000) -> None:
         self._i2c = i2c
         self._interval_ms = interval_ms
 ```
@@ -88,7 +88,7 @@ import board
 import busio
 
 class MySensor:
-    def __init__(self):
+    def __init__(self) -> None:
         self._i2c = busio.I2C(board.SCL, board.SDA)  # untestable
 ```
 
@@ -115,7 +115,7 @@ try:
     from micropython import const
 except ImportError:
 
-    def const(x):
+    def const(x: int) -> int:
         """Identity fallback so const() works on CPython."""
         return x
 
@@ -136,13 +136,13 @@ Normal `bytearray` slicing creates a new copy every time. On a 256 KB board, tha
 
 ```python
 # ❌ Without memoryview — each slice copies data
-def process_packet(data):
+def process_packet(data: bytearray) -> tuple:
     header = data[0:4]      # new bytearray allocated
     payload = data[4:20]    # another new bytearray allocated
     return header, payload
 
 # ✅ With memoryview — slices share the original buffer
-def process_packet(data):
+def process_packet(data: bytearray) -> tuple:
     view = memoryview(data)
     header = view[0:4]      # no copy — points into data
     payload = view[4:20]    # no copy — points into data
@@ -153,11 +153,19 @@ Combine with pre-allocated buffers for the full pattern:
 
 ```python
 class PacketReader:
-    def __init__(self, buffer_size=64):
+    def __init__(self, buffer_size: int = 64) -> None:
         self._buf = bytearray(buffer_size)  # allocated once
         self._view = memoryview(self._buf)  # reusable view
 
-    def read_into(self, source):
+    def read_into(self, source: object) -> memoryview:
+        """Read from source into the pre-allocated buffer.
+
+        Args:
+            source: Readable object with a ``readinto`` method.
+
+        Returns:
+            A memoryview slice of the header bytes.
+        """
         source.readinto(self._buf)
         return self._view[0:4]  # zero-copy slice
 ```
@@ -197,17 +205,22 @@ from chumicro_my_thing import MySensor
 class FakeI2C:
     """Fake I2C bus that returns predetermined data."""
 
-    def __init__(self, data):
+    def __init__(self, data: list) -> None:
         self._data = data
         self.read_count = 0
 
-    def readfrom_into(self, addr, buf):
-        """Fill buf with the next predetermined response."""
+    def readfrom_into(self, addr: int, buf: bytearray) -> None:
+        """Fill buf with the next predetermined response.
+
+        Args:
+            addr: I2C device address.
+            buf: Buffer to fill with response data.
+        """
         buf[:] = self._data[self.read_count]
         self.read_count += 1
 
 
-def test_sensor_reads_on_interval():
+def test_sensor_reads_on_interval() -> None:
     """Sensor returns data from the I2C bus."""
     fake_i2c = FakeI2C(data=[b"\x01\x02"])
     sensor = MySensor(fake_i2c, interval_ms=100)

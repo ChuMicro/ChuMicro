@@ -9,7 +9,7 @@ Provides lightweight reimplementations of CPython standard-library features that
 ```python
 from chumicro_compat.functools import partial
 
-def set_led(pin, brightness):
+def set_led(pin: int, brightness: int) -> None:
     print(f"pin {pin} → {brightness}%")
 
 # Freeze the pin, vary the brightness later.

@@ -15,7 +15,7 @@ On CPython, the real C implementations are re-exported for zero overhead.  On Mi
 ```python
 from chumicro_compat.functools import partial
 
-def set_led(pin, brightness):
+def set_led(pin: int, brightness: int) -> None:
     """Set an LED pin to a brightness level."""
     print(f"pin {pin} → {brightness}%")
 
@@ -32,7 +32,7 @@ Keyword arguments can be frozen and overridden at call time:
 ```python
 from chumicro_compat.functools import partial
 
-def connect(host, port=80, timeout=5):
+def connect(host: str, port: int = 80, timeout: int = 5) -> None:
     """Simulate a connection."""
     print(f"connecting to {host}:{port} (timeout={timeout}s)")
 
@@ -49,7 +49,7 @@ A common embedded pattern is binding a hardware pin or device reference into a c
 ```python
 from chumicro_compat.functools import partial
 
-def on_button_press(pin_number, event_ms):
+def on_button_press(pin_number: int, event_ms: int) -> None:
     """Handle a button press on *pin_number* at *event_ms*."""
     print(f"button on pin {pin_number} pressed at {event_ms} ms")
 

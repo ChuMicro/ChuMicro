@@ -111,7 +111,7 @@ import board
 import busio
 
 class Sensor:
-    def __init__(self):
+    def __init__(self) -> None:
         self._i2c = busio.I2C(board.SCL, board.SDA)
 ```
 
@@ -161,7 +161,7 @@ When a module exists on CPython but not on MicroPython/CircuitPython
 try:
     from micropython import const
 except ImportError:
-    def const(x):
+    def const(x: int) -> int:
         """Identity fallback so const() works on CPython."""
         return x
 ```

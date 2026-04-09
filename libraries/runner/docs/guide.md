@@ -5,10 +5,10 @@
 `chumicro-runner` provides a standard pattern for active components in the Chumicro ecosystem.  Instead of each library inventing its own `poll()` / callback API, every active component implements two methods:
 
 ```python
-def check(self, now_ms):
+def check(self, now_ms: int) -> bool:
     """Check whether the handler should fire.  Return True or False."""
 
-def handle(self, now_ms):
+def handle(self, now_ms: int) -> None:
     """React to the condition detected by check()."""
 ```
 
@@ -30,20 +30,20 @@ from chumicro_runner import Runner
 class TemperatureSensor:
     """Alert when temperature exceeds a threshold."""
 
-    def __init__(self, threshold=30.0):
+    def __init__(self, threshold: float = 30.0) -> None:
         self._threshold = threshold
         self._last_reading = 0.0
 
-    def read_temperature(self):
+    def read_temperature(self) -> float:
         """Read from hardware — fast I2C or ADC operation."""
         # On a real board: return self._i2c_device.temperature
         return self._last_reading
 
-    def check(self, now_ms):
+    def check(self, now_ms: int) -> bool:
         self._last_reading = self.read_temperature()
         return self._last_reading > self._threshold
 
-    def handle(self, now_ms):
+    def handle(self, now_ms: int) -> None:
         print(f"ALERT: {self._last_reading}°C exceeds {self._threshold}°C")
 
 sensor = TemperatureSensor(threshold=30.0)
@@ -75,19 +75,19 @@ Pass an object with `.check(now_ms) -> bool` and `.handle(now_ms)`:
 
 ```python
 class MotionDetector:
-    def __init__(self):
+    def __init__(self) -> None:
         # On a real board: self._pin = digitalio.DigitalInOut(board.D5)
         pass
 
-    def detect_motion(self):
+    def detect_motion(self) -> bool:
         """Read PIR sensor pin — fast digital read."""
         # On a real board: return self._pin.value
         return False
 
-    def check(self, now_ms):
+    def check(self, now_ms: int) -> bool:
         return self.detect_motion()
 
-    def handle(self, now_ms):
+    def handle(self, now_ms: int) -> None:
         print("Motion!")
 
 runner.add(MotionDetector())
