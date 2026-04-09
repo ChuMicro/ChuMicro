@@ -65,7 +65,11 @@ _RUN_CONFIG_TEMPLATE = """\
 
 
 def _config_filename(name: str) -> str:
-    """Derive the XML filename from a run configuration display name."""
+    """Derive the XML filename from a run configuration display name.
+
+    Args:
+        name: Display name (e.g. ``"Lint"``).
+    """
     return f"{name.replace(' ', '_')}.xml"
 
 

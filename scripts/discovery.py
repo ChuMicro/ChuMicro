@@ -41,6 +41,9 @@ def read_platforms(package_dir: Path) -> tuple[str, ...]:
     libraries default to targeting all three runtimes.
 
     See ``plans/decisions/0011-platform-targeting.md``.
+
+    Args:
+        package_dir: Directory containing the package's ``pyproject.toml``.
     """
 
     pyproject_file = package_dir / "pyproject.toml"
@@ -55,7 +58,12 @@ def read_platforms(package_dir: Path) -> tuple[str, ...]:
 
 
 def filter_by_platform(package_dirs: list[Path], platform: str) -> list[Path]:
-    """Return only packages that target *platform*."""
+    """Return only packages that target *platform*.
+
+    Args:
+        package_dirs: Package directories to filter.
+        platform: Runtime identifier (e.g. ``"micropython"``).
+    """
     return [package_dir for package_dir in package_dirs if platform in read_platforms(package_dir)]
 
 
@@ -65,6 +73,9 @@ def find_package_dir(library_dir: Path) -> Path | None:
     Returns the first directory inside ``<library_dir>/src/`` that contains
     an ``__init__.py`` and is not a dot-prefixed or egg-info directory.
     Returns ``None`` when no importable package is found.
+
+    Args:
+        library_dir: Root directory of the library.
     """
     src_dir = library_dir / "src"
     if not src_dir.is_dir():

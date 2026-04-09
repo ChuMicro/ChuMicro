@@ -44,6 +44,9 @@ def copy_shared_docs_assets(doc_dirs: list[Path]) -> None:
     ``support/docs/favicon.png`` to ``docs/img/``.
     Zensical does not support mkdocs hooks, so we handle this before building.
     The generated copies are gitignored.
+
+    Args:
+        doc_dirs: Library directories that contain a ``mkdocs.yml``.
     """
     shared_dir = ROOT / "support" / "docs"
     for library_dir in doc_dirs:
@@ -66,9 +69,10 @@ def inject_landing_page(branch: str) -> None:
     Uses git plumbing commands (hash-object, update-index, write-tree,
     commit-tree, update-ref) to add ``index.html`` and
     ``assets/images/favicon.png`` to the root of *branch* without
-    touching the working tree or requiring a checkout.  This approach
-    avoids disrupting the user's current branch while modifying the
-    gh-pages branch in-place.
+    touching the working tree or requiring a checkout.
+
+    Args:
+        branch: Git branch to commit the landing page to.
     """
     try:
         from generate_landing_page import generate
@@ -159,13 +163,21 @@ def inject_landing_page(branch: str) -> None:
 
 
 def _run(command: list[str]) -> int:
-    """Run a command from the repository root and return its exit code."""
+    """Run a command from the repository root and return its exit code.
+
+    Args:
+        command: Command and arguments to run.
+    """
     print(f"+ {' '.join(command)}")
     return subprocess.run(command, cwd=ROOT, check=False).returncode
 
 
 def _read_version(library_dir: Path) -> str | None:
-    """Read a library's ``VERSION`` file, or return ``None``."""
+    """Read a library's ``VERSION`` file, or return ``None``.
+
+    Args:
+        library_dir: Root directory of the library.
+    """
     version_file = library_dir / "VERSION"
     if not version_file.exists():
         return None
@@ -184,13 +196,18 @@ def docs_deploy(
 
     - **experimental** → version ``dev``, alias ``experimental``.
     - **stable** → version from each library's ``VERSION`` file,
-      alias ``stable``.  Libraries without a ``VERSION`` deploy as
-      ``dev`` / ``experimental``.
-
-    When *libraries* is provided, only deploy those library names
-    (e.g. ``["timing", "runner"]``).  When ``None``, deploy all.
+      alias ``stable``.
 
     After deploying, injects the generated landing page into *branch*.
+
+    Args:
+        channel: Release channel (``"experimental"`` or ``"stable"``).
+        branch: Git branch to deploy to.
+        libraries: Optional list of library names to deploy.
+            When ``None``, deploys all.
+
+    Returns:
+        Exit code (0 for success, non-zero for failure).
     """
     doc_dirs = discover_doc_dirs()
     if libraries:

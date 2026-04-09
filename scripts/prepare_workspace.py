@@ -55,13 +55,22 @@ def _venv_python() -> Path:
 
 
 def _banner(text: str) -> None:
-    """Print a visible section banner."""
+    """Print a visible section banner.
+
+    Args:
+        text: Banner message.
+    """
     ruler = "=" * 60
     print(f"\n{ruler}\n  {text}\n{ruler}")
 
 
 def _run(command: list[str | Path], label: str) -> None:
-    """Run a command from the repository root and abort on failure."""
+    """Run a command from the repository root and abort on failure.
+
+    Args:
+        command: Command and arguments to run.
+        label: Human-readable step label for error reporting.
+    """
     _banner(label)
     printable = " ".join(str(arg) for arg in command)
     print(f"+ {printable}\n")
@@ -108,8 +117,11 @@ def _check_python_version(python: Path | None = None) -> None:
 
     When *python* is ``None``, checks the running interpreter directly
     (fast, no subprocess).  When *python* is a path, shells out to query
-    the target interpreter — needed after creating a venv whose Python
-    may differ from the one running this script.
+    the target interpreter.
+
+    Args:
+        python: Path to the interpreter to check, or ``None`` for the
+            running interpreter.
     """
     if python is None:
         version = ".".join(str(part) for part in sys.version_info[:3])
@@ -145,14 +157,14 @@ def resolve_python(create_venv: bool) -> Path:
     """Decide which Python interpreter to use for the remaining steps.
 
     If *create_venv* is True, create ``.venv`` (or reuse it) and return
-    its interpreter.  Prefers ``uv venv`` when uv is on PATH (faster,
-    no pip bootstrapping needed), falling back to stdlib ``venv``.
+    its interpreter.
 
     If *create_venv* is False, the script looks for an active virtual
     environment or conda environment first, then checks whether a
-    ``.venv`` directory already exists at the repository root.  If none of
-    these apply, the script refuses to continue rather than installing
-    into system Python.
+    ``.venv`` directory already exists.
+
+    Args:
+        create_venv: Whether to create a new virtual environment.
     """
     if create_venv:
         if _venv_python().exists():
@@ -198,9 +210,8 @@ def resolve_python(create_venv: bool) -> Path:
 def install_dependencies(python: Path) -> None:
     """Install development dependencies using the chosen interpreter.
 
-    Prefers ``uv pip install`` when uv is on PATH, falling back to
-    ``python -m pip install``.  The ``--python`` flag tells uv which
-    environment to target even if it has not been activated yet.
+    Args:
+        python: Path to the Python interpreter.
     """
     requirements_file = str(ROOT / "requirements-dev.txt")
     if _has_uv():
@@ -217,13 +228,21 @@ def install_dependencies(python: Path) -> None:
 
 
 def verify_workspace(python: Path) -> None:
-    """Run lint and host tests to confirm the workspace is functional."""
+    """Run lint and host tests to confirm the workspace is functional.
+
+    Args:
+        python: Path to the Python interpreter.
+    """
     _run([python, "scripts/run.py", "lint"], "Lint")
     _run([python, "scripts/run.py", "test"], "Host tests")
 
 
 def print_summary(python: Path) -> None:
-    """Print next steps after workspace preparation."""
+    """Print next steps after workspace preparation.
+
+    Args:
+        python: Path to the Python interpreter used for setup.
+    """
     _banner("Workspace is ready")
     print()
 

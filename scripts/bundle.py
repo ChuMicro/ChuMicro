@@ -46,9 +46,12 @@ EXPERIMENTAL_BUNDLE_REPO = "ChuMicro-Bundle-Experimental"
 def _find_bundle_modules(library_dir: Path) -> tuple[str, Path, list[Path]]:
     """Discover the package name, package dir, and deployable .py files.
 
-    Returns ``(package_name, package_dir, python_files)`` where *python_files* are all
-    ``.py`` modules to include in the bundle (both as source and compiled
-    ``.mpy``).
+    Args:
+        library_dir: Root directory of the library.
+
+    Returns:
+        ``(package_name, package_dir, python_files)`` where *python_files* are all
+        ``.py`` modules to include in the bundle.
     """
     package_dir = find_package_dir(library_dir)
     if package_dir is None:
@@ -69,9 +72,10 @@ def _find_bundle_modules(library_dir: Path) -> tuple[str, Path, list[Path]]:
 def _read_chumicro_dependencies(library_dir: Path) -> list[str]:
     """Return chumicro-* dependency names from pyproject.toml.
 
-    Only intra-workspace dependencies are relevant for mip manifests —
-    external PyPI packages are not installable via mip and are expected
-    to be bundled or re-implemented within the library.
+    Only intra-workspace dependencies are relevant for mip manifests.
+
+    Args:
+        library_dir: Root directory of the library.
     """
     with open(library_dir / "pyproject.toml", "rb") as pyproject_file:
         data = tomllib.load(pyproject_file)
@@ -82,10 +86,8 @@ def _read_chumicro_dependencies(library_dir: Path) -> list[str]:
 def _dependency_to_mip_reference(dependency: str) -> str:
     """Convert 'chumicro-timing>=0.1' to a mip github reference.
 
-    Dependencies always reference the stable (production) variant.
-    An experimental library depends on production releases by default.
-    If coordinated experimental changes across libraries are needed,
-    the developer overrides specific dependencies manually.
+    Args:
+        dependency: PyPI dependency string (e.g. ``"chumicro-timing>=0.1"``).
     """
     # Strip version specifiers (e.g. "chumicro-timing>=0.1" → "chumicro-timing").
     # Splits on the first comparison operator, extras bracket, or environment marker.
@@ -95,7 +97,13 @@ def _dependency_to_mip_reference(dependency: str) -> str:
 
 
 def _compile_mpy(python_file: Path, mpy_file: Path, mpy_cross: str) -> None:
-    """Compile a single .py file to .mpy."""
+    """Compile a single .py file to .mpy.
+
+    Args:
+        python_file: Source Python file.
+        mpy_file: Destination .mpy file.
+        mpy_cross: Path to the mpy-cross binary.
+    """
     mpy_file.parent.mkdir(parents=True, exist_ok=True)
     result = subprocess.run(
         [mpy_cross, "-o", str(mpy_file), str(python_file)],
@@ -119,11 +127,13 @@ def build_bundle(
     Creates ``<staging_dir>/<package_name>/`` containing .py source, .mpy
     bytecode, and a package.json manifest for mip.
 
-    When *experimental* is True the package.json URLs point to the
-    experimental bundle repo.  Directory names are always the base
-    package name (e.g. ``chumicro_timing``) — channel separation is
-    by repo, not directory suffix.  This lets users swap between stable
-    and experimental without changing import statements.
+    Args:
+        library_dir: Root directory of the library.
+        version: Version string for the manifest.
+        staging_dir: Output directory for staged artifacts.
+        mpy_cross: Path to the mpy-cross binary.
+        experimental: When True, package.json URLs point to the
+            experimental bundle repo.
     """
     package_name, package_dir, python_files = _find_bundle_modules(library_dir)
     if not python_files:
@@ -189,9 +199,11 @@ def stage_matrix(
 ) -> None:
     """Stage bundle artifacts for all libraries in a JSON matrix.
 
-    Reads a GitHub Actions matrix JSON (with an ``include`` array of
-    ``{library_dir, version, ...}`` entries) and calls :func:`build_bundle`
-    for each entry in a single process.
+    Args:
+        staging_dir: Output directory for staged artifacts.
+        matrix_json: GitHub Actions matrix JSON string.
+        mpy_cross: Path to the mpy-cross binary.
+        experimental: When True, stage as experimental channel.
     """
     data = json.loads(matrix_json)
     for entry in data["include"]:
@@ -207,7 +219,8 @@ def stage_matrix(
 def _derive_bundle_id(repo_name: str) -> str:
     """Derive the circup bundle_id from a bundle repository name.
 
-    circup lowercases the repository name and replaces underscores with hyphens.
+    Args:
+        repo_name: Bundle repository name (e.g. ``"ChuMicro-Bundle"``).
     """
     return repo_name.lower().replace("_", "-")
 
@@ -221,17 +234,14 @@ def build_circup_zips(
 ) -> list[Path]:
     """Build circup-format zip bundles from a bundle directory.
 
-    Scans *bundle_dir* for ``chumicro_*`` package directories, then creates
-    two zip files in *output_dir*:
+    Args:
+        bundle_dir: Directory containing ``chumicro_*`` package directories.
+        output_dir: Output directory for zip files.
+        repo_name: Bundle repository name used to derive bundle_id.
+        date_tag: Date tag for zip filenames (default: today UTC).
 
-    - ``{bundle_id}-py-{date_tag}.zip`` — ``.py`` source bundle
-    - ``{bundle_id}-10.x-mpy-{date_tag}.zip`` — ``.mpy`` bytecode bundle
-
-    The internal structure follows circup's convention::
-
-        {bundle_id}-{platform}-{date_tag}/lib/{package_name}/...
-
-    Returns the list of created zip paths.
+    Returns:
+        List of created zip file paths.
     """
     if date_tag is None:
         date_tag = datetime.now(timezone.utc).strftime("%Y%m%d")  # noqa: UP017
@@ -285,8 +295,12 @@ def build_circup_zips(
 def _collect_library_metadata(root_dir: Path) -> list[dict]:
     """Collect metadata for all publishable libraries.
 
-    Returns a sorted list of dicts with keys: name, package_name, version,
-    description.
+    Args:
+        root_dir: Workspace root directory.
+
+    Returns:
+        Sorted list of dicts with ``name``, ``package_name``, ``version``,
+        ``description``.
     """
     libraries_dir = root_dir / "libraries"
     if not libraries_dir.is_dir():
@@ -330,9 +344,9 @@ def _collect_library_metadata(root_dir: Path) -> list[dict]:
 def _collect_bundle_metadata(root_dir: Path, bundle_dir: Path) -> list[dict]:
     """Collect metadata only for libraries present in *bundle_dir*.
 
-    Scans *bundle_dir* for ``chumicro_*`` package directories with a
-    ``package.json``, reads the version from each manifest, and pulls
-    the description from the source workspace.
+    Args:
+        root_dir: Workspace root directory.
+        bundle_dir: Bundle directory to scan for packages.
     """
     package_dirs = sorted(
         entry for entry in bundle_dir.iterdir()
@@ -383,13 +397,14 @@ def generate_bundle_readme(
 ) -> str:
     """Generate a rich README.md for a bundle repo.
 
-    Reads library metadata from the workspace and produces markdown with
-    install instructions and a library table linking back to the source repo.
+    Args:
+        root_dir: Workspace root directory.
+        experimental: Generate for the experimental bundle repo.
+        bundle_dir: When provided, only include libraries whose packages
+            exist in this directory.
 
-    When *bundle_dir* is provided, only libraries whose packages actually
-    exist in that directory are included (with versions from their
-    ``package.json``).  This prevents the README from referencing
-    libraries that haven't been published to the bundle repo yet.
+    Returns:
+        README markdown content.
     """
     if bundle_dir is not None:
         libraries = _collect_bundle_metadata(root_dir, bundle_dir)

@@ -20,7 +20,11 @@ from discovery import ROOT
 
 
 def _strip_markdown_links(text: str) -> str:
-    """Convert ``[text](url)`` to just ``text``."""
+    """Convert ``[text](url)`` to just ``text``.
+
+    Args:
+        text: Markdown text that may contain links.
+    """
     return re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
 
 
@@ -69,6 +73,10 @@ def _library_card(library: dict) -> str:
     Links are ordered: Guide → API → Testing (if present) → Experimental → Source.
     The testing link is only shown for libraries whose ``mkdocs.yml``
     references a ``testing.md`` page.
+
+    Args:
+        library: Metadata dict with ``name``, ``package``, ``description``,
+            and ``has_testing`` keys.
     """
     name = library["name"]
     package = library["package"]

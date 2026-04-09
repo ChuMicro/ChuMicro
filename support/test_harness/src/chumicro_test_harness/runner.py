@@ -40,7 +40,11 @@ def _memory_free():
 
 
 def _iter_test_functions(module: object):
-	"""Yield `(name, function)` pairs for callable module attributes named `test_*`."""
+	"""Yield `(name, function)` pairs for callable module attributes named `test_*`.
+
+	Args:
+		module: Module-like object to scan for test functions.
+	"""
 	for name in dir(module):
 		if not name.startswith("test_"):
 			continue
@@ -58,6 +62,9 @@ def _print_exception(exception):
 	1. ``sys.print_exception`` — MicroPython/CircuitPython native hook.
 	2. ``traceback.print_exception`` — CPython standard library fallback.
 	3. Bare class-name + message — always works, no traceback.
+
+	Args:
+		exception: Exception instance to print.
 	"""
 	print(f"{exception.__class__.__name__}: {exception}")
 
@@ -82,18 +89,11 @@ def run_module(module):
 	is available (MicroPython / CircuitPython boards), reports free heap
 	before and after the run to help detect memory leaks.
 
-	Returns a shell-style exit code: 0 for all-pass, 1 for any failure.
+	Args:
+		module: Module-like object containing ``test_*`` callables.
 
-	**Output format contract** — each line uses a fixed prefix so the
-	cross-runtime entry point (``run_cross_runtime.py``) and CI can
-	parse results reliably::
-
-		PASS <name> (<duration>s)
-		FAIL <name> (<duration>s)
-		HEAP <bytes> bytes free
-		HEAP <bytes> bytes free (delta <+/-bytes> bytes)
-		SUMMARY total=<n> failed=<n> time=<seconds>s
-		NO TESTS FOUND
+	Returns:
+		Shell-style exit code: 0 for all-pass, 1 for any failure.
 	"""
 	total = 0
 	failed = 0

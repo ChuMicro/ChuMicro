@@ -22,6 +22,9 @@ def _is_dir(path):
 
     Uses ``os.listdir`` instead of ``os.path.isdir`` because ``os.path``
     is not available on all CircuitPython builds.
+
+    Args:
+        path: Filesystem path to check.
     """
     try:
         os.listdir(path)
@@ -36,6 +39,9 @@ def _sorted_listdir(path):
     Sorting guarantees deterministic test ordering across runtimes and
     filesystems.  Returns an empty list rather than raising when the
     directory does not exist, which simplifies callers.
+
+    Args:
+        path: Directory path to list.
     """
     try:
         entries = os.listdir(path)
@@ -48,8 +54,8 @@ def _sorted_listdir(path):
 def discover_source_roots(root_dir="."):
     """Return ``src/`` directories under ``libraries/`` and ``support/``.
 
-    *root_dir* is the workspace root directory, defaulting to the current
-    working directory.
+    Args:
+        root_dir: Workspace root directory.
     """
     source_roots = []
     for parent in ("libraries", "support"):
@@ -66,12 +72,10 @@ def discover_source_roots(root_dir="."):
 def discover_tests(root_dir=".", libraries=None):
     """Return paths to all ``test_*.py`` files under ``libraries/*/tests/``.
 
-    *root_dir* is the workspace root directory, defaulting to the current
-    working directory.
-
-    *libraries* is an optional list of library names to include.  When
-    ``None``, all libraries are discovered.  Used by platform targeting
-    to skip libraries that don't target the current runtime.
+    Args:
+        root_dir: Workspace root directory.
+        libraries: Optional list of library names to include.
+            When ``None``, all libraries are discovered.
     """
     libraries_dir = root_dir + "/libraries" if root_dir != "." else "libraries"
     library_filter = set(libraries) if libraries else None
@@ -92,7 +96,11 @@ def discover_tests(root_dir=".", libraries=None):
 
 
 def setup_source_paths(root_dir="."):
-    """Insert discovered source roots into ``sys.path`` so library imports resolve."""
+    """Insert discovered source roots into ``sys.path`` so library imports resolve.
+
+    Args:
+        root_dir: Workspace root directory.
+    """
     for source_root_dir in discover_source_roots(root_dir):
         if source_root_dir not in sys.path:
             sys.path.insert(0, source_root_dir)
@@ -114,6 +122,14 @@ def _exec_as_namespace(file_path, name="__main__", package=""):
     multiple libraries have test files with identical names (e.g.
     ``test_core.py``), and MicroPython/CircuitPython lack
     ``importlib.util`` for file-path-based imports.
+
+    Args:
+        file_path: Path to the Python file to execute.
+        name: Value for ``__name__`` in the exec namespace.
+        package: Value for ``__package__`` in the exec namespace.
+
+    Returns:
+        Namespace object with the file's globals as attributes.
     """
     # Seed the exec namespace with dunder attributes so the file "feels"
     # like a real module to any code that inspects __name__ or __package__.
@@ -130,10 +146,12 @@ def _exec_as_namespace(file_path, name="__main__", package=""):
 def run_all(root_dir=".", libraries=None):
     """Discover and run all cross-runtime unit tests, returning a shell exit code.
 
-    *root_dir* is the workspace root directory, defaulting to the current
-    working directory.
+    Args:
+        root_dir: Workspace root directory.
+        libraries: Optional list of library names to include.
 
-    *libraries* is an optional list of library names to include.
+    Returns:
+        ``0`` for all-pass, ``1`` for any failure.
     """
     setup_source_paths(root_dir)
 
