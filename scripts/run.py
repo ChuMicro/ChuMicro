@@ -200,12 +200,12 @@ def test_cpython(
     for coverage_file in ROOT.glob(".coverage.*"):
         coverage_file.unlink()
 
-    # Relax coverage gates when either:
+    # Skip coverage enforcement when either:
     #   - filter_expression is set (selecting a subset of tests naturally
     #     reduces branch coverage below the 94% threshold), or
     #   - no_cov is set (user explicitly opted out of coverage).
-    relax_coverage = bool(filter_expression) or no_cov
-    cov_gate_args = ["--cov-fail-under=0"] if relax_coverage else []
+    skip_coverage_gate = bool(filter_expression) or no_cov
+    cov_gate_args = ["--cov-fail-under=0"] if skip_coverage_gate else []
 
     overall_exit_code = 0
     run_counter = 0
@@ -292,11 +292,17 @@ def test_cpython(
         _run([PYTHON, "-m", "coverage", "combine"])
 
         report_args = [PYTHON, "-m", "coverage", "report", "--show-missing"]
-        if relax_coverage:
+        if skip_coverage_gate:
             report_args.append("--fail-under=0")
 
         report_exit_code = _run(report_args)
         if report_exit_code != 0 and overall_exit_code == 0:
+            if not skip_coverage_gate:
+                print(
+                    "\nHint: check the Missing column above to find uncovered"
+                    " lines.  If the gap is in code you didn't change, note it"
+                    " in your PR — a maintainer can help."
+                )
             overall_exit_code = report_exit_code
 
     return overall_exit_code

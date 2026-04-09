@@ -2,7 +2,7 @@
 
 ## Now
 
-(empty)
+- [ ] Enable GitHub Discussions (Q&A, Ideas, Show and Tell categories) — manual step in repo settings.
 
 ## Next
 
@@ -32,6 +32,7 @@
 
 ## Done (recent)
 
+- [x] Contributor experience audit v2: README reorder (Installation before Development setup), dependency graph, cross-library references (timing ↔ runner), "What's new" sections in all library guides, PR template simplification (N/A defaults), coverage hint in `run.py`, `CLAUDE.md` and `.cursorrules` pointers, GitHub Discussions link in CONTRIBUTING.md and issue template config.
 - [x] Create CONTRIBUTING.md, contributor sub-guides (first-pr, new-library, releases), and GitHub issue templates (bug report, feature request, stable promotion).
 - [x] Rationalize `plans/` folder: remove duplicated prompt files, transform workspace-history into a knowledge document, trim done workstreams, simplify end-of-session checklist.
 - [x] Promote MicroPython and CircuitPython CI jobs to required status checks, gated by platform targeting (Decision 0011).

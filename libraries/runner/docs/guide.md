@@ -299,6 +299,14 @@ Simulated examples run on CPython.  Hardware examples (`circuitpython_*` / `micr
 
 All classes use only basic Python features and work identically on CPython, MicroPython, and CircuitPython.  No `abc`, `typing`, or `asyncio` dependencies.
 
+## What's new
+
+<!-- Add entries for user-visible changes when bumping VERSION.
+     One bullet per change. Internal refactors don't need entries.
+     At stable promotion, collapse/edit as needed. -->
+
+*No changes yet — this section will be updated with each release.*
+
 ---
 
 <div class="chumicro-footer" markdown>

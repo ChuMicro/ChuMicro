@@ -86,6 +86,10 @@ while True:
 | `FakeTicks(start_ms=0)` | Deterministic tick source for host-side tests |
 | `FakeTicks.advance(amount_ms)` | Move the fake clock forward |
 
+## Related libraries
+
+For structured task scheduling with multiple services, see [runner](../runner/). Runner is built on timing — it captures `ticks_ms()` once per tick and dispatches services on a shared timestamp.
+
 ## Platform support
 
 The tick source is selected automatically at import time:

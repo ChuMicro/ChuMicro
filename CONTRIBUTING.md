@@ -27,7 +27,7 @@ Each page is self-contained for its topic. You don't need to read all of them �
 | Git | any recent | |
 | IDE (optional) | PyCharm, VS Code, or CLI | All three are fully supported |
 
-**Windows users:** use native Windows for editing, linting, and tests. Use WSL2 for unix-port cross-runtime checks. See [Getting started](README.md#getting-started) in the README.
+**Windows users:** use native Windows for editing, linting, and tests. Use WSL2 for unix-port cross-runtime checks. See [Development setup](README.md#development-setup) in the README.
 
 ## Development environment
 
@@ -151,6 +151,8 @@ Libraries use [semantic versioning](https://semver.org/). If your PR changes lib
 
 CI enforces this — if you change source files without bumping VERSION, `check-version` will fail.
 
+When you bump VERSION for a user-visible change (new feature, changed behavior, bug fix that affects usage), add a bullet to the "What's new" section in `docs/guide.md`. Internal refactors and test-only changes don't need an entry.
+
 ## Publishing and releases
 
 > **Full details:** See [Releases and Promotion](docs/contributing/releases.md) for the complete release pipeline.
@@ -194,6 +196,7 @@ These aren't arbitrary — each one traces to a design decision with rationale. 
 
 ## Getting help
 
+- **Have a question?** Start a [discussion](https://github.com/ChuMicro/ChuMicro/discussions) — Q&A, ideas, and show-and-tell
 - **Something broken?** Open a [bug report](https://github.com/ChuMicro/ChuMicro/issues/new?template=bug_report.yml)
 - **Have an idea?** Open a [feature request](https://github.com/ChuMicro/ChuMicro/issues/new?template=feature_request.yml)
 - **Want to try an AI agent?** See [Working with Agents](docs/contributing/working-with-agents.md) — agents handle a lot of the mechanical work in this project

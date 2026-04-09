@@ -235,6 +235,14 @@ runner.tick()
 assert recorder.calls == [100]
 ```
 
+## Dependencies
+
+Runner depends on [timing](../timing/) for its tick source and `Heartbeat`-based scheduling. Install both:
+
+```bash
+pip install chumicro-runner chumicro-timing
+```
+
 ## Platform support
 
 All classes use only basic Python features.  Works identically on CPython, MicroPython, and CircuitPython.

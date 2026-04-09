@@ -120,7 +120,7 @@ Process finished with exit code 0
 
 | What you see | What it means | How to fix |
 |---|---|---|
-| `Required test coverage of 94.0% not reached` | Tests don't cover enough code | Check the `Missing` column in the coverage report for uncovered lines |
+| `Required test coverage of 94.0% not reached` | Tests don't cover enough code | Follow the hint printed below the FAIL line — it points to the `Missing` column |
 | `ruff check` errors | Code style violation | Click the file:line link in the output to jump to the issue |
 | `griffe warnings detected` | Bad or missing docstrings | Add type annotations to the signature; `Args:` uses `name: description` (no type), `Returns:` uses just the description |
 | `check-version` failure | Source changed without VERSION bump | Edit `libraries/<name>/VERSION` |
