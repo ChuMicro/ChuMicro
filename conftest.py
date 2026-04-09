@@ -1,11 +1,12 @@
 """Root-level test configuration for the Chumicro workspace.
 
 Auto-discovers library and support package source roots so that
-``pytest`` can be run directly without requiring manual PYTHONPATH
-setup.  Also excludes ``functional_tests/`` from host-side collection.
+``pytest`` can resolve imports even without editable installs
+(e.g., in CI or on a fresh clone before setup runs).  Also
+excludes ``functional_tests/`` from host-side collection.
 
-See ``plans/decisions/0009-per-library-test-runs.md`` for why imports
-resolve via ``sys.path`` manipulation rather than ``pip install -e``.
+See ``plans/decisions/0009-per-library-test-runs.md`` for the
+per-library test isolation strategy.
 """
 
 from __future__ import annotations

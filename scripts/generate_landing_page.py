@@ -25,7 +25,7 @@ def _strip_markdown_links(text: str) -> str:
     Args:
         text: Markdown text that may contain links.
     """
-    return re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+    return re.sub(r"\[([^]]+)]\([^)]+\)", r"\1", text)
 
 
 def _discover_libraries() -> list[dict]:

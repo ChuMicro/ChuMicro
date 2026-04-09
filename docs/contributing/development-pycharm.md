@@ -52,7 +52,7 @@ If imports show as unresolved:
 2. Right-click the project root → **Reload from Disk**
 3. If still broken: **File → Invalidate Caches → Invalidate and Restart**
 
-> **Note:** Do not use `pip install -e` to fix imports. The project uses source root configuration instead.
+> **Note:** PyCharm uses source root configuration for import resolution — you don't need to run `pip install -e` manually. The workspace setup script handles editable installs automatically.
 
 ## Run configurations
 

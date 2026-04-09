@@ -1,7 +1,7 @@
 """IDE configuration generation (PyCharm and VS Code/Pyright).
 
 Regenerates source-root configurations, run/task configurations, and Pyright
-paths so libraries are importable in the IDE without ``pip install -e``.
+paths so libraries are importable in the IDE alongside editable installs.
 See ``plans/decisions/0012-ide-type-stubs.md``.
 
 This module is idempotent — running it multiple times produces the same
