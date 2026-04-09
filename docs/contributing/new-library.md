@@ -61,7 +61,7 @@ Your code must work on CircuitPython, MicroPython, *and* CPython. This means:
 
 - **No `async`/`await`** — use the tick-based runner pattern. If your library has active components, implement `check(now_ms) -> bool` so they work with [`Runner`](../../libraries/runner/).
 - **No third-party dependencies** that aren't available on all three runtimes. If a library doesn't support CircuitPython, re-implement the functionality.
-- **No type annotations on function signatures** — CircuitPython and MicroPython don't reliably support them. Document types in docstrings instead.
+- **No `typing` imports** — the `typing` module doesn't exist on CircuitPython or MicroPython. Use PEP 604/585 syntax instead: `int | None`, `list[int]`, `dict[str, int]` ([Decision 0021](../../plans/decisions/0021-docstring-type-policy.md)).
 
 ### Constructor injection
 
@@ -259,17 +259,17 @@ mkdocstrings renders API docs from your docstrings — the scaffold starts with 
 Every public function, method, and class needs a Google-style docstring:
 
 ```python
-def ticks_diff(end, start):
+def ticks_diff(end: int, start: int) -> int:
     """Compute the signed difference between two tick values.
 
     Handles wraparound correctly for values from ``ticks_ms()``.
 
     Args:
-        end (int): The later tick value.
-        start (int): The earlier tick value.
+        end: The later tick value.
+        start: The earlier tick value.
 
     Returns:
-        int: Signed difference in milliseconds. Positive if ``end``
+        Signed difference in milliseconds. Positive if ``end``
             is after ``start``.
 
     Raises:
@@ -277,9 +277,10 @@ def ticks_diff(end, start):
     """
 ```
 
-> **`Args:` vs `Returns:` format:** `Args:` uses `name (type): description`.
-> `Returns:` uses `type: description` — no name, just the type.  This is
-> standard Google-style.  See [Decision 0021][d0021] for details.
+> **Docstring format:** Types go on the signature as annotations.  Docstrings
+> carry descriptions only — `Args:` uses `name: description` (no type in
+> parens), `Returns:` uses just the description (no `type:` prefix).
+> See [Decision 0021][d0021] for details.
 
 [d0021]: https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0021-docstring-type-policy.md
 

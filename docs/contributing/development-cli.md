@@ -178,30 +178,30 @@ Build finished in 0.00s
   Built: libraries/timing/site/
 ```
 
-**When it fails** (common: griffe warning from bad docstrings):
+**When it fails** (common: griffe warning from missing annotation):
 
 ```
-WARNING  -  griffe: chumicro_timing/core.py:42: No type in parameter 'interval_ms'
+WARNING  -  griffe: chumicro_timing/core.py:42: No type or annotation for parameter 'interval_ms'
 FAIL: griffe warnings detected — fix docstrings before merging.
 ```
 
-**How to fix:** Add the type to the docstring parameter. Use Google-style format:
+**How to fix:** Add a type annotation to the function signature:
 
 ```python
-def my_func(interval_ms):
+def my_func(interval_ms: int) -> int:
     """Do something.
 
     Args:
-        interval_ms (int): Interval in milliseconds.  ← add the (int) part
+        interval_ms: Interval in milliseconds.
 
     Returns:
-        int: The computed value.  ← type only, no name
+        The computed value.
     """
 ```
 
-> **Heads up:** `Args:` uses `name (type): description`, but `Returns:` uses
-> `type: description` — no name before the type.  Mixing these up is the most
-> common docstring error.
+> **Heads up:** Types go on the signature as annotations.  Docstrings carry
+> descriptions only — `Args:` uses `name: description`, `Returns:` uses just
+> the description.
 
 ### Preflight
 

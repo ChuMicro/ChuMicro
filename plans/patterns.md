@@ -20,13 +20,13 @@ class MyService:
     """One-line description.
 
     Args:
-        dependency (SomeType): Injected dependency.
-        interval_ms (int): How often to act, in milliseconds.
-        ticks (object | None): Tick source (must have ``ticks_ms``,
+        dependency: Injected dependency.
+        interval_ms: How often to act, in milliseconds.
+        ticks: Tick source (must have ``ticks_ms``,
             ``ticks_diff``, ``ticks_add``).  Defaults to real clock.
     """
 
-    def __init__(self, dependency, interval_ms=1000, ticks=None):
+    def __init__(self, dependency: object, interval_ms: int = 1000, ticks: object | None = None) -> None:
         self._dep = dependency
         self._interval_ms = interval_ms
         if ticks is not None:
@@ -39,25 +39,25 @@ class MyService:
             self._ticks_add = ticks_add
             self._next_ms = ticks_ms()
 
-    def check(self, now_ms):
+    def check(self, now_ms: int) -> bool:
         """Return True if the service should act this tick.
 
         Args:
-            now_ms (int): Current time in milliseconds.
+            now_ms: Current time in milliseconds.
 
         Returns:
-            bool: True if the interval has elapsed.
+            True if the interval has elapsed.
         """
         if self._ticks_diff(now_ms, self._next_ms) < 0:
             return False
         self._next_ms = self._ticks_add(now_ms, self._interval_ms)
         return True
 
-    def handle(self, now_ms):
+    def handle(self, now_ms: int) -> None:
         """Perform the service action.
 
         Args:
-            now_ms (int): Current time in milliseconds.
+            now_ms: Current time in milliseconds.
         """
         # ... do work ...
 ```
@@ -92,7 +92,7 @@ fake is provided.
 ```python
 # ✅ Injectable — testable with fakes, lazy hardware import
 class Sensor:
-    def __init__(self, i2c=None, ticks=None):
+    def __init__(self, i2c: object | None = None, ticks: object | None = None) -> None:
         if i2c is not None:
             self._i2c = i2c
         else:
@@ -134,10 +134,10 @@ class FakeBackend:
     Provides call recording and deterministic behavior for tests.
     """
 
-    def __init__(self):
-        self.calls = []
+    def __init__(self) -> None:
+        self.calls: list[str] = []
 
-    def read(self):
+    def read(self) -> bytes:
         self.calls.append("read")
         return b""
 ```
@@ -197,7 +197,7 @@ settings library), apply the same approach:
 # Implementations: NvmBackend, FileBackend, MemoryBackend
 
 class Settings:
-    def __init__(self, backend, defaults=None):
+    def __init__(self, backend: object, defaults: dict[str, object] | None = None) -> None:
         self._backend = backend
         # ...
 ```
