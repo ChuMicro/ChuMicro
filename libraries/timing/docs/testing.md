@@ -11,6 +11,7 @@ from chumicro_timing import Heartbeat
 from chumicro_timing.testing import FakeTicks
 
 def test_heartbeat_fires_after_period() -> None:
+    """Heartbeat fires exactly when the period elapses."""
     fake = FakeTicks()
     heartbeat = Heartbeat(period_ms=100, ticks=fake)
 

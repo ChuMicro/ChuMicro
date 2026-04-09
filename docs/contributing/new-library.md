@@ -169,6 +169,8 @@ Combine with pre-allocated buffers for the full pattern:
 
 ```python
 class PacketReader:
+    """Incremental packet reader with zero-copy slicing."""
+
     def __init__(self, buffer_size: int = 64) -> None:
         """Set up a reusable read buffer.
 
