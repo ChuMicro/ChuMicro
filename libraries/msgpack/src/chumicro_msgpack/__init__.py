@@ -34,10 +34,10 @@ try:
         ``pack(obj, stream)`` to write directly to a destination.
 
         Args:
-            obj (object): Python object to serialize.
+            obj: Python object to serialize.
 
         Returns:
-            bytes: Msgpack-encoded data.
+            Msgpack-encoded data.
         """
         buffer = BytesIO()
         pack(obj, buffer)
@@ -47,10 +47,10 @@ try:
         """Unpack msgpack *data* to a Python object using the native decoder.
 
         Args:
-            data (bytes | bytearray | memoryview): Msgpack-encoded data.
+            data: Msgpack-encoded data.
 
         Returns:
-            object: Deserialized Python object.
+            Deserialized Python object.
         """
         return unpack(BytesIO(data))
 
