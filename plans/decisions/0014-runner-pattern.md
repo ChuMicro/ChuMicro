@@ -47,7 +47,7 @@ All patterns accept an optional `period_ms` to gate by time.
 
 The runner owns period gating: `add(service, period_ms=N)` creates an internal `Heartbeat` and only calls the service when the period elapses.  `TaskHandle` allows runtime mutation: `set_period()`, `remove()`.
 
-Components that need conditional logic beyond period gating implement it in their `.check()` method.  There is one mechanism for periodic behaviour, not two.
+Components that need conditional logic beyond period gating implement it in their `.check()` method.  There is one mechanism for periodic behavior, not two.
 
 ### Batch firing
 
@@ -68,7 +68,7 @@ This guarantees handlers see a consistent view of the world — no handler modif
 - **Priority-based dispatch ordering:** Priority constants were defined but never used for dispatch ordering.  Constants without behaviour create confusion.  Deferred until the ecosystem actually needs contention management.
 - **Component-owned sink / `next_event()`:** Less centralized, requires per-library queue logic, harder to orchestrate multiple components.  Rejected in favor of the runner-managed pattern.
 - **`ServiceContext` wrapping ticks + sink:** Adds a layer of indirection not needed at current scale.
-- **Period ownership on the dispatcher:** Created two parallel mechanisms for periodic behaviour (service-side and dispatcher-side) which was confusing.  Consolidated to runner-only.
+- **Period ownership on the dispatcher:** Created two parallel mechanisms for periodic behavior (service-side and dispatcher-side) which was confusing.  Consolidated to runner-only.
 
 ## Consequences
 

@@ -39,7 +39,7 @@ def _ensure_source_tree() -> None:
     """Clone the pinned MicroPython source tree if it is not already present.
 
     Always runs ``git submodule update`` even when the clone already
-    exists because submodules may have been left uninitialised by a
+    exists because submodules may have been left uninitialized by a
     shallow clone or a previous interrupted run.
     """
     _SOURCE_DIR.parent.mkdir(parents=True, exist_ok=True)
