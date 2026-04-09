@@ -13,6 +13,8 @@ class Heartbeat:
     and ``ticks_diff`` methods to override (e.g. for tests).
     """
 
+    __slots__ = ("_period_ms", "_ticks_diff", "_last_beat_ms")
+
     def __init__(self, period_ms: int, ticks: object | None = None) -> None:
         """Create a heartbeat that becomes due once every *period_ms* milliseconds.
 

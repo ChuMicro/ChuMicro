@@ -111,8 +111,46 @@ def test_heartbeat_default_ticks_uses_real_clock() -> None:
 
 
 def test_fake_ticks_add() -> None:
-    """FakeTicks.ticks_add should return a simple sum."""
+    """FakeTicks.ticks_add should return a wrapped sum."""
     fake = FakeTicks()
     assert fake.ticks_add(100, 50) == 150
     assert fake.ticks_add(0, 0) == 0
-    assert fake.ticks_add(200, -50) == 150
+    # Modular arithmetic: result wraps at 2**29.
+    period = 1 << 29
+    assert fake.ticks_add(period - 10, 20) == 10
+
+
+def test_fake_ticks_ms_wraps_at_period() -> None:
+    """FakeTicks.ticks_ms should mask to [0 .. 2**29 - 1]."""
+    period = 1 << 29
+    fake = FakeTicks(start_ms=period - 1)
+    assert fake.ticks_ms() == period - 1
+
+    fake.advance(1)
+    assert fake.ticks_ms() == 0  # wrapped
+
+    fake.advance(1)
+    assert fake.ticks_ms() == 1
+
+
+def test_fake_ticks_diff_handles_wraparound() -> None:
+    """FakeTicks.ticks_diff should use ring arithmetic like the real impl."""
+    period = 1 << 29
+    # Normal forward difference.
+    fake = FakeTicks()
+    assert fake.ticks_diff(100, 50) == 50
+
+    # Wraparound: end < start numerically, but logically end is later.
+    end = 10
+    start = period - 10
+    assert fake.ticks_diff(end, start) == 20
+
+
+def test_fake_ticks_current_ms_property() -> None:
+    """FakeTicks.current_ms property should be readable and writable."""
+    fake = FakeTicks(start_ms=42)
+    assert fake.current_ms == 42
+
+    fake.current_ms = 100
+    assert fake.current_ms == 100
+    assert fake.ticks_ms() == 100

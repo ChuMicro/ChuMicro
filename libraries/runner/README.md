@@ -239,7 +239,7 @@ assert recorder.calls == [100]
 
 ## Dependencies
 
-Runner depends on [timing](../timing/) for its tick source and `Heartbeat`-based scheduling. Install both:
+Runner depends on [timing](../timing/) for its tick source and tick arithmetic (`ticks_diff`, `ticks_add`). Install both:
 
 ```bash
 pip install chumicro-runner chumicro-timing
