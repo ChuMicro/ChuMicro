@@ -16,32 +16,23 @@ that ``resolve_micropython_binary()`` can find it without recompiling.
 
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
 
 from discovery import TOOLS
-from prepare import VERSIONS, build_jobs, ensure_tool, run_build_command, running_on_native_windows
+from prepare import (
+    build_env,
+    build_jobs,
+    ensure_tool,
+    run_build_command,
+    running_on_native_windows,
+    runtime_versions,
+)
 
-_RELEASE = VERSIONS["micropython"]["version"]
+_RELEASE = runtime_versions()["micropython"]["version"]
 _REPO_URL = "https://github.com/micropython/micropython.git"
 _SOURCE_DIR = TOOLS / f"micropython-{_RELEASE}"
 _BINARY_FILE = _SOURCE_DIR / "ports" / "unix" / "build-standard" / "micropython"
-
-
-def _build_env() -> dict[str, str]:
-    """Return environment variables for the MicroPython build."""
-    env = os.environ.copy()
-    # macOS Clang treats gnu-folding-constant as an error by default,
-    # which breaks the MicroPython build.  Suppress it here so the
-    # build succeeds.  Not needed on Linux/GCC.
-    if sys.platform == "darwin":
-        flag = "-Wno-error=gnu-folding-constant"
-        existing = env.get("CFLAGS_EXTRA", "").split()
-        if flag not in existing:
-            existing.append(flag)
-            env["CFLAGS_EXTRA"] = " ".join(existing)
-    return env
 
 
 def _ensure_source_tree() -> None:
@@ -78,7 +69,10 @@ def prepare_micropython() -> int:
         _ensure_source_tree()
 
         jobs = f"-j{build_jobs()}"
-        env = _build_env()
+        # macOS Clang treats gnu-folding-constant as an error by default,
+        # which breaks the MicroPython build.  Not needed on Linux/GCC.
+        macos_flags = ["-Wno-error=gnu-folding-constant"] if sys.platform == "darwin" else []
+        env = build_env(*macos_flags)
         # Build steps must run in order:
         #   1. mpy-cross — the bytecode compiler, required before the port.
         #   2. ports/unix — the actual unix-port interpreter binary.

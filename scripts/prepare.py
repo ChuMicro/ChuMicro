@@ -7,6 +7,7 @@ used by the task runner.
 
 from __future__ import annotations
 
+import functools
 import os
 import shutil
 import subprocess
@@ -14,7 +15,14 @@ from pathlib import Path
 
 from discovery import ROOT, TOOLS, read_runtime_versions
 
-VERSIONS = read_runtime_versions()
+
+@functools.cache
+def runtime_versions() -> dict:
+    """Read and cache pinned runtime versions from ``target-runtimes.toml``.
+
+    Lazy — importing :mod:`prepare` no longer triggers a TOML read.
+    """
+    return read_runtime_versions()
 
 
 def run_build_command(
@@ -52,6 +60,24 @@ def running_on_native_windows() -> bool:
 def build_jobs() -> str:
     """Return a conservative default parallelism level for local builds."""
     return str(min(os.cpu_count() or 2, 4))
+
+
+def build_env(*extra_cflags: str) -> dict[str, str]:
+    """Return a copy of ``os.environ`` with additional ``CFLAGS_EXTRA`` flags.
+
+    Flags already present in ``CFLAGS_EXTRA`` are not duplicated.
+
+    Args:
+        extra_cflags: Additional compiler flags to append.
+    """
+    env = os.environ.copy()
+    existing = env.get("CFLAGS_EXTRA", "").split()
+    for flag in extra_cflags:
+        if flag not in existing:
+            existing.append(flag)
+    if existing:
+        env["CFLAGS_EXTRA"] = " ".join(existing)
+    return env
 
 
 # ---------------------------------------------------------------------------

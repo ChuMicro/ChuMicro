@@ -20,47 +20,26 @@ which is expected — see ``_BINARY_FILE`` below.
 
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
 
 from discovery import TOOLS
-from prepare import VERSIONS, build_jobs, ensure_tool, run_build_command, running_on_native_windows
+from prepare import (
+    build_env,
+    build_jobs,
+    ensure_tool,
+    run_build_command,
+    running_on_native_windows,
+    runtime_versions,
+)
 
-_RELEASE = VERSIONS["circuitpython"]["version"]
+_RELEASE = runtime_versions()["circuitpython"]["version"]
 _REPO_URL = "https://github.com/adafruit/circuitpython.git"
 _SOURCE_DIR = TOOLS / f"circuitpython-{_RELEASE}"
 _UNIX_VARIANT = "standard"
 # The CircuitPython unix-port binary is named "micropython" — inherited
 # from the MicroPython fork.  This is expected, not a misconfiguration.
 _BINARY_FILE = _SOURCE_DIR / "ports" / "unix" / f"build-{_UNIX_VARIANT}" / "micropython"
-
-
-def _build_env() -> dict[str, str]:
-    """Return environment variables for the local CircuitPython unix build.
-
-    CircuitPython 10.1.4 has a bug in ``py/py.mk``: ``objringio.c`` is listed
-    in ``py.cmake`` but missing from ``py.mk``.  The ``standard`` variant sets
-    ``MICROPY_CONFIG_ROM_LEVEL_EXTRA_FEATURES``, which enables
-    ``MICROPY_PY_MICROPYTHON_RINGIO`` by default (``mpconfig.h:1387``).
-    ``modmicropython.c`` then references ``mp_type_ringio``, but the Makefile
-    never compiles the object file that defines it, causing an unresolved-symbol
-    linker error.  MicroPython v1.26.0's ``py.mk`` includes ``objringio.o``;
-    CircuitPython's fork simply missed the line.
-
-    The workaround is ``-DMICROPY_PY_MICROPYTHON_RINGIO=0``, which disables the
-    RingIO type at compile time so the missing object file is not required.
-
-    See ``plans/decisions/0017-circuitpython-ringio-bug.md``.
-    """
-    env = os.environ.copy()
-    flags = env.get("CFLAGS_EXTRA", "").split()
-    required = ["-DMICROPY_PY_MICROPYTHON_RINGIO=0"]
-    for flag in required:
-        if flag not in flags:
-            flags.append(flag)
-    env["CFLAGS_EXTRA"] = " ".join(flags)
-    return env
 
 
 def _ensure_source_tree() -> None:
@@ -99,12 +78,16 @@ def prepare_circuitpython() -> int:
             cwd=_SOURCE_DIR,
         )
         run_build_command(["make", "-C", str(_SOURCE_DIR / "mpy-cross"), jobs])
+        # CircuitPython 10.1.4 has a bug in py/py.mk: objringio.c is listed
+        # in py.cmake but missing from py.mk.  The workaround disables the
+        # RingIO type so the missing object file is not required.
+        # See plans/decisions/0017-circuitpython-ringio-bug.md.
         run_build_command(
             [
                 "make", "-C", str(_SOURCE_DIR / "ports/unix"),
                 f"VARIANT={_UNIX_VARIANT}", jobs,
             ],
-            env=_build_env(),
+            env=build_env("-DMICROPY_PY_MICROPYTHON_RINGIO=0"),
         )
     except subprocess.CalledProcessError as error:
         print(f"Command failed with exit code {error.returncode}: {error.cmd}")

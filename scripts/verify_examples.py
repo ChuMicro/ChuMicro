@@ -108,48 +108,48 @@ def verify_examples(package_dirs: list[Path]) -> int:
         if src_dir not in sys.path:
             sys.path.insert(0, src_dir)
 
-    examples: list[tuple[str, Path]] = []
-    for package_dir in package_dirs:
-        examples_dir = package_dir / "examples"
-        if not examples_dir.is_dir():
-            continue
-        for py_file in sorted(examples_dir.glob("*.py")):
-            relative_path = py_file.relative_to(ROOT)
-            examples.append((str(relative_path), py_file))
+    try:
+        examples: list[tuple[str, Path]] = []
+        for package_dir in package_dirs:
+            examples_dir = package_dir / "examples"
+            if not examples_dir.is_dir():
+                continue
+            for py_file in sorted(examples_dir.glob("*.py")):
+                relative_path = py_file.relative_to(ROOT)
+                examples.append((str(relative_path), py_file))
 
-    if not examples:
-        print("No examples found for the selected packages.")
-        sys.path[:] = saved_path
+        if not examples:
+            print("No examples found for the selected packages.")
+            return 0
+
+        failures = 0
+        for rel_path, py_file in examples:
+            print(f"  checking {rel_path}")
+            source = py_file.read_text(encoding="utf-8")
+            hardware = py_file.name.startswith(_HARDWARE_PREFIXES)
+
+            # 1. Syntax check.
+            try:
+                tree = ast.parse(source, filename=str(py_file))
+            except SyntaxError as exc:
+                print(f"  FAIL: {rel_path}  (syntax error: {exc})")
+                failures += 1
+                continue
+
+            # 2. Verify imports.
+            if not _check_imports(tree, rel_path, hardware):
+                failures += 1
+            else:
+                label = f"  OK:   {rel_path}"
+                if hardware:
+                    label += "  (hardware)"
+                print(label)
+
+        if failures:
+            print(f"\n{failures} example(s) failed.")
+            return 1
+
+        print(f"\nAll {len(examples)} example(s) verified.")
         return 0
-
-    failures = 0
-    for rel_path, py_file in examples:
-        print(f"  checking {rel_path}")
-        source = py_file.read_text(encoding="utf-8")
-        hardware = py_file.name.startswith(_HARDWARE_PREFIXES)
-
-        # 1. Syntax check.
-        try:
-            tree = ast.parse(source, filename=str(py_file))
-        except SyntaxError as exc:
-            print(f"  FAIL: {rel_path}  (syntax error: {exc})")
-            failures += 1
-            continue
-
-        # 2. Verify imports.
-        if not _check_imports(tree, rel_path, hardware):
-            failures += 1
-        else:
-            label = f"  OK:   {rel_path}"
-            if hardware:
-                label += "  (hardware)"
-            print(label)
-
-    sys.path[:] = saved_path
-
-    if failures:
-        print(f"\n{failures} example(s) failed.")
-        return 1
-
-    print(f"\nAll {len(examples)} example(s) verified.")
-    return 0
+    finally:
+        sys.path[:] = saved_path

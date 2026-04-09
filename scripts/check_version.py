@@ -13,25 +13,7 @@ non-release-relevant files changed).  Exits 1 when enforcement fails.
 
 from __future__ import annotations
 
-import subprocess
-
-from discovery import RELEASE_RELEVANT, ROOT, changed_files
-
-
-def _has_release_tag(library_name: str) -> bool:
-    """Return True if *library_name* has at least one release tag (e.g. ``timing-v0.1.0``).
-
-    Args:
-        library_name: Library name (e.g. ``"timing"``).
-    """
-    result = subprocess.run(
-        ["git", "tag", "-l", f"{library_name}-v*"],
-        capture_output=True,
-        text=True,
-        cwd=ROOT,
-        check=False,
-    )
-    return bool(result.stdout.strip())
+from discovery import RELEASE_RELEVANT, changed_files, release_tags
 
 
 def _check(base_ref: str) -> int:
@@ -43,7 +25,12 @@ def _check(base_ref: str) -> int:
     Returns:
         Exit code (0 for success, 1 for failure).
     """
-    changed = changed_files(base_ref)
+    try:
+        changed = changed_files(base_ref)
+    except RuntimeError as exc:
+        print(exc)
+        return 2
+
     if not changed:
         print("No changed files detected.")
         return 0
@@ -97,7 +84,7 @@ def _check(base_ref: str) -> int:
     # PyPI projects must be created manually before the first publish.
     all_changed_libraries = libraries_needing_bump | libraries_with_bump
     for library_name in sorted(all_changed_libraries):
-        if not _has_release_tag(library_name):
+        if not release_tags(library_name):
             print(
                 f"NOTE: libraries/{library_name}/ has no release tags — "
                 "this appears to be a new library.  Before merging, "

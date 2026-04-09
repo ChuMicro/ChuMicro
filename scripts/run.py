@@ -34,7 +34,7 @@ from docs_deploy import (
     inject_landing_page,
 )
 from ide import sync_ide
-from prepare import VERSIONS, resolve_circuitpython_binary, resolve_micropython_binary
+from prepare import resolve_circuitpython_binary, resolve_micropython_binary, runtime_versions
 from prepare_circuitpython import prepare_circuitpython
 from prepare_micropython import prepare_micropython
 from scaffold import new_library
@@ -54,8 +54,9 @@ COMPAT_SCRIPT = "support/test_harness/run_cross_runtime.py"
 
 def setup() -> int:
     """Install development dependencies and regenerate IDE configuration."""
-    circuitpython_version = VERSIONS["circuitpython"]["version"]
-    micropython_version = VERSIONS["micropython"]["version"].lstrip("v")
+    versions = runtime_versions()
+    circuitpython_version = versions["circuitpython"]["version"]
+    micropython_version = versions["micropython"]["version"].lstrip("v")
 
     # Static dependencies come from requirements-dev.txt.  Type stubs for
     # CircuitPython and MicroPython are pinned to the runtime versions

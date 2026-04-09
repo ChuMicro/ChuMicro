@@ -17,37 +17,7 @@ import re
 import subprocess
 import sys
 
-from discovery import ROOT, changed_libraries, find_package_dir
-
-
-def _latest_tag(library_name: str) -> str | None:
-    """Find the latest git tag matching ``<library_name>-v*``.
-
-    Args:
-        library_name: Library name (e.g. ``"timing"``).
-    """
-    result = subprocess.run(
-        ["git", "tag", "--list", f"{library_name}-v*", "--sort=-v:refname"],
-        capture_output=True,
-        text=True,
-        cwd=ROOT,
-        check=False,
-    )
-    if result.returncode != 0 or not result.stdout.strip():
-        return None
-    return result.stdout.strip().splitlines()[0]
-
-
-def _read_version(library_name: str) -> str | None:
-    """Read the current VERSION file for a library.
-
-    Args:
-        library_name: Library name (e.g. ``"timing"``).
-    """
-    version_file = ROOT / "libraries" / library_name / "VERSION"
-    if not version_file.exists():
-        return None
-    return version_file.read_text().strip()
+from discovery import ROOT, changed_libraries, find_package_dir, read_version, release_tags
 
 
 def _parse_version(version: str) -> tuple[int, int, int] | None:
@@ -94,7 +64,12 @@ def _check(base_ref: str) -> int:
     Returns:
         Exit code (0 for success, 1 for failure).
     """
-    libraries = changed_libraries(base_ref)
+    try:
+        libraries = changed_libraries(base_ref)
+    except RuntimeError as exc:
+        print(exc)
+        return 2
+
     if not libraries:
         print("No release-relevant library changes detected.")
         return 0
@@ -102,10 +77,11 @@ def _check(base_ref: str) -> int:
     overall_ok = True
 
     for library_name in sorted(libraries):
-        tag = _latest_tag(library_name)
-        if tag is None:
+        tags = release_tags(library_name)
+        if not tags:
             print(f"SKIP: {library_name} — no previous release tag found.")
             continue
+        tag = tags[0]
 
         package_dir = find_package_dir(ROOT / "libraries" / library_name)
         if package_dir is None:
@@ -113,7 +89,7 @@ def _check(base_ref: str) -> int:
             continue
         package_name = package_dir.name
 
-        new_version = _read_version(library_name)
+        new_version = read_version(ROOT / "libraries" / library_name)
         if new_version is None:
             print(f"SKIP: {library_name} — no VERSION file.")
             continue
