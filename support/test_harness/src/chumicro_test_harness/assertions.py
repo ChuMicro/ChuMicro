@@ -20,7 +20,11 @@ class raises:
     """
 
     def __init__(self, expected):
-        """Accept the expected exception type."""
+        """Accept the expected exception type.
+
+        Args:
+            expected: Exception class to catch.
+        """
         self.expected = expected
         self.exception = None
 

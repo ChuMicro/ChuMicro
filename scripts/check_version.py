@@ -19,7 +19,11 @@ from discovery import RELEASE_RELEVANT, ROOT, changed_files
 
 
 def _has_release_tag(library_name: str) -> bool:
-    """Return True if *library_name* has at least one release tag (e.g. ``timing-v0.1.0``)."""
+    """Return True if *library_name* has at least one release tag (e.g. ``timing-v0.1.0``).
+
+    Args:
+        library_name: Library name (e.g. ``"timing"``).
+    """
     result = subprocess.run(
         ["git", "tag", "-l", f"{library_name}-v*"],
         capture_output=True,
@@ -31,7 +35,14 @@ def _has_release_tag(library_name: str) -> bool:
 
 
 def _check(base_ref: str) -> int:
-    """Run the VERSION enforcement check.  Returns exit code."""
+    """Run the VERSION enforcement check.
+
+    Args:
+        base_ref: Git ref to diff against.
+
+    Returns:
+        Exit code (0 for success, 1 for failure).
+    """
     changed = changed_files(base_ref)
     if not changed:
         print("No changed files detected.")
@@ -98,7 +109,11 @@ def _check(base_ref: str) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Entry point."""
+    """Entry point.
+
+    Args:
+        argv: Command-line arguments (defaults to ``sys.argv``).
+    """
     import argparse
 
     parser = argparse.ArgumentParser(description="Check VERSION file enforcement.")

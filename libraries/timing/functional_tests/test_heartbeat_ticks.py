@@ -6,7 +6,11 @@ from chumicro_timing.ticks import ticks_diff, ticks_ms
 
 
 def _sleep_ms(duration_ms: int) -> None:
-	"""Sleep for the requested duration using the best available runtime API."""
+	"""Sleep for the requested duration using the best available runtime API.
+
+	Args:
+		duration_ms: Duration in milliseconds.
+	"""
 	runtime_sleep_ms = getattr(time, "sleep_ms", None)
 	if callable(runtime_sleep_ms):
 		runtime_sleep_ms(duration_ms)

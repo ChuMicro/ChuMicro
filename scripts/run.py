@@ -49,7 +49,15 @@ COMPAT_SCRIPT = "support/test_harness/run_cross_runtime.py"
 
 
 def _run(command: list[str], env: dict[str, str] | None = None) -> int:
-    """Run a command from the repository root and return its exit code."""
+    """Run a command from the repository root and return its exit code.
+
+    Args:
+        command: Command and arguments to run.
+        env: Optional environment variables to pass to the subprocess.
+
+    Returns:
+        Process exit code.
+    """
     printable_command = " ".join(command)
     print(f"+ {printable_command}")
     completed = subprocess.run(command, cwd=ROOT, env=env, check=False)

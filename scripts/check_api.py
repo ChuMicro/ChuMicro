@@ -21,7 +21,11 @@ from discovery import ROOT, changed_libraries, find_package_dir
 
 
 def _latest_tag(library_name: str) -> str | None:
-    """Find the latest git tag matching ``<library_name>-v*``."""
+    """Find the latest git tag matching ``<library_name>-v*``.
+
+    Args:
+        library_name: Library name (e.g. ``"timing"``).
+    """
     result = subprocess.run(
         ["git", "tag", "--list", f"{library_name}-v*", "--sort=-v:refname"],
         capture_output=True,
@@ -35,7 +39,11 @@ def _latest_tag(library_name: str) -> str | None:
 
 
 def _read_version(library_name: str) -> str | None:
-    """Read the current VERSION file for a library."""
+    """Read the current VERSION file for a library.
+
+    Args:
+        library_name: Library name (e.g. ``"timing"``).
+    """
     version_file = ROOT / "libraries" / library_name / "VERSION"
     if not version_file.exists():
         return None
@@ -43,7 +51,11 @@ def _read_version(library_name: str) -> str | None:
 
 
 def _parse_version(version: str) -> tuple[int, int, int] | None:
-    """Parse a semver string into (major, minor, patch)."""
+    """Parse a semver string into (major, minor, patch).
+
+    Args:
+        version: Semantic version string (e.g. ``"1.2.3"``).
+    """
     match = re.match(r"^(\d+)\.(\d+)\.(\d+)", version)
     if not match:
         return None
@@ -51,7 +63,15 @@ def _parse_version(version: str) -> tuple[int, int, int] | None:
 
 
 def _bump_level(old_version: str, new_version: str) -> str | None:
-    """Determine the bump level between two versions."""
+    """Determine the bump level between two versions.
+
+    Args:
+        old_version: Previous version string.
+        new_version: Current version string.
+
+    Returns:
+        ``"major"``, ``"minor"``, ``"patch"``, or ``None`` if unchanged.
+    """
     old_parsed = _parse_version(old_version)
     new_parsed = _parse_version(new_version)
     if old_parsed is None or new_parsed is None:
@@ -66,7 +86,14 @@ def _bump_level(old_version: str, new_version: str) -> str | None:
 
 
 def _check(base_ref: str) -> int:
-    """Run the API breakage check.  Returns exit code."""
+    """Run the API breakage check.
+
+    Args:
+        base_ref: Git ref to detect changed libraries against.
+
+    Returns:
+        Exit code (0 for success, 1 for failure).
+    """
     libraries = changed_libraries(base_ref)
     if not libraries:
         print("No release-relevant library changes detected.")
@@ -168,7 +195,11 @@ def _check(base_ref: str) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Entry point."""
+    """Entry point.
+
+    Args:
+        argv: Command-line arguments (defaults to ``sys.argv``).
+    """
     import argparse
 
     parser = argparse.ArgumentParser(

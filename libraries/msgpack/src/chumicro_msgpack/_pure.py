@@ -11,7 +11,12 @@ import struct
 # ---------------------------------------------------------------------------
 
 def _encode(obj: object, buffer: bytearray) -> None:
-    """Encode *obj* into msgpack format, appending bytes to *buffer*."""
+    """Encode *obj* into msgpack format, appending bytes to *buffer*.
+
+    Args:
+        obj: Python object to serialize.
+        buffer: Target buffer to append encoded bytes to.
+    """
     if obj is True:
         buffer.append(0xc3)
     elif obj is False:
@@ -36,7 +41,12 @@ def _encode(obj: object, buffer: bytearray) -> None:
 
 
 def _encode_int(value: int, buffer: bytearray) -> None:
-    """Encode an integer value."""
+    """Encode an integer value.
+
+    Args:
+        value: Integer to encode.
+        buffer: Target buffer to append encoded bytes to.
+    """
     if 0 <= value <= 0x7f:
         buffer.append(value)
     elif -32 <= value < 0:
@@ -64,7 +74,12 @@ def _encode_int(value: int, buffer: bytearray) -> None:
 
 
 def _encode_str(value: str, buffer: bytearray) -> None:
-    """Encode a string value."""
+    """Encode a string value.
+
+    Args:
+        value: String to encode.
+        buffer: Target buffer to append encoded bytes to.
+    """
     encoded = value.encode("utf-8")
     length = len(encoded)
     if length <= 31:
@@ -81,7 +96,12 @@ def _encode_str(value: str, buffer: bytearray) -> None:
 
 
 def _encode_bin(value: bytes | bytearray, buffer: bytearray) -> None:
-    """Encode a bytes or bytearray value."""
+    """Encode a bytes or bytearray value.
+
+    Args:
+        value: Bytes or bytearray to encode.
+        buffer: Target buffer to append encoded bytes to.
+    """
     length = len(value)
     if length <= 0xff:
         buffer.append(0xc4)
@@ -95,7 +115,12 @@ def _encode_bin(value: bytes | bytearray, buffer: bytearray) -> None:
 
 
 def _encode_array(value: list | tuple, buffer: bytearray) -> None:
-    """Encode a list or tuple as a msgpack array."""
+    """Encode a list or tuple as a msgpack array.
+
+    Args:
+        value: List or tuple to encode.
+        buffer: Target buffer to append encoded bytes to.
+    """
     length = len(value)
     if length <= 15:
         buffer.append(0x90 | length)
@@ -109,7 +134,12 @@ def _encode_array(value: list | tuple, buffer: bytearray) -> None:
 
 
 def _encode_map(value: dict, buffer: bytearray) -> None:
-    """Encode a dict as a msgpack map."""
+    """Encode a dict as a msgpack map.
+
+    Args:
+        value: Dict to encode.
+        buffer: Target buffer to append encoded bytes to.
+    """
     length = len(value)
     if length <= 15:
         buffer.append(0x80 | length)
@@ -130,7 +160,12 @@ def _encode_map(value: dict, buffer: bytearray) -> None:
 def _decode(data: memoryview, offset: int) -> tuple:
     """Decode one msgpack value from *data* at *offset*.
 
-    Returns ``(value, new_offset)``.
+    Args:
+        data: Memoryview over the msgpack-encoded bytes.
+        offset: Byte position to start decoding from.
+
+    Returns:
+        ``(value, new_offset)`` tuple.
     """
     byte = data[offset]
 
@@ -233,7 +268,16 @@ def _decode(data: memoryview, offset: int) -> tuple:
 
 
 def _decode_array(data: memoryview, offset: int, length: int) -> tuple:
-    """Decode *length* array elements starting at *offset*."""
+    """Decode *length* array elements starting at *offset*.
+
+    Args:
+        data: Memoryview over the msgpack-encoded bytes.
+        offset: Byte position to start decoding from.
+        length: Number of elements to decode.
+
+    Returns:
+        ``(list, new_offset)`` tuple.
+    """
     result = []
     for _ in range(length):
         value, offset = _decode(data, offset)
@@ -242,7 +286,16 @@ def _decode_array(data: memoryview, offset: int, length: int) -> tuple:
 
 
 def _decode_map(data: memoryview, offset: int, length: int) -> tuple:
-    """Decode *length* map key-value pairs starting at *offset*."""
+    """Decode *length* map key-value pairs starting at *offset*.
+
+    Args:
+        data: Memoryview over the msgpack-encoded bytes.
+        offset: Byte position to start decoding from.
+        length: Number of key-value pairs to decode.
+
+    Returns:
+        ``(dict, new_offset)`` tuple.
+    """
     result = {}
     for _ in range(length):
         key, offset = _decode(data, offset)

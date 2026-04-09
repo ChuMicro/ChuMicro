@@ -562,6 +562,9 @@ class Test{class_name}:
 def _scaffold_library(name: str) -> int:
     """Create the directory structure and template files for a new library.
 
+    Args:
+        name: Library short name (e.g. ``"gpio"``).
+
     The resulting layout matches the workspace convention::
 
         libraries/<name>/
@@ -686,7 +689,11 @@ def _scaffold_library(name: str) -> int:
 
 
 def new_library(name: str) -> int:
-    """Scaffold a new library under libraries/ and regenerate IDE configurations."""
+    """Scaffold a new library under libraries/ and regenerate IDE configurations.
+
+    Args:
+        name: Library short name (e.g. ``"gpio"``).
+    """
     result = _scaffold_library(name)
     if result != 0:
         return result

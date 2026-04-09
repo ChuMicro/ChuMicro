@@ -24,7 +24,11 @@ _HARDWARE_PREFIXES = ("circuitpython_", "micropython_")
 
 
 def _is_chumicro_module(name: str) -> bool:
-    """Return whether a module name belongs to this workspace."""
+    """Return whether a module name belongs to this workspace.
+
+    Args:
+        name: Fully qualified module name.
+    """
     return name.startswith("chumicro_")
 
 
@@ -35,7 +39,13 @@ def _check_imports(
 ) -> bool:
     """Walk the AST and verify that all imports resolve.
 
-    Returns True if all imports are valid, False if any fail.
+    Args:
+        tree: Parsed AST of the example file.
+        rel_path: Relative path to the file (for error messages).
+        hardware: Whether the file is a hardware-specific example.
+
+    Returns:
+        ``True`` if all imports are valid, ``False`` if any fail.
     """
     ok = True
     for node in ast.walk(tree):
@@ -82,18 +92,11 @@ def verify_examples(package_dirs: list[Path]) -> int:
     Uses static analysis (AST parsing + ``importlib`` resolution) rather
     than executing examples.
 
-    Discovers ``examples/*.py`` in each selected library, then for each:
+    Args:
+        package_dirs: Package directories whose ``examples/`` to verify.
 
-    1. Compiles the source to catch syntax errors.
-    2. Walks the AST to extract ``import`` and ``from … import …`` statements.
-    3. Resolves each imported module via ``importlib`` and verifies that
-       specific names (``from X import Y``) exist on the module.
-
-    Hardware examples (files named ``circuitpython_*.py`` or
-    ``micropython_*.py``) may import modules unavailable on CPython
-    (``board``, ``digitalio``, ``machine``, etc.).  For these, only
-    ``chumicro_*`` imports are verified — platform-specific imports are
-    skipped.
+    Returns:
+        Exit code (0 for success, 1 for failures).
     """
     # Ensure library src/ dirs are importable.
     src_dirs = [

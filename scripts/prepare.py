@@ -20,13 +20,26 @@ VERSIONS = read_runtime_versions()
 def run_build_command(
     command: list[str], cwd: Path | None = None, env: dict[str, str] | None = None
 ) -> None:
-    """Run a build command and fail fast if it does not succeed."""
+    """Run a build command and fail fast if it does not succeed.
+
+    Args:
+        command: Command and arguments to run.
+        cwd: Working directory (defaults to repository root).
+        env: Optional environment variables for the subprocess.
+    """
     print(f"+ {' '.join(command)}")
     subprocess.run(command, cwd=cwd or ROOT, env=env, check=True)
 
 
 def ensure_tool(name: str) -> None:
-    """Require a host tool before attempting to prepare a runtime."""
+    """Require a host tool before attempting to prepare a runtime.
+
+    Args:
+        name: Tool binary name to look up on PATH.
+
+    Raises:
+        RuntimeError: If the tool is not found.
+    """
     if shutil.which(name) is None:
         raise RuntimeError(f"Required tool not found on PATH: {name}")
 
