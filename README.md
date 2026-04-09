@@ -139,7 +139,6 @@ Everything goes through one command: `python scripts/run.py <task>`.
 
 Tasks that operate on libraries (`test`, `verify-examples`, `docs`, `docs-preview`) accept `--all` or `--libraries name` to control scope. By default, `test` auto-detects changed packages.
 
-
 ### Testing
 
 - **CPython tests** — pytest with a 94% branch coverage gate per library

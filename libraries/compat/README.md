@@ -81,6 +81,14 @@ set_status_led(100)  # pin 13 → 100%
 
 The public API (`.func`, `.args`, `.keywords`, `__call__`, `__repr__`) is identical across all runtimes.
 
+## Examples
+
+| Example | What it shows |
+|---|---|
+| `partial_basic.py` | Freeze one argument to a function |
+| `partial_keyword_override.py` | Freeze keyword args, override at call time |
+| `partial_callback.py` | Wire a callback with frozen context (embedded pattern) |
+
 ## Docs
 
 📖 **[Stable docs](https://chumicro.github.io/ChuMicro/compat/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/compat/experimental/)**
@@ -90,16 +98,8 @@ Browse on GitHub:
 - [User guide](docs/guide.md) — what's polyfilled and why, usage patterns
 - [API reference](docs/api.md) — full API documentation
 
-## Examples
-
-| Example | What it shows |
-|---|---|
-| `partial_basic.py` | Freeze one argument to a function |
-| `partial_keyword_override.py` | Freeze keyword args, override at call time |
-| `partial_callback.py` | Wire a callback with frozen context (embedded pattern) |
-
 ## Find this library
 
-**PyPI:** [chumicro-compat](https://pypi.org/project/chumicro-compat/)
-**Bundle:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) (CircuitPython & MicroPython)
-**Source:** [ChuMicro/ChuMicro](https://github.com/ChuMicro/ChuMicro) — cross-runtime Python libraries for ESP32, RP2040, and other microcontrollers.
+- **PyPI:** [chumicro-compat](https://pypi.org/project/chumicro-compat/)
+- **Bundle:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) (CircuitPython & MicroPython)
+- **Source:** [ChuMicro/ChuMicro](https://github.com/ChuMicro/ChuMicro) — cross-runtime Python libraries for ESP32, RP2040, and other microcontrollers.

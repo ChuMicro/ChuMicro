@@ -148,6 +148,6 @@ Browse on GitHub:
 
 ## Find this library
 
-**PyPI:** [chumicro-timing](https://pypi.org/project/chumicro-timing/)
-**Bundle:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) (CircuitPython & MicroPython)
-**Source:** [ChuMicro/ChuMicro](https://github.com/ChuMicro/ChuMicro) — cross-runtime Python libraries for ESP32, RP2040, and other microcontrollers.
+- **PyPI:** [chumicro-timing](https://pypi.org/project/chumicro-timing/)
+- **Bundle:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) (CircuitPython & MicroPython)
+- **Source:** [ChuMicro/ChuMicro](https://github.com/ChuMicro/ChuMicro) — cross-runtime Python libraries for ESP32, RP2040, and other microcontrollers.
