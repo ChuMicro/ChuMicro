@@ -1,6 +1,6 @@
 """Deploy versioned documentation to a git branch using mike.
 
-Centralises library discovery, shared-CSS copy, mike deploy loop, and
+Centralizes library discovery, shared-CSS copy, mike deploy loop, and
 landing-page injection that the CI workflow and local preview share.
 
 Called as ``python scripts/run.py docs-deploy --channel <channel>``.
@@ -161,7 +161,6 @@ def inject_landing_page(branch: str) -> None:
         ["git", "update-ref", f"refs/heads/{branch}", new_commit],
         cwd=ROOT, check=True,
     )
-
 
 
 
