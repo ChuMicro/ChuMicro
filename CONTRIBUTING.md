@@ -4,18 +4,18 @@ Welcome! Chumicro is an open platform for cross-runtime Python libraries targeti
 
 **You don't need to be an expert.** The tooling handles most of the hard parts (coverage, linting, cross-runtime checks, release automation). If you can run a few commands and follow the guidelines, you can contribute.
 
-**Agents are welcome too.** If you're working with an AI coding agent, point it at [`AGENTS.md`](AGENTS.md) for the full rule set. Agents are especially helpful for writing tests (the 94% coverage gate is real) and generating documentation.
-
 ## Reading guide
 
 Start here, then pick the guide that matches your task:
 
 | What you want to do | Read this |
 |---|---|
+| **Find something to work on** | [Good first contributions](#good-first-contributions) |
 | **Set up and develop** | This page → then your [development environment guide](#development-environment) |
 | **Open a pull request** | [Creating a Pull Request](docs/contributing/pull-requests.md) |
 | **Add a new library** | [Adding a New Library](docs/contributing/new-library.md) |
 | **Understand releases** | [Releases and Promotion](docs/contributing/releases.md) |
+| **Use an AI coding agent** | [Working with Agents](docs/contributing/working-with-agents.md) |
 
 Each page is self-contained for its topic. You don't need to read all of them — just the ones relevant to what you're doing.
 
@@ -78,14 +78,27 @@ git checkout -b feature/my-change
 
 ### Key rules
 
-Don't worry about memorizing these — CI enforces them all automatically. Your PR won't merge until they pass:
+Before opening a PR, run preflight:
 
-- **94% test coverage** per library. Run: `python scripts/run.py test --libraries <name>`
-- **No lint errors.** Run: `python scripts/run.py lint`
-- **Examples must parse.** Run: `python scripts/run.py verify-examples --libraries <name>`
-- **Docs must build.** Run: `python scripts/run.py docs --libraries <name>`
+```bash
+python scripts/run.py preflight 2>&1 | tail -5
+```
+
+If it prints `Preflight passed`, you're good — CI will pass too. That's the only command you need to remember. Everything else below is what preflight checks behind the scenes.
+
+<details>
+<summary>What preflight checks (expand for details)</summary>
+
+- **94% test coverage** per library. Run individually: `python scripts/run.py test --libraries <name>`
+- **No lint errors.** Run individually: `python scripts/run.py lint`
+- **Examples must parse.** Run individually: `python scripts/run.py verify-examples --libraries <name>`
+- **Docs must build.** Run individually: `python scripts/run.py docs --libraries <name>`
 - **No API breakage** without a VERSION bump. CI runs `check-api` and `check-version` automatically.
 - **Cross-runtime compatibility.** CI runs your code under MicroPython and CircuitPython unix ports.
+
+</details>
+
+> **Coverage note:** The 94% gate catches real edge cases that 90% missed — we tried the lower bar and regretted it. If your PR trips the coverage gate on code you didn't change, note it in the PR description. A maintainer can help fill the gap or mark an exception. Don't let someone else's uncovered code block your contribution.
 
 ### Device testing
 
@@ -172,10 +185,10 @@ These aren't arbitrary — each one traces to a design decision with rationale. 
 
 | Rule | Why |
 |---|---|
-| No `async`/`await` | Microcontrollers use tick-based scheduling ([Decision 0014](plans/decisions/0014-runner-pattern.md)) |
+| No `async`/`await` | CircuitPython ships a pure-Python asyncio (Adafruit fork, frozen into firmware — the C `_asyncio` module is never compiled in). MicroPython's asyncio has C-backed task scheduling but a Python event loop. Both are a single global loop with no scheduling visibility, no priority control, and limited networking support. Constructor injection and testability are awkward because the loop owns the call stack. The tick-based runner gives you the same periodic-dispatch capability with explicit scheduling you can inspect and test. ([Decision 0014](plans/decisions/0014-runner-pattern.md)) |
 | Constructor injection for I/O | Testability without mocking things you don't own ([Decision 0010](plans/decisions/0010-library-testability.md)) |
 | Per-library `pytest` runs | Avoids test-directory collisions ([Decision 0009](plans/decisions/0009-per-library-test-runs.md)) |
-| Docstring types, not annotations | CircuitPython/MicroPython don't reliably support annotations ([Decision 0021](plans/decisions/0021-docstring-type-policy.md)) |
+| Docstring types, not annotations | Both runtimes parse annotations without error but silently discard them — `__annotations__` doesn't exist on functions or classes at runtime. Since they're invisible to the code and to any introspection tools running on-device, we document types in docstrings where they're always available and always rendered by mkdocstrings. ([Decision 0021](plans/decisions/0021-docstring-type-policy.md)) |
 | f-strings for formatting | Use `f"value={x}"` — not `%` or `.format()`. Consistent and readable across all three runtimes |
 | `const()` / `memoryview` in library code | Memory efficiency on microcontrollers — see [examples](docs/contributing/new-library.md#memory-efficient-patterns) (not required in `scripts/` or `support/`) |
 
@@ -183,8 +196,19 @@ These aren't arbitrary — each one traces to a design decision with rationale. 
 
 - **Something broken?** Open a [bug report](https://github.com/ChuMicro/ChuMicro/issues/new?template=bug_report.yml)
 - **Have an idea?** Open a [feature request](https://github.com/ChuMicro/ChuMicro/issues/new?template=feature_request.yml)
-- **Using an agent?** See [`AGENTS.md`](AGENTS.md) for the complete rule set
+- **Want to try an AI agent?** See [Working with Agents](docs/contributing/working-with-agents.md) — agents handle a lot of the mechanical work in this project
 - **Questions about decisions?** Browse [`plans/decisions/`](plans/decisions/) — they explain *why* things work the way they do
+
+## Good first contributions
+
+Not sure where to start? These are real ways to contribute that don't require deep knowledge of the codebase:
+
+- **Fix a typo or clarify a sentence** in any README, guide, or docstring — docs-only PRs skip most CI gates.
+- **Add an example script** to a library's `examples/` folder — pick a use case from the library's guide that doesn't have an example yet.
+- **Improve test coverage** — run `python scripts/run.py test --libraries <name>`, check the `Missing` column in the coverage report, and write tests for uncovered lines.
+- **Try a library on your board** and report what happened — even a "it worked on my ESP32-S3" comment on an issue is valuable.
+
+Look for issues labeled [**good first issue**](https://github.com/ChuMicro/ChuMicro/labels/good%20first%20issue) — these are scoped, described, and ready to pick up.
 
 ## License
 

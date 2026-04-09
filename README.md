@@ -20,6 +20,16 @@ Target runtime versions are pinned in [`target-runtimes.toml`](target-runtimes.t
 | [compat](libraries/compat/) | Cross-runtime compatibility polyfills — functools.partial and more. |
 | [msgpack](libraries/msgpack/) | Compact MessagePack serialization with native CircuitPython C module delegation. |
 
+### Which libraries do I need?
+
+Each library solves one problem and works independently — install only what you use. Libraries fall into a few categories:
+
+- **Timing & scheduling** — non-blocking timers, task runners, periodic polling
+- **Data & serialization** — compact encoding for storage and communication
+- **Runtime compatibility** — polyfills for stdlib features missing on CircuitPython/MicroPython
+
+Browse the [documentation site](https://chumicro.github.io/ChuMicro/) for the full list with guides, or look through `libraries/` in this repo. Each library's README has installation commands, a quick example, and an API summary.
+
 ## Documentation
 
 📖 **[Browse documentation](https://chumicro.github.io/ChuMicro/)** — all library docs, guides, and API references.
@@ -150,8 +160,9 @@ Start with [`CONTRIBUTING.md`](CONTRIBUTING.md) — it covers setup, rules, and 
 - **[Creating a Pull Request](docs/contributing/pull-requests.md)** — submitting your work
 - **[Adding a New Library](docs/contributing/new-library.md)** — publishing your own library
 - **[Releases and Promotion](docs/contributing/releases.md)** — how publishing works
+- **[Working with Agents](docs/contributing/working-with-agents.md)** — using AI coding agents on this project
 
-Contributors of all experience levels are welcome.
+Contributors of all experience levels are welcome. If you're looking for a place to start, see [Good first contributions](CONTRIBUTING.md#good-first-contributions) in the contributing guide.
 
 ## Planning
 
