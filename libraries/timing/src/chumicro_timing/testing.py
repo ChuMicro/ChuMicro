@@ -6,31 +6,59 @@ allowing host-side tests to control time without wall-clock waits.
 Ships with the library per Decision 0010 so downstream consumers
 import ready-made fakes rather than inventing ad-hoc mocks.
 
-Usage from any library's tests::
-
+Example:
+    ```python
     from chumicro_timing.testing import FakeTicks
 
     fake = FakeTicks()
     heartbeat = Heartbeat(period_ms=100, ticks=fake)
     fake.advance(100)
     assert heartbeat.poll(fake.ticks_ms()) is True
+    ```
+
+``FakeTicks`` models the full tick contract including the 2²⁹ ms
+wraparound period.  Values returned by ``ticks_ms()`` are always in
+``[0 .. 2**29 - 1]``, and ``ticks_diff`` uses ring arithmetic — so
+tests will catch code that accidentally uses plain subtraction instead
+of ``ticks_diff``.
 """
+
+from .ticks import _TICKS_HALFPERIOD, _TICKS_MAX, _TICKS_PERIOD
 
 
 class FakeTicks:
     """Deterministic tick source for host-side tests.
 
-    Replaces the real ``ticks_ms`` / ``ticks_diff`` contract with values
-    that only move when ``advance()`` is called explicitly.
+    Replaces the real ``ticks_ms`` / ``ticks_diff`` / ``ticks_add``
+    contract with values that only move when ``advance()`` is called
+    explicitly.  Models the 2²⁹ ms wraparound period so downstream
+    code is tested against the real tick semantics.
     """
+
+    __slots__ = ("_current_ms",)
 
     def __init__(self, start_ms: int = 0) -> None:
         """Create a fake tick source starting at *start_ms*.
 
         Args:
-            start_ms: Initial tick value.
+            start_ms: Initial tick value (masked to the tick period).
         """
-        self.current_ms = start_ms
+        self._current_ms = start_ms
+
+    @property
+    def current_ms(self) -> int:
+        """Return the raw internal counter (unmasked).
+
+        Prefer ``ticks_ms()`` for values that match the production
+        contract.  This property exists for backward compatibility
+        and for tests that need to inspect the raw counter.
+        """
+        return self._current_ms
+
+    @current_ms.setter
+    def current_ms(self, value: int) -> None:
+        """Set the raw internal counter."""
+        self._current_ms = value
 
     def advance(self, amount_ms: int) -> None:
         """Move the clock forward by *amount_ms* milliseconds.
@@ -38,14 +66,16 @@ class FakeTicks:
         Args:
             amount_ms: Milliseconds to advance.
         """
-        self.current_ms += amount_ms
+        self._current_ms += amount_ms
 
     def ticks_ms(self) -> int:
-        """Return the current fake tick value."""
-        return self.current_ms
+        """Return the current fake tick value in ``[0 .. 2**29 - 1]``."""
+        return self._current_ms & _TICKS_MAX
 
     def ticks_diff(self, end: int, start: int) -> int:
-        """Return the signed difference *end* − *start*.
+        """Wraparound-safe signed difference *end* − *start*.
+
+        Uses the same ring arithmetic as the real ``ticks_diff``.
 
         Args:
             end: Later tick value.
@@ -54,16 +84,17 @@ class FakeTicks:
         Returns:
             Signed difference in milliseconds.
         """
-        return end - start
+        diff = (end - start) & _TICKS_MAX
+        return ((diff + _TICKS_HALFPERIOD) & _TICKS_MAX) - _TICKS_HALFPERIOD
 
     def ticks_add(self, ticks_val: int, delta: int) -> int:
-        """Add *delta* milliseconds to a tick value.
+        """Wraparound-safe addition of *delta* to a tick value.
 
         Args:
             ticks_val: Base tick value.
             delta: Milliseconds to add.
 
         Returns:
-            Sum of tick value and delta.
+            Wrapped tick value in ``[0 .. 2**29 - 1]``.
         """
-        return ticks_val + delta
+        return (ticks_val + delta) % _TICKS_PERIOD
