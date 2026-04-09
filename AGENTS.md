@@ -15,6 +15,8 @@ Hard rules an agent must never violate:
 - **No `pip install -e`** — IDE resolution uses generated configs (`sync-ide`).
 - **Minimize dependencies** — prefer pure-Python implementations compatible with all three runtimes.
 - **Standard annotations, no `typing` imports** — use type annotations on signatures; do not `import typing` in library code (Decision 0021).  Use PEP 604/585 syntax (`int | None`, `list[int]`).  Docstrings carry descriptions only — **`Args:`** uses `name: description`, **`Returns:`** uses just a description.
+- **Verify before declaring done** — after making changes, run `task-checkpoint` (tests + commit).  Before ending a session, run `end-of-session` (preflight + clean tree).  Do not tell the user "done" with uncommitted or untested changes.
+- **Preflight must pass before you stop** — `python scripts/run.py preflight 2>&1 | tail -5` must show `Preflight passed`.  If it fails, fix it.
 
 Common pitfalls:
 
@@ -59,6 +61,22 @@ At the start of a session, orient yourself:
 6. Check `plans/open-questions.md` for unresolved threads relevant to your task.
 
 Commit history is the primary fallback when planning docs are stale.  Write commit messages accordingly (see Contributing below).
+
+### Completion protocol
+
+**After every unit of work** (feature, fix, refactor), run the `task-checkpoint` skill before telling the user you're done.  The short version:
+
+1. `git status --short` — review what changed.
+2. Run the narrowest test that covers your changes (see the skill for the table).
+3. Commit and push if the work is coherent.  Read the `git-commit` skill for mechanics.
+
+**Before ending a session**, run the `end-of-session` skill.  The short version:
+
+1. `python scripts/run.py preflight 2>&1 | tail -5` — must show `Preflight passed`.
+2. Check VERSION bumps for changed libraries.
+3. Commit any remaining work.  `git status --short` must produce no output.
+
+**Do not skip these.**  Telling the user "done" with failing tests or uncommitted changes is a hard failure.
 
 ### Terminal rules
 
@@ -250,7 +268,7 @@ Planning docs under `plans/` are part of the repository's working state.  See `p
 1. Keep PRs small and focused.  Include tests and documentation.
 2. Code review checks: style, coverage, memory usage, API consistency across runtimes.
 3. Do not commit build artifacts, bytecode, or secret configuration files.
-4. **After completing a unit of work**, run the `task-checkpoint` skill — validate, commit, push.
-5. **Before ending a session**, run the `end-of-session` skill — preflight, VERSION bumps, planning doc audit, clean tree.
+4. **After completing a unit of work**, run the `task-checkpoint` skill — validate, commit, push.  Do not yield to the user with uncommitted changes unless the work is explicitly partial.
+5. **Before ending a session**, run the `end-of-session` skill — preflight, VERSION bumps, planning doc audit, clean tree.  Preflight must pass.  Tree must be clean.
 6. **Write commit messages that aid context recovery** — imperative subject, body explaining *why*, name affected libraries/decisions/workstreams.  A future agent scanning `git log` should be able to reconstruct project state.
 7. **Commit mechanics:** Read the `git-commit` skill before every commit.  Never `git commit -m`.  Write the message to `.scratch/commit-msg.txt` with a file tool, then `git commit -F .scratch/commit-msg.txt`.
