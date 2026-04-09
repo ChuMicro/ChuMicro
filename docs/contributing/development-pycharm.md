@@ -79,15 +79,21 @@ Click the ▶ button or press `⌃R` / `Shift+F10` to run the selected configura
 
 ## Running tests
 
-### From the run configuration
+### From the run configuration (with coverage)
 
-Select **Test** from the dropdown and click ▶. This runs all libraries.
+Select **Test** from the dropdown and click ▶. This runs all libraries with the 94% coverage gate and leaves a `.coverage` data file at the project root. To see coverage in the editor afterward, see [Browsing coverage](#browsing-coverage) below.
 
-### From the test file
+To test a single library, use the terminal:
 
-Right-click a test file or test function in the editor → **Run 'test_...'**. PyCharm runs it with pytest using the source roots from `.idea/chumicro.iml`.
+```bash
+python scripts/run.py test --libraries timing
+```
 
-> **Important:** PyCharm's built-in test runner does not enforce the 94% coverage gate. Always run `Test` from the dropdown or use the terminal to verify coverage before opening a PR.
+### From a test file (quick check, no coverage)
+
+Right-click a test file or test function in the editor → **Run 'test_...'**. PyCharm runs it with pytest using the source roots from `.idea/chumicro.iml`. This is fast for iterating on a single test but does not produce coverage data.
+
+> **Note:** PyCharm also offers **Run with Coverage** (shield icon). This uses PyCharm's built-in coverage runner, which doesn't understand the project's multi-library layout. Use the **Test** run config or the terminal for accurate coverage.
 
 ### From the terminal
 
@@ -166,9 +172,23 @@ ChuMicro/
 | Navigate to file | `⌘⇧O` | `Ctrl+Shift+N` |
 | Navigate to symbol | `⌘⌥O` | `Ctrl+Shift+Alt+N` |
 
+## Browsing coverage
+
+Running **Test** from the ▶ button (or `python scripts/run.py test` from the terminal) produces a `.coverage` file at the project root. You can view it two ways:
+
+**In the editor gutter:** **Run → Show Code Coverage Data** → select the `.coverage` file. Covered lines show green; missed lines show red. This makes it easy to spot untested branches while editing.
+
+**In a browser:** Generate an HTML report for a full clickable overview:
+
+```bash
+python -m coverage html
+open htmlcov/index.html
+```
+
+> `htmlcov/` is gitignored — generate it when you need it, discard when you're done.
+
 ## Quirks and tips
 
-- **Coverage is not shown in the gutter by default.** To see coverage highlighting, run tests with coverage from the terminal: `python scripts/run.py test --libraries timing`. Then in PyCharm: **Run → Show Code Coverage Data** and load the `.coverage` file.
 - **PyCharm may suggest installing packages.** Ignore these suggestions — the project resolves imports through source roots, not pip installs.
 - **If a new library is added**, run `python scripts/run.py sync-ide` to regenerate the `.iml` file. New source roots appear after reloading.
 - **The `.idea/` directory is partially committed** — run configurations and the `.iml` file are shared. Workspace-specific files (`.idea/workspace.xml`, etc.) are gitignored.

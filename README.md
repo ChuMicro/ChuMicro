@@ -1,24 +1,19 @@
 # Chumicro
 
-Cross-runtime Python libraries for CircuitPython, MicroPython, and CPython — built for ESP32, RP2040, and other microcontrollers.
+**Python libraries that work on your microcontroller *and* your laptop.**
 
-**License:** MIT · **CPython:** ≥ 3.11 · **CircuitPython:** 10.1.4 · **MicroPython:** v1.26.0
+Write once, run on CircuitPython, MicroPython, and CPython. Whether you're blinking an LED on an ESP32 or prototyping on your desktop, the same code works everywhere.
 
-- One workspace with many individually published libraries
-- Shared support packages for cross-runtime test tooling and docs assets
-- CPython-first development and testing, with unix-port simulation preferred over hardware when possible
-- Optional real-device validation for boards registered in a local testbed
+## What's in the box?
 
-Target runtime versions are pinned in [`target-runtimes.toml`](target-runtimes.toml). Board support tiers (Tier 1 recommended, Tier 2 constrained) are documented in [Decision 0015](plans/decisions/0015-board-architecture-support.md).
+Small, focused libraries you can install independently. Use what you need.
 
-## Libraries
-
-| Library | Description |
+| Library | What it does |
 |---|---|
-| [timing](libraries/timing/) | Wraparound-safe millisecond tick helpers, heartbeat scheduling, and deterministic test fakes. |
-| [runner](libraries/runner/) | Tick-based task runner: check/handle gates, periodic tasks, shared timestamps — no async required. |
-| [compat](libraries/compat/) | Cross-runtime compatibility polyfills — functools.partial and more. |
-| [msgpack](libraries/msgpack/) | Compact MessagePack serialization with native CircuitPython C module delegation. |
+| **[timing](libraries/timing/)** | Non-blocking timers with wraparound-safe millisecond math. |
+| **[runner](libraries/runner/)** | A tick-based task scheduler — register services, call `runner.tick()` in your loop. No async needed. |
+| **[compat](libraries/compat/)** | Polyfills for stdlib bits that CircuitPython and MicroPython are missing (like `functools.partial`). |
+| **[msgpack](libraries/msgpack/)** | Compact binary serialization — much smaller than JSON, great for settings and sensor data. |
 
 ### Dependencies
 
@@ -31,17 +26,18 @@ msgpack   (no dependencies)
 
 ### Which libraries do I need?
 
-Each library solves one problem and works independently — install only what you use. Libraries fall into a few categories:
+Start with the problem you're solving:
 
-- **Timing & scheduling** — [timing](libraries/timing/) for non-blocking timers, [runner](libraries/runner/) for structured task scheduling with multiple services
-- **Data & serialization** — [msgpack](libraries/msgpack/) for compact binary encoding
-- **Runtime compatibility** — [compat](libraries/compat/) for stdlib polyfills missing on CircuitPython/MicroPython
+- **"I need non-blocking timers"** → [timing](libraries/timing/)
+- **"I have multiple things happening in my loop"** → [runner](libraries/runner/) (includes timing)
+- **"I need to store settings or send data compactly"** → [msgpack](libraries/msgpack/)
+- **"functools.partial doesn't exist on my board"** → [compat](libraries/compat/)
 
-Browse the [documentation site](https://chumicro.github.io/ChuMicro/) for the full list with guides, or look through `libraries/` in this repo. Each library's README has installation commands, a quick example, and an API summary.
+Browse the [documentation site](https://chumicro.github.io/ChuMicro/) for guides and API references, or look through `libraries/` — each library's README has install commands, a quick example, and an API summary.
 
-## Installation
+## Get started
 
-Libraries are published to **[PyPI](https://pypi.org/search/?q=chumicro)** for CPython and to **bundle repos** for CircuitPython (circup) and MicroPython (mip). Pick the install method for your runtime — replace `chumicro-timing` with whichever library you need.
+Pick the install method for your runtime — swap `chumicro-timing` for whichever library you need.
 
 **CircuitPython (circup):**
 
@@ -71,110 +67,122 @@ Experimental (pre-release) builds are also available — see each library's READ
 
 ## Documentation
 
-📖 **[Browse documentation](https://chumicro.github.io/ChuMicro/)** — all library docs, guides, and API references.
+📖 **[Browse the docs](https://chumicro.github.io/ChuMicro/)** — guides, API references, and examples for every library.
 
 Docs are versioned per-library with [mike](https://github.com/jimporter/mike). Stable tracks tagged releases; experimental tracks `main`.
 
 ## Development setup
 
-The prepare script works with whatever Python environment you already have — IDE-managed venv, uv, or `--create-venv` for a fresh start.  When `uv` is on PATH it is used automatically for venv creation and package installation; otherwise stdlib `venv` and `pip` are used as fallbacks.
+Want to hack on Chumicro itself? The setup script gets you from clone to working in one command:
 
 ```zsh
-cd /path/to/chumicro
-python scripts/prepare_workspace.py            # existing venv
-python scripts/prepare_workspace.py --create-venv  # create one first
+git clone https://github.com/ChuMicro/ChuMicro.git
+cd ChuMicro
+python scripts/prepare_workspace.py --create-venv
 ```
 
-The script installs dev dependencies and runs lint + tests to verify. On Windows, unix-port guidance is printed automatically.
+The script creates a virtualenv, installs everything, and runs lint + tests to verify. When you see `Workspace is ready`, you're good. If you already have a venv activated, drop `--create-venv`.
+
+When `uv` is on PATH it's used automatically for faster installs; otherwise stdlib `venv` and `pip` are used as fallbacks.
 
 ### IDE setup
 
-**PyCharm**: shared run configurations are checked into `.idea/runConfigurations/`. After opening the project you should see play buttons for Preflight, Lint, Test, Build, and more.
+The workspace generates configurations for popular editors automatically:
 
-**VSCode**: `.vscode/tasks.json` provides the same tasks via the Command Palette → *Tasks: Run Task*. `.vscode/settings.json` configures pytest discovery and source roots.
+- **PyCharm** — shared run configs in `.idea/runConfigurations/` (Preflight, Lint, Test, Build, etc.)
+- **VS Code** — `.vscode/tasks.json` for Command Palette → *Tasks: Run Task*
+- **Neovim, Zed, Emacs, Sublime** — `pyrightconfig.json` at the root gives any Pyright-based LSP full import resolution
+- **Any terminal** — all tasks are available via `python scripts/run.py <task>`
 
-**No IDE**: all tasks are available from the command line via `python scripts/run.py <task>`.
+See the [contributing guide](CONTRIBUTING.md#development-environment) for full setup instructions for your editor.
 
 ### Windows
 
-Use native Windows for editing, IDE work, linting, host-side tests, and package builds. Use WSL2 for unix-port runtime checks.
+Use native Windows for editing, linting, tests, and builds. Use WSL2 for unix-port runtime checks (MicroPython/CircuitPython simulation).
 
 ## Tasks
 
-All tasks are run through `scripts/run.py`:
+Everything goes through one command: `python scripts/run.py <task>`.
 
-| Task | Purpose |
+| Task | What it does |
 |---|---|
-| `setup` | Install dev dependencies into the active environment |
-| `lint` | Run Ruff |
-| `test` | CPython tests — changed packages by default, `--all` for everything |
-| `verify-examples` | Import-check all library examples |
-| `docs` | Build library docs with Zensical |
+| `setup` | Install dev dependencies |
+| `lint` | Check code style (Ruff) |
+| `test` | Run CPython tests (changed packages by default, `--all` for everything) |
+| `verify-examples` | Check that example scripts parse and import correctly |
+| `docs` | Build library documentation |
 | `docs --serve` | Start a live-reload docs dev server |
-| `docs-preview` | Deploy docs to a local branch and serve a versioned preview |
-| `docs-deploy --channel <ch>` | Deploy versioned docs to gh-pages (`experimental` or `stable`, used by CI) |
-| `build` | Build all publishable package distributions |
-| `preflight` | Full CI gate: lint + test all + examples + compat + build |
-| `new-library <name>` | Scaffold a new library and regenerate IDE configs |
-| `sync-ide` | Regenerate PyCharm and VS Code configs from workspace structure |
-| `prepare-micropython` | Build the pinned MicroPython unix-port binary under `.tools/` |
-| `prepare-circuitpython` | Build the pinned CircuitPython unix-port binary under `.tools/` |
-| `test-micropython-compatibility` | Cross-runtime unit tests under MicroPython (auto-prepares if needed) |
-| `test-circuitpython-compatibility` | Cross-runtime unit tests under CircuitPython (auto-prepares if needed) |
-| `test-runtime-matrix` | Test all packages on CPython + MicroPython + CircuitPython |
+| `docs-preview` | Deploy docs locally and serve a versioned preview |
+| `build` | Build distributable packages |
+| `preflight` | **The big one** — runs everything CI will run. Do this before pushing. |
+| `new-library <name>` | Scaffold a new library |
+| `sync-ide` | Regenerate IDE configs from workspace structure |
+
+<details>
+<summary>More tasks (CI, cross-runtime, deployment)</summary>
+
+| Task | What it does |
+|---|---|
+| `docs-deploy --channel <ch>` | Deploy versioned docs to gh-pages (CI) |
+| `prepare-micropython` | Build the pinned MicroPython unix-port binary |
+| `prepare-circuitpython` | Build the pinned CircuitPython unix-port binary |
+| `test-micropython-compatibility` | Cross-runtime tests under MicroPython |
+| `test-circuitpython-compatibility` | Cross-runtime tests under CircuitPython |
+| `test-runtime-matrix` | Test all packages on all three runtimes |
 | `test-device` | Manual device validation placeholder |
-| `check-version` | Check VERSION bumps for changed libraries (CI gate) |
-| `check-api` | Detect API breakages against the last release tag (CI gate) |
+| `check-version` | Verify VERSION bumps for changed libraries (CI gate) |
+| `check-api` | Detect API breakages against last release (CI gate) |
+
+</details>
 
 Tasks that operate on libraries (`test`, `verify-examples`, `docs`, `docs-preview`) accept `--all` or `--libraries name` to control scope. By default, `test` auto-detects changed packages.
-
 
 ## Development
 
 ### Testing
 
-- **Required:** CPython-hosted `pytest` tests with 94% coverage gate
-- **Required:** MicroPython and CircuitPython unix-port cross-runtime unit tests
-- **Opt-in:** real-device `functional_tests/` via `support/test_harness/` — copy `devices.example.yml` to `devices.yml` and fill in your board details
+- **CPython tests** — pytest with a 94% branch coverage gate per library
+- **Cross-runtime** — MicroPython and CircuitPython unix-port unit tests
+- **On-device** — opt-in `functional_tests/` via `support/test_harness/` (copy `devices.example.yml` to `devices.yml`)
 
 ### CI & releases
 
-PRs and pushes to `main` run the full CI suite via GitHub Actions: lint, test (CPython 3.11/3.12/3.13), verify-examples, docs-build (PRs), build, version-check, api-check, and cross-runtime compat checks.
+PRs and pushes to `main` run the full suite: lint, test (CPython 3.11/3.12/3.13), verify-examples, docs, build, version-check, api-check, and cross-runtime compat.
 
-Releases are automated. Bump a library's `VERSION` file and merge to `main` for an **experimental** release. Run the `promote.yml` workflow to create a **stable** release. Both publish to PyPI, create git tags, deploy to the appropriate bundle repo, and publish docs. See [Decision 0019](plans/decisions/0019-branching-model.md) and [Decision 0018](plans/decisions/0018-distribution-bundle-repo.md).
+Releases are automated — bump a library's `VERSION` file and merge for an **experimental** release. Run `promote.yml` for **stable**. Both publish to PyPI, create tags, deploy bundles, and publish docs. See [Decision 0019](plans/decisions/0019-branching-model.md) and [Decision 0018](plans/decisions/0018-distribution-bundle-repo.md).
 
 ### Versioning
 
-Each library has a `VERSION` file at its root — that is the single source of truth. `pyproject.toml` reads from it via hatchling's dynamic version. See [Decision 0002](plans/decisions/0002-per-library-version-files.md).
+Each library has a `VERSION` file — that's the single source of truth. [Semantic versioning](https://semver.org/). See [Decision 0002](plans/decisions/0002-per-library-version-files.md).
 
 ## Repository layout
 
 ```text
 chumicro/
 ├── libraries/             # Publishable libraries (one folder each)
-├── support/               # Workspace-internal packages (docs assets, test harness)
-├── scripts/               # Developer tasks (run.py is the main entry point)
-├── plans/                 # Roadmap, workstreams, decisions
+├── support/               # Internal packages (docs assets, test harness)
+├── scripts/               # Developer tasks (run.py is the entry point)
+├── plans/                 # Roadmap, decisions, session logs
 ├── .github/
-│   ├── workflows/         # CI, release, promote, docs-deploy, label-sync
+│   ├── workflows/         # CI, release, promote, docs-deploy
 │   └── skills/            # Agent skill instructions
-├── target-runtimes.toml   # Pinned CircuitPython/MicroPython versions
+├── target-runtimes.toml   # Pinned runtime versions
 ├── devices.example.yml    # Template for local board registration
 └── LICENSE                # MIT
 ```
 
 ## Contributing
 
-Start with [`CONTRIBUTING.md`](CONTRIBUTING.md) — it covers setup, rules, and workflow, then links to the right guide for your task:
+We welcome contributors of all experience levels. Start with [`CONTRIBUTING.md`](CONTRIBUTING.md) — it covers setup, rules, and workflow, then links to the right guide for your task:
 
-- **[Command Line](docs/contributing/development-cli.md)**, **[PyCharm](docs/contributing/development-pycharm.md)**, or **[VS Code](docs/contributing/development-vscode.md)** — pick your environment
+- **[Command Line](docs/contributing/development-cli.md)**, **[PyCharm](docs/contributing/development-pycharm.md)**, **[VS Code](docs/contributing/development-vscode.md)**, or **[Other Editors](docs/contributing/development-other-editors.md)** — pick your environment
 - **[Creating a Pull Request](docs/contributing/pull-requests.md)** — submitting your work
 - **[Adding a New Library](docs/contributing/new-library.md)** — publishing your own library
 - **[Releases and Promotion](docs/contributing/releases.md)** — how publishing works
 - **[Working with Agents](docs/contributing/working-with-agents.md)** — using AI coding agents on this project
 
-Contributors of all experience levels are welcome. If you're looking for a place to start, see [Good first contributions](CONTRIBUTING.md#good-first-contributions) in the contributing guide.
+Not sure where to start? Check out [good first contributions](CONTRIBUTING.md#good-first-contributions).
 
 ## Planning
 
-See `plans/` for roadmap, workstreams, decisions, and next-up queue. The README is for users and contributors; `plans/` is the working state for agents and maintainers.
+Design decisions, roadmap, and working state live in `plans/`. The README is for users; `plans/` is the workshop.
