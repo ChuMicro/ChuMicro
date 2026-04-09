@@ -126,7 +126,7 @@ Common failures:
 
 | Check | Typical cause | Fix |
 |---|---|---|
-| `test` | Coverage below 94% | Add more tests — check the `Missing` column in the coverage report |
+| `test` | Coverage below 94% | Follow the hint below the FAIL line — it points to the uncovered lines |
 | `lint` | Formatting issue | Run `python scripts/run.py lint` locally and fix |
 | `version-check` | Changed source without bumping VERSION | Edit `libraries/<name>/VERSION` |
 | `api-check` | Removed or renamed a public function | Bump VERSION to next minor/major |

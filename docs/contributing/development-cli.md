@@ -126,9 +126,12 @@ FAILED libraries/timing/tests/test_heartbeat.py::test_heartbeat_ready
 
 ```
 FAIL Required test coverage of 94.0% not reached. Total coverage: 87.50%
+
+Hint: check the Missing column above to find uncovered lines.  If the gap is
+in code you didn't change, note it in your PR — a maintainer can help.
 ```
 
-**How to fix:** Look at the `Missing` column in the coverage report. It shows the line numbers not covered by tests. Write tests that exercise those lines.
+**How to fix:** Follow the hint — the `Missing` column in the coverage table above shows the uncovered line numbers. Write tests that exercise those lines.
 
 ### Verify examples
 

@@ -228,6 +228,8 @@ PRs and pushes to `main` run: lint (Ruff), test (CPython 3.11/3.12/3.13), verify
 
 Bump rules: `major` for breaking changes, `minor` for new features, `patch` for bug fixes.  Bump only affected libraries.
 
+When bumping VERSION for a user-visible change, add a bullet to the "What's new" section in `docs/guide.md`.  Internal refactors and test-only changes don't need an entry.
+
 Releases are automated: bump `VERSION` and merge to `main` for experimental; run `promote.yml` for stable.  Release workflow publishes to PyPI, creates tags, deploys to bundle repos, and publishes docs.
 
 Keep code as plain `.py` during development.  `.mpy` compilation happens in the release pipeline via `mpy-cross`.

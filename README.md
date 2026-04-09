@@ -20,15 +20,54 @@ Target runtime versions are pinned in [`target-runtimes.toml`](target-runtimes.t
 | [compat](libraries/compat/) | Cross-runtime compatibility polyfills — functools.partial and more. |
 | [msgpack](libraries/msgpack/) | Compact MessagePack serialization with native CircuitPython C module delegation. |
 
+### Dependencies
+
+```
+runner → timing
+timing    (no dependencies)
+compat    (no dependencies)
+msgpack   (no dependencies)
+```
+
 ### Which libraries do I need?
 
 Each library solves one problem and works independently — install only what you use. Libraries fall into a few categories:
 
-- **Timing & scheduling** — non-blocking timers, task runners, periodic polling
-- **Data & serialization** — compact encoding for storage and communication
-- **Runtime compatibility** — polyfills for stdlib features missing on CircuitPython/MicroPython
+- **Timing & scheduling** — [timing](libraries/timing/) for non-blocking timers, [runner](libraries/runner/) for structured task scheduling with multiple services
+- **Data & serialization** — [msgpack](libraries/msgpack/) for compact binary encoding
+- **Runtime compatibility** — [compat](libraries/compat/) for stdlib polyfills missing on CircuitPython/MicroPython
 
 Browse the [documentation site](https://chumicro.github.io/ChuMicro/) for the full list with guides, or look through `libraries/` in this repo. Each library's README has installation commands, a quick example, and an API summary.
+
+## Installation
+
+Libraries are published to **[PyPI](https://pypi.org/search/?q=chumicro)** for CPython and to **bundle repos** for CircuitPython (circup) and MicroPython (mip). Pick the install method for your runtime — replace `chumicro-timing` with whichever library you need.
+
+**CircuitPython (circup):**
+
+```bash
+circup bundle-add ChuMicro/ChuMicro-Bundle
+circup install chumicro-timing
+```
+
+**MicroPython (mip):**
+
+```bash
+mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_timing
+```
+
+**CPython (pip):**
+
+```bash
+pip install chumicro-timing
+```
+
+Experimental (pre-release) builds are also available — see each library's README for details.
+
+| Channel | Bundle repo | Source |
+|---|---|---|
+| **Stable** | [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) | tagged releases |
+| **Experimental** | [ChuMicro-Bundle-Experimental](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental) | `main` |
 
 ## Documentation
 
@@ -36,7 +75,7 @@ Browse the [documentation site](https://chumicro.github.io/ChuMicro/) for the fu
 
 Docs are versioned per-library with [mike](https://github.com/jimporter/mike). Stable tracks tagged releases; experimental tracks `main`.
 
-## Getting started
+## Development setup
 
 The prepare script works with whatever Python environment you already have — IDE-managed venv, uv, or `--create-venv` for a fresh start.  When `uv` is on PATH it is used automatically for venv creation and package installation; otherwise stdlib `venv` and `pip` are used as fallbacks.
 
@@ -89,34 +128,6 @@ All tasks are run through `scripts/run.py`:
 
 Tasks that operate on libraries (`test`, `verify-examples`, `docs`, `docs-preview`) accept `--all` or `--libraries name` to control scope. By default, `test` auto-detects changed packages.
 
-## Distribution
-
-Libraries are published to **[PyPI](https://pypi.org/search/?q=chumicro)** for CPython and to **bundle repos** for CircuitPython (circup) and MicroPython (mip).
-
-| Channel | Repo | Source |
-|---|---|---|
-| **Stable** | [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) | tagged releases |
-| **Experimental** | [ChuMicro-Bundle-Experimental](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental) | `main` |
-
-Install with circup (remove the other channel first if switching):
-
-```bash
-circup bundle-remove ChuMicro/ChuMicro-Bundle-Experimental   # skip if never added
-circup bundle-add ChuMicro/ChuMicro-Bundle
-circup install chumicro-timing
-```
-
-Install with mip:
-
-```bash
-mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_timing
-```
-
-Install with pip (CPython):
-
-```bash
-pip install chumicro-timing
-```
 
 ## Development
 

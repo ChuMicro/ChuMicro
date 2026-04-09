@@ -111,6 +111,14 @@ Unsupported types raise `TypeError`.  Integers outside the 32-bit range raise `O
 
 The wire format is identical regardless of which implementation is used — data packed on one runtime can be unpacked on any other.
 
+## What's new
+
+<!-- Add entries for user-visible changes when bumping VERSION.
+     One bullet per change. Internal refactors don't need entries.
+     At stable promotion, collapse/edit as needed. -->
+
+*No changes yet — this section will be updated with each release.*
+
 ---
 
 <div class="chumicro-footer" markdown>
