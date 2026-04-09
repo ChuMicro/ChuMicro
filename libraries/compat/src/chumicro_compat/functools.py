@@ -28,11 +28,11 @@ class _PurePythonPartial:
 
     __slots__ = ("func", "args", "keywords")
 
-    def __init__(self, func, *args, **keywords):
+    def __init__(self, func: object, *args: object, **keywords: object) -> None:
         """Create a partial object.
 
         Args:
-            func (callable): Callable to wrap.  Raises ``TypeError`` if not
+            func: Callable to wrap.  Raises ``TypeError`` if not
                 callable.
             *args: Positional arguments to freeze.
             **keywords: Keyword arguments to freeze.
@@ -43,13 +43,13 @@ class _PurePythonPartial:
         self.args = args
         self.keywords = keywords
 
-    def __call__(self, *args, **keywords):
+    def __call__(self, *args: object, **keywords: object) -> object:
         """Call the wrapped function with frozen + extra arguments."""
         combined = self.keywords.copy()
         combined.update(keywords)
         return self.func(*self.args, *args, **combined)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """Return a developer-friendly representation."""
         parts = [repr(self.func)]
         parts.extend(repr(a) for a in self.args)

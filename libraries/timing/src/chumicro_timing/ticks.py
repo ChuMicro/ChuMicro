@@ -76,7 +76,7 @@ def _resolve_ticks_ms():
 _raw_ticks_ms = _resolve_ticks_ms()
 
 
-def ticks_ms():
+def ticks_ms() -> int:
     """Return a monotonic millisecond count in [0 .. 2**29 - 1].
 
     Values wrap every ~6.2 days.  Use ``ticks_diff`` and ``ticks_add``
@@ -86,15 +86,15 @@ def ticks_ms():
     return _raw_ticks_ms() & _TICKS_MAX
 
 
-def ticks_add(ticks, delta):
+def ticks_add(ticks: int, delta: int) -> int:
     """Add *delta* milliseconds to a tick value, wrapping at 2**29.
 
     Args:
-        ticks (int): Base tick value.
-        delta (int): Milliseconds to add.
+        ticks: Base tick value.
+        delta: Milliseconds to add.
 
     Returns:
-        int: Wrapped tick value.
+        Wrapped tick value.
 
     Raises:
         OverflowError: If *delta* is outside (-2**28 .. 2**28).
@@ -104,18 +104,18 @@ def ticks_add(ticks, delta):
     raise OverflowError("ticks interval overflow")
 
 
-def ticks_diff(end, start):
+def ticks_diff(end: int, start: int) -> int:
     """Signed difference *end* minus *start* with wraparound handling.
 
     Correct as long as *end* and *start* are no more than
     2**28 ms (~3.1 days) apart.
 
     Args:
-        end (int): Later tick value.
-        start (int): Earlier tick value.
+        end: Later tick value.
+        start: Earlier tick value.
 
     Returns:
-        int: Signed difference in milliseconds.
+        Signed difference in milliseconds.
     """
     diff = (end - start) & _TICKS_MAX
     return ((diff + _TICKS_HALFPERIOD) & _TICKS_MAX) - _TICKS_HALFPERIOD

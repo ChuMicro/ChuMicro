@@ -47,16 +47,19 @@ class _TaskEntry:
         "run_count", "active",
     )
 
-    def __init__(self, check_function, handler_function, period_ms,
-                 next_due_ms, run_count):
+    def __init__(self, check_function: object | None,
+                 handler_function: object,
+                 period_ms: int | None,
+                 next_due_ms: int | None,
+                 run_count: int | None) -> None:
         """Create a task entry.
 
         Args:
-            check_function (callable | None): Optional check callable, or ``None``.
-            handler_function (callable): Handler callable invoked when the task fires.
-            period_ms (int | None): Repeat interval in ms, or ``None``.
-            next_due_ms (int | None): First eligible tick value, or ``None``.
-            run_count (int | None): Remaining fires, or ``None`` for unlimited.
+            check_function: Optional check callable, or ``None``.
+            handler_function: Handler callable invoked when the task fires.
+            period_ms: Repeat interval in ms, or ``None``.
+            next_due_ms: First eligible tick value, or ``None``.
+            run_count: Remaining fires, or ``None`` for unlimited.
         """
         self.check_function = check_function
         self.handler_function = handler_function
@@ -78,32 +81,32 @@ class TaskHandle:
 
     __slots__ = ("_entry", "_runner")
 
-    def __init__(self, entry, runner):
+    def __init__(self, entry: _TaskEntry, runner: "Runner") -> None:
         """Create a handle wrapping *entry* owned by *runner*.
 
         Args:
-            entry (_TaskEntry): Internal task record.
-            runner (Runner): Owning runner instance.
+            entry: Internal task record.
+            runner: Owning runner instance.
         """
         self._entry = entry
         self._runner = runner
 
     @property
-    def period_ms(self):
+    def period_ms(self) -> int | None:
         """Return the task period in milliseconds, or ``None``."""
         return self._entry.period_ms
 
     @property
-    def run_count(self):
+    def run_count(self) -> int | None:
         """Return the remaining run count, or ``None`` if unlimited."""
         return self._entry.run_count
 
     @property
-    def active(self):
+    def active(self) -> bool:
         """Return whether the task is still registered."""
         return self._entry.active
 
-    def set_period(self, period_ms):
+    def set_period(self, period_ms: int | None) -> None:
         """Add, change, or remove the period for this task.
 
         Pass ``None`` to remove an existing period (task runs every tick).
@@ -111,7 +114,7 @@ class TaskHandle:
         *period_ms* from now.
 
         Args:
-            period_ms (int | None): New interval in milliseconds, or ``None`` to
+            period_ms: New interval in milliseconds, or ``None`` to
                 clear the period.
         """
         if period_ms is not None and period_ms <= 0:
@@ -124,11 +127,11 @@ class TaskHandle:
         else:
             self._entry.next_due_ms = None
 
-    def remove(self):
+    def remove(self) -> None:
         """Remove this task from the runner."""
         self._runner._remove_entry(self._entry)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """Return a developer-friendly representation."""
         status = "active" if self._entry.active else "removed"
         period = self._entry.period_ms
@@ -168,18 +171,18 @@ class Runner:
     no ``Heartbeat`` objects are created internally.
 
     Args:
-        ticks (object | None): Optional tick source (must have ``ticks_ms``,
+        ticks: Optional tick source (must have ``ticks_ms``,
             ``ticks_diff``, and ``ticks_add`` methods).
             Defaults to the ``chumicro_timing`` module-level functions.
     """
 
     __slots__ = ("_entries", "_pending", "_ticks")
 
-    def __init__(self, ticks=None):
+    def __init__(self, ticks: object | None = None) -> None:
         """Create a runner.
 
         Args:
-            ticks (object | None): Optional tick source (must have ``ticks_ms``,
+            ticks: Optional tick source (must have ``ticks_ms``,
                 ``ticks_diff``, and ``ticks_add`` methods).
                 Defaults to the ``chumicro_timing.ticks`` module.
                 Constructor injection per Decision 0010; pass
@@ -194,8 +197,11 @@ class Runner:
 
             self._ticks = _ticks_mod
 
-    def add(self, task=None, handler=None, period_ms=None,
-            start_after_ms=None, run_count=None):
+    def add(self, task: object | None = None,
+            handler: object | None = None,
+            period_ms: int | None = None,
+            start_after_ms: int | None = None,
+            run_count: int | None = None) -> TaskHandle:
         """Register a task with the runner.
 
         **Object-based** (task only): *task* must have
@@ -210,14 +216,14 @@ class Runner:
         Returns a ``TaskHandle`` for runtime mutation.
 
         Args:
-            task (object | callable | None): Object with ``.check()`` and ``.handle()``, or a
+            task: Object with ``.check()`` and ``.handle()``, or a
                 callable ``check_function(now_ms) -> bool``.
-            handler (callable | None): Optional callable ``handler(now_ms)``.
-            period_ms (int | None): Optional interval in milliseconds.
-            start_after_ms (int | None): Optional initial delay before the task
+            handler: Optional callable ``handler(now_ms)``.
+            period_ms: Optional interval in milliseconds.
+            start_after_ms: Optional initial delay before the task
                 becomes eligible.  Overrides the first period;
                 subsequent fires use *period_ms* if set.
-            run_count (int | None): Optional number of times the handler may fire
+            run_count: Optional number of times the handler may fire
                 before auto-removing.  ``None`` means unlimited.
         """
         if handler is not None:
@@ -257,19 +263,20 @@ class Runner:
         self._entries.append(entry)
         return TaskHandle(entry, self)
 
-    def add_periodic(self, handler, period_ms, start_after_ms=None,
-                     run_count=None):
+    def add_periodic(self, handler: object, period_ms: int,
+                     start_after_ms: int | None = None,
+                     run_count: int | None = None) -> TaskHandle:
         """Register a periodic handler with no check.
 
         ``handler(now_ms)`` is called every *period_ms* milliseconds.
         Returns a ``TaskHandle`` for runtime mutation.
 
         Args:
-            handler (callable): Callable ``handler(now_ms)`` to fire periodically.
-            period_ms (int): Interval in milliseconds (required).
-            start_after_ms (int | None): Optional initial delay before first fire.
+            handler: Callable ``handler(now_ms)`` to fire periodically.
+            period_ms: Interval in milliseconds (required).
+            start_after_ms: Optional initial delay before first fire.
                 Overrides the first period.
-            run_count (int | None): Optional number of times the handler may fire
+            run_count: Optional number of times the handler may fire
                 before auto-removing.  ``None`` means unlimited.
         """
         if period_ms <= 0:
@@ -289,7 +296,7 @@ class Runner:
         self._entries.append(entry)
         return TaskHandle(entry, self)
 
-    def tick(self):
+    def tick(self) -> int:
         """Capture time, check tasks, then batch-fire handlers.
 
         1. Check each entry (period gate -> check gate).
@@ -298,7 +305,7 @@ class Runner:
         3. Decrement run counts; auto-remove exhausted entries.
 
         Returns:
-            int: The tick timestamp used this cycle.
+            The tick timestamp used this cycle.
         """
         ticks = self._ticks
         now_ms = ticks.ticks_ms()
@@ -337,7 +344,7 @@ class Runner:
 
         return now_ms
 
-    def _remove_entry(self, entry):
+    def _remove_entry(self, entry: _TaskEntry) -> None:
         """Remove *entry* from the runner (called by ``TaskHandle``)."""
         entry.active = False
         try:
