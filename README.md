@@ -71,7 +71,9 @@ Experimental (pre-release) builds are also available — see each library's READ
 
 Docs are versioned per-library with [mike](https://github.com/jimporter/mike). Stable tracks tagged releases; experimental tracks `main`.
 
-## Development setup
+## Development
+
+### Setup
 
 Want to hack on Chumicro itself? The setup script gets you from clone to working in one command:
 
@@ -100,7 +102,7 @@ See the [contributing guide](CONTRIBUTING.md#development-environment) for full s
 
 Use native Windows for editing, linting, tests, and builds. Use WSL2 for unix-port runtime checks (MicroPython/CircuitPython simulation).
 
-## Tasks
+### Tasks
 
 Everything goes through one command: `python scripts/run.py <task>`.
 
@@ -137,7 +139,6 @@ Everything goes through one command: `python scripts/run.py <task>`.
 
 Tasks that operate on libraries (`test`, `verify-examples`, `docs`, `docs-preview`) accept `--all` or `--libraries name` to control scope. By default, `test` auto-detects changed packages.
 
-## Development
 
 ### Testing
 
