@@ -10,26 +10,32 @@ from chumicro_test_harness import raises
 # ---------------------------------------------------------------------------
 
 def test_none_roundtrip() -> None:
+    """None should survive a pack/unpack roundtrip."""
     assert unpackb(packb(None)) is None
 
 
 def test_true_roundtrip() -> None:
+    """True should survive a pack/unpack roundtrip."""
     assert unpackb(packb(True)) is True
 
 
 def test_false_roundtrip() -> None:
+    """False should survive a pack/unpack roundtrip."""
     assert unpackb(packb(False)) is False
 
 
 def test_none_encoding() -> None:
+    """None should encode to the msgpack nil byte 0xc0."""
     assert packb(None) == b"\xc0"
 
 
 def test_true_encoding() -> None:
+    """True should encode to the msgpack true byte 0xc3."""
     assert packb(True) == b"\xc3"
 
 
 def test_false_encoding() -> None:
+    """False should encode to the msgpack false byte 0xc2."""
     assert packb(False) == b"\xc2"
 
 
@@ -38,11 +44,13 @@ def test_false_encoding() -> None:
 # ---------------------------------------------------------------------------
 
 def test_zero() -> None:
+    """Zero should encode to a single 0x00 byte and roundtrip."""
     assert packb(0) == b"\x00"
     assert unpackb(packb(0)) == 0
 
 
 def test_positive_fixint_boundary() -> None:
+    """127 is the upper bound of positive fixint encoding."""
     assert unpackb(packb(127)) == 127
     assert packb(127) == b"\x7f"
 
@@ -52,10 +60,12 @@ def test_positive_fixint_boundary() -> None:
 # ---------------------------------------------------------------------------
 
 def test_negative_one() -> None:
+    """-1 should roundtrip through negative fixint encoding."""
     assert unpackb(packb(-1)) == -1
 
 
 def test_negative_fixint_boundary() -> None:
+    """-32 is the lower bound of negative fixint encoding."""
     assert unpackb(packb(-32)) == -32
 
 
@@ -64,11 +74,13 @@ def test_negative_fixint_boundary() -> None:
 # ---------------------------------------------------------------------------
 
 def test_uint8_low() -> None:
+    """128 should encode as uint8 (0xcc prefix)."""
     assert unpackb(packb(128)) == 128
     assert packb(128) == b"\xcc\x80"
 
 
 def test_uint8_high() -> None:
+    """255 is the upper bound of uint8 encoding."""
     assert unpackb(packb(255)) == 255
 
 
@@ -77,10 +89,12 @@ def test_uint8_high() -> None:
 # ---------------------------------------------------------------------------
 
 def test_uint16_low() -> None:
+    """256 should encode as uint16."""
     assert unpackb(packb(256)) == 256
 
 
 def test_uint16_high() -> None:
+    """65535 is the upper bound of uint16 encoding."""
     assert unpackb(packb(65535)) == 65535
 
 
@@ -89,10 +103,12 @@ def test_uint16_high() -> None:
 # ---------------------------------------------------------------------------
 
 def test_uint32_low() -> None:
+    """65536 should encode as uint32."""
     assert unpackb(packb(65536)) == 65536
 
 
 def test_uint32_high() -> None:
+    """2^32 - 1 is the upper bound of uint32 encoding."""
     value = 2**32 - 1
     assert unpackb(packb(value)) == value
 
@@ -102,10 +118,12 @@ def test_uint32_high() -> None:
 # ---------------------------------------------------------------------------
 
 def test_int8_low() -> None:
+    """-33 should encode as int8 (first value below negative fixint range)."""
     assert unpackb(packb(-33)) == -33
 
 
 def test_int8_high() -> None:
+    """-128 is the lower bound of int8 encoding."""
     assert unpackb(packb(-128)) == -128
 
 
@@ -114,10 +132,12 @@ def test_int8_high() -> None:
 # ---------------------------------------------------------------------------
 
 def test_int16_low() -> None:
+    """-129 should encode as int16 (first value below int8 range)."""
     assert unpackb(packb(-129)) == -129
 
 
 def test_int16_high() -> None:
+    """-32768 is the lower bound of int16 encoding."""
     assert unpackb(packb(-32768)) == -32768
 
 
@@ -126,10 +146,12 @@ def test_int16_high() -> None:
 # ---------------------------------------------------------------------------
 
 def test_int32_low() -> None:
+    """-32769 should encode as int32 (first value below int16 range)."""
     assert unpackb(packb(-32769)) == -32769
 
 
 def test_int32_high() -> None:
+    """-2^31 is the lower bound of int32 encoding."""
     value = -(2**31)
     assert unpackb(packb(value)) == value
 
@@ -139,11 +161,13 @@ def test_int32_high() -> None:
 # ---------------------------------------------------------------------------
 
 def test_int_too_large_raises() -> None:
+    """Integers above 2^32 - 1 should raise OverflowError."""
     with raises(OverflowError):
         packb(2**32)
 
 
 def test_int_too_negative_raises() -> None:
+    """Integers below -2^31 should raise OverflowError."""
     with raises(OverflowError):
         packb(-(2**31) - 1)
 
@@ -153,6 +177,7 @@ def test_int_too_negative_raises() -> None:
 # ---------------------------------------------------------------------------
 
 def test_float_roundtrip() -> None:
+    """Floats should survive a pack/unpack roundtrip within float32 precision."""
     # float32 has limited precision, so compare after pack/unpack
     packed = packb(3.14)
     result = unpackb(packed)
@@ -160,10 +185,12 @@ def test_float_roundtrip() -> None:
 
 
 def test_float_zero() -> None:
+    """Zero float should roundtrip exactly."""
     assert unpackb(packb(0.0)) == 0.0
 
 
 def test_float_negative() -> None:
+    """Negative floats should roundtrip correctly."""
     result = unpackb(packb(-1.5))
     assert result == -1.5
 
@@ -173,10 +200,12 @@ def test_float_negative() -> None:
 # ---------------------------------------------------------------------------
 
 def test_empty_string() -> None:
+    """Empty string should roundtrip."""
     assert unpackb(packb("")) == ""
 
 
 def test_short_string() -> None:
+    """Short strings should roundtrip through fixstr encoding."""
     assert unpackb(packb("hello")) == "hello"
 
 
@@ -193,6 +222,7 @@ def test_str8() -> None:
 
 
 def test_str8_boundary() -> None:
+    """255-byte string is the upper bound of str8 encoding."""
     value = "c" * 255
     assert unpackb(packb(value)) == value
 
@@ -204,6 +234,7 @@ def test_str16() -> None:
 
 
 def test_unicode_string() -> None:
+    """Multi-byte UTF-8 strings should roundtrip correctly."""
     value = "héllo wörld"
     assert unpackb(packb(value)) == value
 
@@ -213,14 +244,17 @@ def test_unicode_string() -> None:
 # ---------------------------------------------------------------------------
 
 def test_empty_bytes() -> None:
+    """Empty bytes should roundtrip."""
     assert unpackb(packb(b"")) == b""
 
 
 def test_short_bytes() -> None:
+    """Short byte sequences should roundtrip."""
     assert unpackb(packb(b"\x01\x02\x03")) == b"\x01\x02\x03"
 
 
 def test_bytearray_encoded_as_bin() -> None:
+    """Bytearrays should encode identically to bytes."""
     value = bytearray(b"\xaa\xbb")
     result = unpackb(packb(value))
     assert result == b"\xaa\xbb"
@@ -233,6 +267,7 @@ def test_bin8_boundary() -> None:
 
 
 def test_bin16() -> None:
+    """Byte sequences exceeding 255 bytes should use bin16 encoding."""
     value = bytes(256)
     assert unpackb(packb(value)) == value
 
@@ -242,19 +277,23 @@ def test_bin16() -> None:
 # ---------------------------------------------------------------------------
 
 def test_empty_list() -> None:
+    """Empty list should roundtrip."""
     assert unpackb(packb([])) == []
 
 
 def test_short_list() -> None:
+    """Short lists should roundtrip through fixarray encoding."""
     assert unpackb(packb([1, 2, 3])) == [1, 2, 3]
 
 
 def test_fixarray_boundary() -> None:
+    """15-element list is the upper bound of fixarray encoding."""
     value = list(range(15))
     assert unpackb(packb(value)) == value
 
 
 def test_array16() -> None:
+    """16-element list should use array16 encoding."""
     value = list(range(16))
     assert unpackb(packb(value)) == value
 
@@ -266,6 +305,7 @@ def test_tuple_encoded_as_array() -> None:
 
 
 def test_mixed_type_list() -> None:
+    """Lists with mixed types should roundtrip correctly."""
     value = [None, True, 42, -7, 3.14, "hello", b"\x00"]
     result = unpackb(packb(value))
     assert result[0] is None
@@ -282,25 +322,30 @@ def test_mixed_type_list() -> None:
 # ---------------------------------------------------------------------------
 
 def test_empty_dict() -> None:
+    """Empty dict should roundtrip."""
     assert unpackb(packb({})) == {}
 
 
 def test_string_key_dict() -> None:
+    """Dicts with string keys should roundtrip."""
     value = {"name": "lamp", "on": True}
     assert unpackb(packb(value)) == value
 
 
 def test_int_key_dict() -> None:
+    """Dicts with integer keys should roundtrip."""
     value = {0: "ssid", 1: "password", 2: True}
     assert unpackb(packb(value)) == value
 
 
 def test_fixmap_boundary() -> None:
+    """15-entry dict is the upper bound of fixmap encoding."""
     value = {i: i * 10 for i in range(15)}
     assert unpackb(packb(value)) == value
 
 
 def test_map16() -> None:
+    """16-entry dict should use map16 encoding."""
     value = {i: i * 10 for i in range(16)}
     assert unpackb(packb(value)) == value
 
@@ -310,16 +355,19 @@ def test_map16() -> None:
 # ---------------------------------------------------------------------------
 
 def test_nested_dict() -> None:
+    """Nested dicts should roundtrip correctly."""
     value = {"settings": {"ssid": "MyNet", "configured": True}, "version": 1}
     assert unpackb(packb(value)) == value
 
 
 def test_nested_list_in_dict() -> None:
+    """Lists nested inside dicts should roundtrip correctly."""
     value = {"items": [1, 2, 3], "count": 3}
     assert unpackb(packb(value)) == value
 
 
 def test_dict_in_list() -> None:
+    """Dicts nested inside lists should roundtrip correctly."""
     value = [{"a": 1}, {"b": 2}]
     assert unpackb(packb(value)) == value
 
@@ -341,6 +389,7 @@ def test_bool_not_encoded_as_int() -> None:
 # ---------------------------------------------------------------------------
 
 def test_stream_pack_unpack() -> None:
+    """Stream-based pack/unpack should roundtrip a dict with nested list."""
     obj = {"key": [1, 2, 3]}
     buf = BytesIO()
     pack(obj, buf)
@@ -349,6 +398,7 @@ def test_stream_pack_unpack() -> None:
 
 
 def test_stream_roundtrip_simple() -> None:
+    """Stream-based pack/unpack should roundtrip a simple string."""
     buf = BytesIO()
     pack("hello", buf)
     buf.seek(0)
@@ -360,16 +410,19 @@ def test_stream_roundtrip_simple() -> None:
 # ---------------------------------------------------------------------------
 
 def test_unpackb_bytes() -> None:
+    """unpackb should accept bytes input."""
     data = packb(42)
     assert unpackb(data) == 42
 
 
 def test_unpackb_bytearray() -> None:
+    """unpackb should accept bytearray input."""
     data = bytearray(packb(42))
     assert unpackb(data) == 42
 
 
 def test_unpackb_memoryview() -> None:
+    """unpackb should accept memoryview input."""
     data = memoryview(packb(42))
     assert unpackb(data) == 42
 
@@ -379,11 +432,13 @@ def test_unpackb_memoryview() -> None:
 # ---------------------------------------------------------------------------
 
 def test_unsupported_type_raises() -> None:
+    """Packing an unsupported type should raise TypeError."""
     with raises(TypeError):
         packb(object())
 
 
 def test_unsupported_decode_byte_raises() -> None:
+    """Decoding the never-used 0xc1 byte should raise ValueError."""
     # 0xc1 is never-used in msgpack spec
     with raises(ValueError):
         unpackb(b"\xc1")
