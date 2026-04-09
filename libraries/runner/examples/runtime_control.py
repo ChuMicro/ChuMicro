@@ -38,12 +38,20 @@ from chumicro_timing import Heartbeat
 
 
 def log_data(now_ms: int) -> None:
-    """Log sensor data."""
+    """Log sensor data.
+
+    Args:
+        now_ms: Current tick value.
+    """
     print(f"  [{now_ms} ms] logged sensor data")
 
 
 def check_wifi(now_ms: int) -> None:
-    """Check Wi-Fi connectivity."""
+    """Check Wi-Fi connectivity.
+
+    Args:
+        now_ms: Current tick value.
+    """
     print(f"  [{now_ms} ms] Wi-Fi: connected")
 
 

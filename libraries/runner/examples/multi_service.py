@@ -54,6 +54,9 @@ class MotionDetector:
     def detect_motion(self) -> bool:
         """Read the PIR sensor pin — fast digital read.
 
+        Returns:
+            True if motion is detected.
+
         On a real board: ``return self._pin.value``
         """
         # Simulated: triggers every ~80 checks (~8 s at 0.1 s ticks).
@@ -61,11 +64,22 @@ class MotionDetector:
         return self._check_count % 80 == 0
 
     def check(self, now_ms: int) -> bool:
-        """Check for motion (fast pin read)."""
+        """Check for motion (fast pin read).
+
+        Args:
+            now_ms: Current tick value.
+
+        Returns:
+            True if motion is detected.
+        """
         return self.detect_motion()
 
     def handle(self, now_ms: int) -> None:
-        """React to detected motion."""
+        """React to detected motion.
+
+        Args:
+            now_ms: Current tick value.
+        """
         print(f"  [{now_ms} ms] MOTION — activating alarm")
 
 
@@ -82,6 +96,9 @@ class LightSensor:
 
     def read_level(self) -> int:
         """Read ambient light level (0=dark, 100=bright).
+
+        Returns:
+            Light level reading.
 
         On a real board: ``return self._adc.value // 256``
         """

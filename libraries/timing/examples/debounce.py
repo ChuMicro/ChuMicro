@@ -49,6 +49,9 @@ _start = ticks_ms()
 def read_raw_button() -> bool:
     """Return the simulated raw button state.
 
+    Returns:
+        True if the button is pressed.
+
     On a real board::
 
         return not button_pin.value   # active-low button

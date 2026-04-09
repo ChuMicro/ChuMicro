@@ -24,7 +24,11 @@ led_state = False
 
 
 def toggle_led(now_ms: int) -> None:
-    """Toggle the LED."""
+    """Toggle the LED.
+
+    Args:
+        now_ms: Current tick value.
+    """
     global led_state  # noqa: PLW0603
     led_state = not led_state
     print(f"  LED {'ON' if led_state else 'OFF'}")

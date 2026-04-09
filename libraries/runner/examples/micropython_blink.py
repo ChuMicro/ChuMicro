@@ -22,7 +22,11 @@ led = Pin(2, Pin.OUT)
 
 
 def toggle_led(now_ms: int) -> None:
-    """Toggle the LED state."""
+    """Toggle the LED state.
+
+    Args:
+        now_ms: Current tick value.
+    """
     led.value(not led.value())
 
 

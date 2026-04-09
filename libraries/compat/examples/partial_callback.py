@@ -16,7 +16,12 @@ from chumicro_compat.functools import partial
 
 
 def on_button_press(pin_number: int, event_ms: int) -> None:
-    """Handle a button press on *pin_number* at *event_ms*."""
+    """Handle a button press on *pin_number* at *event_ms*.
+
+    Args:
+        pin_number: GPIO pin that triggered the event.
+        event_ms: Tick value when the press occurred.
+    """
     print(f"button on pin {pin_number} pressed at {event_ms} ms")
 
 
