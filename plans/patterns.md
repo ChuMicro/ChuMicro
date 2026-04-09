@@ -92,6 +92,8 @@ fake is provided.
 ```python
 # ✅ Injectable — testable with fakes, lazy hardware import
 class Sensor:
+    """Hardware sensor with injectable I2C and tick dependencies."""
+
     def __init__(self, i2c: object | None = None, ticks: object | None = None) -> None:
         if i2c is not None:
             self._i2c = i2c
@@ -138,6 +140,7 @@ class FakeBackend:
         self.calls: list[str] = []
 
     def read(self) -> bytes:
+        """Return an empty response and record the call."""
         self.calls.append("read")
         return b""
 ```
@@ -197,6 +200,8 @@ settings library), apply the same approach:
 # Implementations: NvmBackend, FileBackend, MemoryBackend
 
 class Settings:
+    """Key-value settings backed by a pluggable storage backend."""
+
     def __init__(self, backend: object, defaults: dict[str, object] | None = None) -> None:
         self._backend = backend
         # ...

@@ -29,7 +29,7 @@ Put production code in `src/chumicro_<name>/`.
 
 - No `async`/`await` — use the tick-based runner pattern (Decision 0014).
 - Constructor injection for time, I/O, network (Decision 0010).
-- Docstring types, not function annotations (Decision 0021).
+- Docstring descriptions only; type annotations on signatures (Decision 0021).
 - f-strings for formatting. `const()` / `memoryview` / pre-allocated buffers where appropriate.
 - Minimize dependencies — prefer pure-Python compatible with all three runtimes.
 - If the library has active components, implement `check(now_ms) -> bool` so they work with `Runner`.

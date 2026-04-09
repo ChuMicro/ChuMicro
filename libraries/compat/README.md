@@ -51,6 +51,7 @@ pip install chumicro-compat-experimental
 from chumicro_compat.functools import partial
 
 def set_led(pin: int, brightness: int) -> None:
+    """Set an LED pin to a brightness level."""
     print(f"pin {pin} → {brightness}%")
 
 # Freeze the pin, vary the brightness later.

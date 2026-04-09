@@ -103,6 +103,8 @@ Pass an object with `.check(now_ms) -> bool` and `.handle(now_ms)`:
 
 ```python
 class MotionDetector:
+    """Gate-based motion detector using a PIR sensor."""
+
     def __init__(self) -> None:
         # On a real board: self._pin = digitalio.DigitalInOut(board.D5)
         pass
