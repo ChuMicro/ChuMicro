@@ -30,7 +30,7 @@ from chumicro_runner import Runner
 tick_count = 0
 
 
-def poll_inputs(now_ms):
+def poll_inputs(now_ms: int) -> None:
     """Poll hardware inputs — runs every tick.
 
     On a real board this might scan a button matrix or read
@@ -40,12 +40,12 @@ def poll_inputs(now_ms):
     tick_count += 1
 
 
-def report_status(now_ms):
+def report_status(now_ms: int) -> None:
     """Print a periodic status report."""
     print(f"  [{now_ms} ms] status report ({tick_count} ticks)")
 
 
-def heartbeat(now_ms):
+def heartbeat(now_ms: int) -> None:
     """Print a heartbeat."""
     print(f"  [{now_ms} ms] heartbeat")
 

@@ -39,18 +39,18 @@ class ButtonToggle:
     not continuously while held.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Track the previous button state for edge detection."""
         self._was_pressed = False
 
-    def check(self, now_ms):
+    def check(self, now_ms: int) -> bool:
         """Return True on the falling edge (button just pressed)."""
         pressed = not button.value  # active-low
         just_pressed = pressed and not self._was_pressed
         self._was_pressed = pressed
         return just_pressed
 
-    def handle(self, now_ms):
+    def handle(self, now_ms: int) -> None:
         """Toggle the LED."""
         led.value = not led.value
 

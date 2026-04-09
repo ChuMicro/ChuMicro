@@ -21,7 +21,7 @@ led = digitalio.DigitalInOut(board.LED)
 led.direction = digitalio.Direction.OUTPUT
 
 
-def toggle_led(now_ms):
+def toggle_led(now_ms: int) -> None:
     """Toggle the LED state."""
     led.value = not led.value
 

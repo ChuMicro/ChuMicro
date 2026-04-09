@@ -9,7 +9,7 @@ from chumicro_timing import Heartbeat
 from chumicro_timing.testing import FakeTicks
 
 
-def test_heartbeat_rejects_non_positive_periods():
+def test_heartbeat_rejects_non_positive_periods() -> None:
     """Heartbeat periods must be positive to avoid undefined timing behavior."""
     with raises(ValueError):
         Heartbeat(0)
@@ -18,7 +18,7 @@ def test_heartbeat_rejects_non_positive_periods():
         Heartbeat(-1)
 
 
-def test_heartbeat_becomes_due_after_full_period():
+def test_heartbeat_becomes_due_after_full_period() -> None:
     """The heartbeat should fire once the configured period has elapsed."""
     fake = FakeTicks()
     heartbeat = Heartbeat(period_ms=100, ticks=fake)
@@ -39,7 +39,7 @@ def test_heartbeat_becomes_due_after_full_period():
     assert heartbeat.is_due(now) is False
 
 
-def test_heartbeat_reset_restarts_the_schedule():
+def test_heartbeat_reset_restarts_the_schedule() -> None:
     """Reset should make the next due time relative to the reset moment."""
     fake = FakeTicks()
     heartbeat = Heartbeat(period_ms=50, ticks=fake)
@@ -60,14 +60,14 @@ def test_heartbeat_reset_restarts_the_schedule():
     assert heartbeat.poll(now) is True
 
 
-def test_heartbeat_reports_period_configuration():
+def test_heartbeat_reports_period_configuration() -> None:
     """The configured heartbeat period should remain observable as public state."""
     heartbeat = Heartbeat(period_ms=250, ticks=FakeTicks())
 
     assert heartbeat.period_ms == 250
 
 
-def test_heartbeat_shared_timestamp_prevents_drift():
+def test_heartbeat_shared_timestamp_prevents_drift() -> None:
     """Multiple heartbeats checking the same now_ms should see identical time."""
     fake = FakeTicks()
     hb_a = Heartbeat(period_ms=100, ticks=fake)
@@ -79,7 +79,7 @@ def test_heartbeat_shared_timestamp_prevents_drift():
     assert hb_b.poll(now) is True
 
 
-def test_heartbeat_poll_does_not_fire_before_period():
+def test_heartbeat_poll_does_not_fire_before_period() -> None:
     """poll() should return False when called before the period elapses."""
     fake = FakeTicks()
     heartbeat = Heartbeat(period_ms=200, ticks=fake)
@@ -89,7 +89,7 @@ def test_heartbeat_poll_does_not_fire_before_period():
     assert heartbeat.poll(now) is False
 
 
-def test_heartbeat_poll_fires_exactly_at_period():
+def test_heartbeat_poll_fires_exactly_at_period() -> None:
     """poll() should return True at exactly the period boundary."""
     fake = FakeTicks()
     heartbeat = Heartbeat(period_ms=100, ticks=fake)
@@ -99,7 +99,7 @@ def test_heartbeat_poll_fires_exactly_at_period():
     assert heartbeat.poll(now) is True
 
 
-def test_heartbeat_default_ticks_uses_real_clock():
+def test_heartbeat_default_ticks_uses_real_clock() -> None:
     """Creating a Heartbeat without ticks= should use the real clock."""
     heartbeat = Heartbeat(period_ms=1000)
 
@@ -110,7 +110,7 @@ def test_heartbeat_default_ticks_uses_real_clock():
     assert heartbeat.period_ms == 1000
 
 
-def test_fake_ticks_add():
+def test_fake_ticks_add() -> None:
     """FakeTicks.ticks_add should return a simple sum."""
     fake = FakeTicks()
     assert fake.ticks_add(100, 50) == 150

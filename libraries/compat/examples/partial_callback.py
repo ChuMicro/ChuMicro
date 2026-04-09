@@ -15,7 +15,7 @@ Runs on CPython, MicroPython, and CircuitPython.
 from chumicro_compat.functools import partial
 
 
-def on_button_press(pin_number, event_ms):
+def on_button_press(pin_number: int, event_ms: int) -> None:
     """Handle a button press on *pin_number* at *event_ms*."""
     print(f"button on pin {pin_number} pressed at {event_ms} ms")
 

@@ -10,25 +10,25 @@ from chumicro_msgpack import packb
 from chumicro_test_harness import raises
 
 
-def test_string_too_long_raises():
+def test_string_too_long_raises() -> None:
     """Strings exceeding 65535 bytes should raise OverflowError."""
     with raises(OverflowError):
         packb("a" * 65536)
 
 
-def test_bytes_too_long_raises():
+def test_bytes_too_long_raises() -> None:
     """Bytes exceeding 65535 should raise OverflowError."""
     with raises(OverflowError):
         packb(b"\x00" * 65536)
 
 
-def test_array_too_long_raises():
+def test_array_too_long_raises() -> None:
     """Arrays exceeding 65535 elements should raise OverflowError."""
     with raises(OverflowError):
         packb([None] * 65536)
 
 
-def test_map_too_long_raises():
+def test_map_too_long_raises() -> None:
     """Maps exceeding 65535 entries should raise OverflowError."""
     with raises(OverflowError):
         packb({i: None for i in range(65536)})
