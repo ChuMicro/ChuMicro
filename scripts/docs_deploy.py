@@ -21,6 +21,7 @@ import tempfile
 from pathlib import Path
 
 from discovery import ROOT, discover_package_dirs
+from workspace import run_command
 
 # Absolute path to the mike CLI installed alongside the active interpreter.
 # mike manages versioned MkDocs deployments on a git branch (gh-pages).
@@ -162,15 +163,6 @@ def inject_landing_page(branch: str) -> None:
     )
 
 
-def _run(command: list[str]) -> int:
-    """Run a command from the repository root and return its exit code.
-
-    Args:
-        command: Command and arguments to run.
-    """
-    print(f"+ {' '.join(command)}")
-    return subprocess.run(command, cwd=ROOT, check=False).returncode
-
 
 def _read_version(library_dir: Path) -> str | None:
     """Read a library's ``VERSION`` file, or return ``None``.
@@ -236,7 +228,7 @@ def docs_deploy(
             alias = "experimental"
 
         print(f"== deploy {library_name} {version} ({alias}) ==")
-        exit_code = _run([
+        exit_code = run_command([
             MIKE, "deploy",
             "--deploy-prefix", library_name,
             "-b", branch,
@@ -255,7 +247,7 @@ def docs_deploy(
     if channel == "stable":
         for library_dir in doc_dirs:
             library_name = library_dir.name
-            exit_code = _run([
+            exit_code = run_command([
                 MIKE, "set-default",
                 "--deploy-prefix", library_name,
                 "-b", branch,

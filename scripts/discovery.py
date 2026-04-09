@@ -11,13 +11,6 @@ import os
 import subprocess
 from pathlib import Path
 
-# tomllib is stdlib from Python 3.11+.  The tomli backport covers 3.9–3.10
-# so this module can run on the full range of supported workspace Pythons.
-try:
-    import tomllib
-except ModuleNotFoundError:
-    import tomli as tomllib  # type: ignore[import-not-found,no-redef]
-
 #: Absolute path to the repository root (parent of the scripts/ directory).
 ROOT = Path(__file__).resolve().parent.parent
 #: Directory where prepared runtime source trees and binaries are stored.
@@ -27,9 +20,23 @@ TOOLS = ROOT / ".tools"
 ALL_PLATFORMS = ("cpython", "micropython", "circuitpython")
 
 
+def _load_tomllib():
+    """Import tomllib lazily.
+
+    Stdlib from 3.11+; the ``tomli`` backport covers 3.9–3.10.
+    Keeping this out of module scope lets ``discovery`` be imported on a
+    fresh clone before third-party packages are installed.
+    """
+    try:
+        import tomllib
+    except ModuleNotFoundError:
+        import tomli as tomllib  # type: ignore[import-not-found,no-redef]
+    return tomllib
+
+
 def read_runtime_versions() -> dict:
     """Read pinned target runtime versions from ``target-runtimes.toml``."""
-
+    tomllib = _load_tomllib()
     with (ROOT / "target-runtimes.toml").open("rb") as runtimes_file:
         return tomllib.load(runtimes_file)
 
@@ -49,6 +56,7 @@ def read_platforms(package_dir: Path) -> tuple[str, ...]:
     pyproject_file = package_dir / "pyproject.toml"
     if not pyproject_file.exists():
         return ALL_PLATFORMS
+    tomllib = _load_tomllib()
     with pyproject_file.open("rb") as toml_file:
         data = tomllib.load(toml_file)
     platforms = data.get("tool", {}).get("chumicro", {}).get("platforms")
@@ -113,7 +121,7 @@ def discover_source_roots() -> list[Path]:
     """Return src/ directories for all discovered packages.
 
     Used to build ``PYTHONPATH`` for pytest and IDE ``extraPaths``
-    so libraries are importable without ``pip install -e``.
+    as a fallback alongside editable installs.
     """
     return [
         package_dir / "src"
@@ -280,11 +288,12 @@ def find_publishable_packages() -> list[str]:
     return packages
 
 
+
 def pythonpath_env() -> dict[str, str]:
     """Return an environment with the repository source roots prepended to PYTHONPATH.
 
     Prepending all ``src/`` directories lets pytest discover library
-    packages without ``pip install -e`` (Decision 0008).
+    packages as a fallback alongside editable installs (Decision 0008).
     """
     env = os.environ.copy()
     existing_path = env.get("PYTHONPATH")

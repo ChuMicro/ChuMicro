@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from discovery import ROOT
 from ide import sync_ide
+from workspace import install_editable
 
 # ---------------------------------------------------------------------------
 # Template strings
@@ -703,6 +704,10 @@ def new_library(name: str) -> int:
         name: Library short name (e.g. ``"gpio"``).
     """
     result = _scaffold_library(name)
+    if result != 0:
+        return result
+
+    result = install_editable()
     if result != 0:
         return result
 

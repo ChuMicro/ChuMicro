@@ -10,13 +10,13 @@ Run ``python scripts/run.py -h`` to see available tasks.
 from __future__ import annotations
 
 import argparse
-import shutil
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
-from check_api import main as _check_api_main
-from check_version import main as _check_version_main
+from check_api import main as check_api_main
+from check_version import main as check_version_main
 from discovery import (
     ROOT,
     coverage_args_for,
@@ -30,17 +30,16 @@ from discovery import (
 from docs_deploy import (
     MIKE,
     copy_shared_docs_assets,
+    docs_deploy,
     inject_landing_page,
-)
-from docs_deploy import (
-    docs_deploy as _docs_deploy,
 )
 from ide import sync_ide
 from prepare import VERSIONS, resolve_circuitpython_binary, resolve_micropython_binary
-from prepare_circuitpython import prepare_circuitpython as _prepare_circuitpython
-from prepare_micropython import prepare_micropython as _prepare_micropython
+from prepare_circuitpython import prepare_circuitpython
+from prepare_micropython import prepare_micropython
 from scaffold import new_library
 from verify_examples import verify_examples
+from workspace import install_command, install_editable, run_command
 
 PYTHON = sys.executable
 # Script that runs a library's tests/ directory under a non-CPython interpreter
@@ -48,33 +47,10 @@ PYTHON = sys.executable
 COMPAT_SCRIPT = "support/test_harness/run_cross_runtime.py"
 
 
-def _run(command: list[str], env: dict[str, str] | None = None) -> int:
-    """Run a command from the repository root and return its exit code.
-
-    Args:
-        command: Command and arguments to run.
-        env: Optional environment variables to pass to the subprocess.
-
-    Returns:
-        Process exit code.
-    """
-    printable_command = " ".join(command)
-    print(f"+ {printable_command}")
-    completed = subprocess.run(command, cwd=ROOT, env=env, check=False)
-    return completed.returncode
-
 
 # ---------------------------------------------------------------------------
 # Tasks
 # ---------------------------------------------------------------------------
-
-
-def _install_command() -> list[str]:
-    """Return the pip-install command prefix, preferring uv when available."""
-    if shutil.which("uv"):
-        return ["uv", "pip", "install"]
-    return [PYTHON, "-m", "pip", "install"]
-
 
 def setup() -> int:
     """Install development dependencies and regenerate IDE configuration."""
@@ -91,15 +67,20 @@ def setup() -> int:
         f"micropython-esp32-stubs=={micropython_version}.*",
     ]
 
-    result = _run([*_install_command(), "-U", "-r", requirements_file, *stubs])
+    result = run_command([*install_command(), "-U", "-r", requirements_file, *stubs])
     if result != 0:
         return result
+
+    result = install_editable()
+    if result != 0:
+        return result
+
     return sync_ide()
 
 
 def lint() -> int:
     """Run Ruff across all discovered source, test, and script paths."""
-    return _run([PYTHON, "-m", "ruff", "check", *discover_ruff_paths()])
+    return run_command([PYTHON, "-m", "ruff", "check", *discover_ruff_paths()])
 
 
 def _parse_library_filters(
@@ -170,12 +151,12 @@ def test_cpython(
     # detection).  -k takes precedence over scope flags.
     per_library: dict[str, list[tuple[str | None, str]]] | None = None
     if filter_expression:
-        per_library = _parse_library_filters(filter_expression)
+        parsed = _parse_library_filters(filter_expression)
         # Library prefixes override package_dirs.
         all_package_dirs = discover_package_dirs()
         by_name = {package_dir.name: package_dir for package_dir in all_package_dirs}
         resolved: list[Path] = []
-        for name in per_library:
+        for name in parsed:
             if name not in by_name:
                 available = ", ".join(sorted(by_name))
                 print(f"Unknown library in -k: {name}")
@@ -183,6 +164,7 @@ def test_cpython(
                 return 1
             resolved.append(by_name[name])
         package_dirs = resolved
+        per_library = parsed
 
     # Keep only packages that actually have a tests/ directory.
     testable = [package_dir for package_dir in package_dirs if (package_dir / "tests").is_dir()]
@@ -270,7 +252,7 @@ def test_cpython(
             run_env = {**env, "COVERAGE_FILE": str(ROOT / coverage_name)}
             run_counter += 1
 
-            exit_code = _run(
+            exit_code = run_command(
                 [
                     PYTHON, "-m", "pytest",
                     "-W", "error",
@@ -289,13 +271,13 @@ def test_cpython(
 
     # Combine per-library coverage into one data file and report.
     if not no_cov and list(ROOT.glob(".coverage.*")):
-        _run([PYTHON, "-m", "coverage", "combine"])
+        run_command([PYTHON, "-m", "coverage", "combine"])
 
         report_args = [PYTHON, "-m", "coverage", "report", "--show-missing"]
         if skip_coverage_gate:
             report_args.append("--fail-under=0")
 
-        report_exit_code = _run(report_args)
+        report_exit_code = run_command(report_args)
         if report_exit_code != 0 and overall_exit_code == 0:
             if not skip_coverage_gate:
                 print(
@@ -317,7 +299,7 @@ def build() -> int:
 
     for package in packages:
         print(f"== build {package} ==")
-        result = _run([PYTHON, "-m", "build", package])
+        result = run_command([PYTHON, "-m", "build", package])
         if result != 0:
             print(f"Build failed: {package}")
             return result
@@ -352,7 +334,7 @@ def docs(package_dirs: list[Path], *, serve: bool = False) -> int:
         library_dir = doc_dirs[0]
         relative_path = library_dir.relative_to(ROOT)
         print(f"Serving docs for {relative_path} (Ctrl+C to stop)...")
-        return _run(
+        return run_command(
             [PYTHON, "-m", "zensical", "serve",
              "-f", str(library_dir / "mkdocs.yml")],
         )
@@ -478,14 +460,14 @@ def docs_preview(package_dirs: list[Path]) -> int:
         if not has_source:
             deploy_args.append("--allow-empty")
 
-        exit_code = _run(deploy_args)
+        exit_code = run_command(deploy_args)
         if exit_code != 0:
             print(f"Docs deploy failed: {relative_path}")
             return exit_code
 
     inject_landing_page(preview_branch)
 
-    return _run([
+    return run_command([
         MIKE, "serve",
         "-b", preview_branch,
         "-F", str(doc_dirs[0] / "mkdocs.yml"),
@@ -526,7 +508,7 @@ def preflight(
     base_ref = "origin/main"
     can_diff = _base_ref_reachable(base_ref)
 
-    steps: list[tuple[str, object]] = [
+    steps: list[tuple[str, Callable[[], int]]] = [
         ("lint", lint),
         ("build", build),
         ("docs", lambda: docs(all_packages)),
@@ -561,21 +543,11 @@ def preflight(
     return 0
 
 
-def prepare_micropython() -> int:
-    """Prepare the repository-local MicroPython unix-port runtime."""
-    return _prepare_micropython()
-
-
-def prepare_circuitpython() -> int:
-    """Prepare the repository-local CircuitPython unix-port runtime."""
-    return _prepare_circuitpython()
-
-
 def _test_runtime_compat(
     platform: str,
     label: str,
-    resolve_binary,
-    prepare_fn,
+    resolve_binary: Callable[[], str | None],
+    prepare_fn: Callable[[], int],
 ) -> int:
     """Run cross-runtime unit tests for a single runtime.
 
@@ -611,7 +583,7 @@ def _test_runtime_compat(
     ]
     platform_libraries = filter_by_platform(library_dirs, platform)
     library_names = [library_dir.name for library_dir in platform_libraries]
-    return _run([binary, COMPAT_SCRIPT, *library_names])
+    return run_command([binary, COMPAT_SCRIPT, *library_names])
 
 
 def test_micropython_compatibility(binary: str | None = None) -> int:
@@ -680,12 +652,12 @@ def test_device() -> int:
 
 def check_version() -> int:
     """Check VERSION enforcement for changed libraries (PR check)."""
-    return _check_version_main([])
+    return check_version_main([])
 
 
 def check_api() -> int:
     """Check API breakages against last release tag (PR check)."""
-    return _check_api_main([])
+    return check_api_main([])
 
 
 # ---------------------------------------------------------------------------
@@ -881,7 +853,7 @@ def main(argv: list[str]) -> int:
     # --- docs-deploy ---
     if args.task == "docs-deploy":
         library_filter = args.libraries.split(",") if args.libraries else None
-        return _docs_deploy(args.channel, libraries=library_filter)
+        return docs_deploy(args.channel, libraries=library_filter)
 
     # --- tasks that accept runtime binary overrides ---
     if args.task in {

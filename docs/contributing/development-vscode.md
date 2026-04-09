@@ -72,7 +72,7 @@ If imports show as unresolved:
 1. Run `python scripts/run.py sync-ide` in the terminal
 2. Reload the window: Command Palette → **Developer: Reload Window**
 
-> **Note:** Do not use `pip install -e` to fix imports. The project uses `extraPaths` configuration instead.
+> **Note:** VS Code uses `extraPaths` for import resolution — you don't need to run `pip install -e` manually. The workspace setup script handles editable installs automatically.
 
 ## Running tasks
 

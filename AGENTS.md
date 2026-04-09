@@ -15,14 +15,13 @@ Hard rules an agent must never violate:
 - **Standard annotations, no `typing` imports** — use type annotations on signatures; do not `import typing` in library code (Decision 0021).  Use PEP 604/585 syntax (`int | None`, `list[int]`).  Docstrings carry descriptions only — **`Args:`** uses `name: description`, **`Returns:`** uses just a description.
 - **Check `plans/decisions/`** before proposing structural or pattern changes.
 - **Never hard-code secrets.**
-- **No `pip install -e`** — IDE resolution uses generated configs (`sync-ide`).
 - **Minimize dependencies** — prefer pure-Python implementations compatible with all three runtimes.
 
 Common pitfalls:
 
 - Don't tell the user you're done with uncommitted changes or without running tests — read the `task-checkpoint` and `end-of-session` skills.
 - Don't run bare `pytest` from root — use `python scripts/run.py test`.
-- Don't add `pip install -e` to fix imports — run `python scripts/run.py sync-ide`.
+- Don't run `pip install -e` manually to fix imports — run `python scripts/run.py setup` (it handles editable installs automatically).
 - Don't propose `asyncio`-based solutions — the project forbids `async`/`await`.
 - Don't apply embedded patterns (`const()`, `memoryview`) to infrastructure code under `scripts/` or `support/`.
 - Don't modify unrelated code when fixing a bug.
