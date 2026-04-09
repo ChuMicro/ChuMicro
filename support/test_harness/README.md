@@ -10,7 +10,8 @@ The cross-runtime test path uses:
 
 - `support/test_harness/src/chumicro_test_harness/runner.py` — lightweight runner
 - `support/test_harness/src/chumicro_test_harness/discovery.py` — test discovery and orchestration
-- `libraries/*/tests/test_*.py` (cross-runtime tests — no `import pytest`)
+- `support/test_harness/src/chumicro_test_harness/assertions.py` — cross-runtime assertion helpers (`raises()`)
+- `libraries/*/tests/test_*.py` (cross-runtime tests — no `import pytest`; files ending in `_pytest.py` are skipped)
 - `support/test_harness/run_cross_runtime.py` — entry point (thin bootstrapper)
 
 Today this is wired through `scripts/run.py` for local compatibility evaluation and required CI jobs.
@@ -30,7 +31,7 @@ python scripts/run.py prepare-micropython
 python scripts/run.py test-micropython-compatibility
 ```
 
-If no explicit binary is given, `scripts/run.py` falls back to the repo-local prepared runtime under `.tools/`, and then to a `micropython` executable on `PATH`.  To override, pass `--micropython-binary /path/to/binary`.
+If no explicit binary is given, `scripts/run.py` first tries the repo-local prepared runtime under `.tools/`, then a `micropython` executable on `PATH`, and otherwise triggers the repo-managed prepare step automatically.  To override, pass `--micropython-binary /path/to/binary`.
 
 ### CircuitPython unix-port evaluation run
 
