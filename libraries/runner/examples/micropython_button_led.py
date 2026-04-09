@@ -41,14 +41,25 @@ class ButtonToggle:
         self._was_pressed = False
 
     def check(self, now_ms: int) -> bool:
-        """Return True on the falling edge (button just pressed)."""
+        """Return True on the falling edge (button just pressed).
+
+        Args:
+            now_ms: Current tick value.
+
+        Returns:
+            True if the button was just pressed.
+        """
         pressed = not button.value()  # active-low
         just_pressed = pressed and not self._was_pressed
         self._was_pressed = pressed
         return just_pressed
 
     def handle(self, now_ms: int) -> None:
-        """Toggle the LED."""
+        """Toggle the LED.
+
+        Args:
+            now_ms: Current tick value.
+        """
         led.value(not led.value())
 
 

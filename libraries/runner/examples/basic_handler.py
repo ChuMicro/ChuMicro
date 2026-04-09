@@ -35,18 +35,29 @@ def poll_inputs(now_ms: int) -> None:
 
     On a real board this might scan a button matrix or read
     a UART buffer.  Here it just counts ticks.
+
+    Args:
+        now_ms: Current tick value.
     """
     global tick_count  # noqa: PLW0603
     tick_count += 1
 
 
 def report_status(now_ms: int) -> None:
-    """Print a periodic status report."""
+    """Print a periodic status report.
+
+    Args:
+        now_ms: Current tick value.
+    """
     print(f"  [{now_ms} ms] status report ({tick_count} ticks)")
 
 
 def heartbeat(now_ms: int) -> None:
-    """Print a heartbeat."""
+    """Print a heartbeat.
+
+    Args:
+        now_ms: Current tick value.
+    """
     print(f"  [{now_ms} ms] heartbeat")
 
 

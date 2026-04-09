@@ -25,11 +25,19 @@ class FakeTicks:
     """
 
     def __init__(self, start_ms: int = 0) -> None:
-        """Create a fake tick source starting at *start_ms*."""
+        """Create a fake tick source starting at *start_ms*.
+
+        Args:
+            start_ms: Initial tick value.
+        """
         self.current_ms = start_ms
 
     def advance(self, amount_ms: int) -> None:
-        """Move the clock forward by *amount_ms* milliseconds."""
+        """Move the clock forward by *amount_ms* milliseconds.
+
+        Args:
+            amount_ms: Milliseconds to advance.
+        """
         self.current_ms += amount_ms
 
     def ticks_ms(self) -> int:
@@ -37,9 +45,25 @@ class FakeTicks:
         return self.current_ms
 
     def ticks_diff(self, end: int, start: int) -> int:
-        """Return the signed difference *end* − *start*."""
+        """Return the signed difference *end* − *start*.
+
+        Args:
+            end: Later tick value.
+            start: Earlier tick value.
+
+        Returns:
+            Signed difference in milliseconds.
+        """
         return end - start
 
     def ticks_add(self, ticks_val: int, delta: int) -> int:
-        """Add *delta* milliseconds to a tick value."""
+        """Add *delta* milliseconds to a tick value.
+
+        Args:
+            ticks_val: Base tick value.
+            delta: Milliseconds to add.
+
+        Returns:
+            Sum of tick value and delta.
+        """
         return ticks_val + delta

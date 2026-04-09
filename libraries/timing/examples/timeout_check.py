@@ -45,6 +45,12 @@ _cycle_index = 0
 def poll_sensor(poll_count: int) -> bool:
     """Check whether the sensor is ready.
 
+    Args:
+        poll_count: Number of polls completed so far.
+
+    Returns:
+        True when the sensor is ready.
+
     On a real board::
 
         return sensor_pin.value  # or status_register & READY_BIT
@@ -56,9 +62,14 @@ def poll_sensor(poll_count: int) -> bool:
 def wait_for_sensor(timeout_ms: int) -> int:
     """Poll the sensor until ready or *timeout_ms* expires.
 
-    Returns the elapsed time in ms on success, or ``-1`` on timeout.
     Demonstrates ``ticks_add`` for computing a deadline and
     ``ticks_diff`` for checking it.
+
+    Args:
+        timeout_ms: Maximum time to wait in milliseconds.
+
+    Returns:
+        Elapsed time in ms on success, or ``-1`` on timeout.
     """
     # Record the start time and compute the absolute deadline.
     start = ticks_ms()

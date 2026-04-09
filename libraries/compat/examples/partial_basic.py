@@ -15,7 +15,12 @@ from chumicro_compat.functools import partial
 
 
 def set_led(pin: int, brightness: int) -> None:
-    """Set an LED pin to a brightness level."""
+    """Set an LED pin to a brightness level.
+
+    Args:
+        pin: GPIO pin number.
+        brightness: Brightness percentage (0–100).
+    """
     print(f"pin {pin} → {brightness}%")
 
 
