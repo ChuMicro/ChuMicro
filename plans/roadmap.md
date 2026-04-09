@@ -1,5 +1,7 @@
 # Roadmap
 
+The workspace is designed to grow to 40–50+ libraries.  Tooling, CI, docs, and discovery patterns should be evaluated against that scale, not just the current library count.
+
 ## Milestone 0 — workspace bootstrap
 
 Status: `done`

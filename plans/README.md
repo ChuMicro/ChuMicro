@@ -1,8 +1,10 @@
 # Plans
 
-Knowledge base for the Chumicro workspace.  Captures decisions, history, and
-active work that would otherwise live in people's heads or get lost between
-sessions.
+Project knowledge base — decisions, roadmap, and active work.
+
+**If you're a contributor** and want to know *why* something works the way it does, start with `decisions/`. Everything else here is working state for maintainers and agents.
+
+**If you're working with an AI agent**, these docs give it the context it needs to make good choices. Agents read `decisions/` before proposing structural changes, `patterns.md` before writing library code, and `next-up.md` before picking up work.
 
 ## What's here
 
@@ -20,7 +22,7 @@ sessions.
 ## Rules
 
 - **Decisions are append-only.**  Record a new decision when tradeoffs matter
-  or when future agents would otherwise have to rediscover context.  Use the
+  or when the reasoning would otherwise have to be rediscovered.  Use the
   format in `decisions/README.md`.  Decisions can start as `proposed` and be
   promoted to `accepted` after review.
 - **`next-up.md` is the working queue.**  Move checked-off items to Done in
