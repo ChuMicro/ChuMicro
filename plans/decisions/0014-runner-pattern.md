@@ -19,7 +19,14 @@ A service checks a condition and reports whether its handler should fire:
 
 ```python
 def check(self, now_ms: int) -> bool:
-    """Check one condition; return True if the handler should fire."""
+    """Check one condition.
+
+    Args:
+        now_ms: Shared tick timestamp in milliseconds.
+
+    Returns:
+        True if the handler should fire.
+    """
 ```
 
 This is a duck-typed contract — components do not need to import or subclass anything from `chumicro-runner`.

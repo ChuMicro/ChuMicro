@@ -6,10 +6,21 @@
 
 ```python
 def check(self, now_ms: int) -> bool:
-    """Check whether the handler should fire.  Return True or False."""
+    """Check whether the handler should fire.
+
+    Args:
+        now_ms: Current tick timestamp in milliseconds.
+
+    Returns:
+        True if the handler should fire this tick.
+    """
 
 def handle(self, now_ms: int) -> None:
-    """React to the condition detected by check()."""
+    """React to the condition detected by check().
+
+    Args:
+        now_ms: Current tick timestamp in milliseconds.
+    """
 ```
 
 A shared `Runner` captures time once per tick, checks each service, and batch-fires all due handlers.  This replaces ad-hoc polling loops with a single standard contract.
@@ -28,7 +39,11 @@ Services can be objects with `.check()` and `.handle()` methods, or plain callab
 from chumicro_runner import Runner
 
 class TemperatureSensor:
-    """Alert when temperature exceeds a threshold."""
+    """Alert when temperature exceeds a threshold.
+
+    Args:
+        threshold: Temperature in °C that triggers an alert.
+    """
 
     def __init__(self, threshold: float = 30.0) -> None:
         self._threshold = threshold
@@ -40,10 +55,23 @@ class TemperatureSensor:
         return self._last_reading
 
     def check(self, now_ms: int) -> bool:
+        """Return True when the reading exceeds the threshold.
+
+        Args:
+            now_ms: Current tick timestamp (unused here).
+
+        Returns:
+            True if the last reading exceeds the threshold.
+        """
         self._last_reading = self.read_temperature()
         return self._last_reading > self._threshold
 
     def handle(self, now_ms: int) -> None:
+        """Print an alert with the current reading.
+
+        Args:
+            now_ms: Current tick timestamp.
+        """
         print(f"ALERT: {self._last_reading}°C exceeds {self._threshold}°C")
 
 sensor = TemperatureSensor(threshold=30.0)
@@ -85,9 +113,22 @@ class MotionDetector:
         return False
 
     def check(self, now_ms: int) -> bool:
+        """Return True when motion is detected.
+
+        Args:
+            now_ms: Current tick timestamp.
+
+        Returns:
+            True if the PIR sensor reads high.
+        """
         return self.detect_motion()
 
     def handle(self, now_ms: int) -> None:
+        """React to detected motion.
+
+        Args:
+            now_ms: Current tick timestamp.
+        """
         print("Motion!")
 
 runner.add(MotionDetector())

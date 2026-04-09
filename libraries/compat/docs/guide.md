@@ -16,7 +16,12 @@ On CPython, the real C implementations are re-exported for zero overhead.  On Mi
 from chumicro_compat.functools import partial
 
 def set_led(pin: int, brightness: int) -> None:
-    """Set an LED pin to a brightness level."""
+    """Set an LED pin to a brightness level.
+
+    Args:
+        pin: GPIO pin number.
+        brightness: Brightness percentage (0–100).
+    """
     print(f"pin {pin} → {brightness}%")
 
 # Freeze the pin number.  Now set_status_led only needs brightness.
@@ -33,7 +38,13 @@ Keyword arguments can be frozen and overridden at call time:
 from chumicro_compat.functools import partial
 
 def connect(host: str, port: int = 80, timeout: int = 5) -> None:
-    """Simulate a connection."""
+    """Simulate a connection.
+
+    Args:
+        host: Server hostname.
+        port: TCP port number.
+        timeout: Connection timeout in seconds.
+    """
     print(f"connecting to {host}:{port} (timeout={timeout}s)")
 
 # Freeze host and port; timeout can still be overridden.
@@ -50,7 +61,12 @@ A common embedded pattern is binding a hardware pin or device reference into a c
 from chumicro_compat.functools import partial
 
 def on_button_press(pin_number: int, event_ms: int) -> None:
-    """Handle a button press on *pin_number* at *event_ms*."""
+    """Handle a button press event.
+
+    Args:
+        pin_number: GPIO pin the button is connected to.
+        event_ms: Timestamp of the press in milliseconds.
+    """
     print(f"button on pin {pin_number} pressed at {event_ms} ms")
 
 # Wire pin 0 into the callback.  The runner passes event_ms at call time.
