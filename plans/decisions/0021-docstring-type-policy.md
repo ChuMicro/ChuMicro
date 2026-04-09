@@ -8,10 +8,11 @@
 
 Python type annotations work correctly on both CircuitPython (10.1.4)
 and MicroPython (v1.26.0) — all annotation syntax is parsed without
-error and functions execute normally.  Both runtimes silently discard
-`__annotations__`, so runtime introspection is not available, but the
-annotations are visible in source code, to IDEs, and to documentation
-tools (griffe / mkdocstrings).
+error and functions execute normally.  Both runtimes strip annotations
+at compile time — `__annotations__` is never created, so runtime
+introspection is not available, but the annotations are visible in
+source code, to IDEs, and to documentation tools
+(griffe / mkdocstrings).
 
 The `typing` module (`Optional`, `Union`, `List`, `Dict`, `Callable`,
 `Any`, `TYPE_CHECKING`) does **not** exist on either embedded runtime.
@@ -20,7 +21,13 @@ PEP 604 (`int | None`) and PEP 585 (`list[int]`, `dict[str, int]`)
 both work, covering the most common use cases that previously required
 `typing` imports.
 
-Memory overhead is ~30 bytes per annotated function — negligible.
+Because annotations are stripped at compile time, the annotation
+expressions are parsed but never evaluated, no `__annotations__`
+dict is created, and no RAM is consumed at runtime.  The `.mpy`
+bytecode is identical with or without annotations.  Verified
+empirically on MicroPython v1.26.0 and CircuitPython 10.1.4 unix
+ports: annotation overhead is **zero bytes of heap RAM** and
+**zero bytes of .mpy flash**.
 
 ## Decision
 
