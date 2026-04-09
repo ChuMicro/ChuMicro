@@ -98,12 +98,12 @@ Libraries must be compatible across all three runtimes.  If a third-party librar
 
 ## Libraries
 
-| Library | Version | Description |
-|---------|---------|-------------|
-| [timing](libraries/timing/) | 0.1.16 | Wraparound-safe millisecond tick helpers, heartbeat scheduling, deterministic test fakes |
-| [runner](libraries/runner/) | 0.1.16 | Tick-based task runner: check/handle gates, periodic tasks, shared timestamps — no async |
-| [compat](libraries/compat/) | 0.1.16 | Cross-runtime compatibility polyfills — `functools.partial` and more |
-| [msgpack](libraries/msgpack/) | 0.1.16 | Compact MessagePack serialization with native CircuitPython C module delegation |
+| Library | Description |
+|---------|-------------|
+| [timing](libraries/timing/) | Wraparound-safe millisecond tick helpers, heartbeat scheduling, deterministic test fakes |
+| [runner](libraries/runner/) | Tick-based task runner: check/handle gates, periodic tasks, shared timestamps — no async |
+| [compat](libraries/compat/) | Cross-runtime compatibility polyfills — `functools.partial` and more |
+| [msgpack](libraries/msgpack/) | Compact MessagePack serialization with native CircuitPython C module delegation |
 
 ## Tech stack
 
