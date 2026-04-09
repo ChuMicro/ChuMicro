@@ -1,8 +1,8 @@
 # chumicro-runner
 
-A tick-based task runner for CircuitPython, MicroPython, and CPython — no async required.
+**A tick-based task scheduler — no async, no threads, just `runner.tick()` in your loop.**
 
-Components implement a `check(now_ms) -> bool` check that gates when a handler fires.  A `Runner` captures time once per tick, checks each service, and batch-fires all due handlers — replacing ad-hoc polling loops with a single standard contract.
+Register services with check/handle methods, add periodic callbacks, and the runner dispatches everything on a shared timestamp. Each service runs on its own schedule while you write the interesting parts. Works on CircuitPython, MicroPython, and CPython. Built on [timing](../timing/).
 
 ## Installation
 
@@ -251,7 +251,7 @@ All classes use only basic Python features.  Works identically on CPython, Micro
 
 ## Memory notes
 
-- `_TaskEntry` and `TaskHandle` use `__slots__` to minimise per-instance memory.
+- `_TaskEntry` and `TaskHandle` use `__slots__` to minimize per-instance memory.
 - Handlers are collected into a pre-allocated list and batch-fired, avoiding per-tick allocation.
 
 ## Examples
