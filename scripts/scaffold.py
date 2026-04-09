@@ -479,49 +479,49 @@ class {class_name}:
     Replace this with your real implementation.  This placeholder shows:
 
     - Constructor injection (Decision 0010)
-    - Google-style docstrings with types (Decision 0021)
+    - Type annotations with description-only docstrings (Decision 0021)
     - A ``check(now_ms)`` method for Runner integration (Decision 0014)
 
     Args:
-        value (int): Initial value.
+        value: Initial value.
     \"\"\"
 
-    def __init__(self, value=0):
+    def __init__(self, value: int = 0) -> None:
         \"\"\"Create a new {class_name}.
 
         Args:
-            value (int): Initial value.
+            value: Initial value.
         \"\"\"
         self._value = value
 
     @property
-    def value(self):
+    def value(self) -> int:
         \"\"\"Return the current value.
 
         Returns:
-            int: The current value.
+            The current value.
         \"\"\"
         return self._value
 
-    def update(self, new_value):
+    def update(self, new_value: int) -> None:
         \"\"\"Update the stored value.
 
         Args:
-            new_value (int): The new value to store.
+            new_value: The new value to store.
         \"\"\"
         self._value = new_value
 
-    def check(self, now_ms):
+    def check(self, now_ms: int) -> bool:
         \"\"\"Tick-based check for Runner integration.
 
         Called once per tick by the Runner.  Replace this with real
         logic or remove if the library has no active components.
 
         Args:
-            now_ms (int): Current tick value in milliseconds.
+            now_ms: Current tick value in milliseconds.
 
         Returns:
-            bool: ``True`` if something happened this tick.
+            ``True`` if something happened this tick.
         \"\"\"
         return False
 """

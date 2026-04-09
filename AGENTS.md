@@ -14,7 +14,7 @@ Hard rules an agent must never violate:
 - **Never hard-code secrets.**
 - **No `pip install -e`** — IDE resolution uses generated configs (`sync-ide`).
 - **Minimize dependencies** — prefer pure-Python implementations compatible with all three runtimes.
-- **Docstring types, not annotations** — document types in Google-style docstrings, not function annotations (Decision 0021). **`Args:`** uses `name (type): description`. **`Returns:`** uses `type: description` (no name — this is standard Google-style).
+- **Standard annotations, no `typing` imports** — use type annotations on signatures; do not `import typing` in library code (Decision 0021).  Use PEP 604/585 syntax (`int | None`, `list[int]`).  Docstrings carry descriptions only — **`Args:`** uses `name: description`, **`Returns:`** uses just a description.
 
 Common pitfalls:
 
@@ -149,7 +149,7 @@ Code under `scripts/` and `support/` runs **exclusively on CPython**.  Use the f
 
 ### Naming & style
 
-PEP 8.  Descriptive names (`service`, `test_device`), not abbreviations (`svc`, `dut`).  Document **all** functions and methods with concise docstrings.  Document types in Google-style docstring sections — `Args:` uses `name (type): description`, `Returns:` uses `type: description` (no name), `Raises:` uses `ExceptionType: description`.  Do not use Python type annotations on function signatures in library code (Decision 0021).  When writing CircuitPython drivers: initialize hardware in `__init__`, provide `deinit()` or context-manager support.
+PEP 8.  Descriptive names (`service`, `test_device`), not abbreviations (`svc`, `dut`).  Document **all** functions and methods with concise docstrings.  Use standard Python type annotations on function signatures (Decision 0021).  Do not `import typing` in library code — use PEP 604 (`int | None`) and PEP 585 (`list[int]`) syntax instead.  Docstrings use Google-style sections for descriptions: `Args:` uses `name: description`, `Returns:` uses just the description, `Raises:` uses `ExceptionType: description`.  When writing CircuitPython drivers: initialize hardware in `__init__`, provide `deinit()` or context-manager support.
 
 ### API & compatibility
 

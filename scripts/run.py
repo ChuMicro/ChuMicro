@@ -319,8 +319,8 @@ def docs(package_dirs: list[Path], *, serve: bool = False) -> int:
     selected library instead of building static output.
 
     The build captures stderr and fails if griffe emits any warnings
-    (e.g. missing or malformed docstring type annotations).  This
-    enforces Decision 0021 (docstring type policy).
+    (e.g. missing type annotations or malformed docstrings).  This
+    enforces Decision 0021 (type documentation policy).
     """
     # Keep only packages that have a mkdocs.yml
     doc_dirs = [
