@@ -4,22 +4,23 @@
 
 Hard rules an agent must never violate:
 
-- **No `async`/`await`, no ISRs** — use the tick-based runner pattern (Decision 0014).
+- **Verify before declaring done** — after making changes, run `task-checkpoint` (tests + commit).  Before ending a session, run `end-of-session` (preflight + clean tree).  Do not tell the user "done" with uncommitted or untested changes.
+- **Preflight must pass before you stop** — `python scripts/run.py preflight 2>&1 | tail -5` must show `Preflight passed`.  If it fails, fix it.
+- **`git commit -F .scratch/commit-msg.txt`** — never `git commit -m` (see `.github/skills/git-commit/SKILL.md`).
 - **Per-library pytest** via `python scripts/run.py test` — never bare `pytest` from root.
 - **94 % coverage gate** per library.
+- **No `async`/`await`, no ISRs** — use the tick-based runner pattern (Decision 0014).
 - **Constructor injection** for time, I/O, network — fakes in `testing.py` submodule (Decision 0010).
 - **f-strings everywhere**, `const()` / `memoryview` / pre-allocated buffers in library code only.
-- **`git commit -F .scratch/commit-msg.txt`** — never `git commit -m` (see `.github/skills/git-commit/SKILL.md`).
+- **Standard annotations, no `typing` imports** — use type annotations on signatures; do not `import typing` in library code (Decision 0021).  Use PEP 604/585 syntax (`int | None`, `list[int]`).  Docstrings carry descriptions only — **`Args:`** uses `name: description`, **`Returns:`** uses just a description.
 - **Check `plans/decisions/`** before proposing structural or pattern changes.
 - **Never hard-code secrets.**
 - **No `pip install -e`** — IDE resolution uses generated configs (`sync-ide`).
 - **Minimize dependencies** — prefer pure-Python implementations compatible with all three runtimes.
-- **Standard annotations, no `typing` imports** — use type annotations on signatures; do not `import typing` in library code (Decision 0021).  Use PEP 604/585 syntax (`int | None`, `list[int]`).  Docstrings carry descriptions only — **`Args:`** uses `name: description`, **`Returns:`** uses just a description.
-- **Verify before declaring done** — after making changes, run `task-checkpoint` (tests + commit).  Before ending a session, run `end-of-session` (preflight + clean tree).  Do not tell the user "done" with uncommitted or untested changes.
-- **Preflight must pass before you stop** — `python scripts/run.py preflight 2>&1 | tail -5` must show `Preflight passed`.  If it fails, fix it.
 
 Common pitfalls:
 
+- Don't tell the user you're done with uncommitted changes or without running tests — read the `task-checkpoint` and `end-of-session` skills.
 - Don't run bare `pytest` from root — use `python scripts/run.py test`.
 - Don't add `pip install -e` to fix imports — run `python scripts/run.py sync-ide`.
 - Don't propose `asyncio`-based solutions — the project forbids `async`/`await`.
