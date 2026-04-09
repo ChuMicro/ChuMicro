@@ -44,14 +44,14 @@ class MotionDetector:
     Here it simulates occasional triggers.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Create a detector.
 
         On a real board: ``self._pin = digitalio.DigitalInOut(board.D5)``
         """
         self._check_count = 0
 
-    def detect_motion(self):
+    def detect_motion(self) -> bool:
         """Read the PIR sensor pin — fast digital read.
 
         On a real board: ``return self._pin.value``
@@ -60,11 +60,11 @@ class MotionDetector:
         self._check_count += 1
         return self._check_count % 80 == 0
 
-    def check(self, now_ms):
+    def check(self, now_ms: int) -> bool:
         """Check for motion (fast pin read)."""
         return self.detect_motion()
 
-    def handle(self, now_ms):
+    def handle(self, now_ms: int) -> None:
         """React to detected motion."""
         print(f"  [{now_ms} ms] MOTION — activating alarm")
 
@@ -76,11 +76,11 @@ class LightSensor:
     Here it simulates a dark period so the light handler fires.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Create a sensor with a default bright reading."""
         self._check_count = 0
 
-    def read_level(self):
+    def read_level(self) -> int:
         """Read ambient light level (0=dark, 100=bright).
 
         On a real board: ``return self._adc.value // 256``

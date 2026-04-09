@@ -15,18 +15,18 @@ from chumicro_timing.testing import FakeTicks
 class _GateTask:
     """Minimal gate-based task component for testing."""
 
-    def __init__(self, should_fire=True):
+    def __init__(self, should_fire: bool = True) -> None:
         """Create a stub that returns *should_fire* from check()."""
         self.should_fire = should_fire
         self.check_count = 0
         self.handle_count = 0
 
-    def check(self, now_ms):
+    def check(self, now_ms: int) -> bool:
         """Return whether the handler should fire."""
         self.check_count += 1
         return self.should_fire
 
-    def handle(self, now_ms):
+    def handle(self, now_ms: int) -> None:
         """Record that the handler was called."""
         self.handle_count += 1
 
@@ -34,7 +34,7 @@ class _GateTask:
 # -- TaskHandle --
 
 
-def test_add_returns_task_handle():
+def test_add_returns_task_handle() -> None:
     """add() should return a TaskHandle."""
     fake = FakeTicks()
     runner = Runner(ticks=fake)
@@ -43,7 +43,7 @@ def test_add_returns_task_handle():
     assert isinstance(handle, TaskHandle)
 
 
-def test_task_handle_active_when_added():
+def test_task_handle_active_when_added() -> None:
     """TaskHandle should report active when first added."""
     fake = FakeTicks()
     runner = Runner(ticks=fake)
@@ -52,7 +52,7 @@ def test_task_handle_active_when_added():
     assert handle.active is True
 
 
-def test_task_handle_period_ms_none_by_default():
+def test_task_handle_period_ms_none_by_default() -> None:
     """period_ms should be None when no period is configured."""
     fake = FakeTicks()
     runner = Runner(ticks=fake)
@@ -61,7 +61,7 @@ def test_task_handle_period_ms_none_by_default():
     assert handle.period_ms is None
 
 
-def test_task_handle_period_ms_when_set():
+def test_task_handle_period_ms_when_set() -> None:
     """period_ms should reflect the configured period."""
     fake = FakeTicks()
     runner = Runner(ticks=fake)
@@ -70,7 +70,7 @@ def test_task_handle_period_ms_when_set():
     assert handle.period_ms == 200
 
 
-def test_task_handle_set_period_adds():
+def test_task_handle_set_period_adds() -> None:
     """set_period() should add a period to a previously non-periodic task."""
     fake = FakeTicks()
     runner = Runner(ticks=fake)
@@ -81,7 +81,7 @@ def test_task_handle_set_period_adds():
     assert handle.period_ms == 300
 
 
-def test_task_handle_set_period_changes():
+def test_task_handle_set_period_changes() -> None:
     """set_period() should replace the existing period."""
     fake = FakeTicks()
     runner = Runner(ticks=fake)
@@ -91,7 +91,7 @@ def test_task_handle_set_period_changes():
     assert handle.period_ms == 500
 
 
-def test_task_handle_set_period_none_removes():
+def test_task_handle_set_period_none_removes() -> None:
     """set_period(None) should remove the period (task runs every tick)."""
     fake = FakeTicks()
     runner = Runner(ticks=fake)
@@ -101,7 +101,7 @@ def test_task_handle_set_period_none_removes():
     assert handle.period_ms is None
 
 
-def test_task_handle_remove():
+def test_task_handle_remove() -> None:
     """remove() should deactivate the handle."""
     fake = FakeTicks()
     runner = Runner(ticks=fake)
@@ -111,7 +111,7 @@ def test_task_handle_remove():
     assert handle.active is False
 
 
-def test_task_handle_remove_idempotent():
+def test_task_handle_remove_idempotent() -> None:
     """Calling remove() twice should not raise."""
     fake = FakeTicks()
     runner = Runner(ticks=fake)
@@ -120,7 +120,7 @@ def test_task_handle_remove_idempotent():
     handle.remove()  # should not raise
 
 
-def test_task_handle_repr():
+def test_task_handle_repr() -> None:
     """TaskHandle repr should include period and status."""
     fake = FakeTicks()
     runner = Runner(ticks=fake)
@@ -131,7 +131,7 @@ def test_task_handle_repr():
     assert "active" in r
 
 
-def test_task_handle_repr_after_remove():
+def test_task_handle_repr_after_remove() -> None:
     """TaskHandle repr should show removed after remove()."""
     fake = FakeTicks()
     runner = Runner(ticks=fake)
@@ -144,7 +144,7 @@ def test_task_handle_repr_after_remove():
 # -- Runner: object-based (task with .check() and .handle()) --
 
 
-def test_object_task_fires_handler_when_true():
+def test_object_task_fires_handler_when_true() -> None:
     """Object-based task should fire .handle() when .check() returns True."""
     fake = FakeTicks()
     svc = _GateTask(should_fire=True)
@@ -159,7 +159,7 @@ def test_object_task_fires_handler_when_true():
     assert svc.handle_count == 1
 
 
-def test_object_task_skips_handler_when_false():
+def test_object_task_skips_handler_when_false() -> None:
     """Object-based task should not fire .handle() when .check() returns False."""
     fake = FakeTicks()
     svc = _GateTask(should_fire=False)
@@ -173,7 +173,7 @@ def test_object_task_skips_handler_when_false():
     assert svc.handle_count == 0
 
 
-def test_object_task_with_period():
+def test_object_task_with_period() -> None:
     """Object-based task with period should only be checked when due."""
     fake = FakeTicks()
     svc = _GateTask(should_fire=True)
@@ -192,7 +192,7 @@ def test_object_task_with_period():
     assert svc.handle_count == 1
 
 
-def test_object_task_handler_override():
+def test_object_task_handler_override() -> None:
     """Passing handler= with an object should override .handle()."""
     fake = FakeTicks()
     svc = _GateTask(should_fire=True)
@@ -213,7 +213,7 @@ def test_object_task_handler_override():
 # -- Runner: callable-based (check_function + handler) --
 
 
-def test_callable_check_gates_handler():
+def test_callable_check_gates_handler() -> None:
     """Callable check_function should gate handler_function."""
     fake = FakeTicks()
     received = []
@@ -237,7 +237,7 @@ def test_callable_check_gates_handler():
     assert received == []
 
 
-def test_callable_check_with_period():
+def test_callable_check_with_period() -> None:
     """Callable check with period should only be checked when due."""
     fake = FakeTicks()
     received = []
@@ -260,7 +260,7 @@ def test_callable_check_with_period():
 # -- Runner: handler-only (no check) --
 
 
-def test_handler_only_fires_every_tick():
+def test_handler_only_fires_every_tick() -> None:
     """Handler-only registration should fire every tick."""
     fake = FakeTicks()
     received = []
@@ -276,7 +276,7 @@ def test_handler_only_fires_every_tick():
     assert received == [0, 10]
 
 
-def test_handler_only_with_period():
+def test_handler_only_with_period() -> None:
     """Handler-only with period should fire per period."""
     fake = FakeTicks()
     received = []
@@ -295,7 +295,7 @@ def test_handler_only_with_period():
 # -- Runner: add_periodic --
 
 
-def test_periodic_fires_on_schedule():
+def test_periodic_fires_on_schedule() -> None:
     """Periodic handler should fire when the period elapses."""
     fake = FakeTicks()
     received = []
@@ -311,7 +311,7 @@ def test_periodic_fires_on_schedule():
     assert received == [100]
 
 
-def test_periodic_repeats():
+def test_periodic_repeats() -> None:
     """Periodic handler should fire repeatedly."""
     fake = FakeTicks()
     received = []
@@ -328,7 +328,7 @@ def test_periodic_repeats():
     assert len(received) == 2
 
 
-def test_periodic_set_period_changes_rate():
+def test_periodic_set_period_changes_rate() -> None:
     """Changing period at runtime should take effect."""
     fake = FakeTicks()
     received = []
@@ -346,7 +346,7 @@ def test_periodic_set_period_changes_rate():
     assert len(received) == 2
 
 
-def test_periodic_remove():
+def test_periodic_remove() -> None:
     """Removed periodic handler should no longer fire."""
     fake = FakeTicks()
     received = []
@@ -364,7 +364,7 @@ def test_periodic_remove():
     assert len(received) == 1
 
 
-def test_periodic_handler_receives_now_ms():
+def test_periodic_handler_receives_now_ms() -> None:
     """Periodic handler should receive the shared now_ms timestamp."""
     fake = FakeTicks()
     received = []
@@ -381,7 +381,7 @@ def test_periodic_handler_receives_now_ms():
 # -- Runner: batch firing and ordering --
 
 
-def test_handlers_fire_in_batch():
+def test_handlers_fire_in_batch() -> None:
     """All handlers should fire after all checks are done."""
     fake = FakeTicks()
     order = []
@@ -389,16 +389,16 @@ def test_handlers_fire_in_batch():
     class _OrderedGate:
         """Gate that records when it is checked."""
 
-        def __init__(self, name):
+        def __init__(self, name: str) -> None:
             """Create a gate with the given name."""
             self._name = name
 
-        def check(self, now_ms):
+        def check(self, now_ms: int) -> bool:
             """Record the check and return True."""
             order.append(f"check:{self._name}")
             return True
 
-        def handle(self, now_ms):
+        def handle(self, now_ms: int) -> None:
             """Record the handle call."""
             order.append(f"fire:{self._name}")
 
@@ -414,7 +414,7 @@ def test_handlers_fire_in_batch():
 # -- Runner: shared timestamps --
 
 
-def test_runner_returns_shared_timestamp():
+def test_runner_returns_shared_timestamp() -> None:
     """tick() should return the captured now_ms."""
     fake = FakeTicks()
     runner = Runner(ticks=fake)
@@ -423,7 +423,7 @@ def test_runner_returns_shared_timestamp():
     assert runner.tick() == 42
 
 
-def test_runner_passes_same_timestamp_to_all():
+def test_runner_passes_same_timestamp_to_all() -> None:
     """All tasks should receive the same now_ms on a single tick."""
     fake = FakeTicks()
     timestamps = []
@@ -431,7 +431,7 @@ def test_runner_passes_same_timestamp_to_all():
     class _Recorder:
         """Record each now_ms received."""
 
-        def check(self, now_ms):
+        def check(self, now_ms: int) -> bool:
             """Append now_ms to the shared list."""
             timestamps.append(now_ms)
             return False
@@ -447,7 +447,7 @@ def test_runner_passes_same_timestamp_to_all():
     assert timestamps == [77, 77, 77]
 
 
-def test_runner_defaults_to_real_ticks():
+def test_runner_defaults_to_real_ticks() -> None:
     """Runner with no ticks argument should use chumicro_timing.ticks_ms."""
     runner = Runner()
 
@@ -460,7 +460,7 @@ def test_runner_defaults_to_real_ticks():
 # -- Runner: period gating --
 
 
-def test_period_gates_check():
+def test_period_gates_check() -> None:
     """Task with period should only be called when the period elapses."""
     fake = FakeTicks()
     svc = _GateTask(should_fire=True)
@@ -476,7 +476,7 @@ def test_period_gates_check():
     assert svc.check_count == 1
 
 
-def test_period_does_not_fire_early():
+def test_period_does_not_fire_early() -> None:
     """Task should not be called before the period elapses."""
     fake = FakeTicks()
     svc = _GateTask(should_fire=True)
@@ -490,7 +490,7 @@ def test_period_does_not_fire_early():
     assert svc.check_count == 0
 
 
-def test_period_repeats():
+def test_period_repeats() -> None:
     """Period gate should fire again after another period elapses."""
     fake = FakeTicks()
     svc = _GateTask(should_fire=True)
@@ -507,7 +507,7 @@ def test_period_repeats():
     assert svc.handle_count == 2
 
 
-def test_multiple_periods():
+def test_multiple_periods() -> None:
     """Multiple tasks with different periods should fire independently."""
     fake = FakeTicks()
     fast_received = []
@@ -536,7 +536,7 @@ def test_multiple_periods():
     assert len(slow_received) == 1
 
 
-def test_period_and_no_period_together():
+def test_period_and_no_period_together() -> None:
     """Both periodic and every-tick tasks should work together."""
     fake = FakeTicks()
     always = _GateTask(should_fire=True)
@@ -561,7 +561,7 @@ def test_period_and_no_period_together():
 # -- Runner: runtime mutation --
 
 
-def test_remove_stops_task():
+def test_remove_stops_task() -> None:
     """Removed task should no longer be called."""
     fake = FakeTicks()
     svc = _GateTask(should_fire=True)
@@ -577,7 +577,7 @@ def test_remove_stops_task():
     assert svc.check_count == 1
 
 
-def test_set_period_at_runtime():
+def test_set_period_at_runtime() -> None:
     """Adding a period at runtime should take effect."""
     fake = FakeTicks()
     svc = _GateTask(should_fire=True)
@@ -599,7 +599,7 @@ def test_set_period_at_runtime():
     assert svc.check_count == 2
 
 
-def test_remove_period_at_runtime():
+def test_remove_period_at_runtime() -> None:
     """Removing a period should make the task run every tick again."""
     fake = FakeTicks()
     svc = _GateTask(should_fire=True)
@@ -618,7 +618,7 @@ def test_remove_period_at_runtime():
 # -- Runner: error cases --
 
 
-def test_add_no_args_raises():
+def test_add_no_args_raises() -> None:
     """add() with no task and no handler should raise ValueError."""
     fake = FakeTicks()
     runner = Runner(ticks=fake)
@@ -630,7 +630,7 @@ def test_add_no_args_raises():
 # -- Mixed patterns --
 
 
-def test_all_patterns_together():
+def test_all_patterns_together() -> None:
     """Object-based, callable-based, handler-only, and periodic all in one runner."""
     fake = FakeTicks()
     results = []
@@ -655,7 +655,7 @@ def test_all_patterns_together():
 # -- CallRecorder --
 
 
-def test_call_recorder_records_calls():
+def test_call_recorder_records_calls() -> None:
     """CallRecorder should record all invocations."""
     recorder = CallRecorder()
     recorder(10)
@@ -665,7 +665,7 @@ def test_call_recorder_records_calls():
     assert len(recorder) == 2
 
 
-def test_call_recorder_clear():
+def test_call_recorder_clear() -> None:
     """CallRecorder.clear should discard all recorded calls."""
     recorder = CallRecorder()
     recorder(10)
@@ -675,7 +675,7 @@ def test_call_recorder_clear():
     assert recorder.calls == []
 
 
-def test_call_recorder_as_handler():
+def test_call_recorder_as_handler() -> None:
     """CallRecorder should work as a handler in Runner."""
     fake = FakeTicks()
     recorder = CallRecorder()
@@ -694,7 +694,7 @@ def test_call_recorder_as_handler():
 # -- run_count --
 
 
-def test_run_count_fires_exactly_n_times():
+def test_run_count_fires_exactly_n_times() -> None:
     """Handler with run_count should fire exactly N times then stop."""
     fake = FakeTicks()
     received = []
@@ -709,7 +709,7 @@ def test_run_count_fires_exactly_n_times():
     assert len(received) == 3
 
 
-def test_run_count_auto_removes():
+def test_run_count_auto_removes() -> None:
     """Task should be inactive after run_count is exhausted."""
     fake = FakeTicks()
     runner = Runner(ticks=fake)
@@ -719,7 +719,7 @@ def test_run_count_auto_removes():
     assert handle.active is False
 
 
-def test_run_count_with_period():
+def test_run_count_with_period() -> None:
     """Periodic task with run_count should fire N periods then stop."""
     fake = FakeTicks()
     received = []
@@ -745,7 +745,7 @@ def test_run_count_with_period():
     assert len(received) == 2
 
 
-def test_run_count_one_is_one_shot():
+def test_run_count_one_is_one_shot() -> None:
     """run_count=1 should fire exactly once."""
     fake = FakeTicks()
     received = []
@@ -764,7 +764,7 @@ def test_run_count_one_is_one_shot():
     assert received == [50]
 
 
-def test_run_count_property():
+def test_run_count_property() -> None:
     """TaskHandle.run_count should reflect remaining count."""
     fake = FakeTicks()
     runner = Runner(ticks=fake)
@@ -779,7 +779,7 @@ def test_run_count_property():
     assert handle.run_count == 1
 
 
-def test_run_count_none_by_default():
+def test_run_count_none_by_default() -> None:
     """run_count should be None when not specified."""
     fake = FakeTicks()
     runner = Runner(ticks=fake)
@@ -788,7 +788,7 @@ def test_run_count_none_by_default():
     assert handle.run_count is None
 
 
-def test_run_count_zero_raises():
+def test_run_count_zero_raises() -> None:
     """run_count=0 should raise ValueError."""
     fake = FakeTicks()
     runner = Runner(ticks=fake)
@@ -797,7 +797,7 @@ def test_run_count_zero_raises():
         runner.add(handler=lambda now: None, run_count=0)
 
 
-def test_run_count_zero_raises_periodic():
+def test_run_count_zero_raises_periodic() -> None:
     """run_count=0 on add_periodic should raise ValueError."""
     fake = FakeTicks()
     runner = Runner(ticks=fake)
@@ -806,7 +806,7 @@ def test_run_count_zero_raises_periodic():
         runner.add_periodic(lambda now: None, period_ms=100, run_count=0)
 
 
-def test_run_count_repr():
+def test_run_count_repr() -> None:
     """TaskHandle repr should include run_count when set."""
     fake = FakeTicks()
     runner = Runner(ticks=fake)
@@ -819,7 +819,7 @@ def test_run_count_repr():
 # -- start_after_ms --
 
 
-def test_start_after_ms_delays_handler():
+def test_start_after_ms_delays_handler() -> None:
     """Handler should not fire before start_after_ms elapses."""
     fake = FakeTicks()
     received = []
@@ -842,7 +842,7 @@ def test_start_after_ms_delays_handler():
     assert received == [500]
 
 
-def test_start_after_ms_then_every_tick():
+def test_start_after_ms_then_every_tick() -> None:
     """Handler-only with start_after_ms should run every tick after delay."""
     fake = FakeTicks()
     received = []
@@ -863,7 +863,7 @@ def test_start_after_ms_then_every_tick():
     assert len(received) == 2
 
 
-def test_start_after_ms_with_period():
+def test_start_after_ms_with_period() -> None:
     """start_after_ms should delay first fire; subsequent fires use period_ms."""
     fake = FakeTicks()
     received = []
@@ -891,7 +891,7 @@ def test_start_after_ms_with_period():
     assert received == [500, 600]
 
 
-def test_start_after_ms_with_check():
+def test_start_after_ms_with_check() -> None:
     """Object-based task with start_after_ms should delay check calls."""
     fake = FakeTicks()
     svc = _GateTask(should_fire=True)
@@ -911,7 +911,7 @@ def test_start_after_ms_with_check():
     assert svc.handle_count == 1
 
 
-def test_start_after_ms_zero_fires_immediately():
+def test_start_after_ms_zero_fires_immediately() -> None:
     """start_after_ms=0 should fire on the first tick."""
     fake = FakeTicks()
     received = []
@@ -926,7 +926,7 @@ def test_start_after_ms_zero_fires_immediately():
 # -- Validation --
 
 
-def test_period_ms_zero_raises():
+def test_period_ms_zero_raises() -> None:
     """period_ms=0 should raise ValueError."""
     fake = FakeTicks()
     runner = Runner(ticks=fake)
@@ -935,7 +935,7 @@ def test_period_ms_zero_raises():
         runner.add(handler=lambda now: None, period_ms=0)
 
 
-def test_period_ms_negative_raises():
+def test_period_ms_negative_raises() -> None:
     """Negative period_ms should raise ValueError."""
     fake = FakeTicks()
     runner = Runner(ticks=fake)
@@ -944,7 +944,7 @@ def test_period_ms_negative_raises():
         runner.add(handler=lambda now: None, period_ms=-10)
 
 
-def test_set_period_zero_raises():
+def test_set_period_zero_raises() -> None:
     """set_period(0) should raise ValueError."""
     fake = FakeTicks()
     runner = Runner(ticks=fake)
@@ -954,7 +954,7 @@ def test_set_period_zero_raises():
         handle.set_period(0)
 
 
-def test_periodic_zero_raises():
+def test_periodic_zero_raises() -> None:
     """add_periodic with period_ms=0 should raise ValueError."""
     fake = FakeTicks()
     runner = Runner(ticks=fake)

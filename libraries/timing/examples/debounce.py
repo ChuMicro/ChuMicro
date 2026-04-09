@@ -46,7 +46,7 @@ _CYCLE_MS = sum(d for d, _ in _SIGNAL)
 _start = ticks_ms()
 
 
-def read_raw_button():
+def read_raw_button() -> bool:
     """Return the simulated raw button state.
 
     On a real board::

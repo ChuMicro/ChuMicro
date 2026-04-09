@@ -42,7 +42,7 @@ _READY_AFTER = [4, 99, 3, 99, 2]
 _cycle_index = 0
 
 
-def poll_sensor(poll_count):
+def poll_sensor(poll_count: int) -> bool:
     """Check whether the sensor is ready.
 
     On a real board::
@@ -53,7 +53,7 @@ def poll_sensor(poll_count):
     return poll_count >= threshold
 
 
-def wait_for_sensor(timeout_ms):
+def wait_for_sensor(timeout_ms: int) -> int:
     """Poll the sensor until ready or *timeout_ms* expires.
 
     Returns the elapsed time in ms on success, or ``-1`` on timeout.

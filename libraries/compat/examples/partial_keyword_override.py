@@ -14,7 +14,7 @@ Runs on CPython, MicroPython, and CircuitPython.
 from chumicro_compat.functools import partial
 
 
-def connect(host, port=80, timeout=5):
+def connect(host: str, port: int = 80, timeout: int = 5) -> None:
     """Simulate opening a connection."""
     print(f"connecting to {host}:{port} (timeout={timeout}s)")
 

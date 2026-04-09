@@ -37,13 +37,13 @@ class TemperatureSensor:
     board).
     """
 
-    def __init__(self, threshold=30.0):
+    def __init__(self, threshold: float = 30.0) -> None:
         """Create a sensor with the given alert threshold (°C)."""
         self._threshold = threshold
         self._last_reading = 0.0
         self._index = 0
 
-    def read_temperature(self):
+    def read_temperature(self) -> float:
         """Read temperature from hardware.
 
         On a real board::
@@ -54,12 +54,12 @@ class TemperatureSensor:
         self._index += 1
         return value
 
-    def check(self, now_ms):
+    def check(self, now_ms: int) -> bool:
         """Read the sensor and check against the threshold."""
         self._last_reading = self.read_temperature()
         return self._last_reading > self._threshold
 
-    def handle(self, now_ms):
+    def handle(self, now_ms: int) -> None:
         """React to a threshold breach."""
         print(
             f"  [{now_ms} ms] ALERT: {self._last_reading}°C "

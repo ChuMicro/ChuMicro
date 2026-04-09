@@ -23,7 +23,7 @@ from chumicro_runner import Runner
 led_state = False
 
 
-def toggle_led(now_ms):
+def toggle_led(now_ms: int) -> None:
     """Toggle the LED."""
     global led_state  # noqa: PLW0603
     led_state = not led_state

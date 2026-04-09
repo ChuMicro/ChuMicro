@@ -5,7 +5,7 @@ import time
 from chumicro_timing.ticks import ticks_diff, ticks_ms
 
 
-def _sleep_ms(duration_ms):
+def _sleep_ms(duration_ms: int) -> None:
 	"""Sleep for the requested duration using the best available runtime API."""
 	runtime_sleep_ms = getattr(time, "sleep_ms", None)
 	if callable(runtime_sleep_ms):
@@ -15,7 +15,7 @@ def _sleep_ms(duration_ms):
 	time.sleep(duration_ms / 1000)
 
 
-def test_ticks_progress_on_runtime():
+def test_ticks_progress_on_runtime() -> None:
 	"""The active runtime should expose forward-moving monotonic ticks."""
 	start_ms = ticks_ms()
 	_sleep_ms(20)

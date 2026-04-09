@@ -21,7 +21,7 @@ from machine import Pin
 led = Pin(2, Pin.OUT)
 
 
-def toggle_led(now_ms):
+def toggle_led(now_ms: int) -> None:
     """Toggle the LED state."""
     led.value(not led.value())
 

@@ -26,7 +26,7 @@ try:
 
     from msgpack import pack, unpack  # noqa: F401
 
-    def packb(obj):  # pragma: no cover — native C path
+    def packb(obj: object) -> bytes:  # pragma: no cover — native C path
         """Pack *obj* to msgpack bytes using the native encoder.
 
         Allocates a ``BytesIO`` buffer internally.  For small payloads
@@ -43,7 +43,7 @@ try:
         pack(obj, buffer)
         return buffer.getvalue()
 
-    def unpackb(data):  # pragma: no cover — native C path
+    def unpackb(data: bytes | bytearray | memoryview) -> object:  # pragma: no cover — native C path
         """Unpack msgpack *data* to a Python object using the native decoder.
 
         Args:
