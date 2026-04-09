@@ -137,12 +137,28 @@ Normal `bytearray` slicing creates a new copy every time. On a 256 KB board, tha
 ```python
 # ❌ Without memoryview — each slice copies data
 def process_packet(data: bytearray) -> tuple:
+    """Extract header and payload from a packet.
+
+    Args:
+        data: Raw packet bytes.
+
+    Returns:
+        A (header, payload) tuple — each is a new bytearray copy.
+    """
     header = data[0:4]      # new bytearray allocated
     payload = data[4:20]    # another new bytearray allocated
     return header, payload
 
 # ✅ With memoryview — slices share the original buffer
 def process_packet(data: bytearray) -> tuple:
+    """Extract header and payload from a packet.
+
+    Args:
+        data: Raw packet bytes.
+
+    Returns:
+        A (header, payload) tuple — zero-copy memoryview slices.
+    """
     view = memoryview(data)
     header = view[0:4]      # no copy — points into data
     payload = view[4:20]    # no copy — points into data
@@ -154,6 +170,11 @@ Combine with pre-allocated buffers for the full pattern:
 ```python
 class PacketReader:
     def __init__(self, buffer_size: int = 64) -> None:
+        """Set up a reusable read buffer.
+
+        Args:
+            buffer_size: Number of bytes to pre-allocate.
+        """
         self._buf = bytearray(buffer_size)  # allocated once
         self._view = memoryview(self._buf)  # reusable view
 
