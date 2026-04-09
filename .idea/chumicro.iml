@@ -16,6 +16,11 @@
       <sourceFolder url="file://$MODULE_DIR$/libraries/timing/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/timing/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/timing/functional_tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/compat" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/msgpack" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/runner" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/timing" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/support/test_harness" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/.venv" />
       <excludeFolder url="file://$MODULE_DIR$/.tools" />
     </content>

@@ -25,7 +25,7 @@ Each page is self-contained for its topic. You don't need to read all of them �
 |------|---------|-------|
 | Python | ≥ 3.11 | macOS: `brew install python`; Linux: system package; Windows: [python.org](https://python.org) |
 | Git | any recent | |
-| IDE (optional) | PyCharm, VS Code, or CLI | All three are fully supported |
+| IDE (optional) | Any editor with a terminal | PyCharm, VS Code, Neovim, Zed, Emacs, Sublime — all work |
 
 **Windows users:** use native Windows for editing, linting, and tests. Use WSL2 for unix-port cross-runtime checks. See [Development setup](README.md#development-setup) in the README.
 
@@ -36,8 +36,9 @@ The project supports three workflows — pick whichever you're comfortable with.
 - **[Command Line](docs/contributing/development-cli.md)** — no IDE required, full control
 - **[PyCharm](docs/contributing/development-pycharm.md)** — run configurations, test explorer, source root management
 - **[VS Code](docs/contributing/development-vscode.md)** — tasks, extensions, Pylance integration
+- **[Other Editors](docs/contributing/development-other-editors.md)** — Neovim, Zed, Emacs, Sublime, or anything with a terminal
 
-You only need one. All three reach the same place.
+You only need one. All four reach the same place.
 
 ## Quick start
 

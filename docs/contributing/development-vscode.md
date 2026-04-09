@@ -99,17 +99,15 @@ Output appears in the Terminal panel at the bottom of the window.
 
 ## Running tests
 
-### From the task runner
+### From the task runner (with coverage)
 
-Command Palette → **Tasks: Run Task** → **Test**. This runs all libraries with coverage.
+Command Palette → **Tasks: Run Task** → **Test**. This runs all libraries with the 94% coverage gate and leaves a `.coverage` data file at the project root. To browse coverage visually, see [Browsing coverage](#browsing-coverage) below.
 
-### From the test explorer
+### From the test explorer (quick check, no coverage)
 
 VS Code's Testing panel (beaker icon in the sidebar, or `⌘⇧T` / `Ctrl+Shift+T`) discovers tests via the `python.testing.pytestArgs` setting in `.vscode/settings.json`.
 
-Click the ▶ button next to any test file or function to run it.
-
-> **Important:** The test explorer does not enforce the 94% coverage gate. Always use the **Test** task or the terminal before opening a PR.
+Click the ▶ button next to any test file or function to run it. This is fast for iterating but does not produce coverage data or enforce the 94% gate.
 
 ### From the terminal
 
@@ -203,6 +201,27 @@ Every check enforces a specific quality gate. Here's what each one verifies and 
 | Go to symbol | `⌘⇧O` | `Ctrl+Shift+O` |
 | Find in files | `⌘⇧F` | `Ctrl+Shift+F` |
 | Toggle test explorer | `⌘⇧T` | `Ctrl+Shift+T` |
+
+## Browsing coverage
+
+Running the **Test** task (or `python scripts/run.py test` from the terminal) produces a `.coverage` data file at the project root. You can view it two ways:
+
+**In the editor gutter:** Install the [Coverage Gutters](https://marketplace.visualstudio.com/items?itemName=ryanluker.vscode-coverage-gutters) extension. Then generate an XML report:
+
+```bash
+python -m coverage xml
+```
+
+Coverage Gutters reads `coverage.xml` and highlights covered/uncovered lines directly in the editor. Toggle it with the **Coverage Gutters: Display Coverage** command.
+
+**In a browser:** Generate an HTML report for a full clickable overview:
+
+```bash
+python -m coverage html
+open htmlcov/index.html
+```
+
+> Both `coverage.xml` and `htmlcov/` are gitignored.
 
 ## Quirks and tips
 

@@ -1,10 +1,10 @@
 # chumicro-msgpack
 
-Cross-runtime [MessagePack](https://msgpack.org) serialization for CircuitPython, MicroPython, and CPython.
+**Compact [MessagePack](https://msgpack.org) serialization — much smaller than JSON.**
 
-Encodes Python objects to compact binary bytes and decodes them back.  Supports the subset of msgpack needed for embedded use: integers (up to 32-bit), floats (32-bit), strings, bytes, booleans, None, lists, tuples, and dicts.
+Turns Python dicts, lists, and values into binary bytes, typically 30–50% smaller than JSON. Good for NVM storage, serial protocols, and anywhere bytes matter. On CircuitPython boards with the native `msgpack` C module, everything delegates to the built-in — the pure-Python code is never loaded, saving ~700 bytes of heap.
 
-On CircuitPython boards with the native `msgpack` C module, all functions delegate to the built-in — the pure-Python encoder is never loaded, saving ~700 bytes of heap RAM.
+Works on CircuitPython, MicroPython, and CPython.
 
 ## Installation
 

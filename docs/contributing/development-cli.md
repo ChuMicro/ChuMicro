@@ -133,6 +133,19 @@ in code you didn't change, note it in your PR — a maintainer can help.
 
 **How to fix:** Follow the hint — the `Missing` column in the coverage table above shows the uncovered line numbers. Write tests that exercise those lines.
 
+**Browsing coverage in detail:**
+
+The test command leaves a `.coverage` data file at the repository root. You can generate an HTML report for line-by-line browsing:
+
+```bash
+python -m coverage html
+open htmlcov/index.html    # macOS — use xdg-open on Linux, start on Windows
+```
+
+The report shows every source file with covered lines in green and missed lines in red. Click any file to see exactly which branches are uncovered — much easier than reading line numbers from the terminal.
+
+> **Tip:** `htmlcov/` is gitignored. Generate it whenever you need it, discard it when you're done.
+
 ### Verify examples
 
 Checks that every example script in a library has valid syntax and resolvable imports. Quick to run — catches copy-paste mistakes before they reach users.

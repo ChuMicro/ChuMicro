@@ -1,8 +1,8 @@
 # chumicro-timing
 
-Cross-runtime millisecond tick helpers and periodic timing utilities for CircuitPython, MicroPython, and CPython.
+**Non-blocking timers that handle millisecond wraparound for you.**
 
-All timing is non-blocking — nothing in this library calls `time.sleep()`. Capture `ticks_ms()` once per loop iteration and pass the shared timestamp to `Heartbeat.poll()`.
+Capture `ticks_ms()` once per loop, hand it to a `Heartbeat`, and you've got clean periodic timing — no `time.sleep()`, no wraparound bugs. Works on CircuitPython, MicroPython, and CPython.
 
 ## Installation
 
