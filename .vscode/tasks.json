@@ -189,6 +189,20 @@
             }
         },
         {
+            "label": "Test Scripts",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "scripts/run.py",
+                "test-scripts"
+            ],
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
             "label": "Verify Examples",
             "type": "shell",
             "command": "python",

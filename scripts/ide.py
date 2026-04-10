@@ -41,6 +41,7 @@ _TASKS: list[tuple[str, str, str, str]] = [
     ("Runtime Matrix", "scripts/run.py", "test-runtime-matrix", "test"),
     ("Setup", "scripts/run.py", "setup", "build"),
     ("Test", "scripts/run.py", "test --all", "test"),
+    ("Test Scripts", "scripts/run.py", "test-scripts", "test"),
     ("Verify Examples", "scripts/run.py", "verify-examples --all", "test"),
 ]
 
@@ -159,7 +160,7 @@ def _sync_vscode_settings() -> None:
 
     settings["python.analysis.extraPaths"] = [
         str(source_dir.relative_to(ROOT)) for source_dir in discover_source_roots()
-    ]
+    ] + ["scripts"]
 
     settings_file.write_text(json.dumps(settings, indent=4) + "\n")
     print("  Updated .vscode/settings.json")
@@ -197,6 +198,16 @@ def _sync_pycharm_iml() -> None:
                     f' isTestSource="{is_test}" />'
                 )
 
+    # scripts/ is a source root (bare-name imports like ``from discovery
+    # import ROOT``) and scripts/tests/ is a test root so the IDE test
+    # runner discovers infrastructure tests.
+    source_lines.append(
+        '      <sourceFolder url="file://$MODULE_DIR$/scripts" isTestSource="false" />'
+    )
+    if (ROOT / "scripts" / "tests").is_dir():
+        source_lines.append(
+            '      <sourceFolder url="file://$MODULE_DIR$/scripts/tests" isTestSource="true" />'
+        )
 
     sources = "\n".join(source_lines)
     jdk_entry = f"\n{jdk_line}" if jdk_line else ""
@@ -234,7 +245,7 @@ def _sync_pyrightconfig() -> None:
 
     config["extraPaths"] = [
         str(source_dir.relative_to(ROOT)) for source_dir in discover_source_roots()
-    ]
+    ] + ["scripts"]
 
     config_file.write_text(json.dumps(config, indent=2) + "\n")
     print(f"  Updated {config_file.relative_to(ROOT)}")

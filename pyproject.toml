@@ -1,6 +1,6 @@
 [tool.pytest.ini_options]
 addopts = "-ra --strict-config --strict-markers --ignore-glob=**/functional_tests/**"
-testpaths = ["support", "libraries"]
+testpaths = ["support", "libraries", "scripts/tests"]
 
 [tool.coverage.run]
 branch = true
