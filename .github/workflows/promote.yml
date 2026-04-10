@@ -3,7 +3,7 @@ name: Promote to stable
 # Promotes an experimental release to stable.
 #
 # HOW TO USE: run this workflow from the "main" branch.  Enter the
-# experimental tag to promote (e.g. timing-v0.3.0-experimental) as input.
+# experimental tag to promote (e.g. chumicro-timing-v0.3.0-experimental) as input.
 #
 # The library source comes from the source archive attached to the
 # experimental GitHub Release.  All scripts and build tooling come from
@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
     inputs:
       experimental_tag:
-        description: "Experimental tag to promote (e.g. timing-v0.3.0-experimental)"
+        description: "Experimental tag to promote (e.g. chumicro-timing-v0.3.0-experimental)"
         type: string
         required: true
       dry_run:
@@ -40,7 +40,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      lib_name: ${{ steps.parse.outputs.lib_name }}
+      library_name: ${{ steps.parse.outputs.library_name }}
       version: ${{ steps.parse.outputs.version }}
       stable_tag: ${{ steps.parse.outputs.stable_tag }}
       library_dir: ${{ steps.parse.outputs.library_dir }}
@@ -53,17 +53,17 @@ jobs:
         run: |
           echo "Tag: ${TAG}"
 
-          if [[ "$TAG" =~ ^([a-z][a-z0-9_-]*)-v([0-9]+\.[0-9]+\.[0-9]+)-experimental$ ]]; then
-            lib_name="${BASH_REMATCH[1]}"
+          if [[ "$TAG" =~ ^chumicro-([a-z][a-z0-9_-]*)-v([0-9]+\.[0-9]+\.[0-9]+)-experimental$ ]]; then
+            library_name="${BASH_REMATCH[1]}"
             version="${BASH_REMATCH[2]}"
-            echo "lib_name=${lib_name}" >> "$GITHUB_OUTPUT"
+            echo "library_name=${library_name}" >> "$GITHUB_OUTPUT"
             echo "version=${version}" >> "$GITHUB_OUTPUT"
-            echo "stable_tag=${lib_name}-v${version}" >> "$GITHUB_OUTPUT"
-            echo "library_dir=libraries/${lib_name}" >> "$GITHUB_OUTPUT"
-            echo "source_zip=${lib_name}-v${version}-source.zip" >> "$GITHUB_OUTPUT"
-            echo "✓ Promoting ${lib_name} v${version} from experimental to stable"
+            echo "stable_tag=chumicro-${library_name}-v${version}" >> "$GITHUB_OUTPUT"
+            echo "library_dir=libraries/${library_name}" >> "$GITHUB_OUTPUT"
+            echo "source_zip=chumicro-${library_name}-v${version}-source.zip" >> "$GITHUB_OUTPUT"
+            echo "✓ Promoting ${library_name} v${version} from experimental to stable"
           else
-            echo "::error::Expected an experimental tag (e.g. timing-v0.3.0-experimental), got '${TAG}'."
+            echo "::error::Expected an experimental tag (e.g. chumicro-timing-v0.3.0-experimental), got '${TAG}'."
             exit 1
           fi
 
@@ -103,7 +103,7 @@ jobs:
   # Build and publish the stable package to PyPI.
   # ---------------------------------------------------------------------------
   release:
-    name: "Release ${{ needs.validate.outputs.lib_name }} v${{ needs.validate.outputs.version }} (stable)"
+    name: "Release ${{ needs.validate.outputs.library_name }} v${{ needs.validate.outputs.version }} (stable)"
     needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -115,7 +115,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          lib_name="${{ needs.validate.outputs.lib_name }}"
+          library_name="${{ needs.validate.outputs.library_name }}"
           source_zip="${{ needs.validate.outputs.source_zip }}"
           tag="${{ inputs.experimental_tag }}"
 
@@ -126,12 +126,12 @@ jobs:
           # Replace main's library source with the frozen experimental
           # source.  Only src/, pyproject.toml, VERSION, and README.md are
           # in the archive — that's everything the build needs.
-          rm -rf "libraries/${lib_name}/src"
-          rm -f "libraries/${lib_name}/pyproject.toml" \
-                "libraries/${lib_name}/VERSION" \
-                "libraries/${lib_name}/README.md"
+          rm -rf "libraries/${library_name}/src"
+          rm -f "libraries/${library_name}/pyproject.toml" \
+                "libraries/${library_name}/VERSION" \
+                "libraries/${library_name}/README.md"
           unzip -o "/tmp/source-archive/${source_zip}" \
-            -d "libraries/${lib_name}/"
+            -d "libraries/${library_name}/"
 
       - uses: actions/setup-python@v6
         with:
@@ -156,7 +156,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -a "${{ needs.validate.outputs.stable_tag }}" \
-            -m "Release ${{ needs.validate.outputs.lib_name }} ${{ needs.validate.outputs.version }}"
+            -m "Release ${{ needs.validate.outputs.library_name }} ${{ needs.validate.outputs.version }}"
           git push origin "${{ needs.validate.outputs.stable_tag }}"
 
       - name: Create GitHub Release
@@ -164,12 +164,13 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.validate.outputs.stable_tag }}
-          name: "${{ needs.validate.outputs.lib_name }} v${{ needs.validate.outputs.version }}"
+          name: ${{ needs.validate.outputs.stable_tag }}
           prerelease: false
           body: |
-            Release of **chumicro-${{ needs.validate.outputs.lib_name }}** version **${{ needs.validate.outputs.version }}**.
+            Release of **chumicro-${{ needs.validate.outputs.library_name }}** version **${{ needs.validate.outputs.version }}**.
             Promoted from experimental tag `${{ inputs.experimental_tag }}`.
-          files: "${{ needs.validate.outputs.library_dir }}/dist/*"
+          # No file attachments — dist artifacts are already on PyPI and
+          # CircuitPython/MicroPython users install from the bundle repo.
           generate_release_notes: true
 
   # ---------------------------------------------------------------------------
@@ -184,23 +185,26 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      # Intentionally duplicates the download+unpack from the release job.
+      # Each job runs on a separate runner, and artifact-passing would add
+      # complexity for a lightweight download that only happens on promotion.
       - name: Download and unpack source archive
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          lib_name="${{ needs.validate.outputs.lib_name }}"
+          library_name="${{ needs.validate.outputs.library_name }}"
           source_zip="${{ needs.validate.outputs.source_zip }}"
           tag="${{ inputs.experimental_tag }}"
 
           gh release download "$tag" \
             --pattern "$source_zip" \
             --dir /tmp/source-archive
-          rm -rf "libraries/${lib_name}/src"
-          rm -f "libraries/${lib_name}/pyproject.toml" \
-                "libraries/${lib_name}/VERSION" \
-                "libraries/${lib_name}/README.md"
+          rm -rf "libraries/${library_name}/src"
+          rm -f "libraries/${library_name}/pyproject.toml" \
+                "libraries/${library_name}/VERSION" \
+                "libraries/${library_name}/README.md"
           unzip -o "/tmp/source-archive/${source_zip}" \
-            -d "libraries/${lib_name}/"
+            -d "libraries/${library_name}/"
 
       - uses: actions/setup-python@v6
         with:
@@ -255,18 +259,18 @@ jobs:
             exit 0
           fi
 
-          lib_name="${{ needs.validate.outputs.lib_name }}"
+          library_name="${{ needs.validate.outputs.library_name }}"
           version="${{ needs.validate.outputs.version }}"
-          git commit -m "Update: ${lib_name} v${version}"
+          git commit -m "Update: ${library_name} v${version}"
 
           git tag "${{ env.date_tag }}"
           git push origin main "${{ env.date_tag }}"
 
       - name: Create bundle release
         run: |
-          lib_name="${{ needs.validate.outputs.lib_name }}"
+          library_name="${{ needs.validate.outputs.library_name }}"
           version="${{ needs.validate.outputs.version }}"
-          body="## Updated libraries\n\n- **${lib_name}** v${version}"
+          body="## Updated libraries\n\n- **${library_name}** v${version}"
 
           gh release create "${{ env.date_tag }}" \
             --repo "ChuMicro/ChuMicro-Bundle" \
@@ -294,5 +298,5 @@ jobs:
           gh workflow run docs-deploy.yml \
             --repo "${{ github.repository }}" \
             -f channel=stable \
-            -f "libraries=${{ needs.validate.outputs.lib_name }}"
-          echo "✓ Stable docs deploy triggered for ${{ needs.validate.outputs.lib_name }}."
+            -f "libraries=${{ needs.validate.outputs.library_name }}"
+          echo "✓ Stable docs deploy triggered for ${{ needs.validate.outputs.library_name }}."
