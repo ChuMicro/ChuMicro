@@ -94,8 +94,21 @@ These apply to **publishable library code under `libraries/`** — code that run
 
 `python scripts/run.py lint` runs two tools:
 
-1. **Ruff** — PEP 8 style, import sorting, common bugs (`E`, `F`, `I`, `B`, `UP` rule sets)
-2. **CHU001** — naming conventions (single-letter names, banned abbreviations, banned suffixes)
+**Ruff** — a fast Python linter that enforces:
 
-If lint passes, your style is correct.
+| Rule set | What it catches |
+|---|---|
+| `E` — pycodestyle errors | Whitespace, indentation, line length, blank lines |
+| `F` — pyflakes | Unused imports, undefined names, redefined variables |
+| `I` — isort | Import ordering (stdlib → third-party → local, alphabetized) |
+| `B` — bugbear | Common pitfalls like mutable default arguments, bare `except:`, unused loop variables |
+| `UP` — pyupgrade | Modernization — replaces old syntax with newer Python equivalents |
+
+**CHU001** — a custom naming check that catches:
+
+- Single-letter variable names (`i` → `index`, `e` → `error`)
+- Banned abbreviations used alone (`env` → `environment`, `buf` → `buffer`)
+- Banned abbreviations as suffixes (`base_ref` → `base_reference`, `build_env` → `build_environment`)
+
+If lint passes, your style is correct. You don't need to memorize any of this — the error messages tell you exactly what to fix and why.
 
