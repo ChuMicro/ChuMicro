@@ -92,6 +92,12 @@ jobs:
   # Delegate to the shared release workflow in stable mode.  Using
   # workflow_call keeps all build/publish/bundle steps visible in this
   # single workflow run rather than spawning a separate run.
+  #
+  # Attestations are disabled because PyPI's trusted publisher is
+  # configured for release.yml, but Sigstore certificates carry the
+  # top-level caller's identity (promote.yml).  The OIDC authentication
+  # itself works (it uses job_workflow_ref), but attestation verification
+  # fails on the workflow_ref mismatch.
   release:
     name: Release
     needs: validate
@@ -100,6 +106,7 @@ jobs:
       libraries: ${{ needs.validate.outputs.lib_name }}
       channel: stable
       dry_run: ${{ inputs.dry_run }}
+      attestations: false
     secrets: inherit
 
   # Trigger docs deployment as a separate workflow_dispatch rather than
