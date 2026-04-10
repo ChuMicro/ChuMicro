@@ -37,7 +37,7 @@ Here's what each task does and how to read its output.
 
 ### Lint
 
-Checks code style across the entire workspace using [Ruff](https://docs.astral.sh/ruff/). Fast and usually the first thing to run.
+Checks code style across the entire workspace using [Ruff](https://docs.astral.sh/ruff/) and the `CHU001` naming check. See the [Style Guide](style-guide.md) for what the rules are and why they exist. Fast and usually the first thing to run.
 
 ```bash
 python scripts/run.py lint
