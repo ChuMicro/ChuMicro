@@ -141,6 +141,7 @@ Conventions:
 | `python scripts/run.py setup` | Install dependencies and regenerate IDE configs |
 | `python scripts/run.py preflight` | Full CI mirror: lint, build, docs, test, examples, version-check, api-check, compat |
 | `python scripts/run.py test` | CPython tests (changed packages, or `--all` / `--libraries name`) |
+| `python scripts/run.py test-scripts` | Run scripts/ infrastructure tests |
 | `python scripts/run.py lint` | Ruff across workspace |
 | `python scripts/run.py build` | Build all publishable packages |
 | `python scripts/run.py sync-ide` | Regenerate PyCharm / VS Code configs |
