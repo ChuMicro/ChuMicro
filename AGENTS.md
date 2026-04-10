@@ -30,6 +30,7 @@ Common pitfalls:
 - Don't use heredocs, `echo`, `printf`, or `cat` to create multi-line content in the terminal — write files with file tools instead (see `run-script` skill).
 - Don't run large-output commands (`preflight`, `test --all`, `lint`) without piping through `tail`, `head`, or `grep` (see `large-output` skill).
 - Don't use single-letter variables (`n`, `t`, `s`, `e`, `f`) or banned abbreviations (`env`, `buf`, `src`, `cmd`, `msg`, `err`, `ref`) — the `CHU001` linter rule will catch them.  See Decision 0022.
+- Don't add a feature without updating docs, READMEs, CI, templates, and plans — see the documentation ripple checklist in the completion protocol.  A feature that only exists in code is incomplete.
 
 ## Agent operations
 
@@ -71,6 +72,21 @@ Commit history is the primary fallback when planning docs are stale.  Write comm
 1. `git status --short` — review what changed.
 2. Run the narrowest test that covers your changes (see the skill for the table).
 3. Commit and push if the work is coherent.  Read the `git-commit` skill for mechanics.
+
+**Check for documentation ripple.**  When you add a new task, command, library, config, or change existing behavior, the change likely needs to be reflected in multiple places.  Before committing, scan this list and update anything affected:
+
+- `AGENTS.md` — key commands table, hard rules, common pitfalls
+- `README.md` — tasks table, testing section, repository layout diagram
+- `CONTRIBUTING.md` — "What preflight checks" details
+- `.github/workflows/ci.yml` — new CI jobs for new tasks
+- `docs/contributing/development-cli.md` — task sections, validation checklist
+- `docs/contributing/pull-requests.md` — verification steps table
+- `scripts/scaffold.py` — templates that generate new libraries
+- `scripts/ide.py` — `_TASKS` list and source root generation
+- `plans/history.md` — timeline entry for the current session
+- `plans/next-up.md` — move completed items to Done, add new work
+
+This is not optional.  Stale docs cause agents and contributors to make wrong assumptions.  A feature that exists only in code but not in docs, READMEs, templates, CI, and plans is incomplete.
 
 **Before ending a session**, run the `end-of-session` skill.  The short version:
 

@@ -156,6 +156,7 @@ Everything goes through one command: `python scripts/run.py <task>`.
 | `setup` | Install dev dependencies |
 | `lint` | Check code style (Ruff) |
 | `test` | Run CPython tests (changed packages by default, `--all` for everything) |
+| `test-scripts` | Run infrastructure tests for `scripts/` |
 | `verify-examples` | Check that example scripts parse and import correctly |
 | `docs` | Build library documentation |
 | `docs --serve` | Start a live-reload docs dev server |
