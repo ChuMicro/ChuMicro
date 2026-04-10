@@ -2,20 +2,24 @@
 
 from pathlib import Path
 
+import pytest
 from discovery import (
     ALL_PLATFORMS,
     RELEASE_RELEVANT,
     changed_libraries,
     coverage_args_for,
+    detect_changed_packages,
     discover_package_dirs,
     discover_ruff_paths,
     discover_source_roots,
     filter_by_platform,
     find_package_dir,
     find_publishable_packages,
+    pythonpath_environment,
     read_platforms,
     read_version,
     resolve_named_packages,
+    resolve_scope,
 )
 
 
@@ -311,4 +315,117 @@ class TestReleaseRelevant:
     def test_expected_entries(self):
         """RELEASE_RELEVANT contains the expected set."""
         assert RELEASE_RELEVANT == {"src", "pyproject.toml"}
+
+
+class TestDetectChangedPackages:
+    """Tests for detect_changed_packages."""
+
+    def test_infrastructure_change_returns_none(self, monkeypatch):
+        """Changes to scripts/ trigger all-packages testing."""
+        monkeypatch.setattr(
+            "discovery.subprocess.run",
+            lambda *_args, **_kwargs: type(
+                "R", (), {"returncode": 0, "stdout": "scripts/run.py\n"},
+            )(),
+        )
+        assert detect_changed_packages() is None
+
+    def test_conftest_change_returns_none(self, monkeypatch):
+        """Changes to root conftest.py trigger all-packages testing."""
+        monkeypatch.setattr(
+            "discovery.subprocess.run",
+            lambda *_args, **_kwargs: type(
+                "R", (), {"returncode": 0, "stdout": "conftest.py\n"},
+            )(),
+        )
+        assert detect_changed_packages() is None
+
+    def test_github_change_returns_none(self, monkeypatch):
+        """Changes to .github/ trigger all-packages testing."""
+        monkeypatch.setattr(
+            "discovery.subprocess.run",
+            lambda *_args, **_kwargs: type(
+                "R", (), {"returncode": 0, "stdout": ".github/workflows/ci.yml\n"},
+            )(),
+        )
+        assert detect_changed_packages() is None
+
+    def test_no_changes_returns_none(self, monkeypatch):
+        """No changed files returns None (run everything)."""
+        monkeypatch.setattr(
+            "discovery.subprocess.run",
+            lambda *_args, **_kwargs: type("R", (), {"returncode": 0, "stdout": ""})(),
+        )
+        assert detect_changed_packages() is None
+
+    def test_library_change_detected(self, monkeypatch):
+        """Library changes return the affected package directories."""
+        monkeypatch.setattr(
+            "discovery.subprocess.run",
+            lambda *_args, **_kwargs: type(
+                "R", (),
+                {"returncode": 0, "stdout": "libraries/timing/src/chumicro_timing/core.py\n"},
+            )(),
+        )
+        result = detect_changed_packages()
+        assert result is not None
+        names = [package_dir.name for package_dir in result]
+        assert "timing" in names
+
+    def test_git_unavailable_returns_none(self, monkeypatch):
+        """When git is not available, returns None."""
+        def raise_not_found(*_args, **_kwargs):
+            raise FileNotFoundError("git not found")
+
+        monkeypatch.setattr("discovery.subprocess.run", raise_not_found)
+        assert detect_changed_packages() is None
+
+
+class TestResolveScope:
+    """Tests for resolve_scope."""
+
+    def test_all_packages(self):
+        """--all returns all discovered packages."""
+        result = resolve_scope(all_packages=True)
+        assert len(result) > 0
+        names = {package_dir.name for package_dir in result}
+        assert "timing" in names
+
+    def test_specific_libraries(self):
+        """--libraries returns only the named packages."""
+        result = resolve_scope(libraries="timing")
+        assert len(result) == 1
+        assert result[0].name == "timing"
+
+    def test_unknown_library_exits(self):
+        """Unknown library name raises SystemExit."""
+        with pytest.raises(SystemExit):
+            resolve_scope(libraries="nonexistent")
+
+
+class TestPythonpathEnvironment:
+    """Tests for pythonpath_environment."""
+
+    def test_returns_dict(self):
+        """Returns a dict with PYTHONPATH set."""
+        environment = pythonpath_environment()
+        assert isinstance(environment, dict)
+        assert "PYTHONPATH" in environment
+
+    def test_includes_source_roots(self):
+        """PYTHONPATH contains library source roots."""
+        environment = pythonpath_environment()
+        pythonpath = environment["PYTHONPATH"]
+        assert "timing" in pythonpath
+
+    def test_preserves_existing_path(self, monkeypatch):
+        """Existing PYTHONPATH entries are preserved."""
+        monkeypatch.setenv("PYTHONPATH", "/existing/path")
+        environment = pythonpath_environment()
+        assert "/existing/path" in environment["PYTHONPATH"]
+
+    def test_includes_path(self):
+        """PATH from os.environ is preserved."""
+        environment = pythonpath_environment()
+        assert "PATH" in environment
 

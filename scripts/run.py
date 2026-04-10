@@ -295,6 +295,39 @@ def test_cpython(
     return overall_exit_code
 
 
+def test_scripts(
+    *,
+    exit_first: bool = False,
+    verbose: bool = False,
+) -> int:
+    """Run pytest on scripts/tests/ — infrastructure test suite.
+
+    Scripts tests run without a per-library coverage gate since scripts
+    are subprocess-heavy orchestration code with a different coverage
+    profile than publishable library code.
+    """
+    test_path = "scripts/tests"
+    if not (ROOT / test_path).is_dir():
+        print("No scripts/tests/ directory found.")
+        return 0
+
+    extra_args: list[str] = []
+    if exit_first:
+        extra_args.append("-x")
+    if verbose:
+        extra_args.append("-v")
+
+    return run_command(
+        [
+            PYTHON, "-m", "pytest",
+            "-W", "error",
+            test_path,
+            *extra_args,
+        ],
+        environment=pythonpath_environment(),
+    )
+
+
 def build() -> int:
     """Build all publishable package distributions."""
     packages = find_publishable_packages()
@@ -518,6 +551,7 @@ def preflight(
         ("build", build),
         ("docs", lambda: docs(all_packages)),
         (f"test (python {python_version})", lambda: test_cpython(all_packages)),
+        ("test-scripts", test_scripts),
         ("verify-examples", lambda: verify_examples(all_packages)),
         ("check-version", check_version),
         ("check-api", check_api),
@@ -739,6 +773,18 @@ def _build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("check-version", help="check VERSION enforcement for changed libraries")
     subparsers.add_parser("check-api", help="check API breakages against last release tag")
 
+    test_scripts_parser = subparsers.add_parser(
+        "test-scripts", help="run scripts/ infrastructure tests",
+    )
+    test_scripts_parser.add_argument(
+        "-x", "--exit-first", action="store_true",
+        help="stop on first failure",
+    )
+    test_scripts_parser.add_argument(
+        "-v", "--verbose", action="store_true",
+        help="verbose test output",
+    )
+
     deploy_parser = subparsers.add_parser(
         "docs-deploy",
         help="deploy versioned docs to gh-pages (used by CI)",
@@ -854,6 +900,10 @@ def main(argv: list[str]) -> int:
     # --- new-library ---
     if args.task == "new-library":
         return new_library(args.name)
+
+    # --- test-scripts ---
+    if args.task == "test-scripts":
+        return test_scripts(exit_first=args.exit_first, verbose=args.verbose)
 
     # --- docs-deploy ---
     if args.task == "docs-deploy":
