@@ -165,7 +165,7 @@ These rules apply to **publishable library code under `libraries/`** — code th
 
 ### Infrastructure code
 
-Code under `scripts/` and `support/` runs **exclusively on CPython**.  Use the full standard library freely.  Do **not** use `const()`, `memoryview`, pre-allocated buffers, or other embedded patterns.  Prefer f-strings for readability.
+Code under `scripts/` runs **exclusively on CPython**.  Most of `support/` is also CPython-only, **except `support/test_harness/`** which runs on all three runtimes — treat it like library code for import and memory purposes.  In CPython-only code, use the full standard library freely.  Do **not** use `const()`, `memoryview`, pre-allocated buffers, or other embedded patterns.  Prefer f-strings for readability.
 
 ### Naming & style
 

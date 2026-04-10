@@ -79,8 +79,10 @@ ports: annotation overhead is **zero bytes of heap RAM** and
    `preflight`.  The docs build captures stderr and fails if griffe
    reports any warnings about missing or malformed docstring sections.
 
-6. **Infrastructure code** (`scripts/`, `support/`) may additionally
-   use `typing` imports since it runs only on CPython.
+6. **Infrastructure code** (`scripts/`, `support/` except `test_harness/`)
+   may additionally use `typing` imports since it runs only on CPython.
+   `support/test_harness/` runs on all three runtimes — treat it like
+   library code.
 
 [google-style]: https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings
 
