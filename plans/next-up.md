@@ -2,7 +2,7 @@
 
 ## Now
 
-- [ ] Enable GitHub Discussions (Q&A, Ideas, Show and Tell categories) — manual step in repo settings.
+(empty — pick from Next)
 
 ## Next
 
@@ -25,6 +25,7 @@
   - Control GC explicitly during benchmarks so allocation measurements are stable and reproducible across runs.
   - Define per-benchmark thresholds that fail the run if exceeded, catching regressions over time.
   - Benchmarks may be slow; they should not run as part of the standard `test` path. Consider a separate `bench` task or a deeper test tier that can also run in CI on a schedule.
+- [ ] Populate "What's new" sections in library guides when the next VERSION bumps happen. Currently all are placeholders.
 
 ## Blocked / waiting
 
@@ -32,10 +33,6 @@
 
 ## Done (recent)
 
+- [x] Contributor experience audit v3: root README "Your first program" example and REPL snippet, circup bundle explanation, install section cleanup (details blocks for experimental/channel switching in all library READMEs), common-mistakes FAQ in CONTRIBUTING.md, FakeTicks.ticks_add overflow validation, self-contained testing.py constants (fixes CircuitPython compat import skip), architecture guide, editable-install clarification in Other Editors guide.
+- [x] Enable GitHub Discussions (Q&A, Ideas, Show and Tell categories).
 - [x] Contributor experience audit v2: README reorder (Installation before Development setup), dependency graph, cross-library references (timing ↔ runner), "What's new" sections in all library guides, PR template simplification (N/A defaults), coverage hint in `run.py`, `CLAUDE.md` and `.cursorrules` pointers, GitHub Discussions link in CONTRIBUTING.md and issue template config.
-- [x] Create CONTRIBUTING.md, contributor sub-guides (first-pr, new-library, releases), and GitHub issue templates (bug report, feature request, stable promotion).
-- [x] Rationalize `plans/` folder: remove duplicated prompt files, transform workspace-history into a knowledge document, trim done workstreams, simplify end-of-session checklist.
-- [x] Promote MicroPython and CircuitPython CI jobs to required status checks, gated by platform targeting (Decision 0011).
-- [x] Validate PR flow and branch protection rulesets end-to-end.
-- [x] Deploy docs to GitHub Pages via mike (`docs-deploy.yml`).
-- [x] Complete CI/release infrastructure: PyPI trusted publishing (OIDC), all four libraries published to PyPI, single-branch model (Decision 0019), branch protection rulesets enforced.

@@ -24,7 +24,7 @@ source .venv/bin/activate
 
 The workspace setup does two things that make imports resolve in any editor:
 
-1. **Editable installs** — `prepare_workspace.py` runs `pip install -e` for every library. This registers each package with Python's import system, so `from chumicro_timing import ticks_ms` works in any tool that uses the venv's interpreter — debuggers, REPLs, linters, test runners, and language servers.
+1. **Editable installs** — `prepare_workspace.py` runs `pip install -e` for every library. This registers each package with Python's import system, so `from chumicro_timing import ticks_ms` works in any tool that uses the venv's interpreter — debuggers, REPLs, linters, test runners, and language servers. (PyCharm uses source-root configuration instead of relying on editable installs; for most other editors, the editable installs are what make imports work.)
 
 2. **`pyrightconfig.json`** — sits at the project root with `extraPaths` pointing to every library's `src/` directory. Any editor that uses [Pyright](https://github.com/microsoft/pyright) as its language server (directly or via [basedpyright](https://github.com/DetachHead/basedpyright), [pylsp](https://github.com/python-lsp/python-lsp-server), etc.) picks this up automatically.
 

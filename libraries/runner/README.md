@@ -8,10 +8,9 @@ Register services with check/handle methods, add periodic callbacks, and the run
 
 ### CircuitPython (circup)
 
-Register the ChuMicro bundle (remove the other channel first if switching):
+circup uses bundles to find third-party packages — register the ChuMicro bundle once, then install by name:
 
 ```bash
-circup bundle-remove ChuMicro/ChuMicro-Bundle-Experimental   # skip if never added
 circup bundle-add ChuMicro/ChuMicro-Bundle
 circup install chumicro-runner
 ```
@@ -28,12 +27,13 @@ mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_runner
 pip install chumicro-runner
 ```
 
-### Experimental (pre-release) versions
+<details>
+<summary>Experimental (pre-release) versions and channel switching</summary>
 
 Pre-release builds are published automatically when a library version is bumped.  Do not register both bundles simultaneously — circup may pick either version for a given package.
 
 ```bash
-# CircuitPython
+# CircuitPython — switch to experimental
 circup bundle-remove ChuMicro/ChuMicro-Bundle              # skip if never added
 circup bundle-add ChuMicro/ChuMicro-Bundle-Experimental
 circup install chumicro-runner
@@ -44,6 +44,8 @@ mpremote mip install github:ChuMicro/ChuMicro-Bundle-Experimental/chumicro_runne
 # CPython
 pip install chumicro-runner-experimental
 ```
+
+</details>
 
 ## Quick example
 

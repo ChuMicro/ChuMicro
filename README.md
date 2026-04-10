@@ -41,6 +41,8 @@ Pick the install method for your runtime — swap `chumicro-timing` for whicheve
 
 **CircuitPython (circup):**
 
+circup uses bundles to find third-party packages — register the ChuMicro bundle once, then install any library by name:
+
 ```bash
 circup bundle-add ChuMicro/ChuMicro-Bundle
 circup install chumicro-timing
@@ -58,12 +60,53 @@ mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_timing
 pip install chumicro-timing
 ```
 
-Experimental (pre-release) builds are also available — see each library's README for details.
+<details>
+<summary>Experimental (pre-release) builds and channel switching</summary>
+
+Pre-release builds are published automatically when a library version is bumped. Do not register both bundles simultaneously — circup may pick either version for a given package.
+
+```bash
+# CircuitPython — switch to experimental
+circup bundle-remove ChuMicro/ChuMicro-Bundle              # skip if never added
+circup bundle-add ChuMicro/ChuMicro-Bundle-Experimental
+circup install chumicro-timing
+
+# MicroPython
+mpremote mip install github:ChuMicro/ChuMicro-Bundle-Experimental/chumicro_timing
+
+# CPython
+pip install chumicro-timing-experimental
+```
 
 | Channel | Bundle repo | Source |
 |---|---|---|
 | **Stable** | [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) | tagged releases |
 | **Experimental** | [ChuMicro-Bundle-Experimental](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental) | `main` |
+
+</details>
+
+### Your first program
+
+A non-blocking blink — the embedded hello world:
+
+```python
+from chumicro_timing import Heartbeat, ticks_ms
+
+heartbeat = Heartbeat(period_ms=1000)
+
+while True:
+    now = ticks_ms()
+    if heartbeat.poll(now):
+        print("one second elapsed")  # or: led.value = not led.value
+```
+
+Or try it in the REPL:
+
+```python
+>>> from chumicro_timing import ticks_ms
+>>> ticks_ms()
+42387
+```
 
 ## Documentation
 
@@ -178,6 +221,7 @@ We welcome contributors of all experience levels. Start with [`CONTRIBUTING.md`]
 - **[Command Line](docs/contributing/development-cli.md)**, **[PyCharm](docs/contributing/development-pycharm.md)**, **[VS Code](docs/contributing/development-vscode.md)**, or **[Other Editors](docs/contributing/development-other-editors.md)** — pick your environment
 - **[Creating a Pull Request](docs/contributing/pull-requests.md)** — submitting your work
 - **[Adding a New Library](docs/contributing/new-library.md)** — publishing your own library
+- **[How the Codebase Works](docs/contributing/architecture.md)** — understand the machinery
 - **[Releases and Promotion](docs/contributing/releases.md)** — how publishing works
 - **[Working with Agents](docs/contributing/working-with-agents.md)** — using AI coding agents on this project
 
