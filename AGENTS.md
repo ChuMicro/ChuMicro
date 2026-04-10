@@ -12,6 +12,7 @@ Hard rules an agent must never violate:
 - **No `async`/`await`, no ISRs** — use the tick-based runner pattern (Decision 0014).
 - **Constructor injection** for time, I/O, network — fakes in `testing.py` submodule (Decision 0010).
 - **f-strings everywhere**, `const()` / `memoryview` / pre-allocated buffers in library code only.
+- **No single-letter variables, no cryptic abbreviations** — spell names out.  `_` is the only allowed single-letter name.  See Decision 0022 for the allowed-abbreviation list.
 - **Standard annotations, no `typing` imports** — use type annotations on signatures; do not `import typing` in library code (Decision 0021).  Use PEP 604/585 syntax (`int | None`, `list[int]`).  Docstrings carry descriptions only — **`Args:`** uses `name: description`, **`Returns:`** uses just a description.
 - **Check `plans/decisions/`** before proposing structural or pattern changes.
 - **Never hard-code secrets.**
@@ -28,6 +29,7 @@ Common pitfalls:
 - Don't re-propose something already decided in `plans/decisions/` without referencing the original decision.
 - Don't use heredocs, `echo`, `printf`, or `cat` to create multi-line content in the terminal — write files with file tools instead (see `run-script` skill).
 - Don't run large-output commands (`preflight`, `test --all`, `lint`) without piping through `tail`, `head`, or `grep` (see `large-output` skill).
+- Don't use single-letter variables (`n`, `t`, `s`, `e`, `f`) or abbreviations not on the allowed list (`svc`, `cb`, `ctx`) — see Decision 0022.
 
 ## Agent operations
 
@@ -167,7 +169,7 @@ Code under `scripts/` and `support/` runs **exclusively on CPython**.  Use the f
 
 ### Naming & style
 
-PEP 8.  Descriptive names (`service`, `test_device`), not abbreviations (`svc`, `dut`).  Document **all** functions and methods with concise docstrings.  Use standard Python type annotations on function signatures (Decision 0021).  Do not `import typing` in library code — use PEP 604 (`int | None`) and PEP 585 (`list[int]`) syntax instead.  Docstrings use Google-style sections for descriptions: `Args:` uses `name: description`, `Returns:` uses just the description, `Raises:` uses `ExceptionType: description`.  When writing CircuitPython drivers: initialize hardware in `__init__`, provide `deinit()` or context-manager support.
+PEP 8.  Descriptive names (`service`, `test_device`), not abbreviations (`svc`, `dut`).  No single-letter variable names except `_` (throwaway).  Common idioms like `e`, `f`, `i` must be spelled out (`error`, `file`, `index`).  A short list of allowed abbreviations (`dir`, `args`, `cmd`, `env`, `err`, `msg`, `ref`, `dep`, `config`, `info`, `spec`, `params`) is in Decision 0022 — if it's not on the list, spell it out.  Document **all** functions and methods with concise docstrings.  Use standard Python type annotations on function signatures (Decision 0021).  Do not `import typing` in library code — use PEP 604 (`int | None`) and PEP 585 (`list[int]`) syntax instead.  Docstrings use Google-style sections for descriptions: `Args:` uses `name: description`, `Returns:` uses just the description, `Raises:` uses `ExceptionType: description`.  When writing CircuitPython drivers: initialize hardware in `__init__`, provide `deinit()` or context-manager support.
 
 ### API & compatibility
 

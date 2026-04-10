@@ -548,7 +548,7 @@ def _test_runtime_compat(
     platform: str,
     label: str,
     resolve_binary: Callable[[], str | None],
-    prepare_fn: Callable[[], int],
+    prepare_function: Callable[[], int],
 ) -> int:
     """Run cross-runtime unit tests for a single runtime.
 
@@ -562,7 +562,7 @@ def _test_runtime_compat(
     binary = resolve_binary()
     if binary is None:
         print(f"{label} binary not found. Preparing unix-port runtime first.")
-        prepare_result = prepare_fn()
+        prepare_result = prepare_function()
         if prepare_result != 0:
             print(f"{label} preparation failed.")
             return prepare_result

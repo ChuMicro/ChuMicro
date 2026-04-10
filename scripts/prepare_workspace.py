@@ -128,7 +128,7 @@ def _check_python_version(python: Path | None = None) -> None:
     else:
         result = subprocess.run(
             [str(python), "-c",
-             "import sys; print('.'.join(str(v) for v in sys.version_info[:3]))"],
+             "import sys; print('.'.join(str(part) for part in sys.version_info[:3]))"],
             capture_output=True, text=True, cwd=ROOT,
         )
         if result.returncode != 0:

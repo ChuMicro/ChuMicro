@@ -34,14 +34,14 @@ def _is_chumicro_module(name: str) -> bool:
 
 def _check_imports(
     tree: ast.Module,
-    rel_path: str,
+    relative_path: str,
     hardware: bool,
 ) -> bool:
     """Walk the AST and verify that all imports resolve.
 
     Args:
         tree: Parsed AST of the example file.
-        rel_path: Relative path to the file (for error messages).
+        relative_path: Relative path to the file (for error messages).
         hardware: Whether the file is a hardware-specific example.
 
     Returns:
@@ -57,7 +57,7 @@ def _check_imports(
                     importlib.import_module(alias.name)
                 except ImportError:
                     print(
-                        f"  FAIL: {rel_path}  "
+                        f"  FAIL: {relative_path}  "
                         f"(cannot import module '{alias.name}')"
                     )
                     ok = False
@@ -70,7 +70,7 @@ def _check_imports(
                 module = importlib.import_module(node.module)
             except ImportError:
                 print(
-                    f"  FAIL: {rel_path}  "
+                    f"  FAIL: {relative_path}  "
                     f"(cannot import module '{node.module}')"
                 )
                 ok = False
@@ -78,7 +78,7 @@ def _check_imports(
             for alias in node.names:
                 if not hasattr(module, alias.name):
                     print(
-                        f"  FAIL: {rel_path}  "
+                        f"  FAIL: {relative_path}  "
                         f"('{node.module}' has no attribute "
                         f"'{alias.name}')"
                     )
@@ -123,8 +123,8 @@ def verify_examples(package_dirs: list[Path]) -> int:
             return 0
 
         failures = 0
-        for rel_path, py_file in examples:
-            print(f"  checking {rel_path}")
+        for relative_path, py_file in examples:
+            print(f"  checking {relative_path}")
             source = py_file.read_text(encoding="utf-8")
             hardware = py_file.name.startswith(_HARDWARE_PREFIXES)
 
@@ -132,15 +132,15 @@ def verify_examples(package_dirs: list[Path]) -> int:
             try:
                 tree = ast.parse(source, filename=str(py_file))
             except SyntaxError as exc:
-                print(f"  FAIL: {rel_path}  (syntax error: {exc})")
+                print(f"  FAIL: {relative_path}  (syntax error: {exc})")
                 failures += 1
                 continue
 
             # 2. Verify imports.
-            if not _check_imports(tree, rel_path, hardware):
+            if not _check_imports(tree, relative_path, hardware):
                 failures += 1
             else:
-                label = f"  OK:   {rel_path}"
+                label = f"  OK:   {relative_path}"
                 if hardware:
                     label += "  (hardware)"
                 print(label)

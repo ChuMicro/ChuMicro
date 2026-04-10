@@ -77,8 +77,8 @@ def inject_landing_page(branch: str) -> None:
     """
     try:
         from generate_landing_page import generate
-    except Exception as exc:
-        print(f"  Landing page skipped: {exc}")
+    except Exception as error:
+        print(f"  Landing page skipped: {error}")
         return
 
     html = generate()
