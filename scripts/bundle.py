@@ -429,8 +429,7 @@ def generate_bundle_readme(
         "> ⚠️ **Pre-release channel** — these builds come from the "
         "`main` branch and may contain breaking changes."
         if experimental
-        else "> **Stable channel** — production-ready releases from the "
-        "`main` branch."
+        else "> **Stable channel** — production-ready tagged releases."
     )
 
 
