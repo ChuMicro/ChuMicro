@@ -1,0 +1,276 @@
+"""Tests for bundle.py — bundle staging, manifest generation, and utilities."""
+
+from pathlib import Path
+
+from bundle import (
+    EXPERIMENTAL_BUNDLE_REPO,
+    STABLE_BUNDLE_REPO,
+    _collect_library_metadata,
+    _derive_bundle_id,
+    _find_bundle_modules,
+    _read_chumicro_dependencies,
+    build_circup_zips,
+    generate_bundle_readme,
+    next_date_tag,
+    patch_experimental,
+)
+
+
+class TestDeriveBundleId:
+    """Tests for _derive_bundle_id."""
+
+    def test_stable_bundle(self):
+        """Stable bundle name converts correctly."""
+        assert _derive_bundle_id("ChuMicro-Bundle") == "chumicro-bundle"
+
+    def test_experimental_bundle(self):
+        """Experimental bundle name converts correctly."""
+        assert _derive_bundle_id("ChuMicro-Bundle-Experimental") == "chumicro-bundle-experimental"
+
+    def test_underscores_become_hyphens(self):
+        """Underscores are replaced with hyphens."""
+        assert _derive_bundle_id("Some_Repo_Name") == "some-repo-name"
+
+
+class TestFindBundleModules:
+    """Tests for _find_bundle_modules."""
+
+    def test_finds_python_files(self, tmp_path: Path):
+        """Discovers .py files under the package directory."""
+        package_dir = tmp_path / "src" / "chumicro_example"
+        package_dir.mkdir(parents=True)
+        (package_dir / "__init__.py").write_text("")
+        (package_dir / "core.py").write_text("# core")
+        (package_dir / "testing.py").write_text("# testing")
+
+        name, found_dir, files = _find_bundle_modules(tmp_path)
+        assert name == "chumicro_example"
+        assert found_dir == package_dir
+        assert len(files) == 3
+        filenames = {file.name for file in files}
+        assert filenames == {"__init__.py", "core.py", "testing.py"}
+
+    def test_skips_pycache(self, tmp_path: Path):
+        """__pycache__ files are excluded."""
+        package_dir = tmp_path / "src" / "chumicro_example"
+        package_dir.mkdir(parents=True)
+        (package_dir / "__init__.py").write_text("")
+        cache_dir = package_dir / "__pycache__"
+        cache_dir.mkdir()
+        (cache_dir / "core.cpython-311.pyc").write_text("")
+
+        _, _, files = _find_bundle_modules(tmp_path)
+        assert len(files) == 1  # only __init__.py
+
+
+class TestReadChumicroDependencies:
+    """Tests for _read_chumicro_dependencies."""
+
+    def test_no_dependencies(self, tmp_path: Path):
+        """Library with no chumicro dependencies returns empty list."""
+        (tmp_path / "pyproject.toml").write_text(
+            '[project]\nname = "chumicro-test"\n'
+        )
+        assert _read_chumicro_dependencies(tmp_path) == []
+
+    def test_chumicro_dependencies(self, tmp_path: Path):
+        """Library with chumicro dependencies returns them."""
+        (tmp_path / "pyproject.toml").write_text(
+            '[project]\nname = "chumicro-test"\n'
+            'dependencies = ["chumicro-timing>=0.1", "requests"]\n'
+        )
+        result = _read_chumicro_dependencies(tmp_path)
+        assert result == ["chumicro-timing>=0.1"]
+
+    def test_multiple_chumicro_dependencies(self, tmp_path: Path):
+        """Multiple chumicro dependencies are all returned."""
+        (tmp_path / "pyproject.toml").write_text(
+            '[project]\nname = "chumicro-test"\n'
+            'dependencies = ["chumicro-timing>=0.1", "chumicro-runner>=0.2"]\n'
+        )
+        result = _read_chumicro_dependencies(tmp_path)
+        assert len(result) == 2
+
+
+class TestNextDateTag:
+    """Tests for next_date_tag."""
+
+    def test_no_existing_tags(self, tmp_path: Path, monkeypatch):
+        """No existing tags returns today's date."""
+        # Create a git repo so the git command works.
+        import subprocess
+
+        subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)
+        subprocess.run(
+            ["git", "commit", "--allow-empty", "-m", "init"],
+            cwd=tmp_path, capture_output=True, check=True,
+        )
+
+        tag = next_date_tag(tmp_path)
+        # Should be a YYYYMMDD format string.
+        assert len(tag) == 8
+        assert tag.isdigit()
+
+    def test_one_existing_tag(self, tmp_path: Path):
+        """One existing tag for today returns today.1."""
+        import subprocess
+        from datetime import datetime, timezone
+
+        today = datetime.now(timezone.utc).strftime("%Y%m%d")  # noqa: UP017
+
+        subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)
+        subprocess.run(
+            ["git", "commit", "--allow-empty", "-m", "init"],
+            cwd=tmp_path, capture_output=True, check=True,
+        )
+        subprocess.run(
+            ["git", "tag", today],
+            cwd=tmp_path, capture_output=True, check=True,
+        )
+
+        tag = next_date_tag(tmp_path)
+        assert tag == f"{today}.1"
+
+    def test_multiple_existing_tags(self, tmp_path: Path):
+        """Multiple existing tags for today returns next suffix."""
+        import subprocess
+        from datetime import datetime, timezone
+
+        today = datetime.now(timezone.utc).strftime("%Y%m%d")  # noqa: UP017
+
+        subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)
+        subprocess.run(
+            ["git", "commit", "--allow-empty", "-m", "init"],
+            cwd=tmp_path, capture_output=True, check=True,
+        )
+        for tag_name in [today, f"{today}.1", f"{today}.2"]:
+            subprocess.run(
+                ["git", "tag", tag_name],
+                cwd=tmp_path, capture_output=True, check=True,
+            )
+
+        tag = next_date_tag(tmp_path)
+        assert tag == f"{today}.3"
+
+
+class TestPatchExperimental:
+    """Tests for patch_experimental."""
+
+    def test_patches_pyproject(self, tmp_path: Path):
+        """Patches the package name, bundle URL, and docs URL."""
+        pyproject_content = (
+            '[project]\n'
+            'name = "chumicro-timing"\n'
+            '\n'
+            '[project.urls]\n'
+            'Bundle = "https://github.com/ChuMicro/ChuMicro-Bundle"\n'
+            'Documentation = "https://chumicro.github.io/ChuMicro/timing/stable/"\n'
+        )
+        library_dir = tmp_path / "timing"
+        library_dir.mkdir()
+        (library_dir / "pyproject.toml").write_text(pyproject_content)
+
+        patch_experimental(library_dir)
+
+        patched = (library_dir / "pyproject.toml").read_text()
+        assert 'name = "chumicro-timing-experimental"' in patched
+        assert "ChuMicro-Bundle-Experimental" in patched
+        assert '/experimental/"' in patched
+        assert '/stable/"' not in patched
+
+
+class TestBuildCircupZips:
+    """Tests for build_circup_zips."""
+
+    def test_creates_zip_files(self, tmp_path: Path):
+        """Creates source and bytecode zip bundles."""
+        bundle_dir = tmp_path / "bundle"
+        output_dir = tmp_path / "output"
+        package_dir = bundle_dir / "chumicro_example"
+        package_dir.mkdir(parents=True)
+
+        (package_dir / "__init__.py").write_text("# init")
+        (package_dir / "__init__.mpy").write_bytes(b"\x00mpy")
+        (package_dir / "core.py").write_text("# core")
+        (package_dir / "core.mpy").write_bytes(b"\x00mpy")
+
+        zips = build_circup_zips(
+            bundle_dir, output_dir, "ChuMicro-Bundle", date_tag="20260101",
+        )
+        assert len(zips) == 2
+        assert all(zip_path.exists() for zip_path in zips)
+
+        # Verify filenames follow the circup naming convention.
+        zip_names = {zip_path.name for zip_path in zips}
+        assert "chumicro-bundle-py-20260101.zip" in zip_names
+        assert "chumicro-bundle-10.x-mpy-20260101.zip" in zip_names
+
+    def test_no_packages_returns_empty(self, tmp_path: Path):
+        """Empty bundle directory returns empty list."""
+        bundle_dir = tmp_path / "bundle"
+        bundle_dir.mkdir()
+        output_dir = tmp_path / "output"
+
+        zips = build_circup_zips(
+            bundle_dir, output_dir, "ChuMicro-Bundle", date_tag="20260101",
+        )
+        assert zips == []
+
+
+class TestCollectLibraryMetadata:
+    """Tests for _collect_library_metadata (uses real workspace)."""
+
+    def test_finds_libraries(self):
+        """Discovers metadata for existing libraries."""
+        from discovery import ROOT
+
+        metadata = _collect_library_metadata(ROOT)
+        assert len(metadata) > 0
+        names = {entry["name"] for entry in metadata}
+        assert "timing" in names
+
+    def test_metadata_has_expected_keys(self):
+        """Each metadata entry has the expected keys."""
+        from discovery import ROOT
+
+        metadata = _collect_library_metadata(ROOT)
+        for entry in metadata:
+            assert "name" in entry
+            assert "package_name" in entry
+            assert "version" in entry
+            assert "description" in entry
+
+
+class TestGenerateBundleReadme:
+    """Tests for generate_bundle_readme."""
+
+    def test_stable_readme(self):
+        """Stable README contains expected content."""
+        from discovery import ROOT
+
+        readme = generate_bundle_readme(ROOT)
+        assert STABLE_BUNDLE_REPO in readme
+        assert "circup bundle-add" in readme
+        assert "mip install" in readme
+        assert "pip install" in readme
+
+    def test_experimental_readme(self):
+        """Experimental README contains warning banner."""
+        from discovery import ROOT
+
+        readme = generate_bundle_readme(ROOT, experimental=True)
+        assert EXPERIMENTAL_BUNDLE_REPO in readme
+        assert "Pre-release" in readme
+
+
+class TestBundleRepoConstants:
+    """Tests for bundle repo name constants."""
+
+    def test_stable_repo_name(self):
+        """Stable bundle repo has expected name."""
+        assert STABLE_BUNDLE_REPO == "ChuMicro-Bundle"
+
+    def test_experimental_repo_name(self):
+        """Experimental bundle repo has expected name."""
+        assert EXPERIMENTAL_BUNDLE_REPO == "ChuMicro-Bundle-Experimental"
+
