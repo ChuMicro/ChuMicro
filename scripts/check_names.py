@@ -1,9 +1,8 @@
-"""Lint for single-letter variable names (Decision 0022).
+"""Lint for single-letter variable names and banned abbreviations (Decision 0022).
 
-Walks Python files and flags single-letter variable names, function
-parameters, for-loop targets, comprehension variables, with-statement
-targets, and exception handler names.  The only allowed single-letter
-name is ``_`` (throwaway / unused binding).
+Walks Python files and flags single-letter variable names and specific
+short abbreviations that should be spelled out.  The only allowed
+single-letter name is ``_`` (throwaway / unused binding).
 
 Suppression: add ``# noqa: CHU001`` on the flagged line.
 
@@ -23,6 +22,7 @@ from discovery import ROOT, discover_ruff_paths
 
 _RULE_CODE = "CHU001"
 _ALLOWED = {"_"}
+_BANNED = {"env", "buf", "src", "cmd", "msg", "err", "ref"}
 # Constructed dynamically so ruff doesn't interpret it as a directive.
 _NOQA_TAG = "# " + "noqa"
 
@@ -45,15 +45,15 @@ def _read_noqa_lines(source: str) -> set[int]:
     return suppressed
 
 
-def _collect_names(tree: ast.Module) -> list[tuple[int, str]]:
-    """Walk the AST and collect all single-letter binding names.
+def _collect_names(tree: ast.Module) -> list[tuple[int, str, str]]:
+    """Walk the AST and collect all flagged binding names.
 
-    Returns a list of ``(line_number, name)`` tuples.
+    Returns a list of ``(line_number, name, reason)`` tuples.
 
     Args:
         tree: Parsed AST of the file.
     """
-    hits: list[tuple[int, str]] = []
+    hits: list[tuple[int, str, str]] = []
 
     for node in ast.walk(tree):
         targets: list[tuple[int, str]] = []
@@ -72,13 +72,15 @@ def _collect_names(tree: ast.Module) -> list[tuple[int, str]]:
 
         for lineno, name in targets:
             if len(name) == 1 and name not in _ALLOWED:
-                hits.append((lineno, name))
+                hits.append((lineno, name, "single-letter name"))
+            elif name in _BANNED:
+                hits.append((lineno, name, "banned abbreviation"))
 
     return hits
 
 
 def check_file(filepath: Path, source: str | None = None) -> list[str]:
-    """Check a single file for single-letter names.
+    """Check a single file for flagged names.
 
     Args:
         filepath: Path to the Python file.
@@ -98,11 +100,11 @@ def check_file(filepath: Path, source: str | None = None) -> list[str]:
     noqa_lines = _read_noqa_lines(source)
     errors: list[str] = []
 
-    for lineno, name in _collect_names(tree):
+    for lineno, name, reason in _collect_names(tree):
         if lineno in noqa_lines:
             continue
         relative = filepath.relative_to(ROOT) if filepath.is_relative_to(ROOT) else filepath
-        errors.append(f"{relative}:{lineno}: {_RULE_CODE} single-letter name '{name}'")
+        errors.append(f"{relative}:{lineno}: {_RULE_CODE} {reason} '{name}'")
 
     return errors
 
@@ -133,7 +135,7 @@ def check_paths(paths: list[str]) -> int:
     if all_errors:
         for error in all_errors:
             print(error)
-        print(f"\nFound {len(all_errors)} single-letter name(s). "
+        print(f"\nFound {len(all_errors)} naming violation(s). "
               f"Rename them or add '# noqa: {_RULE_CODE}' to suppress.")
         return 1
     return 0

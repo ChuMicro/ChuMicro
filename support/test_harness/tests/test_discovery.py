@@ -13,10 +13,10 @@ from chumicro_test_harness import discovery
 
 def _make_library(root: str, name: str, test_files: list[str] | None = None):
     """Create a minimal library layout under *root*/libraries/*name*."""
-    src = os.path.join(root, "libraries", name, "src", f"chumicro_{name}")
-    os.makedirs(src, exist_ok=True)
+    source_dir = os.path.join(root, "libraries", name, "src", f"chumicro_{name}")
+    os.makedirs(source_dir, exist_ok=True)
     # Create a minimal __init__.py so the package is importable.
-    with open(os.path.join(src, "__init__.py"), "w") as file:
+    with open(os.path.join(source_dir, "__init__.py"), "w") as file:
         file.write("")
 
     if test_files:
@@ -29,9 +29,9 @@ def _make_library(root: str, name: str, test_files: list[str] | None = None):
 
 def _make_support(root: str, name: str):
     """Create a minimal support package layout under *root*/support/*name*."""
-    src = os.path.join(root, "support", name, "src", f"chumicro_{name}")
-    os.makedirs(src, exist_ok=True)
-    with open(os.path.join(src, "__init__.py"), "w") as file:
+    source_dir = os.path.join(root, "support", name, "src", f"chumicro_{name}")
+    os.makedirs(source_dir, exist_ok=True)
+    with open(os.path.join(source_dir, "__init__.py"), "w") as file:
         file.write("")
 
 

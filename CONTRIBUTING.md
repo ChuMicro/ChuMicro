@@ -194,7 +194,7 @@ These aren't arbitrary — each one traces to a design decision with rationale. 
 | Per-library `pytest` runs | Avoids test-directory collisions ([Decision 0009](plans/decisions/0009-per-library-test-runs.md)) |
 | Standard annotations, no `typing` imports | Both embedded runtimes parse annotations correctly but don't have the `typing` module. Use annotations with built-in types and PEP 604/585 syntax (`int | None`, `list[int]`). Docstrings carry descriptions only — griffe reads types from annotations. ([Decision 0021](plans/decisions/0021-docstring-type-policy.md)) |
 | f-strings for formatting | Use `f"value={x}"` — not `%` or `.format()`. Consistent and readable across all three runtimes |
-| Descriptive names, no single-letter variables | No single-letter variables (except `_`). Spell out `error`, `file`, `index` — not `e`, `f`, `i`. Enforced by `CHU001` linter rule — `python scripts/run.py lint` catches violations ([Decision 0022](plans/decisions/0022-naming-conventions.md)) |
+| Descriptive names, no abbreviations | No single-letter variables (except `_`) and no banned abbreviations (`env`, `buf`, `src`, `cmd`, `msg`, `err`, `ref`). Spell them out. Enforced by `CHU001` linter rule — `python scripts/run.py lint` catches violations ([Decision 0022](plans/decisions/0022-naming-conventions.md)) |
 | `const()` / `memoryview` in library code | Memory efficiency on microcontrollers — see [examples](docs/contributing/new-library.md#memory-efficient-patterns) (not required in `scripts/` or `support/`) |
 
 ## Common mistakes

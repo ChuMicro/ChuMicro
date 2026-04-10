@@ -177,7 +177,7 @@ def test_cpython(
         print("No test directories found for the selected packages.")
         return 0
 
-    env = pythonpath_env()
+    environment = pythonpath_env()
 
     # Clean stale coverage data so combine starts fresh.  Two globs are
     # needed: `.coverage` (the default combined file) and `.coverage.*`
@@ -254,7 +254,7 @@ def test_cpython(
 
             # Unique coverage file per run.
             coverage_name = f".coverage.{package_dir.name}.{run_counter}"
-            run_env = {**env, "COVERAGE_FILE": str(ROOT / coverage_name)}
+            run_env = {**environment, "COVERAGE_FILE": str(ROOT / coverage_name)}
             run_counter += 1
 
             exit_code = run_command(
@@ -267,7 +267,7 @@ def test_cpython(
                     test_target,
                     *extra_args,
                 ],
-                env=run_env,
+                environment=run_env,
             )
             # Exit code 5 means no tests were collected (e.g. -k filter
             # matched nothing in this library) — not an error.

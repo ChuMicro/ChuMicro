@@ -391,18 +391,18 @@ def test_bool_not_encoded_as_int() -> None:
 def test_stream_pack_unpack() -> None:
     """Stream-based pack/unpack should roundtrip a dict with nested list."""
     obj = {"key": [1, 2, 3]}
-    buf = BytesIO()
-    pack(obj, buf)
-    buf.seek(0)
-    assert unpack(buf) == obj
+    stream = BytesIO()
+    pack(obj, stream)
+    stream.seek(0)
+    assert unpack(stream) == obj
 
 
 def test_stream_roundtrip_simple() -> None:
     """Stream-based pack/unpack should roundtrip a simple string."""
-    buf = BytesIO()
-    pack("hello", buf)
-    buf.seek(0)
-    assert unpack(buf) == "hello"
+    stream = BytesIO()
+    pack("hello", stream)
+    stream.seek(0)
+    assert unpack(stream) == "hello"
 
 
 # ---------------------------------------------------------------------------

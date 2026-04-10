@@ -15,19 +15,19 @@ from pathlib import Path
 from discovery import ROOT, find_publishable_packages
 
 
-def run_command(command: list[str], env: dict[str, str] | None = None) -> int:
+def run_command(command: list[str], environment: dict[str, str] | None = None) -> int:
     """Run a command from the repository root and return its exit code.
 
     Args:
         command: Command and arguments to run.
-        env: Optional environment variables to pass to the subprocess.
+        environment: Optional environment variables to pass to the subprocess.
 
     Returns:
         Process exit code.
     """
     printable = " ".join(command)
     print(f"+ {printable}")
-    return subprocess.run(command, cwd=ROOT, env=env, check=False).returncode
+    return subprocess.run(command, cwd=ROOT, env=environment, check=False).returncode
 
 
 def install_command(python: str | Path | None = None) -> list[str]:

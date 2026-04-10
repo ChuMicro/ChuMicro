@@ -72,12 +72,18 @@ def prepare_micropython() -> int:
         # macOS Clang treats gnu-folding-constant as an error by default,
         # which breaks the MicroPython build.  Not needed on Linux/GCC.
         macos_flags = ["-Wno-error=gnu-folding-constant"] if sys.platform == "darwin" else []
-        env = build_env(*macos_flags)
+        environment = build_env(*macos_flags)
         # Build steps must run in order:
         #   1. mpy-cross — the bytecode compiler, required before the port.
         #   2. ports/unix — the actual unix-port interpreter binary.
-        run_build_command(["make", "-C", str(_SOURCE_DIR / "mpy-cross"), jobs], env=env)
-        run_build_command(["make", "-C", str(_SOURCE_DIR / "ports/unix"), jobs], env=env)
+        run_build_command(
+            ["make", "-C", str(_SOURCE_DIR / "mpy-cross"), jobs],
+            environment=environment,
+        )
+        run_build_command(
+            ["make", "-C", str(_SOURCE_DIR / "ports/unix"), jobs],
+            environment=environment,
+        )
     except subprocess.CalledProcessError as error:
         print(f"Command failed with exit code {error.returncode}: {error.cmd}")
         return error.returncode or 1

@@ -12,7 +12,7 @@ Hard rules an agent must never violate:
 - **No `async`/`await`, no ISRs** — use the tick-based runner pattern (Decision 0014).
 - **Constructor injection** for time, I/O, network — fakes in `testing.py` submodule (Decision 0010).
 - **f-strings everywhere**, `const()` / `memoryview` / pre-allocated buffers in library code only.
-- **No single-letter variables** — `_` is the only exception.  Enforced by `CHU001` in `scripts/check_names.py` (runs as part of `lint`).  Suppress with `# noqa: CHU001` only when matching an upstream API.  See Decision 0022.
+- **No single-letter variables or banned abbreviations** — `_` is the only exception for single-letter.  Banned abbreviations: `env`, `buf`, `src`, `cmd`, `msg`, `err`, `ref` (spell them out).  Enforced by `CHU001` in `scripts/check_names.py` (runs as part of `lint`).  Suppress with `# noqa: CHU001` only when matching an upstream API.  See Decision 0022.
 - **Standard annotations, no `typing` imports** — use type annotations on signatures; do not `import typing` in library code (Decision 0021).  Use PEP 604/585 syntax (`int | None`, `list[int]`).  Docstrings carry descriptions only — **`Args:`** uses `name: description`, **`Returns:`** uses just a description.
 - **Check `plans/decisions/`** before proposing structural or pattern changes.
 - **Never hard-code secrets.**
@@ -29,7 +29,7 @@ Common pitfalls:
 - Don't re-propose something already decided in `plans/decisions/` without referencing the original decision.
 - Don't use heredocs, `echo`, `printf`, or `cat` to create multi-line content in the terminal — write files with file tools instead (see `run-script` skill).
 - Don't run large-output commands (`preflight`, `test --all`, `lint`) without piping through `tail`, `head`, or `grep` (see `large-output` skill).
-- Don't use single-letter variables (`n`, `t`, `s`, `e`, `f`) — the `CHU001` linter rule will catch them.  See Decision 0022.
+- Don't use single-letter variables (`n`, `t`, `s`, `e`, `f`) or banned abbreviations (`env`, `buf`, `src`, `cmd`, `msg`, `err`, `ref`) — the `CHU001` linter rule will catch them.  See Decision 0022.
 
 ## Agent operations
 
