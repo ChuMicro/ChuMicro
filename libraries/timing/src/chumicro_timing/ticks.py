@@ -23,7 +23,7 @@ try:
     from micropython import const
 except ImportError:  # CPython — const() is a no-op on standard Python.
 
-    def const(x: int) -> int:
+    def const(x: int) -> int:  # noqa: CHU001 — matches micropython.const() API
         """Identity fallback so ``const()`` works on CPython."""
         return x
 

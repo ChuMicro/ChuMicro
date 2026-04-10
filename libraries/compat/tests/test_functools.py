@@ -12,9 +12,9 @@ from chumicro_test_harness import raises
 
 def test_partial_freezes_positional_args() -> None:
     """Frozen positional args should be prepended to call-time args."""
-    def add(a: int, b: int) -> int:
+    def add(left: int, right: int) -> int:
         """Return a + b."""
-        return a + b
+        return left + right
 
     add_five = partial(add, 5)
     assert add_five(3) == 8
@@ -52,9 +52,9 @@ def test_partial_combines_positional_and_keyword() -> None:
 
 def test_partial_no_frozen_args() -> None:
     """Partial with no frozen args should behave like a plain call."""
-    def identity(x: object) -> object:
-        """Return x."""
-        return x
+    def identity(value: object) -> object:
+        """Return value."""
+        return value
 
     wrapped = partial(identity)
     assert wrapped(42) == 42
@@ -65,20 +65,20 @@ def test_partial_func_attribute() -> None:
     def original() -> None:
         """Placeholder."""
 
-    p = partial(original)
-    assert p.func is original
+    wrapped = partial(original)
+    assert wrapped.func is original
 
 
 def test_partial_args_attribute() -> None:
     """The .args attribute should be a tuple of frozen positional args."""
-    p = partial(int, "42")
-    assert p.args == ("42",)
+    wrapped = partial(int, "42")
+    assert wrapped.args == ("42",)
 
 
 def test_partial_keywords_attribute() -> None:
     """The .keywords attribute should be a dict of frozen keyword args."""
-    p = partial(int, base=16)
-    assert p.keywords == {"base": 16}
+    wrapped = partial(int, base=16)
+    assert wrapped.keywords == {"base": 16}
 
 
 def test_partial_rejects_non_callable() -> None:
@@ -89,12 +89,12 @@ def test_partial_rejects_non_callable() -> None:
 
 def test_partial_repr() -> None:
     """repr should show the function and frozen args."""
-    p = partial(int, "ff", base=16)
-    r = repr(p)
-    assert "partial(" in r
-    assert "int" in r
-    assert "'ff'" in r
-    assert "base=16" in r
+    wrapped = partial(int, "ff", base=16)
+    result = repr(wrapped)
+    assert "partial(" in result
+    assert "int" in result
+    assert "'ff'" in result
+    assert "base=16" in result
 
 
 def test_partial_multiple_positional_args() -> None:
@@ -105,12 +105,12 @@ def test_partial_multiple_positional_args() -> None:
         """Record all positional args."""
         results.extend(args)
 
-    p = partial(collect, 1, 2)
-    p(3, 4)
+    wrapped = partial(collect, 1, 2)
+    wrapped(3, 4)
     assert results == [1, 2, 3, 4]
 
 
 def test_partial_returns_function_result() -> None:
     """The return value of the wrapped function should be passed through."""
-    p = partial(str.upper)
-    assert p("hello") == "HELLO"
+    wrapped = partial(str.upper)
+    assert wrapped("hello") == "HELLO"

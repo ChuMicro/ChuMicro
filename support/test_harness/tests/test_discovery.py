@@ -67,7 +67,7 @@ def test_discover_source_roots_returns_sorted(tmp_path):
     _make_library(root, "alpha")
 
     roots = discovery.discover_source_roots(root)
-    lib_roots = [r for r in roots if "/libraries/" in r]
+    lib_roots = [path for path in roots if "/libraries/" in path]
 
     assert lib_roots == sorted(lib_roots)
 
@@ -85,8 +85,8 @@ def test_discover_tests_finds_test_files(tmp_path):
     tests = discovery.discover_tests(root)
 
     assert len(tests) == 2
-    assert any(t.endswith("test_one.py") for t in tests)
-    assert any(t.endswith("test_two.py") for t in tests)
+    assert any(test_path.endswith("test_one.py") for test_path in tests)
+    assert any(test_path.endswith("test_two.py") for test_path in tests)
 
 
 def test_discover_tests_ignores_non_test_files(tmp_path):

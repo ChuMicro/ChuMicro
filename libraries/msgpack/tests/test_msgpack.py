@@ -340,13 +340,13 @@ def test_int_key_dict() -> None:
 
 def test_fixmap_boundary() -> None:
     """15-entry dict is the upper bound of fixmap encoding."""
-    value = {i: i * 10 for i in range(15)}
+    value = {index: index * 10 for index in range(15)}
     assert unpackb(packb(value)) == value
 
 
 def test_map16() -> None:
     """16-entry dict should use map16 encoding."""
-    value = {i: i * 10 for i in range(16)}
+    value = {index: index * 10 for index in range(16)}
     assert unpackb(packb(value)) == value
 
 

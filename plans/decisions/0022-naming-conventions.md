@@ -1,4 +1,4 @@
-# Decision 0022: Variable and Parameter Naming Conventions
+# Decision 0022: No Single-Letter Variable Names
 
 Status: `accepted`
 Date: `2026-04-09`
@@ -6,60 +6,24 @@ Related: none
 
 ## Context
 
-The project's naming guidance ("Descriptive names, not abbreviations") has been too vague to prevent regressions.  Single-letter variables and cryptic abbreviations keep appearing in both agent-written and human-written code, requiring repeated cleanup passes.  The existing rule in AGENTS.md's Naming & style section didn't specify what's allowed, what's banned, or why — so every contributor rediscovered the boundary independently.
+Single-letter variable names (`i`, `e`, `p`, `r`, `t`, `d`, etc.) kept appearing in both agent-written and human-written code despite a prose rule in AGENTS.md.  Prose rules are easy to ignore; automated enforcement is not.  Ruff has no built-in rule for variable name length, so a custom check was needed.
 
 ## Decision
 
-### No single-letter variables
+**No single-letter variable names**, enforced by a custom linter (`scripts/check_names.py`, rule `CHU001`).
 
-Single-letter variable names are not allowed, with one exception:
+- `_` is the only allowed single-letter name (throwaway / unused binding).
+- Common Python idioms like `e`, `f`, `i`, `k`, `v` must be spelled out: `error`, `file`, `index`, `key`, `value`.
+- The check runs automatically as part of `python scripts/run.py lint`.
+- Suppress with `# noqa: CHU001` when matching an upstream API (e.g., `micropython.const(x)`).
 
-- `_` — throwaway / unused binding (e.g., `for _ in range(n)`)
-
-Common Python idioms like `e`, `f`, `i`, `k`, `v` must be spelled out: `error`, `file`, `index`, `key`, `value`.  Readability matters more than keystroke savings, especially for contributors reading unfamiliar code across 3+ runtimes.
-
-### Allowed abbreviations
-
-Short forms that a Python developer would understand without surrounding context:
-
-| Abbreviation | Meaning |
-|---|---|
-| `dir` | directory |
-| `args` | arguments |
-| `cmd` | command |
-| `env` | environment |
-| `err` | error |
-| `msg` | message |
-| `ref` | reference (git context) |
-| `dep` / `deps` | dependency / dependencies |
-| `config` | configuration |
-| `info` | information |
-| `spec` | specification |
-| `params` | parameters |
-
-If an abbreviation isn't on this list, spell it out.  The list can grow via a PR that updates this decision — the bar is "would any Python developer recognize this instantly?"
-
-### Banned patterns
-
-| Instead of | Write |
-|---|---|
-| `n` | `count`, `length`, `limit` — whatever it represents |
-| `t` | `tag`, `timestamp`, `target` — whatever it represents |
-| `s` | `text`, `source`, `seconds` |
-| `p` | `path`, `pattern`, `port` |
-| `svc` | `service` |
-| `dut` | `test_device` |
-| `cb` | `callback` |
-| `fn` | `function` or the specific name |
-| `ctx` | `context` |
-| `mgr` | `manager` |
-| `impl` | `implementation` |
-| `tgt` | `target` |
+This decision does **not** restrict short-but-complete words (`ok`, `tag`, `key`, `raw`, `env`, `buf`, `pin`, `led`, `src`, `end`) or widely understood abbreviations (`dir`, `args`, `cmd`, `msg`, `err`, `ref`, `config`).  Those are fine — the rule targets only single-character names where the meaning is invisible without context.
 
 ## Consequences
 
+- `scripts/check_names.py` added, integrated into `lint()` in `run.py`.
+- `CHU001` runs on the same paths ruff scans.
+- All existing single-letter violations fixed or suppressed.
 - AGENTS.md hard rules and common pitfalls updated.
 - CONTRIBUTING.md project rules table updated.
-- No automated enforcement — ruff has no variable-name-length rule.  This is enforced in code review and agent instructions.
-- Existing violations should be fixed when the surrounding code is being modified, not in drive-by cleanup PRs.
-
+- Existing violations are caught on the next `lint` or `preflight` run — no silent regression.

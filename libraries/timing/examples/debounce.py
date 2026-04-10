@@ -42,7 +42,7 @@ _SIGNAL = [
     (5, False),     # bounce
     (285, False),   # idle until cycle repeats
 ]
-_CYCLE_MS = sum(d for d, _ in _SIGNAL)
+_CYCLE_MS = sum(duration for duration, _ in _SIGNAL)
 _start = ticks_ms()
 
 
