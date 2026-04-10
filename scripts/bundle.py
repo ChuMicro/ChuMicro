@@ -453,17 +453,21 @@ manifests for [mip](https://docs.micropython.org/en/latest/reference/packages.ht
 
 ### CircuitPython (circup)
 
-Remove any other ChuMicro bundle first, then register this one:
+Register the ChuMicro bundle once, then install any library by name:
 
 ```bash
-circup bundle-remove {_GITHUB_ORG}/{alt_repo}   # skip if {alt_channel.lower()} was never added
 circup bundle-add {_GITHUB_ORG}/{bundle_repo}
 circup install chumicro-timing   # example
 ```
 
+> If you previously registered the {alt_channel.lower()} bundle, remove it first — \
+circup may pick either version when both are active:
+> ```
+> circup bundle-remove {_GITHUB_ORG}/{alt_repo}
+> ```
+
 ### MicroPython (mip)
 
-Install directly from the bundle repo:
 
 ```bash
 mpremote mip install github:{_GITHUB_ORG}/{bundle_repo}/chumicro_timing   # example
