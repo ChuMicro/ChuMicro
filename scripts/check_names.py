@@ -143,8 +143,10 @@ def check_paths(paths: list[str]) -> int:
     if all_errors:
         for error in all_errors:
             print(error)
-        print(f"\nFound {len(all_errors)} naming violation(s). "
-              f"Rename them or add '# noqa: {_RULE_CODE}' to suppress.")
+        print(f"\nFound {len(all_errors)} naming violation(s).")
+        print("Spell out abbreviations for readability — code is read more than written.")
+        print(f"Fix: rename them, or add '# noqa: {_RULE_CODE}' to suppress.")
+        print("Why: plans/decisions/0022-naming-conventions.md")
         return 1
     return 0
 

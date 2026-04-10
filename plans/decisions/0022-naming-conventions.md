@@ -10,6 +10,12 @@ Single-letter variable names (`i`, `e`, `p`, `r`, `t`, `d`, etc.) kept appearing
 
 Short abbreviations like `env`, `buf`, `src`, `cmd`, `msg`, `err`, `ref` were originally allowed but still caused readability issues — they should be spelled out (`environment`, `buffer`, `source`, `command`, `message`, `error`, `reference`).
 
+## Why this helps
+
+Code is read far more often than it is written.  Descriptive names remove the mental step of translating abbreviations back to their meaning, especially for contributors who are new to the codebase.
+
+A useful side effect: longer names push lines past the 100-character limit, which forces multi-line formatting.  That forced splitting consistently improves readability — each argument on its own line is easier to scan, diff, and annotate with `git blame`.
+
 ## Decision
 
 **No single-letter variable names and no banned abbreviations**, enforced by a custom linter (`scripts/check_names.py`, rule `CHU001`).
