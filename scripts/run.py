@@ -16,6 +16,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from check_api import main as check_api_main
+from check_names import main as check_names_main
 from check_version import main as check_version_main
 from discovery import (
     ROOT,
@@ -80,8 +81,11 @@ def setup() -> int:
 
 
 def lint() -> int:
-    """Run Ruff across all discovered source, test, and script paths."""
-    return run_command([PYTHON, "-m", "ruff", "check", *discover_ruff_paths()])
+    """Run Ruff and the single-letter name check across all source paths."""
+    ruff_result = run_command([PYTHON, "-m", "ruff", "check", *discover_ruff_paths()])
+    if ruff_result != 0:
+        return ruff_result
+    return check_names_main()
 
 
 def _parse_library_filters(

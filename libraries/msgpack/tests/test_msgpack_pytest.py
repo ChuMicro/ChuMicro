@@ -31,5 +31,5 @@ def test_array_too_long_raises() -> None:
 def test_map_too_long_raises() -> None:
     """Maps exceeding 65535 entries should raise OverflowError."""
     with raises(OverflowError):
-        packb({i: None for i in range(65536)})
+        packb({index: None for index in range(65536)})
 

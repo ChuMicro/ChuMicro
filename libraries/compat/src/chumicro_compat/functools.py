@@ -52,8 +52,8 @@ class _PurePythonPartial:
     def __repr__(self) -> str:
         """Return a developer-friendly representation."""
         parts = [repr(self.func)]
-        parts.extend(repr(a) for a in self.args)
-        parts.extend(f"{k}={v!r}" for k, v in self.keywords.items())
+        parts.extend(repr(arg) for arg in self.args)
+        parts.extend(f"{key}={value!r}" for key, value in self.keywords.items())
         return f"functools.partial({', '.join(parts)})"
 
 

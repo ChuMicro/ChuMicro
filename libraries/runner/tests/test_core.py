@@ -126,9 +126,9 @@ def test_task_handle_repr() -> None:
     runner = Runner(ticks=fake)
     handle = runner.add(_GateTask(), period_ms=100)
 
-    r = repr(handle)
-    assert "100" in r
-    assert "active" in r
+    result = repr(handle)
+    assert "100" in result
+    assert "active" in result
 
 
 def test_task_handle_repr_after_remove() -> None:
@@ -812,8 +812,8 @@ def test_run_count_repr() -> None:
     runner = Runner(ticks=fake)
     handle = runner.add(handler=lambda now: None, run_count=5)
 
-    r = repr(handle)
-    assert "run_count=5" in r
+    result = repr(handle)
+    assert "run_count=5" in result
 
 
 # -- start_after_ms --
