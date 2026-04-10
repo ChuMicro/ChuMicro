@@ -87,17 +87,18 @@ These patterns caused real bugs when implemented incorrectly. Follow them exactl
 
 - Root `conftest.py` scans `support/*/src` and `libraries/*/src` for source roots.
 - Adds them to `sys.path` so IDE "run single test" and direct pytest invocations can import library packages.
+- Also adds `scripts/` to `sys.path` so scripts tests (bare-name imports like `from discovery import ROOT`) work when collected from root.
 - Sets `collect_ignore_glob = ["**/functional_tests/**"]` to exclude functional tests.
 - `run.py test` sets PYTHONPATH independently, so the root conftest is a convenience, not a requirement for the test runner.
 
 ### IDE config generation (sync-ide)
 
 - `python scripts/run.py sync-ide` generates five outputs from workspace structure:
-  - `.idea/chumicro.iml` — adds `<sourceFolder>` entries for each `src/` and `tests/` directory.
-  - `.idea/runConfigurations/` — per-task XML run configs (preflight, test, lint, etc.).
-  - `pyrightconfig.json` — sets `extraPaths` for each `src/` directory.
+  - `.idea/chumicro.iml` — adds `<sourceFolder>` entries for each `src/`, `tests/`, and `functional_tests/` directory, plus `scripts/` as a source root and `scripts/tests/` as a test source.
+  - `.idea/runConfigurations/` — per-task XML run configs (preflight, test, test-scripts, lint, etc.).
+  - `pyrightconfig.json` — sets `extraPaths` for each `src/` directory plus `scripts/`.
   - `.vscode/tasks.json` — VS Code task definitions mirroring `run.py` commands.
-  - `.vscode/settings.json` — `python.analysis.extraPaths` for Pylance resolution.
+  - `.vscode/settings.json` — `python.analysis.extraPaths` for Pylance resolution (includes `scripts/`).
 - Called automatically by `setup` and `new-library`.
 - The `.iml` generator preserves existing non-source-folder content (SDK settings, etc.) and only replaces the source folder entries.
 - **No manual IDE config editing is needed when adding libraries.**
@@ -239,7 +240,7 @@ This was the largest single session. It addressed three areas: the workspace was
 
 **Milestone 2 marked done.** All CI/release exit criteria met.
 
-**All libraries bumped to 0.1.15 (current).**
+**All libraries bumped to 0.1.18 (current).**
 
 ### 2026-04-07 — Plans rationalization
 
@@ -248,4 +249,12 @@ This was the largest single session. It addressed three areas: the workspace was
 **Resolution:** Deleted 7 prompt files and 3 completed workstreams (462 insertions, 2006 deletions). Transformed `workspace-history.prompt.md` into `history.md` (this document) as a durable knowledge base. Created `end-of-session.md` as a simplified checklist. Moved `guide-generation.prompt.md` to `plans/guide-generation.md`. Trimmed `next-up.md` (90 Done items → 5 recent) and `roadmap.md` (done milestones collapsed). Cross-referenced ~250 commit messages against the remaining plans to surface knowledge gaps.
 
 **Principle:** Plans should capture knowledge that lives in people's heads — design principles, rejected approaches, why decisions were made. Reference material (command lists, decision indices, repo structure) belongs in AGENTS.md and decisions, not duplicated across prompts.
+
+### 2026-04-10 — Scripts test infrastructure and IDE audit
+
+**Scripts test suite:** Added `scripts/tests/` with 203 pytest tests across 12 modules covering pure-logic functions in the scripts infrastructure (check_names, discovery, check_version, check_api, verify_examples, bundle, scaffold, ide, prepare, workspace, run, generate_landing_page). Tests use `tmp_path` and `monkeypatch` for filesystem and git isolation. Runs in 0.4s.
+
+**`test-scripts` subcommand:** Added `python scripts/run.py test-scripts` as a standalone task, integrated into preflight. Scripts tests intentionally run without the 94% per-library coverage gate (scripts are subprocess-heavy orchestration code with a different coverage profile).
+
+**IDE audit:** `scripts/` was invisible to both IDE test runners. Fixed by adding `scripts/` as a source root and `scripts/tests/` as a test source in `.idea/chumicro.iml`, adding `scripts` to `extraPaths` in `pyrightconfig.json` and `.vscode/settings.json`, adding `scripts/tests` to pytest `testpaths` in `pyproject.toml`, and adding `scripts/` to `sys.path` in root `conftest.py`. Also cleaned up stale library-root entries in the `.iml` file. Added "Test Scripts" task to both PyCharm run configurations and VS Code tasks.
 

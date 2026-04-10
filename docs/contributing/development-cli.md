@@ -146,6 +146,14 @@ The report shows every source file with covered lines in green and missed lines 
 
 > **Tip:** `htmlcov/` is gitignored. Generate it whenever you need it, discard it when you're done.
 
+### Test scripts
+
+Runs the infrastructure test suite for `scripts/`. These tests cover pure-logic functions (parsers, validators, generators) without the per-library coverage gate — scripts are subprocess-heavy orchestration code with a different coverage profile.
+
+```bash
+python scripts/run.py test-scripts
+```
+
 ### Verify examples
 
 Checks that every example script in a library has valid syntax and resolvable imports. Quick to run — catches copy-paste mistakes before they reach users.
@@ -309,6 +317,7 @@ What "valid" means:
 |-------|-----------------|----------------|
 | `lint` | Code style (Ruff) | Zero errors |
 | `test` | Correctness + coverage | All tests pass, ≥ 94% branch coverage per library |
+| `test-scripts` | Scripts infrastructure | All infrastructure tests pass |
 | `verify-examples` | Example files parse | All examples have valid syntax and resolvable imports |
 | `docs` | Documentation builds | Zero griffe warnings, clean build |
 | `build` | Package creates correctly | `.tar.gz` and `.whl` produced |

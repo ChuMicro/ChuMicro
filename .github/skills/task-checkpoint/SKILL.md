@@ -27,7 +27,7 @@ Run the **narrowest check** that covers your changes:
 |---|---|
 | One library's code or tests | `python scripts/run.py test --libraries <name> 2>&1 \| tail -10` |
 | Multiple libraries | `python scripts/run.py test --all --no-cov 2>&1 \| tail -5` |
-| Scripts or infrastructure | `python scripts/run.py lint 2>&1 \| tail -3` |
+| Scripts or infrastructure | `python scripts/run.py test-scripts 2>&1 \| tail -5` then `python scripts/run.py lint 2>&1 \| tail -3` |
 | Docs or mkdocs.yml | `python scripts/run.py docs --libraries <name> 2>&1 \| tail -5` |
 | Examples | `python scripts/run.py verify-examples --libraries <name>` |
 | Not sure / broad changes | `python scripts/run.py lint 2>&1 \| tail -3` then `python scripts/run.py test --all --no-cov 2>&1 \| tail -5` |
