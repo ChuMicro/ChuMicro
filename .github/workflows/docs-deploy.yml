@@ -26,9 +26,14 @@ concurrency:
 permissions:
   contents: write
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
         with:
@@ -42,13 +47,15 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
+          cache: "pip"
 
       - name: Install tooling
         run: |
           python -m pip install --upgrade pip zensical mkdocstrings[python]
-          # Install mike from git until the next release includes the
-          # features we need (alias management improvements).
-          pip install "git+https://github.com/squidfunk/mike.git"
+          # mike is installed from the Zensical fork (squidfunk/mike) which
+          # includes alias management improvements not yet on PyPI.
+          # Pinned to 2.2.0+zensical-0.1.0 (2026-03-29).
+          pip install "git+https://github.com/squidfunk/mike.git@0f62791256ebeba60d20d2f1d8fe6ec3b7d1e2b3"
 
       - name: Configure git
         run: |
@@ -61,18 +68,20 @@ jobs:
         run: git fetch origin gh-pages:gh-pages 2>/dev/null || true
 
       - name: Deploy documentation
+        env:
+          INPUT_LIBRARIES: ${{ inputs.libraries }}
         run: |
           # Push trigger always targets experimental; manual runs use the
           # selected channel input.
-          if [ "${{ github.event_name }}" = "push" ]; then
+          if [[ "${{ github.event_name }}" == "push" ]]; then
             channel="experimental"
           else
             channel="${{ inputs.channel }}"
           fi
 
           library_flag=""
-          if [ -n "${{ inputs.libraries }}" ]; then
-            library_flag="--libraries ${{ inputs.libraries }}"
+          if [[ -n "$INPUT_LIBRARIES" ]]; then
+            library_flag="--libraries $INPUT_LIBRARIES"
           fi
 
           python scripts/run.py docs-deploy --channel "$channel" $library_flag
