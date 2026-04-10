@@ -422,12 +422,13 @@ def generate_bundle_readme(
     pip_suffix = "-experimental" if experimental else ""
 
     banner = (
-        "> ⚠️ **Pre-release channel** — these builds come from the "
-        "`main` branch and may contain breaking changes."
+        "> ⚠️ **Pre-release channel** — these builds come from "
+        "`main` and may contain breaking changes."
         if experimental
-        else "> **Stable channel** — production-ready tagged releases."
+        else ""
     )
 
+    banner_block = f"\n{banner}\n" if banner else ""
 
     # Library table rows.
     library_rows = "\n".join(
@@ -439,25 +440,24 @@ def generate_bundle_readme(
     return f"""\
 # {bundle_repo}
 
-{banner}
+**{channel} bundle for [ChuMicro]({source_url}) — \
+install any library on CircuitPython, MicroPython, or CPython.**
+{banner_block}
+📖 [Docs]({docs_url}) · 📦 [Source]({source_url}) · \
+{'📡' if not experimental else '🧪'} [{alt_channel} Bundle]({alt_repo_url})
 
-{channel} distribution bundle for \
-[ChuMicro]({source_url}) libraries. \
-Contains `.py` source, `.mpy` bytecode, and `package.json` \
-manifests for [mip](https://docs.micropython.org/en/latest/reference/packages.html) and \
-[circup](https://github.com/adafruit/circup) installation.
+## Get started
 
-📖 **[Documentation, guides, and API reference]({docs_url})**
+Swap `chumicro-timing` for whichever library you need.
 
-## Installation
+**CircuitPython (circup):**
 
-### CircuitPython (circup)
-
-Register the ChuMicro bundle once, then install any library by name:
+circup uses bundles to find third-party packages — register \
+the ChuMicro bundle once, then install any library by name:
 
 ```bash
 circup bundle-add {_GITHUB_ORG}/{bundle_repo}
-circup install chumicro-timing   # example
+circup install chumicro-timing
 ```
 
 > If you previously registered the {alt_channel.lower()} bundle, remove it first — \
@@ -466,43 +466,42 @@ circup may pick either version when both are active:
 > circup bundle-remove {_GITHUB_ORG}/{alt_repo}
 > ```
 
-### MicroPython (mip)
-
+**MicroPython (mip):**
 
 ```bash
-mpremote mip install github:{_GITHUB_ORG}/{bundle_repo}/chumicro_timing   # example
+mpremote mip install github:{_GITHUB_ORG}/{bundle_repo}/chumicro_timing
 ```
 
-Or on a network-capable board:
+Or from the REPL on a network-capable board:
 
 ```python
 import mip
-mip.install("github:{_GITHUB_ORG}/{bundle_repo}/chumicro_timing")   # example
+mip.install("github:{_GITHUB_ORG}/{bundle_repo}/chumicro_timing")
 ```
 
-### CPython (pip)
+**CPython (pip):**
 
-CPython users install from PyPI — the bundle repo is not involved:
+On your laptop, install from PyPI — no bundle needed:
 
 ```bash
-pip install chumicro-timing{pip_suffix}   # example
+pip install chumicro-timing{pip_suffix}
 ```
 
-## Available libraries
+## What's in the bundle?
 
 | Library | Version | Description |
 | --- | --- | --- |
 {library_rows}
 
-Each library directory in this repo contains a `package.json` \
-manifest for mip, `.py` source files, and `.mpy` compiled \
-bytecode (CircuitPython 10.x, mpy format v6).
+Each directory contains `.py` source, `.mpy` bytecode \
+(CircuitPython 10.x, mpy v6), and a `package.json` manifest \
+for mip.
 
 ## About
 
-This repository is **automatically maintained** by the \
-[ChuMicro source repo]({source_url})'s release workflow. \
-Do not edit it manually.
+This repo is generated automatically by the \
+[ChuMicro release workflow]({source_url}/blob/main/.github/workflows/release.yml). \
+Don't edit it by hand — changes will be overwritten on the next release.
 
 - **Source code and examples:** [{_GITHUB_ORG}/{_SOURCE_REPO}]({source_url})
 - **Documentation:** [chumicro.github.io/ChuMicro]({docs_url})
