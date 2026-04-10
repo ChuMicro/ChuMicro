@@ -93,6 +93,7 @@ If it prints `Preflight passed`, you're good — CI will pass too. That's the on
 <summary>What preflight checks (expand for details)</summary>
 
 - **94% test coverage** per library. Run individually: `python scripts/run.py test --libraries <name>`
+- **Scripts infrastructure tests pass.** Run individually: `python scripts/run.py test-scripts`
 - **No lint errors.** Run individually: `python scripts/run.py lint`
 - **Examples must parse.** Run individually: `python scripts/run.py verify-examples --libraries <name>`
 - **Docs must build.** Run individually: `python scripts/run.py docs --libraries <name>`

@@ -52,6 +52,23 @@ jobs:
       - name: Run tests with coverage
         run: python scripts/run.py test --all
 
+  test-scripts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: "pip"
+
+      - name: Install tooling
+        run: python -m pip install --upgrade pip pytest
+
+      - name: Run scripts infrastructure tests
+        run: python scripts/run.py test-scripts
+
   # Syntax-check every examples/ file to catch import errors and typos
   # before they reach users.
   verify-examples:
