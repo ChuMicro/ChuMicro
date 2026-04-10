@@ -41,6 +41,10 @@ on:
         description: "Git ref to check out for library source. Defaults to the caller's ref."
         type: string
         default: ""
+      attestations:
+        description: "Generate Sigstore attestations for published packages."
+        type: boolean
+        default: true
 
 # One release at a time to avoid race conditions on tags.
 concurrency:
@@ -181,6 +185,7 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: ${{ matrix.library_dir }}/dist/
+          attestations: ${{ github.event_name != 'workflow_call' || inputs.attestations }}
 
       - name: Create git tag
         if: inputs.dry_run != true
