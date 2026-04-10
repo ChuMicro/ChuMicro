@@ -2,8 +2,9 @@
 
 import ast
 import textwrap
+from pathlib import Path
 
-from verify_examples import _check_imports, _is_chumicro_module
+from verify_examples import _check_imports, _is_chumicro_module, verify_examples
 
 
 class TestIsChumicroModule:
@@ -79,3 +80,67 @@ class TestCheckImports:
         tree = self._parse("import chumicro_timing\n")
         assert _check_imports(tree, "test.py", hardware=False) is True
 
+
+class TestVerifyExamples:
+    """Tests for verify_examples — full example directory verification."""
+
+    def _make_package(self, tmp_path: Path) -> Path:
+        """Create a minimal package directory with examples/ and src/."""
+        package_dir = tmp_path / "library"
+        (package_dir / "examples").mkdir(parents=True)
+        (package_dir / "src").mkdir()
+        return package_dir
+
+    def test_clean_examples(self, tmp_path: Path, capsys, monkeypatch):
+        """Directory with valid examples returns 0."""
+        package_dir = self._make_package(tmp_path)
+        (package_dir / "examples" / "good.py").write_text(
+            "import os\nprint('hello')\n"
+        )
+        monkeypatch.setattr("verify_examples.ROOT", tmp_path)
+
+        result = verify_examples([package_dir])
+        assert result == 0
+        assert "verified" in capsys.readouterr().out
+
+    def test_syntax_error_example(self, tmp_path: Path, capsys, monkeypatch):
+        """Example with syntax error is reported as failure."""
+        package_dir = self._make_package(tmp_path)
+        (package_dir / "examples" / "bad.py").write_text("def broken(\n")
+        monkeypatch.setattr("verify_examples.ROOT", tmp_path)
+
+        result = verify_examples([package_dir])
+        assert result == 1
+        assert "FAIL" in capsys.readouterr().out
+
+    def test_no_examples_directory(self, tmp_path: Path, capsys):
+        """Package without examples/ returns 0."""
+        package_dir = tmp_path / "library"
+        package_dir.mkdir()
+
+        result = verify_examples([package_dir])
+        assert result == 0
+        assert "No examples" in capsys.readouterr().out
+
+    def test_hardware_example_prefix(self, tmp_path: Path, capsys, monkeypatch):
+        """circuitpython_* examples skip non-chumicro imports."""
+        package_dir = self._make_package(tmp_path)
+        (package_dir / "examples" / "circuitpython_blink.py").write_text(
+            "import board\nimport digitalio\n"
+        )
+        monkeypatch.setattr("verify_examples.ROOT", tmp_path)
+
+        result = verify_examples([package_dir])
+        assert result == 0
+        assert "hardware" in capsys.readouterr().out
+
+    def test_bad_import_example(self, tmp_path: Path, capsys, monkeypatch):
+        """Example with unresolvable import is reported as failure."""
+        package_dir = self._make_package(tmp_path)
+        (package_dir / "examples" / "bad_import.py").write_text(
+            "import totally_fake_nonexistent_module_xyz\n"
+        )
+        monkeypatch.setattr("verify_examples.ROOT", tmp_path)
+
+        result = verify_examples([package_dir])
+        assert result == 1

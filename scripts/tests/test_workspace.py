@@ -2,7 +2,7 @@
 
 import shutil
 
-from workspace import install_command
+from workspace import install_command, run_command
 
 
 class TestInstallCommand:
@@ -46,3 +46,24 @@ class TestInstallCommand:
         assert "--python" in result
         assert "/custom/python" in result
 
+
+class TestRunCommand:
+    """Tests for run_command."""
+
+    def test_successful_command(self, capsys):
+        """Successful command returns 0."""
+        result = run_command(["python", "-c", "print('ok')"])
+        assert result == 0
+        # Prints the command with + prefix.
+        assert "+" in capsys.readouterr().out
+
+    def test_failing_command(self):
+        """Failing command returns non-zero exit code."""
+        result = run_command(["python", "-c", "raise SystemExit(42)"])
+        assert result == 42
+
+    def test_prints_command(self, capsys):
+        """Command is printed before execution."""
+        run_command(["python", "-c", "pass"])
+        captured = capsys.readouterr().out
+        assert "+ python -c pass" in captured

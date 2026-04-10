@@ -4,7 +4,7 @@ import ast
 import textwrap
 from pathlib import Path
 
-from check_names import _collect_names, _read_noqa_lines, check_file
+from check_names import _collect_names, _read_noqa_lines, check_file, check_paths, main
 
 
 class TestReadNoqaLines:
@@ -158,3 +158,68 @@ class TestCheckFile:
         errors = check_file(filepath, source)
         assert len(errors) == 3
 
+    def test_reads_source_from_file(self, tmp_path: Path):
+        """check_file reads source from disk when source is None."""
+        filepath = tmp_path / "auto_read.py"
+        filepath.write_text("x = 1\n")
+        errors = check_file(filepath)
+        assert len(errors) == 1
+        assert "CHU001" in errors[0]
+
+
+class TestCheckPaths:
+    """Tests for check_paths — directory and file scanning."""
+
+    def test_clean_directory(self, tmp_path: Path):
+        """Directory with clean files returns 0."""
+        (tmp_path / "good.py").write_text("message = 'hello'\n")
+        assert check_paths([str(tmp_path)]) == 0
+
+    def test_directory_with_violations(self, tmp_path: Path, capsys):
+        """Directory with violations returns 1 and prints errors."""
+        (tmp_path / "bad.py").write_text("x = 1\n")
+        assert check_paths([str(tmp_path)]) == 1
+        captured = capsys.readouterr().out
+        assert "CHU001" in captured
+        assert "naming violation" in captured
+
+    def test_single_file(self, tmp_path: Path):
+        """Can check a single .py file directly."""
+        filepath = tmp_path / "single.py"
+        filepath.write_text("message = 'ok'\n")
+        assert check_paths([str(filepath)]) == 0
+
+    def test_skips_pycache(self, tmp_path: Path):
+        """__pycache__ directories are skipped."""
+        cache_dir = tmp_path / "__pycache__"
+        cache_dir.mkdir()
+        (cache_dir / "bad.py").write_text("x = 1\n")
+        assert check_paths([str(tmp_path)]) == 0
+
+    def test_skips_site_directory(self, tmp_path: Path):
+        """site/ directories are skipped."""
+        site_dir = tmp_path / "site"
+        site_dir.mkdir()
+        (site_dir / "bad.py").write_text("x = 1\n")
+        assert check_paths([str(tmp_path)]) == 0
+
+    def test_non_python_files_ignored(self, tmp_path: Path):
+        """Non-.py files are ignored."""
+        (tmp_path / "readme.md").write_text("x = 1\n")
+        assert check_paths([str(tmp_path)]) == 0
+
+
+class TestMain:
+    """Tests for the main entry point."""
+
+    def test_default_paths(self, monkeypatch):
+        """main() with no args uses discover_ruff_paths."""
+        # Just verify it runs without error — the real workspace is clean.
+        result = main()
+        assert result == 0
+
+    def test_custom_paths(self, tmp_path: Path):
+        """main() with explicit paths checks those paths."""
+        (tmp_path / "clean.py").write_text("value = 42\n")
+        result = main([str(tmp_path)])
+        assert result == 0
