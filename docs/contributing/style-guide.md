@@ -2,15 +2,15 @@
 
 This is the definitive reference for code style in the Chumicro workspace. All code — library, infrastructure, and tests — follows these conventions unless explicitly noted.
 
-The linter (`python scripts/run.py lint`) enforces most of these automatically. If lint passes, you're almost certainly fine.
+The linter (`python scripts/run.py lint`) enforces most of these automatically. If lint passes, you're almost certainly fine. This guide explains what the rules are, why they exist, and what to do when the linter flags something.
 
 ## Baseline
 
-[PEP 8](https://peps.python.org/pep-0008/) with a **100-character line limit** (configured in `pyproject.toml`). Enforced by [Ruff](https://docs.astral.sh/ruff/).
+We follow [PEP 8](https://peps.python.org/pep-0008/), the standard Python style guide, with a **100-character line limit** (configured in `pyproject.toml`). This is enforced automatically by [Ruff](https://docs.astral.sh/ruff/), a fast Python linter. You don't need to memorize PEP 8 — Ruff tells you when something is off.
 
 ## Naming
 
-Descriptive names. No abbreviations that require mental translation.
+We use descriptive names and avoid abbreviations that require mental translation. The goal is that someone reading your code for the first time can understand what a variable holds without checking its assignment.
 
 | Rule | Example | Enforced by |
 |---|---|---|
@@ -24,7 +24,9 @@ Descriptive names. No abbreviations that require mental translation.
 
 ## Type annotations
 
-Use standard Python type annotations on all function and method signatures. Do not import `typing` in library code — it doesn't exist on CircuitPython or MicroPython.
+Python type annotations tell readers (and tools) what types a function accepts and returns. We use them on all function and method signatures. They cost zero runtime overhead on embedded boards — both CircuitPython and MicroPython parse annotations but strip them at compile time.
+
+Do not import `typing` in library code — the module doesn't exist on CircuitPython or MicroPython. Use the modern built-in syntax instead:
 
 ```python
 # ✅ Works on all runtimes — PEP 604 / PEP 585 syntax
@@ -42,7 +44,7 @@ Infrastructure code (`scripts/`, `support/`) may use `typing` imports since it r
 
 ## Docstrings
 
-Google-style. Types go on annotations, descriptions go in docstrings — no redundancy.
+Every public function, method, and class needs a docstring. We use [Google style](https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings): types go on annotations, descriptions go in docstrings. This avoids writing the type twice.
 
 ```python
 def ticks_diff(end: int, start: int) -> int:
@@ -57,17 +59,19 @@ def ticks_diff(end: int, start: int) -> int:
     """
 ```
 
-- **`Args:`** — `name: description` (no type in parens)
+The sections you'll use most:
+
+- **`Args:`** — `name: description` (no type in parens — it's already on the signature)
 - **`Returns:`** — description only (no `type:` prefix)
 - **`Raises:`** — `ExceptionType: description`
 
-Document all public functions, methods, and classes. The docs build fails on griffe warnings about missing or malformed sections.
+The docs build fails on [griffe](https://mkdocstrings.github.io/griffe/) warnings about missing or malformed sections, so you'll know right away if something needs fixing.
 
 ([Decision 0021](plans/decisions/0021-docstring-type-policy.md))
 
 ## String formatting
 
-f-strings exclusively. No `%`-style, no `.format()`.
+Use f-strings for all string formatting. They're the most readable option and work identically across all three runtimes.
 
 ```python
 # ✅
@@ -80,7 +84,7 @@ print("Found {} items in {}".format(count, directory))
 
 ## Memory patterns (library code only)
 
-These apply to **publishable library code under `libraries/`** — code that runs on microcontrollers. Infrastructure code (`scripts/`, `support/`) should use standard Python conventions.
+Microcontrollers have limited RAM and no virtual memory. These patterns help library code run efficiently on constrained devices. They apply to **publishable library code under `libraries/`** only — infrastructure code (`scripts/`, `support/`) runs on CPython and should use standard Python conventions.
 
 | Pattern | Why |
 |---|---|
@@ -90,9 +94,11 @@ These apply to **publishable library code under `libraries/`** — code that run
 | Cache frequently used attributes in local variables | Reduce attribute lookups in hot paths |
 | Avoid dynamic string building in loops | GC pressure |
 
+You don't need to apply these patterns from day one — they matter most in performance-sensitive code. If you're writing your first library, focus on correctness first and optimize later.
+
 ## What the linter checks
 
-`python scripts/run.py lint` runs two tools:
+`python scripts/run.py lint` runs two tools back to back. If both pass, your code is style-correct.
 
 **Ruff** — a fast Python linter that enforces:
 
