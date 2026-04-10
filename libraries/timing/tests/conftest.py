@@ -1,1 +1,1 @@
-"""Test configuration for the Chumicro timing package."""
+"""Test configuration for the chumicro-timing package."""
