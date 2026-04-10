@@ -93,11 +93,13 @@ jobs:
   # workflow_call keeps all build/publish/bundle steps visible in this
   # single workflow run rather than spawning a separate run.
   #
-  # PyPI trusted publisher for stable packages is configured for
-  # promote.yml (the top-level caller).  Experimental packages use
-  # release.yml directly.  Sigstore certificates carry the top-level
-  # caller's identity, so each channel's publisher must match the
-  # workflow that actually initiates the run.
+  # Attestations must be disabled for the promote path.  PyPI validates
+  # attestations against the publisher that matched the OIDC token's
+  # job_workflow_ref (release.yml — the reusable workflow), but the
+  # Sigstore certificate's Build Config URI carries the top-level
+  # caller's identity (promote.yml).  These will never match because
+  # they come from different sources.  OIDC *authentication* works fine
+  # (it uses job_workflow_ref), only attestation *verification* fails.
   release:
     name: Release
     needs: validate
@@ -106,6 +108,7 @@ jobs:
       libraries: ${{ needs.validate.outputs.lib_name }}
       channel: stable
       dry_run: ${{ inputs.dry_run }}
+      attestations: false
     secrets: inherit
 
   # Trigger docs deployment as a separate workflow_dispatch rather than
