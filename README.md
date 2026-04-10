@@ -4,6 +4,8 @@
 
 Write once, run on CircuitPython, MicroPython, and CPython. Whether you're blinking an LED on an ESP32 or prototyping on your desktop, the same code works everywhere.
 
+📦 [PyPI](https://pypi.org/search/?q=chumicro) · 📡 [Stable Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · 🧪 [Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental) · 📖 [Docs](https://chumicro.github.io/ChuMicro/)
+
 ## What's in the box?
 
 Small, focused libraries you can install independently. Use what you need.
