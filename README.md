@@ -41,16 +41,16 @@ Browse the [documentation site](https://chumicro.github.io/ChuMicro/) for guides
 
 Pick the install method for your runtime — swap `chumicro-timing` for whichever library you need.
 
-**CircuitPython (circup):**
+**CircuitPython ([circup](https://github.com/adafruit/circup)):**
 
-circup uses bundles to find third-party packages — register the ChuMicro bundle once, then install any library by name:
+[circup](https://github.com/adafruit/circup) is CircuitPython's package manager — it uses bundles to find third-party packages. Register the ChuMicro bundle once, then install any library by name:
 
 ```bash
 circup bundle-add ChuMicro/ChuMicro-Bundle
 circup install chumicro-timing
 ```
 
-**MicroPython (mip):**
+**MicroPython ([mip](https://docs.micropython.org/en/latest/reference/packages.html)):**
 
 ```bash
 mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_timing
