@@ -120,6 +120,18 @@ def test_fake_ticks_add() -> None:
     assert fake.ticks_add(period - 10, 20) == 10
 
 
+def test_fake_ticks_add_rejects_overflow() -> None:
+    """FakeTicks.ticks_add should reject deltas at or beyond half-period."""
+    fake = FakeTicks()
+    halfperiod = 1 << 28
+
+    with raises(OverflowError):
+        fake.ticks_add(0, halfperiod)
+
+    with raises(OverflowError):
+        fake.ticks_add(0, -halfperiod)
+
+
 def test_fake_ticks_ms_wraps_at_period() -> None:
     """FakeTicks.ticks_ms should mask to [0 .. 2**29 - 1]."""
     period = 1 << 29

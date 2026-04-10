@@ -23,7 +23,13 @@ tests will catch code that accidentally uses plain subtraction instead
 of ``ticks_diff``.
 """
 
-from .ticks import _TICKS_HALFPERIOD, _TICKS_MAX, _TICKS_PERIOD
+# Define tick constants directly rather than importing from ticks.py.
+# On CircuitPython, const()-decorated private names in ticks.py may be
+# compiled away and not importable.  These are mathematical constants
+# (the 2**29 tick period) that cannot drift between modules.
+TICKS_PERIOD = 1 << 29
+TICKS_MAX = TICKS_PERIOD - 1
+TICKS_HALFPERIOD = TICKS_PERIOD // 2
 
 
 class FakeTicks:
@@ -70,7 +76,7 @@ class FakeTicks:
 
     def ticks_ms(self) -> int:
         """Return the current fake tick value in ``[0 .. 2**29 - 1]``."""
-        return self._current_ms & _TICKS_MAX
+        return self._current_ms & TICKS_MAX
 
     def ticks_diff(self, end: int, start: int) -> int:
         """Wraparound-safe signed difference *end* − *start*.
@@ -84,11 +90,14 @@ class FakeTicks:
         Returns:
             Signed difference in milliseconds.
         """
-        diff = (end - start) & _TICKS_MAX
-        return ((diff + _TICKS_HALFPERIOD) & _TICKS_MAX) - _TICKS_HALFPERIOD
+        diff = (end - start) & TICKS_MAX
+        return ((diff + TICKS_HALFPERIOD) & TICKS_MAX) - TICKS_HALFPERIOD
 
     def ticks_add(self, ticks_val: int, delta: int) -> int:
         """Wraparound-safe addition of *delta* to a tick value.
+
+        Matches the real ``ticks_add`` behavior, including raising
+        ``OverflowError`` for deltas at or beyond the half-period.
 
         Args:
             ticks_val: Base tick value.
@@ -96,5 +105,10 @@ class FakeTicks:
 
         Returns:
             Wrapped tick value in ``[0 .. 2**29 - 1]``.
+
+        Raises:
+            OverflowError: If *delta* is outside (-2**28 .. 2**28).
         """
-        return (ticks_val + delta) % _TICKS_PERIOD
+        if not (-TICKS_HALFPERIOD < delta < TICKS_HALFPERIOD):
+            raise OverflowError("ticks interval overflow")
+        return (ticks_val + delta) % TICKS_PERIOD

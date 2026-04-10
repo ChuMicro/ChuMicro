@@ -14,6 +14,7 @@ Start here, then pick the guide that matches your task:
 | **Set up and develop** | This page → then your [development environment guide](#development-environment) |
 | **Open a pull request** | [Creating a Pull Request](docs/contributing/pull-requests.md) |
 | **Add a new library** | [Adding a New Library](docs/contributing/new-library.md) |
+| **Understand the codebase** | [How the Codebase Works](docs/contributing/architecture.md) |
 | **Understand releases** | [Releases and Promotion](docs/contributing/releases.md) |
 | **Use an AI coding agent** | [Working with Agents](docs/contributing/working-with-agents.md) |
 
@@ -194,6 +195,17 @@ These aren't arbitrary — each one traces to a design decision with rationale. 
 | Standard annotations, no `typing` imports | Both embedded runtimes parse annotations correctly but don't have the `typing` module. Use annotations with built-in types and PEP 604/585 syntax (`int | None`, `list[int]`). Docstrings carry descriptions only — griffe reads types from annotations. ([Decision 0021](plans/decisions/0021-docstring-type-policy.md)) |
 | f-strings for formatting | Use `f"value={x}"` — not `%` or `.format()`. Consistent and readable across all three runtimes |
 | `const()` / `memoryview` in library code | Memory efficiency on microcontrollers — see [examples](docs/contributing/new-library.md#memory-efficient-patterns) (not required in `scripts/` or `support/`) |
+
+## Common mistakes
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `ImportError` when running `pytest` directly | Bare `pytest` doesn't know about the per-library layout | Use `python scripts/run.py test --libraries <name>` instead |
+| `check-version` fails but you only changed tests | CI gates source changes under `src/` | No VERSION bump needed for test-only, docs-only, or infra changes — delete the failing step's output note in your PR |
+| Coverage fails on code you didn't touch | Pre-existing gap in another file | Note it in the PR description — a maintainer can help fill the gap or mark an exception |
+| `griffe warnings detected` in docs build | Missing type annotation on a function parameter | Add the type to the signature: `def foo(x: int)` — docstrings carry descriptions only |
+| Merge conflicts after pushing | `main` moved while you were working | `git pull --rebase origin main`, resolve conflicts, force-push your branch |
+| PyCharm/VS Code shows red import underlines | IDE configs are stale | Run `python scripts/run.py sync-ide`, then reload the project |
 
 ## Getting help
 
