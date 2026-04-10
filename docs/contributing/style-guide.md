@@ -38,7 +38,7 @@ from typing import Optional, List
 def read(self, timeout: Optional[int] = None) -> Optional[bytes]: ...
 ```
 
-Infrastructure code (`scripts/`, `support/`) may use `typing` imports since it runs only on CPython.
+Infrastructure code (`scripts/`) may use `typing` imports since it runs only on CPython. Most of `support/` is also CPython-only, **except `support/test_harness/`** which runs on all three runtimes — treat it like library code.
 
 ([Decision 0021](plans/decisions/0021-docstring-type-policy.md))
 
@@ -84,7 +84,7 @@ print("Found {} items in {}".format(count, directory))
 
 ## Memory patterns (library code only)
 
-Microcontrollers have limited RAM and no virtual memory. These patterns help library code run efficiently on constrained devices. They apply to **publishable library code under `libraries/`** only — infrastructure code (`scripts/`, `support/`) runs on CPython and should use standard Python conventions.
+Microcontrollers have limited RAM and no virtual memory. These patterns help library code run efficiently on constrained devices. They apply to **publishable library code under `libraries/`** and **`support/test_harness/`** — other infrastructure code (`scripts/`, rest of `support/`) runs on CPython and should use standard Python conventions.
 
 | Pattern | Why |
 |---|---|
