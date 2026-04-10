@@ -39,10 +39,10 @@ def install_command(python: str | Path | None = None) -> list[str]:
             without ``uv`` it replaces ``sys.executable``.
     """
     if shutil.which("uv"):
-        cmd = ["uv", "pip", "install"]
+        command = ["uv", "pip", "install"]
         if python is not None:
-            cmd.extend(["--python", str(python)])
-        return cmd
+            command.extend(["--python", str(python)])
+        return command
     interpreter = str(python) if python is not None else sys.executable
     return [interpreter, "-m", "pip", "install"]
 

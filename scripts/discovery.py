@@ -207,13 +207,13 @@ def detect_changed_packages() -> list[Path] | None:
         #   2. Unstaged working-tree changes
         #   3. Staged but uncommitted changes
         # This ensures we never miss files regardless of commit state.
-        for cmd in (
+        for diff_command in (
             ["git", "diff", "--name-only", "origin/main...HEAD"],
             ["git", "diff", "--name-only"],
             ["git", "diff", "--name-only", "--cached"],
         ):
             result = subprocess.run(
-                cmd, capture_output=True, text=True, cwd=ROOT, check=False
+                diff_command, capture_output=True, text=True, cwd=ROOT, check=False
             )
             if result.returncode == 0 and result.stdout.strip():
                 changed.update(result.stdout.strip().splitlines())
@@ -263,7 +263,7 @@ def resolve_scope(
         return discover_package_dirs()
 
     if libraries:
-        names = [n.strip() for n in libraries.split(",") if n.strip()]
+        names = [name.strip() for name in libraries.split(",") if name.strip()]
         resolved = resolve_named_packages(names)
         if not resolved:
             raise SystemExit(1)

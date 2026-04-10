@@ -85,7 +85,7 @@ def _read_chumicro_dependencies(library_dir: Path) -> list[str]:
     with open(library_dir / "pyproject.toml", "rb") as pyproject_file:
         data = tomllib.load(pyproject_file)
     dependencies = data.get("project", {}).get("dependencies", [])
-    return [dep for dep in dependencies if dep.strip().startswith("chumicro-")]
+    return [dependency for dependency in dependencies if dependency.strip().startswith("chumicro-")]
 
 
 def _dependency_to_mip_reference(dependency: str) -> str:
@@ -182,8 +182,8 @@ def build_bundle(
     # one experimental library does not cascade into pulling experimental
     # versions of all transitive dependencies.
     mip_dependencies = [
-        [_dependency_to_mip_reference(dep), "latest"]
-        for dep in _read_chumicro_dependencies(library_dir)
+        [_dependency_to_mip_reference(dependency), "latest"]
+        for dependency in _read_chumicro_dependencies(library_dir)
     ]
     if mip_dependencies:
         manifest["deps"] = mip_dependencies
@@ -567,7 +567,7 @@ def next_date_tag(bundle_dir: Path) -> str:
          "--sort=v:refname"],
         capture_output=True, text=True, check=False,
     )
-    tags = [t for t in result.stdout.strip().splitlines() if t]
+    tags = [tag for tag in result.stdout.strip().splitlines() if tag]
 
     if not tags:
         return today
@@ -593,7 +593,7 @@ def main() -> None:
     # Default (positional) staging command.
     stage_parser = subparsers.add_parser("stage", help="Stage bundle artifacts")
     stage_parser.add_argument(
-        "lib_dir", type=Path, help="Library directory (e.g. libraries/timing)"
+        "library_dir", type=Path, help="Library directory (e.g. libraries/timing)"
     )
     stage_parser.add_argument("version", help="Library version string")
     stage_parser.add_argument("staging_dir", type=Path, help="Output staging directory")
@@ -675,7 +675,7 @@ def main() -> None:
         help="Patch pyproject.toml for experimental channel release",
     )
     patch_parser.add_argument(
-        "lib_dir", type=Path,
+        "library_dir", type=Path,
         help="Library directory (e.g. libraries/timing)",
     )
 
@@ -702,7 +702,7 @@ def main() -> None:
             print(content)
     elif args.command == "stage":
         build_bundle(
-            args.lib_dir,
+            args.library_dir,
             args.version,
             args.staging_dir,
             args.mpy_cross,
@@ -723,7 +723,7 @@ def main() -> None:
             date_tag=args.date_tag,
         )
     elif args.command == "patch-experimental":
-        patch_experimental(args.lib_dir)
+        patch_experimental(args.library_dir)
     elif args.command == "next-date-tag":
         print(next_date_tag(args.bundle_dir))
     else:
