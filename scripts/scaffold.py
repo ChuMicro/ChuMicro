@@ -158,10 +158,10 @@ from {import_name} import ...
 
 [← All ChuMicro Libraries](../../)
 
-[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/{name})
-· [PyPI](https://pypi.org/project/chumicro-{name}/)
-· [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle)
-· [Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
+[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/{name}) · \
+[PyPI](https://pypi.org/project/chumicro-{name}/) · \
+[Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · \
+[Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
 
 </div>
 """
@@ -255,10 +255,10 @@ Browse on GitHub:
 
 ## Find this library
 
-**PyPI:** [chumicro-{name}](https://pypi.org/project/chumicro-{name}/)
-**Bundle:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle)\
+- **PyPI:** [chumicro-{name}](https://pypi.org/project/chumicro-{name}/)
+- **Bundle:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle)\
  (CircuitPython & MicroPython)
-**Source:** [ChuMicro/ChuMicro](https://github.com/ChuMicro/ChuMicro) —\
+- **Source:** [ChuMicro/ChuMicro](https://github.com/ChuMicro/ChuMicro) —\
  cross-runtime Python libraries for ESP32, RP2040, and other microcontrollers.
 """
 
@@ -319,10 +319,10 @@ _GUIDE_TEMPLATE = """\
 
 [← Home](index.md)
 
-[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/{name})
-· [PyPI](https://pypi.org/project/chumicro-{name}/)
-· [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle)
-· [Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
+[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/{name}) · \
+[PyPI](https://pypi.org/project/chumicro-{name}/) · \
+[Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · \
+[Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
 
 </div>
 """
@@ -380,10 +380,11 @@ Libraries that depend on `chumicro-{name}` can import the fakes directly:
 from {import_name}.testing import Fake...
 ```
 
-This follows [Decision 0010][d0010]: libraries that expose injectable
+This follows the project convention from \
+[Decision 0010]\
+(https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/\
+0010-library-testability.md): libraries that expose injectable \
 services ship their own test fakes.
-
-[d0010]: https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0010-library-testability.md
 
 ## API Reference
 
@@ -395,10 +396,10 @@ services ship their own test fakes.
 
 [← Home](index.md)
 
-[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/{name})
-· [PyPI](https://pypi.org/project/chumicro-{name}/)
-· [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle)
-· [Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
+[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/{name}) · \
+[PyPI](https://pypi.org/project/chumicro-{name}/) · \
+[Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · \
+[Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
 
 </div>
 """
@@ -447,10 +448,10 @@ _API_TEMPLATE = """\
 
 [← Home](index.md)
 
-[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/{name})
-· [PyPI](https://pypi.org/project/chumicro-{name}/)
-· [Bundle](https://github.com/ChuMicro/ChuMicro-Bundle)
-· [Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
+[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/{name}) · \
+[PyPI](https://pypi.org/project/chumicro-{name}/) · \
+[Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · \
+[Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
 
 </div>
 """
