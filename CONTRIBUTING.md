@@ -12,6 +12,7 @@ Start here, then pick the guide that matches your task:
 |---|---|
 | **Find something to work on** | [Good first contributions](#good-first-contributions) |
 | **Set up and develop** | This page → then your [development environment guide](#development-environment) |
+| **Understand the code style** | [Style Guide](docs/contributing/style-guide.md) |
 | **Open a pull request** | [Creating a Pull Request](docs/contributing/pull-requests.md) |
 | **Add a new library** | [Adding a New Library](docs/contributing/new-library.md) |
 | **Understand the codebase** | [How the Codebase Works](docs/contributing/architecture.md) |
@@ -185,17 +186,15 @@ Libraries must work on all three runtimes (CircuitPython, MicroPython, CPython) 
 
 ## Project rules (quick reference)
 
-These aren't arbitrary — each one traces to a design decision with rationale. Browse `plans/decisions/` if you're curious about the reasoning.
+These aren't arbitrary — each one traces to a design decision with rationale. The **[Style Guide](docs/contributing/style-guide.md)** covers naming, annotations, docstrings, and formatting in detail. Browse `plans/decisions/` if you're curious about the deeper reasoning.
 
 | Rule | Why |
 |---|---|
-| No `async`/`await` | CircuitPython ships a pure-Python asyncio (Adafruit fork, frozen into firmware — the C `_asyncio` module is never compiled in). MicroPython's asyncio has C-backed task scheduling but a Python event loop. Both are a single global loop with no scheduling visibility, no priority control, and limited networking support. Constructor injection and testability are awkward because the loop owns the call stack. The tick-based runner gives you the same periodic-dispatch capability with explicit scheduling you can inspect and test. ([Decision 0014](plans/decisions/0014-runner-pattern.md)) |
+| PEP 8 + descriptive names | Enforced by Ruff and `CHU001` — see the [Style Guide](docs/contributing/style-guide.md) |
+| No `async`/`await` | Tick-based runner gives explicit scheduling you can inspect and test ([Decision 0014](plans/decisions/0014-runner-pattern.md)) |
 | Constructor injection for I/O | Testability without mocking things you don't own ([Decision 0010](plans/decisions/0010-library-testability.md)) |
 | Per-library `pytest` runs | Avoids test-directory collisions ([Decision 0009](plans/decisions/0009-per-library-test-runs.md)) |
-| Standard annotations, no `typing` imports | Both embedded runtimes parse annotations correctly but don't have the `typing` module. Use annotations with built-in types and PEP 604/585 syntax (`int | None`, `list[int]`). Docstrings carry descriptions only — griffe reads types from annotations. ([Decision 0021](plans/decisions/0021-docstring-type-policy.md)) |
-| f-strings for formatting | Use `f"value={x}"` — not `%` or `.format()`. Consistent and readable across all three runtimes |
-| Descriptive names, no abbreviations | No single-letter variables (except `_`) and no banned abbreviations (`env`, `buf`, `src`, `cmd`, `msg`, `err`, `ref`). Spell them out. Enforced by `CHU001` linter rule — `python scripts/run.py lint` catches violations ([Decision 0022](plans/decisions/0022-naming-conventions.md)) |
-| `const()` / `memoryview` in library code | Memory efficiency on microcontrollers — see [examples](docs/contributing/new-library.md#memory-efficient-patterns) (not required in `scripts/` or `support/`) |
+| `const()` / `memoryview` in library code | Memory efficiency on microcontrollers (not required in `scripts/` or `support/`) |
 
 ## Common mistakes
 
