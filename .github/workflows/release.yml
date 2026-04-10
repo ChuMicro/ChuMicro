@@ -13,11 +13,10 @@ on:
         type: string
         default: ""
       channel:
-        description: "Release channel"
+        description: "Release channel (stable must use promote.yml)"
         type: choice
         options:
           - experimental
-          - stable
         default: experimental
       dry_run:
         description: "Dry run — build but do not publish or tag"
