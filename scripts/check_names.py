@@ -23,6 +23,7 @@ from discovery import ROOT, discover_ruff_paths
 _RULE_CODE = "CHU001"
 _ALLOWED = {"_"}
 _BANNED = {"env", "buf", "src", "cmd", "msg", "err", "ref"}
+_BANNED_SUFFIXES = tuple(f"_{word}" for word in _BANNED)
 # Constructed dynamically so ruff doesn't interpret it as a directive.
 _NOQA_TAG = "# " + "noqa"
 
@@ -70,11 +71,18 @@ def _collect_names(tree: ast.Module) -> list[tuple[int, str, str]]:
         elif isinstance(node, ast.ExceptHandler) and node.name:
             targets.append((node.lineno, node.name))
 
+        # Function / method names
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            targets.append((node.lineno, node.name))
+
         for lineno, name in targets:
             if len(name) == 1 and name not in _ALLOWED:
                 hits.append((lineno, name, "single-letter name"))
             elif name in _BANNED:
                 hits.append((lineno, name, "banned abbreviation"))
+            elif name.endswith(_BANNED_SUFFIXES):
+                suffix = name.rsplit("_", 1)[-1]
+                hits.append((lineno, name, f"banned abbreviation suffix '_{suffix}'"))
 
     return hits
 

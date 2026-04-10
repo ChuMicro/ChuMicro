@@ -25,7 +25,7 @@ from discovery import (
     discover_ruff_paths,
     filter_by_platform,
     find_publishable_packages,
-    pythonpath_env,
+    pythonpath_environment,
     resolve_scope,
 )
 from docs_deploy import (
@@ -177,7 +177,7 @@ def test_cpython(
         print("No test directories found for the selected packages.")
         return 0
 
-    environment = pythonpath_env()
+    environment = pythonpath_environment()
 
     # Clean stale coverage data so combine starts fresh.  Two globs are
     # needed: `.coverage` (the default combined file) and `.coverage.*`
@@ -254,7 +254,7 @@ def test_cpython(
 
             # Unique coverage file per run.
             coverage_name = f".coverage.{package_dir.name}.{run_counter}"
-            run_env = {**environment, "COVERAGE_FILE": str(ROOT / coverage_name)}
+            run_environment = {**environment, "COVERAGE_FILE": str(ROOT / coverage_name)}
             run_counter += 1
 
             exit_code = run_command(
@@ -267,7 +267,7 @@ def test_cpython(
                     test_target,
                     *extra_args,
                 ],
-                environment=run_env,
+                environment=run_environment,
             )
             # Exit code 5 means no tests were collected (e.g. -k filter
             # matched nothing in this library) — not an error.
@@ -479,10 +479,10 @@ def docs_preview(package_dirs: list[Path]) -> int:
     ])
 
 
-def _base_ref_reachable(base_ref: str) -> bool:
-    """Return True if *base_ref* is a valid git ref that can be diffed against."""
+def _base_ref_reachable(base_reference: str) -> bool:
+    """Return True if *base_reference* is a valid git ref that can be diffed against."""
     result = subprocess.run(
-        ["git", "rev-parse", "--verify", base_ref],
+        ["git", "rev-parse", "--verify", base_reference],
         capture_output=True, cwd=ROOT, check=False,
     )
     return result.returncode == 0
@@ -510,8 +510,8 @@ def preflight(
     # version-check and api-check need a base ref to diff against.
     # If origin/main isn't reachable (detached HEAD, no remote, etc.),
     # skip them with a warning rather than crashing preflight.
-    base_ref = "origin/main"
-    can_diff = _base_ref_reachable(base_ref)
+    base_reference = "origin/main"
+    can_diff = _base_ref_reachable(base_reference)
 
     steps: list[tuple[str, Callable[[], int]]] = [
         ("lint", lint),
@@ -535,7 +535,7 @@ def preflight(
         # Skip diff-based checks when the base ref is unreachable.
         if step_name in ("check-version", "check-api") and not can_diff:
             print(f"== {step_name} ==")
-            print(f"  SKIP: {base_ref} not reachable (fetch or set --base).")
+            print(f"  SKIP: {base_reference} not reachable (fetch or set --base).")
             continue
 
         print(f"== {step_name} ==")

@@ -330,7 +330,7 @@ def release_tags(library_name: str) -> list[str]:
 
 
 
-def pythonpath_env() -> dict[str, str]:
+def pythonpath_environment() -> dict[str, str]:
     """Return an environment with the repository source roots prepended to PYTHONPATH.
 
     Prepending all ``src/`` directories lets pytest discover library
@@ -357,15 +357,15 @@ def pythonpath_env() -> dict[str, str]:
 RELEASE_RELEVANT = {"src", "pyproject.toml"}
 
 
-def changed_files(base_ref: str) -> list[str]:
-    """Return files changed between *base_ref* and HEAD."""
+def changed_files(base_reference: str) -> list[str]:
+    """Return files changed between *base_reference* and HEAD."""
     # Three-dot syntax finds changes since the merge-base, which is the
     # standard PR diff.  It fails in shallow clones (CI) where the
     # merge-base commit is not fetched.  The two-arg fallback gives a
     # full diff between the two refs — a superset that may include extra
     # files, but is safe (we'd rather over-test than under-test).
     result = subprocess.run(
-        ["git", "diff", "--name-only", f"{base_ref}...HEAD"],
+        ["git", "diff", "--name-only", f"{base_reference}...HEAD"],
         capture_output=True,
         text=True,
         cwd=ROOT,
@@ -373,7 +373,7 @@ def changed_files(base_ref: str) -> list[str]:
     )
     if result.returncode != 0:
         result = subprocess.run(
-            ["git", "diff", "--name-only", base_ref, "HEAD"],
+            ["git", "diff", "--name-only", base_reference, "HEAD"],
             capture_output=True,
             text=True,
             cwd=ROOT,
@@ -384,9 +384,9 @@ def changed_files(base_ref: str) -> list[str]:
     return [line for line in result.stdout.strip().splitlines() if line]
 
 
-def changed_libraries(base_ref: str) -> set[str]:
+def changed_libraries(base_reference: str) -> set[str]:
     """Return names of libraries with release-relevant changes."""
-    changed = changed_files(base_ref)
+    changed = changed_files(base_reference)
     libraries: set[str] = set()
     for path in changed:
         parts = path.split("/")
