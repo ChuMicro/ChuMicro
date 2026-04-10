@@ -174,17 +174,18 @@ _README_TEMPLATE = """\
 
 ## Installation
 
-### CircuitPython (circup)
+### CircuitPython ([circup](https://github.com/adafruit/circup))
 
-Register the ChuMicro bundle (remove the other channel first if switching):
+[circup](https://github.com/adafruit/circup) is CircuitPython's package manager — \
+it uses bundles to find third-party packages. Register the ChuMicro bundle once, \
+then install by name:
 
 ```bash
-circup bundle-remove ChuMicro/ChuMicro-Bundle-Experimental   # skip if never added
 circup bundle-add ChuMicro/ChuMicro-Bundle
 circup install chumicro-{name}
 ```
 
-### MicroPython (mip)
+### MicroPython ([mip](https://docs.micropython.org/en/latest/reference/packages.html))
 
 ```bash
 mpremote mip install github:ChuMicro/ChuMicro-Bundle/{import_name}
@@ -196,14 +197,15 @@ mpremote mip install github:ChuMicro/ChuMicro-Bundle/{import_name}
 pip install chumicro-{name}
 ```
 
-### Experimental (pre-release) versions
+<details>
+<summary>Experimental (pre-release) versions and channel switching</summary>
 
-Pre-release builds are published automatically when a library version is bumped.\
-  Do not register both bundles simultaneously — circup may pick either version\
- for a given package.
+Pre-release builds are published automatically when a library version is bumped. \
+Do not register both bundles simultaneously — circup may pick either version \
+for a given package.
 
 ```bash
-# CircuitPython
+# CircuitPython — switch to experimental
 circup bundle-remove ChuMicro/ChuMicro-Bundle              # skip if never added
 circup bundle-add ChuMicro/ChuMicro-Bundle-Experimental
 circup install chumicro-{name}
@@ -214,6 +216,8 @@ mpremote mip install github:ChuMicro/ChuMicro-Bundle-Experimental/{import_name}
 # CPython
 pip install chumicro-{name}-experimental
 ```
+
+</details>
 
 ## Quick example
 
