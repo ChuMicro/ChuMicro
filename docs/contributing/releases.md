@@ -7,14 +7,14 @@ Chumicro uses a two-channel release model: **experimental** (automatic) and **st
 ```mermaid
 flowchart TD
     A[PR merged to main<br/>with VERSION bump] --> B[release.yml fires]
-    B --> C[Build package]
+    B --> C[Build package +<br/>source archive]
     C --> D[Publish to PyPI<br/>chumicro-lib-experimental]
     C --> E[Push to<br/>ChuMicro-Bundle-Experimental]
     C --> F[Create git tag<br/>lib-vX.Y.Z-experimental]
     C --> G[Deploy experimental docs]
 
-    H[Maintainer runs<br/>promote.yml] --> I[release.yml fires<br/>channel=stable]
-    I --> J[Publish to PyPI<br/>chumicro-lib]
+    H[Maintainer runs<br/>promote.yml from main] --> I[Download source archive<br/>from experimental release]
+    I --> J[Build + publish to PyPI<br/>chumicro-lib]
     I --> K[Push to<br/>ChuMicro-Bundle]
     I --> L[Create git tag<br/>lib-vX.Y.Z]
     I --> M[Deploy stable docs]
@@ -50,15 +50,17 @@ pip install chumicro-timing-experimental
 
 ## Stable releases
 
-**Manual — by request.** A maintainer runs the `promote.yml` workflow from the experimental tag. This is a deliberate step to ensure only verified code reaches production users.
+**Manual — by request.** A maintainer runs the `promote.yml` workflow from `main`, entering the experimental tag as input. This is a deliberate step to ensure only verified code reaches production users.
 
 What happens:
 
-1. `promote.yml` validates the experimental tag and VERSION file
-2. The package is built and published to PyPI as `chumicro-<name>` (the production name)
+1. `promote.yml` downloads the library's source archive from the experimental GitHub Release
+2. The package is rebuilt using `main`'s CI scripts and published to PyPI as `chumicro-<name>` (the production name)
 3. Files are pushed to the [stable bundle repo](https://github.com/ChuMicro/ChuMicro-Bundle)
 4. A stable git tag is created: `<name>-v<version>`
 5. Stable docs are deployed
+
+The source archive ensures the stable release contains the exact library source that was tested as experimental, while build tooling and scripts always come from `main`.
 
 ## How to request a stable promotion
 

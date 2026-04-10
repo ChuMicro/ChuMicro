@@ -22,28 +22,7 @@ on:
         description: "Dry run — build but do not publish or tag"
         type: boolean
         default: false
-  workflow_call:
-    inputs:
-      libraries:
-        description: "Libraries to release (comma-separated)."
-        type: string
-        required: true
-      channel:
-        description: "Release channel (experimental or stable)."
-        type: string
-        required: true
-      dry_run:
-        description: "Dry run — build but do not publish or tag."
-        type: boolean
-        default: false
-      checkout_ref:
-        description: "Git ref to check out for library source. Defaults to the caller's ref."
-        type: string
-        default: ""
-      attestations:
-        description: "Generate Sigstore attestations for published packages."
-        type: boolean
-        default: true
+  # Stable promotion uses promote.yml (standalone).  See Decision 0023.
 
 # One release at a time to avoid race conditions on tags.
 concurrency:
@@ -73,7 +52,6 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          ref: ${{ inputs.checkout_ref || github.ref }}
 
       - id: channel
         name: Determine release channel
@@ -161,8 +139,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
-        with:
-          ref: ${{ inputs.checkout_ref || github.ref }}
 
       - uses: actions/setup-python@v6
         with:
@@ -179,12 +155,23 @@ jobs:
       - name: Build distribution
         run: python -m build ${{ matrix.library_dir }}
 
+      - name: Create library source archive
+        # Frozen snapshot of the library source attached to the GitHub
+        # Release.  promote.yml downloads this archive instead of checking
+        # out the tag, so stable promotions always use main's CI scripts
+        # with the exact source that was tested as experimental.
+        # See Decision 0023.
+        run: |
+          cd "${{ matrix.library_dir }}"
+          zip -r "${GITHUB_WORKSPACE}/${{ matrix.library_name }}-v${{ matrix.version }}-source.zip" \
+            src/ pyproject.toml VERSION README.md
+
       - name: Publish to PyPI
         if: inputs.dry_run != true
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: ${{ matrix.library_dir }}/dist/
-          attestations: ${{ github.event_name != 'workflow_call' || inputs.attestations }}
+          attestations: true
 
       - name: Create git tag
         if: inputs.dry_run != true
@@ -203,7 +190,9 @@ jobs:
           prerelease: ${{ needs.detect.outputs.is_experimental == 'true' }}
           body: |
             Release of **chumicro-${{ matrix.library_name }}** version **${{ matrix.version }}**${{ needs.detect.outputs.is_experimental == 'true' && ' (experimental)' || '' }}.
-          files: ${{ matrix.library_dir }}/dist/*
+          files: |
+            ${{ matrix.library_dir }}/dist/*
+            ${{ matrix.library_name }}-v${{ matrix.version }}-source.zip
           generate_release_notes: true
 
   # ---------------------------------------------------------------------------
@@ -233,8 +222,6 @@ jobs:
       MATRIX_JSON: ${{ needs.detect.outputs.matrix }}
     steps:
       - uses: actions/checkout@v6
-        with:
-          ref: ${{ inputs.checkout_ref || github.ref }}
 
       - uses: actions/setup-python@v6
         with:
