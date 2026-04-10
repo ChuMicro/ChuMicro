@@ -22,30 +22,36 @@ permissions:
   id-token: write    # PyPI trusted publishing (release.yml)
   actions: write     # trigger docs-deploy
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   validate:
     name: Parse tag
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       lib_name: ${{ steps.parse.outputs.lib_name }}
       version: ${{ steps.parse.outputs.version }}
     steps:
       - name: Parse experimental tag
         id: parse
+        env:
+          TAG: ${{ github.ref_name }}
         run: |
-          tag="${{ github.ref_name }}"
-          echo "Tag: ${tag}"
+          echo "Tag: ${TAG}"
 
           # Match the tag format: <library>-v<semver>-experimental
           # Capture group 1 = library name, capture group 2 = version.
-          if [[ "$tag" =~ ^([a-z][a-z0-9_-]*)-v([0-9]+\.[0-9]+\.[0-9]+)-experimental$ ]]; then
+          if [[ "$TAG" =~ ^([a-z][a-z0-9_-]*)-v([0-9]+\.[0-9]+\.[0-9]+)-experimental$ ]]; then
             lib_name="${BASH_REMATCH[1]}"
             version="${BASH_REMATCH[2]}"
             echo "lib_name=${lib_name}" >> "$GITHUB_OUTPUT"
             echo "version=${version}" >> "$GITHUB_OUTPUT"
             echo "✓ Promoting ${lib_name} v${version} from experimental to stable"
           else
-            echo "::error::Expected an experimental tag in 'Use workflow from' (e.g. timing-v0.3.0-experimental), got '${tag}'."
+            echo "::error::Expected an experimental tag in 'Use workflow from' (e.g. timing-v0.3.0-experimental), got '${TAG}'."
             exit 1
           fi
 
@@ -64,13 +70,13 @@ jobs:
           version="${{ steps.parse.outputs.version }}"
           version_file="libraries/${lib_name}/VERSION"
 
-          if [ ! -f "$version_file" ]; then
+          if [[ ! -f "$version_file" ]]; then
             echo "::error::Library '${lib_name}' not found (no ${version_file})."
             exit 1
           fi
 
-          file_version=$(cat "$version_file" | tr -d '[:space:]')
-          if [ "$file_version" != "$version" ]; then
+          file_version=$(tr -d '[:space:]' < "$version_file")
+          if [[ "$file_version" != "$version" ]]; then
             echo "::error::VERSION file says ${file_version} but tag says ${version}."
             exit 1
           fi
@@ -104,6 +110,7 @@ jobs:
     needs: [validate, release]
     if: ${{ !inputs.dry_run }}
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Trigger stable docs deploy
         env:

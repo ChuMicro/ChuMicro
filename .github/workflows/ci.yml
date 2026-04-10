@@ -6,15 +6,21 @@ on:
       - main
   pull_request:
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
+          cache: "pip"
 
       - name: Install tooling
         run: python -m pip install --upgrade pip ruff
@@ -24,6 +30,7 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       # Run all Python versions even if one fails so the full
       # compatibility picture is visible in a single CI run.
@@ -37,6 +44,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
+          cache: "pip"
 
       - name: Install tooling
         run: python -m pip install --upgrade pip pytest pytest-cov
@@ -48,6 +56,7 @@ jobs:
   # before they reach users.
   verify-examples:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
 
@@ -63,12 +72,14 @@ jobs:
   documentation-build:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
+          cache: "pip"
 
       - name: Install tooling
         run: python -m pip install --upgrade pip zensical mkdocstrings[python]
@@ -78,12 +89,14 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
+          cache: "pip"
 
       - name: Install tooling
         run: python -m pip install --upgrade pip build
@@ -101,6 +114,7 @@ jobs:
   version-check:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
         with:
@@ -119,6 +133,7 @@ jobs:
   api-check:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
         with:
@@ -128,6 +143,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
+          cache: "pip"
 
       - name: Install tooling
         run: python -m pip install --upgrade pip griffe
@@ -143,16 +159,26 @@ jobs:
     if: github.event_name == 'pull_request'
     name: MicroPython compatibility
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
+
+      - uses: actions/cache@v4
+        id: mp-cache
+        with:
+          path: .tools
+          key: micropython-${{ hashFiles('target-runtimes.toml', 'scripts/prepare_micropython.py', 'scripts/prepare.py') }}
+
       - name: Install unix-port build dependencies
+        if: steps.mp-cache.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y libffi-dev pkg-config
       - name: Prepare MicroPython unix-port runtime
+        if: steps.mp-cache.outputs.cache-hit != 'true'
         run: python scripts/run.py prepare-micropython
       - name: Run MicroPython compatibility tests
         run: python scripts/run.py test-micropython-compatibility
@@ -161,16 +187,26 @@ jobs:
     if: github.event_name == 'pull_request'
     name: CircuitPython compatibility
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
+
+      - uses: actions/cache@v4
+        id: cp-cache
+        with:
+          path: .tools
+          key: circuitpython-${{ hashFiles('target-runtimes.toml', 'scripts/prepare_circuitpython.py', 'scripts/prepare.py') }}
+
       - name: Install unix-port build dependencies
+        if: steps.cp-cache.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y libffi-dev pkg-config
       - name: Prepare CircuitPython unix-port runtime
+        if: steps.cp-cache.outputs.cache-hit != 'true'
         run: python scripts/run.py prepare-circuitpython
       - name: Run CircuitPython compatibility tests
         run: python scripts/run.py test-circuitpython-compatibility

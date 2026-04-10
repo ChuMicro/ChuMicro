@@ -7,15 +7,20 @@ The two-repo bundle strategy (stable vs. experimental) is defined in
 ``plans/decisions/0018-distribution-bundle-repo.md``.
 
 Subcommands:
-    stage        Stage a single library's bundle artifacts.
-    stage-matrix Stage artifacts for libraries in a JSON matrix (--matrix).
-    readme       Generate a bundle repo README.md.
+    stage              Stage a single library's bundle artifacts.
+    stage-matrix       Stage artifacts for libraries in a JSON matrix (--matrix).
+    readme             Generate a bundle repo README.md.
+    circup-zip         Build circup-format zip bundles from a bundle directory.
+    patch-experimental Patch pyproject.toml for experimental channel release.
+    next-date-tag      Print the next available date-based tag for a bundle repo.
 
 Examples:
     python scripts/bundle.py stage libraries/timing 0.1.0 .bundle-staging
     python scripts/bundle.py stage-matrix .bundle-staging --matrix '{"include": [...]}'
     python scripts/bundle.py readme --experimental -o README.md
     python scripts/bundle.py circup-zip .bundle-repo .circup-zips --repo-name ChuMicro-Bundle
+    python scripts/bundle.py patch-experimental libraries/timing
+    python scripts/bundle.py next-date-tag .bundle-repo
 """
 
 from __future__ import annotations
@@ -208,7 +213,7 @@ def stage_matrix(
     data = json.loads(matrix_json)
     for entry in data["include"]:
         build_bundle(
-            Path(entry["lib_dir"]),
+            Path(entry["library_dir"]),
             entry["version"],
             staging_dir,
             mpy_cross,
@@ -507,6 +512,77 @@ Do not edit it manually.
 """
 
 
+def patch_experimental(library_dir: Path) -> None:
+    """Patch a library's pyproject.toml for experimental channel release.
+
+    Renames the PyPI package to ``*-experimental``, redirects the Bundle
+    URL to the experimental bundle repo, and switches the Documentation
+    URL from ``/stable/`` to ``/experimental/``.
+
+    Args:
+        library_dir: Root directory of the library (e.g. ``libraries/timing``).
+    """
+    pyproject_path = library_dir / "pyproject.toml"
+    content = pyproject_path.read_text()
+    library_name = library_dir.name
+
+    # 1. Rename the PyPI package.
+    original_name = f'name = "chumicro-{library_name}"'
+    experimental_name = f'name = "chumicro-{library_name}-experimental"'
+    if original_name not in content:
+        sys.exit(f"Cannot find '{original_name}' in {pyproject_path}")
+    content = content.replace(original_name, experimental_name)
+
+    # 2. Point Bundle URL to the experimental bundle repository.
+    content = content.replace('ChuMicro-Bundle"', 'ChuMicro-Bundle-Experimental"')
+
+    # 3. Point Documentation URL to the experimental docs channel.
+    content = content.replace('/stable/"', '/experimental/"')
+
+    pyproject_path.write_text(content)
+
+    # Print patched lines for verification.
+    print("Patched pyproject.toml:")
+    for line in content.splitlines():
+        if line.startswith(("name =", "Bundle =", "Documentation =")):
+            print(f"  {line}")
+
+
+def next_date_tag(bundle_dir: Path) -> str:
+    """Compute the next available date-based tag for a bundle release.
+
+    Tags use ``YYYYMMDD`` for the first release of a day, with
+    ``.1``, ``.2``, etc. suffixes for subsequent releases.
+
+    Args:
+        bundle_dir: Path to the cloned bundle repository.
+
+    Returns:
+        The next available date tag string.
+    """
+    today = datetime.now(timezone.utc).strftime("%Y%m%d")  # noqa: UP017
+
+    result = subprocess.run(
+        ["git", "-C", str(bundle_dir), "tag", "-l", f"{today}*",
+         "--sort=v:refname"],
+        capture_output=True, text=True, check=False,
+    )
+    tags = [t for t in result.stdout.strip().splitlines() if t]
+
+    if not tags:
+        return today
+
+    latest = tags[-1]
+    if latest == today:
+        return f"{today}.1"
+
+    suffix_str = latest.removeprefix(f"{today}.")
+    try:
+        return f"{today}.{int(suffix_str) + 1}"
+    except ValueError:
+        return f"{today}.1"
+
+
 def main() -> None:
     """CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -593,6 +669,26 @@ def main() -> None:
         help="Date tag for zip filenames (default: today UTC as YYYYMMDD)",
     )
 
+    # Patch pyproject.toml for experimental release.
+    patch_parser = subparsers.add_parser(
+        "patch-experimental",
+        help="Patch pyproject.toml for experimental channel release",
+    )
+    patch_parser.add_argument(
+        "lib_dir", type=Path,
+        help="Library directory (e.g. libraries/timing)",
+    )
+
+    # Compute the next available date-based tag.
+    date_tag_parser = subparsers.add_parser(
+        "next-date-tag",
+        help="Print the next available date-based tag for a bundle repo",
+    )
+    date_tag_parser.add_argument(
+        "bundle_dir", type=Path,
+        help="Path to the cloned bundle repository",
+    )
+
     args = parser.parse_args()
 
     if args.command == "readme":
@@ -626,6 +722,10 @@ def main() -> None:
             args.repo_name,
             date_tag=args.date_tag,
         )
+    elif args.command == "patch-experimental":
+        patch_experimental(args.lib_dir)
+    elif args.command == "next-date-tag":
+        print(next_date_tag(args.bundle_dir))
     else:
         parser.print_help()
         raise SystemExit(1)
