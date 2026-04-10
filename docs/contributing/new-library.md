@@ -53,7 +53,7 @@ The scaffold is immediately runnable — tests pass at 100% coverage, lint is cl
 
 ## 2. Implement
 
-Put your code in `src/chumicro_my_thing/`. The rules for library code:
+Put your code in `src/chumicro_my_thing/`. The [Style Guide](style-guide.md) covers naming, annotations, docstrings, and formatting. The rules below are specific to library code:
 
 ### Cross-runtime compatibility
 

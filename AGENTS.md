@@ -169,6 +169,8 @@ Code under `scripts/` and `support/` runs **exclusively on CPython**.  Use the f
 
 ### Naming & style
 
+See the **[Style Guide](docs/contributing/style-guide.md)** for the complete reference on naming, annotations, docstrings, and formatting.
+
 PEP 8.  Descriptive names (`service`, `test_device`), not abbreviations (`svc`, `dut`).  No single-letter variable names except `_` (throwaway).  Common idioms like `e`, `f`, `i` must be spelled out (`error`, `file`, `index`).  Enforced by `CHU001` in `scripts/check_names.py` (runs as part of `lint`).  Suppress with `# noqa: CHU001` only when matching an upstream API.  See Decision 0022.  Document **all** functions and methods with concise docstrings.  Use standard Python type annotations on function signatures (Decision 0021).  Do not `import typing` in library code — use PEP 604 (`int | None`) and PEP 585 (`list[int]`) syntax instead.  Docstrings use Google-style sections for descriptions: `Args:` uses `name: description`, `Returns:` uses just the description, `Raises:` uses `ExceptionType: description`.  When writing CircuitPython drivers: initialize hardware in `__init__`, provide `deinit()` or context-manager support.
 
 ### API & compatibility

@@ -140,7 +140,7 @@ Preflight passed — required CI checks should pass.
 | What you see | What it means | How to fix |
 |---|---|---|
 | `Required test coverage of 94.0% not reached` | Tests don't cover enough code | Follow the hint printed below the FAIL line — it points to the `Missing` column |
-| `ruff check` errors with file:line | Code style violation | `Ctrl+click` / `⌘+click` the file:line link to jump there |
+| `ruff check` errors with file:line | Code style violation — see [Style Guide](style-guide.md) | `Ctrl+click` / `⌘+click` the file:line link to jump there |
 | `griffe warnings detected` | Bad or missing docstrings | Add type annotations to the signature; `Args:` uses `name: description` (no type), `Returns:` uses just the description |
 | `check-version` failure | Source changed without VERSION bump | Edit `libraries/<name>/VERSION` |
 
