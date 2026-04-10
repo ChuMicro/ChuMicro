@@ -154,12 +154,22 @@ jobs:
 
   # -------------------------------------------------------------------------
   # Runtime compatibility — pull request only to conserve CI minutes.
+  # Parametrized as a matrix to avoid duplicating near-identical job
+  # definitions for each runtime.
   # -------------------------------------------------------------------------
-  micropython-compatibility:
+  runtime-compatibility:
     if: github.event_name == 'pull_request'
-    name: MicroPython compatibility
+    name: "${{ matrix.runtime_label }} compatibility"
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runtime_label: MicroPython
+            runtime_slug: micropython
+          - runtime_label: CircuitPython
+            runtime_slug: circuitpython
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -167,46 +177,18 @@ jobs:
           python-version: "3.13"
 
       - uses: actions/cache@v4
-        id: mp-cache
+        id: runtime-cache
         with:
           path: .tools
-          key: micropython-${{ hashFiles('target-runtimes.toml', 'scripts/prepare_micropython.py', 'scripts/prepare.py') }}
+          key: ${{ matrix.runtime_slug }}-${{ hashFiles('target-runtimes.toml', format('scripts/prepare_{0}.py', matrix.runtime_slug), 'scripts/prepare.py') }}
 
       - name: Install unix-port build dependencies
-        if: steps.mp-cache.outputs.cache-hit != 'true'
+        if: steps.runtime-cache.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y libffi-dev pkg-config
-      - name: Prepare MicroPython unix-port runtime
-        if: steps.mp-cache.outputs.cache-hit != 'true'
-        run: python scripts/run.py prepare-micropython
-      - name: Run MicroPython compatibility tests
-        run: python scripts/run.py test-micropython-compatibility
-
-  circuitpython-compatibility:
-    if: github.event_name == 'pull_request'
-    name: CircuitPython compatibility
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.13"
-
-      - uses: actions/cache@v4
-        id: cp-cache
-        with:
-          path: .tools
-          key: circuitpython-${{ hashFiles('target-runtimes.toml', 'scripts/prepare_circuitpython.py', 'scripts/prepare.py') }}
-
-      - name: Install unix-port build dependencies
-        if: steps.cp-cache.outputs.cache-hit != 'true'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libffi-dev pkg-config
-      - name: Prepare CircuitPython unix-port runtime
-        if: steps.cp-cache.outputs.cache-hit != 'true'
-        run: python scripts/run.py prepare-circuitpython
-      - name: Run CircuitPython compatibility tests
-        run: python scripts/run.py test-circuitpython-compatibility
+      - name: "Prepare ${{ matrix.runtime_label }} unix-port runtime"
+        if: steps.runtime-cache.outputs.cache-hit != 'true'
+        run: python scripts/run.py prepare-${{ matrix.runtime_slug }}
+      - name: "Run ${{ matrix.runtime_label }} compatibility tests"
+        run: python scripts/run.py test-${{ matrix.runtime_slug }}-compatibility
