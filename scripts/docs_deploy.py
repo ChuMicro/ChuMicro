@@ -105,19 +105,19 @@ def inject_landing_page(branch: str) -> None:
     # of the default .git/index.
     file_descriptor, temp_index_file = tempfile.mkstemp(suffix=".idx")
     os.close(file_descriptor)
-    env = {**os.environ, "GIT_INDEX_FILE": temp_index_file}
+    index_environment = {**os.environ, "GIT_INDEX_FILE": temp_index_file}
     try:
         # Seed the temp index with the current branch tree.
         subprocess.run(
             ["git", "read-tree", f"{branch}^{{tree}}"],
-            env=env, cwd=ROOT, check=True,
+            env=index_environment, cwd=ROOT, check=True,
         )
 
         # Upsert index.html at the root.
         subprocess.run(
             ["git", "update-index", "--add", "--cacheinfo",
              f"100644,{html_blob},index.html"],
-            env=env, cwd=ROOT, check=True,
+            env=index_environment, cwd=ROOT, check=True,
         )
 
         # Upsert the favicon.
@@ -125,13 +125,13 @@ def inject_landing_page(branch: str) -> None:
             subprocess.run(
                 ["git", "update-index", "--add", "--cacheinfo",
                  f"100644,{favicon_blob},assets/images/favicon.png"],
-                env=env, cwd=ROOT, check=True,
+                env=index_environment, cwd=ROOT, check=True,
             )
 
         # Write the tree from the index.
         new_tree = subprocess.run(
             ["git", "write-tree"],
-            env=env, capture_output=True, cwd=ROOT, check=True,
+            env=index_environment, capture_output=True, cwd=ROOT, check=True,
         ).stdout.strip().decode()
     finally:
         Path(temp_index_file).unlink(missing_ok=True)

@@ -336,14 +336,14 @@ def pythonpath_env() -> dict[str, str]:
     Prepending all ``src/`` directories lets pytest discover library
     packages as a fallback alongside editable installs (Decision 0008).
     """
-    env = os.environ.copy()
-    existing_path = env.get("PYTHONPATH")
+    environment = os.environ.copy()
+    existing_path = environment.get("PYTHONPATH")
     path_entries = [str(source_dir) for source_dir in discover_source_roots()]
     if existing_path:
         path_entries.append(existing_path)
 
-    env["PYTHONPATH"] = os.pathsep.join(path_entries)
-    return env
+    environment["PYTHONPATH"] = os.pathsep.join(path_entries)
+    return environment
 
 
 # ---------------------------------------------------------------------------

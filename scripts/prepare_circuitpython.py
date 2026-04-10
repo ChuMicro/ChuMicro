@@ -87,7 +87,7 @@ def prepare_circuitpython() -> int:
                 "make", "-C", str(_SOURCE_DIR / "ports/unix"),
                 f"VARIANT={_UNIX_VARIANT}", jobs,
             ],
-            env=build_env("-DMICROPY_PY_MICROPYTHON_RINGIO=0"),
+            environment=build_env("-DMICROPY_PY_MICROPYTHON_RINGIO=0"),
         )
     except subprocess.CalledProcessError as error:
         print(f"Command failed with exit code {error.returncode}: {error.cmd}")

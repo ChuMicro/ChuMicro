@@ -26,17 +26,17 @@ def runtime_versions() -> dict:
 
 
 def run_build_command(
-    command: list[str], cwd: Path | None = None, env: dict[str, str] | None = None
+    command: list[str], cwd: Path | None = None, environment: dict[str, str] | None = None
 ) -> None:
     """Run a build command and fail fast if it does not succeed.
 
     Args:
         command: Command and arguments to run.
         cwd: Working directory (defaults to repository root).
-        env: Optional environment variables for the subprocess.
+        environment: Optional environment variables for the subprocess.
     """
     print(f"+ {' '.join(command)}")
-    subprocess.run(command, cwd=cwd or ROOT, env=env, check=True)
+    subprocess.run(command, cwd=cwd or ROOT, env=environment, check=True)
 
 
 def ensure_tool(name: str) -> None:
@@ -70,14 +70,14 @@ def build_env(*extra_cflags: str) -> dict[str, str]:
     Args:
         extra_cflags: Additional compiler flags to append.
     """
-    env = os.environ.copy()
-    existing = env.get("CFLAGS_EXTRA", "").split()
+    environment = os.environ.copy()
+    existing = environment.get("CFLAGS_EXTRA", "").split()
     for flag in extra_cflags:
         if flag not in existing:
             existing.append(flag)
     if existing:
-        env["CFLAGS_EXTRA"] = " ".join(existing)
-    return env
+        environment["CFLAGS_EXTRA"] = " ".join(existing)
+    return environment
 
 
 # ---------------------------------------------------------------------------
