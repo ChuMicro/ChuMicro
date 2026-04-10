@@ -4,6 +4,7 @@
     "libraries/compat/src",
     "libraries/msgpack/src",
     "libraries/runner/src",
-    "libraries/timing/src"
+    "libraries/timing/src",
+    "scripts"
   ]
 }
