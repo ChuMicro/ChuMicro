@@ -242,19 +242,51 @@ This was the largest single session. It addressed three areas: the workspace was
 
 **All libraries bumped to 0.1.18 (current).**
 
-### 2026-04-07 — Plans rationalization
+### 2026-04-07 — Contributor docs, skills, and plans rationalization
 
-**Duplication diagnosis:** The `plans/` folder had ~950 lines of duplicated content spread across 7 prompt files, 3 completed workstreams, and bloated done-item lists. The same content (decision lists, command lists, repo shape, "current verified state") was repeated 3–4 times, creating a maintenance treadmill. Two meta-prompts (`plans-sync`, `end-of-session` §5b–5d) existed solely to fight staleness caused by the duplication.
+**Contributor documentation:** Built the full contributor guide infrastructure: `docs/contributing/` with architecture overview, CLI guide, PyCharm guide, VS Code guide, other-editors guide, new-library guide, pull-requests guide, and releases guide. Root README restructured for readability. Issue templates and PR template added. Agent skills organized into `.github/skills/` with five new skills (end-of-session, task-checkpoint, debug-test-failure, large-output, run-script).
 
-**Resolution:** Deleted 7 prompt files and 3 completed workstreams (462 insertions, 2006 deletions). Transformed `workspace-history.prompt.md` into `history.md` (this document) as a durable knowledge base. Created `end-of-session.md` as a simplified checklist. Moved `guide-generation.prompt.md` to `plans/guide-generation.md`. Trimmed `next-up.md` (90 Done items → 5 recent) and `roadmap.md` (done milestones collapsed). Cross-referenced ~250 commit messages against the remaining plans to surface knowledge gaps.
+**Docstring and type policy (Decision 0021):** Adopted standard Python type annotations on all function signatures. Reversed the earlier "docstring-only types" policy after empirical testing proved annotations have zero runtime overhead on MicroPython and CircuitPython (both strip `__annotations__` at compile time). Added griffe warning detection to docs builds — griffe warnings now fail the build, enforcing annotation and docstring completeness.
 
-**Principle:** Plans should capture knowledge that lives in people's heads — design principles, rejected approaches, why decisions were made. Reference material (command lists, decision indices, repo structure) belongs in AGENTS.md and decisions, not duplicated across prompts.
+**Preflight overhaul:** Integrated docs build with griffe warning detection, example verification, version-check, and api-check into preflight. All checks run as sequential steps with clear failure messages.
 
-### 2026-04-10 — Scripts test infrastructure and IDE audit
+**Plans rationalization:** Deleted 7 prompt files and 3 completed workstreams (462 insertions, 2006 deletions). Transformed `workspace-history.prompt.md` into `history.md` (this document). Trimmed `next-up.md` and `roadmap.md`. Added `plans/patterns.md`, `plans/open-questions.md`, and `plans/sessions/`.
+
+### 2026-04-08 — Type annotations and agent steering
+
+**Type annotation rollout (Decision 0021 applied):** Added PEP 604/585 type annotations to all unannotated functions across library source, examples, tests, and functional tests. Added Google-style `Args:`/`Returns:`/`Raises:` docstring sections across all `.py` files and code examples in markdown docs. Removed redundant `returns_named_value: false` from mkdocs.yml files (mkdocstrings defaults to false).
+
+**Contributing docs expansion:** Restructured contributing guide for a clear reading path. Added const()/memoryview before/after examples to new-library guide. Updated PR template. Added planning infrastructure (sessions, open questions, patterns).
+
+**Agent steering:** Reordered AGENTS.md hard rules by violation frequency. Added pitfall: "Don't tell the user you're done with uncommitted changes." Strengthened preflight and commit-on-completion steering. Added CLAUDE.md and .cursorrules agent tool detection files.
+
+### 2026-04-09 — Naming conventions, style guide, release fixes, contributor audits
+
+**Naming conventions (Decision 0022):** Created `scripts/check_names.py` with custom `CHU001` linter rule enforcing no single-letter variables (except `_`) and banned abbreviations (`env`, `buf`, `src`, `cmd`, `msg`, `err`, `ref`). Extended to catch banned abbreviations as suffixes. Registered `CHU001` as external rule code in ruff config. Integrated into lint task.
+
+**Style guide:** Extracted style rules from CONTRIBUTING.md into standalone `docs/contributing/style-guide.md` with explanatory prose. Expanded linter section for beginners. Linked from AGENTS.md, IDE guides, and new-library guide.
+
+**Editable installs adoption:** Policy change — `pip install -e` is now standard workspace setup. Extracted shared `scripts/workspace.py` module with `run_command()`, `install_command()`, `install_editable()`. Made `discovery.py` importable before third-party packages by lazy-loading tomllib. Eliminated duplicate subprocess and pip-install logic across scripts. Updated AGENTS.md, conftest.py, history.md, and contributor docs.
+
+**Contributor experience audit v2:** README restructured (Installation above Development), dependency graph, cross-library references (timing ↔ runner), "What's new" sections in all library guides, PR template simplification (N/A defaults), coverage hint in run.py, CLAUDE.md/.cursorrules pointers, GitHub Discussions links.
+
+**Contributor experience audit v3:** Root README "Your first program" example and REPL snippet, circup bundle explanation, install section cleanup, common-mistakes FAQ in CONTRIBUTING.md, FakeTicks.ticks_add overflow validation, self-contained testing.py constants, architecture guide, editable-install clarification.
+
+**Standalone promote workflow (Decision 0023):** Rewrote `promote.yml` as standalone workflow that runs from main instead of delegating to `release.yml` via `workflow_call`. Fixed PyPI OIDC attestation mismatch (Sigstore certificate carries caller identity, not callee). Release workflow now creates source archive attached to GitHub Release. Promote downloads it and builds/publishes/bundles/deploys inline.
+
+**Release and bundle fixes:** Fixed PyPI trusted publisher mismatch for stable releases. Fixed attestation verification failure on promote path. Included testing.py in bundle artifacts. Fixed stable bundle README banner. Bumped all libraries to 0.1.17, then 0.1.18.
+
+**CI hardening:** Fixed bundle KeyError, standardized shell usage, added caching. Consolidated duplicate micropython/circuitpython compatibility jobs into matrix. Cleaned up workflow files (naming, deduplication, comments). Added `chumicro-` prefix to tags and source archive filenames.
+
+### 2026-04-10 — Scaffold alignment, README polish, scripts tests, IDE audit
+
+**Scaffold and README alignment:** Aligned scaffold templates with existing library implementations (bullet prefixes, link styles, footer bars). Added circup/mip links to all library READMEs and scaffold. Rewrote bundle READMEs to match root README tone. Fixed support/test_harness/ carve-out in typing/infra docs.
 
 **Scripts test suite:** Added `scripts/tests/` with 203 pytest tests across 12 modules covering pure-logic functions in the scripts infrastructure (check_names, discovery, check_version, check_api, verify_examples, bundle, scaffold, ide, prepare, workspace, run, generate_landing_page). Tests use `tmp_path` and `monkeypatch` for filesystem and git isolation. Runs in 0.4s.
 
 **`test-scripts` subcommand:** Added `python scripts/run.py test-scripts` as a standalone task, integrated into preflight. Scripts tests intentionally run without the 94% per-library coverage gate (scripts are subprocess-heavy orchestration code with a different coverage profile).
 
 **IDE audit:** `scripts/` was invisible to both IDE test runners. Fixed by adding `scripts/` as a source root and `scripts/tests/` as a test source in `.idea/chumicro.iml`, adding `scripts` to `extraPaths` in `pyrightconfig.json` and `.vscode/settings.json`, adding `scripts/tests` to pytest `testpaths` in `pyproject.toml`, and adding `scripts/` to `sys.path` in root `conftest.py`. Also cleaned up stale library-root entries in the `.iml` file. Added "Test Scripts" task to both PyCharm run configurations and VS Code tasks.
+
+**All libraries at 0.1.18.**
 
