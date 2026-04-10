@@ -62,14 +62,10 @@ def _find_bundle_modules(library_dir: Path) -> tuple[str, Path, list[Path]]:
     if package_dir is None:
         sys.exit(f"No importable package under {library_dir / 'src'}")
 
-    # Exclude __pycache__ artifacts and testing.py — the testing module
-    # contains test fakes only used by host-based pytest suites and should
-    # not be deployed to microcontroller boards (saves flash space).
     python_files = [
         py_file
         for py_file in sorted(package_dir.rglob("*.py"))
         if "__pycache__" not in py_file.relative_to(package_dir).parts
-        and py_file.name != "testing.py"
     ]
     return package_dir.name, package_dir, python_files
 

@@ -44,13 +44,13 @@ ChuMicro/ChuMicro-Bundle/              # (or ChuMicro-Bundle-Experimental)
 │   ├── package.json
 │   ├── __init__.py / .mpy
 │   ├── ticks.py / .mpy
-│   └── testing.py                      # source-only (mock layer)
+│   └── testing.py / .mpy
 ├── chumicro_runner/
 │   └── ...
 └── (GitHub Releases for circup)
 ```
 
-Each library directory contains both `.py` and `.mpy` for every module (except testing modules which are `.py` only), plus a `package.json` for `mip`.
+Each library directory contains both `.py` and `.mpy` for every module, plus a `package.json` for `mip`.
 
 ### 3. `mip` installation via `package.json`
 
