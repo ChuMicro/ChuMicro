@@ -6,16 +6,16 @@ Register services with check/handle methods, add periodic callbacks, and the run
 
 ## Installation
 
-### CircuitPython (circup)
+### CircuitPython ([circup](https://github.com/adafruit/circup))
 
-circup uses bundles to find third-party packages — register the ChuMicro bundle once, then install by name:
+[circup](https://github.com/adafruit/circup) is CircuitPython's package manager — it uses bundles to find third-party packages. Register the ChuMicro bundle once, then install by name:
 
 ```bash
 circup bundle-add ChuMicro/ChuMicro-Bundle
 circup install chumicro-runner
 ```
 
-### MicroPython (mip)
+### MicroPython ([mip](https://docs.micropython.org/en/latest/reference/packages.html))
 
 ```bash
 mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_runner
