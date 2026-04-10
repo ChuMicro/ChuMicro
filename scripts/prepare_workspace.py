@@ -84,14 +84,14 @@ def _is_native_windows() -> bool:
     return os.name == "nt"
 
 
-def _in_virtual_env() -> bool:
+def _in_virtual_environment() -> bool:
     """Return whether the interpreter is running inside a virtual environment."""
     return sys.prefix != sys.base_prefix
 
 
 def _describe_environment() -> str:
     """Return a short human-readable description of the active Python environment."""
-    if _in_virtual_env():
+    if _in_virtual_environment():
         return f"virtual environment at {sys.prefix}"
 
     conda = os.environ.get("CONDA_PREFIX")
@@ -187,7 +187,7 @@ def resolve_python(create_venv: bool) -> Path:
         return _venv_python()
 
     # Already inside a virtual environment or conda — use it.
-    if _in_virtual_env() or os.environ.get("CONDA_PREFIX"):
+    if _in_virtual_environment() or os.environ.get("CONDA_PREFIX"):
         print(f"Using {_describe_environment()}")
         return Path(sys.executable)
 
@@ -247,7 +247,7 @@ def print_summary(python: Path) -> None:
     print()
 
     # Activation hint only if we created .venv and it is not the running interpreter.
-    if python == _venv_python() and not _in_virtual_env():
+    if python == _venv_python() and not _in_virtual_environment():
         print("Activate the virtual environment:")
         if _is_native_windows():
             print("  .venv\\Scripts\\activate")

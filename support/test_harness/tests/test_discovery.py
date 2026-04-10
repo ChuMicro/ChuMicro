@@ -40,7 +40,7 @@ def _make_support(root: str, name: str):
 # ---------------------------------------------------------------------------
 
 
-def test_discover_source_roots_finds_library_and_support_src(tmp_path):
+def test_discover_source_roots_finds_library_and_support_source(tmp_path):
     """Source roots from both libraries/ and support/ should be discovered."""
     root = str(tmp_path)
     _make_library(root, "alpha")
@@ -52,7 +52,7 @@ def test_discover_source_roots_finds_library_and_support_src(tmp_path):
     assert f"{root}/support/beta/src" in roots
 
 
-def test_discover_source_roots_ignores_dirs_without_src(tmp_path):
+def test_discover_source_roots_ignores_dirs_without_source(tmp_path):
     """Directories without a src/ subdirectory should be skipped."""
     root = str(tmp_path)
     os.makedirs(os.path.join(root, "libraries", "nosrc"))

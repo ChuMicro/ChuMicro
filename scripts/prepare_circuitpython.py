@@ -25,7 +25,7 @@ import sys
 
 from discovery import TOOLS
 from prepare import (
-    build_env,
+    build_environment,
     build_jobs,
     ensure_tool,
     run_build_command,
@@ -87,7 +87,7 @@ def prepare_circuitpython() -> int:
                 "make", "-C", str(_SOURCE_DIR / "ports/unix"),
                 f"VARIANT={_UNIX_VARIANT}", jobs,
             ],
-            environment=build_env("-DMICROPY_PY_MICROPYTHON_RINGIO=0"),
+            environment=build_environment("-DMICROPY_PY_MICROPYTHON_RINGIO=0"),
         )
     except subprocess.CalledProcessError as error:
         print(f"Command failed with exit code {error.returncode}: {error.cmd}")

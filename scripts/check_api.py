@@ -55,17 +55,17 @@ def _bump_level(old_version: str, new_version: str) -> str | None:
     return None
 
 
-def _check(base_ref: str) -> int:
+def _check(base_reference: str) -> int:
     """Run the API breakage check.
 
     Args:
-        base_ref: Git ref to detect changed libraries against.
+        base_reference: Git ref to detect changed libraries against.
 
     Returns:
         Exit code (0 for success, 1 for failure).
     """
     try:
-        libraries = changed_libraries(base_ref)
+        libraries = changed_libraries(base_reference)
     except RuntimeError as exc:
         print(exc)
         return 2

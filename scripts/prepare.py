@@ -62,7 +62,7 @@ def build_jobs() -> str:
     return str(min(os.cpu_count() or 2, 4))
 
 
-def build_env(*extra_cflags: str) -> dict[str, str]:
+def build_environment(*extra_cflags: str) -> dict[str, str]:
     """Return a copy of ``os.environ`` with additional ``CFLAGS_EXTRA`` flags.
 
     Flags already present in ``CFLAGS_EXTRA`` are not duplicated.

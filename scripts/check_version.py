@@ -16,17 +16,17 @@ from __future__ import annotations
 from discovery import RELEASE_RELEVANT, changed_files, release_tags
 
 
-def _check(base_ref: str) -> int:
+def _check(base_reference: str) -> int:
     """Run the VERSION enforcement check.
 
     Args:
-        base_ref: Git ref to diff against.
+        base_reference: Git ref to diff against.
 
     Returns:
         Exit code (0 for success, 1 for failure).
     """
     try:
-        changed = changed_files(base_ref)
+        changed = changed_files(base_reference)
     except RuntimeError as exc:
         print(exc)
         return 2
