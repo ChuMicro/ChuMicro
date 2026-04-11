@@ -12,23 +12,24 @@ This means mip users always get `.py` source, even on boards that could run pre-
 
 ## Decision
 
-### Folder-based mpy manifests
+### Folder-based mpy layout
 
-Each bundle repo contains an `mpy6/` directory with per-library `package.json` manifests that point to the `.mpy` files in the root package directories:
+Each bundle repo contains an `mpy6/` directory with per-library subdirectories that hold both the compiled `.mpy` files and a `package.json` manifest:
 
 ```
 ChuMicro-Bundle/
-├── chumicro_timing/              # default: .py source
+├── chumicro_timing/              # default: .py source only
 │   ├── package.json              # urls → .py files
 │   ├── __init__.py
-│   ├── __init__.mpy
-│   └── ticks.py / .mpy
+│   └── ticks.py
 ├── mpy6/                         # opt-in: .mpy v6 bytecode
 │   └── chumicro_timing/
-│       └── package.json          # urls → root .mpy files
+│       ├── package.json          # urls → mpy6/chumicro_timing/*.mpy
+│       ├── __init__.mpy
+│       └── ticks.mpy
 ```
 
-The `mpy6/` manifests use full `github:` URLs pointing to the `.mpy` files in the root package directories.  No file duplication — only the `package.json` manifests live under `mpy6/`.
+The `.mpy` files live exclusively under `mpy6/`, not in the root package directories.  This keeps each mpy format version self-contained so that a future `mpy7/` folder can be added without file collisions.
 
 ### User experience
 
@@ -57,16 +58,18 @@ The folder name encodes the mpy bytecode format version, not the runtime version
 - **Branch-based** (`version="mpy6"`): Every release must update multiple branches atomically.  The `version` parameter rewrites all URLs in the manifest, requiring the entire file tree per branch.  Branch drift risk with automation.
 - **Separate JSON** (`package-mpy6.json`): Dependencies leak the `.json` suffix into user-facing dep declarations.  Users must type the full filename.
 - **Separate repo per mpy version**: Cross-repo dependency management.  Extremely high CI complexity.
+- **.mpy files in root (previous approach)**: Co-locating `.mpy` and `.py` in the root package directory prevents supporting multiple mpy format versions simultaneously — file names collide and there is no way to distinguish which mpy format a given `.mpy` file targets.
 
 ### circup interaction
 
-The `mpy6/` directory does not affect circup.  The circup zip builder filters on `chumicro_*` directory names, so `mpy6/` is naturally excluded from circup zips.  circup continues to use the root `.mpy` files via its own version-matched zip naming convention.
+The circup zip builder scans `mpy6/chumicro_*` directories for `.mpy` files when building the bytecode zip.  Root `chumicro_*` directories contain only `.py` source.  The zip naming convention (`-10.x-mpy-`) tells circup which bytecode format the zip contains.
 
 ## Consequences
 
 - MicroPython users who want `.mpy` bytecode have a documented opt-in path.
 - The default `package.json` stays `.py`-based for universal compatibility.
-- `build_bundle` generates `mpy6/` manifests alongside the root manifests.
+- `build_bundle` compiles `.mpy` files into `mpy6/` and generates manifests pointing to those files.
+- `build_circup_zips` pulls `.py` from root dirs and `.mpy` from `mpy6/` dirs.
 - Bundle README documents both install paths.
 - Adding a future mpy format version requires adding one folder and regenerating manifests — no branch or repo management.
-
+- Each mpy format version is self-contained: files and manifest live together.

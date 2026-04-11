@@ -141,8 +141,9 @@ def build_bundle(
 ) -> None:
     """Stage bundle artifacts for a single library.
 
-    Creates ``<staging_dir>/<package_name>/`` containing .py source, .mpy
-    bytecode, and a package.json manifest for mip.
+    Creates ``<staging_dir>/<package_name>/`` containing .py source and a
+    mip package.json manifest, and ``<staging_dir>/mpy6/<package_name>/``
+    containing pre-compiled .mpy bytecode and its own package.json.
 
     Args:
         library_dir: Root directory of the library.
@@ -160,14 +161,14 @@ def build_bundle(
     output_dir = staging_dir / package_name
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # All modules get both .py source and .mpy bytecode.
+    # Copy .py source files into the root package directory.  The .mpy
+    # bytecode goes into the mpy6/ folder (see below) so that each mpy
+    # format version has its own self-contained directory.
     for source_file in python_files:
         relative_path = source_file.relative_to(package_dir)
         python_dest_file = output_dir / relative_path
-        mpy_dest_file = (output_dir / relative_path).with_suffix(".mpy")
         python_dest_file.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source_file, python_dest_file)
-        _compile_mpy(source_file, mpy_dest_file, mpy_cross)
 
     # Copy README.md into the bundle directory so GitHub renders it when
     # users browse the bundle repo.  The file is not included in circup zips
@@ -189,8 +190,9 @@ def build_bundle(
     # are tied to a specific bytecode version (e.g. mpy v6 for CP 10.x)
     # and would fail on boards running a different version.  MicroPython
     # compiles .py to bytecode on import, so source works everywhere.
-    # The .mpy files in the bundle are consumed by circup (which handles
-    # version matching via the zip naming convention), not by mip.
+    # Pre-compiled .mpy bytecode lives under mpy6/ and is consumed by
+    # circup (which handles version matching via zip naming) and by the
+    # mpy6/ mip install path.
     urls = []
     for source_file in python_files:
         relative_path = source_file.relative_to(package_dir)
@@ -214,9 +216,10 @@ def build_bundle(
         json.dump(manifest, manifest_file, indent=2)
         manifest_file.write("\n")
 
-    # Generate mpy6/ manifest — an opt-in mip install path for pre-compiled
-    # .mpy bytecode (Decision 0024).  The manifest points to the .mpy files
-    # in the root package directory; no files are duplicated.
+    # Compile .mpy bytecode into mpy6/ and generate the mpy6/ manifest —
+    # an opt-in mip install path for pre-compiled .mpy bytecode
+    # (Decision 0024).  Each mpy format version gets its own
+    # self-contained directory with both .mpy files and a package.json.
     mpy_manifest_dir = staging_dir / MPY_FORMAT_FOLDER / package_name
     mpy_manifest_dir.mkdir(parents=True, exist_ok=True)
 
@@ -224,8 +227,14 @@ def build_bundle(
     for source_file in python_files:
         relative_path = source_file.relative_to(package_dir)
         mpy_relative_path = relative_path.with_suffix(".mpy").as_posix()
+        mpy_dest_file = mpy_manifest_dir / relative_path.with_suffix(".mpy")
+        mpy_dest_file.parent.mkdir(parents=True, exist_ok=True)
+        _compile_mpy(source_file, mpy_dest_file, mpy_cross)
         target = f"{package_name}/{mpy_relative_path}"
-        source = f"github:ChuMicro/{bundle_repo}/{package_name}/{mpy_relative_path}"
+        source = (
+            f"github:ChuMicro/{bundle_repo}"
+            f"/{MPY_FORMAT_FOLDER}/{package_name}/{mpy_relative_path}"
+        )
         mpy_urls.append([target, source])
 
     mpy_manifest: dict = {"urls": mpy_urls, "version": version}
@@ -241,7 +250,7 @@ def build_bundle(
         mpy_manifest_file.write("\n")
 
     print(f"Staged {package_name} v{version} -> {output_dir}")
-    print(f"Staged {MPY_FORMAT_FOLDER}/{package_name} manifest -> {mpy_manifest_dir}")
+    print(f"Staged {MPY_FORMAT_FOLDER}/{package_name} bytecode -> {mpy_manifest_dir}")
 
 
 def stage_matrix(
@@ -312,6 +321,15 @@ def build_circup_zips(
         print(f"No chumicro_* packages found in {bundle_dir}")
         return []
 
+    # .mpy bytecode lives under mpy6/chumicro_* (one folder per mpy
+    # format version).  Collect those directories for the bytecode zip.
+    mpy_base = bundle_dir / MPY_FORMAT_FOLDER
+    mpy_package_dirs = sorted(
+        entry
+        for entry in (mpy_base.iterdir() if mpy_base.is_dir() else [])
+        if entry.is_dir() and entry.name.startswith("chumicro_")
+    )
+
     source_bundle_name = f"{bundle_id}-py-{date_tag}"
     # "10.x" refers to CircuitPython 10.x's mpy bytecode format (v6).
     # circup parses this pattern to match bundles to the running firmware
@@ -325,18 +343,19 @@ def build_circup_zips(
         zipfile.ZipFile(source_zip_path, "w", zipfile.ZIP_DEFLATED) as source_zip,
         zipfile.ZipFile(bytecode_zip_path, "w", zipfile.ZIP_DEFLATED) as bytecode_zip,
     ):
+        # .py source bundle: all .py files from root package directories.
         for package_dir in package_dirs:
             package_name = package_dir.name
-
-            # .py source bundle: all .py files.
             for source_file in sorted(package_dir.rglob("*.py")):
                 relative_path = source_file.relative_to(package_dir)
                 archive_path = f"{source_bundle_name}/lib/{package_name}/{relative_path}"
                 source_zip.write(source_file, archive_path)
 
-            # .mpy bytecode bundle: all .mpy files.
-            for bytecode_file in sorted(package_dir.rglob("*.mpy")):
-                relative_path = bytecode_file.relative_to(package_dir)
+        # .mpy bytecode bundle: all .mpy files from mpy6/ directories.
+        for mpy_dir in mpy_package_dirs:
+            package_name = mpy_dir.name
+            for bytecode_file in sorted(mpy_dir.rglob("*.mpy")):
+                relative_path = bytecode_file.relative_to(mpy_dir)
                 archive_path = f"{bytecode_bundle_name}/lib/{package_name}/{relative_path}"
                 bytecode_zip.write(bytecode_file, archive_path)
 
@@ -565,9 +584,9 @@ pip install chumicro-timing{pip_suffix}
 | --- | --- | --- |
 {library_rows}
 
-Each directory contains `.py` source, `.mpy` bytecode \
-(CircuitPython 10.x, mpy v6), and a `package.json` manifest \
-for mip.
+Each root directory contains `.py` source and a `package.json` manifest \
+for mip.  Pre-compiled `.mpy` bytecode (CircuitPython 10.x, mpy v6) lives \
+under `{MPY_FORMAT_FOLDER}/`.
 
 ## About
 
