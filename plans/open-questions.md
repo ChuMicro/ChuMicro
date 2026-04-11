@@ -59,9 +59,10 @@ Hardcoded single-version assumptions in `bundle_manager.py`:
 
 Hardcoded assumptions in CI:
 
-- `release.yml` and `promote.yml` only install MicroPython's `mpy-cross`
-  (via pip) and don't pass `--cp-mpy-cross` or `--mp-mpy-cross` flags.
-  Multi-version CI needs to install and invoke multiple mpy-cross binaries.
+- `release.yml` and `promote.yml` build both mpy-cross compilers from source
+  via `prepare-mpy-cross` and pass them to `bundle_manager.py` via
+  auto-discovery.  Multi-version CI would need to build and invoke multiple
+  mpy-cross binaries per runtime.
 - `target-runtimes.toml` pins one CP version and one MP version.  Multi-version
   support would need to pin multiple versions for the transition period.
 

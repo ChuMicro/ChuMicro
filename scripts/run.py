@@ -28,6 +28,7 @@ from ide_sync import sync_ide
 from new_library_scaffold import new_library
 from prepare_circuitpython import prepare_circuitpython
 from prepare_micropython import prepare_micropython
+from prepare_mpy_cross import prepare_mpy_cross
 from shared import (
     install_command,
     install_editable,
@@ -761,6 +762,10 @@ def _build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("prepare-micropython", help="prepare MicroPython unix-port")
     subparsers.add_parser("prepare-circuitpython", help="prepare CircuitPython unix-port")
     subparsers.add_parser(
+        "prepare-mpy-cross",
+        help="build mpy-cross compilers for both runtimes (no unix-port)",
+    )
+    subparsers.add_parser(
         "test-micropython-compatibility",
         parents=[binary],
         help="MicroPython cross-runtime unit tests",
@@ -939,6 +944,7 @@ def main(argv: list[str]) -> int:
         "build": build,
         "prepare-micropython": prepare_micropython,
         "prepare-circuitpython": prepare_circuitpython,
+        "prepare-mpy-cross": prepare_mpy_cross,
         "test-device": test_device,
         "check-version": check_version,
         "check-api": check_api,

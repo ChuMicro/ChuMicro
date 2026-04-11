@@ -231,8 +231,15 @@ jobs:
           python-version: "3.13"
           cache: "pip"
 
-      - name: Install mpy-cross
-        run: pip install mpy-cross
+      - uses: actions/cache@v4
+        id: mpy-cross-cache
+        with:
+          path: .tools
+          key: mpy-cross-${{ hashFiles('target-runtimes.toml', 'scripts/prepare_mpy_cross.py', 'scripts/shared.py') }}
+
+      - name: Build mpy-cross compilers
+        if: steps.mpy-cross-cache.outputs.cache-hit != 'true'
+        run: python scripts/run.py prepare-mpy-cross
 
       - name: Stage bundle artifacts
         # Compiles .py → .mpy and arranges library files into the bundle
