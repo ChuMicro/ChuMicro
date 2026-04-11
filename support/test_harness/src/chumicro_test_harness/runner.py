@@ -109,11 +109,11 @@ def run_module(module):
 		test_start = _now_seconds()
 		try:
 			function()
-		except Exception as exception:  # pragma: no cover - exercised indirectly by tests.
+		except Exception as error:  # pragma: no cover - exercised indirectly by tests.
 			duration = _now_seconds() - test_start
 			failed += 1
 			print(f"FAIL {name} ({duration:.3f}s)")
-			_print_exception(exception)
+			_print_exception(error)
 		else:
 			duration = _now_seconds() - test_start
 			print(f"PASS {name} ({duration:.3f}s)")

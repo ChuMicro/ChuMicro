@@ -69,7 +69,14 @@ def _collect_names(tree: ast.Module) -> list[tuple[int, str, str]]:
 
         # Exception handlers: except ... as e
         elif isinstance(node, ast.ExceptHandler) and node.name:
-            targets.append((node.lineno, node.name))
+            if node.name == "exception":
+                hits.append((
+                    node.lineno,
+                    node.name,
+                    "use 'error' for exception handler names, not 'exception'",
+                ))
+            else:
+                targets.append((node.lineno, node.name))
 
         # Function / method names
         elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):

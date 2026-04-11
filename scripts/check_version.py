@@ -27,8 +27,8 @@ def _check(base_reference: str) -> int:
     """
     try:
         changed = changed_files(base_reference)
-    except RuntimeError as exception:
-        print(exception)
+    except RuntimeError as error:
+        print(error)
         return 2
 
     if not changed:
