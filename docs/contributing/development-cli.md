@@ -4,12 +4,10 @@ This guide covers the full development workflow using only the terminal — no I
 
 ## Setup
 
-```bash
-# Clone (or fork first, then clone your fork)
-git clone https://github.com/ChuMicro/ChuMicro.git
-cd ChuMicro
+If you haven't already, fork and clone the repository following the [quick start](../../CONTRIBUTING.md#quick-start) in the contributing guide. Then install dependencies:
 
-# Install dependencies, run lint + tests to verify
+```bash
+cd ChuMicro
 python scripts/prepare_workspace.py --create-venv
 ```
 
