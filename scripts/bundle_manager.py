@@ -15,12 +15,13 @@ Subcommands:
     next-date-tag      Print the next available date-based tag for a bundle repo.
 
 Examples:
-    python scripts/bundle.py stage libraries/timing 0.1.0 .bundle-staging
-    python scripts/bundle.py stage-matrix .bundle-staging --matrix '{"include": [...]}'
-    python scripts/bundle.py readme --experimental -o README.md
-    python scripts/bundle.py circup-zip .bundle-repo .circup-zips --repo-name ChuMicro-Bundle
-    python scripts/bundle.py patch-experimental libraries/timing
-    python scripts/bundle.py next-date-tag .bundle-repo
+    python scripts/bundle_manager.py stage libraries/timing 0.1.0 .bundle-staging
+    python scripts/bundle_manager.py stage-matrix .bundle-staging --matrix '{"include": [...]}'
+    python scripts/bundle_manager.py readme --experimental -o README.md
+    python scripts/bundle_manager.py circup-zip .bundle-repo .circup-zips \
+        --repo-name ChuMicro-Bundle
+    python scripts/bundle_manager.py patch-experimental libraries/timing
+    python scripts/bundle_manager.py next-date-tag .bundle-repo
 """
 
 from __future__ import annotations
@@ -40,7 +41,7 @@ try:
 except ModuleNotFoundError:
     import tomli as tomllib  # type: ignore[import-not-found,no-redef]
 
-from discovery import ROOT, find_package_dir
+from workspace import ROOT, find_package_dir
 
 #: Bundle repository names for each channel.  Experimental uses a separate repository
 #: so that circup's latest_tag works per-channel without prerelease tag tricks.

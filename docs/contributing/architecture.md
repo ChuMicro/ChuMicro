@@ -18,7 +18,7 @@ After reading these five files, you understand ~80% of the project.
 
 `scripts/run.py` is the single entry point for all developer tasks. It delegates to task-specific modules in `scripts/`.
 
-Package discovery (`scripts/discovery.py`) scans the workspace for `pyproject.toml` files under `libraries/` and `support/`. There are no hard-coded package lists — adding a library via `new-library` automatically makes it visible to all tasks (test, lint, build, docs, verify-examples).
+Package discovery (`scripts/workspace.py`) scans the workspace for `pyproject.toml` files under `libraries/` and `support/`. There are no hard-coded package lists — adding a library via `new-library` automatically makes it visible to all tasks (test, lint, build, docs, verify-examples).
 
 ## Test isolation
 
@@ -70,7 +70,7 @@ Running `python scripts/run.py preflight` locally mirrors this entire pipeline.
 
 ## IDE configs
 
-`scripts/ide.py` generates configuration files for multiple editors:
+`scripts/ide_sync.py` generates configuration files for multiple editors:
 
 - **PyCharm** — `.idea/chumicro.iml` (source roots) and `.idea/runConfigurations/*.xml` (run configs)
 - **VS Code** — `.vscode/settings.json` (extraPaths) and `.vscode/tasks.json` (task runner)

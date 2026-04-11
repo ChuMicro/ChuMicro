@@ -1,7 +1,7 @@
 # Pinned runtime versions for compatibility testing and IDE stubs.
 #
 # Change these when upgrading the CircuitPython or MicroPython targets.
-# The prepare module (scripts/prepare.py) and setup task (scripts/run.py)
+# The shared module (scripts/shared.py) and setup task (scripts/run.py)
 # read from this file — no other files need version updates.
 
 [circuitpython]

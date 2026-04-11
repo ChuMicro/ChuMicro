@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import re
 
-from discovery import ROOT
+from workspace import ROOT
 
 
 def _strip_markdown_links(text: str) -> str:

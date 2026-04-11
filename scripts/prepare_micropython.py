@@ -19,8 +19,7 @@ from __future__ import annotations
 import subprocess
 import sys
 
-from discovery import TOOLS
-from prepare import (
+from shared import (
     build_environment,
     build_jobs,
     ensure_tool,
@@ -28,6 +27,7 @@ from prepare import (
     running_on_native_windows,
     runtime_versions,
 )
+from workspace import TOOLS
 
 _RELEASE = runtime_versions()["micropython"]["version"]
 _REPO_URL = "https://github.com/micropython/micropython.git"

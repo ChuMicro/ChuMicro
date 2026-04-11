@@ -9,11 +9,11 @@ Use this procedure to generate or update `docs/guide.md` for a Chumicro library.
 
 ## When to use
 
-- After implementing a new library (the scaffold generates placeholder comments — see `scripts/scaffold.py` `_GUIDE_TEMPLATE`)
+- After implementing a new library (the scaffold generates placeholder comments — see `scripts/new_library_scaffold.py` `_GUIDE_TEMPLATE`)
 - After adding significant new features to an existing library
 - When `guide.md` still contains placeholder comments from scaffolding
 
-Keep this document and `_GUIDE_TEMPLATE` in `scripts/scaffold.py` synchronized — they define the same section order and requirements.
+Keep this document and `_GUIDE_TEMPLATE` in `scripts/new_library_scaffold.py` synchronized — they define the same section order and requirements.
 
 ## Inputs to read before generating
 

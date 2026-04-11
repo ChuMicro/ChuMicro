@@ -2,7 +2,7 @@
 
 import json
 
-from ide import _config_filename, sync_ide
+from ide_sync import _config_filename, sync_ide
 
 
 class TestConfigFilename:
@@ -33,7 +33,7 @@ class TestSyncIde:
 
     def test_creates_pyrightconfig(self):
         """pyrightconfig.json exists after sync."""
-        from discovery import ROOT
+        from workspace import ROOT
 
         sync_ide()
         config_file = ROOT / "pyrightconfig.json"
@@ -44,7 +44,7 @@ class TestSyncIde:
 
     def test_creates_vscode_tasks(self):
         """VS Code tasks.json exists after sync."""
-        from discovery import ROOT
+        from workspace import ROOT
 
         sync_ide()
         tasks_file = ROOT / ".vscode" / "tasks.json"
@@ -55,7 +55,7 @@ class TestSyncIde:
 
     def test_creates_pycharm_configs(self):
         """PyCharm run configurations are created."""
-        from discovery import ROOT
+        from workspace import ROOT
 
         sync_ide()
         config_dir = ROOT / ".idea" / "runConfigurations"

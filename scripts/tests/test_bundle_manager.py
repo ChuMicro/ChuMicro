@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from bundle import (
+from bundle_manager import (
     EXPERIMENTAL_BUNDLE_REPO,
     STABLE_BUNDLE_REPO,
     _collect_library_metadata,
@@ -224,7 +224,7 @@ class TestCollectLibraryMetadata:
 
     def test_finds_libraries(self):
         """Discovers metadata for existing libraries."""
-        from discovery import ROOT
+        from workspace import ROOT
 
         metadata = _collect_library_metadata(ROOT)
         assert len(metadata) > 0
@@ -233,7 +233,7 @@ class TestCollectLibraryMetadata:
 
     def test_metadata_has_expected_keys(self):
         """Each metadata entry has the expected keys."""
-        from discovery import ROOT
+        from workspace import ROOT
 
         metadata = _collect_library_metadata(ROOT)
         for entry in metadata:
@@ -248,7 +248,7 @@ class TestGenerateBundleReadme:
 
     def test_stable_readme(self):
         """Stable README contains expected content."""
-        from discovery import ROOT
+        from workspace import ROOT
 
         readme = generate_bundle_readme(ROOT)
         assert STABLE_BUNDLE_REPO in readme
@@ -258,7 +258,7 @@ class TestGenerateBundleReadme:
 
     def test_experimental_readme(self):
         """Experimental README contains warning banner."""
-        from discovery import ROOT
+        from workspace import ROOT
 
         readme = generate_bundle_readme(ROOT, experimental=True)
         assert EXPERIMENTAL_BUNDLE_REPO in readme

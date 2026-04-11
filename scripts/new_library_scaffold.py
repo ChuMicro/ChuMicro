@@ -19,9 +19,9 @@ retroactively.
 
 from __future__ import annotations
 
-from discovery import ROOT
-from ide import sync_ide
-from workspace import install_editable
+from ide_sync import sync_ide
+from shared import install_editable
+from workspace import ROOT
 
 # ---------------------------------------------------------------------------
 # Template strings

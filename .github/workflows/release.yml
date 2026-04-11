@@ -162,7 +162,7 @@ jobs:
 
       - name: Patch package name for experimental
         if: needs.detect.outputs.is_experimental == 'true'
-        run: python scripts/bundle.py patch-experimental ${{ matrix.library_dir }}
+        run: python scripts/bundle_manager.py patch-experimental ${{ matrix.library_dir }}
 
       - name: Build distribution
         run: python -m build ${{ matrix.library_dir }}
@@ -238,7 +238,7 @@ jobs:
         # Compiles .py → .mpy and arranges library files into the bundle
         # directory layout expected by mip and circup.
         run: |
-          python scripts/bundle.py stage-matrix .bundle-staging \
+          python scripts/bundle_manager.py stage-matrix .bundle-staging \
             --matrix "$MATRIX_JSON" \
             ${{ needs.detect.outputs.is_experimental == 'true' && '--experimental' || '' }}
 
@@ -261,19 +261,19 @@ jobs:
 
       - name: Generate bundle README
         run: |
-          python scripts/bundle.py readme \
+          python scripts/bundle_manager.py readme \
             ${{ needs.detect.outputs.is_experimental == 'true' && '--experimental' || '' }} \
             --bundle-dir .bundle-repo \
             -o .bundle-repo/README.md
 
       - name: Create circup zips
         run: |
-          date_tag=$(python scripts/bundle.py next-date-tag .bundle-repo)
+          date_tag=$(python scripts/bundle_manager.py next-date-tag .bundle-repo)
           echo "date_tag=${date_tag}" >> "$GITHUB_ENV"
 
           repository_name="${{ needs.detect.outputs.bundle_repository }}"
           repository_name="${repository_name##*/}"
-          python scripts/bundle.py circup-zip .bundle-repo .circup-zips \
+          python scripts/bundle_manager.py circup-zip .bundle-repo .circup-zips \
             --repo-name "$repository_name" --date-tag "$date_tag"
 
       - name: Push to bundle repository
