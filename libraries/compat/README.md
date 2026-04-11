@@ -75,11 +75,11 @@ set_status_led(100)  # pin 13 → 100%
 
 ## Platform support
 
-| Runtime | Implementation |
+| Runtime | What happens |
 |---|---|
-| CPython | Re-exports the C-implemented `functools.partial` directly |
-| MicroPython | Pure-Python polyfill with `__slots__` |
-| CircuitPython | Pure-Python polyfill with `__slots__` |
+| CPython | Uses the built-in `functools.partial` directly — zero overhead |
+| MicroPython | Lightweight pure-Python replacement |
+| CircuitPython | Lightweight pure-Python replacement |
 
 The public API (`.func`, `.args`, `.keywords`, `__call__`, `__repr__`) is identical across all runtimes.
 

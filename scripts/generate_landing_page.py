@@ -16,16 +16,19 @@ from __future__ import annotations
 
 import re
 
-from workspace import ROOT
+from workspace import ROOT, _load_tomllib
 
 
-def _strip_markdown_links(text: str) -> str:
-    """Convert ``[text](url)`` to just ``text``.
+def _read_description(pyproject_file) -> str:
+    """Read ``project.description`` from a ``pyproject.toml``.
 
     Args:
-        text: Markdown text that may contain links.
+        pyproject_file: Path to the ``pyproject.toml`` file.
     """
-    return re.sub(r"\[([^]]+)]\([^)]+\)", r"\1", text)
+    tomllib = _load_tomllib()
+    with pyproject_file.open("rb") as toml_file:
+        data = tomllib.load(toml_file)
+    return data.get("project", {}).get("description", "")
 
 
 def _discover_libraries() -> list[dict]:
@@ -39,18 +42,7 @@ def _discover_libraries() -> list[dict]:
         if not child.is_dir() or not (child / "mkdocs.yml").exists():
             continue
         name = child.name
-        readme_file = child / "README.md"
-        description = ""
-        if readme_file.exists():
-            readme_text = readme_file.read_text()
-            # Extract the first "real" paragraph line from the README.
-            # Skip headings (#), blank lines, and table rows (|) — some
-            # READMEs have a metadata or badge table near the top.
-            for line in readme_text.splitlines():
-                stripped = line.strip()
-                if stripped and not stripped.startswith("#") and not stripped.startswith("|"):
-                    description = _strip_markdown_links(stripped)
-                    break
+        description = _read_description(child / "pyproject.toml")
 
         # Detect whether the library's docs include a testing page.
         # A plain text search in mkdocs.yml is a pragmatic shortcut —

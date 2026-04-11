@@ -1,10 +1,23 @@
-# Chumicro
+<p align="center">
+  <img src="support/docs/chumicro.png" width="200" alt="Chumicro" />
+</p>
+<h1 align="center">Chumicro</h1>
 
-**Python libraries that work on your microcontroller *and* your laptop.**
+<p align="center">
+  <strong><big>Python libraries that work on your microcontroller <em>and</em> your laptop.</big></strong><br>
+  <big>Write once, run on CircuitPython, MicroPython, and CPython.</big>
+</p>
 
-Write once, run on CircuitPython, MicroPython, and CPython. Whether you're blinking an LED on an ESP32 or prototyping on your desktop, the same code works everywhere.
+<p align="center">
+  <a href="https://chumicro.github.io/ChuMicro/">Docs</a> •
+  <a href="https://pypi.org/search/?q=chumicro">PyPI</a> •
+  <a href="https://github.com/ChuMicro/ChuMicro-Bundle">Bundle</a> •
+  <a href="https://github.com/ChuMicro/ChuMicro-Bundle-Experimental">Experimental</a> •
+  <a href="https://github.com/ChuMicro/ChuMicro/issues">Issues</a> •
+  <a href="#get-started">Get Started</a>
+</p>
 
-📦 [PyPI](https://pypi.org/search/?q=chumicro) · 📡 [Stable Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · 🧪 [Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental) · 📖 [Docs](https://chumicro.github.io/ChuMicro/)
+---
 
 ## What's in the box?
 
@@ -12,10 +25,14 @@ Small, focused libraries you can install independently. Use what you need.
 
 | Library | What it does |
 |---|---|
-| **[timing](libraries/timing/)** | Non-blocking timers with wraparound-safe millisecond math. |
-| **[runner](libraries/runner/)** | A tick-based task scheduler — register services, call `runner.tick()` in your loop. No async needed. |
-| **[compat](libraries/compat/)** | Polyfills for stdlib bits that CircuitPython and MicroPython are missing (like `functools.partial`). |
-| **[msgpack](libraries/msgpack/)** | Compact binary serialization — much smaller than JSON, great for settings and sensor data. |
+| **[timing](libraries/timing/)** | Non-blocking timers that handle millisecond wraparound for you. No more `time.sleep()` freezing your loop. |
+| **[runner](libraries/runner/)** | A simple task scheduler — register your services, call `runner.tick()` in your loop. No async needed. |
+| **[compat](libraries/compat/)** | Standard library features that CircuitPython and MicroPython are missing (like `functools.partial`). |
+| **[msgpack](libraries/msgpack/)** | Compact binary serialization — 30–50% smaller than JSON, great for settings and sensor data. |
+
+### Supported boards
+
+Works on ESP32 (S2, S3, C3, C6), RP2040/RP2350 (Raspberry Pi Pico), STM32, and most boards with at least 256 KB RAM and 4 MB flash.
 
 ### Dependencies
 
@@ -114,7 +131,7 @@ Or try it in the REPL:
 
 📖 **[Browse the docs](https://chumicro.github.io/ChuMicro/)** — guides, API references, and examples for every library.
 
-Docs are versioned per-library with [mike](https://github.com/jimporter/mike). Stable tracks tagged releases; experimental tracks `main`.
+Each library has its own docs with a version selector so you can switch between stable and experimental (dev).
 
 ## Development
 
@@ -219,17 +236,8 @@ chumicro/
 
 ## Contributing
 
-We welcome contributors of all experience levels. Start with [`CONTRIBUTING.md`](CONTRIBUTING.md) — it covers setup, rules, and workflow, then links to the right guide for your task:
+We welcome contributors of all experience levels. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup, guidelines, and how to submit a pull request. Not sure where to start? Check out [good first contributions](CONTRIBUTING.md#good-first-contributions).
 
-- **[Command Line](docs/contributing/development-cli.md)**, **[PyCharm](docs/contributing/development-pycharm.md)**, **[VS Code](docs/contributing/development-vscode.md)**, or **[Other Editors](docs/contributing/development-other-editors.md)** — pick your environment
-- **[Creating a Pull Request](docs/contributing/pull-requests.md)** — submitting your work
-- **[Adding a New Library](docs/contributing/new-library.md)** — publishing your own library
-- **[How the Codebase Works](docs/contributing/architecture.md)** — understand the machinery
-- **[Releases and Promotion](docs/contributing/releases.md)** — how publishing works
-- **[Working with Agents](docs/contributing/working-with-agents.md)** — using AI coding agents on this project
+## License
 
-Not sure where to start? Check out [good first contributions](CONTRIBUTING.md#good-first-contributions).
-
-## Planning
-
-Design decisions, roadmap, and working state live in `plans/`. The README is for users; `plans/` is the workshop.
+[MIT](LICENSE)

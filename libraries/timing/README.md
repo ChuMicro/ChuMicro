@@ -67,9 +67,9 @@ while True:
 
 | Symbol | Description |
 |---|---|
-| `ticks_ms()` | Monotonic millisecond counter, wraps every ~6.2 days |
-| `ticks_diff(end, start)` | Wraparound-safe signed difference |
-| `ticks_add(ticks, delta)` | Wraparound-safe addition |
+| `ticks_ms()` | Current time in milliseconds — keeps counting even when it wraps around |
+| `ticks_diff(end, start)` | Time elapsed between two tick values (handles wraparound correctly) |
+| `ticks_add(ticks, delta)` | Add milliseconds to a tick value (handles wraparound correctly) |
 
 ### Heartbeat
 
@@ -94,7 +94,7 @@ For structured task scheduling with multiple services, see [runner](../runner/).
 
 ## Platform support
 
-The tick source is selected automatically at import time:
+You don't need to pick a tick source — the library detects your runtime and uses the best one available:
 
 | Priority | Source | Runtime |
 |---|---|---|

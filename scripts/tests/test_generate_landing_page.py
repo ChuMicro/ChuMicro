@@ -1,32 +1,24 @@
 """Tests for generate_landing_page.py — HTML landing page generation."""
 
-from generate_landing_page import _library_card, _strip_markdown_links, generate
+from generate_landing_page import _library_card, _read_description, generate
+from workspace import ROOT
 
 
-class TestStripMarkdownLinks:
-    """Tests for _strip_markdown_links."""
+class TestReadDescription:
+    """Tests for _read_description."""
 
-    def test_simple_link(self):
-        """Strips a simple markdown link."""
-        assert _strip_markdown_links("[text](url)") == "text"
+    def test_reads_from_pyproject(self):
+        """Reads the description field from a real pyproject.toml."""
+        pyproject_file = ROOT / "libraries" / "timing" / "pyproject.toml"
+        description = _read_description(pyproject_file)
+        assert description
+        assert "**" not in description
 
-    def test_multiple_links(self):
-        """Strips multiple links in one string."""
-        result = _strip_markdown_links("[a](url1) and [b](url2)")
-        assert result == "a and b"
-
-    def test_no_links(self):
-        """Plain text is returned unchanged."""
-        assert _strip_markdown_links("plain text") == "plain text"
-
-    def test_nested_brackets(self):
-        """Handles text with brackets that aren't links."""
-        assert _strip_markdown_links("no link here") == "no link here"
-
-    def test_link_with_complex_url(self):
-        """Handles URLs with special characters."""
-        result = _strip_markdown_links("[text](https://example.com/path?q=1&r=2)")
-        assert result == "text"
+    def test_returns_empty_for_missing_field(self, tmp_path):
+        """Returns empty string when description is absent."""
+        toml_file = tmp_path / "pyproject.toml"
+        toml_file.write_text("[project]\nname = 'test'\n")
+        assert _read_description(toml_file) == ""
 
 
 class TestLibraryCard:
