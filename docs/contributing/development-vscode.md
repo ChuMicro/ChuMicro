@@ -4,13 +4,9 @@ This guide covers the full development workflow in Visual Studio Code. The proje
 
 ## Setup
 
-### 1. Clone the repository
+### 1. Fork, clone, and install
 
-```bash
-git clone https://github.com/ChuMicro/ChuMicro.git
-```
-
-Or fork first on GitHub, then clone your fork.
+Follow steps 1–4 of the [quick start](../../CONTRIBUTING.md#quick-start) in the contributing guide to fork the repository, clone it, and install dependencies. Then come back here for VS Code–specific setup.
 
 ### 2. Open in VS Code
 

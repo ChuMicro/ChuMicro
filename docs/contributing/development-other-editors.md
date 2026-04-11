@@ -4,10 +4,9 @@ This guide is for developers using editors other than PyCharm and VS Code — Ne
 
 ## Setup
 
-Follow the same steps as the [Command Line guide](development-cli.md#setup):
+Follow steps 1–4 of the [quick start](../../CONTRIBUTING.md#quick-start) in the contributing guide to fork the repository, clone it, and install dependencies:
 
 ```bash
-git clone https://github.com/ChuMicro/ChuMicro.git
 cd ChuMicro
 python scripts/prepare_workspace.py --create-venv
 ```

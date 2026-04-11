@@ -145,6 +145,8 @@ cd ChuMicro
 python scripts/prepare_workspace.py --create-venv
 ```
 
+**Planning to contribute?** [Fork the repository](CONTRIBUTING.md#quick-start) first, then clone your fork instead.
+
 The script creates a virtualenv, installs everything, and runs lint + tests to verify. When you see `Workspace is ready`, you're good. If you already have a venv activated, drop `--create-venv`.
 
 When `uv` is on PATH it's used automatically for faster installs; otherwise stdlib `venv` and `pip` are used as fallbacks.

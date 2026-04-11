@@ -48,20 +48,62 @@ You only need one. All four reach the same place.
 
 ## Quick start
 
+### 1. Fork the repository
+
+A fork is your own copy of ChuMicro on GitHub. You make changes there, then open a pull request back to the original.
+
+Go to **[github.com/ChuMicro/ChuMicro](https://github.com/ChuMicro/ChuMicro)** and click the **Fork** button (top right). GitHub creates a copy at `github.com/<your-username>/ChuMicro`.
+
+### 2. Clone your fork
+
 ```bash
-# 1. Fork and clone
 git clone https://github.com/<your-username>/ChuMicro.git
 cd ChuMicro
-
-# 2. Set up the development environment
-python scripts/prepare_workspace.py --create-venv  # or without --create-venv if you have one
-
-# 3. Verify everything works
-python scripts/run.py preflight 2>&1 | tail -5
-# Expected: "Preflight passed — required CI checks should pass."
 ```
 
-If preflight passes, you're ready. If not, see your development environment guide for troubleshooting.
+Replace `<your-username>` with your GitHub username. For example, if your username is `octocat`:
+
+```bash
+git clone https://github.com/octocat/ChuMicro.git
+```
+
+### 3. Add the upstream remote
+
+This lets you pull future changes from the original repository:
+
+```bash
+git remote add upstream https://github.com/ChuMicro/ChuMicro.git
+```
+
+You can verify both remotes are set up:
+
+```bash
+git remote -v
+# origin    https://github.com/<your-username>/ChuMicro.git (fetch)
+# upstream  https://github.com/ChuMicro/ChuMicro.git (fetch)
+```
+
+### 4. Set up the development environment
+
+```bash
+python scripts/prepare_workspace.py --create-venv
+```
+
+This creates a virtual environment, installs all dependencies, and runs lint + tests. When you see `Workspace is ready`, you're good. If you already have a virtual environment activated, drop `--create-venv`.
+
+### 5. Verify everything works
+
+```bash
+python scripts/run.py preflight 2>&1 | tail -5
+```
+
+You should see:
+
+```
+Preflight passed — required CI checks should pass.
+```
+
+If preflight passes, you're ready. If not, see your [development environment guide](#development-environment) for troubleshooting.
 
 ## Branching conventions
 
