@@ -87,7 +87,7 @@ These patterns caused real bugs when implemented incorrectly. Follow them exactl
 
 - Root `conftest.py` scans `support/*/src` and `libraries/*/src` for source roots.
 - Adds them to `sys.path` so IDE "run single test" and direct pytest invocations can import library packages.
-- Also adds `scripts/` to `sys.path` so scripts tests (bare-name imports like `from discovery import ROOT`) work when collected from root.
+- Also adds `scripts/` to `sys.path` so scripts tests (bare-name imports like `from workspace import ROOT`) work when collected from root.
 - Sets `collect_ignore_glob = ["**/functional_tests/**"]` to exclude functional tests.
 - `run.py test` sets PYTHONPATH independently, so the root conftest is a convenience, not a requirement for the test runner.
 
@@ -278,7 +278,7 @@ This was the largest single session. It addressed three areas: the workspace was
 
 **CI hardening:** Fixed bundle KeyError, standardized shell usage, added caching. Consolidated duplicate micropython/circuitpython compatibility jobs into matrix. Cleaned up workflow files (naming, deduplication, comments). Added `chumicro-` prefix to tags and source archive filenames.
 
-### 2026-04-10 — Scaffold alignment, README polish, scripts tests, IDE audit
+### 2026-04-10 — Scaffold alignment, README polish, scripts tests, IDE audit, naming cleanup, module rename
 
 **Scaffold and README alignment:** Aligned scaffold templates with existing library implementations (bullet prefixes, link styles, footer bars). Added circup/mip links to all library READMEs and scaffold. Rewrote bundle READMEs to match root README tone. Fixed support/test_harness/ carve-out in typing/infra docs.
 
@@ -287,6 +287,14 @@ This was the largest single session. It addressed three areas: the workspace was
 **`test-scripts` subcommand:** Added `python scripts/run.py test-scripts` as a standalone task, integrated into preflight. Scripts tests intentionally run without the 94% per-library coverage gate (scripts are subprocess-heavy orchestration code with a different coverage profile).
 
 **IDE audit:** `scripts/` was invisible to both IDE test runners. Fixed by adding `scripts/` as a source root and `scripts/tests/` as a test source in `.idea/chumicro.iml`, adding `scripts` to `extraPaths` in `pyrightconfig.json` and `.vscode/settings.json`, adding `scripts/tests` to pytest `testpaths` in `pyproject.toml`, and adding `scripts/` to `sys.path` in root `conftest.py`. Also cleaned up stale library-root entries in the `.iml` file. Added "Test Scripts" task to both PyCharm run configurations and VS Code tasks.
+
+**Documentation ripple rule:** Added a completion protocol checklist to AGENTS.md and end-of-session skill requiring docs/CI/template updates when adding features. Fixed test-scripts gaps in README (tasks table), CI (missing job), and CONTRIBUTING.md (preflight details).
+
+**CHU001 naming refinements:** Fixed banned abbreviation violations in doc code examples (`_buf` → `_buffer`, `x` → `value` in const() fallback). Added `addr`, `exc`, `exec` to banned abbreviations list. Briefly enforced `error` for exception handler names, then removed that check — `exception` is correct for non-Error types like StopIteration, and the single-letter/abbreviation checks already catch real problems. Updated Decision 0022, style guide, and patterns.md.
+
+**Bundle test CI fix:** `TestNextDateTag` tests ran bare `git commit` which fails in CI where user.name/user.email are not configured. Added a `_git` helper with author/committer env vars.
+
+**Scripts module rename:** Renamed all scripts/ modules for clarity: `discovery.py` → `workspace.py`, `ide.py` → `ide_sync.py`, `scaffold.py` → `new_library_scaffold.py`, `docs_deploy.py` → `deploy_documents.py`, `bundle.py` → `bundle_manager.py`. Merged `prepare.py` + old `workspace.py` → `shared.py`. Updated all imports, monkeypatch targets, test files, CI workflows, skills, docs, and decision records. Fixed stale module names in docstrings. Attempted to also rename the `docs-deploy` CLI subcommand to `deploy-documents` but reverted — the module rename was sufficient and the CLI name was already established in docs and muscle memory.
 
 **All libraries at 0.1.18.**
 
