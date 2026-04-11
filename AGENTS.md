@@ -72,10 +72,9 @@ At the start of a session:
 
 1. Run `git --no-pager log --oneline -20`
 2. Read `plans/next-up.md`
-3. Check `plans/sessions/` for recent session logs
-4. Read `plans/roadmap.md` if you need the big picture
-5. Check `plans/decisions/` before proposing structural changes
-6. Check `plans/open-questions.md` for unresolved relevant threads
+3. Read `plans/roadmap.md` if you need the big picture
+4. Check `plans/decisions/` before proposing structural changes
+5. Check `plans/open-questions.md` for unresolved relevant threads
 
 Commit history is the primary fallback when planning docs are stale. Write commit messages that help future context recovery.
 
@@ -282,7 +281,6 @@ Key files:
 - `plans/open-questions.md` — unresolved questions
 - `plans/patterns.md` — reusable implementation patterns
 - `plans/roadmap.md` — milestone status
-- `plans/sessions/` — recent session logs
 
 Housekeeping rules:
 
