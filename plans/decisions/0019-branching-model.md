@@ -48,8 +48,8 @@ On-device import paths are always the base name (`chumicro_timing`). Channel sep
 
 - `ci.yml` triggers on push to `main` and on all PRs.
 - `release.yml` triggers on push to `main` with `libraries/*/VERSION` changes (experimental auto-release). Also accepts `workflow_dispatch` with `channel` and `libraries` inputs for stable releases and manual re-runs.
-- `promote.yml` is a `workflow_dispatch` that triggers `release.yml` with `channel=stable` for named libraries, then triggers `docs-deploy.yml` with `channel=stable`.
-- `docs-deploy.yml` triggers on push to `main` (experimental docs) and via `workflow_dispatch` with `channel=stable` (stable docs, called by `promote.yml`).
+- `promote.yml` is a `workflow_dispatch` that builds and publishes the stable package from the experimental source archive, publishes to the stable bundle repo, and deploys stable docs inline (with a retry loop to handle concurrent gh-pages pushes).
+- `docs-deploy.yml` triggers on push to `main` (experimental docs) and accepts `workflow_dispatch` for ad-hoc deploys. Stable docs are deployed by `promote.yml` directly, not via `docs-deploy.yml`, to avoid silent cancellation from the shared concurrency group.
 
 ### Manual steps for migration
 

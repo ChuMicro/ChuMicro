@@ -187,9 +187,10 @@ Examples are verified via static analysis in `scripts/run.py verify-examples`:
 ### Release pipeline integration
 
 - `docs-build` CI job verifies all library docs build on every PR (Zensical).
-- `docs-deploy.yml` workflow deploys docs on push to `main` (experimental) and via `workflow_dispatch` with `channel=stable` (stable, called by `promote.yml`):
+- `docs-deploy.yml` workflow deploys experimental docs on push to `main` and accepts `workflow_dispatch` for ad-hoc deploys:
   - **push to main**: deploys each library at version `dev` with alias `experimental`.
-  - **promote (stable)**: deploys each library at its VERSION (e.g., `0.1.0`) with alias `stable`, sets `stable` as the default redirect for `/<lib>/`.
+  - Stable docs are deployed inline by `promote.yml` (not via `docs-deploy.yml`) to avoid silent cancellation from the shared concurrency group.
+  - **promote (stable)**: `promote.yml` deploys each promoted library at its VERSION (e.g., `0.1.0`) with alias `stable`, sets `stable` as the default redirect for `/<lib>/`.
   - Uses mike with `--deploy-prefix <lib>` per library, pushing to the `gh-pages` branch.
   - Concurrency group prevents conflicting deploys.
 - The `mkdocs.yml` configs, `docs` task in `scripts/run.py`, and the `new-library` scaffolder are all wired.
