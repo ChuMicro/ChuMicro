@@ -37,7 +37,6 @@ from shared import (
     run_command,
     runtime_versions,
 )
-from validate_mip_install import validate_mip_install
 from verify_examples import verify_examples
 from workspace import (
     ROOT,
@@ -698,13 +697,14 @@ def test_device() -> int:
 
 
 def validate_mip(
-    bundle_repo: str,
+    bundle_repo: str | None,
     libraries: str | None = None,
     micropython_binary: str | None = None,
+    local_bundle: str | None = None,
 ) -> int:
     """Validate mip install and import for bundle packages.
 
-    Tests both .py and .mpy6 formats against a live bundle repository.
+    Tests both .py and .mpy6 formats against a live bundle repository or local bundle.
     Requires a MicroPython unix-port binary (auto-detected or explicit).
     """
     library_names = (
@@ -713,18 +713,23 @@ def validate_mip(
     )
     if library_names is None:
         # Auto-discover publishable libraries.
+        from workspace import discover_package_dirs
         library_names = [
             package_dir.name
             for package_dir in discover_package_dirs()
             if package_dir.parent.name == "libraries"
         ]
+
     if not library_names:
         print("No libraries found to validate.")
         return 1
-    return validate_mip_install(
+
+    from validate_mip_install import validate_mip_install as _validate_mip_install
+    return _validate_mip_install(
         bundle_repo=bundle_repo,
         library_names=library_names,
         binary=micropython_binary,
+        local_bundle=local_bundle,
     )
 
 
@@ -818,12 +823,16 @@ def _build_parser() -> argparse.ArgumentParser:
 
     validate_mip_parser = subparsers.add_parser(
         "validate-mip",
-        help="validate mip install + import against a live bundle repo",
+        help="validate mip install + import against a live bundle repo or local bundle",
     )
-    validate_mip_parser.add_argument(
+    group = validate_mip_parser.add_mutually_exclusive_group(required=True)
+    group.add_argument(
         "--bundle-repo",
-        required=True,
         help="bundle repository name (e.g. ChuMicro-Bundle-Experimental)",
+    )
+    group.add_argument(
+        "--local-bundle",
+        help="path to a local bundle directory to validate",
     )
     validate_mip_parser.add_argument(
         "--libraries",
@@ -977,9 +986,10 @@ def main(argv: list[str]) -> int:
             bundle_repo=args.bundle_repo,
             libraries=args.libraries,
             micropython_binary=args.micropython_binary,
+            local_bundle=args.local_bundle,
         )
 
-    # --- tasks that accept runtime binary overrides ---
+    # --- test ---
     if args.task in {
         "preflight", "test-micropython-compatibility",
         "test-circuitpython-compatibility", "test-runtime-matrix",

@@ -27,9 +27,13 @@ Requirements:
 from __future__ import annotations
 
 import argparse
+import re
+import shutil
 import subprocess
 import tempfile
+import threading
 import time
+from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 
 from shared import resolve_micropython_binary
@@ -45,6 +49,25 @@ _MAX_RETRIES = 3
 
 #: Seconds to wait between retries.
 _RETRY_DELAY = 15
+
+
+class _QuietHandler(SimpleHTTPRequestHandler):
+    """HTTP request handler that suppresses logs."""
+    def log_message(self, format: str, *args: list[str]) -> None:
+        pass
+
+
+def _serve_local_bundle(bundle_dir: Path) -> tuple[HTTPServer, str]:
+    """Serve a local bundle directory via HTTP."""
+    server = HTTPServer(
+        ("127.0.0.1", 0),
+        lambda *args: _QuietHandler(*args, directory=str(bundle_dir)),
+    )
+    port = server.server_address[1]
+    url_base = f"http://127.0.0.1:{port}"
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server, url_base
 
 
 def _write_install_script(target_path: Path, package_url: str, install_dir: Path) -> Path:
@@ -191,9 +214,10 @@ def _validate_single(
 
 
 def validate_mip_install(
-    bundle_repo: str,
+    bundle_repo: str | None,
     library_names: list[str],
     binary: str | None = None,
+    local_bundle: str | None = None,
 ) -> int:
     """Validate mip install and import for the given libraries.
 
@@ -205,6 +229,7 @@ def validate_mip_install(
         bundle_repo: Bundle repository name (e.g. ``ChuMicro-Bundle``).
         library_names: Library names to validate (e.g. ``["timing", "runner"]``).
         binary: Explicit MicroPython binary path, or None for auto-detection.
+        local_bundle: Local bundle directory to validate via HTTP server.
 
     Returns:
         Exit code (0 on success, 1 on failure).
@@ -216,43 +241,64 @@ def validate_mip_install(
         return 1
 
     print(f"MicroPython binary: {resolved_binary}")
-    print(f"Bundle repository:  {_GITHUB_ORG}/{bundle_repo}")
+    if local_bundle:
+        print(f"Local bundle:       {local_bundle}")
+    else:
+        print(f"Bundle repository:  {_GITHUB_ORG}/{bundle_repo}")
     print(f"Libraries:          {', '.join(library_names)}")
     print()
 
-    # Sort so libraries without intra-workspace deps run first.  This
-    # ensures that when runner (which depends on timing) is tested, the
-    # dependency resolution path is exercised against the live bundle repo.
-    # A simple heuristic: libraries that appear as dependencies of others
-    # go first.  For now, just move "runner" to the end since it's the
-    # only library with deps.
     sorted_names = sorted(library_names, key=lambda name: name == "runner")
 
     total = 0
     passed = 0
     failed_tests: list[str] = []
 
-    for library_name in sorted_names:
-        package_name = f"chumicro_{library_name}"
-        print(f"== {package_name} ==")
+    with tempfile.TemporaryDirectory() as serve_dir:
+        serve_path = Path(serve_dir)
+        if local_bundle:
+            # Copy local bundle into a temporary directory so we can patch package.json
+            shutil.copytree(local_bundle, serve_path, dirs_exist_ok=True)
+            # Patch all package.json files to point to localhost instead of github
+            server, url_base = _serve_local_bundle(serve_path)
+            for pjson in serve_path.rglob("package.json"):
+                content = pjson.read_text()
+                content = re.sub(r"github:[\w\-]+/[\w-]+/", f"{url_base}/", content)
+                pjson.write_text(content)
 
-        # .py format (source)
-        py_url = f"github:{_GITHUB_ORG}/{bundle_repo}/{package_name}"
-        total += 1
-        if _validate_single(resolved_binary, bundle_repo, library_name, "py", py_url):
-            passed += 1
-        else:
-            failed_tests.append(f"{package_name} (py)")
+        for library_name in sorted_names:
+            package_name = f"chumicro_{library_name}"
+            print(f"== {package_name} ==")
 
-        # .mpy6 format (bytecode)
-        mpy_url = f"github:{_GITHUB_ORG}/{bundle_repo}/{_MPY_FORMAT_FOLDER}/{package_name}"
-        total += 1
-        if _validate_single(resolved_binary, bundle_repo, library_name, "mpy6", mpy_url):
-            passed += 1
-        else:
-            failed_tests.append(f"{package_name} (mpy6)")
+            # .py format (source)
+            if local_bundle:
+                py_url = f"{url_base}/{package_name}"
+            else:
+                py_url = f"github:{_GITHUB_ORG}/{bundle_repo}/{package_name}"
 
-        print()
+            total += 1
+            if _validate_single(
+                resolved_binary, bundle_repo or "local", library_name, "py", py_url
+            ):
+                passed += 1
+            else:
+                failed_tests.append(f"{package_name} (py)")
+
+            # .mpy6 format (bytecode)
+            if local_bundle:
+                mpy_url = f"{url_base}/{_MPY_FORMAT_FOLDER}/{package_name}"
+            else:
+                mpy_url = f"github:{_GITHUB_ORG}/{bundle_repo}/{_MPY_FORMAT_FOLDER}/{package_name}"
+
+            total += 1
+            if _validate_single(
+                resolved_binary, bundle_repo or "local", library_name, "mpy6", mpy_url
+            ):
+                passed += 1
+            else:
+                failed_tests.append(f"{package_name} (mpy6)")
+
+            print()
 
     # Summary
     if failed_tests:
@@ -291,10 +337,14 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Validate mip install and import for bundle packages.",
     )
-    parser.add_argument(
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument(
         "--bundle-repo",
-        required=True,
         help="Bundle repository name (e.g. ChuMicro-Bundle-Experimental)",
+    )
+    group.add_argument(
+        "--local-bundle",
+        help="Path to a local bundle directory to validate.",
     )
     parser.add_argument(
         "--libraries",
@@ -315,6 +365,7 @@ def main(argv: list[str] | None = None) -> int:
         bundle_repo=args.bundle_repo,
         library_names=library_names,
         binary=args.micropython_binary,
+        local_bundle=args.local_bundle,
     )
 
 
