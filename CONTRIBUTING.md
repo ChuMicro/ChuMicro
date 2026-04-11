@@ -48,9 +48,11 @@ You only need one. All four reach the same place.
 
 ## Quick start
 
+This walks you through your entire first contribution — from fork to merged pull request. The example fixes a typo, but the same steps apply to any change.
+
 ### 1. Fork the repository
 
-A fork is your own copy of ChuMicro on GitHub. You make changes there, then open a pull request back to the original.
+A fork is your own copy of ChuMicro on GitHub. You'll push changes to your fork, then ask the original repository to pull them in.
 
 Go to **[github.com/ChuMicro/ChuMicro](https://github.com/ChuMicro/ChuMicro)** and click the **Fork** button (top right). GitHub creates a copy at `github.com/<your-username>/ChuMicro`.
 
@@ -69,7 +71,7 @@ git clone https://github.com/octocat/ChuMicro.git
 
 ### 3. Add the upstream remote
 
-This lets you pull future changes from the original repository:
+This connects your local clone to the original repository so you can pull future changes:
 
 ```bash
 git remote add upstream https://github.com/ChuMicro/ChuMicro.git
@@ -103,7 +105,78 @@ You should see:
 Preflight passed — required CI checks should pass.
 ```
 
-If preflight passes, you're ready. If not, see your [development environment guide](#development-environment) for troubleshooting.
+If it fails, check that Python ≥ 3.11 is installed (`python --version`) and see your [development environment guide](#development-environment) for more troubleshooting.
+
+### 6. Create a branch
+
+Always work on a branch — never commit directly to `main`. Name the branch after what you're doing:
+
+```bash
+git checkout -b fix/my-first-change
+```
+
+Use `fix/` for bug fixes and small improvements, `docs/` for documentation changes, or `feature/` for new features. See [branching conventions](#branching-conventions) for the full list.
+
+### 7. Make your change
+
+Open the file in your editor and make the change. For example, fix a typo in a library's README:
+
+```bash
+# Open the file in your editor
+code libraries/timing/README.md   # VS Code
+# or: pycharm libraries/timing/README.md
+# or: vim libraries/timing/README.md
+```
+
+Save the file when you're done.
+
+### 8. Check your work
+
+Run preflight to make sure your change doesn't break anything:
+
+```bash
+python scripts/run.py preflight 2>&1 | tail -5
+```
+
+If it prints `Preflight passed`, you're good. If something fails, read the output — it tells you what went wrong and where.
+
+### 9. Commit your change
+
+Stage your files and commit. Git opens your default editor for the commit message:
+
+```bash
+git add -A
+git commit
+```
+
+Write a message like:
+
+```
+Fix typo in timing README
+
+"milisecond" → "millisecond" in the API summary table.
+```
+
+Use imperative mood in the subject line ("Fix", not "Fixed" or "Fixes"). See [commit messages](#commit-messages) for more guidance.
+
+### 10. Push and open a pull request
+
+Push your branch to your fork:
+
+```bash
+git push -u origin fix/my-first-change
+```
+
+Then open a pull request:
+
+- **GitHub UI:** Go to your fork on GitHub. You'll see a banner saying your branch had recent pushes — click **Compare & pull request**. Fill in the title and description, make sure the base branch is `main`, and click **Create pull request**.
+- **GitHub CLI:** `gh pr create --title "Fix typo in timing README" --base main`
+
+CI runs automatically on your PR. All checks must pass before a maintainer can merge. If something fails, click the failed check to see the log, fix it locally, and push again — CI re-runs automatically.
+
+That's it — you've made your first contribution! 🎉
+
+For the full details on any step, keep reading below.
 
 ## Branching conventions
 
@@ -115,17 +188,17 @@ All work happens on branches off `main`. PRs target `main`. There is no `develop
 | **Feature** | `feature/<description>` | New features, new libraries, larger work | `feature/settings-library` |
 | **Release** | `release/<lib>-v<major.minor>.x` | Hotfix against an older stable tag (rare) | `release/timing-v0.2.x` |
 
-Create a branch:
+If you're starting new work after your first contribution, pull the latest `main` first:
 
 ```bash
 git checkout main
-git pull origin main
+git pull upstream main
 git checkout -b feature/my-change
 ```
 
 ## Making changes
 
-### Key rules
+### Preflight
 
 Before opening a PR, run preflight:
 
@@ -180,14 +253,7 @@ Use imperative mood in the subject line. Name affected libraries in the body.
 
 ## Pull request workflow
 
-> **Full walkthrough:** See [Creating a Pull Request](docs/contributing/pull-requests.md) for step-by-step instructions.
-
-The short version:
-
-1. Push your branch: `git push -u origin feature/my-change`
-2. Open a PR on GitHub targeting `main`
-3. CI runs automatically — all checks must pass
-4. A maintainer reviews and merges
+The [quick start](#quick-start) covers the basic flow. For a detailed walkthrough — PR templates, CI check details, review process — see [Creating a Pull Request](docs/contributing/pull-requests.md).
 
 ### VERSION bumps
 
