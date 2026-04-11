@@ -23,9 +23,8 @@ on:
         default: false
 
 permissions:
-  contents: write    # tags + GitHub Releases
+  contents: write    # tags + GitHub Releases + push to gh-pages
   id-token: write    # PyPI trusted publishing (OIDC)
-  actions: write     # trigger docs-deploy
 
 defaults:
   run:
@@ -289,21 +288,73 @@ jobs:
           GH_TOKEN: ${{ secrets.BUNDLE_TOKEN }}
 
   # ---------------------------------------------------------------------------
-  # Trigger stable docs deployment.
+  # Deploy stable docs inline.
+  #
+  # Previously this job used fire-and-forget `gh workflow run` to trigger
+  # docs-deploy.yml.  That workflow shares the `documentation-deploy`
+  # concurrency group with push-triggered experimental deploys.  When a
+  # new run enters the group while a stable deploy is pending, GitHub
+  # Actions silently cancels the pending run — so the stable version
+  # never reaches gh-pages.
+  #
+  # Inlining the deployment here makes it part of the promote workflow
+  # and immune to that cancellation.  A retry loop handles transient
+  # push conflicts with concurrent experimental deploys.
   # ---------------------------------------------------------------------------
   docs:
     name: Deploy stable docs
     needs: [validate, release]
     if: ${{ !inputs.dry_run }}
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
-      - name: Trigger stable docs deploy
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ssh-key: ${{ secrets.GH_PAGES_DEPLOY_KEY }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: "pip"
+
+      - name: Install tooling
         run: |
-          gh workflow run docs-deploy.yml \
-            --repo "${{ github.repository }}" \
-            -f channel=stable \
-            -f "libraries=${{ needs.validate.outputs.library_name }}"
-          echo "✓ Stable docs deploy triggered for ${{ needs.validate.outputs.library_name }}."
+          python -m pip install --upgrade pip zensical mkdocstrings[python]
+          pip install "git+https://github.com/squidfunk/mike.git@0f62791256ebeba60d20d2f1d8fe6ec3b7d1e2b3"
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Deploy and push stable docs
+        run: |
+          library_name="${{ needs.validate.outputs.library_name }}"
+          max_attempts=3
+
+          for attempt in $(seq 1 $max_attempts); do
+            echo "::group::Attempt $attempt of $max_attempts"
+
+            # Fetch the latest gh-pages so mike builds on top of the
+            # current remote state (including any concurrent experimental
+            # deploys that landed since the last attempt).
+            git fetch origin gh-pages:gh-pages --force 2>/dev/null || true
+
+            python scripts/run.py docs-deploy \
+              --channel stable \
+              --libraries "$library_name"
+
+            if git push origin gh-pages; then
+              echo "::endgroup::"
+              echo "✓ Stable docs deployed for ${library_name}."
+              exit 0
+            fi
+
+            echo "::endgroup::"
+            echo "Push failed (likely concurrent update), retrying in 10s..."
+            sleep 10
+          done
+
+          echo "::error::Failed to deploy stable docs after $max_attempts attempts."
+          exit 1
