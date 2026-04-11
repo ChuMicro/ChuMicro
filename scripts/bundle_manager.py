@@ -446,14 +446,25 @@ def generate_bundle_readme(
         for library in libraries
     )
 
-    return f"""\
-# {bundle_repo}
+    logo_url = f"https://raw.githubusercontent.com/{_GITHUB_ORG}/{_SOURCE_REPO}/main/support/docs/chumicro.png"
 
-**{channel} bundle for [ChuMicro]({source_url}) — \
-install any library on CircuitPython, MicroPython, or CPython.**
+    return f"""\
+<p align="center">
+  <a href="{source_url}"><img src="{logo_url}" width="420" alt="ChuMicro" /></a>
+</p>
+<h1 align="center">{bundle_repo}</h1>
+
+<p align="center">
+  <strong>{channel} bundle for <a href="{source_url}">ChuMicro</a> &mdash; \
+install any library on CircuitPython, MicroPython, or CPython.</strong>
+</p>
+
+<p align="center">
+  <a href="{docs_url}">Docs</a> &bull;
+  <a href="{source_url}">Source</a> &bull;
+  <a href="{alt_repo_url}">{alt_channel} Bundle</a>
+</p>
 {banner_block}
-📖 [Docs]({docs_url}) · 📦 [Source]({source_url}) · \
-{'📡' if not experimental else '🧪'} [{alt_channel} Bundle]({alt_repo_url})
 
 ## Get started
 
