@@ -33,6 +33,13 @@
 
 ## Done (recent)
 
+- [x] Docs branding overhaul: warm palette matching badger logo, favicon regeneration, landing page reads descriptions from pyproject.toml, centered logo header in root README, plain-language library descriptions.
+- [x] Library README overhaul: absolute URLs for PyPI compatibility, badger tip images, Source links to library directories, README.md included in bundle staging, scaffold template aligned.
+- [x] Brand normalization: "Chumicro" → "ChuMicro" across 50+ occurrences in prose, docstrings, templates, and docs.
+- [x] Contributor fork workflow: complete fork-to-PR walkthrough in CONTRIBUTING.md, fork sync/rebase guidance, GitHub UI steering for PRs.
+- [x] Contributor experience audit v4: "First contribution?" signpost, Contributor FAQ, "abbreviations we spell out" reframing, memory-pattern reassurance repositioning, "Part of ChuMicro" discovery line in all library READMEs, AGENTS.md working-style consolidation.
+- [x] Test harness heap deltas: per-test allocation tracking with manual GC control.
+- [x] Plans cleanup: removed plans/sessions/, commit history is the primary context recovery mechanism.
 - [x] Scripts test suite: 203 pytest tests for scripts/ infrastructure, `test-scripts` subcommand integrated into preflight.
 - [x] IDE audit: scripts/ added to source roots, test discovery, and extraPaths in PyCharm and VS Code configs. Stale .iml entries cleaned up. `scripts/tests` added to pytest testpaths.
 - [x] Contributor experience audit v3: root README "Your first program" example and REPL snippet, circup bundle explanation, install section cleanup (details blocks for experimental/channel switching in all library READMEs), common-mistakes FAQ in CONTRIBUTING.md, FakeTicks.ticks_add overflow validation, self-contained testing.py constants (fixes CircuitPython compat import skip), architecture guide, editable-install clarification in Other Editors guide.
