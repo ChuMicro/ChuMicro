@@ -37,6 +37,7 @@ from shared import (
     run_command,
     runtime_versions,
 )
+from validate_mip_install import validate_mip_install
 from verify_examples import verify_examples
 from workspace import (
     ROOT,
@@ -696,6 +697,37 @@ def test_device() -> int:
     return 2
 
 
+def validate_mip(
+    bundle_repo: str,
+    libraries: str | None = None,
+    micropython_binary: str | None = None,
+) -> int:
+    """Validate mip install and import for bundle packages.
+
+    Tests both .py and .mpy6 formats against a live bundle repository.
+    Requires a MicroPython unix-port binary (auto-detected or explicit).
+    """
+    library_names = (
+        [name.strip() for name in libraries.split(",") if name.strip()]
+        if libraries else None
+    )
+    if library_names is None:
+        # Auto-discover publishable libraries.
+        library_names = [
+            package_dir.name
+            for package_dir in discover_package_dirs()
+            if package_dir.parent.name == "libraries"
+        ]
+    if not library_names:
+        print("No libraries found to validate.")
+        return 1
+    return validate_mip_install(
+        bundle_repo=bundle_repo,
+        library_names=library_names,
+        binary=micropython_binary,
+    )
+
+
 def check_version() -> int:
     """Check VERSION enforcement for changed libraries (PR check)."""
     return check_version_main([])
@@ -783,6 +815,24 @@ def _build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("test-device", help="device validation information")
     subparsers.add_parser("check-version", help="check VERSION enforcement for changed libraries")
     subparsers.add_parser("check-api", help="check API breakages against last release tag")
+
+    validate_mip_parser = subparsers.add_parser(
+        "validate-mip",
+        help="validate mip install + import against a live bundle repo",
+    )
+    validate_mip_parser.add_argument(
+        "--bundle-repo",
+        required=True,
+        help="bundle repository name (e.g. ChuMicro-Bundle-Experimental)",
+    )
+    validate_mip_parser.add_argument(
+        "--libraries",
+        help="comma-separated library names (default: all)",
+    )
+    validate_mip_parser.add_argument(
+        "--micropython-binary", metavar="PATH",
+        help="path to MicroPython binary (overrides auto-detection)",
+    )
 
     test_scripts_parser = subparsers.add_parser(
         "test-scripts", help="run scripts/ infrastructure tests",
@@ -920,6 +970,14 @@ def main(argv: list[str]) -> int:
     if args.task == "docs-deploy":
         library_filter = args.libraries.split(",") if args.libraries else None
         return docs_deploy(args.channel, libraries=library_filter)
+
+    # --- validate-mip ---
+    if args.task == "validate-mip":
+        return validate_mip(
+            bundle_repo=args.bundle_repo,
+            libraries=args.libraries,
+            micropython_binary=args.micropython_binary,
+        )
 
     # --- tasks that accept runtime binary overrides ---
     if args.task in {

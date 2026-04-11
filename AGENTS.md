@@ -170,6 +170,7 @@ Conventions:
 | `python scripts/run.py docs` | Build library docs |
 | `python scripts/run.py docs-preview` | Serve versioned local docs preview |
 | `python scripts/run.py docs-deploy --channel <ch>` | Deploy versioned docs |
+| `python scripts/run.py validate-mip --bundle-repo <repo>` | Validate mip install + import against a live bundle repo |
 | `python scripts/run.py new-library <name>` | Scaffold a new library |
 | `python scripts/run.py prepare-mpy-cross` | Build mpy-cross compilers for both runtimes |
 
