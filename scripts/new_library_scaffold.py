@@ -253,12 +253,12 @@ Works on CPython, MicroPython, and CircuitPython.
 📖 **[Stable docs](https://chumicro.github.io/ChuMicro/{name}/stable/)** · \
 **[Experimental docs](https://chumicro.github.io/ChuMicro/{name}/experimental/)**
 
-Browse on GitHub:
+Browse the docs:
 
-- [User guide](docs/guide.md)
-- [API reference](docs/api.md)
+- [User guide](https://chumicro.github.io/ChuMicro/{name}/stable/guide/)
+- [API reference](https://chumicro.github.io/ChuMicro/{name}/stable/api/)
 <!-- If this library has a testing submodule, uncomment the next line: -->
-<!-- - [Testing helpers](docs/testing.md) -->
+<!-- - [Testing helpers](https://chumicro.github.io/ChuMicro/{name}/stable/testing/) -->
 
 ## Find this library
 
