@@ -1,8 +1,12 @@
 # chumicro-timing
 
+<img src="../../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
+
 **Non-blocking timers that handle millisecond wraparound for you.**
 
 Capture `ticks_ms()` once per loop, hand it to a `Heartbeat`, and you've got clean periodic timing — no `time.sleep()`, no wraparound bugs. Works on CircuitPython, MicroPython, and CPython.
+
+<br clear="left">
 
 ## Installation
 

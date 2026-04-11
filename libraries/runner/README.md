@@ -1,8 +1,12 @@
 # chumicro-runner
 
+<img src="../../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
+
 **A tick-based task scheduler — no async, no threads, just `runner.tick()` in your loop.**
 
 Register services with check/handle methods, add periodic callbacks, and the runner dispatches everything on a shared timestamp. Each service runs on its own schedule while you write the interesting parts. Works on CircuitPython, MicroPython, and CPython. Built on [timing](../timing/).
+
+<br clear="left">
 
 ## Installation
 

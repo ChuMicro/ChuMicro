@@ -1,8 +1,12 @@
 # chumicro-compat
 
+<img src="../../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
+
 **Standard library features that CircuitPython and MicroPython are missing.**
 
 Import from `chumicro_compat` instead of the stdlib and your code works everywhere. On CPython it re-exports the real C implementations (zero overhead); on microcontrollers it provides lightweight pure-Python versions.
+
+<br clear="left">
 
 ## Installation
 
