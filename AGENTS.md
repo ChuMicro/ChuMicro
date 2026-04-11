@@ -48,6 +48,14 @@ Before proposing a structural or pattern change, check `plans/decisions/` first.
 - Do not rerun large-output commands without piping or redirecting.
 - Do not add a feature that exists only in code. Update the affected docs, templates, CI, and planning files in the same unit of work.
 
+## Working style
+
+- **Do not fabricate.** Verify claims about the codebase by reading the actual code, running tests, or checking command output. If you cannot verify something, say so explicitly rather than guessing.
+- **Anchor claims to evidence** — reference a file, symbol, test, or command when making factual statements about how the codebase works.
+- **Keep it simple.** Write the minimum code that solves the problem. No features beyond what was asked, no abstractions for single-use code, no speculative error handling. If 200 lines could be 50, rewrite it.
+- **Surface tradeoffs early.** If multiple reasonable approaches exist, name them briefly. If ambiguity affects correctness, stop and ask. If a simpler approach would work, say so.
+- **Clean up after yourself.** When your changes make an import, variable, function, or test unused, remove it. When your changes affect docs, update them. But do not fix pre-existing issues unless asked — mention them separately instead.
+
 ## Agent operations
 
 ### Skills
@@ -191,7 +199,7 @@ Key rules:
 
 - Use descriptive names
 - No single-letter variables except `_`
-- No banned abbreviations unless required by an upstream API
+- No abbreviated names we spell out unless required by an upstream API
 - Document functions and methods with concise docstrings
 - Use standard annotations in signatures
 - Do not `import typing` in library code
