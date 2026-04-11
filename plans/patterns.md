@@ -164,9 +164,9 @@ When a module exists on CPython but not on MicroPython/CircuitPython
 try:
     from micropython import const
 except ImportError:
-    def const(x: int) -> int:
+    def const(value: int) -> int:
         """Identity fallback so const() works on CPython."""
-        return x
+        return value
 ```
 
 For larger differences (e.g., `socketpool` vs `socket`), create a

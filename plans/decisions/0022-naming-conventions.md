@@ -26,7 +26,7 @@ A useful side effect: longer names push lines past the 100-character limit, whic
 - Banned abbreviations are also caught as **suffixes** in compound names (e.g., `base_ref` → `base_reference`, `build_env` → `build_environment`).  `_dir` is exempt — it is a short-but-complete word like `key` or `tag`.
 - The check covers variables, parameters, exception handler names, and function/method names.
 - The check runs automatically as part of `python scripts/run.py lint`.
-- Suppress with `# noqa: CHU001` when matching an upstream API (e.g., `micropython.const(x)`).
+- Suppress with `# noqa: CHU001` only when matching an upstream API that you cannot rename.
 
 Short-but-complete words (`ok`, `tag`, `key`, `raw`, `pin`, `led`, `end`) and widely understood abbreviations (`dir`, `args`, `config`) are still fine — they are not on the banned list.
 
