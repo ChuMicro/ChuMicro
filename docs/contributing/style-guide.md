@@ -15,7 +15,7 @@ We use descriptive names and avoid abbreviations that require mental translation
 | Rule | Example | Enforced by |
 |---|---|---|
 | No single-letter variables (except `_`) | `index`, not `i`; `error`, not `e`; `key`, not `k` | `CHU001` linter |
-| No banned abbreviations | `environment`, not `env`; `buffer`, not `buf`; `source`, not `src`; `command`, not `cmd`; `message`, not `msg`; `error`, not `err`; `reference`, not `ref` | `CHU001` linter |
+| No banned abbreviations | `environment`, not `env`; `buffer`, not `buf`; `source`, not `src`; `command`, not `cmd`; `message`, not `msg`; `error`, not `err`; `reference`, not `ref`; `address`, not `addr`; `exception`, not `exc`; `execute`, not `exec` | `CHU001` linter |
 | Banned abbreviations as suffixes too | `base_reference`, not `base_ref`; `build_environment`, not `build_env` | `CHU001` linter |
 | Short-but-complete words are fine | `dir`, `key`, `tag`, `raw`, `pin`, `led`, `ok`, `end`, `args`, `config` | — |
 | Suppress with `# noqa: CHU001` | Only when matching an upstream API that you cannot rename | — |

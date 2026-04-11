@@ -22,7 +22,7 @@ from discovery import ROOT, discover_ruff_paths
 
 _RULE_CODE = "CHU001"
 _ALLOWED = {"_"}
-_BANNED = {"env", "buf", "src", "cmd", "msg", "err", "ref"}
+_BANNED = {"env", "buf", "src", "cmd", "msg", "err", "ref", "addr", "exc", "exec"}
 _BANNED_SUFFIXES = tuple(f"_{word}" for word in _BANNED)
 # Constructed dynamically so ruff doesn't interpret it as a directive.
 _NOQA_TAG = "# " + "noqa"

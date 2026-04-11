@@ -98,7 +98,7 @@ class TestCollectNames:
 
     def test_all_banned_abbreviations(self):
         """All banned abbreviations are caught."""
-        banned = ["env", "buf", "src", "cmd", "msg", "err", "ref"]
+        banned = ["env", "buf", "src", "cmd", "msg", "err", "ref", "addr", "exc", "exec"]
         source = "\n".join(f"{name} = None" for name in banned) + "\n"
         tree = self._parse(source)
         hits = _collect_names(tree)

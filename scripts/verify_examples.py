@@ -131,8 +131,8 @@ def verify_examples(package_dirs: list[Path]) -> int:
             # 1. Syntax check.
             try:
                 tree = ast.parse(source, filename=str(py_file))
-            except SyntaxError as exc:
-                print(f"  FAIL: {relative_path}  (syntax error: {exc})")
+            except SyntaxError as exception:
+                print(f"  FAIL: {relative_path}  (syntax error: {exception})")
                 failures += 1
                 continue
 

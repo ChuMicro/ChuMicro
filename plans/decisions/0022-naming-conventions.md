@@ -22,7 +22,7 @@ A useful side effect: longer names push lines past the 100-character limit, whic
 
 - `_` is the only allowed single-letter name (throwaway / unused binding).
 - Common Python idioms like `e`, `f`, `i`, `k`, `v` must be spelled out: `error`, `file`, `index`, `key`, `value`.
-- The following abbreviations are banned and must be spelled out: `env`, `buf`, `src`, `cmd`, `msg`, `err`, `ref`.
+- The following abbreviations are banned and must be spelled out: `env`, `buf`, `src`, `cmd`, `msg`, `err`, `ref`, `addr`, `exc`, `exec`.
 - Banned abbreviations are also caught as **suffixes** in compound names (e.g., `base_ref` → `base_reference`, `build_env` → `build_environment`).  `_dir` is exempt — it is a short-but-complete word like `key` or `tag`.
 - The check covers variables, parameters, exception handler names, and function/method names.
 - The check runs automatically as part of `python scripts/run.py lint`.
