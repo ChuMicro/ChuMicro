@@ -73,7 +73,21 @@ circup install chumicro-timing
 mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_timing
 ```
 
+Or from the REPL on a network-capable board:
+
+```python
+import mip
+mip.install("github:ChuMicro/ChuMicro-Bundle/chumicro_timing")
+```
+
+> **Want pre-compiled `.mpy` bytecode?** Add `mpy6/` before the package name for faster startup and lower RAM usage on boards with mpy format v6 (MicroPython 1.24+):
+> ```
+> mpremote mip install github:ChuMicro/ChuMicro-Bundle/mpy6/chumicro_timing
+> ```
+
 **CPython (pip):**
+
+On your laptop, install from PyPI — no bundle needed:
 
 ```bash
 pip install chumicro-timing
