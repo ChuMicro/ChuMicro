@@ -1,26 +1,27 @@
 /* ChuMicro docs — dark-mode readability overrides for Material for MkDocs.
  *
  * The slate scheme provides the dark background.  These overrides improve
- * font sizing, code block contrast, and add purple accent touches to match
- * the ChuMicro landing page palette.
+ * font sizing, code block contrast, and add warm accent touches to match
+ * the ChuMicro branding palette (honey badger: oranges, teals, deep navy).
  *
  * This is the single source of truth.  The build copies it into each
  * library's docs/stylesheets/ at build time — do not duplicate this file.
  */
 
-/* -- Purple accent palette (aligned with the landing page) -------------- */
+/* -- Warm accent palette (aligned with the logo and landing page) ------- */
 :root {
-  --chumicro-purple: #9d7cd8;
-  --chumicro-purple-dim: #7c5fbf;
-  --chumicro-purple-glow: #b4a0e0;
-  --chumicro-surface: #2b2b3d;
-  --chumicro-surface-border: #3a3a52;
+  --chumicro-orange: #e87518;
+  --chumicro-orange-dim: #c05e10;
+  --chumicro-gold: #f0b050;
+  --chumicro-teal: #5da4aa;
+  --chumicro-surface: #1a2230;
+  --chumicro-surface-border: #2a3a4a;
 }
 
-/* Override Material's accent color to our purple */
+/* Override Material's accent color to our orange */
 [data-md-color-scheme="slate"] {
-  --md-accent-fg-color: #9d7cd8;
-  --md-accent-fg-color--transparent: rgba(157, 124, 216, 0.1);
+  --md-accent-fg-color: #e87518;
+  --md-accent-fg-color--transparent: rgba(232, 117, 24, 0.1);
 }
 
 /* -- Typography --------------------------------------------------------- */
@@ -49,9 +50,9 @@
   max-width: 72rem;
 }
 
-/* Headings: subtle purple on h1, section dividers on h2 */
+/* Headings: warm gold on h1, section dividers on h2 */
 .md-typeset h1 {
-  color: var(--chumicro-purple-glow);
+  color: var(--chumicro-gold);
   font-weight: 700;
 }
 
@@ -75,14 +76,14 @@
   border: 1px solid var(--chumicro-surface-border);
 }
 
-/* Inline code: subtle purple-tinted background for contrast */
+/* Inline code: subtle warm-tinted background for contrast */
 .md-typeset :not(pre) > code {
   background-color: var(--chumicro-surface);
   border: 1px solid var(--chumicro-surface-border);
   border-radius: 0.25rem;
   padding: 0.1em 0.35em;
   font-size: 0.88em;
-  color: var(--chumicro-purple-glow);
+  color: var(--chumicro-gold);
 }
 
 /* -- Tables ------------------------------------------------------------- */
@@ -112,9 +113,9 @@
   font-size: 0.8rem;
 }
 
-/* Purple tint on the active nav item */
+/* Orange tint on the active nav item */
 .md-nav__link--active {
-  color: var(--chumicro-purple) !important;
+  color: var(--chumicro-orange) !important;
 }
 
 /* -- Page footer links -------------------------------------------------- */
@@ -126,16 +127,16 @@
 
 /* -- Admonitions -------------------------------------------------------- */
 
-/* Give note admonitions a purple border in dark mode */
+/* Give note admonitions an orange border in dark mode */
 [data-md-color-scheme="slate"] .md-typeset .admonition.note,
 [data-md-color-scheme="slate"] .md-typeset details.note {
-  border-color: var(--chumicro-purple-dim);
+  border-color: var(--chumicro-orange-dim);
 }
 
 /* -- Miscellaneous ------------------------------------------------------ */
 
-/* Version selector badge — subtle purple */
+/* Version selector badge — warm gold */
 .md-version__current {
-  color: var(--chumicro-purple-glow);
+  color: var(--chumicro-gold);
 }
 
