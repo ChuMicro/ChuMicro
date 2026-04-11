@@ -95,16 +95,29 @@ class TestReadChumicroDependencies:
 class TestNextDateTag:
     """Tests for next_date_tag."""
 
-    def test_no_existing_tags(self, tmp_path: Path, monkeypatch):
-        """No existing tags returns today's date."""
-        # Create a git repo so the git command works.
+    #: Git environment overrides so commits work in CI (no global user config).
+    _GIT_ENV = {
+        "GIT_AUTHOR_NAME": "test",
+        "GIT_AUTHOR_EMAIL": "test@test",
+        "GIT_COMMITTER_NAME": "test",
+        "GIT_COMMITTER_EMAIL": "test@test",
+    }
+
+    def _git(self, *arguments: str, cwd: Path) -> None:
+        """Run a git command with CI-safe identity."""
+        import os
         import subprocess
 
-        subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)
+        merged = {**os.environ, **self._GIT_ENV}
         subprocess.run(
-            ["git", "commit", "--allow-empty", "-m", "init"],
-            cwd=tmp_path, capture_output=True, check=True,
+            ["git", *arguments],
+            cwd=cwd, capture_output=True, check=True, env=merged,
         )
+
+    def test_no_existing_tags(self, tmp_path: Path, monkeypatch):
+        """No existing tags returns today's date."""
+        self._git("init", cwd=tmp_path)
+        self._git("commit", "--allow-empty", "-m", "init", cwd=tmp_path)
 
         tag = next_date_tag(tmp_path)
         # Should be a YYYYMMDD format string.
@@ -113,41 +126,30 @@ class TestNextDateTag:
 
     def test_one_existing_tag(self, tmp_path: Path):
         """One existing tag for today returns today.1."""
-        import subprocess
         from datetime import datetime, timezone
 
         today = datetime.now(timezone.utc).strftime("%Y%m%d")  # noqa: UP017
 
-        subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)
-        subprocess.run(
-            ["git", "commit", "--allow-empty", "-m", "init"],
-            cwd=tmp_path, capture_output=True, check=True,
-        )
-        subprocess.run(
-            ["git", "tag", today],
-            cwd=tmp_path, capture_output=True, check=True,
-        )
+        self._git("init", cwd=tmp_path)
+        self._git("commit", "--allow-empty", "-m", "init", cwd=tmp_path)
+        self._git("tag", today, cwd=tmp_path)
 
         tag = next_date_tag(tmp_path)
         assert tag == f"{today}.1"
 
     def test_multiple_existing_tags(self, tmp_path: Path):
         """Multiple existing tags for today returns next suffix."""
-        import subprocess
         from datetime import datetime, timezone
 
         today = datetime.now(timezone.utc).strftime("%Y%m%d")  # noqa: UP017
 
-        subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)
-        subprocess.run(
-            ["git", "commit", "--allow-empty", "-m", "init"],
-            cwd=tmp_path, capture_output=True, check=True,
-        )
+        self._git("init", cwd=tmp_path)
+        self._git("commit", "--allow-empty", "-m", "init", cwd=tmp_path)
         for tag_name in [today, f"{today}.1", f"{today}.2"]:
-            subprocess.run(
-                ["git", "tag", tag_name],
-                cwd=tmp_path, capture_output=True, check=True,
-            )
+            self._git("tag", tag_name, cwd=tmp_path)
+
+        tag = next_date_tag(tmp_path)
+        assert tag == f"{today}.3"
 
         tag = next_date_tag(tmp_path)
         assert tag == f"{today}.3"
