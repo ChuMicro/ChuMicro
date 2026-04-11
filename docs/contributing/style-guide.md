@@ -19,6 +19,7 @@ We use descriptive names and avoid abbreviations that require mental translation
 | Banned abbreviations as suffixes too | `base_reference`, not `base_ref`; `build_environment`, not `build_env` | `CHU001` linter |
 | Short-but-complete words are fine | `dir`, `key`, `tag`, `raw`, `pin`, `led`, `ok`, `end`, `args`, `config` | — |
 | Suppress with `# noqa: CHU001` | Only when matching an upstream API that you cannot rename | — |
+| Exception handlers use `error` | `except ValueError as error:`, not `as exception:` | `CHU001` linter |
 
 **Why:** Code is read far more often than it is written. Descriptive names remove the mental step of translating abbreviations. Longer names also push lines past the 100-character limit, which forces multi-line formatting — each argument on its own line is easier to scan, diff, and blame. ([Decision 0022](plans/decisions/0022-naming-conventions.md))
 
