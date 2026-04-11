@@ -21,7 +21,7 @@ from check_version import main as check_version_main
 from deploy_documents import (
     MIKE,
     copy_shared_docs_assets,
-    docs_deploy,
+    deploy_documents,
     inject_landing_page,
 )
 from ide_sync import sync_ide
@@ -792,7 +792,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     deploy_parser = subparsers.add_parser(
-        "docs-deploy",
+        "deploy-documents",
         help="deploy versioned docs to gh-pages (used by CI)",
     )
     deploy_parser.add_argument(
@@ -911,10 +911,10 @@ def main(argv: list[str]) -> int:
     if args.task == "test-scripts":
         return test_scripts(exit_first=args.exit_first, verbose=args.verbose)
 
-    # --- docs-deploy ---
-    if args.task == "docs-deploy":
+    # --- deploy-documents ---
+    if args.task == "deploy-documents":
         library_filter = args.libraries.split(",") if args.libraries else None
-        return docs_deploy(args.channel, libraries=library_filter)
+        return deploy_documents(args.channel, libraries=library_filter)
 
     # --- tasks that accept runtime binary overrides ---
     if args.task in {

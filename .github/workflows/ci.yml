@@ -85,7 +85,7 @@ jobs:
         run: python scripts/run.py verify-examples --all
 
   # Build documentation on PRs to catch rendering errors before merge.
-  # Actual deployment happens in docs-deploy.yml on push to main.
+  # Actual deployment happens in deploy-documents.yml on push to main.
   documentation-build:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest

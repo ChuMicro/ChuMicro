@@ -187,7 +187,7 @@ Examples are verified via static analysis in `scripts/run.py verify-examples`:
 ### Release pipeline integration
 
 - `docs-build` CI job verifies all library docs build on every PR (Zensical).
-- `docs-deploy.yml` workflow deploys docs on push to `main` (experimental) and via `workflow_dispatch` with `channel=stable` (stable, called by `promote.yml`):
+- `deploy-documents.yml` workflow deploys docs on push to `main` (experimental) and via `workflow_dispatch` with `channel=stable` (stable, called by `promote.yml`):
   - **push to main**: deploys each library at version `dev` with alias `experimental`.
   - **promote (stable)**: deploys each library at its VERSION (e.g., `0.1.0`) with alias `stable`, sets `stable` as the default redirect for `/<lib>/`.
   - Uses mike with `--deploy-prefix <lib>` per library, pushing to the `gh-pages` branch.

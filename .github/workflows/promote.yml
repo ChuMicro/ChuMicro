@@ -25,7 +25,7 @@ on:
 permissions:
   contents: write    # tags + GitHub Releases
   id-token: write    # PyPI trusted publishing (OIDC)
-  actions: write     # trigger docs-deploy
+  actions: write     # trigger deploy-documents
 
 defaults:
   run:
@@ -295,7 +295,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh workflow run docs-deploy.yml \
+          gh workflow run deploy-documents.yml \
             --repo "${{ github.repository }}" \
             -f channel=stable \
             -f "libraries=${{ needs.validate.outputs.library_name }}"
