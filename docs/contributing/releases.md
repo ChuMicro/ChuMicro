@@ -19,8 +19,8 @@ flowchart TD
     I --> L[Create git tag<br/>lib-vX.Y.Z]
     I --> M[Deploy stable docs]
 
-    style A fill:#2d5016,color:#fff
-    style H fill:#1a3a5c,color:#fff
+    style A fill:#7a3d10,color:#fff
+    style H fill:#c05e10,color:#fff
 ```
 
 ## Experimental releases

@@ -91,8 +91,8 @@ theme:
   name: material
   palette:
     scheme: slate
-    primary: teal
-    accent: deep orange
+    primary: deep orange
+    accent: amber
   font:
     text: Inter
     code: JetBrains Mono
