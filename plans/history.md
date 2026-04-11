@@ -240,7 +240,6 @@ This was the largest single session. It addressed three areas: the workspace was
 
 **Milestone 2 marked done.** All CI/release exit criteria met.
 
-**All libraries bumped to 0.1.18 (current).**
 
 ### 2026-04-07 — Contributor docs, skills, and plans rationalization
 
@@ -274,7 +273,7 @@ This was the largest single session. It addressed three areas: the workspace was
 
 **Standalone promote workflow (Decision 0023):** Rewrote `promote.yml` as standalone workflow that runs from main instead of delegating to `release.yml` via `workflow_call`. Fixed PyPI OIDC attestation mismatch (Sigstore certificate carries caller identity, not callee). Release workflow now creates source archive attached to GitHub Release. Promote downloads it and builds/publishes/bundles/deploys inline.
 
-**Release and bundle fixes:** Fixed PyPI trusted publisher mismatch for stable releases. Fixed attestation verification failure on promote path. Included testing.py in bundle artifacts. Fixed stable bundle README banner. Bumped all libraries to 0.1.17, then 0.1.18.
+**Release and bundle fixes:** Fixed PyPI trusted publisher mismatch for stable releases. Fixed attestation verification failure on promote path. Included testing.py in bundle artifacts. Fixed stable bundle README banner.
 
 **CI hardening:** Fixed bundle KeyError, standardized shell usage, added caching. Consolidated duplicate micropython/circuitpython compatibility jobs into matrix. Cleaned up workflow files (naming, deduplication, comments). Added `chumicro-` prefix to tags and source archive filenames.
 
@@ -296,5 +295,21 @@ This was the largest single session. It addressed three areas: the workspace was
 
 **Scripts module rename:** Renamed all scripts/ modules for clarity: `discovery.py` → `workspace.py`, `ide.py` → `ide_sync.py`, `scaffold.py` → `new_library_scaffold.py`, `bundle.py` → `bundle_manager.py`. Merged `prepare.py` + old `workspace.py` → `shared.py`. Updated all imports, monkeypatch targets, test files, CI workflows, skills, docs, and decision records. Fixed stale module names in docstrings. `docs_deploy.py` was briefly renamed to `deploy_documents.py` for consistency with the other renames, then reverted — the `docs_` prefix matches the CLI subcommand (`docs-deploy`) and is easier to find.
 
-**All libraries at 0.1.18.**
+### 2026-04-11 — Docs branding, README overhaul, brand normalization, contributor fork workflow, AGENTS.md consolidation
+
+**Test harness heap deltas:** Disabled automatic GC during test runs and added explicit collection between tests so per-test heap deltas reflect only that test's retained allocations. Cached `_MEM_FREE_AVAILABLE` flag to avoid per-call `hasattr` on constrained runtimes.
+
+**Plans cleanup:** Removed `plans/sessions/` directory and references — commit history serves as the primary context recovery mechanism. Fixed a broken link in CONTRIBUTING.md and added `good first issue` label to `.github/labels.yml`.
+
+**Docs branding overhaul:** Rebranded docs theme from purple to a warm palette matching the badger logo (teal primary, deep orange accent, warm gold headings, dark navy surfaces). Regenerated favicon from badger head image. Rewrote the landing page to read library descriptions from `pyproject.toml` instead of scraping README paragraphs. Added centered logo header to root README with tagline and nav links. Rewrote library descriptions in plain language. Added "Supported boards" section. Added badger tip image to CONTRIBUTING.md.
+
+**Library README polish:** Rewrote the link and image structure of all four library READMEs and the scaffold template for PyPI compatibility. Switched all links to absolute URLs (relative paths break on PyPI). Added badger tip image. Pointed Source links to specific library directories instead of the repo root. Simplified Docs sections, removed duplicate circup links and redundant "All libraries" navigation. Included README.md in bundle staging so each library directory in the bundle repos renders its own README.
+
+**Brand normalization:** Replaced 50+ occurrences of "Chumicro" with "ChuMicro" across prose, docstrings, author fields, test class names, issue templates, skill descriptions, decision records, and documentation. Python package identifiers (`chumicro_timing`, `chumicro-runner`) remain lowercase per convention.
+
+**Contributor fork workflow:** Replaced the setup-only quick start in CONTRIBUTING.md with a complete 10-step fork-to-PR walkthrough using a concrete typo-fix example. Added fork workflow guidance (why forking is required, keeping a fork in sync, rebasing when main moves). Clarified that PRs from forks target the original repository. Steered contributors toward the GitHub UI for opening PRs (the PR template loads automatically; `gh pr create` skips it). Updated IDE-specific guides to reference the contributing quick start instead of duplicating clone instructions.
+
+**Contributor experience audit v4:** Added "First contribution?" minimum-reading signpost to CONTRIBUTING.md. Added Contributor FAQ (device requirements, coverage, naming). Reframed "banned abbreviations" as "abbreviations we spell out" across style guide, FAQ, Decision 0022, and AGENTS.md. Moved memory-pattern reassurance to top of section in style guide and new-library guide with collapsible details. Added "Part of ChuMicro" discovery line to all library READMEs. Noted that `plans/patterns.md` is primarily for agent context recovery.
+
+**AGENTS.md consolidation:** Absorbed useful global rules from `copilot-instructions.md` (fabrication avoidance, simplicity, tradeoff surfacing, orphan cleanup) into a new "Working style" section in AGENTS.md. Removed the separate file. Reframed rules as contributor behavior guidance rather than restrictive prohibitions.
 
