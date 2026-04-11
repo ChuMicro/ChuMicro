@@ -123,16 +123,16 @@ def generate() -> str:
   <style>
     :root {{
       --bg: #0e0f10;
-      --card-bg: #131a22;
+      --card-bg: #1a1510;
       --text: #e6edf3;
       --muted: #8b949e;
       --accent: #e87518;
       --accent-hover: #f0a050;
-      --border: #1e2e3e;
-      --tag-bg: #0e1e28;
-      --tag-text: #5da4aa;
-      --green-bg: #0f1a12;
-      --green-text: #3fb950;
+      --border: #2a1e10;
+      --tag-bg: #1e1208;
+      --tag-text: #e8d296;
+      --green-bg: #1e1208;
+      --green-text: #ed9838;
       --orange-bg: #1e1208;
       --orange-text: #f0a050;
     }}
@@ -153,8 +153,8 @@ def generate() -> str:
       display: inline-block; font-size: .8rem; font-weight: 600;
       padding: .25rem .65rem; border-radius: 1rem;
     }}
-    .badge-blue {{ background: var(--tag-bg); color: var(--tag-text); }}
-    .badge-green {{ background: var(--green-bg); color: var(--green-text); }}
+    .badge-cream {{ background: var(--tag-bg); color: var(--tag-text); }}
+    .badge-amber {{ background: var(--green-bg); color: var(--green-text); }}
     .badge-orange {{ background: var(--orange-bg); color: var(--orange-text); }}
 
     /* Library cards */
@@ -214,8 +214,8 @@ def generate() -> str:
       <h1>ChuMicro</h1>
       <p>Cross-runtime Python libraries for CircuitPython, MicroPython, and CPython &mdash; built for ESP32, RP2040, and other microcontrollers.</p>
       <div class="badges">
-        <span class="badge badge-blue">CircuitPython</span>
-        <span class="badge badge-green">MicroPython</span>
+        <span class="badge badge-cream">CircuitPython</span>
+        <span class="badge badge-amber">MicroPython</span>
         <span class="badge badge-orange">CPython</span>
       </div>
     </header>
