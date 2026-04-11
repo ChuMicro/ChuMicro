@@ -203,22 +203,6 @@
             }
         },
         {
-            "label": "Validate Mip",
-            "type": "shell",
-            "command": "python",
-            "args": [
-                "scripts/run.py",
-                "validate-mip",
-                "--bundle-repo",
-                "ChuMicro-Bundle-Experimental"
-            ],
-            "group": "test",
-            "presentation": {
-                "reveal": "always",
-                "panel": "shared"
-            }
-        },
-        {
             "label": "Verify Examples",
             "type": "shell",
             "command": "python",

@@ -42,10 +42,6 @@ _TASKS: list[tuple[str, str, str, str]] = [
     ("Setup", "scripts/run.py", "setup", "build"),
     ("Test", "scripts/run.py", "test --all", "test"),
     ("Test Scripts", "scripts/run.py", "test-scripts", "test"),
-    (
-        "Validate Mip", "scripts/run.py",
-        "validate-mip --bundle-repo ChuMicro-Bundle-Experimental", "test",
-    ),
     ("Verify Examples", "scripts/run.py", "verify-examples --all", "test"),
 ]
 
