@@ -114,14 +114,22 @@ def test_run_module_includes_total_duration(capsys) -> None:
 
 
 def test_run_module_reports_heap_when_available(monkeypatch, capsys) -> None:
-    """When gc.mem_free is available, HEAP stats should appear before and after."""
-    fake_gc = SimpleNamespace(collect=lambda: None, mem_free=lambda: 50000)
+    """When gc.mem_free is available, per-test and module-level heap stats should appear."""
+    fake_gc = SimpleNamespace(
+        collect=lambda: None,
+        mem_free=lambda: 50000,
+        disable=lambda: None,
+        enable=lambda: None,
+    )
     monkeypatch.setattr(runner_module, "_gc", fake_gc)
+    monkeypatch.setattr(runner_module, "_MEM_FREE_AVAILABLE", True)
 
     module = SimpleNamespace(test_ok=lambda: None)
     run_module(module)
     output = capsys.readouterr().out
 
+    assert "PASS test_ok" in output
+    assert "heap +0" in output
     assert "HEAP 50000 bytes free" in output
     assert "delta +0 bytes" in output
 
@@ -138,14 +146,3 @@ def test_run_module_skips_non_callable_test_attributes(capsys) -> None:
     assert "test_value" not in output
     assert "SUMMARY total=1 failed=0" in output
 
-
-def test_memory_free_returns_none_without_gc_mem_free(monkeypatch) -> None:
-    """_memory_free should return None when gc lacks mem_free."""
-    monkeypatch.setattr(runner_module, "_gc", SimpleNamespace(collect=lambda: None))
-    assert runner_module._memory_free() is None
-
-
-def test_memory_free_returns_none_without_gc(monkeypatch) -> None:
-    """_memory_free should return None when gc is not available."""
-    monkeypatch.setattr(runner_module, "_gc", None)
-    assert runner_module._memory_free() is None
