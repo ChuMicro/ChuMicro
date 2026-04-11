@@ -27,7 +27,7 @@ def _load_tomllib():
     """Import tomllib lazily.
 
     Stdlib from 3.11+; the ``tomli`` backport covers 3.9–3.10.
-    Keeping this out of module scope lets ``discovery`` be imported on a
+    Keeping this out of module scope lets ``workspace`` be imported on a
     fresh clone before third-party packages are installed.
     """
     try:

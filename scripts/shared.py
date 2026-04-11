@@ -94,7 +94,7 @@ def install_editable(python: str | Path | None = None) -> int:
 def runtime_versions() -> dict:
     """Read and cache pinned runtime versions from ``target-runtimes.toml``.
 
-    Lazy — importing :mod:`prepare` no longer triggers a TOML read.
+    Lazy — importing :mod:`shared` no longer triggers a TOML read.
     """
     return read_runtime_versions()
 
