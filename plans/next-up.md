@@ -6,7 +6,6 @@
 
 ## Next
 
-- [ ] Update `release.yml` and `promote.yml` to pass `--cp-mpy-cross` and `--mp-mpy-cross` to bundle staging. Currently CI installs MicroPython's mpy-cross via pip but doesn't pass either flag, so no `.mpy` files are compiled.  Need to also install CircuitPython's mpy-cross (build from source or download from Adafruit release assets).  See Decision 0024.
 - [ ] Enable GitHub Copilot code review as a PR quality gate (low priority — defer until community contributions begin).
 - [ ] Implement `chumicro-settings` — dict-like persistent storage for microcontrollers.
   - Uses `chumicro-msgpack` for serialization (2-byte length prefix + msgpack payload).
@@ -34,6 +33,7 @@
 
 ## Done (recent)
 
+- [x] CI mpy-cross integration: `release.yml` and `promote.yml` build both mpy-cross compilers from source (cached) instead of `pip install mpy-cross`. Both CircuitPython and MicroPython `.mpy` files are now compiled during bundle staging. New `prepare-mpy-cross` command builds only the compilers without the full unix-port interpreters.
 - [x] Docs branding overhaul: warm palette matching badger logo, favicon regeneration, landing page reads descriptions from pyproject.toml, centered logo header in root README, plain-language library descriptions.
 - [x] Library README overhaul: absolute URLs for PyPI compatibility, badger tip images, Source links to library directories, README.md included in bundle staging, scaffold template aligned.
 - [x] Brand normalization: "Chumicro" → "ChuMicro" across 50+ occurrences in prose, docstrings, templates, and docs.
