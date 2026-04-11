@@ -194,6 +194,13 @@ circup install chumicro-{name}
 mpremote mip install github:ChuMicro/ChuMicro-Bundle/{import_name}
 ```
 
+> **Want pre-compiled `.mpy` bytecode?** Add `mpy6/` before the package name \
+for faster startup and lower RAM usage on boards with mpy format v6 \
+(MicroPython 1.24+):
+> ```
+> mpremote mip install github:ChuMicro/ChuMicro-Bundle/mpy6/{import_name}
+> ```
+
 ### CPython (pip)
 
 ```bash
