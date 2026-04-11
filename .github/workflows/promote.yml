@@ -148,6 +148,7 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: "${{ needs.validate.outputs.library_dir }}/dist/"
+          attestations: true
 
       - name: Create git tag
         if: ${{ !inputs.dry_run }}
