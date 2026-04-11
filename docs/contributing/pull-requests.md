@@ -50,15 +50,9 @@ Use imperative mood in the subject — "Add test", not "Added" or "Adds". Name a
 git push -u origin fix/my-first-change
 ```
 
-**Option A — GitHub UI:** Go to your fork on GitHub. You'll see a banner: "fix/my-first-change had recent pushes — Compare & pull request." Click it.
+Go to your fork on GitHub. You'll see a banner: "fix/my-first-change had recent pushes — Compare & pull request." Click it.
 
-**Option B — GitHub CLI:**
-
-```bash
-gh pr create --title "Add edge-case test for ticks_add" --body "See commit message" --base main
-```
-
-Fill in the PR template:
+GitHub loads the PR template automatically. Fill in each section:
 
 - **Summary:** What your PR does (one sentence)
 - **Motivation:** Why this change is needed
@@ -66,6 +60,8 @@ Fill in the PR template:
 - **How to verify:** Concrete steps (`python scripts/run.py test --libraries timing`)
 - **Device testing:** Evidence of on-device testing, if applicable (see below)
 - **Version impact:** For test-only changes, select "No bump needed"
+
+> **Prefer the GitHub UI over `gh pr create`.** The UI auto-populates the PR template so reviewers get the context they need. The CLI skips it, which usually means a reviewer has to ask follow-up questions before they can review — slowing things down.
 
 ## Device testing
 
@@ -169,5 +165,5 @@ git remote add upstream https://github.com/ChuMicro/ChuMicro.git
 | Full check | `python scripts/run.py preflight 2>&1 \| tail -5` |
 | Commit | `git add -A && git commit` |
 | Push | `git push -u origin <branch>` |
-| Open PR | `gh pr create` or GitHub UI |
+| Open PR | GitHub UI — click "Compare & pull request" on your fork |
 

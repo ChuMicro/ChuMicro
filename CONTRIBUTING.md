@@ -167,10 +167,13 @@ Push your branch to your fork:
 git push -u origin fix/my-first-change
 ```
 
-Then open a pull request:
+Then open a pull request on GitHub:
 
-- **GitHub UI:** Go to your fork on GitHub. You'll see a banner saying your branch had recent pushes — click **Compare & pull request**. Fill in the title and description, make sure the base branch is `main`, and click **Create pull request**.
-- **GitHub CLI:** `gh pr create --title "Fix typo in timing README" --base main`
+1. Go to your fork on GitHub. You'll see a banner saying your branch had recent pushes — click **Compare & pull request**.
+2. GitHub loads the PR template automatically. Fill in each section (summary, motivation, how to verify, etc.).
+3. Make sure the base branch is `main` and click **Create pull request**.
+
+> **Why the GitHub UI?** The repository has a PR template with sections that help reviewers and keep CI smooth. The GitHub UI loads it automatically. `gh pr create` skips the template, which means reviewers have to ask for missing context — slowing things down for everyone.
 
 CI runs automatically on your PR. All checks must pass before a maintainer can merge. If something fails, click the failed check to see the log, fix it locally, and push again — CI re-runs automatically.
 
