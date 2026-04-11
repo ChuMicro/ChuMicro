@@ -143,18 +143,15 @@ After merge, your change is on `main`. If you bumped a VERSION file, an experime
 
 ## Keeping your fork up to date
 
-Before starting new work:
+Your fork doesn't update automatically. Before starting new work, sync it with the original repository. See [Keeping your fork in sync](../../CONTRIBUTING.md#keeping-your-fork-in-sync) in the contributing guide for full instructions, including how to rebase your branch if `main` moves while you're working.
+
+The short version:
 
 ```bash
 git checkout main
 git pull upstream main
 git push origin main
-```
-
-If you haven't added the upstream remote yet:
-
-```bash
-git remote add upstream https://github.com/ChuMicro/ChuMicro.git
+git checkout -b fix/next-change
 ```
 
 ## Quick reference
