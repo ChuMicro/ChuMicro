@@ -48,6 +48,10 @@ from workspace import ROOT, find_package_dir
 STABLE_BUNDLE_REPO = "ChuMicro-Bundle"
 EXPERIMENTAL_BUNDLE_REPO = "ChuMicro-Bundle-Experimental"
 
+#: mpy bytecode format version folder name.  mpy v6 is used by CircuitPython 10.x
+#: and MicroPython 1.24+.  See Decision 0024.
+MPY_FORMAT_FOLDER = "mpy6"
+
 
 def _find_bundle_modules(library_dir: Path) -> tuple[str, Path, list[Path]]:
     """Discover the package name, package dir, and deployable .py files.
@@ -96,6 +100,17 @@ def _dependency_to_mip_reference(dependency: str) -> str:
     name = re.split(r"[><=!;~\[]", dependency, maxsplit=1)[0]
     package = name.strip().replace("-", "_")
     return f"github:{_GITHUB_ORG}/{STABLE_BUNDLE_REPO}/{package}"
+
+
+def _dependency_to_mpy_mip_reference(dependency: str) -> str:
+    """Convert 'chumicro-timing>=0.1' to an mpy6 mip github reference.
+
+    Args:
+        dependency: PyPI dependency string (e.g. ``"chumicro-timing>=0.1"``).
+    """
+    name = re.split(r"[><=!;~\[]", dependency, maxsplit=1)[0]
+    package = name.strip().replace("-", "_")
+    return f"github:{_GITHUB_ORG}/{STABLE_BUNDLE_REPO}/{MPY_FORMAT_FOLDER}/{package}"
 
 
 def _compile_mpy(python_file: Path, mpy_file: Path, mpy_cross: str) -> None:
@@ -199,7 +214,34 @@ def build_bundle(
         json.dump(manifest, manifest_file, indent=2)
         manifest_file.write("\n")
 
+    # Generate mpy6/ manifest — an opt-in mip install path for pre-compiled
+    # .mpy bytecode (Decision 0024).  The manifest points to the .mpy files
+    # in the root package directory; no files are duplicated.
+    mpy_manifest_dir = staging_dir / MPY_FORMAT_FOLDER / package_name
+    mpy_manifest_dir.mkdir(parents=True, exist_ok=True)
+
+    mpy_urls = []
+    for source_file in python_files:
+        relative_path = source_file.relative_to(package_dir)
+        mpy_relative_path = relative_path.with_suffix(".mpy").as_posix()
+        target = f"{package_name}/{mpy_relative_path}"
+        source = f"github:ChuMicro/{bundle_repo}/{package_name}/{mpy_relative_path}"
+        mpy_urls.append([target, source])
+
+    mpy_manifest: dict = {"urls": mpy_urls, "version": version}
+    mpy_mip_dependencies = [
+        [_dependency_to_mpy_mip_reference(dependency), "latest"]
+        for dependency in _read_chumicro_dependencies(library_dir)
+    ]
+    if mpy_mip_dependencies:
+        mpy_manifest["deps"] = mpy_mip_dependencies
+
+    with open(mpy_manifest_dir / "package.json", "w") as mpy_manifest_file:
+        json.dump(mpy_manifest, mpy_manifest_file, indent=2)
+        mpy_manifest_file.write("\n")
+
     print(f"Staged {package_name} v{version} -> {output_dir}")
+    print(f"Staged {MPY_FORMAT_FOLDER}/{package_name} manifest -> {mpy_manifest_dir}")
 
 
 def stage_matrix(
@@ -501,6 +543,13 @@ Or from the REPL on a network-capable board:
 import mip
 mip.install("github:{_GITHUB_ORG}/{bundle_repo}/chumicro_timing")
 ```
+
+> **Want pre-compiled `.mpy` bytecode?** Add `{MPY_FORMAT_FOLDER}/` before the package name \
+for faster startup and lower RAM usage on boards with mpy format v6 \
+(MicroPython 1.24+, CircuitPython 10.x):
+> ```
+> mpremote mip install github:{_GITHUB_ORG}/{bundle_repo}/{MPY_FORMAT_FOLDER}/chumicro_timing
+> ```
 
 **CPython (pip):**
 
