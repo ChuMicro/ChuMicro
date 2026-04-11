@@ -313,4 +313,3 @@ This was the largest single session. It addressed three areas: the workspace was
 
 **AGENTS.md consolidation:** Absorbed useful global rules from `copilot-instructions.md` (fabrication avoidance, simplicity, tradeoff surfacing, orphan cleanup) into a new "Working style" section in AGENTS.md. Removed the separate file. Reframed rules as contributor behavior guidance rather than restrictive prohibitions.
 
-**Local bundle validation:** Added a `--local-bundle` option to `validate-mip` (and underlying `validate_mip_install.py`). This spins up a background `http.server` to serve a local directory, automatically patching staged `package.json` files to use `localhost` URLs rather than `github:` URLs, allowing full end-to-end `mip` installation tests without pushing to a live repository.
