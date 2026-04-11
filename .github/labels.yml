@@ -75,6 +75,10 @@
   color: "fbca04"
   description: "Awaiting code review"
 
+- name: "good first issue"
+  color: "7057ff"
+  description: "Good for newcomers"
+
 - name: blocked
   color: "000000"
   description: "Blocked on external dependency or decision"

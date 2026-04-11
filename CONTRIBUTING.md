@@ -29,7 +29,7 @@ Each page is self-contained for its topic. You don't need to read all of them â€
 | Git | any recent | |
 | IDE (optional) | Any editor with a terminal | PyCharm, VS Code, Neovim, Zed, Emacs, Sublime â€” all work |
 
-**Windows users:** use native Windows for editing, linting, and tests. Use WSL2 for unix-port cross-runtime checks. See [Development setup](README.md#development-setup) in the README.
+**Windows users:** use native Windows for editing, linting, and tests. Use WSL2 for unix-port cross-runtime checks. See [Development](README.md#development) in the README.
 
 ## Development environment
 
