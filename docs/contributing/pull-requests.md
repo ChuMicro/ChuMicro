@@ -50,7 +50,9 @@ Use imperative mood in the subject — "Add test", not "Added" or "Adds". Name a
 git push -u origin fix/my-first-change
 ```
 
-Go to your fork on GitHub. You'll see a banner: "fix/my-first-change had recent pushes — Compare & pull request." Click it.
+Go to your fork on GitHub (`github.com/<your-username>/ChuMicro`). You'll see a banner: "fix/my-first-change had recent pushes — Compare & pull request." Click it.
+
+GitHub knows your fork came from the original repository, so it automatically sets up the PR to merge your branch into `ChuMicro/ChuMicro`'s `main`. Verify the header reads **base repository: ChuMicro/ChuMicro** and **base: main** — if it points at your own fork instead, change the base repository dropdown.
 
 GitHub loads the PR template automatically. Fill in each section:
 

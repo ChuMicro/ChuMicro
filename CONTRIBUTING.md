@@ -169,9 +169,9 @@ git push -u origin fix/my-first-change
 
 Then open a pull request on GitHub:
 
-1. Go to your fork on GitHub. You'll see a banner saying your branch had recent pushes — click **Compare & pull request**.
-2. GitHub loads the PR template automatically. Fill in each section (summary, motivation, how to verify, etc.).
-3. Make sure the base branch is `main` and click **Create pull request**.
+1. Go to your fork on GitHub (`github.com/<your-username>/ChuMicro`). You'll see a banner saying your branch had recent pushes — click **Compare & pull request**.
+2. GitHub knows your fork came from the original repository, so it automatically sets up the PR to merge your branch into `ChuMicro/ChuMicro`'s `main` branch. Verify the header reads **base repository: ChuMicro/ChuMicro** and **base: main**.
+3. GitHub loads the PR template automatically. Fill in each section (summary, motivation, how to verify, etc.) and click **Create pull request**.
 
 > **Why the GitHub UI?** The repository has a PR template with sections that help reviewers and keep CI smooth. The GitHub UI loads it automatically. `gh pr create` skips the template, which means reviewers have to ask for missing context — slowing things down for everyone.
 
