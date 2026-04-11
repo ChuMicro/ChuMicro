@@ -259,8 +259,7 @@ Works on CPython, MicroPython, and CircuitPython.
 - **PyPI:** [chumicro-{name}](https://pypi.org/project/chumicro-{name}/)
 - **Bundle:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle)\
  (CircuitPython & MicroPython)
-- **Source:** [ChuMicro/ChuMicro](https://github.com/ChuMicro/ChuMicro) —\
- cross-runtime Python libraries for ESP32, RP2040, and other microcontrollers.
+- **Source:** [libraries/{name}](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/{name})
 """
 
 #: User guide skeleton with required section headings.
