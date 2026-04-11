@@ -60,7 +60,7 @@ Pick the install method for your runtime — swap `chumicro-timing` for whicheve
 
 **CircuitPython ([circup](https://github.com/adafruit/circup)):**
 
-[circup](https://github.com/adafruit/circup) is CircuitPython's package manager — it uses bundles to find third-party packages. Register the ChuMicro bundle once, then install any library by name:
+circup is CircuitPython's package manager — it uses bundles to find third-party packages. Register the ChuMicro bundle once, then install any library by name:
 
 ```bash
 circup bundle-add ChuMicro/ChuMicro-Bundle
