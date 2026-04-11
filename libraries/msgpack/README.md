@@ -1,8 +1,12 @@
 # chumicro-msgpack
 
+<img src="../../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
+
 **Compact [MessagePack](https://msgpack.org) serialization — much smaller than JSON.**
 
 Turns Python dicts, lists, and values into binary bytes, typically 30–50% smaller than JSON. Good for NVM storage, serial protocols, and anywhere bytes matter. On CircuitPython boards with the native `msgpack` C module, everything delegates to the built-in — the pure-Python code is never loaded, saving ~700 bytes of heap.
+
+<br clear="left">
 
 Works on CircuitPython, MicroPython, and CPython.
 

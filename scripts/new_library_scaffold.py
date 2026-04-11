@@ -168,7 +168,12 @@ from {import_name} import ...
 _README_TEMPLATE = """\
 # chumicro-{name}
 
+<img src="../../support/docs/chumicro_tip.png" align="left" width="64" \
+style="margin-right: 16px; margin-bottom: 8px;">
+
 <!-- TODO: Add a one-line description of what the library does. -->
+
+<br clear="left">
 
 ## Installation
 
