@@ -8,6 +8,8 @@ Register services with check/handle methods, add periodic callbacks, and the run
 
 <br clear="left">
 
+> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family — small, focused Python libraries for microcontrollers and laptops. [See all libraries.](https://github.com/ChuMicro/ChuMicro#whats-in-the-box)
+
 ## Installation
 
 ### CircuitPython ([circup](https://github.com/adafruit/circup))

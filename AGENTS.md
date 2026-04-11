@@ -1,8 +1,10 @@
 # ChuMicro Development Ecosystem
 
+> This file is for AI coding agents. Human contributors should use [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Quick reference
 
-- **Commit mechanics:** Read the `git-commit` skill before every commit. Never use `git commit -m`. Write the message to `.scratch/commit-msg.txt` with a file tool, then run `git commit -F .scratch/commit-msg.txt`.
+- **Commit mechanics:** Read the `git-commit` skill before every commit. Use `git commit -F .scratch/commit-msg.txt` instead of `git commit -m` so the message can be multi-line and thoughtful. Write the message to `.scratch/commit-msg.txt` with a file tool first.
 - **After each unit of work:** Run the `task-checkpoint` skill. Validate, commit, and push. Do not yield with uncommitted changes unless the work is explicitly partial.
 - **Before ending a session:** Run the `end-of-session` skill. Preflight must pass and the tree must be clean.
 - **Scratch space:** `.scratch/` is gitignored and safe for temporary files, commit messages, and log captures.
@@ -20,21 +22,21 @@ When instructions overlap, use this order:
 
 Before proposing a structural or pattern change, check `plans/decisions/` first.
 
-## Hard rules an agent must never violate
+## Non-negotiable rules
 
 - **Verify before declaring done** — after making changes, run `task-checkpoint`. Before ending a session, run `end-of-session`. Do not tell the user work is done with uncommitted, untested, or failing changes.
 - **Preflight must pass before you stop** — `python scripts/run.py preflight 2>&1 | tail -5` must show `Preflight passed`. If it fails because of your work, fix it.
-- **Use `git commit -F .scratch/commit-msg.txt`** — never `git commit -m`.
+- **Use `git commit -F .scratch/commit-msg.txt`** — not `git commit -m`, so messages can be multi-line and descriptive.
 - **Use per-library pytest via `python scripts/run.py test`** — never run bare `pytest` from the repository root.
 - **Maintain the 94% coverage gate** per library.
 - **No `async`/`await`, no ISRs** — use the tick-based runner pattern from Decision 0014.
 - **Use constructor injection** for time, I/O, and network dependencies. Put fakes in the library's `testing.py` submodule. See Decision 0010.
 - **Use f-strings everywhere.** Use `const()`, `memoryview`, and pre-allocated buffers in library code only.
-- **No single-letter variable names or banned abbreviations** — `_` is the only exception for single-letter names. Banned abbreviations: `env`, `buf`, `src`, `cmd`, `msg`, `err`, `ref`, `addr`, `exc`, `exec`. Enforced by `CHU001` in `scripts/check_names.py`. Suppress with `# noqa: CHU001` only when matching an upstream API. See Decision 0022.
+- **No single-letter variable names or abbreviated names we spell out** — `_` is the only exception for single-letter names. Abbreviations we spell out: `env`, `buf`, `src`, `cmd`, `msg`, `err`, `ref`, `addr`, `exc`, `exec`. Enforced by `CHU001` in `scripts/check_names.py`. Suppress with `# noqa: CHU001` only when matching an upstream API. See Decision 0022.
 - **Use standard annotations and do not import `typing` in library code** — use PEP 604/585 syntax such as `int | None` and `list[int]`. See Decision 0021.
-- **Never hard-code secrets.**
+- **Do not hard-code secrets.**
 - **Minimize dependencies** — prefer pure-Python implementations compatible with all three runtimes.
-- **Never use heredocs, `echo`, `printf`, or `cat` to create multi-line content** — write files with file tools, then reference them from the terminal.
+- **Do not use heredocs, `echo`, `printf`, or `cat` to create multi-line content** — write files with file tools, then reference them from the terminal.
 - **Do not leave docs, templates, CI, and plans stale** when behavior changes.
 
 ## Common pitfalls

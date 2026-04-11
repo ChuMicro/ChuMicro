@@ -129,6 +129,8 @@ Hint: check the Missing column above to find uncovered lines.  If the gap is
 in code you didn't change, note it in your PR — a maintainer can help.
 ```
 
+> **Don't panic.** The 94% gate is about the whole library, not just your change. If the uncovered lines are in code you didn't write, that's not your fault. Note it in your PR description and move on — a maintainer can help fill the gap or mark an exception.
+
 **How to fix:** Follow the hint — the `Missing` column in the coverage table above shows the uncovered line numbers. Write tests that exercise those lines.
 
 **Browsing coverage in detail:**
@@ -232,6 +234,8 @@ Preflight runs everything CI will run. Always run it before opening a PR:
 ```bash
 python scripts/run.py preflight 2>&1 | tail -5
 ```
+
+> **What's `2>&1 | tail -5`?** This merges error output with normal output and shows just the last 5 lines — the pass/fail summary. You can drop `| tail -5` to see the full output.
 
 **When it passes:**
 

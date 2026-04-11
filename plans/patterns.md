@@ -1,5 +1,7 @@
 # Patterns
 
+> **Note:** This file is primarily for AI agent context recovery — it gives agents a quick reference for implementation patterns without re-reading all the source code. Human contributors should use the [Style Guide](../docs/contributing/style-guide.md) and [Adding a New Library](../docs/contributing/new-library.md) guides instead.
+
 Reusable implementation patterns specific to this codebase.  Follow these
 when writing new libraries or modifying existing ones — they were established
 because incorrect implementations caused real bugs.

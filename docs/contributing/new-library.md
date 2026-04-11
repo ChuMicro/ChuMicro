@@ -96,7 +96,7 @@ Why? So tests can inject fakes without touching real hardware. See [Decision 001
 
 ### Memory-efficient patterns
 
-Library code runs on boards with as little as 256 KB RAM:
+Library code runs on boards with as little as 256 KB RAM. **You don't need to apply these patterns from day one** — focus on correctness first and add optimizations when they matter. The patterns below are required in `libraries/` code for production, but a first draft without them is perfectly fine.
 
 - **Pre-allocate buffers** in the constructor, reuse with `readinto()`
 - **Use `memoryview`** for slicing — avoids copies
@@ -104,7 +104,10 @@ Library code runs on boards with as little as 256 KB RAM:
 - **Use f-strings** for all string formatting
 - **Don't build strings in loops**
 
-These patterns are required in `libraries/` code. They are *not* required in `scripts/` or `support/` (those only run on CPython).
+These patterns are *not* required in `scripts/` or `support/` (those only run on CPython).
+
+<details>
+<summary>Examples: <code>const()</code> and <code>memoryview</code> (expand when you're ready to optimize)</summary>
 
 #### `const()` — compile-time constants
 
@@ -192,6 +195,8 @@ class PacketReader:
         source.readinto(self._buffer)
         return self._view[0:4]  # zero-copy slice
 ```
+
+</details>
 
 ### Public API
 
