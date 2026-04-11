@@ -15,12 +15,12 @@ We use descriptive names and avoid abbreviations that require mental translation
 | Rule | Example | Enforced by |
 |---|---|---|
 | No single-letter variables (except `_`) | `index`, not `i`; `error`, not `e`; `key`, not `k` | `CHU001` linter |
-| No banned abbreviations | `environment`, not `env`; `buffer`, not `buf`; `source`, not `src`; `command`, not `cmd`; `message`, not `msg`; `error`, not `err`; `reference`, not `ref`; `address`, not `addr`; `exception`, not `exc`; `execute`, not `exec` | `CHU001` linter |
-| Banned abbreviations as suffixes too | `base_reference`, not `base_ref`; `build_environment`, not `build_env` | `CHU001` linter |
+| Abbreviations we spell out | `environment`, not `env`; `buffer`, not `buf`; `source`, not `src`; `command`, not `cmd`; `message`, not `msg`; `error`, not `err`; `reference`, not `ref`; `address`, not `addr`; `exception`, not `exc`; `execute`, not `exec` | `CHU001` linter |
+| Spell them out as suffixes too | `base_reference`, not `base_ref`; `build_environment`, not `build_env` | `CHU001` linter |
 | Short-but-complete words are fine | `dir`, `key`, `tag`, `raw`, `pin`, `led`, `ok`, `end`, `args`, `config` | — |
 | Suppress with `# noqa: CHU001` | Only when matching an upstream API that you cannot rename | — |
 
-**Why:** Code is read far more often than it is written. Descriptive names remove the mental step of translating abbreviations. Longer names also push lines past the 100-character limit, which forces multi-line formatting — each argument on its own line is easier to scan, diff, and blame. ([Decision 0022](plans/decisions/0022-naming-conventions.md))
+**Why:** This project is read by beginners who are learning Python alongside embedded development. A beginner seeing `for i in range(10)` has to guess what `i` means; `for index in range(10)` is self-documenting. We know this departs from idiomatic Python convention — experienced developers may find it unusual. That's a deliberate tradeoff: we'd rather every reader understand the code immediately than save a few keystrokes for contributors who already know the idioms. Descriptive names also push lines past the 100-character limit, which forces multi-line formatting — each argument on its own line is easier to scan, diff, and blame. ([Decision 0022](plans/decisions/0022-naming-conventions.md))
 
 ## Type annotations
 
@@ -84,7 +84,9 @@ print("Found {} items in {}".format(count, directory))
 
 ## Memory patterns (library code only)
 
-Microcontrollers have limited RAM and no virtual memory. These patterns help library code run efficiently on constrained devices. They apply to **publishable library code under `libraries/`** and **`support/test_harness/`** — other infrastructure code (`scripts/`, rest of `support/`) runs on CPython and should use standard Python conventions.
+Microcontrollers have limited RAM and no virtual memory. These patterns help library code run efficiently on constrained devices. **You don't need to apply these patterns from day one** — they matter most in performance-sensitive code. If you're writing your first library, focus on correctness first and optimize later.
+
+They apply to **publishable library code under `libraries/`** and **`support/test_harness/`** — other infrastructure code (`scripts/`, rest of `support/`) runs on CPython and should use standard Python conventions.
 
 | Pattern | Why |
 |---|---|
@@ -94,7 +96,6 @@ Microcontrollers have limited RAM and no virtual memory. These patterns help lib
 | Cache frequently used attributes in local variables | Reduce attribute lookups in hot paths |
 | Avoid dynamic string building in loops | GC pressure |
 
-You don't need to apply these patterns from day one — they matter most in performance-sensitive code. If you're writing your first library, focus on correctness first and optimize later.
 
 ## What the linter checks
 
@@ -113,8 +114,8 @@ You don't need to apply these patterns from day one — they matter most in perf
 **CHU001** — a custom naming check that catches:
 
 - Single-letter variable names (`i` → `index`, `e` → `error`)
-- Banned abbreviations used alone (`env` → `environment`, `buf` → `buffer`)
-- Banned abbreviations as suffixes (`base_ref` → `base_reference`, `build_env` → `build_environment`)
+- Abbreviated names we prefer spelled out (`env` → `environment`, `buf` → `buffer`)
+- Those same abbreviations as suffixes (`base_ref` → `base_reference`, `build_env` → `build_environment`)
 
 If lint passes, your style is correct. You don't need to memorize any of this — the error messages tell you exactly what to fix and why.
 

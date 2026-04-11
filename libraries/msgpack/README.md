@@ -8,6 +8,8 @@ Turns Python dicts, lists, and values into binary bytes, typically 30–50% smal
 
 <br clear="left">
 
+> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family — small, focused Python libraries for microcontrollers and laptops. [See all libraries.](https://github.com/ChuMicro/ChuMicro#whats-in-the-box)
+
 Works on CircuitPython, MicroPython, and CPython.
 
 ## Installation
@@ -108,6 +110,7 @@ Use `pack`/`unpack` when writing to files, sockets, or NVM.  Use `packb`/`unpack
 | CircuitPython (unix port) | Pure-Python encoder/decoder (native module not compiled in) |
 | MicroPython | Pure-Python encoder/decoder |
 | CPython | Pure-Python encoder/decoder |
+
 
 ## Examples
 

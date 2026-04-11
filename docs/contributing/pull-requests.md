@@ -83,6 +83,8 @@ Note the exemption in the PR and delete the Device Testing section from the temp
 
 PRs that change library source code under `src/` — especially code that interacts with hardware, timing, or I/O — should include evidence that the code works on a real device.
 
+**Borderline cases:** Not every change to `timing` or `runner` needs device testing. A bug fix in `ticks_diff` with full test coverage: device testing appreciated but not required. A change to tick-source detection logic or platform-specific code paths: device testing strongly recommended. Use judgment — if your change could behave differently on real hardware than in tests, device testing adds confidence.
+
 **What to include:**
 
 1. **Console output** from running the library on a device (scrub any PII — WiFi passwords, IP addresses)

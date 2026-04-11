@@ -25,6 +25,8 @@ Start here, then pick the guide that matches your task:
 
 Each page is self-contained for its topic. You don't need to read all of them — just the ones relevant to what you're doing.
 
+> **First contribution?** Read the [Quick Start](#quick-start) below, make your change, and run `preflight` before pushing. That's the minimum. The style guide, architecture docs, and decision records are there when you need them — you don't need to read them all upfront.
+
 ## Prerequisites
 
 | Tool | Version | Notes |
@@ -99,7 +101,7 @@ This creates a virtual environment, installs all dependencies, and runs lint + t
 python scripts/run.py preflight 2>&1 | tail -5
 ```
 
-You should see:
+This merges error output with normal output and shows just the last 5 lines — the pass/fail summary. You should see:
 
 ```
 Preflight passed — required CI checks should pass.
@@ -263,7 +265,7 @@ If it prints `Preflight passed`, you're good — CI will pass too. That's the on
 
 </details>
 
-> **Coverage note:** The 94% gate catches real edge cases that 90% missed — we tried the lower bar and regretted it. If your PR trips the coverage gate on code you didn't change, note it in the PR description. A maintainer can help fill the gap or mark an exception. Don't let someone else's uncovered code block your contribution.
+> **Coverage note:** The 94% gate catches real edge cases that 90% missed — we tried the lower bar and regretted it. If your PR trips the coverage gate on code you didn't change, that's not your fault — note it in the PR description. A maintainer can help fill the gap or mark an exception. Don't let someone else's uncovered code block your contribution.
 
 ### Device testing
 
@@ -346,10 +348,10 @@ These aren't arbitrary — each one traces to a design decision with rationale. 
 | Rule | Why |
 |---|---|
 | PEP 8 + descriptive names | Enforced by Ruff and `CHU001` — see the [Style Guide](docs/contributing/style-guide.md) |
-| No `async`/`await` | Tick-based runner gives explicit scheduling you can inspect and test ([Decision 0014](plans/decisions/0014-runner-pattern.md)) |
+| No `async`/`await` | The tick-based runner gives explicit scheduling you can inspect and test ([Decision 0014](plans/decisions/0014-runner-pattern.md)) |
 | Constructor injection for I/O | Testability without mocking things you don't own ([Decision 0010](plans/decisions/0010-library-testability.md)) |
 | Per-library `pytest` runs | Avoids test-directory collisions ([Decision 0009](plans/decisions/0009-per-library-test-runs.md)) |
-| `const()` / `memoryview` in library code | Memory efficiency on microcontrollers (not required in `scripts/` or `support/`) |
+| `const()` / `memoryview` in library code | Memory efficiency on microcontrollers (not required in `scripts/` or `support/`). You can add these later — correctness first. |
 
 ## Common mistakes
 
@@ -361,6 +363,23 @@ These aren't arbitrary — each one traces to a design decision with rationale. 
 | `griffe warnings detected` in docs build | Missing type annotation on a function parameter | Add the type to the signature: `def foo(x: int)` — docstrings carry descriptions only |
 | Merge conflicts after pushing | `main` moved while you were working | [Rebase your branch](#what-if-main-moves-while-im-working) onto the latest `main` |
 | PyCharm/VS Code shows red import underlines | IDE configs are stale | Run `python scripts/run.py sync-ide`, then reload the project |
+
+## Contributor FAQ
+
+**Do I need a device to contribute?**
+No. Most contributions don't need device testing. If yours does and you don't have a board, say so in the PR — a maintainer can help.
+
+**What if coverage fails on code I didn't write?**
+Note it in the PR description. A maintainer can help fill the gap or mark an exception. Don't let someone else's uncovered code block your contribution.
+
+**Do I need to read all the docs before contributing?**
+No. The [Quick Start](#quick-start) and `preflight` are all you need for your first PR. The rest is reference material for when you need it.
+
+**Can I use `async`/`await`?**
+Not in library code. The project uses a tick-based runner pattern instead — see [Decision 0014](plans/decisions/0014-runner-pattern.md) for the reasoning.
+
+**Why can't I use `i` as a loop variable?**
+This project is read by beginners learning Python alongside embedded development. `for index in range(10)` is self-documenting in a way `for i in range(10)` isn't for someone new. We know this departs from Python convention — it's a deliberate tradeoff favoring readability for newcomers. See [Decision 0022](plans/decisions/0022-naming-conventions.md) for the full rationale.
 
 ## Getting help
 

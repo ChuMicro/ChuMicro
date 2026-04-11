@@ -8,6 +8,8 @@ Capture `ticks_ms()` once per loop, hand it to a `Heartbeat`, and you've got cle
 
 <br clear="left">
 
+> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family — small, focused Python libraries for microcontrollers and laptops. [See all libraries.](https://github.com/ChuMicro/ChuMicro#whats-in-the-box)
+
 ## Installation
 
 ### CircuitPython ([circup](https://github.com/adafruit/circup))

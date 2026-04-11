@@ -8,6 +8,8 @@ Import from `chumicro_compat` instead of the stdlib and your code works everywhe
 
 <br clear="left">
 
+> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family — small, focused Python libraries for microcontrollers and laptops. [See all libraries.](https://github.com/ChuMicro/ChuMicro#whats-in-the-box)
+
 ## Installation
 
 ### CircuitPython ([circup](https://github.com/adafruit/circup))
@@ -86,6 +88,7 @@ set_status_led(100)  # pin 13 → 100%
 | CircuitPython | Lightweight pure-Python replacement |
 
 The public API (`.func`, `.args`, `.keywords`, `__call__`, `__repr__`) is identical across all runtimes.
+
 
 ## Examples
 
