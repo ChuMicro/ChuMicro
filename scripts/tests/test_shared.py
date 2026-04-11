@@ -11,7 +11,9 @@ from shared import (
     build_jobs,
     install_command,
     resolve_circuitpython_binary,
+    resolve_cp_mpy_cross,
     resolve_micropython_binary,
+    resolve_mp_mpy_cross,
     run_command,
     running_on_native_windows,
 )
@@ -204,5 +206,105 @@ class TestResolveCircuitpythonBinary:
         monkeypatch.setattr("shared.TOOLS", tmp_path)
         monkeypatch.setattr("shared.shutil.which", lambda _name: None)
         result = resolve_circuitpython_binary()
+        assert result is None
+
+
+class TestResolveCpMpyCross:
+    """Tests for resolve_cp_mpy_cross."""
+
+    def test_explicit_path_exists(self, tmp_path: Path):
+        """Explicit path to existing binary is returned."""
+        binary = tmp_path / "mpy-cross"
+        binary.touch()
+        result = resolve_cp_mpy_cross(str(binary))
+        assert result == str(binary)
+
+    def test_explicit_path_missing_exits(self):
+        """Explicit path to nonexistent binary raises SystemExit."""
+        with pytest.raises(SystemExit):
+            resolve_cp_mpy_cross("/nonexistent/mpy-cross")
+
+    def test_discovers_from_tools(self, monkeypatch, tmp_path: Path):
+        """Finds mpy-cross in the prepared CircuitPython source tree."""
+        monkeypatch.setattr("shared.TOOLS", tmp_path)
+        monkeypatch.setattr(
+            "shared.runtime_versions",
+            lambda: {"circuitpython": {"version": "10.1.4"}},
+        )
+        binary = tmp_path / "circuitpython-10.1.4" / "mpy-cross" / "build" / "mpy-cross"
+        binary.parent.mkdir(parents=True)
+        binary.touch()
+        result = resolve_cp_mpy_cross()
+        assert result == str(binary)
+
+    def test_no_binary_returns_none(self, monkeypatch, tmp_path: Path):
+        """When no binary is found, returns None (no PATH fallback)."""
+        monkeypatch.setattr("shared.TOOLS", tmp_path)
+        monkeypatch.setattr(
+            "shared.runtime_versions",
+            lambda: {"circuitpython": {"version": "10.1.4"}},
+        )
+        result = resolve_cp_mpy_cross()
+        assert result is None
+
+    def test_no_circuitpython_config(self, monkeypatch, tmp_path: Path):
+        """Missing circuitpython key in config returns None."""
+        monkeypatch.setattr("shared.TOOLS", tmp_path)
+        monkeypatch.setattr("shared.runtime_versions", lambda: {})
+        result = resolve_cp_mpy_cross()
+        assert result is None
+
+
+class TestResolveMpMpyCross:
+    """Tests for resolve_mp_mpy_cross."""
+
+    def test_explicit_path_exists(self, tmp_path: Path):
+        """Explicit path to existing binary is returned."""
+        binary = tmp_path / "mpy-cross"
+        binary.touch()
+        result = resolve_mp_mpy_cross(str(binary))
+        assert result == str(binary)
+
+    def test_explicit_path_missing_exits(self):
+        """Explicit path to nonexistent binary raises SystemExit."""
+        with pytest.raises(SystemExit):
+            resolve_mp_mpy_cross("/nonexistent/mpy-cross")
+
+    def test_discovers_from_tools(self, monkeypatch, tmp_path: Path):
+        """Finds mpy-cross in the prepared MicroPython source tree."""
+        monkeypatch.setattr("shared.TOOLS", tmp_path)
+        monkeypatch.setattr(
+            "shared.runtime_versions",
+            lambda: {"micropython": {"version": "v1.26.0"}},
+        )
+        binary = tmp_path / "micropython-v1.26.0" / "mpy-cross" / "build" / "mpy-cross"
+        binary.parent.mkdir(parents=True)
+        binary.touch()
+        result = resolve_mp_mpy_cross()
+        assert result == str(binary)
+
+    def test_falls_back_to_path(self, monkeypatch, tmp_path: Path):
+        """Falls back to PATH-installed mpy-cross when tree not prepared."""
+        monkeypatch.setattr("shared.TOOLS", tmp_path)
+        monkeypatch.setattr(
+            "shared.runtime_versions",
+            lambda: {"micropython": {"version": "v1.26.0"}},
+        )
+        monkeypatch.setattr(
+            "shared.shutil.which",
+            lambda name: "/usr/bin/mpy-cross" if name == "mpy-cross" else None,
+        )
+        result = resolve_mp_mpy_cross()
+        assert result == "/usr/bin/mpy-cross"
+
+    def test_no_binary_returns_none(self, monkeypatch, tmp_path: Path):
+        """When no binary is found anywhere, returns None."""
+        monkeypatch.setattr("shared.TOOLS", tmp_path)
+        monkeypatch.setattr(
+            "shared.runtime_versions",
+            lambda: {"micropython": {"version": "v1.26.0"}},
+        )
+        monkeypatch.setattr("shared.shutil.which", lambda _name: None)
+        result = resolve_mp_mpy_cross()
         assert result is None
 

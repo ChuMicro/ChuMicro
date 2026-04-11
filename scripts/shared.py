@@ -8,7 +8,8 @@ This module provides:
 - Build utilities shared by the MicroPython and CircuitPython preparation
   modules: :func:`run_build_command`, :func:`ensure_tool`, etc.
 - Binary resolution: :func:`resolve_micropython_binary`,
-  :func:`resolve_circuitpython_binary`
+  :func:`resolve_circuitpython_binary`, :func:`resolve_cp_mpy_cross`,
+  :func:`resolve_mp_mpy_cross`
 """
 
 from __future__ import annotations
@@ -216,3 +217,65 @@ def resolve_circuitpython_binary(binary: str | None = None) -> str | None:
     if prepared:
         return prepared
     return shutil.which("circuitpython")
+
+
+# ---------------------------------------------------------------------------
+# mpy-cross resolution
+# ---------------------------------------------------------------------------
+
+
+def resolve_cp_mpy_cross(binary: str | None = None) -> str | None:
+    """Resolve CircuitPython's mpy-cross from an explicit path or the prepared source tree.
+
+    Resolution order (first match wins):
+      1. *binary* — explicit override from CLI (``--cp-mpy-cross``).
+      2. Prepared source tree — ``.tools/circuitpython-{version}/mpy-cross/build/mpy-cross``
+         where *version* comes from ``target-runtimes.toml``.
+
+    No PATH fallback — CircuitPython's mpy-cross is not pip-installable.
+    Raises :class:`SystemExit` if *binary* is given but does not exist.
+
+    Args:
+        binary: Explicit path to the mpy-cross binary, or ``None`` for
+            auto-discovery.
+    """
+    if binary:
+        if not Path(binary).exists():
+            print(f"CircuitPython mpy-cross not found: {binary}")
+            raise SystemExit(1)
+        return binary
+    cp_version = runtime_versions().get("circuitpython", {}).get("version")
+    if cp_version:
+        candidate = TOOLS / f"circuitpython-{cp_version}" / "mpy-cross" / "build" / "mpy-cross"
+        if candidate.exists():
+            return str(candidate)
+    return None
+
+
+def resolve_mp_mpy_cross(binary: str | None = None) -> str | None:
+    """Resolve MicroPython's mpy-cross from an explicit path, prepared tree, or PATH.
+
+    Resolution order (first match wins):
+      1. *binary* — explicit override from CLI (``--mp-mpy-cross``).
+      2. Prepared source tree — ``.tools/micropython-{version}/mpy-cross/build/mpy-cross``
+         where *version* comes from ``target-runtimes.toml``.
+      3. System PATH lookup — pip-installed ``mpy-cross``.
+
+    Raises :class:`SystemExit` if *binary* is given but does not exist.
+
+    Args:
+        binary: Explicit path to the mpy-cross binary, or ``None`` for
+            auto-discovery.
+    """
+    if binary:
+        if not Path(binary).exists():
+            print(f"MicroPython mpy-cross not found: {binary}")
+            raise SystemExit(1)
+        return binary
+    mp_version = runtime_versions().get("micropython", {}).get("version")
+    if mp_version:
+        candidate = TOOLS / f"micropython-{mp_version}" / "mpy-cross" / "build" / "mpy-cross"
+        if candidate.exists():
+            return str(candidate)
+    return shutil.which("mpy-cross")
+

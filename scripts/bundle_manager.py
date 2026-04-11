@@ -24,11 +24,11 @@ Subcommands:
     next-date-tag      Print the next available date-based tag for a bundle repo.
 
 Examples:
+    python scripts/bundle_manager.py stage libraries/timing 0.1.0 .bundle-staging
     python scripts/bundle_manager.py stage libraries/timing 0.1.0 .bundle-staging \\
         --cp-mpy-cross .tools/circuitpython-10.1.4/mpy-cross/build/mpy-cross \\
         --mp-mpy-cross mpy-cross
-    python scripts/bundle_manager.py stage-matrix .bundle-staging --matrix '{"include": [...]}' \\
-        --cp-mpy-cross cp-mpy-cross --mp-mpy-cross mpy-cross
+    python scripts/bundle_manager.py stage-matrix .bundle-staging --matrix '{"include": [...]}'
     python scripts/bundle_manager.py readme --experimental -o README.md
     python scripts/bundle_manager.py circup-zip .bundle-repo .circup-zips \\
         --repo-name ChuMicro-Bundle
@@ -53,6 +53,7 @@ try:
 except ModuleNotFoundError:
     import tomli as tomllib  # type: ignore[import-not-found,no-redef]
 
+from shared import resolve_cp_mpy_cross, resolve_mp_mpy_cross
 from workspace import ROOT, find_package_dir
 
 #: Bundle repository names for each channel.  Experimental uses a separate repository
@@ -749,11 +750,13 @@ def main() -> None:
     stage_parser.add_argument("staging_dir", type=Path, help="Output staging directory")
     stage_parser.add_argument(
         "--cp-mpy-cross", default=None,
-        help="Path to CircuitPython's mpy-cross binary",
+        help="Path to CircuitPython's mpy-cross binary "
+        "(default: auto-discover from target-runtimes.toml and .tools/)",
     )
     stage_parser.add_argument(
         "--mp-mpy-cross", default=None,
-        help="Path to MicroPython's mpy-cross binary",
+        help="Path to MicroPython's mpy-cross binary "
+        "(default: auto-discover from target-runtimes.toml, .tools/, or PATH)",
     )
     stage_parser.add_argument(
         "--experimental",
@@ -776,11 +779,13 @@ def main() -> None:
     )
     stage_matrix_parser.add_argument(
         "--cp-mpy-cross", default=None,
-        help="Path to CircuitPython's mpy-cross binary",
+        help="Path to CircuitPython's mpy-cross binary "
+        "(default: auto-discover from target-runtimes.toml and .tools/)",
     )
     stage_matrix_parser.add_argument(
         "--mp-mpy-cross", default=None,
-        help="Path to MicroPython's mpy-cross binary",
+        help="Path to MicroPython's mpy-cross binary "
+        "(default: auto-discover from target-runtimes.toml, .tools/, or PATH)",
     )
     stage_matrix_parser.add_argument(
         "--experimental",
@@ -861,20 +866,24 @@ def main() -> None:
         else:
             print(content)
     elif args.command == "stage":
+        cp_cross = resolve_cp_mpy_cross(args.cp_mpy_cross)
+        mp_cross = resolve_mp_mpy_cross(args.mp_mpy_cross)
         build_bundle(
             args.library_dir,
             args.version,
             args.staging_dir,
-            cp_mpy_cross=args.cp_mpy_cross,
-            mp_mpy_cross=args.mp_mpy_cross,
+            cp_mpy_cross=cp_cross,
+            mp_mpy_cross=mp_cross,
             experimental=args.experimental,
         )
     elif args.command == "stage-matrix":
+        cp_cross = resolve_cp_mpy_cross(args.cp_mpy_cross)
+        mp_cross = resolve_mp_mpy_cross(args.mp_mpy_cross)
         stage_matrix(
             args.staging_dir,
             args.matrix,
-            cp_mpy_cross=args.cp_mpy_cross,
-            mp_mpy_cross=args.mp_mpy_cross,
+            cp_mpy_cross=cp_cross,
+            mp_mpy_cross=mp_cross,
             experimental=args.experimental,
         )
     elif args.command == "circup-zip":
