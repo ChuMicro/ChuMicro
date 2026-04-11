@@ -6,7 +6,7 @@ Date: `2026-04-01`
 
 ## Context
 
-Chumicro is a mono-workspace where multiple libraries each have their own `tests/` directory. When a second library (`gpio`) was scaffolded alongside `timing`, pytest raised `ImportPathMismatchError` because both libraries had `tests/__init__.py`, and pytest's default import mode treated them as the same `tests` package:
+ChuMicro is a mono-workspace where multiple libraries each have their own `tests/` directory. When a second library (`gpio`) was scaffolded alongside `timing`, pytest raised `ImportPathMismatchError` because both libraries had `tests/__init__.py`, and pytest's default import mode treated them as the same `tests` package:
 
 ```
 ImportPathMismatchError: ('tests.conftest',

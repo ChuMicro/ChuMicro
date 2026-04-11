@@ -1,4 +1,4 @@
-# Static development dependencies for the Chumicro workspace.
+# Static development dependencies for the ChuMicro workspace.
 #
 # Read by `python scripts/run.py setup`.  Runtime-pinned stubs
 # (circuitpython-stubs, micropython-esp32-stubs) are appended

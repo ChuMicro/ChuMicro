@@ -5,7 +5,7 @@ Date: `2026-03-29`
 
 ## Context
 
-Chumicro needs a first publishable library that proves the workspace design across CPython, MicroPython, and CircuitPython without pulling in too much embedded complexity too early.
+ChuMicro needs a first publishable library that proves the workspace design across CPython, MicroPython, and CircuitPython without pulling in too much embedded complexity too early.
 
 ## Decision
 

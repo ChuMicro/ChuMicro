@@ -5,12 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "chumicro-test-harness"
 version = "0.0.0"
-description = "Minimal cross-runtime test runner for Chumicro libraries (workspace-internal)."
+description = "Minimal cross-runtime test runner for ChuMicro libraries (workspace-internal)."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [
-    { name = "Chumicro" },
+    { name = "ChuMicro" },
 ]
 
 [tool.setuptools]

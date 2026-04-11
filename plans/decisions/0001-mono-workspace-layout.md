@@ -5,7 +5,7 @@ Date: `2026-03-28`
 
 ## Context
 
-Chumicro needs shared tooling and support code, but libraries must still be published independently.
+ChuMicro needs shared tooling and support code, but libraries must still be published independently.
 
 ## Decision
 

@@ -1,6 +1,6 @@
 ---
 name: new-library
-description: Full lifecycle for creating a new Chumicro library — from scaffolding through release-ready. Use this skill when adding a new library to the workspace.
+description: Full lifecycle for creating a new ChuMicro library — from scaffolding through release-ready. Use this skill when adding a new library to the workspace.
 ---
 
 # New Library Lifecycle

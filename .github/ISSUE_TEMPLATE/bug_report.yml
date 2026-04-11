@@ -1,5 +1,5 @@
 name: Bug Report
-description: Report a bug in a Chumicro library
+description: Report a bug in a ChuMicro library
 labels: ["bug"]
 body:
   - type: markdown

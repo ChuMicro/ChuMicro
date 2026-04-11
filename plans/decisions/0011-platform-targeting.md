@@ -4,7 +4,7 @@ Status: `accepted`
 
 ## Context
 
-Chumicro targets three runtimes: CPython, MicroPython, and CircuitPython.  Most libraries should support all three, but some may only work on a subset — for example, a library wrapping a CircuitPython-only hardware API has no reason to be published to PyPI, and a CPython-only dev tool shouldn't be shipped as a `.mpy` bundle.
+ChuMicro targets three runtimes: CPython, MicroPython, and CircuitPython.  Most libraries should support all three, but some may only work on a subset — for example, a library wrapping a CircuitPython-only hardware API has no reason to be published to PyPI, and a CPython-only dev tool shouldn't be shipped as a `.mpy` bundle.
 
 Release automation must know which platforms a library targets so it can skip irrelevant packaging and distribution channels.  The cross-runtime compatibility runners (`test-micropython-compat`, `test-circuitpython-compat`) should also skip libraries that don't target those runtimes.
 

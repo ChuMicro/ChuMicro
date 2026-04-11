@@ -1,4 +1,4 @@
-"""Core tick-runner abstractions for the Chumicro ecosystem.
+"""Core tick-runner abstractions for the ChuMicro ecosystem.
 
 Provides two ways to register work with a ``Runner``:
 

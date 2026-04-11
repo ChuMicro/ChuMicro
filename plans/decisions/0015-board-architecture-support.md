@@ -5,7 +5,7 @@ Date: `2026-04-03` (revised `2026-04-04`, baseline lowered `2026-04-04`)
 
 ## Context
 
-Chumicro libraries may depend on `collections.deque` and other features that are not available on all CircuitPython and MicroPython board architectures.  `deque` is gated by compile-time flags that vary by port and chip family.
+ChuMicro libraries may depend on `collections.deque` and other features that are not available on all CircuitPython and MicroPython board architectures.  `deque` is gated by compile-time flags that vary by port and chip family.
 
 A source-level audit of the pinned CircuitPython 10.1.4 and MicroPython v1.26.0 trees (`.tools/`) was performed to determine which architectures include `deque`.
 
@@ -19,7 +19,7 @@ Beyond compile-time feature availability, boards also vary widely in RAM and fla
 
 | Port | `CIRCUITPY_FULL_BUILD` | `deque` available | Notes |
 |---|---|---|---|
-| **espressif** (ESP32-S2, S3, C3, etc.) | `?= 1` | ✅ | Primary Chumicro target |
+| **espressif** (ESP32-S2, S3, C3, etc.) | `?= 1` | ✅ | Primary ChuMicro target |
 | **raspberrypi** (RP2040, RP2350) | `?= 1` | ✅ | |
 | **broadcom** (Raspberry Pi SBCs) | `= 1` | ✅ | |
 | **stm** | inherits `1` | ✅ | |
@@ -39,7 +39,7 @@ Beyond compile-time feature availability, boards also vary widely in RAM and fla
 
 | Port | ROM level | `deque` available | Notes |
 |---|---|---|---|
-| **esp32** (ESP32, S2, S3, C3, C6) | `EXTRA_FEATURES` | ✅ | Primary Chumicro target |
+| **esp32** (ESP32, S2, S3, C3, C6) | `EXTRA_FEATURES` | ✅ | Primary ChuMicro target |
 | **rp2** (RP2040, RP2350) | `EXTRA_FEATURES` | ✅ | |
 | **stm32** | `EXTRA_FEATURES` | ✅ | |
 | **esp8266** | `EXTRA_FEATURES` | ✅ | |
@@ -70,13 +70,13 @@ Beyond compile-time feature availability, boards also vary widely in RAM and fla
 
 ### Hardware resource baseline
 
-Chumicro libraries are tested and supported on boards with at least **256 KB of MCU RAM** and at least **4 MB of flash**.  Libraries may still run on boards below this baseline, but those boards are not tested, and issues specific to them will not be investigated.
+ChuMicro libraries are tested and supported on boards with at least **256 KB of MCU RAM** and at least **4 MB of flash**.  Libraries may still run on boards below this baseline, but those boards are not tested, and issues specific to them will not be investigated.
 
 Boards with PSRAM are preferred — especially for networking, TLS, displays, and larger buffers.  Boards in the 256–512 KB range without PSRAM are supported but may be constrained for memory-intensive workloads like MQTT + TLS.
 
 ### Feature requirements
 
-Chumicro libraries require `collections.deque` and therefore require a full-build CircuitPython or `EXTRA_FEATURES`+ MicroPython port.
+ChuMicro libraries require `collections.deque` and therefore require a full-build CircuitPython or `EXTRA_FEATURES`+ MicroPython port.
 
 ### Support tiers
 

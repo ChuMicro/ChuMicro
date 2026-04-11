@@ -6,7 +6,7 @@ Superseded by: [Decision 0016](0016-cross-runtime-unit-tests.md)
 
 ## Context
 
-Chumicro now verifies the same tiny timing smoke test under CPython, MicroPython unix-port, and CircuitPython unix-port. During local runtime validation, the repo hit interpreter-specific inconsistencies around executing the same checked-in smoke files through normal filesystem imports, especially in the CircuitPython unix-port path.
+ChuMicro now verifies the same tiny timing smoke test under CPython, MicroPython unix-port, and CircuitPython unix-port. During local runtime validation, the repo hit interpreter-specific inconsistencies around executing the same checked-in smoke files through normal filesystem imports, especially in the CircuitPython unix-port path.
 
 The repo still needs one small, repeatable compatibility signal that humans, agents, and CI can run across interpreters without introducing a larger runtime-specific harness split too early.
 

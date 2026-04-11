@@ -1,4 +1,4 @@
-"""Root-level test configuration for the Chumicro workspace.
+"""Root-level test configuration for the ChuMicro workspace.
 
 Auto-discovers library and support package source roots so that
 ``pytest`` can resolve imports even without editable installs

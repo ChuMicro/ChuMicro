@@ -2,7 +2,7 @@
 
 ## Overview
 
-`chumicro-runner` provides a standard pattern for active components in the Chumicro ecosystem.  Instead of each library inventing its own `poll()` / callback API, every active component implements two methods:
+`chumicro-runner` provides a standard pattern for active components in the ChuMicro ecosystem.  Instead of each library inventing its own `poll()` / callback API, every active component implements two methods:
 
 ```python
 def check(self, now_ms: int) -> bool:

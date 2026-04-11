@@ -4,7 +4,7 @@ Status: `accepted` (revised)
 
 ## Context
 
-Chumicro libraries import modules that only exist on CircuitPython or MicroPython (e.g., `micropython.const`, `supervisor.ticks_ms`, `machine.Pin`).  The code uses `try/except ImportError` guards so it runs correctly on CPython, but IDEs flag the imports as unresolved.
+ChuMicro libraries import modules that only exist on CircuitPython or MicroPython (e.g., `micropython.const`, `supervisor.ticks_ms`, `machine.Pin`).  The code uses `try/except ImportError` guards so it runs correctly on CPython, but IDEs flag the imports as unresolved.
 
 An earlier draft hand-wrote minimal `.pyi` stubs in a `typings/` directory.  This was revised: well-maintained upstream stub packages exist for both runtimes.
 

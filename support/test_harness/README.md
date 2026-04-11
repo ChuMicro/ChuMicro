@@ -1,6 +1,6 @@
 # chumicro-test-harness
 
-A very small test runner and cross-runtime orchestrator for Chumicro libraries.
+A very small test runner and cross-runtime orchestrator for ChuMicro libraries.
 
 This package is intentionally tiny. It is meant to complement host-side `pytest`, not replace it.
 
