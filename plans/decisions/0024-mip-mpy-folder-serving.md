@@ -99,6 +99,48 @@ The circup zip builder scans `circuitpython-10.x-mpy/chumicro_*` directories for
 
 Root `chumicro_*` directories contain only `.py` source and are used for the `-py-` source zip.
 
+## Future work: multi-version mpy support
+
+When CircuitPython 11 ships (likely with mpy v7) or MicroPython bumps its mpy
+format version, the pipeline must produce bundles for multiple versions
+simultaneously during the transition period.  The folder layout is already
+designed for this — add `circuitpython-11.x-mpy/` and/or `mpy7/` alongside
+the existing directories.  The code, however, is currently single-version:
+
+**`bundle_manager.py` changes needed:**
+
+1. `CP_MPY_FOLDER` and `MPY_FORMAT_FOLDER` — replace scalar constants with a
+   list or dict driven by configuration (e.g. `target-runtimes.toml` or a
+   new `bundle-targets.toml`).
+2. `build_bundle()` — replace single `cp_mpy_cross` / `mp_mpy_cross` params
+   with a version→binary mapping so one invocation compiles for all target
+   versions.
+3. `build_circup_zips()` — iterate over all `circuitpython-*-mpy/` folders
+   and produce one bytecode zip per CP version range (e.g. both `10.x-mpy`
+   and `11.x-mpy` zips in the same release).
+4. `_dependency_to_mpy_mip_reference()` — accept a format version parameter
+   instead of hardcoding `mpy6`.
+5. `generate_bundle_readme()` — list all version folders dynamically.
+6. CLI — accept repeated `--cp-target 10.x=/path/to/mpy-cross` style args
+   or read targets from a config file.
+
+**CI workflow changes needed:**
+
+1. Install multiple mpy-cross binaries — one per target version per runtime.
+   CircuitPython's mpy-cross must be built from source or downloaded from
+   Adafruit's release assets; MicroPython's comes from pip but version-pinned.
+2. Pass all binaries to `stage-matrix` / `stage` via the new multi-version
+   CLI interface.
+3. `target-runtimes.toml` or a new config file must enumerate the active
+   version targets for each runtime.
+
+**Not needed until a new mpy version actually ships.**  The current single-version
+architecture is correct for the CP 10.x / MP v6 era.  This section documents
+the anticipated shape of the change so it can be planned when the time comes.
+
+See also: open question "How should the bundle pipeline handle multiple mpy
+format versions?" in `plans/open-questions.md`.
+
 ## Consequences
 
 - CircuitPython users get `.mpy` files compiled with the correct mpy-cross via circup.

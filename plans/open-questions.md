@@ -41,6 +41,38 @@ interact with hardware, the ratio will shift.  Should the default assumption
 change, or should simulation remain the norm with hardware examples as
 opt-in?
 
+### How should the bundle pipeline handle multiple mpy format versions?
+
+CircuitPython 11 will likely introduce mpy v7, and MicroPython will eventually
+follow.  The bundle pipeline currently assumes a single CP version range
+(`circuitpython-10.x-mpy/`) and a single MP format version (`mpy6/`).
+
+Hardcoded single-version assumptions in `bundle_manager.py`:
+
+- `CP_MPY_FOLDER` and `MPY_FORMAT_FOLDER` are scalar constants.
+- `build_bundle()` accepts one `cp_mpy_cross` and one `mp_mpy_cross` binary.
+  Multi-version needs a dict-like mapping (e.g. `{"10.x": path, "11.x": path}`).
+- `build_circup_zips()` scans only `circuitpython-10.x-mpy/` and produces a
+  single `10.x-mpy` zip.  Multi-version needs one zip per CP version range.
+- `_dependency_to_mpy_mip_reference()` is hardcoded to `mpy6`.
+- `generate_bundle_readme()` references single folder names.
+
+Hardcoded assumptions in CI:
+
+- `release.yml` and `promote.yml` only install MicroPython's `mpy-cross`
+  (via pip) and don't pass `--cp-mpy-cross` or `--mp-mpy-cross` flags.
+  Multi-version CI needs to install and invoke multiple mpy-cross binaries.
+- `target-runtimes.toml` pins one CP version and one MP version.  Multi-version
+  support would need to pin multiple versions for the transition period.
+
+The current architecture handles one version per runtime correctly.  No code
+changes are needed until a new mpy format version actually ships, but the
+design should anticipate the shape of the change: folder-per-version,
+compiler-per-version, zip-per-version, with `target-runtimes.toml` or a
+similar config driving the version list.
+
+See Decision 0024 (naming conventions section) for the folder scheme.
+
 ### What does "contributor-ready" look like beyond docs?
 
 CONTRIBUTING.md, issue templates, and PR templates exist.  But contributor

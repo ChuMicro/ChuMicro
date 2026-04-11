@@ -6,6 +6,7 @@
 
 ## Next
 
+- [ ] Update `release.yml` and `promote.yml` to pass `--cp-mpy-cross` and `--mp-mpy-cross` to bundle staging. Currently CI installs MicroPython's mpy-cross via pip but doesn't pass either flag, so no `.mpy` files are compiled.  Need to also install CircuitPython's mpy-cross (build from source or download from Adafruit release assets).  See Decision 0024.
 - [ ] Enable GitHub Copilot code review as a PR quality gate (low priority — defer until community contributions begin).
 - [ ] Implement `chumicro-settings` — dict-like persistent storage for microcontrollers.
   - Uses `chumicro-msgpack` for serialization (2-byte length prefix + msgpack payload).
