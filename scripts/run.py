@@ -18,7 +18,7 @@ from pathlib import Path
 from check_api import main as check_api_main
 from check_names import main as check_names_main
 from check_version import main as check_version_main
-from deploy_documents import (
+from docs_deploy import (
     MIKE,
     copy_shared_docs_assets,
     docs_deploy,

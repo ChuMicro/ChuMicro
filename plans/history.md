@@ -294,7 +294,7 @@ This was the largest single session. It addressed three areas: the workspace was
 
 **Bundle test CI fix:** `TestNextDateTag` tests ran bare `git commit` which fails in CI where user.name/user.email are not configured. Added a `_git` helper with author/committer env vars.
 
-**Scripts module rename:** Renamed all scripts/ modules for clarity: `discovery.py` → `workspace.py`, `ide.py` → `ide_sync.py`, `scaffold.py` → `new_library_scaffold.py`, `docs_deploy.py` → `deploy_documents.py`, `bundle.py` → `bundle_manager.py`. Merged `prepare.py` + old `workspace.py` → `shared.py`. Updated all imports, monkeypatch targets, test files, CI workflows, skills, docs, and decision records. Fixed stale module names in docstrings. Attempted to also rename the `docs-deploy` CLI subcommand to `deploy-documents` but reverted — the module rename was sufficient and the CLI name was already established in docs and muscle memory.
+**Scripts module rename:** Renamed all scripts/ modules for clarity: `discovery.py` → `workspace.py`, `ide.py` → `ide_sync.py`, `scaffold.py` → `new_library_scaffold.py`, `bundle.py` → `bundle_manager.py`. Merged `prepare.py` + old `workspace.py` → `shared.py`. Updated all imports, monkeypatch targets, test files, CI workflows, skills, docs, and decision records. Fixed stale module names in docstrings. `docs_deploy.py` was briefly renamed to `deploy_documents.py` for consistency with the other renames, then reverted — the `docs_` prefix matches the CLI subcommand (`docs-deploy`) and is easier to find.
 
 **All libraries at 0.1.18.**
 
