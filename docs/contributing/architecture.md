@@ -38,7 +38,7 @@ Cross-runtime tests run during `preflight` and in CI via `test-micropython-compa
 
 Each library has its own `mkdocs.yml` and `docs/` directory. Documentation is built per-library with [MkDocs](https://www.mkdocs.org/) + [Material](https://squidfunk.github.io/mkdocs-material/) + [mkdocstrings](https://mkdocstrings.github.io/).
 
-Versioning uses [mike](https://github.com/jimporter/mike): each library gets `stable` and `experimental` doc versions deployed to GitHub Pages. The `deploy-documents` workflow handles this in CI. Locally, `python scripts/run.py docs-preview` deploys to a local gh-pages branch and serves a versioned preview.
+Versioning uses [mike](https://github.com/jimporter/mike): each library gets `stable` and `experimental` doc versions deployed to GitHub Pages. The `docs-deploy` workflow handles this in CI. Locally, `python scripts/run.py docs-preview` deploys to a local gh-pages branch and serves a versioned preview.
 
 ## Release pipeline
 

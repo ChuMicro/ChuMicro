@@ -3,7 +3,7 @@
 Centralizes library discovery, shared-CSS copy, mike deploy loop, and
 landing-page injection that the CI workflow and local preview share.
 
-Called as ``python scripts/run.py deploy-documents --channel <channel>``.
+Called as ``python scripts/run.py docs-deploy --channel <channel>``.
 
 This module manages the ``gh-pages`` branch layout where each library
 gets its own deploy prefix (subdirectory).  For example, the timing
@@ -164,7 +164,7 @@ def inject_landing_page(branch: str) -> None:
 
 
 
-def deploy_documents(
+def docs_deploy(
     channel: str,
     *,
     branch: str = "gh-pages",

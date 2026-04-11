@@ -86,7 +86,7 @@ jobs:
 
           # $library_flag is intentionally unquoted so it word-splits into
           # separate arguments (--libraries <value>) or disappears when empty.
-          python scripts/run.py deploy-documents --channel "$channel" $library_flag
+          python scripts/run.py docs-deploy --channel "$channel" $library_flag
 
       - name: Push to gh-pages
         run: git push origin gh-pages
