@@ -154,6 +154,14 @@ def build_bundle(
         shutil.copy2(source_file, python_dest_file)
         _compile_mpy(source_file, mpy_dest_file, mpy_cross)
 
+    # Copy README.md into the bundle directory so GitHub renders it when
+    # users browse the bundle repo.  The file is not included in circup zips
+    # (which only glob *.py and *.mpy) or mip manifests, so it never ends up
+    # on-device.
+    readme_source = library_dir / "README.md"
+    if readme_source.exists():
+        shutil.copy2(readme_source, output_dir / "README.md")
+
     # Generate mip package.json manifest.
     #
     # mip (MicroPython's package installer) reads package.json to know

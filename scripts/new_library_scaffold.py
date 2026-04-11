@@ -256,8 +256,10 @@ Works on CPython, MicroPython, and CircuitPython.
 ## Find this library
 
 - **PyPI:** [chumicro-{name}](https://pypi.org/project/chumicro-{name}/)
-- **Bundle:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle)\
+- **Bundle:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle/tree/main/{import_name})\
  (CircuitPython & MicroPython)
+- **Experimental bundle:** [ChuMicro-Bundle-Experimental]\
+(https://github.com/ChuMicro/ChuMicro-Bundle-Experimental/tree/main/{import_name})
 - **Source:** [libraries/{name}](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/{name})
 """
 
