@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Have an idea for Chumicro? Describe it here. We welcome feature requests for existing libraries and proposals for new ones.
+        Have an idea for ChuMicro? Describe it here. We welcome feature requests for existing libraries and proposals for new ones.
 
   - type: dropdown
     id: library
@@ -30,7 +30,7 @@ body:
       description: What problem does this solve? What are you trying to do that you can't do today?
       placeholder: |
         I'm building a weather station and need to store calibration settings
-        persistently across reboots, but there's no Chumicro library for
+        persistently across reboots, but there's no ChuMicro library for
         persistent key-value storage.
     validations:
       required: true

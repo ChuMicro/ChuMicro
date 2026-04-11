@@ -6,7 +6,7 @@ Updated: `2026-04-05`
 
 ## Context
 
-Decision 0007 established that Chumicro publishes to three distribution channels (PyPI, mip, circup).  The ci-release workstream confirmed that the ChuMicro GitHub org hosts a circup-compatible repository and that release artifacts include both `.py` source and `.mpy` compiled bytecode.
+Decision 0007 established that ChuMicro publishes to three distribution channels (PyPI, mip, circup).  The ci-release workstream confirmed that the ChuMicro GitHub org hosts a circup-compatible repository and that release artifacts include both `.py` source and `.mpy` compiled bytecode.
 
 What remained unspecified was the concrete repository architecture: where the built artifacts live, how `mip` and `circup` find them, and how the source repo relates to the distribution repo.
 

@@ -1,6 +1,6 @@
 # Adding a New Library
 
-This guide walks you through the full lifecycle of adding a new library to Chumicro — from idea to published package. It's written for humans; if you're working with an AI agent, point it at the [`new-library` skill](../../.github/skills/new-library/SKILL.md) for the condensed version.
+This guide walks you through the full lifecycle of adding a new library to ChuMicro — from idea to published package. It's written for humans; if you're working with an AI agent, point it at the [`new-library` skill](../../.github/skills/new-library/SKILL.md) for the condensed version.
 
 ## Overview
 
@@ -198,7 +198,7 @@ class PacketReader:
 Export your public API from `__init__.py`:
 
 ```python
-"""Chumicro my-thing — one-line description."""
+"""ChuMicro my-thing — one-line description."""
 
 from chumicro_my_thing.core import MyClass, helper_function
 
@@ -255,7 +255,7 @@ def test_sensor_reads_on_interval() -> None:
 
 Key principles:
 
-- **Fake what you own, don't mock what you don't.** Create lightweight fakes for your own interfaces. Use fakes from upstream Chumicro libraries (`from chumicro_timing.testing import FakeTicks`). Don't use `unittest.mock` on third-party APIs.
+- **Fake what you own, don't mock what you don't.** Create lightweight fakes for your own interfaces. Use fakes from upstream ChuMicro libraries (`from chumicro_timing.testing import FakeTicks`). Don't use `unittest.mock` on third-party APIs.
 - **Test behavior, not implementation.** Assert on outputs and side effects, not internal state.
 - **Constructor injection makes this easy.** Since you accepted dependencies as parameters, pass in fakes.
 
@@ -340,7 +340,7 @@ python scripts/run.py verify-examples --libraries my-thing
 Update `libraries/my-thing/pyproject.toml`:
 
 - `description` — one-line package description
-- `dependencies` — if your library depends on other Chumicro libraries (e.g., `"chumicro-timing>=0.1"`)
+- `dependencies` — if your library depends on other ChuMicro libraries (e.g., `"chumicro-timing>=0.1"`)
 
 Update `libraries/my-thing/README.md` — replace all TODO placeholders.
 

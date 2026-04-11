@@ -63,7 +63,7 @@ class TestFindBundleModules:
         assert len(files) == 1  # only __init__.py
 
 
-class TestReadChumicroDependencies:
+class TestReadChuMicroDependencies:
     """Tests for _read_chumicro_dependencies."""
 
     def test_no_dependencies(self, tmp_path: Path):

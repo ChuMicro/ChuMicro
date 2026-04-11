@@ -1,4 +1,4 @@
-# Chumicro Development Ecosystem
+# ChuMicro Development Ecosystem
 
 ## Quick reference
 
@@ -97,7 +97,7 @@ This is required. A feature that exists only in code is incomplete.
 
 ## Project overview
 
-Chumicro is a family of open-source Python libraries targeting three runtimes:
+ChuMicro is a family of open-source Python libraries targeting three runtimes:
 
 - **CircuitPython** and **MicroPython** for embedded boards
 - **CPython** for desktop development, testing, and standard tooling

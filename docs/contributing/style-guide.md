@@ -1,6 +1,6 @@
 # Style Guide
 
-This is the definitive reference for code style in the Chumicro workspace. All code — library, infrastructure, and tests — follows these conventions unless explicitly noted.
+This is the definitive reference for code style in the ChuMicro workspace. All code — library, infrastructure, and tests — follows these conventions unless explicitly noted.
 
 The linter (`python scripts/run.py lint`) enforces most of these automatically. If lint passes, you're almost certainly fine. This guide explains what the rules are, why they exist, and what to do when the linter flags something.
 

@@ -1,11 +1,11 @@
 ---
 name: guide-generation
-description: How to generate or update docs/guide.md for a Chumicro library. Use this skill when a library needs its user guide written or refreshed.
+description: How to generate or update docs/guide.md for a ChuMicro library. Use this skill when a library needs its user guide written or refreshed.
 ---
 
 # Guide generation
 
-Use this procedure to generate or update `docs/guide.md` for a Chumicro library.
+Use this procedure to generate or update `docs/guide.md` for a ChuMicro library.
 
 ## When to use
 

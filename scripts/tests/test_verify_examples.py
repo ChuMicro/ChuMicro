@@ -7,7 +7,7 @@ from pathlib import Path
 from verify_examples import _check_imports, _is_chumicro_module, verify_examples
 
 
-class TestIsChumicroModule:
+class TestIsChuMicroModule:
     """Tests for _is_chumicro_module."""
 
     def test_chumicro_module(self):

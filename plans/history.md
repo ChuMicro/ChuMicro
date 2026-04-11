@@ -114,7 +114,7 @@ These patterns caused real bugs when implemented incorrectly. Follow them exactl
 
 ### 2026-03-28 — Workspace bootstrap
 
-1. Established Chumicro as a mono-workspace for individually published libraries.
+1. Established ChuMicro as a mono-workspace for individually published libraries.
 2. Added root planning docs under `plans/`:
    - `README.md`, `roadmap.md`, `next-up.md`
    - `workstreams/`, `decisions/`

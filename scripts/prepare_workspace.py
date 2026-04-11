@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare the Chumicro workspace for development and testing.
+"""Prepare the ChuMicro workspace for development and testing.
 
 Uses whatever Python interpreter runs it.  Works with an IDE-managed
 virtual environment, uv, or ``--create-venv`` for a fresh start.
@@ -282,7 +282,7 @@ def print_summary(python: Path) -> None:
 
 def main() -> None:
     """Prepare the workspace for development and testing."""
-    parser = argparse.ArgumentParser(description="Prepare the Chumicro workspace.")
+    parser = argparse.ArgumentParser(description="Prepare the ChuMicro workspace.")
     parser.add_argument(
         "--create-venv",
         action="store_true",
@@ -290,7 +290,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    _banner("Preparing Chumicro workspace")
+    _banner("Preparing ChuMicro workspace")
     print()
 
     python = resolve_python(args.create_venv)

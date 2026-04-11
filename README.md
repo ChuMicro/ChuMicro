@@ -1,7 +1,7 @@
 <p align="center">
-  <img src="support/docs/chumicro.png" width="420" alt="Chumicro" />
+  <img src="support/docs/chumicro.png" width="420" alt="ChuMicro" />
 </p>
-<h1 align="center">Chumicro</h1>
+<h1 align="center">ChuMicro</h1>
 
 <p align="center">
   <strong><big>Python libraries that work on your microcontroller <em>and</em> your laptop.</big></strong><br>
@@ -137,7 +137,7 @@ Each library has its own docs with a version selector so you can switch between 
 
 ### Setup
 
-Want to hack on Chumicro itself? The setup script gets you from clone to working in one command:
+Want to hack on ChuMicro itself? The setup script gets you from clone to working in one command:
 
 ```zsh
 git clone https://github.com/ChuMicro/ChuMicro.git

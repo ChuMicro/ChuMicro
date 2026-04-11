@@ -5,7 +5,7 @@ Date: `2026-03-29`
 
 ## Context
 
-Chumicro wants a developer environment that works across macOS, Linux, and Windows, but the early target-runtime validation path depends on Unix-like execution targets such as the MicroPython Unix port and CircuitPython `ports/unix/` workflows.
+ChuMicro wants a developer environment that works across macOS, Linux, and Windows, but the early target-runtime validation path depends on Unix-like execution targets such as the MicroPython Unix port and CircuitPython `ports/unix/` workflows.
 
 The repo already has compatibility-oriented task entrypoints in `scripts/run.py`, but it does not yet have a proven native-Windows strategy for those Unix-port checks.
 

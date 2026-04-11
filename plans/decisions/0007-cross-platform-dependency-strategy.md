@@ -5,7 +5,7 @@ Date: `2026-04-01`
 
 ## Context
 
-Chumicro targets three runtimes with three different package managers:
+ChuMicro targets three runtimes with three different package managers:
 
 | Runtime        | Package manager | Default index        |
 |----------------|-----------------|----------------------|
@@ -13,13 +13,13 @@ Chumicro targets three runtimes with three different package managers:
 | MicroPython    | mip / mpremote  | micropython-lib      |
 | CircuitPython  | circup          | Adafruit Bundle / Community Bundle |
 
-The sample library's tick helpers overlap with Adafruit's `adafruit_ticks` library (MIT-licensed). Evaluating whether to depend on it or re-implement surfaced broader questions about how Chumicro should handle external dependencies and distribute its own packages across all three ecosystems.
+The sample library's tick helpers overlap with Adafruit's `adafruit_ticks` library (MIT-licensed). Evaluating whether to depend on it or re-implement surfaced broader questions about how ChuMicro should handle external dependencies and distribute its own packages across all three ecosystems.
 
 Key findings from the evaluation:
 
 - `adafruit_ticks` on PyPI depends on **Adafruit-Blinka**, a heavy CircuitPython-on-Linux shim. Unacceptable as a transitive dependency for a lightweight timing library.
 - `adafruit_ticks` is **not in `micropython-lib`**, so `mip` cannot install it from the default index.
-- MicroPython provides `time.ticks_ms`, `time.ticks_diff`, and `time.ticks_add` as built-in functions, making a Python-level ticks library unnecessary on that runtime — but Chumicro still needs a consistent cross-runtime API.
+- MicroPython provides `time.ticks_ms`, `time.ticks_diff`, and `time.ticks_add` as built-in functions, making a Python-level ticks library unnecessary on that runtime — but ChuMicro still needs a consistent cross-runtime API.
 - Adafruit libraries on PyPI almost universally list Adafruit-Blinka as a dependency, making them impractical as lean CPython dependencies.
 - The `adafruit_ticks` algorithm (ring arithmetic with a 2^29 period) is standard modular arithmetic also implemented natively in MicroPython's C runtime. It is not novel copyrightable expression.
 
@@ -43,7 +43,7 @@ When a dependency fails any criterion, choose from the following strategies in p
 
 The adapter approach is especially valuable for larger libraries where re-implementation carries real correctness or maintenance risk. It does require managing per-platform dependency metadata and ensuring test coverage across all adapter paths.
 
-### 2. Publish Chumicro packages to all three distribution channels
+### 2. Publish ChuMicro packages to all three distribution channels
 
 Each publishable library should eventually support:
 
@@ -62,16 +62,16 @@ For CircuitPython-specific modules (`supervisor`, `board`, `digitalio`, etc.):
 
 Blinka is **not required** for IDE completions. Stubs give the IDE type information; the library's `try/except ImportError` patterns handle runtime behavior.
 
-If Chumicro code is written with proper feature detection (`getattr`, `try/except ImportError`), it runs correctly on CPython without any stubs. Stubs only suppress IDE warnings for platform-specific imports.
+If ChuMicro code is written with proper feature detection (`getattr`, `try/except ImportError`), it runs correctly on CPython without any stubs. Stubs only suppress IDE warnings for platform-specific imports.
 
 ### 4. External dependencies are not banned
 
-Chumicro is not locked into zero-dependency mode. When an external library passes the cross-platform test above, use it. The bar is intentionally high because each dependency adds flash usage, maintenance burden, and cross-ecosystem packaging complexity — but it is not absolute.
+ChuMicro is not locked into zero-dependency mode. When an external library passes the cross-platform test above, use it. The bar is intentionally high because each dependency adds flash usage, maintenance burden, and cross-ecosystem packaging complexity — but it is not absolute.
 
 ## Consequences
 
-- Core utilities (ticks, runtime detection) are owned by Chumicro with no external dependencies.
+- Core utilities (ticks, runtime detection) are owned by ChuMicro with no external dependencies.
 - Each library must eventually carry per-platform distribution metadata (pyproject.toml, package.json, circup requirements).
 - The release workstream should include tooling to publish to all three channels.
-- Blinka remains useful as a development-time reference or for running CircuitPython code on Linux SBCs, but it is never a Chumicro runtime dependency.
+- Blinka remains useful as a development-time reference or for running CircuitPython code on Linux SBCs, but it is never a ChuMicro runtime dependency.
 - When evaluating a new external dependency, apply the three-criterion test from this decision before adding it.

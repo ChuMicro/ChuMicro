@@ -46,7 +46,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [
-    {{ name = "Chumicro" }},
+    {{ name = "ChuMicro" }},
 ]
 keywords = [
     "circuitpython", "micropython", "microcontroller", "embedded",
@@ -489,7 +489,7 @@ _CORE_TEMPLATE = """\
 
 
 class {class_name}:
-    \"\"\"A starter class demonstrating Chumicro library patterns.
+    \"\"\"A starter class demonstrating ChuMicro library patterns.
 
     Replace this with your real implementation.  This placeholder shows:
 
