@@ -66,8 +66,8 @@ def _check(base_reference: str) -> int:
     """
     try:
         libraries = changed_libraries(base_reference)
-    except RuntimeError as exc:
-        print(exc)
+    except RuntimeError as exception:
+        print(exception)
         return 2
 
     if not libraries:
