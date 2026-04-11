@@ -52,7 +52,7 @@ This walks you through your entire first contribution — from fork to merged pu
 
 ### 1. Fork the repository
 
-A fork is your own copy of ChuMicro on GitHub. You'll push changes to your fork, then ask the original repository to pull them in.
+Only maintainers can push branches directly to the ChuMicro repository. Everyone else works through a **fork** — your own copy of the repository on GitHub. You push changes to your fork, then open a pull request asking the original repository to pull your changes in.
 
 Go to **[github.com/ChuMicro/ChuMicro](https://github.com/ChuMicro/ChuMicro)** and click the **Fork** button (top right). GitHub creates a copy at `github.com/<your-username>/ChuMicro`.
 
@@ -181,6 +181,47 @@ That's it — you've made your first contribution! 🎉
 
 For the full details on any step, keep reading below.
 
+## Keeping your fork in sync
+
+Your fork doesn't update automatically when the original repository changes. Before starting new work, pull the latest `main` from upstream and push it to your fork:
+
+```bash
+git checkout main
+git pull upstream main
+git push origin main
+```
+
+This keeps your fork's `main` branch identical to the original. Always do this before creating a new branch.
+
+### What if `main` moves while I'm working?
+
+If other PRs merge while you're working on your branch, your branch falls behind. GitHub will show "This branch is out of date" on your PR. To catch up:
+
+```bash
+git checkout main
+git pull upstream main
+git push origin main
+git checkout fix/my-first-change
+git rebase main
+```
+
+If there are no conflicts, Git replays your changes on top of the updated `main`. Push the result:
+
+```bash
+git push --force-with-lease origin fix/my-first-change
+```
+
+If there are conflicts, Git pauses and tells you which files conflict. Open each file, look for the `<<<<<<<` / `>>>>>>>` markers, resolve them, then:
+
+```bash
+git add <resolved-file>
+git rebase --continue
+```
+
+Repeat until the rebase finishes, then push with `--force-with-lease` as above.
+
+> **`--force-with-lease`** is a safer version of `--force`. It refuses to overwrite the remote branch if someone else pushed to it since your last fetch — preventing you from accidentally losing work.
+
 ## Branching conventions
 
 All work happens on branches off `main`. PRs target `main`. There is no `develop` branch.
@@ -191,11 +232,9 @@ All work happens on branches off `main`. PRs target `main`. There is no `develop
 | **Feature** | `feature/<description>` | New features, new libraries, larger work | `feature/settings-library` |
 | **Release** | `release/<lib>-v<major.minor>.x` | Hotfix against an older stable tag (rare) | `release/timing-v0.2.x` |
 
-If you're starting new work after your first contribution, pull the latest `main` first:
+After [syncing your fork](#keeping-your-fork-in-sync), create a branch:
 
 ```bash
-git checkout main
-git pull upstream main
 git checkout -b feature/my-change
 ```
 
@@ -320,7 +359,7 @@ These aren't arbitrary — each one traces to a design decision with rationale. 
 | `check-version` fails but you only changed tests | CI gates source changes under `src/` | No VERSION bump needed for test-only, docs-only, or infra changes — delete the failing step's output note in your PR |
 | Coverage fails on code you didn't touch | Pre-existing gap in another file | Note it in the PR description — a maintainer can help fill the gap or mark an exception |
 | `griffe warnings detected` in docs build | Missing type annotation on a function parameter | Add the type to the signature: `def foo(x: int)` — docstrings carry descriptions only |
-| Merge conflicts after pushing | `main` moved while you were working | `git pull --rebase origin main`, resolve conflicts, force-push your branch |
+| Merge conflicts after pushing | `main` moved while you were working | [Rebase your branch](#what-if-main-moves-while-im-working) onto the latest `main` |
 | PyCharm/VS Code shows red import underlines | IDE configs are stale | Run `python scripts/run.py sync-ide`, then reload the project |
 
 ## Getting help
