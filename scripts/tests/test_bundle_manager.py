@@ -188,13 +188,18 @@ class TestBuildCircupZips:
         """Creates source and bytecode zip bundles."""
         bundle_dir = tmp_path / "bundle"
         output_dir = tmp_path / "output"
+
+        # Root package: .py source only.
         package_dir = bundle_dir / "chumicro_example"
         package_dir.mkdir(parents=True)
-
         (package_dir / "__init__.py").write_text("# init")
-        (package_dir / "__init__.mpy").write_bytes(b"\x00mpy")
         (package_dir / "core.py").write_text("# core")
-        (package_dir / "core.mpy").write_bytes(b"\x00mpy")
+
+        # mpy6/: .mpy bytecode.
+        mpy_dir = bundle_dir / "mpy6" / "chumicro_example"
+        mpy_dir.mkdir(parents=True)
+        (mpy_dir / "__init__.mpy").write_bytes(b"\x00mpy")
+        (mpy_dir / "core.mpy").write_bytes(b"\x00mpy")
 
         zips = build_circup_zips(
             bundle_dir, output_dir, "ChuMicro-Bundle", date_tag="20260101",
@@ -206,6 +211,55 @@ class TestBuildCircupZips:
         zip_names = {zip_path.name for zip_path in zips}
         assert "chumicro-bundle-py-20260101.zip" in zip_names
         assert "chumicro-bundle-10.x-mpy-20260101.zip" in zip_names
+
+    def test_source_zip_contains_only_py(self, tmp_path: Path):
+        """Source zip contains only .py files, not .mpy."""
+        bundle_dir = tmp_path / "bundle"
+        output_dir = tmp_path / "output"
+
+        package_dir = bundle_dir / "chumicro_example"
+        package_dir.mkdir(parents=True)
+        (package_dir / "__init__.py").write_text("# init")
+
+        mpy_dir = bundle_dir / "mpy6" / "chumicro_example"
+        mpy_dir.mkdir(parents=True)
+        (mpy_dir / "__init__.mpy").write_bytes(b"\x00mpy")
+
+        build_circup_zips(
+            bundle_dir, output_dir, "ChuMicro-Bundle", date_tag="20260101",
+        )
+        import zipfile
+
+        source_zip_path = output_dir / "chumicro-bundle-py-20260101.zip"
+        with zipfile.ZipFile(source_zip_path) as source_zip:
+            names = source_zip.namelist()
+            assert all(name.endswith(".py") for name in names)
+            assert any("__init__.py" in name for name in names)
+
+    def test_bytecode_zip_pulls_from_mpy6(self, tmp_path: Path):
+        """Bytecode zip contains .mpy files from mpy6/ directory."""
+        bundle_dir = tmp_path / "bundle"
+        output_dir = tmp_path / "output"
+
+        package_dir = bundle_dir / "chumicro_example"
+        package_dir.mkdir(parents=True)
+        (package_dir / "__init__.py").write_text("# init")
+
+        mpy_dir = bundle_dir / "mpy6" / "chumicro_example"
+        mpy_dir.mkdir(parents=True)
+        (mpy_dir / "__init__.mpy").write_bytes(b"\x00mpy")
+        (mpy_dir / "core.mpy").write_bytes(b"\x00mpy")
+
+        build_circup_zips(
+            bundle_dir, output_dir, "ChuMicro-Bundle", date_tag="20260101",
+        )
+        import zipfile
+
+        bytecode_zip_path = output_dir / "chumicro-bundle-10.x-mpy-20260101.zip"
+        with zipfile.ZipFile(bytecode_zip_path) as bytecode_zip:
+            names = bytecode_zip.namelist()
+            assert all(name.endswith(".mpy") for name in names)
+            assert len(names) == 2
 
     def test_no_packages_returns_empty(self, tmp_path: Path):
         """Empty bundle directory returns empty list."""
