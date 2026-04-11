@@ -110,28 +110,30 @@ def _read_chumicro_dependencies(library_dir: Path) -> list[str]:
     return [dependency for dependency in dependencies if dependency.strip().startswith("chumicro-")]
 
 
-def _dependency_to_mip_reference(dependency: str) -> str:
+def _dependency_to_mip_reference(dependency: str, bundle_repo: str) -> str:
     """Convert 'chumicro-timing>=0.1' to a mip github reference.
 
     Args:
         dependency: PyPI dependency string (e.g. ``"chumicro-timing>=0.1"``).
+        bundle_repo: Bundle repository name (e.g. ``"ChuMicro-Bundle"``).
     """
     # Strip version specifiers (e.g. "chumicro-timing>=0.1" → "chumicro-timing").
     # Splits on the first comparison operator, extras bracket, or environment marker.
     name = re.split(r"[><=!;~\[]", dependency, maxsplit=1)[0]
     package = name.strip().replace("-", "_")
-    return f"github:{_GITHUB_ORG}/{STABLE_BUNDLE_REPO}/{package}"
+    return f"github:{_GITHUB_ORG}/{bundle_repo}/{package}"
 
 
-def _dependency_to_mpy_mip_reference(dependency: str) -> str:
+def _dependency_to_mpy_mip_reference(dependency: str, bundle_repo: str) -> str:
     """Convert 'chumicro-timing>=0.1' to an mpy6 mip github reference.
 
     Args:
         dependency: PyPI dependency string (e.g. ``"chumicro-timing>=0.1"``).
+        bundle_repo: Bundle repository name (e.g. ``"ChuMicro-Bundle"``).
     """
     name = re.split(r"[><=!;~\[]", dependency, maxsplit=1)[0]
     package = name.strip().replace("-", "_")
-    return f"github:{_GITHUB_ORG}/{STABLE_BUNDLE_REPO}/{MPY_FORMAT_FOLDER}/{package}"
+    return f"github:{_GITHUB_ORG}/{bundle_repo}/{MPY_FORMAT_FOLDER}/{package}"
 
 
 def _compile_mpy(python_file: Path, mpy_file: Path, mpy_cross: str) -> None:
@@ -224,11 +226,10 @@ def build_bundle(
         urls.append([target, source])
 
     manifest: dict = {"urls": urls, "version": version}
-    # Dependencies always reference stable variants so that installing
-    # one experimental library does not cascade into pulling experimental
-    # versions of all transitive dependencies.
+    # Dependencies reference the same bundle repo so that experimental
+    # installs pull experimental deps and stable installs pull stable deps.
     mip_dependencies = [
-        [_dependency_to_mip_reference(dependency), "latest"]
+        [_dependency_to_mip_reference(dependency, bundle_repo), "latest"]
         for dependency in _read_chumicro_dependencies(library_dir)
     ]
     if mip_dependencies:
@@ -286,7 +287,7 @@ def build_bundle(
 
         mpy_manifest: dict = {"urls": mpy_urls, "version": version}
         mpy_mip_dependencies = [
-            [_dependency_to_mpy_mip_reference(dependency), "latest"]
+            [_dependency_to_mpy_mip_reference(dependency, bundle_repo), "latest"]
             for dependency in _read_chumicro_dependencies(library_dir)
         ]
         if mpy_mip_dependencies:

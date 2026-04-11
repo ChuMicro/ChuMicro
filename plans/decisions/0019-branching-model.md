@@ -42,7 +42,7 @@ Channels are differentiated by **package name**, not version number or branch:
 
 On-device import paths are always the base name (`chumicro_timing`). Channel separation is by repo and package name, not by directory name (Decision 0018).
 
-**Dependency model:** experimental packages depend on stable releases by default. Installing one experimental library does not cascade into pulling experimental versions of transitive dependencies.
+**Dependency model:** experimental packages depend on experimental releases, stable on stable. Dependencies reference the same bundle repo as the package being installed.  Import paths are always the base name (`chumicro_timing`) regardless of channel.
 
 ### CI trigger changes
 

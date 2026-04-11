@@ -77,7 +77,7 @@ mip.install("github:ChuMicro/ChuMicro-Bundle/chumicro_runner")
 ```
 
 
-Dependencies between libraries (e.g., runner depends on timing) are declared in `package.json`'s `deps` list and resolved recursively by `mip`.  Dependencies always reference the stable repo so that installing one experimental library does not cascade into pulling experimental versions of all transitive dependencies.
+Dependencies between libraries (e.g., runner depends on timing) are declared in `package.json`'s `deps` list and resolved recursively by `mip`.  Dependencies reference the same bundle repo as the package being installed — experimental deps pull from experimental, stable from stable.  This keeps all installed code on the same channel without requiring the user to change any import statements.
 
 ### 4. `circup` installation via bundle
 
