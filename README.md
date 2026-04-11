@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="support/docs/chumicro.png" width="300" alt="Chumicro" />
+  <img src="support/docs/chumicro.png" width="500" alt="Chumicro" />
 </p>
 <h1 align="center">Chumicro</h1>
 
