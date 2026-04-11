@@ -219,6 +219,10 @@ pip install chumicro-{name}-experimental
 
 ## Quick example
 
+<!-- TODO: Replace with a real example. Show the most common use case in
+     5-10 lines. Add a comment showing expected output so readers can
+     verify it works. -->
+
 ```python
 from {import_name} import ...
 ```

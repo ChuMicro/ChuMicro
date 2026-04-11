@@ -59,7 +59,7 @@ while True:
     runner.tick()
 ```
 
-For services with conditional logic, implement `check()` and `handle()`:
+That's all you need for simple tasks. For services with conditional logic (only do something when a condition is met), implement `check()` and `handle()`:
 
 ```python
 from chumicro_runner import Runner
@@ -246,12 +246,7 @@ Runner depends on [timing](../timing/) for its tick source and tick arithmetic (
 
 ## Platform support
 
-All classes use only basic Python features.  Works identically on CPython, MicroPython, and CircuitPython.
-
-## Memory notes
-
-- `_TaskEntry` and `TaskHandle` use `__slots__` to minimize per-instance memory.
-- Handlers are collected into a pre-allocated list and batch-fired, avoiding per-tick allocation.
+All classes use only basic Python features. Works identically on CPython, MicroPython, and CircuitPython. Designed to be lightweight — uses minimal memory per task, suitable for boards with limited RAM.
 
 ## Examples
 
