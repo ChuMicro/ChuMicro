@@ -28,15 +28,13 @@ else:  # pragma: no cover — MicroPython fallback; time.monotonic always exists
 		return time.ticks_ms() / 1000
 
 
-def _memory_free():
-	"""Return free heap bytes, or ``None`` if unavailable."""
-	if _gc is not None and hasattr(_gc, "mem_free"):
-		# Collect first so the reading reflects actually-available memory
-		# rather than including reclaimable garbage.  This makes before/after
-		# comparisons meaningful for detecting real leaks.
-		_gc.collect()
-		return _gc.mem_free()
-	return None
+def _has_mem_free():
+	"""Return whether ``gc.mem_free`` is available (MicroPython/CircuitPython)."""
+	return _gc is not None and hasattr(_gc, "mem_free")
+
+
+_MEM_FREE_AVAILABLE = _has_mem_free()
+
 
 
 def _iter_test_functions(module: object):
@@ -86,8 +84,10 @@ def run_module(module):
 	"""Run all ``test_*`` callables on a module-like object.
 
 	Prints per-test duration and PASS/FAIL status.  When ``gc.mem_free``
-	is available (MicroPython / CircuitPython boards), reports free heap
-	before and after the run to help detect memory leaks.
+	is available (MicroPython / CircuitPython boards), automatic GC is
+	disabled for the run and ``gc.collect()`` is called explicitly between
+	tests.  This gives per-test heap deltas that reflect only that test's
+	retained allocations, plus a module-level summary.
 
 	Args:
 		module: Module-like object containing ``test_*`` callables.
@@ -98,36 +98,67 @@ def run_module(module):
 	total = 0
 	failed = 0
 
-	memory_before = _memory_free()
-	if memory_before is not None:
-		print(f"HEAP {memory_before} bytes free")
-
 	run_start = _now_seconds()
+
+	# Disable automatic GC so collections happen only at explicit points
+	# between tests.  Manual gc.collect() still works.  This makes per-test
+	# heap deltas deterministic: each delta reflects only that test's
+	# retained allocations, not debris from a prior test that happened to
+	# become collectible mid-run.
+	gc_tracking = _MEM_FREE_AVAILABLE
+	if gc_tracking:
+		_gc.collect()
+		_gc.disable()
+		module_heap_before = _gc.mem_free()
 
 	for name, function in _iter_test_functions(module):
 		total += 1
+
+		# Allocate the timing float *before* the heap baseline so it
+		# does not count towards the test's delta.
 		test_start = _now_seconds()
+		if gc_tracking:
+			_gc.collect()
+			test_heap_before = _gc.mem_free()
+
 		try:
 			function()
 		except Exception as error:  # pragma: no cover - exercised indirectly by tests.
+			# Take the heap snapshot *before* computing duration so the
+			# duration float does not inflate the delta.
+			heap_suffix = ""
+			if gc_tracking:
+				_gc.collect()
+				test_delta = _gc.mem_free() - test_heap_before
+				sign = "+" if test_delta >= 0 else ""
+				heap_suffix = f", heap {sign}{test_delta}"
 			duration = _now_seconds() - test_start
 			failed += 1
-			print(f"FAIL {name} ({duration:.3f}s)")
+			print(f"FAIL {name} ({duration:.3f}s{heap_suffix})")
 			_print_exception(error)
 		else:
+			heap_suffix = ""
+			if gc_tracking:
+				_gc.collect()
+				test_delta = _gc.mem_free() - test_heap_before
+				sign = "+" if test_delta >= 0 else ""
+				heap_suffix = f", heap {sign}{test_delta}"
 			duration = _now_seconds() - test_start
-			print(f"PASS {name} ({duration:.3f}s)")
+			print(f"PASS {name} ({duration:.3f}s{heap_suffix})")
+
+	if gc_tracking:
+		_gc.collect()
+		module_heap_after = _gc.mem_free()
+		_gc.enable()
+		delta = module_heap_after - module_heap_before
+		sign = "+" if delta >= 0 else ""
+		print(f"HEAP {module_heap_after} bytes free (delta {sign}{delta} bytes)")
 
 	total_duration = _now_seconds() - run_start
 
 	if total == 0:
 		print("NO TESTS FOUND")
 
-	memory_after = _memory_free()
-	if memory_after is not None:
-		delta = memory_after - memory_before
-		sign = "+" if delta >= 0 else ""
-		print(f"HEAP {memory_after} bytes free (delta {sign}{delta} bytes)")
 
 	print(f"SUMMARY total={total} failed={failed} time={total_duration:.3f}s")
 	return 1 if failed else 0
