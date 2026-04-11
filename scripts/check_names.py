@@ -18,7 +18,7 @@ import ast
 import sys
 from pathlib import Path
 
-from discovery import ROOT, discover_ruff_paths
+from workspace import ROOT, discover_ruff_paths
 
 _RULE_CODE = "CHU001"
 _ALLOWED = {"_"}

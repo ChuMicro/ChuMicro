@@ -17,7 +17,7 @@ import re
 import subprocess
 import sys
 
-from discovery import ROOT, changed_libraries, find_package_dir, read_version, release_tags
+from workspace import ROOT, changed_libraries, find_package_dir, read_version, release_tags
 
 
 def _parse_version(version: str) -> tuple[int, int, int] | None:

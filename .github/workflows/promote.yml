@@ -216,7 +216,7 @@ jobs:
 
       - name: Stage bundle artifacts
         run: |
-          python scripts/bundle.py stage \
+          python scripts/bundle_manager.py stage \
             "${{ needs.validate.outputs.library_dir }}" \
             "${{ needs.validate.outputs.version }}" \
             .bundle-staging
@@ -236,16 +236,16 @@ jobs:
 
       - name: Generate bundle README
         run: |
-          python scripts/bundle.py readme \
+          python scripts/bundle_manager.py readme \
             --bundle-dir .bundle-repo \
             -o .bundle-repo/README.md
 
       - name: Create circup zips
         run: |
-          date_tag=$(python scripts/bundle.py next-date-tag .bundle-repo)
+          date_tag=$(python scripts/bundle_manager.py next-date-tag .bundle-repo)
           echo "date_tag=${date_tag}" >> "$GITHUB_ENV"
 
-          python scripts/bundle.py circup-zip .bundle-repo .circup-zips \
+          python scripts/bundle_manager.py circup-zip .bundle-repo .circup-zips \
             --repo-name ChuMicro-Bundle --date-tag "$date_tag"
 
       - name: Push to bundle repository

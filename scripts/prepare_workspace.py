@@ -9,9 +9,9 @@ Usage::
     python scripts/prepare_workspace.py              # install dependencies + verify
     python scripts/prepare_workspace.py --create-venv  # create .venv first
 
-This script imports ``discovery`` and ``workspace`` for shared helpers
+This script imports ``workspace`` and ``shared`` for shared helpers
 (ROOT, editable-install logic).  Both modules are safe to import on a
-fresh clone — ``discovery`` lazy-loads ``tomllib`` so no third-party
+fresh clone — ``workspace`` lazy-loads ``tomllib`` so no third-party
 packages are needed at import time.  The code itself is compatible with
 Python 3.7+ so ``_check_python_version()`` can deliver a friendly error
 on older interpreters.
@@ -27,8 +27,8 @@ import sys
 import venv
 from pathlib import Path
 
-from discovery import ROOT
-from workspace import install_command, install_editable
+from shared import install_command, install_editable
+from workspace import ROOT
 
 VENV_DIR = ROOT / ".venv"
 #: Minimum Python for the workspace (pytest 8, hatchling, griffe need 3.8+;

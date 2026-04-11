@@ -13,7 +13,7 @@ non-release-relevant files changed).  Exits 1 when enforcement fails.
 
 from __future__ import annotations
 
-from discovery import RELEASE_RELEVANT, changed_files, release_tags
+from workspace import RELEASE_RELEVANT, changed_files, release_tags
 
 
 def _check(base_reference: str) -> int:

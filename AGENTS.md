@@ -89,8 +89,8 @@ Check for documentation ripple before committing. When you add a new task, comma
 - `.github/workflows/ci.yml`
 - `docs/contributing/development-cli.md`
 - `docs/contributing/pull-requests.md`
-- `scripts/scaffold.py`
-- `scripts/ide.py`
+- `scripts/new_library_scaffold.py`
+- `scripts/ide_sync.py`
 - `plans/history.md`
 - `plans/next-up.md`
 

@@ -1,8 +1,14 @@
-"""Shared runtime preparation helpers and binary resolution.
+"""Shared infrastructure helpers — subprocess wrappers, package installation,
+runtime preparation, and binary resolution.
 
-This module provides build utilities shared by the MicroPython and
-CircuitPython preparation modules, plus binary resolution functions
-used by the task runner.
+This module provides:
+
+- Generic subprocess helpers: :func:`run_command`, :func:`install_command`
+- Editable-install logic: :func:`install_editable`
+- Build utilities shared by the MicroPython and CircuitPython preparation
+  modules: :func:`run_build_command`, :func:`ensure_tool`, etc.
+- Binary resolution: :func:`resolve_micropython_binary`,
+  :func:`resolve_circuitpython_binary`
 """
 
 from __future__ import annotations
@@ -11,9 +17,77 @@ import functools
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
-from discovery import ROOT, TOOLS, read_runtime_versions
+from workspace import ROOT, TOOLS, find_publishable_packages, read_runtime_versions
+
+# ---------------------------------------------------------------------------
+# Generic subprocess helpers
+# ---------------------------------------------------------------------------
+
+
+def run_command(command: list[str], environment: dict[str, str] | None = None) -> int:
+    """Run a command from the repository root and return its exit code.
+
+    Args:
+        command: Command and arguments to run.
+        environment: Optional environment variables to pass to the subprocess.
+
+    Returns:
+        Process exit code.
+    """
+    printable = " ".join(command)
+    print(f"+ {printable}")
+    return subprocess.run(command, cwd=ROOT, env=environment, check=False).returncode
+
+
+def install_command(python: str | Path | None = None) -> list[str]:
+    """Return the pip-install command prefix, preferring uv when available.
+
+    Args:
+        python: Interpreter to target.  When *None*, targets the running
+            interpreter.  With ``uv`` this becomes ``--python <path>``;
+            without ``uv`` it replaces ``sys.executable``.
+    """
+    if shutil.which("uv"):
+        command = ["uv", "pip", "install"]
+        if python is not None:
+            command.extend(["--python", str(python)])
+        return command
+    interpreter = str(python) if python is not None else sys.executable
+    return [interpreter, "-m", "pip", "install"]
+
+
+def install_editable(python: str | Path | None = None) -> int:
+    """Install all publishable libraries as editable packages.
+
+    This registers each library with Python's import system so that
+    imports work in any tool (editors, debuggers, REPLs, scripts)
+    without manual PYTHONPATH setup.  Changes to source files are
+    reflected immediately — no reinstall needed.
+
+    Args:
+        python: Interpreter to install into.  Defaults to the running
+            interpreter when *None*.
+
+    Returns:
+        Process exit code (0 on success).
+    """
+    packages = find_publishable_packages()
+    if not packages:
+        return 0
+
+    editable_args: list[str] = []
+    for package in packages:
+        editable_args.extend(["-e", package])
+
+    return run_command([*install_command(python), *editable_args])
+
+
+# ---------------------------------------------------------------------------
+# Runtime preparation helpers
+# ---------------------------------------------------------------------------
 
 
 @functools.cache

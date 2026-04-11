@@ -15,7 +15,7 @@ import importlib
 import sys
 from pathlib import Path
 
-from discovery import ROOT
+from workspace import ROOT
 
 #: Filename prefixes that indicate hardware-specific examples.
 #: For these, only chumicro_* imports are verified — platform modules

@@ -18,7 +18,26 @@ from pathlib import Path
 from check_api import main as check_api_main
 from check_names import main as check_names_main
 from check_version import main as check_version_main
-from discovery import (
+from deploy_documents import (
+    MIKE,
+    copy_shared_docs_assets,
+    docs_deploy,
+    inject_landing_page,
+)
+from ide_sync import sync_ide
+from new_library_scaffold import new_library
+from prepare_circuitpython import prepare_circuitpython
+from prepare_micropython import prepare_micropython
+from shared import (
+    install_command,
+    install_editable,
+    resolve_circuitpython_binary,
+    resolve_micropython_binary,
+    run_command,
+    runtime_versions,
+)
+from verify_examples import verify_examples
+from workspace import (
     ROOT,
     coverage_args_for,
     discover_package_dirs,
@@ -28,19 +47,6 @@ from discovery import (
     pythonpath_environment,
     resolve_scope,
 )
-from docs_deploy import (
-    MIKE,
-    copy_shared_docs_assets,
-    docs_deploy,
-    inject_landing_page,
-)
-from ide import sync_ide
-from prepare import resolve_circuitpython_binary, resolve_micropython_binary, runtime_versions
-from prepare_circuitpython import prepare_circuitpython
-from prepare_micropython import prepare_micropython
-from scaffold import new_library
-from verify_examples import verify_examples
-from workspace import install_command, install_editable, run_command
 
 PYTHON = sys.executable
 # Script that runs a library's tests/ directory under a non-CPython interpreter

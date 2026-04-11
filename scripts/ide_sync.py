@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import json
 
-from discovery import ROOT, discover_package_dirs, discover_source_roots
+from workspace import ROOT, discover_package_dirs, discover_source_roots
 
 # ---------------------------------------------------------------------------
 # Managed task definitions — shared between PyCharm and VS Code
@@ -198,7 +198,7 @@ def _sync_pycharm_iml() -> None:
                     f' isTestSource="{is_test}" />'
                 )
 
-    # scripts/ is a source root (bare-name imports like ``from discovery
+    # scripts/ is a source root (bare-name imports like ``from workspace
     # import ROOT``) and scripts/tests/ is a test root so the IDE test
     # runner discovers infrastructure tests.
     source_lines.append(

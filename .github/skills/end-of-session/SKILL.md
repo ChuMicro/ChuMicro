@@ -69,8 +69,8 @@ also check for documentation ripple across the workspace:
 | `.github/workflows/ci.yml` | New tasks added as CI jobs if they should gate PRs |
 | `docs/contributing/development-cli.md` | Task sections, validation checklist table |
 | `docs/contributing/pull-requests.md` | Verification steps table |
-| `scripts/scaffold.py` | Templates for new libraries |
-| `scripts/ide.py` | `_TASKS` list, source root generation |
+| `scripts/new_library_scaffold.py` | Templates for new libraries |
+| `scripts/ide_sync.py` | `_TASKS` list, source root generation |
 
 ## 5. Commit remaining work
 

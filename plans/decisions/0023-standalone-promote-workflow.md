@@ -8,7 +8,7 @@ Related: Decision 0018
 
 The promote workflow (`promote.yml`) previously delegated to `release.yml` via `workflow_call`.  This caused two problems:
 
-1. **Stale CI files.**  When a maintainer selected an experimental tag in the "Use workflow from" dropdown, GitHub ran the workflow YAML from that tag — including `release.yml` and all scripts (`bundle.py`, `discovery.py`, etc.).  CI improvements merged to `main` after the experimental release were invisible to promotions.
+1. **Stale CI files.**  When a maintainer selected an experimental tag in the "Use workflow from" dropdown, GitHub ran the workflow YAML from that tag — including `release.yml` and all scripts (`bundle_manager.py`, `workspace.py`, etc.).  CI improvements merged to `main` after the experimental release were invisible to promotions.
 
 2. **PyPI OIDC mismatch.**  PyPI's trusted publishing validates attestations against `job_workflow_ref` (the reusable workflow), but the Sigstore certificate carries the caller's identity (the top-level workflow).  These never match when one workflow calls another, forcing attestations to be disabled for stable promotions.
 

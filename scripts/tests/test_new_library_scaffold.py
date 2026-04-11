@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from scaffold import _scaffold_library
+from new_library_scaffold import _scaffold_library
 
 
 class TestScaffoldLibrary:
@@ -10,7 +10,7 @@ class TestScaffoldLibrary:
 
     def test_creates_expected_structure(self, tmp_path: Path, monkeypatch):
         """Scaffolding creates the full directory tree."""
-        monkeypatch.setattr("scaffold.ROOT", tmp_path)
+        monkeypatch.setattr("new_library_scaffold.ROOT", tmp_path)
         (tmp_path / "libraries").mkdir()
 
         result = _scaffold_library("example")
@@ -36,7 +36,7 @@ class TestScaffoldLibrary:
 
     def test_version_starts_at_0_1_0(self, tmp_path: Path, monkeypatch):
         """VERSION file starts at 0.1.0."""
-        monkeypatch.setattr("scaffold.ROOT", tmp_path)
+        monkeypatch.setattr("new_library_scaffold.ROOT", tmp_path)
         (tmp_path / "libraries").mkdir()
 
         _scaffold_library("example")
@@ -45,7 +45,7 @@ class TestScaffoldLibrary:
 
     def test_pyproject_contains_name(self, tmp_path: Path, monkeypatch):
         """pyproject.toml contains the library name."""
-        monkeypatch.setattr("scaffold.ROOT", tmp_path)
+        monkeypatch.setattr("new_library_scaffold.ROOT", tmp_path)
         (tmp_path / "libraries").mkdir()
 
         _scaffold_library("mylib")
@@ -54,7 +54,7 @@ class TestScaffoldLibrary:
 
     def test_init_exports_class(self, tmp_path: Path, monkeypatch):
         """__init__.py exports the generated class name."""
-        monkeypatch.setattr("scaffold.ROOT", tmp_path)
+        monkeypatch.setattr("new_library_scaffold.ROOT", tmp_path)
         (tmp_path / "libraries").mkdir()
 
         _scaffold_library("my-thing")
@@ -66,7 +66,7 @@ class TestScaffoldLibrary:
 
     def test_existing_directory_fails(self, tmp_path: Path, monkeypatch, capsys):
         """Scaffolding fails if the library directory already exists."""
-        monkeypatch.setattr("scaffold.ROOT", tmp_path)
+        monkeypatch.setattr("new_library_scaffold.ROOT", tmp_path)
         (tmp_path / "libraries" / "existing").mkdir(parents=True)
 
         result = _scaffold_library("existing")
@@ -75,7 +75,7 @@ class TestScaffoldLibrary:
 
     def test_hyphenated_name(self, tmp_path: Path, monkeypatch):
         """Hyphenated library names are converted to underscores in imports."""
-        monkeypatch.setattr("scaffold.ROOT", tmp_path)
+        monkeypatch.setattr("new_library_scaffold.ROOT", tmp_path)
         (tmp_path / "libraries").mkdir()
 
         _scaffold_library("data-store")
@@ -85,7 +85,7 @@ class TestScaffoldLibrary:
 
     def test_test_file_has_tests(self, tmp_path: Path, monkeypatch):
         """Generated test file contains test methods."""
-        monkeypatch.setattr("scaffold.ROOT", tmp_path)
+        monkeypatch.setattr("new_library_scaffold.ROOT", tmp_path)
         (tmp_path / "libraries").mkdir()
 
         _scaffold_library("example")

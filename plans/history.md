@@ -194,7 +194,7 @@ This was the largest single session. It addressed three areas: the workspace was
 
 **Board architecture support (Decision 0015):** Source-level audit of `CIRCUITPY_FULL_BUILD` and `MICROPY_CONFIG_ROM_LEVEL` across all ports. Tier 1/2/unsupported classification.
 
-**Script modularization:** Split `scripts/run.py` into focused modules: `discovery.py`, `ide.py`, `scaffold.py`, `prepare.py`, etc. Removed `ci/` directory entirely.
+**Script modularization:** Split `scripts/run.py` into focused modules: `workspace.py`, `ide_sync.py`, `new_library_scaffold.py`, `shared.py`, etc. Removed `ci/` directory entirely.
 
 **Cross-runtime unit tests (Decision 0016):** Compat tasks now run real unit tests from `tests/` through the lightweight harness, not just smoke checks.
 
@@ -266,7 +266,7 @@ This was the largest single session. It addressed three areas: the workspace was
 
 **Style guide:** Extracted style rules from CONTRIBUTING.md into standalone `docs/contributing/style-guide.md` with explanatory prose. Expanded linter section for beginners. Linked from AGENTS.md, IDE guides, and new-library guide.
 
-**Editable installs adoption:** Policy change — `pip install -e` is now standard workspace setup. Extracted shared `scripts/workspace.py` module with `run_command()`, `install_command()`, `install_editable()`. Made `discovery.py` importable before third-party packages by lazy-loading tomllib. Eliminated duplicate subprocess and pip-install logic across scripts. Updated AGENTS.md, conftest.py, history.md, and contributor docs.
+**Editable installs adoption:** Policy change — `pip install -e` is now standard workspace setup. Extracted shared `scripts/shared.py` module with `run_command()`, `install_command()`, `install_editable()`. Made `workspace.py` importable before third-party packages by lazy-loading tomllib. Eliminated duplicate subprocess and pip-install logic across scripts. Updated AGENTS.md, conftest.py, history.md, and contributor docs.
 
 **Contributor experience audit v2:** README restructured (Installation above Development), dependency graph, cross-library references (timing ↔ runner), "What's new" sections in all library guides, PR template simplification (N/A defaults), coverage hint in run.py, CLAUDE.md/.cursorrules pointers, GitHub Discussions links.
 
