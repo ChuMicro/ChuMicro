@@ -270,9 +270,14 @@ Successfully built chumicro_timing-0.1.15.tar.gz and chumicro_timing-0.1.15-py3-
 Built 4 package(s): libraries/compat, libraries/msgpack, libraries/runner, libraries/timing
 ```
 
-### Validate mip
+### `validate-mip`
 
-Tests that published libraries can be installed via MicroPython's `mip` package manager and imported successfully.  Both `.py` (source) and `.mpy6` (bytecode) formats are validated.  Requires a MicroPython unix-port binary (built with `prepare-micropython`) and network access to `raw.githubusercontent.com`.
+Tests that libraries can be installed via MicroPython's `mip` package manager and imported successfully.  Both `.py` (source) and `.mpy6` (bytecode) formats are validated.  Requires a MicroPython unix-port binary (built with `prepare-micropython`).
+
+Two modes:
+
+- **Remote** (`--bundle-repo`): validate against a live GitHub bundle repository.  Requires network access to `raw.githubusercontent.com`.
+- **Local** (`--staging-dir`): validate against a locally staged bundle directory by serving it over a background HTTP server.  No network access needed.
 
 ```bash
 # Validate specific libraries against the experimental bundle
@@ -282,6 +287,9 @@ python scripts/run.py validate-mip \
 
 # Validate all libraries against the stable bundle
 python scripts/run.py validate-mip --bundle-repo ChuMicro-Bundle
+
+# Validate a locally staged bundle (pre-publish)
+python scripts/run.py validate-mip --staging-dir .bundle-staging
 ```
 
 **When it passes:**
@@ -298,7 +306,7 @@ python scripts/run.py validate-mip --bundle-repo ChuMicro-Bundle
 All 4 validations passed (4/4).
 ```
 
-This runs automatically in CI after every experimental release and stable promotion.  Use it locally to verify bundle publishing before cutting a release.
+This runs automatically in CI: locally before pushing to bundle repos (pre-publish gate) and remotely after pushing (post-publish smoke test).  Use `--staging-dir` locally to verify staged bundle artifacts before cutting a release.
 
 ## Commit workflow
 

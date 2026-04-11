@@ -1,16 +1,30 @@
-"""Validate mip install and import for published bundle packages.
+"""Validate mip install and import for bundle packages.
 
-Tests that libraries published to a ChuMicro bundle repository can be
-installed via MicroPython's mip package manager and imported successfully.
+Tests that libraries published to (or staged for) a ChuMicro bundle
+repository can be installed via MicroPython's mip package manager and
+imported successfully.
 
 Both ``.py`` (source) and ``.mpy6`` (bytecode) formats are validated for
 each library.  The runner library is always tested last because its
 dependency on timing exercises mip's dependency resolution.
 
+Two modes:
+
+- **Remote** (``--bundle-repo``): validate against a live GitHub bundle
+  repository.  Used post-publish as a smoke test.
+- **Local** (``--staging-dir``): validate against a locally staged bundle
+  directory by serving it over a background HTTP server and rewriting
+  ``package.json`` URLs.  Used pre-publish to catch broken ``.mpy``
+  compilation or manifest errors before pushing.
+
 Usage (via task runner)::
 
     python scripts/run.py validate-mip \\
         --bundle-repo ChuMicro-Bundle-Experimental \\
+        --libraries timing,runner
+
+    python scripts/run.py validate-mip \\
+        --staging-dir .bundle-staging \\
         --libraries timing,runner
 
 Direct usage::
@@ -19,17 +33,25 @@ Direct usage::
         --bundle-repo ChuMicro-Bundle-Experimental \\
         --libraries timing,runner
 
+    python scripts/validate_mip_install.py \\
+        --staging-dir .bundle-staging \\
+        --libraries timing,runner
+
 Requirements:
     - MicroPython unix-port binary (auto-detected or ``--micropython-binary``)
-    - Network access to ``raw.githubusercontent.com``
+    - Remote mode: network access to ``raw.githubusercontent.com``
 """
 
 from __future__ import annotations
 
 import argparse
+import re
+import shutil
 import subprocess
 import tempfile
+import threading
 import time
+from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 
 from shared import resolve_micropython_binary
@@ -45,6 +67,36 @@ _MAX_RETRIES = 3
 
 #: Seconds to wait between retries.
 _RETRY_DELAY = 15
+
+
+class _QuietHandler(SimpleHTTPRequestHandler):
+    """HTTP request handler that suppresses access logs."""
+
+    def log_message(self, format: str, *args: object) -> None:  # noqa: A002
+        pass
+
+
+def _start_local_server(directory: Path) -> tuple[HTTPServer, str]:
+    """Start a background HTTP server serving *directory*.
+
+    Args:
+        directory: Filesystem path to serve.
+
+    Returns:
+        ``(server, base_url)`` where *base_url* is
+        ``http://127.0.0.1:<port>``.
+    """
+    server = HTTPServer(
+        ("127.0.0.1", 0),
+        lambda *handler_args: _QuietHandler(
+            *handler_args, directory=str(directory),
+        ),
+    )
+    port = server.server_address[1]
+    base_url = f"http://127.0.0.1:{port}"
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server, base_url
 
 
 def _write_install_script(target_path: Path, package_url: str, install_dir: Path) -> Path:
@@ -265,6 +317,110 @@ def validate_mip_install(
     return 0
 
 
+def validate_local_staging(
+    staging_dir: str,
+    library_names: list[str],
+    binary: str | None = None,
+) -> int:
+    """Validate mip install and import from a locally staged bundle.
+
+    Copies the staging directory into a temp directory, rewrites all
+    ``package.json`` manifests to replace ``github:`` URLs with
+    ``http://localhost`` URLs, starts a background HTTP server, and
+    validates that each library can be installed via mip and imported.
+
+    This is the pre-publish gate — run it after staging bundle artifacts
+    but before pushing to the live bundle repository.
+
+    Args:
+        staging_dir: Path to the staged bundle directory (e.g.
+            ``.bundle-staging``).
+        library_names: Library names to validate (e.g. ``["timing", "runner"]``).
+        binary: Explicit MicroPython binary path, or None for auto-detection.
+
+    Returns:
+        Exit code (0 on success, 1 on failure).
+    """
+    resolved_binary = resolve_micropython_binary(binary)
+    if resolved_binary is None:
+        print("MicroPython binary not found.")
+        print("Run: python scripts/run.py prepare-micropython")
+        return 1
+
+    staging_path = Path(staging_dir)
+    if not staging_path.is_dir():
+        print(f"Staging directory not found: {staging_dir}")
+        return 1
+
+    print(f"MicroPython binary: {resolved_binary}")
+    print(f"Staging directory:  {staging_dir}")
+    print(f"Libraries:          {', '.join(library_names)}")
+    print()
+
+    sorted_names = sorted(library_names, key=lambda name: name == "runner")
+
+    total = 0
+    passed = 0
+    failed_tests: list[str] = []
+
+    # Copy staging to a temp directory so we can rewrite package.json
+    # without modifying the original artifacts.
+    with tempfile.TemporaryDirectory() as serve_dir:
+        serve_path = Path(serve_dir)
+        shutil.copytree(staging_dir, serve_path, dirs_exist_ok=True)
+
+        server, base_url = _start_local_server(serve_path)
+        try:
+            # Rewrite all github: URLs in package.json manifests to point
+            # at the local HTTP server.
+            for manifest_path in serve_path.rglob("package.json"):
+                content = manifest_path.read_text()
+                content = re.sub(
+                    r"github:[\w\-]+/[\w\-]+/",
+                    f"{base_url}/",
+                    content,
+                )
+                manifest_path.write_text(content)
+
+            for library_name in sorted_names:
+                package_name = f"chumicro_{library_name}"
+                print(f"== {package_name} ==")
+
+                # .py format (source)
+                py_url = f"{base_url}/{package_name}"
+                total += 1
+                if _validate_single(
+                    resolved_binary, "local", library_name, "py", py_url,
+                ):
+                    passed += 1
+                else:
+                    failed_tests.append(f"{package_name} (py)")
+
+                # .mpy6 format (bytecode)
+                mpy_url = f"{base_url}/{_MPY_FORMAT_FOLDER}/{package_name}"
+                total += 1
+                if _validate_single(
+                    resolved_binary, "local", library_name, "mpy6", mpy_url,
+                ):
+                    passed += 1
+                else:
+                    failed_tests.append(f"{package_name} (mpy6)")
+
+                print()
+        finally:
+            server.shutdown()
+
+    # Summary
+    if failed_tests:
+        print(f"FAILED: {len(failed_tests)} of {total} validations failed:")
+        for failure in failed_tests:
+            print(f"  - {failure}")
+        return 1
+
+    print(f"All {total} validations passed ({passed}/{total}).")
+    return 0
+
+
 def _resolve_library_names(libraries_arg: str | None) -> list[str]:
     """Resolve library names from CLI argument or auto-discover.
 
@@ -291,10 +447,14 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Validate mip install and import for bundle packages.",
     )
-    parser.add_argument(
+    source_group = parser.add_mutually_exclusive_group(required=True)
+    source_group.add_argument(
         "--bundle-repo",
-        required=True,
         help="Bundle repository name (e.g. ChuMicro-Bundle-Experimental)",
+    )
+    source_group.add_argument(
+        "--staging-dir",
+        help="Path to a locally staged bundle directory",
     )
     parser.add_argument(
         "--libraries",
@@ -310,6 +470,13 @@ def main(argv: list[str] | None = None) -> int:
     if not library_names:
         print("No libraries found to validate.")
         return 1
+
+    if args.staging_dir:
+        return validate_local_staging(
+            staging_dir=args.staging_dir,
+            library_names=library_names,
+            binary=args.micropython_binary,
+        )
 
     return validate_mip_install(
         bundle_repo=args.bundle_repo,

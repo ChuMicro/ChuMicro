@@ -313,3 +313,5 @@ This was the largest single session. It addressed three areas: the workspace was
 
 **AGENTS.md consolidation:** Absorbed useful global rules from `copilot-instructions.md` (fabrication avoidance, simplicity, tradeoff surfacing, orphan cleanup) into a new "Working style" section in AGENTS.md. Removed the separate file. Reframed rules as contributor behavior guidance rather than restrictive prohibitions.
 
+**Pre-publish bundle validation:** Added `--staging-dir` mode to `validate-mip` that validates mip install + import from a locally staged bundle directory via a background HTTP server, rewriting `package.json` URLs from `github:` to `http://localhost:` on a temp copy. Integrated into the `bundle` jobs of both `release.yml` and `promote.yml` as a pre-push gate — validation now happens after staging artifacts but before pushing to the live bundle repo. The existing post-push `validate-mip` jobs remain as smoke tests against the live CDN. An earlier attempt at this feature (reverted) only added the validation half without testing it; this version was tested end-to-end locally including dependency resolution (runner → timing).
+
