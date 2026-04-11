@@ -179,7 +179,7 @@ style="margin-right: 16px; margin-bottom: 8px;">
 
 ### CircuitPython ([circup](https://github.com/adafruit/circup))
 
-[circup](https://github.com/adafruit/circup) is CircuitPython's package manager — \
+circup is CircuitPython's package manager — \
 it uses bundles to find third-party packages. Register the ChuMicro bundle once, \
 then install by name:
 

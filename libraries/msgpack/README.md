@@ -14,7 +14,7 @@ Works on CircuitPython, MicroPython, and CPython.
 
 ### CircuitPython ([circup](https://github.com/adafruit/circup))
 
-[circup](https://github.com/adafruit/circup) is CircuitPython's package manager — it uses bundles to find third-party packages. Register the ChuMicro bundle once, then install by name:
+circup is CircuitPython's package manager — it uses bundles to find third-party packages. Register the ChuMicro bundle once, then install by name:
 
 ```bash
 circup bundle-add ChuMicro/ChuMicro-Bundle
