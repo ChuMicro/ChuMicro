@@ -1,6 +1,6 @@
 # chumicro-runner
 
-<img src="../../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
+<img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 **A tick-based task scheduler — no async, no threads, just `runner.tick()` in your loop.**
 

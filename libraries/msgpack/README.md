@@ -1,6 +1,6 @@
 # chumicro-msgpack
 
-<img src="../../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
+<img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 **Compact [MessagePack](https://msgpack.org) serialization — much smaller than JSON.**
 
