@@ -177,8 +177,8 @@ class PacketReader:
         Args:
             buffer_size: Number of bytes to pre-allocate.
         """
-        self._buf = bytearray(buffer_size)  # allocated once
-        self._view = memoryview(self._buf)  # reusable view
+        self._buffer = bytearray(buffer_size)  # allocated once
+        self._view = memoryview(self._buffer)  # reusable view
 
     def read_into(self, source: object) -> memoryview:
         """Read from source into the pre-allocated buffer.
@@ -189,7 +189,7 @@ class PacketReader:
         Returns:
             A memoryview slice of the header bytes.
         """
-        source.readinto(self._buf)
+        source.readinto(self._buffer)
         return self._view[0:4]  # zero-copy slice
 ```
 
@@ -232,8 +232,8 @@ class FakeI2C:
         self._data = data
         self.read_count = 0
 
-    def readfrom_into(self, addr: int, buf: bytearray) -> None:
-        """Fill buf with the next predetermined response.
+    def readfrom_into(self, addr: int, buf: bytearray) -> None:  # noqa: CHU001
+        """Fill buffer with the next predetermined response.
 
         Args:
             addr: I2C device address.
