@@ -270,6 +270,36 @@ Successfully built chumicro_timing-0.1.15.tar.gz and chumicro_timing-0.1.15-py3-
 Built 4 package(s): libraries/compat, libraries/msgpack, libraries/runner, libraries/timing
 ```
 
+### Validate mip
+
+Tests that published libraries can be installed via MicroPython's `mip` package manager and imported successfully.  Both `.py` (source) and `.mpy6` (bytecode) formats are validated.  Requires a MicroPython unix-port binary (built with `prepare-micropython`) and network access to `raw.githubusercontent.com`.
+
+```bash
+# Validate specific libraries against the experimental bundle
+python scripts/run.py validate-mip \
+    --bundle-repo ChuMicro-Bundle-Experimental \
+    --libraries timing,runner
+
+# Validate all libraries against the stable bundle
+python scripts/run.py validate-mip --bundle-repo ChuMicro-Bundle
+```
+
+**When it passes:**
+
+```
+== chumicro_timing ==
+  [py] github:ChuMicro/ChuMicro-Bundle-Experimental/chumicro_timing
+    Installing ...
+    OK: install + import succeeded
+  [mpy6] github:ChuMicro/ChuMicro-Bundle-Experimental/mpy6/chumicro_timing
+    Installing ...
+    OK: install + import succeeded
+
+All 4 validations passed (4/4).
+```
+
+This runs automatically in CI after every experimental release and stable promotion.  Use it locally to verify bundle publishing before cutting a release.
+
 ## Commit workflow
 
 Stage your changes and commit. Git opens your default editor for the message:

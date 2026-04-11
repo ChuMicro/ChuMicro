@@ -365,6 +365,28 @@ python scripts/run.py tset 2>&1 | tail -5
 # Exit code: 2
 ```
 
+## 20. validate-mip
+
+```bash
+# ⏭️ Requires MicroPython binary and network access to raw.githubusercontent.com
+# ⏭️ Requires a public bundle repo to test against
+
+# ❌ Missing required --bundle-repo
+python scripts/run.py validate-mip 2>&1 | tail -5
+# 🔍 Output contains: "the following arguments are required: --bundle-repo"
+# Exit code: 2
+
+# ✅ Validate specific libraries against a bundle repo
+python scripts/run.py validate-mip --bundle-repo ChuMicro-Bundle-Experimental --libraries timing 2>&1 | tail -5
+# 🔍 Output contains: "All 2 validations passed (2/2)."
+# Exit code: 0
+
+# ✅ Validate with dependency resolution
+python scripts/run.py validate-mip --bundle-repo ChuMicro-Bundle-Experimental --libraries timing,runner 2>&1 | tail -5
+# 🔍 Output contains: "All 4 validations passed (4/4)."
+# Exit code: 0
+```
+
 ---
 
 ## Validation checklist
@@ -411,6 +433,9 @@ Use this to track which tasks have been validated:
 [ ] docs-deploy --channel invalid      (negative)
 [ ] preflight
 [ ] setup
+[ ] validate-mip (no --bundle-repo)  (negative)
+[ ] validate-mip --bundle-repo <repo> --libraries <name>
+[ ] validate-mip --bundle-repo <repo> --libraries <dep-lib>  (deps)
 [ ] unknown task                       (negative)
 ```
 
@@ -440,6 +465,7 @@ python scripts/run.py test -k timing/test_nonexistent_file/x 2>&1 | tail -3
 python scripts/run.py test --all --libraries timing 2>&1 | tail -3
 python scripts/run.py docs-deploy 2>&1 | tail -3
 python scripts/run.py docs-deploy --channel invalid 2>&1 | tail -3
+python scripts/run.py validate-mip 2>&1 | tail -3
 python scripts/run.py nonexistent-task 2>&1 | tail -3
 python scripts/run.py test-micropython-compatibility --micropython-binary /nonexistent 2>&1 | tail -3
 python scripts/run.py test-circuitpython-compatibility --circuitpython-binary /nonexistent 2>&1 | tail -3

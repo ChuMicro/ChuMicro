@@ -289,6 +289,46 @@ jobs:
           GH_TOKEN: ${{ secrets.BUNDLE_TOKEN }}
 
   # ---------------------------------------------------------------------------
+  # Validate that mip install + import works for the promoted stable package.
+  # Uses the MicroPython unix-port to install from ChuMicro-Bundle and verify
+  # that the library can be imported (both .py and .mpy6).
+  # ---------------------------------------------------------------------------
+  validate-mip:
+    name: Validate mip install (stable)
+    needs: [validate, bundle]
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - uses: actions/cache@v4
+        id: runtime-cache
+        with:
+          path: .tools
+          key: micropython-${{ hashFiles('target-runtimes.toml', 'scripts/prepare_micropython.py', 'scripts/shared.py') }}
+
+      - name: Install unix-port build dependencies
+        if: steps.runtime-cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libffi-dev pkg-config
+
+      - name: Prepare MicroPython unix-port
+        if: steps.runtime-cache.outputs.cache-hit != 'true'
+        run: python scripts/run.py prepare-micropython
+
+      - name: Validate mip install and import
+        run: |
+          python scripts/validate_mip_install.py \
+            --bundle-repo ChuMicro-Bundle \
+            --libraries "${{ needs.validate.outputs.library_name }}"
+
+  # ---------------------------------------------------------------------------
   # Deploy stable docs inline.
   #
   # Previously this job used fire-and-forget `gh workflow run` to trigger
