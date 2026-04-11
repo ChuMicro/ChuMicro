@@ -229,7 +229,7 @@ def build_bundle(
     # Dependencies reference the same bundle repo so that experimental
     # installs pull experimental deps and stable installs pull stable deps.
     mip_dependencies = [
-        [_dependency_to_mip_reference(dependency, bundle_repo), "latest"]
+        [_dependency_to_mip_reference(dependency, bundle_repo), "HEAD"]
         for dependency in _read_chumicro_dependencies(library_dir)
     ]
     if mip_dependencies:
@@ -287,7 +287,7 @@ def build_bundle(
 
         mpy_manifest: dict = {"urls": mpy_urls, "version": version}
         mpy_mip_dependencies = [
-            [_dependency_to_mpy_mip_reference(dependency, bundle_repo), "latest"]
+            [_dependency_to_mpy_mip_reference(dependency, bundle_repo), "HEAD"]
             for dependency in _read_chumicro_dependencies(library_dir)
         ]
         if mpy_mip_dependencies:
