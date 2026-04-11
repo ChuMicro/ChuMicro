@@ -99,13 +99,9 @@ The public API (`.func`, `.args`, `.keywords`, `__call__`, `__repr__`) is identi
 
 📖 **[Stable docs](https://chumicro.github.io/ChuMicro/compat/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/compat/experimental/)**
 
-Browse the docs:
-
-- [User guide](https://chumicro.github.io/ChuMicro/compat/stable/guide/) — what's polyfilled and why, usage patterns
-- [API reference](https://chumicro.github.io/ChuMicro/compat/stable/api/) — full API documentation
-
 ## Find this library
 
+- **All libraries:** [chumicro.github.io/ChuMicro](https://chumicro.github.io/ChuMicro/)
 - **PyPI:** [chumicro-compat](https://pypi.org/project/chumicro-compat/)
 - **Bundle:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) (CircuitPython & MicroPython)
 - **Source:** [ChuMicro/ChuMicro](https://github.com/ChuMicro/ChuMicro) — cross-runtime Python libraries for ESP32, RP2040, and other microcontrollers.

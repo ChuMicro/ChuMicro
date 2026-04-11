@@ -253,15 +253,9 @@ Works on CPython, MicroPython, and CircuitPython.
 📖 **[Stable docs](https://chumicro.github.io/ChuMicro/{name}/stable/)** · \
 **[Experimental docs](https://chumicro.github.io/ChuMicro/{name}/experimental/)**
 
-Browse the docs:
-
-- [User guide](https://chumicro.github.io/ChuMicro/{name}/stable/guide/)
-- [API reference](https://chumicro.github.io/ChuMicro/{name}/stable/api/)
-<!-- If this library has a testing submodule, uncomment the next line: -->
-<!-- - [Testing helpers](https://chumicro.github.io/ChuMicro/{name}/stable/testing/) -->
-
 ## Find this library
 
+- **All libraries:** [chumicro.github.io/ChuMicro](https://chumicro.github.io/ChuMicro/)
 - **PyPI:** [chumicro-{name}](https://pypi.org/project/chumicro-{name}/)
 - **Bundle:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle)\
  (CircuitPython & MicroPython)

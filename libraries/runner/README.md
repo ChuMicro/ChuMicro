@@ -270,14 +270,9 @@ All classes use only basic Python features. Works identically on CPython, MicroP
 
 📖 **[Stable docs](https://chumicro.github.io/ChuMicro/runner/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/runner/experimental/)**
 
-Browse the docs:
-
-- [User guide](https://chumicro.github.io/ChuMicro/runner/stable/guide/) — the pattern, getting started, writing components
-- [API reference](https://chumicro.github.io/ChuMicro/runner/stable/api/) — full API documentation
-- [Testing helpers](https://chumicro.github.io/ChuMicro/runner/stable/testing/) — using `CallRecorder` in your tests
-
 ## Find this library
 
+- **All libraries:** [chumicro.github.io/ChuMicro](https://chumicro.github.io/ChuMicro/)
 - **PyPI:** [chumicro-runner](https://pypi.org/project/chumicro-runner/)
 - **Bundle:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) (CircuitPython & MicroPython)
 - **Source:** [ChuMicro/ChuMicro](https://github.com/ChuMicro/ChuMicro) — cross-runtime Python libraries for ESP32, RP2040, and other microcontrollers.
