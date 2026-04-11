@@ -122,13 +122,9 @@ Use `pack`/`unpack` when writing to files, sockets, or NVM.  Use `packb`/`unpack
 
 📖 **[Stable docs](https://chumicro.github.io/ChuMicro/msgpack/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/msgpack/experimental/)**
 
-Browse the docs:
-
-- [User guide](https://chumicro.github.io/ChuMicro/msgpack/stable/guide/) — getting started, usage patterns, size comparison
-- [API reference](https://chumicro.github.io/ChuMicro/msgpack/stable/api/) — full API documentation
-
 ## Find this library
 
+- **All libraries:** [chumicro.github.io/ChuMicro](https://chumicro.github.io/ChuMicro/)
 - **PyPI:** [chumicro-msgpack](https://pypi.org/project/chumicro-msgpack/)
 - **Bundle:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) (CircuitPython & MicroPython)
 - **Source:** [ChuMicro/ChuMicro](https://github.com/ChuMicro/ChuMicro) — cross-runtime Python libraries for ESP32, RP2040, and other microcontrollers.
