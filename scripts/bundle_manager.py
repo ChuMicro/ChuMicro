@@ -3,6 +3,15 @@
 Copies deployable .py source files, compiles .mpy bytecode with mpy-cross,
 and generates a mip-compatible package.json manifest.
 
+CircuitPython and MicroPython use different mpy-cross compilers that produce
+incompatible .mpy files (different magic bytes: 'C' vs 'M').  The bundle
+stages separate directories for each runtime:
+
+- ``circuitpython-10.x-mpy/`` — compiled with CircuitPython mpy-cross,
+  consumed by circup via zip bundles.
+- ``mpy6/`` — compiled with MicroPython mpy-cross, consumed by mip via
+  ``package.json`` manifests.
+
 The two-repo bundle strategy (stable vs. experimental) is defined in
 ``plans/decisions/0018-distribution-bundle-repo.md``.
 
@@ -15,10 +24,13 @@ Subcommands:
     next-date-tag      Print the next available date-based tag for a bundle repo.
 
 Examples:
-    python scripts/bundle_manager.py stage libraries/timing 0.1.0 .bundle-staging
-    python scripts/bundle_manager.py stage-matrix .bundle-staging --matrix '{"include": [...]}'
+    python scripts/bundle_manager.py stage libraries/timing 0.1.0 .bundle-staging \\
+        --cp-mpy-cross .tools/circuitpython-10.1.4/mpy-cross/build/mpy-cross \\
+        --mp-mpy-cross mpy-cross
+    python scripts/bundle_manager.py stage-matrix .bundle-staging --matrix '{"include": [...]}' \\
+        --cp-mpy-cross cp-mpy-cross --mp-mpy-cross mpy-cross
     python scripts/bundle_manager.py readme --experimental -o README.md
-    python scripts/bundle_manager.py circup-zip .bundle-repo .circup-zips \
+    python scripts/bundle_manager.py circup-zip .bundle-repo .circup-zips \\
         --repo-name ChuMicro-Bundle
     python scripts/bundle_manager.py patch-experimental libraries/timing
     python scripts/bundle_manager.py next-date-tag .bundle-repo
@@ -48,9 +60,17 @@ from workspace import ROOT, find_package_dir
 STABLE_BUNDLE_REPO = "ChuMicro-Bundle"
 EXPERIMENTAL_BUNDLE_REPO = "ChuMicro-Bundle-Experimental"
 
-#: mpy bytecode format version folder name.  mpy v6 is used by CircuitPython 10.x
-#: and MicroPython 1.24+.  See Decision 0024.
+#: MicroPython mpy bytecode format version folder name.  mpy v6 is used by
+#: MicroPython 1.24+.  Contains .mpy files compiled with MicroPython's
+#: mpy-cross (magic byte 'M') and package.json manifests for mip.
+#: See Decision 0024.
 MPY_FORMAT_FOLDER = "mpy6"
+
+#: CircuitPython .mpy folder name.  Follows Adafruit's naming convention
+#: where "10.x" reflects the CircuitPython version range.  Contains .mpy
+#: files compiled with CircuitPython's mpy-cross (magic byte 'C'), consumed
+#: by circup via zip bundles.  See Decision 0024.
+CP_MPY_FOLDER = "circuitpython-10.x-mpy"
 
 
 def _find_bundle_modules(library_dir: Path) -> tuple[str, Path, list[Path]]:
@@ -135,21 +155,33 @@ def build_bundle(
     library_dir: Path,
     version: str,
     staging_dir: Path,
-    mpy_cross: str = "mpy-cross",
     *,
+    cp_mpy_cross: str | None = None,
+    mp_mpy_cross: str | None = None,
     experimental: bool = False,
 ) -> None:
     """Stage bundle artifacts for a single library.
 
     Creates ``<staging_dir>/<package_name>/`` containing .py source and a
-    mip package.json manifest, and ``<staging_dir>/mpy6/<package_name>/``
-    containing pre-compiled .mpy bytecode and its own package.json.
+    mip package.json manifest.
+
+    When *cp_mpy_cross* is provided, compiles CircuitPython .mpy bytecode
+    into ``<staging_dir>/circuitpython-10.x-mpy/<package_name>/`` for circup
+    zip bundles.
+
+    When *mp_mpy_cross* is provided, compiles MicroPython .mpy bytecode
+    into ``<staging_dir>/mpy6/<package_name>/`` with a package.json manifest
+    for mip.
+
+    CircuitPython and MicroPython mpy-cross produce incompatible .mpy files
+    (magic byte 'C' vs 'M'), so each runtime requires its own compiler.
 
     Args:
         library_dir: Root directory of the library.
         version: Version string for the manifest.
         staging_dir: Output directory for staged artifacts.
-        mpy_cross: Path to the mpy-cross binary.
+        cp_mpy_cross: Path to CircuitPython's mpy-cross binary.
+        mp_mpy_cross: Path to MicroPython's mpy-cross binary.
         experimental: When True, package.json URLs point to the
             experimental bundle repo.
     """
@@ -161,9 +193,7 @@ def build_bundle(
     output_dir = staging_dir / package_name
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Copy .py source files into the root package directory.  The .mpy
-    # bytecode goes into the mpy6/ folder (see below) so that each mpy
-    # format version has its own self-contained directory.
+    # Copy .py source files into the root package directory.
     for source_file in python_files:
         relative_path = source_file.relative_to(package_dir)
         python_dest_file = output_dir / relative_path
@@ -178,21 +208,12 @@ def build_bundle(
     if readme_source.exists():
         shutil.copy2(readme_source, output_dir / "README.md")
 
-    # Generate mip package.json manifest.
+    # Generate mip package.json manifest for .py source.
     #
-    # mip (MicroPython's package installer) reads package.json to know
-    # which files to download and where to place them on-device.  Each
-    # entry in "urls" is [target_path, source_url]:
-    #   - target_path: on-device path relative to /lib/
-    #   - source_url:  github: URI pointing to the file in this bundle repo
-    #
-    # The manifest lists .py source files, not .mpy bytecode.  .mpy files
-    # are tied to a specific bytecode version (e.g. mpy v6 for CP 10.x)
-    # and would fail on boards running a different version.  MicroPython
-    # compiles .py to bytecode on import, so source works everywhere.
-    # Pre-compiled .mpy bytecode lives under mpy6/ and is consumed by
-    # circup (which handles version matching via zip naming) and by the
-    # mpy6/ mip install path.
+    # mip reads package.json to know which files to download and where to
+    # place them on-device.  Each entry in "urls" is [target_path, source_url].
+    # The root manifest lists .py source files — the safe universal path
+    # that works on all runtimes without version matching.
     urls = []
     for source_file in python_files:
         relative_path = source_file.relative_to(package_dir)
@@ -216,48 +237,73 @@ def build_bundle(
         json.dump(manifest, manifest_file, indent=2)
         manifest_file.write("\n")
 
-    # Compile .mpy bytecode into mpy6/ and generate the mpy6/ manifest —
-    # an opt-in mip install path for pre-compiled .mpy bytecode
-    # (Decision 0024).  Each mpy format version gets its own
-    # self-contained directory with both .mpy files and a package.json.
-    mpy_manifest_dir = staging_dir / MPY_FORMAT_FOLDER / package_name
-    mpy_manifest_dir.mkdir(parents=True, exist_ok=True)
-
-    mpy_urls = []
-    for source_file in python_files:
-        relative_path = source_file.relative_to(package_dir)
-        mpy_relative_path = relative_path.with_suffix(".mpy").as_posix()
-        mpy_dest_file = mpy_manifest_dir / relative_path.with_suffix(".mpy")
-        mpy_dest_file.parent.mkdir(parents=True, exist_ok=True)
-        _compile_mpy(source_file, mpy_dest_file, mpy_cross)
-        target = f"{package_name}/{mpy_relative_path}"
-        source = (
-            f"github:ChuMicro/{bundle_repo}"
-            f"/{MPY_FORMAT_FOLDER}/{package_name}/{mpy_relative_path}"
-        )
-        mpy_urls.append([target, source])
-
-    mpy_manifest: dict = {"urls": mpy_urls, "version": version}
-    mpy_mip_dependencies = [
-        [_dependency_to_mpy_mip_reference(dependency), "latest"]
-        for dependency in _read_chumicro_dependencies(library_dir)
-    ]
-    if mpy_mip_dependencies:
-        mpy_manifest["deps"] = mpy_mip_dependencies
-
-    with open(mpy_manifest_dir / "package.json", "w") as mpy_manifest_file:
-        json.dump(mpy_manifest, mpy_manifest_file, indent=2)
-        mpy_manifest_file.write("\n")
-
     print(f"Staged {package_name} v{version} -> {output_dir}")
-    print(f"Staged {MPY_FORMAT_FOLDER}/{package_name} bytecode -> {mpy_manifest_dir}")
+
+    # --- CircuitPython .mpy (for circup zip bundles) ---
+    #
+    # CircuitPython's mpy-cross produces .mpy files with magic byte 'C'.
+    # These go into circuitpython-10.x-mpy/ following Adafruit's naming
+    # convention where "10.x" is the CircuitPython version range.  circup
+    # consumes these via zip bundles named with the same pattern.
+    # No package.json needed — circup uses zip naming, not mip manifests.
+    if cp_mpy_cross is not None:
+        cp_mpy_dir = staging_dir / CP_MPY_FOLDER / package_name
+        cp_mpy_dir.mkdir(parents=True, exist_ok=True)
+
+        for source_file in python_files:
+            relative_path = source_file.relative_to(package_dir)
+            mpy_dest_file = cp_mpy_dir / relative_path.with_suffix(".mpy")
+            mpy_dest_file.parent.mkdir(parents=True, exist_ok=True)
+            _compile_mpy(source_file, mpy_dest_file, cp_mpy_cross)
+
+        print(f"Staged {CP_MPY_FOLDER}/{package_name} (CircuitPython) -> {cp_mpy_dir}")
+
+    # --- MicroPython .mpy (for mip install) ---
+    #
+    # MicroPython's mpy-cross produces .mpy files with magic byte 'M'.
+    # These go into mpy6/ following MicroPython's mpy format version
+    # convention.  A package.json manifest lets MicroPython users opt in
+    # to .mpy bytecode via mip:
+    #   mpremote mip install github:ChuMicro/ChuMicro-Bundle/mpy6/chumicro_timing
+    if mp_mpy_cross is not None:
+        mpy_manifest_dir = staging_dir / MPY_FORMAT_FOLDER / package_name
+        mpy_manifest_dir.mkdir(parents=True, exist_ok=True)
+
+        mpy_urls = []
+        for source_file in python_files:
+            relative_path = source_file.relative_to(package_dir)
+            mpy_relative_path = relative_path.with_suffix(".mpy").as_posix()
+            mpy_dest_file = mpy_manifest_dir / relative_path.with_suffix(".mpy")
+            mpy_dest_file.parent.mkdir(parents=True, exist_ok=True)
+            _compile_mpy(source_file, mpy_dest_file, mp_mpy_cross)
+            target = f"{package_name}/{mpy_relative_path}"
+            source = (
+                f"github:ChuMicro/{bundle_repo}"
+                f"/{MPY_FORMAT_FOLDER}/{package_name}/{mpy_relative_path}"
+            )
+            mpy_urls.append([target, source])
+
+        mpy_manifest: dict = {"urls": mpy_urls, "version": version}
+        mpy_mip_dependencies = [
+            [_dependency_to_mpy_mip_reference(dependency), "latest"]
+            for dependency in _read_chumicro_dependencies(library_dir)
+        ]
+        if mpy_mip_dependencies:
+            mpy_manifest["deps"] = mpy_mip_dependencies
+
+        with open(mpy_manifest_dir / "package.json", "w") as mpy_manifest_file:
+            json.dump(mpy_manifest, mpy_manifest_file, indent=2)
+            mpy_manifest_file.write("\n")
+
+        print(f"Staged {MPY_FORMAT_FOLDER}/{package_name} (MicroPython) -> {mpy_manifest_dir}")
 
 
 def stage_matrix(
     staging_dir: Path,
     matrix_json: str,
-    mpy_cross: str = "mpy-cross",
     *,
+    cp_mpy_cross: str | None = None,
+    mp_mpy_cross: str | None = None,
     experimental: bool = False,
 ) -> None:
     """Stage bundle artifacts for all libraries in a JSON matrix.
@@ -265,7 +311,8 @@ def stage_matrix(
     Args:
         staging_dir: Output directory for staged artifacts.
         matrix_json: GitHub Actions matrix JSON string.
-        mpy_cross: Path to the mpy-cross binary.
+        cp_mpy_cross: Path to CircuitPython's mpy-cross binary.
+        mp_mpy_cross: Path to MicroPython's mpy-cross binary.
         experimental: When True, stage as experimental channel.
     """
     data = json.loads(matrix_json)
@@ -274,7 +321,8 @@ def stage_matrix(
             Path(entry["library_dir"]),
             entry["version"],
             staging_dir,
-            mpy_cross,
+            cp_mpy_cross=cp_mpy_cross,
+            mp_mpy_cross=mp_mpy_cross,
             experimental=experimental,
         )
 
@@ -296,6 +344,10 @@ def build_circup_zips(
     date_tag: str | None = None,
 ) -> list[Path]:
     """Build circup-format zip bundles from a bundle directory.
+
+    The source zip contains .py files from root ``chumicro_*`` directories.
+    The bytecode zip contains .mpy files from ``circuitpython-10.x-mpy/``
+    directories, compiled with CircuitPython's mpy-cross (magic byte 'C').
 
     Args:
         bundle_dir: Directory containing ``chumicro_*`` package directories.
@@ -321,12 +373,13 @@ def build_circup_zips(
         print(f"No chumicro_* packages found in {bundle_dir}")
         return []
 
-    # .mpy bytecode lives under mpy6/chumicro_* (one folder per mpy
-    # format version).  Collect those directories for the bytecode zip.
-    mpy_base = bundle_dir / MPY_FORMAT_FOLDER
-    mpy_package_dirs = sorted(
+    # CircuitPython .mpy bytecode lives under circuitpython-10.x-mpy/
+    # (compiled with CircuitPython's mpy-cross, magic byte 'C').
+    # The folder name follows Adafruit's naming convention.
+    cp_mpy_base = bundle_dir / CP_MPY_FOLDER
+    cp_mpy_package_dirs = sorted(
         entry
-        for entry in (mpy_base.iterdir() if mpy_base.is_dir() else [])
+        for entry in (cp_mpy_base.iterdir() if cp_mpy_base.is_dir() else [])
         if entry.is_dir() and entry.name.startswith("chumicro_")
     )
 
@@ -351,8 +404,8 @@ def build_circup_zips(
                 archive_path = f"{source_bundle_name}/lib/{package_name}/{relative_path}"
                 source_zip.write(source_file, archive_path)
 
-        # .mpy bytecode bundle: all .mpy files from mpy6/ directories.
-        for mpy_dir in mpy_package_dirs:
+        # .mpy bytecode bundle: CircuitPython .mpy from circuitpython-10.x-mpy/.
+        for mpy_dir in cp_mpy_package_dirs:
             package_name = mpy_dir.name
             for bytecode_file in sorted(mpy_dir.rglob("*.mpy")):
                 relative_path = bytecode_file.relative_to(mpy_dir)
@@ -565,7 +618,7 @@ mip.install("github:{_GITHUB_ORG}/{bundle_repo}/chumicro_timing")
 
 > **Want pre-compiled `.mpy` bytecode?** Add `{MPY_FORMAT_FOLDER}/` before the package name \
 for faster startup and lower RAM usage on boards with mpy format v6 \
-(MicroPython 1.24+, CircuitPython 10.x):
+(MicroPython 1.24+):
 > ```
 > mpremote mip install github:{_GITHUB_ORG}/{bundle_repo}/{MPY_FORMAT_FOLDER}/chumicro_timing
 > ```
@@ -585,8 +638,16 @@ pip install chumicro-timing{pip_suffix}
 {library_rows}
 
 Each root directory contains `.py` source and a `package.json` manifest \
-for mip.  Pre-compiled `.mpy` bytecode (CircuitPython 10.x, mpy v6) lives \
-under `{MPY_FORMAT_FOLDER}/`.
+for mip.  Pre-compiled `.mpy` bytecode is stored in two runtime-specific \
+directories:
+
+- **`{CP_MPY_FOLDER}/`** — compiled with CircuitPython's mpy-cross, \
+used by circup zip bundles.
+- **`{MPY_FORMAT_FOLDER}/`** — compiled with MicroPython's mpy-cross, \
+installable via `mip`.
+
+CircuitPython and MicroPython `.mpy` files are not interchangeable — each \
+runtime's mpy-cross embeds a different magic byte in the header.
 
 ## About
 
@@ -687,7 +748,12 @@ def main() -> None:
     stage_parser.add_argument("version", help="Library version string")
     stage_parser.add_argument("staging_dir", type=Path, help="Output staging directory")
     stage_parser.add_argument(
-        "--mpy-cross", default="mpy-cross", help="Path to mpy-cross binary"
+        "--cp-mpy-cross", default=None,
+        help="Path to CircuitPython's mpy-cross binary",
+    )
+    stage_parser.add_argument(
+        "--mp-mpy-cross", default=None,
+        help="Path to MicroPython's mpy-cross binary",
     )
     stage_parser.add_argument(
         "--experimental",
@@ -709,7 +775,12 @@ def main() -> None:
         help='JSON matrix string (e.g. \'{"include": [{"lib_dir": "...", "version": "..."}]}\')',
     )
     stage_matrix_parser.add_argument(
-        "--mpy-cross", default="mpy-cross", help="Path to mpy-cross binary"
+        "--cp-mpy-cross", default=None,
+        help="Path to CircuitPython's mpy-cross binary",
+    )
+    stage_matrix_parser.add_argument(
+        "--mp-mpy-cross", default=None,
+        help="Path to MicroPython's mpy-cross binary",
     )
     stage_matrix_parser.add_argument(
         "--experimental",
@@ -794,14 +865,16 @@ def main() -> None:
             args.library_dir,
             args.version,
             args.staging_dir,
-            args.mpy_cross,
+            cp_mpy_cross=args.cp_mpy_cross,
+            mp_mpy_cross=args.mp_mpy_cross,
             experimental=args.experimental,
         )
     elif args.command == "stage-matrix":
         stage_matrix(
             args.staging_dir,
             args.matrix,
-            args.mpy_cross,
+            cp_mpy_cross=args.cp_mpy_cross,
+            mp_mpy_cross=args.mp_mpy_cross,
             experimental=args.experimental,
         )
     elif args.command == "circup-zip":
