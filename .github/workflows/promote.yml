@@ -276,7 +276,7 @@ jobs:
         run: |
           library_name="${{ needs.validate.outputs.library_name }}"
           version="${{ needs.validate.outputs.version }}"
-          body="## Updated libraries\n\n- **${library_name}** v${version}"
+          body=$(printf "## Updated libraries\n\n- **%s** v%s" "$library_name" "$version")
 
           gh release create "${{ env.date_tag }}" \
             --repo "ChuMicro/ChuMicro-Bundle" \
