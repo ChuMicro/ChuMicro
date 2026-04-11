@@ -272,7 +272,6 @@ All classes use only basic Python features. Works identically on CPython, MicroP
 
 ## Find this library
 
-- **All libraries:** [chumicro.github.io/ChuMicro](https://chumicro.github.io/ChuMicro/)
 - **PyPI:** [chumicro-runner](https://pypi.org/project/chumicro-runner/)
 - **Bundle:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) (CircuitPython & MicroPython)
 - **Source:** [libraries/runner](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner)

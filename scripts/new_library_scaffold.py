@@ -255,7 +255,6 @@ Works on CPython, MicroPython, and CircuitPython.
 
 ## Find this library
 
-- **All libraries:** [chumicro.github.io/ChuMicro](https://chumicro.github.io/ChuMicro/)
 - **PyPI:** [chumicro-{name}](https://pypi.org/project/chumicro-{name}/)
 - **Bundle:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle)\
  (CircuitPython & MicroPython)
