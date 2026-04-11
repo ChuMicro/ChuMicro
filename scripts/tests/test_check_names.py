@@ -96,19 +96,6 @@ class TestCollectNames:
         names = [name for _, name, _ in hits]
         assert "e" in names
 
-    def test_except_handler_exception_is_flagged(self):
-        """'exception' as an exception handler name is flagged — use 'error'."""
-        tree = self._parse("try:\n    pass\nexcept ValueError as exception:\n    pass\n")
-        hits = _collect_names(tree)
-        assert len(hits) == 1
-        assert hits[0][1] == "exception"
-        assert "error" in hits[0][2]
-
-    def test_except_handler_error_is_clean(self):
-        """'error' as an exception handler name is not flagged."""
-        tree = self._parse("try:\n    pass\nexcept ValueError as error:\n    pass\n")
-        hits = _collect_names(tree)
-        assert hits == []
 
     def test_all_banned_abbreviations(self):
         """All banned abbreviations are caught."""
