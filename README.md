@@ -171,7 +171,7 @@ Everything goes through one command: `python scripts/run.py <task>`.
 
 | Task | What it does |
 |---|---|
- `deploy-documents --channel <ch>`  Deploy versioned docs to gh-pages (CI) 
+| `docs-deploy --channel <ch>` | Deploy versioned docs to gh-pages (CI) |
 | `prepare-micropython` | Build the pinned MicroPython unix-port binary |
 | `prepare-circuitpython` | Build the pinned CircuitPython unix-port binary |
 | `test-micropython-compatibility` | Cross-runtime tests under MicroPython |
@@ -210,7 +210,7 @@ chumicro/
 ├── scripts/               # Developer tasks (run.py is the entry point)
 ├── plans/                 # Roadmap, decisions, session logs
 ├── .github/
-│   ├── workflows/         # CI, release, promote, deploy-documents
+│   ├── workflows/         # CI, release, promote, docs-deploy
 │   └── skills/            # Agent skill instructions
 ├── target-runtimes.toml   # Pinned runtime versions
 ├── devices.example.yml    # Template for local board registration

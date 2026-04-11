@@ -8,7 +8,7 @@ Usage (from repository root)::
 
     python scripts/generate_landing_page.py > /tmp/index.html
 
-The deploy-documents workflow calls this to regenerate the page on every push.
+The docs-deploy workflow calls this to regenerate the page on every push.
 """
 # ruff: noqa: E501 — embedded HTML/CSS in f-strings exceeds line limits.
 

@@ -294,25 +294,25 @@ python scripts/run.py test-runtime-matrix 2>&1 | tail -10
 # Exit code: 0 if all pass
 ```
 
-## 15. deploy-documents
+## 15. docs-deploy
 
 ```bash
 # ❌ Missing required --channel
-python scripts/run.py deploy-documents 2>&1 | tail -5
+python scripts/run.py docs-deploy 2>&1 | tail -5
 # 🔍 Output contains: "the following arguments are required: --channel"
 # Exit code: 2
 
 # ❌ Invalid channel value
-python scripts/run.py deploy-documents --channel invalid 2>&1 | tail -5
+python scripts/run.py docs-deploy --channel invalid 2>&1 | tail -5
 # 🔍 Output contains: "invalid choice"
 # Exit code: 2
 
 # ✅ Valid channel (but may fail if gh-pages/mike not set up locally)
-# python scripts/run.py deploy-documents --channel experimental 2>&1 | tail -10
+# python scripts/run.py docs-deploy --channel experimental 2>&1 | tail -10
 # 🔍 Output starts with deploy messages
 
 # ✅ With library filter
-# python scripts/run.py deploy-documents --channel experimental --libraries timing 2>&1 | tail -10
+# python scripts/run.py docs-deploy --channel experimental --libraries timing 2>&1 | tail -10
 ```
 
 ## 16. preflight
@@ -407,8 +407,8 @@ Use this to track which tasks have been validated:
 [ ] test-micropython-compat --micropython-binary /bad  (negative)
 [ ] test-circuitpython-compatibility
 [ ] test-circuitpython-compat --circuitpython-binary /bad  (negative)
-[ ] deploy-documents (no --channel)         (negative)
-[ ] deploy-documents --channel invalid      (negative)
+[ ] docs-deploy (no --channel)         (negative)
+[ ] docs-deploy --channel invalid      (negative)
 [ ] preflight
 [ ] setup
 [ ] unknown task                       (negative)
@@ -438,8 +438,8 @@ python scripts/run.py test --libraries nonexistent 2>&1 | tail -3
 python scripts/run.py test -k bad_format 2>&1 | tail -3
 python scripts/run.py test -k timing/test_nonexistent_file/x 2>&1 | tail -3
 python scripts/run.py test --all --libraries timing 2>&1 | tail -3
-python scripts/run.py deploy-documents 2>&1 | tail -3
-python scripts/run.py deploy-documents --channel invalid 2>&1 | tail -3
+python scripts/run.py docs-deploy 2>&1 | tail -3
+python scripts/run.py docs-deploy --channel invalid 2>&1 | tail -3
 python scripts/run.py nonexistent-task 2>&1 | tail -3
 python scripts/run.py test-micropython-compatibility --micropython-binary /nonexistent 2>&1 | tail -3
 python scripts/run.py test-circuitpython-compatibility --circuitpython-binary /nonexistent 2>&1 | tail -3
