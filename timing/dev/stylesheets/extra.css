@@ -2,7 +2,10 @@
  *
  * The slate scheme provides the dark background.  These overrides improve
  * font sizing, code block contrast, and add warm accent touches to match
- * the ChuMicro branding palette (honey badger: oranges, teals, deep navy).
+ * the ChuMicro branding palette (honey badger: oranges, golds, warm darks).
+ *
+ * Palette extracted from support/docs/chumicro_tip.png.  All hues stay in
+ * the 10°–50° orange/gold range; no greens or blues.
  *
  * This is the single source of truth.  The build copies it into each
  * library's docs/stylesheets/ at build time — do not duplicate this file.
@@ -12,14 +15,20 @@
 :root {
   --chumicro-orange: #e87518;
   --chumicro-orange-dim: #c05e10;
+  --chumicro-red-orange: #d4460f;
   --chumicro-gold: #f0b050;
-  --chumicro-teal: #5da4aa;
-  --chumicro-surface: #1a2230;
-  --chumicro-surface-border: #2a3a4a;
+  --chumicro-cream: #e8d296;
+  --chumicro-surface: #1c1510;
+  --chumicro-surface-border: #3a2a1a;
 }
 
-/* Override Material's accent color to our orange */
+/* Override Material's primary and accent colors to warm orange tones */
 [data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #c05e10;
+  --md-primary-fg-color--light: #e87518;
+  --md-primary-fg-color--dark: #9a4a0c;
+  --md-primary-bg-color: #fff;
+  --md-primary-bg-color--light: rgba(255, 255, 255, 0.7);
   --md-accent-fg-color: #e87518;
   --md-accent-fg-color--transparent: rgba(232, 117, 24, 0.1);
 }
