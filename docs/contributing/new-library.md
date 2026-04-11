@@ -115,9 +115,9 @@ try:
     from micropython import const
 except ImportError:
 
-    def const(x: int) -> int:
+    def const(value: int) -> int:
         """Identity fallback so const() works on CPython."""
-        return x
+        return value
 
 # ❌ Without const — these are regular variables, allocated on the heap
 _PERIOD = 1 << 29
@@ -232,14 +232,14 @@ class FakeI2C:
         self._data = data
         self.read_count = 0
 
-    def readfrom_into(self, addr: int, buf: bytearray) -> None:  # noqa: CHU001
+    def readfrom_into(self, address: int, buffer: bytearray) -> None:
         """Fill buffer with the next predetermined response.
 
         Args:
-            addr: I2C device address.
-            buf: Buffer to fill with response data.
+            address: I2C device address.
+            buffer: Buffer to fill with response data.
         """
-        buf[:] = self._data[self.read_count]
+        buffer[:] = self._data[self.read_count]
         self.read_count += 1
 
 

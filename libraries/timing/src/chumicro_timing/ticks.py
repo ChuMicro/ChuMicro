@@ -23,9 +23,9 @@ try:
     from micropython import const
 except ImportError:  # CPython — const() is a no-op on standard Python.
 
-    def const(x: int) -> int:  # noqa: CHU001 — matches micropython.const() API
+    def const(value: int) -> int:
         """Identity fallback so ``const()`` works on CPython."""
-        return x
+        return value
 
 
 _TICKS_PERIOD = const(1 << 29)
