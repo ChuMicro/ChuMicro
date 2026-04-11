@@ -4,7 +4,7 @@
 
 **A tick-based task scheduler — no async, no threads, just `runner.tick()` in your loop.**
 
-Register services with check/handle methods, add periodic callbacks, and the runner dispatches everything on a shared timestamp. Each service runs on its own schedule while you write the interesting parts. Works on CircuitPython, MicroPython, and CPython. Built on [timing](../timing/).
+Register services with check/handle methods, add periodic callbacks, and the runner dispatches everything on a shared timestamp. Each service runs on its own schedule while you write the interesting parts. Works on CircuitPython, MicroPython, and CPython. Built on [timing](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing).
 
 <br clear="left">
 
@@ -246,7 +246,7 @@ assert recorder.calls == [100]
 
 ## Dependencies
 
-Runner depends on [timing](../timing/) for its tick source and tick arithmetic (`ticks_diff`, `ticks_add`). All three package managers resolve this automatically — just install `chumicro-runner` and timing comes along.
+Runner depends on [timing](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing) for its tick source and tick arithmetic (`ticks_diff`, `ticks_add`). All three package managers resolve this automatically — just install `chumicro-runner` and timing comes along.
 
 ## Platform support
 
@@ -270,11 +270,11 @@ All classes use only basic Python features. Works identically on CPython, MicroP
 
 📖 **[Stable docs](https://chumicro.github.io/ChuMicro/runner/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/runner/experimental/)**
 
-Browse on GitHub:
+Browse the docs:
 
-- [User guide](docs/guide.md) — the pattern, getting started, writing components
-- [API reference](docs/api.md) — full API documentation
-- [Testing helpers](docs/testing.md) — using `CallRecorder` in your tests
+- [User guide](https://chumicro.github.io/ChuMicro/runner/stable/guide/) — the pattern, getting started, writing components
+- [API reference](https://chumicro.github.io/ChuMicro/runner/stable/api/) — full API documentation
+- [Testing helpers](https://chumicro.github.io/ChuMicro/runner/stable/testing/) — using `CallRecorder` in your tests
 
 ## Find this library
 

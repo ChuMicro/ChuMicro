@@ -94,7 +94,7 @@ while True:
 
 ## Related libraries
 
-For structured task scheduling with multiple services, see [runner](../runner/). Runner is built on timing — it captures `ticks_ms()` once per tick and dispatches services on a shared timestamp.
+For structured task scheduling with multiple services, see [runner](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner). Runner is built on timing — it captures `ticks_ms()` once per tick and dispatches services on a shared timestamp.
 
 ## Platform support
 
@@ -146,11 +146,11 @@ assert heartbeat.poll(now) is True
 
 📖 **[Stable docs](https://chumicro.github.io/ChuMicro/timing/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/timing/experimental/)**
 
-Browse on GitHub:
+Browse the docs:
 
-- [User guide](docs/guide.md) — getting started, usage patterns, platform notes
-- [API reference](docs/api.md) — full API documentation
-- [Testing helpers](docs/testing.md) — using `FakeTicks` in your tests
+- [User guide](https://chumicro.github.io/ChuMicro/timing/stable/guide/) — getting started, usage patterns, platform notes
+- [API reference](https://chumicro.github.io/ChuMicro/timing/stable/api/) — full API documentation
+- [Testing helpers](https://chumicro.github.io/ChuMicro/timing/stable/testing/) — using `FakeTicks` in your tests
 
 ## Find this library
 
