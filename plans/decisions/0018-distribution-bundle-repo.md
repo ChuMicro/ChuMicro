@@ -54,7 +54,7 @@ Each library directory contains both `.py` and `.mpy` for every module, plus a `
 
 ### 3. `mip` installation via `package.json`
 
-Each library's `package.json` lists `.mpy` files as the default targets.  Users install the stable channel with:
+Each library's `package.json` lists `.py` source files as the targets.  MicroPython compiles `.py` to bytecode on import, so source works on all mpy versions.  The `.mpy` bytecode files in the bundle are consumed by circup (which handles version matching via the zip naming convention), not by mip.  Users install the stable channel with:
 
 ```
 mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_runner
@@ -74,7 +74,6 @@ mip.install("github:ChuMicro/ChuMicro-Bundle/chumicro_runner")
 # experimental: mip.install("github:ChuMicro/ChuMicro-Bundle-Experimental/chumicro_runner")
 ```
 
-To install source instead of bytecode: `mip.install(..., mpy=False)`.
 
 Dependencies between libraries (e.g., runner depends on timing) are declared in `package.json`'s `deps` list and resolved recursively by `mip`.  Dependencies always reference the stable repo so that installing one experimental library does not cascade into pulling experimental versions of all transitive dependencies.
 

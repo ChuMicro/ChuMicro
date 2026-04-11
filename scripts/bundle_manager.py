@@ -167,19 +167,21 @@ def build_bundle(
     # mip (MicroPython's package installer) reads package.json to know
     # which files to download and where to place them on-device.  Each
     # entry in "urls" is [target_path, source_url]:
-    #   - target_path: on-device path relative to /lib/ (e.g. chumicro_timing/__init__.mpy)
-    #   - source_url:  github: URI pointing to the .mpy file in this bundle repo
+    #   - target_path: on-device path relative to /lib/
+    #   - source_url:  github: URI pointing to the file in this bundle repo
     #
-    # Both target and source paths use package_name — the on-device import name
-    # is always the base package name (e.g. chumicro_timing) regardless of
-    # channel.  This lets users swap between stable and experimental by
-    # changing which bundle repo they use, without changing imports.
+    # The manifest lists .py source files, not .mpy bytecode.  .mpy files
+    # are tied to a specific bytecode version (e.g. mpy v6 for CP 10.x)
+    # and would fail on boards running a different version.  MicroPython
+    # compiles .py to bytecode on import, so source works everywhere.
+    # The .mpy files in the bundle are consumed by circup (which handles
+    # version matching via the zip naming convention), not by mip.
     urls = []
     for source_file in python_files:
         relative_path = source_file.relative_to(package_dir)
-        mpy_relative_path = relative_path.with_suffix(".mpy").as_posix()
-        target = f"{package_name}/{mpy_relative_path}"
-        source = f"github:ChuMicro/{bundle_repo}/{package_name}/{mpy_relative_path}"
+        py_relative_path = relative_path.as_posix()
+        target = f"{package_name}/{py_relative_path}"
+        source = f"github:ChuMicro/{bundle_repo}/{package_name}/{py_relative_path}"
         urls.append([target, source])
 
     manifest: dict = {"urls": urls, "version": version}
