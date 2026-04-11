@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from bundle_manager import (
+    CP_MPY_FOLDER,
     EXPERIMENTAL_BUNDLE_REPO,
     STABLE_BUNDLE_REPO,
     _collect_library_metadata,
@@ -195,11 +196,11 @@ class TestBuildCircupZips:
         (package_dir / "__init__.py").write_text("# init")
         (package_dir / "core.py").write_text("# core")
 
-        # mpy6/: .mpy bytecode.
-        mpy_dir = bundle_dir / "mpy6" / "chumicro_example"
-        mpy_dir.mkdir(parents=True)
-        (mpy_dir / "__init__.mpy").write_bytes(b"\x00mpy")
-        (mpy_dir / "core.mpy").write_bytes(b"\x00mpy")
+        # circuitpython-10.x-mpy/: CircuitPython .mpy bytecode.
+        cp_mpy_dir = bundle_dir / CP_MPY_FOLDER / "chumicro_example"
+        cp_mpy_dir.mkdir(parents=True)
+        (cp_mpy_dir / "__init__.mpy").write_bytes(b"C\x06mpy")
+        (cp_mpy_dir / "core.mpy").write_bytes(b"C\x06mpy")
 
         zips = build_circup_zips(
             bundle_dir, output_dir, "ChuMicro-Bundle", date_tag="20260101",
@@ -221,9 +222,9 @@ class TestBuildCircupZips:
         package_dir.mkdir(parents=True)
         (package_dir / "__init__.py").write_text("# init")
 
-        mpy_dir = bundle_dir / "mpy6" / "chumicro_example"
-        mpy_dir.mkdir(parents=True)
-        (mpy_dir / "__init__.mpy").write_bytes(b"\x00mpy")
+        cp_mpy_dir = bundle_dir / CP_MPY_FOLDER / "chumicro_example"
+        cp_mpy_dir.mkdir(parents=True)
+        (cp_mpy_dir / "__init__.mpy").write_bytes(b"C\x06mpy")
 
         build_circup_zips(
             bundle_dir, output_dir, "ChuMicro-Bundle", date_tag="20260101",
@@ -236,8 +237,8 @@ class TestBuildCircupZips:
             assert all(name.endswith(".py") for name in names)
             assert any("__init__.py" in name for name in names)
 
-    def test_bytecode_zip_pulls_from_mpy6(self, tmp_path: Path):
-        """Bytecode zip contains .mpy files from mpy6/ directory."""
+    def test_bytecode_zip_pulls_from_circuitpython_mpy(self, tmp_path: Path):
+        """Bytecode zip contains .mpy files from circuitpython-10.x-mpy/ directory."""
         bundle_dir = tmp_path / "bundle"
         output_dir = tmp_path / "output"
 
@@ -245,10 +246,10 @@ class TestBuildCircupZips:
         package_dir.mkdir(parents=True)
         (package_dir / "__init__.py").write_text("# init")
 
-        mpy_dir = bundle_dir / "mpy6" / "chumicro_example"
-        mpy_dir.mkdir(parents=True)
-        (mpy_dir / "__init__.mpy").write_bytes(b"\x00mpy")
-        (mpy_dir / "core.mpy").write_bytes(b"\x00mpy")
+        cp_mpy_dir = bundle_dir / CP_MPY_FOLDER / "chumicro_example"
+        cp_mpy_dir.mkdir(parents=True)
+        (cp_mpy_dir / "__init__.mpy").write_bytes(b"C\x06mpy")
+        (cp_mpy_dir / "core.mpy").write_bytes(b"C\x06mpy")
 
         build_circup_zips(
             bundle_dir, output_dir, "ChuMicro-Bundle", date_tag="20260101",
@@ -260,6 +261,30 @@ class TestBuildCircupZips:
             names = bytecode_zip.namelist()
             assert all(name.endswith(".mpy") for name in names)
             assert len(names) == 2
+
+    def test_ignores_micropython_mpy6_folder(self, tmp_path: Path):
+        """Bytecode zip does not include files from mpy6/ (MicroPython) folder."""
+        bundle_dir = tmp_path / "bundle"
+        output_dir = tmp_path / "output"
+
+        package_dir = bundle_dir / "chumicro_example"
+        package_dir.mkdir(parents=True)
+        (package_dir / "__init__.py").write_text("# init")
+
+        # Only MicroPython mpy6/ present — no circuitpython-10.x-mpy/ folder.
+        mp_mpy_dir = bundle_dir / "mpy6" / "chumicro_example"
+        mp_mpy_dir.mkdir(parents=True)
+        (mp_mpy_dir / "__init__.mpy").write_bytes(b"M\x06mpy")
+
+        build_circup_zips(
+            bundle_dir, output_dir, "ChuMicro-Bundle", date_tag="20260101",
+        )
+        import zipfile
+
+        bytecode_zip_path = output_dir / "chumicro-bundle-10.x-mpy-20260101.zip"
+        with zipfile.ZipFile(bytecode_zip_path) as bytecode_zip:
+            # Should be empty — no CircuitPython .mpy files staged.
+            assert bytecode_zip.namelist() == []
 
     def test_no_packages_returns_empty(self, tmp_path: Path):
         """Empty bundle directory returns empty list."""

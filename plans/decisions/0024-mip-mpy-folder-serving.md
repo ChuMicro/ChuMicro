@@ -1,4 +1,4 @@
-# Decision 0024: Folder-based .mpy serving for mip
+# Decision 0024: Folder-based .mpy serving for mip and circup
 
 Status: `accepted`
 Date: `2026-04-11`
@@ -8,13 +8,18 @@ Related: Decision 0018
 
 Decision 0018 established that bundle repos host both `.py` source and `.mpy` bytecode.  The root `package.json` for each library lists `.py` files because mip has no version-negotiation mechanism for self-hosted `github:` packages — the `mpy=True/False` parameter only affects index-based installs from `micropython.org`.
 
-This means mip users always get `.py` source, even on boards that could run pre-compiled `.mpy` bytecode for faster startup and lower RAM usage.  CircuitPython users get `.mpy` through circup (which handles version matching via zip naming), but MicroPython users have no `.mpy` path.
+CircuitPython and MicroPython both use `.mpy` bytecode format v6, but their mpy-cross compilers embed different magic bytes in the file header:
+
+- CircuitPython mpy-cross: magic byte `C`
+- MicroPython mpy-cross: magic byte `M`
+
+Files compiled with the wrong runtime's mpy-cross are rejected at import time.  This means a single `.mpy` file cannot serve both runtimes — each requires its own compilation.
 
 ## Decision
 
-### Folder-based mpy layout
+### Dual-folder mpy layout
 
-Each bundle repo contains an `mpy6/` directory with per-library subdirectories that hold both the compiled `.mpy` files and a `package.json` manifest:
+Each bundle repo contains two separate `.mpy` directories — one per runtime:
 
 ```
 ChuMicro-Bundle/
@@ -22,24 +27,51 @@ ChuMicro-Bundle/
 │   ├── package.json              # urls → .py files
 │   ├── __init__.py
 │   └── ticks.py
-├── mpy6/                         # opt-in: .mpy v6 bytecode
+├── circuitpython-10.x-mpy/      # CircuitPython .mpy (magic 'C')
+│   └── chumicro_timing/
+│       ├── __init__.mpy
+│       └── ticks.mpy
+├── mpy6/                         # MicroPython .mpy (magic 'M')
 │   └── chumicro_timing/
 │       ├── package.json          # urls → mpy6/chumicro_timing/*.mpy
 │       ├── __init__.mpy
 │       └── ticks.mpy
 ```
 
-The `.mpy` files live exclusively under `mpy6/`, not in the root package directories.  This keeps each mpy format version self-contained so that a future `mpy7/` folder can be added without file collisions.
+- **`circuitpython-10.x-mpy/`** — follows Adafruit's naming convention where `10.x` reflects the CircuitPython version range.  No `package.json` needed — CircuitPython users install via circup, which uses zip bundles.
+- **`mpy6/`** — follows MicroPython's mpy format version convention.  Contains `package.json` manifests for mip install.
 
 ### User experience
 
-```bash
-# Default (safe, works everywhere):
-mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_timing
+**CircuitPython (circup):**
 
-# Optimized (.mpy v6, for boards with mpy format v6):
+```bash
+circup bundle-add ChuMicro/ChuMicro-Bundle
+circup install chumicro-timing
+```
+
+circup downloads the `10.x-mpy` zip, which contains `.mpy` files from `circuitpython-10.x-mpy/`.
+
+**MicroPython (mip — default, .py source):**
+
+```bash
+mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_timing
+```
+
+**MicroPython (mip — optimized, .mpy bytecode):**
+
+```bash
 mpremote mip install github:ChuMicro/ChuMicro-Bundle/mpy6/chumicro_timing
 ```
+
+### Build pipeline
+
+`build_bundle` accepts separate `--cp-mpy-cross` and `--mp-mpy-cross` arguments:
+
+- `--cp-mpy-cross`: Path to CircuitPython's mpy-cross binary.  Compiles into `circuitpython-10.x-mpy/`.
+- `--mp-mpy-cross`: Path to MicroPython's mpy-cross binary.  Compiles into `mpy6/` and generates `package.json`.
+
+Either argument can be omitted to skip that runtime's compilation.
 
 ### Dependency handling
 
@@ -49,27 +81,31 @@ Dependencies in `mpy6/` manifests reference `mpy6/` paths for intra-workspace de
 ["github:ChuMicro/ChuMicro-Bundle/mpy6/chumicro_timing", "latest"]
 ```
 
-### Version naming
+### Naming conventions
 
-The folder name encodes the mpy bytecode format version, not the runtime version.  `mpy6` corresponds to mpy format v6 (used by CircuitPython 10.x and MicroPython 1.24+).  When a new mpy format arrives, add an `mpy7/` folder.
+- **`circuitpython-10.x-mpy/`** — mirrors Adafruit's zip naming convention (`bundle-10.x-mpy-DATE.zip`).  The `10.x` encodes the CircuitPython version range, not the mpy format version.  When CircuitPython 11.x ships (likely with mpy7), add `circuitpython-11.x-mpy/`.
+- **`mpy6/`** — encodes the mpy bytecode format version.  When MicroPython adopts mpy7, add `mpy7/`.
 
 ### Alternatives considered
 
-- **Branch-based** (`version="mpy6"`): Every release must update multiple branches atomically.  The `version` parameter rewrites all URLs in the manifest, requiring the entire file tree per branch.  Branch drift risk with automation.
-- **Separate JSON** (`package-mpy6.json`): Dependencies leak the `.json` suffix into user-facing dep declarations.  Users must type the full filename.
+- **Single folder for both runtimes**: Magic byte incompatibility means a single `.mpy` file cannot serve both CircuitPython and MicroPython.  Rejected.
+- **Branch-based** (`version="mpy6"`): Every release must update multiple branches atomically.  Branch drift risk.
+- **Separate JSON** (`package-mpy6.json`): Users must type the full filename.  Leaks `.json` into dependency declarations.
 - **Separate repo per mpy version**: Cross-repo dependency management.  Extremely high CI complexity.
-- **.mpy files in root (previous approach)**: Co-locating `.mpy` and `.py` in the root package directory prevents supporting multiple mpy format versions simultaneously — file names collide and there is no way to distinguish which mpy format a given `.mpy` file targets.
 
 ### circup interaction
 
-The circup zip builder scans `mpy6/chumicro_*` directories for `.mpy` files when building the bytecode zip.  Root `chumicro_*` directories contain only `.py` source.  The zip naming convention (`-10.x-mpy-`) tells circup which bytecode format the zip contains.
+The circup zip builder scans `circuitpython-10.x-mpy/chumicro_*` directories for `.mpy` files when building the bytecode zip (named `bundle-10.x-mpy-DATE.zip`).  It ignores `mpy6/` entirely — that folder is for MicroPython mip only.
+
+Root `chumicro_*` directories contain only `.py` source and are used for the `-py-` source zip.
 
 ## Consequences
 
-- MicroPython users who want `.mpy` bytecode have a documented opt-in path.
+- CircuitPython users get `.mpy` files compiled with the correct mpy-cross via circup.
+- MicroPython users who want `.mpy` bytecode have a documented opt-in mip path.
 - The default `package.json` stays `.py`-based for universal compatibility.
-- `build_bundle` compiles `.mpy` files into `mpy6/` and generates manifests pointing to those files.
-- `build_circup_zips` pulls `.py` from root dirs and `.mpy` from `mpy6/` dirs.
-- Bundle README documents both install paths.
-- Adding a future mpy format version requires adding one folder and regenerating manifests — no branch or repo management.
-- Each mpy format version is self-contained: files and manifest live together.
+- `build_bundle` compiles into separate folders using separate mpy-cross binaries.
+- `build_circup_zips` pulls `.py` from root dirs and `.mpy` from `circuitpython-10.x-mpy/` dirs.
+- Bundle README documents all install paths.
+- Adding a future mpy format version requires adding one folder per runtime and regenerating manifests.
+- Each runtime's `.mpy` files are self-contained in their own directory.
