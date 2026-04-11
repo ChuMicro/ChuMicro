@@ -2,7 +2,9 @@
 
 Status: `accepted`
 Date: `2026-04-04`
-Updated: `2026-04-05`
+Updated: `2026-04-11`
+
+> **Note:** See also [Decision 0024](0024-mip-mpy-folder-serving.md) which adds folder-based `.mpy` serving for mip users.
 
 ## Context
 
