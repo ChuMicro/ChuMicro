@@ -160,7 +160,7 @@ Conventions:
 | `python scripts/run.py sync-ide` | Regenerate IDE configs |
 | `python scripts/run.py docs` | Build library docs |
 | `python scripts/run.py docs-preview` | Serve versioned local docs preview |
-| `python scripts/run.py docs-deploy --channel <ch>` | Deploy versioned docs |
+ `python scripts/run.py deploy-documents --channel <ch>`  Deploy versioned docs 
 | `python scripts/run.py new-library <name>` | Scaffold a new library |
 
 ## Development guidance
