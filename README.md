@@ -30,9 +30,10 @@ Small, focused libraries you can install independently. Use what you need.
 | **[compat](libraries/compat/)** | Standard library features that CircuitPython and MicroPython are missing (like `functools.partial`). |
 | **[msgpack](libraries/msgpack/)** | Compact binary serialization — 30–50% smaller than JSON, great for settings and sensor data. |
 
-### Supported boards
+Works on ESP32 (S2, S3, C3, C6), RP2040/RP2350 (Raspberry Pi Pico), STM32, and most boards with at least 256 KB RAM and 4 MB flash. Browse the [documentation site](https://chumicro.github.io/ChuMicro/) for guides and API references, or look through `libraries/` — each library's README has install commands, a quick example, and an API summary.
 
-Works on ESP32 (S2, S3, C3, C6), RP2040/RP2350 (Raspberry Pi Pico), STM32, and most boards with at least 256 KB RAM and 4 MB flash.
+<details>
+<summary>Which libraries do I need? (dependencies and selection guide)</summary>
 
 ### Dependencies
 
@@ -43,16 +44,14 @@ compat    (no dependencies)
 msgpack   (no dependencies)
 ```
 
-### Which libraries do I need?
-
-Start with the problem you're solving:
+### Start with the problem you're solving
 
 - **"I need non-blocking timers"** → [timing](libraries/timing/)
 - **"I have multiple things happening in my loop"** → [runner](libraries/runner/) (includes timing)
 - **"I need to store settings or send data compactly"** → [msgpack](libraries/msgpack/)
 - **"functools.partial doesn't exist on my board"** → [compat](libraries/compat/)
 
-Browse the [documentation site](https://chumicro.github.io/ChuMicro/) for guides and API references, or look through `libraries/` — each library's README has install commands, a quick example, and an API summary.
+</details>
 
 ## Get started
 
