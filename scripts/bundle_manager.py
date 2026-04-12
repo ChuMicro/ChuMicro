@@ -591,7 +591,9 @@ Swap `chumicro-timing` for whichever library you need.
 **CircuitPython ([circup](https://github.com/adafruit/circup)):**
 
 circup is CircuitPython's package manager — \
-it uses bundles to find third-party packages. Register the ChuMicro bundle once, \
+it uses [bundles]\
+(https://learn.adafruit.com/keep-your-circuitpython-libraries-on-devices-up-to-date-with-circup\
+/bundle-commands) to find third-party packages. Register the ChuMicro bundle once, \
 then install any library by name:
 
 ```bash
