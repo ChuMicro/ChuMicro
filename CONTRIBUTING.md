@@ -31,7 +31,6 @@ Start here, then pick the guide that matches your task:
 | **Understand the code style** | [Style Guide](docs/contributing/style-guide.md) |
 | **Open a pull request** | [Creating a Pull Request](docs/contributing/pull-requests.md) |
 | **Add a new library** | [Adding a New Library](docs/contributing/new-library.md) |
-| **Understand the codebase** | [How the Codebase Works](docs/contributing/architecture.md) |
 | **Understand releases** | [Releases and Promotion](docs/contributing/releases.md) |
 | **Use an AI coding agent** | [Working with Agents](docs/contributing/working-with-agents.md) |
 

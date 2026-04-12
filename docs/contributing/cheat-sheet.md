@@ -58,11 +58,20 @@ git push -u origin fix/my-change      # then open PR on GitHub
 | `griffe warnings` | Add type annotations to function signatures |
 | Tests you can't figure out | Ask in the PR — someone will help |
 
+## Want to read the source?
+
+These five files cover ~80% of the project:
+
+1. `libraries/timing/src/chumicro_timing/ticks.py` — tick contract, runtime detection
+2. `libraries/timing/src/chumicro_timing/heartbeat.py` — periodic timer
+3. `libraries/runner/src/chumicro_runner/core.py` — task scheduler (the most complex file)
+4. `libraries/msgpack/src/chumicro_msgpack/_pure.py` — msgpack encoder/decoder
+5. `libraries/compat/src/chumicro_compat/functools.py` — polyfill pattern
+
 ## Links
 
 - [Full contributing guide](../../CONTRIBUTING.md)
 - [Style guide](style-guide.md)
 - [PR guide](pull-requests.md)
-- [Architecture overview](architecture.md)
 - [Design decisions](../../plans/decisions/)
 
