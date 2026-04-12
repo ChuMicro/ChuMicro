@@ -25,7 +25,7 @@ Small, focused libraries you can install independently. Use what you need.
 
 | Library | What it does |
 |---|---|
-| **[timing](libraries/timing/)** | Non-blocking timers that handle millisecond wraparound for you. No more `time.sleep()` freezing your loop. |
+| **[timing](libraries/timing/)** | Timers that don't freeze your code — your loop keeps running while waiting. No more `time.sleep()` locking everything up. |
 | **[runner](libraries/runner/)** | A simple task scheduler — register your services, call `runner.tick()` in your loop. No async needed. |
 | **[compat](libraries/compat/)** | Standard library features that CircuitPython and MicroPython are missing (like `functools.partial`). |
 | **[msgpack](libraries/msgpack/)** | Compact binary serialization — 30–50% smaller than JSON, great for settings and sensor data. |
@@ -46,7 +46,7 @@ msgpack   (no dependencies)
 
 ### Start with the problem you're solving
 
-- **"I need non-blocking timers"** → [timing](libraries/timing/)
+- **"I need timers that don't freeze my loop"** → [timing](libraries/timing/)
 - **"I have multiple things happening in my loop"** → [runner](libraries/runner/) (includes timing)
 - **"I need to store settings or send data compactly"** → [msgpack](libraries/msgpack/)
 - **"functools.partial doesn't exist on my board"** → [compat](libraries/compat/)
@@ -59,7 +59,7 @@ Pick the install method for your runtime — swap `chumicro-timing` for whicheve
 
 **CircuitPython ([circup](https://github.com/adafruit/circup)):**
 
-circup is CircuitPython's package manager — it uses bundles to find third-party packages. Register the ChuMicro bundle once, then install any library by name:
+circup is CircuitPython's package manager — it uses [bundles](https://learn.adafruit.com/keep-your-circuitpython-libraries-on-devices-up-to-date-with-circup/usage#bundle-management-3105292) to find third-party packages. Register the ChuMicro bundle once, then install any library by name:
 
 ```bash
 circup bundle-add ChuMicro/ChuMicro-Bundle
@@ -119,7 +119,7 @@ pip install chumicro-timing-experimental
 
 ### Your first program
 
-A non-blocking blink — the embedded hello world:
+A blink that doesn't freeze — the embedded hello world:
 
 ```python
 from chumicro_timing import Heartbeat, ticks_ms

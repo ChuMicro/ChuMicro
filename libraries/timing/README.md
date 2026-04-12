@@ -2,7 +2,7 @@
 
 <img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-**Non-blocking timers that handle millisecond wraparound for you.**
+**Timers that don't freeze your code — your loop keeps running while waiting.**
 
 Capture `ticks_ms()` once per loop, hand it to a `Heartbeat`, and you've got clean periodic timing — no `time.sleep()`, no wraparound bugs. Works on CircuitPython, MicroPython, and CPython.
 
@@ -14,7 +14,7 @@ Capture `ticks_ms()` once per loop, hand it to a `Heartbeat`, and you've got cle
 
 ### CircuitPython ([circup](https://github.com/adafruit/circup))
 
-circup is CircuitPython's package manager — it uses bundles to find third-party packages. Register the ChuMicro bundle once, then install by name:
+circup is CircuitPython's package manager — it uses [bundles](https://learn.adafruit.com/keep-your-circuitpython-libraries-on-devices-up-to-date-with-circup/usage#bundle-management-3105292) to find third-party packages. Register the ChuMicro bundle once, then install by name:
 
 ```bash
 circup bundle-add ChuMicro/ChuMicro-Bundle
@@ -114,7 +114,14 @@ You don't need to pick a tick source — the library detects your runtime and us
 | 3 | `time.monotonic_ns` | CPython, some CircuitPython boards |
 | 4 | `time.monotonic` | Final fallback (float seconds → int ms) |
 
-All sources are masked to a 2²⁹ ms period, so behavior is identical regardless of which source is used.
+Behavior is identical regardless of which source is used — you don't need to think about this, it just works.
+
+<details>
+<summary>Technical detail: tick wraparound</summary>
+
+All sources are masked to a 2²⁹ ms period (~6.2 days). `ticks_diff` and `ticks_add` handle wraparound correctly, so your timers keep working even when the counter rolls over.
+
+</details>
 
 ## Testing your code
 
