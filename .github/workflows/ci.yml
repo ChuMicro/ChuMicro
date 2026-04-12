@@ -116,7 +116,7 @@ jobs:
           cache: "pip"
 
       - name: Install tooling
-        run: python -m pip install --upgrade pip build
+        run: python -m pip install --upgrade pip build hatchling
 
       - name: Build packages
         run: python scripts/run.py build
