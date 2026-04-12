@@ -68,6 +68,35 @@ similar config driving the version list.
 
 See Decision 0024 (naming conventions section) for the folder scheme.
 
+### Should the bundle repo carry per-library version tags for mip pinning?
+
+mip supports version pinning via `version="branch-or-tag"`, but the bundle
+repo's release tags are date-based bundle snapshots (e.g. `20260410`), not
+per-library versions.  A user who wants "timing v0.1.25" cannot map that to
+a bundle tag without reading release notes.
+
+circup has no version-pinning capability at all — it always pulls the latest
+bundle release.  That's an upstream limitation we can't fix.
+
+Options considered:
+
+1. **Per-library tags** like `chumicro-timing-0.1.25` on the bundle repo.
+   mip users could pin with `version="chumicro-timing-0.1.25"`.  Downside:
+   tag proliferation — every library release adds a tag.  The release pipeline
+   would need to create them.
+2. **Do nothing** — document that mip pins to date-based bundle tags and
+   circup always gets latest.  Users who need a specific version download the
+   release zip manually.
+3. **Per-library branches** (e.g. `chumicro-timing/latest`) — more complex,
+   unclear benefit over tags.
+
+Not blocking any current work.  Worth revisiting if users request pinning or
+if the library count grows enough that bundle-level snapshots cause unwanted
+upgrades of unrelated libraries.
+
+Related: Decision 0018 (bundle architecture), Decision 0024 (mpy folder
+serving).
+
 ### What does "contributor-ready" look like beyond docs?
 
 CONTRIBUTING.md, issue templates, and PR templates exist.  But contributor
