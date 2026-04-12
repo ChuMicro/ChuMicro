@@ -82,7 +82,6 @@ At the start of a session:
 
 Commit history is the primary fallback when planning docs are stale. Write commit messages that help future context recovery.
 
-
 ## Project overview
 
 ChuMicro is a family of open-source Python libraries targeting three runtimes:
@@ -293,5 +292,3 @@ Housekeeping rules:
 2. Include tests and documentation with behavior changes
 3. Do not commit build artifacts, bytecode, or secrets
 4. Write commit messages that aid context recovery — imperative subject, body explaining why, and the affected libraries, decisions, or workstreams
-
-A future agent scanning `git log` should be able to reconstruct project state from the commit history.
