@@ -31,6 +31,14 @@ from workspace import TOOLS
 
 _REPO_URL = "https://github.com/micropython/micropython.git"
 
+# Only these submodules are required for the unix-port build.
+# The full recursive init pulls ~1.4GB of board-specific libraries
+# (stm32lib, pico-sdk, nxp_driver, etc.) that are never used.
+_UNIX_PORT_SUBMODULES = [
+    "lib/berkeley-db-1.xx",
+    "lib/libffi",
+]
+
 
 def _source_dir():
     """Return the MicroPython source directory (computed lazily)."""
@@ -58,7 +66,14 @@ def prepare_micropython() -> int:
 
         source_dir = _source_dir()
         release = runtime_versions()["micropython"]["version"]
-        ensure_source_tree(source_dir, _REPO_URL, release, init_submodules=True)
+        ensure_source_tree(source_dir, _REPO_URL, release)
+
+        # Init only the submodules needed for unix-port (not recursive).
+        for submodule in _UNIX_PORT_SUBMODULES:
+            run_build_command(
+                ["git", "submodule", "update", "--init", submodule],
+                cwd=source_dir,
+            )
 
         jobs = f"-j{build_jobs()}"
         environment = macos_build_environment()
