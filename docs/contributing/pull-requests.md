@@ -57,44 +57,69 @@ GitHub knows your fork came from the original repository, so it automatically se
 GitHub loads the PR template automatically. Fill in each section:
 
 - **Summary:** What your PR does (one sentence)
-- **Motivation:** Why this change is needed
 - **Changes:** List the files changed
 - **How to verify:** Concrete steps (`python scripts/run.py test --libraries timing`)
-- **Device testing:** Evidence of on-device testing, if applicable (see below)
-- **Version impact:** For test-only changes, select "No bump needed"
+- **Device testing:** Evidence of on-device testing, or N/A (see [below](#device-testing))
+- **Version impact:** Bump type and affected libraries, or N/A for test/docs/infra changes
+- **Breaking changes:** Describe any removed or renamed public API, or None
 
-> **Prefer the GitHub UI over `gh pr create`.** The UI auto-populates the PR template so reviewers get the context they need. The CLI skips it, which usually means a reviewer has to ask follow-up questions before they can review — slowing things down.
+<details>
+<summary>Example: a filled-in PR</summary>
+
+```markdown
+## Summary
+
+Fix wraparound bug in ticks_diff when end is near zero and start is near max.
+
+## Changes
+
+- `libraries/timing/src/chumicro_timing/ticks.py` — fix boundary comparison in `ticks_diff`
+- `libraries/timing/tests/test_ticks.py` — add wraparound boundary tests
+- `libraries/timing/VERSION` — patch bump 0.1.15 → 0.1.16
+
+## How to verify
+
+Run `python scripts/run.py test --libraries timing` — new tests in `test_ticks.py` cover the boundary case.
 
 ## Device testing
 
-CI runs your code under unix-port builds of CircuitPython and MicroPython, which catches most cross-runtime issues. But some problems only surface on real hardware — memory constraints, timing behavior, peripheral interaction. Device testing provides that final layer of confidence.
+N/A — pure arithmetic fix with full test coverage.
+
+## Version impact
+
+Patch bump: timing 0.1.15 → 0.1.16
+
+## Breaking changes
+
+None
+```
+
+</details>
+
+> **Prefer the GitHub UI** — it loads the PR template automatically so reviewers get the context they need. If you prefer the CLI, use `gh pr create --template .github/PULL_REQUEST_TEMPLATE.md` to include the template.
+
+## Device testing
+
+CI runs your code under unix-port builds of CircuitPython and MicroPython, which catches most cross-runtime issues. Device testing is **optional** — it provides extra confidence but is never required to open a PR.
+
+### When device testing helps
+
+If your change could behave differently on a real board than in tests — timing-sensitive code, platform-specific branches, hardware I/O — device testing evidence is appreciated. If you're not sure, submit the PR without it and note that in the description. A reviewer will tell you if it's needed.
 
 ### What doesn't need device testing
 
-Most contributions are exempt. Skip this section if your PR is:
-
-- **Docs-only, test-only, or infrastructure-only** (changes to `docs/`, `tests/`, `scripts/`, `support/`)
+- **Docs-only, test-only, or infrastructure-only** changes
 - **Trivial fixes** (typos, comment corrections, formatting)
 - **Libraries with no hardware interaction** (e.g., `compat`, `msgpack`)
 
-Note the exemption in the PR and delete the Device Testing section from the template.
-
-### What does need device testing
-
-PRs that change library source code under `src/` — especially code that interacts with hardware, timing, or I/O — should include evidence that the code works on a real device.
-
-**Borderline cases:** Not every change to `timing` or `runner` needs device testing. A bug fix in `ticks_diff` with full test coverage: device testing appreciated but not required. A change to tick-source detection logic or platform-specific code paths: device testing strongly recommended. Use judgment — if your change could behave differently on real hardware than in tests, device testing adds confidence.
-
-**What to include:**
+### What to include (when you do test)
 
 1. **Console output** from running the library on a device (scrub any PII — WiFi passwords, IP addresses)
 2. **Board name** (e.g., "Adafruit QT Py ESP32-S3")
 3. **Runtime and version** (e.g., "CircuitPython 10.1.4" or "MicroPython v1.26.0")
 4. **What was tested** — which examples or functional tests you ran, and their results
 
-Screenshots or short videos of the device in action are welcome but not required — console output showing the code executing successfully is the primary evidence.
-
-Paste the output directly in the PR description or as a comment. Drag images/videos into the PR on GitHub — they upload automatically.
+Paste the output directly in the PR description or as a comment.
 
 ### Don't have a device?
 

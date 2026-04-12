@@ -79,6 +79,10 @@
   color: "7057ff"
   description: "Good for newcomers"
 
+- name: "board-test"
+  color: "1d76db"
+  description: "Hardware test report from a real device"
+
 - name: blocked
   color: "000000"
   description: "Blocked on external dependency or decision"

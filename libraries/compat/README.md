@@ -38,6 +38,8 @@ mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_compat
 pip install chumicro-compat
 ```
 
+*Just getting started? Skip this — the install commands above are all you need.*
+
 <details>
 <summary>Experimental (pre-release) versions and channel switching</summary>
 

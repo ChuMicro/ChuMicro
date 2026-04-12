@@ -26,9 +26,9 @@ Not sure where to start? These are real ways to contribute that don't require de
 
   > *Example:* You run `python scripts/run.py test --libraries timing` and the coverage report shows lines 45–48 of `_ticks.py` aren't covered. Those lines handle a rare wraparound edge case. Write a test that triggers that path — now the library is more reliable because of you.
 
-- **Try a library on your board** and report what happened — even a "it worked on my ESP32-S3" comment on an issue is valuable.
+- **Try a library on your board** and report what happened — even a "it worked on my ESP32-S3" is valuable. Use the [board test report](https://github.com/ChuMicro/ChuMicro/issues/new?template=board_test_report.yml) template to share your results.
 
-  > *Example:* You have a Raspberry Pi Pico. Install `chumicro-timing`, run the `heartbeat_blink.py` example, and post a comment: "Tested on RP2040, CircuitPython 9.2 — heartbeat fires correctly at 1 Hz." That data point helps everyone.
+  > *Example:* You have a Raspberry Pi Pico. Install `chumicro-timing`, run the `heartbeat_blink.py` example, and file a board test report: "Tested on RP2040, CircuitPython 9.2 — heartbeat fires correctly at 1 Hz." That data point helps everyone.
 
 Look for issues labeled [**good first issue**](https://github.com/ChuMicro/ChuMicro/labels/good%20first%20issue) — these are scoped, described, and ready to pick up.
 
@@ -140,7 +140,7 @@ Always work on a branch — never commit directly to `main`. Name the branch aft
 git checkout -b fix/my-first-change
 ```
 
-Use `fix/` for bug fixes and small improvements, `docs/` for documentation changes, or `feature/` for new features. See [branching conventions](#branching-conventions) for the full list.
+The `fix/` prefix gives reviewers context at a glance. See [branching conventions](#branching-conventions) for more examples.
 
 ### 7. Make your change
 
@@ -198,7 +198,7 @@ Then open a pull request on GitHub:
 2. GitHub knows your fork came from the original repository, so it automatically sets up the PR to merge your branch into `ChuMicro/ChuMicro`'s `main` branch. Verify the header reads **base repository: ChuMicro/ChuMicro** and **base: main**.
 3. GitHub loads the PR template automatically. Fill in each section (summary, motivation, how to verify, etc.) and click **Create pull request**.
 
-> **Why the GitHub UI?** The repository has a PR template with sections that help reviewers and keep CI smooth. The GitHub UI loads it automatically. `gh pr create` skips the template, which means reviewers have to ask for missing context — slowing things down for everyone.
+> **Why the GitHub UI?** The repository has a PR template with sections that help reviewers. The GitHub UI loads it automatically. If you prefer the CLI, use `gh pr create --template .github/PULL_REQUEST_TEMPLATE.md` to include the template so reviewers have the context they need.
 
 CI runs automatically on your PR. All checks need to pass before a maintainer can merge. If something fails, click the failed check to see the log, fix it locally, and push again — CI re-runs automatically.
 
@@ -251,11 +251,15 @@ Repeat until the rebase finishes, then push with `--force-with-lease` as above.
 
 All work happens on branches off `main`. PRs target `main`. There is no `develop` branch.
 
-| Branch type | Naming | When to use | Example |
-|---|---|---|---|
-| **Topic** | `fix/<description>` or `docs/<description>` | Bug fixes, doc changes, small improvements | `fix/heartbeat-wraparound` |
-| **Feature** | `feature/<description>` | New features, new libraries, larger work | `feature/settings-library` |
-| **Release** | `release/<lib>-v<major.minor>.x` | Hotfix against an older stable tag (rare) | `release/timing-v0.2.x` |
+Name your branch `topic/short-description` — the topic gives context, the name describes the work. Keep it short and relevant:
+
+```bash
+git checkout -b fix/timing-wraparound
+git checkout -b docs/install-guide
+git checkout -b feature/settings-lib
+```
+
+Common topics: `fix/`, `docs/`, `feature/`. Use whatever fits — the name matters more than the prefix.
 
 After [syncing your fork](#keeping-your-fork-in-sync), create a branch:
 
@@ -278,7 +282,7 @@ If it prints `Preflight passed`, you're good — CI will pass too. That's the on
 <details>
 <summary>What preflight checks (expand for details)</summary>
 
-- **Test coverage** per library. Run individually: `python scripts/run.py test --libraries <name>`
+- **Test coverage** per library (85% branch coverage). Run individually: `python scripts/run.py test --libraries <name>`
 - **Scripts infrastructure tests pass.** Run individually: `python scripts/run.py test-scripts`
 - **No lint errors.** Run individually: `python scripts/run.py lint`
 - **Examples must parse.** Run individually: `python scripts/run.py verify-examples --libraries <name>`
@@ -292,9 +296,9 @@ If it prints `Preflight passed`, you're good — CI will pass too. That's the on
 
 ### Device testing
 
-PRs that change library code need evidence that the code works on a real device — console output from running on hardware, plus the board and runtime version used. This is how we catch issues that CI's unix-port checks can't.
+Device testing is **optional**. If your change could behave differently on a real board than in tests, including console output from a device is appreciated but never required to open a PR. If you're not sure, submit the PR without it and note that in the description — a reviewer will tell you if it's needed.
 
-**Most contributions don't need this.** Docs-only, test-only, infrastructure, and trivial fixes are exempt. Libraries with no hardware interaction (like `compat` and `msgpack`) are also exempt. See [Device Testing](docs/contributing/pull-requests.md#device-testing) in the PR guide for full details.
+**Most contributions don't need this.** Docs-only, test-only, infrastructure, and trivial fixes are exempt. Libraries with no hardware interaction (like `compat` and `msgpack`) are also exempt. See [Device Testing](docs/contributing/pull-requests.md#device-testing) in the PR guide for details on what to include when you do test.
 
 ### Commit messages
 
@@ -369,7 +373,7 @@ These aren't arbitrary — each one traces to a design decision with rationale. 
 | Rule | Why |
 |---|---|
 | PEP 8 + descriptive names | The linter catches this for you — see the [Style Guide](docs/contributing/style-guide.md) |
-| No `async`/`await` | The tick-based runner gives you scheduling that's easy to test, inspect, and debug on resource-constrained boards — no hidden coroutine state, no event loop overhead ([Decision 0014](plans/decisions/0014-runner-pattern.md)) |
+| No `async`/`await` | The tick-based runner keeps everything visible in a single loop — easier to test, debug, and inspect on resource-constrained boards. `asyncio` on microcontrollers is limited and not bug-free. ([Decision 0014](plans/decisions/0014-runner-pattern.md)) |
 | Constructor injection for I/O | Testability with fakes and dependency injection ([Decision 0010](plans/decisions/0010-library-testability.md)) |
 | Per-library `pytest` runs | Avoids test-directory collisions ([Decision 0009](plans/decisions/0009-per-library-test-runs.md)) |
 | `const()` / `memoryview` in library code | Memory efficiency on microcontrollers (not required in `scripts/` or `support/`). You can add these later — correctness first. |
@@ -397,10 +401,14 @@ Note it in the PR description. A maintainer can help fill the gap or mark an exc
 No. The [Quick Start](#quick-start) and `preflight` are all you need for your first PR. The rest is reference material for when you need it.
 
 **Can I use `async`/`await`?**
-Not in library code. The tick-based runner gives you scheduling that's easy to test, inspect, and debug on resource-constrained boards — no hidden coroutine state, no event loop overhead. See [Decision 0014](plans/decisions/0014-runner-pattern.md) for the full reasoning.
+Not in library code. On a microcontroller with 256 KB RAM, an event loop adds overhead and hides state. The tick-based pattern keeps everything visible in a single loop — easier to debug with print statements when you're connected to a serial console. Additionally, `asyncio` on CircuitPython and MicroPython is limited and not exactly bug-free. See [Decision 0014](plans/decisions/0014-runner-pattern.md) for the full reasoning.
 
 **Why do I have to spell out `error` instead of `err`?**
-Python's abbreviations like `msg`, `err`, `exc`, and `buf` are tribal knowledge — obvious if you've spent years in Python, opaque if you haven't.  We optimize for newcomers, multilingual developers, and non-native English speakers who shouldn't need a glossary to read the code.  The linter tells you exactly what to write, so the cost is a few extra keystrokes.  Single-letter for-loop targets like `for i in range(10)` are fine.  See [Decision 0022](plans/decisions/0022-naming-conventions.md) for the full reasoning.
+We use full words so everyone can read the code without looking things up — newcomers, multilingual developers, and non-native English speakers shouldn't need a glossary. The linter tells you exactly what to write, so the cost is a few extra keystrokes.  Single-letter for-loop targets like `for i in range(10)` are fine. See [Decision 0022](plans/decisions/0022-naming-conventions.md) for the full reasoning.
+
+## Project decisions
+
+Major design choices are documented in [`plans/decisions/`](plans/decisions/) — each file explains what was decided, why, and when. You don't need to read them all, but **search there before proposing structural changes**. If your idea was already considered, the decision doc will tell you the reasoning and whether circumstances have changed.
 
 ## Getting help
 

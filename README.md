@@ -92,6 +92,8 @@ On your laptop, install from PyPI — no bundle needed:
 pip install chumicro-timing
 ```
 
+*Just getting started? Skip this — the install commands above are all you need.*
+
 <details>
 <summary>Experimental (pre-release) builds and channel switching</summary>
 
@@ -146,95 +148,9 @@ Or try it in the REPL:
 
 Each library has its own docs with a version selector so you can switch between stable and experimental (dev).
 
-## Development
+## Contributing
 
-### Setup
-
-Want to hack on ChuMicro itself? [Fork the repository](CONTRIBUTING.md#quick-start) on GitHub, then:
-
-```zsh
-git clone https://github.com/<your-username>/ChuMicro.git
-cd ChuMicro
-git remote add upstream https://github.com/ChuMicro/ChuMicro.git
-python scripts/prepare_workspace.py --create-venv
-```
-
-The script creates a virtualenv, installs everything, and runs lint + tests to verify. When you see `Workspace is ready`, you're good. If you already have a venv activated, drop `--create-venv`.
-
-
-When `uv` is on PATH it's used automatically for faster installs; otherwise stdlib `venv` and `pip` are used as fallbacks.
-
-### IDE setup
-
-The workspace generates configurations for popular editors automatically:
-
-- **PyCharm** — shared run configs in `.idea/runConfigurations/` (Preflight, Lint, Test, Build, etc.)
-- **VS Code** — `.vscode/tasks.json` for Command Palette → *Tasks: Run Task*
-- **Neovim, Zed, Emacs, Sublime** — `pyrightconfig.json` at the root gives any Pyright-based LSP full import resolution
-- **Any terminal** — all tasks are available via `python scripts/run.py <task>`
-
-See the [contributing guide](CONTRIBUTING.md#development-environment) for full setup instructions for your editor.
-
-### Windows
-
-Use native Windows for editing, linting, tests, and builds. Use WSL2 for unix-port runtime checks (MicroPython/CircuitPython simulation).
-
-### Tasks
-
-Everything goes through one command: `python scripts/run.py <task>`.
-
-| Task | What it does |
-|---|---|
-| `setup` | Install dev dependencies |
-| `lint` | Check code style (Ruff) |
-| `test` | Run CPython tests (changed packages by default, `--all` for everything) |
-| `test-scripts` | Run infrastructure tests for `scripts/` |
-| `verify-examples` | Check that example scripts parse and import correctly |
-| `docs` | Build library documentation |
-| `docs --serve` | Start a live-reload docs dev server |
-| `docs-preview` | Deploy docs locally and serve a versioned preview |
-| `build` | Build distributable packages |
-| `preflight` | **The big one** — runs everything CI will run. Do this before pushing. |
-| `new-library <name>` | Scaffold a new library |
-| `sync-ide` | Regenerate IDE configs from workspace structure |
-
-<details>
-<summary>More tasks (CI, cross-runtime, deployment)</summary>
-
-| Task | What it does |
-|---|---|
-| `docs-deploy --channel <ch>` | Deploy versioned docs to gh-pages (CI) |
-| `prepare-micropython` | Build the pinned MicroPython unix-port binary |
-| `prepare-circuitpython` | Build the pinned CircuitPython unix-port binary |
-| `prepare-mpy-cross` | Build mpy-cross compilers for both runtimes (no unix-port) |
-| `test-micropython-compatibility` | Cross-runtime tests under MicroPython |
-| `test-circuitpython-compatibility` | Cross-runtime tests under CircuitPython |
-| `test-runtime-matrix` | Test all packages on all three runtimes |
-| `test-device` | Manual device validation placeholder |
-| `check-version` | Verify VERSION bumps for changed libraries (CI gate) |
-| `check-api` | Detect API breakages against last release (CI gate) |
-| `validate-mip --bundle-repo <repo>` | Validate mip install + import against a live bundle repo |
-| `validate-mip --staging-dir <dir>` | Validate mip install + import from locally staged bundle |
-
-</details>
-
-Tasks that operate on libraries (`test`, `verify-examples`, `docs`, `docs-preview`) accept `--all` or `--libraries name` to control scope. By default, `test` auto-detects changed packages.
-
-### Testing
-
-- **CPython tests** — pytest with a per-library branch coverage gate
-- **Cross-runtime** — MicroPython and CircuitPython unix-port unit tests
-- **On-device** — opt-in `functional_tests/` via `support/test_harness/` (copy `devices.example.yml` to `devices.yml`)
-
-### CI & releases
-
-PRs and pushes to `main` run the full suite: lint, test (CPython 3.11/3.12/3.13), verify-examples, docs, build, version-check, api-check, and cross-runtime compat.
-
-Releases are automated — bump a library's `VERSION` file and merge for an **experimental** release. Run `promote.yml` for **stable**. Both publish to PyPI, create tags, deploy bundles, and publish docs. See [Decision 0019](plans/decisions/0019-branching-model.md) and [Decision 0018](plans/decisions/0018-distribution-bundle-repo.md).
-
-### Versioning
-
-Each library has a `VERSION` file — that's the single source of truth. [Semantic versioning](https://semver.org/). See [Decision 0002](plans/decisions/0002-per-library-version-files.md).
+We welcome contributors of all experience levels. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup, guidelines, and how to submit a pull request. Want the short version? Check the [contributor cheat sheet](docs/contributing/cheat-sheet.md). Not sure where to start? Check out [good first contributions](CONTRIBUTING.md#good-first-contributions).
 
 ## Repository layout
 
@@ -253,9 +169,6 @@ chumicro/
 └── LICENSE                # MIT
 ```
 
-## Contributing
-
-We welcome contributors of all experience levels. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup, guidelines, and how to submit a pull request. Want the short version? Check the [contributor cheat sheet](docs/contributing/cheat-sheet.md). Not sure where to start? Check out [good first contributions](CONTRIBUTING.md#good-first-contributions).
 
 ## License
 

@@ -2,6 +2,10 @@
 
 This guide walks you through the full lifecycle of adding a new library to ChuMicro — from idea to published package. If you're working with an AI agent, point it at the [`new-library` skill](../../.github/skills/new-library/SKILL.md).
 
+## Before you start
+
+Check [open issues](https://github.com/ChuMicro/ChuMicro/issues) and [discussions](https://github.com/ChuMicro/ChuMicro/discussions) to see if your idea overlaps with planned work. If you're unsure whether the library fits the project, open a discussion first — it's much faster to align on scope before building.
+
 ## 1. Scaffold
 
 ```bash

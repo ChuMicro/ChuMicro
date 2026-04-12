@@ -1,0 +1,62 @@
+name: Board test report
+description: Share results from running a ChuMicro library on your board.
+title: "Board test: [library] on [board]"
+labels: ["board-test"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing on real hardware — every data point helps!
+        Fill in what you can. Even "it worked" is useful.
+
+  - type: input
+    id: board
+    attributes:
+      label: Board
+      description: What board did you test on?
+      placeholder: "e.g., Raspberry Pi Pico, Adafruit QT Py ESP32-S3"
+    validations:
+      required: true
+
+  - type: input
+    id: runtime
+    attributes:
+      label: Runtime and version
+      description: Which runtime and version?
+      placeholder: "e.g., CircuitPython 10.1.4, MicroPython v1.26.0"
+    validations:
+      required: true
+
+  - type: input
+    id: library
+    attributes:
+      label: Library
+      description: Which ChuMicro library did you test?
+      placeholder: "e.g., timing, runner, msgpack"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what_you_tried
+    attributes:
+      label: What you tried
+      description: Which examples or code did you run?
+      placeholder: "e.g., Ran heartbeat_blink.py from the timing examples"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: What happened
+      description: Paste console output, describe the result, or attach a photo. Scrub any PII (WiFi passwords, IP addresses).
+      placeholder: "e.g., Heartbeat fired correctly at 1 Hz for 5 minutes, no issues."
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else?
+      description: Optional — surprises, workarounds, or suggestions.
+

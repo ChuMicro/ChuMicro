@@ -21,7 +21,7 @@ We use descriptive names so everyone can read the code without extra context. Th
 | For-loop targets are exempt | `for i in range(10)`, `for k, v in items()` | — |
 | Suppress with `# noqa: CHU001` | Only when matching an upstream API that you cannot rename | — |
 
-**Why:** Python's common abbreviations (`msg`, `err`, `exc`, `buf`) are tribal knowledge from C and Unix culture. Experienced Python developers read them without thinking, but newcomers, multilingual developers working across multiple languages, and non-native English speakers don't share that background — `exc` isn't obviously "exception" if you haven't seen it before. The full words save every future reader a mental lookup. The linter tells you exactly what to type, so the cost in practice is near zero. ([Decision 0022](../../plans/decisions/0022-naming-conventions.md))
+**Why:** We optimize for readability across experience levels — full words over abbreviations. Python's common abbreviations (`msg`, `err`, `exc`, `buf`) are instantly familiar to experienced developers but not self-explanatory to everyone. Newcomers, multilingual developers working across multiple languages, and non-native English speakers don't share that background — `exc` isn't obviously "exception" if you haven't seen it before. The full words save every future reader a mental lookup. The linter handles this automatically, so it doesn't cost you time. We know it feels different from other Python projects — that's intentional. ([Decision 0022](../../plans/decisions/0022-naming-conventions.md))
 
 ## Type annotations
 
