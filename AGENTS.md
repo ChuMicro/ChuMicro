@@ -32,19 +32,7 @@ Before proposing a structural or pattern change, check `plans/decisions/` first.
 - **Do not hard-code secrets.**
 - **Minimize dependencies** — prefer pure-Python implementations compatible with all three runtimes.
 - **Do not use heredocs, `echo`, `printf`, or `cat` to create multi-line content** — write files with file tools, then reference them from the terminal.
-- **Do not leave docs, templates, CI, and plans stale** when behavior changes. When you add or change a task, command, library, config, pattern, or behavior, check whether these files need updating — not all of them every time, just the ones your change affects:
-    - `AGENTS.md` — key commands table, hard rules, pitfalls
-    - `README.md` — tasks table, testing section, repository layout
-    - `CONTRIBUTING.md` — preflight details, project rules
-    - `.github/workflows/ci.yml` — new CI jobs if needed
-    - `docs/contributing/cheat-sheet.md` — common commands
-    - `docs/contributing/pull-requests.md` — verification steps
-    - `scripts/new_library_scaffold.py` — templates for new libraries
-    - `scripts/ide_sync.py` — task list, source roots
-    - `plans/history.md` — timeline entry for significant changes
-    - `plans/next-up.md` — move done items, add new work
-
-  A feature that exists only in code is incomplete.
+- **Do not leave docs, templates, CI, and plans stale** — a feature that exists only in code is incomplete. When you add or change a task, command, library, config, pattern, or behavior, ask: *"If someone reads the docs tomorrow, will they find correct information about this?"* Update whatever your change makes wrong — READMEs, contributing guides, style guide, cheat sheet, CI workflows, scaffold templates, planning docs. Don't limit yourself to a fixed list of files.
 
 ## Common pitfalls
 

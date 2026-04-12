@@ -60,19 +60,7 @@ For each significant change, verify:
 | `plans/history.md` | Timeline entry added for the current session (if significant) |
 | `plans/decisions/` | New decisions recorded if tradeoffs were made |
 
-If you added a new task, command, library, or changed existing behavior,
-also check for documentation ripple across the workspace:
-
-| File | What to verify |
-|---|---|
-| `AGENTS.md` | Key commands table, hard rules, pitfalls |
-| `README.md` | Tasks table, testing section, repository layout |
-| `CONTRIBUTING.md` | "What preflight checks" details |
-| `.github/workflows/ci.yml` | New tasks added as CI jobs if they should gate PRs |
-| `docs/contributing/development-cli.md` | Task sections, validation checklist table |
-| `docs/contributing/pull-requests.md` | Verification steps table |
-| `scripts/new_library_scaffold.py` | Templates for new libraries |
-| `scripts/ide_sync.py` | `_TASKS` list, source root generation |
+If you added a new task, command, library, or changed existing behavior, ask: *"If someone reads the docs tomorrow, will they find correct information about this?"* Update whatever your changes make wrong — READMEs, contributing guides, style guide, cheat sheet, CI workflows, scaffold templates, IDE configs, planning docs.
 
 ## 5. Commit remaining work
 
