@@ -270,46 +270,8 @@ Successfully built chumicro_timing-0.1.15.tar.gz and chumicro_timing-0.1.15-py3-
 Built 4 package(s): libraries/compat, libraries/msgpack, libraries/runner, libraries/timing
 ```
 
-### `validate-mip`
-
-Tests that libraries can be installed via MicroPython's `mip` package manager and imported successfully.  Both `.py` (source) and `.mpy6` (bytecode) formats are validated.  Requires a MicroPython unix-port binary (built with `prepare-micropython`).
-
-Two modes:
-
-- **Remote** (`--bundle-repo`): validate against a live GitHub bundle repository.  Requires network access to `raw.githubusercontent.com`.
-- **Local** (`--staging-dir`): validate against a locally staged bundle directory by serving it over a background HTTP server.  No network access needed.
-
-```bash
-# Validate specific libraries against the experimental bundle
-python scripts/run.py validate-mip \
-    --bundle-repo ChuMicro-Bundle-Experimental \
-    --libraries timing,runner
-
-# Validate all libraries against the stable bundle
-python scripts/run.py validate-mip --bundle-repo ChuMicro-Bundle
-
-# Validate a locally staged bundle (pre-publish)
-python scripts/run.py validate-mip --staging-dir .bundle-staging
-```
-
-**When it passes:**
-
-```
-== chumicro_timing ==
-  [py] github:ChuMicro/ChuMicro-Bundle-Experimental/chumicro_timing
-    Installing ...
-    OK: install + import succeeded
-  [mpy6] github:ChuMicro/ChuMicro-Bundle-Experimental/mpy6/chumicro_timing
-    Installing ...
-    OK: install + import succeeded
-
-All 4 validations passed (4/4).
-```
-
-This runs automatically in CI: locally before pushing to bundle repos (pre-publish gate) and remotely after pushing (post-publish smoke test).  Use `--staging-dir` locally to verify staged bundle artifacts before cutting a release.
-
 <details>
-<summary>Other tasks (CI, cross-runtime, scaffolding)</summary>
+<summary>Other tasks (cross-runtime, scaffolding)</summary>
 
 These tasks are less commonly used during development but are available:
 
@@ -319,9 +281,6 @@ python scripts/run.py sync-ide
 
 # Scaffold a new library
 python scripts/run.py new-library my-thing
-
-# Deploy versioned docs to gh-pages (used by CI)
-python scripts/run.py docs-deploy --channel experimental
 
 # Serve a versioned docs preview locally
 python scripts/run.py docs-preview --libraries timing
@@ -344,17 +303,17 @@ python scripts/run.py test-circuitpython-compatibility
 # Run all tests across CPython, MicroPython, and CircuitPython
 python scripts/run.py test-runtime-matrix
 
-# Check VERSION enforcement for changed libraries (CI gate)
+# Check VERSION enforcement for changed libraries
 python scripts/run.py check-version
 
-# Check for API breakages against last release tag (CI gate)
+# Check for API breakages against last release tag
 python scripts/run.py check-api
 
 # Device validation information
 python scripts/run.py test-device
 ```
 
-Most of these run automatically as part of preflight or CI — you only need them for targeted debugging or specific workflows.
+Most of these run automatically as part of preflight — you only need them for targeted debugging.
 
 </details>
 
