@@ -134,6 +134,18 @@ A `result_parser.py` module parses the harness's structured output (`PASS`, `FAI
 
 ## Hardware-validated findings (2026-04-12)
 
+### MicroPython — Lolin S2 Mini (ESP32-S2-S2FN4R2), MicroPython v1.28.0
+
+All 5 assumptions validated on first attempt, no workarounds needed:
+
+- `mpremote exec` connects and runs code
+- `mpremote run` executes a local script on the device from RAM (no flash write)
+- `mpremote mount` mounts a local directory and `import` works from it
+- The test harness (`runner.run_module`) runs on device with PASS/FAIL/SUMMARY/HEAP output
+- The real `test_ticks_progress_on_runtime` functional test passes (0.064s)
+
+### CircuitPython — Lolin S2 Mini (ESP32-S2-S2FN4R2), CircuitPython 10.1.4
+
 Tested on Lolin S2 Mini (ESP32-S2-S2FN4R2) running CircuitPython 10.1.4.
 
 **Confirmed:**
