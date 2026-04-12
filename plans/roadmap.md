@@ -30,22 +30,26 @@ Settled choices: single-branch model with tag-based stable releases (Decision 00
 
 ## Milestone 3 — device validation and simulation
 
-Status: `proposed`
+Status: `in-progress`
 
 Goal: add simulation-first device validation and optional home testbed execution.
 
 Exit criteria:
 
-- device registry template exists
+- device registry template exists (`devices.example.yml`, `device-config.example.yml`)
 - simulation/emulation path is part of CI where practical
 - hardware workflow can target user-managed boards when configured
 - functional test harness contract is defined and exercised
 
-Key choices to confirm:
+Key choices confirmed (Decision 0027):
 
-- whether MicroPython Unix port is sufficient as an early compatibility signal
-- whether CircuitPython should rely on mocks first, or whether you want a board-run path in the first implementation wave
-- how much of the home testbed should block PRs versus run on demand
+- MicroPython transport uses `mpremote` (mount mode default, copy mode fallback)
+- CircuitPython transport uses pyserial raw paste mode for serial, Web Workflow REST API for WiFi boards
+- two gitignored config files: `devices.yml` (board registry) + `device-config.yml` (shared environment like WiFi)
+- `test-device` command in run.py replaces the placeholder with real orchestration
+- IDE integration via pytest conftest that routes `functional_tests/` to device when `CHUMICRO_DEVICE_RUNTIME` env var is set
+- harness gains `name_filter` parameter for single-test execution
+- transport implementations live in `support/device_transport/`, not published
 
 Current answer:
 

@@ -27,4 +27,5 @@ libraries/*/docs/assets/
 .mypy_cache/
 .scratch/
 devices.yml
+device-config.yml
 

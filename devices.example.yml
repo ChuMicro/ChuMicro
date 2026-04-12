@@ -1,16 +1,34 @@
+# Device registry for local/CI device testing.
+#
+# Copy to devices.yml and fill in your board details.
+# Keep devices.yml out of version control — it is gitignored.
+#
+# See Decision 0027 for the full schema and device-config.example.yml
+# for shared test environment settings (WiFi, MQTT, etc.).
+
 devices:
   - id: sample-circuitpython-board
-    description: Example CircuitPython board entry for local manual device validation.
+    description: Example CircuitPython board entry for local device validation.
     runtime: circuitpython
     connection_type: serial
     address: /dev/cu.usbmodemEXAMPLE
     board_type: esp32s3
+    serial_baudrate: 115200
     setup_command: null
+    # For WiFi-enabled boards, the Web Workflow REST API can be used
+    # as an alternative transport for file staging:
+    # web_workflow:
+    #   host: "192.168.1.42"
+    #   port: 80
+    #   password: "your-web-api-password"
 
   - id: sample-micropython-board
-    description: Example MicroPython board entry for local manual device validation.
+    description: Example MicroPython board entry for local device validation.
     runtime: micropython
     connection_type: serial
     address: /dev/cu.usbserial-EXAMPLE
     board_type: esp32s3
+    serial_baudrate: 115200
+    # Transport mode: "mount" (default, no flash wear) or "copy" (write to flash).
+    transport_mode: mount
     setup_command: null

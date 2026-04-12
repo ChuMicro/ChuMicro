@@ -20,8 +20,10 @@ Add a simulation-first validation path, then layer on optional hardware executio
 - `libraries/timing/functional_tests/test_heartbeat_ticks.py` exists as the first device-facing timing test
 - `scripts/prepare_micropython.py` and `scripts/prepare_circuitpython.py` provide MicroPython and CircuitPython unix-port preparation (tasks: `prepare-micropython`, `prepare-circuitpython`)
 - `support/test_harness/run_cross_runtime.py` exists as the canonical cross-runtime test runner entrypoint (runs `tests/` through the lightweight harness, see Decision 0016)
-- `devices.example.yml` exists as the first committed local board registry template
+- `devices.example.yml` exists as the local board registry template
+- `device-config.example.yml` exists as the shared test environment config template (WiFi, MQTT, etc.)
 - manual-only hardware execution is the current documented starting point
+- Decision 0027 accepted — defines transport protocol, config schema, run.py integration, and IDE approach
 
 ## Validation layers
 
@@ -51,18 +53,55 @@ Windows host note:
 
 - per [Decision 0005](../decisions/0005-windows-wsl2-unix-port-validation.md), Windows contributors should use WSL2 for unix-port-based MicroPython and CircuitPython validation rather than native-Windows unix-port workflows in this phase
 
-### Layer 3: functional tests
+### Layer 3: functional tests on real devices
 
 Purpose:
 
 - validate behavior that mocks cannot prove
-- validate actual MicroPython and CircuitPython interpreter behavior
-- validate board-facing integration points
+- validate actual MicroPython and CircuitPython interpreter behavior on real hardware
+- validate board-facing integration points (GPIO, WiFi, real-time)
+
+Transport (Decision 0027):
+
+- MicroPython: `mpremote` (mount mode default, copy mode fallback)
+- CircuitPython: pyserial raw paste mode (serial), Web Workflow REST API (WiFi boards)
+
+## Implementation phases
+
+### Phase 1: Configuration + MicroPython transport
+
+- [ ] Create `scripts/device_config.py` — load and validate `devices.yml` + `device-config.yml`
+- [ ] Create `support/device_transport/` package with `MicropythonTransport`
+- [ ] Add `mpremote` to `requirements-dev.txt`
+- [ ] Add `name_filter` parameter to `runner.run_module` for single-test execution
+- [ ] Create `result_parser.py` for structured output parsing
+- [ ] Replace `test-device` placeholder in `run.py` with real orchestration
+- [ ] Write host-side tests for config loader, result parser, and transport orchestration
+
+### Phase 2: CircuitPython serial transport
+
+- [ ] Create `CircuitpythonTransport` using pyserial raw paste mode
+- [ ] Add `pyserial` to `requirements-dev.txt`
+- [ ] Implement Web Workflow REST API transport as an alternative for WiFi boards
+- [ ] Test on at least one real CircuitPython board
+
+### Phase 3: IDE integration
+
+- [ ] Create pytest conftest/plugin that routes `functional_tests/` to device when `CHUMICRO_DEVICE_RUNTIME` is set
+- [ ] Add PyCharm run configuration template for device tests
+- [ ] Add VS Code configuration guidance
+- [ ] Verify single-test play button works in PyCharm
+
+### Phase 4: CI integration (manual-trigger only)
+
+- [ ] Create `device-test.yml` workflow with `workflow_dispatch` trigger
+- [ ] Support CI-injected `devices.yml` and `device-config.yml` via env vars / secrets
+- [ ] Document home testbed setup for CI runners
 
 ## Proposed first device strategy
 
 - keep `devices.yml` out of version control
-- provide `devices.example.yml`
+- provide `devices.example.yml` and `device-config.example.yml`
 - use manually triggered workflows first
 - allow a local home testbed to be attached later without changing library code
 - keep the functional test harness tiny and purpose-built
@@ -77,6 +116,7 @@ Current decision:
 Current verified state:
 
 - `devices.example.yml` is now checked in
+- `device-config.example.yml` is now checked in
 - the repo has a manual `test-device` entrypoint in `scripts/run.py`
 - the repo can prepare a pinned local MicroPython unix-port runtime under `.tools/`
 - the first MicroPython-oriented compatibility command has been exercised successfully in this workspace with the prepared local runtime
@@ -90,8 +130,8 @@ Current verified state:
 
 The likely right split is:
 
-- `pytest` on the host
-- a tiny `support/test_harness/` for `functional_tests/` and cross-runtime `tests/` execution
+- `pytest` on the host (with a conftest that routes to device transport)
+- a tiny `support/test_harness/` for `functional_tests/` and cross-runtime `tests/` execution on device
 
 ## Success criteria
 
@@ -100,6 +140,7 @@ The likely right split is:
 - board registration is explicit and local configuration stays out of version control
 - functional tests are separated from host-only tests
 - device execution paths are simple enough for both humans and agents to run repeatedly
+- IDE play buttons work for functional tests when device runtime env var is set
 
 ## Notes
 
@@ -112,3 +153,4 @@ This workstream remains active because the transport layer, automated compatibil
 - **CircuitPython unix-port host-runtime path:** Already pursued and verified. The pinned CircuitPython 10.1.4 unix-port builds locally on macOS and passes the cross-runtime unit tests. It runs as a required CI job.
 - **Hardware workflow promotion:** Promote once board transport tooling exists and has proven reliable. Until then, manual-only.
 - **First-class test boards:** ESP32-S2 — specifically the [Wemos S2-Mini](https://www.wemos.cc/en/latest/s2/s2_mini.html) as the initial target. The device matrix will expand later. A future goal is CI-hosted hardware, but that is a high-security concern and will not be user-accessible. Users configure their own local test matrix via `devices.yml`.
+- **Transport and config design:** Decision 0027 accepted — defines the transport protocol, config schema, CLI integration, and IDE approach.

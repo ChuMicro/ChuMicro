@@ -2,10 +2,19 @@
 
 ## Now
 
-(empty — pick from Next)
+- [ ] Device testing infrastructure — Milestone 3, Phase 1 (Decision 0027)
+  - [ ] Create `scripts/device_config.py` — load and validate `devices.yml` + `device-config.yml`
+  - [ ] Create `support/device_transport/` package with `MicropythonTransport` (mpremote-based)
+  - [ ] Add `mpremote` to `requirements-dev.txt`
+  - [ ] Add `name_filter` parameter to `runner.run_module` for single-test execution
+  - [ ] Create `result_parser.py` for structured output parsing
+  - [ ] Replace `test-device` placeholder in `run.py` with real orchestration
+  - [ ] Write host-side tests for config loader, result parser, and transport orchestration
 
 ## Next
 
+- [ ] Device testing Phase 2: CircuitPython serial transport (pyserial raw paste mode) — Decision 0027
+- [ ] Device testing Phase 3: IDE integration (pytest conftest routes `functional_tests/` to device when `CHUMICRO_DEVICE_RUNTIME` is set) — Decision 0027
 - [ ] Enable GitHub Copilot code review as a PR quality gate (low priority — defer until community contributions begin).
 - [ ] Implement `chumicro-settings` — dict-like persistent storage for microcontrollers.
   - Uses `chumicro-msgpack` for serialization (2-byte length prefix + msgpack payload).
@@ -18,7 +27,6 @@
 - [ ] Add digital I/O as the second library seam (alongside CI/release work, not sequentially).
 - [ ] Explore test ergonomics: reduce repeated boilerplate across test files.
 - [ ] Validate VS Code workspace end-to-end (configs are generated and structurally correct — needs a live VS Code session to confirm test discovery and import resolution work interactively).
-- [ ] Add the first real board transport tooling for ESP32-S2 (Wemos S2-Mini) once the manual device execution path needs to move beyond direct local runs.
 - [ ] Design a performance and resource benchmarking infrastructure. Goals:
   - Measure memory footprint (heap allocations, peak usage) and CPU cost of library operations.
   - Control GC explicitly during benchmarks so allocation measurements are stable and reproducible across runs.
@@ -28,6 +36,7 @@
 ## Blocked / waiting
 
 - [ ] Expand the device test matrix beyond ESP32-S2 once transport tooling is proven.
+- [ ] Device testing Phase 4: CI integration (`device-test.yml` with `workflow_dispatch`) — blocked on Phase 1 proving reliable.
 
 ## Done (recent)
 

@@ -56,4 +56,23 @@ This runs the current verified CPython host test suite, prepares the repo-local 
 
 ## Device registration
 
-Real-board execution is still manual-only. Use `devices.example.yml` as the starting point for your local `devices.yml` file. Keep `devices.yml` out of version control.
+Real-board execution is being built out as Milestone 3 (Decision 0027).
+
+- Copy `devices.example.yml` to `devices.yml` and fill in your board details.
+- Copy `device-config.example.yml` to `device-config.yml` and fill in WiFi credentials and other test environment settings.
+- Keep both files out of version control — they are gitignored.
+
+Once transport tooling is implemented:
+
+```zsh
+# Run all functional tests on all configured devices
+python scripts/run.py test-device
+
+# Target a specific runtime and library
+python scripts/run.py test-device --runtime micropython --library timing
+
+# Target a specific device and test
+python scripts/run.py test-device --device sample-mp-board --test test_heartbeat_ticks
+```
+
+See Decision 0027 and `plans/workstreams/device-validation.md` for the full design.
