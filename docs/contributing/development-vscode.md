@@ -79,6 +79,7 @@ The project provides pre-configured tasks in `.vscode/tasks.json`. Open the Comm
 | **Preflight** | Full CI gate — lint, test, build, docs, examples, compat |
 | **Lint** | Ruff across the workspace |
 | **Test** | CPython tests for all libraries |
+| **Test Scripts** | Infrastructure tests for `scripts/` |
 | **Build** | Build all package distributions |
 | **Verify Examples** | AST-based import check of all examples |
 | **Docs** | Build documentation for all libraries |

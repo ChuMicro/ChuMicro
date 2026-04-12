@@ -59,6 +59,7 @@ The project includes pre-configured run configurations in `.idea/runConfiguratio
 | **Preflight** | Full CI gate — lint, test, build, docs, examples, compat |
 | **Lint** | Ruff across the workspace |
 | **Test** | CPython tests for all libraries |
+| **Test Scripts** | Infrastructure tests for `scripts/` |
 | **Build** | Build all package distributions |
 | **Verify Examples** | AST-based import check of all examples |
 | **Docs** | Build documentation for all libraries |
