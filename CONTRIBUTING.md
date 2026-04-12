@@ -50,14 +50,13 @@ Each page is self-contained for its topic. You don't need to read all of them �
 
 ## Development environment
 
-The project supports three workflows — pick whichever you're comfortable with. Each guide covers setup, running tasks, interpreting output (both success and failure), and a validation checklist:
+Pick whichever workflow you're comfortable with:
 
-- **[Command Line](docs/contributing/development-cli.md)** — no IDE required, full control
 - **[PyCharm](docs/contributing/development-pycharm.md)** — run configurations, test explorer, source root management
 - **[VS Code](docs/contributing/development-vscode.md)** — tasks, extensions, Pylance integration
-- **[Other Editors](docs/contributing/development-other-editors.md)** — Neovim, Zed, Emacs, Sublime, or anything with a terminal
+- **[Other Editors / Command Line](docs/contributing/development-other-editors.md)** — Neovim, Zed, Emacs, Sublime, or anything with a terminal
 
-You only need one. All four reach the same place.
+You only need one. All three reach the same place.
 
 ## Quick start
 

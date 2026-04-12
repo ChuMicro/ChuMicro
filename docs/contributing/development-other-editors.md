@@ -39,7 +39,7 @@ python scripts/run.py lint                       # lint the workspace
 python scripts/run.py preflight                  # full CI mirror
 ```
 
-See the [Command Line guide](development-cli.md#running-tasks) for the full list with expected output.
+See the [Cheat Sheet](cheat-sheet.md) for the full command list.
 
 ## Editor-specific tips
 
@@ -102,7 +102,7 @@ This re-runs editable installs and regenerates `pyrightconfig.json`. Your editor
 
 ## Validation checklist
 
-Same as the [CLI guide](development-cli.md#validation-checklist) — run preflight before opening a PR:
+Run preflight before opening a PR:
 
 ```bash
 python scripts/run.py preflight
