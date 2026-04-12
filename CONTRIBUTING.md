@@ -25,6 +25,7 @@ Start here, then pick the guide that matches your task:
 
 | What you want to do | Read this |
 |---|---|
+| **Get the short version** | [Contributor Cheat Sheet](docs/contributing/cheat-sheet.md) — one page, everything you need |
 | **Find something to work on** | [Good first contributions](#good-first-contributions) |
 | **Set up and develop** | This page → then your [development environment guide](#development-environment) |
 | **Understand the code style** | [Style Guide](docs/contributing/style-guide.md) |
@@ -36,7 +37,7 @@ Start here, then pick the guide that matches your task:
 
 Each page is self-contained for its topic. You don't need to read all of them — just the ones relevant to what you're doing.
 
-> **First contribution?** Read the [Quick Start](#quick-start) below, make your change, and run `preflight` before pushing. That's the minimum. The style guide, architecture docs, and decision records are there when you need them — you don't need to read them all upfront.
+> **First contribution?** Start with the [cheat sheet](docs/contributing/cheat-sheet.md) for the short version, or read the [Quick Start](#quick-start) below for the full walkthrough. Run `preflight` before pushing — that's all you need to remember.
 
 ## Prerequisites
 
