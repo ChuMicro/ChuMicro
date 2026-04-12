@@ -32,8 +32,14 @@
 
 ## Done (recent)
 
+- [x] Validate-mpy CI job for PRs: builds mpy-cross, stages all libraries, validates mip install + import from staged bundle. Catches broken mpy compilation or manifest errors before merge.
+- [x] Pre-publish bundle validation: `--staging-dir` mode validates mip install against locally staged bundles before pushing to live repos. Integrated as a gate in both `release.yml` and `promote.yml`.
 - [x] Mip install validation in CI: `validate-mip` job in `release.yml` and `promote.yml` tests mip install + import for both `.py` and `.mpy6` formats after every bundle push. `validate-mip` run.py subcommand for local use.
+- [x] Mpy folder restructuring (Decision 0024): `.mpy` bytecode moved out of root package dirs into `mpy6/` (MicroPython) and `circuitpython-10.x-mpy/` (CircuitPython). Root `package.json` lists `.py` source for universal compatibility; `mpy6/` manifests for users who want pre-compiled bytecode.
+- [x] Mip dependency routing: experimental `package.json` references experimental bundle repo for deps (was hardcoded to stable). Fixed "latest" → "HEAD" for git ref resolution.
 - [x] CI mpy-cross integration: `release.yml` and `promote.yml` build both mpy-cross compilers from source (cached) instead of `pip install mpy-cross`. Both CircuitPython and MicroPython `.mpy` files are now compiled during bundle staging. New `prepare-mpy-cross` command builds only the compilers without the full unix-port interpreters.
+- [x] Promote workflow fixes: inlined stable docs deployment (concurrency group was silently canceling deploys), added attestations to stable PyPI publish, fixed garbled bundle release description.
+- [x] CI micropython cache sharing: `validate-mpy`, `runtime-compatibility`, `release.yml`, and `promote.yml` all share the same micropython cache key.
 - [x] Docs branding overhaul: warm palette matching badger logo, favicon regeneration, landing page reads descriptions from pyproject.toml, centered logo header in root README, plain-language library descriptions.
 - [x] Library README overhaul: absolute URLs for PyPI compatibility, badger tip images, Source links to library directories, README.md included in bundle staging, scaffold template aligned.
 - [x] Brand normalization: "Chumicro" → "ChuMicro" across 50+ occurrences in prose, docstrings, templates, and docs.

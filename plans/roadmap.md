@@ -26,7 +26,7 @@ Status: `done`
 
 Goal: prove branch → PR → checks → merge → release staging.
 
-Settled choices: single-branch model with tag-based stable releases (Decision 0019); required PR checks include lint, tests, coverage, build, MP/CP compat, version-check, api-check; all three distribution targets (PyPI, circup, mip) in the same release pipeline; per-repo SSH deploy keys for bundle repos.
+Settled choices: single-branch model with tag-based stable releases (Decision 0019); required PR checks include lint, tests, coverage, build, MP/CP compat, version-check, api-check, validate-mpy; all three distribution targets (PyPI, circup, mip) in the same release pipeline; per-repo SSH deploy keys for bundle repos; mpy-cross compiled from source (both runtimes) during bundle staging (Decision 0024); pre-publish mip validation via `--staging-dir` before pushing to live bundle repos; post-publish mip validation as CDN smoke test.
 
 ## Milestone 3 — device validation and simulation
 
