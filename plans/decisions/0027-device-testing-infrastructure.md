@@ -172,3 +172,35 @@ Tested on Lolin S2 Mini (ESP32-S2-S2FN4R2) running CircuitPython 10.1.4.
 
 These are implementation details that do not change the transport architecture.
 
+### MicroPython file deployment — validated (2026-04-12)
+
+Tested `mpremote fs` commands for persistent file deployment to flash:
+
+| Operation | Result | Notes |
+|-----------|--------|-------|
+| `fs cp` single file | ✅ | Instant |
+| `fs mkdir` + copy to subdir | ✅ | Instant |
+| `fs cp -r` recursive tree | ✅ | 1.02 s for 3 files |
+| Import deployed package | ✅ | Works from flash |
+| `fs sha256sum` integrity | ✅ | Hashes match |
+| `fs rm` / `fs rmdir` cleanup | ✅ | Works |
+| Flash capacity | ✅ | 2 MB total, 98 % free |
+
+`mpremote` handles the entire deployment workflow natively — recursive copy, integrity verification, cleanup.  No workarounds needed.
+
+### CircuitPython file deployment — validated (2026-04-12)
+
+Tested USB-drive deployment with autoreload control via raw REPL:
+
+| Step | Result | Notes |
+|------|--------|-------|
+| 1 — Disable autoreload | ✅ | `autoreload = False` confirmed |
+| 2 — File copy + verify | ✅ | Wrote to CIRCUITPY (7.4 s with sync), REPL read-back correct |
+| 3 — Deploy `lib/` package | ✅ | Package copied (3.3 s), import + function call worked from REPL |
+| 4 — `code.py` + reload | ✅ | Wrote code.py, soft-reset triggered standalone run, `DEPLOY_VERIFIED` appeared in serial output |
+| 5 — Clean up | ✅ | Original code.py restored, flash at 99 % free |
+
+**CircuitPython-specific constraint discovered:**
+
+- `hashlib.sha256` is unavailable on ESP32-S2 running CircuitPython 10.1.4.  The transport should fall back to byte-compare or skip hash verification on boards without `hashlib.sha256`.  This does not affect the deployment workflow itself.
+
