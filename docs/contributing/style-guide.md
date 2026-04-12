@@ -97,6 +97,61 @@ They apply to **publishable library code under `libraries/`** and **`support/tes
 | Cache frequently used attributes in local variables | Reduce attribute lookups in hot paths |
 | Avoid dynamic string building in loops | GC pressure |
 
+<details>
+<summary>Examples (expand when you're ready to optimize)</summary>
+
+#### `const()` — compile-time constants
+
+On MicroPython and CircuitPython, `const()` inlines the value at compile time instead of creating a runtime object. On CPython it doesn't exist, so every library that uses it needs a fallback:
+
+```python
+try:
+    from micropython import const
+except ImportError:
+
+    def const(value: int) -> int:
+        """Identity fallback so const() works on CPython."""
+        return value
+
+_PERIOD = const(1 << 29)       # inlined at compile time, no heap allocation
+_MAX = const(_PERIOD - 1)
+```
+
+Prefix internal constants with `_` (module-private). See `libraries/timing/src/chumicro_timing/ticks.py` for a real example.
+
+#### `memoryview` — zero-copy slicing
+
+Normal `bytearray` slicing creates a copy every time. `memoryview` gives you a slice that points to the original data:
+
+```python
+# ❌ Each slice copies data
+header = data[0:4]       # new bytearray allocated
+payload = data[4:20]     # another new bytearray allocated
+
+# ✅ Zero-copy — slices share the original buffer
+view = memoryview(data)
+header = view[0:4]       # no copy
+payload = view[4:20]     # no copy
+```
+
+Combine with pre-allocated buffers for the full pattern:
+
+```python
+class PacketReader:
+    """Incremental packet reader with zero-copy slicing."""
+
+    def __init__(self, buffer_size: int = 64) -> None:
+        self._buffer = bytearray(buffer_size)  # allocated once
+        self._view = memoryview(self._buffer)   # reusable view
+
+    def read_header(self, source: object) -> memoryview:
+        """Read from source into the buffer, return the header slice."""
+        source.readinto(self._buffer)
+        return self._view[0:4]  # zero-copy slice
+```
+
+</details>
+
 
 ## What the linter checks
 
