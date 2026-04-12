@@ -14,7 +14,7 @@ Import from `chumicro_compat` instead of the stdlib and your code works everywhe
 
 ### CircuitPython ([circup](https://github.com/adafruit/circup))
 
-circup is CircuitPython's package manager — it uses [bundles](https://learn.adafruit.com/keep-your-circuitpython-libraries-on-devices-up-to-date-with-circup/usage#bundle-management-3105292) to find third-party packages. Register the ChuMicro bundle once, then install by name:
+circup is CircuitPython's package manager — it uses [bundles](https://learn.adafruit.com/keep-your-circuitpython-libraries-on-devices-up-to-date-with-circup/bundle-commands) to find third-party packages. Register the ChuMicro bundle once, then install by name:
 
 ```bash
 circup bundle-add ChuMicro/ChuMicro-Bundle
