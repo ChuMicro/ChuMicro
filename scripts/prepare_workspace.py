@@ -27,7 +27,7 @@ import sys
 import venv
 from pathlib import Path
 
-from shared import install_command, install_editable
+from shared import install_command, install_editable, running_on_native_windows
 from workspace import ROOT
 
 VENV_DIR = ROOT / ".venv"
@@ -77,11 +77,6 @@ def _run(command: list[str | Path], label: str) -> None:
     if result.returncode != 0:
         print(f"\nFailed: {label}")
         raise SystemExit(result.returncode)
-
-
-def _is_native_windows() -> bool:
-    """Return whether this is native Windows (not WSL)."""
-    return os.name == "nt"
 
 
 def _in_virtual_environment() -> bool:
@@ -249,7 +244,7 @@ def print_summary(python: Path) -> None:
     # Activation hint only if we created .venv and it is not the running interpreter.
     if python == _venv_python() and not _in_virtual_environment():
         print("Activate the virtual environment:")
-        if _is_native_windows():
+        if running_on_native_windows():
             print("  .venv\\Scripts\\activate")
         else:
             print("  source .venv/bin/activate")
@@ -257,11 +252,11 @@ def print_summary(python: Path) -> None:
 
     print("Common tasks:")
     print("  python scripts/run.py preflight          # verify before pushing")
-    if not _is_native_windows():
+    if not running_on_native_windows():
         print("  python scripts/run.py test-runtime-matrix # full cross-runtime tests")
     print("  python scripts/run.py test                # CPython tests only")
 
-    if _is_native_windows():
+    if running_on_native_windows():
         print()
         print("Windows note:")
         print("  Unix-port runtime checks (MicroPython, CircuitPython) require WSL2.")

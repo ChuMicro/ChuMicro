@@ -17,40 +17,30 @@ that ``resolve_micropython_binary()`` can find it without recompiling.
 from __future__ import annotations
 
 import subprocess
-import sys
 
 from shared import (
-    build_environment,
     build_jobs,
+    ensure_source_tree,
     ensure_tool,
+    macos_build_environment,
     run_build_command,
     running_on_native_windows,
     runtime_versions,
 )
 from workspace import TOOLS
 
-_RELEASE = runtime_versions()["micropython"]["version"]
 _REPO_URL = "https://github.com/micropython/micropython.git"
-_SOURCE_DIR = TOOLS / f"micropython-{_RELEASE}"
-_BINARY_FILE = _SOURCE_DIR / "ports" / "unix" / "build-standard" / "micropython"
 
 
-def _ensure_source_tree() -> None:
-    """Clone the pinned MicroPython source tree if it is not already present.
+def _source_dir():
+    """Return the MicroPython source directory (computed lazily)."""
+    release = runtime_versions()["micropython"]["version"]
+    return TOOLS / f"micropython-{release}"
 
-    Always runs ``git submodule update`` even when the clone already
-    exists because submodules may have been left uninitialized by a
-    shallow clone or a previous interrupted run.
-    """
-    _SOURCE_DIR.parent.mkdir(parents=True, exist_ok=True)
-    if not _SOURCE_DIR.exists():
-        run_build_command([
-            "git", "clone", "--depth", "1",
-            "--branch", _RELEASE, _REPO_URL, str(_SOURCE_DIR),
-        ])
-    run_build_command(
-        ["git", "submodule", "update", "--init", "--recursive"], cwd=_SOURCE_DIR
-    )
+
+def _binary_file():
+    """Return the expected binary path (computed lazily)."""
+    return _source_dir() / "ports" / "unix" / "build-standard" / "micropython"
 
 
 def prepare_micropython() -> int:
@@ -66,22 +56,21 @@ def prepare_micropython() -> int:
         for tool_name in ("git", "make", "cc"):
             ensure_tool(tool_name)
 
-        _ensure_source_tree()
+        source_dir = _source_dir()
+        release = runtime_versions()["micropython"]["version"]
+        ensure_source_tree(source_dir, _REPO_URL, release, init_submodules=True)
 
         jobs = f"-j{build_jobs()}"
-        # macOS Clang treats gnu-folding-constant as an error by default,
-        # which breaks the MicroPython build.  Not needed on Linux/GCC.
-        macos_flags = ["-Wno-error=gnu-folding-constant"] if sys.platform == "darwin" else []
-        environment = build_environment(*macos_flags)
+        environment = macos_build_environment()
         # Build steps must run in order:
         #   1. mpy-cross — the bytecode compiler, required before the port.
         #   2. ports/unix — the actual unix-port interpreter binary.
         run_build_command(
-            ["make", "-C", str(_SOURCE_DIR / "mpy-cross"), jobs],
+            ["make", "-C", str(source_dir / "mpy-cross"), jobs],
             environment=environment,
         )
         run_build_command(
-            ["make", "-C", str(_SOURCE_DIR / "ports/unix"), jobs],
+            ["make", "-C", str(source_dir / "ports/unix"), jobs],
             environment=environment,
         )
     except subprocess.CalledProcessError as error:
@@ -91,10 +80,11 @@ def prepare_micropython() -> int:
         print(error)
         return 1
 
-    if not _BINARY_FILE.exists():
-        print(f"Prepared source tree does not contain the expected binary: {_BINARY_FILE}")
+    binary_file = _binary_file()
+    if not binary_file.exists():
+        print(f"Prepared source tree does not contain the expected binary: {binary_file}")
         return 1
 
-    print(f"Prepared MicroPython binary: {_BINARY_FILE}")
-    (TOOLS / "micropython.path").write_text(str(_BINARY_FILE))
+    print(f"Prepared MicroPython binary: {binary_file}")
+    (TOOLS / "micropython.path").write_text(str(binary_file))
     return 0

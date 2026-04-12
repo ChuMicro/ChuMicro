@@ -6,7 +6,7 @@ This module provides:
 - Generic subprocess helpers: :func:`run_command`, :func:`install_command`
 - Editable-install logic: :func:`install_editable`
 - Build utilities shared by the MicroPython and CircuitPython preparation
-  modules: :func:`run_build_command`, :func:`ensure_tool`, etc.
+  modules: :func:`run_build_command`, :func:`ensure_tool`, :func:`ensure_source_tree`, etc.
 - Binary resolution: :func:`resolve_micropython_binary`,
   :func:`resolve_circuitpython_binary`, :func:`resolve_cp_mpy_cross`,
   :func:`resolve_mp_mpy_cross`
@@ -153,6 +153,45 @@ def build_environment(*extra_cflags: str) -> dict[str, str]:
     if existing:
         environment["CFLAGS_EXTRA"] = " ".join(existing)
     return environment
+
+
+def macos_build_environment() -> dict[str, str]:
+    """Return build environment with macOS-specific compiler flags.
+
+    macOS Clang treats ``gnu-folding-constant`` as an error by default,
+    which breaks the MicroPython build.  This helper adds the suppression
+    flag when running on Darwin.  Not needed on Linux/GCC.
+    """
+    macos_flags = ["-Wno-error=gnu-folding-constant"] if sys.platform == "darwin" else []
+    return build_environment(*macos_flags)
+
+
+def ensure_source_tree(
+    source_dir: Path,
+    repo_url: str,
+    release: str,
+    *,
+    init_submodules: bool = False,
+) -> None:
+    """Clone a pinned source tree if not already present.
+
+    Args:
+        source_dir: Target directory for the cloned repository.
+        repo_url: Git repository URL to clone.
+        release: Git tag or branch to check out.
+        init_submodules: Whether to recursively initialize submodules after
+            cloning.
+    """
+    source_dir.parent.mkdir(parents=True, exist_ok=True)
+    if not source_dir.exists():
+        run_build_command([
+            "git", "clone", "--depth", "1",
+            "--branch", release, repo_url, str(source_dir),
+        ])
+    if init_submodules:
+        run_build_command(
+            ["git", "submodule", "update", "--init", "--recursive"], cwd=source_dir
+        )
 
 
 # ---------------------------------------------------------------------------

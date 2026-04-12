@@ -26,6 +26,7 @@ import sys
 from shared import (
     build_environment,
     build_jobs,
+    ensure_source_tree,
     ensure_tool,
     run_build_command,
     running_on_native_windows,
@@ -33,23 +34,23 @@ from shared import (
 )
 from workspace import TOOLS
 
-_RELEASE = runtime_versions()["circuitpython"]["version"]
 _REPO_URL = "https://github.com/adafruit/circuitpython.git"
-_SOURCE_DIR = TOOLS / f"circuitpython-{_RELEASE}"
 _UNIX_VARIANT = "standard"
-# The CircuitPython unix-port binary is named "micropython" — inherited
-# from the MicroPython fork.  This is expected, not a misconfiguration.
-_BINARY_FILE = _SOURCE_DIR / "ports" / "unix" / f"build-{_UNIX_VARIANT}" / "micropython"
 
 
-def _ensure_source_tree() -> None:
-    """Clone the pinned CircuitPython source tree if it is not already present."""
-    _SOURCE_DIR.parent.mkdir(parents=True, exist_ok=True)
-    if not _SOURCE_DIR.exists():
-        run_build_command([
-            "git", "clone", "--depth", "1",
-            "--branch", _RELEASE, _REPO_URL, str(_SOURCE_DIR),
-        ])
+def _source_dir():
+    """Return the CircuitPython source directory (computed lazily)."""
+    release = runtime_versions()["circuitpython"]["version"]
+    return TOOLS / f"circuitpython-{release}"
+
+
+def _binary_file():
+    """Return the expected binary path (computed lazily).
+
+    The CircuitPython unix-port binary is named "micropython" — inherited
+    from the MicroPython fork.  This is expected, not a misconfiguration.
+    """
+    return _source_dir() / "ports" / "unix" / f"build-{_UNIX_VARIANT}" / "micropython"
 
 
 def prepare_circuitpython() -> int:
@@ -65,7 +66,9 @@ def prepare_circuitpython() -> int:
         for tool_name in ("git", "make", "cc"):
             ensure_tool(tool_name)
 
-        _ensure_source_tree()
+        source_dir = _source_dir()
+        release = runtime_versions()["circuitpython"]["version"]
+        ensure_source_tree(source_dir, _REPO_URL, release)
 
         jobs = f"-j{build_jobs()}"
         # Build steps must run in this exact order:
@@ -75,16 +78,16 @@ def prepare_circuitpython() -> int:
         #   3. ports/unix make — the actual unix-port binary.
         run_build_command(
             [sys.executable, "tools/ci_fetch_deps.py", "mpy-cross", "tests"],
-            cwd=_SOURCE_DIR,
+            cwd=source_dir,
         )
-        run_build_command(["make", "-C", str(_SOURCE_DIR / "mpy-cross"), jobs])
+        run_build_command(["make", "-C", str(source_dir / "mpy-cross"), jobs])
         # CircuitPython 10.1.4 has a bug in py/py.mk: objringio.c is listed
         # in py.cmake but missing from py.mk.  The workaround disables the
         # RingIO type so the missing object file is not required.
         # See plans/decisions/0017-circuitpython-ringio-bug.md.
         run_build_command(
             [
-                "make", "-C", str(_SOURCE_DIR / "ports/unix"),
+                "make", "-C", str(source_dir / "ports/unix"),
                 f"VARIANT={_UNIX_VARIANT}", jobs,
             ],
             environment=build_environment("-DMICROPY_PY_MICROPYTHON_RINGIO=0"),
@@ -96,10 +99,11 @@ def prepare_circuitpython() -> int:
         print(error)
         return 1
 
-    if not _BINARY_FILE.exists():
-        print(f"Prepared source tree does not contain the expected binary: {_BINARY_FILE}")
+    binary_file = _binary_file()
+    if not binary_file.exists():
+        print(f"Prepared source tree does not contain the expected binary: {binary_file}")
         return 1
 
-    print(f"Prepared CircuitPython binary: {_BINARY_FILE}")
-    (TOOLS / "circuitpython.path").write_text(str(_BINARY_FILE))
+    print(f"Prepared CircuitPython binary: {binary_file}")
+    (TOOLS / "circuitpython.path").write_text(str(binary_file))
     return 0
