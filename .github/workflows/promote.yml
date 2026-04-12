@@ -382,7 +382,14 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
-          cache: "pip"
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: docs-pip-${{ hashFiles('requirements-docs.txt') }}
+          restore-keys: |
+            docs-pip-
 
       - name: Install tooling
         run: |
