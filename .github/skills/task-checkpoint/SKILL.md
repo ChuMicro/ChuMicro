@@ -19,20 +19,13 @@ Scan the output. Ask yourself:
 - Are there files I didn't mean to change?
 - Did I leave any temporary or scratch files outside `.scratch/`?
 
-## 2. Check for breakage
+## 2. Run preflight
 
-Run the **narrowest check** that covers your changes:
+```bash
+python scripts/run.py preflight 2>&1 | tail -5
+```
 
-| What changed | What to run |
-|---|---|
-| One library's code or tests | `python scripts/run.py test --libraries <name> 2>&1 \| tail -10` |
-| Multiple libraries | `python scripts/run.py test --all --no-cov 2>&1 \| tail -5` |
-| Scripts or infrastructure | `python scripts/run.py test-scripts 2>&1 \| tail -5` then `python scripts/run.py lint 2>&1 \| tail -3` |
-| Docs or mkdocs.yml | `python scripts/run.py docs --libraries <name> 2>&1 \| tail -5` |
-| Examples | `python scripts/run.py verify-examples --libraries <name>` |
-| Not sure / broad changes | `python scripts/run.py lint 2>&1 \| tail -3` then `python scripts/run.py test --all --no-cov 2>&1 \| tail -5` |
-
-Don't run full preflight here — save that for end-of-session.
+Must show: `Preflight passed`. If it fails because of your work, fix it before committing. Use the `debug-test-failure` skill if tests fail.
 
 ## 3. Commit and push if the work is meaningful
 
@@ -51,8 +44,8 @@ If you couldn't complete something, or noticed something that needs follow-up, s
 
 ## Rules
 
-- **This is fast.** Steps 1-3 should take under 30 seconds. If it's taking longer, you're running too broad a check.
+- **This is fast.** Preflight takes a few seconds. Steps 1–3 should take under a minute total.
 - **Don't skip step 1.** A `git status` catches surprises — files you forgot, files you didn't mean to change, merge artifacts.
+- **Don't skip step 2.** Preflight is the single gate. If it passes, CI will pass. Narrow checks miss cross-cutting breakage.
 - **Commit and push early.** Small commits are easier to review and revert than large ones. If you've done something useful, commit and push it.
-- **Don't run preflight.** That's for `end-of-session`. Here you just want to catch obvious breakage.
 
