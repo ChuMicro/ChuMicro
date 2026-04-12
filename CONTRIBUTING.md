@@ -15,9 +15,20 @@ Welcome! ChuMicro is an open platform for cross-runtime Python libraries targeti
 Not sure where to start? These are real ways to contribute that don't require deep knowledge of the codebase:
 
 - **Fix a typo or clarify a sentence** in any README, guide, or docstring — docs-only PRs skip most CI checks.
+
+  > *Example:* A docstring says "returns a list" but the function actually returns a tuple. Fix the docstring, run `python scripts/run.py preflight`, open a PR. That's it.
+
 - **Add an example script** to a library's `examples/` folder — pick a use case from the library's guide that doesn't have an example yet.
+
+  > *Example:* The msgpack guide explains stream-based `pack`/`unpack`, but there's no example showing how to save settings to a file and load them back. Write a `file_settings.py` in `libraries/msgpack/examples/` that does exactly that.
+
 - **Improve test coverage** — run `python scripts/run.py test --libraries <name>`, check the `Missing` column in the coverage report, and write tests for uncovered lines.
+
+  > *Example:* You run `python scripts/run.py test --libraries timing` and the coverage report shows lines 45–48 of `_ticks.py` aren't covered. Those lines handle a rare wraparound edge case. Write a test that triggers that path — now the library is more reliable because of you.
+
 - **Try a library on your board** and report what happened — even a "it worked on my ESP32-S3" comment on an issue is valuable.
+
+  > *Example:* You have a Raspberry Pi Pico. Install `chumicro-timing`, run the `heartbeat_blink.py` example, and post a comment: "Tested on RP2040, CircuitPython 9.2 — heartbeat fires correctly at 1 Hz." That data point helps everyone.
 
 Look for issues labeled [**good first issue**](https://github.com/ChuMicro/ChuMicro/labels/good%20first%20issue) — these are scoped, described, and ready to pick up.
 
