@@ -222,7 +222,7 @@ Tasks that operate on libraries (`test`, `verify-examples`, `docs`, `docs-previe
 
 ### Testing
 
-- **CPython tests** — pytest with a 94% branch coverage gate per library
+- **CPython tests** — pytest with a per-library branch coverage gate
 - **Cross-runtime** — MicroPython and CircuitPython unix-port unit tests
 - **On-device** — opt-in `functional_tests/` via `support/test_harness/` (copy `devices.example.yml` to `devices.yml`)
 

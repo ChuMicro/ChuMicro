@@ -98,13 +98,13 @@ Output appears in the Terminal panel at the bottom of the window.
 
 ### From the task runner (with coverage)
 
-Command Palette → **Tasks: Run Task** → **Test**. This runs all libraries with the 94% coverage threshold and leaves a `.coverage` data file at the project root. To browse coverage visually, see [Browsing coverage](#browsing-coverage) below.
+Command Palette → **Tasks: Run Task** → **Test**. This runs all libraries with the coverage threshold and leaves a `.coverage` data file at the project root. To browse coverage visually, see [Browsing coverage](#browsing-coverage) below.
 
 ### From the test explorer (quick check, no coverage)
 
 VS Code's Testing panel (beaker icon in the sidebar, or `⌘⇧T` / `Ctrl+Shift+T`) discovers tests via the `python.testing.pytestArgs` setting in `.vscode/settings.json`.
 
-Click the ▶ button next to any test file or function to run it. This is fast for iterating but does not produce coverage data or enforce the 94% threshold.
+Click the ▶ button next to any test file or function to run it. This is fast for iterating but does not produce coverage data or enforce the coverage threshold.
 
 ### From the terminal
 
@@ -167,7 +167,7 @@ Every check enforces a specific quality gate. Here's what each one verifies and 
 | Check | Pass condition | Typical output on failure |
 |-------|---------------|--------------------------|
 | **Lint** | Zero Ruff errors | `F841 Local variable 'x' is assigned to but never used` |
-| **Test** | All tests pass + ≥ 94% coverage | `FAIL Required test coverage of 94.0% not reached.` followed by a hint pointing to the `Missing` column |
+| **Test** | All tests pass + coverage gate met | `FAIL Required test coverage of …% not reached.` followed by a hint pointing to the `Missing` column |
 | **Verify Examples** | All examples have valid syntax | `FAIL: examples/broken.py — SyntaxError: invalid syntax (line 12)` |
 | **Docs** | Clean build, zero griffe warnings | `WARNING — griffe: No type in parameter 'interval_ms'` |
 | **Check Version** | VERSION bumped when `src/` changed | `FAIL: timing has source changes but VERSION was not bumped` |

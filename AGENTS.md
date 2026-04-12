@@ -28,7 +28,7 @@ Before proposing a structural or pattern change, check `plans/decisions/` first.
 - **Preflight must pass before you stop** — `python scripts/run.py preflight 2>&1 | tail -5` must show `Preflight passed`. If it fails because of your work, fix it.
 - **Use `git commit -F .scratch/commit-msg.txt`** — not `git commit -m`, so messages can be multi-line and descriptive.
 - **Use per-library pytest via `python scripts/run.py test`** — never run bare `pytest` from the repository root.
-- **Maintain the 94% coverage gate** per library.
+- **Maintain the coverage gate** per library (threshold is in `pyproject.toml`).
 - **No `async`/`await`, no ISRs** — use the tick-based runner pattern from Decision 0014.
 - **Use constructor injection** for time, I/O, and network dependencies. Put fakes in the library's `testing.py` submodule. See Decision 0010.
 - **Use f-strings everywhere.** Use `const()`, `memoryview`, and pre-allocated buffers in library code only.
@@ -254,7 +254,7 @@ Key rules:
 
 - Tests live under each library's `tests/`
 - `scripts/run.py test` runs per-library pytest subprocesses
-- Coverage must stay at or above 94% per library
+- Coverage must meet the per-library gate configured in `pyproject.toml`
 - Shared fakes belong in `src/chumicro_<name>/testing.py`
 - Use constructor injection for time, I/O, and network dependencies
 - Do not mock what you do not own when usable upstream fakes already exist

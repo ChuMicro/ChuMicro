@@ -222,7 +222,7 @@ library design in `next-up.md`.
 ## Per-library test isolation
 
 Each library's tests run in a separate pytest subprocess.  Coverage is
-measured per-library with a 94% gate (Decision 0009).
+measured per-library with a coverage gate (Decision 0009, threshold in `pyproject.toml`).
 
 ```bash
 # Run one library

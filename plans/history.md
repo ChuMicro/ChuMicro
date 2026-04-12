@@ -72,7 +72,7 @@ These patterns caused real bugs when implemented incorrectly. Follow them exactl
 - `scripts/run.py test` runs a separate pytest subprocess for each package.
 - Each run targets a single library's `tests/` directory — no collision between identically named directories.
 - `PYTHONPATH` is set to include all `src/` directories so cross-library imports work.
-- Each library must independently meet the 94% coverage threshold.  Coverage data is written per-library (`.coverage.<name>`), then `coverage combine` merges them for a combined report.
+- Each library must independently meet the coverage threshold (configured in `pyproject.toml`).  Coverage data is written per-library (`.coverage.<name>`), then `coverage combine` merges them for a combined report.
 - This replaced `--import-mode=importlib` (Decision 0008, now superseded) which imposed constraints on test directory structure.
 - Bare `pytest` from the repo root is not the supported path — use `run.py test`.
 
@@ -283,7 +283,7 @@ This was the largest single session. It addressed three areas: the workspace was
 
 **Scripts test suite:** Added `scripts/tests/` with 203 pytest tests across 12 modules covering pure-logic functions in the scripts infrastructure (check_names, discovery, check_version, check_api, verify_examples, bundle, scaffold, ide, prepare, workspace, run, generate_landing_page). Tests use `tmp_path` and `monkeypatch` for filesystem and git isolation. Runs in 0.4s.
 
-**`test-scripts` subcommand:** Added `python scripts/run.py test-scripts` as a standalone task, integrated into preflight. Scripts tests intentionally run without the 94% per-library coverage gate (scripts are subprocess-heavy orchestration code with a different coverage profile).
+**`test-scripts` subcommand:** Added `python scripts/run.py test-scripts` as a standalone task, integrated into preflight. Scripts tests intentionally run without the per-library coverage gate (scripts are subprocess-heavy orchestration code with a different coverage profile).
 
 **IDE audit:** `scripts/` was invisible to both IDE test runners. Fixed by adding `scripts/` as a source root and `scripts/tests/` as a test source in `.idea/chumicro.iml`, adding `scripts` to `extraPaths` in `pyrightconfig.json` and `.vscode/settings.json`, adding `scripts/tests` to pytest `testpaths` in `pyproject.toml`, and adding `scripts/` to `sys.path` in root `conftest.py`. Also cleaned up stale library-root entries in the `.iml` file. Added "Test Scripts" task to both PyCharm run configurations and VS Code tasks.
 

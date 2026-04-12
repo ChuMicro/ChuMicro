@@ -84,7 +84,7 @@ __all__ = ["MyClass", "helper_function"]
 
 ## 3. Write tests
 
-Tests go in `libraries/my-thing/tests/`. The coverage threshold is **94%** — every library must meet it independently.
+Tests go in `libraries/my-thing/tests/`. Every library must independently meet the coverage threshold configured in `pyproject.toml`.
 
 ```bash
 python scripts/run.py test --libraries my-thing
@@ -234,7 +234,7 @@ When you're confident the experimental release is production-ready, open a [Stab
 - [ ] `python scripts/run.py new-library <name>` — scaffold created
 - [ ] Implementation in `src/chumicro_<name>/`
 - [ ] Public exports in `__init__.py` with `__all__`
-- [ ] Tests in `tests/` — 94% coverage passing
+- [ ] Tests in `tests/` — coverage gate passing
 - [ ] Testing submodule: kept and implemented, or deleted with all references
 - [ ] Examples in `examples/` — `verify-examples` passes
 - [ ] `docs/guide.md` — real content, no placeholders

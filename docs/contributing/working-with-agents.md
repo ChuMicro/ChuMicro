@@ -6,7 +6,7 @@ This project is set up to work well with AI coding agents — the rules are docu
 
 An AI coding agent is a tool that reads code, proposes changes, runs tests, and iterates — like a very fast pair programmer that doesn't get tired. In this project, agents handle a lot of the repetitive work:
 
-- **Writing tests** to hit the 94% coverage gate
+- **Writing tests** to hit the coverage gate
 - **Generating documentation** from code and docstrings
 - **Scaffolding** new libraries, examples, and boilerplate
 - **Fixing lint errors** and formatting issues
@@ -44,7 +44,7 @@ Agent: reads the codebase, writes the test, runs it, checks coverage,
 You: "Create a new library called 'settings' for persistent key-value storage"
 
 Agent: runs the scaffold command, generates starter code following the 
-       project patterns, writes tests to 94% coverage, builds docs — 
+       project patterns, writes tests to pass the coverage gate, builds docs — 
        ready for your review.
 ```
 

@@ -148,7 +148,8 @@ def test_cpython(
 
     Runs pytest separately for each package to avoid test-directory name
     collisions (Decision 0009), then combines and reports coverage.  Each
-    library must independently meet the coverage threshold (94%) unless
+    library must independently meet the coverage threshold (configured in
+    ``pyproject.toml``) unless
     *filter_expression* is set (filtering naturally reduces coverage) or *no_cov*
     skips coverage entirely.
 
@@ -197,7 +198,7 @@ def test_cpython(
 
     # Skip coverage enforcement when either:
     #   - filter_expression is set (selecting a subset of tests naturally
-    #     reduces branch coverage below the 94% threshold), or
+    #     reduces branch coverage below the configured threshold), or
     #   - no_cov is set (user explicitly opted out of coverage).
     skip_coverage_gate = bool(filter_expression) or no_cov
     cov_gate_args = ["--cov-fail-under=0"] if skip_coverage_gate else []

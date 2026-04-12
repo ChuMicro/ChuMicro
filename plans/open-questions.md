@@ -12,11 +12,11 @@ Questions that lead to structural tradeoffs should become decisions in
 
 ## Active
 
-### Should the coverage gate be higher than 94%?
+### Should the coverage gate be higher?
 
-The 94% threshold was chosen early (relaxed from 90%) and has worked well.
-As the library count grows and test patterns mature, revisit whether 95% or
-higher is appropriate — or whether the gate should vary by library maturity
+The threshold (configured in `pyproject.toml`) was chosen early and has worked well.
+As the library count grows and test patterns mature, revisit whether a higher gate
+is appropriate — or whether the gate should vary by library maturity
 (stricter for stable, relaxed for experimental).
 
 ### Is ESP32 NVS worth a dedicated backend?

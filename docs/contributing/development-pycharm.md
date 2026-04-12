@@ -78,7 +78,7 @@ Click the ▶ button or press `⌃R` / `Shift+F10` to run the selected configura
 
 ### From the run configuration (with coverage)
 
-Select **Test** from the dropdown and click ▶. This runs all libraries with the 94% coverage threshold and leaves a `.coverage` data file at the project root. To see coverage in the editor afterward, see [Browsing coverage](#browsing-coverage) below.
+Select **Test** from the dropdown and click ▶. This runs all libraries with the coverage threshold and leaves a `.coverage` data file at the project root. To see coverage in the editor afterward, see [Browsing coverage](#browsing-coverage) below.
 
 To test a single library, use the terminal:
 
