@@ -147,8 +147,7 @@ from {import_name} import ...
 
 - [User Guide](guide.md) — getting started and usage patterns
 - [API Reference](api.md) — full API documentation
-<!-- If this library has a testing submodule, uncomment the next line: -->
-<!-- - [Testing Helpers](testing.md) — fakes for downstream test suites -->
+- [Testing Helpers](testing.md) — fakes for downstream test suites
 
 ---
 
@@ -213,6 +212,8 @@ for faster startup and lower RAM usage on boards with mpy format v6 \
 ```bash
 pip install chumicro-{name}
 ```
+
+*Just getting started? Skip this — the install commands above are all you need.*
 
 <details>
 <summary>Experimental (pre-release) versions and channel switching</summary>
