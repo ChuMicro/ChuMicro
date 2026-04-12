@@ -209,3 +209,66 @@ jobs:
         run: python scripts/run.py prepare-${{ matrix.runtime_slug }}
       - name: "Run ${{ matrix.runtime_label }} compatibility tests"
         run: python scripts/run.py test-${{ matrix.runtime_slug }}-compatibility
+
+  # -------------------------------------------------------------------------
+  # Validate mpy bytecode — build mpy-cross, stage all libraries into a
+  # local bundle, and verify that MicroPython can install and import both
+  # .py and .mpy6 formats via mip against a local HTTP server.
+  # Catches broken mpy compilation or manifest errors before merge.
+  # -------------------------------------------------------------------------
+  validate-mpy:
+    if: github.event_name == 'pull_request'
+    name: Validate mpy bytecode
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      # Two caches: mpy-cross compilers and MicroPython unix-port.
+      # Both live under .tools/ but have separate cache keys so they
+      # can be restored independently (and shared with other jobs).
+      - uses: actions/cache@v4
+        id: mpy-cross-cache
+        with:
+          path: .tools
+          key: mpy-cross-${{ hashFiles('target-runtimes.toml', 'scripts/prepare_mpy_cross.py', 'scripts/shared.py') }}
+
+      - uses: actions/cache@v4
+        id: micropython-cache
+        with:
+          path: .tools
+          key: micropython-${{ hashFiles('target-runtimes.toml', 'scripts/prepare_micropython.py', 'scripts/shared.py') }}
+
+      - name: Install unix-port build dependencies
+        if: steps.mpy-cross-cache.outputs.cache-hit != 'true' || steps.micropython-cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libffi-dev pkg-config
+
+      - name: Build mpy-cross compilers
+        if: steps.mpy-cross-cache.outputs.cache-hit != 'true'
+        run: python scripts/run.py prepare-mpy-cross
+
+      - name: Prepare MicroPython unix-port
+        if: steps.micropython-cache.outputs.cache-hit != 'true'
+        run: python scripts/run.py prepare-micropython
+
+      - name: Stage all libraries
+        run: |
+          for version_file in libraries/*/VERSION; do
+            library_dir=$(dirname "$version_file")
+            version=$(tr -d '[:space:]' < "$version_file")
+            python scripts/bundle_manager.py stage \
+              "$library_dir" "$version" .bundle-staging
+          done
+
+
+      - name: Validate mip install from staged bundle
+        run: |
+          python scripts/validate_mip_install.py \
+            --staging-dir .bundle-staging
+
