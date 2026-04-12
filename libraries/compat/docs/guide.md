@@ -114,7 +114,7 @@ The [examples](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/compat/e
      One bullet per change. Internal refactors don't need entries.
      At stable promotion, collapse/edit as needed. -->
 
-*No changes yet — this section will be updated with each release.*
+- **0.1.23**: CI and documentation improvements.
 
 ---
 
