@@ -8,6 +8,8 @@ Welcome! ChuMicro is an open platform for cross-runtime Python libraries targeti
 
 <br clear="left">
 
+> ⚡ **Short on time?** The **[Contributor Cheat Sheet](docs/contributing/cheat-sheet.md)** is one page with everything you need — setup, workflow, and the only command you have to remember.
+
 ## Good first contributions
 
 Not sure where to start? These are real ways to contribute that don't require deep knowledge of the codebase:
