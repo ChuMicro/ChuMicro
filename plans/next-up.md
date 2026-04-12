@@ -24,7 +24,6 @@
   - Control GC explicitly during benchmarks so allocation measurements are stable and reproducible across runs.
   - Define per-benchmark thresholds that fail the run if exceeded, catching regressions over time.
   - Benchmarks may be slow; they should not run as part of the standard `test` path. Consider a separate `bench` task or a deeper test tier that can also run in CI on a schedule.
-- [ ] Populate "What's new" sections in library guides when the next VERSION bumps happen. Currently all are placeholders.
 
 ## Blocked / waiting
 
@@ -32,6 +31,9 @@
 
 ## Done (recent)
 
+- [x] Populate "What's new" sections in library guides — all four libraries now have version entries.
+- [x] CI build and cache optimizations: `--no-isolation` build (~7x faster), MicroPython submodule pruning (87% cache size reduction), explicit pip caching for docs deploy.
+- [x] Documentation sync: run.py commands synced across README, AGENTS.md, and development-cli.md.
 - [x] Validate-mpy CI job for PRs: builds mpy-cross, stages all libraries, validates mip install + import from staged bundle. Catches broken mpy compilation or manifest errors before merge.
 - [x] Pre-publish bundle validation: `--staging-dir` mode validates mip install against locally staged bundles before pushing to live repos. Integrated as a gate in both `release.yml` and `promote.yml`.
 - [x] Mip install validation in CI: `validate-mip` job in `release.yml` and `promote.yml` tests mip install + import for both `.py` and `.mpy6` formats after every bundle push. `validate-mip` run.py subcommand for local use.

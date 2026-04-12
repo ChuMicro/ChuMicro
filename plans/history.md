@@ -327,3 +327,13 @@ This was the largest single session. It addressed three areas: the workspace was
 
 **CI caching:** Added micropython cache sharing across `validate-mpy`, `runtime-compatibility`, `release.yml`, and `promote.yml` jobs so MicroPython unix-port isn't rebuilt redundantly. Same cache key across all workflows.
 
+**Documentation sync:** Audited `run.py` commands against all documentation files (README.md, AGENTS.md, development-cli.md) and added missing commands. Added "Test Scripts" task to PyCharm and VS Code task tables. Made "Other tasks" section collapsible in development-cli.md.
+
+**Scripts test coverage:** Added `test_validate_mip_install.py` with 13 tests for `validate_mip_install.py` helper functions.
+
+**Build optimization:** Added `--no-isolation` flag to `python -m build` command, which skips creating fresh virtual environments for each package build (~7x faster). Requires `hatchling` pre-installed — added to CI build job dependencies.
+
+**Docs deploy optimization:** Added explicit `actions/cache@v4` for pip packages in docs-deploy.yml and promote.yml docs job. The built-in setup-python cache doesn't effectively cache wheels built from git+https:// URLs (like the mike fork).
+
+**MicroPython submodule optimization:** Changed `prepare-micropython` from recursive submodule init to targeted init of only the four submodules needed for unix-port build: `lib/berkeley-db-1.xx`, `lib/libffi`, `lib/mbedtls`, and `lib/micropython-lib`. Reduced `.tools/micropython-*` cache size from ~2.6GB to ~350MB (87% reduction). Fixed `build_environment()` to use `CFLAGS` instead of `CFLAGS_EXTRA` so macOS compiler flags are actually passed to the MicroPython Makefile.
+
