@@ -244,6 +244,7 @@ chumicro/
 ├── libraries/             # Publishable libraries (one folder each)
 ├── support/               # Internal packages (docs assets, test harness)
 ├── scripts/               # Developer tasks (run.py is the entry point)
+├── docs/contributing/     # Style guide, cheat sheet, setup guides
 ├── plans/                 # Roadmap, decisions, session logs
 ├── .github/
 │   ├── workflows/         # CI, release, promote, docs-deploy
