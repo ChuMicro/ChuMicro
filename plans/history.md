@@ -337,3 +337,23 @@ This was the largest single session. It addressed three areas: the workspace was
 
 **MicroPython submodule optimization:** Changed `prepare-micropython` from recursive submodule init to targeted init of only the four submodules needed for unix-port build: `lib/berkeley-db-1.xx`, `lib/libffi`, `lib/mbedtls`, and `lib/micropython-lib`. Reduced `.tools/micropython-*` cache size from ~2.6GB to ~350MB (87% reduction). Fixed `build_environment()` to use `CFLAGS` instead of `CFLAGS_EXTRA` so macOS compiler flags are actually passed to the MicroPython Makefile.
 
+### 2026-04-12 — Developer experience review, dual coverage, AGENTS.md consolidation
+
+**Developer experience review:** Applied findings from a comprehensive review covering beginner, intermediate, and advanced contributor profiles. README: added consumer/contributor separator and "skip if just getting started" hints on experimental blocks. CONTRIBUTING.md: reframed abbreviation and async FAQs, simplified branching convention to `topic/short-description`, made device testing clearly optional, softened `gh pr create` guidance, added "Project decisions" section pointing to `plans/decisions/`, stated human coverage threshold (85%) in preflight details. Pull requests guide: added example filled-in PR. Style guide: reframed naming rationale without "tribal knowledge." Cheat sheet: stated coverage gate number. New library guide: added "Before you start" section. Added board-test-report issue template.
+
+**Dual coverage thresholds (Decision 0025):** Lowered `pyproject.toml` `fail_under` to 85% (human baseline). Added `--coverage-threshold` flag to `test` and `preflight` commands. In preflight, the elevated threshold applies only to libraries the caller changed (via `detect_changed_packages()`). Agent instructions require `--coverage-threshold 94`. CI enforces the 85% minimum for all contributors. Resolved the "Should the coverage gate be higher?" open question.
+
+**Coverage exclusions:** Added `pragma: no cover` guidance to the style guide and AGENTS.md — permitted for runtime-only branches and hardware fallbacks that genuinely cannot be exercised in CPython tests.
+
+**Mock/fake guidance softened (Decision 0010 revised):** `unittest.mock` is no longer implicitly prohibited. Provided fakes are still preferred when available, but mocks are fine when no purpose-built fake exists.
+
+**AGENTS.md consolidation:** Merged Quick reference into Non-negotiable rules (agents ignored rules outside that section). Inlined the docs-ripple checklist into the stale-docs rule. Replaced the static file list with a principle-based question: "If someone reads the docs tomorrow, will they find correct information?" Removed end-of-session from agent workflow (task-checkpoint now runs preflight). Removed 13 duplicated rules from Development guidance and Testing strategy sections.
+
+**Task-checkpoint streamlined:** Changed from "run the narrowest check" to "run preflight directly." Preflight is fast and is the single gate matching CI — narrow checks saved no meaningful time and missed cross-cutting breakage.
+
+**Documentation consolidation:** Removed hardcoded coverage percentage from all docs (now defined in one place: `pyproject.toml`). Explained naming rule rationale for newcomers and multilingual developers in Decision 0022, style guide, and FAQ. Added concrete examples to "Good first contributions." Surfaced cheat sheet at top of CONTRIBUTING.md. Improved README beginner-friendliness (plain language in library table, collapsible tick-period detail, bundle links in circup install sections).
+
+**Scaffold sync:** Updated new-library scaffold template to match current library READMEs: "skip if just getting started" hint, uncommented Testing Helpers link, fixed broken circup bundles link, added bundles hyperlink.
+
+**Decision audit (Decision 0026):** Audited decisions against workspace and commit history. Identified editable installs adoption (Apr 9) as an unrecorded decision — a policy reversal of a previously rejected approach affecting every developer's setup. Recorded as Decision 0026.
+
