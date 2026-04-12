@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-import pytest
 from validate_mip_install import (
     _resolve_library_names,
     _write_import_script,
