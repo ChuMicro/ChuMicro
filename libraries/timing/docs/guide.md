@@ -160,7 +160,7 @@ Simulated examples run on CPython.  Hardware examples (`circuitpython_*` / `micr
      One bullet per change. Internal refactors don't need entries.
      At stable promotion, collapse/edit as needed. -->
 
-*No changes yet — this section will be updated with each release.*
+- **0.1.24**: Documentation sync and CI build performance improvements.
 
 ---
 
