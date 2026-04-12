@@ -102,21 +102,7 @@ Say so in the PR. A maintainer can help test on available hardware. This won't b
 
 ## CI checks
 
-After you open the PR, GitHub Actions runs the full CI suite:
-
-```
-✓ lint
-✓ test (3.11, 3.12, 3.13)
-✓ verify-examples
-✓ documentation-build
-✓ build
-✓ version-check
-✓ api-check
-✓ MicroPython compatibility
-✓ CircuitPython compatibility
-```
-
-All checks need to pass before merge. If something fails:
+After you open the PR, GitHub Actions runs the full CI suite. If something fails:
 
 1. Click the failed check to see the log
 2. Fix the issue locally

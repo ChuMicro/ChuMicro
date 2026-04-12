@@ -128,35 +128,7 @@ Process finished with exit code 0
 | `griffe warnings detected` | Bad or missing docstrings | Add type annotations to the signature; `Args:` uses `name: description` (no type), `Returns:` uses just the description |
 | `check-version` failure | Source changed without VERSION bump | Edit `libraries/<name>/VERSION` |
 
-### Step-by-step validation
-
-If preflight fails, run individual checks to isolate the problem:
-
-1. **Lint** → click ▶ on the Lint configuration
-2. **Test** → click ▶ on the Test configuration (or test a single library from the terminal)
-3. **Verify Examples** → click ▶
-4. **Docs** → click ▶
-5. **Check Version** → click ▶ (only meaningful on a branch with source changes)
-
-## Navigating the workspace
-
-### Project structure
-
-The Project panel (**View → Tool Windows → Project**, or `⌘1` / `Alt+1`) shows:
-
-```
-ChuMicro/
-├── libraries/
-│   └── timing/
-│       ├── src/chumicro_timing/    ← source code (marked as Source Root)
-│       ├── tests/                  ← tests (marked as Test Source Root)
-│       ├── docs/                   ← documentation
-│       ├── examples/               ← example scripts
-│       └── VERSION                 ← version file
-├── scripts/                        ← developer tasks
-├── plans/                          ← decisions, roadmap
-└── CONTRIBUTING.md
-```
+If the output isn't enough to pinpoint the problem, run the individual configurations (Lint, Test, Docs, etc.) from the dropdown to isolate the failing step.
 
 ### Useful shortcuts
 
