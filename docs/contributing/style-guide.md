@@ -10,17 +10,18 @@ We follow [PEP 8](https://peps.python.org/pep-0008/), the standard Python style 
 
 ## Naming
 
-We use descriptive names and avoid abbreviations that require mental translation. The goal is that someone reading your code for the first time can understand what a variable holds without checking its assignment.
+We use descriptive names so everyone can read the code without extra context. The linter catches common abbreviations and suggests the descriptive name for you.
 
 | Rule | Example | Enforced by |
 |---|---|---|
-| No single-letter variables (except `_`) | `index`, not `i`; `error`, not `e`; `key`, not `k` | `CHU001` linter |
+| No single-letter variables (except `_` and for-loop targets) | `index`, not `i` in assignments; `for i in range(10)` is fine | `CHU001` linter |
 | Abbreviations we spell out | `environment`, not `env`; `buffer`, not `buf`; `source`, not `src`; `command`, not `cmd`; `message`, not `msg`; `error`, not `err`; `reference`, not `ref`; `address`, not `addr`; `exception`, not `exc`; `execute`, not `exec` | `CHU001` linter |
 | Spell them out as suffixes too | `base_reference`, not `base_ref`; `build_environment`, not `build_env` | `CHU001` linter |
 | Short-but-complete words are fine | `dir`, `key`, `tag`, `raw`, `pin`, `led`, `ok`, `end`, `args`, `config` | — |
+| For-loop targets are exempt | `for i in range(10)`, `for k, v in items()` | — |
 | Suppress with `# noqa: CHU001` | Only when matching an upstream API that you cannot rename | — |
 
-**Why:** This project is read by beginners who are learning Python alongside embedded development. A beginner seeing `for i in range(10)` has to guess what `i` means; `for index in range(10)` is self-documenting. We know this departs from idiomatic Python convention — experienced developers may find it unusual. That's a deliberate tradeoff: we'd rather every reader understand the code immediately than save a few keystrokes for contributors who already know the idioms. Descriptive names also push lines past the 100-character limit, which forces multi-line formatting — each argument on its own line is easier to scan, diff, and blame. ([Decision 0022](plans/decisions/0022-naming-conventions.md))
+**Why:** Descriptive names remove the mental step of translating abbreviations back to their meaning, especially for contributors who are new to the codebase. Longer names also push lines past the 100-character limit, which forces multi-line formatting — each argument on its own line is easier to scan, diff, and blame. ([Decision 0022](plans/decisions/0022-naming-conventions.md))
 
 ## Type annotations
 
@@ -113,7 +114,8 @@ They apply to **publishable library code under `libraries/`** and **`support/tes
 
 **CHU001** — a custom naming check that catches:
 
-- Single-letter variable names (`i` → `index`, `e` → `error`)
+- Single-letter variable names in assignments, parameters, and function names (`x` → use a descriptive name, `e` → `error`)
+- For-loop targets are exempt — `for i in range(10)` is fine
 - Abbreviated names we prefer spelled out (`env` → `environment`, `buf` → `buffer`)
 - Those same abbreviations as suffixes (`base_ref` → `base_reference`, `build_env` → `build_environment`)
 

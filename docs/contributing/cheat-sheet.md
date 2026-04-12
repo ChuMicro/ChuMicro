@@ -1,0 +1,68 @@
+# Contributor Cheat Sheet
+
+Everything you need to know on one page. The full docs are linked if you want details.
+
+## Setup (once)
+
+```bash
+git clone https://github.com/<your-username>/ChuMicro.git
+cd ChuMicro
+git remote add upstream https://github.com/ChuMicro/ChuMicro.git
+python scripts/prepare_workspace.py --create-venv
+```
+
+## Workflow (every change)
+
+```bash
+git checkout main && git pull upstream main && git push origin main
+git checkout -b fix/my-change
+# ... make changes ...
+python scripts/run.py preflight       # must print "Preflight passed"
+git add -A && git commit              # imperative subject, explain why
+git push -u origin fix/my-change      # then open PR on GitHub
+```
+
+## The 10 things
+
+1. **One command to rule them all:** `python scripts/run.py preflight`. If it passes, CI will pass.
+2. **Use descriptive names.** The linter catches abbreviations and suggests replacements. Single-letter for-loop targets (`for i in range(10)`) are fine.
+3. **No `async`/`await`.** Use the tick-based runner. It's easier to test and debug on microcontrollers.
+4. **Accept dependencies as constructor parameters.** Don't import `board` or `busio` at the top level. This makes code testable without hardware.
+5. **Tests live next to the code.** `libraries/<name>/tests/`. Run them with `python scripts/run.py test --libraries <name>`.
+6. **Bump VERSION when you change source code.** Edit `libraries/<name>/VERSION`. CI catches it if you forget.
+7. **Docstrings are required** on public functions. Types go on the signature, descriptions in the docstring.
+8. **f-strings everywhere.** No `%` formatting, no `.format()`.
+9. **`const()` and `memoryview` are optional on day one.** Focus on correctness first, optimize later.
+10. **Update docs that your change affects.** Not 10 files — just the ones directly impacted. Reviewers catch the rest.
+
+## Common commands
+
+| What | Command |
+|------|---------|
+| Run all checks | `python scripts/run.py preflight` |
+| Lint only | `python scripts/run.py lint` |
+| Test one library | `python scripts/run.py test --libraries timing` |
+| Test everything | `python scripts/run.py test --all` |
+| Quick test (no coverage) | `python scripts/run.py test -k timing/test_heartbeat -x -v --no-cov` |
+| Build docs | `python scripts/run.py docs --libraries timing` |
+| Verify examples | `python scripts/run.py verify-examples --libraries timing` |
+| Scaffold a new library | `python scripts/run.py new-library my-thing` |
+
+## When something fails
+
+| What failed | What to do |
+|---|---|
+| Coverage on code you didn't change | Note it in the PR — not your problem |
+| Lint error | Run `python scripts/run.py lint`, fix the flagged lines |
+| `check-version` | Edit `libraries/<name>/VERSION` (patch bump is usually right) |
+| `griffe warnings` | Add type annotations to function signatures |
+| Tests you can't figure out | Ask in the PR — someone will help |
+
+## Links
+
+- [Full contributing guide](../../CONTRIBUTING.md)
+- [Style guide](style-guide.md)
+- [PR guide](pull-requests.md)
+- [Architecture overview](architecture.md)
+- [Design decisions](../../plans/decisions/)
+

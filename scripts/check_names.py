@@ -2,7 +2,8 @@
 
 Walks Python files and flags single-letter variable names and specific
 short abbreviations that should be spelled out.  The only allowed
-single-letter name is ``_`` (throwaway / unused binding).
+single-letter name is ``_`` (throwaway / unused binding), plus
+single-letter names used as ``for``-loop targets are permitted.
 
 Suppression: add ``# noqa: CHU001`` on the flagged line.
 
@@ -46,6 +47,28 @@ def _read_noqa_lines(source: str) -> set[int]:
     return suppressed
 
 
+def _for_loop_target_ids(tree: ast.Module) -> set[tuple[int, str]]:
+    """Return ``(line, name)`` pairs for all ``for``-loop target variables.
+
+    Handles simple targets (``for i in ...``) and tuple-unpacking
+    targets (``for i, j in ...``).
+
+    Args:
+        tree: Parsed AST of the file.
+    """
+    result: set[tuple[int, str]] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.For):
+            target = node.target
+            if isinstance(target, ast.Name):
+                result.add((target.lineno, target.id))
+            elif isinstance(target, ast.Tuple):
+                for element in target.elts:
+                    if isinstance(element, ast.Name):
+                        result.add((element.lineno, element.id))
+    return result
+
+
 def _collect_names(tree: ast.Module) -> list[tuple[int, str, str]]:
     """Walk the AST and collect all flagged binding names.
 
@@ -55,6 +78,7 @@ def _collect_names(tree: ast.Module) -> list[tuple[int, str, str]]:
         tree: Parsed AST of the file.
     """
     hits: list[tuple[int, str, str]] = []
+    loop_targets = _for_loop_target_ids(tree)
 
     for node in ast.walk(tree):
         targets: list[tuple[int, str]] = []
@@ -77,6 +101,9 @@ def _collect_names(tree: ast.Module) -> list[tuple[int, str, str]]:
 
         for lineno, name in targets:
             if len(name) == 1 and name not in _ALLOWED:
+                # Allow single-letter names in for-loop targets.
+                if (lineno, name) in loop_targets:
+                    continue
                 hits.append((lineno, name, "single-letter name"))
             elif name in _BANNED:
                 hits.append((lineno, name, "banned abbreviation"))

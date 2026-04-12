@@ -20,8 +20,9 @@ A useful side effect: longer names push lines past the 100-character limit, whic
 
 **No single-letter variable names and no banned abbreviations**, enforced by a custom linter (`scripts/check_names.py`, rule `CHU001`).
 
-- `_` is the only allowed single-letter name (throwaway / unused binding).
-- Common Python idioms like `e`, `f`, `i`, `k`, `v` must be spelled out: `error`, `file`, `index`, `key`, `value`.
+- `_` is the only allowed single-letter name in general code (throwaway / unused binding).
+- **For-loop targets are exempt** — `for i in range(10)` and `for k, v in items()` are fine.  The exemption applies only to the loop variable itself; single-letter names in the loop body are still flagged.
+- Common Python idioms like `e`, `f`, `k`, `v` must be spelled out in non-loop contexts: `error`, `file`, `key`, `value`.
 - The following abbreviations are banned and must be spelled out: `env`, `buf`, `src`, `cmd`, `msg`, `err`, `ref`, `addr`, `exc`, `exec`.
 - Banned abbreviations are also caught as **suffixes** in compound names (e.g., `base_ref` → `base_reference`, `build_env` → `build_environment`).  `_dir` is exempt — it is a short-but-complete word like `key` or `tag`.
 - The check covers variables, parameters, exception handler names, and function/method names.
@@ -29,6 +30,8 @@ A useful side effect: longer names push lines past the 100-character limit, whic
 - Suppress with `# noqa: CHU001` only when matching an upstream API that you cannot rename.
 
 Short-but-complete words (`ok`, `tag`, `key`, `raw`, `pin`, `led`, `end`) and widely understood abbreviations (`dir`, `args`, `config`) are still fine — they are not on the banned list.
+
+**AI agents** continue to use descriptive names like `index` even in for-loops — the exemption is a convenience for human contributors, not a style change for generated code.
 
 ## Consequences
 

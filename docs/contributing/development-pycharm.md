@@ -78,7 +78,7 @@ Click the ▶ button or press `⌃R` / `Shift+F10` to run the selected configura
 
 ### From the run configuration (with coverage)
 
-Select **Test** from the dropdown and click ▶. This runs all libraries with the 94% coverage gate and leaves a `.coverage` data file at the project root. To see coverage in the editor afterward, see [Browsing coverage](#browsing-coverage) below.
+Select **Test** from the dropdown and click ▶. This runs all libraries with the 94% coverage threshold and leaves a `.coverage` data file at the project root. To see coverage in the editor afterward, see [Browsing coverage](#browsing-coverage) below.
 
 To test a single library, use the terminal:
 
@@ -123,7 +123,7 @@ Process finished with exit code 0
 
 | What you see | What it means | How to fix |
 |---|---|---|
-| `Required test coverage of 94.0% not reached` | Tests don't cover enough code | Follow the hint printed below the FAIL line — it points to the `Missing` column |
+| `Required test coverage of 94.0% not reached` | Tests don't cover enough code | Follow the hint below the FAIL line — it points to the `Missing` column |
 | `ruff check` errors | Code style violation — see [Style Guide](style-guide.md) | Click the file:line link in the output to jump to the issue |
 | `griffe warnings detected` | Bad or missing docstrings | Add type annotations to the signature; `Args:` uses `name: description` (no type), `Returns:` uses just the description |
 | `check-version` failure | Source changed without VERSION bump | Edit `libraries/<name>/VERSION` |

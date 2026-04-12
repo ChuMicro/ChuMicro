@@ -8,6 +8,17 @@ Welcome! ChuMicro is an open platform for cross-runtime Python libraries targeti
 
 <br clear="left">
 
+## Good first contributions
+
+Not sure where to start? These are real ways to contribute that don't require deep knowledge of the codebase:
+
+- **Fix a typo or clarify a sentence** in any README, guide, or docstring — docs-only PRs skip most CI checks.
+- **Add an example script** to a library's `examples/` folder — pick a use case from the library's guide that doesn't have an example yet.
+- **Improve test coverage** — run `python scripts/run.py test --libraries <name>`, check the `Missing` column in the coverage report, and write tests for uncovered lines.
+- **Try a library on your board** and report what happened — even a "it worked on my ESP32-S3" comment on an issue is valuable.
+
+Look for issues labeled [**good first issue**](https://github.com/ChuMicro/ChuMicro/labels/good%20first%20issue) — these are scoped, described, and ready to pick up.
+
 ## Reading guide
 
 Start here, then pick the guide that matches your task:
@@ -98,10 +109,10 @@ This creates a virtual environment, installs all dependencies, and runs lint + t
 ### 5. Verify everything works
 
 ```bash
-python scripts/run.py preflight 2>&1 | tail -5
+python scripts/run.py preflight
 ```
 
-This merges error output with normal output and shows just the last 5 lines — the pass/fail summary. You should see:
+You should see:
 
 ```
 Preflight passed — required CI checks should pass.
@@ -137,7 +148,7 @@ Save the file when you're done.
 Run preflight to make sure your change doesn't break anything:
 
 ```bash
-python scripts/run.py preflight 2>&1 | tail -5
+python scripts/run.py preflight
 ```
 
 If it prints `Preflight passed`, you're good. If something fails, read the output — it tells you what went wrong and where.
@@ -177,7 +188,7 @@ Then open a pull request on GitHub:
 
 > **Why the GitHub UI?** The repository has a PR template with sections that help reviewers and keep CI smooth. The GitHub UI loads it automatically. `gh pr create` skips the template, which means reviewers have to ask for missing context — slowing things down for everyone.
 
-CI runs automatically on your PR. All checks must pass before a maintainer can merge. If something fails, click the failed check to see the log, fix it locally, and push again — CI re-runs automatically.
+CI runs automatically on your PR. All checks need to pass before a maintainer can merge. If something fails, click the failed check to see the log, fix it locally, and push again — CI re-runs automatically.
 
 That's it — you've made your first contribution! 🎉
 
@@ -247,7 +258,7 @@ git checkout -b feature/my-change
 Before opening a PR, run preflight:
 
 ```bash
-python scripts/run.py preflight 2>&1 | tail -5
+python scripts/run.py preflight
 ```
 
 If it prints `Preflight passed`, you're good — CI will pass too. That's the only command you need to remember. Everything else below is what preflight checks behind the scenes.
@@ -255,7 +266,7 @@ If it prints `Preflight passed`, you're good — CI will pass too. That's the on
 <details>
 <summary>What preflight checks (expand for details)</summary>
 
-- **94% test coverage** per library. Run individually: `python scripts/run.py test --libraries <name>`
+- **Test coverage** per library. Run individually: `python scripts/run.py test --libraries <name>`
 - **Scripts infrastructure tests pass.** Run individually: `python scripts/run.py test-scripts`
 - **No lint errors.** Run individually: `python scripts/run.py lint`
 - **Examples must parse.** Run individually: `python scripts/run.py verify-examples --libraries <name>`
@@ -265,7 +276,7 @@ If it prints `Preflight passed`, you're good — CI will pass too. That's the on
 
 </details>
 
-> **Coverage note:** The 94% gate catches real edge cases that 90% missed — we tried the lower bar and regretted it. If your PR trips the coverage gate on code you didn't change, that's not your fault — note it in the PR description. A maintainer can help fill the gap or mark an exception. Don't let someone else's uncovered code block your contribution.
+> **Coverage note:** The test suite catches real edge cases that lower thresholds miss. If coverage fails on code you didn't change, that's not your fault — note it in the PR description. A maintainer can help fill the gap or mark an exception. Don't let someone else's uncovered code block your contribution.
 
 ### Device testing
 
@@ -309,9 +320,7 @@ Libraries use [semantic versioning](https://semver.org/). If your PR changes lib
 | New feature, backward-compatible | Minor | `0.1.15` → `0.2.0` |
 | Breaking API change | Major | `0.1.15` → `1.0.0` |
 
-CI enforces this — if you change source files without bumping VERSION, `check-version` will fail.
-
-When you bump VERSION for a user-visible change (new feature, changed behavior, bug fix that affects usage), add a bullet to the "What's new" section in `docs/guide.md`. Internal refactors and test-only changes don't need an entry.
+CI catches this — if you change source files without bumping VERSION, `check-version` will let you know.
 
 ## Publishing and releases
 
@@ -347,8 +356,8 @@ These aren't arbitrary — each one traces to a design decision with rationale. 
 
 | Rule | Why |
 |---|---|
-| PEP 8 + descriptive names | Enforced by Ruff and `CHU001` — see the [Style Guide](docs/contributing/style-guide.md) |
-| No `async`/`await` | The tick-based runner gives explicit scheduling you can inspect and test ([Decision 0014](plans/decisions/0014-runner-pattern.md)) |
+| PEP 8 + descriptive names | The linter catches this for you — see the [Style Guide](docs/contributing/style-guide.md) |
+| No `async`/`await` | The tick-based runner gives you scheduling that's easy to test, inspect, and debug on resource-constrained boards — no hidden coroutine state, no event loop overhead ([Decision 0014](plans/decisions/0014-runner-pattern.md)) |
 | Constructor injection for I/O | Testability without mocking things you don't own ([Decision 0010](plans/decisions/0010-library-testability.md)) |
 | Per-library `pytest` runs | Avoids test-directory collisions ([Decision 0009](plans/decisions/0009-per-library-test-runs.md)) |
 | `const()` / `memoryview` in library code | Memory efficiency on microcontrollers (not required in `scripts/` or `support/`). You can add these later — correctness first. |
@@ -358,7 +367,7 @@ These aren't arbitrary — each one traces to a design decision with rationale. 
 | Symptom | Cause | Fix |
 |---|---|---|
 | `ImportError` when running `pytest` directly | Bare `pytest` doesn't know about the per-library layout | Use `python scripts/run.py test --libraries <name>` instead |
-| `check-version` fails but you only changed tests | CI gates source changes under `src/` | No VERSION bump needed for test-only, docs-only, or infra changes — delete the failing step's output note in your PR |
+| `check-version` fails but you only changed tests | CI checks source changes under `src/` | No VERSION bump needed for test-only, docs-only, or infra changes — delete the failing step's output note in your PR |
 | Coverage fails on code you didn't touch | Pre-existing gap in another file | Note it in the PR description — a maintainer can help fill the gap or mark an exception |
 | `griffe warnings detected` in docs build | Missing type annotation on a function parameter | Add the type to the signature: `def foo(x: int)` — docstrings carry descriptions only |
 | Merge conflicts after pushing | `main` moved while you were working | [Rebase your branch](#what-if-main-moves-while-im-working) onto the latest `main` |
@@ -376,10 +385,10 @@ Note it in the PR description. A maintainer can help fill the gap or mark an exc
 No. The [Quick Start](#quick-start) and `preflight` are all you need for your first PR. The rest is reference material for when you need it.
 
 **Can I use `async`/`await`?**
-Not in library code. The project uses a tick-based runner pattern instead — see [Decision 0014](plans/decisions/0014-runner-pattern.md) for the reasoning.
+Not in library code. The tick-based runner gives you scheduling that's easy to test, inspect, and debug on resource-constrained boards — no hidden coroutine state, no event loop overhead. See [Decision 0014](plans/decisions/0014-runner-pattern.md) for the full reasoning.
 
-**Why can't I use `i` as a loop variable?**
-This project is read by beginners learning Python alongside embedded development. `for index in range(10)` is self-documenting in a way `for i in range(10)` isn't for someone new. We know this departs from Python convention — it's a deliberate tradeoff favoring readability for newcomers. See [Decision 0022](plans/decisions/0022-naming-conventions.md) for the full rationale.
+**Do you use descriptive loop variable names?**
+We use descriptive names throughout the codebase so everyone can read the code without extra context. The linter catches common abbreviations and suggests the descriptive name for you. Single-letter for-loop targets like `for i in range(10)` are fine — but variables, parameters, and function names should be spelled out. See [Decision 0022](plans/decisions/0022-naming-conventions.md).
 
 ## Getting help
 
@@ -388,17 +397,6 @@ This project is read by beginners learning Python alongside embedded development
 - **Have an idea?** Open a [feature request](https://github.com/ChuMicro/ChuMicro/issues/new?template=feature_request.yml)
 - **Want to try an AI agent?** See [Working with Agents](docs/contributing/working-with-agents.md) — agents handle a lot of the mechanical work in this project
 - **Questions about decisions?** Browse [`plans/decisions/`](plans/decisions/) — they explain *why* things work the way they do
-
-## Good first contributions
-
-Not sure where to start? These are real ways to contribute that don't require deep knowledge of the codebase:
-
-- **Fix a typo or clarify a sentence** in any README, guide, or docstring — docs-only PRs skip most CI gates.
-- **Add an example script** to a library's `examples/` folder — pick a use case from the library's guide that doesn't have an example yet.
-- **Improve test coverage** — run `python scripts/run.py test --libraries <name>`, check the `Missing` column in the coverage report, and write tests for uncovered lines.
-- **Try a library on your board** and report what happened — even a "it worked on my ESP32-S3" comment on an issue is valuable.
-
-Look for issues labeled [**good first issue**](https://github.com/ChuMicro/ChuMicro/labels/good%20first%20issue) — these are scoped, described, and ready to pick up.
 
 ## License
 

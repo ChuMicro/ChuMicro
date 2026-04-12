@@ -66,7 +66,7 @@ Found 1 error.
 
 ### Test
 
-Runs pytest for one or more libraries. Each library is tested in its own subprocess to avoid import collisions, and every library must hit **94% branch coverage** independently.
+Runs pytest for one or more libraries. Each library is tested in its own subprocess to avoid import collisions, and every library must meet a **94% branch coverage** threshold independently.
 
 ```bash
 # Test one library
@@ -129,7 +129,7 @@ Hint: check the Missing column above to find uncovered lines.  If the gap is
 in code you didn't change, note it in your PR — a maintainer can help.
 ```
 
-> **Don't panic.** The 94% gate is about the whole library, not just your change. If the uncovered lines are in code you didn't write, that's not your fault. Note it in your PR description and move on — a maintainer can help fill the gap or mark an exception.
+> **Don't panic.** The 94% threshold is about the whole library, not just your change. If the uncovered lines are in code you didn't write, that's not your fault. Note it in your PR description and move on — a maintainer can help fill the gap or mark an exception.
 
 **How to fix:** Follow the hint — the `Missing` column in the coverage table above shows the uncovered line numbers. Write tests that exercise those lines.
 
@@ -232,10 +232,10 @@ def my_func(interval_ms: int) -> int:
 Preflight runs everything CI will run. Always run it before opening a PR:
 
 ```bash
-python scripts/run.py preflight 2>&1 | tail -5
+python scripts/run.py preflight
 ```
 
-> **What's `2>&1 | tail -5`?** This merges error output with normal output and shows just the last 5 lines — the pass/fail summary. You can drop `| tail -5` to see the full output.
+> **Lots of output?** Pipe through `tail` to see just the summary: `python scripts/run.py preflight 2>&1 | tail -5`. The `2>&1` merges error output with normal output, and `tail -5` shows just the last 5 lines.
 
 **When it passes:**
 
@@ -243,9 +243,7 @@ python scripts/run.py preflight 2>&1 | tail -5
 Preflight passed — required CI checks should pass.
 ```
 
-**When it fails:**
-
-The output will show which step failed. Scroll up or omit the `tail` to see the full output:
+**When it fails** — the output will show which step failed. Scroll up to see the full output, or pipe to `less`:
 
 ```bash
 python scripts/run.py preflight 2>&1 | less
@@ -357,7 +355,7 @@ python scripts/run.py verify-examples --libraries <name>
 python scripts/run.py docs --libraries <name>
 
 # 5. Full preflight (runs everything — do this last)
-python scripts/run.py preflight 2>&1 | tail -5
+python scripts/run.py preflight
 ```
 
 What "valid" means:

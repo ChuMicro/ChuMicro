@@ -36,7 +36,7 @@ All tasks go through `scripts/run.py` in the terminal. There are no editor-speci
 ```bash
 python scripts/run.py test --libraries timing   # test one library
 python scripts/run.py lint                       # lint the workspace
-python scripts/run.py preflight 2>&1 | tail -5   # full CI gate
+python scripts/run.py preflight                  # full CI mirror
 ```
 
 See the [Command Line guide](development-cli.md#running-tasks) for the full list with expected output.
@@ -105,7 +105,7 @@ This re-runs editable installs and regenerates `pyrightconfig.json`. Your editor
 Same as the [CLI guide](development-cli.md#validation-checklist) — run preflight before opening a PR:
 
 ```bash
-python scripts/run.py preflight 2>&1 | tail -5
+python scripts/run.py preflight
 # Expected: "Preflight passed — required CI checks should pass."
 ```
 

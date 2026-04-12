@@ -14,7 +14,7 @@ Make sure you've:
 If you haven't validated yet, run preflight:
 
 ```bash
-python scripts/run.py preflight 2>&1 | tail -5
+python scripts/run.py preflight
 ```
 
 Expected:
@@ -116,7 +116,7 @@ After you open the PR, GitHub Actions runs the full CI suite:
 ✓ CircuitPython compatibility
 ```
 
-All checks must pass before merge. If something fails:
+All checks need to pass before merge. If something fails:
 
 1. Click the failed check to see the log
 2. Fix the issue locally
@@ -163,7 +163,7 @@ git checkout -b fix/next-change
 | Create branch | `git checkout -b fix/description` |
 | Run tests | `python scripts/run.py test --libraries <name>` |
 | Run lint | `python scripts/run.py lint` |
-| Full check | `python scripts/run.py preflight 2>&1 \| tail -5` |
+| Full check | `python scripts/run.py preflight` |
 | Commit | `git add -A && git commit` |
 | Push | `git push -u origin <branch>` |
 | Open PR | GitHub UI — click "Compare & pull request" on your fork |

@@ -32,7 +32,7 @@ Before proposing a structural or pattern change, check `plans/decisions/` first.
 - **No `async`/`await`, no ISRs** — use the tick-based runner pattern from Decision 0014.
 - **Use constructor injection** for time, I/O, and network dependencies. Put fakes in the library's `testing.py` submodule. See Decision 0010.
 - **Use f-strings everywhere.** Use `const()`, `memoryview`, and pre-allocated buffers in library code only.
-- **No single-letter variable names or abbreviated names we spell out** — `_` is the only exception for single-letter names. Abbreviations we spell out: `env`, `buf`, `src`, `cmd`, `msg`, `err`, `ref`, `addr`, `exc`, `exec`. Enforced by `CHU001` in `scripts/check_names.py`. Suppress with `# noqa: CHU001` only when matching an upstream API. See Decision 0022.
+- **No single-letter variable names or abbreviated names we spell out** — `_` is the only exception for single-letter names. Human contributors may use single-letter for-loop targets (e.g., `for i in range(10)`), but **agents must always use descriptive names** like `index`, `key`, `value` even in loops. Abbreviations we spell out: `env`, `buf`, `src`, `cmd`, `msg`, `err`, `ref`, `addr`, `exc`, `exec`. Enforced by `CHU001` in `scripts/check_names.py`. Suppress with `# noqa: CHU001` only when matching an upstream API. See Decision 0022.
 - **Use standard annotations and do not import `typing` in library code** — use PEP 604/585 syntax such as `int | None` and `list[int]`. See Decision 0021.
 - **Do not hard-code secrets.**
 - **Minimize dependencies** — prefer pure-Python implementations compatible with all three runtimes.
@@ -268,7 +268,6 @@ On-device tests live under `functional_tests/` and use `support/test_harness/`.
 - Use Semantic Versioning
 - Each library's `VERSION` file is the source of truth
 - Bump only affected libraries
-- Add a "What's new" bullet to `docs/guide.md` for user-visible version bumps
 - Keep development code as plain `.py`; `.mpy` compilation happens in the release pipeline
 
 ## Board support

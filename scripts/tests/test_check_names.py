@@ -4,7 +4,14 @@ import ast
 import textwrap
 from pathlib import Path
 
-from check_names import _collect_names, _read_noqa_lines, check_file, check_paths, main
+from check_names import (
+    _collect_names,
+    _for_loop_target_ids,
+    _read_noqa_lines,
+    check_file,
+    check_paths,
+    main,
+)
 
 
 class TestReadNoqaLines:
@@ -112,6 +119,65 @@ class TestCollectNames:
         hits = _collect_names(tree)
         names = [name for _, name, _ in hits]
         assert "f" in names
+
+    def test_for_loop_target_single_letter_is_allowed(self):
+        """Single-letter for-loop target is not flagged."""
+        tree = self._parse("for i in range(10):\n    pass\n")
+        hits = _collect_names(tree)
+        names = [name for _, name, _ in hits]
+        assert "i" not in names
+
+    def test_for_loop_tuple_target_single_letter_is_allowed(self):
+        """Single-letter tuple-unpacking for-loop targets are not flagged."""
+        tree = self._parse("for k, v in items.items():\n    pass\n")
+        hits = _collect_names(tree)
+        names = [name for _, name, _ in hits]
+        assert "k" not in names
+        assert "v" not in names
+
+    def test_for_loop_target_banned_abbreviation_still_flagged(self):
+        """Banned abbreviation as a for-loop target is still flagged."""
+        tree = self._parse("for msg in messages:\n    pass\n")
+        hits = _collect_names(tree)
+        names = [name for _, name, _ in hits]
+        assert "msg" in names
+
+    def test_single_letter_outside_for_loop_still_flagged(self):
+        """Single-letter variable in assignment (not a for-loop) is still flagged."""
+        tree = self._parse("for i in range(10):\n    x = i + 1\n")
+        hits = _collect_names(tree)
+        names = [name for _, name, _ in hits]
+        assert "i" not in names  # for-loop target is fine
+        assert "x" in names  # assignment is still flagged
+
+
+class TestForLoopTargetIds:
+    """Tests for _for_loop_target_ids helper."""
+
+    def _parse(self, source: str) -> ast.Module:
+        """Parse source text into an AST."""
+        return ast.parse(textwrap.dedent(source))
+
+    def test_simple_for_loop(self):
+        """Simple for-loop target is collected."""
+        tree = self._parse("for i in range(10):\n    pass\n")
+        result = _for_loop_target_ids(tree)
+        names = {name for _, name in result}
+        assert "i" in names
+
+    def test_tuple_unpacking(self):
+        """Tuple-unpacking targets are collected."""
+        tree = self._parse("for k, v in items:\n    pass\n")
+        result = _for_loop_target_ids(tree)
+        names = {name for _, name in result}
+        assert "k" in names
+        assert "v" in names
+
+    def test_no_for_loop(self):
+        """Code with no for-loops returns empty set."""
+        tree = self._parse("x = 1\n")
+        result = _for_loop_target_ids(tree)
+        assert result == set()
 
 
 class TestCheckFile:

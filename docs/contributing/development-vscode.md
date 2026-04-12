@@ -98,13 +98,13 @@ Output appears in the Terminal panel at the bottom of the window.
 
 ### From the task runner (with coverage)
 
-Command Palette → **Tasks: Run Task** → **Test**. This runs all libraries with the 94% coverage gate and leaves a `.coverage` data file at the project root. To browse coverage visually, see [Browsing coverage](#browsing-coverage) below.
+Command Palette → **Tasks: Run Task** → **Test**. This runs all libraries with the 94% coverage threshold and leaves a `.coverage` data file at the project root. To browse coverage visually, see [Browsing coverage](#browsing-coverage) below.
 
 ### From the test explorer (quick check, no coverage)
 
 VS Code's Testing panel (beaker icon in the sidebar, or `⌘⇧T` / `Ctrl+Shift+T`) discovers tests via the `python.testing.pytestArgs` setting in `.vscode/settings.json`.
 
-Click the ▶ button next to any test file or function to run it. This is fast for iterating but does not produce coverage data or enforce the 94% gate.
+Click the ▶ button next to any test file or function to run it. This is fast for iterating but does not produce coverage data or enforce the 94% threshold.
 
 ### From the terminal
 

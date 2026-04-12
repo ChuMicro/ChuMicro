@@ -212,7 +212,7 @@ __all__ = ["MyClass", "helper_function"]
 
 ## 3. Write tests
 
-Tests go in `libraries/my-thing/tests/`. The coverage gate is **94%** — every library must meet it independently.
+Tests go in `libraries/my-thing/tests/`. The coverage threshold is **94%** — every library must meet it independently.
 
 ```bash
 # Run tests for your library
