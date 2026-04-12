@@ -38,6 +38,7 @@ _UNIX_PORT_SUBMODULES = [
     "lib/berkeley-db-1.xx",
     "lib/libffi",
     "lib/mbedtls",  # SSL/TLS and crypto
+    "lib/micropython-lib",  # Frozen stdlib modules
 ]
 
 
