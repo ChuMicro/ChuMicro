@@ -337,7 +337,13 @@ def test_scripts(
 
 
 def build() -> int:
-    """Build all publishable package distributions."""
+    """Build all publishable package distributions.
+
+    Uses ``--no-isolation`` to skip creating fresh virtual environments
+    for each build, which dramatically speeds up builds (~10x faster).
+    This is safe because the development environment already has
+    ``hatchling`` installed via ``requirements-dev.txt``.
+    """
     packages = find_publishable_packages()
     if not packages:
         print("No publishable packages found (no VERSION + pyproject.toml pairs).")
@@ -345,7 +351,7 @@ def build() -> int:
 
     for package in packages:
         print(f"== build {package} ==")
-        result = run_command([PYTHON, "-m", "build", package])
+        result = run_command([PYTHON, "-m", "build", "--no-isolation", package])
         if result != 0:
             print(f"Build failed: {package}")
             return result
