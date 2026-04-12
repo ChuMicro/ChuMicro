@@ -44,7 +44,7 @@ Exit criteria:
 Key choices confirmed (Decision 0027):
 
 - MicroPython transport uses `mpremote` (mount mode default, copy mode fallback)
-- CircuitPython transport uses pyserial raw paste mode for serial, Web Workflow REST API for WiFi boards
+- CircuitPython transport uses pyserial raw REPL (Ctrl-A mode) for serial, Web Workflow REST API for WiFi boards
 - two gitignored config files: `devices.yml` (board registry) + `device-config.yml` (shared environment like WiFi)
 - `test-device` command in run.py replaces the placeholder with real orchestration
 - IDE integration via pytest conftest that routes `functional_tests/` to device when `CHUMICRO_DEVICE_RUNTIME` env var is set

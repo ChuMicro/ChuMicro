@@ -13,7 +13,7 @@
 
 ## Next
 
-- [ ] Device testing Phase 2: CircuitPython serial transport (pyserial raw paste mode) — Decision 0027
+- [ ] Device testing Phase 2: CircuitPython serial transport (pyserial raw REPL) — Decision 0027
 - [ ] Device testing Phase 3: IDE integration (pytest conftest routes `functional_tests/` to device when `CHUMICRO_DEVICE_RUNTIME` is set) — Decision 0027
 - [ ] Enable GitHub Copilot code review as a PR quality gate (low priority — defer until community contributions begin).
 - [ ] Implement `chumicro-settings` — dict-like persistent storage for microcontrollers.
