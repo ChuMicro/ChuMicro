@@ -2,14 +2,6 @@
 
 > This file is for AI coding agents. Human contributors should use [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Quick reference
-
-- **Commit mechanics:** Read the `git-commit` skill before every commit. Use `git commit -F .scratch/commit-msg.txt` instead of `git commit -m` so the message can be multi-line and thoughtful. Write the message to `.scratch/commit-msg.txt` with a file tool first.
-- **After each unit of work:** Run the `task-checkpoint` skill. Preflight must pass, then commit and push. Do not yield with uncommitted changes unless the work is explicitly partial.
-- **Scratch space:** `.scratch/` is gitignored and safe for temporary files, commit messages, and log captures.
-- **Large output:** Pipe through `tail`, `head`, or `grep`. Redirect to `.scratch/` when full output is needed.
-- **Disable pagers:** Use `git --no-pager` or `| cat`.
-
 ## Instruction priority
 
 When instructions overlap, use this order:
@@ -25,7 +17,11 @@ Before proposing a structural or pattern change, check `plans/decisions/` first.
 
 - **Verify before declaring done** — after making changes, run `task-checkpoint`. Do not tell the user work is done with uncommitted, untested, or failing changes.
 - **Preflight must pass before you stop** — `python scripts/run.py preflight 2>&1 | tail -5` must show `Preflight passed`. If it fails because of your work, fix it.
-- **Use `git commit -F .scratch/commit-msg.txt`** — not `git commit -m`, so messages can be multi-line and descriptive.
+- **Use `git commit -F .scratch/commit-msg.txt`** — not `git commit -m`, so messages can be multi-line and descriptive. Read the `git-commit` skill before every commit. Write the message to `.scratch/commit-msg.txt` with a file tool first.
+- **After each unit of work:** Run the `task-checkpoint` skill. Preflight must pass, then commit and push. Do not yield with uncommitted changes unless the work is explicitly partial.
+- **Scratch space:** `.scratch/` is gitignored and safe for temporary files, commit messages, and log captures.
+- **Large output:** Pipe through `tail`, `head`, or `grep`. Redirect to `.scratch/` when full output is needed.
+- **Disable pagers:** Use `git --no-pager` or `| cat`.
 - **Use per-library pytest via `python scripts/run.py test`** — never run bare `pytest` from the repository root.
 - **Maintain the coverage gate** per library (threshold is in `pyproject.toml`).
 - **No `async`/`await`, no ISRs** — use the tick-based runner pattern from Decision 0014.

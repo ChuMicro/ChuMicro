@@ -1,5 +1,6 @@
-ou---
-name: end-of-session description: Human-driven checklist for the end of a working session. Covers preflight, VERSION bumps, IDE configs, and planning doc hygiene. Agents use task-checkpoint instead.
+---
+name: end-of-session
+description: Human-driven checklist for the end of a working session. Covers preflight, VERSION bumps, IDE configs, and planning doc hygiene. Agents use task-checkpoint instead.
 ---
 
 # End-of-session checklist
