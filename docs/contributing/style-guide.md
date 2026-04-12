@@ -21,7 +21,7 @@ We use descriptive names so everyone can read the code without extra context. Th
 | For-loop targets are exempt | `for i in range(10)`, `for k, v in items()` | — |
 | Suppress with `# noqa: CHU001` | Only when matching an upstream API that you cannot rename | — |
 
-**Why:** Descriptive names remove the mental step of translating abbreviations back to their meaning, especially for contributors who are new to the codebase. Longer names also push lines past the 100-character limit, which forces multi-line formatting — each argument on its own line is easier to scan, diff, and blame. ([Decision 0022](plans/decisions/0022-naming-conventions.md))
+**Why:** Python's common abbreviations (`msg`, `err`, `exc`, `buf`) are tribal knowledge from C and Unix culture. Experienced Python developers read them without thinking, but newcomers, multilingual developers working across multiple languages, and non-native English speakers don't share that background — `exc` isn't obviously "exception" if you haven't seen it before. The full words save every future reader a mental lookup. The linter tells you exactly what to type, so the cost in practice is near zero. ([Decision 0022](../../plans/decisions/0022-naming-conventions.md))
 
 ## Type annotations
 

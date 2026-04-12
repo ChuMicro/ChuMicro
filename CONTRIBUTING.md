@@ -399,8 +399,8 @@ No. The [Quick Start](#quick-start) and `preflight` are all you need for your fi
 **Can I use `async`/`await`?**
 Not in library code. The tick-based runner gives you scheduling that's easy to test, inspect, and debug on resource-constrained boards — no hidden coroutine state, no event loop overhead. See [Decision 0014](plans/decisions/0014-runner-pattern.md) for the full reasoning.
 
-**Do you use descriptive loop variable names?**
-We use descriptive names throughout the codebase so everyone can read the code without extra context. The linter catches common abbreviations and suggests the descriptive name for you. Single-letter for-loop targets like `for i in range(10)` are fine — but variables, parameters, and function names should be spelled out. See [Decision 0022](plans/decisions/0022-naming-conventions.md).
+**Why do I have to spell out `error` instead of `err`?**
+Python's abbreviations like `msg`, `err`, `exc`, and `buf` are tribal knowledge — obvious if you've spent years in Python, opaque if you haven't.  We optimize for newcomers, multilingual developers, and non-native English speakers who shouldn't need a glossary to read the code.  The linter tells you exactly what to write, so the cost is a few extra keystrokes.  Single-letter for-loop targets like `for i in range(10)` are fine.  See [Decision 0022](plans/decisions/0022-naming-conventions.md) for the full reasoning.
 
 ## Getting help
 

@@ -12,7 +12,15 @@ Short abbreviations like `env`, `buf`, `src`, `cmd`, `msg`, `err`, `ref` were or
 
 ## Why this helps
 
-Code is read far more often than it is written.  Descriptive names remove the mental step of translating abbreviations back to their meaning, especially for contributors who are new to the codebase.
+Python's common abbreviations — `msg`, `err`, `exc`, `buf`, `cmd` — are tribal knowledge.  They come from C and Unix culture, and experienced Python developers read them without thinking.  But not everyone has that background:
+
+- **Newcomers to Python** (or to programming) don't know that `exc` means "exception" or `buf` means "buffer."  They have to guess from context or look it up.
+- **Multilingual developers** working across Python, JavaScript, Swift, Kotlin, Rust, or Go don't share a single set of abbreviation conventions.  `msg` is obvious if you've spent years in Python, but it's just a three-letter fragment if you haven't.
+- **Non-native English speakers** may not recognize that `err` is a truncation of "error" — especially when reading quickly or scanning unfamiliar code.
+
+The abbreviations save a few keystrokes per line.  The full words save every future reader a mental lookup.  We chose the side that scales.
+
+This is a deliberate tradeoff.  Some experienced developers will find it verbose.  That's fine — the linter tells you exactly what to type, so the cost in practice is near zero.  If spelling out `error` instead of `err` is a dealbreaker, this project may not be the right fit, and that's okay too.
 
 A useful side effect: longer names push lines past the 100-character limit, which forces multi-line formatting.  That forced splitting consistently improves readability — each argument on its own line is easier to scan, diff, and annotate with `git blame`.
 
