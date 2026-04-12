@@ -175,6 +175,10 @@ align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 <br clear="left">
 
+> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family — small, \
+focused Python libraries for microcontrollers and laptops. \
+[See all libraries.](https://github.com/ChuMicro/ChuMicro#whats-in-the-box)
+
 ## Installation
 
 ### CircuitPython ([circup](https://github.com/adafruit/circup))
