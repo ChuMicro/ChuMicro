@@ -151,17 +151,17 @@ Each library has its own docs with a version selector so you can switch between 
 
 ### Setup
 
-Want to hack on ChuMicro itself? The setup script gets you from clone to working in one command:
+Want to hack on ChuMicro itself? [Fork the repository](CONTRIBUTING.md#quick-start) on GitHub, then:
 
 ```zsh
-git clone https://github.com/ChuMicro/ChuMicro.git
+git clone https://github.com/<your-username>/ChuMicro.git
 cd ChuMicro
+git remote add upstream https://github.com/ChuMicro/ChuMicro.git
 python scripts/prepare_workspace.py --create-venv
 ```
 
 The script creates a virtualenv, installs everything, and runs lint + tests to verify. When you see `Workspace is ready`, you're good. If you already have a venv activated, drop `--create-venv`.
 
-**Planning to contribute?** [Fork the repository](CONTRIBUTING.md#quick-start) first, then clone your fork instead.
 
 When `uv` is on PATH it's used automatically for faster installs; otherwise stdlib `venv` and `pip` are used as fallbacks.
 
