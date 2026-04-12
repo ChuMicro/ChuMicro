@@ -207,12 +207,15 @@ Everything goes through one command: `python scripts/run.py <task>`.
 | `docs-deploy --channel <ch>` | Deploy versioned docs to gh-pages (CI) |
 | `prepare-micropython` | Build the pinned MicroPython unix-port binary |
 | `prepare-circuitpython` | Build the pinned CircuitPython unix-port binary |
+| `prepare-mpy-cross` | Build mpy-cross compilers for both runtimes (no unix-port) |
 | `test-micropython-compatibility` | Cross-runtime tests under MicroPython |
 | `test-circuitpython-compatibility` | Cross-runtime tests under CircuitPython |
 | `test-runtime-matrix` | Test all packages on all three runtimes |
 | `test-device` | Manual device validation placeholder |
 | `check-version` | Verify VERSION bumps for changed libraries (CI gate) |
 | `check-api` | Detect API breakages against last release (CI gate) |
+| `validate-mip --bundle-repo <repo>` | Validate mip install + import against a live bundle repo |
+| `validate-mip --staging-dir <dir>` | Validate mip install + import from locally staged bundle |
 
 </details>
 

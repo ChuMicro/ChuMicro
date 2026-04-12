@@ -308,6 +308,53 @@ All 4 validations passed (4/4).
 
 This runs automatically in CI: locally before pushing to bundle repos (pre-publish gate) and remotely after pushing (post-publish smoke test).  Use `--staging-dir` locally to verify staged bundle artifacts before cutting a release.
 
+### Other tasks
+
+These tasks are less commonly used during development but are available:
+
+```bash
+# Regenerate IDE configuration files
+python scripts/run.py sync-ide
+
+# Scaffold a new library
+python scripts/run.py new-library my-thing
+
+# Deploy versioned docs to gh-pages (used by CI)
+python scripts/run.py docs-deploy --channel experimental
+
+# Serve a versioned docs preview locally
+python scripts/run.py docs-preview --libraries timing
+
+# Prepare MicroPython unix-port binary
+python scripts/run.py prepare-micropython
+
+# Prepare CircuitPython unix-port binary
+python scripts/run.py prepare-circuitpython
+
+# Build mpy-cross compilers for both runtimes
+python scripts/run.py prepare-mpy-cross
+
+# Run cross-runtime unit tests under MicroPython
+python scripts/run.py test-micropython-compatibility
+
+# Run cross-runtime unit tests under CircuitPython
+python scripts/run.py test-circuitpython-compatibility
+
+# Run all tests across CPython, MicroPython, and CircuitPython
+python scripts/run.py test-runtime-matrix
+
+# Check VERSION enforcement for changed libraries (CI gate)
+python scripts/run.py check-version
+
+# Check for API breakages against last release tag (CI gate)
+python scripts/run.py check-api
+
+# Device validation information
+python scripts/run.py test-device
+```
+
+Most of these run automatically as part of preflight or CI — you only need them for targeted debugging or specific workflows.
+
 ## Commit workflow
 
 Stage your changes and commit. Git opens your default editor for the message:
