@@ -21,7 +21,7 @@ Before proposing a structural or pattern change, check `plans/decisions/` first.
 - **Large output:** Pipe through `tail`, `head`, or `grep`. Redirect to `.scratch/` when full output is needed.
 - **Disable pagers:** Use `git --no-pager` or `| cat`.
 - **Use per-library pytest via `python scripts/run.py test`** — never run bare `pytest` from the repository root.
-- **Maintain the coverage gate** per library — the human baseline is 85 % (configured in `pyproject.toml`). **Agents must pass `--coverage-threshold 94`** on every `test` and `preflight` invocation (Decision 0025).
+- **Maintain the coverage gate** per library — the human baseline is 85 % (configured in `pyproject.toml`). **Agents must pass `--coverage-threshold 94`** on every `test` and `preflight` invocation (Decision 0025). Use `# pragma: no cover` where code genuinely cannot be exercised in CPython tests (runtime-only branches, hardware fallbacks) — see the [coverage exclusions](docs/contributing/style-guide.md#coverage-exclusions) section in the style guide.
 - **No `async`/`await`, no ISRs** — use the tick-based runner pattern from Decision 0014.
 - **Use constructor injection** for time, I/O, and network dependencies. Put fakes in the library's `testing.py` submodule. See Decision 0010.
 - **Use f-strings everywhere.** Use `const()`, `memoryview`, and pre-allocated buffers in library code only.
