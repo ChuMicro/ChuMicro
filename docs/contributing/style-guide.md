@@ -153,7 +153,58 @@ class PacketReader:
 </details>
 
 
-## What the linter checks
+## Coverage exclusions
+
+Every library must meet the coverage threshold (configured in `pyproject.toml`). Sometimes code genuinely can't be exercised in CPython tests — runtime-specific branches, hardware fallbacks, or defensive guards that only fire on a real board. Mark those lines so they don't drag down your coverage.
+
+### `# pragma: no cover` — exclude a line or block
+
+Add the comment to any line, `if` branch, or function that can't be tested on CPython:
+
+```python
+# Single line
+x = board.D5  # pragma: no cover
+
+# Entire branch
+if sys.implementation.name == "circuitpython":  # pragma: no cover
+    import neopixel
+else:
+    from chumicro_compat.stubs import neopixel
+
+# Entire function (put it on the def line)
+def _reset_hardware() -> None:  # pragma: no cover
+    """Hard-reset the I2C bus — only works on real hardware."""
+    ...
+```
+
+### Common patterns that already work
+
+The `const()` fallback pattern used across libraries is already fully covered (both the `try` and `except` branches run on CPython). You usually don't need `# pragma: no cover` for it.
+
+### When to use it
+
+- **Runtime-only imports** (`import board`, `import neopixel`, etc.)
+- **Hardware-specific branches** (`if sys.platform == "rp2":`)
+- **Defensive guards** that only fire under conditions impossible to reproduce in tests (e.g., memory allocation failure on a 256 KB MCU)
+
+### When NOT to use it
+
+- Don't use it to hide untested business logic — write a test instead.
+- Don't use it on code that *could* be tested with a fake or stub. If you can inject the dependency and test it, do that.
+- If you're unsure, leave it uncovered and note it in your PR. A reviewer can help decide.
+
+### Browsing coverage
+
+After running tests, you can see exactly which lines are covered:
+
+```bash
+python -m coverage html
+open htmlcov/index.html
+```
+
+Covered lines show in green, missed lines in red. Much easier than reading line numbers from the terminal output. (`htmlcov/` is gitignored.)
+
+
 
 `python scripts/run.py lint` runs two tools back to back. If both pass, your code is style-correct.
 

@@ -216,7 +216,7 @@ Existing examples:
 - `chumicro_timing.testing.FakeTicks` — duck-types the ticks protocol
 - `chumicro_runner.testing.CallRecorder` — duck-types the handler callable
 
-Related: Decision 0010 (don't mock what you don't own), settings
+Related: Decision 0010 (prefer provided fakes over ad-hoc mocks), settings
 library design in `next-up.md`.
 
 ## Per-library test isolation

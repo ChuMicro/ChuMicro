@@ -22,7 +22,7 @@ Scan the output. Ask yourself:
 ## 2. Run preflight
 
 ```bash
-python scripts/run.py preflight 2>&1 | tail -5
+python scripts/run.py preflight --coverage-threshold 94 2>&1 | tail -5
 ```
 
 Must show: `Preflight passed`. If it fails because of your work, fix it before committing. Use the `debug-test-failure` skill if tests fail.

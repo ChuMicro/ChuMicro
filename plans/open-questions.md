@@ -12,12 +12,6 @@ Questions that lead to structural tradeoffs should become decisions in
 
 ## Active
 
-### Should the coverage gate be higher?
-
-The threshold (configured in `pyproject.toml`) was chosen early and has worked well.
-As the library count grows and test patterns mature, revisit whether a higher gate
-is appropriate — or whether the gate should vary by library maturity
-(stricter for stable, relaxed for experimental).
 
 ### Is ESP32 NVS worth a dedicated backend?
 
@@ -86,5 +80,8 @@ before actively seeking contributions?
 
 ## Resolved
 
-(none yet)
+### Should the coverage gate be higher?
+
+Resolved by Decision 0025: dual thresholds — 85 % baseline for humans
+(in `pyproject.toml`), 94 % for agents (via `--coverage-threshold 94`).
 

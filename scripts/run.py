@@ -42,6 +42,7 @@ from verify_examples import verify_examples
 from workspace import (
     ROOT,
     coverage_args_for,
+    detect_changed_packages,
     discover_package_dirs,
     discover_ruff_paths,
     filter_by_platform,
@@ -143,15 +144,26 @@ def test_cpython(
     exit_first: bool = False,
     verbose: bool = False,
     no_cov: bool = False,
+    coverage_threshold: int | None = None,
+    elevated_packages: set[str] | None = None,
 ) -> int:
     """Run the CPython test suite for the given packages.
 
     Runs pytest separately for each package to avoid test-directory name
     collisions (Decision 0009), then combines and reports coverage.  Each
-    library must independently meet the coverage threshold (configured in
-    ``pyproject.toml``) unless
+    library must independently meet the coverage threshold unless
     *filter_expression* is set (filtering naturally reduces coverage) or *no_cov*
     skips coverage entirely.
+
+    The default threshold comes from ``pyproject.toml`` (85 % — the human
+    baseline).  Pass *coverage_threshold* to override it; agents use 94 %
+    (Decision 0025).
+
+    When *elevated_packages* is provided, only those libraries (by name)
+    use *coverage_threshold*; all other libraries fall back to the
+    ``pyproject.toml`` default.  This lets agents enforce a higher bar on
+    the libraries they changed without failing on pre-existing coverage
+    in libraries they didn't touch.
 
     *filter_expression* requires library-scoped syntax::
 
@@ -201,12 +213,23 @@ def test_cpython(
     #     reduces branch coverage below the configured threshold), or
     #   - no_cov is set (user explicitly opted out of coverage).
     skip_coverage_gate = bool(filter_expression) or no_cov
-    cov_gate_args = ["--cov-fail-under=0"] if skip_coverage_gate else []
 
     overall_exit_code = 0
     run_counter = 0
 
     for package_dir in testable:
+        # Per-library coverage gate.  When elevated_packages is set, only
+        # those libraries get the overridden threshold; the rest fall back
+        # to the pyproject.toml default (no --cov-fail-under flag).
+        if skip_coverage_gate:
+            cov_gate_args = ["--cov-fail-under=0"]
+        elif coverage_threshold is not None:
+            if elevated_packages is None or package_dir.name in elevated_packages:
+                cov_gate_args = [f"--cov-fail-under={coverage_threshold}"]
+            else:
+                cov_gate_args = []
+        else:
+            cov_gate_args = []
         # Determine what pytest runs are needed for this library.
         #
         # Filter entries split into two categories:
@@ -290,6 +313,13 @@ def test_cpython(
         report_args = [PYTHON, "-m", "coverage", "report", "--show-missing"]
         if skip_coverage_gate:
             report_args.append("--fail-under=0")
+        elif coverage_threshold is not None and elevated_packages is None:
+            # Apply the override to the combined report only when all
+            # libraries share the same threshold (no elevated_packages
+            # scoping).  When elevated_packages is set, per-library gates
+            # already enforce the higher bar on changed libraries; the
+            # combined report uses the pyproject.toml default.
+            report_args.append(f"--fail-under={coverage_threshold}")
 
         report_exit_code = run_command(report_args)
         if report_exit_code != 0 and overall_exit_code == 0:
@@ -539,6 +569,7 @@ def _base_ref_reachable(base_reference: str) -> bool:
 def preflight(
     micropython_binary: str | None = None,
     circuitpython_binary: str | None = None,
+    coverage_threshold: int | None = None,
 ) -> int:
     """Run the full check suite that CI requires on every pull request.
 
@@ -547,6 +578,9 @@ def preflight(
     example verification, version-check, api-check, MicroPython and
     CircuitPython cross-runtime unit tests.
 
+    Pass *coverage_threshold* to override the ``pyproject.toml`` default
+    (85 %).  Agents should pass ``--coverage-threshold 94`` (Decision 0025).
+
     Tests run once with the current Python interpreter (CI runs 3.11,
     3.12, and 3.13 separately).  Version-check and api-check require
     ``origin/main`` to be reachable; they skip gracefully if it is not.
@@ -554,6 +588,19 @@ def preflight(
     """
     python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
     all_packages = discover_package_dirs()
+
+    # When --coverage-threshold is set, only apply the elevated threshold
+    # to libraries the caller actually changed.  Libraries the caller
+    # didn't touch keep the pyproject.toml default (85 %).  This prevents
+    # agents from failing on pre-existing coverage in human-authored code.
+    elevated_packages: set[str] | None = None
+    if coverage_threshold is not None:
+        changed = detect_changed_packages()
+        if changed is not None:
+            elevated_packages = {package_dir.name for package_dir in changed}
+        # When changed is None (infrastructure change or no diff), all
+        # packages are considered "changed" — leave elevated_packages as
+        # None so the threshold applies everywhere.
 
     # version-check and api-check need a base ref to diff against.
     # If origin/main isn't reachable (detached HEAD, no remote, etc.),
@@ -565,7 +612,14 @@ def preflight(
         ("lint", lint),
         ("build", build),
         ("docs", lambda: docs(all_packages)),
-        (f"test (python {python_version})", lambda: test_cpython(all_packages)),
+        (
+            f"test (python {python_version})",
+            lambda: test_cpython(
+                all_packages,
+                coverage_threshold=coverage_threshold,
+                elevated_packages=elevated_packages,
+            ),
+        ),
         ("test-scripts", test_scripts),
         ("verify-examples", lambda: verify_examples(all_packages)),
         ("check-version", check_version),
@@ -807,6 +861,12 @@ def _build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser(
         "preflight", parents=[binary],
         help="lint + test + examples + compatibility + build",
+    ).add_argument(
+        "--coverage-threshold", type=int, metavar="PCT",
+        help=(
+            "override coverage fail-under percentage "
+            "(default: from pyproject.toml)"
+        ),
     )
     subparsers.add_parser("prepare-micropython", help="prepare MicroPython unix-port")
     subparsers.add_parser("prepare-circuitpython", help="prepare CircuitPython unix-port")
@@ -923,6 +983,13 @@ def _build_parser() -> argparse.ArgumentParser:
         "--no-cov", action="store_true",
         help="skip coverage collection",
     )
+    test_parser.add_argument(
+        "--coverage-threshold", type=int, metavar="PCT",
+        help=(
+            "override coverage fail-under percentage "
+            "(default: from pyproject.toml)"
+        ),
+    )
     subparsers.add_parser("verify-examples", parents=[scope], help="import-check examples")
 
     docs_parser = subparsers.add_parser("docs", parents=[scope], help="build library docs")
@@ -974,6 +1041,7 @@ def main(argv: list[str]) -> int:
                 exit_first=args.exit_first,
                 verbose=args.verbose,
                 no_cov=args.no_cov,
+                coverage_threshold=args.coverage_threshold,
             )
         if args.task == "verify-examples":
             return verify_examples(package_dirs)
@@ -1016,7 +1084,11 @@ def main(argv: list[str]) -> int:
             return test_circuitpython_compatibility(circuitpython_binary)
         if args.task == "test-runtime-matrix":
             return test_runtime_matrix(micropython_binary, circuitpython_binary)
-        return preflight(micropython_binary, circuitpython_binary)
+        return preflight(
+            micropython_binary,
+            circuitpython_binary,
+            coverage_threshold=args.coverage_threshold,
+        )
 
     # --- no-arg tasks ---
     no_arg = {

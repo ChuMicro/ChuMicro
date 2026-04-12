@@ -125,7 +125,7 @@ def test_sensor_reads_from_bus() -> None:
     assert result == b"\x01\x02"
 ```
 
-Create lightweight fakes for your own interfaces. Use fakes from upstream ChuMicro libraries when available (`from chumicro_timing.testing import FakeTicks`). Don't use `unittest.mock` on third-party APIs — build a simple fake instead.
+Create lightweight fakes for your own interfaces. Use fakes from upstream ChuMicro libraries when available (`from chumicro_timing.testing import FakeTicks`). `unittest.mock` is fine when a purpose-built fake doesn't exist or doesn't make sense — but with dependency injection, you'll usually find that a simple fake gives better test control than patching.
 
 ### Testing submodule
 

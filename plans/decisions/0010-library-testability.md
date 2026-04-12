@@ -42,9 +42,11 @@ Libraries that expose types or functions others will need to mock must include a
 
 Fakes ship in `src/` alongside production code so they are importable by any library's test suite via PYTHONPATH — no pip install needed.
 
-### 3. Don't mock what you don't own
+### 3. Prefer provided fakes over ad-hoc mocks
 
-When testing code that uses another library, use that library's provided fakes rather than creating ad-hoc mocks.  This ensures the fake's behavior stays consistent with the real implementation as the upstream library evolves.
+When testing code that uses another ChuMicro library, prefer that library's provided fakes over `unittest.mock`.  Fakes stay consistent with the real implementation as the upstream library evolves, and they give tests better steering (e.g., manually advancing time with `FakeTicks`).
+
+`unittest.mock` is not banned — it's fine when a purpose-built fake doesn't exist or doesn't make sense for the situation.  But if a library ships a `testing` submodule with fakes designed for exactly your use case, reach for those first.
 
 ## Consequences
 

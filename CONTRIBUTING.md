@@ -370,7 +370,7 @@ These aren't arbitrary — each one traces to a design decision with rationale. 
 |---|---|
 | PEP 8 + descriptive names | The linter catches this for you — see the [Style Guide](docs/contributing/style-guide.md) |
 | No `async`/`await` | The tick-based runner gives you scheduling that's easy to test, inspect, and debug on resource-constrained boards — no hidden coroutine state, no event loop overhead ([Decision 0014](plans/decisions/0014-runner-pattern.md)) |
-| Constructor injection for I/O | Testability without mocking things you don't own ([Decision 0010](plans/decisions/0010-library-testability.md)) |
+| Constructor injection for I/O | Testability with fakes and dependency injection ([Decision 0010](plans/decisions/0010-library-testability.md)) |
 | Per-library `pytest` runs | Avoids test-directory collisions ([Decision 0009](plans/decisions/0009-per-library-test-runs.md)) |
 | `const()` / `memoryview` in library code | Memory efficiency on microcontrollers (not required in `scripts/` or `support/`). You can add these later — correctness first. |
 

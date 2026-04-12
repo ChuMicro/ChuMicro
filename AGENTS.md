@@ -21,7 +21,7 @@ Before proposing a structural or pattern change, check `plans/decisions/` first.
 - **Large output:** Pipe through `tail`, `head`, or `grep`. Redirect to `.scratch/` when full output is needed.
 - **Disable pagers:** Use `git --no-pager` or `| cat`.
 - **Use per-library pytest via `python scripts/run.py test`** — never run bare `pytest` from the repository root.
-- **Maintain the coverage gate** per library (threshold is in `pyproject.toml`).
+- **Maintain the coverage gate** per library — the human baseline is 85 % (configured in `pyproject.toml`). **Agents must pass `--coverage-threshold 94`** on every `test` and `preflight` invocation (Decision 0025).
 - **No `async`/`await`, no ISRs** — use the tick-based runner pattern from Decision 0014.
 - **Use constructor injection** for time, I/O, and network dependencies. Put fakes in the library's `testing.py` submodule. See Decision 0010.
 - **Use f-strings everywhere.** Use `const()`, `memoryview`, and pre-allocated buffers in library code only.
@@ -208,7 +208,7 @@ Key rules:
 
 - Tests live under each library's `tests/`
 - Shared fakes belong in `src/chumicro_<name>/testing.py`
-- Do not mock what you do not own when usable upstream fakes already exist
+- Prefer provided fakes over ad-hoc mocks when a library ships a `testing` submodule
 
 See Decision 0009 and Decision 0010.
 
