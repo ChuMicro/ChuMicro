@@ -37,6 +37,7 @@ _REPO_URL = "https://github.com/micropython/micropython.git"
 _UNIX_PORT_SUBMODULES = [
     "lib/berkeley-db-1.xx",
     "lib/libffi",
+    "lib/mbedtls",  # SSL/TLS and crypto
 ]
 
 

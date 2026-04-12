@@ -122,19 +122,19 @@ class TestBuildEnvironment:
     def test_adds_cflags(self):
         """Extra CFLAGS are appended."""
         environment = build_environment("-Wno-error")
-        assert "-Wno-error" in environment.get("CFLAGS_EXTRA", "")
+        assert "-Wno-error" in environment.get("CFLAGS", "")
 
     def test_no_duplicate_flags(self):
         """Same flag passed twice is not duplicated."""
         environment = build_environment("-Wno-error", "-Wno-error")
-        cflags = environment.get("CFLAGS_EXTRA", "")
+        cflags = environment.get("CFLAGS", "")
         assert cflags.count("-Wno-error") == 1
 
     def test_preserves_existing_cflags(self, monkeypatch):
-        """Existing CFLAGS_EXTRA values are preserved."""
-        monkeypatch.setenv("CFLAGS_EXTRA", "-Wexisting")
+        """Existing CFLAGS values are preserved."""
+        monkeypatch.setenv("CFLAGS", "-Wexisting")
         environment = build_environment("-Wnew")
-        cflags = environment["CFLAGS_EXTRA"]
+        cflags = environment["CFLAGS"]
         assert "-Wexisting" in cflags
         assert "-Wnew" in cflags
 

@@ -138,20 +138,20 @@ def build_jobs() -> str:
 
 
 def build_environment(*extra_cflags: str) -> dict[str, str]:
-    """Return a copy of ``os.environ`` with additional ``CFLAGS_EXTRA`` flags.
+    """Return a copy of ``os.environ`` with additional ``CFLAGS`` flags.
 
-    Flags already present in ``CFLAGS_EXTRA`` are not duplicated.
+    Flags already present in ``CFLAGS`` are not duplicated.
 
     Args:
         extra_cflags: Additional compiler flags to append.
     """
     environment = os.environ.copy()
-    existing = environment.get("CFLAGS_EXTRA", "").split()
+    existing = environment.get("CFLAGS", "").split()
     for flag in extra_cflags:
         if flag not in existing:
             existing.append(flag)
     if existing:
-        environment["CFLAGS_EXTRA"] = " ".join(existing)
+        environment["CFLAGS"] = " ".join(existing)
     return environment
 
 
