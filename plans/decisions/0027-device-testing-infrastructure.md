@@ -96,7 +96,19 @@ A pytest conftest or plugin intercepts `functional_tests/` collection when `CHUM
 - **PyCharm:** Set `CHUMICRO_DEVICE_RUNTIME=micropython` (or `circuitpython`) in a run configuration template.  Play buttons work at file and function level.
 - **VSCode:** Same env var in `settings.json` or `.env`.
 
-### File deployment to CircuitPython flash
+### File deployment to flash
+
+#### MicroPython
+
+`mpremote` handles file deployment natively:
+
+```
+mpremote connect <addr> fs cp -r <local_tree> :
+```
+
+Integrity verification (`fs sha256sum`), directory creation (`fs mkdir`), and cleanup (`fs rm`, `fs rmdir`) are built-in subcommands.  No workarounds needed.
+
+#### CircuitPython
 
 For deploying persistent files (code.py, libraries to lib/, settings.toml):
 
@@ -161,16 +173,7 @@ Tested on Lolin S2 Mini (ESP32-S2-S2FN4R2) running CircuitPython 10.1.4.
 - `types.ModuleType` is unavailable — use class objects as fake modules instead
 - `exec(code, class_instance.__dict__)` raises `TypeError` — exec into a plain dict, then copy attributes to a class with `setattr`
 - `object.__setattr__` is unavailable — use the built-in `setattr()` function
-
-**File deployment findings:**
-- `supervisor.runtime.autoreload = False` works from the REPL — prevents restart during batch file copy
-- Files written to CIRCUITPY USB drive are immediately visible from the REPL (`os.stat`, `import`)
-- Modules in both `/` and `/lib/` import correctly after USB copy
-- `supervisor.runtime.autoreload = True` re-enables auto-reload for the final restart
-- `storage.remount("/", readonly=False)` fails while USB is active — cannot write files from REPL
-- `storage.disable_usb_drive()` only works in boot.py, not at runtime
-
-These are implementation details that do not change the transport architecture.
+- `hashlib.sha256` is unavailable on ESP32-S2 — transport should fall back to byte-compare or skip hash verification
 
 ### MicroPython file deployment — validated (2026-04-12)
 
@@ -200,7 +203,4 @@ Tested USB-drive deployment with autoreload control via raw REPL:
 | 4 — `code.py` + reload | ✅ | Wrote code.py, soft-reset triggered standalone run, `DEPLOY_VERIFIED` appeared in serial output |
 | 5 — Clean up | ✅ | Original code.py restored, flash at 99 % free |
 
-**CircuitPython-specific constraint discovered:**
-
-- `hashlib.sha256` is unavailable on ESP32-S2 running CircuitPython 10.1.4.  The transport should fall back to byte-compare or skip hash verification on boards without `hashlib.sha256`.  This does not affect the deployment workflow itself.
 
