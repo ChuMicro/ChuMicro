@@ -308,7 +308,8 @@ All 4 validations passed (4/4).
 
 This runs automatically in CI: locally before pushing to bundle repos (pre-publish gate) and remotely after pushing (post-publish smoke test).  Use `--staging-dir` locally to verify staged bundle artifacts before cutting a release.
 
-### Other tasks
+<details>
+<summary>Other tasks (CI, cross-runtime, scaffolding)</summary>
 
 These tasks are less commonly used during development but are available:
 
@@ -354,6 +355,8 @@ python scripts/run.py test-device
 ```
 
 Most of these run automatically as part of preflight or CI — you only need them for targeted debugging or specific workflows.
+
+</details>
 
 ## Commit workflow
 
