@@ -146,86 +146,6 @@ The report shows every source file with covered lines in green and missed lines 
 
 > **Tip:** `htmlcov/` is gitignored. Generate it whenever you need it, discard it when you're done.
 
-### Test scripts
-
-Runs the infrastructure test suite for `scripts/`. These tests cover pure-logic functions (parsers, validators, generators) without the per-library coverage gate — scripts are subprocess-heavy orchestration code with a different coverage profile.
-
-```bash
-python scripts/run.py test-scripts
-```
-
-### Verify examples
-
-Checks that every example script in a library has valid syntax and resolvable imports. Quick to run — catches copy-paste mistakes before they reach users.
-
-```bash
-python scripts/run.py verify-examples --libraries timing
-```
-
-**When it passes:**
-
-```
-  checking libraries/timing/examples/heartbeat_blink.py
-  OK:   libraries/timing/examples/heartbeat_blink.py
-  ...
-All 9 example(s) verified.
-```
-
-**When it fails:**
-
-```
-  checking libraries/timing/examples/broken_example.py
-  FAIL: libraries/timing/examples/broken_example.py
-    SyntaxError: invalid syntax (line 12)
-```
-
-**How to fix:** Open the example file and fix the syntax error at the reported line.
-
-### Build docs
-
-Builds the MkDocs documentation site for a library. Docstrings are rendered into API reference pages by mkdocstrings, so this also catches malformed docstrings.
-
-```bash
-python scripts/run.py docs --libraries timing
-```
-
-**When it passes:**
-
-```
-== docs libraries/timing ==
-Build started
-+ /
-+ /testing/
-+ /guide/
-+ /api/
-Build finished in 0.00s
-  Built: libraries/timing/site/
-```
-
-**When it fails** (common: griffe warning from missing annotation):
-
-```
-WARNING  -  griffe: chumicro_timing/core.py:42: No type or annotation for parameter 'interval_ms'
-FAIL: griffe warnings detected — fix docstrings before merging.
-```
-
-**How to fix:** Add a type annotation to the function signature:
-
-```python
-def my_func(interval_ms: int) -> int:
-    """Do something.
-
-    Args:
-        interval_ms: Interval in milliseconds.
-
-    Returns:
-        The computed value.
-    """
-```
-
-> **Heads up:** Types go on the signature as annotations.  Docstrings carry
-> descriptions only — `Args:` uses `name: description`, `Returns:` uses just
-> the description.
 
 ### Preflight
 
@@ -251,29 +171,22 @@ python scripts/run.py preflight 2>&1 | less
 
 Look for lines starting with `FAIL` or `ERROR`. Fix the issue and run preflight again.
 
-### Build
-
-Builds distributable packages (`.tar.gz` and `.whl`) for all libraries. You rarely need this during development — preflight runs it for you — but it's useful to verify packaging independently.
-
-```bash
-python scripts/run.py build
-```
-
-**When it passes:**
-
-```
-== build libraries/timing ==
-...
-Successfully built chumicro_timing-0.1.15.tar.gz and chumicro_timing-0.1.15-py3-none-any.whl
-Built 4 package(s): libraries/compat, libraries/msgpack, libraries/runner, libraries/timing
-```
-
 <details>
-<summary>Other tasks (cross-runtime, scaffolding)</summary>
-
-These tasks are less commonly used during development but are available:
+<summary>Other tasks (expand for full list)</summary>
 
 ```bash
+# Test scripts infrastructure
+python scripts/run.py test-scripts
+
+# Verify example scripts parse and import correctly
+python scripts/run.py verify-examples --libraries timing
+
+# Build docs (catches malformed docstrings)
+python scripts/run.py docs --libraries timing
+
+# Build distributable packages
+python scripts/run.py build
+
 # Regenerate IDE configuration files
 python scripts/run.py sync-ide
 
@@ -283,95 +196,21 @@ python scripts/run.py new-library my-thing
 # Serve a versioned docs preview locally
 python scripts/run.py docs-preview --libraries timing
 
-# Prepare MicroPython unix-port binary
+# Cross-runtime tasks
 python scripts/run.py prepare-micropython
-
-# Prepare CircuitPython unix-port binary
 python scripts/run.py prepare-circuitpython
-
-# Build mpy-cross compilers for both runtimes
 python scripts/run.py prepare-mpy-cross
-
-# Run cross-runtime unit tests under MicroPython
 python scripts/run.py test-micropython-compatibility
-
-# Run cross-runtime unit tests under CircuitPython
 python scripts/run.py test-circuitpython-compatibility
-
-# Run all tests across CPython, MicroPython, and CircuitPython
 python scripts/run.py test-runtime-matrix
 
-# Check VERSION enforcement for changed libraries
+# CI checks (run automatically in preflight)
 python scripts/run.py check-version
-
-# Check for API breakages against last release tag
 python scripts/run.py check-api
-
-# Device validation information
-python scripts/run.py test-device
 ```
 
 Most of these run automatically as part of preflight — you only need them for targeted debugging.
 
 </details>
 
-## Commit workflow
-
-Stage your changes and commit. Git opens your default editor for the message:
-
-```bash
-git add -A
-git commit
-```
-
-The commit message format:
-
-```
-Imperative subject line (what this commit does)
-
-Body explaining *why*, not *what*. The diff shows what changed.
-Name affected libraries.
-
-Affects: timing, runner
-```
-
-Use imperative mood in the subject — "Fix wraparound bug", not "Fixed" or "Fixes".
-
-## Validation checklist
-
-Before opening a PR, verify your changes pass all checks. Run them in order — each is progressively broader:
-
-```bash
-# 1. Lint (fastest — catches formatting issues)
-python scripts/run.py lint
-
-# 2. Test the libraries you changed
-python scripts/run.py test --libraries <name>
-
-# 3. Verify examples parse
-python scripts/run.py verify-examples --libraries <name>
-
-# 4. Build docs
-python scripts/run.py docs --libraries <name>
-
-# 5. Full preflight (runs everything — do this last)
-python scripts/run.py preflight
-```
-
-What "valid" means:
-
-| Check | What it verifies | Pass condition |
-|-------|-----------------|----------------|
-| `lint` | Code style (Ruff) | Zero errors |
-| `test` | Correctness + coverage | All tests pass, ≥ 94% branch coverage per library |
-| `test-scripts` | Scripts infrastructure | All infrastructure tests pass |
-| `verify-examples` | Example files parse | All examples have valid syntax and resolvable imports |
-| `docs` | Documentation builds | Zero griffe warnings, clean build |
-| `build` | Package creates correctly | `.tar.gz` and `.whl` produced |
-| `check-version` | VERSION bump if source changed | VERSION file bumped when `src/` files changed |
-| `check-api` | No unintentional API breakage | No removed/renamed public symbols without VERSION bump |
-| `MicroPython compat` | Code runs on MicroPython | Cross-runtime unit tests pass |
-| `CircuitPython compat` | Code runs on CircuitPython | Cross-runtime unit tests pass |
-
-Steps 1–4 catch most issues. Preflight (step 5) catches the rest.
 
