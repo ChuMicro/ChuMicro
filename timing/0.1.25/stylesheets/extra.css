@@ -1,0 +1,151 @@
+/* ChuMicro docs — dark-mode readability overrides for Material for MkDocs.
+ *
+ * The slate scheme provides the dark background.  These overrides improve
+ * font sizing, code block contrast, and add warm accent touches to match
+ * the ChuMicro branding palette (honey badger: oranges, golds, warm darks).
+ *
+ * Palette extracted from support/docs/chumicro_tip.png.  All hues stay in
+ * the 10°–50° orange/gold range; no greens or blues.
+ *
+ * This is the single source of truth.  The build copies it into each
+ * library's docs/stylesheets/ at build time — do not duplicate this file.
+ */
+
+/* -- Warm accent palette (aligned with the logo and landing page) ------- */
+:root {
+  --chumicro-orange: #e87518;
+  --chumicro-orange-dim: #c05e10;
+  --chumicro-red-orange: #d4460f;
+  --chumicro-gold: #f0b050;
+  --chumicro-cream: #e8d296;
+  --chumicro-surface: #1c1510;
+  --chumicro-surface-border: #3a2a1a;
+}
+
+/* Override Material's primary and accent colors to warm orange tones */
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #c05e10;
+  --md-primary-fg-color--light: #e87518;
+  --md-primary-fg-color--dark: #9a4a0c;
+  --md-primary-bg-color: #fff;
+  --md-primary-bg-color--light: rgba(255, 255, 255, 0.7);
+  --md-accent-fg-color: #e87518;
+  --md-accent-fg-color--transparent: rgba(232, 117, 24, 0.1);
+}
+
+/* -- Typography --------------------------------------------------------- */
+
+/* Bump body text slightly from Material's 0.8rem default for readability,
+   but keep it compact enough that API pages don't feel oversized. */
+.md-typeset {
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+/* Tighten paragraph and list spacing — Material defaults add generous
+   bottom margins that create excessive whitespace between blocks. */
+.md-typeset p,
+.md-typeset ul,
+.md-typeset ol {
+  margin-bottom: 0.6em;
+}
+
+.md-typeset li + li {
+  margin-top: 0.15em;
+}
+
+/* Widen content area (Material default is 61rem) */
+.md-grid {
+  max-width: 72rem;
+}
+
+/* Headings: warm gold on h1, section dividers on h2 */
+.md-typeset h1 {
+  color: var(--chumicro-gold);
+  font-weight: 700;
+}
+
+.md-typeset h2 {
+  border-bottom: 1px solid var(--chumicro-surface-border);
+  padding-bottom: 0.3em;
+  margin-top: 2em;
+}
+
+/* -- Code blocks -------------------------------------------------------- */
+
+/* Fenced code blocks: visible surface, generous padding, rounded corners */
+.md-typeset pre > code {
+  font-size: 0.88rem;
+  line-height: 1.65;
+  border-radius: 0.5rem;
+}
+
+.md-typeset pre {
+  border-radius: 0.5rem;
+  border: 1px solid var(--chumicro-surface-border);
+}
+
+/* Inline code: subtle warm-tinted background for contrast */
+.md-typeset :not(pre) > code {
+  background-color: var(--chumicro-surface);
+  border: 1px solid var(--chumicro-surface-border);
+  border-radius: 0.25rem;
+  padding: 0.1em 0.35em;
+  font-size: 0.88em;
+  color: var(--chumicro-gold);
+}
+
+/* -- Tables ------------------------------------------------------------- */
+
+/* Softer table borders and slightly more row padding */
+.md-typeset table:not([class]) th {
+  background-color: var(--chumicro-surface);
+  font-weight: 600;
+}
+
+.md-typeset table:not([class]) td,
+.md-typeset table:not([class]) th {
+  border-color: var(--chumicro-surface-border);
+  padding: 0.6em 0.8em;
+}
+
+/* -- Navigation --------------------------------------------------------- */
+
+/* Top header bar: bump from Material's small default */
+.md-header {
+  font-size: 0.85rem;
+}
+
+/* Left sidebar and right TOC: Material defaults to ~0.64rem which is
+   hard to read.  Bump both to 0.8rem. */
+.md-nav {
+  font-size: 0.8rem;
+}
+
+/* Orange tint on the active nav item */
+.md-nav__link--active {
+  color: var(--chumicro-orange) !important;
+}
+
+/* -- Page footer links -------------------------------------------------- */
+
+/* Center the back-link and project links in the page footer. */
+.chumicro-footer {
+  text-align: center;
+}
+
+/* -- Admonitions -------------------------------------------------------- */
+
+/* Give note admonitions an orange border in dark mode */
+[data-md-color-scheme="slate"] .md-typeset .admonition.note,
+[data-md-color-scheme="slate"] .md-typeset details.note {
+  border-color: var(--chumicro-orange-dim);
+}
+
+/* -- Miscellaneous ------------------------------------------------------ */
+
+/* Version selector badge — warm gold */
+.md-version__current {
+  color: var(--chumicro-gold);
+}
+
