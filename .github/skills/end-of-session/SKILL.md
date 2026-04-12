@@ -1,9 +1,10 @@
----
-name: end-of-session
-description: Checklist to run at the end of every working session. Use this skill before finishing work to ensure a clean tree and current planning docs.
+ou---
+name: end-of-session description: Human-driven checklist for the end of a working session. Covers preflight, VERSION bumps, IDE configs, and planning doc hygiene. Agents use task-checkpoint instead.
 ---
 
 # End-of-session checklist
+
+> **For human contributors.** Agents should use the `task-checkpoint` skill after each unit of work — it runs preflight and commits. This checklist covers broader housekeeping that humans do at the end of a working session.
 
 Use this checklist at the end of every working session to ensure the workspace
 is clean and planning docs are current.

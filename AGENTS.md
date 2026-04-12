@@ -5,8 +5,7 @@
 ## Quick reference
 
 - **Commit mechanics:** Read the `git-commit` skill before every commit. Use `git commit -F .scratch/commit-msg.txt` instead of `git commit -m` so the message can be multi-line and thoughtful. Write the message to `.scratch/commit-msg.txt` with a file tool first.
-- **After each unit of work:** Run the `task-checkpoint` skill. Validate, commit, and push. Do not yield with uncommitted changes unless the work is explicitly partial.
-- **Before ending a session:** Run the `end-of-session` skill. Preflight must pass and the tree must be clean.
+- **After each unit of work:** Run the `task-checkpoint` skill. Preflight must pass, then commit and push. Do not yield with uncommitted changes unless the work is explicitly partial.
 - **Scratch space:** `.scratch/` is gitignored and safe for temporary files, commit messages, and log captures.
 - **Large output:** Pipe through `tail`, `head`, or `grep`. Redirect to `.scratch/` when full output is needed.
 - **Disable pagers:** Use `git --no-pager` or `| cat`.
@@ -24,7 +23,7 @@ Before proposing a structural or pattern change, check `plans/decisions/` first.
 
 ## Non-negotiable rules
 
-- **Verify before declaring done** — after making changes, run `task-checkpoint`. Before ending a session, run `end-of-session`. Do not tell the user work is done with uncommitted, untested, or failing changes.
+- **Verify before declaring done** — after making changes, run `task-checkpoint`. Do not tell the user work is done with uncommitted, untested, or failing changes.
 - **Preflight must pass before you stop** — `python scripts/run.py preflight 2>&1 | tail -5` must show `Preflight passed`. If it fails because of your work, fix it.
 - **Use `git commit -F .scratch/commit-msg.txt`** — not `git commit -m`, so messages can be multi-line and descriptive.
 - **Use per-library pytest via `python scripts/run.py test`** — never run bare `pytest` from the repository root.
@@ -65,7 +64,6 @@ Procedural knowledge lives in `.github/skills/`. Read the relevant skill file be
 | Skill | When to read it |
 |-------|-----------------|
 | `git-commit` | Before every commit |
-| `end-of-session` | Before finishing work |
 | `task-checkpoint` | After completing a unit of work |
 | `debug-test-failure` | When tests fail |
 | `large-output` | Before running commands with large output |
