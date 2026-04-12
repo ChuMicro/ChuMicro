@@ -42,8 +42,35 @@ Put your code in `src/chumicro_my_thing/`. Follow the [Style Guide](style-guide.
 - **No `async`/`await`** — use the tick-based runner pattern. If your library has active components, implement `check(now_ms) -> bool` so they work with [`Runner`](../../libraries/runner/).
 - **No third-party dependencies** that aren't available on all three runtimes.
 - **No `typing` imports** — use PEP 604/585 syntax: `int | None`, `list[int]`.
-- **Constructor injection** — accept dependencies (time, I/O, network) as constructor parameters. Don't import hardware modules at the top level. See [Decision 0010](../../plans/decisions/0010-library-testability.md).
 - **Memory patterns are optional on day one** — `const()`, `memoryview`, pre-allocated buffers. Focus on correctness first. The [Style Guide](style-guide.md#memory-patterns-library-code-only) has the full list when you're ready.
+
+### Constructor injection
+
+Accept dependencies (time sources, I/O objects, network sockets) as constructor parameters instead of importing hardware modules at the top level. This makes your code testable without real hardware:
+
+```python
+# ✅ Good — testable, injectable
+class MySensor:
+    """Reads from a sensor on a schedule."""
+
+    def __init__(self, i2c: object, interval_ms: int = 1000) -> None:
+        self._i2c = i2c
+        self._interval_ms = interval_ms
+```
+
+```python
+# ❌ Bad — hard-wired to hardware, can't test without a board
+import board
+import busio
+
+class MySensor:
+    def __init__(self) -> None:
+        self._i2c = busio.I2C(board.SCL, board.SDA)
+```
+
+See [Decision 0010](../../plans/decisions/0010-library-testability.md) for the reasoning.
+
+### Public API
 
 Export your public API from `__init__.py`:
 
@@ -66,7 +93,39 @@ python scripts/run.py test --libraries my-thing
 python scripts/run.py test -k my-thing/test_core -x -v --no-cov
 ```
 
-Create lightweight fakes for your own interfaces and inject them via constructors. Use fakes from upstream ChuMicro libraries (`from chumicro_timing.testing import FakeTicks`). Don't use `unittest.mock` on third-party APIs.
+### What a test looks like
+
+Since you accepted dependencies as constructor parameters, testing is straightforward — pass in a fake:
+
+```python
+"""Tests for MySensor reading behavior."""
+
+from chumicro_my_thing import MySensor
+
+
+class FakeI2C:
+    """Fake I2C bus that returns predetermined data."""
+
+    def __init__(self, data: list) -> None:
+        self._data = data
+        self.read_count = 0
+
+    def readfrom_into(self, address: int, buffer: bytearray) -> None:
+        """Fill buffer with the next predetermined response."""
+        buffer[:] = self._data[self.read_count]
+        self.read_count += 1
+
+
+def test_sensor_reads_from_bus() -> None:
+    """Sensor returns data from the I2C bus."""
+    fake_i2c = FakeI2C(data=[b"\x01\x02"])
+    sensor = MySensor(fake_i2c, interval_ms=100)
+
+    result = sensor.read()
+    assert result == b"\x01\x02"
+```
+
+Create lightweight fakes for your own interfaces. Use fakes from upstream ChuMicro libraries when available (`from chumicro_timing.testing import FakeTicks`). Don't use `unittest.mock` on third-party APIs — build a simple fake instead.
 
 ### Testing submodule
 
@@ -96,6 +155,23 @@ python scripts/run.py docs --libraries my-thing
 ### API reference (`docs/api.md`)
 
 mkdocstrings renders API docs from your docstrings. The scaffold starts with a single directive — add section headings and per-module directives as you add modules. See `libraries/timing/docs/api.md` for an example.
+
+Every public function, method, and class needs a docstring. Types go on the signature as annotations; docstrings carry descriptions only:
+
+```python
+def ticks_diff(end: int, start: int) -> int:
+    """Signed difference between two tick values.
+
+    Args:
+        end: Later tick value.
+        start: Earlier tick value.
+
+    Returns:
+        Signed difference in milliseconds.
+    """
+```
+
+See the [Style Guide](style-guide.md#docstrings) for the full format.
 
 ## 5. Write examples
 
@@ -128,7 +204,30 @@ python scripts/run.py preflight
 
 Must print `Preflight passed`. Then push and open a PR on GitHub targeting `main`. See [Creating a Pull Request](pull-requests.md) for the full walkthrough.
 
-When your PR merges, the VERSION bump triggers an automatic experimental release. See [Releases](releases.md) for the full release model, including how to request stable promotion.
+## 8. After merge
+
+When your PR merges, the VERSION bump triggers an automatic **experimental release**:
+
+- Your package is published to PyPI as `chumicro-my-thing-experimental`
+- Files are pushed to the [experimental bundle repo](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
+- Experimental docs are deployed
+- A git tag `my-thing-v0.1.0-experimental` is created
+
+Users can install your library immediately:
+
+```bash
+# CircuitPython
+circup bundle-add ChuMicro/ChuMicro-Bundle-Experimental
+circup install chumicro-my-thing
+
+# MicroPython
+mpremote mip install github:ChuMicro/ChuMicro-Bundle-Experimental/chumicro_my_thing
+
+# CPython
+pip install chumicro-my-thing-experimental
+```
+
+When you're confident the experimental release is production-ready, open a [Stable Promotion Request](https://github.com/ChuMicro/ChuMicro/issues/new?template=stable_promotion.yml) and a maintainer will promote it. See [Releases](releases.md) for details.
 
 ## Checklist
 

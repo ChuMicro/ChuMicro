@@ -50,13 +50,18 @@ git push -u origin fix/my-change      # then open PR on GitHub
 
 ## When something fails
 
+Don't panic — every failure message tells you exactly what to do.
+
 | What failed | What to do |
 |---|---|
-| Coverage on code you didn't change | Note it in the PR — not your problem |
-| Lint error | Run `python scripts/run.py lint`, fix the flagged lines |
+| Lint error | Run `python scripts/run.py lint`, fix the flagged lines — the error message tells you what's wrong |
+| Test failure | Read the assertion error — the test name and line number point you right to it |
+| Coverage too low | Check the `Missing` column in the coverage report for uncovered line numbers. If it's code you didn't write, note it in the PR |
 | `check-version` | Edit `libraries/<name>/VERSION` (patch bump is usually right) |
 | `griffe warnings` | Add type annotations to function signatures |
-| Tests you can't figure out | Ask in the PR — someone will help |
+| Stuck or confused | Ask in the PR — someone will help |
+
+**Browsing coverage in detail:** After running tests, generate an HTML report with `python -m coverage html` and open `htmlcov/index.html`. Covered lines show in green, missed lines in red — much easier than reading line numbers from the terminal. (`htmlcov/` is gitignored.)
 
 ## Links
 
