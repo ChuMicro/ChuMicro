@@ -15,10 +15,8 @@ Before proposing a structural or pattern change, check `plans/decisions/` first.
 
 ## Non-negotiable rules
 
-- **Verify before declaring done** — after making changes, run `task-checkpoint`. Do not tell the user work is done with uncommitted, untested, or failing changes.
-- **Preflight must pass before you stop** — `python scripts/run.py preflight 2>&1 | tail -5` must show `Preflight passed`. If it fails because of your work, fix it.
+- **After each unit of work:** Run the `task-checkpoint` skill. Preflight must pass, then commit and push. Do not yield with uncommitted changes unless the work is explicitly partial. Do not tell the user work is done with untested or failing changes.
 - **Use `git commit -F .scratch/commit-msg.txt`** — not `git commit -m`, so messages can be multi-line and descriptive. Read the `git-commit` skill before every commit. Write the message to `.scratch/commit-msg.txt` with a file tool first.
-- **After each unit of work:** Run the `task-checkpoint` skill. Preflight must pass, then commit and push. Do not yield with uncommitted changes unless the work is explicitly partial.
 - **Scratch space:** `.scratch/` is gitignored and safe for temporary files, commit messages, and log captures.
 - **Large output:** Pipe through `tail`, `head`, or `grep`. Redirect to `.scratch/` when full output is needed.
 - **Disable pagers:** Use `git --no-pager` or `| cat`.
@@ -37,11 +35,7 @@ Before proposing a structural or pattern change, check `plans/decisions/` first.
 ## Common pitfalls
 
 - Do not use `pip install -e` manually to fix imports. Run `python scripts/run.py setup`.
-- Do not propose `asyncio`-based designs.
-- Do not apply embedded patterns such as `const()` or `memoryview` to `scripts/` or other CPython-only infrastructure.
 - Do not modify unrelated code when fixing a focused bug.
-- Do not rerun large-output commands without piping or redirecting.
-- Do not add a feature that exists only in code. Update the affected docs, templates, CI, and planning files in the same unit of work.
 
 ## Working style
 
@@ -182,21 +176,7 @@ This file is the operational summary. Use the authoritative docs and decisions f
 
 ### Style and annotations
 
-Follow `docs/contributing/style-guide.md`.
-
-Key rules:
-
-- Use descriptive names
-- No single-letter variables except `_`
-- No abbreviated names we spell out unless required by an upstream API
-- Document functions and methods with concise docstrings
-- Use standard annotations in signatures
-- Do not `import typing` in library code
-- `Args:` uses `name: description`
-- `Returns:` uses description only
-- `Raises:` uses `ExceptionType: description`
-
-See Decision 0021 and Decision 0022.
+Follow `docs/contributing/style-guide.md`. The naming, annotation, and docstring rules are in Non-negotiable rules above (Decision 0021, Decision 0022).
 
 ### API and compatibility
 
@@ -204,7 +184,6 @@ See Decision 0021 and Decision 0022.
 - Do not add non-CPython APIs into standard-library-shaped modules
 - Avoid `u*` naming such as `usocket`
 - Prefer one implementation across runtimes with thin shims where needed
-- Minimize dependencies
 
 ### Networking and scheduling
 
@@ -213,13 +192,11 @@ See Decision 0021 and Decision 0022.
 - Handle `POLLHUP` and `POLLERR` promptly
 - Read and write incrementally
 - Poll once per tick and return quickly
-- No `async`/`await`; use the tick-based runner pattern from Decision 0014
 
-### Storage, secrets, and logging
+### Storage and logging
 
 - Batch writes and defer them to idle periods
 - Do not write to flash in tight loops
-- Never hard-code secrets
 - Provide configuration hooks such as `config.py`
 - Keep logging lightweight and avoid noisy tight-loop logging
 
@@ -230,10 +207,7 @@ Use `python scripts/run.py test` for host-side tests.
 Key rules:
 
 - Tests live under each library's `tests/`
-- `scripts/run.py test` runs per-library pytest subprocesses
-- Coverage must meet the per-library gate configured in `pyproject.toml`
 - Shared fakes belong in `src/chumicro_<name>/testing.py`
-- Use constructor injection for time, I/O, and network dependencies
 - Do not mock what you do not own when usable upstream fakes already exist
 
 See Decision 0009 and Decision 0010.
