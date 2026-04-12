@@ -211,14 +211,17 @@ jobs:
           python-version: "3.13"
           cache: "pip"
 
+      # Single unified cache for all .tools/ artifacts (mpy-cross + unix-port).
+      # Using separate cache actions for the same path causes the second
+      # restore to overwrite the first, leading to subtle corruption.
       - uses: actions/cache@v4
-        id: mpy-cross-cache
+        id: tools-cache
         with:
           path: .tools
-          key: mpy-cross-${{ hashFiles('target-runtimes.toml', 'scripts/prepare_mpy_cross.py', 'scripts/shared.py') }}
+          key: tools-${{ hashFiles('target-runtimes.toml', 'scripts/prepare_*.py', 'scripts/shared.py') }}
 
       - name: Build mpy-cross compilers
-        if: steps.mpy-cross-cache.outputs.cache-hit != 'true'
+        if: steps.tools-cache.outputs.cache-hit != 'true'
         run: python scripts/run.py prepare-mpy-cross
 
       - name: Stage bundle artifacts
@@ -232,20 +235,15 @@ jobs:
       # Pre-publish validation: verify mip install + import works from
       # the staged artifacts BEFORE pushing to the live bundle repo.
       # ---------------------------------------------------------------
-      - uses: actions/cache@v4
-        id: micropython-cache
-        with:
-          path: .tools
-          key: micropython-${{ hashFiles('target-runtimes.toml', 'scripts/prepare_micropython.py', 'scripts/shared.py') }}
 
       - name: Install unix-port build dependencies
-        if: steps.mpy-cross-cache.outputs.cache-hit != 'true' || steps.micropython-cache.outputs.cache-hit != 'true'
+        if: steps.tools-cache.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y libffi-dev pkg-config
 
       - name: Prepare MicroPython unix-port
-        if: steps.micropython-cache.outputs.cache-hit != 'true'
+        if: steps.tools-cache.outputs.cache-hit != 'true'
         run: python scripts/run.py prepare-micropython
 
       - name: Validate staged bundle locally
@@ -334,19 +332,19 @@ jobs:
           python-version: "3.13"
 
       - uses: actions/cache@v4
-        id: runtime-cache
+        id: tools-cache
         with:
           path: .tools
-          key: micropython-${{ hashFiles('target-runtimes.toml', 'scripts/prepare_micropython.py', 'scripts/shared.py') }}
+          key: tools-${{ hashFiles('target-runtimes.toml', 'scripts/prepare_*.py', 'scripts/shared.py') }}
 
       - name: Install unix-port build dependencies
-        if: steps.runtime-cache.outputs.cache-hit != 'true'
+        if: steps.tools-cache.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y libffi-dev pkg-config
 
       - name: Prepare MicroPython unix-port
-        if: steps.runtime-cache.outputs.cache-hit != 'true'
+        if: steps.tools-cache.outputs.cache-hit != 'true'
         run: python scripts/run.py prepare-micropython
 
       - name: Validate mip install and import
@@ -388,8 +386,8 @@ jobs:
 
       - name: Install tooling
         run: |
-          python -m pip install --upgrade pip zensical mkdocstrings[python]
-          pip install "git+https://github.com/squidfunk/mike.git@0f62791256ebeba60d20d2f1d8fe6ec3b7d1e2b3"
+          python -m pip install --upgrade pip
+          pip install -r requirements-docs.txt
 
       - name: Configure git
         run: |
