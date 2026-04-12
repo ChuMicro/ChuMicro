@@ -307,7 +307,7 @@ All classes use only basic Python features and work identically on CPython, Micr
      One bullet per change. Internal refactors don't need entries.
      At stable promotion, collapse/edit as needed. -->
 
-*No changes yet — this section will be updated with each release.*
+- **0.1.23**: Documentation sync and CI improvements.
 
 ---
 
