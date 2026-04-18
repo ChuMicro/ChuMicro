@@ -6,6 +6,8 @@
       <sourceFolder url="file://$MODULE_DIR$/support/device_transport/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/support/test_harness/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/support/test_harness/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/support/testing/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/support/testing/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/compat/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/compat/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/compat/functional_tests" isTestSource="true" />

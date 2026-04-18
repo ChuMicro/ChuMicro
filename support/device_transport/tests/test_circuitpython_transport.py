@@ -14,9 +14,8 @@ from chumicro_device_transport.circuitpython_transport import (
     CircuitpythonTransportError,
 )
 from chumicro_device_transport.testing import (
-    FakeMonotonic,
     FakeSerialPort,
-    noop_sleep,
+    FakeTime,
 )
 
 #: Shorthand for the standard autoreload REPL acknowledgement.
@@ -36,8 +35,7 @@ class TestConnect:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
-            sleep=noop_sleep,
-            monotonic=FakeMonotonic(),
+            time=FakeTime(),
         )
         transport.connect()
 
@@ -55,8 +53,7 @@ class TestConnect:
         transport = CircuitpythonTransport(
             "/dev/ttyNONE",
             serial_port_factory=factory,
-            sleep=noop_sleep,
-            monotonic=FakeMonotonic(),
+            time=FakeTime(),
         )
 
         with pytest.raises(
@@ -75,8 +72,7 @@ class TestConnect:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
-            sleep=noop_sleep,
-            monotonic=FakeMonotonic(),
+            time=FakeTime(),
         )
 
         with pytest.raises(
@@ -98,8 +94,7 @@ class TestConnect:
             "/dev/ttyUSB0",
             baudrate=9600,
             serial_port_factory=factory,
-            sleep=noop_sleep,
-            monotonic=FakeMonotonic(),
+            time=FakeTime(),
         )
         transport.connect()
 
@@ -134,8 +129,7 @@ class TestStage:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
-            sleep=noop_sleep,
-            monotonic=FakeMonotonic(),
+            time=FakeTime(),
         )
         transport.connect()
         transport.stage([source_dir], [test_file], harness_dir)
@@ -169,8 +163,7 @@ class TestStage:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
-            sleep=noop_sleep,
-            monotonic=FakeMonotonic(),
+            time=FakeTime(),
         )
         transport.connect()
         transport.stage([source_dir], [], harness_dir)
@@ -203,8 +196,7 @@ class TestStage:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
-            sleep=noop_sleep,
-            monotonic=FakeMonotonic(),
+            time=FakeTime(),
         )
         transport.connect()
         transport.stage([source_dir], [], harness_dir)
@@ -230,8 +222,7 @@ class TestStage:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
-            sleep=noop_sleep,
-            monotonic=FakeMonotonic(),
+            time=FakeTime(),
         )
         transport.connect()
         transport.stage([nonexistent], [], harness_dir)
@@ -263,8 +254,7 @@ class TestStage:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
-            sleep=noop_sleep,
-            monotonic=FakeMonotonic(),
+            time=FakeTime(),
         )
         transport.connect()
         transport.stage([source_dir], [], harness_dir)
@@ -301,8 +291,7 @@ class TestExecute:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
-            sleep=noop_sleep,
-            monotonic=FakeMonotonic(),
+            time=FakeTime(),
         )
         transport.connect()
         transport.stage([source_dir], [], harness_dir)
@@ -334,8 +323,7 @@ class TestExecute:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
-            sleep=noop_sleep,
-            monotonic=FakeMonotonic(),
+            time=FakeTime(),
         )
         transport.connect()
         transport.stage([source_dir], [], harness_dir)
@@ -367,8 +355,7 @@ class TestExecute:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
-            sleep=noop_sleep,
-            monotonic=FakeMonotonic(),
+            time=FakeTime(),
         )
         transport.connect()
         transport.stage([source_dir], [], harness_dir)
@@ -401,8 +388,7 @@ class TestExecute:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
-            sleep=noop_sleep,
-            monotonic=FakeMonotonic(),
+            time=FakeTime(),
         )
         transport.connect()
         transport.stage([source_dir], [], harness_dir)
@@ -422,8 +408,7 @@ class TestExecute:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
-            sleep=noop_sleep,
-            monotonic=FakeMonotonic(),
+            time=FakeTime(),
         )
         transport.connect()
 
@@ -440,8 +425,7 @@ class TestExecute:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=lambda **kw: None,
-            sleep=noop_sleep,
-            monotonic=FakeMonotonic(),
+            time=FakeTime(),
         )
         # Manually set staged sources to bypass stage check.
         transport._staged_sources = []
@@ -466,8 +450,7 @@ class TestReset:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
-            sleep=noop_sleep,
-            monotonic=FakeMonotonic(),
+            time=FakeTime(),
         )
         transport.connect()
         port.writes.clear()
@@ -481,8 +464,7 @@ class TestReset:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=lambda **kw: None,
-            sleep=noop_sleep,
-            monotonic=FakeMonotonic(),
+            time=FakeTime(),
         )
         transport.reset()  # Should not raise.
 
@@ -500,8 +482,7 @@ class TestDisconnect:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
-            sleep=noop_sleep,
-            monotonic=FakeMonotonic(),
+            time=FakeTime(),
         )
         transport.connect()
         transport.disconnect()
@@ -526,8 +507,7 @@ class TestDisconnect:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
-            sleep=noop_sleep,
-            monotonic=FakeMonotonic(),
+            time=FakeTime(),
         )
         transport.connect()
         transport.stage([source_dir], [], harness_dir)
@@ -542,8 +522,7 @@ class TestDisconnect:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=lambda **kw: None,
-            sleep=noop_sleep,
-            monotonic=FakeMonotonic(),
+            time=FakeTime(),
         )
         transport.disconnect()  # Should not raise.
 
@@ -557,8 +536,7 @@ class TestDisconnect:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
-            sleep=noop_sleep,
-            monotonic=FakeMonotonic(),
+            time=FakeTime(),
         )
         transport.connect()
         transport.disconnect()
@@ -631,8 +609,7 @@ class TestFlashMode:
             mode="flash",
             circuitpy_drive_path=circuitpy_drive_path,
             serial_port_factory=factory,
-            sleep=noop_sleep,
-            monotonic=FakeMonotonic(),
+            time=FakeTime(),
         )
 
     def test_flash_mode_stores_mode(self) -> None:
@@ -642,8 +619,7 @@ class TestFlashMode:
             mode="flash",
             circuitpy_drive_path="/Volumes/CIRCUITPY",
             serial_port_factory=lambda **kw: None,
-            sleep=noop_sleep,
-            monotonic=FakeMonotonic(),
+            time=FakeTime(),
         )
         assert transport.mode == "flash"
 
@@ -663,8 +639,7 @@ class TestFlashMode:
             "/dev/ttyUSB0",
             mode="flash",
             serial_port_factory=factory,
-            sleep=noop_sleep,
-            monotonic=FakeMonotonic(),
+            time=FakeTime(),
         )
         transport.connect()
 
@@ -843,8 +818,7 @@ class TestFlashMode:
             "/dev/ttyUSB0",
             mode="ram",
             serial_port_factory=factory,
-            sleep=noop_sleep,
-            monotonic=FakeMonotonic(),
+            time=FakeTime(),
         )
         transport.connect()
         port.writes.clear()
@@ -906,8 +880,7 @@ class TestSendReplCommand:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
-            sleep=noop_sleep,
-            monotonic=FakeMonotonic(),
+            time=FakeTime(),
         )
         transport.connect()
 
@@ -921,8 +894,7 @@ class TestSendReplCommand:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=lambda **kw: None,
-            sleep=noop_sleep,
-            monotonic=FakeMonotonic(),
+            time=FakeTime(),
         )
 
         with pytest.raises(

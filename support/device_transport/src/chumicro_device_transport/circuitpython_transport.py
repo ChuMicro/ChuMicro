@@ -20,7 +20,7 @@ See Decision 0027 and Decision 0028 for the full transport protocol.
 from __future__ import annotations
 
 import shutil
-import time
+import time as _time_module
 from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol, cast
@@ -56,6 +56,27 @@ class SerialPort(Protocol):
     def reset_input_buffer(self) -> None: ...
 
 
+class _RealTime:
+    """Thin wrapper around the ``time`` module.
+
+    Satisfies the same interface as ``FakeTime`` from
+    ``chumicro_testing`` so production code can use either
+    interchangeably.  This is the default when no fake is injected.
+    """
+
+    __slots__ = ()
+
+    @staticmethod
+    def monotonic() -> float:  # pragma: no cover
+        """Return ``time.monotonic()``."""
+        return _time_module.monotonic()
+
+    @staticmethod
+    def sleep(duration: float) -> None:  # pragma: no cover
+        """Call ``time.sleep(duration)``."""
+        _time_module.sleep(duration)
+
+
 class CircuitpythonTransportError(Exception):
     """Raised when a CircuitPython serial operation fails."""
 
@@ -80,10 +101,10 @@ class CircuitpythonTransport:
         serial_port_factory: Callable that creates a serial port object.
             Accepts ``(port, baudrate, timeout)`` keyword arguments.
             Defaults to ``serial.Serial``.  Inject a fake for testing.
-        sleep: Callable for delays between serial operations.
-            Defaults to ``time.sleep``.  Inject a no-op for testing.
-        monotonic: Callable returning the current time in seconds.
-            Defaults to ``time.monotonic``.  Inject a fake for testing.
+        time: Object providing ``monotonic()`` and ``sleep()`` methods.
+            Defaults to a thin wrapper around Python's ``time`` module.
+            Inject ``FakeTime`` from ``chumicro_testing`` for
+            deterministic tests with no wall-clock waits.
     """
 
     def __init__(
@@ -95,8 +116,7 @@ class CircuitpythonTransport:
         mode: str = "ram",
         circuitpy_drive_path: str | None = None,
         serial_port_factory: Callable[..., object] | None = None,
-        sleep: Callable[[float], object] | None = None,
-        monotonic: Callable[[], float] | None = None,
+        time: object | None = None,
     ) -> None:
         self.address = address
         self.baudrate = baudrate
@@ -106,8 +126,7 @@ class CircuitpythonTransport:
         self._serial_port_factory: Callable[..., object] = (
             serial_port_factory or self._default_serial_factory
         )
-        self._sleep = sleep or time.sleep
-        self._monotonic = monotonic or time.monotonic
+        self._time = time or _RealTime()
         self._port: SerialPort | None = None
         self._staged_sources: list[tuple[str, str]] | None = None
 
@@ -145,16 +164,16 @@ class CircuitpythonTransport:
         assert self._port is not None
         # Ctrl-C × 2 to interrupt any running program.
         self._port.write(_CTRL_C)
-        self._sleep(_INTERRUPT_DELAY)
+        self._time.sleep(_INTERRUPT_DELAY)
         self._port.write(_CTRL_C)
-        self._sleep(_INTERRUPT_DELAY)
+        self._time.sleep(_INTERRUPT_DELAY)
 
         # Drain any pending output before entering raw REPL.
         self._port.reset_input_buffer()
 
         # Ctrl-A to enter raw REPL.
         self._port.write(_CTRL_A)
-        self._sleep(_ENTER_DELAY)
+        self._time.sleep(_ENTER_DELAY)
 
         # Read until we see the raw REPL prompt.
         response = self._read_until(_RAW_REPL_PROMPT)
@@ -355,7 +374,7 @@ class CircuitpythonTransport:
         if self._port is not None:
             self._port.write(_CTRL_D)
             # Allow time for the reset to complete.
-            self._sleep(0.5)
+            self._time.sleep(0.5)
 
     def disconnect(self) -> None:
         """Close the serial port and clear staged data.
@@ -396,8 +415,8 @@ class CircuitpythonTransport:
         """
         assert self._port is not None
         accumulated = b""
-        deadline = self._monotonic() + self.timeout
-        while self._monotonic() < deadline:
+        deadline = self._time.monotonic() + self.timeout
+        while self._time.monotonic() < deadline:
             waiting = self._port.in_waiting
             if waiting > 0:
                 chunk = self._port.read(waiting)
@@ -405,7 +424,7 @@ class CircuitpythonTransport:
                 if marker in accumulated:
                     return accumulated
             else:
-                self._sleep(0.01)
+                self._time.sleep(0.01)
         return accumulated
 
     def _send_repl_command(self, command: str) -> str:

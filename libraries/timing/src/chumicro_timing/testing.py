@@ -6,7 +6,7 @@ allowing host-side tests to control time without wall-clock waits.
 Ships with the library per Decision 0010 so downstream consumers
 import ready-made fakes rather than inventing ad-hoc mocks.
 
-Example:
+Example — tick-domain tests:
     ```python
     from chumicro_timing.testing import FakeTicks
 
@@ -112,3 +112,4 @@ class FakeTicks:
         if not (-TICKS_HALFPERIOD < delta < TICKS_HALFPERIOD):
             raise OverflowError("ticks interval overflow")
         return (ticks_val + delta) % TICKS_PERIOD
+

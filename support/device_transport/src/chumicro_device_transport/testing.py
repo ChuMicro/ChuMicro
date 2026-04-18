@@ -8,42 +8,22 @@ Also provides serial-level fakes for testing ``CircuitpythonTransport``
 internals without real hardware or real time::
 
     from chumicro_device_transport.testing import (
-        FakeMonotonic,
+        FakeTime,
         FakeSerialPort,
-        noop_sleep,
     )
+
+``FakeTime`` is re-exported from the shared ``chumicro_testing``
+package so that transport tests can import it alongside the
+transport-specific fakes.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from chumicro_testing import FakeTime
 
-def noop_sleep(_duration: float) -> None:
-    """No-op sleep replacement to eliminate delays in tests."""
-
-
-class FakeMonotonic:
-    """Fake monotonic clock for tests.
-
-    Advances by ``step`` on each call.  Paired with a small
-    ``timeout`` on the transport, this lets ``_read_until`` enter
-    the loop once (to read available data) and then exit when no
-    more data is available, instead of spinning for 10 real seconds.
-
-    Default: ``step=0.5`` with ``timeout=1.0`` → one loop iteration
-    before deadline is exceeded.
-    """
-
-    def __init__(self, step: float = 0.5) -> None:
-        self._value = 0.0
-        self._step = step
-
-    def __call__(self) -> float:
-        """Return current time and advance."""
-        current = self._value
-        self._value += self._step
-        return current
+__all__ = ["FakeTime", "FakeSerialPort", "FakeTransport"]
 
 
 class FakeSerialPort:

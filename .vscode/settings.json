@@ -8,6 +8,7 @@
     "python.analysis.extraPaths": [
         "support/device_transport/src",
         "support/test_harness/src",
+        "support/testing/src",
         "libraries/compat/src",
         "libraries/msgpack/src",
         "libraries/runner/src",
