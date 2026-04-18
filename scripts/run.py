@@ -1137,7 +1137,7 @@ def main(argv: list[str]) -> int:
         )
 
     # --- no-arg tasks ---
-    no_arg = {
+    no_arg: dict[str, Callable[[], int]] = {
         "setup": setup,
         "sync-ide": sync_ide,
         "lint": lint,
@@ -1148,7 +1148,12 @@ def main(argv: list[str]) -> int:
         "check-version": check_version,
         "check-api": check_api,
     }
-    return no_arg[args.task]()
+
+    if args.task in no_arg:
+        return no_arg[args.task]()
+
+    print(f"Unknown task: {args.task}")
+    return 1
 
 
 if __name__ == "__main__":
