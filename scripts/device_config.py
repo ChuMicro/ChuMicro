@@ -45,6 +45,7 @@ class DeviceEntry:
     board_type: str = ""
     serial_baudrate: int = 115200
     transport_mode: str = "mount"
+    circuitpy_drive_path: str | None = None
     setup_command: str | None = None
     extra: dict = field(default_factory=dict)
 
@@ -121,7 +122,8 @@ def _validate_device(raw: dict, index: int) -> DeviceEntry:
     # Extract known fields, put everything else in extra.
     known_keys = {
         "id", "runtime", "address", "description", "connection_type",
-        "board_type", "serial_baudrate", "transport_mode", "setup_command",
+        "board_type", "serial_baudrate", "transport_mode",
+        "circuitpy_drive_path", "setup_command",
     }
     extra = {key: value for key, value in raw.items() if key not in known_keys}
 
@@ -134,6 +136,7 @@ def _validate_device(raw: dict, index: int) -> DeviceEntry:
         board_type=raw.get("board_type", ""),
         serial_baudrate=raw.get("serial_baudrate", 115200),
         transport_mode=raw.get("transport_mode", "mount"),
+        circuitpy_drive_path=raw.get("circuitpy_drive_path"),
         setup_command=raw.get("setup_command"),
         extra=extra,
     )

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import device_testing
+from device_config import DeviceEntry
 
 
 class TestBuildBootstrap:
@@ -101,4 +102,135 @@ class TestDeviceOrchestration:
         monkeypatch.setenv("CHUMICRO_DEVICES", str(devices_file))
         result = device_testing.test_device(device="nonexistent")
         assert result == 2
+
+
+class TestCreateTransport:
+    """Tests for _create_transport deploy mode routing."""
+
+    def _make_device_entry(
+        self,
+        runtime: str = "micropython",
+        **kwargs,
+    ) -> DeviceEntry:
+        """Create a DeviceEntry for testing."""
+        return DeviceEntry(
+            identifier="test-board",
+            runtime=runtime,
+            address="/dev/null",
+            **kwargs,
+        )
+
+    def test_micropython_ram_uses_mount_mode(self) -> None:
+        """RAM deploy mode should map to mount for MicroPython."""
+        entry = self._make_device_entry(runtime="micropython")
+        transport = device_testing._create_transport(entry, deploy_mode="ram")
+        assert transport.mode == "mount"
+
+    def test_micropython_flash_uses_copy_mode(self) -> None:
+        """Flash deploy mode should map to copy for MicroPython."""
+        entry = self._make_device_entry(runtime="micropython")
+        transport = device_testing._create_transport(entry, deploy_mode="flash")
+        assert transport.mode == "copy"
+
+    def test_circuitpython_ram_mode(self) -> None:
+        """RAM deploy mode should pass ram to CircuitPython transport."""
+        entry = self._make_device_entry(runtime="circuitpython")
+        transport = device_testing._create_transport(entry, deploy_mode="ram")
+        assert transport.mode == "ram"
+
+    def test_circuitpython_flash_mode(self) -> None:
+        """Flash deploy mode should pass flash to CircuitPython transport."""
+        entry = self._make_device_entry(
+            runtime="circuitpython",
+            circuitpy_drive_path="/Volumes/CIRCUITPY",
+        )
+        transport = device_testing._create_transport(entry, deploy_mode="flash")
+        assert transport.mode == "flash"
+        assert transport.circuitpy_drive_path == "/Volumes/CIRCUITPY"
+
+    def test_unsupported_runtime_raises(self) -> None:
+        """Unsupported runtime should raise ValueError."""
+        import pytest
+
+        entry = self._make_device_entry(runtime="unknown")
+        # Override runtime since DeviceEntry doesn't validate.
+        entry.runtime = "unknown"
+        with pytest.raises(ValueError, match="Unsupported runtime"):
+            device_testing._create_transport(entry)
+
+    def test_default_deploy_mode_is_ram(self) -> None:
+        """Default deploy mode should be ram."""
+        entry = self._make_device_entry(runtime="micropython")
+        transport = device_testing._create_transport(entry)
+        assert transport.mode == "mount"
+
+
+class TestBuildDeviceBootstrap:
+    """Tests for _build_device_bootstrap mode routing."""
+
+    def test_circuitpython_ram_uses_inline_bootstrap(self, tmp_path) -> None:
+        """CP ram mode should use inline bootstrap with module injection."""
+        entry = DeviceEntry(
+            identifier="cp-board",
+            runtime="circuitpython",
+            address="/dev/null",
+        )
+
+        class FakeTransport:
+            mode = "ram"
+            staged_sources = [("chumicro_timing", "# init")]
+
+        test_file = tmp_path / "test_example.py"
+        test_file.write_text("def test_ok(): pass")
+
+        bootstrap = device_testing._build_device_bootstrap(
+            entry, FakeTransport(), test_file, None,
+        )
+        # Inline bootstrap uses _inject_module.
+        assert "_inject_module" in bootstrap
+
+    def test_circuitpython_flash_uses_standard_bootstrap(
+        self, tmp_path,
+    ) -> None:
+        """CP flash mode should use standard import-based bootstrap."""
+        entry = DeviceEntry(
+            identifier="cp-board",
+            runtime="circuitpython",
+            address="/dev/null",
+        )
+
+        class FakeTransport:
+            mode = "flash"
+            staged_sources = []
+
+        test_file = tmp_path / "test_example.py"
+        test_file.write_text("def test_ok(): pass")
+
+        bootstrap = device_testing._build_device_bootstrap(
+            entry, FakeTransport(), test_file, None,
+        )
+        # Standard bootstrap uses import, not _inject_module.
+        assert "_inject_module" not in bootstrap
+        assert "run_module" in bootstrap
+
+    def test_micropython_uses_standard_bootstrap(self, tmp_path) -> None:
+        """MicroPython should always use standard import-based bootstrap."""
+        entry = DeviceEntry(
+            identifier="mp-board",
+            runtime="micropython",
+            address="/dev/null",
+        )
+
+        class FakeTransport:
+            mode = "mount"
+            staged_sources = []
+
+        test_file = tmp_path / "test_example.py"
+        test_file.write_text("def test_ok(): pass")
+
+        bootstrap = device_testing._build_device_bootstrap(
+            entry, FakeTransport(), test_file, None,
+        )
+        assert "_inject_module" not in bootstrap
+        assert "run_module" in bootstrap
 

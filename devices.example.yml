@@ -15,6 +15,9 @@ devices:
     board_type: esp32s3
     serial_baudrate: 115200
     setup_command: null
+    # Path to the CIRCUITPY USB drive mount point on the host.
+    # Required for flash deploy mode (--deploy-mode flash).
+    # circuitpy_drive_path: /Volumes/CIRCUITPY
     # For WiFi-enabled boards, the Web Workflow REST API can be used
     # as an alternative transport for file staging:
     # web_workflow:

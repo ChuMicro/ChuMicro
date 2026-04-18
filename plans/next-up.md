@@ -7,6 +7,7 @@
 ## Next
 
 - [ ] Device testing Phase 3: IDE integration (pytest conftest routes `functional_tests/` to device when `CHUMICRO_DEVICE_RUNTIME` is set) — Decision 0027
+- [ ] `chumicro-deploy` standalone pip package — extract transport layer into a publishable tool for deploying user projects to boards. Companion project template repo. See Decision 0028.
 - [ ] Enable GitHub Copilot code review as a PR quality gate (low priority — defer until community contributions begin).
 - [ ] Implement `chumicro-settings` — dict-like persistent storage for microcontrollers.
   - Uses `chumicro-msgpack` for serialization (2-byte length prefix + msgpack payload).
@@ -32,6 +33,7 @@
 
 ## Done (recent)
 
+- [x] Deploy modes: RAM and flash (Decision 0028) — `--deploy-mode ram|flash` flag on `test-device`, CircuitPython flash transport (USB drive copy with autoreload control), `circuitpy_drive_path` device config field, bootstrap routing (inline for CP ram, standard imports for CP flash). MicroPython `ram`→`mount`, `flash`→`copy`.
 - [x] Device testing Phase 2: CircuitPython serial transport — `CircuitpythonTransport` (pyserial raw REPL: Ctrl-C interrupt, Ctrl-A enter, Ctrl-D execute, OK/stdout/stderr parsing), `build_circuitpython_bootstrap` (class-as-module injection, inline harness, test exec), orchestrator routing for CP devices. `pyserial` added to dev deps.
 - [x] Device testing infrastructure — Phase 1 complete (Decision 0027): `device_config.py` config loader, `result_parser.py` structured output parsing, `support/device_transport/` with `MicropythonTransport` (mount + copy modes), `name_filter` on `runner.run_module`, real `test-device` orchestration in `run.py` with `--runtime`/`--device`/`--library`/`--test` flags, `mpremote` + `pyyaml` in requirements-dev.txt. 49 new host-side tests.
 - [x] Populate "What's new" sections in library guides — all four libraries now have version entries.

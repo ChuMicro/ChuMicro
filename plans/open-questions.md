@@ -12,6 +12,23 @@ Questions that lead to structural tradeoffs should become decisions in
 
 ## Active
 
+### When should the transport layer be extracted into `chumicro-deploy`?
+
+Decision 0028 envisions a standalone pip-installable package for deploying
+user projects to MicroPython and CircuitPython boards.  The transport layer
+in `support/device_transport/` is shaped for extraction, but questions remain:
+
+- What public API should `chumicro-deploy` expose?  CLI only, or also a
+  Python API?
+- Should it handle dependency resolution from bundle repos, or just raw
+  file deployment?
+- Should a companion `chumicro-project-template` repo exist, and what does
+  its structure look like?
+- Should `.mpy` compilation be built-in or opt-in?
+
+Not blocking any current work.  Revisit when the transport layer stabilizes
+after Phase 3 (IDE integration) and real-world usage.
+
 
 ### Is ESP32 NVS worth a dedicated backend?
 

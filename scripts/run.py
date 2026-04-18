@@ -922,6 +922,13 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="test_filter",
         help="filter to test files or functions matching this substring",
     )
+    test_device_parser.add_argument(
+        "--deploy-mode",
+        dest="deploy_mode",
+        choices=["ram", "flash"],
+        default="ram",
+        help="deploy mode: ram (default, no flash wear) or flash (persistent)",
+    )
     subparsers.add_parser("check-version", help="check VERSION enforcement for changed libraries")
     subparsers.add_parser("check-api", help="check API breakages against last release tag")
 
@@ -1134,6 +1141,7 @@ def main(argv: list[str]) -> int:
             device=args.device,
             library=args.library,
             test_filter=args.test_filter,
+            deploy_mode=args.deploy_mode,
         )
 
     # --- no-arg tasks ---

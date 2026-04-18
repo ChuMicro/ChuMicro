@@ -666,3 +666,303 @@ class TestParseRawReplResponse:
         ):
             CircuitpythonTransport._parse_raw_repl_response(response)
 
+
+class TestFlashMode:
+    """Tests for CircuitpythonTransport in flash mode."""
+
+    def _make_flash_transport(
+        self,
+        port: FakeSerialPort,
+        circuitpy_drive_path: str,
+    ) -> CircuitpythonTransport:
+        """Create a flash-mode transport with a fake serial port."""
+        def factory(**kwargs):
+            return port
+
+        return CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            mode="flash",
+            circuitpy_drive_path=circuitpy_drive_path,
+            serial_port_factory=factory,
+            sleep=_noop_sleep,
+        )
+
+    def test_flash_mode_stores_mode(self) -> None:
+        """Flash transport should record the mode."""
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            mode="flash",
+            circuitpy_drive_path="/Volumes/CIRCUITPY",
+            serial_port_factory=lambda **kw: None,
+            sleep=_noop_sleep,
+        )
+        assert transport.mode == "flash"
+
+    def test_flash_stage_requires_drive_path(
+        self, tmp_path: Path,
+    ) -> None:
+        """stage() in flash mode should raise without circuitpy_drive_path."""
+        port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
+
+        def factory(**kwargs):
+            return port
+
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            mode="flash",
+            serial_port_factory=factory,
+            sleep=_noop_sleep,
+        )
+        transport.connect()
+
+        source_dir = tmp_path / "src"
+        source_dir.mkdir()
+        harness_dir = tmp_path / "harness"
+        harness_dir.mkdir()
+
+        with pytest.raises(
+            CircuitpythonTransportError,
+            match="circuitpy_drive_path is required",
+        ):
+            transport.stage([source_dir], [], harness_dir)
+
+        transport.disconnect()
+
+    def test_flash_stage_requires_existing_drive(
+        self, tmp_path: Path,
+    ) -> None:
+        """stage() in flash mode should raise when drive path doesn't exist."""
+        # Provide two REPL responses: connect + autoreload command.
+        port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
+
+        transport = self._make_flash_transport(
+            port, str(tmp_path / "NO_DRIVE"),
+        )
+        transport.connect()
+
+        source_dir = tmp_path / "src"
+        source_dir.mkdir()
+        harness_dir = tmp_path / "harness"
+        harness_dir.mkdir()
+
+        with pytest.raises(
+            CircuitpythonTransportError,
+            match="CIRCUITPY drive not found",
+        ):
+            transport.stage([source_dir], [], harness_dir)
+
+        transport.disconnect()
+
+    def test_flash_stage_copies_packages_to_lib(
+        self, tmp_path: Path,
+    ) -> None:
+        """stage() in flash mode should copy packages to lib/ on drive."""
+        drive_path = tmp_path / "CIRCUITPY"
+        drive_path.mkdir()
+
+        source_dir = tmp_path / "src"
+        package_dir = source_dir / "chumicro_timing"
+        package_dir.mkdir(parents=True)
+        (package_dir / "__init__.py").write_text("# init")
+        (package_dir / "ticks.py").write_text("def ticks_ms(): pass")
+
+        harness_dir = tmp_path / "harness"
+        harness_package = harness_dir / "chumicro_test_harness"
+        harness_package.mkdir(parents=True)
+        (harness_package / "__init__.py").write_text("# harness")
+        (harness_package / "runner.py").write_text("def run_module(): pass")
+
+        # Responses: connect prompt, autoreload command response.
+        port = FakeSerialPort(
+            read_responses=[_RAW_REPL_PROMPT, b"OK\x04\x04>"],
+        )
+
+        transport = self._make_flash_transport(port, str(drive_path))
+        transport.connect()
+        transport.stage([source_dir], [], harness_dir)
+
+        # Check that packages were copied to lib/.
+        lib_dir = drive_path / "lib"
+        assert lib_dir.is_dir()
+        assert (lib_dir / "chumicro_timing" / "__init__.py").exists()
+        assert (lib_dir / "chumicro_timing" / "ticks.py").exists()
+        assert (lib_dir / "chumicro_test_harness" / "__init__.py").exists()
+        assert (lib_dir / "chumicro_test_harness" / "runner.py").exists()
+
+        transport.disconnect()
+
+    def test_flash_stage_copies_test_files_to_root(
+        self, tmp_path: Path,
+    ) -> None:
+        """stage() in flash mode should copy test files to drive root."""
+        drive_path = tmp_path / "CIRCUITPY"
+        drive_path.mkdir()
+
+        source_dir = tmp_path / "src"
+        source_dir.mkdir()
+        harness_dir = tmp_path / "harness"
+        harness_dir.mkdir()
+
+        test_file = tmp_path / "test_example.py"
+        test_file.write_text("def test_ok(): pass")
+
+        # Responses: connect prompt, autoreload command.
+        port = FakeSerialPort(
+            read_responses=[_RAW_REPL_PROMPT, b"OK\x04\x04>"],
+        )
+
+        transport = self._make_flash_transport(port, str(drive_path))
+        transport.connect()
+        transport.stage([source_dir], [test_file], harness_dir)
+
+        assert (drive_path / "test_example.py").exists()
+        assert (drive_path / "test_example.py").read_text() == "def test_ok(): pass"
+
+        transport.disconnect()
+
+    def test_flash_stage_sends_autoreload_disable(
+        self, tmp_path: Path,
+    ) -> None:
+        """stage() in flash mode should send autoreload disable via REPL."""
+        drive_path = tmp_path / "CIRCUITPY"
+        drive_path.mkdir()
+
+        source_dir = tmp_path / "src"
+        source_dir.mkdir()
+        harness_dir = tmp_path / "harness"
+        harness_dir.mkdir()
+
+        port = FakeSerialPort(
+            read_responses=[_RAW_REPL_PROMPT, b"OK\x04\x04>"],
+        )
+
+        transport = self._make_flash_transport(port, str(drive_path))
+        transport.connect()
+        port.writes.clear()
+
+        transport.stage([source_dir], [], harness_dir)
+
+        # Should have sent autoreload disable command.
+        written_data = b"".join(port.writes)
+        assert b"autoreload" in written_data
+        assert b"False" in written_data
+
+        transport.disconnect()
+
+    def test_flash_disconnect_restores_autoreload(
+        self, tmp_path: Path,
+    ) -> None:
+        """disconnect() in flash mode should re-enable autoreload."""
+        port = FakeSerialPort(
+            read_responses=[
+                _RAW_REPL_PROMPT,   # connect
+                b"OK\x04\x04>",    # autoreload restore command
+            ],
+        )
+
+        transport = self._make_flash_transport(
+            port, str(tmp_path / "CIRCUITPY"),
+        )
+        transport.connect()
+        port.writes.clear()
+
+        transport.disconnect()
+
+        # Should have sent autoreload = True and supervisor.reload().
+        written_data = b"".join(port.writes)
+        assert b"autoreload" in written_data
+        assert b"True" in written_data
+
+    def test_ram_disconnect_does_not_send_autoreload(self) -> None:
+        """disconnect() in ram mode should not send autoreload commands."""
+        port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
+
+        def factory(**kwargs):
+            return port
+
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            mode="ram",
+            serial_port_factory=factory,
+            sleep=_noop_sleep,
+        )
+        transport.connect()
+        port.writes.clear()
+
+        transport.disconnect()
+
+        written_data = b"".join(port.writes)
+        assert b"autoreload" not in written_data
+
+    def test_flash_stage_overwrites_existing_package(
+        self, tmp_path: Path,
+    ) -> None:
+        """stage() should overwrite existing package on drive."""
+        drive_path = tmp_path / "CIRCUITPY"
+        lib_dir = drive_path / "lib" / "chumicro_timing"
+        lib_dir.mkdir(parents=True)
+        (lib_dir / "__init__.py").write_text("# old")
+        (lib_dir / "old_file.py").write_text("# should be removed")
+
+        source_dir = tmp_path / "src"
+        package_dir = source_dir / "chumicro_timing"
+        package_dir.mkdir(parents=True)
+        (package_dir / "__init__.py").write_text("# new")
+
+        harness_dir = tmp_path / "harness"
+        harness_dir.mkdir()
+
+        port = FakeSerialPort(
+            read_responses=[_RAW_REPL_PROMPT, b"OK\x04\x04>"],
+        )
+
+        transport = self._make_flash_transport(port, str(drive_path))
+        transport.connect()
+        transport.stage([source_dir], [], harness_dir)
+
+        assert (lib_dir / "__init__.py").read_text() == "# new"
+        assert not (lib_dir / "old_file.py").exists()
+
+        transport.disconnect()
+
+
+class TestSendReplCommand:
+    """Tests for _send_repl_command."""
+
+    def test_send_repl_command_returns_stdout(self) -> None:
+        """_send_repl_command should return the stdout portion."""
+        port = FakeSerialPort(
+            read_responses=[
+                _RAW_REPL_PROMPT,   # connect
+                b"OKhello\x04\x04>",  # command response
+            ],
+        )
+
+        def factory(**kwargs):
+            return port
+
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            serial_port_factory=factory,
+            sleep=_noop_sleep,
+        )
+        transport.connect()
+
+        result = transport._send_repl_command("print('hello')")
+        assert result == "hello"
+
+        transport.disconnect()
+
+    def test_send_repl_command_raises_without_connect(self) -> None:
+        """_send_repl_command should raise when not connected."""
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            serial_port_factory=lambda **kw: None,
+            sleep=_noop_sleep,
+        )
+
+        with pytest.raises(
+            CircuitpythonTransportError,
+            match="connect",
+        ):
+            transport._send_repl_command("print('hello')")

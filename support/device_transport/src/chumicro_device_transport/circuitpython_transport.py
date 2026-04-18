@@ -1,9 +1,12 @@
 """CircuitPython device transport using pyserial raw REPL.
 
 Uses ``pyserial`` to connect to CircuitPython boards via serial and
-execute code through raw REPL mode (Ctrl-A).  All library source, test
-code, and the harness runner are sent inline as a single code block —
-no file staging or flash writes required.
+execute code through raw REPL mode (Ctrl-A).  Two modes:
+
+- **RAM mode** (default): All source code is sent inline through the
+  raw REPL — no file copy or flash writes required.
+- **Flash mode**: Files are copied to the CIRCUITPY USB drive for
+  persistent deployment.  Autoreload is managed via raw REPL commands.
 
 Raw REPL protocol:
 1. Ctrl-C × 2 interrupts any running code.
@@ -11,12 +14,12 @@ Raw REPL protocol:
 3. Send code bytes, terminated with Ctrl-D.
 4. Response: ``OK<stdout>\\x04<stderr>\\x04>``.
 
-See Decision 0027 for the full transport protocol and CircuitPython
-constraints.
+See Decision 0027 and Decision 0028 for the full transport protocol.
 """
 
 from __future__ import annotations
 
+import shutil
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -60,13 +63,20 @@ class CircuitpythonTransportError(Exception):
 class CircuitpythonTransport:
     """Transport for CircuitPython boards via pyserial raw REPL.
 
-    All source code is sent inline through the raw REPL — no file copy
-    or mounting needed.
+    Supports two modes:
+
+    - **ram** (default): all source code is sent inline through the
+      raw REPL — no file copy or mounting needed.
+    - **flash**: files are copied to the CIRCUITPY USB drive for
+      persistent deployment.
 
     Args:
         address: Serial port path (e.g. ``/dev/cu.usbmodem14101``).
         baudrate: Serial baud rate.  Defaults to 115200.
         timeout: Read timeout in seconds.
+        mode: ``"ram"`` (default) or ``"flash"``.
+        circuitpy_drive_path: Host path to the CIRCUITPY USB drive.
+            Required when ``mode="flash"``.
         serial_port_factory: Callable that creates a serial port object.
             Accepts ``(port, baudrate, timeout)`` keyword arguments.
             Defaults to ``serial.Serial``.  Inject a fake for testing.
@@ -80,12 +90,16 @@ class CircuitpythonTransport:
         *,
         baudrate: int = 115200,
         timeout: float = DEFAULT_TIMEOUT,
+        mode: str = "ram",
+        circuitpy_drive_path: str | None = None,
         serial_port_factory: Callable[..., object] | None = None,
         sleep: Callable[[float], object] | None = None,
     ) -> None:
         self.address = address
         self.baudrate = baudrate
         self.timeout = timeout
+        self.mode = mode
+        self.circuitpy_drive_path = circuitpy_drive_path
         self._serial_port_factory: Callable[..., object] = (
             serial_port_factory or self._default_serial_factory
         )
@@ -153,9 +167,11 @@ class CircuitpythonTransport:
     ) -> None:
         """Read source files into memory for inline execution.
 
-        CircuitPython transport does not copy files to the device.
-        Instead, all source code is read now and embedded into the
-        bootstrap code block sent via raw REPL during ``execute()``.
+        In RAM mode, source code is read and stored for embedding into
+        the bootstrap code block sent via raw REPL.
+
+        In flash mode, source packages are copied to the CIRCUITPY USB
+        drive after disabling autoreload.
 
         Args:
             source_dirs: Library ``src/`` directories to include.
@@ -164,11 +180,89 @@ class CircuitpythonTransport:
             harness_source: Path to the test harness ``src/`` directory.
         """
         self._staged_sources = []
-        # Collect library package sources.
+        # Collect library package sources (needed for both modes).
         for source_directory in source_dirs:
             self._collect_package_sources(source_directory)
         # Collect harness sources.
         self._collect_package_sources(harness_source)
+
+        if self.mode == "flash":
+            self._stage_to_flash(source_dirs, test_files, harness_source)
+
+    def _stage_to_flash(
+        self,
+        source_dirs: list[Path],
+        test_files: list[Path],
+        harness_source: Path,
+    ) -> None:
+        """Copy staged files to the CIRCUITPY USB drive.
+
+        Disables autoreload before copying to prevent restarts during
+        the file transfer.
+
+        Args:
+            source_dirs: Library ``src/`` directories.
+            test_files: Test files to deploy.
+            harness_source: Path to the test harness ``src/`` directory.
+
+        Raises:
+            CircuitpythonTransportError: If ``circuitpy_drive_path`` is
+                not configured or the drive path does not exist.
+        """
+        if not self.circuitpy_drive_path:
+            raise CircuitpythonTransportError(
+                "circuitpy_drive_path is required for flash mode"
+            )
+        drive_path = Path(self.circuitpy_drive_path)
+        if not drive_path.is_dir():
+            raise CircuitpythonTransportError(
+                f"CIRCUITPY drive not found: {drive_path}"
+            )
+
+        # Disable autoreload to prevent restarts during file copy.
+        self._send_repl_command(
+            "import supervisor; "
+            "supervisor.runtime.autoreload = False"
+        )
+
+        # Copy library packages to lib/ on the drive.
+        lib_destination = drive_path / "lib"
+        lib_destination.mkdir(exist_ok=True)
+
+        for source_directory in source_dirs:
+            self._copy_packages_to_drive(source_directory, lib_destination)
+
+        # Copy harness packages to lib/.
+        self._copy_packages_to_drive(harness_source, lib_destination)
+
+        # Copy test files to drive root.
+        for test_file in test_files:
+            destination = drive_path / test_file.name
+            shutil.copy2(test_file, destination)
+
+    @staticmethod
+    def _copy_packages_to_drive(
+        source_directory: Path,
+        lib_destination: Path,
+    ) -> None:
+        """Copy top-level packages from a source directory to the drive.
+
+        Args:
+            source_directory: A ``src/`` directory containing packages.
+            lib_destination: The ``lib/`` directory on the CIRCUITPY drive.
+        """
+        if not source_directory.is_dir():
+            return
+        for child in sorted(source_directory.iterdir()):
+            if not child.is_dir():
+                continue
+            init_file = child / "__init__.py"
+            if not init_file.exists():
+                continue
+            target = lib_destination / child.name
+            if target.exists():
+                shutil.rmtree(target)
+            shutil.copytree(child, target)
 
     def _collect_package_sources(self, source_directory: Path) -> None:
         """Walk a source directory and collect all .py files as module entries.
@@ -260,8 +354,21 @@ class CircuitpythonTransport:
             self._sleep(0.5)
 
     def disconnect(self) -> None:
-        """Close the serial port and clear staged data."""
+        """Close the serial port and clear staged data.
+
+        In flash mode, re-enables autoreload and triggers a reload
+        before closing the port.
+        """
         if self._port is not None:
+            if self.mode == "flash":
+                try:
+                    self._send_repl_command(
+                        "import supervisor; "
+                        "supervisor.runtime.autoreload = True; "
+                        "supervisor.reload()"
+                    )
+                except Exception:  # pragma: no cover
+                    pass  # Best-effort restore.
             try:
                 self._port.close()
             except Exception:  # pragma: no cover
@@ -296,6 +403,31 @@ class CircuitpythonTransport:
             else:
                 self._sleep(0.01)
         return accumulated
+
+    def _send_repl_command(self, command: str) -> str:
+        """Send a command through raw REPL and return stdout.
+
+        Used internally for control commands (autoreload, supervisor).
+        The port must already be connected and in raw REPL mode.
+
+        Args:
+            command: Python code to execute.
+
+        Returns:
+            Captured stdout from the command.
+
+        Raises:
+            CircuitpythonTransportError: If the port is not connected
+                or the command produces an error.
+        """
+        if self._port is None:
+            raise CircuitpythonTransportError(
+                "connect() must be called before sending REPL commands"
+            )
+        self._port.write(command.encode("utf-8"))
+        self._port.write(_CTRL_D)
+        raw_response = self._read_until(b"\x04>")
+        return self._parse_raw_repl_response(raw_response)
 
     @staticmethod
     def _parse_raw_repl_response(raw_response: bytes) -> str:

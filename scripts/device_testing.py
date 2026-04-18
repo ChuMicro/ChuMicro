@@ -126,26 +126,30 @@ def build_bootstrap(
     )
 
 
-def _create_transport(device_entry):
+def _create_transport(device_entry, deploy_mode: str = "ram"):
     """Create the appropriate transport for a device entry.
 
     Args:
         device_entry: A DeviceEntry from the config loader.
+        deploy_mode: ``"ram"`` (default) or ``"flash"``.
 
     Returns:
         A transport instance for the device's runtime.
 
     Raises:
-        ValueError: If the runtime is not supported.
+        ValueError: If the runtime is not supported or flash mode
+            is missing required configuration.
     """
     _ensure_support_importable()
 
     if device_entry.runtime == "micropython":
         from chumicro_device_transport import MicropythonTransport
 
+        # Map deploy mode to MicroPython transport mode.
+        transport_mode = "mount" if deploy_mode == "ram" else "copy"
         return MicropythonTransport(
             device_entry.address,
-            mode=device_entry.transport_mode,
+            mode=transport_mode,
         )
 
     if device_entry.runtime == "circuitpython":
@@ -154,6 +158,8 @@ def _create_transport(device_entry):
         return CircuitpythonTransport(
             device_entry.address,
             baudrate=device_entry.serial_baudrate,
+            mode=deploy_mode,
+            circuitpy_drive_path=device_entry.circuitpy_drive_path,
         )
 
     raise ValueError(f"Unsupported runtime: {device_entry.runtime}")
@@ -168,19 +174,21 @@ def _build_device_bootstrap(
     """Build the bootstrap script for the given device and test file.
 
     MicroPython uses the standard import-based bootstrap.
-    CircuitPython uses an inline bootstrap with module injection.
+    CircuitPython in RAM mode uses an inline bootstrap with module
+    injection.  CircuitPython in flash mode uses the standard
+    import-based bootstrap since files are on the device.
 
     Args:
         device_entry: A DeviceEntry from the config loader.
         transport: The transport instance (needed for staged sources
-            on CircuitPython).
+            on CircuitPython RAM mode).
         test_file: Path to the test file.
         test_filter: Optional name filter for ``run_module``.
 
     Returns:
         Python source code string for the bootstrap script.
     """
-    if device_entry.runtime == "circuitpython":
+    if device_entry.runtime == "circuitpython" and transport.mode == "ram":
         from chumicro_device_transport import build_circuitpython_bootstrap
 
         return build_circuitpython_bootstrap(
@@ -195,7 +203,13 @@ def _build_device_bootstrap(
     )
 
 
-def _run_tests_on_device(device_entry, test_plan, harness_source, test_filter):
+def _run_tests_on_device(
+    device_entry,
+    test_plan,
+    harness_source,
+    test_filter,
+    deploy_mode="ram",
+):
     """Run all planned tests on a single device.
 
     Args:
@@ -203,6 +217,7 @@ def _run_tests_on_device(device_entry, test_plan, harness_source, test_filter):
         test_plan: List of ``(library_name, source_dir, test_files)``.
         harness_source: Path to the test harness ``src/`` directory.
         test_filter: Optional name filter for ``run_module``.
+        deploy_mode: ``"ram"`` or ``"flash"``.
 
     Returns:
         Tuple of ``(passed, failed, errors)`` counts.
@@ -212,7 +227,7 @@ def _run_tests_on_device(device_entry, test_plan, harness_source, test_filter):
     errors = 0
 
     try:
-        transport = _create_transport(device_entry)
+        transport = _create_transport(device_entry, deploy_mode=deploy_mode)
     except ValueError as runtime_error:
         print(f"  Skipping — {runtime_error}")
         return passed, failed, errors
@@ -263,6 +278,7 @@ def test_device(
     device: str | None = None,
     library: str | None = None,
     test_filter: str | None = None,
+    deploy_mode: str = "ram",
 ) -> int:
     """Run functional tests on connected devices.
 
@@ -272,6 +288,7 @@ def test_device(
         library: Limit to a single library's functional tests.
         test_filter: Filter to test files or functions matching this
             substring.
+        deploy_mode: ``"ram"`` (default) or ``"flash"``.
 
     Returns:
         0 for all-pass, 1 for any failure, 2 for configuration issues.
@@ -320,6 +337,7 @@ def test_device(
 
         passed, failed, errors = _run_tests_on_device(
             device_entry, test_plan, harness_source, test_filter,
+            deploy_mode=deploy_mode,
         )
         total_passed += passed
         total_failed += failed
