@@ -126,6 +126,75 @@ def build_bootstrap(
     )
 
 
+def _create_transport(device_entry):
+    """Create the appropriate transport for a device entry.
+
+    Args:
+        device_entry: A DeviceEntry from the config loader.
+
+    Returns:
+        A transport instance for the device's runtime.
+
+    Raises:
+        ValueError: If the runtime is not supported.
+    """
+    _ensure_support_importable()
+
+    if device_entry.runtime == "micropython":
+        from chumicro_device_transport import MicropythonTransport
+
+        return MicropythonTransport(
+            device_entry.address,
+            mode=device_entry.transport_mode,
+        )
+
+    if device_entry.runtime == "circuitpython":
+        from chumicro_device_transport import CircuitpythonTransport
+
+        return CircuitpythonTransport(
+            device_entry.address,
+            baudrate=device_entry.serial_baudrate,
+        )
+
+    raise ValueError(f"Unsupported runtime: {device_entry.runtime}")
+
+
+def _build_device_bootstrap(
+    device_entry,
+    transport,
+    test_file,
+    test_filter,
+):
+    """Build the bootstrap script for the given device and test file.
+
+    MicroPython uses the standard import-based bootstrap.
+    CircuitPython uses an inline bootstrap with module injection.
+
+    Args:
+        device_entry: A DeviceEntry from the config loader.
+        transport: The transport instance (needed for staged sources
+            on CircuitPython).
+        test_file: Path to the test file.
+        test_filter: Optional name filter for ``run_module``.
+
+    Returns:
+        Python source code string for the bootstrap script.
+    """
+    if device_entry.runtime == "circuitpython":
+        from chumicro_device_transport import build_circuitpython_bootstrap
+
+        return build_circuitpython_bootstrap(
+            transport.staged_sources,
+            test_file,
+            name_filter=test_filter,
+        )
+
+    return build_bootstrap(
+        test_file.name,
+        name_filter=test_filter,
+    )
+
+
 def _run_tests_on_device(device_entry, test_plan, harness_source, test_filter):
     """Run all planned tests on a single device.
 
@@ -142,20 +211,11 @@ def _run_tests_on_device(device_entry, test_plan, harness_source, test_filter):
     failed = 0
     errors = 0
 
-    if device_entry.runtime != "micropython":
-        print(
-            f"  Skipping — {device_entry.runtime} transport "
-            f"not yet implemented."
-        )
+    try:
+        transport = _create_transport(device_entry)
+    except ValueError as runtime_error:
+        print(f"  Skipping — {runtime_error}")
         return passed, failed, errors
-
-    _ensure_support_importable()
-    from chumicro_device_transport import MicropythonTransport
-
-    transport = MicropythonTransport(
-        device_entry.address,
-        mode=device_entry.transport_mode,
-    )
 
     try:
         transport.connect()
@@ -171,9 +231,8 @@ def _run_tests_on_device(device_entry, test_plan, harness_source, test_filter):
 
             try:
                 transport.stage(source_dirs, [test_file], harness_source)
-                bootstrap = build_bootstrap(
-                    test_file.name,
-                    name_filter=test_filter,
+                bootstrap = _build_device_bootstrap(
+                    device_entry, transport, test_file, test_filter,
                 )
                 raw_output = transport.execute(bootstrap)
                 print(raw_output)

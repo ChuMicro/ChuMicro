@@ -14,6 +14,7 @@ hatchling
 griffe
 tomli; python_version < "3.11"
 zensical
+pyserial
 pyyaml
 mpremote
 mike @ git+https://github.com/squidfunk/mike.git

@@ -1,0 +1,185 @@
+"""Tests for the CircuitPython bootstrap code generator."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from chumicro_device_transport.circuitpython_bootstrap import (
+    _escape_source,
+    build_circuitpython_bootstrap,
+)
+
+
+class TestBuildCircuitpythonBootstrap:
+    """Tests for build_circuitpython_bootstrap."""
+
+    def test_generates_module_injection(self, tmp_path: Path) -> None:
+        """Bootstrap should contain _inject_module calls for each module."""
+        staged_sources = [
+            ("chumicro_timing", "# timing init"),
+            ("chumicro_timing.ticks", "def ticks_ms(): pass"),
+        ]
+        test_file = tmp_path / "test_example.py"
+        test_file.write_text("def test_ok(): pass")
+
+        result = build_circuitpython_bootstrap(staged_sources, test_file)
+
+        assert "_inject_module('chumicro_timing'" in result
+        assert "_inject_module('chumicro_timing.ticks'" in result
+
+    def test_includes_inject_module_helper(self, tmp_path: Path) -> None:
+        """Bootstrap should define the _inject_module helper function."""
+        test_file = tmp_path / "test_example.py"
+        test_file.write_text("def test_ok(): pass")
+
+        result = build_circuitpython_bootstrap([], test_file)
+
+        assert "def _inject_module(module_name, source_code):" in result
+        assert "sys.modules[module_name] = _Module" in result
+
+    def test_execs_test_file(self, tmp_path: Path) -> None:
+        """Bootstrap should exec the test file source."""
+        test_file = tmp_path / "test_example.py"
+        test_file.write_text("def test_hello(): assert True")
+
+        result = build_circuitpython_bootstrap([], test_file)
+
+        assert "exec(" in result
+        assert "_test_namespace" in result
+        assert "def test_hello" in result or "test_hello" in result
+
+    def test_calls_run_module(self, tmp_path: Path) -> None:
+        """Bootstrap should call run_module with the test namespace."""
+        test_file = tmp_path / "test_example.py"
+        test_file.write_text("def test_ok(): pass")
+
+        result = build_circuitpython_bootstrap([], test_file)
+
+        assert "run_module(_TestModule" in result
+
+    def test_passes_name_filter(self, tmp_path: Path) -> None:
+        """Bootstrap should pass name_filter to run_module when set."""
+        test_file = tmp_path / "test_example.py"
+        test_file.write_text("def test_ok(): pass")
+
+        result = build_circuitpython_bootstrap(
+            [], test_file, name_filter="test_specific",
+        )
+
+        assert "name_filter='test_specific'" in result
+
+    def test_name_filter_none_by_default(self, tmp_path: Path) -> None:
+        """Bootstrap should pass None for name_filter when not set."""
+        test_file = tmp_path / "test_example.py"
+        test_file.write_text("def test_ok(): pass")
+
+        result = build_circuitpython_bootstrap([], test_file)
+
+        assert "name_filter=None" in result
+
+    def test_imports_sys(self, tmp_path: Path) -> None:
+        """Bootstrap should import sys for module registration."""
+        test_file = tmp_path / "test_example.py"
+        test_file.write_text("def test_ok(): pass")
+
+        result = build_circuitpython_bootstrap([], test_file)
+
+        assert "import sys" in result
+
+    def test_creates_test_module_class(self, tmp_path: Path) -> None:
+        """Bootstrap should create a _TestModule class from namespace."""
+        test_file = tmp_path / "test_example.py"
+        test_file.write_text("def test_ok(): pass")
+
+        result = build_circuitpython_bootstrap([], test_file)
+
+        assert "class _TestModule:" in result
+        assert "setattr(_TestModule" in result
+
+    def test_inject_module_attaches_submodules(
+        self, tmp_path: Path,
+    ) -> None:
+        """_inject_module should attach submodules to parent packages."""
+        test_file = tmp_path / "test_example.py"
+        test_file.write_text("def test_ok(): pass")
+
+        result = build_circuitpython_bootstrap(
+            [("pkg", "x = 1"), ("pkg.sub", "y = 2")],
+            test_file,
+        )
+
+        # The helper should contain parent-attachment logic.
+        assert "parent_name" in result
+        assert "setattr(sys.modules[parent_name]" in result
+
+    def test_exits_with_result_code(self, tmp_path: Path) -> None:
+        """Bootstrap should exit with the run_module return code."""
+        test_file = tmp_path / "test_example.py"
+        test_file.write_text("def test_ok(): pass")
+
+        result = build_circuitpython_bootstrap([], test_file)
+
+        assert "sys.exit(_exit_code)" in result
+
+    def test_generated_code_is_valid_python(self, tmp_path: Path) -> None:
+        """The generated bootstrap should parse as valid Python."""
+        staged_sources = [
+            ("chumicro_timing", "x = 1\ny = 'hello'"),
+            ("chumicro_timing.ticks", "def ticks_ms():\n    return 0"),
+        ]
+        test_file = tmp_path / "test_example.py"
+        test_file.write_text("def test_ok():\n    assert True\n")
+
+        result = build_circuitpython_bootstrap(
+            staged_sources, test_file, name_filter="test_ok",
+        )
+
+        # compile() will raise SyntaxError if the code is invalid.
+        compile(result, "<bootstrap>", "exec")
+
+    def test_handles_source_with_special_characters(
+        self, tmp_path: Path,
+    ) -> None:
+        """Bootstrap should safely embed source with quotes and backslashes."""
+        staged_sources = [
+            ("mypkg", "x = 'single'\ny = \"double\"\nz = '''triple'''"),
+        ]
+        test_file = tmp_path / "test_example.py"
+        test_file.write_text("def test_ok(): pass")
+
+        result = build_circuitpython_bootstrap(staged_sources, test_file)
+
+        # Should be valid Python despite tricky source content.
+        compile(result, "<bootstrap>", "exec")
+
+
+class TestEscapeSource:
+    """Tests for _escape_source helper."""
+
+    def test_escapes_simple_string(self) -> None:
+        """Should produce a valid Python string literal."""
+        result = _escape_source("x = 1")
+        assert eval(result) == "x = 1"
+
+    def test_escapes_quotes(self) -> None:
+        """Should handle embedded quotes."""
+        result = _escape_source("x = 'hello \"world\"'")
+        assert eval(result) == "x = 'hello \"world\"'"
+
+    def test_escapes_backslashes(self) -> None:
+        """Should handle backslash characters."""
+        result = _escape_source("path = 'C:\\\\Users'")
+        assert eval(result) == "path = 'C:\\\\Users'"
+
+    def test_escapes_newlines(self) -> None:
+        """Should handle multiline source."""
+        source = "def foo():\n    return 1\n"
+        result = _escape_source(source)
+        assert eval(result) == source
+
+    def test_escapes_triple_quotes(self) -> None:
+        """Should handle triple-quoted strings in source."""
+        source = '"""docstring"""\nx = 1'
+        result = _escape_source(source)
+        assert eval(result) == source
+

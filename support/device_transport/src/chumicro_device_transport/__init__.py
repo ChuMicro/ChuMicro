@@ -12,11 +12,18 @@ Transport protocol (duck-typed)::
     disconnect() -> None
 """
 
+from .circuitpython_bootstrap import build_circuitpython_bootstrap
+from .circuitpython_transport import (
+    CircuitpythonTransport,
+    CircuitpythonTransportError,
+)
 from .micropython_transport import MicropythonTransport
 from .testing import FakeTransport
 
 __all__ = [
+    "CircuitpythonTransport",
+    "CircuitpythonTransportError",
     "FakeTransport",
     "MicropythonTransport",
+    "build_circuitpython_bootstrap",
 ]
-
