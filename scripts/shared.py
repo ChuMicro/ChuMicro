@@ -21,7 +21,13 @@ import subprocess
 import sys
 from pathlib import Path
 
-from workspace import ROOT, TOOLS, find_publishable_packages, read_runtime_versions
+from workspace import (
+    ROOT,
+    TOOLS,
+    find_publishable_packages,
+    find_support_packages,
+    read_runtime_versions,
+)
 
 # ---------------------------------------------------------------------------
 # Generic subprocess helpers
@@ -61,12 +67,13 @@ def install_command(python: str | Path | None = None) -> list[str]:
 
 
 def install_editable(python: str | Path | None = None) -> int:
-    """Install all publishable libraries as editable packages.
+    """Install all workspace packages as editable.
 
-    This registers each library with Python's import system so that
-    imports work in any tool (editors, debuggers, REPLs, scripts)
-    without manual PYTHONPATH setup.  Changes to source files are
-    reflected immediately — no reinstall needed.
+    Installs publishable libraries (under ``libraries/``) and support
+    packages (under ``support/``) so that imports work in any tool
+    (editors, debuggers, REPLs, scripts) without manual PYTHONPATH
+    setup.  Changes to source files are reflected immediately — no
+    reinstall needed.
 
     Args:
         python: Interpreter to install into.  Defaults to the running
@@ -75,7 +82,7 @@ def install_editable(python: str | Path | None = None) -> int:
     Returns:
         Process exit code (0 on success).
     """
-    packages = find_publishable_packages()
+    packages = find_publishable_packages() + find_support_packages()
     if not packages:
         return 0
 

@@ -301,6 +301,24 @@ def find_publishable_packages() -> list[str]:
     return packages
 
 
+def find_support_packages() -> list[str]:
+    """Return relative paths to support packages under ``support/``.
+
+    A support package is any directory under ``support/`` with a
+    ``pyproject.toml``.  These are workspace-internal packages that
+    are editable-installed for development convenience but never
+    published.
+    """
+    support_dir = ROOT / "support"
+    if not support_dir.is_dir():
+        return []
+    packages = []
+    for child in sorted(support_dir.iterdir()):
+        if child.is_dir() and (child / "pyproject.toml").exists():
+            packages.append(str(child.relative_to(ROOT)))
+    return packages
+
+
 def read_version(library_dir: Path) -> str | None:
     """Read a library's ``VERSION`` file.
 
