@@ -18,6 +18,7 @@ constraints.
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 _CTRL_A = b"\x01"
@@ -63,8 +64,8 @@ class CircuitpythonTransport:
         *,
         baudrate: int = 115200,
         timeout: float = DEFAULT_TIMEOUT,
-        serial_port_factory: object | None = None,
-        sleep: object | None = None,
+        serial_port_factory: Callable[..., object] | None = None,
+        sleep: Callable[[float], object] | None = None,
     ) -> None:
         self.address = address
         self.baudrate = baudrate

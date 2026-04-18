@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import subprocess
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 
 
@@ -38,7 +39,7 @@ class MicropythonTransport:
         address: str,
         *,
         mode: str = "mount",
-        runner: object | None = None,
+        runner: Callable[..., subprocess.CompletedProcess] | None = None,
     ) -> None:
         self.address = address
         self.mode = mode
