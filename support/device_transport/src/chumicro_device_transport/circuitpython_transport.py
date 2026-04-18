@@ -53,6 +53,8 @@ class CircuitpythonTransport:
         serial_port_factory: Callable that creates a serial port object.
             Accepts ``(port, baudrate, timeout)`` keyword arguments.
             Defaults to ``serial.Serial``.  Inject a fake for testing.
+        sleep: Callable for delays between serial operations.
+            Defaults to ``time.sleep``.  Inject a no-op for testing.
     """
 
     def __init__(
@@ -62,11 +64,13 @@ class CircuitpythonTransport:
         baudrate: int = 115200,
         timeout: float = DEFAULT_TIMEOUT,
         serial_port_factory: object | None = None,
+        sleep: object | None = None,
     ) -> None:
         self.address = address
         self.baudrate = baudrate
         self.timeout = timeout
         self._serial_port_factory = serial_port_factory
+        self._sleep = sleep or time.sleep
         self._port: object | None = None
         self._staged_sources: list[tuple[str, str]] | None = None
 
@@ -105,16 +109,16 @@ class CircuitpythonTransport:
         """Interrupt running code and switch to raw REPL mode."""
         # Ctrl-C × 2 to interrupt any running program.
         self._port.write(_CTRL_C)
-        time.sleep(_INTERRUPT_DELAY)
+        self._sleep(_INTERRUPT_DELAY)
         self._port.write(_CTRL_C)
-        time.sleep(_INTERRUPT_DELAY)
+        self._sleep(_INTERRUPT_DELAY)
 
         # Drain any pending output before entering raw REPL.
         self._port.reset_input_buffer()
 
         # Ctrl-A to enter raw REPL.
         self._port.write(_CTRL_A)
-        time.sleep(_ENTER_DELAY)
+        self._sleep(_ENTER_DELAY)
 
         # Read until we see the raw REPL prompt.
         response = self._read_until(_RAW_REPL_PROMPT)
@@ -234,7 +238,7 @@ class CircuitpythonTransport:
         if self._port is not None:
             self._port.write(_CTRL_D)
             # Allow time for the reset to complete.
-            time.sleep(0.5)
+            self._sleep(0.5)
 
     def disconnect(self) -> None:
         """Close the serial port and clear staged data."""
@@ -270,7 +274,7 @@ class CircuitpythonTransport:
                 if marker in accumulated:
                     return accumulated
             else:
-                time.sleep(0.01)
+                self._sleep(0.01)
         return accumulated
 
     @staticmethod

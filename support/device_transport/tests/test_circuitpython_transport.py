@@ -15,6 +15,10 @@ from chumicro_device_transport.circuitpython_transport import (
 )
 
 
+def _noop_sleep(_duration: float) -> None:
+    """No-op sleep replacement to eliminate delays in tests."""
+
+
 class FakeSerialPort:
     """Simulates a pyserial Serial port for transport testing.
 
@@ -105,6 +109,7 @@ class TestConnect:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
+            sleep=_noop_sleep,
         )
         transport.connect()
 
@@ -122,6 +127,7 @@ class TestConnect:
         transport = CircuitpythonTransport(
             "/dev/ttyNONE",
             serial_port_factory=factory,
+            sleep=_noop_sleep,
         )
 
         with pytest.raises(
@@ -141,6 +147,7 @@ class TestConnect:
             "/dev/ttyUSB0",
             timeout=0.1,
             serial_port_factory=factory,
+            sleep=_noop_sleep,
         )
 
         with pytest.raises(
@@ -162,6 +169,7 @@ class TestConnect:
             "/dev/ttyUSB0",
             baudrate=9600,
             serial_port_factory=factory,
+            sleep=_noop_sleep,
         )
         transport.connect()
 
@@ -196,6 +204,7 @@ class TestStage:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
+            sleep=_noop_sleep,
         )
         transport.connect()
         transport.stage([source_dir], [test_file], harness_dir)
@@ -229,6 +238,7 @@ class TestStage:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
+            sleep=_noop_sleep,
         )
         transport.connect()
         transport.stage([source_dir], [], harness_dir)
@@ -261,6 +271,7 @@ class TestStage:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
+            sleep=_noop_sleep,
         )
         transport.connect()
         transport.stage([source_dir], [], harness_dir)
@@ -286,6 +297,7 @@ class TestStage:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
+            sleep=_noop_sleep,
         )
         transport.connect()
         transport.stage([nonexistent], [], harness_dir)
@@ -317,6 +329,7 @@ class TestStage:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
+            sleep=_noop_sleep,
         )
         transport.connect()
         transport.stage([source_dir], [], harness_dir)
@@ -353,6 +366,7 @@ class TestExecute:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
+            sleep=_noop_sleep,
         )
         transport.connect()
         transport.stage([source_dir], [], harness_dir)
@@ -384,6 +398,7 @@ class TestExecute:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
+            sleep=_noop_sleep,
         )
         transport.connect()
         transport.stage([source_dir], [], harness_dir)
@@ -415,6 +430,7 @@ class TestExecute:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
+            sleep=_noop_sleep,
         )
         transport.connect()
         transport.stage([source_dir], [], harness_dir)
@@ -447,6 +463,7 @@ class TestExecute:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
+            sleep=_noop_sleep,
         )
         transport.connect()
         transport.stage([source_dir], [], harness_dir)
@@ -466,6 +483,7 @@ class TestExecute:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
+            sleep=_noop_sleep,
         )
         transport.connect()
 
@@ -482,6 +500,7 @@ class TestExecute:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=lambda **kw: None,
+            sleep=_noop_sleep,
         )
         # Manually set staged sources to bypass stage check.
         transport._staged_sources = []
@@ -506,6 +525,7 @@ class TestReset:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
+            sleep=_noop_sleep,
         )
         transport.connect()
         port.writes.clear()
@@ -519,6 +539,7 @@ class TestReset:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=lambda **kw: None,
+            sleep=_noop_sleep,
         )
         transport.reset()  # Should not raise.
 
@@ -536,6 +557,7 @@ class TestDisconnect:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
+            sleep=_noop_sleep,
         )
         transport.connect()
         transport.disconnect()
@@ -560,6 +582,7 @@ class TestDisconnect:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
+            sleep=_noop_sleep,
         )
         transport.connect()
         transport.stage([source_dir], [], harness_dir)
@@ -574,6 +597,7 @@ class TestDisconnect:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=lambda **kw: None,
+            sleep=_noop_sleep,
         )
         transport.disconnect()  # Should not raise.
 
@@ -587,6 +611,7 @@ class TestDisconnect:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
+            sleep=_noop_sleep,
         )
         transport.connect()
         transport.disconnect()
