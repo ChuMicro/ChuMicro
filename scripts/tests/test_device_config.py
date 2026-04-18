@@ -103,12 +103,12 @@ devices:
   - id: extended
     runtime: micropython
     address: /dev/ttyUSB0
-    web_workflow:
+    custom_property:
       host: "192.168.1.42"
 """)
         devices = load_devices(devices_file)
-        assert "web_workflow" in devices[0].extra
-        assert devices[0].extra["web_workflow"]["host"] == "192.168.1.42"
+        assert "custom_property" in devices[0].extra
+        assert devices[0].extra["custom_property"]["host"] == "192.168.1.42"
 
     def test_defaults_for_optional_fields(self, tmp_path) -> None:
         """Optional fields should have sensible defaults."""

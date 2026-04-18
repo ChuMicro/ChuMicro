@@ -64,7 +64,7 @@ Purpose:
 Transport (Decision 0027):
 
 - MicroPython: `mpremote` (mount mode default, copy mode fallback)
-- CircuitPython: pyserial raw REPL (Ctrl-A mode) for serial, Web Workflow REST API for WiFi boards
+- CircuitPython: pyserial raw REPL (Ctrl-A mode) for serial, CIRCUITPY USB copy for flash
 
 ## Implementation phases
 
@@ -80,10 +80,9 @@ Transport (Decision 0027):
 
 ### Phase 2: CircuitPython serial transport
 
-- [ ] Create `CircuitpythonTransport` using pyserial raw REPL
-- [ ] Add `pyserial` to `requirements-dev.txt`
-- [ ] Implement Web Workflow REST API transport as an alternative for WiFi boards
-- [ ] Test on at least one real CircuitPython board
+- [x] Create `CircuitpythonTransport` using pyserial raw REPL
+- [x] Add `pyserial` to `requirements-dev.txt`
+- [x] Test on at least one real CircuitPython board
 
 ### Phase 3: IDE integration
 

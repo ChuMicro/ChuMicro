@@ -19,12 +19,6 @@ devices:
     # Used for flash deploy mode (--deploy-mode flash).
     # Auto-detected if omitted; set explicitly with multiple boards.
     # circuitpy_drive_path: /Volumes/CIRCUITPY
-    # Web Workflow REST API transport is not yet implemented.
-    # These fields are reserved for future use:
-    # web_workflow:
-    #   host: "192.168.1.42"
-    #   port: 80
-    #   password: "your-web-api-password"
 
   - id: sample-micropython-board
     description: Example MicroPython board entry for local device validation.
