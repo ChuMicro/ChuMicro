@@ -67,8 +67,9 @@ class MicropythonTransport:
             test_files: Test files to stage.
             harness_source: Path to the test harness ``src/`` directory.
         """
-        self._staging_dir = tempfile.TemporaryDirectory(prefix="chumicro_device_")
-        staging_path = Path(self._staging_dir.name)
+        staging_dir = tempfile.TemporaryDirectory(prefix="chumicro_device_")
+        self._staging_dir = staging_dir
+        staging_path = Path(staging_dir.name)
         self._staging_path = staging_path
 
         # Copy source packages into staging.
