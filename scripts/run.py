@@ -744,18 +744,183 @@ def test_runtime_matrix(
     return 0
 
 
-def test_device() -> int:
-    """Point users to the current manual-only device validation path."""
-    devices_file = ROOT / "devices.yml"
-    if devices_file.exists():
-        print(f"Manual device validation remains user-driven. Config: {devices_file}")
-    else:
-        print(
-            "Copy devices.example.yml to devices.yml and fill in your board details."
+def test_device(
+    runtime: str | None = None,
+    device: str | None = None,
+    library: str | None = None,
+    test_filter: str | None = None,
+) -> int:
+    """Run functional tests on connected devices.
+
+    Loads the device registry, selects matching devices, stages library
+    source + functional_tests + harness for each, executes via the
+    appropriate transport, and parses results.
+
+    Args:
+        runtime: Filter to devices matching this runtime
+            (``micropython`` or ``circuitpython``).
+        device: Filter to the device with this ID.
+        library: Limit to a single library's functional tests.
+        test_filter: Filter to test files or functions matching this
+            substring.
+
+    Returns:
+        0 for all-pass, 1 for any failure, 2 for configuration issues.
+    """
+    from device_config import (
+        DeviceConfigError,
+        filter_devices,
+        load_devices,
+    )
+    from result_parser import parse_output
+
+    # Load device registry.
+    try:
+        all_devices = load_devices()
+    except DeviceConfigError as error:
+        print(f"Device config error: {error}")
+        return 2
+
+    # Filter devices.
+    selected = filter_devices(all_devices, runtime=runtime, device_id=device)
+    if not selected:
+        print("No matching devices found.")
+        if not all_devices:
+            print("Copy devices.example.yml to devices.yml and fill in your board details.")
+        return 2
+
+    # Discover functional test files.
+    libraries_root = ROOT / "libraries"
+    harness_source = ROOT / "support" / "test_harness" / "src"
+    test_plan: list[tuple[str, Path, list[Path]]] = []
+
+    for library_dir in sorted(libraries_root.iterdir()):
+        if not library_dir.is_dir():
+            continue
+        if library and library_dir.name != library:
+            continue
+        functional_dir = library_dir / "functional_tests"
+        if not functional_dir.is_dir():
+            continue
+        test_files = sorted(
+            path for path in functional_dir.iterdir()
+            if path.name.startswith("test_") and path.name.endswith(".py")
+        )
+        if test_filter:
+            test_files = [
+                path for path in test_files
+                if test_filter in path.name
+            ]
+        if test_files:
+            source_dir = library_dir / "src"
+            test_plan.append((library_dir.name, source_dir, test_files))
+
+    if not test_plan:
+        print("No functional test files found.")
+        return 0
+
+    # Run tests on each device.
+    total_passed = 0
+    total_failed = 0
+    total_errors = 0
+
+    for device_entry in selected:
+        print(f"\n{'=' * 60}")
+        print(f"Device: {device_entry.identifier} ({device_entry.runtime})")
+        print(f"Address: {device_entry.address}")
+        print(f"{'=' * 60}")
+
+        if device_entry.runtime != "micropython":
+            print(f"  Skipping — {device_entry.runtime} transport not yet implemented.")
+            continue
+
+        from chumicro_device_transport import MicropythonTransport
+
+        transport = MicropythonTransport(
+            device_entry.address,
+            mode=device_entry.transport_mode,
         )
 
-    print("Use libraries/timing/functional_tests/ with support/test_harness/ on the target board.")
-    return 2
+        try:
+            transport.connect()
+        except Exception as connect_error:
+            print(f"  Connection failed: {connect_error}")
+            total_errors += 1
+            continue
+
+        for library_name, source_dir, test_files in test_plan:
+            # Collect all source dirs this library might need.
+            source_dirs = [source_dir]
+            # Add dependency source dirs (all libraries for now).
+            for dependency_dir in sorted(libraries_root.iterdir()):
+                dependency_source = dependency_dir / "src"
+                if dependency_source.is_dir() and dependency_source != source_dir:
+                    source_dirs.append(dependency_source)
+
+            for test_file in test_files:
+                print(f"\n  {library_name}/{test_file.name}")
+
+                try:
+                    transport.stage(source_dirs, [test_file], harness_source)
+
+                    bootstrap = _build_bootstrap(
+                        test_file.name,
+                        name_filter=test_filter,
+                    )
+                    raw_output = transport.execute(bootstrap)
+                    print(raw_output)
+
+                    result = parse_output(raw_output)
+                    if result.summary:
+                        total_passed += result.summary.total - result.summary.failed
+                        total_failed += result.summary.failed
+                    else:
+                        print("  WARNING: No summary line in output.")
+                        total_errors += 1
+
+                except Exception as run_error:
+                    print(f"  ERROR: {run_error}")
+                    total_errors += 1
+
+        try:
+            transport.reset()
+        except Exception:
+            pass  # Best-effort reset.
+        transport.disconnect()
+
+    # Final summary.
+    print(f"\n{'=' * 60}")
+    print(
+        f"Device test summary: {total_passed} passed, "
+        f"{total_failed} failed, {total_errors} errors"
+    )
+    print(f"{'=' * 60}")
+
+    return 1 if (total_failed or total_errors) else 0
+
+
+def _build_bootstrap(test_filename: str, name_filter: str | None = None) -> str:
+    """Generate a bootstrap script for the test harness.
+
+    The bootstrap sets up sys.path on the mounted/staged directory,
+    imports the test file, and runs it through the harness runner.
+
+    Args:
+        test_filename: Name of the test file (e.g. ``test_heartbeat_ticks.py``).
+        name_filter: Optional name filter to pass to ``run_module``.
+
+    Returns:
+        Python source code string for the bootstrap script.
+    """
+    filter_repr = repr(name_filter) if name_filter else "None"
+    return (
+        "import sys\n"
+        "from chumicro_test_harness.runner import run_module\n"
+        "from chumicro_test_harness.discovery import _exec_as_namespace\n"
+        f"module = _exec_as_namespace('{test_filename}')\n"
+        f"result = run_module(module, name_filter={filter_repr})\n"
+        "sys.exit(result)\n"
+    )
 
 
 def validate_mip(
@@ -889,7 +1054,28 @@ def _build_parser() -> argparse.ArgumentParser:
         parents=[binary],
         help="test all packages on CPython + MicroPython + CircuitPython",
     )
-    subparsers.add_parser("test-device", help="device validation information")
+    test_device_parser = subparsers.add_parser(
+        "test-device",
+        help="run functional tests on connected devices",
+    )
+    test_device_parser.add_argument(
+        "--runtime",
+        choices=["micropython", "circuitpython"],
+        help="filter devices by runtime",
+    )
+    test_device_parser.add_argument(
+        "--device",
+        help="target a specific device by ID",
+    )
+    test_device_parser.add_argument(
+        "--library",
+        help="limit to one library's functional tests",
+    )
+    test_device_parser.add_argument(
+        "--test",
+        dest="test_filter",
+        help="filter to test files or functions matching this substring",
+    )
     subparsers.add_parser("check-version", help="check VERSION enforcement for changed libraries")
     subparsers.add_parser("check-api", help="check API breakages against last release tag")
 
@@ -1090,6 +1276,15 @@ def main(argv: list[str]) -> int:
             coverage_threshold=args.coverage_threshold,
         )
 
+    # --- test-device ---
+    if args.task == "test-device":
+        return test_device(
+            runtime=args.runtime,
+            device=args.device,
+            library=args.library,
+            test_filter=args.test_filter,
+        )
+
     # --- no-arg tasks ---
     no_arg = {
         "setup": setup,
@@ -1099,7 +1294,6 @@ def main(argv: list[str]) -> int:
         "prepare-micropython": prepare_micropython,
         "prepare-circuitpython": prepare_circuitpython,
         "prepare-mpy-cross": prepare_mpy_cross,
-        "test-device": test_device,
         "check-version": check_version,
         "check-api": check_api,
     }
