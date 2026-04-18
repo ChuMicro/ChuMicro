@@ -141,7 +141,7 @@ These patterns caused real bugs when implemented incorrectly. Follow them exactl
    - host tests with `FakeTicks` mock
    - a device-facing timing test
 5. Added `ci/tasks.py` as the shared repo-level task entrypoints.
-6. Added `devices.example.yml` and documented the manual-only device validation starting point.
+6. Added device config generation during setup and documented the manual-only device validation starting point.
 7. Added `ci/prepare_micropython.py` to prepare a pinned repo-local MicroPython unix-port runtime.
 8. Verified the sample MicroPython smoke test against the prepared local runtime.
 9. Added `ci/prepare_circuitpython.py` and verified a pinned CircuitPython unix-port build on macOS.

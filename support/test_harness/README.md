@@ -58,9 +58,9 @@ This runs the current verified CPython host test suite, prepares the repo-local 
 
 Real-board execution is being built out as Milestone 3 (Decision 0027).
 
-- Copy `devices.example.yml` to `devices.yml` and fill in your board details.
-- Copy `device-config.example.yml` to `device-config.yml` and fill in WiFi credentials and other test environment settings.
-- Keep both files out of version control — they are gitignored.
+- Run `python scripts/run.py setup` to generate starter `devices.yml` and `device-config.yml` files.
+- Fill in your board details and WiFi credentials.
+- Both files are gitignored — they will not be committed.
 
 Once transport tooling is implemented:
 

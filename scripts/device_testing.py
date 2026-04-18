@@ -287,8 +287,8 @@ def test_device(
         print("No matching devices found.")
         if not all_devices:
             print(
-                "Copy devices.example.yml to devices.yml "
-                "and fill in your board details."
+                "Run 'python scripts/run.py setup' to generate "
+                "devices.yml, then fill in your board details."
             )
         return 2
 

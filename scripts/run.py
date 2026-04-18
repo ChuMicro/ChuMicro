@@ -25,6 +25,7 @@ from docs_deploy import (
     docs_deploy,
     inject_landing_page,
 )
+from generate_config_files import generate_config_files
 from ide_sync import sync_ide
 from new_library_scaffold import new_library
 from prepare_circuitpython import prepare_circuitpython
@@ -88,6 +89,9 @@ def setup() -> int:
     result = install_editable()
     if result != 0:
         return result
+
+    print("== generate config files ==")
+    generate_config_files()
 
     return sync_ide()
 

@@ -165,7 +165,6 @@ chumicro/
 │   ├── workflows/         # CI, release, promote, docs-deploy
 │   └── skills/            # Agent skill instructions
 ├── target-runtimes.toml   # Pinned runtime versions
-├── devices.example.yml    # Template for local board registration
 └── LICENSE                # MIT
 ```
 

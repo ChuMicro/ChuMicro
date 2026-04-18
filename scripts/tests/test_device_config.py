@@ -137,14 +137,13 @@ devices:
         devices = load_devices()
         assert devices[0].identifier == "env-board"
 
-    def test_example_file_parses(self) -> None:
-        """The checked-in devices.example.yml should parse without errors."""
-        from workspace import ROOT
+    def test_generated_devices_content_parses(self, tmp_path) -> None:
+        """The generated devices.yml content should parse without errors."""
+        from generate_config_files import _DEVICES_CONTENT
 
-        example_path = ROOT / "devices.example.yml"
-        if not example_path.exists():
-            pytest.skip("devices.example.yml not found")
-        devices = load_devices(example_path)
+        devices_file = tmp_path / "devices.yml"
+        devices_file.write_text(_DEVICES_CONTENT)
+        devices = load_devices(devices_file)
         assert len(devices) >= 1
 
 
@@ -176,14 +175,13 @@ wifi:
         config = load_device_config()
         assert config["wifi"]["ssid"] == "EnvNet"
 
-    def test_example_file_parses(self) -> None:
-        """The checked-in device-config.example.yml should parse without errors."""
-        from workspace import ROOT
+    def test_generated_device_config_content_parses(self, tmp_path) -> None:
+        """The generated device-config.yml content should parse."""
+        from generate_config_files import _DEVICE_CONFIG_CONTENT
 
-        example_path = ROOT / "device-config.example.yml"
-        if not example_path.exists():
-            pytest.skip("device-config.example.yml not found")
-        config = load_device_config(example_path)
+        config_file = tmp_path / "device-config.yml"
+        config_file.write_text(_DEVICE_CONFIG_CONTENT)
+        config = load_device_config(config_file)
         assert isinstance(config, dict)
 
 
