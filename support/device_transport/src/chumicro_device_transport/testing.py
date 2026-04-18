@@ -4,26 +4,18 @@ Provides ``FakeTransport`` — a transport implementation that records
 all calls and returns configurable output.  Use it in host-side tests
 that need to verify orchestration logic without touching real hardware.
 
-Also provides serial-level fakes for testing ``CircuitpythonTransport``
-internals without real hardware or real time::
+Also provides ``FakeSerialPort`` for testing ``CircuitpythonTransport``
+internals without real hardware::
 
-    from chumicro_device_transport.testing import (
-        FakeTime,
-        FakeSerialPort,
-    )
-
-``FakeTime`` is re-exported from the shared ``chumicro_testing``
-package so that transport tests can import it alongside the
-transport-specific fakes.
+    from chumicro_device_transport.testing import FakeSerialPort
+    from chumicro_testing import FakeTime
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from chumicro_testing import FakeTime
-
-__all__ = ["FakeTime", "FakeSerialPort", "FakeTransport"]
+__all__ = ["FakeSerialPort", "FakeTransport"]
 
 
 class FakeSerialPort:

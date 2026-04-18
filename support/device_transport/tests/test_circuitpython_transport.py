@@ -15,8 +15,8 @@ from chumicro_device_transport.circuitpython_transport import (
 )
 from chumicro_device_transport.testing import (
     FakeSerialPort,
-    FakeTime,
 )
+from chumicro_testing import FakeTime
 
 #: Shorthand for the standard autoreload REPL acknowledgement.
 _OK_RESPONSE = b"OK\x04\x04>"
