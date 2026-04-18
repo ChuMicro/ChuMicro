@@ -1,6 +1,6 @@
 """Public exports for the chumicro-runner package."""
 
-from .core import (
+from chumicro_runner.core import (
     Runner,
     TaskHandle,
 )

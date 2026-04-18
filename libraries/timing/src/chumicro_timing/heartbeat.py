@@ -33,7 +33,7 @@ class Heartbeat:
             self._ticks_diff = ticks.ticks_diff
             self._last_beat_ms = ticks.ticks_ms()
         else:
-            from .ticks import ticks_diff, ticks_ms
+            from chumicro_timing.ticks import ticks_diff, ticks_ms
 
             self._ticks_diff = ticks_diff
             self._last_beat_ms = ticks_ms()

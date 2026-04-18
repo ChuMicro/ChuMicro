@@ -14,7 +14,7 @@ See ``plans/decisions/0016-cross-runtime-unit-tests.md``.
 import os
 import sys
 
-from .runner import run_module
+from chumicro_test_harness.runner import run_module
 
 
 def _is_dir(path):

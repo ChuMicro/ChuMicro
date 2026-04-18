@@ -6,7 +6,6 @@ from pathlib import Path
 
 from chumicro_device_transport.circuitpython_bootstrap import (
     _escape_source,
-    _resolve_relative_imports,
     build_circuitpython_bootstrap,
 )
 
@@ -129,21 +128,6 @@ class TestBuildCircuitpythonBootstrap:
         populate_position = result.index("_populate_module(")
         assert stub_position < populate_position
 
-    def test_resolves_relative_imports_in_source(
-        self, tmp_path: Path,
-    ) -> None:
-        """Bootstrap should rewrite relative imports to absolute."""
-        staged_sources = [
-            ("mypkg.sub", "x = 1"),
-            ("mypkg", "from .sub import x"),
-        ]
-        test_file = tmp_path / "test_example.py"
-        test_file.write_text("def test_ok(): pass")
-
-        result = build_circuitpython_bootstrap(staged_sources, test_file)
-
-        assert "from mypkg.sub import x" in result
-
     def test_does_not_call_sys_exit(self, tmp_path: Path) -> None:
         """Bootstrap should not call sys.exit (breaks mpremote cleanup)."""
         test_file = tmp_path / "test_example.py"
@@ -214,38 +198,3 @@ class TestEscapeSource:
         source = '"""docstring"""\nx = 1'
         result = _escape_source(source)
         assert eval(result) == source
-
-
-class TestResolveRelativeImports:
-    """Tests for _resolve_relative_imports."""
-
-    def test_rewrites_from_dot_module(self) -> None:
-        """Should rewrite ``from .sub import x`` to absolute."""
-        source = "from .sub import x"
-        result = _resolve_relative_imports(source, "mypkg")
-        assert result == "from mypkg.sub import x"
-
-    def test_rewrites_from_dot_import(self) -> None:
-        """Should rewrite ``from . import x`` to absolute."""
-        source = "from . import x"
-        result = _resolve_relative_imports(source, "mypkg")
-        assert result == "from mypkg import x"
-
-    def test_preserves_absolute_imports(self) -> None:
-        """Should not touch absolute imports."""
-        source = "from os.path import join"
-        result = _resolve_relative_imports(source, "mypkg")
-        assert result == source
-
-    def test_preserves_indented_relative_imports(self) -> None:
-        """Should handle indented relative imports (e.g. in if blocks)."""
-        source = "    from .sub import x"
-        result = _resolve_relative_imports(source, "mypkg")
-        assert result == "    from mypkg.sub import x"
-
-    def test_handles_multiple_relative_imports(self) -> None:
-        """Should rewrite all relative imports in the source."""
-        source = "from .alpha import a\nfrom .beta import b"
-        result = _resolve_relative_imports(source, "pkg")
-        assert "from pkg.alpha import a" in result
-        assert "from pkg.beta import b" in result

@@ -56,6 +56,6 @@ try:
 
 except ImportError:
     # No native msgpack — load the pure-Python implementation.
-    from ._pure import pack, packb, unpack, unpackb  # noqa: F401
+    from chumicro_msgpack._pure import pack, packb, unpack, unpackb  # noqa: F401
 
 __all__ = ["pack", "packb", "unpack", "unpackb"]
