@@ -64,7 +64,7 @@ jobs:
           cache: "pip"
 
       - name: Install tooling
-        run: python -m pip install --upgrade pip pytest
+        run: python -m pip install --upgrade pip pytest pyyaml
 
       - name: Run scripts infrastructure tests
         run: python scripts/run.py test-scripts
