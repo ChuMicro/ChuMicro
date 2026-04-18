@@ -68,24 +68,25 @@ class MicropythonTransport:
             harness_source: Path to the test harness ``src/`` directory.
         """
         self._staging_dir = tempfile.TemporaryDirectory(prefix="chumicro_device_")
-        self._staging_path = Path(self._staging_dir.name)
+        staging_path = Path(self._staging_dir.name)
+        self._staging_path = staging_path
 
         # Copy source packages into staging.
         for source_dir in source_dirs:
-            self._copy_tree(source_dir, self._staging_path)
+            self._copy_tree(source_dir, staging_path)
 
         # Copy harness source.
-        self._copy_tree(harness_source, self._staging_path)
+        self._copy_tree(harness_source, staging_path)
 
         # Copy test files into staging root.
         for test_file in test_files:
-            destination = self._staging_path / test_file.name
+            destination = staging_path / test_file.name
             destination.write_bytes(test_file.read_bytes())
 
         if self.mode == "copy":
             self._run_mpremote([
                 "fs", "cp", "-r",
-                str(self._staging_path) + "/.",
+                str(staging_path) + "/.",
                 ":",
             ])
 
