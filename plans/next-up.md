@@ -6,7 +6,6 @@
 
 ## Next
 
-- [ ] Device testing Phase 2: CircuitPython serial transport (pyserial raw REPL) — Decision 0027
 - [ ] Device testing Phase 3: IDE integration (pytest conftest routes `functional_tests/` to device when `CHUMICRO_DEVICE_RUNTIME` is set) — Decision 0027
 - [ ] Enable GitHub Copilot code review as a PR quality gate (low priority — defer until community contributions begin).
 - [ ] Implement `chumicro-settings` — dict-like persistent storage for microcontrollers.
@@ -33,6 +32,7 @@
 
 ## Done (recent)
 
+- [x] Device testing Phase 2: CircuitPython serial transport — `CircuitpythonTransport` (pyserial raw REPL: Ctrl-C interrupt, Ctrl-A enter, Ctrl-D execute, OK/stdout/stderr parsing), `build_circuitpython_bootstrap` (class-as-module injection, inline harness, test exec), orchestrator routing for CP devices. `pyserial` added to dev deps.
 - [x] Device testing infrastructure — Phase 1 complete (Decision 0027): `device_config.py` config loader, `result_parser.py` structured output parsing, `support/device_transport/` with `MicropythonTransport` (mount + copy modes), `name_filter` on `runner.run_module`, real `test-device` orchestration in `run.py` with `--runtime`/`--device`/`--library`/`--test` flags, `mpremote` + `pyyaml` in requirements-dev.txt. 49 new host-side tests.
 - [x] Populate "What's new" sections in library guides — all four libraries now have version entries.
 - [x] CI build and cache optimizations: `--no-isolation` build (~7x faster), MicroPython submodule pruning (87% cache size reduction), explicit pip caching for docs deploy.
