@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from chumicro_abstractions import FakeTime
 from chumicro_device_transport.circuitpython_transport import (
     _CTRL_A,
     _CTRL_C,
@@ -16,7 +17,6 @@ from chumicro_device_transport.circuitpython_transport import (
 from chumicro_device_transport.testing import (
     FakeSerialPort,
 )
-from chumicro_testing import FakeTime
 
 #: Shorthand for the standard autoreload REPL acknowledgement.
 _OK_RESPONSE = b"OK\x04\x04>"

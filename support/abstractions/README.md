@@ -1,6 +1,6 @@
-# chumicro-testing
+# chumicro-abstractions
 
-Shared time abstractions and test fakes for the ChuMicro workspace.
+Shared abstractions and test fakes for the ChuMicro workspace.
 
 This is **workspace infrastructure** — it is not published as a library.
 It provides injectable time sources for support packages (`support/`)
@@ -14,7 +14,7 @@ Production default wrapping Python's `time` module.  Provides
 `monotonic()` and `sleep()` — the same interface as `FakeTime`.
 
 ```python
-from chumicro_testing import RealTime
+from chumicro_abstractions import RealTime
 
 class MyService:
     def __init__(self, *, time=None):
@@ -28,7 +28,7 @@ Inject it wherever production code accepts a `time` parameter to
 eliminate wall-clock waits.
 
 ```python
-from chumicro_testing import FakeTime
+from chumicro_abstractions import FakeTime
 
 fake = FakeTime()
 service = MyService(time=fake)

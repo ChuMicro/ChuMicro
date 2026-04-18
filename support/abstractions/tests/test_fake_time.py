@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from chumicro_testing import FakeTime
+from chumicro_abstractions import FakeTime
 
 
 class TestFakeTimeMonotonic:
@@ -66,17 +66,16 @@ class TestFakeTimeAdvance:
 
 
 class TestFakeTimeReExport:
-    """Tests for the chumicro_testing package re-export."""
+    """Tests for the chumicro_abstractions package re-export."""
 
     def test_importable_from_package(self) -> None:
-        """FakeTime should be importable from chumicro_testing."""
-        from chumicro_testing import FakeTime as imported
+        """FakeTime should be importable from chumicro_abstractions."""
+        from chumicro_abstractions import FakeTime as imported
 
         assert imported is FakeTime
 
     def test_importable_from_fake_time_module(self) -> None:
-        """FakeTime should be importable from chumicro_testing.fake_time."""
-        from chumicro_testing.fake_time import FakeTime as imported
+        """FakeTime should be importable from chumicro_abstractions.fake_time."""
+        from chumicro_abstractions.fake_time import FakeTime as imported
 
         assert imported is FakeTime
-

@@ -21,7 +21,7 @@ class RealTime:
 
     This is the default used when no fake is injected::
 
-        from chumicro_testing import RealTime
+        from chumicro_abstractions import RealTime
 
         class MyService:
             def __init__(self, *, time=None):

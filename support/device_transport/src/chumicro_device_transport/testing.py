@@ -8,7 +8,7 @@ Also provides ``FakeSerialPort`` for testing ``CircuitpythonTransport``
 internals without real hardware::
 
     from chumicro_device_transport.testing import FakeSerialPort
-    from chumicro_testing import FakeTime
+    from chumicro_abstractions import FakeTime
 """
 
 from __future__ import annotations

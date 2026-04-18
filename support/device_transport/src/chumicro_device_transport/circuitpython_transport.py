@@ -24,7 +24,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol, cast
 
-from chumicro_testing import RealTime
+from chumicro_abstractions import RealTime
 
 _CTRL_A = b"\x01"
 _CTRL_C = b"\x03"
@@ -83,7 +83,7 @@ class CircuitpythonTransport:
             Accepts ``(port, baudrate, timeout)`` keyword arguments.
             Defaults to ``serial.Serial``.  Inject a fake for testing.
         time: Object providing ``monotonic()`` and ``sleep()`` methods.
-            Defaults to ``RealTime`` from ``chumicro_testing``.
+            Defaults to ``RealTime`` from ``chumicro_abstractions``.
             Inject ``FakeTime`` for deterministic tests with no
             wall-clock waits.
     """
