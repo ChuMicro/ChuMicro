@@ -17,23 +17,17 @@ import re
 from string import Template
 
 from shared import TEMPLATES_DIR
-from workspace import ROOT, read_pyproject_description
+from workspace import discover_doc_dirs, read_pyproject_description
 
 
 def _discover_libraries() -> list[dict]:
     """Return metadata dicts for each library with a mkdocs.yml."""
-    libraries_dir = ROOT / "libraries"
-    if not libraries_dir.is_dir():
-        return []
-
     libraries = []
-    for child in sorted(libraries_dir.iterdir()):
-        if not child.is_dir() or not (child / "mkdocs.yml").exists():
-            continue
-        name = child.name
-        description = read_pyproject_description(child)
+    for library_dir in discover_doc_dirs():
+        name = library_dir.name
+        description = read_pyproject_description(library_dir)
 
-        mkdocs_text = (child / "mkdocs.yml").read_text()
+        mkdocs_text = (library_dir / "mkdocs.yml").read_text()
         has_testing = "testing.md" in mkdocs_text
 
         libraries.append({
