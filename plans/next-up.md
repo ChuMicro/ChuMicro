@@ -2,14 +2,7 @@
 
 ## Now
 
-- [ ] Device testing infrastructure — Milestone 3, Phase 1 (Decision 0027)
-  - [ ] Create `scripts/device_config.py` — load and validate `devices.yml` + `device-config.yml`
-  - [ ] Create `support/device_transport/` package with `MicropythonTransport` (mpremote-based)
-  - [ ] Add `mpremote` to `requirements-dev.txt`
-  - [ ] Add `name_filter` parameter to `runner.run_module` for single-test execution
-  - [ ] Create `result_parser.py` for structured output parsing
-  - [ ] Replace `test-device` placeholder in `run.py` with real orchestration
-  - [ ] Write host-side tests for config loader, result parser, and transport orchestration
+(empty — pick from Next)
 
 ## Next
 
@@ -40,6 +33,7 @@
 
 ## Done (recent)
 
+- [x] Device testing infrastructure — Phase 1 complete (Decision 0027): `device_config.py` config loader, `result_parser.py` structured output parsing, `support/device_transport/` with `MicropythonTransport` (mount + copy modes), `name_filter` on `runner.run_module`, real `test-device` orchestration in `run.py` with `--runtime`/`--device`/`--library`/`--test` flags, `mpremote` + `pyyaml` in requirements-dev.txt. 49 new host-side tests.
 - [x] Populate "What's new" sections in library guides — all four libraries now have version entries.
 - [x] CI build and cache optimizations: `--no-isolation` build (~7x faster), MicroPython submodule pruning (87% cache size reduction), explicit pip caching for docs deploy.
 - [x] Documentation sync: run.py commands synced across README, AGENTS.md, and development-cli.md.

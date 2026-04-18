@@ -20,7 +20,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
-
 from workspace import ROOT
 
 #: Default path to the device registry file.

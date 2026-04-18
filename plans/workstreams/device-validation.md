@@ -70,13 +70,13 @@ Transport (Decision 0027):
 
 ### Phase 1: Configuration + MicroPython transport
 
-- [ ] Create `scripts/device_config.py` — load and validate `devices.yml` + `device-config.yml`
-- [ ] Create `support/device_transport/` package with `MicropythonTransport`
-- [ ] Add `mpremote` to `requirements-dev.txt`
-- [ ] Add `name_filter` parameter to `runner.run_module` for single-test execution
-- [ ] Create `result_parser.py` for structured output parsing
-- [ ] Replace `test-device` placeholder in `run.py` with real orchestration
-- [ ] Write host-side tests for config loader, result parser, and transport orchestration
+- [x] Create `scripts/device_config.py` — load and validate `devices.yml` + `device-config.yml`
+- [x] Create `support/device_transport/` package with `MicropythonTransport`
+- [x] Add `mpremote` to `requirements-dev.txt`
+- [x] Add `name_filter` parameter to `runner.run_module` for single-test execution
+- [x] Create `result_parser.py` for structured output parsing
+- [x] Replace `test-device` placeholder in `run.py` with real orchestration
+- [x] Write host-side tests for config loader, result parser, and transport orchestration
 
 ### Phase 2: CircuitPython serial transport
 
@@ -117,7 +117,12 @@ Current verified state:
 
 - `devices.example.yml` is now checked in
 - `device-config.example.yml` is now checked in
-- the repo has a manual `test-device` entrypoint in `scripts/run.py`
+- `scripts/device_config.py` loads and validates both config files with environment variable overrides
+- `support/device_transport/` provides `MicropythonTransport` (mount + copy modes via mpremote)
+- `scripts/result_parser.py` parses structured harness output (PASS/FAIL/SKIP/SUMMARY/HEAP)
+- `test-device` is a real orchestration command with `--runtime`, `--device`, `--library`, `--test` flags
+- `runner.run_module` supports `name_filter` for single-test execution
+- `mpremote` and `pyyaml` are in `requirements-dev.txt`
 - the repo can prepare a pinned local MicroPython unix-port runtime under `.tools/`
 - the first MicroPython-oriented compatibility command has been exercised successfully in this workspace with the prepared local runtime
 - the repo now has a real local `prepare-circuitpython` / `test-circuitpython-compat` evaluation path instead of a placeholder task

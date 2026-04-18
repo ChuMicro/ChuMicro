@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from pathlib import Path
-from types import SimpleNamespace
+from dataclasses import dataclass
 
 import pytest
-
 from chumicro_device_transport.micropython_transport import (
     MicropythonTransport,
     MicropythonTransportError,
