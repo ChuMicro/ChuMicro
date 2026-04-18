@@ -1,16 +1,18 @@
-"""Shared test fakes and helpers for the ChuMicro workspace.
+"""Shared time abstractions and test fakes for the ChuMicro workspace.
 
-This package provides deterministic fakes that are useful across
-multiple support packages and scripts tests.  It is workspace
-infrastructure — not a published library.
+This package provides injectable time sources for support packages
+and scripts.  It is workspace infrastructure — not a published library.
 
-Available fakes:
+- ``RealTime`` — production default wrapping Python's ``time`` module.
+- ``FakeTime`` — deterministic fake for host-side tests: stable clock,
+  ``sleep()`` auto-advances, ``advance()`` for explicit control.
 
-- ``FakeTime`` — deterministic seconds-domain time source that
-  bundles ``monotonic()`` and ``sleep()`` behind a single injectable.
+Production code accepts a ``time`` dependency via constructor injection
+and defaults to ``RealTime()``.  Tests inject ``FakeTime()`` to
+eliminate wall-clock waits.
 """
 
 from chumicro_testing.fake_time import FakeTime
+from chumicro_testing.real_time import RealTime
 
-__all__ = ["FakeTime"]
-
+__all__ = ["FakeTime", "RealTime"]

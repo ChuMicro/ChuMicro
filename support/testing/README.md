@@ -1,32 +1,44 @@
 # chumicro-testing
 
-Shared test fakes and helpers for the ChuMicro workspace.
+Shared time abstractions and test fakes for the ChuMicro workspace.
 
 This is **workspace infrastructure** — it is not published as a library.
-It provides deterministic fakes that are useful across multiple support
-packages (`support/`) and scripts tests (`scripts/tests/`).
+It provides injectable time sources for support packages (`support/`)
+and scripts tests (`scripts/tests/`).
 
-## Available fakes
+## Available exports
+
+### `RealTime`
+
+Production default wrapping Python's `time` module.  Provides
+`monotonic()` and `sleep()` — the same interface as `FakeTime`.
+
+```python
+from chumicro_testing import RealTime
+
+class MyService:
+    def __init__(self, *, time=None):
+        self._time = time or RealTime()
+```
 
 ### `FakeTime`
 
-Deterministic seconds-domain time source that bundles `monotonic()` and
-`sleep()` into a single injectable object.  Inject it wherever production
-code accepts a `time` parameter to eliminate wall-clock waits in tests.
+Deterministic seconds-domain time source for host-side tests.
+Inject it wherever production code accepts a `time` parameter to
+eliminate wall-clock waits.
 
 ```python
 from chumicro_testing import FakeTime
 
 fake = FakeTime()
-transport = SomeTransport(time=fake)
+service = MyService(time=fake)
 
 fake.advance(5.0)  # simulate 5 seconds passing
 ```
 
 ## Why not in a published library?
 
-`FakeTime` fakes Python's `time` module — that's host-side CPython
-infrastructure.  It does not belong in a published library like
-`chumicro-timing`, which ships `FakeTicks` for the tick-domain contract
-that runs on CircuitPython and MicroPython boards.
-
+These abstractions wrap Python's `time` module — that's host-side
+CPython infrastructure.  They do not belong in a published library
+like `chumicro-timing`, which ships `FakeTicks` for the tick-domain
+contract that runs on CircuitPython and MicroPython boards.
