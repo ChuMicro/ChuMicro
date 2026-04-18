@@ -14,5 +14,7 @@ hatchling
 griffe
 tomli; python_version < "3.11"
 zensical
+pyyaml
+mpremote
 mike @ git+https://github.com/squidfunk/mike.git
 mkdocstrings[python]
