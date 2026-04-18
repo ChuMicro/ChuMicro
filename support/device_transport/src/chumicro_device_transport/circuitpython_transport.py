@@ -82,12 +82,12 @@ class _RealTime:
     @staticmethod
     def monotonic() -> float:  # pragma: no cover
         """Return ``time.monotonic()``."""
-        return _time_module.monotonic()
+        return _time_module.monotonic()  # type: ignore[attr-defined]
 
     @staticmethod
     def sleep(duration: float) -> None:  # pragma: no cover
         """Call ``time.sleep(duration)``."""
-        _time_module.sleep(duration)
+        _time_module.sleep(duration)  # type: ignore[attr-defined]
 
 
 class CircuitpythonTransportError(Exception):
