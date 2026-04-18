@@ -1037,9 +1037,16 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-#: Tasks that accept ``--all`` / ``--libraries`` scope flags and operate
-#: on a resolved list of package directories rather than the entire workspace.
-_SCOPED_TASKS = frozenset({"test", "verify-examples", "docs", "docs-preview"})
+def _resolve_scoped_packages(args) -> list[Path]:
+    """Resolve package directories for tasks that accept scope flags.
+
+    Args:
+        args: Parsed CLI arguments (must have ``all_packages`` and
+            ``libraries``).
+    """
+    return resolve_scope(
+        all_packages=args.all_packages, libraries=args.libraries,
+    )
 
 
 def main(argv: list[str]) -> int:
@@ -1051,46 +1058,46 @@ def main(argv: list[str]) -> int:
         parser.print_help()
         return 1
 
-    # --- scoped tasks ---
-    if args.task in _SCOPED_TASKS:
-        if args.task == "test" and args.filter_expression:
+    # --- scoped tasks (--all / --libraries) ---
+
+    if args.task == "test":
+        if args.filter_expression:
             # -k provides its own library scope via the filter expression,
             # so skip resolve_scope() to avoid a misleading "Running for
             # all packages" message that would immediately be overridden.
             package_dirs = []
         else:
-            package_dirs = resolve_scope(
-                all_packages=args.all_packages, libraries=args.libraries,
-            )
-        if args.task == "test":
-            return test_cpython(
-                package_dirs,
-                filter_expression=args.filter_expression,
-                exit_first=args.exit_first,
-                verbose=args.verbose,
-                no_cov=args.no_cov,
-                coverage_threshold=args.coverage_threshold,
-            )
-        if args.task == "verify-examples":
-            return verify_examples(package_dirs)
-        if args.task == "docs-preview":
-            return docs_preview(package_dirs)
-        return docs(package_dirs, serve=args.serve)
+            package_dirs = _resolve_scoped_packages(args)
+        return test_cpython(
+            package_dirs,
+            filter_expression=args.filter_expression,
+            exit_first=args.exit_first,
+            verbose=args.verbose,
+            no_cov=args.no_cov,
+            coverage_threshold=args.coverage_threshold,
+        )
 
-    # --- new-library ---
+    if args.task == "verify-examples":
+        return verify_examples(_resolve_scoped_packages(args))
+
+    if args.task == "docs":
+        return docs(_resolve_scoped_packages(args), serve=args.serve)
+
+    if args.task == "docs-preview":
+        return docs_preview(_resolve_scoped_packages(args))
+
+    # --- tasks with specific arguments ---
+
     if args.task == "new-library":
         return new_library(args.name)
 
-    # --- test-scripts ---
     if args.task == "test-scripts":
         return test_scripts(exit_first=args.exit_first, verbose=args.verbose)
 
-    # --- docs-deploy ---
     if args.task == "docs-deploy":
         library_filter = args.libraries.split(",") if args.libraries else None
         return docs_deploy(args.channel, libraries=library_filter)
 
-    # --- validate-mip ---
     if args.task == "validate-mip":
         return validate_mip(
             bundle_repo=args.bundle_repo,
@@ -1099,26 +1106,24 @@ def main(argv: list[str]) -> int:
             staging_dir=args.staging_dir,
         )
 
-    # --- tasks that accept runtime binary overrides ---
-    if args.task in {
-        "preflight", "test-micropython-compatibility",
-        "test-circuitpython-compatibility", "test-runtime-matrix",
-    }:
-        micropython_binary = args.micropython_binary
-        circuitpython_binary = args.circuitpython_binary
-        if args.task == "test-micropython-compatibility":
-            return test_micropython_compatibility(micropython_binary)
-        if args.task == "test-circuitpython-compatibility":
-            return test_circuitpython_compatibility(circuitpython_binary)
-        if args.task == "test-runtime-matrix":
-            return test_runtime_matrix(micropython_binary, circuitpython_binary)
+    if args.task == "preflight":
         return preflight(
-            micropython_binary,
-            circuitpython_binary,
+            args.micropython_binary,
+            args.circuitpython_binary,
             coverage_threshold=args.coverage_threshold,
         )
 
-    # --- test-device ---
+    if args.task == "test-micropython-compatibility":
+        return test_micropython_compatibility(args.micropython_binary)
+
+    if args.task == "test-circuitpython-compatibility":
+        return test_circuitpython_compatibility(args.circuitpython_binary)
+
+    if args.task == "test-runtime-matrix":
+        return test_runtime_matrix(
+            args.micropython_binary, args.circuitpython_binary,
+        )
+
     if args.task == "test-device":
         return test_device(
             runtime=args.runtime,
