@@ -56,6 +56,19 @@ class SerialPort(Protocol):
     def reset_input_buffer(self) -> None: ...
 
 
+class TimeSource(Protocol):
+    """Structural interface for a time source.
+
+    Both ``_RealTime`` and ``FakeTime`` from ``chumicro_testing``
+    satisfy this protocol.  Using a protocol instead of ``object``
+    gives the IDE full type information for ``monotonic()`` and
+    ``sleep()`` calls.
+    """
+
+    def monotonic(self) -> float: ...
+    def sleep(self, duration: float) -> None: ...
+
+
 class _RealTime:
     """Thin wrapper around the ``time`` module.
 
@@ -116,7 +129,7 @@ class CircuitpythonTransport:
         mode: str = "ram",
         circuitpy_drive_path: str | None = None,
         serial_port_factory: Callable[..., object] | None = None,
-        time: object | None = None,
+        time: TimeSource | None = None,
     ) -> None:
         self.address = address
         self.baudrate = baudrate
@@ -126,7 +139,7 @@ class CircuitpythonTransport:
         self._serial_port_factory: Callable[..., object] = (
             serial_port_factory or self._default_serial_factory
         )
-        self._time = time or _RealTime()
+        self._time: TimeSource = time or _RealTime()
         self._port: SerialPort | None = None
         self._staged_sources: list[tuple[str, str]] | None = None
 
