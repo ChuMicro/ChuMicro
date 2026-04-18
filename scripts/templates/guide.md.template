@@ -1,0 +1,62 @@
+# User Guide
+
+<!-- GENERATION INSTRUCTIONS — delete this block once the guide is written.
+
+     This guide should be generated from the library's source code, docstrings,
+     tests, and examples.  See the guide-generation skill for the
+     full prompt an AI agent can use.  Every section below is required unless
+     marked conditional.  Do not leave placeholder comments in the final guide. -->
+
+## Overview
+
+<!-- Required. 2-4 sentences: what the library does, why it exists, the core
+     concept. Name the key classes/functions. -->
+
+## Getting started
+
+<!-- Required. The most common usage pattern as a copy-pasteable snippet.
+     Import from the public package, not internal modules. -->
+
+## Runner pattern
+
+<!-- Conditional. Include if the library has classes that implement
+     check(now_ms) -> bool. Show how to wire them into a Runner.
+     Omit if not applicable. -->
+
+## Memory notes
+
+<!-- Conditional. Include if the library manages buffers, queues, or
+     pre-allocated structures. Explain allocation strategy and tuning. -->
+
+## Platform notes
+
+<!-- Required. Runtime-specific behavior or limitations. If the library works
+     identically on all three runtimes, say so in one line. -->
+
+## Examples
+
+<!-- Required. List all examples from the examples/ directory in a table:
+     | Example | What it shows |
+     Note which are simulated (CPython) vs hardware. -->
+
+## What's new
+
+<!-- Add entries for user-visible changes when bumping VERSION.
+     One bullet per change. Internal refactors don't need entries.
+     At stable promotion, collapse/edit as needed. -->
+
+*No changes yet — this section will be updated with each release.*
+
+---
+
+<div class="chumicro-footer" markdown>
+
+[← Home](index.md)
+
+[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/{name}) · \
+[PyPI](https://pypi.org/project/chumicro-{name}/) · \
+[Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · \
+[Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
+
+</div>
+

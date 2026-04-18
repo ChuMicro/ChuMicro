@@ -16,8 +16,25 @@ Called via ``python scripts/run.py sync-ide`` or automatically after
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from workspace import ROOT, discover_package_dirs, discover_source_roots
+
+# ---------------------------------------------------------------------------
+# Template loading
+# ---------------------------------------------------------------------------
+
+_TEMPLATES_DIR = Path(__file__).parent / "templates"
+
+
+def _load_template(filename: str) -> str:
+    """Read a template file from the ``scripts/templates/`` directory.
+
+    Args:
+        filename: Template filename (e.g. ``"run_config.xml.template"``).
+    """
+    return (_TEMPLATES_DIR / filename).read_text()
+
 
 # ---------------------------------------------------------------------------
 # Managed task definitions — shared between PyCharm and VS Code
@@ -52,18 +69,6 @@ _DEFAULT_BUILD_TASK = "Preflight"
 # PyCharm run configurations
 # ---------------------------------------------------------------------------
 
-_RUN_CONFIG_TEMPLATE = """\
-<component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="{name}" type="PythonConfigurationType" factoryName="Python">
-    <module name="chumicro" />
-    <option name="SCRIPT_NAME" value="$PROJECT_DIR$/{script}" />
-    <option name="PARAMETERS" value="{parameters}" />
-    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
-    <method v="2" />
-  </configuration>
-</component>
-"""
-
 
 def _config_filename(name: str) -> str:
     """Derive the XML filename from a run configuration display name.
@@ -83,11 +88,13 @@ def _sync_run_configurations() -> None:
     run_config_dir = ROOT / ".idea" / "runConfigurations"
     run_config_dir.mkdir(parents=True, exist_ok=True)
 
+    template = _load_template("run_config.xml.template")
+
     managed_filenames: set[str] = set()
     for name, script, parameters, _group in _TASKS:
         filename = _config_filename(name)
         managed_filenames.add(filename)
-        content = _RUN_CONFIG_TEMPLATE.format(
+        content = template.format(
             name=name, script=script, parameters=parameters,
         )
         (run_config_dir / filename).write_text(content)
@@ -171,12 +178,7 @@ def _sync_pycharm_iml() -> None:
     iml_file = ROOT / ".idea" / "chumicro.iml"
 
     # Preserve the existing SDK reference so users keep their interpreter
-    # setting across regenerations.  PyCharm stores the project SDK as a
-    # line containing type="jdk" (its internal name for the Python
-    # interpreter entry).  We scan for it with text search rather than
-    # XML parsing to avoid adding a dependency on lxml/ElementTree for
-    # this single line.  Losing this entry would reset the user's
-    # interpreter selection in the IDE.
+    # setting across regenerations.
     jdk_line = ""
     if iml_file.exists():
         for line in iml_file.read_text().splitlines():
@@ -198,9 +200,6 @@ def _sync_pycharm_iml() -> None:
                     f' isTestSource="{is_test}" />'
                 )
 
-    # scripts/ is a source root (bare-name imports like ``from workspace
-    # import ROOT``) and scripts/tests/ is a test root so the IDE test
-    # runner discovers infrastructure tests.
     source_lines.append(
         '      <sourceFolder url="file://$MODULE_DIR$/scripts" isTestSource="false" />'
     )
@@ -211,22 +210,9 @@ def _sync_pycharm_iml() -> None:
 
     sources = "\n".join(source_lines)
     jdk_entry = f"\n{jdk_line}" if jdk_line else ""
-    # Two-phase interpolation: the template uses f-string for {sources}
-    # but defers {jdk} to .format() because the XML content contains
-    # literal curly braces that would conflict with f-string syntax.
-    content = (
-        '<?xml version="1.0" encoding="UTF-8"?>\n'
-        '<module type="PYTHON_MODULE" version="4">\n'
-        '  <component name="NewModuleRootManager">\n'
-        '    <content url="file://$MODULE_DIR$">\n'
-        f"{sources}\n"
-        '      <excludeFolder url="file://$MODULE_DIR$/.venv" />\n'
-        '      <excludeFolder url="file://$MODULE_DIR$/.tools" />\n'
-        "    </content>{jdk}\n"
-        '    <orderEntry type="sourceFolder" forTests="false" />\n'
-        "  </component>\n"
-        "</module>\n"
-    ).format(jdk=jdk_entry)
+    content = _load_template("chumicro.iml.template").format(
+        sources=sources, jdk=jdk_entry,
+    )
 
     iml_file.parent.mkdir(parents=True, exist_ok=True)
     iml_file.write_text(content)

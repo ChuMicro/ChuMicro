@@ -1,0 +1,82 @@
+<p align="center">
+  <a href="{source_url}"><img src="{logo_url}" width="420" alt="ChuMicro" /></a>
+</p>
+<h1 align="center">{bundle_repo}</h1>
+
+<p align="center">
+  <strong>{channel} bundle for <a href="{source_url}">ChuMicro</a> &mdash; install any library on CircuitPython, MicroPython, or CPython.</strong>
+</p>
+
+<p align="center">
+  <a href="{docs_url}">Docs</a> &bull;
+  <a href="{source_url}">Source</a> &bull;
+  <a href="{alt_repo_url}">{alt_channel} Bundle</a>
+</p>
+{banner_block}
+
+## Get started
+
+Swap `chumicro-timing` for whichever library you need.
+
+**CircuitPython ([circup](https://github.com/adafruit/circup)):**
+
+circup is CircuitPython's package manager — it uses [bundles](https://learn.adafruit.com/keep-your-circuitpython-libraries-on-devices-up-to-date-with-circup/bundle-commands) to find third-party packages. Register the ChuMicro bundle once, then install any library by name:
+
+```bash
+circup bundle-add {github_org}/{bundle_repo}
+circup install chumicro-timing
+```
+
+> If you previously registered the {alt_channel_lower} bundle, remove it first — circup may pick either version when both are active:
+> ```
+> circup bundle-remove {github_org}/{alt_repo}
+> ```
+
+**MicroPython ([mip](https://docs.micropython.org/en/latest/reference/packages.html)):**
+
+```bash
+mpremote mip install github:{github_org}/{bundle_repo}/chumicro_timing
+```
+
+Or from the REPL on a network-capable board:
+
+```python
+import mip
+mip.install("github:{github_org}/{bundle_repo}/chumicro_timing")
+```
+
+> **Want pre-compiled `.mpy` bytecode?** Add `{mpy_format_folder}/` before the package name for faster startup and lower RAM usage on boards with mpy format v6 (MicroPython 1.24+):
+> ```
+> mpremote mip install github:{github_org}/{bundle_repo}/{mpy_format_folder}/chumicro_timing
+> ```
+
+**CPython (pip):**
+
+On your laptop, install from PyPI — no bundle needed:
+
+```bash
+pip install chumicro-timing{pip_suffix}
+```
+
+## What's in the bundle?
+
+| Library | Version | Description |
+| --- | --- | --- |
+{library_rows}
+
+Each root directory contains `.py` source and a `package.json` manifest for mip.  Pre-compiled `.mpy` bytecode is stored in two runtime-specific directories:
+
+- **`{cp_mpy_folder}/`** — compiled with CircuitPython's mpy-cross, used by circup zip bundles.
+- **`{mpy_format_folder}/`** — compiled with MicroPython's mpy-cross, installable via `mip`.
+
+CircuitPython and MicroPython `.mpy` files are not interchangeable — each runtime's mpy-cross embeds a different magic byte in the header.
+
+## About
+
+This repo is generated automatically by the [ChuMicro release workflow]({source_url}/blob/main/.github/workflows/release.yml). Don't edit it by hand — changes will be overwritten on the next release.
+
+- **Source code and examples:** [{github_org}/{source_repo}]({source_url})
+- **Documentation:** [chumicro.github.io/ChuMicro]({docs_url})
+- **{alt_channel} bundle:** [{github_org}/{alt_repo}]({alt_repo_url})
+- **License:** [MIT](LICENSE)
+

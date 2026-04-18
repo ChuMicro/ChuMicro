@@ -74,6 +74,8 @@ MPY_FORMAT_FOLDER = "mpy6"
 #: by circup via zip bundles.  See Decision 0024.
 CP_MPY_FOLDER = "circuitpython-10.x-mpy"
 
+_TEMPLATES_DIR = Path(__file__).parent / "templates"
+
 
 def _find_bundle_modules(library_dir: Path) -> tuple[str, Path, list[Path]]:
     """Discover the package name, package dir, and deployable .py files.
@@ -556,104 +558,25 @@ def generate_bundle_readme(
 
     logo_url = f"https://raw.githubusercontent.com/{GITHUB_ORG}/{_SOURCE_REPO}/main/support/docs/chumicro.png"
 
-    return f"""\
-<p align="center">
-  <a href="{source_url}"><img src="{logo_url}" width="420" alt="ChuMicro" /></a>
-</p>
-<h1 align="center">{bundle_repo}</h1>
-
-<p align="center">
-  <strong>{channel} bundle for <a href="{source_url}">ChuMicro</a> &mdash; \
-install any library on CircuitPython, MicroPython, or CPython.</strong>
-</p>
-
-<p align="center">
-  <a href="{docs_url}">Docs</a> &bull;
-  <a href="{source_url}">Source</a> &bull;
-  <a href="{alt_repo_url}">{alt_channel} Bundle</a>
-</p>
-{banner_block}
-
-## Get started
-
-Swap `chumicro-timing` for whichever library you need.
-
-**CircuitPython ([circup](https://github.com/adafruit/circup)):**
-
-circup is CircuitPython's package manager — \
-it uses [bundles]\
-(https://learn.adafruit.com/keep-your-circuitpython-libraries-on-devices-up-to-date-with-circup\
-/bundle-commands) to find third-party packages. Register the ChuMicro bundle once, \
-then install any library by name:
-
-```bash
-circup bundle-add {GITHUB_ORG}/{bundle_repo}
-circup install chumicro-timing
-```
-
-> If you previously registered the {alt_channel.lower()} bundle, remove it first — \
-circup may pick either version when both are active:
-> ```
-> circup bundle-remove {GITHUB_ORG}/{alt_repo}
-> ```
-
-**MicroPython ([mip](https://docs.micropython.org/en/latest/reference/packages.html)):**
-
-```bash
-mpremote mip install github:{GITHUB_ORG}/{bundle_repo}/chumicro_timing
-```
-
-Or from the REPL on a network-capable board:
-
-```python
-import mip
-mip.install("github:{GITHUB_ORG}/{bundle_repo}/chumicro_timing")
-```
-
-> **Want pre-compiled `.mpy` bytecode?** Add `{MPY_FORMAT_FOLDER}/` before the package name \
-for faster startup and lower RAM usage on boards with mpy format v6 \
-(MicroPython 1.24+):
-> ```
-> mpremote mip install github:{GITHUB_ORG}/{bundle_repo}/{MPY_FORMAT_FOLDER}/chumicro_timing
-> ```
-
-**CPython (pip):**
-
-On your laptop, install from PyPI — no bundle needed:
-
-```bash
-pip install chumicro-timing{pip_suffix}
-```
-
-## What's in the bundle?
-
-| Library | Version | Description |
-| --- | --- | --- |
-{library_rows}
-
-Each root directory contains `.py` source and a `package.json` manifest \
-for mip.  Pre-compiled `.mpy` bytecode is stored in two runtime-specific \
-directories:
-
-- **`{CP_MPY_FOLDER}/`** — compiled with CircuitPython's mpy-cross, \
-used by circup zip bundles.
-- **`{MPY_FORMAT_FOLDER}/`** — compiled with MicroPython's mpy-cross, \
-installable via `mip`.
-
-CircuitPython and MicroPython `.mpy` files are not interchangeable — each \
-runtime's mpy-cross embeds a different magic byte in the header.
-
-## About
-
-This repo is generated automatically by the \
-[ChuMicro release workflow]({source_url}/blob/main/.github/workflows/release.yml). \
-Don't edit it by hand — changes will be overwritten on the next release.
-
-- **Source code and examples:** [{GITHUB_ORG}/{_SOURCE_REPO}]({source_url})
-- **Documentation:** [chumicro.github.io/ChuMicro]({docs_url})
-- **{alt_channel} bundle:** [{GITHUB_ORG}/{alt_repo}]({alt_repo_url})
-- **License:** [MIT](LICENSE)
-"""
+    template_text = (_TEMPLATES_DIR / "bundle_readme.md.template").read_text()
+    return template_text.format(
+        source_url=source_url,
+        logo_url=logo_url,
+        bundle_repo=bundle_repo,
+        channel=channel,
+        docs_url=docs_url,
+        alt_repo_url=alt_repo_url,
+        alt_channel=alt_channel,
+        banner_block=banner_block,
+        github_org=GITHUB_ORG,
+        alt_repo=alt_repo,
+        alt_channel_lower=alt_channel.lower(),
+        mpy_format_folder=MPY_FORMAT_FOLDER,
+        cp_mpy_folder=CP_MPY_FOLDER,
+        pip_suffix=pip_suffix,
+        library_rows=library_rows,
+        source_repo=_SOURCE_REPO,
+    )
 
 
 def patch_experimental(library_dir: Path) -> None:
