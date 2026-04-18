@@ -16,10 +16,11 @@ devices:
     serial_baudrate: 115200
     setup_command: null
     # Path to the CIRCUITPY USB drive mount point on the host.
-    # Required for flash deploy mode (--deploy-mode flash).
+    # Used for flash deploy mode (--deploy-mode flash).
+    # Auto-detected if omitted; set explicitly with multiple boards.
     # circuitpy_drive_path: /Volumes/CIRCUITPY
-    # For WiFi-enabled boards, the Web Workflow REST API can be used
-    # as an alternative transport for file staging:
+    # Web Workflow REST API transport is not yet implemented.
+    # These fields are reserved for future use:
     # web_workflow:
     #   host: "192.168.1.42"
     #   port: 80

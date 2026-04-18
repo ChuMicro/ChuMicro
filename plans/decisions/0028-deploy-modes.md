@@ -51,9 +51,7 @@ Flash mode in `disconnect()`:
 
 ### CircuitPython drive path configuration
 
-A new optional `circuitpy_drive_path` field in `devices.yml` specifies where the CIRCUITPY USB drive is mounted on the host (e.g. `/Volumes/CIRCUITPY`).  Required for flash mode; ignored for RAM mode.
-
-Auto-detection is deferred — explicit configuration avoids ambiguity with multiple boards.
+A new optional `circuitpy_drive_path` field in `devices.yml` specifies where the CIRCUITPY USB drive is mounted on the host (e.g. `/Volumes/CIRCUITPY`).  When omitted, `find_circuitpy_drive()` auto-detects the drive by checking common mount points on macOS (`/Volumes/CIRCUITPY`) and Linux (`/media/<user>/CIRCUITPY`, `/run/media/<user>/CIRCUITPY`).  Explicit paths take precedence and are recommended when multiple boards are connected.
 
 ### Future: `chumicro-deploy` pip package
 
@@ -71,7 +69,7 @@ This is intentionally deferred.  The current work shapes the transport API to ma
 - `CircuitpythonTransport` gains `mode` and `circuitpy_drive_path` parameters.
 - `DeviceEntry` gains a `circuitpy_drive_path` field.
 - `--deploy-mode` becomes the user-facing flag; `transport_mode` remains for device-level defaults.
-- Flash mode for CircuitPython requires `circuitpy_drive_path` in the device config.
+- Flash mode for CircuitPython uses `circuitpy_drive_path` from device config, falling back to auto-detection via `find_circuitpy_drive()`.
 - The transport API's `stage()`/`execute()`/`disconnect()` protocol remains stable — mode is an internal concern.
 - The `chumicro-deploy` package and project template are recorded as future work in `open-questions.md`.
 

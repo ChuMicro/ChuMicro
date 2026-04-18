@@ -8,7 +8,7 @@ Related: Decision 0003, Decision 0016, Decision 0015
 
 Milestone 3 requires deploying and validating code on real MicroPython and CircuitPython boards.  The workspace has host-side pytest, cross-runtime unix-port tests, and `functional_tests/` directories per library — but no transport layer, no device configuration schema, and no way to run functional tests on hardware from the IDE or command line.
 
-MicroPython has `mpremote` (official, well-maintained, pip-installable).  CircuitPython has no equivalent — options are CIRCUITPY USB copy, Web Workflow REST API, and serial raw-paste-mode execution via pyserial.
+MicroPython has `mpremote` (official, well-maintained, pip-installable).  CircuitPython has no equivalent — options are CIRCUITPY USB copy and serial raw-REPL execution via pyserial.
 
 ## Decision
 
@@ -54,9 +54,8 @@ Uses `pyserial` to drive raw REPL (Ctrl-A mode, **not** raw paste mode):
 
 File staging options, in priority order:
 
-1. **Inline send** — exec library source + test code into raw REPL as a single code block.  Validated at 10KB+ on ESP32-S2.  No file copy needed.
-2. **Web Workflow REST API** — for WiFi-enabled boards running CP 8+, `PUT /fs/` to upload files, then execute via serial.
-3. **CIRCUITPY USB copy** — copy to mounted drive.  Unreliable for automation; defer to later phase.
+1. **Inline send** (RAM mode) — exec library source + test code into raw REPL as a single code block.  Validated at 10KB+ on ESP32-S2.  No file copy needed.
+2. **CIRCUITPY USB copy** (flash mode, Decision 0028) — copy files to mounted CIRCUITPY drive with autoreload control via raw REPL.  Auto-detected via `find_circuitpy_drive()` or configured via `circuitpy_drive_path`.
 
 Module injection for `from chumicro_X import Y` uses the **class-as-module** pattern: exec source into a plain dict, copy attributes to a class via `setattr`, register the class in `sys.modules`.  Python's import system accepts any object with attributes.
 
