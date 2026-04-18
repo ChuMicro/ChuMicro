@@ -144,14 +144,14 @@ class TestBuildCircuitpythonBootstrap:
 
         assert "from mypkg.sub import x" in result
 
-    def test_exits_with_result_code(self, tmp_path: Path) -> None:
-        """Bootstrap should exit with the run_module return code."""
+    def test_does_not_call_sys_exit(self, tmp_path: Path) -> None:
+        """Bootstrap should not call sys.exit (breaks mpremote cleanup)."""
         test_file = tmp_path / "test_example.py"
         test_file.write_text("def test_ok(): pass")
 
         result = build_circuitpython_bootstrap([], test_file)
 
-        assert "sys.exit(_exit_code)" in result
+        assert "sys.exit" not in result
 
     def test_generated_code_is_valid_python(self, tmp_path: Path) -> None:
         """The generated bootstrap should parse as valid Python."""

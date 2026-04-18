@@ -78,12 +78,10 @@ def build_bootstrap(
     """
     filter_repr = repr(name_filter) if name_filter else "None"
     return (
-        "import sys\n"
         "from chumicro_test_harness.runner import run_module\n"
         "from chumicro_test_harness.discovery import _exec_as_namespace\n"
         f"module = _exec_as_namespace('{test_filename}')\n"
-        f"result = run_module(module, name_filter={filter_repr})\n"
-        "sys.exit(result)\n"
+        f"run_module(module, name_filter={filter_repr})\n"
     )
 
 

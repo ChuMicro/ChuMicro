@@ -166,10 +166,8 @@ def build_circuitpython_bootstrap(
         "from chumicro_test_harness.runner import run_module"
     )
     lines.append(
-        f"_exit_code = run_module(_TestModule, name_filter={filter_repr})"
+        f"run_module(_TestModule, name_filter={filter_repr})"
     )
-    lines.append("import sys as _sys")
-    lines.append("_sys.exit(_exit_code)")
 
     return "\n".join(lines) + "\n"
 
