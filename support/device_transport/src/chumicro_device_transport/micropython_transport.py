@@ -178,4 +178,3 @@ class MicropythonTransport:
                 MicropythonTransport._copy_tree(child, target)
             elif child.is_file():
                 target.write_bytes(child.read_bytes())
-

@@ -62,4 +62,3 @@ class TestSyncIde:
         assert config_dir.is_dir()
         xml_files = list(config_dir.glob("*.xml"))
         assert len(xml_files) > 0
-

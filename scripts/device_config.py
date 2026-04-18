@@ -211,4 +211,3 @@ def filter_devices(
     if device_id:
         result = [device for device in result if device.identifier == device_id]
     return result
-

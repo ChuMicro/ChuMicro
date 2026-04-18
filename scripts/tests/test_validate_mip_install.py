@@ -127,5 +127,3 @@ class TestResolveLibraryNames:
         )
         result = _resolve_library_names("")
         assert result == ["timing"]
-
-

@@ -292,4 +292,3 @@ def test_run_all_counts_failed_test_modules(tmp_path, capsys):
     assert result == 1
     output = capsys.readouterr().out
     assert "FAIL test_boom" in output
-

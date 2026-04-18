@@ -260,4 +260,3 @@ class TestFakeTransport:
         assert fake.connected
         fake.disconnect()
         assert not fake.connected
-

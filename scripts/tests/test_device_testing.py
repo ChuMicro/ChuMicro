@@ -233,4 +233,3 @@ class TestBuildDeviceBootstrap:
         )
         assert "_inject_module" not in bootstrap
         assert "run_module" in bootstrap
-

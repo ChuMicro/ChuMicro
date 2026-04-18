@@ -123,4 +123,3 @@ def parse_output(raw_output: str) -> RunResult:
             )
 
     return result
-

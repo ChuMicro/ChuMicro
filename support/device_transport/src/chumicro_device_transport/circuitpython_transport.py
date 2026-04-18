@@ -86,7 +86,6 @@ class SerialPort(Protocol):
     def reset_input_buffer(self) -> None: ...
 
 
-
 class CircuitpythonTransportError(Exception):
     """Raised when a CircuitPython serial operation fails."""
 
@@ -509,4 +508,3 @@ class CircuitpythonTransport:
             )
 
         return stdout_text
-

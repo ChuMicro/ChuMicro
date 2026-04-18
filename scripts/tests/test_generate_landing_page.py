@@ -90,4 +90,3 @@ class TestGenerate:
         assert "Stable" in html
         assert "Experimental" in html
         assert "ChuMicro-Bundle" in html
-

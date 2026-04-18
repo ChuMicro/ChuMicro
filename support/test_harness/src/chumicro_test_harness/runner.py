@@ -36,7 +36,6 @@ def _has_mem_free():
 _MEM_FREE_AVAILABLE = _has_mem_free()
 
 
-
 def _iter_test_functions(module: object):
 	"""Yield `(name, function)` pairs for callable module attributes named `test_*`.
 

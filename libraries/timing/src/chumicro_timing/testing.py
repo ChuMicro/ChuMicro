@@ -112,4 +112,3 @@ class FakeTicks:
         if not (-TICKS_HALFPERIOD < delta < TICKS_HALFPERIOD):
             raise OverflowError("ticks interval overflow")
         return (ticks_val + delta) % TICKS_PERIOD
-

@@ -307,4 +307,3 @@ class TestResolveMpMpyCross:
         monkeypatch.setattr("shared.shutil.which", lambda _name: None)
         result = resolve_mp_mpy_cross()
         assert result is None
-

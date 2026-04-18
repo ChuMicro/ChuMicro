@@ -1009,4 +1009,3 @@ class TestFindCircuitpyDrive:
         assert (fake_drive / "lib").is_dir()
 
         transport.disconnect()
-

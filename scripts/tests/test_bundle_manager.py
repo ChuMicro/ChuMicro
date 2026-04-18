@@ -354,4 +354,3 @@ class TestBundleRepoConstants:
     def test_experimental_repo_name(self):
         """Experimental bundle repo has expected name."""
         assert EXPERIMENTAL_BUNDLE_REPO == "ChuMicro-Bundle-Experimental"
-

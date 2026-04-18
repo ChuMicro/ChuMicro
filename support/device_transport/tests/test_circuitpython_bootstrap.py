@@ -182,4 +182,3 @@ class TestEscapeSource:
         source = '"""docstring"""\nx = 1'
         result = _escape_source(source)
         assert eval(result) == source
-

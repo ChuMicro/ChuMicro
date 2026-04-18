@@ -81,4 +81,3 @@ class TestBumpLevel:
     def test_minor_bump_resets_patch(self):
         """Minor bump with lower patch is still minor."""
         assert _bump_level("1.2.9", "1.3.0") == "minor"
-

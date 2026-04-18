@@ -226,4 +226,3 @@ class TestFilterDevices:
         """A filter that matches nothing should return an empty list."""
         result = filter_devices(sample_devices, device_id="nonexistent")
         assert result == []
-

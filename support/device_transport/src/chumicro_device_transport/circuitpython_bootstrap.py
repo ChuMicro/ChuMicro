@@ -126,4 +126,3 @@ def _escape_source(source_text: str) -> str:
     # For large sources, this is still more reliable than triple-quotes
     # which could contain unescaped triple-quote sequences.
     return repr(source_text)
-

@@ -114,4 +114,3 @@ class FakeTransport:
         """Record a disconnect call."""
         self.calls.append(("disconnect", ()))
         self.connected = False
-

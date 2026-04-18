@@ -349,7 +349,6 @@ def release_tags(library_name: str) -> list[str]:
     return result.stdout.strip().splitlines()
 
 
-
 def pythonpath_environment() -> dict[str, str]:
     """Return an environment with the repository source roots prepended to PYTHONPATH.
 

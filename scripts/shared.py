@@ -324,4 +324,3 @@ def resolve_mp_mpy_cross(binary: str | None = None) -> str | None:
         if candidate.exists():
             return str(candidate)
     return shutil.which("mpy-cross")
-

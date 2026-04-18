@@ -333,4 +333,3 @@ def test_device(
     print(f"{'=' * 60}")
 
     return 1 if (total_failed or total_errors) else 0
-

@@ -78,4 +78,3 @@ class FakeTime:
             seconds: Seconds to advance.
         """
         self._current += seconds
-

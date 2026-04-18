@@ -21,4 +21,3 @@ for parent in [ROOT / "support", ROOT / "libraries"]:
         source = child / "src"
         if source.is_dir() and str(source) not in sys.path:
             sys.path.insert(0, str(source))
-

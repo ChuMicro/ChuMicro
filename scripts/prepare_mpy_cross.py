@@ -140,4 +140,3 @@ def prepare_mpy_cross() -> int:
         return 1
 
     return 0
-

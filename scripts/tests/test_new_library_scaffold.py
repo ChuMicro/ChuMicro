@@ -94,4 +94,3 @@ class TestScaffoldLibrary:
         ).read_text()
         assert "def test_default_value" in test_content
         assert "def test_update" in test_content
-

@@ -163,7 +163,6 @@ def inject_landing_page(branch: str) -> None:
     )
 
 
-
 def docs_deploy(
     channel: str,
     *,

@@ -18,6 +18,7 @@ from pathlib import Path
 from check_api import main as check_api_main
 from check_names import main as check_names_main
 from check_version import main as check_version_main
+from check_whitespace import main as check_whitespace_main
 from docs_deploy import (
     MIKE,
     copy_shared_docs_assets,
@@ -57,7 +58,6 @@ PYTHON = sys.executable
 COMPAT_SCRIPT = "support/test_harness/run_cross_runtime.py"
 
 
-
 # ---------------------------------------------------------------------------
 # Tasks
 # ---------------------------------------------------------------------------
@@ -90,11 +90,14 @@ def setup() -> int:
 
 
 def lint() -> int:
-    """Run Ruff and the single-letter name check across all source paths."""
+    """Run Ruff, the single-letter name check, and whitespace checks across all source paths."""
     ruff_result = run_command([PYTHON, "-m", "ruff", "check", *discover_ruff_paths()])
     if ruff_result != 0:
         return ruff_result
-    return check_names_main()
+    names_result = check_names_main()
+    if names_result != 0:
+        return names_result
+    return check_whitespace_main()
 
 
 def _parse_library_filters(

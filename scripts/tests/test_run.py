@@ -57,4 +57,3 @@ class TestParseLibraryFilters:
         """Empty entries from extra commas are ignored."""
         result = _parse_library_filters("timing/test_a,,runner/test_b,")
         assert len(result) == 2
-

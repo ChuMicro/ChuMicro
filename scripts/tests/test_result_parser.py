@@ -148,4 +148,3 @@ class TestParseMixedOutput:
         assert result.tests[0].status == "FAIL"
         assert result.summary is not None
         assert result.summary.failed == 1
-

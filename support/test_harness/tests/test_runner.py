@@ -207,4 +207,3 @@ def test_run_module_name_filter_none_runs_all(capsys) -> None:
     assert result == 0
     assert state["ran"] == 2
     assert "SUMMARY total=2 failed=0" in output
-

@@ -39,4 +39,3 @@ class RealTime:
     def sleep(duration: float) -> None:  # pragma: no cover
         """Call ``time.sleep(duration)``."""
         _time_module.sleep(duration)  # type: ignore[attr-defined]
-

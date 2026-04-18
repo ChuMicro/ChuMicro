@@ -16,4 +16,4 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
-external = ["CHU001"]
+external = ["CHU001", "CHU002", "CHU003", "CHU004", "CHU005"]

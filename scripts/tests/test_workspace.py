@@ -428,4 +428,3 @@ class TestPythonpathEnvironment:
         """PATH from os.environ is preserved."""
         environment = pythonpath_environment()
         assert "PATH" in environment
-

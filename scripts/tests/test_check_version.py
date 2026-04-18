@@ -104,4 +104,3 @@ class TestCheck:
         )
         result = _check("origin/main")
         assert result == 2
-
