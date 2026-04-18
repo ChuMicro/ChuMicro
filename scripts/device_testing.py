@@ -14,7 +14,7 @@ from pathlib import Path
 
 from device_config import DeviceConfigError, filter_devices, load_devices
 from result_parser import parse_output
-from workspace import ROOT
+from workspace import ROOT, discover_library_dirs
 
 
 def discover_functional_tests(
@@ -57,27 +57,6 @@ def discover_functional_tests(
             test_plan.append((library_dir.name, source_dir, test_files))
 
     return test_plan
-
-
-def collect_source_dirs(primary_source: Path) -> list[Path]:
-    """Collect all library source directories, with *primary_source* first.
-
-    Device tests may import from any library, so all ``src/`` directories
-    are staged.  The primary library's source comes first.
-
-    Args:
-        primary_source: The ``src/`` directory of the library under test.
-
-    Returns:
-        Ordered list of source directories.
-    """
-    libraries_root = ROOT / "libraries"
-    source_dirs = [primary_source]
-    for dependency_dir in sorted(libraries_root.iterdir()):
-        dependency_source = dependency_dir / "src"
-        if dependency_source.is_dir() and dependency_source != primary_source:
-            source_dirs.append(dependency_source)
-    return source_dirs
 
 
 def build_bootstrap(
@@ -219,9 +198,13 @@ def _run_tests_on_device(
         print(f"  Connection failed: {connect_error}")
         return 0, 0, 1
 
-    for library_name, source_dir, test_files in test_plan:
-        source_dirs = collect_source_dirs(source_dir)
+    source_dirs = [
+        library_dir / "src"
+        for library_dir in discover_library_dirs()
+        if (library_dir / "src").is_dir()
+    ]
 
+    for library_name, _source_dir, test_files in test_plan:
         for test_file in test_files:
             print(f"\n  {library_name}/{test_file.name}")
 
