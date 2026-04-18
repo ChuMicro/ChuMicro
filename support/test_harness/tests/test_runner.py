@@ -146,3 +146,65 @@ def test_run_module_skips_non_callable_test_attributes(capsys) -> None:
     assert "test_value" not in output
     assert "SUMMARY total=1 failed=0" in output
 
+
+def test_run_module_name_filter_runs_only_matching_tests(capsys) -> None:
+    """When name_filter is set, only tests whose name contains the filter should run."""
+    state = {"ran": []}
+
+    def test_alpha() -> None:
+        state["ran"].append("alpha")
+
+    def test_beta() -> None:
+        state["ran"].append("beta")
+
+    def test_alpha_extra() -> None:
+        state["ran"].append("alpha_extra")
+
+    module = SimpleNamespace(
+        test_alpha=test_alpha, test_beta=test_beta, test_alpha_extra=test_alpha_extra
+    )
+
+    result = run_module(module, name_filter="alpha")
+    output = capsys.readouterr().out
+
+    assert result == 0
+    assert "alpha" in state["ran"]
+    assert "alpha_extra" in state["ran"]
+    assert "beta" not in state["ran"]
+    assert "PASS test_alpha" in output
+    assert "PASS test_alpha_extra" in output
+    assert "test_beta" not in output
+    assert "SUMMARY total=2 failed=0" in output
+
+
+def test_run_module_name_filter_no_matches(capsys) -> None:
+    """When name_filter matches nothing, the runner should report no tests found."""
+    module = SimpleNamespace(test_one=lambda: None)
+
+    result = run_module(module, name_filter="nonexistent")
+    output = capsys.readouterr().out
+
+    assert result == 0
+    assert "NO TESTS FOUND" in output
+    assert "SUMMARY total=0 failed=0" in output
+
+
+def test_run_module_name_filter_none_runs_all(capsys) -> None:
+    """When name_filter is None (default), all tests should run."""
+    state = {"ran": 0}
+
+    def test_one() -> None:
+        state["ran"] += 1
+
+    def test_two() -> None:
+        state["ran"] += 1
+
+    module = SimpleNamespace(test_one=test_one, test_two=test_two)
+
+    result = run_module(module, name_filter=None)
+    output = capsys.readouterr().out
+
+    assert result == 0
+    assert state["ran"] == 2
+    assert "SUMMARY total=2 failed=0" in output
+

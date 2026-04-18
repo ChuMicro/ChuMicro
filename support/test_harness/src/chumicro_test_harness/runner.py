@@ -80,7 +80,7 @@ def _print_exception(exception):
 	# so the caller at least sees the exception class and message.
 
 
-def run_module(module):
+def run_module(module, name_filter=None):
 	"""Run all ``test_*`` callables on a module-like object.
 
 	Prints per-test duration and PASS/FAIL status.  When ``gc.mem_free``
@@ -91,6 +91,9 @@ def run_module(module):
 
 	Args:
 		module: Module-like object containing ``test_*`` callables.
+		name_filter: Optional substring filter.  When set, only
+			``test_*`` functions whose name contains this string
+			are executed.  Enables single-test runs from the IDE.
 
 	Returns:
 		Shell-style exit code: 0 for all-pass, 1 for any failure.
@@ -112,6 +115,8 @@ def run_module(module):
 		module_heap_before = _gc.mem_free()
 
 	for name, function in _iter_test_functions(module):
+		if name_filter is not None and name_filter not in name:
+			continue
 		total += 1
 
 		# Allocate the timing float *before* the heap baseline so it
