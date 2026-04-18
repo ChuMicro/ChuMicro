@@ -799,11 +799,15 @@ def validate_mip(
             binary=micropython_binary,
         )
 
-    return validate_mip_install(
-        bundle_repo=bundle_repo,
-        library_names=library_names,
-        binary=micropython_binary,
-    )
+    if bundle_repo:
+        return validate_mip_install(
+            bundle_repo=bundle_repo,
+            library_names=library_names,
+            binary=micropython_binary,
+        )
+
+    print("Either --bundle-repo or --staging-dir is required.")
+    return 1
 
 
 def check_version() -> int:
