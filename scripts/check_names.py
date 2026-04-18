@@ -124,15 +124,14 @@ def check_file(filepath: Path, source: str | None = None) -> list[str]:
     Returns:
         List of formatted error strings (empty if clean).
     """
-    if source is None:
-        source = filepath.read_text(encoding="utf-8")
+    text = source if source is not None else filepath.read_text(encoding="utf-8")
 
     try:
-        tree = ast.parse(source, filename=str(filepath))
+        tree = ast.parse(text, filename=str(filepath))
     except SyntaxError:
         return []
 
-    noqa_lines = _read_noqa_lines(source)
+    noqa_lines = _read_noqa_lines(text)
     errors: list[str] = []
 
     for lineno, name, reason in _collect_names(tree):
