@@ -6,6 +6,7 @@ from pathlib import Path
 
 from chumicro_device_transport.circuitpython_bootstrap import (
     _escape_source,
+    _resolve_relative_imports,
     build_circuitpython_bootstrap,
 )
 
@@ -14,7 +15,7 @@ class TestBuildCircuitpythonBootstrap:
     """Tests for build_circuitpython_bootstrap."""
 
     def test_generates_module_injection(self, tmp_path: Path) -> None:
-        """Bootstrap should contain _inject_module calls for each module."""
+        """Bootstrap should contain populate calls for each module."""
         staged_sources = [
             ("chumicro_timing", "# timing init"),
             ("chumicro_timing.ticks", "def ticks_ms(): pass"),
@@ -24,18 +25,19 @@ class TestBuildCircuitpythonBootstrap:
 
         result = build_circuitpython_bootstrap(staged_sources, test_file)
 
-        assert "_inject_module('chumicro_timing'" in result
-        assert "_inject_module('chumicro_timing.ticks'" in result
+        assert "_populate_module('chumicro_timing'" in result
+        assert "_populate_module('chumicro_timing.ticks'" in result
 
-    def test_includes_inject_module_helper(self, tmp_path: Path) -> None:
-        """Bootstrap should define the _inject_module helper function."""
+    def test_includes_module_helpers(self, tmp_path: Path) -> None:
+        """Bootstrap should define stub and populate helpers."""
         test_file = tmp_path / "test_example.py"
         test_file.write_text("def test_ok(): pass")
 
         result = build_circuitpython_bootstrap([], test_file)
 
-        assert "def _inject_module(module_name, source_code):" in result
-        assert "sys.modules[module_name] = _Module" in result
+        assert "def _register_stub(module_name):" in result
+        assert "def _populate_module(module_name, source_code):" in result
+        assert "sys.modules[module_name]" in result
 
     def test_execs_test_file(self, tmp_path: Path) -> None:
         """Bootstrap should exec the test file source."""
@@ -96,10 +98,10 @@ class TestBuildCircuitpythonBootstrap:
         assert "class _TestModule:" in result
         assert "setattr(_TestModule" in result
 
-    def test_inject_module_attaches_submodules(
+    def test_module_helpers_attach_submodules(
         self, tmp_path: Path,
     ) -> None:
-        """_inject_module should attach submodules to parent packages."""
+        """Module helpers should attach submodules to parent packages."""
         test_file = tmp_path / "test_example.py"
         test_file.write_text("def test_ok(): pass")
 
@@ -109,8 +111,38 @@ class TestBuildCircuitpythonBootstrap:
         )
 
         # The helper should contain parent-attachment logic.
-        assert "parent_name" in result
-        assert "setattr(sys.modules[parent_name]" in result
+        assert "setattr(sys.modules[parent]" in result
+
+    def test_registers_stubs_before_population(self, tmp_path: Path) -> None:
+        """Bootstrap should register stubs before populating modules."""
+        staged_sources = [
+            ("chumicro_timing.ticks", "def ticks_ms(): pass"),
+            ("chumicro_timing", "from chumicro_timing.ticks import ticks_ms"),
+        ]
+        test_file = tmp_path / "test_example.py"
+        test_file.write_text("def test_ok(): pass")
+
+        result = build_circuitpython_bootstrap(staged_sources, test_file)
+
+        # Stubs should appear before populate calls.
+        stub_position = result.index("_register_stub(")
+        populate_position = result.index("_populate_module(")
+        assert stub_position < populate_position
+
+    def test_resolves_relative_imports_in_source(
+        self, tmp_path: Path,
+    ) -> None:
+        """Bootstrap should rewrite relative imports to absolute."""
+        staged_sources = [
+            ("mypkg.sub", "x = 1"),
+            ("mypkg", "from .sub import x"),
+        ]
+        test_file = tmp_path / "test_example.py"
+        test_file.write_text("def test_ok(): pass")
+
+        result = build_circuitpython_bootstrap(staged_sources, test_file)
+
+        assert "from mypkg.sub import x" in result
 
     def test_exits_with_result_code(self, tmp_path: Path) -> None:
         """Bootstrap should exit with the run_module return code."""
@@ -182,3 +214,38 @@ class TestEscapeSource:
         source = '"""docstring"""\nx = 1'
         result = _escape_source(source)
         assert eval(result) == source
+
+
+class TestResolveRelativeImports:
+    """Tests for _resolve_relative_imports."""
+
+    def test_rewrites_from_dot_module(self) -> None:
+        """Should rewrite ``from .sub import x`` to absolute."""
+        source = "from .sub import x"
+        result = _resolve_relative_imports(source, "mypkg")
+        assert result == "from mypkg.sub import x"
+
+    def test_rewrites_from_dot_import(self) -> None:
+        """Should rewrite ``from . import x`` to absolute."""
+        source = "from . import x"
+        result = _resolve_relative_imports(source, "mypkg")
+        assert result == "from mypkg import x"
+
+    def test_preserves_absolute_imports(self) -> None:
+        """Should not touch absolute imports."""
+        source = "from os.path import join"
+        result = _resolve_relative_imports(source, "mypkg")
+        assert result == source
+
+    def test_preserves_indented_relative_imports(self) -> None:
+        """Should handle indented relative imports (e.g. in if blocks)."""
+        source = "    from .sub import x"
+        result = _resolve_relative_imports(source, "mypkg")
+        assert result == "    from mypkg.sub import x"
+
+    def test_handles_multiple_relative_imports(self) -> None:
+        """Should rewrite all relative imports in the source."""
+        source = "from .alpha import a\nfrom .beta import b"
+        result = _resolve_relative_imports(source, "pkg")
+        assert "from pkg.alpha import a" in result
+        assert "from pkg.beta import b" in result

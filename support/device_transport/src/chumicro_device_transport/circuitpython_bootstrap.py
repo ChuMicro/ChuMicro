@@ -14,7 +14,43 @@ constraints.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
+
+#: Pattern matching ``from .xxx import yyy`` or ``from . import yyy``.
+_RELATIVE_IMPORT_RE = re.compile(
+    r"^(\s*)from\s+\.(\w*)\s+import\s+",
+    re.MULTILINE,
+)
+
+
+def _resolve_relative_imports(source_text: str, package: str) -> str:
+    """Rewrite relative imports to absolute imports.
+
+    CircuitPython's ``exec()`` does not support relative imports even
+    when ``__package__`` is set in the namespace.  This rewrites
+    ``from .foo import bar`` to ``from <package>.foo import bar`` and
+    ``from . import bar`` to ``from <package> import bar``.
+
+    Only single-dot relative imports are handled — deeper relative
+    imports (``from ..foo``) are not used in this codebase.
+
+    Args:
+        source_text: Raw Python source code.
+        package: The package name to resolve against.
+
+    Returns:
+        Source text with relative imports rewritten.
+    """
+
+    def _replace(match: re.Match) -> str:
+        indent = match.group(1)
+        relative_module = match.group(2)
+        if relative_module:
+            return f"{indent}from {package}.{relative_module} import "
+        return f"{indent}from {package} import "
+
+    return _RELATIVE_IMPORT_RE.sub(_replace, source_text)
 
 
 def build_circuitpython_bootstrap(
@@ -46,40 +82,68 @@ def build_circuitpython_bootstrap(
     lines.append("")
 
     # Module injection helper: class-as-module pattern.
-    # CircuitPython lacks types.ModuleType, so we use a plain class.
-    # exec() into a dict, then copy attributes to a class via setattr.
-    lines.append("def _inject_module(module_name, source_code):")
-    lines.append("    namespace = {}")
-    lines.append("    exec(source_code, namespace)")
-    lines.append("    class _Module:")
+    # CircuitPython lacks types.ModuleType, so we use a plain class
+    # as a module stand-in.  A stub is registered first so that other
+    # modules can ``import`` it; exec populates real attributes.
+    lines.append("def _register_stub(module_name):")
+    lines.append("    parts = module_name.rsplit('.', 1)")
+    lines.append("    package = parts[0] if len(parts) > 1 else module_name")
+    lines.append("    class _Mod:")
     lines.append("        pass")
+    lines.append("    _Mod.__name__ = module_name")
+    lines.append("    _Mod.__package__ = package")
+    lines.append("    sys.modules[module_name] = _Mod")
+    lines.append("    if len(parts) > 1:")
+    lines.append("        parent = parts[0]")
+    lines.append("        attr = parts[1]")
+    lines.append("        if parent in sys.modules:")
+    lines.append("            setattr(sys.modules[parent], attr, _Mod)")
+    lines.append("")
+    lines.append("def _populate_module(module_name, source_code):")
+    lines.append("    parts = module_name.rsplit('.', 1)")
+    lines.append("    package = parts[0] if len(parts) > 1 else module_name")
+    lines.append("    namespace = {'__name__': module_name, '__package__': package}")
+    lines.append("    exec(source_code, namespace)")
+    lines.append("    module_obj = sys.modules[module_name]")
     lines.append("    for _key in namespace:")
     lines.append("        if not _key.startswith('__'):")
-    lines.append("            setattr(_Module, _key, namespace[_key])")
-    lines.append("    # Preserve dunder attributes needed by import system.")
-    lines.append("    _Module.__name__ = module_name")
-    lines.append("    parts = module_name.rsplit('.', 1)")
-    lines.append("    _Module.__package__ = parts[0] if len(parts) > 1 else module_name")  # noqa: E501
-    lines.append("    sys.modules[module_name] = _Module")
-    lines.append("    # If this is a submodule, attach to parent package.")
-    lines.append("    if '.' in module_name:")
-    lines.append("        parent_name = module_name.rsplit('.', 1)[0]")
-    lines.append("        attr_name = module_name.rsplit('.', 1)[1]")
-    lines.append("        if parent_name in sys.modules:")
-    lines.append("            setattr(sys.modules[parent_name], attr_name, _Module)")
+    lines.append("            setattr(module_obj, _key, namespace[_key])")
+    lines.append("    if len(parts) > 1:")
+    lines.append("        parent = parts[0]")
+    lines.append("        attr = parts[1]")
+    lines.append("        if parent in sys.modules:")
+    lines.append("            setattr(sys.modules[parent], attr, module_obj)")
     lines.append("")
 
-    # Register each library and harness module.
-    # Order matters: __init__.py modules must come before submodules so
-    # that the parent package exists in sys.modules when submodules try
-    # to attach themselves.
+    # Pass 1: Register empty stubs for ALL modules so that import
+    # statements resolve during exec.
+    for module_name, _source_text in staged_sources:
+        lines.append(f"_register_stub({module_name!r})")
+    lines.append("")
+
+    # Pass 2: Populate each module by exec'ing its source.  Relative
+    # imports are rewritten to absolute because CircuitPython exec()
+    # does not support relative imports.  Modules that import siblings
+    # not yet populated get retried in pass 3.
+    lines.append("_deferred = []")
     for module_name, source_text in staged_sources:
-        # Skip test harness runner — it will be handled separately
-        # as the entry point for running tests.
-        escaped_source = _escape_source(source_text)
+        parts = module_name.rsplit(".", 1)
+        package = parts[0] if len(parts) > 1 else module_name
+        resolved_source = _resolve_relative_imports(source_text, package)
+        escaped_source = _escape_source(resolved_source)
+        lines.append("try:")
         lines.append(
-            f"_inject_module({module_name!r}, {escaped_source})"
+            f"    _populate_module({module_name!r}, {escaped_source})"
         )
+        lines.append("except ImportError:")
+        lines.append(
+            f"    _deferred.append(({module_name!r}, {escaped_source}))"
+        )
+    lines.append("")
+
+    # Pass 3: Retry deferred modules (forward references now resolved).
+    lines.append("for _mod_name, _mod_src in _deferred:")
+    lines.append("    _populate_module(_mod_name, _mod_src)")
     lines.append("")
 
     # Execute the test file.

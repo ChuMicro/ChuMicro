@@ -192,8 +192,8 @@ class TestBuildDeviceBootstrap:
         bootstrap = device_testing._build_device_bootstrap(
             entry, FakeTransport(), test_file, None,
         )
-        # Inline bootstrap uses _inject_module.
-        assert "_inject_module" in bootstrap
+        # Inline bootstrap uses _populate_module.
+        assert "_populate_module" in bootstrap
 
     def test_circuitpython_flash_uses_standard_bootstrap(
         self, tmp_path,
@@ -215,8 +215,8 @@ class TestBuildDeviceBootstrap:
         bootstrap = device_testing._build_device_bootstrap(
             entry, FakeTransport(), test_file, None,
         )
-        # Standard bootstrap uses import, not _inject_module.
-        assert "_inject_module" not in bootstrap
+        # Standard bootstrap uses import, not _populate_module.
+        assert "_populate_module" not in bootstrap
         assert "run_module" in bootstrap
 
     def test_micropython_uses_standard_bootstrap(self, tmp_path) -> None:
@@ -237,5 +237,6 @@ class TestBuildDeviceBootstrap:
         bootstrap = device_testing._build_device_bootstrap(
             entry, FakeTransport(), test_file, None,
         )
-        assert "_inject_module" not in bootstrap
+        assert "_make_lazy_module" not in bootstrap
+        assert "_populate_module" not in bootstrap
         assert "run_module" in bootstrap

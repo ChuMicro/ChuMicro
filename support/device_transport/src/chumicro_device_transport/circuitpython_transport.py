@@ -326,11 +326,16 @@ class CircuitpythonTransport:
     ) -> None:
         """Recursively collect .py files from a package directory.
 
+        Collects ``__init__.py`` last so that submodules are already
+        registered in ``sys.modules`` when the package init executes
+        relative imports.
+
         Args:
             directory: Directory to walk.
             dotted_prefix: Dotted module name prefix for this directory.
         """
         assert self._staged_sources is not None
+        init_entry: tuple[str, str] | None = None
         for child in sorted(directory.iterdir()):
             if child.is_dir():
                 child_init = child / "__init__.py"
@@ -341,11 +346,16 @@ class CircuitpythonTransport:
                     )
             elif child.suffix == ".py":
                 if child.name == "__init__.py":
-                    module_name = dotted_prefix
+                    # Defer __init__.py until after submodules.
+                    source_text = child.read_text(encoding="utf-8")
+                    init_entry = (dotted_prefix, source_text)
                 else:
                     module_name = f"{dotted_prefix}.{child.stem}"
-                source_text = child.read_text(encoding="utf-8")
-                self._staged_sources.append((module_name, source_text))
+                    source_text = child.read_text(encoding="utf-8")
+                    self._staged_sources.append((module_name, source_text))
+        # Append __init__.py last.
+        if init_entry is not None:
+            self._staged_sources.append(init_entry)
 
     def execute(self, bootstrap_script: str) -> str:
         """Send a code block through raw REPL and return captured stdout.
