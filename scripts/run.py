@@ -741,6 +741,7 @@ def test_device(
     device: str | None = None,
     library: str | None = None,
     test_filter: str | None = None,
+    deploy_mode: str = "ram",
 ) -> int:
     """Run functional tests on connected devices.
 
@@ -754,6 +755,7 @@ def test_device(
         device=device,
         library=library,
         test_filter=test_filter,
+        deploy_mode=deploy_mode,
     )
 
 
