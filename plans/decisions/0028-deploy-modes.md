@@ -28,7 +28,7 @@ The flag maps to runtime-specific transport modes:
 | `ram` | `mount` (stream from host) | `inline` (raw REPL exec, no flash) |
 | `flash` | `copy` (`mpremote fs cp -r`) | `usb` (copy to CIRCUITPY drive) |
 
-The per-device `transport_mode` field in `devices.yml` remains as a device-level default.  `--deploy-mode` overrides it when specified.
+The per-device `deploy_mode` field in `devices.yml` sets the device-level default (``"ram"`` when omitted).  Both MicroPython and CircuitPython entries support `deploy_mode`.  `--deploy-mode` on the CLI overrides it when specified.
 
 ### CircuitPython flash transport
 
@@ -68,7 +68,7 @@ This is intentionally deferred.  The current work shapes the transport API to ma
 
 - `CircuitpythonTransport` gains `mode` and `circuitpy_drive_path` parameters.
 - `DeviceEntry` gains a `circuitpy_drive_path` field.
-- `--deploy-mode` becomes the user-facing flag; `transport_mode` remains for device-level defaults.
+- `--deploy-mode` becomes the user-facing CLI override; `deploy_mode` in `devices.yml` is the per-device default (both runtimes, ``"ram"`` when omitted).
 - Flash mode for CircuitPython uses `circuitpy_drive_path` from device config, falling back to auto-detection via `find_circuitpy_drive()`.
 - The transport API's `stage()`/`execute()`/`disconnect()` protocol remains stable — mode is an internal concern.
 - The `chumicro-deploy` package and project template are recorded as future work in `open-questions.md`.

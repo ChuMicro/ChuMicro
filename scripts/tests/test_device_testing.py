@@ -139,10 +139,36 @@ class TestCreateTransport:
             device_testing._create_transport(entry)
 
     def test_default_deploy_mode_is_ram(self) -> None:
-        """Default deploy mode should be ram."""
+        """Default deploy mode (from device entry) should be ram → mount."""
         entry = self._make_device_entry(runtime="micropython")
         transport = device_testing._create_transport(entry)
         assert transport.mode == "mount"
+
+    def test_device_entry_deploy_mode_flash(self) -> None:
+        """Device entry deploy_mode=flash should apply when CLI is None."""
+        entry = self._make_device_entry(
+            runtime="micropython", deploy_mode="flash",
+        )
+        transport = device_testing._create_transport(entry)
+        assert transport.mode == "copy"
+
+    def test_cli_overrides_device_entry_deploy_mode(self) -> None:
+        """CLI deploy_mode should override the device entry default."""
+        entry = self._make_device_entry(
+            runtime="micropython", deploy_mode="flash",
+        )
+        transport = device_testing._create_transport(entry, deploy_mode="ram")
+        assert transport.mode == "mount"
+
+    def test_circuitpython_device_entry_flash(self) -> None:
+        """CP device entry deploy_mode=flash should apply when CLI is None."""
+        entry = self._make_device_entry(
+            runtime="circuitpython",
+            deploy_mode="flash",
+            circuitpy_drive_path="/Volumes/CIRCUITPY",
+        )
+        transport = device_testing._create_transport(entry)
+        assert transport.mode == "flash"
 
 
 class TestBuildDeviceBootstrap:

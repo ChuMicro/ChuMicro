@@ -918,8 +918,9 @@ def _build_parser() -> argparse.ArgumentParser:
         "--deploy-mode",
         dest="deploy_mode",
         choices=["ram", "flash"],
-        default="ram",
-        help="deploy mode: ram (default, no flash wear) or flash (persistent)",
+        default=None,
+        help="deploy mode: ram (default, no flash wear) or flash (persistent). "
+             "Overrides the per-device deploy_mode in devices.yml.",
     )
     subparsers.add_parser("check-version", help="check VERSION enforcement for changed libraries")
     subparsers.add_parser("check-api", help="check API breakages against last release tag")

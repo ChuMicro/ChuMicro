@@ -40,7 +40,7 @@ devices:
         assert devices[0].address == "/dev/ttyUSB0"
         assert devices[0].description == "Test board"
         assert devices[0].board_type == "esp32s3"
-        assert devices[0].transport_mode == "mount"
+        assert devices[0].deploy_mode == "ram"
 
     def test_loads_multiple_devices(self, tmp_path) -> None:
         """Multiple device entries should all be returned."""
@@ -121,7 +121,7 @@ devices:
         device = load_devices(devices_file)[0]
         assert device.connection_type == "serial"
         assert device.serial_baudrate == 115200
-        assert device.transport_mode == "mount"
+        assert device.deploy_mode == "ram"
         assert device.setup_command is None
         assert device.description == ""
 

@@ -87,12 +87,13 @@ def build_bootstrap(
     )
 
 
-def _create_transport(device_entry, deploy_mode: str = "ram"):
+def _create_transport(device_entry, deploy_mode: str | None = None):
     """Create the appropriate transport for a device entry.
 
     Args:
         device_entry: A DeviceEntry from the config loader.
-        deploy_mode: ``"ram"`` (default) or ``"flash"``.
+        deploy_mode: ``"ram"`` or ``"flash"``.  When ``None``, uses the
+            device entry's ``deploy_mode`` field (default ``"ram"``).
 
     Returns:
         A transport instance for the device's runtime.
@@ -101,15 +102,16 @@ def _create_transport(device_entry, deploy_mode: str = "ram"):
         ValueError: If the runtime is not supported or flash mode
             is missing required configuration.
     """
+    effective_mode = deploy_mode or device_entry.deploy_mode
 
     if device_entry.runtime == "micropython":
         from chumicro_device_transport import MicropythonTransport
 
-        # Map deploy mode to MicroPython transport mode.
-        transport_mode = "mount" if deploy_mode == "ram" else "copy"
+        # Map deploy mode to mpremote transport terminology.
+        mpremote_mode = "mount" if effective_mode == "ram" else "copy"
         return MicropythonTransport(
             device_entry.address,
-            mode=transport_mode,
+            mode=mpremote_mode,
         )
 
     if device_entry.runtime == "circuitpython":
@@ -118,7 +120,7 @@ def _create_transport(device_entry, deploy_mode: str = "ram"):
         return CircuitpythonTransport(
             device_entry.address,
             baudrate=device_entry.serial_baudrate,
-            mode=deploy_mode,
+            mode=effective_mode,
             circuitpy_drive_path=device_entry.circuitpy_drive_path,
         )
 
@@ -168,7 +170,7 @@ def _run_tests_on_device(
     test_plan,
     harness_source,
     test_filter,
-    deploy_mode="ram",
+    deploy_mode=None,
 ):
     """Run all planned tests on a single device.
 
@@ -177,7 +179,8 @@ def _run_tests_on_device(
         test_plan: List of ``(library_name, source_dir, test_files)``.
         harness_source: Path to the test harness ``src/`` directory.
         test_filter: Optional name filter for ``run_module``.
-        deploy_mode: ``"ram"`` or ``"flash"``.
+        deploy_mode: ``"ram"`` or ``"flash"``.  When ``None``, uses the
+            device entry's ``deploy_mode`` field.
 
     Returns:
         Tuple of ``(passed, failed, errors)`` counts.
@@ -242,7 +245,7 @@ def test_device(
     device: str | None = None,
     library: str | None = None,
     test_filter: str | None = None,
-    deploy_mode: str = "ram",
+    deploy_mode: str | None = None,
 ) -> int:
     """Run functional tests on connected devices.
 
@@ -252,7 +255,9 @@ def test_device(
         library: Limit to a single library's functional tests.
         test_filter: Filter to test files or functions matching this
             substring.
-        deploy_mode: ``"ram"`` (default) or ``"flash"``.
+        deploy_mode: ``"ram"`` or ``"flash"``.  When ``None``, each
+            device uses its own ``deploy_mode`` from ``devices.yml``
+            (default ``"ram"``).
 
     Returns:
         0 for all-pass, 1 for any failure, 2 for configuration issues.
