@@ -1,24 +1,6 @@
 """Tests for generate_landing_page.py — HTML landing page generation."""
 
-from generate_landing_page import _library_card, _read_description, generate
-from workspace import ROOT
-
-
-class TestReadDescription:
-    """Tests for _read_description."""
-
-    def test_reads_from_pyproject(self):
-        """Reads the description field from a real pyproject.toml."""
-        pyproject_file = ROOT / "libraries" / "timing" / "pyproject.toml"
-        description = _read_description(pyproject_file)
-        assert description
-        assert "**" not in description
-
-    def test_returns_empty_for_missing_field(self, tmp_path):
-        """Returns empty string when description is absent."""
-        toml_file = tmp_path / "pyproject.toml"
-        toml_file.write_text("[project]\nname = 'test'\n")
-        assert _read_description(toml_file) == ""
+from generate_landing_page import _library_card, generate
 
 
 class TestLibraryCard:

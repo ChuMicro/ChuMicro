@@ -16,19 +16,7 @@ from __future__ import annotations
 
 import re
 
-from workspace import ROOT, _load_tomllib
-
-
-def _read_description(pyproject_file) -> str:
-    """Read ``project.description`` from a ``pyproject.toml``.
-
-    Args:
-        pyproject_file: Path to the ``pyproject.toml`` file.
-    """
-    tomllib = _load_tomllib()
-    with pyproject_file.open("rb") as toml_file:
-        data = tomllib.load(toml_file)
-    return data.get("project", {}).get("description", "")
+from workspace import ROOT, read_pyproject_description
 
 
 def _discover_libraries() -> list[dict]:
@@ -42,7 +30,7 @@ def _discover_libraries() -> list[dict]:
         if not child.is_dir() or not (child / "mkdocs.yml").exists():
             continue
         name = child.name
-        description = _read_description(child / "pyproject.toml")
+        description = read_pyproject_description(child)
 
         # Detect whether the library's docs include a testing page.
         # A plain text search in mkdocs.yml is a pragmatic shortcut —

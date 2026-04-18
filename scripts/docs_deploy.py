@@ -21,21 +21,13 @@ import tempfile
 from pathlib import Path
 
 from shared import run_command
-from workspace import ROOT, discover_package_dirs, read_version
+from workspace import ROOT, discover_doc_dirs, read_version
 
 # Absolute path to the mike CLI installed alongside the active interpreter.
 # mike manages versioned MkDocs deployments on a git branch (gh-pages).
 # We use the absolute path rather than just "mike" to ensure we pick up
 # the correct installation even when the venv is not activated.
 MIKE = str(Path(sys.executable).parent / "mike")
-
-
-def discover_doc_dirs() -> list[Path]:
-    """Return publishable library directories that contain a ``mkdocs.yml``."""
-    return [
-        package_dir for package_dir in discover_package_dirs()
-        if package_dir.parent.name == "libraries" and (package_dir / "mkdocs.yml").exists()
-    ]
 
 
 def copy_shared_docs_assets(doc_dirs: list[Path]) -> None:

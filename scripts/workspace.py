@@ -22,8 +22,11 @@ TOOLS = ROOT / ".tools"
 #: Canonical platform identifiers.
 ALL_PLATFORMS = ("cpython", "micropython", "circuitpython")
 
+#: GitHub organization name used across bundle, docs, and distribution URLs.
+GITHUB_ORG = "ChuMicro"
 
-def _load_tomllib():
+
+def load_tomllib():
     """Import tomllib lazily.
 
     Stdlib from 3.11+; the ``tomli`` backport covers 3.9–3.10.
@@ -35,6 +38,11 @@ def _load_tomllib():
     except ModuleNotFoundError:
         import tomli as tomllib  # type: ignore[import-not-found,no-redef]
     return tomllib
+
+
+# Backward compatibility — some call sites may still reference the
+# private name.  New code should use ``load_tomllib()``.
+_load_tomllib = load_tomllib
 
 
 def read_runtime_versions() -> dict:
@@ -130,6 +138,19 @@ def discover_package_dirs() -> list[Path]:
     return package_dirs
 
 
+def discover_library_dirs() -> list[Path]:
+    """Return package directories that live under ``libraries/``.
+
+    Convenience wrapper around :func:`discover_package_dirs` that filters
+    to publishable library directories only — excludes ``support/``
+    packages.
+    """
+    return [
+        package_dir for package_dir in discover_package_dirs()
+        if package_dir.parent.name == "libraries"
+    ]
+
+
 def discover_source_roots() -> list[Path]:
     """Return src/ directories for all discovered packages.
 
@@ -167,6 +188,61 @@ def coverage_args_for(package_dirs: list[Path]) -> list[str]:
         if importable_dir is not None:
             args.extend(["--cov", str(importable_dir.relative_to(ROOT))])
     return args
+
+
+def read_pyproject_description(library_dir: Path) -> str:
+    """Read ``project.description`` from a library's ``pyproject.toml``.
+
+    Falls back to the first non-heading, non-empty line of ``README.md``
+    when the description is empty.
+
+    Args:
+        library_dir: Root directory of the library.
+
+    Returns:
+        Description string, or empty string if none found.
+    """
+    pyproject_file = library_dir / "pyproject.toml"
+    if not pyproject_file.exists():
+        return ""
+    tomllib = load_tomllib()
+    with pyproject_file.open("rb") as toml_file:
+        data = tomllib.load(toml_file)
+    description = data.get("project", {}).get("description", "") or ""
+    if not description and (library_dir / "README.md").exists():
+        for line in (library_dir / "README.md").read_text().splitlines():
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#"):
+                description = stripped
+                break
+    return description
+
+
+def discover_doc_dirs(package_dirs: list[Path] | None = None) -> list[Path]:
+    """Return library directories that contain a ``mkdocs.yml``.
+
+    Args:
+        package_dirs: Package directories to filter.  When ``None``,
+            uses :func:`discover_library_dirs`.
+    """
+    candidates = package_dirs if package_dirs is not None else discover_library_dirs()
+    return [
+        package_dir for package_dir in candidates
+        if (package_dir / "mkdocs.yml").exists()
+    ]
+
+
+def is_ref_reachable(reference: str) -> bool:
+    """Return True if *reference* is a valid git ref that can be diffed against.
+
+    Args:
+        reference: Git ref to check (e.g. ``"origin/main"``).
+    """
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", reference],
+        capture_output=True, cwd=ROOT, check=False,
+    )
+    return result.returncode == 0
 
 
 def resolve_named_packages(names: list[str]) -> list[Path]:

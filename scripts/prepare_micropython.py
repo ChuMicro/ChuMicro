@@ -20,8 +20,8 @@ import subprocess
 
 from shared import (
     build_jobs,
+    ensure_build_tools,
     ensure_source_tree,
-    ensure_tool,
     macos_build_environment,
     run_build_command,
     running_on_native_windows,
@@ -63,8 +63,7 @@ def prepare_micropython() -> int:
         return 2
 
     try:
-        for tool_name in ("git", "make", "cc"):
-            ensure_tool(tool_name)
+        ensure_build_tools()
 
         source_dir = _source_dir()
         release = runtime_versions()["micropython"]["version"]

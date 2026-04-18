@@ -5,22 +5,51 @@ from pathlib import Path
 import pytest
 from workspace import (
     ALL_PLATFORMS,
+    GITHUB_ORG,
     RELEASE_RELEVANT,
     changed_libraries,
     coverage_args_for,
     detect_changed_packages,
+    discover_doc_dirs,
+    discover_library_dirs,
     discover_package_dirs,
     discover_ruff_paths,
     discover_source_roots,
     filter_by_platform,
     find_package_dir,
     find_publishable_packages,
+    is_ref_reachable,
+    load_tomllib,
     pythonpath_environment,
     read_platforms,
+    read_pyproject_description,
     read_version,
     resolve_named_packages,
     resolve_scope,
 )
+
+
+class TestLoadTomllib:
+    """Tests for load_tomllib."""
+
+    def test_returns_module(self):
+        """Returns a module with a load function."""
+        tomllib = load_tomllib()
+        assert hasattr(tomllib, "load")
+
+    def test_idempotent(self):
+        """Calling twice returns the same module."""
+        first = load_tomllib()
+        second = load_tomllib()
+        assert first is second
+
+
+class TestGithubOrg:
+    """Tests for the GITHUB_ORG constant."""
+
+    def test_value(self):
+        """GITHUB_ORG is the expected string."""
+        assert GITHUB_ORG == "ChuMicro"
 
 
 class TestFindPackageDir:
@@ -428,3 +457,117 @@ class TestPythonpathEnvironment:
         """PATH from os.environ is preserved."""
         environment = pythonpath_environment()
         assert "PATH" in environment
+
+
+class TestDiscoverLibraryDirs:
+    """Tests for discover_library_dirs."""
+
+    def test_returns_list(self):
+        """discover_library_dirs returns a non-empty list of Paths."""
+        dirs = discover_library_dirs()
+        assert isinstance(dirs, list)
+        assert len(dirs) > 0
+
+    def test_all_under_libraries(self):
+        """Every returned directory is under libraries/."""
+        for library_dir in discover_library_dirs():
+            assert library_dir.parent.name == "libraries"
+
+    def test_excludes_support(self):
+        """Support packages are not included."""
+        names = {library_dir.name for library_dir in discover_library_dirs()}
+        # support packages like test_harness should not appear
+        support_names = {
+            package_dir.name for package_dir in discover_package_dirs()
+            if package_dir.parent.name == "support"
+        }
+        assert names.isdisjoint(support_names)
+
+    def test_includes_known_libraries(self):
+        """Known libraries are discovered."""
+        names = {library_dir.name for library_dir in discover_library_dirs()}
+        assert "timing" in names
+        assert "runner" in names
+
+    def test_subset_of_discover_package_dirs(self):
+        """Results are a subset of discover_package_dirs."""
+        all_dirs = set(str(directory) for directory in discover_package_dirs())
+        library_dirs = set(str(directory) for directory in discover_library_dirs())
+        assert library_dirs.issubset(all_dirs)
+
+
+class TestReadPyprojectDescription:
+    """Tests for read_pyproject_description."""
+
+    def test_reads_from_pyproject(self):
+        """Reads the description field from a real library directory."""
+        from workspace import ROOT
+
+        library_dir = ROOT / "libraries" / "timing"
+        description = read_pyproject_description(library_dir)
+        assert description
+        assert "**" not in description
+
+    def test_returns_empty_for_missing_field(self, tmp_path: Path):
+        """Returns empty string when description is absent."""
+        toml_file = tmp_path / "pyproject.toml"
+        toml_file.write_text("[project]\nname = 'test'\n")
+        assert read_pyproject_description(tmp_path) == ""
+
+    def test_returns_empty_for_missing_pyproject(self, tmp_path: Path):
+        """Returns empty string when pyproject.toml does not exist."""
+        assert read_pyproject_description(tmp_path) == ""
+
+    def test_falls_back_to_readme(self, tmp_path: Path):
+        """Falls back to README.md when description is empty."""
+        (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
+        (tmp_path / "README.md").write_text("# My Library\n\nA great library.\n")
+        description = read_pyproject_description(tmp_path)
+        assert description == "A great library."
+
+
+class TestDiscoverDocDirs:
+    """Tests for discover_doc_dirs."""
+
+    def test_returns_list(self):
+        """discover_doc_dirs returns a non-empty list."""
+        dirs = discover_doc_dirs()
+        assert isinstance(dirs, list)
+        assert len(dirs) > 0
+
+    def test_all_have_mkdocs(self):
+        """Every returned directory contains an mkdocs.yml."""
+        for doc_dir in discover_doc_dirs():
+            assert (doc_dir / "mkdocs.yml").exists()
+
+    def test_includes_known_libraries(self):
+        """Known libraries with docs are discovered."""
+        names = {doc_dir.name for doc_dir in discover_doc_dirs()}
+        assert "timing" in names
+
+    def test_accepts_custom_package_dirs(self, tmp_path: Path):
+        """Accepts a custom list of package dirs."""
+        library_dir = tmp_path / "mylib"
+        library_dir.mkdir()
+        (library_dir / "mkdocs.yml").touch()
+        result = discover_doc_dirs([library_dir])
+        assert result == [library_dir]
+
+    def test_filters_dirs_without_mkdocs(self, tmp_path: Path):
+        """Directories without mkdocs.yml are excluded."""
+        library_dir = tmp_path / "nodocs"
+        library_dir.mkdir()
+        result = discover_doc_dirs([library_dir])
+        assert result == []
+
+
+class TestIsRefReachable:
+    """Tests for is_ref_reachable."""
+
+    def test_head_is_reachable(self):
+        """HEAD is always reachable in a git repo."""
+        assert is_ref_reachable("HEAD") is True
+
+    def test_nonexistent_reference(self):
+        """A clearly nonexistent ref is not reachable."""
+        assert is_ref_reachable("nonexistent-ref-abc123xyz") is False

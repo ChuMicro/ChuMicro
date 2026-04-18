@@ -48,13 +48,14 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-try:
-    import tomllib
-except ModuleNotFoundError:
-    import tomli as tomllib  # type: ignore[import-not-found,no-redef]
-
 from shared import resolve_cp_mpy_cross, resolve_mp_mpy_cross
-from workspace import ROOT, find_package_dir
+from workspace import (
+    GITHUB_ORG,
+    ROOT,
+    find_package_dir,
+    load_tomllib,
+    read_pyproject_description,
+)
 
 #: Bundle repository names for each channel.  Experimental uses a separate repository
 #: so that circup's latest_tag works per-channel without prerelease tag tricks.
@@ -104,6 +105,7 @@ def _read_chumicro_dependencies(library_dir: Path) -> list[str]:
     Args:
         library_dir: Root directory of the library.
     """
+    tomllib = load_tomllib()
     with open(library_dir / "pyproject.toml", "rb") as pyproject_file:
         data = tomllib.load(pyproject_file)
     dependencies = data.get("project", {}).get("dependencies", [])
@@ -121,7 +123,7 @@ def _dependency_to_mip_reference(dependency: str, bundle_repo: str) -> str:
     # Splits on the first comparison operator, extras bracket, or environment marker.
     name = re.split(r"[><=!;~\[]", dependency, maxsplit=1)[0]
     package = name.strip().replace("-", "_")
-    return f"github:{_GITHUB_ORG}/{bundle_repo}/{package}"
+    return f"github:{GITHUB_ORG}/{bundle_repo}/{package}"
 
 
 def _dependency_to_mpy_mip_reference(dependency: str, bundle_repo: str) -> str:
@@ -133,7 +135,7 @@ def _dependency_to_mpy_mip_reference(dependency: str, bundle_repo: str) -> str:
     """
     name = re.split(r"[><=!;~\[]", dependency, maxsplit=1)[0]
     package = name.strip().replace("-", "_")
-    return f"github:{_GITHUB_ORG}/{bundle_repo}/{MPY_FORMAT_FOLDER}/{package}"
+    return f"github:{GITHUB_ORG}/{bundle_repo}/{MPY_FORMAT_FOLDER}/{package}"
 
 
 def _compile_mpy(python_file: Path, mpy_file: Path, mpy_cross: str) -> None:
@@ -222,7 +224,7 @@ def build_bundle(
         relative_path = source_file.relative_to(package_dir)
         py_relative_path = relative_path.as_posix()
         target = f"{package_name}/{py_relative_path}"
-        source = f"github:ChuMicro/{bundle_repo}/{package_name}/{py_relative_path}"
+        source = f"github:{GITHUB_ORG}/{bundle_repo}/{package_name}/{py_relative_path}"
         urls.append([target, source])
 
     manifest: dict = {"urls": urls, "version": version}
@@ -280,7 +282,7 @@ def build_bundle(
             _compile_mpy(source_file, mpy_dest_file, mp_mpy_cross)
             target = f"{package_name}/{mpy_relative_path}"
             source = (
-                f"github:ChuMicro/{bundle_repo}"
+                f"github:{GITHUB_ORG}/{bundle_repo}"
                 f"/{MPY_FORMAT_FOLDER}/{package_name}/{mpy_relative_path}"
             )
             mpy_urls.append([target, source])
@@ -441,18 +443,7 @@ def _collect_library_metadata(root_dir: Path) -> list[dict]:
         version = version_file.read_text().strip()
         name = library_dir.name  # e.g. "timing"
 
-        # Read description from pyproject.toml.
-        with open(library_dir / "pyproject.toml", "rb") as pyproject_file:
-            data = tomllib.load(pyproject_file)
-        description = data.get("project", {}).get("description", "") or ""
-
-        # Fall back to first non-heading, non-empty line of README.
-        if not description and (library_dir / "README.md").exists():
-            for line in (library_dir / "README.md").read_text().splitlines():
-                stripped = line.strip()
-                if stripped and not stripped.startswith("#"):
-                    description = stripped
-                    break
+        description = read_pyproject_description(library_dir)
 
         # Derive the import-name from the src/ directory.
         package_dir = find_package_dir(library_dir)
@@ -512,8 +503,7 @@ def _collect_bundle_metadata(root_dir: Path, bundle_dir: Path) -> list[dict]:
     return entries
 
 
-#: GitHub organization and source repository used for README links.
-_GITHUB_ORG = "ChuMicro"
+#: GitHub source repository name used for README links.
 _SOURCE_REPO = "ChuMicro"
 
 
@@ -543,8 +533,8 @@ def generate_bundle_readme(
     alt_repo = STABLE_BUNDLE_REPO if experimental else EXPERIMENTAL_BUNDLE_REPO
     channel = "Experimental" if experimental else "Stable"
     alt_channel = "Stable" if experimental else "Experimental"
-    source_url = f"https://github.com/{_GITHUB_ORG}/{_SOURCE_REPO}"
-    alt_repo_url = f"https://github.com/{_GITHUB_ORG}/{alt_repo}"
+    source_url = f"https://github.com/{GITHUB_ORG}/{_SOURCE_REPO}"
+    alt_repo_url = f"https://github.com/{GITHUB_ORG}/{alt_repo}"
     docs_url = "https://chumicro.github.io/ChuMicro/"
     pip_suffix = "-experimental" if experimental else ""
 
@@ -564,7 +554,7 @@ def generate_bundle_readme(
         for library in libraries
     )
 
-    logo_url = f"https://raw.githubusercontent.com/{_GITHUB_ORG}/{_SOURCE_REPO}/main/support/docs/chumicro.png"
+    logo_url = f"https://raw.githubusercontent.com/{GITHUB_ORG}/{_SOURCE_REPO}/main/support/docs/chumicro.png"
 
     return f"""\
 <p align="center">
@@ -597,34 +587,34 @@ it uses [bundles]\
 then install any library by name:
 
 ```bash
-circup bundle-add {_GITHUB_ORG}/{bundle_repo}
+circup bundle-add {GITHUB_ORG}/{bundle_repo}
 circup install chumicro-timing
 ```
 
 > If you previously registered the {alt_channel.lower()} bundle, remove it first — \
 circup may pick either version when both are active:
 > ```
-> circup bundle-remove {_GITHUB_ORG}/{alt_repo}
+> circup bundle-remove {GITHUB_ORG}/{alt_repo}
 > ```
 
 **MicroPython ([mip](https://docs.micropython.org/en/latest/reference/packages.html)):**
 
 ```bash
-mpremote mip install github:{_GITHUB_ORG}/{bundle_repo}/chumicro_timing
+mpremote mip install github:{GITHUB_ORG}/{bundle_repo}/chumicro_timing
 ```
 
 Or from the REPL on a network-capable board:
 
 ```python
 import mip
-mip.install("github:{_GITHUB_ORG}/{bundle_repo}/chumicro_timing")
+mip.install("github:{GITHUB_ORG}/{bundle_repo}/chumicro_timing")
 ```
 
 > **Want pre-compiled `.mpy` bytecode?** Add `{MPY_FORMAT_FOLDER}/` before the package name \
 for faster startup and lower RAM usage on boards with mpy format v6 \
 (MicroPython 1.24+):
 > ```
-> mpremote mip install github:{_GITHUB_ORG}/{bundle_repo}/{MPY_FORMAT_FOLDER}/chumicro_timing
+> mpremote mip install github:{GITHUB_ORG}/{bundle_repo}/{MPY_FORMAT_FOLDER}/chumicro_timing
 > ```
 
 **CPython (pip):**
@@ -659,9 +649,9 @@ This repo is generated automatically by the \
 [ChuMicro release workflow]({source_url}/blob/main/.github/workflows/release.yml). \
 Don't edit it by hand — changes will be overwritten on the next release.
 
-- **Source code and examples:** [{_GITHUB_ORG}/{_SOURCE_REPO}]({source_url})
+- **Source code and examples:** [{GITHUB_ORG}/{_SOURCE_REPO}]({source_url})
 - **Documentation:** [chumicro.github.io/ChuMicro]({docs_url})
-- **{alt_channel} bundle:** [{_GITHUB_ORG}/{alt_repo}]({alt_repo_url})
+- **{alt_channel} bundle:** [{GITHUB_ORG}/{alt_repo}]({alt_repo_url})
 - **License:** [MIT](LICENSE)
 """
 

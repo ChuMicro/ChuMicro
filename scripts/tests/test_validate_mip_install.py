@@ -101,18 +101,16 @@ class TestResolveLibraryNames:
 
     def test_none_discovers_from_workspace(self, monkeypatch):
         """None argument triggers workspace auto-discovery."""
-        # Mock discover_package_dirs to return controlled test data.
+        # Mock discover_library_dirs to return controlled test data.
         mock_dirs = [
             Path("/workspace/libraries/timing"),
             Path("/workspace/libraries/runner"),
-            Path("/workspace/support/test_harness"),  # Not under libraries/
         ]
         monkeypatch.setattr(
-            "validate_mip_install.discover_package_dirs",
+            "validate_mip_install.discover_library_dirs",
             lambda: mock_dirs,
         )
         result = _resolve_library_names(None)
-        # Only libraries/ packages are included.
         assert set(result) == {"timing", "runner"}
 
     def test_empty_string_triggers_autodiscovery(self, monkeypatch):
@@ -122,7 +120,7 @@ class TestResolveLibraryNames:
             Path("/workspace/libraries/timing"),
         ]
         monkeypatch.setattr(
-            "validate_mip_install.discover_package_dirs",
+            "validate_mip_install.discover_library_dirs",
             lambda: mock_dirs,
         )
         result = _resolve_library_names("")

@@ -134,6 +134,20 @@ def ensure_tool(name: str) -> None:
         raise RuntimeError(f"Required tool not found on PATH: {name}")
 
 
+def ensure_build_tools() -> None:
+    """Require ``git``, ``make``, and ``cc`` on PATH.
+
+    Convenience wrapper for the build-tool check shared by all three
+    runtime preparation scripts (``prepare-micropython``,
+    ``prepare-circuitpython``, ``prepare-mpy-cross``).
+
+    Raises:
+        RuntimeError: If any required tool is missing.
+    """
+    for tool_name in ("git", "make", "cc"):
+        ensure_tool(tool_name)
+
+
 def running_on_native_windows() -> bool:
     """Return whether the script is running on native Windows rather than WSL."""
     return os.name == "nt"

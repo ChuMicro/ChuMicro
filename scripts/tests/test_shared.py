@@ -9,6 +9,7 @@ from shared import (
     _read_prepared_binary,
     build_environment,
     build_jobs,
+    ensure_build_tools,
     install_command,
     resolve_circuitpython_binary,
     resolve_cp_mpy_cross,
@@ -137,6 +138,33 @@ class TestBuildEnvironment:
         cflags = environment["CFLAGS"]
         assert "-Wexisting" in cflags
         assert "-Wnew" in cflags
+
+
+class TestEnsureBuildTools:
+    """Tests for ensure_build_tools."""
+
+    def test_passes_when_tools_exist(self, monkeypatch):
+        """Does not raise when git, make, and cc are all on PATH."""
+        monkeypatch.setattr("shared.shutil.which", lambda _name: "/usr/bin/tool")
+        ensure_build_tools()  # Should not raise.
+
+    def test_raises_when_tool_missing(self, monkeypatch):
+        """Raises RuntimeError when a required tool is missing."""
+        monkeypatch.setattr("shared.shutil.which", lambda _name: None)
+        with pytest.raises(RuntimeError, match="Required tool not found"):
+            ensure_build_tools()
+
+    def test_checks_all_three_tools(self, monkeypatch):
+        """Checks for git, make, and cc specifically."""
+        checked_tools: list[str] = []
+
+        def track_which(name):
+            checked_tools.append(name)
+            return f"/usr/bin/{name}"
+
+        monkeypatch.setattr("shared.shutil.which", track_which)
+        ensure_build_tools()
+        assert set(checked_tools) == {"git", "make", "cc"}
 
 
 class TestReadPreparedBinary:

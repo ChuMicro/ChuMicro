@@ -44,10 +44,13 @@ from workspace import (
     ROOT,
     coverage_args_for,
     detect_changed_packages,
+    discover_doc_dirs,
+    discover_library_dirs,
     discover_package_dirs,
     discover_ruff_paths,
     filter_by_platform,
     find_publishable_packages,
+    is_ref_reachable,
     pythonpath_environment,
     resolve_scope,
 )
@@ -405,10 +408,7 @@ def docs(package_dirs: list[Path], *, serve: bool = False) -> int:
     enforces Decision 0021 (type documentation policy).
     """
     # Keep only packages that have a mkdocs.yml
-    doc_dirs = [
-        package_dir for package_dir in package_dirs
-        if (package_dir / "mkdocs.yml").exists()
-    ]
+    doc_dirs = discover_doc_dirs(package_dirs)
     if not doc_dirs:
         print("No libraries with mkdocs.yml found for the selected packages.")
         return 0
@@ -480,10 +480,7 @@ def docs_preview(package_dirs: list[Path]) -> int:
     preview_branch = "_docs-preview"
     source_branch = "gh-pages"
 
-    doc_dirs = [
-        package_dir for package_dir in package_dirs
-        if (package_dir / "mkdocs.yml").exists()
-    ]
+    doc_dirs = discover_doc_dirs(package_dirs)
     if not doc_dirs:
         print("No libraries with mkdocs.yml found for the selected packages.")
         return 0
@@ -560,15 +557,6 @@ def docs_preview(package_dirs: list[Path]) -> int:
     ])
 
 
-def _base_ref_reachable(base_reference: str) -> bool:
-    """Return True if *base_reference* is a valid git ref that can be diffed against."""
-    result = subprocess.run(
-        ["git", "rev-parse", "--verify", base_reference],
-        capture_output=True, cwd=ROOT, check=False,
-    )
-    return result.returncode == 0
-
-
 def preflight(
     micropython_binary: str | None = None,
     circuitpython_binary: str | None = None,
@@ -609,7 +597,7 @@ def preflight(
     # If origin/main isn't reachable (detached HEAD, no remote, etc.),
     # skip them with a warning rather than crashing preflight.
     base_reference = "origin/main"
-    can_diff = _base_ref_reachable(base_reference)
+    can_diff = is_ref_reachable(base_reference)
 
     steps: list[tuple[str, Callable[[], int]]] = [
         ("lint", lint),
@@ -688,10 +676,7 @@ def _test_runtime_compat(
     # Only publishable libraries under libraries/ are tested against
     # non-CPython runtimes.  support/ packages are CPython-only
     # infrastructure and are excluded from cross-runtime validation.
-    library_dirs = [
-        package_dir for package_dir in discover_package_dirs()
-        if package_dir.parent.name == "libraries"
-    ]
+    library_dirs = discover_library_dirs()
     platform_libraries = filter_by_platform(library_dirs, platform)
     library_names = [library_dir.name for library_dir in platform_libraries]
     return run_command([binary, COMPAT_SCRIPT, *library_names])
@@ -787,9 +772,7 @@ def validate_mip(
     if library_names is None:
         # Auto-discover publishable libraries.
         library_names = [
-            package_dir.name
-            for package_dir in discover_package_dirs()
-            if package_dir.parent.name == "libraries"
+            package_dir.name for package_dir in discover_library_dirs()
         ]
     if not library_names:
         print("No libraries found to validate.")

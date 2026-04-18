@@ -55,9 +55,7 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 
 from shared import resolve_micropython_binary
-from workspace import discover_package_dirs
-
-_GITHUB_ORG = "ChuMicro"
+from workspace import GITHUB_ORG, discover_library_dirs
 
 #: mpy bytecode format folder (must match bundle_manager.MPY_FORMAT_FOLDER).
 _MPY_FORMAT_FOLDER = "mpy6"
@@ -268,7 +266,7 @@ def validate_mip_install(
         return 1
 
     print(f"MicroPython binary: {resolved_binary}")
-    print(f"Bundle repository:  {_GITHUB_ORG}/{bundle_repo}")
+    print(f"Bundle repository:  {GITHUB_ORG}/{bundle_repo}")
     print(f"Libraries:          {', '.join(library_names)}")
     print()
 
@@ -289,7 +287,7 @@ def validate_mip_install(
         print(f"== {package_name} ==")
 
         # .py format (source)
-        py_url = f"github:{_GITHUB_ORG}/{bundle_repo}/{package_name}"
+        py_url = f"github:{GITHUB_ORG}/{bundle_repo}/{package_name}"
         total += 1
         if _validate_single(resolved_binary, bundle_repo, library_name, "py", py_url):
             passed += 1
@@ -297,7 +295,7 @@ def validate_mip_install(
             failed_tests.append(f"{package_name} (py)")
 
         # .mpy6 format (bytecode)
-        mpy_url = f"github:{_GITHUB_ORG}/{bundle_repo}/{_MPY_FORMAT_FOLDER}/{package_name}"
+        mpy_url = f"github:{GITHUB_ORG}/{bundle_repo}/{_MPY_FORMAT_FOLDER}/{package_name}"
         total += 1
         if _validate_single(resolved_binary, bundle_repo, library_name, "mpy6", mpy_url):
             passed += 1
@@ -434,12 +432,7 @@ def _resolve_library_names(libraries_arg: str | None) -> list[str]:
         return [name.strip() for name in libraries_arg.split(",") if name.strip()]
 
     # Auto-discover from workspace.
-    all_dirs = discover_package_dirs()
-    return [
-        package_dir.name
-        for package_dir in all_dirs
-        if package_dir.parent.name == "libraries"
-    ]
+    return [package_dir.name for package_dir in discover_library_dirs()]
 
 
 def main(argv: list[str] | None = None) -> int:

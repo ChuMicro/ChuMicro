@@ -26,8 +26,8 @@ import sys
 from shared import (
     build_environment,
     build_jobs,
+    ensure_build_tools,
     ensure_source_tree,
-    ensure_tool,
     run_build_command,
     running_on_native_windows,
     runtime_versions,
@@ -63,8 +63,7 @@ def prepare_circuitpython() -> int:
         return 2
 
     try:
-        for tool_name in ("git", "make", "cc"):
-            ensure_tool(tool_name)
+        ensure_build_tools()
 
         source_dir = _source_dir()
         release = runtime_versions()["circuitpython"]["version"]
