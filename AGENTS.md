@@ -151,7 +151,7 @@ Conventions:
 | `python scripts/run.py test-micropython-compatibility` | MicroPython cross-runtime unit tests |
 | `python scripts/run.py test-circuitpython-compatibility` | CircuitPython cross-runtime unit tests |
 | `python scripts/run.py test-runtime-matrix` | Test all packages on CPython + MicroPython + CircuitPython |
-| `python scripts/run.py test-device` | Device validation information |
+| `python scripts/run.py test-device` | Run functional tests on connected devices |
 | `python scripts/run.py check-version` | Check VERSION enforcement for changed libraries |
 | `python scripts/run.py check-api` | Check API breakages against last release tag |
 

@@ -29,7 +29,7 @@
 ## Blocked / waiting
 
 - [ ] Expand the device test matrix beyond ESP32-S2 once transport tooling is proven.
-- [ ] Device testing Phase 4: CI integration (`device-test.yml` with `workflow_dispatch`) — blocked on Phase 1 proving reliable.
+- [ ] Device testing Phase 4: CI integration (`device-test.yml` with `workflow_dispatch`) — blocked on Phase 2 proving reliable on real hardware.
 
 ## Done (recent)
 
