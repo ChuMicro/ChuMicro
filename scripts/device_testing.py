@@ -10,29 +10,11 @@ See Decision 0027 for the transport protocol and config schema.
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 from device_config import DeviceConfigError, filter_devices, load_devices
 from result_parser import parse_output
 from workspace import ROOT
-
-
-def _ensure_support_importable() -> None:
-    """Add support package source roots to sys.path if not already present.
-
-    Support packages are editable-installed by ``setup``, but this
-    fallback ensures imports work even before setup has run (e.g., on
-    a fresh clone or in CI before the install step).
-    """
-    support_dir = ROOT / "support"
-    if not support_dir.is_dir():
-        return
-    for child in sorted(support_dir.iterdir()):
-        source_dir = child / "src"
-        source_str = str(source_dir)
-        if source_dir.is_dir() and source_str not in sys.path:
-            sys.path.insert(0, source_str)
 
 
 def discover_functional_tests(
@@ -140,7 +122,6 @@ def _create_transport(device_entry, deploy_mode: str = "ram"):
         ValueError: If the runtime is not supported or flash mode
             is missing required configuration.
     """
-    _ensure_support_importable()
 
     if device_entry.runtime == "micropython":
         from chumicro_device_transport import MicropythonTransport
