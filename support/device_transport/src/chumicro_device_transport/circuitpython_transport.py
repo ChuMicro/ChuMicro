@@ -19,6 +19,7 @@ See Decision 0027 and Decision 0028 for the full transport protocol.
 
 from __future__ import annotations
 
+import os
 import shutil
 from collections.abc import Callable
 from pathlib import Path
@@ -40,6 +41,34 @@ _INTERRUPT_DELAY = 0.1
 
 #: Delay after entering raw REPL in seconds.
 _ENTER_DELAY = 0.1
+
+#: Volume name CircuitPython uses by default.
+_CIRCUITPY_VOLUME_NAME = "CIRCUITPY"
+
+
+def find_circuitpy_drive() -> str | None:
+    """Auto-detect the CIRCUITPY USB drive mount path.
+
+    Checks common mount locations on macOS and Linux.  Returns the
+    first path that exists as a directory, or ``None`` if no drive
+    is found.
+
+    Checked locations (in order):
+
+    - macOS: ``/Volumes/CIRCUITPY``
+    - Linux: ``/media/<user>/CIRCUITPY``
+    - Linux (systemd): ``/run/media/<user>/CIRCUITPY``
+    """
+    username = os.environ.get("USER", "")
+    candidates = [
+        Path("/Volumes") / _CIRCUITPY_VOLUME_NAME,
+        Path("/media") / username / _CIRCUITPY_VOLUME_NAME,
+        Path("/run/media") / username / _CIRCUITPY_VOLUME_NAME,
+    ]
+    for candidate in candidates:
+        if candidate.is_dir():
+            return str(candidate)
+    return None
 
 
 class SerialPort(Protocol):
@@ -78,7 +107,8 @@ class CircuitpythonTransport:
         timeout: Read timeout in seconds.
         mode: ``"ram"`` (default) or ``"flash"``.
         circuitpy_drive_path: Host path to the CIRCUITPY USB drive.
-            Required when ``mode="flash"``.
+            Used in ``mode="flash"``.  When omitted, auto-detected
+            via ``find_circuitpy_drive()``.
         serial_port_factory: Callable that creates a serial port object.
             Accepts ``(port, baudrate, timeout)`` keyword arguments.
             Defaults to ``serial.Serial``.  Inject a fake for testing.
@@ -210,14 +240,16 @@ class CircuitpythonTransport:
             harness_source: Path to the test harness ``src/`` directory.
 
         Raises:
-            CircuitpythonTransportError: If ``circuitpy_drive_path`` is
-                not configured or the drive path does not exist.
+            CircuitpythonTransportError: If the CIRCUITPY drive cannot
+                be found (neither configured nor auto-detected).
         """
-        if not self.circuitpy_drive_path:
+        drive_path_str = self.circuitpy_drive_path or find_circuitpy_drive()
+        if not drive_path_str:
             raise CircuitpythonTransportError(
-                "circuitpy_drive_path is required for flash mode"
+                "CIRCUITPY drive not found.  Either set circuitpy_drive_path "
+                "or connect the board's USB drive."
             )
-        drive_path = Path(self.circuitpy_drive_path)
+        drive_path = Path(drive_path_str)
         if not drive_path.is_dir():
             raise CircuitpythonTransportError(
                 f"CIRCUITPY drive not found: {drive_path}"

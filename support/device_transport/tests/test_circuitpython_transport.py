@@ -13,6 +13,7 @@ from chumicro_device_transport.circuitpython_transport import (
     _RAW_REPL_PROMPT,
     CircuitpythonTransport,
     CircuitpythonTransportError,
+    find_circuitpy_drive,
 )
 from chumicro_device_transport.testing import (
     FakeSerialPort,
@@ -623,10 +624,16 @@ class TestFlashMode:
         )
         assert transport.mode == "flash"
 
-    def test_flash_stage_requires_drive_path(
-        self, tmp_path: Path,
+    def test_flash_stage_raises_when_no_drive_found(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """stage() in flash mode should raise without circuitpy_drive_path."""
+        """stage() in flash mode should raise when drive is not found."""
+        # Ensure auto-detection finds nothing.
+        monkeypatch.setattr(
+            "chumicro_device_transport.circuitpython_transport"
+            ".find_circuitpy_drive",
+            lambda: None,
+        )
         # Extra _OK_RESPONSE for disconnect()'s autoreload restore.
         port = FakeSerialPort(
             read_responses=[_RAW_REPL_PROMPT, _OK_RESPONSE],
@@ -650,7 +657,7 @@ class TestFlashMode:
 
         with pytest.raises(
             CircuitpythonTransportError,
-            match="circuitpy_drive_path is required",
+            match="CIRCUITPY drive not found",
         ):
             transport.stage([source_dir], [], harness_dir)
 
@@ -902,3 +909,104 @@ class TestSendReplCommand:
             match="connect",
         ):
             transport._send_repl_command("print('hello')")
+
+
+class TestFindCircuitpyDrive:
+    """Tests for find_circuitpy_drive auto-detection."""
+
+    def test_returns_none_when_no_drive_found(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Should return None when no known mount point exists."""
+        original_is_dir = Path.is_dir
+
+        def patched_is_dir(self_path: Path) -> bool:
+            if "CIRCUITPY" in str(self_path):
+                return False
+            return original_is_dir(self_path)
+
+        monkeypatch.setattr(Path, "is_dir", patched_is_dir)
+        assert find_circuitpy_drive() is None
+
+    def test_finds_macos_mount(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Should find a CIRCUITPY volume at /Volumes/ style path."""
+        fake_volumes = tmp_path / "Volumes"
+        fake_drive = fake_volumes / "CIRCUITPY"
+        fake_drive.mkdir(parents=True)
+
+        # Patch Path.is_dir to recognize our fake path.
+        original_is_dir = Path.is_dir
+
+        def patched_is_dir(self_path: Path) -> bool:
+            if str(self_path) == "/Volumes/CIRCUITPY":
+                return True
+            return original_is_dir(self_path)
+
+        monkeypatch.setattr(Path, "is_dir", patched_is_dir)
+        result = find_circuitpy_drive()
+        assert result == "/Volumes/CIRCUITPY"
+
+    def test_finds_linux_media_mount(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Should find a CIRCUITPY volume at /media/<user>/ style path."""
+        monkeypatch.setenv("USER", "testuser")
+
+        original_is_dir = Path.is_dir
+
+        def patched_is_dir(self_path: Path) -> bool:
+            path_str = str(self_path)
+            if path_str == "/Volumes/CIRCUITPY":
+                return False  # Block macOS path.
+            if path_str == "/media/testuser/CIRCUITPY":
+                return True
+            return original_is_dir(self_path)
+
+        monkeypatch.setattr(Path, "is_dir", patched_is_dir)
+        result = find_circuitpy_drive()
+        assert result == "/media/testuser/CIRCUITPY"
+
+    def test_flash_stage_auto_detects_drive(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """stage() in flash mode should auto-detect the drive path."""
+        fake_drive = tmp_path / "CIRCUITPY"
+        fake_drive.mkdir()
+
+        # Make find_circuitpy_drive return our fake path.
+        monkeypatch.setattr(
+            "chumicro_device_transport.circuitpython_transport"
+            ".find_circuitpy_drive",
+            lambda: str(fake_drive),
+        )
+
+        source_dir = tmp_path / "src"
+        source_dir.mkdir()
+        harness_dir = tmp_path / "harness"
+        harness_dir.mkdir()
+
+        # Responses: connect, autoreload disable (stage), autoreload
+        # restore (disconnect).
+        port = FakeSerialPort(
+            read_responses=[_RAW_REPL_PROMPT, _OK_RESPONSE, _OK_RESPONSE],
+        )
+
+        def factory(**kwargs):
+            return port
+
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            mode="flash",
+            serial_port_factory=factory,
+            time=FakeTime(),
+        )
+        transport.connect()
+        transport.stage([source_dir], [], harness_dir)
+
+        # Should have used the auto-detected path — lib/ created there.
+        assert (fake_drive / "lib").is_dir()
+
+        transport.disconnect()
+

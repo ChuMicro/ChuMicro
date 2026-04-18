@@ -17,6 +17,7 @@ from .circuitpython_transport import (
     CircuitpythonTransport,
     CircuitpythonTransportError,
     SerialPort,
+    find_circuitpy_drive,
 )
 from .micropython_transport import MicropythonTransport
 from .testing import FakeTransport
@@ -28,4 +29,5 @@ __all__ = [
     "MicropythonTransport",
     "SerialPort",
     "build_circuitpython_bootstrap",
+    "find_circuitpy_drive",
 ]
