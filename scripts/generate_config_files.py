@@ -9,11 +9,8 @@ Called by ``python scripts/run.py setup``.
 
 from __future__ import annotations
 
-from pathlib import Path
-
+from shared import TEMPLATES_DIR
 from workspace import ROOT
-
-_TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 #: Files to generate: (relative path, template filename).
 _CONFIGS: list[tuple[str, str]] = [
@@ -32,7 +29,7 @@ def generate_config_files() -> int:
         if target.exists():
             print(f"  {relative_path} already exists — skipped")
         else:
-            content = (_TEMPLATES_DIR / template_name).read_text()
+            content = (TEMPLATES_DIR / template_name).read_text()
             target.write_text(content)
             print(f"  Created {relative_path}")
     return 0

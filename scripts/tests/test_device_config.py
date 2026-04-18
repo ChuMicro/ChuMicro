@@ -139,9 +139,9 @@ devices:
 
     def test_generated_devices_content_parses(self, tmp_path) -> None:
         """The generated devices.yml content should parse without errors."""
-        from generate_config_files import _TEMPLATES_DIR
+        from shared import TEMPLATES_DIR
 
-        template_content = (_TEMPLATES_DIR / "devices.yml.template").read_text()
+        template_content = (TEMPLATES_DIR / "devices.yml.template").read_text()
         devices_file = tmp_path / "devices.yml"
         devices_file.write_text(template_content)
         devices = load_devices(devices_file)
@@ -178,9 +178,9 @@ wifi:
 
     def test_generated_device_config_content_parses(self, tmp_path) -> None:
         """The generated device-config.yml content should parse."""
-        from generate_config_files import _TEMPLATES_DIR
+        from shared import TEMPLATES_DIR
 
-        template_content = (_TEMPLATES_DIR / "device-config.yml.template").read_text()
+        template_content = (TEMPLATES_DIR / "device-config.yml.template").read_text()
         config_file = tmp_path / "device-config.yml"
         config_file.write_text(template_content)
         config = load_device_config(config_file)

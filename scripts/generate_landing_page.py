@@ -14,12 +14,10 @@ The docs-deploy workflow calls this to regenerate the page on every push.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 from string import Template
 
+from shared import TEMPLATES_DIR
 from workspace import ROOT, read_pyproject_description
-
-_TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 
 def _discover_libraries() -> list[dict]:
@@ -95,7 +93,7 @@ def generate() -> str:
     first_package = libraries[0]["package"] if libraries else "chumicro-timing"
     first_import = re.sub(r"-", "_", first_package)
 
-    template_text = (_TEMPLATES_DIR / "landing_page.html.template").read_text()
+    template_text = (TEMPLATES_DIR / "landing_page.html.template").read_text()
     return Template(template_text).substitute(
         cards=cards,
         first_package=first_package,

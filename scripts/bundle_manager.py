@@ -48,7 +48,7 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-from shared import resolve_cp_mpy_cross, resolve_mp_mpy_cross
+from shared import TEMPLATES_DIR, resolve_cp_mpy_cross, resolve_mp_mpy_cross
 from workspace import (
     GITHUB_ORG,
     ROOT,
@@ -73,10 +73,6 @@ MPY_FORMAT_FOLDER = "mpy6"
 #: files compiled with CircuitPython's mpy-cross (magic byte 'C'), consumed
 #: by circup via zip bundles.  See Decision 0024.
 CP_MPY_FOLDER = "circuitpython-10.x-mpy"
-
-_TEMPLATES_DIR = Path(__file__).parent / "templates"
-
-
 def _find_bundle_modules(library_dir: Path) -> tuple[str, Path, list[Path]]:
     """Discover the package name, package dir, and deployable .py files.
 
@@ -558,7 +554,7 @@ def generate_bundle_readme(
 
     logo_url = f"https://raw.githubusercontent.com/{GITHUB_ORG}/{_SOURCE_REPO}/main/support/docs/chumicro.png"
 
-    template_text = (_TEMPLATES_DIR / "bundle_readme.md.template").read_text()
+    template_text = (TEMPLATES_DIR / "bundle_readme.md.template").read_text()
     return template_text.format(
         source_url=source_url,
         logo_url=logo_url,

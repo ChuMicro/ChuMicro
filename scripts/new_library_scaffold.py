@@ -19,26 +19,9 @@ propagate retroactively.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from ide_sync import sync_ide
-from shared import install_editable
+from shared import install_editable, load_template
 from workspace import ROOT
-
-# ---------------------------------------------------------------------------
-# Template loading
-# ---------------------------------------------------------------------------
-
-_TEMPLATES_DIR = Path(__file__).parent / "templates"
-
-
-def _load_template(filename: str) -> str:
-    """Read a template file from the ``scripts/templates/`` directory.
-
-    Args:
-        filename: Template filename (e.g. ``"pyproject.toml.template"``).
-    """
-    return (_TEMPLATES_DIR / filename).read_text()
 
 
 def _scaffold_library(name: str) -> int:
@@ -94,45 +77,45 @@ def _scaffold_library(name: str) -> int:
 
     # pyproject.toml
     (library_dir / "pyproject.toml").write_text(
-        _load_template("pyproject.toml.template").format(
+        load_template("pyproject.toml.template").format(
             name=name, import_name=import_name,
         )
     )
 
     # mkdocs.yml
     (library_dir / "mkdocs.yml").write_text(
-        _load_template("mkdocs.yml.template").format(name=name)
+        load_template("mkdocs.yml.template").format(name=name)
     )
 
     # README
     (library_dir / "README.md").write_text(
-        _load_template("readme.md.template").format(
+        load_template("readme.md.template").format(
             name=name, import_name=import_name,
         )
     )
 
     # docs/
     (library_dir / "docs" / "index.md").write_text(
-        _load_template("index.md.template").format(
+        load_template("index.md.template").format(
             name=name, import_name=import_name,
         )
     )
 
     # docs/guide.md
     (library_dir / "docs" / "guide.md").write_text(
-        _load_template("guide.md.template").format(name=name)
+        load_template("guide.md.template").format(name=name)
     )
 
     # docs/api.md
     (library_dir / "docs" / "api.md").write_text(
-        _load_template("api.md.template").format(
+        load_template("api.md.template").format(
             name=name, import_name=import_name,
         )
     )
 
     # docs/testing.md
     (library_dir / "docs" / "testing.md").write_text(
-        _load_template("testing.md.template").format(
+        load_template("testing.md.template").format(
             name=name, import_name=import_name,
         )
     )
@@ -140,7 +123,7 @@ def _scaffold_library(name: str) -> int:
     # Example
     display_name = name.replace("-", " ").replace("_", " ").title()
     (library_dir / "examples" / "quickstart.py").write_text(
-        _load_template("quickstart.py.template").format(
+        load_template("quickstart.py.template").format(
             name=name,
             display_name=display_name,
             import_name=import_name,
@@ -159,14 +142,14 @@ def _scaffold_library(name: str) -> int:
 
     # core.py — starter implementation with project patterns
     (library_dir / "src" / import_name / "core.py").write_text(
-        _load_template("core.py.template").format(
+        load_template("core.py.template").format(
             name=name, class_name=class_name,
         )
     )
 
     # testing.py stub — delete if the library has no injectable services
     (library_dir / "src" / import_name / "testing.py").write_text(
-        _load_template("testing.py.template").format(
+        load_template("testing.py.template").format(
             name=name, import_name=import_name,
         )
     )
@@ -179,7 +162,7 @@ def _scaffold_library(name: str) -> int:
     # Starter test file demonstrating test patterns
     test_name = name.replace("-", "_")
     (library_dir / "tests" / f"test_{test_name}.py").write_text(
-        _load_template("test_library.py.template").format(
+        load_template("test_library.py.template").format(
             import_name=import_name, class_name=class_name,
         )
     )

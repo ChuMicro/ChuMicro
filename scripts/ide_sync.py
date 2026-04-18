@@ -16,25 +16,9 @@ Called via ``python scripts/run.py sync-ide`` or automatically after
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
+from shared import load_template
 from workspace import ROOT, discover_package_dirs, discover_source_roots
-
-# ---------------------------------------------------------------------------
-# Template loading
-# ---------------------------------------------------------------------------
-
-_TEMPLATES_DIR = Path(__file__).parent / "templates"
-
-
-def _load_template(filename: str) -> str:
-    """Read a template file from the ``scripts/templates/`` directory.
-
-    Args:
-        filename: Template filename (e.g. ``"run_config.xml.template"``).
-    """
-    return (_TEMPLATES_DIR / filename).read_text()
-
 
 # ---------------------------------------------------------------------------
 # Managed task definitions — shared between PyCharm and VS Code
@@ -88,7 +72,7 @@ def _sync_run_configurations() -> None:
     run_config_dir = ROOT / ".idea" / "runConfigurations"
     run_config_dir.mkdir(parents=True, exist_ok=True)
 
-    template = _load_template("run_config.xml.template")
+    template = load_template("run_config.xml.template")
 
     managed_filenames: set[str] = set()
     for name, script, parameters, _group in _TASKS:
@@ -210,7 +194,7 @@ def _sync_pycharm_iml() -> None:
 
     sources = "\n".join(source_lines)
     jdk_entry = f"\n{jdk_line}" if jdk_line else ""
-    content = _load_template("chumicro.iml.template").format(
+    content = load_template("chumicro.iml.template").format(
         sources=sources, jdk=jdk_entry,
     )
 

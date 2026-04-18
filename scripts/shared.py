@@ -33,6 +33,18 @@ from workspace import (
 # Generic subprocess helpers
 # ---------------------------------------------------------------------------
 
+#: Path to the ``scripts/templates/`` directory containing ``.template`` files.
+TEMPLATES_DIR = Path(__file__).parent / "templates"
+
+
+def load_template(filename: str) -> str:
+    """Read a template file from the ``scripts/templates/`` directory.
+
+    Args:
+        filename: Template filename (e.g. ``"pyproject.toml.template"``).
+    """
+    return (TEMPLATES_DIR / filename).read_text()
+
 
 def run_command(command: list[str], environment: dict[str, str] | None = None) -> int:
     """Run a command from the repository root and return its exit code.
