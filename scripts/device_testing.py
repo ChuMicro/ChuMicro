@@ -21,9 +21,9 @@ from workspace import ROOT
 def _ensure_support_importable() -> None:
     """Add support package source roots to sys.path if not already present.
 
-    Support packages are not installed via pip — they rely on PYTHONPATH
-    or sys.path manipulation.  This mirrors the approach used by
-    ``conftest.py`` and the IDE sync configs.
+    Support packages are editable-installed by ``setup``, but this
+    fallback ensures imports work even before setup has run (e.g., on
+    a fresh clone or in CI before the install step).
     """
     support_dir = ROOT / "support"
     if not support_dir.is_dir():
