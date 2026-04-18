@@ -155,6 +155,16 @@ from chumicro_mylib.testing import FakeBackend
 If the library has nothing worth faking, delete `testing.py` and its
 references (see `new-library` skill § 4).
 
+**Workspace-level abstractions:** The `support/abstractions/` package
+(`chumicro_abstractions`) provides shared injectable interfaces and fakes
+used across support packages and scripts tests — e.g., `FakeTime` and
+`RealTime` for seconds-domain time injection.  Import from
+`chumicro_abstractions` directly:
+
+```python
+from chumicro_abstractions import FakeTime, RealTime
+```
+
 Related: Decision 0010, `new-library` skill.
 
 ## Cross-runtime shim

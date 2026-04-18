@@ -36,17 +36,19 @@ Goal: add simulation-first device validation and optional home testbed execution
 
 Exit criteria:
 
-- device registry template exists (`devices.example.yml`, `device-config.example.yml`)
-- simulation/emulation path is part of CI where practical
-- hardware workflow can target user-managed boards when configured
-- functional test harness contract is defined and exercised
+- ✅ device registry template exists (`devices.example.yml`, `device-config.example.yml`)
+- [ ] simulation/emulation path is part of CI where practical
+- ✅ hardware workflow can target user-managed boards when configured
+- ✅ functional test harness contract is defined and exercised
 
 Key choices confirmed (Decision 0027):
 
 - MicroPython transport uses `mpremote` (mount mode default, copy mode fallback)
-- CircuitPython transport uses pyserial raw REPL (Ctrl-A mode) for serial, Web Workflow REST API for WiFi boards
+- CircuitPython transport uses pyserial raw REPL (Ctrl-A mode) for serial; WiFi boards deferred
+- Deploy modes: `--deploy-mode ram|flash` — RAM for inline execution, flash for USB drive copy (CP) or file copy (MP)
+- CircuitPython flash mode auto-detects CIRCUITPY drive, controls autoreload via raw REPL
 - two gitignored config files: `devices.yml` (board registry) + `device-config.yml` (shared environment like WiFi)
-- `test-device` command in run.py replaces the placeholder with real orchestration
+- `test-device` command in run.py with `--runtime`, `--device`, `--library`, `--test`, `--deploy-mode` flags
 - IDE integration via pytest conftest that routes `functional_tests/` to device when `CHUMICRO_DEVICE_RUNTIME` env var is set
 - harness gains `name_filter` parameter for single-test execution
 - transport implementations live in `support/device_transport/`, not published

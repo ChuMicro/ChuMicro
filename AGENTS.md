@@ -99,7 +99,7 @@ Libraries must be compatible across all three runtimes. If a third-party library
 - **Language:** Python 3 subset compatible with CircuitPython and MicroPython
 - **Runtimes:** CircuitPython, MicroPython, CPython
 - **Testing:** PyTest on host, lightweight on-device runner in `support/test_harness/`
-- **Docs:** MkDocs + Material + mkdocstrings, versioned with mike
+- **Docs:** Zensical + mkdocstrings, versioned with mike
 
 ## Workspace structure
 

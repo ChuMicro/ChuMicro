@@ -29,10 +29,14 @@
 ## Blocked / waiting
 
 - [ ] Expand the device test matrix beyond ESP32-S2 once transport tooling is proven.
-- [ ] Device testing Phase 4: CI integration (`device-test.yml` with `workflow_dispatch`) — blocked on Phase 2 proving reliable on real hardware.
+- [ ] Device testing Phase 4: CI integration (`device-test.yml` with `workflow_dispatch`) — blocked on Phase 2 + deploy modes proving reliable on real hardware.
 
 ## Done (recent)
 
+- [x] Whitespace linter (CHU002–CHU005) — `scripts/check_whitespace.py` wired into `run.py lint`, fixed 42 pre-existing violations. Rules: file ends with one newline, no excess blank lines, no trailing whitespace, no blank line after block opener.
+- [x] Scripts consolidation — `ensure_build_tools` → `shared.py`; `load_tomllib`, `GITHUB_ORG`, `discover_library_dirs`, `read_pyproject_description`, `discover_doc_dirs`, `is_ref_reachable` → `workspace.py`. Tests aligned.
+- [x] Support package rename — `support/testing/` (`chumicro_testing`) → `support/abstractions/` (`chumicro_abstractions`). Contains both `RealTime` (production) and `FakeTime` (test fake).
+- [x] Editable-install support packages — `install_editable()` now installs both libraries and support packages. Previously support packages relied on `conftest.py` `sys.path` manipulation.
 - [x] Deploy modes: RAM and flash (Decision 0028) — `--deploy-mode ram|flash` flag on `test-device`, CircuitPython flash transport (USB drive copy with autoreload control), `circuitpy_drive_path` device config field, bootstrap routing (inline for CP ram, standard imports for CP flash). MicroPython `ram`→`mount`, `flash`→`copy`.
 - [x] Device testing Phase 2: CircuitPython serial transport — `CircuitpythonTransport` (pyserial raw REPL: Ctrl-C interrupt, Ctrl-A enter, Ctrl-D execute, OK/stdout/stderr parsing), `build_circuitpython_bootstrap` (class-as-module injection, inline harness, test exec), orchestrator routing for CP devices. `pyserial` added to dev deps.
 - [x] Device testing infrastructure — Phase 1 complete (Decision 0027): `device_config.py` config loader, `result_parser.py` structured output parsing, `support/device_transport/` with `MicropythonTransport` (mount + copy modes), `name_filter` on `runner.run_module`, real `test-device` orchestration in `run.py` with `--runtime`/`--device`/`--library`/`--test` flags, `mpremote` + `pyyaml` in requirements-dev.txt. 49 new host-side tests.

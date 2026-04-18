@@ -160,7 +160,7 @@ chumicro/
 ├── support/               # Internal packages (docs assets, test harness)
 ├── scripts/               # Developer tasks (run.py is the entry point)
 ├── docs/contributing/     # Style guide, cheat sheet, setup guides
-├── plans/                 # Roadmap, decisions, session logs
+├── plans/                 # Roadmap, decisions, design history
 ├── .github/
 │   ├── workflows/         # CI, release, promote, docs-deploy
 │   └── skills/            # Agent skill instructions

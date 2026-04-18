@@ -26,8 +26,9 @@ in `support/device_transport/` is shaped for extraction, but questions remain:
   its structure look like?
 - Should `.mpy` compilation be built-in or opt-in?
 
-Not blocking any current work.  Revisit when the transport layer stabilizes
-after Phase 3 (IDE integration) and real-world usage.
+Not blocking any current work.  Phase 2 (CircuitPython transport) and deploy
+modes (Decision 0028) are complete.  Revisit when the transport layer
+stabilizes after Phase 3 (IDE integration) and real-world usage.
 
 
 ### Is ESP32 NVS worth a dedicated backend?
