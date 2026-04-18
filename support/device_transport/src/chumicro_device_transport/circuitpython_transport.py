@@ -20,6 +20,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 from pathlib import Path
+from typing import Protocol, cast
 
 _CTRL_A = b"\x01"
 _CTRL_C = b"\x03"
@@ -35,6 +36,21 @@ _INTERRUPT_DELAY = 0.1
 
 #: Delay after entering raw REPL in seconds.
 _ENTER_DELAY = 0.1
+
+
+class SerialPort(Protocol):
+    """Structural interface for a serial port.
+
+    Matches the subset of ``serial.Serial`` used by the transport.
+    Fakes in tests satisfy this protocol without importing pyserial.
+    """
+
+    @property
+    def in_waiting(self) -> int: ...
+    def read(self, size: int = 1) -> bytes: ...
+    def write(self, data: bytes, /) -> int | None: ...
+    def close(self) -> None: ...
+    def reset_input_buffer(self) -> None: ...
 
 
 class CircuitpythonTransportError(Exception):
@@ -70,17 +86,18 @@ class CircuitpythonTransport:
         self.address = address
         self.baudrate = baudrate
         self.timeout = timeout
-        self._serial_port_factory = serial_port_factory
+        self._serial_port_factory: Callable[..., object] = (
+            serial_port_factory or self._default_serial_factory
+        )
         self._sleep = sleep or time.sleep
-        self._port: object | None = None
+        self._port: SerialPort | None = None
         self._staged_sources: list[tuple[str, str]] | None = None
 
-    def _get_serial_port_factory(self):
-        """Return the serial port factory, importing pyserial lazily."""
-        if self._serial_port_factory is not None:
-            return self._serial_port_factory
-        import serial  # pragma: no cover
-        return serial.Serial  # pragma: no cover
+    @staticmethod
+    def _default_serial_factory(**kwargs) -> SerialPort:  # pragma: no cover
+        """Create a pyserial Serial port (default factory)."""
+        import serial
+        return serial.Serial(**kwargs)
 
     def connect(self) -> None:
         """Open the serial port and enter raw REPL mode.
@@ -92,13 +109,12 @@ class CircuitpythonTransport:
             CircuitpythonTransportError: If the serial port cannot be
                 opened or raw REPL prompt is not received.
         """
-        factory = self._get_serial_port_factory()
         try:
-            self._port = factory(
+            self._port = cast(SerialPort, self._serial_port_factory(
                 port=self.address,
                 baudrate=self.baudrate,
                 timeout=self.timeout,
-            )
+            ))
         except Exception as open_error:
             raise CircuitpythonTransportError(
                 f"Failed to open serial port {self.address}: {open_error}"
@@ -108,6 +124,7 @@ class CircuitpythonTransport:
 
     def _enter_raw_repl(self) -> None:
         """Interrupt running code and switch to raw REPL mode."""
+        assert self._port is not None
         # Ctrl-C × 2 to interrupt any running program.
         self._port.write(_CTRL_C)
         self._sleep(_INTERRUPT_DELAY)
@@ -185,6 +202,7 @@ class CircuitpythonTransport:
             directory: Directory to walk.
             dotted_prefix: Dotted module name prefix for this directory.
         """
+        assert self._staged_sources is not None
         for child in sorted(directory.iterdir()):
             if child.is_dir():
                 child_init = child / "__init__.py"
@@ -265,6 +283,7 @@ class CircuitpythonTransport:
         Returns:
             All bytes read, including the marker if found.
         """
+        assert self._port is not None
         accumulated = b""
         deadline = time.monotonic() + self.timeout
         while time.monotonic() < deadline:
