@@ -82,6 +82,8 @@ class CircuitpythonTransport:
             Defaults to ``serial.Serial``.  Inject a fake for testing.
         sleep: Callable for delays between serial operations.
             Defaults to ``time.sleep``.  Inject a no-op for testing.
+        monotonic: Callable returning the current time in seconds.
+            Defaults to ``time.monotonic``.  Inject a fake for testing.
     """
 
     def __init__(
@@ -94,6 +96,7 @@ class CircuitpythonTransport:
         circuitpy_drive_path: str | None = None,
         serial_port_factory: Callable[..., object] | None = None,
         sleep: Callable[[float], object] | None = None,
+        monotonic: Callable[[], float] | None = None,
     ) -> None:
         self.address = address
         self.baudrate = baudrate
@@ -104,6 +107,7 @@ class CircuitpythonTransport:
             serial_port_factory or self._default_serial_factory
         )
         self._sleep = sleep or time.sleep
+        self._monotonic = monotonic or time.monotonic
         self._port: SerialPort | None = None
         self._staged_sources: list[tuple[str, str]] | None = None
 
@@ -392,8 +396,8 @@ class CircuitpythonTransport:
         """
         assert self._port is not None
         accumulated = b""
-        deadline = time.monotonic() + self.timeout
-        while time.monotonic() < deadline:
+        deadline = self._monotonic() + self.timeout
+        while self._monotonic() < deadline:
             waiting = self._port.in_waiting
             if waiting > 0:
                 chunk = self._port.read(waiting)

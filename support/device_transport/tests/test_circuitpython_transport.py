@@ -13,87 +13,14 @@ from chumicro_device_transport.circuitpython_transport import (
     CircuitpythonTransport,
     CircuitpythonTransportError,
 )
+from chumicro_device_transport.testing import (
+    FakeMonotonic,
+    FakeSerialPort,
+    noop_sleep,
+)
 
-
-def _noop_sleep(_duration: float) -> None:
-    """No-op sleep replacement to eliminate delays in tests."""
-
-
-class FakeSerialPort:
-    """Simulates a pyserial Serial port for transport testing.
-
-    Records all writes and returns canned responses for reads.
-    """
-
-    def __init__(
-        self,
-        *,
-        read_responses: list[bytes] | None = None,
-        open_error: Exception | None = None,
-    ) -> None:
-        self.writes: list[bytes] = []
-        self.closed = False
-        self._read_responses = list(read_responses or [])
-        self._read_index = 0
-        self._open_error = open_error
-        self._buffer = b""
-
-    @property
-    def in_waiting(self) -> int:
-        """Return how many bytes are available to read."""
-        if self._read_index < len(self._read_responses):
-            return len(self._read_responses[self._read_index])
-        return 0
-
-    def read(self, size: int = 1) -> bytes:
-        """Return the next canned response."""
-        if self._read_index < len(self._read_responses):
-            data = self._read_responses[self._read_index]
-            self._read_index += 1
-            return data
-        return b""
-
-    def write(self, data: bytes) -> int:
-        """Record a write."""
-        self.writes.append(data)
-        return len(data)
-
-    def close(self) -> None:
-        """Mark the port as closed."""
-        self.closed = True
-
-    def reset_input_buffer(self) -> None:
-        """No-op for fake."""
-
-
-def _make_factory(port: FakeSerialPort):
-    """Create a factory callable that returns the given fake port."""
-    def factory(*, port_path=None, baudrate=None, timeout=None, **kwargs):
-        if port._open_error:
-            raise port._open_error
-        return port
-    return factory
-
-
-def _make_raw_repl_port(execute_stdout: str = "", execute_stderr: str = ""):
-    """Create a FakeSerialPort pre-loaded with connect + execute responses.
-
-    Returns the port and a factory for it.
-    """
-    execute_response = (
-        f"OK{execute_stdout}\x04{execute_stderr}\x04>"
-    ).encode()
-    port = FakeSerialPort(
-        read_responses=[
-            _RAW_REPL_PROMPT,  # connect response
-            execute_response,   # execute response
-        ],
-    )
-
-    def factory(*, port=port, **kwargs):
-        return port
-
-    return port, factory
+#: Shorthand for the standard autoreload REPL acknowledgement.
+_OK_RESPONSE = b"OK\x04\x04>"
 
 
 class TestConnect:
@@ -109,7 +36,8 @@ class TestConnect:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
-            sleep=_noop_sleep,
+            sleep=noop_sleep,
+            monotonic=FakeMonotonic(),
         )
         transport.connect()
 
@@ -127,7 +55,8 @@ class TestConnect:
         transport = CircuitpythonTransport(
             "/dev/ttyNONE",
             serial_port_factory=factory,
-            sleep=_noop_sleep,
+            sleep=noop_sleep,
+            monotonic=FakeMonotonic(),
         )
 
         with pytest.raises(
@@ -145,9 +74,9 @@ class TestConnect:
 
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
-            timeout=0.1,
             serial_port_factory=factory,
-            sleep=_noop_sleep,
+            sleep=noop_sleep,
+            monotonic=FakeMonotonic(),
         )
 
         with pytest.raises(
@@ -169,7 +98,8 @@ class TestConnect:
             "/dev/ttyUSB0",
             baudrate=9600,
             serial_port_factory=factory,
-            sleep=_noop_sleep,
+            sleep=noop_sleep,
+            monotonic=FakeMonotonic(),
         )
         transport.connect()
 
@@ -204,7 +134,8 @@ class TestStage:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
-            sleep=_noop_sleep,
+            sleep=noop_sleep,
+            monotonic=FakeMonotonic(),
         )
         transport.connect()
         transport.stage([source_dir], [test_file], harness_dir)
@@ -238,7 +169,8 @@ class TestStage:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
-            sleep=_noop_sleep,
+            sleep=noop_sleep,
+            monotonic=FakeMonotonic(),
         )
         transport.connect()
         transport.stage([source_dir], [], harness_dir)
@@ -271,7 +203,8 @@ class TestStage:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
-            sleep=_noop_sleep,
+            sleep=noop_sleep,
+            monotonic=FakeMonotonic(),
         )
         transport.connect()
         transport.stage([source_dir], [], harness_dir)
@@ -297,7 +230,8 @@ class TestStage:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
-            sleep=_noop_sleep,
+            sleep=noop_sleep,
+            monotonic=FakeMonotonic(),
         )
         transport.connect()
         transport.stage([nonexistent], [], harness_dir)
@@ -329,7 +263,8 @@ class TestStage:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
-            sleep=_noop_sleep,
+            sleep=noop_sleep,
+            monotonic=FakeMonotonic(),
         )
         transport.connect()
         transport.stage([source_dir], [], harness_dir)
@@ -366,7 +301,8 @@ class TestExecute:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
-            sleep=_noop_sleep,
+            sleep=noop_sleep,
+            monotonic=FakeMonotonic(),
         )
         transport.connect()
         transport.stage([source_dir], [], harness_dir)
@@ -398,7 +334,8 @@ class TestExecute:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
-            sleep=_noop_sleep,
+            sleep=noop_sleep,
+            monotonic=FakeMonotonic(),
         )
         transport.connect()
         transport.stage([source_dir], [], harness_dir)
@@ -430,7 +367,8 @@ class TestExecute:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
-            sleep=_noop_sleep,
+            sleep=noop_sleep,
+            monotonic=FakeMonotonic(),
         )
         transport.connect()
         transport.stage([source_dir], [], harness_dir)
@@ -463,7 +401,8 @@ class TestExecute:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
-            sleep=_noop_sleep,
+            sleep=noop_sleep,
+            monotonic=FakeMonotonic(),
         )
         transport.connect()
         transport.stage([source_dir], [], harness_dir)
@@ -483,7 +422,8 @@ class TestExecute:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
-            sleep=_noop_sleep,
+            sleep=noop_sleep,
+            monotonic=FakeMonotonic(),
         )
         transport.connect()
 
@@ -500,7 +440,8 @@ class TestExecute:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=lambda **kw: None,
-            sleep=_noop_sleep,
+            sleep=noop_sleep,
+            monotonic=FakeMonotonic(),
         )
         # Manually set staged sources to bypass stage check.
         transport._staged_sources = []
@@ -525,7 +466,8 @@ class TestReset:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
-            sleep=_noop_sleep,
+            sleep=noop_sleep,
+            monotonic=FakeMonotonic(),
         )
         transport.connect()
         port.writes.clear()
@@ -539,7 +481,8 @@ class TestReset:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=lambda **kw: None,
-            sleep=_noop_sleep,
+            sleep=noop_sleep,
+            monotonic=FakeMonotonic(),
         )
         transport.reset()  # Should not raise.
 
@@ -557,7 +500,8 @@ class TestDisconnect:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
-            sleep=_noop_sleep,
+            sleep=noop_sleep,
+            monotonic=FakeMonotonic(),
         )
         transport.connect()
         transport.disconnect()
@@ -582,7 +526,8 @@ class TestDisconnect:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
-            sleep=_noop_sleep,
+            sleep=noop_sleep,
+            monotonic=FakeMonotonic(),
         )
         transport.connect()
         transport.stage([source_dir], [], harness_dir)
@@ -597,7 +542,8 @@ class TestDisconnect:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=lambda **kw: None,
-            sleep=_noop_sleep,
+            sleep=noop_sleep,
+            monotonic=FakeMonotonic(),
         )
         transport.disconnect()  # Should not raise.
 
@@ -611,7 +557,8 @@ class TestDisconnect:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
-            sleep=_noop_sleep,
+            sleep=noop_sleep,
+            monotonic=FakeMonotonic(),
         )
         transport.connect()
         transport.disconnect()
@@ -684,7 +631,8 @@ class TestFlashMode:
             mode="flash",
             circuitpy_drive_path=circuitpy_drive_path,
             serial_port_factory=factory,
-            sleep=_noop_sleep,
+            sleep=noop_sleep,
+            monotonic=FakeMonotonic(),
         )
 
     def test_flash_mode_stores_mode(self) -> None:
@@ -694,7 +642,8 @@ class TestFlashMode:
             mode="flash",
             circuitpy_drive_path="/Volumes/CIRCUITPY",
             serial_port_factory=lambda **kw: None,
-            sleep=_noop_sleep,
+            sleep=noop_sleep,
+            monotonic=FakeMonotonic(),
         )
         assert transport.mode == "flash"
 
@@ -702,7 +651,10 @@ class TestFlashMode:
         self, tmp_path: Path,
     ) -> None:
         """stage() in flash mode should raise without circuitpy_drive_path."""
-        port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
+        # Extra _OK_RESPONSE for disconnect()'s autoreload restore.
+        port = FakeSerialPort(
+            read_responses=[_RAW_REPL_PROMPT, _OK_RESPONSE],
+        )
 
         def factory(**kwargs):
             return port
@@ -711,7 +663,8 @@ class TestFlashMode:
             "/dev/ttyUSB0",
             mode="flash",
             serial_port_factory=factory,
-            sleep=_noop_sleep,
+            sleep=noop_sleep,
+            monotonic=FakeMonotonic(),
         )
         transport.connect()
 
@@ -732,8 +685,10 @@ class TestFlashMode:
         self, tmp_path: Path,
     ) -> None:
         """stage() in flash mode should raise when drive path doesn't exist."""
-        # Provide two REPL responses: connect + autoreload command.
-        port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
+        # Responses: connect + autoreload restore (disconnect).
+        port = FakeSerialPort(
+            read_responses=[_RAW_REPL_PROMPT, _OK_RESPONSE],
+        )
 
         transport = self._make_flash_transport(
             port, str(tmp_path / "NO_DRIVE"),
@@ -772,9 +727,10 @@ class TestFlashMode:
         (harness_package / "__init__.py").write_text("# harness")
         (harness_package / "runner.py").write_text("def run_module(): pass")
 
-        # Responses: connect prompt, autoreload command response.
+        # Responses: connect, autoreload disable (stage), autoreload
+        # restore (disconnect).
         port = FakeSerialPort(
-            read_responses=[_RAW_REPL_PROMPT, b"OK\x04\x04>"],
+            read_responses=[_RAW_REPL_PROMPT, _OK_RESPONSE, _OK_RESPONSE],
         )
 
         transport = self._make_flash_transport(port, str(drive_path))
@@ -806,9 +762,10 @@ class TestFlashMode:
         test_file = tmp_path / "test_example.py"
         test_file.write_text("def test_ok(): pass")
 
-        # Responses: connect prompt, autoreload command.
+        # Responses: connect, autoreload disable (stage), autoreload
+        # restore (disconnect).
         port = FakeSerialPort(
-            read_responses=[_RAW_REPL_PROMPT, b"OK\x04\x04>"],
+            read_responses=[_RAW_REPL_PROMPT, _OK_RESPONSE, _OK_RESPONSE],
         )
 
         transport = self._make_flash_transport(port, str(drive_path))
@@ -832,8 +789,10 @@ class TestFlashMode:
         harness_dir = tmp_path / "harness"
         harness_dir.mkdir()
 
+        # Responses: connect, autoreload disable (stage), autoreload
+        # restore (disconnect).
         port = FakeSerialPort(
-            read_responses=[_RAW_REPL_PROMPT, b"OK\x04\x04>"],
+            read_responses=[_RAW_REPL_PROMPT, _OK_RESPONSE, _OK_RESPONSE],
         )
 
         transport = self._make_flash_transport(port, str(drive_path))
@@ -856,7 +815,7 @@ class TestFlashMode:
         port = FakeSerialPort(
             read_responses=[
                 _RAW_REPL_PROMPT,   # connect
-                b"OK\x04\x04>",    # autoreload restore command
+                _OK_RESPONSE,       # autoreload restore (disconnect)
             ],
         )
 
@@ -884,7 +843,8 @@ class TestFlashMode:
             "/dev/ttyUSB0",
             mode="ram",
             serial_port_factory=factory,
-            sleep=_noop_sleep,
+            sleep=noop_sleep,
+            monotonic=FakeMonotonic(),
         )
         transport.connect()
         port.writes.clear()
@@ -912,8 +872,10 @@ class TestFlashMode:
         harness_dir = tmp_path / "harness"
         harness_dir.mkdir()
 
+        # Responses: connect, autoreload disable (stage), autoreload
+        # restore (disconnect).
         port = FakeSerialPort(
-            read_responses=[_RAW_REPL_PROMPT, b"OK\x04\x04>"],
+            read_responses=[_RAW_REPL_PROMPT, _OK_RESPONSE, _OK_RESPONSE],
         )
 
         transport = self._make_flash_transport(port, str(drive_path))
@@ -944,7 +906,8 @@ class TestSendReplCommand:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=factory,
-            sleep=_noop_sleep,
+            sleep=noop_sleep,
+            monotonic=FakeMonotonic(),
         )
         transport.connect()
 
@@ -958,7 +921,8 @@ class TestSendReplCommand:
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
             serial_port_factory=lambda **kw: None,
-            sleep=_noop_sleep,
+            sleep=noop_sleep,
+            monotonic=FakeMonotonic(),
         )
 
         with pytest.raises(
