@@ -156,13 +156,21 @@ If the library has nothing worth faking, delete `testing.py` and its
 references (see `new-library` skill § 4).
 
 **Workspace-level abstractions:** The `support/abstractions/` package
-(`chumicro_abstractions`) provides shared injectable interfaces and fakes
-used across support packages and scripts tests — e.g., `FakeTime` and
-`RealTime` for seconds-domain time injection.  Import from
-`chumicro_abstractions` directly:
+(`chumicro_abstractions`) provides shared test fakes used across support
+packages and scripts tests — e.g., `FakeTime` for seconds-domain time
+injection.  Production code defaults to Python's `time` module directly;
+tests inject `FakeTime` to eliminate wall-clock waits:
 
 ```python
-from chumicro_abstractions import FakeTime, RealTime
+import time
+from chumicro_abstractions import FakeTime
+
+class MyService:
+    def __init__(self, *, time_source=None):
+        self._time = time_source or time
+
+# In tests:
+service = MyService(time_source=FakeTime())
 ```
 
 Related: Decision 0010, `new-library` skill.

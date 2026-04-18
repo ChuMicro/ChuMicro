@@ -3,16 +3,14 @@
 This package provides injectable time sources for support packages
 and scripts.  It is workspace infrastructure — not a published library.
 
-- ``RealTime`` — production default wrapping Python's ``time`` module.
 - ``FakeTime`` — deterministic fake for host-side tests: stable clock,
   ``sleep()`` auto-advances, ``advance()`` for explicit control.
 
 Production code accepts a ``time`` dependency via constructor injection
-and defaults to ``RealTime()``.  Tests inject ``FakeTime()`` to
-eliminate wall-clock waits.
+and defaults to Python's ``time`` module.  Tests inject ``FakeTime()``
+to eliminate wall-clock waits.
 """
 
 from chumicro_abstractions.fake_time import FakeTime
-from chumicro_abstractions.real_time import RealTime
 
-__all__ = ["FakeTime", "RealTime"]
+__all__ = ["FakeTime"]

@@ -8,18 +8,6 @@ and scripts tests (`scripts/tests/`).
 
 ## Available exports
 
-### `RealTime`
-
-Production default wrapping Python's `time` module.  Provides
-`monotonic()` and `sleep()` — the same interface as `FakeTime`.
-
-```python
-from chumicro_abstractions import RealTime
-
-class MyService:
-    def __init__(self, *, time=None):
-        self._time = time or RealTime()
-```
 
 ### `FakeTime`
 

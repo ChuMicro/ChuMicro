@@ -21,11 +21,10 @@ from __future__ import annotations
 
 import os
 import shutil
+import time as _time_module
 from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol, cast
-
-from chumicro_abstractions import RealTime
 
 _CTRL_A = b"\x01"
 _CTRL_C = b"\x03"
@@ -112,7 +111,7 @@ class CircuitpythonTransport:
             Accepts ``(port, baudrate, timeout)`` keyword arguments.
             Defaults to ``serial.Serial``.  Inject a fake for testing.
         time: Object providing ``monotonic()`` and ``sleep()`` methods.
-            Defaults to ``RealTime`` from ``chumicro_abstractions``.
+            Defaults to Python's ``time`` module.
             Inject ``FakeTime`` for deterministic tests with no
             wall-clock waits.
     """
@@ -126,7 +125,7 @@ class CircuitpythonTransport:
         mode: str = "ram",
         circuitpy_drive_path: str | None = None,
         serial_port_factory: Callable[..., object] | None = None,
-        time: RealTime | None = None,
+        time: object | None = None,
     ) -> None:
         self.address = address
         self.baudrate = baudrate
@@ -136,7 +135,7 @@ class CircuitpythonTransport:
         self._serial_port_factory: Callable[..., object] = (
             serial_port_factory or self._default_serial_factory
         )
-        self._time: RealTime = time or RealTime()
+        self._time = time or _time_module
         self._port: SerialPort | None = None
         self._staged_sources: list[tuple[str, str]] | None = None
 
