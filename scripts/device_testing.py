@@ -10,14 +10,11 @@ See Decision 0027 for the transport protocol and config schema.
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 
 from device_config import DeviceConfigError, filter_devices, load_devices
 from result_parser import parse_output
 from workspace import ROOT, discover_library_dirs
-
-_logger = logging.getLogger(__name__)
 
 
 def discover_functional_tests(
@@ -234,8 +231,8 @@ def _run_tests_on_device(
 
     try:
         transport.reset()
-    except Exception:
-        _logger.warning("Failed to reset device after test run", exc_info=True)
+    except Exception as reset_error:
+        print(f"  WARNING: Failed to reset device after test run: {reset_error}")
     transport.disconnect()
 
     return passed, failed, errors

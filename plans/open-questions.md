@@ -123,9 +123,17 @@ expectations, mentoring patterns for agent-assisted contributors, and
 community channels.  What's the minimum viable contributor experience
 before actively seeking contributions?
 
+### Should we use a unified logging framework across scripts?
+
+Currently scripts use `print()` for warnings and status.  A unified
+`logging` setup would allow log levels, consistent formatting, and
+filtering — but only makes sense if applied across all scripts, not
+piecemeal.  Parked for a rainy day.
+
 ---
 
 ## Resolved
+
 
 ### Should the coverage gate be higher?
 
