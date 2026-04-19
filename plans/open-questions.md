@@ -135,8 +135,8 @@ MicroPython doesn't have this problem — the filesystem is just a filesystem.
 CircuitPython does provide escape hatches:
 
 - `storage.disable_usb_drive()` in `boot.py` hides the USB drive entirely,
-  giving Python code full filesystem access.  Deploy via serial or Web
-  Workflow instead of drag-and-drop.
+  giving Python code full filesystem access.  Deploy via serial instead of
+  drag-and-drop.
 - `storage.remount("/", readonly=False)` in `boot.py` gives Python write
   access but makes the USB drive read-only to the host.
 - A physical button check in `boot.py` can toggle between modes at boot.
@@ -148,7 +148,7 @@ CircuitPython board in and out of "drive mode" by writing or updating its
 
 1. **"Development mode"** — `storage.disable_usb_drive()` in `boot.py`.
    No CIRCUITPY drive.  Full filesystem from Python.  Deploy via serial
-   transport or Web Workflow.  Board behaves more like MicroPython.
+   transport.  Board behaves more like MicroPython.
 2. **"Drive mode"** (default CircuitPython behavior) — no `boot.py`
    override, CIRCUITPY drive is visible, drag-and-drop works.
 3. **"Hybrid mode"** — `boot.py` checks a GPIO pin or button at boot to
@@ -175,10 +175,6 @@ Open sub-questions:
   entered with USB active.  Needs investigation on actual hardware.
 - Should hybrid mode be the default recommendation?  It's the most flexible
   but adds a physical-button dependency.
-- How does Web Workflow factor in?  On WiFi-capable boards (ESP32-S2/S3),
-  CircuitPython's built-in web server can replace the USB drive for file
-  management.  Could the tool configure Web Workflow as a drive-mode
-  alternative?
 - What's the interaction with `circuitpy_drive_path` in `devices.yml`?
   A board in development mode wouldn't have a drive path.
 
