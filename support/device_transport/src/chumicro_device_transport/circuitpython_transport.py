@@ -402,26 +402,26 @@ class CircuitpythonTransport:
     def _flush_volume(drive_path: Path) -> None:
         """Flush pending writes to the volume containing *drive_path*.
 
-        On macOS, calls the ``sync`` command and then waits briefly to
-        let the USB controller finish writing.  On other platforms,
-        falls back to ``os.sync()``.
+        On macOS, calls the ``sync`` command; on other platforms, uses
+        ``os.sync()``.  Always waits briefly afterward to let the USB
+        controller finish writing to FAT32 media.
 
         Args:
             drive_path: Path on the volume to flush.
         """
         if _sys_module.platform == "darwin":
             try:
-                # sync(8) on macOS flushes all filesystem caches.
                 subprocess.run(["sync"], check=True, capture_output=True)
-                # Allow time for the USB controller to finish writing
-                # to the FAT32 media.  Without this pause, the device
-                # may read stale content even after sync returns.
-                _time_module.sleep(0.5)
             except Exception:  # pragma: no cover
                 print("WARNING: sync command failed — falling back to os.sync()")
                 os.sync()
         else:
             os.sync()  # pragma: no cover — tests run on macOS
+
+        # Allow time for the USB controller to finish writing to the
+        # FAT32 media.  Without this pause, the device may read stale
+        # content even after sync returns.
+        _time_module.sleep(0.5)
 
     @staticmethod
     def _strip_extended_attributes(path: Path) -> None:
