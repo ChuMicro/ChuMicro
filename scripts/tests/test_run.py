@@ -338,6 +338,8 @@ class TestMainDispatch:
             ((), {
                 "runtime": None,
                 "device": None,
+                "micropython_device": None,
+                "circuitpython_device": None,
                 "library": None,
                 "test_filter": None,
                 "deploy_mode": None,
@@ -363,6 +365,8 @@ class TestMainDispatch:
             ((), {
                 "runtime": "circuitpython",
                 "device": "cp-board",
+                "micropython_device": None,
+                "circuitpython_device": None,
                 "library": "timing",
                 "test_filter": "heartbeat",
                 "deploy_mode": "flash",
@@ -381,8 +385,48 @@ class TestMainDispatch:
             ((), {
                 "runtime": "both",
                 "device": None,
+                "micropython_device": None,
+                "circuitpython_device": None,
                 "library": None,
                 "test_filter": None,
                 "deploy_mode": None,
             }),
         ]
+
+    def test_test_device_forwards_per_runtime_device_overrides(
+        self, monkeypatch,
+    ) -> None:
+        """test-device should forward explicit per-runtime device overrides."""
+        command_calls, fake_test_device = _make_fake_command(return_value=71)
+        monkeypatch.setattr(run, "test_device", fake_test_device)
+
+        result = run.main([
+            "run.py", "test-device",
+            "--runtime", "both",
+            "--micropython-device", "mp-alt",
+            "--circuitpython-device", "cp-alt",
+        ])
+
+        assert result == 71
+        assert command_calls == [
+            ((), {
+                "runtime": "both",
+                "device": None,
+                "micropython_device": "mp-alt",
+                "circuitpython_device": "cp-alt",
+                "library": None,
+                "test_filter": None,
+                "deploy_mode": None,
+            }),
+        ]
+
+    def test_test_device_rejects_mixed_legacy_and_runtime_specific_device_flags(
+        self,
+    ) -> None:
+        """The legacy --device shortcut should not combine with per-runtime overrides."""
+        with pytest.raises(SystemExit, match="2"):
+            run.main([
+                "run.py", "test-device",
+                "--device", "board-1",
+                "--micropython-device", "mp-alt",
+            ])

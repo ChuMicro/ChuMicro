@@ -163,10 +163,11 @@ class TestDeviceOrchestration:
     def test_runtime_filter_overrides_defaults(
         self, monkeypatch, tmp_path,
     ) -> None:
-        """Explicit runtime filters should bypass defaults-based selection."""
+        """Explicit runtime filters should change the runtime set, not fan out to every device."""
         devices_file = tmp_path / "devices.yml"
         devices_file.write_text(
             "defaults:\n"
+            "  micropython: mp-two\n"
             "  circuitpython: cp-default\n"
             "  ide_runtime: circuitpython\n"
             "devices:\n"
@@ -218,18 +219,18 @@ class TestDeviceOrchestration:
         result = device_testing.test_device(runtime="micropython")
 
         assert result == 0
-        assert selected_device_ids == ["mp-one", "mp-two"]
+        assert selected_device_ids == ["mp-two"]
 
     def test_explicit_both_runtime_matches_omission(
         self, monkeypatch, tmp_path,
     ) -> None:
-        """runtime='both' should explicitly request the defaults-selected pair."""
+        """runtime='both' should override defaults.ide_runtime but keep default IDs."""
         devices_file = tmp_path / "devices.yml"
         devices_file.write_text(
             "defaults:\n"
             "  micropython: mp-default\n"
             "  circuitpython: cp-default\n"
-            "  ide_runtime: both\n"
+            "  ide_runtime: micropython\n"
             "devices:\n"
             "  - id: mp-default\n"
             "    runtime: micropython\n"
@@ -277,6 +278,137 @@ class TestDeviceOrchestration:
 
         assert result == 0
         assert selected_device_ids == ["mp-default", "cp-default"]
+
+    def test_runtime_specific_device_overrides_replace_defaults(
+        self, monkeypatch, tmp_path,
+    ) -> None:
+        """Per-runtime CLI overrides should replace only their matching default IDs."""
+        devices_file = tmp_path / "devices.yml"
+        devices_file.write_text(
+            "defaults:\n"
+            "  micropython: mp-default\n"
+            "  circuitpython: cp-default\n"
+            "  ide_runtime: both\n"
+            "devices:\n"
+            "  - id: mp-default\n"
+            "    runtime: micropython\n"
+            "    address: /dev/ttyUSB0\n"
+            "  - id: mp-alt\n"
+            "    runtime: micropython\n"
+            "    address: /dev/ttyUSB1\n"
+            "  - id: cp-default\n"
+            "    runtime: circuitpython\n"
+            "    address: /dev/cu.usbmodem1\n"
+            "  - id: cp-alt\n"
+            "    runtime: circuitpython\n"
+            "    address: /dev/cu.usbmodem2\n"
+        )
+        monkeypatch.setenv("CHUMICRO_DEVICES", str(devices_file))
+
+        selected_device_ids: list[str] = []
+
+        def fake_run_tests_on_device(
+            device_entry,
+            test_plan,
+            harness_source,
+            test_filter,
+            deploy_mode=None,
+        ):
+            selected_device_ids.append(device_entry.identifier)
+            return 1, 0, 0
+
+        monkeypatch.setattr(
+            device_testing,
+            "discover_functional_tests",
+            lambda library=None, test_filter=None: [
+                (
+                    "timing",
+                    device_testing.ROOT / "libraries" / "timing" / "src",
+                    [
+                        device_testing.ROOT
+                        / "libraries"
+                        / "timing"
+                        / "functional_tests"
+                        / "test_heartbeat.py",
+                    ],
+                ),
+            ],
+        )
+        monkeypatch.setattr(
+            device_testing, "_run_tests_on_device", fake_run_tests_on_device,
+        )
+
+        result = device_testing.test_device(
+            runtime="both",
+            micropython_device="mp-alt",
+            circuitpython_device="cp-alt",
+        )
+
+        assert result == 0
+        assert selected_device_ids == ["mp-alt", "cp-alt"]
+
+    def test_runtime_specific_override_leaves_other_runtime_on_default(
+        self, monkeypatch, tmp_path,
+    ) -> None:
+        """Overriding one runtime should leave the other runtime on its default board."""
+        devices_file = tmp_path / "devices.yml"
+        devices_file.write_text(
+            "defaults:\n"
+            "  micropython: mp-default\n"
+            "  circuitpython: cp-default\n"
+            "  ide_runtime: both\n"
+            "devices:\n"
+            "  - id: mp-default\n"
+            "    runtime: micropython\n"
+            "    address: /dev/ttyUSB0\n"
+            "  - id: cp-default\n"
+            "    runtime: circuitpython\n"
+            "    address: /dev/cu.usbmodem1\n"
+            "  - id: cp-alt\n"
+            "    runtime: circuitpython\n"
+            "    address: /dev/cu.usbmodem2\n"
+        )
+        monkeypatch.setenv("CHUMICRO_DEVICES", str(devices_file))
+
+        selected_device_ids: list[str] = []
+
+        def fake_run_tests_on_device(
+            device_entry,
+            test_plan,
+            harness_source,
+            test_filter,
+            deploy_mode=None,
+        ):
+            selected_device_ids.append(device_entry.identifier)
+            return 1, 0, 0
+
+        monkeypatch.setattr(
+            device_testing,
+            "discover_functional_tests",
+            lambda library=None, test_filter=None: [
+                (
+                    "timing",
+                    device_testing.ROOT / "libraries" / "timing" / "src",
+                    [
+                        device_testing.ROOT
+                        / "libraries"
+                        / "timing"
+                        / "functional_tests"
+                        / "test_heartbeat.py",
+                    ],
+                ),
+            ],
+        )
+        monkeypatch.setattr(
+            device_testing, "_run_tests_on_device", fake_run_tests_on_device,
+        )
+
+        result = device_testing.test_device(
+            circuitpython_device="cp-alt",
+        )
+
+        assert result == 0
+        assert selected_device_ids == ["mp-default", "cp-alt"]
 
     def test_explicit_both_runtime_with_device_targets_that_device(
         self, monkeypatch, tmp_path,

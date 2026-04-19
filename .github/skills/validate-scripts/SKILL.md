@@ -254,7 +254,9 @@ python scripts/run.py test-device --library timing --test progress_on_runtime 2>
 #    "Device: <id>" lines for the defaults-selected board(s)
 #    OR "Device config error" / "No matching devices found" if local board config is incomplete
 # 🔍 `--runtime both` is an explicit alias for that same defaults-based dual-runtime selection
-# 🔍 --runtime / --device remain available to override the defaults
+# 🔍 `--runtime micropython|circuitpython` overrides only the runtime set
+# 🔍 `--micropython-device` / `--circuitpython-device` override the selected boards for those runtimes
+# 🔍 `--device` remains available as a legacy single-device shortcut
 ```
 
 ## 12. test-micropython-compatibility

@@ -80,10 +80,12 @@ Replace the placeholder `test-device` command with real orchestration:
 
 ```
 python scripts/run.py test-device
-    --runtime micropython|circuitpython|both   # filter by one runtime, or explicitly request the defaults-backed dual-runtime set
-    --device <id>                         # target specific device
-    --library <name>                      # limit to one library
-    --test <name>                         # filter to test file or function name
+    --runtime micropython|circuitpython|both   # override the default runtime set
+    --device <id>                              # legacy single-device shortcut
+    --micropython-device <id>                  # override the selected MicroPython board
+    --circuitpython-device <id>                # override the selected CircuitPython board
+    --library <name>                           # limit to one library
+    --test <name>                              # filter to test file or function name
 ```
 
 Flow: load config → select transport → for each library, stage `src/` + `functional_tests/` + harness → run each test file → parse output → report summary.

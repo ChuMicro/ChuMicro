@@ -739,6 +739,8 @@ def test_runtime_matrix(
 def test_device(
     runtime: str | None = None,
     device: str | None = None,
+    micropython_device: str | None = None,
+    circuitpython_device: str | None = None,
     library: str | None = None,
     test_filter: str | None = None,
     deploy_mode: str | None = None,
@@ -755,6 +757,8 @@ def test_device(
     return _test_device(
         runtime=runtime,
         device=device,
+        micropython_device=micropython_device,
+        circuitpython_device=circuitpython_device,
         library=library,
         test_filter=test_filter,
         deploy_mode=deploy_mode,
@@ -898,9 +902,10 @@ def _build_parser() -> argparse.ArgumentParser:
         "test-device",
         description=(
             "Run functional tests on connected devices. When --runtime and "
-            "--device are omitted, the command uses the default target "
-            "device(s) from devices.yml. Pass --runtime both to request "
-            "that same dual-runtime default selection explicitly."
+            "device flags are omitted, the command uses the default target "
+            "device(s) from devices.yml. Pass --runtime to override the "
+            "runtime set, and --micropython-device / --circuitpython-device "
+            "to override the default board for each runtime."
         ),
         help=(
             "run functional tests on connected devices "
@@ -911,13 +916,21 @@ def _build_parser() -> argparse.ArgumentParser:
         "--runtime",
         choices=["micropython", "circuitpython", "both"],
         help=(
-            "filter devices by runtime, or use 'both' for the default "
-            "devices.yml dual-runtime target set"
+            "override the default runtime set, or use 'both' for the "
+            "defaults-backed dual-runtime target set"
         ),
     )
     test_device_parser.add_argument(
         "--device",
-        help="target a specific device by ID",
+        help="target one specific device by ID (legacy single-device shortcut)",
+    )
+    test_device_parser.add_argument(
+        "--micropython-device",
+        help="override the default MicroPython device ID",
+    )
+    test_device_parser.add_argument(
+        "--circuitpython-device",
+        help="override the default CircuitPython device ID",
     )
     test_device_parser.add_argument(
         "--library",
@@ -1143,9 +1156,19 @@ def main(argv: list[str]) -> int:
         )
 
     if args.task == "test-device":
+        if args.device is not None and (
+            args.micropython_device is not None
+            or args.circuitpython_device is not None
+        ):
+            parser.error(
+                "--device cannot be combined with --micropython-device or "
+                "--circuitpython-device"
+            )
         return test_device(
             runtime=args.runtime,
             device=args.device,
+            micropython_device=args.micropython_device,
+            circuitpython_device=args.circuitpython_device,
             library=args.library,
             test_filter=args.test_filter,
             deploy_mode=args.deploy_mode,

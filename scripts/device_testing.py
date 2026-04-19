@@ -15,6 +15,7 @@ from pathlib import Path
 
 from device_config import (
     DeviceConfigError,
+    DeviceDefaults,
     filter_devices,
     load_device_registry,
     resolve_ide_devices,
@@ -399,9 +400,56 @@ def _run_tests_on_device(
     return passed, failed, errors
 
 
+def _resolve_selected_devices(
+    all_devices,
+    defaults: DeviceDefaults,
+    runtime: str | None,
+    device: str | None,
+    micropython_device: str | None,
+    circuitpython_device: str | None,
+) -> list:
+    """Resolve the device target set for the test-device CLI.
+
+    Selection precedence:
+
+    1. ``--device`` targets one specific board directly.
+    2. ``--runtime`` overrides which runtimes are active.
+    3. ``--micropython-device`` / ``--circuitpython-device`` override the
+       default board IDs for those runtimes.
+    4. Remaining choices fall back to ``devices.yml`` defaults, then the first
+       device of a runtime when no default ID is configured.
+
+    Args:
+        all_devices: Loaded device entries.
+        defaults: Parsed ``devices.yml`` defaults section.
+        runtime: Requested runtime set override.
+        device: Legacy single-device override.
+        micropython_device: MicroPython device-ID override.
+        circuitpython_device: CircuitPython device-ID override.
+
+    Returns:
+        Selected device entries in IDE/runtime order.
+    """
+    if device is not None:
+        effective_runtime = None if runtime in (None, "both") else runtime
+        return filter_devices(
+            all_devices, runtime=effective_runtime, device_id=device,
+        )
+
+    effective_defaults = DeviceDefaults(
+        micropython=micropython_device or defaults.micropython,
+        circuitpython=circuitpython_device or defaults.circuitpython,
+        deploy_mode=defaults.deploy_mode,
+        ide_runtime=runtime or defaults.ide_runtime,
+    )
+    return resolve_ide_devices(all_devices, effective_defaults)
+
+
 def test_device(
     runtime: str | None = None,
     device: str | None = None,
+    micropython_device: str | None = None,
+    circuitpython_device: str | None = None,
     library: str | None = None,
     test_filter: str | None = None,
     deploy_mode: str | None = None,
@@ -409,10 +457,11 @@ def test_device(
     """Run functional tests on connected devices.
 
     Args:
-        runtime: Filter to devices matching this runtime. Use ``"both"``
-            to select the defaults-backed MicroPython + CircuitPython target
-            set explicitly.
-        device: Filter to the device with this ID.
+        runtime: Override which runtimes are active. Use ``"both"`` to
+            request the MicroPython + CircuitPython target set explicitly.
+        device: Legacy single-device override.
+        micropython_device: Override the selected MicroPython device ID.
+        circuitpython_device: Override the selected CircuitPython device ID.
         library: Limit to a single library's functional tests.
         test_filter: Filter to test files or functions matching this
             substring.
@@ -430,15 +479,14 @@ def test_device(
         print(f"Device config error: {error}")
         return 2
 
-    # Filter devices. When the CLI does not specify runtime or device,
-    # mirror the IDE behavior by selecting the defaults from devices.yml.
-    # An explicit ``runtime="both"`` requests that same target set.
-    if runtime in (None, "both") and device is None:
-        selected = resolve_ide_devices(all_devices, defaults)
-    elif runtime == "both":
-        selected = filter_devices(all_devices, device_id=device)
-    else:
-        selected = filter_devices(all_devices, runtime=runtime, device_id=device)
+    selected = _resolve_selected_devices(
+        all_devices,
+        defaults,
+        runtime,
+        device,
+        micropython_device,
+        circuitpython_device,
+    )
 
     if not selected:
         print("No matching devices found.")
