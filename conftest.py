@@ -3,21 +3,32 @@
 Auto-discovers library and support package source roots so that
 ``pytest`` can resolve imports even without editable installs
 (e.g., in CI or on a fresh clone before setup runs).  Also
-excludes ``functional_tests/`` from host-side collection.
+excludes ``functional_tests/`` from host-side collection unless
+``CHUMICRO_DEVICE_RUNTIME`` is set, in which case the
+``pytest_device`` plugin routes them to real hardware.
 
 See ``plans/decisions/0009-per-library-test-runs.md`` for the
 per-library test isolation strategy.
+See ``plans/decisions/0027-device-testing-infrastructure.md`` for
+IDE integration via the device plugin.
 """
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 
-# Exclude real-device functional tests from host-side pytest collection.
-collect_ignore_glob = ["**/functional_tests/**"]
+# When CHUMICRO_DEVICE_RUNTIME is set, functional tests are collected
+# and routed to hardware by the pytest_device plugin.  Otherwise they
+# are excluded from host-side collection.
+if os.environ.get("CHUMICRO_DEVICE_RUNTIME"):
+    collect_ignore_glob: list[str] = []
+    pytest_plugins = ["pytest_device"]
+else:
+    collect_ignore_glob = ["**/functional_tests/**"]
 
 
 def _discover_source_roots() -> list[str]:
@@ -42,4 +53,3 @@ for _src_root in _discover_source_roots():
 _scripts_dir = str(ROOT / "scripts")
 if _scripts_dir not in sys.path:
     sys.path.insert(0, _scripts_dir)
-

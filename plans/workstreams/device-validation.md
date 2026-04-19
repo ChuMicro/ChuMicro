@@ -85,9 +85,9 @@ Transport (Decision 0027):
 
 ### Phase 3: IDE integration
 
-- [ ] Create pytest conftest/plugin that routes `functional_tests/` to device when `CHUMICRO_DEVICE_RUNTIME` is set
-- [ ] Add PyCharm run configuration template for device tests
-- [ ] Add VS Code configuration guidance
+- [x] Create pytest conftest/plugin that routes `functional_tests/` to device when `CHUMICRO_DEVICE_RUNTIME` is set
+- [x] Add PyCharm run configuration template for device tests
+- [x] Add VS Code configuration guidance
 - [ ] Verify single-test play button works in PyCharm
 
 ### Phase 4: CI integration (manual-trigger only)
@@ -126,6 +126,8 @@ Current verified state:
 - the repo now has a real local `prepare-circuitpython` / `test-circuitpython-compat` evaluation path instead of a placeholder task
 - the pinned CircuitPython `10.1.4` unix-port path now builds successfully in this macOS workspace
 - the cross-runtime unit tests now pass in this workspace under CPython, MicroPython unix-port, and CircuitPython unix-port (Decision 0016)
+- `scripts/pytest_device.py` routes `functional_tests/` to device via custom pytest collector when `CHUMICRO_DEVICE_RUNTIME` is set
+- PyCharm run configurations and VS Code task for device testing are managed by `sync-ide`
 
 ## Why not use `pytest` directly on device?
 

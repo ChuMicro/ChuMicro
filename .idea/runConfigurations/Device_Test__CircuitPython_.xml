@@ -1,0 +1,12 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Device Test (CircuitPython)" type="tests" factoryName="py.test">
+    <module name="chumicro" />
+    <option name="PARAMETERS" value="--co -q" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+    <envs>
+      <env name="CHUMICRO_DEVICE_RUNTIME" value="circuitpython" />
+    </envs>
+    <method v="2" />
+  </configuration>
+</component>
+

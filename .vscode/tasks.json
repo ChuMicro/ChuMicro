@@ -189,6 +189,20 @@
             }
         },
         {
+            "label": "Test Device",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "scripts/run.py",
+                "test-device"
+            ],
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
             "label": "Test Scripts",
             "type": "shell",
             "command": "python",
