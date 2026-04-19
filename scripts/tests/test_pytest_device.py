@@ -107,6 +107,17 @@ class TestTransportCache:
         cache.mark_staged("dev1", "timing", "test_ticks.py")
         assert cache.needs_staging("dev1", "timing", "test_ticks.py") is False
 
+    def test_has_staged_file_false_initially(self) -> None:
+        """A fresh cache should report no prior staged files."""
+        cache = pytest_device._TransportCache()
+        assert cache.has_staged_file("dev1") is False
+
+    def test_has_staged_file_true_after_mark_staged(self) -> None:
+        """mark_staged should record that the device has staged a file."""
+        cache = pytest_device._TransportCache()
+        cache.mark_staged("dev1", "timing", "test_ticks.py")
+        assert cache.has_staged_file("dev1") is True
+
     def test_different_library_needs_staging(self) -> None:
         """A different library should still need staging."""
         cache = pytest_device._TransportCache()
@@ -264,6 +275,104 @@ class TestLoadFallbackDevice:
         monkeypatch.setenv("CHUMICRO_DEVICES", str(devices_file))
         device = pytest_device._load_fallback_device()
         assert device.identifier == "board2"
+
+
+class TestShouldSoftResetBeforeStage:
+    """Tests for _should_soft_reset_before_stage."""
+
+    def test_false_for_first_file_on_device(self) -> None:
+        """The first RAM-mode file should not soft-reset before staging."""
+        from chumicro_device_transport.testing import FakeTransport
+
+        cache = pytest_device._TransportCache()
+        device = DeviceEntry(
+            identifier="cp_dev",
+            runtime="circuitpython",
+            address="/dev/cu.usbmodem1",
+        )
+        transport = FakeTransport(mode="ram")
+
+        should_reset = pytest_device._should_soft_reset_before_stage(
+            cache, device, transport, "timing", "test_heartbeat.py",
+        )
+
+        assert should_reset is False
+
+    def test_true_when_switching_files_in_circuitpython_ram_mode(self) -> None:
+        """A new RAM-mode file should soft-reset to reclaim interpreter heap."""
+        from chumicro_device_transport.testing import FakeTransport
+
+        cache = pytest_device._TransportCache()
+        cache.mark_staged("cp_dev", "timing", "test_heartbeat.py")
+        device = DeviceEntry(
+            identifier="cp_dev",
+            runtime="circuitpython",
+            address="/dev/cu.usbmodem1",
+        )
+        transport = FakeTransport(mode="ram")
+
+        should_reset = pytest_device._should_soft_reset_before_stage(
+            cache, device, transport, "timing", "test_heartbeat_ticks.py",
+        )
+
+        assert should_reset is True
+
+    def test_false_for_same_file_in_circuitpython_ram_mode(self) -> None:
+        """Repeated items from the same file should keep the current batch alive."""
+        from chumicro_device_transport.testing import FakeTransport
+
+        cache = pytest_device._TransportCache()
+        cache.mark_staged("cp_dev", "timing", "test_heartbeat.py")
+        device = DeviceEntry(
+            identifier="cp_dev",
+            runtime="circuitpython",
+            address="/dev/cu.usbmodem1",
+        )
+        transport = FakeTransport(mode="ram")
+
+        should_reset = pytest_device._should_soft_reset_before_stage(
+            cache, device, transport, "timing", "test_heartbeat.py",
+        )
+
+        assert should_reset is False
+
+    def test_false_for_circuitpython_flash_mode(self) -> None:
+        """Flash mode should not use the RAM-mode per-file reset rule."""
+        from chumicro_device_transport.testing import FakeTransport
+
+        cache = pytest_device._TransportCache()
+        cache.mark_staged("cp_dev", "timing", "test_heartbeat.py")
+        device = DeviceEntry(
+            identifier="cp_dev",
+            runtime="circuitpython",
+            address="/dev/cu.usbmodem1",
+        )
+        transport = FakeTransport(mode="flash")
+
+        should_reset = pytest_device._should_soft_reset_before_stage(
+            cache, device, transport, "timing", "test_heartbeat_ticks.py",
+        )
+
+        assert should_reset is False
+
+    def test_false_for_micropython_mount_mode(self) -> None:
+        """MicroPython already gets clean execution without this reset path."""
+        from chumicro_device_transport.testing import FakeTransport
+
+        cache = pytest_device._TransportCache()
+        cache.mark_staged("mp_dev", "timing", "test_heartbeat.py")
+        device = DeviceEntry(
+            identifier="mp_dev",
+            runtime="micropython",
+            address="/dev/ttyUSB0",
+        )
+        transport = FakeTransport(mode="mount")
+
+        should_reset = pytest_device._should_soft_reset_before_stage(
+            cache, device, transport, "timing", "test_heartbeat_ticks.py",
+        )
+
+        assert should_reset is False
 
 
 class TestPytestCollectFile:

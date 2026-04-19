@@ -165,6 +165,18 @@ class _TransportCache:
         """
         self._last_staged[device_id] = (library_name, test_file_name)
 
+    def has_staged_file(self, device_id: str) -> bool:
+        """Return whether the device has staged a RAM-mode file already.
+
+        Args:
+            device_id: Device identifier.
+
+        Returns:
+            ``True`` when at least one ``(library, file)`` staging record
+            exists for the device.
+        """
+        return device_id in self._last_staged
+
     def get_batch_result(
         self,
         device_id: str,
@@ -360,6 +372,13 @@ class DeviceTestItem(pytest.Item):
                 self.test_file.name,
             )
             if cache.needs_staging(*staging_key):
+                if _should_soft_reset_before_stage(
+                    cache, device_entry, transport, self._library_name, self.test_file.name,
+                ):
+                    try:
+                        transport.soft_reset()
+                    except Exception as error:
+                        pytest.fail(f"Device reset failed between test files: {error}")
                 source_dirs = _resolve_library_source_dirs(self._library_dir)
                 transport.stage(
                     source_dirs, [self.test_file], HARNESS_SOURCE,
@@ -478,6 +497,52 @@ def _load_fallback_device() -> DeviceEntry:
         )
 
     return targets[0]
+
+
+def _should_soft_reset_before_stage(
+    cache: _TransportCache,
+    device_entry: DeviceEntry,
+    transport,
+    library_name: str,
+    test_file_name: str,
+) -> bool:
+    """Return whether RAM-mode re-staging should soft-reset first.
+
+    CircuitPython RAM mode injects library modules and test code into the
+    live interpreter via raw REPL. When switching to a different test file,
+    the previous file's injected modules can remain in ``sys.modules`` and
+    consume heap. On low-RAM boards this can cause the next inline bootstrap
+    to fail with ``MemoryError`` before execution even begins.
+
+    To preserve batching within a file while reclaiming memory across files,
+    soft-reset only when all of the following are true:
+
+    - the target runtime is CircuitPython,
+    - the transport is in RAM mode,
+    - the device previously staged a file in this session, and
+    - the current staging target differs from the last one.
+
+    Args:
+        cache: Session transport cache.
+        device_entry: Target device.
+        transport: Connected transport instance.
+        library_name: Library for the current item.
+        test_file_name: Test file for the current item.
+
+    Returns:
+        ``True`` when a soft reset should run before ``stage()``.
+    """
+    if device_entry.runtime != "circuitpython":
+        return False
+    if not hasattr(transport, "soft_reset"):
+        return False
+    if getattr(transport, "mode", None) != "ram":
+        return False
+    if not cache.has_staged_file(device_entry.identifier):
+        return False
+    return cache.needs_staging(
+        device_entry.identifier, library_name, test_file_name,
+    )
 
 
 def _bulk_stage_for_device(session, device_entry: DeviceEntry, transport) -> None:
