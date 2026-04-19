@@ -290,16 +290,20 @@ def _run_tests_on_device(
         if abort:
             break
 
-        if use_per_library_staging:
-            # Soft-reset between library groups so modules from the
-            # previous library are evicted from the interpreter.  This
-            # prevents RAM accumulation and ensures test isolation.
-            if previous_library_ran:
-                try:
-                    transport.soft_reset()
-                except Exception as reset_error:
-                    print(f"  WARNING: soft_reset failed between libraries: {reset_error}")
+        # Soft-reset between library groups so modules from the
+        # previous library are evicted from the interpreter.  This
+        # ensures test isolation: a test cannot accidentally pass
+        # because a dependency was left in sys.modules by an earlier
+        # library's tests.  MicroPython mount mode already gets a
+        # clean interpreter per execute() call, but the reset is
+        # harmless there.
+        if previous_library_ran and hasattr(transport, "soft_reset"):
+            try:
+                transport.soft_reset()
+            except Exception as reset_error:
+                print(f"  WARNING: soft_reset failed between libraries: {reset_error}")
 
+        if use_per_library_staging:
             # Resolve only the source dirs this library needs.
             library_dir = source_dir.parent
             library_source_dirs = _resolve_library_source_dirs(library_dir)
@@ -343,8 +347,7 @@ def _run_tests_on_device(
                     print("  Aborting remaining tests on this device.")
                     abort = True
 
-        if use_per_library_staging:
-            previous_library_ran = True
+        previous_library_ran = True
 
     try:
         transport.reset()
