@@ -138,6 +138,7 @@ class CircuitpythonTransport:
         self._time = time or _time_module
         self._port: SerialPort | None = None
         self._staged_sources: list[tuple[str, str]] | None = None
+        self._flash_libs_staged: bool = False
 
     @staticmethod
     def _default_serial_factory(**kwargs) -> SerialPort:  # pragma: no cover
@@ -230,7 +231,10 @@ class CircuitpythonTransport:
         """Copy staged files to the CIRCUITPY USB drive.
 
         Disables autoreload before copying to prevent restarts during
-        the file transfer.
+        the file transfer.  Library and harness packages are only copied
+        on the first call; subsequent calls within the same session only
+        update the test files.  This avoids redundant slow writes to
+        the FAT32 USB drive.
 
         Args:
             source_dirs: Library ``src/`` directories.
@@ -259,26 +263,28 @@ class CircuitpythonTransport:
             "supervisor.runtime.autoreload = False"
         )
 
-        # Copy library packages to lib/ on the drive.
-        lib_destination = drive_path / "lib"
-        try:
-            lib_destination.mkdir(exist_ok=True)
-        except PermissionError as permission_error:
-            raise CircuitpythonTransportError(
-                f"Cannot write to CIRCUITPY drive at {drive_path}.  "
-                f"Flash deploy mode requires the board's boot.py to "
-                f"set storage.remount('/', readonly=False) so the host "
-                f"can write files.  Use deploy_mode='ram' to skip flash "
-                f"writes."
-            ) from permission_error
+        # Copy library and harness packages only on the first call.
+        if not self._flash_libs_staged:
+            lib_destination = drive_path / "lib"
+            try:
+                lib_destination.mkdir(exist_ok=True)
+            except PermissionError as permission_error:
+                raise CircuitpythonTransportError(
+                    f"Cannot write to CIRCUITPY drive at {drive_path}.  "
+                    f"Flash deploy mode requires the board's boot.py to "
+                    f"set storage.remount('/', readonly=False) so the host "
+                    f"can write files.  Use deploy_mode='ram' to skip flash "
+                    f"writes."
+                ) from permission_error
 
-        for source_directory in source_dirs:
-            self._copy_packages_to_drive(source_directory, lib_destination)
+            for source_directory in source_dirs:
+                self._copy_packages_to_drive(source_directory, lib_destination)
 
-        # Copy harness packages to lib/.
-        self._copy_packages_to_drive(harness_source, lib_destination)
+            # Copy harness packages to lib/.
+            self._copy_packages_to_drive(harness_source, lib_destination)
+            self._flash_libs_staged = True
 
-        # Copy test files to drive root.
+        # Copy test files to drive root (always — they change per run).
         for test_file in test_files:
             destination = drive_path / test_file.name
             shutil.copy2(test_file, destination)
@@ -434,6 +440,7 @@ class CircuitpythonTransport:
                 pass  # Best-effort close.
             self._port = None
         self._staged_sources = None
+        self._flash_libs_staged = False
 
     @property
     def staged_sources(self) -> list[tuple[str, str]] | None:

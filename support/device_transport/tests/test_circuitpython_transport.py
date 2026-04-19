@@ -876,6 +876,60 @@ class TestFlashMode:
         written_data = b"".join(port.writes)
         assert b"autoreload" not in written_data
 
+    def test_flash_stage_skips_lib_copy_on_second_call(
+        self, tmp_path: Path,
+    ) -> None:
+        """Second stage() call should skip library copy, only update test file."""
+        drive_path = tmp_path / "CIRCUITPY"
+        drive_path.mkdir()
+
+        source_dir = tmp_path / "src"
+        package_dir = source_dir / "chumicro_timing"
+        package_dir.mkdir(parents=True)
+        (package_dir / "__init__.py").write_text("# init")
+
+        harness_dir = tmp_path / "harness"
+        harness_dir.mkdir()
+
+        test_file_one = tmp_path / "test_one.py"
+        test_file_one.write_text("def test_one(): pass")
+        test_file_two = tmp_path / "test_two.py"
+        test_file_two.write_text("def test_two(): pass")
+
+        # Responses: connect, autoreload disable (stage 1),
+        # autoreload disable (stage 2),
+        # _enter_raw_repl + autoreload restore (disconnect).
+        port = FakeSerialPort(
+            read_responses=[
+                _RAW_REPL_PROMPT, _OK_RESPONSE,
+                _OK_RESPONSE,
+                _RAW_REPL_PROMPT, _OK_RESPONSE,
+            ],
+        )
+
+        transport = self._make_flash_transport(port, str(drive_path))
+        transport.connect()
+
+        # First stage — copies libraries + test file.
+        transport.stage([source_dir], [test_file_one], harness_dir)
+        assert (drive_path / "lib" / "chumicro_timing" / "__init__.py").exists()
+        assert (drive_path / "test_one.py").exists()
+        assert transport._flash_libs_staged is True
+
+        # Modify a library file on the host (should NOT be re-copied).
+        (package_dir / "__init__.py").write_text("# modified")
+
+        # Second stage — only test file should be updated.
+        transport.stage([source_dir], [test_file_two], harness_dir)
+        assert (drive_path / "test_two.py").exists()
+        # Library should still have original content (not re-copied).
+        lib_init = drive_path / "lib" / "chumicro_timing" / "__init__.py"
+        assert lib_init.read_text() == "# init"
+
+        transport.disconnect()
+        # After disconnect, flag is cleared.
+        assert transport._flash_libs_staged is False
+
     def test_flash_stage_excludes_pycache(
         self, tmp_path: Path,
     ) -> None:
