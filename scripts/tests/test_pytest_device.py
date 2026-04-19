@@ -126,32 +126,28 @@ class TestIterRuntimeVariants:
         ]
 
 
-class TestExplicitFunctionTargets:
-    """Tests for explicit single-function nodeid helpers."""
+class TestRuntimeControlNames:
+    """Tests for synthetic runtime control item names."""
 
-    def test_explicit_function_targets_returns_matching_names(self, tmp_path: Path) -> None:
-        """Explicit nodeid args should extract test function names for the file."""
-        test_file = tmp_path / "test_example.py"
-        test_file.write_text("def test_alpha():\n    pass\n")
-
-        names = pytest_device._explicit_function_targets(
-            [f"{test_file}::test_alpha"], test_file,
+    def test_runtime_prepare_name(self) -> None:
+        """Prepare items should include the runtime in a stable label."""
+        device = DeviceEntry(
+            identifier="cp-board",
+            runtime="circuitpython",
+            address="/dev/cu.usbmodem1",
         )
 
-        assert names == ["test_alpha"]
+        assert pytest_device._runtime_prepare_name(device) == "[circuitpython prepare]"
 
-    def test_explicit_function_targets_ignores_other_files(self, tmp_path: Path) -> None:
-        """Nodeids for other files should not affect this file's collection."""
-        this_file = tmp_path / "test_example.py"
-        other_file = tmp_path / "test_other.py"
-        this_file.write_text("def test_alpha():\n    pass\n")
-        other_file.write_text("def test_beta():\n    pass\n")
-
-        names = pytest_device._explicit_function_targets(
-            [f"{other_file}::test_beta"], this_file,
+    def test_runtime_run_file_name(self) -> None:
+        """Run-file items should include the runtime in a stable label."""
+        device = DeviceEntry(
+            identifier="mp-board",
+            runtime="micropython",
+            address="/dev/ttyUSB0",
         )
 
-        assert names == []
+        assert pytest_device._runtime_run_file_name(device) == "[micropython run file]"
 
 
 class TestTransportCache:

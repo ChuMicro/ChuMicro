@@ -113,47 +113,14 @@ def _iter_runtime_variants(
             yield function_name, device
 
 
-def _explicit_function_targets(
-    config_args: list[str],
-    test_file: Path,
-) -> list[str]:
-    """Return explicitly targeted test functions for *test_file*.
+def _runtime_prepare_name(device_entry: DeviceEntry) -> str:
+    """Return the synthetic pytest item name for a runtime prepare step."""
+    return f"[{device_entry.runtime} prepare]"
 
-    PyCharm and pytest can target a single function via a nodeid like
-    ``path/to/test_file.py::test_name``.  When that happens, keep the
-    flatter per-test item layout so direct function runs continue to look
-    natural and do not require the user to know about synthetic batch
-    collector nodeids.
 
-    Args:
-        config_args: Raw pytest CLI args.
-        test_file: Functional test file currently being collected.
-
-    Returns:
-        Ordered list of explicitly targeted ``test_*`` function names for
-        the file.
-    """
-    explicit_names: list[str] = []
-    resolved_test_file = test_file.resolve()
-
-    for arg in config_args:
-        if "::" not in arg:
-            continue
-        file_part, remainder = arg.split("::", 1)
-        try:
-            resolved_arg_file = Path(file_part).resolve()
-        except OSError:
-            continue
-        if resolved_arg_file != resolved_test_file:
-            continue
-
-        function_name = remainder.split("::", 1)[0]
-        if not function_name.startswith("test_"):
-            continue
-        if function_name not in explicit_names:
-            explicit_names.append(function_name)
-
-    return explicit_names
+def _runtime_run_file_name(device_entry: DeviceEntry) -> str:
+    """Return the synthetic pytest item name for a runtime file-run step."""
+    return f"[{device_entry.runtime} run file]"
 
 
 class _TransportCache:
@@ -338,40 +305,23 @@ class DeviceTestFile(pytest.File):
         """Yield a :class:`DeviceTestItem` for each test function and target device."""
         function_names = _parse_test_functions(self.path)
         targets = getattr(self.session, "_device_targets", None)
-        explicit_function_names = _explicit_function_targets(
-            self.session.config.args, self.path,
-        )
 
-        if explicit_function_names:
-            function_names = [
-                name for name in function_names
-                if name in explicit_function_names
-            ]
-
-        if explicit_function_names:
-            if targets is None or len(targets) <= 1:
-                device = targets[0] if targets else None
-                for name in function_names:
-                    yield DeviceTestItem.from_parent(
-                        self,
-                        name=name,
-                        test_file=self.path,
-                        function_name=name,
-                        target_device=device,
-                    )
-            else:
-                for name, device in _iter_runtime_variants(function_names, targets):
-                    display_name = f"{name}[{device.runtime}]"
-                    yield DeviceTestItem.from_parent(
-                        self,
-                        name=display_name,
-                        test_file=self.path,
-                        function_name=name,
-                        target_device=device,
-                    )
-        elif targets is None or len(targets) <= 1:
+        if targets is None or len(targets) <= 1:
             # No config, single target, or no devices — one item per function.
             device = targets[0] if targets else None
+            if device is not None:
+                yield DevicePrepareItem.from_parent(
+                    self,
+                    name=_runtime_prepare_name(device),
+                    test_file=self.path,
+                    target_device=device,
+                )
+                yield DeviceRunFileItem.from_parent(
+                    self,
+                    name=_runtime_run_file_name(device),
+                    test_file=self.path,
+                    target_device=device,
+                )
             for name in function_names:
                 yield DeviceTestItem.from_parent(
                     self,
@@ -382,6 +332,19 @@ class DeviceTestFile(pytest.File):
                 )
         else:
             # Multiple targets (both mode) — parametrize by runtime.
+            for device in targets:
+                yield DevicePrepareItem.from_parent(
+                    self,
+                    name=_runtime_prepare_name(device),
+                    test_file=self.path,
+                    target_device=device,
+                )
+                yield DeviceRunFileItem.from_parent(
+                    self,
+                    name=_runtime_run_file_name(device),
+                    test_file=self.path,
+                    target_device=device,
+                )
             for name, device in _iter_runtime_variants(function_names, targets):
                 display_name = f"{name}[{device.runtime}]"
                 yield DeviceTestItem.from_parent(
@@ -513,6 +476,29 @@ class DeviceRuntimeItem(pytest.Item):
     def reportinfo(self):
         """Return location info for test reporting."""
         return self.path, None, f"[device] {self._library_name}::{self.name}"
+
+
+class DevicePrepareItem(DeviceRuntimeItem):
+    """Synthetic item that owns transport connect/stage time for a runtime."""
+
+    def runtest(self) -> None:
+        """Prepare the runtime for a file batch."""
+        device_entry = self._resolve_device_entry()
+        self._ensure_prepared(device_entry)
+
+
+class DeviceRunFileItem(DeviceRuntimeItem):
+    """Synthetic item that owns file-batch execution time for a runtime."""
+
+    def runtest(self) -> None:
+        """Run the file batch once and validate the harness-level result."""
+        device_entry = self._resolve_device_entry()
+        result, raw_output = self._ensure_batch_result(device_entry)
+
+        if result is None:
+            pytest.fail(raw_output)
+        if not result.tests:
+            pytest.fail(f"No test results in device output:\n{raw_output}")
 
 
 class DeviceTestItem(DeviceRuntimeItem):
