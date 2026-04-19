@@ -878,10 +878,10 @@ class TestFlashMode:
         written_data = b"".join(port.writes)
         assert b"autoreload" not in written_data
 
-    def test_flash_stage_skips_lib_copy_on_second_call(
+    def test_flash_stage_is_idempotent_across_calls(
         self, tmp_path: Path,
     ) -> None:
-        """Second stage() call should skip library copy, only update test file."""
+        """Repeated stage() calls should produce the same drive state."""
         drive_path = tmp_path / "CIRCUITPY"
         drive_path.mkdir()
 
@@ -900,12 +900,10 @@ class TestFlashMode:
 
         # Responses: connect, autoreload disable (stage 1),
         # autoreload disable (stage 2),
-        # autoreload disable (stage 3 — no-op for test file),
         # _enter_raw_repl + autoreload restore (disconnect).
         port = FakeSerialPort(
             read_responses=[
                 _RAW_REPL_PROMPT, _OK_RESPONSE,
-                _OK_RESPONSE,
                 _OK_RESPONSE,
                 _RAW_REPL_PROMPT, _OK_RESPONSE,
             ],
@@ -914,34 +912,22 @@ class TestFlashMode:
         transport = self._make_flash_transport(port, str(drive_path))
         transport.connect()
 
-        # First stage — copies libraries + test file.
+        # First stage — libs + test_one.
         transport.stage([source_dir], [test_file_one], harness_dir)
         assert (drive_path / "lib" / "chumicro_timing" / "__init__.py").exists()
         assert (drive_path / "test_one.py").exists()
-        assert transport._flash_libs_staged is True
 
-        # Modify a library file on the host (should NOT be re-copied).
-        (package_dir / "__init__.py").write_text("# modified")
-
-        # Second stage with a different test file — only the new test
-        # file should be synced; libs and test_one are skipped.
+        # Second stage with test_two — rsync replaces root test files
+        # and keeps libs intact (checksum match = no rewrite).
         transport.stage([source_dir], [test_file_two], harness_dir)
         assert (drive_path / "test_two.py").exists()
-        # Library should still have original content (not re-copied).
+        # test_one should be gone (--delete removes stale files).
+        assert not (drive_path / "test_one.py").exists()
+        # Library content is unchanged.
         lib_init = drive_path / "lib" / "chumicro_timing" / "__init__.py"
         assert lib_init.read_text() == "# init"
-        # Both test files should be tracked as synced.
-        assert test_file_one in transport._flash_synced_tests
-        assert test_file_two in transport._flash_synced_tests
-
-        # Third stage re-using test_file_one — should be a no-op
-        # since it was already synced.
-        transport.stage([source_dir], [test_file_one], harness_dir)
 
         transport.disconnect()
-        # After disconnect, flags and tracking are cleared.
-        assert transport._flash_libs_staged is False
-        assert len(transport._flash_synced_tests) == 0
 
     def test_flash_stage_excludes_pycache(
         self, tmp_path: Path,
@@ -1023,7 +1009,7 @@ class TestFlashMode:
 
 
 class TestRsyncHelpers:
-    """Tests for _rsync_directory, _rsync_file, and _flush_volume."""
+    """Tests for _rsync_directory and _flush_volume."""
 
     def test_rsync_directory_raises_on_failure(
         self, tmp_path: Path,
@@ -1069,47 +1055,6 @@ class TestRsyncHelpers:
             ):
                 CircuitpythonTransport._rsync_directory(source, destination)
 
-    def test_rsync_file_raises_on_failure(
-        self, tmp_path: Path,
-    ) -> None:
-        """_rsync_file should raise on rsync failure."""
-        source_file = tmp_path / "test_example.py"
-        source_file.write_text("# content")
-        destination = tmp_path / "destination"
-        destination.mkdir()
-
-        with patch(
-            "chumicro_device_transport.circuitpython_transport"
-            ".subprocess.run",
-            side_effect=subprocess.CalledProcessError(
-                1, "rsync", stderr="write error",
-            ),
-        ):
-            with pytest.raises(
-                CircuitpythonTransportError,
-                match="rsync failed for test_example.py",
-            ):
-                CircuitpythonTransport._rsync_file(source_file, destination)
-
-    def test_rsync_file_raises_when_not_installed(
-        self, tmp_path: Path,
-    ) -> None:
-        """_rsync_file should raise when rsync is not installed."""
-        source_file = tmp_path / "test_example.py"
-        source_file.write_text("# content")
-        destination = tmp_path / "destination"
-        destination.mkdir()
-
-        with patch(
-            "chumicro_device_transport.circuitpython_transport"
-            ".subprocess.run",
-            side_effect=FileNotFoundError("rsync"),
-        ):
-            with pytest.raises(
-                CircuitpythonTransportError,
-                match="rsync is required",
-            ):
-                CircuitpythonTransport._rsync_file(source_file, destination)
 
     def test_flush_volume_calls_sync_on_darwin(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,

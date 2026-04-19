@@ -141,8 +141,6 @@ class CircuitpythonTransport:
         self._time = time or _time_module
         self._port: SerialPort | None = None
         self._staged_sources: list[tuple[str, str]] | None = None
-        self._flash_libs_staged: bool = False
-        self._flash_synced_tests: set[Path] = set()
 
     @staticmethod
     def _default_serial_factory(**kwargs) -> SerialPort:  # pragma: no cover
@@ -234,21 +232,27 @@ class CircuitpythonTransport:
     ) -> None:
         """Copy staged files to the CIRCUITPY USB drive via rsync.
 
-        Uses rsync with ``--checksum`` and ``--inplace`` to ensure
-        reliable writes to FAT32 USB drives.  macOS + FAT32 is prone
-        to data loss with ``shutil.copytree`` because the OS buffers
-        writes aggressively and ``os.sync()`` returns before the drive
-        has flushed.  rsync's checksum verification catches these
-        failures, and ``--inplace`` avoids temp-file rename races on
-        FAT32.  ``--delete`` removes stale files that no longer belong
-        on the device.
+        Builds a local staging directory that mirrors the desired drive
+        layout — library and harness packages under ``lib/``, test
+        files at the root — then rsyncs the whole thing to the drive
+        in one pass.  Building locally is reliable (no FAT32 quirks);
+        rsync handles the fragile USB-drive write.
+
+        rsync flags:
+
+        - ``--checksum``: verify content (FAT32 timestamps are
+          unreliable).
+        - ``--inplace``: write directly into files (avoids temp-file
+          rename races on FAT32).
+        - ``--delete``: remove stale files that no longer belong on
+          the device.
+
+        Device config files (``boot.py``, ``boot_out.txt``,
+        ``settings.toml``) are excluded from deletion so they
+        survive the sync.
 
         Disables autoreload before copying to prevent restarts during
-        the file transfer.  Library and harness packages are only
-        synced on the first call; subsequent calls within the same
-        session only update the test files.
-
-        Requires rsync to be installed on the host.
+        the file transfer.  Requires rsync on the host.
 
         Args:
             source_dirs: Library ``src/`` directories.
@@ -257,7 +261,7 @@ class CircuitpythonTransport:
 
         Raises:
             CircuitpythonTransportError: If the CIRCUITPY drive cannot
-                be found (neither configured nor auto-detected).
+                be found or is not writable.
         """
         drive_path_str = self.circuitpy_drive_path or find_circuitpy_drive()
         if not drive_path_str:
@@ -277,38 +281,23 @@ class CircuitpythonTransport:
             "supervisor.runtime.autoreload = False"
         )
 
-        # Copy library and harness packages only on the first call.
-        if not self._flash_libs_staged:
-            lib_destination = drive_path / "lib"
-            try:
-                lib_destination.mkdir(exist_ok=True)
-            except PermissionError as permission_error:
-                raise CircuitpythonTransportError(
-                    f"Cannot write to CIRCUITPY drive at {drive_path}.  "
-                    f"Flash deploy mode requires the board's boot.py to "
-                    f"set storage.remount('/', readonly=False) so the host "
-                    f"can write files.  Use deploy_mode='ram' to skip flash "
-                    f"writes."
-                ) from permission_error
+        # Build a local staging directory that mirrors the full drive
+        # layout, then rsync it to the device in one pass.
+        with tempfile.TemporaryDirectory() as staging_directory:
+            staging_path = Path(staging_directory)
 
-            # Build a local staging directory with the final lib/
-            # layout, then rsync the whole thing to the drive in one
-            # pass.  Building locally is reliable (no FAT32 issues);
-            # rsync handles the fragile USB-drive write.
-            with tempfile.TemporaryDirectory() as staging_directory:
-                staging_path = Path(staging_directory)
-                for source_directory in source_dirs:
-                    self._merge_packages(source_directory, staging_path)
-                self._merge_packages(harness_source, staging_path)
-                self._rsync_directory(staging_path, lib_destination)
+            # lib/ — library packages + test harness.
+            lib_staging = staging_path / "lib"
+            lib_staging.mkdir()
+            for source_directory in source_dirs:
+                self._merge_packages(source_directory, lib_staging)
+            self._merge_packages(harness_source, lib_staging)
 
-            self._flash_libs_staged = True
+            # Test files at root.
+            for test_file in test_files:
+                shutil.copy2(test_file, staging_path / test_file.name)
 
-        # Sync test files to drive root (skips already-synced files).
-        for test_file in test_files:
-            if test_file not in self._flash_synced_tests:
-                self._rsync_file(test_file, drive_path)
-                self._flash_synced_tests.add(test_file)
+            self._rsync_directory(staging_path, drive_path)
 
         # Flush the volume so the device reads current content.
         self._flush_volume(drive_path)
@@ -354,6 +343,10 @@ class CircuitpythonTransport:
         temp-file rename races on FAT32), and ``--delete`` to remove
         stale files from the destination.
 
+        Device config files and build artifacts that live on the drive
+        but are not part of the test deployment are excluded from
+        deletion.
+
         Raises:
             CircuitpythonTransportError: If rsync is not installed or
                 the sync fails.
@@ -372,6 +365,10 @@ class CircuitpythonTransport:
             "--exclude=*.pyc",
             "--exclude=.DS_Store",
             "--exclude=._*",
+            "--exclude=boot.py",
+            "--exclude=boot_out.txt",
+            "--exclude=code.py",
+            "--exclude=settings.toml",
             str(source) + "/",
             str(destination) + "/",
         ]
@@ -387,38 +384,6 @@ class CircuitpythonTransport:
                 f"rsync failed: {rsync_error.stderr}"
             ) from rsync_error
 
-    @staticmethod
-    def _rsync_file(source: Path, destination_directory: Path) -> None:
-        """Rsync a single file to a destination directory.
-
-        Uses ``--checksum`` and ``--inplace`` for reliable FAT32 writes.
-
-        Raises:
-            CircuitpythonTransportError: If rsync is not installed or
-                the sync fails.
-
-        Args:
-            source: Source file path.
-            destination_directory: Directory to sync the file into.
-        """
-        command = [
-            "rsync",
-            "--checksum",
-            "--inplace",
-            str(source),
-            str(destination_directory) + "/",
-        ]
-        try:
-            subprocess.run(command, capture_output=True, text=True, check=True)
-        except FileNotFoundError as not_found_error:
-            raise CircuitpythonTransportError(
-                "rsync is required for flash deploy mode but was not found.  "
-                "Install rsync and ensure it is on your PATH."
-            ) from not_found_error
-        except subprocess.CalledProcessError as rsync_error:
-            raise CircuitpythonTransportError(
-                f"rsync failed for {source.name}: {rsync_error.stderr}"
-            ) from rsync_error
 
     @staticmethod
     def _flush_volume(drive_path: Path) -> None:
@@ -567,8 +532,6 @@ class CircuitpythonTransport:
                 pass  # Best-effort close.
             self._port = None
         self._staged_sources = None
-        self._flash_libs_staged = False
-        self._flash_synced_tests = set()
 
     @property
     def staged_sources(self) -> list[tuple[str, str]] | None:
