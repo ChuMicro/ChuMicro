@@ -973,12 +973,12 @@ class TestFlashMode:
     def test_flash_stage_overwrites_existing_package(
         self, tmp_path: Path,
     ) -> None:
-        """stage() should overwrite existing package on drive."""
+        """stage() should overwrite existing files on drive in place."""
         drive_path = tmp_path / "CIRCUITPY"
         lib_dir = drive_path / "lib" / "chumicro_timing"
         lib_dir.mkdir(parents=True)
         (lib_dir / "__init__.py").write_text("# old")
-        (lib_dir / "old_file.py").write_text("# should be removed")
+        (lib_dir / "stale_file.py").write_text("# leftover from old version")
 
         source_dir = tmp_path / "src"
         package_dir = source_dir / "chumicro_timing"
@@ -1001,8 +1001,10 @@ class TestFlashMode:
         transport.connect()
         transport.stage([source_dir], [], harness_dir)
 
+        # Existing files are overwritten with new content.
         assert (lib_dir / "__init__.py").read_text() == "# new"
-        assert not (lib_dir / "old_file.py").exists()
+        # Stale files remain (dirs_exist_ok, no rmtree).
+        assert (lib_dir / "stale_file.py").exists()
 
         transport.disconnect()
 

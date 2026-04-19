@@ -296,6 +296,10 @@ class CircuitpythonTransport:
     ) -> None:
         """Copy top-level packages from a source directory to the drive.
 
+        Uses ``dirs_exist_ok=True`` to overwrite in place rather than
+        deleting first.  macOS + FAT32 USB drives race between
+        ``rmtree`` and ``copytree``, causing ``ENOENT`` errors.
+
         Args:
             source_directory: A ``src/`` directory containing packages.
             lib_destination: The ``lib/`` directory on the CIRCUITPY drive.
@@ -309,12 +313,11 @@ class CircuitpythonTransport:
             if not init_file.exists():
                 continue
             target = lib_destination / child.name
-            if target.exists():
-                shutil.rmtree(target)
             shutil.copytree(
                 child,
                 target,
                 ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+                dirs_exist_ok=True,
             )
 
     def _collect_package_sources(self, source_directory: Path) -> None:
