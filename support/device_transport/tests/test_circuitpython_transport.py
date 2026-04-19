@@ -905,8 +905,13 @@ class TestFlashMode:
         assert b"True" in written_data
 
     def test_ram_disconnect_does_not_send_autoreload(self) -> None:
-        """disconnect() in ram mode should not send autoreload commands."""
-        port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
+        """disconnect() in ram mode should restore board but skip autoreload."""
+        port = FakeSerialPort(
+            read_responses=[
+                _RAW_REPL_PROMPT,   # connect
+                _RAW_REPL_PROMPT,   # _enter_raw_repl in disconnect
+            ],
+        )
 
         def factory(**kwargs):
             return port
@@ -923,7 +928,12 @@ class TestFlashMode:
         transport.disconnect()
 
         written_data = b"".join(port.writes)
+        # Should NOT send autoreload commands in ram mode.
         assert b"autoreload" not in written_data
+        # Should still send Ctrl-B (exit raw REPL) and Ctrl-D (soft reboot).
+        from chumicro_device_transport.circuitpython_transport import _CTRL_B
+        assert _CTRL_B in port.writes
+        assert _CTRL_D in port.writes
 
     def test_flash_stage_is_idempotent_across_calls(
         self, tmp_path: Path,
