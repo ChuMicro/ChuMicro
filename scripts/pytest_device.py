@@ -113,11 +113,6 @@ def _iter_runtime_variants(
             yield function_name, device
 
 
-def _runtime_batch_name(device_entry: DeviceEntry) -> str:
-    """Return the synthetic pytest collector name for a runtime batch."""
-    return f"[{device_entry.runtime} batch]"
-
-
 def _explicit_function_targets(
     config_args: list[str],
     test_file: Path,
@@ -374,7 +369,7 @@ class DeviceTestFile(pytest.File):
                         function_name=name,
                         target_device=device,
                     )
-        elif targets is None or not targets:
+        elif targets is None or len(targets) <= 1:
             # No config, single target, or no devices — one item per function.
             device = targets[0] if targets else None
             for name in function_names:
@@ -386,44 +381,16 @@ class DeviceTestFile(pytest.File):
                     target_device=device,
                 )
         else:
-            # File or directory run with resolved devices — show one runtime
-            # batch collector per target.
-            for device in targets:
-                yield DeviceRuntimeBatch.from_parent(
+            # Multiple targets (both mode) — parametrize by runtime.
+            for name, device in _iter_runtime_variants(function_names, targets):
+                display_name = f"{name}[{device.runtime}]"
+                yield DeviceTestItem.from_parent(
                     self,
-                    name=_runtime_batch_name(device),
+                    name=display_name,
                     test_file=self.path,
-                    function_names=function_names,
+                    function_name=name,
                     target_device=device,
                 )
-
-
-class DeviceRuntimeBatch(pytest.Collector):
-    """Synthetic collector grouping one runtime's batched file run."""
-
-    def __init__(
-        self,
-        *,
-        test_file: Path,
-        function_names: list[str],
-        target_device: DeviceEntry,
-        **kwargs,
-    ) -> None:
-        super().__init__(**kwargs)
-        self.test_file = test_file
-        self._function_names = function_names
-        self._target_device = target_device
-
-    def collect(self):
-        """Yield parsed test result items for this runtime batch."""
-        for function_name in self._function_names:
-            yield DeviceTestItem.from_parent(
-                self,
-                name=function_name,
-                test_file=self.test_file,
-                function_name=function_name,
-                target_device=self._target_device,
-            )
 
 
 class DeviceRuntimeItem(pytest.Item):

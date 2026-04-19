@@ -90,7 +90,6 @@ python scripts/run.py test --libraries timing
 
 Right-click a test file or test function in the editor → **Run 'test_...'**. PyCharm runs it with pytest using the source roots from `.idea/chumicro.iml`. This is fast for iterating on a single test but does not produce coverage data.
 
-For device-backed `functional_tests/`, the test tree includes synthetic runtime batch nodes such as `[micropython batch]` and `[circuitpython batch]`. Under each batch node, PyCharm shows the parsed test results for that runtime. The batch node represents the staged, batched device run for that runtime.
 
 > **Note:** PyCharm also offers **Run with Coverage** (shield icon). This uses PyCharm's built-in coverage runner, which doesn't understand the project's multi-library layout. Use the **Test** run config or the terminal for accurate coverage.
 

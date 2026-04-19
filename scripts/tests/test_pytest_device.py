@@ -126,18 +126,8 @@ class TestIterRuntimeVariants:
         ]
 
 
-class TestRuntimeBatchHelpers:
-    """Tests for runtime batch naming and explicit-target helpers."""
-
-    def test_runtime_batch_name(self) -> None:
-        """Runtime batch collectors should include the runtime in a stable label."""
-        device = DeviceEntry(
-            identifier="cp-board",
-            runtime="circuitpython",
-            address="/dev/cu.usbmodem1",
-        )
-
-        assert pytest_device._runtime_batch_name(device) == "[circuitpython batch]"
+class TestExplicitFunctionTargets:
+    """Tests for explicit single-function nodeid helpers."""
 
     def test_explicit_function_targets_returns_matching_names(self, tmp_path: Path) -> None:
         """Explicit nodeid args should extract test function names for the file."""
