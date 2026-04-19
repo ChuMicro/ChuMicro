@@ -8,10 +8,10 @@ the test via the device transport, and parses the harness output to
 report pass/fail to pytest.
 
 **No environment variable setup is required.**  The plugin reads
-``devices.yml`` to find the target device.  Optional env vars
-(``CHUMICRO_DEVICE_RUNTIME``, ``CHUMICRO_DEVICE_ID``,
-``CHUMICRO_DEPLOY_MODE``) narrow the selection when multiple boards
-are configured.
+``devices.yml`` to find the target device.  Mark a device with
+``default: true`` to select it for IDE play-button tests; if none
+is marked, the first device in the list is used.  To swap boards,
+just move ``default: true`` to a different entry.
 
 This enables IDE play buttons (PyCharm, VS Code) to run device
 tests at file and function granularity — just click play.
@@ -22,11 +22,10 @@ See Decision 0027 (IDE integration section).
 from __future__ import annotations
 
 import ast
-import os
 from pathlib import Path
 
 import pytest
-from device_config import DeviceConfigError, filter_devices, load_devices
+from device_config import DeviceConfigError, find_default_device, load_devices
 from device_testing import (
     _build_device_bootstrap,
     _create_transport,
@@ -34,13 +33,6 @@ from device_testing import (
 )
 from result_parser import parse_output
 from workspace import ROOT
-
-#: Optional env var to filter devices by runtime.
-RUNTIME_ENV_VAR = "CHUMICRO_DEVICE_RUNTIME"
-#: Optional env var to target a specific device by ID.
-DEVICE_ID_ENV_VAR = "CHUMICRO_DEVICE_ID"
-#: Optional env var to override deploy mode (ram/flash).
-DEPLOY_MODE_ENV_VAR = "CHUMICRO_DEPLOY_MODE"
 
 #: Path to the test harness source directory.
 HARNESS_SOURCE = ROOT / "support" / "test_harness" / "src"
@@ -83,23 +75,20 @@ def _resolve_library_dir(test_file: Path) -> Path:
 
 
 def _load_target_device():
-    """Load devices.yml and return the best matching device entry.
+    """Load devices.yml and return the target device.
 
-    Uses optional environment variables to narrow the selection:
-
-    - ``CHUMICRO_DEVICE_RUNTIME`` — filter by runtime
-    - ``CHUMICRO_DEVICE_ID`` — filter by device ID
+    Uses ``find_default_device`` to select the device marked
+    ``default: true`` in ``devices.yml``, or the first device if
+    none is marked.  All configuration lives in the YAML file —
+    no environment variable setup is needed.
 
     Returns:
         A ``DeviceEntry`` from the device registry.
 
     Raises:
-        pytest.skip: If no devices.yml exists or no devices match.
+        pytest.skip: If no devices.yml exists or no devices are configured.
         pytest.fail: If devices.yml is malformed.
     """
-    runtime = os.environ.get(RUNTIME_ENV_VAR)
-    device_id = os.environ.get(DEVICE_ID_ENV_VAR)
-
     try:
         all_devices = load_devices()
     except DeviceConfigError as error:
@@ -111,22 +100,14 @@ def _load_target_device():
             )
         pytest.fail(f"Device config error: {error}")
 
-    selected = filter_devices(
-        all_devices, runtime=runtime, device_id=device_id,
-    )
-    if not selected:
-        if runtime or device_id:
-            pytest.skip(
-                f"No device matches runtime={runtime!r}, "
-                f"device_id={device_id!r}.  "
-                f"Check devices.yml or remove filter env vars."
-            )
+    device = find_default_device(all_devices)
+    if device is None:
         pytest.skip(
             "No devices configured in devices.yml.  "
             "Add your board details to run functional tests on hardware."
         )
 
-    return selected[0]
+    return device
 
 
 class _TransportCache:
@@ -226,13 +207,12 @@ class DeviceTestItem(pytest.Item):
 
     def runtest(self) -> None:
         """Execute the test on a connected device."""
-        deploy_mode = os.environ.get(DEPLOY_MODE_ENV_VAR)
         device_entry = _load_target_device()
 
         cache: _TransportCache = self.session._device_transport_cache  # type: ignore[attr-defined]
 
         try:
-            transport = cache.get_transport(device_entry, deploy_mode)
+            transport = cache.get_transport(device_entry, None)
         except Exception as error:
             pytest.fail(f"Transport connection failed: {error}")
 

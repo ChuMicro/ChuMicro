@@ -45,6 +45,7 @@ class DeviceEntry:
     board_type: str = ""
     serial_baudrate: int = 115200
     deploy_mode: str = "ram"
+    default: bool = False
     circuitpy_drive_path: str | None = None
     setup_command: str | None = None
     extra: dict = field(default_factory=dict)
@@ -122,7 +123,7 @@ def _validate_device(raw: dict, index: int) -> DeviceEntry:
     # Extract known fields, put everything else in extra.
     known_keys = {
         "id", "runtime", "address", "description", "connection_type",
-        "board_type", "serial_baudrate", "deploy_mode",
+        "board_type", "serial_baudrate", "deploy_mode", "default",
         "circuitpy_drive_path", "setup_command",
     }
     extra = {key: value for key, value in raw.items() if key not in known_keys}
@@ -136,6 +137,7 @@ def _validate_device(raw: dict, index: int) -> DeviceEntry:
         board_type=raw.get("board_type", ""),
         serial_baudrate=raw.get("serial_baudrate", 115200),
         deploy_mode=raw.get("deploy_mode", "ram"),
+        default=bool(raw.get("default", False)),
         circuitpy_drive_path=raw.get("circuitpy_drive_path"),
         setup_command=raw.get("setup_command"),
         extra=extra,
@@ -211,3 +213,28 @@ def filter_devices(
     if device_id:
         result = [device for device in result if device.identifier == device_id]
     return result
+
+
+def find_default_device(
+    devices: list[DeviceEntry],
+) -> DeviceEntry | None:
+    """Return the default device for IDE play-button tests.
+
+    Selection order:
+
+    1. The device marked ``default: true`` in ``devices.yml``.
+    2. If none is marked, the first device in the list.
+    3. ``None`` if the list is empty.
+
+    Args:
+        devices: Full list of devices from the registry.
+
+    Returns:
+        The selected device, or ``None`` if no devices exist.
+    """
+    if not devices:
+        return None
+    for device in devices:
+        if device.default:
+            return device
+    return devices[0]

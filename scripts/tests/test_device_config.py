@@ -9,6 +9,7 @@ from device_config import (
     DeviceConfigError,
     DeviceEntry,
     filter_devices,
+    find_default_device,
     load_device_config,
     load_devices,
 )
@@ -226,3 +227,69 @@ class TestFilterDevices:
         """A filter that matches nothing should return an empty list."""
         result = filter_devices(sample_devices, device_id="nonexistent")
         assert result == []
+
+
+class TestFindDefaultDevice:
+    """Tests for find_default_device."""
+
+    def test_returns_none_for_empty_list(self) -> None:
+        """An empty device list should return None."""
+        assert find_default_device([]) is None
+
+    def test_returns_marked_default(self) -> None:
+        """Should return the device marked default: true."""
+        devices = [
+            DeviceEntry(identifier="first", runtime="micropython", address="/dev/0"),
+            DeviceEntry(
+                identifier="second", runtime="circuitpython",
+                address="/dev/1", default=True,
+            ),
+            DeviceEntry(identifier="third", runtime="micropython", address="/dev/2"),
+        ]
+        result = find_default_device(devices)
+        assert result.identifier == "second"
+
+    def test_returns_first_when_none_marked(self) -> None:
+        """When no device is marked default, should return the first one."""
+        devices = [
+            DeviceEntry(identifier="alpha", runtime="micropython", address="/dev/0"),
+            DeviceEntry(identifier="beta", runtime="circuitpython", address="/dev/1"),
+        ]
+        result = find_default_device(devices)
+        assert result.identifier == "alpha"
+
+    def test_returns_first_default_if_multiple(self) -> None:
+        """If multiple devices are marked default, return the first one."""
+        devices = [
+            DeviceEntry(identifier="a", runtime="micropython", address="/dev/0", default=True),
+            DeviceEntry(identifier="b", runtime="circuitpython", address="/dev/1", default=True),
+        ]
+        result = find_default_device(devices)
+        assert result.identifier == "a"
+
+
+class TestDefaultField:
+    """Tests for the default field on DeviceEntry."""
+
+    def test_default_false_by_default(self, tmp_path) -> None:
+        """Devices without 'default' should have default=False."""
+        devices_file = _write_yaml(tmp_path / "devices.yml", """
+devices:
+  - id: board1
+    runtime: micropython
+    address: /dev/ttyUSB0
+""")
+        device = load_devices(devices_file)[0]
+        assert device.default is False
+
+    def test_default_true_parsed(self, tmp_path) -> None:
+        """The 'default: true' field should be parsed correctly."""
+        devices_file = _write_yaml(tmp_path / "devices.yml", """
+devices:
+  - id: board1
+    runtime: circuitpython
+    address: /dev/cu.usb1
+    default: true
+""")
+        device = load_devices(devices_file)[0]
+        assert device.default is True

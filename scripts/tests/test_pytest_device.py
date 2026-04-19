@@ -156,51 +156,25 @@ class TestTransportCache:
             pytest_device._create_transport = original
 
 
-class TestEnvVarConstants:
-    """Tests for environment variable names."""
-
-    def test_runtime_env_var(self) -> None:
-        """The runtime env var should match the documented convention."""
-        assert pytest_device.RUNTIME_ENV_VAR == "CHUMICRO_DEVICE_RUNTIME"
-
-    def test_device_id_env_var(self) -> None:
-        """The device ID env var should match the documented convention."""
-        assert pytest_device.DEVICE_ID_ENV_VAR == "CHUMICRO_DEVICE_ID"
-
-    def test_deploy_mode_env_var(self) -> None:
-        """The deploy mode env var should match the documented convention."""
-        assert pytest_device.DEPLOY_MODE_ENV_VAR == "CHUMICRO_DEPLOY_MODE"
-
-
 class TestLoadTargetDevice:
     """Tests for _load_target_device."""
 
     def test_skips_when_no_devices_file(self, monkeypatch, tmp_path) -> None:
         """Should skip with setup instructions when devices.yml is missing."""
-        monkeypatch.delenv("CHUMICRO_DEVICE_RUNTIME", raising=False)
-        monkeypatch.delenv("CHUMICRO_DEVICE_ID", raising=False)
-        # Point to a nonexistent file.
         monkeypatch.setenv("CHUMICRO_DEVICES", str(tmp_path / "nope.yml"))
         with pytest.raises(pytest.skip.Exception, match="No devices.yml found"):
             pytest_device._load_target_device()
 
-    def test_skips_when_no_devices_match_filter(self, monkeypatch, tmp_path) -> None:
-        """Should skip when env var filters exclude all devices."""
+    def test_skips_when_no_devices_configured(self, monkeypatch, tmp_path) -> None:
+        """Should skip when devices list is empty."""
         devices_file = tmp_path / "devices.yml"
-        devices_file.write_text(
-            "devices:\n"
-            "  - id: board1\n"
-            "    runtime: micropython\n"
-            "    address: /dev/ttyUSB0\n"
-        )
+        devices_file.write_text("devices: []\n")
         monkeypatch.setenv("CHUMICRO_DEVICES", str(devices_file))
-        monkeypatch.setenv("CHUMICRO_DEVICE_RUNTIME", "circuitpython")
-        monkeypatch.delenv("CHUMICRO_DEVICE_ID", raising=False)
-        with pytest.raises(pytest.skip.Exception, match="No device matches"):
+        with pytest.raises(pytest.skip.Exception, match="No devices configured"):
             pytest_device._load_target_device()
 
-    def test_returns_first_device(self, monkeypatch, tmp_path) -> None:
-        """Should return the first device when no filters are set."""
+    def test_returns_default_device(self, monkeypatch, tmp_path) -> None:
+        """Should return the device marked default: true."""
         devices_file = tmp_path / "devices.yml"
         devices_file.write_text(
             "devices:\n"
@@ -210,33 +184,14 @@ class TestLoadTargetDevice:
             "  - id: board2\n"
             "    runtime: circuitpython\n"
             "    address: /dev/ttyUSB1\n"
+            "    default: true\n"
         )
         monkeypatch.setenv("CHUMICRO_DEVICES", str(devices_file))
-        monkeypatch.delenv("CHUMICRO_DEVICE_RUNTIME", raising=False)
-        monkeypatch.delenv("CHUMICRO_DEVICE_ID", raising=False)
         device = pytest_device._load_target_device()
-        assert device.identifier == "board1"
+        assert device.identifier == "board2"
 
-    def test_filters_by_runtime(self, monkeypatch, tmp_path) -> None:
-        """Should respect CHUMICRO_DEVICE_RUNTIME filter."""
-        devices_file = tmp_path / "devices.yml"
-        devices_file.write_text(
-            "devices:\n"
-            "  - id: mp_board\n"
-            "    runtime: micropython\n"
-            "    address: /dev/ttyUSB0\n"
-            "  - id: cp_board\n"
-            "    runtime: circuitpython\n"
-            "    address: /dev/ttyUSB1\n"
-        )
-        monkeypatch.setenv("CHUMICRO_DEVICES", str(devices_file))
-        monkeypatch.setenv("CHUMICRO_DEVICE_RUNTIME", "circuitpython")
-        monkeypatch.delenv("CHUMICRO_DEVICE_ID", raising=False)
-        device = pytest_device._load_target_device()
-        assert device.identifier == "cp_board"
-
-    def test_filters_by_device_id(self, monkeypatch, tmp_path) -> None:
-        """Should respect CHUMICRO_DEVICE_ID filter."""
+    def test_returns_first_device_when_none_marked(self, monkeypatch, tmp_path) -> None:
+        """Should return the first device when no default is marked."""
         devices_file = tmp_path / "devices.yml"
         devices_file.write_text(
             "devices:\n"
@@ -244,14 +199,12 @@ class TestLoadTargetDevice:
             "    runtime: micropython\n"
             "    address: /dev/ttyUSB0\n"
             "  - id: board_b\n"
-            "    runtime: micropython\n"
+            "    runtime: circuitpython\n"
             "    address: /dev/ttyUSB1\n"
         )
         monkeypatch.setenv("CHUMICRO_DEVICES", str(devices_file))
-        monkeypatch.delenv("CHUMICRO_DEVICE_RUNTIME", raising=False)
-        monkeypatch.setenv("CHUMICRO_DEVICE_ID", "board_b")
         device = pytest_device._load_target_device()
-        assert device.identifier == "board_b"
+        assert device.identifier == "board_a"
 
 
 class TestPytestCollectFile:

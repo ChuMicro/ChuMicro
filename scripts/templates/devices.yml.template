@@ -3,6 +3,9 @@
 # Fill in your board details below.
 # This file is gitignored — it will not be committed.
 #
+# Mark one device with "default: true" to target it from IDE play
+# buttons.  If none is marked, the first device is used.
+#
 # See Decision 0027 for the full schema.
 
 devices:
@@ -13,6 +16,8 @@ devices:
     address: /dev/cu.usbmodemEXAMPLE
     board_type: esp32s3
     serial_baudrate: 115200
+    # Set to true to use this board when clicking play in the IDE.
+    default: true
     # Deploy mode: "ram" (default, no flash wear) or "flash" (persistent).
     # Can be overridden per-run with --deploy-mode.
     deploy_mode: ram
@@ -33,4 +38,3 @@ devices:
     # Can be overridden per-run with --deploy-mode.
     deploy_mode: ram
     setup_command: null
-
