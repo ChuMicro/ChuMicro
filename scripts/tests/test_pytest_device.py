@@ -126,11 +126,52 @@ class TestTransportCache:
         assert cache.needs_staging("dev2", "timing", "test_ticks.py") is True
 
     def test_disconnect_all_clears_state(self) -> None:
-        """disconnect_all should clear all cached state."""
+        """disconnect_all should clear all cached state including batch results."""
         cache = pytest_device._TransportCache()
         cache.mark_staged("dev1", "timing", "test_ticks.py")
+        cache.cache_batch_result("dev1", "timing", "test_ticks.py", "result", "output")
         cache.disconnect_all()
         assert cache.needs_staging("dev1", "timing", "test_ticks.py") is True
+        assert cache.get_batch_result("dev1", "timing", "test_ticks.py") is None
+
+    def test_batch_result_not_cached_initially(self) -> None:
+        """A fresh cache should have no batch results."""
+        cache = pytest_device._TransportCache()
+        assert cache.get_batch_result("dev1", "timing", "test_ticks.py") is None
+
+    def test_cache_and_retrieve_batch_result(self) -> None:
+        """Cached batch results should be retrievable."""
+        cache = pytest_device._TransportCache()
+        cache.cache_batch_result(
+            "dev1", "timing", "test_ticks.py", "parsed", "raw output",
+        )
+        result = cache.get_batch_result("dev1", "timing", "test_ticks.py")
+        assert result == ("parsed", "raw output")
+
+    def test_batch_result_separate_per_device(self) -> None:
+        """Batch results should be keyed per device."""
+        cache = pytest_device._TransportCache()
+        cache.cache_batch_result(
+            "dev1", "timing", "test_ticks.py", "result_1", "output_1",
+        )
+        assert cache.get_batch_result("dev2", "timing", "test_ticks.py") is None
+
+    def test_batch_result_separate_per_file(self) -> None:
+        """Batch results should be keyed per test file."""
+        cache = pytest_device._TransportCache()
+        cache.cache_batch_result(
+            "dev1", "timing", "test_ticks.py", "result_1", "output_1",
+        )
+        assert cache.get_batch_result("dev1", "timing", "test_heartbeat.py") is None
+
+    def test_batch_result_caches_failure(self) -> None:
+        """A None parsed result (failure) should be cached and retrievable."""
+        cache = pytest_device._TransportCache()
+        cache.cache_batch_result(
+            "dev1", "timing", "test_ticks.py", None, "connection error",
+        )
+        result = cache.get_batch_result("dev1", "timing", "test_ticks.py")
+        assert result == (None, "connection error")
 
     def test_get_transport_creates_and_caches(self) -> None:
         """get_transport should create a transport and reuse it."""

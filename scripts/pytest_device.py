@@ -90,18 +90,30 @@ def _resolve_library_dir(test_file: Path) -> Path:
 
 
 class _TransportCache:
-    """Session-scoped cache for device transports.
+    """Session-scoped cache for device transports and batch results.
 
     Avoids reconnecting for every test item.  Stores one transport
     per device ID and tracks the last-staged library *and test file*
     to avoid redundant staging while ensuring re-staging when the
     test file changes (critical for RAM mode where test file content
     is part of the staged sources).
+
+    Also caches batch execution results: the first test item for a
+    given ``(device, library, file)`` combo runs *all* tests in the
+    file at once and caches the parsed output.  Subsequent items
+    look up their result from the cache.  This amortizes the per-
+    invocation overhead of transports like ``mpremote`` that spawn
+    a fresh subprocess per ``execute()`` call.
     """
 
     def __init__(self) -> None:
         self._transports: dict[str, object] = {}
         self._last_staged: dict[str, tuple[str, str]] = {}
+        #: Cached batch results keyed by (device_id, library, file).
+        #: Value is (parsed_result_or_None, raw_output_or_error).
+        self._batch_results: dict[
+            tuple[str, str, str], tuple[object | None, str]
+        ] = {}
 
     def get_transport(self, device_entry: DeviceEntry, deploy_mode: str | None):
         """Get or create a connected transport for the device.
@@ -151,6 +163,48 @@ class _TransportCache:
         """
         self._last_staged[device_id] = (library_name, test_file_name)
 
+    def get_batch_result(
+        self,
+        device_id: str,
+        library_name: str,
+        test_file_name: str,
+    ) -> tuple[object | None, str] | None:
+        """Return cached batch result, or ``None`` if not yet executed.
+
+        Args:
+            device_id: Device identifier.
+            library_name: Library name.
+            test_file_name: Name of the test file.
+
+        Returns:
+            Tuple of ``(parsed_result, raw_output)`` if cached, else
+            ``None``.  When the batch execution failed,
+            ``parsed_result`` is ``None`` and ``raw_output`` contains
+            the error message.
+        """
+        return self._batch_results.get((device_id, library_name, test_file_name))
+
+    def cache_batch_result(
+        self,
+        device_id: str,
+        library_name: str,
+        test_file_name: str,
+        parsed_result: object | None,
+        raw_output: str,
+    ) -> None:
+        """Store a batch execution result.
+
+        Args:
+            device_id: Device identifier.
+            library_name: Library name.
+            test_file_name: Name of the test file.
+            parsed_result: Parsed harness output, or ``None`` on failure.
+            raw_output: Raw device output or error message.
+        """
+        self._batch_results[
+            (device_id, library_name, test_file_name)
+        ] = (parsed_result, raw_output)
+
     def disconnect_all(self) -> None:
         """Reset and disconnect all cached transports."""
         for transport in self._transports.values():
@@ -165,6 +219,7 @@ class _TransportCache:
                 pass
         self._transports.clear()
         self._last_staged.clear()
+        self._batch_results.clear()
 
 
 class DeviceTestFile(pytest.File):
@@ -230,42 +285,69 @@ class DeviceTestItem(pytest.Item):
         self._library_name = self._library_dir.name
 
     def runtest(self) -> None:
-        """Execute the test on a connected device."""
+        """Execute the test on a connected device.
+
+        Uses batch execution: the first item for a given
+        ``(device, library, file)`` combo runs *all* test functions
+        in the file at once (no ``name_filter``) and caches the
+        parsed results.  Subsequent items look up their result from
+        the cache.  This reduces ``mpremote`` invocations from
+        N-per-function to 1-per-file.
+        """
         device_entry = self._target_device
         if device_entry is None:
             # No device resolved at collection time — try again.
             device_entry = _load_fallback_device()
 
         cache: _TransportCache = self.session._device_transport_cache  # type: ignore[attr-defined]
-
-        try:
-            transport = cache.get_transport(device_entry, None)
-        except Exception as error:
-            pytest.fail(f"Transport connection failed: {error}")
-
-        # Stage library source if needed.  Track both library name
-        # and test file name so we re-stage when the test file changes
-        # (RAM mode includes test file content in staged sources).
-        if cache.needs_staging(
-            device_entry.identifier, self._library_name, self.test_file.name,
-        ):
-            source_dirs = _resolve_library_source_dirs(self._library_dir)
-            transport.stage(
-                source_dirs, [self.test_file], HARNESS_SOURCE,
-            )
-            cache.mark_staged(
-                device_entry.identifier, self._library_name, self.test_file.name,
-            )
-
-        # Build and execute bootstrap with name_filter for this
-        # specific test function.
-        bootstrap = _build_device_bootstrap(
-            device_entry, transport, self.test_file, self._function_name,
+        batch_key = (
+            device_entry.identifier,
+            self._library_name,
+            self.test_file.name,
         )
-        raw_output = transport.execute(bootstrap)
 
-        # Parse harness output.
-        result = parse_output(raw_output)
+        # Check for cached batch result from a previous item.
+        batch = cache.get_batch_result(*batch_key)
+
+        if batch is None:
+            # First item for this (device, file) — run all tests.
+            try:
+                transport = cache.get_transport(device_entry, None)
+            except Exception as error:
+                cache.cache_batch_result(
+                    *batch_key, None, f"Transport connection failed: {error}",
+                )
+                pytest.fail(f"Transport connection failed: {error}")
+
+            # Stage library source if needed.
+            if cache.needs_staging(*batch_key):
+                source_dirs = _resolve_library_source_dirs(self._library_dir)
+                transport.stage(
+                    source_dirs, [self.test_file], HARNESS_SOURCE,
+                )
+                cache.mark_staged(*batch_key)
+
+            # Run ALL tests in the file (no name_filter) to amortize
+            # the per-invocation overhead.
+            bootstrap = _build_device_bootstrap(
+                device_entry, transport, self.test_file, None,
+            )
+            try:
+                raw_output = transport.execute(bootstrap)
+            except Exception as error:
+                cache.cache_batch_result(
+                    *batch_key, None, f"Device execution failed: {error}",
+                )
+                pytest.fail(f"Device execution failed: {error}")
+
+            result = parse_output(raw_output)
+            cache.cache_batch_result(*batch_key, result, raw_output)
+        else:
+            result, raw_output = batch
+
+        # If the batch failed, all items from it fail.
+        if result is None:
+            pytest.fail(raw_output)
 
         if not result.tests:
             pytest.fail(
