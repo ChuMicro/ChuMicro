@@ -184,6 +184,22 @@ class TestBuildCircuitpythonBootstrap:
                 [("chumicro_massive", giant_source)], test_file,
             )
 
+    def test_allows_oversized_bootstrap_on_esp32_family_boards(
+        self, tmp_path: Path,
+    ) -> None:
+        """ESP32-family boards should skip the conservative RAM-size guard."""
+        test_file = tmp_path / "test_example.py"
+        test_file.write_text("def test_ok(): pass")
+        giant_source = "x = 1\n" * (MAX_INLINE_BOOTSTRAP_BYTES // 4)
+
+        result = build_circuitpython_bootstrap(
+            [("chumicro_massive", giant_source)],
+            test_file,
+            board_type="esp32s2",
+        )
+
+        assert len(result.encode("utf-8")) > MAX_INLINE_BOOTSTRAP_BYTES
+
 
 class TestEscapeSource:
     """Tests for _escape_source helper."""

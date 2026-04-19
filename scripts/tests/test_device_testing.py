@@ -522,6 +522,56 @@ class TestBuildDeviceBootstrap:
         # Inline bootstrap uses _populate_module.
         assert "_populate_module" in bootstrap
 
+    def test_circuitpython_ram_passes_board_type_to_inline_bootstrap(
+        self, tmp_path, monkeypatch,
+    ) -> None:
+        """CP ram mode should pass board_type into inline bootstrap generation."""
+        import chumicro_device_transport
+
+        entry = DeviceEntry(
+            identifier="cp-board",
+            runtime="circuitpython",
+            address="/dev/null",
+            board_type="esp32s2",
+        )
+
+        class FakeTransport:
+            mode = "ram"
+            staged_sources = [("chumicro_timing", "# init")]
+
+        test_file = tmp_path / "test_example.py"
+        test_file.write_text("def test_ok(): pass")
+        captured_arguments: dict[str, str] = {}
+
+        def fake_build_circuitpython_bootstrap(
+            staged_sources,
+            bootstrap_test_file,
+            *,
+            name_filter=None,
+            board_type="",
+        ) -> str:
+            captured_arguments["board_type"] = board_type
+            captured_arguments["test_file_name"] = bootstrap_test_file.name
+            assert staged_sources == [("chumicro_timing", "# init")]
+            assert name_filter is None
+            return "inline bootstrap"
+
+        monkeypatch.setattr(
+            chumicro_device_transport,
+            "build_circuitpython_bootstrap",
+            fake_build_circuitpython_bootstrap,
+        )
+
+        bootstrap = device_testing._build_device_bootstrap(
+            entry, FakeTransport(), test_file, None,
+        )
+
+        assert bootstrap == "inline bootstrap"
+        assert captured_arguments == {
+            "board_type": "esp32s2",
+            "test_file_name": "test_example.py",
+        }
+
     def test_circuitpython_flash_uses_standard_bootstrap(
         self, tmp_path,
     ) -> None:

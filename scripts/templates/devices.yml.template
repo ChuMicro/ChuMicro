@@ -25,6 +25,8 @@ devices:
     runtime: circuitpython
     connection_type: serial
     address: /dev/cu.usbmodemEXAMPLE
+    # Chip or board family. Used for runtime heuristics such as the
+    # CircuitPython RAM bootstrap size guard.
     board_type: esp32s3
     serial_baudrate: 115200
     setup_command: null

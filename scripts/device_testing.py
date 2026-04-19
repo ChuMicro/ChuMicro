@@ -319,6 +319,7 @@ def _build_device_bootstrap(
             transport.staged_sources,
             test_file,
             name_filter=test_filter,
+            board_type=device_entry.board_type,
         )
 
     return build_bootstrap(

@@ -24,9 +24,14 @@ from pathlib import Path
 _TEMPLATE_PATH = Path(__file__).parent / "circuitpython_bootstrap_template.txt"
 
 # Inline raw-REPL payloads that grow beyond this size have proven unreliable
-# on low-RAM CircuitPython boards such as the Pi Pico W. Flash deploy mode
-# avoids the giant in-memory bootstrap entirely.
+# on constrained CircuitPython boards such as the Pi Pico W. Flash deploy
+# mode avoids the giant in-memory bootstrap entirely.
 MAX_INLINE_BOOTSTRAP_BYTES = 64 * 1024
+
+# ESP32-family CircuitPython boards have enough headroom for substantially
+# larger inline payloads, so they bypass the conservative size guard used
+# for constrained boards.
+_ESP32_BOARD_TYPE_PREFIX = "esp32"
 
 
 class CircuitpythonBootstrapTooLargeError(ValueError):
@@ -38,6 +43,7 @@ def build_circuitpython_bootstrap(
     test_file: Path,
     *,
     name_filter: str | None = None,
+    board_type: str = "",
 ) -> str:
     """Generate a bootstrap code block for CircuitPython raw REPL execution.
 
@@ -51,6 +57,9 @@ def build_circuitpython_bootstrap(
         test_file: Path to the test file to execute.
         name_filter: Optional substring filter passed to
             ``run_module``.
+        board_type: Optional board identifier from ``devices.yml``.
+            Used to apply conservative RAM-payload limits only on
+            constrained CircuitPython boards.
 
     Returns:
         Python source code string for raw REPL execution.
@@ -88,12 +97,16 @@ def build_circuitpython_bootstrap(
         .replace("$FILTER_REPR", filter_repr)
     )
 
+    inline_bootstrap_limit_bytes = _inline_bootstrap_limit_bytes(board_type)
     bootstrap_size_bytes = len(bootstrap_script.encode("utf-8"))
-    if bootstrap_size_bytes > MAX_INLINE_BOOTSTRAP_BYTES:
+    if (
+        inline_bootstrap_limit_bytes is not None
+        and bootstrap_size_bytes > inline_bootstrap_limit_bytes
+    ):
         raise CircuitpythonBootstrapTooLargeError(
             "CircuitPython inline bootstrap is too large for reliable RAM "
             f"execution on constrained boards ({bootstrap_size_bytes} bytes > "
-            f"{MAX_INLINE_BOOTSTRAP_BYTES} bytes). Use flash deploy mode or "
+            f"{inline_bootstrap_limit_bytes} bytes). Use flash deploy mode or "
             "set deploy_mode: flash for this board in devices.yml."
         )
 
@@ -111,3 +124,23 @@ def _escape_source(source_text: str) -> str:
     """
     # Use repr() for safe escaping — it handles all special characters.
     return repr(source_text)
+
+
+def _inline_bootstrap_limit_bytes(board_type: str) -> int | None:
+    """Return the inline bootstrap size limit for a CircuitPython board.
+
+    ESP32-family boards tolerate substantially larger inline payloads in RAM
+    mode, so the conservative 64 KiB guard is skipped for them. Unknown or
+    empty board types keep the conservative guard.
+
+    Args:
+        board_type: Board identifier from ``devices.yml``.
+
+    Returns:
+        Maximum allowed inline bootstrap size in bytes, or ``None`` when the
+        board family is known to handle larger payloads reliably.
+    """
+    normalized_board_type = board_type.strip().lower()
+    if normalized_board_type.startswith(_ESP32_BOARD_TYPE_PREFIX):
+        return None
+    return MAX_INLINE_BOOTSTRAP_BYTES
