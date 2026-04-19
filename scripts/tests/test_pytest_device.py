@@ -93,6 +93,39 @@ class TestResolveLibraryDir:
         assert result == library_dir
 
 
+class TestIterRuntimeVariants:
+    """Tests for _iter_runtime_variants ordering."""
+
+    def test_groups_runtime_variants_per_function(self) -> None:
+        """Each function should appear adjacent across runtimes."""
+        devices = [
+            DeviceEntry(
+                identifier="mp-board",
+                runtime="micropython",
+                address="/dev/ttyUSB0",
+            ),
+            DeviceEntry(
+                identifier="cp-board",
+                runtime="circuitpython",
+                address="/dev/cu.usbmodem1",
+            ),
+        ]
+
+        variants = list(pytest_device._iter_runtime_variants(
+            ["test_alpha", "test_beta"], devices,
+        ))
+
+        assert [
+            (function_name, device.runtime)
+            for function_name, device in variants
+        ] == [
+            ("test_alpha", "micropython"),
+            ("test_alpha", "circuitpython"),
+            ("test_beta", "micropython"),
+            ("test_beta", "circuitpython"),
+        ]
+
+
 class TestTransportCache:
     """Tests for the _TransportCache helper."""
 

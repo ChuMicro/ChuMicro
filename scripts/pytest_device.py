@@ -89,6 +89,30 @@ def _resolve_library_dir(test_file: Path) -> Path:
     return test_file.parent.parent
 
 
+def _iter_runtime_variants(
+    function_names: list[str],
+    targets: list[DeviceEntry],
+):
+    """Yield ``(function_name, device)`` pairs in IDE-friendly order.
+
+    When collecting a whole file for both runtimes, keep the runtime
+    variants of each function adjacent.  Some IDE test explorers build
+    parameterized-test groups from the incoming item stream, and a
+    runtime-first order can produce duplicate parent nodes when the two
+    variants of the same base function are far apart.
+
+    Args:
+        function_names: Sorted test function names from the file.
+        targets: Device targets selected for the session.
+
+    Yields:
+        Tuples of ``(function_name, device_entry)``.
+    """
+    for function_name in function_names:
+        for device in targets:
+            yield function_name, device
+
+
 class _TransportCache:
     """Session-scoped cache for device transports and batch results.
 
@@ -285,16 +309,15 @@ class DeviceTestFile(pytest.File):
                 )
         else:
             # Multiple targets (both mode) — parametrize by runtime.
-            for device in targets:
-                for name in function_names:
-                    display_name = f"{name}[{device.runtime}]"
-                    yield DeviceTestItem.from_parent(
-                        self,
-                        name=display_name,
-                        test_file=self.path,
-                        function_name=name,
-                        target_device=device,
-                    )
+            for name, device in _iter_runtime_variants(function_names, targets):
+                display_name = f"{name}[{device.runtime}]"
+                yield DeviceTestItem.from_parent(
+                    self,
+                    name=display_name,
+                    test_file=self.path,
+                    function_name=name,
+                    target_device=device,
+                )
 
 
 class DeviceTestItem(pytest.Item):
