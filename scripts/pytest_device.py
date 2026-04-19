@@ -288,10 +288,14 @@ class DeviceTestFile(pytest.File):
 class DeviceTestItem(pytest.Item):
     """A single test function that runs on a real device.
 
-    Stages library source to the device, sends a bootstrap script
-    that invokes the test harness with ``name_filter`` set to this
-    test function, parses the structured output, and reports
-    pass/fail to pytest.
+    Preparation (connecting and staging) happens in :meth:`setup` so
+    the IDE shows it as a distinct setup phase.  :meth:`runtest` only
+    handles execution and result lookup.
+
+    Uses batch execution: the first item for a given
+    ``(device, library, file)`` combo runs *all* test functions in
+    the file at once (no ``name_filter``) and caches the parsed
+    output.  Subsequent items look up their result from the cache.
     """
 
     def __init__(
@@ -309,19 +313,70 @@ class DeviceTestItem(pytest.Item):
         self._library_dir = _resolve_library_dir(test_file)
         self._library_name = self._library_dir.name
 
-    def runtest(self) -> None:
-        """Execute the test on a connected device.
+    def setup(self) -> None:
+        """Connect to the device and stage source files.
 
-        Uses batch execution: the first item for a given
-        ``(device, library, file)`` combo runs *all* test functions
-        in the file at once (no ``name_filter``) and caches the
-        parsed results.  Subsequent items look up their result from
-        the cache.  This reduces ``mpremote`` invocations from
-        N-per-function to 1-per-file.
+        This runs before :meth:`runtest` and appears as a separate
+        setup phase in IDE test runners (PyCharm, VS Code).
+
+        Flash/copy modes bulk-stage all sources and test files in one
+        pass on first use.  RAM mode re-stages per file since the
+        source content is embedded inline.
         """
         device_entry = self._target_device
         if device_entry is None:
-            # No device resolved at collection time — try again.
+            device_entry = _load_fallback_device()
+            self._target_device = device_entry
+
+        cache: _TransportCache = self.session._device_transport_cache  # type: ignore[attr-defined]
+
+        try:
+            transport = cache.get_transport(device_entry, None)
+        except Exception as error:
+            batch_key = (
+                device_entry.identifier,
+                self._library_name,
+                self.test_file.name,
+            )
+            cache.cache_batch_result(
+                *batch_key, None, f"Transport connection failed: {error}",
+            )
+            pytest.fail(f"Transport connection failed: {error}")
+
+        # Flash/copy modes persist files on the device filesystem,
+        # so we bulk-stage ALL sources + ALL test files in one pass
+        # (one rsync) on first use.  RAM mode embeds source inline,
+        # so it re-stages per file.
+        is_filesystem_mode = (
+            hasattr(transport, "mode") and transport.mode not in ("ram", "mount")
+        )
+        if is_filesystem_mode and not cache.is_fully_staged(device_entry.identifier):
+            _bulk_stage_for_device(self.session, device_entry, transport)
+            cache.mark_fully_staged(device_entry.identifier)
+        elif not is_filesystem_mode:
+            staging_key = (
+                device_entry.identifier,
+                self._library_name,
+                self.test_file.name,
+            )
+            if cache.needs_staging(*staging_key):
+                source_dirs = _resolve_library_source_dirs(self._library_dir)
+                transport.stage(
+                    source_dirs, [self.test_file], HARNESS_SOURCE,
+                )
+                cache.mark_staged(*staging_key)
+
+    def runtest(self) -> None:
+        """Execute the test on the connected device.
+
+        The first item for a given ``(device, library, file)`` combo
+        runs *all* test functions in the file at once and caches the
+        parsed results.  Subsequent items look up their result from
+        the cache.
+        """
+        device_entry = self._target_device
+        if device_entry is None:
+            # setup() should have resolved this, but guard anyway.
             device_entry = _load_fallback_device()
 
         cache: _TransportCache = self.session._device_transport_cache  # type: ignore[attr-defined]
@@ -336,31 +391,7 @@ class DeviceTestItem(pytest.Item):
 
         if batch is None:
             # First item for this (device, file) — run all tests.
-            try:
-                transport = cache.get_transport(device_entry, None)
-            except Exception as error:
-                cache.cache_batch_result(
-                    *batch_key, None, f"Transport connection failed: {error}",
-                )
-                pytest.fail(f"Transport connection failed: {error}")
-
-            # Stage library source if needed.
-            # Flash/copy modes persist files on the device filesystem,
-            # so we bulk-stage ALL sources + ALL test files in one pass
-            # (one rsync) on first use.  RAM mode embeds source inline,
-            # so it re-stages per file.
-            is_filesystem_mode = (
-                hasattr(transport, "mode") and transport.mode not in ("ram", "mount")
-            )
-            if is_filesystem_mode and not cache.is_fully_staged(device_entry.identifier):
-                _bulk_stage_for_device(self.session, device_entry, transport)
-                cache.mark_fully_staged(device_entry.identifier)
-            elif not is_filesystem_mode and cache.needs_staging(*batch_key):
-                source_dirs = _resolve_library_source_dirs(self._library_dir)
-                transport.stage(
-                    source_dirs, [self.test_file], HARNESS_SOURCE,
-                )
-                cache.mark_staged(*batch_key)
+            transport = cache.get_transport(device_entry, None)
 
             # Run ALL tests in the file (no name_filter) to amortize
             # the per-invocation overhead.
