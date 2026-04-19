@@ -113,14 +113,52 @@ def _iter_runtime_variants(
             yield function_name, device
 
 
-def _runtime_prepare_name(device_entry: DeviceEntry) -> str:
-    """Return the synthetic pytest item name for a runtime prepare step."""
-    return f"[{device_entry.runtime} prepare]"
+def _runtime_batch_name(device_entry: DeviceEntry) -> str:
+    """Return the synthetic pytest collector name for a runtime batch."""
+    return f"[{device_entry.runtime} batch]"
 
 
-def _runtime_run_file_name(device_entry: DeviceEntry) -> str:
-    """Return the synthetic pytest item name for a runtime file-run step."""
-    return f"[{device_entry.runtime} run file]"
+def _explicit_function_targets(
+    config_args: list[str],
+    test_file: Path,
+) -> list[str]:
+    """Return explicitly targeted test functions for *test_file*.
+
+    PyCharm and pytest can target a single function via a nodeid like
+    ``path/to/test_file.py::test_name``.  When that happens, keep the
+    flatter per-test item layout so direct function runs continue to look
+    natural and do not require the user to know about synthetic batch
+    collector nodeids.
+
+    Args:
+        config_args: Raw pytest CLI args.
+        test_file: Functional test file currently being collected.
+
+    Returns:
+        Ordered list of explicitly targeted ``test_*`` function names for
+        the file.
+    """
+    explicit_names: list[str] = []
+    resolved_test_file = test_file.resolve()
+
+    for arg in config_args:
+        if "::" not in arg:
+            continue
+        file_part, remainder = arg.split("::", 1)
+        try:
+            resolved_arg_file = Path(file_part).resolve()
+        except OSError:
+            continue
+        if resolved_arg_file != resolved_test_file:
+            continue
+
+        function_name = remainder.split("::", 1)[0]
+        if not function_name.startswith("test_"):
+            continue
+        if function_name not in explicit_names:
+            explicit_names.append(function_name)
+
+    return explicit_names
 
 
 class _TransportCache:
@@ -305,23 +343,40 @@ class DeviceTestFile(pytest.File):
         """Yield a :class:`DeviceTestItem` for each test function and target device."""
         function_names = _parse_test_functions(self.path)
         targets = getattr(self.session, "_device_targets", None)
+        explicit_function_names = _explicit_function_targets(
+            self.session.config.args, self.path,
+        )
 
-        if targets is None or len(targets) <= 1:
+        if explicit_function_names:
+            function_names = [
+                name for name in function_names
+                if name in explicit_function_names
+            ]
+
+        if explicit_function_names:
+            if targets is None or len(targets) <= 1:
+                device = targets[0] if targets else None
+                for name in function_names:
+                    yield DeviceTestItem.from_parent(
+                        self,
+                        name=name,
+                        test_file=self.path,
+                        function_name=name,
+                        target_device=device,
+                    )
+            else:
+                for name, device in _iter_runtime_variants(function_names, targets):
+                    display_name = f"{name}[{device.runtime}]"
+                    yield DeviceTestItem.from_parent(
+                        self,
+                        name=display_name,
+                        test_file=self.path,
+                        function_name=name,
+                        target_device=device,
+                    )
+        elif targets is None or not targets:
             # No config, single target, or no devices — one item per function.
             device = targets[0] if targets else None
-            if device is not None:
-                yield DevicePrepareItem.from_parent(
-                    self,
-                    name=_runtime_prepare_name(device),
-                    test_file=self.path,
-                    target_device=device,
-                )
-                yield DeviceRunFileItem.from_parent(
-                    self,
-                    name=_runtime_run_file_name(device),
-                    test_file=self.path,
-                    target_device=device,
-                )
             for name in function_names:
                 yield DeviceTestItem.from_parent(
                     self,
@@ -331,29 +386,56 @@ class DeviceTestFile(pytest.File):
                     target_device=device,
                 )
         else:
-            # Multiple targets (both mode) — parametrize by runtime.
+            # File or directory run with resolved devices — show one runtime
+            # batch collector per target.
             for device in targets:
-                yield DevicePrepareItem.from_parent(
+                yield DeviceRuntimeBatch.from_parent(
                     self,
-                    name=_runtime_prepare_name(device),
+                    name=_runtime_batch_name(device),
                     test_file=self.path,
+                    function_names=function_names,
                     target_device=device,
                 )
-                yield DeviceRunFileItem.from_parent(
-                    self,
-                    name=_runtime_run_file_name(device),
-                    test_file=self.path,
-                    target_device=device,
-                )
-            for name, device in _iter_runtime_variants(function_names, targets):
-                display_name = f"{name}[{device.runtime}]"
-                yield DeviceTestItem.from_parent(
-                    self,
-                    name=display_name,
-                    test_file=self.path,
-                    function_name=name,
-                    target_device=device,
-                )
+
+
+class DeviceRuntimeBatch(pytest.Collector):
+    """Synthetic collector grouping one runtime's batched file run."""
+
+    def __init__(
+        self,
+        *,
+        test_file: Path,
+        function_names: list[str],
+        target_device: DeviceEntry,
+        **kwargs,
+    ) -> None:
+        super().__init__(**kwargs)
+        self.test_file = test_file
+        self._function_names = function_names
+        self._target_device = target_device
+
+    def collect(self):
+        """Yield the synthetic batch steps and parsed test result items."""
+        yield DevicePrepareItem.from_parent(
+            self,
+            name="setup / stage device",
+            test_file=self.test_file,
+            target_device=self._target_device,
+        )
+        yield DeviceRunFileItem.from_parent(
+            self,
+            name="run file",
+            test_file=self.test_file,
+            target_device=self._target_device,
+        )
+        for function_name in self._function_names:
+            yield DeviceTestItem.from_parent(
+                self,
+                name=function_name,
+                test_file=self.test_file,
+                function_name=function_name,
+                target_device=self._target_device,
+            )
 
 
 class DeviceRuntimeItem(pytest.Item):
