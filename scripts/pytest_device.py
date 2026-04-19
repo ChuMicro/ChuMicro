@@ -113,6 +113,16 @@ def _iter_runtime_variants(
             yield function_name, device
 
 
+def _runtime_prepare_name(device_entry: DeviceEntry) -> str:
+    """Return the synthetic pytest item name for a runtime prepare step."""
+    return f"[{device_entry.runtime} prepare]"
+
+
+def _runtime_run_file_name(device_entry: DeviceEntry) -> str:
+    """Return the synthetic pytest item name for a runtime file-run step."""
+    return f"[{device_entry.runtime} run file]"
+
+
 class _TransportCache:
     """Session-scoped cache for device transports and batch results.
 
@@ -299,6 +309,19 @@ class DeviceTestFile(pytest.File):
         if targets is None or len(targets) <= 1:
             # No config, single target, or no devices — one item per function.
             device = targets[0] if targets else None
+            if device is not None:
+                yield DevicePrepareItem.from_parent(
+                    self,
+                    name=_runtime_prepare_name(device),
+                    test_file=self.path,
+                    target_device=device,
+                )
+                yield DeviceRunFileItem.from_parent(
+                    self,
+                    name=_runtime_run_file_name(device),
+                    test_file=self.path,
+                    target_device=device,
+                )
             for name in function_names:
                 yield DeviceTestItem.from_parent(
                     self,
@@ -309,6 +332,19 @@ class DeviceTestFile(pytest.File):
                 )
         else:
             # Multiple targets (both mode) — parametrize by runtime.
+            for device in targets:
+                yield DevicePrepareItem.from_parent(
+                    self,
+                    name=_runtime_prepare_name(device),
+                    test_file=self.path,
+                    target_device=device,
+                )
+                yield DeviceRunFileItem.from_parent(
+                    self,
+                    name=_runtime_run_file_name(device),
+                    test_file=self.path,
+                    target_device=device,
+                )
             for name, device in _iter_runtime_variants(function_names, targets):
                 display_name = f"{name}[{device.runtime}]"
                 yield DeviceTestItem.from_parent(
@@ -320,59 +356,53 @@ class DeviceTestFile(pytest.File):
                 )
 
 
-class DeviceTestItem(pytest.Item):
-    """A single test function that runs on a real device.
+class DeviceRuntimeItem(pytest.Item):
+    """Base class for synthetic and per-test device pytest items.
 
-    Preparation (connecting and staging) happens in :meth:`setup` so
-    the IDE shows it as a distinct setup phase.  :meth:`runtest` only
-    handles execution and result lookup.
-
-    Uses batch execution: the first item for a given
-    ``(device, library, file)`` combo runs *all* test functions in
-    the file at once (no ``name_filter``) and caches the parsed
-    output.  Subsequent items look up their result from the cache.
+    All leaf items for a ``functional_tests/`` file share the same device
+    preparation and batch-execution helpers.  Those helpers are idempotent,
+    so synthetic control items can perform the expensive work during full-file
+    runs while direct single-test targeting still works.
     """
 
     def __init__(
         self,
         *,
         test_file: Path,
-        function_name: str,
         target_device: DeviceEntry | None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
         self.test_file = test_file
-        self._function_name = function_name
         self._target_device = target_device
         self._library_dir = _resolve_library_dir(test_file)
         self._library_name = self._library_dir.name
 
-    def setup(self) -> None:
-        """Connect to the device and stage source files.
-
-        This runs before :meth:`runtest` and appears as a separate
-        setup phase in IDE test runners (PyCharm, VS Code).
-
-        Flash/copy modes bulk-stage all sources and test files in one
-        pass on first use.  RAM mode re-stages per file since the
-        source content is embedded inline.
-        """
+    def _resolve_device_entry(self) -> DeviceEntry:
+        """Return the resolved target device for this item."""
         device_entry = self._target_device
         if device_entry is None:
             device_entry = _load_fallback_device()
             self._target_device = device_entry
+        return device_entry
+
+    def _batch_key(self, device_entry: DeviceEntry) -> tuple[str, str, str]:
+        """Return the cache key for this item's file/runtime batch."""
+        return (
+            device_entry.identifier,
+            self._library_name,
+            self.test_file.name,
+        )
+
+    def _ensure_prepared(self, device_entry: DeviceEntry) -> None:
+        """Connect to the device and stage source files if needed."""
 
         cache: _TransportCache = self.session._device_transport_cache  # type: ignore[attr-defined]
 
         try:
             transport = cache.get_transport(device_entry, None)
         except Exception as error:
-            batch_key = (
-                device_entry.identifier,
-                self._library_name,
-                self.test_file.name,
-            )
+            batch_key = self._batch_key(device_entry)
             cache.cache_batch_result(
                 *batch_key, None, f"Transport connection failed: {error}",
             )
@@ -389,11 +419,7 @@ class DeviceTestItem(pytest.Item):
             _bulk_stage_for_device(self.session, device_entry, transport)
             cache.mark_fully_staged(device_entry.identifier)
         elif not is_filesystem_mode:
-            staging_key = (
-                device_entry.identifier,
-                self._library_name,
-                self.test_file.name,
-            )
+            staging_key = self._batch_key(device_entry)
             if cache.needs_staging(*staging_key):
                 if _should_soft_reset_before_stage(
                     cache, device_entry, transport, self._library_name, self.test_file.name,
@@ -408,31 +434,20 @@ class DeviceTestItem(pytest.Item):
                 )
                 cache.mark_staged(*staging_key)
 
-    def runtest(self) -> None:
-        """Execute the test on the connected device.
-
-        The first item for a given ``(device, library, file)`` combo
-        runs *all* test functions in the file at once and caches the
-        parsed results.  Subsequent items look up their result from
-        the cache.
-        """
-        device_entry = self._target_device
-        if device_entry is None:
-            # setup() should have resolved this, but guard anyway.
-            device_entry = _load_fallback_device()
-
+    def _ensure_batch_result(
+        self,
+        device_entry: DeviceEntry,
+    ) -> tuple[object | None, str]:
+        """Run the file batch once if needed and return its cached result."""
         cache: _TransportCache = self.session._device_transport_cache  # type: ignore[attr-defined]
-        batch_key = (
-            device_entry.identifier,
-            self._library_name,
-            self.test_file.name,
-        )
+        batch_key = self._batch_key(device_entry)
 
         # Check for cached batch result from a previous item.
         batch = cache.get_batch_result(*batch_key)
 
         if batch is None:
             # First item for this (device, file) — run all tests.
+            self._ensure_prepared(device_entry)
             transport = cache.get_transport(device_entry, None)
 
             # Run ALL tests in the file (no name_filter) to amortize
@@ -450,8 +465,64 @@ class DeviceTestItem(pytest.Item):
 
             result = parse_output(raw_output)
             cache.cache_batch_result(*batch_key, result, raw_output)
-        else:
-            result, raw_output = batch
+            return result, raw_output
+
+        return batch
+
+    def repr_failure(self, excinfo, style=None):
+        """Produce a readable failure representation."""
+        return str(excinfo.value)
+
+    def reportinfo(self):
+        """Return location info for test reporting."""
+        return self.path, None, f"[device] {self._library_name}::{self.name}"
+
+
+class DevicePrepareItem(DeviceRuntimeItem):
+    """Synthetic item that owns transport connect/stage time for a runtime."""
+
+    def runtest(self) -> None:
+        """Prepare the runtime for a file batch."""
+        device_entry = self._resolve_device_entry()
+        self._ensure_prepared(device_entry)
+
+
+class DeviceRunFileItem(DeviceRuntimeItem):
+    """Synthetic item that owns file-batch execution time for a runtime."""
+
+    def runtest(self) -> None:
+        """Run the file batch once and validate the harness-level result."""
+        device_entry = self._resolve_device_entry()
+        result, raw_output = self._ensure_batch_result(device_entry)
+
+        if result is None:
+            pytest.fail(raw_output)
+        if not result.tests:
+            pytest.fail(f"No test results in device output:\n{raw_output}")
+
+
+class DeviceTestItem(DeviceRuntimeItem):
+    """A single parsed test result from a batched file run on device."""
+
+    def __init__(
+        self,
+        *,
+        test_file: Path,
+        function_name: str,
+        target_device: DeviceEntry | None,
+        **kwargs,
+    ) -> None:
+        super().__init__(
+            test_file=test_file,
+            target_device=target_device,
+            **kwargs,
+        )
+        self._function_name = function_name
+
+    def runtest(self) -> None:
+        """Look up this test's result from the batched device run."""
+        device_entry = self._resolve_device_entry()
+        result, raw_output = self._ensure_batch_result(device_entry)
 
         # If the batch failed, all items from it fail.
         if result is None:
@@ -478,14 +549,6 @@ class DeviceTestItem(pytest.Item):
         pytest.fail(
             f"Test {self._function_name!r} not found in device output:\n{raw_output}"
         )
-
-    def repr_failure(self, excinfo, style=None):
-        """Produce a readable failure representation."""
-        return str(excinfo.value)
-
-    def reportinfo(self):
-        """Return location info for test reporting."""
-        return self.path, None, f"[device] {self._library_name}::{self.name}"
 
 
 def _load_fallback_device() -> DeviceEntry:
@@ -646,7 +709,7 @@ def pytest_collection_modifyitems(config, items):
     deselected = []
     selected = []
     for item in items:
-        if "functional_tests" in item.nodeid and not isinstance(item, DeviceTestItem):
+        if "functional_tests" in item.nodeid and not isinstance(item, DeviceRuntimeItem):
             deselected.append(item)
         else:
             selected.append(item)
