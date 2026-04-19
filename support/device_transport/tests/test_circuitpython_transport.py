@@ -1037,6 +1037,27 @@ class TestRsyncHelpers:
             ):
                 CircuitpythonTransport._rsync_directory(source, destination)
 
+    def test_rsync_directory_raises_when_not_installed(
+        self, tmp_path: Path,
+    ) -> None:
+        """_rsync_directory should raise when rsync is not installed."""
+        source = tmp_path / "source"
+        source.mkdir()
+        (source / "file.py").write_text("# content")
+        destination = tmp_path / "destination"
+        destination.mkdir()
+
+        with patch(
+            "chumicro_device_transport.circuitpython_transport"
+            ".subprocess.run",
+            side_effect=FileNotFoundError("rsync"),
+        ):
+            with pytest.raises(
+                CircuitpythonTransportError,
+                match="rsync is required",
+            ):
+                CircuitpythonTransport._rsync_directory(source, destination)
+
     def test_rsync_file_raises_on_failure(
         self, tmp_path: Path,
     ) -> None:
@@ -1056,6 +1077,26 @@ class TestRsyncHelpers:
             with pytest.raises(
                 CircuitpythonTransportError,
                 match="rsync failed for test_example.py",
+            ):
+                CircuitpythonTransport._rsync_file(source_file, destination)
+
+    def test_rsync_file_raises_when_not_installed(
+        self, tmp_path: Path,
+    ) -> None:
+        """_rsync_file should raise when rsync is not installed."""
+        source_file = tmp_path / "test_example.py"
+        source_file.write_text("# content")
+        destination = tmp_path / "destination"
+        destination.mkdir()
+
+        with patch(
+            "chumicro_device_transport.circuitpython_transport"
+            ".subprocess.run",
+            side_effect=FileNotFoundError("rsync"),
+        ):
+            with pytest.raises(
+                CircuitpythonTransportError,
+                match="rsync is required",
             ):
                 CircuitpythonTransport._rsync_file(source_file, destination)
 

@@ -247,7 +247,7 @@ class CircuitpythonTransport:
         synced on the first call; subsequent calls within the same
         session only update the test files.
 
-        Falls back to ``shutil`` if rsync is not available.
+        Requires rsync to be installed on the host.
 
         Args:
             source_dirs: Library ``src/`` directories.
@@ -351,7 +351,9 @@ class CircuitpythonTransport:
         temp-file rename races on FAT32), and ``--delete`` to remove
         stale files from the destination.
 
-        Falls back to ``shutil.copytree`` if rsync is not available.
+        Raises:
+            CircuitpythonTransportError: If rsync is not installed or
+                the sync fails.
 
         Args:
             source: Source directory whose contents to sync.
@@ -372,15 +374,11 @@ class CircuitpythonTransport:
         ]
         try:
             subprocess.run(command, capture_output=True, text=True, check=True)
-        except FileNotFoundError:  # pragma: no cover — rsync available on macOS/Linux
-            # rsync not available — fall back to shutil.
-            if destination.exists():
-                shutil.rmtree(destination)
-            shutil.copytree(
-                source,
-                destination,
-                ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
-            )
+        except FileNotFoundError as not_found_error:
+            raise CircuitpythonTransportError(
+                "rsync is required for flash deploy mode but was not found.  "
+                "Install rsync and ensure it is on your PATH."
+            ) from not_found_error
         except subprocess.CalledProcessError as rsync_error:
             raise CircuitpythonTransportError(
                 f"rsync failed: {rsync_error.stderr}"
@@ -391,7 +389,10 @@ class CircuitpythonTransport:
         """Rsync a single file to a destination directory.
 
         Uses ``--checksum`` and ``--inplace`` for reliable FAT32 writes.
-        Falls back to ``shutil.copy2`` if rsync is not available.
+
+        Raises:
+            CircuitpythonTransportError: If rsync is not installed or
+                the sync fails.
 
         Args:
             source: Source file path.
@@ -406,8 +407,11 @@ class CircuitpythonTransport:
         ]
         try:
             subprocess.run(command, capture_output=True, text=True, check=True)
-        except FileNotFoundError:  # pragma: no cover — rsync available on macOS/Linux
-            shutil.copy2(source, destination_directory / source.name)
+        except FileNotFoundError as not_found_error:
+            raise CircuitpythonTransportError(
+                "rsync is required for flash deploy mode but was not found.  "
+                "Install rsync and ensure it is on your PATH."
+            ) from not_found_error
         except subprocess.CalledProcessError as rsync_error:
             raise CircuitpythonTransportError(
                 f"rsync failed for {source.name}: {rsync_error.stderr}"
