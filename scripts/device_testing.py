@@ -205,12 +205,27 @@ def _run_tests_on_device(
         if (library_dir / "src").is_dir()
     ]
 
+    # Collect all test files across libraries and stage them in one
+    # rsync pass.  Running stage() per test file would re-sync the
+    # entire drive for each test — expensive on FAT32 USB drives.
+    all_test_files = [
+        test_file
+        for _library_name, _source_dir, test_files in test_plan
+        for test_file in test_files
+    ]
+
+    try:
+        transport.stage(source_dirs, all_test_files, harness_source)
+    except Exception as stage_error:
+        print(f"  Stage failed: {stage_error}")
+        transport.disconnect()
+        return 0, 0, len(all_test_files)
+
     for library_name, _source_dir, test_files in test_plan:
         for test_file in test_files:
             print(f"\n  {library_name}/{test_file.name}")
 
             try:
-                transport.stage(source_dirs, [test_file], harness_source)
                 bootstrap = _build_device_bootstrap(
                     device_entry, transport, test_file, test_filter,
                 )
