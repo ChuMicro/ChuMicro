@@ -123,6 +123,71 @@ expectations, mentoring patterns for agent-assisted contributors, and
 community channels.  What's the minimum viable contributor experience
 before actively seeking contributions?
 
+### Should we offer a "drive mode toggle" tool for CircuitPython boards?
+
+CircuitPython's CIRCUITPY USB drive is convenient for beginners but limits
+power users: Python code can't write to the filesystem while USB has write
+access (`storage.remount` fails with "Cannot remount path when visible via
+USB"), the FAT partition has write-endurance concerns for datalogging, and
+the auto-reload-on-save behavior interferes with multi-file deployments.
+MicroPython doesn't have this problem — the filesystem is just a filesystem.
+
+CircuitPython does provide escape hatches:
+
+- `storage.disable_usb_drive()` in `boot.py` hides the USB drive entirely,
+  giving Python code full filesystem access.  Deploy via serial or Web
+  Workflow instead of drag-and-drop.
+- `storage.remount("/", readonly=False)` in `boot.py` gives Python write
+  access but makes the USB drive read-only to the host.
+- A physical button check in `boot.py` can toggle between modes at boot.
+
+The idea: provide a tool (in this workspace now, eventually in
+`chumicro-deploy` as a published package) that can put a connected
+CircuitPython board in and out of "drive mode" by writing or updating its
+`boot.py`.  Concretely:
+
+1. **"Development mode"** — `storage.disable_usb_drive()` in `boot.py`.
+   No CIRCUITPY drive.  Full filesystem from Python.  Deploy via serial
+   transport or Web Workflow.  Board behaves more like MicroPython.
+2. **"Drive mode"** (default CircuitPython behavior) — no `boot.py`
+   override, CIRCUITPY drive is visible, drag-and-drop works.
+3. **"Hybrid mode"** — `boot.py` checks a GPIO pin or button at boot to
+   decide which mode to enter.  Hold a button during reset → drive mode;
+   normal boot → development mode.
+
+The tool would:
+
+- Detect the board's current mode by reading `boot.py` via serial.
+- Switch modes by writing a new `boot.py` and triggering a reset.
+- Optionally configure the GPIO pin for hybrid mode.
+- Work as a `run.py` subcommand locally (`python scripts/run.py board-mode`)
+  and eventually as a `chumicro-deploy` CLI command.
+
+This would also benefit device testing — flash-mode tests (Decision 0028)
+currently require the CIRCUITPY drive to be mounted.  A board in
+"development mode" could use serial-only flash deployment instead, avoiding
+the host-OS USB drive dependency entirely.
+
+Open sub-questions:
+
+- Is serial-only flash deployment feasible on CircuitPython without the USB
+  drive?  `storage.remount` from the REPL may still fail if the board
+  entered with USB active.  Needs investigation on actual hardware.
+- Should hybrid mode be the default recommendation?  It's the most flexible
+  but adds a physical-button dependency.
+- How does Web Workflow factor in?  On WiFi-capable boards (ESP32-S2/S3),
+  CircuitPython's built-in web server can replace the USB drive for file
+  management.  Could the tool configure Web Workflow as a drive-mode
+  alternative?
+- What's the interaction with `circuitpy_drive_path` in `devices.yml`?
+  A board in development mode wouldn't have a drive path.
+
+Not worth implementing now — the device transport layer works for current
+needs.  Revisit when `chumicro-deploy` extraction begins or when the CIRCUITPY
+drive becomes a real friction point in daily development.
+
+Related: Decision 0027 (device testing), Decision 0028 (deploy modes).
+
 ### Should we use a unified logging framework across scripts?
 
 Currently scripts use `print()` for warnings and status.  A unified
