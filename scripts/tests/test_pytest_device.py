@@ -8,10 +8,12 @@ from __future__ import annotations
 
 import textwrap
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import pytest_device
 from device_config import DeviceEntry
+from result_parser import TestResult as ParsedTestResult
 
 
 class TestParseTestFunctions:
@@ -153,6 +155,70 @@ class TestRuntimeControlNames:
         )
 
         assert pytest_device._runtime_run_file_name(device) == "Batch run — MicroPython"
+
+
+class TestReportedDurations:
+    """Tests for propagating parsed device timing into pytest reports."""
+
+    def test_sum_reported_test_durations_ignores_missing_values(self) -> None:
+        """Only tests with parsed durations should contribute to the total."""
+        test_results = [
+            ParsedTestResult(name="test_alpha", status="PASS", duration=0.125),
+            ParsedTestResult(name="test_beta", status="SKIP", duration=None),
+            ParsedTestResult(name="test_gamma", status="FAIL", duration=0.5),
+        ]
+
+        total_duration = pytest_device._sum_reported_test_durations(test_results)
+
+        assert total_duration == pytest.approx(0.625)
+
+    def test_apply_reported_duration_uses_per_test_value(self) -> None:
+        """Per-test items should show the parsed device runtime in pytest."""
+        item = SimpleNamespace(
+            _reported_duration=0.321,
+            _reported_test_total_duration=None,
+        )
+        report = SimpleNamespace(when="call", duration=1.5)
+
+        pytest_device._apply_reported_duration(item, report)
+
+        assert report.duration == pytest.approx(0.321)
+
+    def test_apply_reported_duration_keeps_only_batch_overhead(self) -> None:
+        """Batch items should retain only residual host-side overhead."""
+        item = SimpleNamespace(
+            _reported_duration=None,
+            _reported_test_total_duration=1.2,
+        )
+        report = SimpleNamespace(when="call", duration=1.75)
+
+        pytest_device._apply_reported_duration(item, report)
+
+        assert report.duration == pytest.approx(0.55)
+
+    def test_apply_reported_duration_never_goes_negative(self) -> None:
+        """Rounded device timings should not produce negative batch durations."""
+        item = SimpleNamespace(
+            _reported_duration=None,
+            _reported_test_total_duration=1.8,
+        )
+        report = SimpleNamespace(when="call", duration=1.2)
+
+        pytest_device._apply_reported_duration(item, report)
+
+        assert report.duration == 0.0
+
+    def test_apply_reported_duration_ignores_non_call_phase(self) -> None:
+        """Setup and teardown timings should keep their original values."""
+        item = SimpleNamespace(
+            _reported_duration=0.321,
+            _reported_test_total_duration=0.654,
+        )
+        report = SimpleNamespace(when="setup", duration=1.5)
+
+        pytest_device._apply_reported_duration(item, report)
+
+        assert report.duration == pytest.approx(1.5)
 
 
 class TestTransportCache:

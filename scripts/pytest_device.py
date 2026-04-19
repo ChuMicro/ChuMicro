@@ -138,6 +138,57 @@ def _runtime_run_file_name(device_entry: DeviceEntry) -> str:
     return f"Batch run — {_runtime_display_name(device_entry.runtime)}"
 
 
+def _sum_reported_test_durations(test_results) -> float:
+    """Return the total device-reported duration across parsed tests.
+
+    Args:
+        test_results: Iterable of parsed result objects with optional
+            ``duration`` attributes.
+
+    Returns:
+        Sum of all non-``None`` durations.
+    """
+    total_duration = 0.0
+    for test_result in test_results:
+        if test_result.duration is not None:
+            total_duration += test_result.duration
+    return total_duration
+
+
+def _apply_reported_duration(item, report) -> None:
+    """Override pytest timing with parsed device timing when available.
+
+    Real device runs batch a whole file at once. Without this adjustment,
+    pytest measures each cached per-test item as ~0 ms host work and attributes
+    nearly all execution time to the synthetic batch item.
+
+    For per-test items, use the harness-reported duration directly. For the
+    synthetic batch item, keep only the residual host-side overhead after
+    subtracting the sum of the parsed per-test durations. This preserves a
+    useful batch node without double-counting the device test times into the
+    parent file total.
+
+    Args:
+        item: Pytest item with optional reported-duration attributes.
+        report: Pytest report object for the item.
+    """
+    if report.when != "call":
+        return
+
+    reported_duration = getattr(item, "_reported_duration", None)
+    if reported_duration is not None:
+        report.duration = reported_duration
+        return
+
+    reported_test_total_duration = getattr(
+        item, "_reported_test_total_duration", None,
+    )
+    if reported_test_total_duration is None:
+        return
+
+    report.duration = max(report.duration - reported_test_total_duration, 0.0)
+
+
 class _TransportCache:
     """Session-scoped cache for device transports and batch results.
 
@@ -392,6 +443,8 @@ class DeviceRuntimeItem(pytest.Item):
         self._target_device = target_device
         self._library_dir = _resolve_library_dir(test_file)
         self._library_name = self._library_dir.name
+        self._reported_duration: float | None = None
+        self._reported_test_total_duration: float | None = None
 
     def _resolve_device_entry(self) -> DeviceEntry:
         """Return the resolved target device for this item."""
@@ -514,6 +567,7 @@ class DeviceRunFileItem(DeviceRuntimeItem):
             pytest.fail(raw_output)
         if not result.tests:
             pytest.fail(f"No test results in device output:\n{raw_output}")
+        self._reported_test_total_duration = _sum_reported_test_durations(result.tests)
 
 
 class DeviceTestItem(DeviceRuntimeItem):
@@ -551,6 +605,7 @@ class DeviceTestItem(DeviceRuntimeItem):
         # Find this specific test in the results.
         for test_result in result.tests:
             if test_result.name == self._function_name:
+                self._reported_duration = test_result.duration
                 if test_result.status == "FAIL":
                     pytest.fail(
                         f"Device test FAIL: {self._function_name}\n{raw_output}"
@@ -751,3 +806,12 @@ def pytest_sessionfinish(session, exitstatus):
     cache = getattr(session, "_device_transport_cache", None)
     if cache is not None:
         cache.disconnect_all()
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """Inject parsed device durations into call-phase pytest reports."""
+    outcome = yield
+    report = outcome.get_result()
+    if isinstance(item, DeviceRuntimeItem):
+        _apply_reported_duration(item, report)
