@@ -261,7 +261,16 @@ class CircuitpythonTransport:
 
         # Copy library packages to lib/ on the drive.
         lib_destination = drive_path / "lib"
-        lib_destination.mkdir(exist_ok=True)
+        try:
+            lib_destination.mkdir(exist_ok=True)
+        except PermissionError as permission_error:
+            raise CircuitpythonTransportError(
+                f"Cannot write to CIRCUITPY drive at {drive_path}.  "
+                f"Flash deploy mode requires the board's boot.py to "
+                f"set storage.remount('/', readonly=False) so the host "
+                f"can write files.  Use deploy_mode='ram' to skip flash "
+                f"writes."
+            ) from permission_error
 
         for source_directory in source_dirs:
             self._copy_packages_to_drive(source_directory, lib_destination)
