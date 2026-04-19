@@ -109,6 +109,8 @@ class _TransportCache:
     def __init__(self) -> None:
         self._transports: dict[str, object] = {}
         self._last_staged: dict[str, tuple[str, str]] = {}
+        #: Device IDs that have been bulk-staged (flash/copy modes).
+        self._fully_staged: set[str] = set()
         #: Cached batch results keyed by (device_id, library, file).
         #: Value is (parsed_result_or_None, raw_output_or_error).
         self._batch_results: dict[
@@ -205,6 +207,28 @@ class _TransportCache:
             (device_id, library_name, test_file_name)
         ] = (parsed_result, raw_output)
 
+    def is_fully_staged(self, device_id: str) -> bool:
+        """Check whether a device has been bulk-staged.
+
+        In flash/copy modes, all sources and test files are staged in
+        one pass.  Once bulk-staged, per-file re-staging is skipped.
+
+        Args:
+            device_id: Device identifier.
+
+        Returns:
+            ``True`` if the device has been bulk-staged.
+        """
+        return device_id in self._fully_staged
+
+    def mark_fully_staged(self, device_id: str) -> None:
+        """Record that a device has been bulk-staged.
+
+        Args:
+            device_id: Device identifier.
+        """
+        self._fully_staged.add(device_id)
+
     def disconnect_all(self) -> None:
         """Reset and disconnect all cached transports."""
         for transport in self._transports.values():
@@ -219,6 +243,7 @@ class _TransportCache:
                 pass
         self._transports.clear()
         self._last_staged.clear()
+        self._fully_staged.clear()
         self._batch_results.clear()
 
 
@@ -320,7 +345,17 @@ class DeviceTestItem(pytest.Item):
                 pytest.fail(f"Transport connection failed: {error}")
 
             # Stage library source if needed.
-            if cache.needs_staging(*batch_key):
+            # Flash/copy modes persist files on the device filesystem,
+            # so we bulk-stage ALL sources + ALL test files in one pass
+            # (one rsync) on first use.  RAM mode embeds source inline,
+            # so it re-stages per file.
+            is_filesystem_mode = (
+                hasattr(transport, "mode") and transport.mode not in ("ram", "mount")
+            )
+            if is_filesystem_mode and not cache.is_fully_staged(device_entry.identifier):
+                _bulk_stage_for_device(self.session, device_entry, transport)
+                cache.mark_fully_staged(device_entry.identifier)
+            elif not is_filesystem_mode and cache.needs_staging(*batch_key):
                 source_dirs = _resolve_library_source_dirs(self._library_dir)
                 transport.stage(
                     source_dirs, [self.test_file], HARNESS_SOURCE,
@@ -412,6 +447,49 @@ def _load_fallback_device() -> DeviceEntry:
         )
 
     return targets[0]
+
+
+def _bulk_stage_for_device(session, device_entry: DeviceEntry, transport) -> None:
+    """Stage all sources and test files for a device in one pass.
+
+    In flash/copy modes, files persist on the device filesystem so
+    we can deploy everything once instead of re-staging per test file.
+    This reduces rsync (CircuitPython) or ``mpremote fs cp``
+    (MicroPython) invocations from N-per-file to 1-per-device.
+
+    Collects all :class:`DeviceTestItem` instances targeting the given
+    device from the session's collected items, deduplicates their
+    library source directories and test files, and calls
+    ``transport.stage()`` once.
+
+    Args:
+        session: The pytest session (provides ``items``).
+        device_entry: The target device.
+        transport: A connected transport instance.
+    """
+    seen_source_dirs: list[Path] = []
+    seen_test_files: list[Path] = []
+    seen_test_file_ids: set[str] = set()
+
+    for item in session.items:
+        if not isinstance(item, DeviceTestItem):
+            continue
+        target = item._target_device
+        if target is None or target.identifier != device_entry.identifier:
+            continue
+
+        # Collect source dirs for this item's library.
+        for source_dir in _resolve_library_source_dirs(item._library_dir):
+            if source_dir not in seen_source_dirs:
+                seen_source_dirs.append(source_dir)
+
+        # Collect test file (deduplicate by path string).
+        test_file_key = str(item.test_file)
+        if test_file_key not in seen_test_file_ids:
+            seen_test_file_ids.add(test_file_key)
+            seen_test_files.append(item.test_file)
+
+    transport.stage(seen_source_dirs, seen_test_files, HARNESS_SOURCE)
 
 
 # ---------------------------------------------------------------------------

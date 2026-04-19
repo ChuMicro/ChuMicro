@@ -70,12 +70,15 @@ class FakeTransport:
 
     Attributes:
         execute_output: The string returned by ``execute()``.
+        mode: Deploy mode label (e.g. ``"ram"``, ``"flash"``, ``"mount"``,
+            ``"copy"``).  Defaults to ``"ram"``.
         calls: List of ``(method_name, args_tuple)`` recording every call.
         connected: Whether ``connect()`` has been called without a
             subsequent ``disconnect()``.
     """
 
     execute_output: str = ""
+    mode: str = "ram"
     calls: list[tuple[str, tuple]] = field(default_factory=list)
     connected: bool = False
 

@@ -130,9 +130,11 @@ class TestTransportCache:
         cache = pytest_device._TransportCache()
         cache.mark_staged("dev1", "timing", "test_ticks.py")
         cache.cache_batch_result("dev1", "timing", "test_ticks.py", "result", "output")
+        cache.mark_fully_staged("dev1")
         cache.disconnect_all()
         assert cache.needs_staging("dev1", "timing", "test_ticks.py") is True
         assert cache.get_batch_result("dev1", "timing", "test_ticks.py") is None
+        assert cache.is_fully_staged("dev1") is False
 
     def test_batch_result_not_cached_initially(self) -> None:
         """A fresh cache should have no batch results."""
@@ -201,6 +203,23 @@ class TestTransportCache:
             assert len(calls) == 1
         finally:
             pytest_device._create_transport = original
+
+    def test_fully_staged_not_set_initially(self) -> None:
+        """A fresh cache should not report any device as fully staged."""
+        cache = pytest_device._TransportCache()
+        assert cache.is_fully_staged("dev1") is False
+
+    def test_mark_fully_staged(self) -> None:
+        """After marking fully staged, is_fully_staged returns True."""
+        cache = pytest_device._TransportCache()
+        cache.mark_fully_staged("dev1")
+        assert cache.is_fully_staged("dev1") is True
+
+    def test_fully_staged_separate_per_device(self) -> None:
+        """Fully-staged state should be per-device."""
+        cache = pytest_device._TransportCache()
+        cache.mark_fully_staged("dev1")
+        assert cache.is_fully_staged("dev2") is False
 
 
 class TestLoadFallbackDevice:
