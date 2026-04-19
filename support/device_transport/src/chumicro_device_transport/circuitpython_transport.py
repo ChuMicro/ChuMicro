@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Protocol, cast
 
 _CTRL_A = b"\x01"
+_CTRL_B = b"\x02"
 _CTRL_C = b"\x03"
 _CTRL_D = b"\x04"
 _RAW_REPL_PROMPT = b"raw REPL; CTRL-B to exit\r\n>"
@@ -625,9 +626,14 @@ class CircuitpythonTransport:
     def disconnect(self) -> None:
         """Close the serial port and clear staged data.
 
-        In flash mode, re-enters raw REPL (in case a reset or soft
-        reboot exited it), then re-enables autoreload and triggers a
-        reload before closing the port.
+        In flash mode, restores the board to normal operation:
+
+        1. Re-enters raw REPL (in case a reset exited it).
+        2. Re-enables autoreload via supervisor.
+        3. Exits raw REPL with Ctrl-B (back to normal REPL).
+        4. Soft-reboots with Ctrl-D so code.py runs normally.
+        5. Waits briefly for the reboot to complete.
+        6. Closes the serial port.
         """
         if self._port is not None:
             if self.mode == "flash":
@@ -635,11 +641,16 @@ class CircuitpythonTransport:
                     self._enter_raw_repl()
                     self._send_repl_command(
                         "import supervisor; "
-                        "supervisor.runtime.autoreload = True; "
-                        "supervisor.reload()"
+                        "supervisor.runtime.autoreload = True"
                     )
+                    # Exit raw REPL back to normal REPL.
+                    self._port.write(_CTRL_B)
+                    self._time.sleep(_ENTER_DELAY)
+                    # Soft-reboot so code.py starts normally.
+                    self._port.write(_CTRL_D)
+                    self._time.sleep(0.5)
                 except Exception as restore_error:
-                    print(f"WARNING: Failed to restore autoreload on disconnect: {restore_error}")
+                    print(f"WARNING: Failed to restore board state on disconnect: {restore_error}")
             try:
                 self._port.close()
             except Exception as close_error:  # pragma: no cover
