@@ -310,22 +310,48 @@ def _build_device_bootstrap(
         test_filter: Optional name filter for ``run_module``.
 
     Returns:
-        Python source code string for the bootstrap script.
+        Python source code string, or a list of chunked raw-REPL scripts for
+        CircuitPython RAM mode.
     """
     if device_entry.runtime == "circuitpython" and transport.mode == "ram":
-        from chumicro_device_transport import build_circuitpython_bootstrap
+        from chumicro_device_transport import build_circuitpython_bootstrap_scripts
 
-        return build_circuitpython_bootstrap(
+        max_chunk_size_bytes = None
+        if hasattr(transport, "inline_script_budget_bytes"):
+            max_chunk_size_bytes = transport.inline_script_budget_bytes()
+
+        if max_chunk_size_bytes is None:
+            return build_circuitpython_bootstrap_scripts(
+                transport.staged_sources,
+                test_file,
+                name_filter=test_filter,
+            )
+
+        return build_circuitpython_bootstrap_scripts(
             transport.staged_sources,
             test_file,
             name_filter=test_filter,
-            board_type=device_entry.board_type,
+            max_chunk_size_bytes=max_chunk_size_bytes,
         )
 
     return build_bootstrap(
         test_file.name,
         name_filter=test_filter,
     )
+
+
+def _execute_device_bootstrap(transport, bootstrap):
+    """Execute either a single bootstrap script or a chunked script sequence."""
+    if isinstance(bootstrap, list):
+        if hasattr(transport, "execute_scripts"):
+            return transport.execute_scripts(bootstrap)
+
+        last_output = ""
+        for bootstrap_script in bootstrap:
+            last_output = transport.execute(bootstrap_script)
+        return last_output
+
+    return transport.execute(bootstrap)
 
 
 def _run_tests_on_device(
@@ -448,7 +474,7 @@ def _run_tests_on_device(
                 bootstrap = _build_device_bootstrap(
                     device_entry, transport, test_file, test_filter,
                 )
-                raw_output = transport.execute(bootstrap)
+                raw_output = _execute_device_bootstrap(transport, bootstrap)
                 print(raw_output)
 
                 result = parse_output(raw_output)

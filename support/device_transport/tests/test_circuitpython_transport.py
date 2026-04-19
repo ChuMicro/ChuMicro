@@ -440,6 +440,167 @@ class TestExecute:
             transport.execute("print('hello')")
 
 
+class TestExecuteScripts:
+    """Tests for chunked raw-REPL execution."""
+
+    def test_execute_scripts_runs_each_chunk_and_returns_last_output(
+        self, tmp_path: Path,
+    ) -> None:
+        """execute_scripts() should run every chunk and return the final stdout."""
+        source_dir = tmp_path / "src"
+        source_dir.mkdir()
+        harness_dir = tmp_path / "harness"
+        harness_dir.mkdir()
+
+        port = FakeSerialPort(
+            read_responses=[
+                _RAW_REPL_PROMPT,
+                b"OK\x04\x04>",
+                b"OK\x04\x04>",
+                b"OKPASS test_ok (0.001s)\n\x04\x04>",
+            ],
+        )
+
+        def factory(**kwargs):
+            return port
+
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            serial_port_factory=factory,
+            time=FakeTime(),
+        )
+        transport.connect()
+        transport.stage([source_dir], [], harness_dir)
+
+        output = transport.execute_scripts([
+            "print('chunk one')",
+            "print('chunk two')",
+        ])
+
+        assert output == "PASS test_ok (0.001s)\n"
+        written_data = b"".join(port.writes)
+        assert b"gc.collect()" in written_data
+
+        transport.disconnect()
+
+    def test_execute_scripts_wraps_chunk_index_on_failure(
+        self, tmp_path: Path,
+    ) -> None:
+        """Chunk failures should identify which raw-REPL script failed."""
+        source_dir = tmp_path / "src"
+        source_dir.mkdir()
+        harness_dir = tmp_path / "harness"
+        harness_dir.mkdir()
+
+        port = FakeSerialPort(
+            read_responses=[
+                _RAW_REPL_PROMPT,
+                b"OK\x04\x04>",
+                b"OK\x04\x04>",
+                b"OK\x04Traceback: boom\x04>",
+            ],
+        )
+
+        def factory(**kwargs):
+            return port
+
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            serial_port_factory=factory,
+            time=FakeTime(),
+        )
+        transport.connect()
+        transport.stage([source_dir], [], harness_dir)
+
+        with pytest.raises(
+            CircuitpythonTransportError,
+            match="chunk 2/2 failed",
+        ):
+            transport.execute_scripts([
+                "print('chunk one')",
+                "print('chunk two')",
+            ])
+
+        transport.disconnect()
+
+
+class TestMemoryProbe:
+    """Tests for free-memory probing and script budgeting."""
+
+    def test_probe_free_memory_returns_integer(self) -> None:
+        """probe_free_memory() should parse the board's gc.mem_free output."""
+        port = FakeSerialPort(
+            read_responses=[
+                _RAW_REPL_PROMPT,
+                b"OK32768\n\x04\x04>",
+            ],
+        )
+
+        def factory(**kwargs):
+            return port
+
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            serial_port_factory=factory,
+            time=FakeTime(),
+        )
+        transport.connect()
+
+        assert transport.probe_free_memory() == 32768
+
+        transport.disconnect()
+
+    def test_probe_free_memory_raises_on_non_integer_output(self) -> None:
+        """probe_free_memory() should reject unexpected probe output."""
+        port = FakeSerialPort(
+            read_responses=[
+                _RAW_REPL_PROMPT,
+                b"OKnot-a-number\x04\x04>",
+            ],
+        )
+
+        def factory(**kwargs):
+            return port
+
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            serial_port_factory=factory,
+            time=FakeTime(),
+        )
+        transport.connect()
+
+        with pytest.raises(
+            CircuitpythonTransportError,
+            match="free-memory probe returned unexpected output",
+        ):
+            transport.probe_free_memory()
+
+        transport.disconnect()
+
+    def test_inline_script_budget_uses_half_the_live_heap(self) -> None:
+        """inline_script_budget_bytes() should scale from live free RAM."""
+        port = FakeSerialPort(
+            read_responses=[
+                _RAW_REPL_PROMPT,
+                b"OK65536\n\x04\x04>",
+            ],
+        )
+
+        def factory(**kwargs):
+            return port
+
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            serial_port_factory=factory,
+            time=FakeTime(),
+        )
+        transport.connect()
+
+        assert transport.inline_script_budget_bytes() == 32768
+
+        transport.disconnect()
+
+
 class TestReset:
     """Tests for CircuitpythonTransport.reset."""
 

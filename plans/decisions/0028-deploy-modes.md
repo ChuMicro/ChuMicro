@@ -46,7 +46,9 @@ Flash mode in `execute()`:
 
 ### Large CircuitPython RAM-mode payloads
 
-Some functional tests inline multiple ChuMicro libraries plus the test harness and test file into one raw-REPL bootstrap. On constrained boards such as the Pi Pico W, very large inline payloads can destabilize the USB connection instead of producing a normal traceback. To avoid that failure mode, the RAM-mode bootstrap guard is board-aware: it uses `board_type` from `devices.yml`, keeps the conservative size cap for constrained boards, and skips that cap for ESP32-family boards that have proven reliable with larger inline payloads.
+Some functional tests inline multiple ChuMicro libraries plus the test harness and test file into the CircuitPython raw REPL. Sending that entire payload in one submission can destabilize the USB connection on lower-memory boards instead of producing a normal traceback.
+
+To avoid that failure mode, CircuitPython RAM mode now probes live free heap from the connected board with `gc.mem_free()` after `gc.collect()`, derives a conservative per-script budget from that measurement, and splits the inline bootstrap into multiple raw-REPL chunks. The transport runs those chunks sequentially, collecting garbage between them. If a single required chunk still exceeds the measured RAM budget, the run fails early with guidance to use flash deploy mode.
 
 Flash mode in `disconnect()`:
 
@@ -74,7 +76,7 @@ This is intentionally deferred.  The current work shapes the transport API to ma
 - `DeviceEntry` gains a `circuitpy_drive_path` field.
 - `--deploy-mode` becomes the user-facing CLI override; `deploy_mode` in `devices.yml` is the per-device default (both runtimes, ``"ram"`` when omitted).
 - Flash mode for CircuitPython uses `circuitpy_drive_path` from device config, falling back to auto-detection via `find_circuitpy_drive()`.
-- Oversized CircuitPython RAM-mode bootstraps fail before execution and direct the user to flash mode on constrained boards, while ESP32-family boards skip the conservative cap.
+- Oversized CircuitPython RAM-mode submissions are chunked using a live free-heap probe instead of static board-family metadata. If even the chunked path cannot fit, the run fails early and directs the user to flash mode.
 - The transport API's `stage()`/`execute()`/`disconnect()` protocol remains stable — mode is an internal concern.
 - The `chumicro-deploy` package and project template are recorded as future work in `open-questions.md`.
 

@@ -44,6 +44,7 @@ from device_config import (
 from device_testing import (
     _build_device_bootstrap,
     _create_transport,
+    _execute_device_bootstrap,
     _resolve_library_source_dirs,
 )
 from result_parser import parse_output
@@ -526,7 +527,7 @@ class DeviceRuntimeItem(pytest.Item):
                 device_entry, transport, self.test_file, None,
             )
             try:
-                raw_output = transport.execute(bootstrap)
+                raw_output = _execute_device_bootstrap(transport, bootstrap)
             except Exception as error:
                 cache.cache_batch_result(
                     *batch_key, None, f"Device execution failed: {error}",

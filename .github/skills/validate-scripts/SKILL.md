@@ -256,7 +256,7 @@ python scripts/run.py test-device --library timing --test progress_on_runtime 2>
 # 🔍 `--runtime both` is an explicit alias for that same defaults-based dual-runtime selection
 # 🔍 `--runtime micropython|circuitpython` overrides only the runtime set
 # 🔍 `--micropython-device` / `--circuitpython-device` override the selected boards for those runtimes
-# 🔍 `--device` remains available as a legacy single-device shortcut
+# 🔍 CircuitPython RAM mode now probes live free heap and sends large inline payloads in multiple chunks; low-memory failures should mention the measured RAM budget and suggest flash mode
 ```
 
 ## 12. test-micropython-compatibility

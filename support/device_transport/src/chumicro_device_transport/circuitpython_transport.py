@@ -55,6 +55,10 @@ _FLUSH_SETTLE_DELAY = 0.5
 #: Volume name CircuitPython uses by default.
 _CIRCUITPY_VOLUME_NAME = "CIRCUITPY"
 
+# RAM-mode inline scripts are chunked based on live free-heap measurements.
+_MIN_INLINE_SCRIPT_BUDGET_BYTES = 8 * 1024
+_MAX_INLINE_SCRIPT_BUDGET_BYTES = 48 * 1024
+
 
 def find_circuitpy_drive() -> str | None:
     """Auto-detect the CIRCUITPY USB drive mount path.
@@ -615,6 +619,62 @@ class CircuitpythonTransport:
         raw_response = self._read_until(b"\x04>")
 
         return self._parse_raw_repl_response(raw_response)
+
+    def execute_scripts(self, bootstrap_scripts: list[str]) -> str:
+        """Execute multiple raw-REPL scripts in one interpreter session.
+
+        Large CircuitPython RAM-mode payloads are more reliable when split into
+        smaller scripts. Each script leaves the interpreter in raw REPL ready
+        for the next chunk.
+
+        Args:
+            bootstrap_scripts: Ordered raw-REPL scripts to execute.
+
+        Returns:
+            Stdout from the final script.
+        """
+        last_output = ""
+        total_script_count = len(bootstrap_scripts)
+        for script_index, bootstrap_script in enumerate(bootstrap_scripts, start=1):
+            try:
+                last_output = self.execute(bootstrap_script)
+            except CircuitpythonTransportError as execute_error:
+                raise CircuitpythonTransportError(
+                    "CircuitPython inline bootstrap chunk "
+                    f"{script_index}/{total_script_count} failed: {execute_error}"
+                ) from execute_error
+
+            if script_index != total_script_count:
+                self._send_repl_command("import gc\ngc.collect()")
+
+        return last_output
+
+    def probe_free_memory(self) -> int:
+        """Return free heap bytes reported by the connected board."""
+        output = self._send_repl_command("import gc\ngc.collect()\nprint(gc.mem_free())")
+        memory_text = output.strip()
+        try:
+            return int(memory_text)
+        except ValueError as parse_error:
+            raise CircuitpythonTransportError(
+                "CircuitPython free-memory probe returned unexpected output: "
+                f"{memory_text!r}"
+            ) from parse_error
+
+    def inline_script_budget_bytes(self) -> int:
+        """Return a conservative raw-REPL script budget based on live heap."""
+        free_memory_bytes = self.probe_free_memory()
+        if free_memory_bytes < _MIN_INLINE_SCRIPT_BUDGET_BYTES:
+            raise CircuitpythonTransportError(
+                "CircuitPython board reports too little free RAM for inline "
+                f"execution ({free_memory_bytes} bytes available). Use flash "
+                "deploy mode."
+            )
+
+        return min(
+            _MAX_INLINE_SCRIPT_BUDGET_BYTES,
+            max(_MIN_INLINE_SCRIPT_BUDGET_BYTES, free_memory_bytes // 2),
+        )
 
     def soft_reset(self) -> None:
         """Soft-reset the interpreter and re-enter raw REPL.

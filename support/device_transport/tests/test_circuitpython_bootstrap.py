@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 from chumicro_device_transport.circuitpython_bootstrap import (
-    MAX_INLINE_BOOTSTRAP_BYTES,
     CircuitpythonBootstrapTooLargeError,
     _escape_source,
     build_circuitpython_bootstrap,
+    build_circuitpython_bootstrap_scripts,
 )
 
 
@@ -171,34 +171,70 @@ class TestBuildCircuitpythonBootstrap:
         # Should be valid Python despite tricky source content.
         compile(result, "<bootstrap>", "exec")
 
-    def test_raises_for_oversized_bootstrap(self, tmp_path: Path) -> None:
-        """Huge inline payloads should fail fast with a flash-mode hint."""
+    def test_chunked_scripts_split_large_payloads(self, tmp_path: Path) -> None:
+        """Large RAM-mode payloads should be split into multiple scripts."""
         test_file = tmp_path / "test_example.py"
         test_file.write_text("def test_ok(): pass")
-        giant_source = "x = 1\n" * (MAX_INLINE_BOOTSTRAP_BYTES // 4)
+        staged_sources = [
+            (f"chumicro_massive_{index}", "x = 1\n" * 600)
+            for index in range(4)
+        ]
 
-        with pytest.raises(
-            CircuitpythonBootstrapTooLargeError, match="flash deploy mode",
-        ):
-            build_circuitpython_bootstrap(
-                [("chumicro_massive", giant_source)], test_file,
-            )
-
-    def test_allows_oversized_bootstrap_on_esp32_family_boards(
-        self, tmp_path: Path,
-    ) -> None:
-        """ESP32-family boards should skip the conservative RAM-size guard."""
-        test_file = tmp_path / "test_example.py"
-        test_file.write_text("def test_ok(): pass")
-        giant_source = "x = 1\n" * (MAX_INLINE_BOOTSTRAP_BYTES // 4)
-
-        result = build_circuitpython_bootstrap(
-            [("chumicro_massive", giant_source)],
+        scripts = build_circuitpython_bootstrap_scripts(
+            staged_sources,
             test_file,
-            board_type="esp32s2",
+            max_chunk_size_bytes=10 * 1024,
         )
 
-        assert len(result.encode("utf-8")) > MAX_INLINE_BOOTSTRAP_BYTES
+        assert len(scripts) > 2
+        assert all(
+            len(script.encode("utf-8")) <= 10 * 1024
+            for script in scripts
+        )
+
+    def test_chunked_scripts_are_valid_python(
+        self, tmp_path: Path,
+    ) -> None:
+        """Each generated chunk should parse on its own."""
+        test_file = tmp_path / "test_example.py"
+        test_file.write_text("def test_ok(): pass")
+        scripts = build_circuitpython_bootstrap_scripts(
+            [
+                (f"chumicro_massive_{index}", "x = 1\n" * 400)
+                for index in range(3)
+            ],
+            test_file,
+            max_chunk_size_bytes=8 * 1024,
+        )
+
+        for script in scripts:
+            compile(script, "<bootstrap-chunk>", "exec")
+
+    def test_chunked_scripts_retry_deferred_imports(self, tmp_path: Path) -> None:
+        """The final chunk should retry deferred imports before running tests."""
+        test_file = tmp_path / "test_example.py"
+        test_file.write_text("def test_ok(): pass")
+
+        scripts = build_circuitpython_bootstrap_scripts([], test_file)
+
+        assert scripts[-1].startswith("_retry_deferred()")
+
+    def test_raises_when_single_chunk_cannot_fit_budget(
+        self, tmp_path: Path,
+    ) -> None:
+        """A too-small live budget should fail before raw REPL execution."""
+        test_file = tmp_path / "test_example.py"
+        test_file.write_text("def test_ok(): pass")
+
+        with pytest.raises(
+            CircuitpythonBootstrapTooLargeError,
+            match="live RAM budget",
+        ):
+            build_circuitpython_bootstrap_scripts(
+                [("chumicro_massive", "x = 1\n" * 20)],
+                test_file,
+                max_chunk_size_bytes=64,
+            )
 
 
 class TestEscapeSource:

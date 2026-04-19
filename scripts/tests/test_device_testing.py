@@ -519,56 +519,60 @@ class TestBuildDeviceBootstrap:
         bootstrap = device_testing._build_device_bootstrap(
             entry, FakeTransport(), test_file, None,
         )
-        # Inline bootstrap uses _populate_module.
-        assert "_populate_module" in bootstrap
+        assert isinstance(bootstrap, list)
+        # Inline bootstrap uses _populate_module in one of the chunked scripts.
+        assert any("_populate_module" in script for script in bootstrap)
 
-    def test_circuitpython_ram_passes_board_type_to_inline_bootstrap(
+    def test_circuitpython_ram_uses_live_chunk_budget_for_inline_bootstrap(
         self, tmp_path, monkeypatch,
     ) -> None:
-        """CP ram mode should pass board_type into inline bootstrap generation."""
+        """CP ram mode should pass the transport's live chunk budget through."""
         import chumicro_device_transport
 
         entry = DeviceEntry(
             identifier="cp-board",
             runtime="circuitpython",
             address="/dev/null",
-            board_type="esp32s2",
         )
 
         class FakeTransport:
             mode = "ram"
             staged_sources = [("chumicro_timing", "# init")]
 
+            @staticmethod
+            def inline_script_budget_bytes() -> int:
+                return 12345
+
         test_file = tmp_path / "test_example.py"
         test_file.write_text("def test_ok(): pass")
-        captured_arguments: dict[str, str] = {}
+        captured_arguments: dict[str, object] = {}
 
-        def fake_build_circuitpython_bootstrap(
+        def fake_build_circuitpython_bootstrap_scripts(
             staged_sources,
             bootstrap_test_file,
             *,
             name_filter=None,
-            board_type="",
-        ) -> str:
-            captured_arguments["board_type"] = board_type
+            max_chunk_size_bytes=0,
+        ) -> list[str]:
+            captured_arguments["max_chunk_size_bytes"] = max_chunk_size_bytes
             captured_arguments["test_file_name"] = bootstrap_test_file.name
             assert staged_sources == [("chumicro_timing", "# init")]
             assert name_filter is None
-            return "inline bootstrap"
+            return ["inline bootstrap"]
 
         monkeypatch.setattr(
             chumicro_device_transport,
-            "build_circuitpython_bootstrap",
-            fake_build_circuitpython_bootstrap,
+            "build_circuitpython_bootstrap_scripts",
+            fake_build_circuitpython_bootstrap_scripts,
         )
 
         bootstrap = device_testing._build_device_bootstrap(
             entry, FakeTransport(), test_file, None,
         )
 
-        assert bootstrap == "inline bootstrap"
+        assert bootstrap == ["inline bootstrap"]
         assert captured_arguments == {
-            "board_type": "esp32s2",
+            "max_chunk_size_bytes": 12345,
             "test_file_name": "test_example.py",
         }
 
@@ -685,6 +689,46 @@ class TestResolveLibrarySourceDirs:
         )
         runner_source = runner_dir / "src"
         assert result.index(msgpack_source) < result.index(runner_source)
+
+
+class TestExecuteDeviceBootstrap:
+    """Tests for _execute_device_bootstrap."""
+
+    def test_runs_chunked_bootstraps_with_execute_scripts(self) -> None:
+        """List bootstraps should use execute_scripts when the transport has it."""
+
+        class FakeTransport:
+            captured_bootstrap = None
+
+            @staticmethod
+            def execute_scripts(bootstrap_scripts):
+                FakeTransport.captured_bootstrap = bootstrap_scripts
+                return "chunked output"
+
+        result = device_testing._execute_device_bootstrap(
+            FakeTransport(), ["chunk-1", "chunk-2"],
+        )
+
+        assert result == "chunked output"
+        assert FakeTransport.captured_bootstrap == ["chunk-1", "chunk-2"]
+
+    def test_runs_single_bootstraps_with_execute(self) -> None:
+        """String bootstraps should continue to use execute()."""
+
+        class FakeTransport:
+            captured_bootstrap = None
+
+            @staticmethod
+            def execute(bootstrap_script):
+                FakeTransport.captured_bootstrap = bootstrap_script
+                return "single output"
+
+        result = device_testing._execute_device_bootstrap(
+            FakeTransport(), "single bootstrap",
+        )
+
+        assert result == "single output"
+        assert FakeTransport.captured_bootstrap == "single bootstrap"
 
     def test_library_without_dependencies(self) -> None:
         """A library with no deps should return only its own src/."""

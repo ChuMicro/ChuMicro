@@ -35,7 +35,6 @@ devices:
     runtime: micropython
     address: /dev/ttyUSB0
     description: Test board
-    board_type: esp32s3
 """)
         devices = load_devices(devices_file)
         assert len(devices) == 1
@@ -43,8 +42,21 @@ devices:
         assert devices[0].runtime == "micropython"
         assert devices[0].address == "/dev/ttyUSB0"
         assert devices[0].description == "Test board"
-        assert devices[0].board_type == "esp32s3"
         assert devices[0].deploy_mode == "ram"
+
+    def test_legacy_board_type_field_is_ignored(self, tmp_path) -> None:
+        """Legacy board_type entries should not affect the active schema."""
+        devices_file = _write_yaml(tmp_path / "devices.yml", """
+devices:
+  - id: board-one
+    runtime: micropython
+    address: /dev/ttyUSB0
+    board_type: esp32s3
+""")
+
+        devices = load_devices(devices_file)
+
+        assert devices[0].extra["board_type"] == "esp32s3"
 
     def test_loads_multiple_devices(self, tmp_path) -> None:
         """Multiple device entries should all be returned."""

@@ -13,7 +13,10 @@ Transport protocol (duck-typed)::
     disconnect() -> None
 """
 
-from .circuitpython_bootstrap import build_circuitpython_bootstrap
+from .circuitpython_bootstrap import (
+    build_circuitpython_bootstrap,
+    build_circuitpython_bootstrap_scripts,
+)
 from .circuitpython_transport import (
     CircuitpythonTransport,
     CircuitpythonTransportError,
@@ -30,5 +33,6 @@ __all__ = [
     "MicropythonTransport",
     "SerialPort",
     "build_circuitpython_bootstrap",
+    "build_circuitpython_bootstrap_scripts",
     "find_circuitpy_drive",
 ]

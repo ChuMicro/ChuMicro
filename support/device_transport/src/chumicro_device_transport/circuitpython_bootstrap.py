@@ -23,15 +23,13 @@ from pathlib import Path
 
 _TEMPLATE_PATH = Path(__file__).parent / "circuitpython_bootstrap_template.txt"
 
-# Inline raw-REPL payloads that grow beyond this size have proven unreliable
-# on constrained CircuitPython boards such as the Pi Pico W. Flash deploy
-# mode avoids the giant in-memory bootstrap entirely.
-MAX_INLINE_BOOTSTRAP_BYTES = 64 * 1024
+# CircuitPython raw-REPL execution is more reliable when large inline test
+# payloads are sent as multiple smaller scripts instead of one giant block.
+# The transport picks a runtime-specific budget at execution time.
+DEFAULT_INLINE_SCRIPT_BUDGET_BYTES = 48 * 1024
 
-# ESP32-family CircuitPython boards have enough headroom for substantially
-# larger inline payloads, so they bypass the conservative size guard used
-# for constrained boards.
-_ESP32_BOARD_TYPE_PREFIX = "esp32"
+_HELPER_AND_SETUP_MARKER = "# Pass 1: register empty stubs so import statements resolve."
+_TEST_EXECUTION_MARKER = "# Execute the test file."
 
 
 class CircuitpythonBootstrapTooLargeError(ValueError):
@@ -43,7 +41,6 @@ def build_circuitpython_bootstrap(
     test_file: Path,
     *,
     name_filter: str | None = None,
-    board_type: str = "",
 ) -> str:
     """Generate a bootstrap code block for CircuitPython raw REPL execution.
 
@@ -55,62 +52,81 @@ def build_circuitpython_bootstrap(
         staged_sources: List of ``(dotted_module_name, source_text)``
             tuples from the transport's ``stage()`` step.
         test_file: Path to the test file to execute.
-        name_filter: Optional substring filter passed to
-            ``run_module``.
-        board_type: Optional board identifier from ``devices.yml``.
-            Used to apply conservative RAM-payload limits only on
-            constrained CircuitPython boards.
+        name_filter: Optional substring filter passed to ``run_module``.
 
     Returns:
         Python source code string for raw REPL execution.
     """
-    template = _TEMPLATE_PATH.read_text(encoding="utf-8")
+    return "\n\n".join(build_circuitpython_bootstrap_scripts(
+        staged_sources,
+        test_file,
+        name_filter=name_filter,
+        max_chunk_size_bytes=1024 * 1024 * 1024,
+    ))
 
-    # Build stub registration lines.
-    stub_lines = [
-        f"_register_stub({module_name!r})"
-        for module_name, _source_text in staged_sources
-    ]
 
-    # Build population lines with ImportError deferral.
-    population_lines: list[str] = []
-    for module_name, source_text in staged_sources:
-        escaped_source = _escape_source(source_text)
-        population_lines.extend([
-            "try:",
-            f"    _populate_module({module_name!r}, {escaped_source})",
-            "except ImportError:",
-            f"    _deferred.append(({module_name!r}, {escaped_source}))",
-        ])
+def build_circuitpython_bootstrap_scripts(
+    staged_sources: list[tuple[str, str]],
+    test_file: Path,
+    *,
+    name_filter: str | None = None,
+    max_chunk_size_bytes: int = DEFAULT_INLINE_SCRIPT_BUDGET_BYTES,
+) -> list[str]:
+    """Generate chunked raw-REPL scripts for CircuitPython RAM-mode tests.
 
-    # Read and escape the test file.
-    test_source = test_file.read_text(encoding="utf-8")
-    escaped_test = _escape_source(test_source)
+    CircuitPython raw REPL buffers and compiles each submitted script before it
+    executes. Large one-shot payloads can therefore exhaust heap even when the
+    final imported modules would fit. This builder splits the inline bootstrap
+    into smaller scripts that can be executed sequentially in one interpreter
+    session.
 
-    filter_repr = repr(name_filter) if name_filter else "None"
+    Args:
+        staged_sources: List of ``(dotted_module_name, source_text)`` tuples.
+        test_file: Path to the test file to execute.
+        name_filter: Optional substring filter passed to ``run_module``.
+        max_chunk_size_bytes: Maximum encoded size for any single submitted raw
+            REPL script.
 
-    bootstrap_script = (
-        template
-        .replace("$STUB_REGISTRATIONS", "\n".join(stub_lines))
-        .replace("$MODULE_POPULATIONS", "\n".join(population_lines))
-        .replace("$TEST_SOURCE", escaped_test)
-        .replace("$FILTER_REPR", filter_repr)
+    Returns:
+        Ordered list of Python source strings to execute sequentially.
+    """
+    if max_chunk_size_bytes <= 0:
+        raise ValueError("max_chunk_size_bytes must be positive")
+
+    helper_script = _build_helper_script()
+    _validate_script_size(
+        "bootstrap helpers",
+        helper_script,
+        max_chunk_size_bytes,
     )
 
-    inline_bootstrap_limit_bytes = _inline_bootstrap_limit_bytes(board_type)
-    bootstrap_size_bytes = len(bootstrap_script.encode("utf-8"))
-    if (
-        inline_bootstrap_limit_bytes is not None
-        and bootstrap_size_bytes > inline_bootstrap_limit_bytes
-    ):
-        raise CircuitpythonBootstrapTooLargeError(
-            "CircuitPython inline bootstrap is too large for reliable RAM "
-            f"execution on constrained boards ({bootstrap_size_bytes} bytes > "
-            f"{inline_bootstrap_limit_bytes} bytes). Use flash deploy mode or "
-            "set deploy_mode: flash for this board in devices.yml."
-        )
+    stub_scripts = _chunk_script_blocks(
+        [
+            (module_name, f"_register_stub({module_name!r})")
+            for module_name, _source_text in staged_sources
+        ],
+        max_chunk_size_bytes,
+    )
 
-    return bootstrap_script
+    population_scripts = _chunk_script_blocks(
+        [
+            (
+                module_name,
+                _build_population_block(module_name, source_text),
+            )
+            for module_name, source_text in staged_sources
+        ],
+        max_chunk_size_bytes,
+    )
+
+    final_script = _build_test_execution_script(test_file, name_filter=name_filter)
+    _validate_script_size(
+        f"test execution for {test_file.name}",
+        final_script,
+        max_chunk_size_bytes,
+    )
+
+    return [helper_script, *stub_scripts, *population_scripts, final_script]
 
 
 def _escape_source(source_text: str) -> str:
@@ -126,21 +142,101 @@ def _escape_source(source_text: str) -> str:
     return repr(source_text)
 
 
-def _inline_bootstrap_limit_bytes(board_type: str) -> int | None:
-    """Return the inline bootstrap size limit for a CircuitPython board.
+def _build_helper_script() -> str:
+    """Return the setup script that defines helper functions once."""
+    template = _TEMPLATE_PATH.read_text(encoding="utf-8")
+    helper_template = template.split(_HELPER_AND_SETUP_MARKER, maxsplit=1)[0]
+    deferred_retry_helper = """
+def _retry_deferred():
+    while _deferred:
+        remaining = []
+        progress_made = False
+        for module_name, source_code in _deferred:
+            try:
+                _populate_module(module_name, source_code)
+                progress_made = True
+            except ImportError:
+                remaining.append((module_name, source_code))
+        if not progress_made:
+            raise ImportError(
+                'Unresolved module dependencies: ' + ', '.join(
+                    module_name for module_name, _ in remaining
+                )
+            )
+        _deferred[:] = remaining
+"""
+    return helper_template + deferred_retry_helper + "\n_deferred = []\n"
 
-    ESP32-family boards tolerate substantially larger inline payloads in RAM
-    mode, so the conservative 64 KiB guard is skipped for them. Unknown or
-    empty board types keep the conservative guard.
 
-    Args:
-        board_type: Board identifier from ``devices.yml``.
+def _build_test_execution_script(
+    test_file: Path,
+    *,
+    name_filter: str | None,
+) -> str:
+    """Return the final script that resolves deferred imports and runs tests."""
+    template = _TEMPLATE_PATH.read_text(encoding="utf-8")
+    test_execution_template = template.split(_TEST_EXECUTION_MARKER, maxsplit=1)[1]
+    test_source = test_file.read_text(encoding="utf-8")
+    escaped_test = _escape_source(test_source)
+    filter_repr = repr(name_filter) if name_filter else "None"
+    return (
+        "_retry_deferred()\n\n"
+        + _TEST_EXECUTION_MARKER
+        + test_execution_template
+        .replace("$TEST_SOURCE", escaped_test)
+        .replace("$FILTER_REPR", filter_repr)
+        .replace("$STUB_REGISTRATIONS", "")
+        .replace("$MODULE_POPULATIONS", "")
+    ).strip()
 
-    Returns:
-        Maximum allowed inline bootstrap size in bytes, or ``None`` when the
-        board family is known to handle larger payloads reliably.
-    """
-    normalized_board_type = board_type.strip().lower()
-    if normalized_board_type.startswith(_ESP32_BOARD_TYPE_PREFIX):
-        return None
-    return MAX_INLINE_BOOTSTRAP_BYTES
+
+def _build_population_block(module_name: str, source_text: str) -> str:
+    """Return the population block for one staged module."""
+    escaped_source = _escape_source(source_text)
+    return "\n".join([
+        "try:",
+        f"    _populate_module({module_name!r}, {escaped_source})",
+        "except ImportError:",
+        f"    _deferred.append(({module_name!r}, {escaped_source}))",
+    ])
+
+
+def _chunk_script_blocks(
+    blocks: list[tuple[str, str]],
+    max_chunk_size_bytes: int,
+) -> list[str]:
+    """Group named script blocks into scripts that stay under the size budget."""
+    chunked_scripts: list[str] = []
+    current_blocks: list[str] = []
+
+    for block_name, block_text in blocks:
+        _validate_script_size(block_name, block_text, max_chunk_size_bytes)
+        candidate_blocks = [*current_blocks, block_text]
+        candidate_script = "\n".join(candidate_blocks)
+        if current_blocks and len(candidate_script.encode("utf-8")) > max_chunk_size_bytes:
+            chunked_scripts.append("\n".join(current_blocks))
+            current_blocks = [block_text]
+        else:
+            current_blocks = candidate_blocks
+
+    if current_blocks:
+        chunked_scripts.append("\n".join(current_blocks))
+
+    return chunked_scripts
+
+
+def _validate_script_size(
+    script_name: str,
+    script_text: str,
+    max_chunk_size_bytes: int,
+) -> None:
+    """Raise when a single script exceeds the live RAM-mode chunk budget."""
+    script_size_bytes = len(script_text.encode("utf-8"))
+    if script_size_bytes <= max_chunk_size_bytes:
+        return
+
+    raise CircuitpythonBootstrapTooLargeError(
+        "CircuitPython inline bootstrap chunk is larger than the live RAM "
+        f"budget ({script_name}: {script_size_bytes} bytes > "
+        f"{max_chunk_size_bytes} bytes). Use flash deploy mode for this test."
+    )

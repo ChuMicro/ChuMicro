@@ -92,7 +92,7 @@ Right-click a test file or test function in the editor → **Run 'test_...'**. P
 
 For device-backed `functional_tests/`, the test tree includes synthetic nodes such as `Setup — MicroPython`, `Run overhead — MicroPython`, `Setup — CircuitPython`, and `Run overhead — CircuitPython`. The setup node owns staging time. Individual test functions show the durations reported by the on-device harness, while the run-overhead node keeps only the remaining batch overhead that is not attributable to a single test.
 
-On low-RAM CircuitPython boards, very large RAM-mode functional tests may exceed the safe inline bootstrap size and fail fast with a message telling you to use flash deploy mode instead. In that case, set the board's `deploy_mode: flash` in `devices.yml` or use the CLI with `--deploy-mode flash`.
+Large CircuitPython RAM-mode functional tests are sent in multiple raw-REPL chunks instead of one giant inline bootstrap. Before sending those chunks, the transport asks the board for its live free heap and sizes each chunk conservatively from that measurement. If a single chunk still cannot fit within the measured RAM budget, the run fails early with a flash-mode hint. In that case, set the board's `deploy_mode: flash` in `devices.yml` or use the CLI with `--deploy-mode flash`.
 
 > **Note:** PyCharm also offers **Run with Coverage** (shield icon). This uses PyCharm's built-in coverage runner, which doesn't understand the project's multi-library layout. Use the **Test** run config or the terminal for accurate coverage.
 
