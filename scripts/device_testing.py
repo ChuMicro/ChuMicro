@@ -14,7 +14,7 @@ from pathlib import Path
 
 from device_config import DeviceConfigError, filter_devices, load_devices
 from result_parser import parse_output
-from workspace import ROOT, discover_library_dirs
+from workspace import ROOT, discover_library_dirs, load_tomllib
 
 
 def discover_functional_tests(
@@ -83,6 +83,59 @@ def build_bootstrap(
         f"module = _exec_as_namespace('{test_filename}')\n"
         f"run_module(module, name_filter={filter_repr})\n"
     )
+
+
+def _resolve_library_source_dirs(library_dir: Path) -> list[Path]:
+    """Return source dirs for a library and its intra-workspace dependencies.
+
+    Reads ``project.dependencies`` from the library's ``pyproject.toml``
+    and resolves any ``chumicro-*`` entries to their ``src/`` directories.
+    This provides the minimal set of source directories needed to run
+    the library's tests — critical for RAM mode where all source code
+    is sent inline through the serial REPL.
+
+    Args:
+        library_dir: Root directory of the library (e.g.
+            ``libraries/runner``).
+
+    Returns:
+        List of ``src/`` directories: the library's own plus
+        any intra-workspace dependencies, in dependency-first order.
+    """
+    libraries_root = ROOT / "libraries"
+    tomllib = load_tomllib()
+
+    # Read the library's own dependencies.
+    pyproject_file = library_dir / "pyproject.toml"
+    dependency_dirs: list[Path] = []
+    if pyproject_file.exists():
+        with pyproject_file.open("rb") as toml_file:
+            data = tomllib.load(toml_file)
+        dependencies = data.get("project", {}).get("dependencies", [])
+        for dependency in dependencies:
+            dependency_name = dependency.strip()
+            if not dependency_name.startswith("chumicro-"):
+                continue
+            # "chumicro-timing>=0.1" → "timing"
+            bare_name = dependency_name.split(">")[0].split("<")[0]
+            bare_name = bare_name.split("=")[0].split("!")[0].strip()
+            library_name = bare_name.removeprefix("chumicro-")
+            dependency_source = libraries_root / library_name / "src"
+            if dependency_source.is_dir():
+                # Recurse to pick up transitive dependencies.
+                for transitive_dir in _resolve_library_source_dirs(
+                    libraries_root / library_name,
+                ):
+                    if transitive_dir not in dependency_dirs:
+                        dependency_dirs.append(transitive_dir)
+
+    # The library's own src/ comes last so dependencies are registered
+    # first during staging.
+    own_source = library_dir / "src"
+    if own_source.is_dir() and own_source not in dependency_dirs:
+        dependency_dirs.append(own_source)
+
+    return dependency_dirs
 
 
 def _create_transport(device_entry, deploy_mode: str | None = None):
@@ -199,32 +252,56 @@ def _run_tests_on_device(
         print(f"  Connection failed: {connect_error}")
         return 0, 0, 1
 
-    source_dirs = [
-        library_dir / "src"
-        for library_dir in discover_library_dirs()
-        if (library_dir / "src").is_dir()
-    ]
+    # RAM mode sends all source code inline through the serial REPL,
+    # so we re-stage per library with only the source dirs that library
+    # actually needs (itself + its intra-workspace dependencies).
+    # Flash mode (and MicroPython mount mode) can stage everything once
+    # since files live on disk, not in RAM.
+    use_per_library_staging = (
+        hasattr(transport, "mode") and transport.mode == "ram"
+    )
 
-    # Collect all test files across libraries and stage them in one
-    # rsync pass.  Running stage() per test file would re-sync the
-    # entire drive for each test — expensive on FAT32 USB drives.
-    all_test_files = [
-        test_file
-        for _library_name, _source_dir, test_files in test_plan
-        for test_file in test_files
-    ]
+    if not use_per_library_staging:
+        source_dirs = [
+            library_dir / "src"
+            for library_dir in discover_library_dirs()
+            if (library_dir / "src").is_dir()
+        ]
 
-    try:
-        transport.stage(source_dirs, all_test_files, harness_source)
-    except Exception as stage_error:
-        print(f"  Stage failed: {stage_error}")
-        transport.disconnect()
-        return 0, 0, len(all_test_files)
+        # Collect all test files across libraries and stage them in one
+        # rsync pass.  Running stage() per test file would re-sync the
+        # entire drive for each test — expensive on FAT32 USB drives.
+        all_test_files = [
+            test_file
+            for _library_name, _source_dir, test_files in test_plan
+            for test_file in test_files
+        ]
+
+        try:
+            transport.stage(source_dirs, all_test_files, harness_source)
+        except Exception as stage_error:
+            print(f"  Stage failed: {stage_error}")
+            transport.disconnect()
+            return 0, 0, len(all_test_files)
 
     abort = False
-    for library_name, _source_dir, test_files in test_plan:
+    for library_name, source_dir, test_files in test_plan:
         if abort:
             break
+
+        if use_per_library_staging:
+            # Resolve only the source dirs this library needs.
+            library_dir = source_dir.parent
+            library_source_dirs = _resolve_library_source_dirs(library_dir)
+            try:
+                transport.stage(
+                    library_source_dirs, test_files, harness_source,
+                )
+            except Exception as stage_error:
+                print(f"  Stage failed for {library_name}: {stage_error}")
+                errors += len(test_files)
+                continue
+
         for test_file in test_files:
             if abort:
                 break

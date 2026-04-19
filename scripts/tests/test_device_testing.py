@@ -240,3 +240,47 @@ class TestBuildDeviceBootstrap:
         assert "_make_lazy_module" not in bootstrap
         assert "_populate_module" not in bootstrap
         assert "run_module" in bootstrap
+
+
+class TestResolveLibrarySourceDirs:
+    """Tests for _resolve_library_source_dirs."""
+
+    def test_includes_own_source_dir(self) -> None:
+        """Should include the library's own src/ directory."""
+        timing_dir = device_testing.ROOT / "libraries" / "timing"
+        result = device_testing._resolve_library_source_dirs(timing_dir)
+        assert timing_dir / "src" in result
+
+    def test_includes_dependency_source_dirs(self) -> None:
+        """Runner depends on timing — both src/ dirs should appear."""
+        runner_dir = device_testing.ROOT / "libraries" / "runner"
+        result = device_testing._resolve_library_source_dirs(runner_dir)
+        timing_source = device_testing.ROOT / "libraries" / "timing" / "src"
+        runner_source = runner_dir / "src"
+        assert timing_source in result
+        assert runner_source in result
+
+    def test_dependency_comes_before_library(self) -> None:
+        """Dependencies should appear before the library itself."""
+        runner_dir = device_testing.ROOT / "libraries" / "runner"
+        result = device_testing._resolve_library_source_dirs(runner_dir)
+        timing_source = device_testing.ROOT / "libraries" / "timing" / "src"
+        runner_source = runner_dir / "src"
+        assert result.index(timing_source) < result.index(runner_source)
+
+    def test_library_without_dependencies(self) -> None:
+        """A library with no deps should return only its own src/."""
+        timing_dir = device_testing.ROOT / "libraries" / "timing"
+        result = device_testing._resolve_library_source_dirs(timing_dir)
+        assert result == [timing_dir / "src"]
+
+    def test_nonexistent_library_returns_empty(self, tmp_path) -> None:
+        """A nonexistent library dir should return an empty list."""
+        result = device_testing._resolve_library_source_dirs(tmp_path / "nope")
+        assert result == []
+
+    def test_no_duplicate_entries(self) -> None:
+        """Source dirs should not appear more than once."""
+        runner_dir = device_testing.ROOT / "libraries" / "runner"
+        result = device_testing._resolve_library_source_dirs(runner_dir)
+        assert len(result) == len(set(result))
