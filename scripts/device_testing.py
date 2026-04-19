@@ -13,7 +13,12 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-from device_config import DeviceConfigError, filter_devices, load_devices
+from device_config import (
+    DeviceConfigError,
+    filter_devices,
+    load_device_registry,
+    resolve_ide_devices,
+)
 from result_parser import parse_output
 from workspace import ROOT, discover_library_dirs, load_tomllib
 
@@ -418,13 +423,18 @@ def test_device(
     """
     # Load device registry.
     try:
-        all_devices = load_devices()
+        all_devices, defaults = load_device_registry()
     except DeviceConfigError as error:
         print(f"Device config error: {error}")
         return 2
 
-    # Filter devices.
-    selected = filter_devices(all_devices, runtime=runtime, device_id=device)
+    # Filter devices. When the CLI does not specify runtime or device,
+    # mirror the IDE behavior by selecting the defaults from devices.yml.
+    if runtime is None and device is None:
+        selected = resolve_ide_devices(all_devices, defaults)
+    else:
+        selected = filter_devices(all_devices, runtime=runtime, device_id=device)
+
     if not selected:
         print("No matching devices found.")
         if not all_devices:

@@ -99,6 +99,127 @@ class TestDeviceOrchestration:
         result = device_testing.test_device(device="nonexistent")
         assert result == 2
 
+    def test_no_filters_use_devices_yml_defaults(
+        self, monkeypatch, tmp_path,
+    ) -> None:
+        """Bare CLI runs should target the defaults-selected device(s)."""
+        devices_file = tmp_path / "devices.yml"
+        devices_file.write_text(
+            "defaults:\n"
+            "  micropython: mp-default\n"
+            "  circuitpython: cp-default\n"
+            "  ide_runtime: both\n"
+            "devices:\n"
+            "  - id: mp-other\n"
+            "    runtime: micropython\n"
+            "    address: /dev/ttyUSB0\n"
+            "  - id: mp-default\n"
+            "    runtime: micropython\n"
+            "    address: /dev/ttyUSB1\n"
+            "  - id: cp-default\n"
+            "    runtime: circuitpython\n"
+            "    address: /dev/cu.usbmodem1\n"
+        )
+        monkeypatch.setenv("CHUMICRO_DEVICES", str(devices_file))
+
+        selected_device_ids: list[str] = []
+
+        def fake_run_tests_on_device(
+            device_entry,
+            test_plan,
+            harness_source,
+            test_filter,
+            deploy_mode=None,
+        ):
+            selected_device_ids.append(device_entry.identifier)
+            return 1, 0, 0
+
+        monkeypatch.setattr(
+            device_testing,
+            "discover_functional_tests",
+            lambda library=None, test_filter=None: [
+                (
+                    "timing",
+                    device_testing.ROOT / "libraries" / "timing" / "src",
+                    [
+                        device_testing.ROOT
+                        / "libraries"
+                        / "timing"
+                        / "functional_tests"
+                        / "test_heartbeat.py",
+                    ],
+                ),
+            ],
+        )
+        monkeypatch.setattr(
+            device_testing, "_run_tests_on_device", fake_run_tests_on_device,
+        )
+
+        result = device_testing.test_device()
+
+        assert result == 0
+        assert selected_device_ids == ["mp-default", "cp-default"]
+
+    def test_runtime_filter_overrides_defaults(
+        self, monkeypatch, tmp_path,
+    ) -> None:
+        """Explicit runtime filters should bypass defaults-based selection."""
+        devices_file = tmp_path / "devices.yml"
+        devices_file.write_text(
+            "defaults:\n"
+            "  circuitpython: cp-default\n"
+            "  ide_runtime: circuitpython\n"
+            "devices:\n"
+            "  - id: mp-one\n"
+            "    runtime: micropython\n"
+            "    address: /dev/ttyUSB0\n"
+            "  - id: mp-two\n"
+            "    runtime: micropython\n"
+            "    address: /dev/ttyUSB1\n"
+            "  - id: cp-default\n"
+            "    runtime: circuitpython\n"
+            "    address: /dev/cu.usbmodem1\n"
+        )
+        monkeypatch.setenv("CHUMICRO_DEVICES", str(devices_file))
+
+        selected_device_ids: list[str] = []
+
+        def fake_run_tests_on_device(
+            device_entry,
+            test_plan,
+            harness_source,
+            test_filter,
+            deploy_mode=None,
+        ):
+            selected_device_ids.append(device_entry.identifier)
+            return 1, 0, 0
+
+        monkeypatch.setattr(
+            device_testing,
+            "discover_functional_tests",
+            lambda library=None, test_filter=None: [
+                (
+                    "timing",
+                    device_testing.ROOT / "libraries" / "timing" / "src",
+                    [
+                        device_testing.ROOT
+                        / "libraries"
+                        / "timing"
+                        / "functional_tests"
+                        / "test_heartbeat.py",
+                    ],
+                ),
+            ],
+        )
+        monkeypatch.setattr(
+            device_testing, "_run_tests_on_device", fake_run_tests_on_device,
+        )
+
+        result = device_testing.test_device(runtime="micropython")
+
+        assert result == 0
+        assert selected_device_ids == ["mp-one", "mp-two"]
+
 
 class TestCreateTransport:
     """Tests for _create_transport deploy mode routing."""

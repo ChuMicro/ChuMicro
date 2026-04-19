@@ -741,12 +741,14 @@ def test_device(
     device: str | None = None,
     library: str | None = None,
     test_filter: str | None = None,
-    deploy_mode: str = "ram",
+    deploy_mode: str | None = None,
 ) -> int:
     """Run functional tests on connected devices.
 
     Delegates to ``device_testing.test_device`` — see that module for
-    the full orchestration logic (Decision 0027).
+    the full orchestration logic (Decision 0027). When ``runtime`` and
+    ``device`` are both omitted, the CLI uses the default target device(s)
+    from ``devices.yml``.
     """
     from device_testing import test_device as _test_device
 
@@ -894,7 +896,15 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     test_device_parser = subparsers.add_parser(
         "test-device",
-        help="run functional tests on connected devices",
+        description=(
+            "Run functional tests on connected devices. When --runtime and "
+            "--device are omitted, the command uses the default target "
+            "device(s) from devices.yml."
+        ),
+        help=(
+            "run functional tests on connected devices "
+            "(uses devices.yml defaults when unfiltered)"
+        ),
     )
     test_device_parser.add_argument(
         "--runtime",

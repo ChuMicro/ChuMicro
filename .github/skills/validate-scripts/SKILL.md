@@ -248,10 +248,12 @@ python scripts/run.py check-api 2>&1 | tail -5
 ## 11. test-device
 
 ```bash
-# ✅ Device validation placeholder
-python scripts/run.py test-device
-# 🔍 Output contains: "functional_tests" or "devices.yml"
-# Exit code: 2 (always — it's a placeholder)
+# ✅ Bare CLI run uses the default target device(s) from devices.yml
+python scripts/run.py test-device --library timing --test progress_on_runtime 2>&1 | tail -20
+# 🔍 Output contains either:
+#    "Device: <id>" lines for the defaults-selected board(s)
+#    OR "Device config error" / "No matching devices found" if local board config is incomplete
+# 🔍 --runtime / --device remain available to override the defaults
 ```
 
 ## 12. test-micropython-compatibility
