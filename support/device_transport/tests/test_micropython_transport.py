@@ -204,6 +204,19 @@ class TestReset:
         assert command == ["mpremote", "connect", "/dev/ttyUSB0", "reset"]
 
 
+class TestSoftReset:
+    """Tests for MicropythonTransport.soft_reset."""
+
+    def test_soft_reset_runs_mpremote_reset(self) -> None:
+        """soft_reset() should run mpremote reset."""
+        runner = FakeRunner()
+        transport = MicropythonTransport("/dev/ttyUSB0", runner=runner)
+        transport.soft_reset()
+
+        command = runner.calls[0][0]
+        assert command == ["mpremote", "connect", "/dev/ttyUSB0", "reset"]
+
+
 class TestDisconnect:
     """Tests for MicropythonTransport.disconnect."""
 
@@ -241,16 +254,18 @@ class TestFakeTransport:
         fake.connect()
         fake.stage([], [], None)
         output = fake.execute("script")
+        fake.soft_reset()
         fake.reset()
         fake.disconnect()
 
         assert output == "PASS test_ok (0.001s)\n"
-        assert len(fake.calls) == 5
+        assert len(fake.calls) == 6
         assert fake.calls[0] == ("connect", ())
         assert fake.calls[1][0] == "stage"
         assert fake.calls[2][0] == "execute"
-        assert fake.calls[3] == ("reset", ())
-        assert fake.calls[4] == ("disconnect", ())
+        assert fake.calls[3] == ("soft_reset", ())
+        assert fake.calls[4] == ("reset", ())
+        assert fake.calls[5] == ("disconnect", ())
 
     def test_connected_state(self) -> None:
         """FakeTransport should track connected state."""

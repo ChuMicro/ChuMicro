@@ -472,6 +472,53 @@ class TestReset:
         transport.reset()  # Should not raise.
 
 
+class TestSoftReset:
+    """Tests for CircuitpythonTransport.soft_reset."""
+
+    def test_soft_reset_exits_raw_repl_reboots_and_re_enters(self) -> None:
+        """soft_reset() should exit raw REPL, reboot, then re-enter."""
+        port = FakeSerialPort(
+            read_responses=[
+                _RAW_REPL_PROMPT,   # connect
+                _RAW_REPL_PROMPT,   # re-enter after soft reset
+            ],
+        )
+
+        def factory(**kwargs):
+            return port
+
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            serial_port_factory=factory,
+            time=FakeTime(),
+        )
+        transport.connect()
+        port.writes.clear()
+
+        transport.soft_reset()
+
+        from chumicro_device_transport.circuitpython_transport import _CTRL_B
+        # Should have: Ctrl-B (exit raw), Ctrl-D (reboot),
+        # then Ctrl-C×2 + Ctrl-A (re-enter raw REPL).
+        assert _CTRL_B in port.writes
+        assert _CTRL_D in port.writes
+        assert _CTRL_A in port.writes
+
+    def test_soft_reset_raises_without_connect(self) -> None:
+        """soft_reset() without a connected port should raise."""
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            serial_port_factory=lambda **kw: None,
+            time=FakeTime(),
+        )
+
+        with pytest.raises(
+            CircuitpythonTransportError,
+            match="Cannot soft_reset",
+        ):
+            transport.soft_reset()
+
+
 class TestDisconnect:
     """Tests for CircuitpythonTransport.disconnect."""
 

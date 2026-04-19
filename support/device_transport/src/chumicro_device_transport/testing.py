@@ -110,6 +110,10 @@ class FakeTransport:
         """Record a reset call."""
         self.calls.append(("reset", ()))
 
+    def soft_reset(self) -> None:
+        """Record a soft_reset call."""
+        self.calls.append(("soft_reset", ()))
+
     def disconnect(self) -> None:
         """Record a disconnect call."""
         self.calls.append(("disconnect", ()))

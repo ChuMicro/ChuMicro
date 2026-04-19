@@ -616,6 +616,35 @@ class CircuitpythonTransport:
 
         return self._parse_raw_repl_response(raw_response)
 
+    def soft_reset(self) -> None:
+        """Soft-reset the interpreter and re-enter raw REPL.
+
+        Exits raw REPL (Ctrl-B), sends Ctrl-D to trigger a soft reboot
+        (which clears ``sys.modules`` and all interpreter state), waits
+        for the reboot to complete, then re-enters raw REPL.
+
+        Use between test groups to ensure each group starts with a
+        clean interpreter — previous modules are evicted from RAM.
+
+        Raises:
+            CircuitpythonTransportError: If raw REPL cannot be
+                re-established after the reset.
+        """
+        if self._port is None:
+            raise CircuitpythonTransportError(
+                "Cannot soft_reset — port is not open"
+            )
+        # Exit raw REPL → normal REPL.
+        self._port.write(_CTRL_B)
+        self._time.sleep(_ENTER_DELAY)
+        # Ctrl-D in normal REPL triggers soft reboot.
+        self._port.write(_CTRL_D)
+        self._time.sleep(0.5)
+        # Drain the soft-reboot banner.
+        self._port.reset_input_buffer()
+        # Re-enter raw REPL for the next test group.
+        self._enter_raw_repl()
+
     def reset(self) -> None:
         """Soft-reset the device via Ctrl-D."""
         if self._port is not None:

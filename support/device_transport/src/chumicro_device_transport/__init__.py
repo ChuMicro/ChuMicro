@@ -8,6 +8,7 @@ Transport protocol (duck-typed)::
     connect() -> None
     stage(source_dirs, test_files, harness_source) -> None
     execute(bootstrap_script) -> str
+    soft_reset() -> None
     reset() -> None
     disconnect() -> None
 """

@@ -122,6 +122,16 @@ class MicropythonTransport:
 
         return result.stdout
 
+    def soft_reset(self) -> None:
+        """Soft-reset the device to clear interpreter state.
+
+        Runs ``mpremote reset`` to trigger a soft reboot, which clears
+        ``sys.modules`` and frees RAM from previously loaded modules.
+        Use between test groups so each group starts with a clean
+        interpreter.
+        """
+        self._run_mpremote(["reset"])
+
     def reset(self) -> None:
         """Soft-reset the device."""
         self._run_mpremote(["reset"])
