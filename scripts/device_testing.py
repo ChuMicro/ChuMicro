@@ -117,7 +117,58 @@ def build_bootstrap(
     )
 
 
-def _resolve_library_source_dirs(library_dir: Path) -> list[Path]:
+def _library_name_for_chumicro_module(module_name: str) -> str | None:
+    """Return the workspace library name for a `chumicro_*` module.
+
+    Args:
+        module_name: Imported module name.
+
+    Returns:
+        The library directory name, or ``None`` for non-ChuMicro modules.
+    """
+    if not module_name.startswith("chumicro_"):
+        return None
+    suffix = module_name.removeprefix("chumicro_")
+    return suffix.split(".", 1)[0]
+
+
+def _resolve_test_imported_library_names(test_files: list[Path]) -> list[str]:
+    """Return workspace library names imported by functional test files.
+
+    Args:
+        test_files: Functional test files to inspect.
+
+    Returns:
+        Sorted unique library names referenced through ``chumicro_*`` imports.
+    """
+    imported_library_names: set[str] = set()
+
+    for test_file in test_files:
+        source_text = test_file.read_text(encoding="utf-8")
+        syntax_tree = ast.parse(source_text, filename=str(test_file))
+
+        for node in ast.walk(syntax_tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    library_name = _library_name_for_chumicro_module(alias.name)
+                    if library_name is not None:
+                        imported_library_names.add(library_name)
+            elif isinstance(node, ast.ImportFrom):
+                if node.module is None:
+                    continue
+                library_name = _library_name_for_chumicro_module(node.module)
+                if library_name is not None:
+                    imported_library_names.add(library_name)
+
+    return sorted(imported_library_names)
+
+
+def _resolve_library_source_dirs(
+    library_dir: Path,
+    *,
+    test_files: list[Path] | None = None,
+    visited_library_names: set[str] | None = None,
+) -> list[Path]:
     """Return source dirs for a library and its intra-workspace dependencies.
 
     Reads ``project.dependencies`` from the library's ``pyproject.toml``
@@ -126,9 +177,16 @@ def _resolve_library_source_dirs(library_dir: Path) -> list[Path]:
     the library's tests — critical for RAM mode where all source code
     is sent inline through the serial REPL.
 
+    Functional tests may also import additional ChuMicro libraries directly
+    without making them install-time dependencies of the library under test.
+    When ``test_files`` is provided, those imports are resolved and staged too.
+
     Args:
         library_dir: Root directory of the library (e.g.
             ``libraries/runner``).
+        test_files: Optional functional test files whose ChuMicro imports
+            should also be staged.
+        visited_library_names: Internal cycle guard for recursive resolution.
 
     Returns:
         List of ``src/`` directories: the library's own plus
@@ -137,9 +195,20 @@ def _resolve_library_source_dirs(library_dir: Path) -> list[Path]:
     libraries_root = ROOT / "libraries"
     tomllib = load_tomllib()
 
+    if not library_dir.is_dir():
+        return []
+
+    if visited_library_names is None:
+        visited_library_names = set()
+    library_name = library_dir.name
+    if library_name in visited_library_names:
+        return []
+    visited_library_names.add(library_name)
+
     # Read the library's own dependencies.
     pyproject_file = library_dir / "pyproject.toml"
     dependency_dirs: list[Path] = []
+    dependency_library_names: list[str] = []
     if pyproject_file.exists():
         with pyproject_file.open("rb") as toml_file:
             data = tomllib.load(toml_file)
@@ -151,15 +220,25 @@ def _resolve_library_source_dirs(library_dir: Path) -> list[Path]:
             # "chumicro-timing>=0.1" → "timing"
             bare_name = dependency_name.split(">")[0].split("<")[0]
             bare_name = bare_name.split("=")[0].split("!")[0].strip()
-            library_name = bare_name.removeprefix("chumicro-")
-            dependency_source = libraries_root / library_name / "src"
-            if dependency_source.is_dir():
-                # Recurse to pick up transitive dependencies.
-                for transitive_dir in _resolve_library_source_dirs(
-                    libraries_root / library_name,
-                ):
-                    if transitive_dir not in dependency_dirs:
-                        dependency_dirs.append(transitive_dir)
+            dependency_library_names.append(
+                bare_name.removeprefix("chumicro-")
+            )
+
+    if test_files:
+        for imported_library_name in _resolve_test_imported_library_names(
+            test_files,
+        ):
+            if imported_library_name not in dependency_library_names:
+                dependency_library_names.append(imported_library_name)
+
+    for dependency_library_name in dependency_library_names:
+        dependency_library_dir = libraries_root / dependency_library_name
+        for transitive_dir in _resolve_library_source_dirs(
+            dependency_library_dir,
+            visited_library_names=visited_library_names,
+        ):
+            if transitive_dir not in dependency_dirs:
+                dependency_dirs.append(transitive_dir)
 
     # The library's own src/ comes last so dependencies are registered
     # first during staging.
@@ -347,7 +426,9 @@ def _run_tests_on_device(
         if use_per_library_staging:
             # Resolve only the source dirs this library needs.
             library_dir = source_dir.parent
-            library_source_dirs = _resolve_library_source_dirs(library_dir)
+            library_source_dirs = _resolve_library_source_dirs(
+                library_dir, test_files=test_files,
+            )
             try:
                 transport.stage(
                     library_source_dirs, test_files, harness_source,

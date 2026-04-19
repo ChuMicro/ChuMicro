@@ -23,6 +23,15 @@ from pathlib import Path
 
 _TEMPLATE_PATH = Path(__file__).parent / "circuitpython_bootstrap_template.txt"
 
+# Inline raw-REPL payloads that grow beyond this size have proven unreliable
+# on low-RAM CircuitPython boards such as the Pi Pico W. Flash deploy mode
+# avoids the giant in-memory bootstrap entirely.
+MAX_INLINE_BOOTSTRAP_BYTES = 64 * 1024
+
+
+class CircuitpythonBootstrapTooLargeError(ValueError):
+    """Raised when an inline CircuitPython bootstrap is too large to send safely."""
+
 
 def build_circuitpython_bootstrap(
     staged_sources: list[tuple[str, str]],
@@ -71,13 +80,24 @@ def build_circuitpython_bootstrap(
 
     filter_repr = repr(name_filter) if name_filter else "None"
 
-    return (
+    bootstrap_script = (
         template
         .replace("$STUB_REGISTRATIONS", "\n".join(stub_lines))
         .replace("$MODULE_POPULATIONS", "\n".join(population_lines))
         .replace("$TEST_SOURCE", escaped_test)
         .replace("$FILTER_REPR", filter_repr)
     )
+
+    bootstrap_size_bytes = len(bootstrap_script.encode("utf-8"))
+    if bootstrap_size_bytes > MAX_INLINE_BOOTSTRAP_BYTES:
+        raise CircuitpythonBootstrapTooLargeError(
+            "CircuitPython inline bootstrap is too large for reliable RAM "
+            f"execution on constrained boards ({bootstrap_size_bytes} bytes > "
+            f"{MAX_INLINE_BOOTSTRAP_BYTES} bytes). Use flash deploy mode or "
+            "set deploy_mode: flash for this board in devices.yml."
+        )
+
+    return bootstrap_script
 
 
 def _escape_source(source_text: str) -> str:

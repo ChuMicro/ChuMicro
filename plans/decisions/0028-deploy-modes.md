@@ -44,6 +44,10 @@ Flash mode in `execute()`:
 
 - Files are on flash, so the bootstrap uses standard `import` statements — no class-as-module injection needed.
 
+### Large CircuitPython RAM-mode payloads
+
+Some functional tests inline multiple ChuMicro libraries plus the test harness and test file into one raw-REPL bootstrap. On low-RAM boards such as the Pi Pico W, very large inline payloads can destabilize the USB connection instead of producing a normal traceback. To avoid that failure mode, oversized CircuitPython RAM-mode bootstraps fail fast with a clear message instructing the user to switch the board to flash deploy mode.
+
 Flash mode in `disconnect()`:
 
 - Re-enable autoreload via `supervisor.runtime.autoreload = True`.
@@ -70,6 +74,7 @@ This is intentionally deferred.  The current work shapes the transport API to ma
 - `DeviceEntry` gains a `circuitpy_drive_path` field.
 - `--deploy-mode` becomes the user-facing CLI override; `deploy_mode` in `devices.yml` is the per-device default (both runtimes, ``"ram"`` when omitted).
 - Flash mode for CircuitPython uses `circuitpy_drive_path` from device config, falling back to auto-detection via `find_circuitpy_drive()`.
+- Oversized CircuitPython RAM-mode bootstraps fail before execution and direct the user to flash mode.
 - The transport API's `stage()`/`execute()`/`disconnect()` protocol remains stable — mode is an internal concern.
 - The `chumicro-deploy` package and project template are recorded as future work in `open-questions.md`.
 

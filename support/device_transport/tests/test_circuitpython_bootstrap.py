@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from chumicro_device_transport.circuitpython_bootstrap import (
+    MAX_INLINE_BOOTSTRAP_BYTES,
+    CircuitpythonBootstrapTooLargeError,
     _escape_source,
     build_circuitpython_bootstrap,
 )
@@ -167,6 +170,19 @@ class TestBuildCircuitpythonBootstrap:
 
         # Should be valid Python despite tricky source content.
         compile(result, "<bootstrap>", "exec")
+
+    def test_raises_for_oversized_bootstrap(self, tmp_path: Path) -> None:
+        """Huge inline payloads should fail fast with a flash-mode hint."""
+        test_file = tmp_path / "test_example.py"
+        test_file.write_text("def test_ok(): pass")
+        giant_source = "x = 1\n" * (MAX_INLINE_BOOTSTRAP_BYTES // 4)
+
+        with pytest.raises(
+            CircuitpythonBootstrapTooLargeError, match="flash deploy mode",
+        ):
+            build_circuitpython_bootstrap(
+                [("chumicro_massive", giant_source)], test_file,
+            )
 
 
 class TestEscapeSource:

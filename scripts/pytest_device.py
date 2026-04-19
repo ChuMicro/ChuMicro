@@ -496,7 +496,9 @@ class DeviceRuntimeItem(pytest.Item):
                         transport.soft_reset()
                     except Exception as error:
                         pytest.fail(f"Device reset failed between test files: {error}")
-                source_dirs = _resolve_library_source_dirs(self._library_dir)
+                source_dirs = _resolve_library_source_dirs(
+                    self._library_dir, test_files=[self.test_file],
+                )
                 transport.stage(
                     source_dirs, [self.test_file], HARNESS_SOURCE,
                 )
@@ -731,7 +733,9 @@ def _bulk_stage_for_device(session, device_entry: DeviceEntry, transport) -> Non
             continue
 
         # Collect source dirs for this item's library.
-        for source_dir in _resolve_library_source_dirs(item._library_dir):
+        for source_dir in _resolve_library_source_dirs(
+            item._library_dir, test_files=[item.test_file],
+        ):
             if source_dir not in seen_source_dirs:
                 seen_source_dirs.append(source_dir)
 

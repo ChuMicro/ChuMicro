@@ -572,6 +572,26 @@ class TestBuildDeviceBootstrap:
 class TestResolveLibrarySourceDirs:
     """Tests for _resolve_library_source_dirs."""
 
+    def test_resolves_chumicro_imports_from_test_files(self) -> None:
+        """Functional test imports should stage additional ChuMicro libraries."""
+        runner_dir = device_testing.ROOT / "libraries" / "runner"
+        integration_test = (
+            device_testing.ROOT
+            / "libraries"
+            / "runner"
+            / "functional_tests"
+            / "test_integration.py"
+        )
+
+        result = device_testing._resolve_library_source_dirs(
+            runner_dir, test_files=[integration_test],
+        )
+
+        msgpack_source = (
+            device_testing.ROOT / "libraries" / "msgpack" / "src"
+        )
+        assert msgpack_source in result
+
     def test_includes_own_source_dir(self) -> None:
         """Should include the library's own src/ directory."""
         timing_dir = device_testing.ROOT / "libraries" / "timing"
@@ -594,6 +614,27 @@ class TestResolveLibrarySourceDirs:
         timing_source = device_testing.ROOT / "libraries" / "timing" / "src"
         runner_source = runner_dir / "src"
         assert result.index(timing_source) < result.index(runner_source)
+
+    def test_test_import_dependency_comes_before_library(self) -> None:
+        """Test-imported libraries should stage before the library under test."""
+        runner_dir = device_testing.ROOT / "libraries" / "runner"
+        integration_test = (
+            device_testing.ROOT
+            / "libraries"
+            / "runner"
+            / "functional_tests"
+            / "test_integration.py"
+        )
+
+        result = device_testing._resolve_library_source_dirs(
+            runner_dir, test_files=[integration_test],
+        )
+
+        msgpack_source = (
+            device_testing.ROOT / "libraries" / "msgpack" / "src"
+        )
+        runner_source = runner_dir / "src"
+        assert result.index(msgpack_source) < result.index(runner_source)
 
     def test_library_without_dependencies(self) -> None:
         """A library with no deps should return only its own src/."""
