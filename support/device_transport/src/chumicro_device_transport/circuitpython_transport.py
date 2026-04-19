@@ -44,6 +44,13 @@ _INTERRUPT_DELAY = 0.1
 #: Delay after entering raw REPL in seconds.
 _ENTER_DELAY = 0.1
 
+#: Delay after flushing writes to the USB drive in seconds.
+#: Gives the USB controller time to finish writing to FAT32 media.
+#: May need increasing for boards with slower USB controllers or
+#: larger file sets.  Tune by running flash tests with ``--verbose``
+#: and watching for stale-read failures after sync.
+_FLUSH_SETTLE_DELAY = 0.5
+
 #: Volume name CircuitPython uses by default.
 _CIRCUITPY_VOLUME_NAME = "CIRCUITPY"
 
@@ -315,6 +322,21 @@ class CircuitpythonTransport:
         # Flush the volume so the device reads current content.
         self._flush_volume(drive_path)
 
+        # Verify that files are readable after the flush.  If the
+        # settle delay is too short, the drive may return stale or
+        # empty content.  A failure here means _FLUSH_SETTLE_DELAY
+        # needs increasing for this board.
+        if test_files:
+            probe_file = drive_path / test_files[0].name
+            if probe_file.exists():
+                content = probe_file.read_bytes()
+                if len(content) == 0:
+                    print(
+                        f"WARNING: {probe_file.name} is empty after flush — "
+                        f"_FLUSH_SETTLE_DELAY ({_FLUSH_SETTLE_DELAY}s) may be "
+                        f"too short for this board"
+                    )
+
     @staticmethod
     def _merge_packages(
         source_directory: Path,
@@ -421,7 +443,7 @@ class CircuitpythonTransport:
         # Allow time for the USB controller to finish writing to the
         # FAT32 media.  Without this pause, the device may read stale
         # content even after sync returns.
-        _time_module.sleep(0.5)
+        _time_module.sleep(_FLUSH_SETTLE_DELAY)
 
     @staticmethod
     def _strip_extended_attributes(path: Path) -> None:
