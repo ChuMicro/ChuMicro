@@ -1009,12 +1009,12 @@ class TestFlashMode:
 
 
 class TestRsyncHelpers:
-    """Tests for _rsync_directory and _flush_volume."""
+    """Tests for _rsync and _flush_volume."""
 
-    def test_rsync_directory_raises_on_failure(
+    def test_rsync_raises_on_failure(
         self, tmp_path: Path,
     ) -> None:
-        """_rsync_directory should raise on rsync failure."""
+        """_rsync should raise on rsync failure."""
         source = tmp_path / "source"
         source.mkdir()
         (source / "file.py").write_text("# content")
@@ -1032,12 +1032,12 @@ class TestRsyncHelpers:
                 CircuitpythonTransportError,
                 match="rsync failed",
             ):
-                CircuitpythonTransport._rsync_directory(source, destination)
+                CircuitpythonTransport._rsync(source, destination)
 
-    def test_rsync_directory_raises_when_not_installed(
+    def test_rsync_raises_when_not_installed(
         self, tmp_path: Path,
     ) -> None:
-        """_rsync_directory should raise when rsync is not installed."""
+        """_rsync should raise when rsync is not installed."""
         source = tmp_path / "source"
         source.mkdir()
         (source / "file.py").write_text("# content")
@@ -1053,7 +1053,7 @@ class TestRsyncHelpers:
                 CircuitpythonTransportError,
                 match="rsync is required",
             ):
-                CircuitpythonTransport._rsync_directory(source, destination)
+                CircuitpythonTransport._rsync(source, destination)
 
 
     def test_flush_volume_calls_sync_on_darwin(

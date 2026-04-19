@@ -297,7 +297,7 @@ class CircuitpythonTransport:
             for test_file in test_files:
                 shutil.copy2(test_file, staging_path / test_file.name)
 
-            self._rsync_directory(staging_path, drive_path)
+            self._rsync(staging_path, drive_path)
 
         # Flush the volume so the device reads current content.
         self._flush_volume(drive_path)
@@ -335,7 +335,7 @@ class CircuitpythonTransport:
             )
 
     @staticmethod
-    def _rsync_directory(source: Path, destination: Path) -> None:
+    def _rsync(source: Path, destination: Path) -> None:
         """Rsync a source directory's contents to a destination.
 
         Uses ``--checksum`` to verify content (FAT32 timestamps are
