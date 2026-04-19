@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from chumicro_abstractions import FakeTime
@@ -973,7 +975,7 @@ class TestFlashMode:
     def test_flash_stage_overwrites_existing_package(
         self, tmp_path: Path,
     ) -> None:
-        """stage() should overwrite existing files on drive in place."""
+        """stage() should overwrite existing files and remove stale ones."""
         drive_path = tmp_path / "CIRCUITPY"
         lib_dir = drive_path / "lib" / "chumicro_timing"
         lib_dir.mkdir(parents=True)
@@ -1003,10 +1005,82 @@ class TestFlashMode:
 
         # Existing files are overwritten with new content.
         assert (lib_dir / "__init__.py").read_text() == "# new"
-        # Stale files remain (dirs_exist_ok, no rmtree).
-        assert (lib_dir / "stale_file.py").exists()
+        # Stale files are removed by rsync --delete.
+        assert not (lib_dir / "stale_file.py").exists()
 
         transport.disconnect()
+
+
+class TestRsyncHelpers:
+    """Tests for _rsync_directory, _rsync_file, and _flush_volume."""
+
+    def test_rsync_directory_raises_on_failure(
+        self, tmp_path: Path,
+    ) -> None:
+        """_rsync_directory should raise on rsync failure."""
+        source = tmp_path / "source"
+        source.mkdir()
+        (source / "file.py").write_text("# content")
+        destination = tmp_path / "destination"
+        destination.mkdir()
+
+        with patch(
+            "chumicro_device_transport.circuitpython_transport"
+            ".subprocess.run",
+            side_effect=subprocess.CalledProcessError(
+                1, "rsync", stderr="permission denied",
+            ),
+        ):
+            with pytest.raises(
+                CircuitpythonTransportError,
+                match="rsync failed",
+            ):
+                CircuitpythonTransport._rsync_directory(source, destination)
+
+    def test_rsync_file_raises_on_failure(
+        self, tmp_path: Path,
+    ) -> None:
+        """_rsync_file should raise on rsync failure."""
+        source_file = tmp_path / "test_example.py"
+        source_file.write_text("# content")
+        destination = tmp_path / "destination"
+        destination.mkdir()
+
+        with patch(
+            "chumicro_device_transport.circuitpython_transport"
+            ".subprocess.run",
+            side_effect=subprocess.CalledProcessError(
+                1, "rsync", stderr="write error",
+            ),
+        ):
+            with pytest.raises(
+                CircuitpythonTransportError,
+                match="rsync failed for test_example.py",
+            ):
+                CircuitpythonTransport._rsync_file(source_file, destination)
+
+    def test_flush_volume_calls_sync_on_darwin(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """_flush_volume should call sync on macOS."""
+        monkeypatch.setattr(
+            "chumicro_device_transport.circuitpython_transport"
+            "._sys_module.platform",
+            "darwin",
+        )
+        sync_called = []
+
+        def fake_run(command, **kwargs):
+            sync_called.append(command)
+
+        with patch(
+            "chumicro_device_transport.circuitpython_transport"
+            ".subprocess.run",
+            side_effect=fake_run,
+        ):
+            CircuitpythonTransport._flush_volume(tmp_path)
+
+        assert ["sync"] in sync_called
 
 
 class TestSendReplCommand:

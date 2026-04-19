@@ -21,6 +21,9 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
+import sys as _sys_module
+import tempfile
 import time as _time_module
 from collections.abc import Callable
 from pathlib import Path
@@ -228,13 +231,23 @@ class CircuitpythonTransport:
         test_files: list[Path],
         harness_source: Path,
     ) -> None:
-        """Copy staged files to the CIRCUITPY USB drive.
+        """Copy staged files to the CIRCUITPY USB drive via rsync.
+
+        Uses rsync with ``--checksum`` and ``--inplace`` to ensure
+        reliable writes to FAT32 USB drives.  macOS + FAT32 is prone
+        to data loss with ``shutil.copytree`` because the OS buffers
+        writes aggressively and ``os.sync()`` returns before the drive
+        has flushed.  rsync's checksum verification catches these
+        failures, and ``--inplace`` avoids temp-file rename races on
+        FAT32.  ``--delete`` removes stale files that no longer belong
+        on the device.
 
         Disables autoreload before copying to prevent restarts during
-        the file transfer.  Library and harness packages are only copied
-        on the first call; subsequent calls within the same session only
-        update the test files.  This avoids redundant slow writes to
-        the FAT32 USB drive.
+        the file transfer.  Library and harness packages are only
+        synced on the first call; subsequent calls within the same
+        session only update the test files.
+
+        Falls back to ``shutil`` if rsync is not available.
 
         Args:
             source_dirs: Library ``src/`` directories.
@@ -277,37 +290,41 @@ class CircuitpythonTransport:
                     f"writes."
                 ) from permission_error
 
-            for source_directory in source_dirs:
-                self._copy_packages_to_drive(source_directory, lib_destination)
+            # Build a local staging directory with the final lib/
+            # layout, then rsync the whole thing to the drive in one
+            # pass.  Building locally is reliable (no FAT32 issues);
+            # rsync handles the fragile USB-drive write.
+            with tempfile.TemporaryDirectory() as staging_directory:
+                staging_path = Path(staging_directory)
+                for source_directory in source_dirs:
+                    self._merge_packages(source_directory, staging_path)
+                self._merge_packages(harness_source, staging_path)
+                self._rsync_directory(staging_path, lib_destination)
 
-            # Copy harness packages to lib/.
-            self._copy_packages_to_drive(harness_source, lib_destination)
             self._flash_libs_staged = True
 
-        # Copy test files to drive root (always — they change per run).
+        # Sync test files to drive root (always — they change per run).
         for test_file in test_files:
-            destination = drive_path / test_file.name
-            shutil.copy2(test_file, destination)
+            self._rsync_file(test_file, drive_path)
 
-        # Force macOS to flush writes to the FAT32 USB drive.  Without
-        # this, the device may read stale or empty content because
-        # macOS buffers writes to removable media.
-        os.sync()
+        # Flush the volume so the device reads current content.
+        self._flush_volume(drive_path)
 
     @staticmethod
-    def _copy_packages_to_drive(
+    def _merge_packages(
         source_directory: Path,
-        lib_destination: Path,
+        staging_destination: Path,
     ) -> None:
-        """Copy top-level packages from a source directory to the drive.
+        """Copy top-level packages from a source directory to a staging dir.
 
-        Uses ``dirs_exist_ok=True`` to overwrite in place rather than
-        deleting first.  macOS + FAT32 USB drives race between
-        ``rmtree`` and ``copytree``, causing ``ENOENT`` errors.
+        Merges into the staging destination using ``dirs_exist_ok=True``
+        so multiple source directories can contribute packages.  This
+        operates on the local filesystem (not the USB drive), so
+        ``shutil.copytree`` is reliable here.
 
         Args:
             source_directory: A ``src/`` directory containing packages.
-            lib_destination: The ``lib/`` directory on the CIRCUITPY drive.
+            staging_destination: Local staging directory to merge into.
         """
         if not source_directory.is_dir():
             return
@@ -317,13 +334,108 @@ class CircuitpythonTransport:
             init_file = child / "__init__.py"
             if not init_file.exists():
                 continue
-            target = lib_destination / child.name
+            target = staging_destination / child.name
             shutil.copytree(
                 child,
                 target,
                 ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
                 dirs_exist_ok=True,
             )
+
+    @staticmethod
+    def _rsync_directory(source: Path, destination: Path) -> None:
+        """Rsync a source directory's contents to a destination.
+
+        Uses ``--checksum`` to verify content (FAT32 timestamps are
+        unreliable), ``--inplace`` to write directly into files (avoids
+        temp-file rename races on FAT32), and ``--delete`` to remove
+        stale files from the destination.
+
+        Falls back to ``shutil.copytree`` if rsync is not available.
+
+        Args:
+            source: Source directory whose contents to sync.
+            destination: Destination directory.
+        """
+        command = [
+            "rsync",
+            "--recursive",
+            "--checksum",
+            "--inplace",
+            "--delete",
+            "--exclude=__pycache__",
+            "--exclude=*.pyc",
+            "--exclude=.DS_Store",
+            "--exclude=._*",
+            str(source) + "/",
+            str(destination) + "/",
+        ]
+        try:
+            subprocess.run(command, capture_output=True, text=True, check=True)
+        except FileNotFoundError:  # pragma: no cover — rsync available on macOS/Linux
+            # rsync not available — fall back to shutil.
+            if destination.exists():
+                shutil.rmtree(destination)
+            shutil.copytree(
+                source,
+                destination,
+                ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+            )
+        except subprocess.CalledProcessError as rsync_error:
+            raise CircuitpythonTransportError(
+                f"rsync failed: {rsync_error.stderr}"
+            ) from rsync_error
+
+    @staticmethod
+    def _rsync_file(source: Path, destination_directory: Path) -> None:
+        """Rsync a single file to a destination directory.
+
+        Uses ``--checksum`` and ``--inplace`` for reliable FAT32 writes.
+        Falls back to ``shutil.copy2`` if rsync is not available.
+
+        Args:
+            source: Source file path.
+            destination_directory: Directory to sync the file into.
+        """
+        command = [
+            "rsync",
+            "--checksum",
+            "--inplace",
+            str(source),
+            str(destination_directory) + "/",
+        ]
+        try:
+            subprocess.run(command, capture_output=True, text=True, check=True)
+        except FileNotFoundError:  # pragma: no cover — rsync available on macOS/Linux
+            shutil.copy2(source, destination_directory / source.name)
+        except subprocess.CalledProcessError as rsync_error:
+            raise CircuitpythonTransportError(
+                f"rsync failed for {source.name}: {rsync_error.stderr}"
+            ) from rsync_error
+
+    @staticmethod
+    def _flush_volume(drive_path: Path) -> None:
+        """Flush pending writes to the volume containing *drive_path*.
+
+        On macOS, calls the ``sync`` command and then waits briefly to
+        let the USB controller finish writing.  On other platforms,
+        falls back to ``os.sync()``.
+
+        Args:
+            drive_path: Path on the volume to flush.
+        """
+        if _sys_module.platform == "darwin":
+            try:
+                # sync(8) on macOS flushes all filesystem caches.
+                subprocess.run(["sync"], check=True, capture_output=True)
+                # Allow time for the USB controller to finish writing
+                # to the FAT32 media.  Without this pause, the device
+                # may read stale content even after sync returns.
+                _time_module.sleep(0.5)
+            except Exception:  # pragma: no cover
+                os.sync()
+        else:
+            os.sync()  # pragma: no cover — tests run on macOS
 
     def _collect_package_sources(self, source_directory: Path) -> None:
         """Walk a source directory and collect all .py files as module entries.
