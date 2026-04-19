@@ -1079,6 +1079,124 @@ class TestRsyncHelpers:
 
         assert ["sync"] in sync_called
 
+    def test_strip_extended_attributes_calls_xattr(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """_strip_extended_attributes should call xattr -cr on macOS."""
+        monkeypatch.setattr(
+            "chumicro_device_transport.circuitpython_transport"
+            "._sys_module.platform",
+            "darwin",
+        )
+        xattr_called = []
+
+        def fake_run(command, **kwargs):
+            xattr_called.append(command)
+
+        with patch(
+            "chumicro_device_transport.circuitpython_transport"
+            ".subprocess.run",
+            side_effect=fake_run,
+        ):
+            CircuitpythonTransport._strip_extended_attributes(tmp_path)
+
+        assert ["xattr", "-cr", str(tmp_path)] in xattr_called
+
+    def test_strip_extended_attributes_ignores_missing_xattr(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """_strip_extended_attributes should not raise if xattr is missing."""
+        monkeypatch.setattr(
+            "chumicro_device_transport.circuitpython_transport"
+            "._sys_module.platform",
+            "darwin",
+        )
+        with patch(
+            "chumicro_device_transport.circuitpython_transport"
+            ".subprocess.run",
+            side_effect=FileNotFoundError("xattr"),
+        ):
+            # Should not raise.
+            CircuitpythonTransport._strip_extended_attributes(tmp_path)
+
+    def test_clean_dot_files_calls_dot_clean(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """_clean_dot_files should call dot_clean on macOS."""
+        monkeypatch.setattr(
+            "chumicro_device_transport.circuitpython_transport"
+            "._sys_module.platform",
+            "darwin",
+        )
+        dot_clean_called = []
+
+        def fake_run(command, **kwargs):
+            dot_clean_called.append(command)
+
+        with patch(
+            "chumicro_device_transport.circuitpython_transport"
+            ".subprocess.run",
+            side_effect=fake_run,
+        ):
+            CircuitpythonTransport._clean_dot_files(tmp_path)
+
+        assert ["dot_clean", str(tmp_path)] in dot_clean_called
+
+    def test_clean_dot_files_ignores_missing_dot_clean(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """_clean_dot_files should not raise if dot_clean is missing."""
+        monkeypatch.setattr(
+            "chumicro_device_transport.circuitpython_transport"
+            "._sys_module.platform",
+            "darwin",
+        )
+        with patch(
+            "chumicro_device_transport.circuitpython_transport"
+            ".subprocess.run",
+            side_effect=FileNotFoundError("dot_clean"),
+        ):
+            CircuitpythonTransport._clean_dot_files(tmp_path)
+
+    def test_disable_spotlight_indexing_calls_mdutil(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """_disable_spotlight_indexing should call mdutil -i off on macOS."""
+        monkeypatch.setattr(
+            "chumicro_device_transport.circuitpython_transport"
+            "._sys_module.platform",
+            "darwin",
+        )
+        mdutil_called = []
+
+        def fake_run(command, **kwargs):
+            mdutil_called.append(command)
+
+        with patch(
+            "chumicro_device_transport.circuitpython_transport"
+            ".subprocess.run",
+            side_effect=fake_run,
+        ):
+            CircuitpythonTransport._disable_spotlight_indexing(tmp_path)
+
+        assert ["mdutil", "-i", "off", str(tmp_path)] in mdutil_called
+
+    def test_disable_spotlight_indexing_ignores_missing_mdutil(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """_disable_spotlight_indexing should not raise if mdutil is missing."""
+        monkeypatch.setattr(
+            "chumicro_device_transport.circuitpython_transport"
+            "._sys_module.platform",
+            "darwin",
+        )
+        with patch(
+            "chumicro_device_transport.circuitpython_transport"
+            ".subprocess.run",
+            side_effect=FileNotFoundError("mdutil"),
+        ):
+            CircuitpythonTransport._disable_spotlight_indexing(tmp_path)
+
 
 class TestSendReplCommand:
     """Tests for _send_repl_command."""

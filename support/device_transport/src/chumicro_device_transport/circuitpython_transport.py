@@ -275,6 +275,10 @@ class CircuitpythonTransport:
                 f"CIRCUITPY drive not found: {drive_path}"
             )
 
+        # Prevent macOS Spotlight from indexing the drive — it creates
+        # hidden metadata files and slows down FAT32 writes.
+        self._disable_spotlight_indexing(drive_path)
+
         # Disable autoreload to prevent restarts during file copy.
         self._send_repl_command(
             "import supervisor; "
@@ -297,7 +301,16 @@ class CircuitpythonTransport:
             for test_file in test_files:
                 shutil.copy2(test_file, staging_path / test_file.name)
 
+            # Strip macOS extended attributes from the staging dir
+            # before rsyncing — xattrs cause slow FAT32 transfers and
+            # generate ._ resource fork files.
+            self._strip_extended_attributes(staging_path)
+
             self._rsync(staging_path, drive_path)
+
+        # Remove ._ resource fork files that macOS may have created
+        # on the FAT32 volume despite rsync's --exclude=._* flag.
+        self._clean_dot_files(drive_path)
 
         # Flush the volume so the device reads current content.
         self._flush_volume(drive_path)
@@ -408,6 +421,84 @@ class CircuitpythonTransport:
                 os.sync()
         else:
             os.sync()  # pragma: no cover — tests run on macOS
+
+    @staticmethod
+    def _strip_extended_attributes(path: Path) -> None:
+        """Remove macOS extended attributes from all files under *path*.
+
+        Extended attributes (xattrs) cause slow transfers to FAT32
+        volumes and generate ``._`` resource fork files.  Stripping
+        them from the staging directory before rsync prevents these
+        artifacts from reaching the device.
+
+        No-op on non-macOS platforms.
+
+        Args:
+            path: Root directory to strip recursively.
+        """
+        if _sys_module.platform != "darwin":
+            return  # pragma: no cover — tests run on macOS
+        try:
+            subprocess.run(
+                ["xattr", "-cr", str(path)],
+                capture_output=True,
+                check=False,
+            )
+        except FileNotFoundError:
+            pass  # xattr not available — skip silently.
+
+    @staticmethod
+    def _clean_dot_files(drive_path: Path) -> None:
+        """Merge or remove ``._`` resource fork files on a FAT32 volume.
+
+        macOS creates ``._`` files on FAT32 drives even when rsync
+        excludes them, because the OS itself writes them during
+        filesystem operations.  ``dot_clean`` merges these back into
+        the native file or removes them if the native file is absent.
+
+        No-op on non-macOS platforms.
+
+        Args:
+            drive_path: Mount point of the FAT32 volume.
+        """
+        if _sys_module.platform != "darwin":
+            return  # pragma: no cover — tests run on macOS
+        try:
+            subprocess.run(
+                ["dot_clean", str(drive_path)],
+                capture_output=True,
+                check=False,
+            )
+        except FileNotFoundError:
+            pass  # dot_clean not available — skip silently.
+
+    @staticmethod
+    def _disable_spotlight_indexing(drive_path: Path) -> None:
+        """Disable Spotlight indexing on a mounted volume.
+
+        Spotlight indexing creates ``.Spotlight-V100`` metadata and
+        slows down FAT32 writes.  ``mdutil -i off`` is idempotent
+        but resets on remount, so it is called each time the drive
+        is used.
+
+        May require elevated privileges on some macOS versions; if
+        the command fails, indexing continues and no error is raised.
+
+        No-op on non-macOS platforms.
+
+        Args:
+            drive_path: Mount point of the volume.
+        """
+        if _sys_module.platform != "darwin":
+            return  # pragma: no cover — tests run on macOS
+        try:
+            subprocess.run(
+                ["mdutil", "-i", "off", str(drive_path)],
+                capture_output=True,
+                check=False,
+            )
+        except FileNotFoundError:
+            pass  # mdutil not available — skip silently.
 
     def _collect_package_sources(self, source_directory: Path) -> None:
         """Walk a source directory and collect all .py files as module entries.
