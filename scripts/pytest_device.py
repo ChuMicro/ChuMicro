@@ -415,19 +415,7 @@ class DeviceRuntimeBatch(pytest.Collector):
         self._target_device = target_device
 
     def collect(self):
-        """Yield the synthetic batch steps and parsed test result items."""
-        yield DevicePrepareItem.from_parent(
-            self,
-            name="setup / stage device",
-            test_file=self.test_file,
-            target_device=self._target_device,
-        )
-        yield DeviceRunFileItem.from_parent(
-            self,
-            name="run file",
-            test_file=self.test_file,
-            target_device=self._target_device,
-        )
+        """Yield parsed test result items for this runtime batch."""
         for function_name in self._function_names:
             yield DeviceTestItem.from_parent(
                 self,
@@ -558,29 +546,6 @@ class DeviceRuntimeItem(pytest.Item):
     def reportinfo(self):
         """Return location info for test reporting."""
         return self.path, None, f"[device] {self._library_name}::{self.name}"
-
-
-class DevicePrepareItem(DeviceRuntimeItem):
-    """Synthetic item that owns transport connect/stage time for a runtime."""
-
-    def runtest(self) -> None:
-        """Prepare the runtime for a file batch."""
-        device_entry = self._resolve_device_entry()
-        self._ensure_prepared(device_entry)
-
-
-class DeviceRunFileItem(DeviceRuntimeItem):
-    """Synthetic item that owns file-batch execution time for a runtime."""
-
-    def runtest(self) -> None:
-        """Run the file batch once and validate the harness-level result."""
-        device_entry = self._resolve_device_entry()
-        result, raw_output = self._ensure_batch_result(device_entry)
-
-        if result is None:
-            pytest.fail(raw_output)
-        if not result.tests:
-            pytest.fail(f"No test results in device output:\n{raw_output}")
 
 
 class DeviceTestItem(DeviceRuntimeItem):
