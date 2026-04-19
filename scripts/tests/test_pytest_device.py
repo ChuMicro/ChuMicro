@@ -99,32 +99,38 @@ class TestTransportCache:
     def test_needs_staging_initially(self) -> None:
         """A fresh cache should report staging needed."""
         cache = pytest_device._TransportCache()
-        assert cache.needs_staging("dev1", "timing") is True
+        assert cache.needs_staging("dev1", "timing", "test_ticks.py") is True
 
     def test_mark_staged_clears_need(self) -> None:
         """After marking staged, needs_staging returns False."""
         cache = pytest_device._TransportCache()
-        cache.mark_staged("dev1", "timing")
-        assert cache.needs_staging("dev1", "timing") is False
+        cache.mark_staged("dev1", "timing", "test_ticks.py")
+        assert cache.needs_staging("dev1", "timing", "test_ticks.py") is False
 
     def test_different_library_needs_staging(self) -> None:
         """A different library should still need staging."""
         cache = pytest_device._TransportCache()
-        cache.mark_staged("dev1", "timing")
-        assert cache.needs_staging("dev1", "runner") is True
+        cache.mark_staged("dev1", "timing", "test_ticks.py")
+        assert cache.needs_staging("dev1", "runner", "test_ticks.py") is True
+
+    def test_different_test_file_needs_staging(self) -> None:
+        """A different test file in the same library should need staging."""
+        cache = pytest_device._TransportCache()
+        cache.mark_staged("dev1", "timing", "test_ticks.py")
+        assert cache.needs_staging("dev1", "timing", "test_heartbeat.py") is True
 
     def test_different_device_needs_staging(self) -> None:
         """A different device should still need staging."""
         cache = pytest_device._TransportCache()
-        cache.mark_staged("dev1", "timing")
-        assert cache.needs_staging("dev2", "timing") is True
+        cache.mark_staged("dev1", "timing", "test_ticks.py")
+        assert cache.needs_staging("dev2", "timing", "test_ticks.py") is True
 
     def test_disconnect_all_clears_state(self) -> None:
         """disconnect_all should clear all cached state."""
         cache = pytest_device._TransportCache()
-        cache.mark_staged("dev1", "timing")
+        cache.mark_staged("dev1", "timing", "test_ticks.py")
         cache.disconnect_all()
-        assert cache.needs_staging("dev1", "timing") is True
+        assert cache.needs_staging("dev1", "timing", "test_ticks.py") is True
 
     def test_get_transport_creates_and_caches(self) -> None:
         """get_transport should create a transport and reuse it."""
@@ -156,55 +162,48 @@ class TestTransportCache:
             pytest_device._create_transport = original
 
 
-class TestLoadTargetDevice:
-    """Tests for _load_target_device."""
+class TestLoadFallbackDevice:
+    """Tests for _load_fallback_device."""
 
     def test_skips_when_no_devices_file(self, monkeypatch, tmp_path) -> None:
         """Should skip with setup instructions when devices.yml is missing."""
         monkeypatch.setenv("CHUMICRO_DEVICES", str(tmp_path / "nope.yml"))
         with pytest.raises(pytest.skip.Exception, match="No devices.yml found"):
-            pytest_device._load_target_device()
+            pytest_device._load_fallback_device()
 
     def test_skips_when_no_devices_configured(self, monkeypatch, tmp_path) -> None:
-        """Should skip when devices list is empty."""
-        devices_file = tmp_path / "devices.yml"
-        devices_file.write_text("devices: []\n")
-        monkeypatch.setenv("CHUMICRO_DEVICES", str(devices_file))
-        with pytest.raises(pytest.skip.Exception, match="No devices configured"):
-            pytest_device._load_target_device()
-
-    def test_returns_default_device(self, monkeypatch, tmp_path) -> None:
-        """Should return the device marked default: true."""
+        """Should skip when no devices match the ide_runtime."""
         devices_file = tmp_path / "devices.yml"
         devices_file.write_text(
+            "defaults:\n"
+            "  ide_runtime: circuitpython\n"
+            "devices:\n"
+            "  - id: mp-only\n"
+            "    runtime: micropython\n"
+            "    address: /dev/ttyUSB0\n"
+        )
+        monkeypatch.setenv("CHUMICRO_DEVICES", str(devices_file))
+        with pytest.raises(pytest.skip.Exception, match="No devices configured"):
+            pytest_device._load_fallback_device()
+
+    def test_returns_target_device(self, monkeypatch, tmp_path) -> None:
+        """Should return the device matching ide_runtime defaults."""
+        devices_file = tmp_path / "devices.yml"
+        devices_file.write_text(
+            "defaults:\n"
+            "  micropython: board2\n"
+            "  ide_runtime: micropython\n"
             "devices:\n"
             "  - id: board1\n"
             "    runtime: micropython\n"
             "    address: /dev/ttyUSB0\n"
             "  - id: board2\n"
-            "    runtime: circuitpython\n"
-            "    address: /dev/ttyUSB1\n"
-            "    default: true\n"
-        )
-        monkeypatch.setenv("CHUMICRO_DEVICES", str(devices_file))
-        device = pytest_device._load_target_device()
-        assert device.identifier == "board2"
-
-    def test_returns_first_device_when_none_marked(self, monkeypatch, tmp_path) -> None:
-        """Should return the first device when no default is marked."""
-        devices_file = tmp_path / "devices.yml"
-        devices_file.write_text(
-            "devices:\n"
-            "  - id: board_a\n"
             "    runtime: micropython\n"
-            "    address: /dev/ttyUSB0\n"
-            "  - id: board_b\n"
-            "    runtime: circuitpython\n"
             "    address: /dev/ttyUSB1\n"
         )
         monkeypatch.setenv("CHUMICRO_DEVICES", str(devices_file))
-        device = pytest_device._load_target_device()
-        assert device.identifier == "board_a"
+        device = pytest_device._load_fallback_device()
+        assert device.identifier == "board2"
 
 
 class TestPytestCollectFile:

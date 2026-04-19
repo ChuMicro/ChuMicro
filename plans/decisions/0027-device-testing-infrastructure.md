@@ -94,12 +94,14 @@ A pytest plugin (`scripts/pytest_device.py`) intercepts `functional_tests/` coll
 
 - The plugin is always registered via the root `conftest.py`.
 - When a functional test file is targeted (e.g. IDE play button), the plugin collects it as `DeviceTestItem` instances and deselects the normal pytest items to prevent local CPython execution.
-- At run time, `DeviceTestItem.runtest()` loads `devices.yml` and picks the first available device.  If no `devices.yml` exists, the test is skipped with setup instructions.
-- **PyCharm / VS Code:** Just click the play button on any `functional_tests/test_*.py` file or function — it runs on the connected board.
-- Optional env vars for filtering when multiple boards are configured:
-  - `CHUMICRO_DEVICE_RUNTIME=micropython` — filter by runtime
-  - `CHUMICRO_DEVICE_ID=my-board` — target a specific device
-  - `CHUMICRO_DEPLOY_MODE=flash` — override deploy mode
+- A top-level `defaults:` section in `devices.yml` controls which board(s) the IDE targets:
+  - `micropython` / `circuitpython` — device IDs to use for each runtime
+  - `deploy_mode` — global default (`ram` or `flash`), not per-device
+  - `ide_runtime` — `micropython`, `circuitpython`, or `both`
+- When `ide_runtime` is `both`, each test function is collected twice (once per runtime) so the IDE shows separate pass/fail results.
+- **PyCharm / VS Code:** Just click the play button on any `functional_tests/test_*.py` file or function — it runs on the connected board(s).
+- Per-library staging (`_resolve_library_source_dirs`) ensures only the library under test and its intra-workspace dependencies are staged — not the entire workspace.  Critical for RAM mode where all source is sent inline.
+- Staging tracks both library name and test file name, so switching test files within the same library triggers re-staging (RAM mode includes test file content in staged sources).
 
 ### File deployment to flash
 
