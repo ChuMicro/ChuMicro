@@ -58,6 +58,22 @@ class TestDiscoverFunctionalTests:
             for _, _, test_files in plan:
                 assert all("heartbeat" in path.name for path in test_files)
 
+    def test_test_filter_matches_function_name(self) -> None:
+        """Function-name filters should include the containing test file."""
+        plan = device_testing.discover_functional_tests(
+            library="timing", test_filter="non_negative"
+        )
+        assert len(plan) == 1
+        _library_name, _source_dir, test_files = plan[0]
+        assert [path.name for path in test_files] == ["test_ticks_arithmetic.py"]
+
+    def test_test_filter_non_matching_function_returns_empty(self) -> None:
+        """A filter matching neither filename nor function names should exclude the file."""
+        plan = device_testing.discover_functional_tests(
+            library="timing", test_filter="definitely_not_a_real_test_name"
+        )
+        assert plan == []
+
 
 class TestDeviceOrchestration:
     """Tests for the top-level test_device orchestration."""

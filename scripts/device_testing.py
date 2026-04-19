@@ -10,6 +10,7 @@ See Decision 0027 for the transport protocol and config schema.
 
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 from device_config import DeviceConfigError, filter_devices, load_devices
@@ -26,8 +27,8 @@ def discover_functional_tests(
 
     Args:
         library: Limit to a single library name.
-        test_filter: Only include test files whose name contains this
-            substring.
+        test_filter: Only include test files whose filename or ``test_*``
+            function names contain this substring.
 
     Returns:
         List of ``(library_name, source_dir, test_files)`` tuples.
@@ -50,13 +51,39 @@ def discover_functional_tests(
         if test_filter:
             test_files = [
                 path for path in test_files
-                if test_filter in path.name
+                if _functional_test_matches_filter(path, test_filter)
             ]
         if test_files:
             source_dir = library_dir / "src"
             test_plan.append((library_dir.name, source_dir, test_files))
 
     return test_plan
+
+
+def _functional_test_matches_filter(test_file: Path, test_filter: str) -> bool:
+    """Return whether a functional test file matches a CLI filter.
+
+    Args:
+        test_file: Path to a ``functional_tests/test_*.py`` file.
+        test_filter: User-provided substring filter.
+
+    Returns:
+        ``True`` when the filename or any module-level ``test_*`` function
+        name contains the filter substring.
+    """
+    if test_filter in test_file.name:
+        return True
+
+    source_text = test_file.read_text(encoding="utf-8")
+    syntax_tree = ast.parse(source_text, filename=str(test_file))
+    for node in ast.iter_child_nodes(syntax_tree):
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        if not node.name.startswith("test_"):
+            continue
+        if test_filter in node.name:
+            return True
+    return False
 
 
 def build_bootstrap(
