@@ -900,10 +900,12 @@ class TestFlashMode:
 
         # Responses: connect, autoreload disable (stage 1),
         # autoreload disable (stage 2),
+        # autoreload disable (stage 3 — no-op for test file),
         # _enter_raw_repl + autoreload restore (disconnect).
         port = FakeSerialPort(
             read_responses=[
                 _RAW_REPL_PROMPT, _OK_RESPONSE,
+                _OK_RESPONSE,
                 _OK_RESPONSE,
                 _RAW_REPL_PROMPT, _OK_RESPONSE,
             ],
@@ -921,16 +923,25 @@ class TestFlashMode:
         # Modify a library file on the host (should NOT be re-copied).
         (package_dir / "__init__.py").write_text("# modified")
 
-        # Second stage — only test file should be updated.
+        # Second stage with a different test file — only the new test
+        # file should be synced; libs and test_one are skipped.
         transport.stage([source_dir], [test_file_two], harness_dir)
         assert (drive_path / "test_two.py").exists()
         # Library should still have original content (not re-copied).
         lib_init = drive_path / "lib" / "chumicro_timing" / "__init__.py"
         assert lib_init.read_text() == "# init"
+        # Both test files should be tracked as synced.
+        assert test_file_one in transport._flash_synced_tests
+        assert test_file_two in transport._flash_synced_tests
+
+        # Third stage re-using test_file_one — should be a no-op
+        # since it was already synced.
+        transport.stage([source_dir], [test_file_one], harness_dir)
 
         transport.disconnect()
-        # After disconnect, flag is cleared.
+        # After disconnect, flags and tracking are cleared.
         assert transport._flash_libs_staged is False
+        assert len(transport._flash_synced_tests) == 0
 
     def test_flash_stage_excludes_pycache(
         self, tmp_path: Path,

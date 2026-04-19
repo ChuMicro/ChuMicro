@@ -142,6 +142,7 @@ class CircuitpythonTransport:
         self._port: SerialPort | None = None
         self._staged_sources: list[tuple[str, str]] | None = None
         self._flash_libs_staged: bool = False
+        self._flash_synced_tests: set[Path] = set()
 
     @staticmethod
     def _default_serial_factory(**kwargs) -> SerialPort:  # pragma: no cover
@@ -303,9 +304,11 @@ class CircuitpythonTransport:
 
             self._flash_libs_staged = True
 
-        # Sync test files to drive root (always — they change per run).
+        # Sync test files to drive root (skips already-synced files).
         for test_file in test_files:
-            self._rsync_file(test_file, drive_path)
+            if test_file not in self._flash_synced_tests:
+                self._rsync_file(test_file, drive_path)
+                self._flash_synced_tests.add(test_file)
 
         # Flush the volume so the device reads current content.
         self._flush_volume(drive_path)
@@ -565,6 +568,7 @@ class CircuitpythonTransport:
             self._port = None
         self._staged_sources = None
         self._flash_libs_staged = False
+        self._flash_synced_tests = set()
 
     @property
     def staged_sources(self) -> list[tuple[str, str]] | None:
