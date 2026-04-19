@@ -173,6 +173,13 @@ def _validate_device(raw: dict, index: int, *, global_deploy_mode: str = "ram") 
             f"invalid runtime '{runtime}', must be one of {_VALID_RUNTIMES}"
         )
 
+    if "deploy_mode" in raw and raw["deploy_mode"] not in _VALID_DEPLOY_MODES:
+        raise DeviceConfigError(
+            f"Device entry {index} ({raw['id']}): "
+            f"invalid deploy_mode '{raw['deploy_mode']}', "
+            f"must be one of {_VALID_DEPLOY_MODES}"
+        )
+
     # Extract known fields, put everything else in extra.
     known_keys = {
         "id", "runtime", "address", "description", "connection_type",

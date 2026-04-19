@@ -28,6 +28,9 @@ devices:
     board_type: esp32s3
     serial_baudrate: 115200
     setup_command: null
+    # Override the global deploy_mode for this board (e.g. if RAM
+    # testing is unreliable on this device):
+    # deploy_mode: flash
     # Path to the CIRCUITPY USB drive mount point on the host.
     # Used for flash deploy mode.
     # Auto-detected if omitted; set explicitly with multiple boards.
@@ -41,3 +44,5 @@ devices:
     board_type: esp32s3
     serial_baudrate: 115200
     setup_command: null
+    # Override the global deploy_mode for this board:
+    # deploy_mode: flash

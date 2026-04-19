@@ -94,6 +94,18 @@ devices:
         with pytest.raises(DeviceConfigError, match="'devices' list"):
             load_devices(devices_file)
 
+    def test_invalid_per_device_deploy_mode_raises(self, tmp_path) -> None:
+        """An invalid per-device deploy_mode should raise DeviceConfigError."""
+        devices_file = _write_yaml(tmp_path / "devices.yml", """
+devices:
+  - id: bad-mode
+    runtime: micropython
+    address: /dev/ttyUSB0
+    deploy_mode: turbo
+""")
+        with pytest.raises(DeviceConfigError, match="invalid deploy_mode"):
+            load_devices(devices_file)
+
     def test_non_dict_yaml_raises(self, tmp_path) -> None:
         """A YAML file with a list at the root should raise DeviceConfigError."""
         devices_file = _write_yaml(tmp_path / "devices.yml", "- item\n")
