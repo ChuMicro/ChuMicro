@@ -113,14 +113,29 @@ def _iter_runtime_variants(
             yield function_name, device
 
 
+def _runtime_display_name(runtime_name: str) -> str:
+    """Return a UI-friendly runtime label.
+
+    Args:
+        runtime_name: Internal runtime identifier from device config.
+
+    Returns:
+        Human-friendly runtime label for IDE test trees.
+    """
+    return {
+        "micropython": "MicroPython",
+        "circuitpython": "CircuitPython",
+    }.get(runtime_name, runtime_name)
+
+
 def _runtime_prepare_name(device_entry: DeviceEntry) -> str:
     """Return the synthetic pytest item name for a runtime prepare step."""
-    return f"[{device_entry.runtime} prepare]"
+    return f"[{_runtime_display_name(device_entry.runtime)} setup]"
 
 
 def _runtime_run_file_name(device_entry: DeviceEntry) -> str:
     """Return the synthetic pytest item name for a runtime file-run step."""
-    return f"[{device_entry.runtime} run file]"
+    return f"[{_runtime_display_name(device_entry.runtime)} batch run]"
 
 
 class _TransportCache:
@@ -346,7 +361,7 @@ class DeviceTestFile(pytest.File):
                     target_device=device,
                 )
             for name, device in _iter_runtime_variants(function_names, targets):
-                display_name = f"{name}[{device.runtime}]"
+                display_name = f"{name}[{_runtime_display_name(device.runtime)}]"
                 yield DeviceTestItem.from_parent(
                     self,
                     name=display_name,

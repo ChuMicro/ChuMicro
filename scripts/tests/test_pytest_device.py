@@ -129,6 +129,11 @@ class TestIterRuntimeVariants:
 class TestRuntimeControlNames:
     """Tests for synthetic runtime control item names."""
 
+    def test_runtime_display_name(self) -> None:
+        """Runtime labels should be human-friendly in the IDE tree."""
+        assert pytest_device._runtime_display_name("micropython") == "MicroPython"
+        assert pytest_device._runtime_display_name("circuitpython") == "CircuitPython"
+
     def test_runtime_prepare_name(self) -> None:
         """Prepare items should include the runtime in a stable label."""
         device = DeviceEntry(
@@ -137,7 +142,7 @@ class TestRuntimeControlNames:
             address="/dev/cu.usbmodem1",
         )
 
-        assert pytest_device._runtime_prepare_name(device) == "[circuitpython prepare]"
+        assert pytest_device._runtime_prepare_name(device) == "[CircuitPython setup]"
 
     def test_runtime_run_file_name(self) -> None:
         """Run-file items should include the runtime in a stable label."""
@@ -147,7 +152,7 @@ class TestRuntimeControlNames:
             address="/dev/ttyUSB0",
         )
 
-        assert pytest_device._runtime_run_file_name(device) == "[micropython run file]"
+        assert pytest_device._runtime_run_file_name(device) == "[MicroPython batch run]"
 
 
 class TestTransportCache:
