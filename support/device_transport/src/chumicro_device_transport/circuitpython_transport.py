@@ -305,7 +305,11 @@ class CircuitpythonTransport:
             target = lib_destination / child.name
             if target.exists():
                 shutil.rmtree(target)
-            shutil.copytree(child, target)
+            shutil.copytree(
+                child,
+                target,
+                ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+            )
 
     def _collect_package_sources(self, source_directory: Path) -> None:
         """Walk a source directory and collect all .py files as module entries.
@@ -409,18 +413,20 @@ class CircuitpythonTransport:
     def disconnect(self) -> None:
         """Close the serial port and clear staged data.
 
-        In flash mode, re-enables autoreload and triggers a reload
-        before closing the port.
+        In flash mode, re-enters raw REPL (in case a reset or soft
+        reboot exited it), then re-enables autoreload and triggers a
+        reload before closing the port.
         """
         if self._port is not None:
             if self.mode == "flash":
                 try:
+                    self._enter_raw_repl()
                     self._send_repl_command(
                         "import supervisor; "
                         "supervisor.runtime.autoreload = True; "
                         "supervisor.reload()"
                     )
-                except Exception:  # pragma: no cover
+                except Exception:
                     pass  # Best-effort restore.
             try:
                 self._port.close()

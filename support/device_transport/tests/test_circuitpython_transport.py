@@ -634,9 +634,9 @@ class TestFlashMode:
             ".find_circuitpy_drive",
             lambda: None,
         )
-        # Extra _OK_RESPONSE for disconnect()'s autoreload restore.
+        # Extra responses for disconnect()'s _enter_raw_repl + autoreload restore.
         port = FakeSerialPort(
-            read_responses=[_RAW_REPL_PROMPT, _OK_RESPONSE],
+            read_responses=[_RAW_REPL_PROMPT, _RAW_REPL_PROMPT, _OK_RESPONSE],
         )
 
         def factory(**kwargs):
@@ -667,9 +667,9 @@ class TestFlashMode:
         self, tmp_path: Path,
     ) -> None:
         """stage() in flash mode should raise when drive path doesn't exist."""
-        # Responses: connect + autoreload restore (disconnect).
+        # Responses: connect + _enter_raw_repl + autoreload restore (disconnect).
         port = FakeSerialPort(
-            read_responses=[_RAW_REPL_PROMPT, _OK_RESPONSE],
+            read_responses=[_RAW_REPL_PROMPT, _RAW_REPL_PROMPT, _OK_RESPONSE],
         )
 
         transport = self._make_flash_transport(
@@ -709,10 +709,13 @@ class TestFlashMode:
         (harness_package / "__init__.py").write_text("# harness")
         (harness_package / "runner.py").write_text("def run_module(): pass")
 
-        # Responses: connect, autoreload disable (stage), autoreload
-        # restore (disconnect).
+        # Responses: connect, autoreload disable (stage),
+        # _enter_raw_repl + autoreload restore (disconnect).
         port = FakeSerialPort(
-            read_responses=[_RAW_REPL_PROMPT, _OK_RESPONSE, _OK_RESPONSE],
+            read_responses=[
+                _RAW_REPL_PROMPT, _OK_RESPONSE,
+                _RAW_REPL_PROMPT, _OK_RESPONSE,
+            ],
         )
 
         transport = self._make_flash_transport(port, str(drive_path))
@@ -744,10 +747,13 @@ class TestFlashMode:
         test_file = tmp_path / "test_example.py"
         test_file.write_text("def test_ok(): pass")
 
-        # Responses: connect, autoreload disable (stage), autoreload
-        # restore (disconnect).
+        # Responses: connect, autoreload disable (stage),
+        # _enter_raw_repl + autoreload restore (disconnect).
         port = FakeSerialPort(
-            read_responses=[_RAW_REPL_PROMPT, _OK_RESPONSE, _OK_RESPONSE],
+            read_responses=[
+                _RAW_REPL_PROMPT, _OK_RESPONSE,
+                _RAW_REPL_PROMPT, _OK_RESPONSE,
+            ],
         )
 
         transport = self._make_flash_transport(port, str(drive_path))
@@ -771,10 +777,13 @@ class TestFlashMode:
         harness_dir = tmp_path / "harness"
         harness_dir.mkdir()
 
-        # Responses: connect, autoreload disable (stage), autoreload
-        # restore (disconnect).
+        # Responses: connect, autoreload disable (stage),
+        # _enter_raw_repl + autoreload restore (disconnect).
         port = FakeSerialPort(
-            read_responses=[_RAW_REPL_PROMPT, _OK_RESPONSE, _OK_RESPONSE],
+            read_responses=[
+                _RAW_REPL_PROMPT, _OK_RESPONSE,
+                _RAW_REPL_PROMPT, _OK_RESPONSE,
+            ],
         )
 
         transport = self._make_flash_transport(port, str(drive_path))
@@ -797,6 +806,7 @@ class TestFlashMode:
         port = FakeSerialPort(
             read_responses=[
                 _RAW_REPL_PROMPT,   # connect
+                _RAW_REPL_PROMPT,   # _enter_raw_repl in disconnect
                 _OK_RESPONSE,       # autoreload restore (disconnect)
             ],
         )
@@ -811,6 +821,37 @@ class TestFlashMode:
 
         # Should have sent autoreload = True and supervisor.reload().
         written_data = b"".join(port.writes)
+        assert b"autoreload" in written_data
+        assert b"True" in written_data
+
+    def test_flash_disconnect_restores_autoreload_after_reset(
+        self, tmp_path: Path,
+    ) -> None:
+        """disconnect() after reset() should re-enter raw REPL and restore."""
+        port = FakeSerialPort(
+            read_responses=[
+                _RAW_REPL_PROMPT,   # connect
+                _RAW_REPL_PROMPT,   # _enter_raw_repl in disconnect
+                _OK_RESPONSE,       # autoreload restore (disconnect)
+            ],
+        )
+
+        transport = self._make_flash_transport(
+            port, str(tmp_path / "CIRCUITPY"),
+        )
+        transport.connect()
+
+        # Simulate what _run_tests_on_device does: reset then disconnect.
+        transport.reset()
+        port.writes.clear()
+
+        transport.disconnect()
+
+        # Should have re-entered raw REPL (Ctrl-C×2, Ctrl-A) and
+        # sent autoreload = True.
+        written_data = b"".join(port.writes)
+        assert _CTRL_C in port.writes
+        assert _CTRL_A in port.writes
         assert b"autoreload" in written_data
         assert b"True" in written_data
 
@@ -835,6 +876,46 @@ class TestFlashMode:
         written_data = b"".join(port.writes)
         assert b"autoreload" not in written_data
 
+    def test_flash_stage_excludes_pycache(
+        self, tmp_path: Path,
+    ) -> None:
+        """stage() in flash mode should not copy __pycache__ to the drive."""
+        drive_path = tmp_path / "CIRCUITPY"
+        drive_path.mkdir()
+
+        source_dir = tmp_path / "src"
+        package_dir = source_dir / "chumicro_timing"
+        package_dir.mkdir(parents=True)
+        (package_dir / "__init__.py").write_text("# init")
+        (package_dir / "ticks.py").write_text("def ticks_ms(): pass")
+        # Create a __pycache__ directory with .pyc files.
+        pycache_dir = package_dir / "__pycache__"
+        pycache_dir.mkdir()
+        (pycache_dir / "ticks.cpython-314.pyc").write_bytes(b"\x00")
+
+        harness_dir = tmp_path / "harness"
+        harness_dir.mkdir()
+
+        # Responses: connect, autoreload disable (stage),
+        # _enter_raw_repl + autoreload restore (disconnect).
+        port = FakeSerialPort(
+            read_responses=[
+                _RAW_REPL_PROMPT, _OK_RESPONSE,
+                _RAW_REPL_PROMPT, _OK_RESPONSE,
+            ],
+        )
+
+        transport = self._make_flash_transport(port, str(drive_path))
+        transport.connect()
+        transport.stage([source_dir], [], harness_dir)
+
+        lib_dir = drive_path / "lib"
+        assert (lib_dir / "chumicro_timing" / "__init__.py").exists()
+        assert (lib_dir / "chumicro_timing" / "ticks.py").exists()
+        assert not (lib_dir / "chumicro_timing" / "__pycache__").exists()
+
+        transport.disconnect()
+
     def test_flash_stage_overwrites_existing_package(
         self, tmp_path: Path,
     ) -> None:
@@ -853,10 +934,13 @@ class TestFlashMode:
         harness_dir = tmp_path / "harness"
         harness_dir.mkdir()
 
-        # Responses: connect, autoreload disable (stage), autoreload
-        # restore (disconnect).
+        # Responses: connect, autoreload disable (stage),
+        # _enter_raw_repl + autoreload restore (disconnect).
         port = FakeSerialPort(
-            read_responses=[_RAW_REPL_PROMPT, _OK_RESPONSE, _OK_RESPONSE],
+            read_responses=[
+                _RAW_REPL_PROMPT, _OK_RESPONSE,
+                _RAW_REPL_PROMPT, _OK_RESPONSE,
+            ],
         )
 
         transport = self._make_flash_transport(port, str(drive_path))
@@ -987,10 +1071,13 @@ class TestFindCircuitpyDrive:
         harness_dir = tmp_path / "harness"
         harness_dir.mkdir()
 
-        # Responses: connect, autoreload disable (stage), autoreload
-        # restore (disconnect).
+        # Responses: connect, autoreload disable (stage),
+        # _enter_raw_repl + autoreload restore (disconnect).
         port = FakeSerialPort(
-            read_responses=[_RAW_REPL_PROMPT, _OK_RESPONSE, _OK_RESPONSE],
+            read_responses=[
+                _RAW_REPL_PROMPT, _OK_RESPONSE,
+                _RAW_REPL_PROMPT, _OK_RESPONSE,
+            ],
         )
 
         def factory(**kwargs):
