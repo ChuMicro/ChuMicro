@@ -96,7 +96,7 @@ class TestDeviceOrchestration:
             "    address: /dev/null\n"
         )
         monkeypatch.setenv("CHUMICRO_DEVICES", str(devices_file))
-        result = device_testing.test_device(device="nonexistent")
+        result = device_testing.test_device(micropython_device="nonexistent")
         assert result == 2
 
     def test_no_filters_use_devices_yml_defaults(
@@ -409,64 +409,6 @@ class TestDeviceOrchestration:
 
         assert result == 0
         assert selected_device_ids == ["mp-default", "cp-alt"]
-
-    def test_explicit_both_runtime_with_device_targets_that_device(
-        self, monkeypatch, tmp_path,
-    ) -> None:
-        """runtime='both' plus a device ID should still let the device override win."""
-        devices_file = tmp_path / "devices.yml"
-        devices_file.write_text(
-            "defaults:\n"
-            "  micropython: mp-default\n"
-            "  circuitpython: cp-default\n"
-            "  ide_runtime: both\n"
-            "devices:\n"
-            "  - id: mp-default\n"
-            "    runtime: micropython\n"
-            "    address: /dev/ttyUSB0\n"
-            "  - id: cp-default\n"
-            "    runtime: circuitpython\n"
-            "    address: /dev/cu.usbmodem1\n"
-        )
-        monkeypatch.setenv("CHUMICRO_DEVICES", str(devices_file))
-
-        selected_device_ids: list[str] = []
-
-        def fake_run_tests_on_device(
-            device_entry,
-            test_plan,
-            harness_source,
-            test_filter,
-            deploy_mode=None,
-        ):
-            selected_device_ids.append(device_entry.identifier)
-            return 1, 0, 0
-
-        monkeypatch.setattr(
-            device_testing,
-            "discover_functional_tests",
-            lambda library=None, test_filter=None: [
-                (
-                    "timing",
-                    device_testing.ROOT / "libraries" / "timing" / "src",
-                    [
-                        device_testing.ROOT
-                        / "libraries"
-                        / "timing"
-                        / "functional_tests"
-                        / "test_heartbeat.py",
-                    ],
-                ),
-            ],
-        )
-        monkeypatch.setattr(
-            device_testing, "_run_tests_on_device", fake_run_tests_on_device,
-        )
-
-        result = device_testing.test_device(runtime="both", device="cp-default")
-
-        assert result == 0
-        assert selected_device_ids == ["cp-default"]
 
 
 class TestCreateTransport:

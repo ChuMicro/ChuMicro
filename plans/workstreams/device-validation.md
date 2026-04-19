@@ -118,7 +118,7 @@ Current verified state:
 - `scripts/device_config.py` loads and validates both config files with environment variable overrides
 - `support/device_transport/` provides `MicropythonTransport` (ram → mount, flash → copy via mpremote)
 - `scripts/result_parser.py` parses structured harness output (PASS/FAIL/SKIP/SUMMARY/HEAP)
-- `test-device` is a real orchestration command with `--runtime`, `--device`, `--library`, `--test` flags
+- `test-device` is a real orchestration command with `--runtime`, `--micropython-device`, `--circuitpython-device`, `--library`, `--test` flags
 - `runner.run_module` supports `name_filter` for single-test execution
 - `mpremote` and `pyyaml` are in `requirements-dev.txt`
 - the repo can prepare a pinned local MicroPython unix-port runtime under `.tools/`

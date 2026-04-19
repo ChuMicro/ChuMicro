@@ -48,7 +48,7 @@ Key choices confirmed (Decision 0027):
 - Deploy modes: `--deploy-mode ram|flash` — RAM for inline execution, flash for USB drive copy (CP) or file copy (MP)
 - CircuitPython flash mode auto-detects CIRCUITPY drive, controls autoreload via raw REPL
 - two gitignored config files: `devices.yml` (board registry) + `device-config.yml` (shared environment like WiFi)
-- `test-device` command in run.py with `--runtime`, `--device`, `--micropython-device`, `--circuitpython-device`, `--library`, `--test`, `--deploy-mode` flags
+- `test-device` command in run.py with `--runtime`, `--micropython-device`, `--circuitpython-device`, `--library`, `--test`, `--deploy-mode` flags
 - IDE integration via pytest conftest that routes `functional_tests/` to device when `CHUMICRO_DEVICE_RUNTIME` env var is set
 - harness gains `name_filter` parameter for single-test execution
 - transport implementations live in `support/device_transport/`, not published

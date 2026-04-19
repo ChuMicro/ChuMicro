@@ -337,7 +337,6 @@ class TestMainDispatch:
         assert command_calls == [
             ((), {
                 "runtime": None,
-                "device": None,
                 "micropython_device": None,
                 "circuitpython_device": None,
                 "library": None,
@@ -347,14 +346,13 @@ class TestMainDispatch:
         ]
 
     def test_test_device_forwards_explicit_cli_filters(self, monkeypatch) -> None:
-        """test-device should forward explicit runtime, device, and filter flags."""
+        """test-device should forward explicit runtime and filter flags."""
         command_calls, fake_test_device = _make_fake_command(return_value=61)
         monkeypatch.setattr(run, "test_device", fake_test_device)
 
         result = run.main([
             "run.py", "test-device",
             "--runtime", "circuitpython",
-            "--device", "cp-board",
             "--library", "timing",
             "--test", "heartbeat",
             "--deploy-mode", "flash",
@@ -364,7 +362,6 @@ class TestMainDispatch:
         assert command_calls == [
             ((), {
                 "runtime": "circuitpython",
-                "device": "cp-board",
                 "micropython_device": None,
                 "circuitpython_device": None,
                 "library": "timing",
@@ -384,7 +381,6 @@ class TestMainDispatch:
         assert command_calls == [
             ((), {
                 "runtime": "both",
-                "device": None,
                 "micropython_device": None,
                 "circuitpython_device": None,
                 "library": None,
@@ -411,7 +407,6 @@ class TestMainDispatch:
         assert command_calls == [
             ((), {
                 "runtime": "both",
-                "device": None,
                 "micropython_device": "mp-alt",
                 "circuitpython_device": "cp-alt",
                 "library": None,
@@ -420,13 +415,10 @@ class TestMainDispatch:
             }),
         ]
 
-    def test_test_device_rejects_mixed_legacy_and_runtime_specific_device_flags(
-        self,
-    ) -> None:
-        """The legacy --device shortcut should not combine with per-runtime overrides."""
+    def test_test_device_rejects_removed_legacy_device_flag(self) -> None:
+        """The removed --device flag should fail with an argparse error."""
         with pytest.raises(SystemExit, match="2"):
             run.main([
                 "run.py", "test-device",
                 "--device", "board-1",
-                "--micropython-device", "mp-alt",
             ])

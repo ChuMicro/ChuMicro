@@ -16,7 +16,6 @@ from pathlib import Path
 from device_config import (
     DeviceConfigError,
     DeviceDefaults,
-    filter_devices,
     load_device_registry,
     resolve_ide_devices,
 )
@@ -404,7 +403,6 @@ def _resolve_selected_devices(
     all_devices,
     defaults: DeviceDefaults,
     runtime: str | None,
-    device: str | None,
     micropython_device: str | None,
     circuitpython_device: str | None,
 ) -> list:
@@ -412,30 +410,22 @@ def _resolve_selected_devices(
 
     Selection precedence:
 
-    1. ``--device`` targets one specific board directly.
-    2. ``--runtime`` overrides which runtimes are active.
-    3. ``--micropython-device`` / ``--circuitpython-device`` override the
+    1. ``--runtime`` overrides which runtimes are active.
+    2. ``--micropython-device`` / ``--circuitpython-device`` override the
        default board IDs for those runtimes.
-    4. Remaining choices fall back to ``devices.yml`` defaults, then the first
+    3. Remaining choices fall back to ``devices.yml`` defaults, then the first
        device of a runtime when no default ID is configured.
 
     Args:
         all_devices: Loaded device entries.
         defaults: Parsed ``devices.yml`` defaults section.
         runtime: Requested runtime set override.
-        device: Legacy single-device override.
         micropython_device: MicroPython device-ID override.
         circuitpython_device: CircuitPython device-ID override.
 
     Returns:
         Selected device entries in IDE/runtime order.
     """
-    if device is not None:
-        effective_runtime = None if runtime in (None, "both") else runtime
-        return filter_devices(
-            all_devices, runtime=effective_runtime, device_id=device,
-        )
-
     effective_defaults = DeviceDefaults(
         micropython=micropython_device or defaults.micropython,
         circuitpython=circuitpython_device or defaults.circuitpython,
@@ -447,7 +437,6 @@ def _resolve_selected_devices(
 
 def test_device(
     runtime: str | None = None,
-    device: str | None = None,
     micropython_device: str | None = None,
     circuitpython_device: str | None = None,
     library: str | None = None,
@@ -459,7 +448,6 @@ def test_device(
     Args:
         runtime: Override which runtimes are active. Use ``"both"`` to
             request the MicroPython + CircuitPython target set explicitly.
-        device: Legacy single-device override.
         micropython_device: Override the selected MicroPython device ID.
         circuitpython_device: Override the selected CircuitPython device ID.
         library: Limit to a single library's functional tests.
@@ -483,7 +471,6 @@ def test_device(
         all_devices,
         defaults,
         runtime,
-        device,
         micropython_device,
         circuitpython_device,
     )

@@ -81,7 +81,6 @@ Replace the placeholder `test-device` command with real orchestration:
 ```
 python scripts/run.py test-device
     --runtime micropython|circuitpython|both   # override the default runtime set
-    --device <id>                              # legacy single-device shortcut
     --micropython-device <id>                  # override the selected MicroPython board
     --circuitpython-device <id>                # override the selected CircuitPython board
     --library <name>                           # limit to one library
