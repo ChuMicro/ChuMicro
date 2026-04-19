@@ -294,10 +294,19 @@ def _run_tests_on_device(
         # previous library are evicted from the interpreter.  This
         # ensures test isolation: a test cannot accidentally pass
         # because a dependency was left in sys.modules by an earlier
-        # library's tests.  MicroPython mount mode already gets a
-        # clean interpreter per execute() call, but the reset is
-        # harmless there.
-        if previous_library_ran and hasattr(transport, "soft_reset"):
+        # library's tests.
+        #
+        # MicroPython does not need this: mount mode starts a fresh
+        # mpremote process per execute() call (clean interpreter),
+        # and copy mode uses separate mpremote invocations too.
+        # Calling mpremote reset between libraries actively causes
+        # USB disconnection issues.
+        needs_soft_reset = (
+            previous_library_ran
+            and hasattr(transport, "soft_reset")
+            and device_entry.runtime != "micropython"
+        )
+        if needs_soft_reset:
             try:
                 transport.soft_reset()
             except Exception as reset_error:
