@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import subprocess
 from pathlib import Path
 from unittest.mock import patch
@@ -1102,10 +1103,11 @@ class TestRsyncHelpers:
 
         assert ["xattr", "-cr", str(tmp_path)] in xattr_called
 
-    def test_strip_extended_attributes_ignores_missing_xattr(
+    def test_strip_extended_attributes_logs_when_xattr_missing(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
-        """_strip_extended_attributes should not raise if xattr is missing."""
+        """_strip_extended_attributes should log a warning if xattr is missing."""
         monkeypatch.setattr(
             "chumicro_device_transport.circuitpython_transport"
             "._sys_module.platform",
@@ -1116,8 +1118,10 @@ class TestRsyncHelpers:
             ".subprocess.run",
             side_effect=FileNotFoundError("xattr"),
         ):
-            # Should not raise.
-            CircuitpythonTransport._strip_extended_attributes(tmp_path)
+            with caplog.at_level(logging.WARNING):
+                CircuitpythonTransport._strip_extended_attributes(tmp_path)
+
+        assert "xattr not found" in caplog.text
 
     def test_clean_dot_files_calls_dot_clean(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
@@ -1142,10 +1146,11 @@ class TestRsyncHelpers:
 
         assert ["dot_clean", str(tmp_path)] in dot_clean_called
 
-    def test_clean_dot_files_ignores_missing_dot_clean(
+    def test_clean_dot_files_logs_when_dot_clean_missing(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
-        """_clean_dot_files should not raise if dot_clean is missing."""
+        """_clean_dot_files should log a warning if dot_clean is missing."""
         monkeypatch.setattr(
             "chumicro_device_transport.circuitpython_transport"
             "._sys_module.platform",
@@ -1156,7 +1161,10 @@ class TestRsyncHelpers:
             ".subprocess.run",
             side_effect=FileNotFoundError("dot_clean"),
         ):
-            CircuitpythonTransport._clean_dot_files(tmp_path)
+            with caplog.at_level(logging.WARNING):
+                CircuitpythonTransport._clean_dot_files(tmp_path)
+
+        assert "dot_clean not found" in caplog.text
 
     def test_disable_spotlight_indexing_calls_mdutil(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
@@ -1181,10 +1189,11 @@ class TestRsyncHelpers:
 
         assert ["mdutil", "-i", "off", str(tmp_path)] in mdutil_called
 
-    def test_disable_spotlight_indexing_ignores_missing_mdutil(
+    def test_disable_spotlight_indexing_logs_when_mdutil_missing(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
-        """_disable_spotlight_indexing should not raise if mdutil is missing."""
+        """_disable_spotlight_indexing should log a warning if mdutil is missing."""
         monkeypatch.setattr(
             "chumicro_device_transport.circuitpython_transport"
             "._sys_module.platform",
@@ -1195,7 +1204,10 @@ class TestRsyncHelpers:
             ".subprocess.run",
             side_effect=FileNotFoundError("mdutil"),
         ):
-            CircuitpythonTransport._disable_spotlight_indexing(tmp_path)
+            with caplog.at_level(logging.WARNING):
+                CircuitpythonTransport._disable_spotlight_indexing(tmp_path)
+
+        assert "mdutil not found" in caplog.text
 
 
 class TestSendReplCommand:

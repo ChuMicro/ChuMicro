@@ -19,6 +19,7 @@ See Decision 0027 and Decision 0028 for the full transport protocol.
 
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 import subprocess
@@ -28,6 +29,8 @@ import time as _time_module
 from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol, cast
+
+_logger = logging.getLogger(__name__)
 
 _CTRL_A = b"\x01"
 _CTRL_C = b"\x03"
@@ -418,6 +421,10 @@ class CircuitpythonTransport:
                 # may read stale content even after sync returns.
                 _time_module.sleep(0.5)
             except Exception:  # pragma: no cover
+                _logger.warning(
+                    "sync command failed — falling back to os.sync()",
+                    exc_info=True,
+                )
                 os.sync()
         else:
             os.sync()  # pragma: no cover — tests run on macOS
@@ -445,7 +452,7 @@ class CircuitpythonTransport:
                 check=False,
             )
         except FileNotFoundError:
-            pass  # xattr not available — skip silently.
+            _logger.warning("xattr not found — skipping extended attribute removal")
 
     @staticmethod
     def _clean_dot_files(drive_path: Path) -> None:
@@ -470,7 +477,7 @@ class CircuitpythonTransport:
                 check=False,
             )
         except FileNotFoundError:
-            pass  # dot_clean not available — skip silently.
+            _logger.warning("dot_clean not found — skipping ._ file cleanup")
 
     @staticmethod
     def _disable_spotlight_indexing(drive_path: Path) -> None:
@@ -498,7 +505,7 @@ class CircuitpythonTransport:
                 check=False,
             )
         except FileNotFoundError:
-            pass  # mdutil not available — skip silently.
+            _logger.warning("mdutil not found — skipping Spotlight indexing disable")
 
     def _collect_package_sources(self, source_directory: Path) -> None:
         """Walk a source directory and collect all .py files as module entries.
@@ -616,11 +623,17 @@ class CircuitpythonTransport:
                         "supervisor.reload()"
                     )
                 except Exception:
-                    pass  # Best-effort restore.
+                    _logger.warning(
+                        "Failed to restore autoreload on disconnect",
+                        exc_info=True,
+                    )
             try:
                 self._port.close()
             except Exception:  # pragma: no cover
-                pass  # Best-effort close.
+                _logger.warning(
+                    "Failed to close serial port on disconnect",
+                    exc_info=True,
+                )
             self._port = None
         self._staged_sources = None
 
