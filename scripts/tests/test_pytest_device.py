@@ -154,7 +154,7 @@ class TestRuntimeControlNames:
             address="/dev/ttyUSB0",
         )
 
-        assert pytest_device._runtime_run_file_name(device) == "Batch run — MicroPython"
+        assert pytest_device._runtime_run_file_name(device) == "Run overhead — MicroPython"
 
 
 class TestReportedDurations:

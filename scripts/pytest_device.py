@@ -135,7 +135,7 @@ def _runtime_prepare_name(device_entry: DeviceEntry) -> str:
 
 def _runtime_run_file_name(device_entry: DeviceEntry) -> str:
     """Return the synthetic pytest item name for a runtime file-run step."""
-    return f"Batch run — {_runtime_display_name(device_entry.runtime)}"
+    return f"Run overhead — {_runtime_display_name(device_entry.runtime)}"
 
 
 def _sum_reported_test_durations(test_results) -> float:
