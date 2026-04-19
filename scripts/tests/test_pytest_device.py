@@ -142,7 +142,7 @@ class TestRuntimeControlNames:
             address="/dev/cu.usbmodem1",
         )
 
-        assert pytest_device._runtime_prepare_name(device) == "[CircuitPython setup]"
+        assert pytest_device._runtime_prepare_name(device) == "Setup — CircuitPython"
 
     def test_runtime_run_file_name(self) -> None:
         """Run-file items should include the runtime in a stable label."""
@@ -152,7 +152,7 @@ class TestRuntimeControlNames:
             address="/dev/ttyUSB0",
         )
 
-        assert pytest_device._runtime_run_file_name(device) == "[MicroPython batch run]"
+        assert pytest_device._runtime_run_file_name(device) == "Batch run — MicroPython"
 
 
 class TestTransportCache:

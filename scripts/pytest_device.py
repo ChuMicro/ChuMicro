@@ -130,12 +130,12 @@ def _runtime_display_name(runtime_name: str) -> str:
 
 def _runtime_prepare_name(device_entry: DeviceEntry) -> str:
     """Return the synthetic pytest item name for a runtime prepare step."""
-    return f"[{_runtime_display_name(device_entry.runtime)} setup]"
+    return f"Setup — {_runtime_display_name(device_entry.runtime)}"
 
 
 def _runtime_run_file_name(device_entry: DeviceEntry) -> str:
     """Return the synthetic pytest item name for a runtime file-run step."""
-    return f"[{_runtime_display_name(device_entry.runtime)} batch run]"
+    return f"Batch run — {_runtime_display_name(device_entry.runtime)}"
 
 
 class _TransportCache:
