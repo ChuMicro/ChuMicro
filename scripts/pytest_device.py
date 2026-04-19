@@ -1,14 +1,20 @@
 """Pytest plugin for routing functional tests to real hardware.
 
-When ``CHUMICRO_DEVICE_RUNTIME`` is set, this plugin collects
-``functional_tests/test_*.py`` files and wraps each ``test_*``
-function as a :class:`DeviceTestItem`.  Instead of importing and
-running the test locally, the item stages source code on the target
-device, executes the test via the device transport, and parses the
-harness output to report pass/fail to pytest.
+When pytest collects a file from a ``functional_tests/`` directory,
+this plugin intercepts it and wraps each ``test_*`` function as a
+:class:`DeviceTestItem`.  Instead of importing and running the test
+locally, the item stages source code on a connected board, executes
+the test via the device transport, and parses the harness output to
+report pass/fail to pytest.
+
+**No environment variable setup is required.**  The plugin reads
+``devices.yml`` to find the target device.  Optional env vars
+(``CHUMICRO_DEVICE_RUNTIME``, ``CHUMICRO_DEVICE_ID``,
+``CHUMICRO_DEPLOY_MODE``) narrow the selection when multiple boards
+are configured.
 
 This enables IDE play buttons (PyCharm, VS Code) to run device
-tests at file and function granularity.
+tests at file and function granularity — just click play.
 
 See Decision 0027 (IDE integration section).
 """
@@ -29,7 +35,7 @@ from device_testing import (
 from result_parser import parse_output
 from workspace import ROOT
 
-#: Environment variable that activates device test collection.
+#: Optional env var to filter devices by runtime.
 RUNTIME_ENV_VAR = "CHUMICRO_DEVICE_RUNTIME"
 #: Optional env var to target a specific device by ID.
 DEVICE_ID_ENV_VAR = "CHUMICRO_DEVICE_ID"
@@ -74,6 +80,53 @@ def _resolve_library_dir(test_file: Path) -> Path:
         The library root directory (e.g. ``libraries/timing``).
     """
     return test_file.parent.parent
+
+
+def _load_target_device():
+    """Load devices.yml and return the best matching device entry.
+
+    Uses optional environment variables to narrow the selection:
+
+    - ``CHUMICRO_DEVICE_RUNTIME`` — filter by runtime
+    - ``CHUMICRO_DEVICE_ID`` — filter by device ID
+
+    Returns:
+        A ``DeviceEntry`` from the device registry.
+
+    Raises:
+        pytest.skip: If no devices.yml exists or no devices match.
+        pytest.fail: If devices.yml is malformed.
+    """
+    runtime = os.environ.get(RUNTIME_ENV_VAR)
+    device_id = os.environ.get(DEVICE_ID_ENV_VAR)
+
+    try:
+        all_devices = load_devices()
+    except DeviceConfigError as error:
+        error_message = str(error)
+        if "not found" in error_message:
+            pytest.skip(
+                "No devices.yml found.  Run 'python scripts/run.py setup' "
+                "and configure your board to run functional tests on hardware."
+            )
+        pytest.fail(f"Device config error: {error}")
+
+    selected = filter_devices(
+        all_devices, runtime=runtime, device_id=device_id,
+    )
+    if not selected:
+        if runtime or device_id:
+            pytest.skip(
+                f"No device matches runtime={runtime!r}, "
+                f"device_id={device_id!r}.  "
+                f"Check devices.yml or remove filter env vars."
+            )
+        pytest.skip(
+            "No devices configured in devices.yml.  "
+            "Add your board details to run functional tests on hardware."
+        )
+
+    return selected[0]
 
 
 class _TransportCache:
@@ -173,29 +226,9 @@ class DeviceTestItem(pytest.Item):
 
     def runtest(self) -> None:
         """Execute the test on a connected device."""
-        runtime = os.environ.get(RUNTIME_ENV_VAR)
-        device_id = os.environ.get(DEVICE_ID_ENV_VAR)
         deploy_mode = os.environ.get(DEPLOY_MODE_ENV_VAR)
+        device_entry = _load_target_device()
 
-        # Load device registry.
-        try:
-            all_devices = load_devices()
-        except DeviceConfigError as error:
-            pytest.fail(
-                f"Device config error: {error}\n"
-                f"Run 'python scripts/run.py setup' to generate devices.yml."
-            )
-
-        selected = filter_devices(
-            all_devices, runtime=runtime, device_id=device_id,
-        )
-        if not selected:
-            pytest.skip(
-                f"No device found for runtime={runtime!r}, "
-                f"device_id={device_id!r}"
-            )
-
-        device_entry = selected[0]
         cache: _TransportCache = self.session._device_transport_cache  # type: ignore[attr-defined]
 
         try:
@@ -258,14 +291,12 @@ class DeviceTestItem(pytest.Item):
 
 
 def pytest_collect_file(parent, file_path):
-    """Collect functional test files when device runtime is configured.
+    """Collect functional test files as device test items.
 
-    Only activates when ``CHUMICRO_DEVICE_RUNTIME`` is set.  Returns
-    a :class:`DeviceTestFile` collector for ``test_*.py`` files inside
-    ``functional_tests/`` directories.
+    Activates for any ``test_*.py`` file inside a ``functional_tests/``
+    directory.  No environment variable required — ``devices.yml``
+    is the gate (checked at run time, not collection time).
     """
-    if not os.environ.get(RUNTIME_ENV_VAR):
-        return None
 
     if (
         file_path.suffix == ".py"
@@ -275,6 +306,27 @@ def pytest_collect_file(parent, file_path):
         return DeviceTestFile.from_parent(parent, path=file_path)
 
     return None
+
+
+def pytest_collection_modifyitems(config, items):
+    """Remove normal pytest items for functional test files.
+
+    ``pytest_collect_file`` adds DeviceTestItems but does not suppress
+    the default Module collector, which also creates regular Function
+    items for the same file.  This hook deselects those duplicates so
+    functional tests only run through the device transport — never
+    locally on CPython.
+    """
+    deselected = []
+    selected = []
+    for item in items:
+        if "functional_tests" in item.nodeid and not isinstance(item, DeviceTestItem):
+            deselected.append(item)
+        else:
+            selected.append(item)
+    if deselected:
+        config.hook.pytest_deselected(items=deselected)
+        items[:] = selected
 
 
 def pytest_sessionstart(session):

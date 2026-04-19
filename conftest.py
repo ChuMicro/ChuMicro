@@ -2,15 +2,13 @@
 
 Auto-discovers library and support package source roots so that
 ``pytest`` can resolve imports even without editable installs
-(e.g., in CI or on a fresh clone before setup runs).  Also
-excludes ``functional_tests/`` from host-side collection unless
-``CHUMICRO_DEVICE_RUNTIME`` is set, in which case the
-``pytest_device`` plugin routes them to real hardware.
+(e.g., in CI or on a fresh clone before setup runs).
 
-When a functional test file is targeted directly (e.g. via an IDE
-play button), ``collect_ignore_glob`` is bypassed.  The
-``pytest_collection_modifyitems`` hook catches these and skips them
-with a clear message instead of silently running on CPython.
+Functional tests (``functional_tests/``) are excluded from normal
+host-side collection.  When an IDE targets one directly (play
+button), the ``pytest_device`` plugin intercepts it and routes
+execution to a connected board — no environment variable setup
+needed.  The plugin reads ``devices.yml`` to find the target device.
 
 See ``plans/decisions/0009-per-library-test-runs.md`` for the
 per-library test isolation strategy.
@@ -20,47 +18,20 @@ IDE integration via the device plugin.
 
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
-import pytest
-
 ROOT = Path(__file__).resolve().parent
 
-# When CHUMICRO_DEVICE_RUNTIME is set, functional tests are collected
-# and routed to hardware by the pytest_device plugin.  Otherwise they
-# are excluded from host-side collection.
-_device_runtime = os.environ.get("CHUMICRO_DEVICE_RUNTIME")
+# Functional tests are excluded from directory-traversal collection.
+# When an IDE passes a file path directly, the pytest_device plugin
+# (always registered) intercepts collection and routes to hardware.
+collect_ignore_glob = ["**/functional_tests/**"]
 
-if _device_runtime:
-    collect_ignore_glob: list[str] = []
-    pytest_plugins = ["pytest_device"]
-else:
-    collect_ignore_glob = ["**/functional_tests/**"]
-
-
-def pytest_collection_modifyitems(config, items):
-    """Skip functional tests that were collected without a device runtime.
-
-    ``collect_ignore_glob`` prevents discovery during directory traversal,
-    but IDEs often pass file paths directly (e.g. ``--path <file>``),
-    bypassing glob exclusion.  This hook catches those items and marks
-    them as skipped so they never silently run on CPython.
-    """
-    if _device_runtime:
-        return
-
-    skip_marker = pytest.mark.skip(
-        reason=(
-            "Functional tests require a connected device.  "
-            "Set CHUMICRO_DEVICE_RUNTIME=micropython (or circuitpython) "
-            "in your run configuration to route tests to hardware."
-        ),
-    )
-    for item in items:
-        if "functional_tests" in item.nodeid:
-            item.add_marker(skip_marker)
+# Always register the device plugin.  It only activates for files
+# inside functional_tests/ directories — normal test runs are
+# unaffected.
+pytest_plugins = ["pytest_device"]
 
 
 def _discover_source_roots() -> list[str]:

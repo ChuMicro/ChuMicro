@@ -90,10 +90,16 @@ Flow: load config → select transport → for each library, stage `src/` + `fun
 
 ### IDE integration
 
-A pytest conftest or plugin intercepts `functional_tests/` collection when `CHUMICRO_DEVICE_RUNTIME` is set in the environment.  Each collected `test_*` function becomes a pytest item that stages, executes on device, parses output, and reports as pytest pass/fail.
+A pytest plugin (`scripts/pytest_device.py`) intercepts `functional_tests/` collection automatically.  Each collected `test_*` function becomes a pytest item that stages, executes on device, parses output, and reports as pytest pass/fail.  **No environment variable setup is required** — `devices.yml` is the gate.
 
-- **PyCharm:** Set `CHUMICRO_DEVICE_RUNTIME=micropython` (or `circuitpython`) in a run configuration template.  Play buttons work at file and function level.
-- **VSCode:** Same env var in `settings.json` or `.env`.
+- The plugin is always registered via the root `conftest.py`.
+- When a functional test file is targeted (e.g. IDE play button), the plugin collects it as `DeviceTestItem` instances and deselects the normal pytest items to prevent local CPython execution.
+- At run time, `DeviceTestItem.runtest()` loads `devices.yml` and picks the first available device.  If no `devices.yml` exists, the test is skipped with setup instructions.
+- **PyCharm / VS Code:** Just click the play button on any `functional_tests/test_*.py` file or function — it runs on the connected board.
+- Optional env vars for filtering when multiple boards are configured:
+  - `CHUMICRO_DEVICE_RUNTIME=micropython` — filter by runtime
+  - `CHUMICRO_DEVICE_ID=my-board` — target a specific device
+  - `CHUMICRO_DEPLOY_MODE=flash` — override deploy mode
 
 ### File deployment to flash
 

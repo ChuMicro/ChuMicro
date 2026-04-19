@@ -31,7 +31,7 @@
 
 ## Done (recent)
 
-- [x] Device testing Phase 3: IDE integration — `scripts/pytest_device.py` plugin routes `functional_tests/` to device when `CHUMICRO_DEVICE_RUNTIME` is set. AST-based test discovery (no import), session-scoped transport caching, per-function `name_filter` execution. PyCharm and VS Code run configurations added. `conftest.py` conditionally registers the plugin; `--ignore-glob` moved out of `pyproject.toml` into conftest. Decision 0027.
+- [x] Device testing Phase 3: IDE integration — `scripts/pytest_device.py` plugin routes `functional_tests/` to device automatically. `devices.yml` is the gate — no env var setup needed, just click play. AST-based test discovery (no import), session-scoped transport caching, per-function `name_filter` execution. Optional `CHUMICRO_DEVICE_RUNTIME`/`CHUMICRO_DEVICE_ID`/`CHUMICRO_DEPLOY_MODE` env vars for filtering when multiple boards are configured. Decision 0027.
 
 - [x] Whitespace linter (CHU002–CHU005) — `scripts/check_whitespace.py` wired into `run.py lint`, fixed 42 pre-existing violations. Rules: file ends with one newline, no excess blank lines, no trailing whitespace, no blank line after block opener.
 - [x] Scripts consolidation — `ensure_build_tools` → `shared.py`; `load_tomllib`, `GITHUB_ORG`, `discover_library_dirs`, `read_pyproject_description`, `discover_doc_dirs`, `is_ref_reachable` → `workspace.py`. Tests aligned.

@@ -1,7 +1,7 @@
 """Tests for pytest_device — the pytest plugin for device functional tests.
 
 Tests AST-based test discovery, DeviceTestItem behavior with faked
-transports, and the conditional conftest gating.
+transports, device config loading, and collection hook behavior.
 """
 
 from __future__ import annotations
@@ -9,6 +9,7 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
+import pytest
 import pytest_device
 from device_config import DeviceEntry
 
@@ -155,42 +156,116 @@ class TestTransportCache:
             pytest_device._create_transport = original
 
 
-class TestRuntimeEnvVar:
-    """Tests for environment variable gating."""
+class TestEnvVarConstants:
+    """Tests for environment variable names."""
 
-    def test_env_var_constant(self) -> None:
-        """The env var name should match the documented convention."""
+    def test_runtime_env_var(self) -> None:
+        """The runtime env var should match the documented convention."""
         assert pytest_device.RUNTIME_ENV_VAR == "CHUMICRO_DEVICE_RUNTIME"
 
-    def test_device_id_env_var_constant(self) -> None:
+    def test_device_id_env_var(self) -> None:
         """The device ID env var should match the documented convention."""
         assert pytest_device.DEVICE_ID_ENV_VAR == "CHUMICRO_DEVICE_ID"
 
-    def test_deploy_mode_env_var_constant(self) -> None:
+    def test_deploy_mode_env_var(self) -> None:
         """The deploy mode env var should match the documented convention."""
         assert pytest_device.DEPLOY_MODE_ENV_VAR == "CHUMICRO_DEPLOY_MODE"
+
+
+class TestLoadTargetDevice:
+    """Tests for _load_target_device."""
+
+    def test_skips_when_no_devices_file(self, monkeypatch, tmp_path) -> None:
+        """Should skip with setup instructions when devices.yml is missing."""
+        monkeypatch.delenv("CHUMICRO_DEVICE_RUNTIME", raising=False)
+        monkeypatch.delenv("CHUMICRO_DEVICE_ID", raising=False)
+        # Point to a nonexistent file.
+        monkeypatch.setenv("CHUMICRO_DEVICES", str(tmp_path / "nope.yml"))
+        with pytest.raises(pytest.skip.Exception, match="No devices.yml found"):
+            pytest_device._load_target_device()
+
+    def test_skips_when_no_devices_match_filter(self, monkeypatch, tmp_path) -> None:
+        """Should skip when env var filters exclude all devices."""
+        devices_file = tmp_path / "devices.yml"
+        devices_file.write_text(
+            "devices:\n"
+            "  - id: board1\n"
+            "    runtime: micropython\n"
+            "    address: /dev/ttyUSB0\n"
+        )
+        monkeypatch.setenv("CHUMICRO_DEVICES", str(devices_file))
+        monkeypatch.setenv("CHUMICRO_DEVICE_RUNTIME", "circuitpython")
+        monkeypatch.delenv("CHUMICRO_DEVICE_ID", raising=False)
+        with pytest.raises(pytest.skip.Exception, match="No device matches"):
+            pytest_device._load_target_device()
+
+    def test_returns_first_device(self, monkeypatch, tmp_path) -> None:
+        """Should return the first device when no filters are set."""
+        devices_file = tmp_path / "devices.yml"
+        devices_file.write_text(
+            "devices:\n"
+            "  - id: board1\n"
+            "    runtime: micropython\n"
+            "    address: /dev/ttyUSB0\n"
+            "  - id: board2\n"
+            "    runtime: circuitpython\n"
+            "    address: /dev/ttyUSB1\n"
+        )
+        monkeypatch.setenv("CHUMICRO_DEVICES", str(devices_file))
+        monkeypatch.delenv("CHUMICRO_DEVICE_RUNTIME", raising=False)
+        monkeypatch.delenv("CHUMICRO_DEVICE_ID", raising=False)
+        device = pytest_device._load_target_device()
+        assert device.identifier == "board1"
+
+    def test_filters_by_runtime(self, monkeypatch, tmp_path) -> None:
+        """Should respect CHUMICRO_DEVICE_RUNTIME filter."""
+        devices_file = tmp_path / "devices.yml"
+        devices_file.write_text(
+            "devices:\n"
+            "  - id: mp_board\n"
+            "    runtime: micropython\n"
+            "    address: /dev/ttyUSB0\n"
+            "  - id: cp_board\n"
+            "    runtime: circuitpython\n"
+            "    address: /dev/ttyUSB1\n"
+        )
+        monkeypatch.setenv("CHUMICRO_DEVICES", str(devices_file))
+        monkeypatch.setenv("CHUMICRO_DEVICE_RUNTIME", "circuitpython")
+        monkeypatch.delenv("CHUMICRO_DEVICE_ID", raising=False)
+        device = pytest_device._load_target_device()
+        assert device.identifier == "cp_board"
+
+    def test_filters_by_device_id(self, monkeypatch, tmp_path) -> None:
+        """Should respect CHUMICRO_DEVICE_ID filter."""
+        devices_file = tmp_path / "devices.yml"
+        devices_file.write_text(
+            "devices:\n"
+            "  - id: board_a\n"
+            "    runtime: micropython\n"
+            "    address: /dev/ttyUSB0\n"
+            "  - id: board_b\n"
+            "    runtime: micropython\n"
+            "    address: /dev/ttyUSB1\n"
+        )
+        monkeypatch.setenv("CHUMICRO_DEVICES", str(devices_file))
+        monkeypatch.delenv("CHUMICRO_DEVICE_RUNTIME", raising=False)
+        monkeypatch.setenv("CHUMICRO_DEVICE_ID", "board_b")
+        device = pytest_device._load_target_device()
+        assert device.identifier == "board_b"
 
 
 class TestPytestCollectFile:
     """Tests for the pytest_collect_file hook."""
 
-    def test_returns_none_without_env_var(self, monkeypatch) -> None:
-        """Should not collect when CHUMICRO_DEVICE_RUNTIME is unset."""
-        monkeypatch.delenv("CHUMICRO_DEVICE_RUNTIME", raising=False)
-        result = pytest_device.pytest_collect_file(None, Path("/x/functional_tests/test_a.py"))
-        assert result is None
-
-    def test_returns_none_for_non_test_file(self, monkeypatch) -> None:
-        """Should not collect helper files even with env var set."""
-        monkeypatch.setenv("CHUMICRO_DEVICE_RUNTIME", "micropython")
+    def test_returns_none_for_non_test_file(self) -> None:
+        """Should not collect helper files."""
         result = pytest_device.pytest_collect_file(
             None, Path("/x/functional_tests/conftest.py"),
         )
         assert result is None
 
-    def test_returns_none_outside_functional_tests(self, monkeypatch) -> None:
+    def test_returns_none_outside_functional_tests(self) -> None:
         """Should not collect regular test files."""
-        monkeypatch.setenv("CHUMICRO_DEVICE_RUNTIME", "micropython")
         result = pytest_device.pytest_collect_file(
             None, Path("/x/tests/test_normal.py"),
         )
