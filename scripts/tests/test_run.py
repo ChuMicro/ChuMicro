@@ -368,3 +368,21 @@ class TestMainDispatch:
                 "deploy_mode": "flash",
             }),
         ]
+
+    def test_test_device_accepts_explicit_both_runtime(self, monkeypatch) -> None:
+        """test-device should allow `--runtime both` as an explicit defaults alias."""
+        command_calls, fake_test_device = _make_fake_command(return_value=67)
+        monkeypatch.setattr(run, "test_device", fake_test_device)
+
+        result = run.main(["run.py", "test-device", "--runtime", "both"])
+
+        assert result == 67
+        assert command_calls == [
+            ((), {
+                "runtime": "both",
+                "device": None,
+                "library": None,
+                "test_filter": None,
+                "deploy_mode": None,
+            }),
+        ]

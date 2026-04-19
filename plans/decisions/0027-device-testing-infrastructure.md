@@ -80,7 +80,7 @@ Replace the placeholder `test-device` command with real orchestration:
 
 ```
 python scripts/run.py test-device
-    --runtime micropython|circuitpython   # filter devices by runtime
+    --runtime micropython|circuitpython|both   # filter by one runtime, or explicitly request the defaults-backed dual-runtime set
     --device <id>                         # target specific device
     --library <name>                      # limit to one library
     --test <name>                         # filter to test file or function name

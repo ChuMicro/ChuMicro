@@ -409,7 +409,9 @@ def test_device(
     """Run functional tests on connected devices.
 
     Args:
-        runtime: Filter to devices matching this runtime.
+        runtime: Filter to devices matching this runtime. Use ``"both"``
+            to select the defaults-backed MicroPython + CircuitPython target
+            set explicitly.
         device: Filter to the device with this ID.
         library: Limit to a single library's functional tests.
         test_filter: Filter to test files or functions matching this
@@ -430,8 +432,11 @@ def test_device(
 
     # Filter devices. When the CLI does not specify runtime or device,
     # mirror the IDE behavior by selecting the defaults from devices.yml.
-    if runtime is None and device is None:
+    # An explicit ``runtime="both"`` requests that same target set.
+    if runtime in (None, "both") and device is None:
         selected = resolve_ide_devices(all_devices, defaults)
+    elif runtime == "both":
+        selected = filter_devices(all_devices, device_id=device)
     else:
         selected = filter_devices(all_devices, runtime=runtime, device_id=device)
 

@@ -253,6 +253,7 @@ python scripts/run.py test-device --library timing --test progress_on_runtime 2>
 # 🔍 Output contains either:
 #    "Device: <id>" lines for the defaults-selected board(s)
 #    OR "Device config error" / "No matching devices found" if local board config is incomplete
+# 🔍 `--runtime both` is an explicit alias for that same defaults-based dual-runtime selection
 # 🔍 --runtime / --device remain available to override the defaults
 ```
 

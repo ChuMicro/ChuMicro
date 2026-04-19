@@ -899,7 +899,8 @@ def _build_parser() -> argparse.ArgumentParser:
         description=(
             "Run functional tests on connected devices. When --runtime and "
             "--device are omitted, the command uses the default target "
-            "device(s) from devices.yml."
+            "device(s) from devices.yml. Pass --runtime both to request "
+            "that same dual-runtime default selection explicitly."
         ),
         help=(
             "run functional tests on connected devices "
@@ -908,8 +909,11 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     test_device_parser.add_argument(
         "--runtime",
-        choices=["micropython", "circuitpython"],
-        help="filter devices by runtime",
+        choices=["micropython", "circuitpython", "both"],
+        help=(
+            "filter devices by runtime, or use 'both' for the default "
+            "devices.yml dual-runtime target set"
+        ),
     )
     test_device_parser.add_argument(
         "--device",
