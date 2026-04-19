@@ -126,6 +126,13 @@ class MicropythonTransport:
         """Soft-reset the device."""
         self._run_mpremote(["reset"])
 
+    def recover(self) -> None:
+        """Attempt to recover after a failed test.
+
+        For MicroPython, this is a soft reset via mpremote.
+        """
+        self._run_mpremote(["reset"])
+
     def disconnect(self) -> None:
         """Clean up staging directory."""
         if self._staging_dir is not None:

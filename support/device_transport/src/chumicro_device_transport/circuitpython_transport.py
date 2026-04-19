@@ -623,6 +623,23 @@ class CircuitpythonTransport:
             # Allow time for the reset to complete.
             self._time.sleep(0.5)
 
+    def recover(self) -> None:
+        """Attempt to recover raw REPL after a failed test.
+
+        Sends Ctrl-C to interrupt any running code, drains stale
+        output, then re-enters raw REPL mode.  Call this after a
+        test error before running the next test.
+
+        Raises:
+            CircuitpythonTransportError: If raw REPL cannot be
+                re-established.
+        """
+        if self._port is None:
+            raise CircuitpythonTransportError(
+                "Cannot recover — port is not open"
+            )
+        self._enter_raw_repl()
+
     def disconnect(self) -> None:
         """Close the serial port and clear staged data.
 

@@ -221,8 +221,13 @@ def _run_tests_on_device(
         transport.disconnect()
         return 0, 0, len(all_test_files)
 
+    abort = False
     for library_name, _source_dir, test_files in test_plan:
+        if abort:
+            break
         for test_file in test_files:
+            if abort:
+                break
             print(f"\n  {library_name}/{test_file.name}")
 
             try:
@@ -243,6 +248,13 @@ def _run_tests_on_device(
             except Exception as run_error:
                 print(f"  ERROR: {run_error}")
                 errors += 1
+                # Try to recover raw REPL so the next test can run.
+                try:
+                    transport.recover()
+                except Exception as recover_error:
+                    print(f"  FATAL: Cannot recover board state: {recover_error}")
+                    print("  Aborting remaining tests on this device.")
+                    abort = True
 
     try:
         transport.reset()
