@@ -289,6 +289,11 @@ class CircuitpythonTransport:
             destination = drive_path / test_file.name
             shutil.copy2(test_file, destination)
 
+        # Force macOS to flush writes to the FAT32 USB drive.  Without
+        # this, the device may read stale or empty content because
+        # macOS buffers writes to removable media.
+        os.sync()
+
     @staticmethod
     def _copy_packages_to_drive(
         source_directory: Path,
