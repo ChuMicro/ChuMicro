@@ -120,7 +120,7 @@ Current verified state:
 - `devices.yml` has a `defaults:` section that controls bare `test-device` runs and IDE targeting
 - `support/device_transport/` provides `MicropythonTransport` (ram → mpremote mount, flash → mpremote fs cp -r) and `CircuitpythonTransport` (ram → inline raw-REPL exec, flash → copy to CIRCUITPY drive with autoreload control)
 - `scripts/result_parser.py` parses structured harness output (PASS/FAIL/SKIP/SUMMARY/HEAP)
-- `test-device` is a real orchestration command with `--runtime`, `--micropython-device`, `--circuitpython-device`, `--library`, `--test` flags
+- `test-device` is a real orchestration command with `--runtime`, `--micropython-device`, `--circuitpython-device`, `--library`, `--file`, `--function`, `--deploy-mode` flags (`--file` and `--function` are orthogonal substring filters — `--file` matches test file names, `--function` matches test function names)
 - `runner.run_module` supports `name_filter` for single-test execution
 - `mpremote` and `pyyaml` are in `requirements-dev.txt`
 - the repo can prepare a pinned local MicroPython unix-port runtime under `.tools/`

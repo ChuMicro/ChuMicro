@@ -23,17 +23,29 @@ Environment variable overrides: `CHUMICRO_DEVICES` and `CHUMICRO_DEVICE_CONFIG` 
 
 A `scripts/device_config.py` module loads, validates, and exposes the config to `run.py` and the transport layer.
 
-### Transport protocol (duck-typed)
+### Transport protocol
 
-Transport implementations live in `support/device_transport/`.  The protocol is documented, not enforced by a base class:
+Transport implementations live in `support/device_transport/`.  The
+protocol is captured as a ``typing.Protocol`` class
+(``chumicro_device_transport.protocol.TransportProtocol``) — structural
+typing, not inheritance, so the two concrete transports stay
+independent while type checkers and ``isinstance`` checks (via
+``@runtime_checkable``) can still verify the contract:
 
 ```
 connect() -> None
 stage(source_dirs, test_files, harness_src) -> None
 execute(bootstrap_script) -> str   # returns captured stdout
-reset() -> None
+soft_reset() -> None               # planned reset between file groups
+reset() -> None                    # healthy reset between library groups
+recover() -> None                  # aggressive reset after a failure
 disconnect() -> None
 ```
+
+A companion ``ExtendedTransportProtocol`` adds the CircuitPython
+RAM-mode chunking helpers (``execute_scripts``, ``probe_free_memory``,
+``inline_script_budget_bytes``).  ``MicropythonTransport`` does not
+implement these — there is no per-script RAM budget on mpremote.
 
 ### MicroPython transport
 
@@ -84,9 +96,17 @@ python scripts/run.py test-device
     --micropython-device <id>                  # override the selected MicroPython board
     --circuitpython-device <id>                # override the selected CircuitPython board
     --library <name>                           # limit to one library
-    --test <name>                              # filter to test file or function name
+    --file <substring>                         # match test file names
+    --function <substring>                     # match test function names
     --deploy-mode ram|flash                    # override the configured deploy mode
 ```
+
+`--file` and `--function` are orthogonal substring filters — passing both
+narrows the plan to files whose name contains the file substring AND that
+define at least one ``test_*`` function whose name contains the function
+substring.  The earlier single ``--test <name>`` flag was split in two
+because it matched against file OR function names and surprised users who
+expected it to match only files.
 
 Flow: load config → resolve target devices from `devices.yml` defaults and CLI overrides → select transport → for each library, stage `src/` + `functional_tests/` + harness → run each test file → parse output → report summary.
 
