@@ -1113,6 +1113,74 @@ def _runtime_display_name(runtime_name: str) -> str:
     }.get(runtime_name, runtime_name)
 
 
+def _report_empty_test_plan(
+    library: str | None,
+    file_filter: str | None,
+    function_filter: str | None,
+) -> int:
+    """Print a diagnostic for an empty test plan and return the right exit code.
+
+    When any filter was provided but yielded nothing, treat it as a
+    configuration error (exit 2) so CI and scripts don't silently
+    pass.  An empty plan with no filters is a benign no-op on a fresh
+    project (exit 0).
+    """
+    filter_parts = []
+    if library:
+        filter_parts.append(f"--library {library}")
+    if file_filter:
+        filter_parts.append(f"--file {file_filter}")
+    if function_filter:
+        filter_parts.append(f"--function {function_filter}")
+
+    if filter_parts:
+        print(f"No functional tests matched: {', '.join(filter_parts)}")
+        return 2
+    print("No functional test files found.")
+    return 0
+
+
+def _run_device_with_fatal_catch(
+    device_entry: DeviceEntry,
+    test_plan: list[tuple[str, Path, list[Path]]],
+    harness_source: Path,
+    function_filter: str | None,
+    deploy_mode: str | None,
+) -> DeviceRunResult:
+    """Run one device's plan, catching a crash so other devices still report.
+
+    One device crashing must not hide passing results from other
+    devices.  A fatal exception becomes an error-row
+    :class:`DeviceRunResult` with the resolved deploy mode still
+    filled in so the PR summary can identify which device failed.
+    """
+    effective_deploy_mode = _resolve_effective_deploy_mode(
+        device_entry, deploy_mode,
+    )
+    print(f"\n{'=' * 60}")
+    print(
+        f"Device: {device_entry.identifier} "
+        f"({device_entry.runtime}, {effective_deploy_mode} mode)"
+    )
+    print(f"Address: {device_entry.address}")
+    print(f"{'=' * 60}")
+
+    try:
+        return _run_tests_on_device(
+            device_entry, test_plan, harness_source,
+            function_filter,
+            deploy_mode=deploy_mode,
+        )
+    except Exception as device_error:
+        print(f"  FATAL: Device run raised: {device_error}")
+        return DeviceRunResult(
+            device=device_entry,
+            passed=0, failed=0, errors=1,
+            implementation=None,
+            deploy_mode=effective_deploy_mode,
+        )
+
+
 def test_device(
     runtime: str | None = None,
     micropython_device: str | None = None,
@@ -1157,13 +1225,9 @@ def test_device(
         return 2
 
     selected = _resolve_selected_devices(
-        all_devices,
-        defaults,
-        runtime,
-        micropython_device,
-        circuitpython_device,
+        all_devices, defaults,
+        runtime, micropython_device, circuitpython_device,
     )
-
     if not selected:
         print("No matching devices found.")
         if not all_devices:
@@ -1173,86 +1237,39 @@ def test_device(
             )
         return 2
 
-    # Discover functional tests.
     test_plan = discover_functional_tests(
         library=library,
         file_filter=file_filter,
         function_filter=function_filter,
     )
     if not test_plan:
-        # When a filter was provided but yielded nothing, treat it as
-        # a configuration error so CI and scripts don't silently pass.
-        # Without a filter, an empty plan on a fresh project is still
-        # a benign no-op.
-        any_filter = bool(library or file_filter or function_filter)
-        if any_filter:
-            filter_parts = []
-            if library:
-                filter_parts.append(f"--library {library}")
-            if file_filter:
-                filter_parts.append(f"--file {file_filter}")
-            if function_filter:
-                filter_parts.append(f"--function {function_filter}")
-            print(
-                f"No functional tests matched: {', '.join(filter_parts)}"
-            )
-            return 2
-        print("No functional test files found.")
-        return 0
+        return _report_empty_test_plan(library, file_filter, function_filter)
 
     harness_source = ROOT / "support" / "test_harness" / "src"
 
-    # Run tests on each device.  The per-device loop is wrapped in
-    # try/finally so the summary + PR block always print as long as
-    # at least one device produced a row — even if a later device's
-    # transport raises something unexpected mid-run.  Contributors used
-    # to lose the summary entirely in that case.
+    # The per-device loop is wrapped in try/finally so the summary +
+    # PR block always print as long as at least one device produced a
+    # row — even if a later device's transport raises something
+    # unexpected mid-run.  Contributors used to lose the summary
+    # entirely in that case.
     per_device_results: list[DeviceRunResult] = []
     command = _format_test_device_command(
         runtime, micropython_device, circuitpython_device,
         library, file_filter, function_filter, deploy_mode,
     )
     total_start = time.perf_counter()
-    total_duration = 0.0
 
     try:
         for device_entry in selected:
-            effective_deploy_mode = _resolve_effective_deploy_mode(
-                device_entry, deploy_mode,
-            )
-            print(f"\n{'=' * 60}")
-            print(
-                f"Device: {device_entry.identifier} "
-                f"({device_entry.runtime}, {effective_deploy_mode} mode)"
-            )
-            print(f"Address: {device_entry.address}")
-            print(f"{'=' * 60}")
-
-            try:
-                device_result = _run_tests_on_device(
-                    device_entry, test_plan, harness_source,
-                    function_filter,
-                    deploy_mode=deploy_mode,
-                )
-            except Exception as device_error:
-                # One device crashing must not hide passing results from
-                # other devices.  Record the crash as an error row and
-                # move on.
-                print(f"  FATAL: Device run raised: {device_error}")
-                per_device_results.append(DeviceRunResult(
-                    device=device_entry,
-                    passed=0, failed=0, errors=1,
-                    implementation=None,
-                    deploy_mode=effective_deploy_mode,
-                ))
-                continue
-
-            per_device_results.append(device_result)
+            per_device_results.append(_run_device_with_fatal_catch(
+                device_entry, test_plan, harness_source,
+                function_filter, deploy_mode,
+            ))
     finally:
-        total_duration = time.perf_counter() - total_start
         if per_device_results:
             _print_device_test_summary(
-                command, per_device_results, total_duration,
+                command, per_device_results,
+                time.perf_counter() - total_start,
             )
 
     total_failed = sum(device.failed for device in per_device_results)

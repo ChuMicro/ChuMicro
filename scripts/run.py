@@ -125,6 +125,170 @@ def _parse_library_filters(
     return result
 
 
+def _resolve_filter_and_scope(
+    filter_expression: str | None,
+    package_dirs: list[Path],
+) -> tuple[list[Path], dict[str, list[tuple[str | None, str]]] | None] | None:
+    """Narrow ``package_dirs`` and build the per-library filter plan.
+
+    Handles both filter forms:
+
+    - **Bare** (``heartbeat``) — standard pytest ``-k``.  ``package_dirs``
+      is untouched; every selected library runs with this expression.
+    - **Library-scoped** (``timing/test_heartbeat``) — the named
+      libraries replace whatever scope was selected by ``--all`` /
+      ``--libraries`` / change detection.
+
+    Args:
+        filter_expression: Raw ``-k`` argument, or ``None``.
+        package_dirs: Initial scope from the CLI.
+
+    Returns:
+        ``(package_dirs, per_library)`` on success, or ``None`` when an
+        unknown library was named in a library-scoped filter (the
+        caller should return exit code 1; the error message has
+        already been printed).
+    """
+    if not filter_expression:
+        return package_dirs, None
+
+    entries = [entry.strip() for entry in filter_expression.split(",") if entry.strip()]
+    if entries and all("/" not in entry for entry in entries):
+        # Bare pytest-style filter — leave package_dirs alone.
+        return package_dirs, {
+            package_dir.name: [(None, filter_expression)]
+            for package_dir in package_dirs
+        }
+
+    # Library-scoped — library names override package_dirs.
+    parsed = _parse_library_filters(filter_expression)
+    by_name = {package_dir.name: package_dir for package_dir in discover_package_dirs()}
+    resolved: list[Path] = []
+    for name in parsed:
+        if name not in by_name:
+            available = ", ".join(sorted(by_name))
+            print(f"Unknown library in -k: {name}")
+            print(f"Available: {available}")
+            return None
+        resolved.append(by_name[name])
+    return resolved, parsed
+
+
+def _coverage_gate_args(
+    package_name: str,
+    *,
+    skip_coverage_gate: bool,
+    coverage_threshold: int | None,
+    elevated_packages: set[str] | None,
+) -> list[str]:
+    """Return the pytest ``--cov-fail-under`` args for one library.
+
+    When ``elevated_packages`` is set, only those libraries get the
+    overridden threshold; the rest fall back to the ``pyproject.toml``
+    default (no ``--cov-fail-under`` flag added).
+    """
+    if skip_coverage_gate:
+        return ["--cov-fail-under=0"]
+    if coverage_threshold is None:
+        return []
+    if elevated_packages is None or package_name in elevated_packages:
+        return [f"--cov-fail-under={coverage_threshold}"]
+    return []
+
+
+def _plan_test_runs_for_library(
+    package_dir: Path,
+    per_library: dict[str, list[tuple[str | None, str]]] | None,
+) -> list[tuple[str, str]] | None:
+    """Build the ordered list of pytest invocations for one library.
+
+    Filter entries split into two categories:
+
+    - **Global** (no file specified) — combined with ``or`` into a single
+      pytest invocation across the whole ``tests/`` directory.
+    - **File-scoped** (``library/file/expression``) — each gets its own
+      pytest invocation targeting a specific test file so coverage data
+      stays attributable.
+
+    Args:
+        package_dir: The library's root directory.
+        per_library: Parsed filter plan keyed by library name, or
+            ``None`` to run the entire ``tests/`` directory.
+
+    Returns:
+        List of ``(test_target, expression)`` tuples, or ``None`` when
+        a file-scoped entry names a test file that doesn't exist (the
+        caller should return exit code 1; the error message has
+        already been printed).
+    """
+    test_path = str((package_dir / "tests").relative_to(ROOT))
+
+    if per_library is None:
+        return [(test_path, "")]
+
+    entries = per_library.get(package_dir.name, [])
+    global_expressions = [
+        expression for file_name, expression in entries if file_name is None
+    ]
+    file_entries = [
+        (file_name, expression) for file_name, expression in entries
+        if file_name is not None
+    ]
+
+    runs: list[tuple[str, str]] = []
+    if global_expressions:
+        runs.append((test_path, " or ".join(global_expressions)))
+
+    for file_name, expression in file_entries:
+        test_file = package_dir / "tests" / f"{file_name}.py"
+        if not test_file.exists():
+            print(f"Test file not found: {test_file.relative_to(ROOT)}")
+            return None
+        runs.append((str(test_file.relative_to(ROOT)), expression))
+
+    return runs
+
+
+def _combine_and_report_coverage(
+    *,
+    skip_coverage_gate: bool,
+    coverage_threshold: int | None,
+    elevated_packages: set[str] | None,
+    overall_exit_code: int,
+) -> int:
+    """Combine per-run coverage files, report, and return the final exit code.
+
+    The per-library ``--cov-fail-under`` gates enforced inside the main
+    loop are the primary mechanism.  The combined report additionally
+    applies the override when every library was held to the same
+    threshold (no ``elevated_packages`` scoping) — when it *is* scoped,
+    the combined report uses the ``pyproject.toml`` default because
+    the unchanged libraries shouldn't be held to the higher bar.
+    """
+    if not list(ROOT.glob(".coverage.*")):
+        return overall_exit_code
+
+    run_command([PYTHON, "-m", "coverage", "combine"])
+
+    report_args = [PYTHON, "-m", "coverage", "report", "--show-missing"]
+    if skip_coverage_gate:
+        report_args.append("--fail-under=0")
+    elif coverage_threshold is not None and elevated_packages is None:
+        report_args.append(f"--fail-under={coverage_threshold}")
+
+    report_exit_code = run_command(report_args)
+    if report_exit_code == 0 or overall_exit_code != 0:
+        return overall_exit_code
+
+    if not skip_coverage_gate:
+        print(
+            "\nHint: check the Missing column above to find uncovered"
+            " lines.  If the gap is in code you didn't change, note it"
+            " in your PR — a maintainer can help."
+        )
+    return report_exit_code
+
+
 def test_cpython(
     package_dirs: list[Path],
     *,
@@ -165,35 +329,11 @@ def test_cpython(
     ``--libraries``, or change detection).  Library-scoped filters
     override the scope and target only the named libraries.
     """
-    per_library: dict[str, list[tuple[str | None, str]]] | None = None
-    if filter_expression:
-        entries = [entry.strip() for entry in filter_expression.split(",") if entry.strip()]
-        if entries and all("/" not in entry for entry in entries):
-            # Bare pytest-style filter — apply unchanged to all selected
-            # packages and leave package_dirs alone so `--libraries` and
-            # change detection still scope the run.
-            per_library = {
-                package_dir.name: [(None, filter_expression)]
-                for package_dir in package_dirs
-            }
-        else:
-            # Library-scoped — library names override package_dirs from
-            # --all / --libraries / change detection.
-            parsed = _parse_library_filters(filter_expression)
-            all_package_dirs = discover_package_dirs()
-            by_name = {package_dir.name: package_dir for package_dir in all_package_dirs}
-            resolved: list[Path] = []
-            for name in parsed:
-                if name not in by_name:
-                    available = ", ".join(sorted(by_name))
-                    print(f"Unknown library in -k: {name}")
-                    print(f"Available: {available}")
-                    return 1
-                resolved.append(by_name[name])
-            package_dirs = resolved
-            per_library = parsed
+    resolved = _resolve_filter_and_scope(filter_expression, package_dirs)
+    if resolved is None:
+        return 1
+    package_dirs, per_library = resolved
 
-    # Keep only packages that actually have a tests/ directory.
     testable = [package_dir for package_dir in package_dirs if (package_dir / "tests").is_dir()]
     if not testable:
         print("No test directories found for the selected packages.")
@@ -219,60 +359,16 @@ def test_cpython(
     run_counter = 0
 
     for package_dir in testable:
-        # Per-library coverage gate.  When elevated_packages is set, only
-        # those libraries get the overridden threshold; the rest fall back
-        # to the pyproject.toml default (no --cov-fail-under flag).
-        if skip_coverage_gate:
-            cov_gate_args = ["--cov-fail-under=0"]
-        elif coverage_threshold is not None:
-            if elevated_packages is None or package_dir.name in elevated_packages:
-                cov_gate_args = [f"--cov-fail-under={coverage_threshold}"]
-            else:
-                cov_gate_args = []
-        else:
-            cov_gate_args = []
-        # Determine what pytest runs are needed for this library.
-        #
-        # Filter entries split into two categories:
-        #   - "global" (no file specified): combined with `or` into a
-        #     single pytest invocation across the whole tests/ dir.
-        #   - "file-scoped" (library/file/expression): each gets its own
-        #     pytest invocation targeting a specific test file.
-        #
-        # Each invocation writes to a unique COVERAGE_FILE to avoid
-        # overwriting coverage data from other runs.
-        if per_library is not None:
-            entries = per_library.get(package_dir.name, [])
+        runs = _plan_test_runs_for_library(package_dir, per_library)
+        if runs is None:
+            return 1
 
-            # Split into file-scoped and global entries.
-            global_expressions = [
-                expression for file_name, expression in entries
-                if file_name is None
-            ]
-            file_entries = [
-                (file_name, expression) for file_name, expression in entries
-                if file_name is not None
-            ]
-
-            # Global expressions combine into a single run.
-            runs: list[tuple[str, str]] = []
-            if global_expressions:
-                test_path = str((package_dir / "tests").relative_to(ROOT))
-                combined = " or ".join(global_expressions)
-                runs.append((test_path, combined))
-
-            # File-scoped entries each get their own run.
-            for file_name, expression in file_entries:
-                test_file = package_dir / "tests" / f"{file_name}.py"
-                if not test_file.exists():
-                    relative_path = test_file.relative_to(ROOT)
-                    print(f"Test file not found: {relative_path}")
-                    return 1
-                runs.append((str(test_file.relative_to(ROOT)), expression))
-        else:
-            # No filter — run the entire tests/ directory.
-            test_path = str((package_dir / "tests").relative_to(ROOT))
-            runs = [(test_path, "")]
+        cov_gate_args = _coverage_gate_args(
+            package_dir.name,
+            skip_coverage_gate=skip_coverage_gate,
+            coverage_threshold=coverage_threshold,
+            elevated_packages=elevated_packages,
+        )
 
         for test_target, expression in runs:
             extra_args: list[str] = []
@@ -285,7 +381,7 @@ def test_cpython(
 
             cov_args = [] if no_cov else coverage_args_for([package_dir])
 
-            # Unique coverage file per run.
+            # Unique coverage file per run keeps data attributable.
             coverage_name = f".coverage.{package_dir.name}.{run_counter}"
             run_environment = {**environment, "COVERAGE_FILE": str(ROOT / coverage_name)}
             run_counter += 1
@@ -307,32 +403,14 @@ def test_cpython(
             if exit_code not in (0, 5):
                 overall_exit_code = exit_code
 
-    # Combine per-library coverage into one data file and report.
-    if not no_cov and list(ROOT.glob(".coverage.*")):
-        run_command([PYTHON, "-m", "coverage", "combine"])
-
-        report_args = [PYTHON, "-m", "coverage", "report", "--show-missing"]
-        if skip_coverage_gate:
-            report_args.append("--fail-under=0")
-        elif coverage_threshold is not None and elevated_packages is None:
-            # Apply the override to the combined report only when all
-            # libraries share the same threshold (no elevated_packages
-            # scoping).  When elevated_packages is set, per-library gates
-            # already enforce the higher bar on changed libraries; the
-            # combined report uses the pyproject.toml default.
-            report_args.append(f"--fail-under={coverage_threshold}")
-
-        report_exit_code = run_command(report_args)
-        if report_exit_code != 0 and overall_exit_code == 0:
-            if not skip_coverage_gate:
-                print(
-                    "\nHint: check the Missing column above to find uncovered"
-                    " lines.  If the gap is in code you didn't change, note it"
-                    " in your PR — a maintainer can help."
-                )
-            overall_exit_code = report_exit_code
-
-    return overall_exit_code
+    if no_cov:
+        return overall_exit_code
+    return _combine_and_report_coverage(
+        skip_coverage_gate=skip_coverage_gate,
+        coverage_threshold=coverage_threshold,
+        elevated_packages=elevated_packages,
+        overall_exit_code=overall_exit_code,
+    )
 
 
 def test_scripts(

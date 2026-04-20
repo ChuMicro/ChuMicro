@@ -246,6 +246,78 @@ class CircuitpythonTransport:
         if self.mode == "flash":
             self._stage_to_flash(source_dirs, test_files, harness_source)
 
+    def _resolve_circuitpy_drive(self) -> Path:
+        """Return the CIRCUITPY drive path, raising if it isn't usable.
+
+        Uses the configured ``circuitpy_drive_path`` when set, otherwise
+        falls back to :func:`find_circuitpy_drive`.  Raises when no drive
+        can be found or the resolved path is not a directory (e.g. the
+        board ejected mid-run).
+        """
+        drive_path_str = self.circuitpy_drive_path or find_circuitpy_drive()
+        if not drive_path_str:
+            raise CircuitpythonTransportError(
+                "CIRCUITPY drive not found.  Either set circuitpy_drive_path "
+                "or connect the board's USB drive."
+            )
+        drive_path = Path(drive_path_str)
+        if not drive_path.is_dir():
+            raise CircuitpythonTransportError(
+                f"CIRCUITPY drive not found: {drive_path}"
+            )
+        return drive_path
+
+    @staticmethod
+    def _build_local_staging_tree(
+        staging_path: Path,
+        source_dirs: list[Path],
+        test_files: list[Path],
+        harness_source: Path,
+    ) -> None:
+        """Mirror the desired drive layout inside a local staging directory.
+
+        Library and harness packages go under ``lib/``; test files go at
+        the root.  Building locally is reliable (no FAT32 quirks) — only
+        the rsync that follows has to deal with the device drive.
+        macOS extended attributes are stripped at the end so ``._``
+        resource forks don't end up on the FAT32 volume.
+        """
+        lib_staging = staging_path / "lib"
+        lib_staging.mkdir()
+        for source_directory in source_dirs:
+            flash_drive.merge_packages(source_directory, lib_staging)
+        flash_drive.merge_packages(harness_source, lib_staging)
+
+        for test_file in test_files:
+            shutil.copy2(test_file, staging_path / test_file.name)
+
+        flash_drive.strip_extended_attributes(staging_path)
+
+    @staticmethod
+    def _warn_if_flush_produced_empty_file(
+        drive_path: Path, test_files: list[Path],
+    ) -> None:
+        """Probe the first test file after flush and warn on empty content.
+
+        If the settle delay is too short, the drive returns stale or
+        empty content and test runs silently pick up last session's
+        code.  A warning here means ``flash_drive.FLUSH_SETTLE_DELAY``
+        needs increasing for this board.
+        """
+        if not test_files:
+            return
+        probe_file = drive_path / test_files[0].name
+        if not probe_file.exists():
+            return
+        if probe_file.read_bytes():
+            return
+        print(
+            f"WARNING: {probe_file.name} is empty after flush — "
+            f"FLUSH_SETTLE_DELAY "
+            f"({flash_drive.FLUSH_SETTLE_DELAY}s) may be "
+            f"too short for this board"
+        )
+
     def _stage_to_flash(
         self,
         source_dirs: list[Path],
@@ -285,17 +357,7 @@ class CircuitpythonTransport:
             CircuitpythonTransportError: If the CIRCUITPY drive cannot
                 be found or is not writable.
         """
-        drive_path_str = self.circuitpy_drive_path or find_circuitpy_drive()
-        if not drive_path_str:
-            raise CircuitpythonTransportError(
-                "CIRCUITPY drive not found.  Either set circuitpy_drive_path "
-                "or connect the board's USB drive."
-            )
-        drive_path = Path(drive_path_str)
-        if not drive_path.is_dir():
-            raise CircuitpythonTransportError(
-                f"CIRCUITPY drive not found: {drive_path}"
-            )
+        drive_path = self._resolve_circuitpy_drive()
 
         # Prevent macOS Spotlight from indexing the drive — it creates
         # hidden metadata files and slows down FAT32 writes.
@@ -307,27 +369,11 @@ class CircuitpythonTransport:
             "supervisor.runtime.autoreload = False"
         )
 
-        # Build a local staging directory that mirrors the full drive
-        # layout, then rsync it to the device in one pass.
         with tempfile.TemporaryDirectory() as staging_directory:
             staging_path = Path(staging_directory)
-
-            # lib/ — library packages + test harness.
-            lib_staging = staging_path / "lib"
-            lib_staging.mkdir()
-            for source_directory in source_dirs:
-                flash_drive.merge_packages(source_directory, lib_staging)
-            flash_drive.merge_packages(harness_source, lib_staging)
-
-            # Test files at root.
-            for test_file in test_files:
-                shutil.copy2(test_file, staging_path / test_file.name)
-
-            # Strip macOS extended attributes from the staging dir
-            # before rsyncing — xattrs cause slow FAT32 transfers and
-            # generate ._ resource fork files.
-            flash_drive.strip_extended_attributes(staging_path)
-
+            self._build_local_staging_tree(
+                staging_path, source_dirs, test_files, harness_source,
+            )
             try:
                 flash_drive.rsync(staging_path, drive_path)
             except flash_drive.FlashDriveError as error:
@@ -340,21 +386,7 @@ class CircuitpythonTransport:
         # Flush the volume so the device reads current content.
         flash_drive.flush_volume(drive_path, sleep=self._time.sleep)
 
-        # Verify that files are readable after the flush.  If the
-        # settle delay is too short, the drive may return stale or
-        # empty content.  A failure here means flash_drive.FLUSH_SETTLE_DELAY
-        # needs increasing for this board.
-        if test_files:
-            probe_file = drive_path / test_files[0].name
-            if probe_file.exists():
-                content = probe_file.read_bytes()
-                if len(content) == 0:
-                    print(
-                        f"WARNING: {probe_file.name} is empty after flush — "
-                        f"FLUSH_SETTLE_DELAY "
-                        f"({flash_drive.FLUSH_SETTLE_DELAY}s) may be "
-                        f"too short for this board"
-                    )
+        self._warn_if_flush_produced_empty_file(drive_path, test_files)
 
     def _collect_package_sources(self, source_directory: Path) -> None:
         """Walk a source directory and collect all .py files as module entries.
