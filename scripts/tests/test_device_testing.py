@@ -1319,15 +1319,16 @@ class TestFormatPrSummaryBlock:
     """Tests for _format_pr_summary_block — paste-ready PR markdown."""
 
     def test_empty_results_still_renders_command_and_zero_total(self) -> None:
-        """No devices run → block shows the command and a bold zero total."""
+        """No devices run → block shows just the command and a bold zero total."""
         block = device_testing._format_pr_summary_block(
             command="python scripts/run.py test-device",
             per_device_results=[],
         )
-        assert block == (
-            "- Command: `python scripts/run.py test-device`\n"
-            "- **Total: 0 passed, 0 failed, 0 errors**"
-        )
+        lines = block.splitlines()
+        assert lines[0] == "- Command: `python scripts/run.py test-device`"
+        assert "**Total: 0 passed, 0 failed, 0 errors**" in block
+        # No table when there are no devices.
+        assert "| Device" not in block
 
     def test_duration_line_included_when_provided(self) -> None:
         """``Duration:`` line appears right after the Command when passed."""
@@ -1336,14 +1337,12 @@ class TestFormatPrSummaryBlock:
             per_device_results=[],
             total_duration_seconds=12.345,
         )
-        assert "- Duration: 12.35s\n" in block
-        # Ordering: Command first, Duration second.
         lines = block.splitlines()
         assert lines[0].startswith("- Command:")
-        assert lines[1].startswith("- Duration:")
+        assert lines[1] == "- Duration: 12.35s"
 
-    def test_single_device_renders_one_bullet_with_duration(self) -> None:
-        """Each device bullet carries its own wall-clock label."""
+    def test_single_device_renders_table_row(self) -> None:
+        """A device appears as a padded markdown table row with its duration."""
         result = _make_device_result(
             identifier="pico-w", passed=5, duration_seconds=1.5,
         )
@@ -1351,11 +1350,25 @@ class TestFormatPrSummaryBlock:
             command="python scripts/run.py test-device --runtime micropython",
             per_device_results=[result],
         )
-        assert (
-            "- `pico-w` (MicroPython, ram mode, `/dev/cu.usbmodem1`): "
-            "5 passed, 0 failed, 0 errors in 1.50s"
-        ) in block
-        assert "- **Total: 5 passed, 0 failed, 0 errors**" in block
+        # Header + separator + data row present.
+        assert "| Device" in block
+        assert "| Runtime" in block
+        assert "| Duration" in block
+        assert "---" in block
+        # The data row contains the identifier, runtime, mode, counts,
+        # and duration.
+        data_rows = [
+            line for line in block.splitlines()
+            if line.startswith("| `pico-w`")
+        ]
+        assert len(data_rows) == 1
+        data_row = data_rows[0]
+        assert "MicroPython" in data_row
+        assert "ram" in data_row
+        assert " 5 " in data_row
+        assert "1.50s" in data_row
+        # Total follows the table, not embedded in it.
+        assert "**Total: 5 passed, 0 failed, 0 errors**" in block
 
     def test_multiple_devices_sum_into_bold_total(self) -> None:
         """Per-device counts accumulate into the bolded final line."""
@@ -1371,8 +1384,12 @@ class TestFormatPrSummaryBlock:
             command="python scripts/run.py test-device --runtime both",
             per_device_results=[mp_result, cp_result],
         )
-        assert "`pico-w` (MicroPython" in block
-        assert "`s2-mini` (CircuitPython" in block
+        # Both devices appear as table rows.
+        data_rows = [
+            line for line in block.splitlines()
+            if line.startswith("| `") and ("pico-w" in line or "s2-mini" in line)
+        ]
+        assert len(data_rows) == 2
         assert "**Total: 7 passed, 1 failed, 2 errors**" in block
 
     def test_uses_human_friendly_runtime_labels(self) -> None:
@@ -1386,13 +1403,14 @@ class TestFormatPrSummaryBlock:
                 ),
             ],
         )
-        assert "(MicroPython," in block
-        assert "(CircuitPython," in block
-        assert "(micropython," not in block
-        assert "(circuitpython," not in block
+        assert "MicroPython" in block
+        assert "CircuitPython" in block
+        # Internal identifiers should NOT leak into the rendered block.
+        assert "| micropython " not in block
+        assert "| circuitpython " not in block
 
     def test_probe_result_surfaces_version_and_board(self) -> None:
-        """When the probe succeeded, version and machine show up in the bullet."""
+        """When the probe succeeded, version and machine fill their table columns."""
         from chumicro_device_transport import DeviceImplementation
 
         result = _make_device_result(
@@ -1407,13 +1425,12 @@ class TestFormatPrSummaryBlock:
             command="python scripts/run.py test-device",
             per_device_results=[result],
         )
-        assert (
-            "(MicroPython 1.26.0 on Raspberry Pi Pico W with RP2040, ram mode,"
-            in block
-        )
+        # Version lives in the Runtime column, machine in the Board column.
+        assert "MicroPython 1.26.0" in block
+        assert "Raspberry Pi Pico W with RP2040" in block
 
-    def test_probe_result_without_machine_skips_board_label(self) -> None:
-        """Empty ``machine`` renders just the runtime + version, no ``on ...``."""
+    def test_probe_result_without_machine_keeps_board_cell_empty(self) -> None:
+        """Empty ``machine`` leaves the Board cell blank (not missing)."""
         from chumicro_device_transport import DeviceImplementation
 
         result = _make_device_result(
@@ -1429,7 +1446,14 @@ class TestFormatPrSummaryBlock:
             command="cmd",
             per_device_results=[result],
         )
-        assert "(CircuitPython 10.1.4, ram mode, `/dev/cu.usbmodem2`)" in block
+        assert "CircuitPython 10.1.4" in block
+        # Still a well-formed table row: | `cp` | CircuitPython 10.1.4 |  | ...
+        data_row = next(
+            line for line in block.splitlines()
+            if line.startswith("| `cp`")
+        )
+        # Exactly 8 data columns + 2 outer borders → 9 pipes.
+        assert data_row.count("|") == 9
 
     def test_deploy_mode_surfaces_even_without_probe(self) -> None:
         """Bare ``test-device`` (no probe result) still shows the deploy mode."""
@@ -1442,7 +1466,11 @@ class TestFormatPrSummaryBlock:
             command="python scripts/run.py test-device",
             per_device_results=[result],
         )
-        assert "flash mode" in block
+        data_row = next(
+            line for line in block.splitlines()
+            if line.startswith("| `cp`")
+        )
+        assert " flash " in data_row
 
     def test_different_devices_can_show_different_modes(self) -> None:
         """Per-device modes render independently so mixed runs are legible."""
@@ -1456,11 +1484,19 @@ class TestFormatPrSummaryBlock:
                 ),
             ],
         )
-        assert "`mp` (MicroPython, ram mode," in block
-        assert "`cp` (CircuitPython, flash mode," in block
+        mp_row = next(
+            line for line in block.splitlines()
+            if line.startswith("| `mp`")
+        )
+        cp_row = next(
+            line for line in block.splitlines()
+            if line.startswith("| `cp`")
+        )
+        assert " ram " in mp_row
+        assert " flash " in cp_row
 
-    def test_single_file_run_renders_per_test_sub_bullets(self) -> None:
-        """One file → sub-bullets list the test method names and statuses."""
+    def test_single_file_run_renders_per_test_table(self) -> None:
+        """One file → per-test detail table with status + duration per method."""
         from result_parser import TestResult
 
         files = [device_testing.FileRunResult(
@@ -1496,14 +1532,19 @@ class TestFormatPrSummaryBlock:
             command="cmd",
             per_device_results=[result],
         )
-        assert "  - `test_heartbeat_fires`: PASS (12ms)" in block
-        assert "  - `test_heartbeat_resets`: FAIL (8ms)" in block
-        assert "  - `test_heartbeat_period`: PASS (2ms)" in block
-        # Per-file sub-bullet should NOT appear when only one file ran.
-        assert "  - `timing/test_heartbeat.py`" not in block
+        assert "per-test breakdown" in block
+        assert "| Test" in block
+        assert "| Status" in block
+        assert "`test_heartbeat_fires`" in block
+        assert "PASS" in block
+        assert "FAIL" in block
+        assert "12ms" in block
+        # Per-file table should NOT appear when only one file ran
+        # (the device row + per-test table are enough).
+        assert "per-file breakdown" not in block
 
-    def test_multi_file_run_renders_per_file_sub_bullets(self) -> None:
-        """Multiple files → sub-bullets list file counts (no per-test detail)."""
+    def test_multi_file_run_renders_per_file_table(self) -> None:
+        """Multiple files → per-file detail table with counts + duration."""
         files = [
             device_testing.FileRunResult(
                 library="timing", file_name="test_heartbeat.py",
@@ -1521,32 +1562,83 @@ class TestFormatPrSummaryBlock:
             command="cmd",
             per_device_results=[result],
         )
-        assert (
-            "  - `timing/test_heartbeat.py`: 3 passed, 0 failed, 0 errors in 120ms"
-            in block
-        )
-        assert (
-            "  - `timing/test_ticks.py`: 2 passed, 0 failed, 0 errors in 80ms"
-            in block
-        )
-        # Should not leak test-level detail when there are multiple files.
-        assert "PASS (" not in block
-        assert "FAIL (" not in block
+        assert "per-file breakdown" in block
+        assert "| File" in block
+        assert "`timing/test_heartbeat.py`" in block
+        assert "`timing/test_ticks.py`" in block
+        assert "120ms" in block
+        assert "80ms" in block
+        # Test-level detail must be suppressed when multiple files run.
+        assert "per-test breakdown" not in block
 
-    def test_device_without_files_has_no_sub_bullets(self) -> None:
-        """A device that never ran any file gets only the device bullet."""
+    def test_device_without_files_has_no_detail_section(self) -> None:
+        """A device that never ran any file gets no detail section."""
         result = _make_device_result(errors=1, duration_seconds=0.05)
         block = device_testing._format_pr_summary_block(
             command="cmd",
             per_device_results=[result],
         )
-        # No sub-bullets — but the device bullet exists.
-        lines = [
-            line for line in block.splitlines()
-            if line.startswith("  - ")
-        ]
-        assert lines == []
-        assert "`mp-one`" in block
+        assert "per-file breakdown" not in block
+        assert "per-test breakdown" not in block
+        # Summary row still there.
+        assert "| `mp-one`" in block
+
+
+class TestFormatMarkdownTable:
+    """Tests for the padded-table helper used by the PR summary."""
+
+    def test_left_alignment_default_pads_right(self) -> None:
+        """With no alignments argument, every column pads on the right."""
+        table = device_testing._format_markdown_table(
+            headers=["Name", "Value"],
+            rows=[["alpha", "1"], ["bravo", "22"]],
+        )
+        lines = table.splitlines()
+        # Header row and two data rows, all the same width → padded.
+        row_widths = [len(line) for line in lines]
+        assert len(set(row_widths)) == 1
+        # Separator is ``|  ---- |`` style — all dashes, no colons.
+        separator = lines[1]
+        assert ":" not in separator
+
+    def test_right_alignment_adds_trailing_colon_to_separator(self) -> None:
+        """``"right"`` alignment marks the separator with a trailing colon."""
+        table = device_testing._format_markdown_table(
+            headers=["N"],
+            rows=[["1"], ["10"]],
+            alignments=["right"],
+        )
+        # With the 3-char minimum column width, the separator is ``--:``.
+        separator = table.splitlines()[1]
+        assert " --: " in separator
+        # Right-aligned data rows pad on the left (numbers right-justified).
+        data_rows = table.splitlines()[2:]
+        assert "|   1 |" in data_rows[0]
+        assert "|  10 |" in data_rows[1]
+
+    def test_center_alignment_marks_both_ends_of_separator(self) -> None:
+        """``"center"`` alignment marks the separator with colons on both ends."""
+        table = device_testing._format_markdown_table(
+            headers=["Mode"],
+            rows=[["ram"]],
+            alignments=["center"],
+        )
+        separator = table.splitlines()[1]
+        # Strip the outer "| " / " |" then check the payload.
+        inner = separator[2:-2]
+        assert inner.startswith(":")
+        assert inner.endswith(":")
+
+    def test_column_widths_respect_max_content(self) -> None:
+        """Each column widens to fit its widest cell (header or data)."""
+        table = device_testing._format_markdown_table(
+            headers=["Short", "Wider header"],
+            rows=[["loooooong value", "x"]],
+        )
+        # Long data cell in column 0 forces the header to pad:
+        # ``| Short           | Wider header |``
+        header_row = table.splitlines()[0]
+        assert "Short           " in header_row
 
 
 class TestResolveEffectiveDeployMode:
@@ -1715,9 +1807,11 @@ class TestSummaryAlwaysPrints:
 
         captured = capsys.readouterr()
         assert result == 1  # mp-one errored
+        # Both devices have rows in the summary table (wrapped in
+        # backticks like `mp-one`).
         assert "`mp-one`" in captured.out
         assert "`cp-one`" in captured.out
-        assert "3 passed, 0 failed, 0 errors" in captured.out
-        assert "0 passed, 0 failed, 1 errors" in captured.out
-        # Final total: 3 passed from cp-one, 1 error from mp-one.
+        # Totals banner and Total bold line both include the aggregate
+        # (3 passed from cp-one + 1 error from mp-one's crash).
+        assert "Device test summary: 3 passed, 0 failed, 1 errors" in captured.out
         assert "**Total: 3 passed, 0 failed, 1 errors**" in captured.out

@@ -764,6 +764,92 @@ def _format_duration(seconds: float) -> str:
     return f"{seconds:.2f}s"
 
 
+def _format_markdown_table(
+    headers: list[str],
+    rows: list[list[str]],
+    alignments: list[str] | None = None,
+) -> str:
+    """Render a padded markdown table.
+
+    Pads each cell with trailing (or leading, for right-aligned
+    columns) spaces so columns align in monospace CLI output; the
+    result still parses as a valid GitHub-flavored markdown table.
+    The separator row gets a trailing ``:`` for right-aligned
+    columns and a leading-plus-trailing ``:`` for centered ones, so
+    GitHub renders the intended alignment.
+
+    Args:
+        headers: Column headers, one per column.
+        rows: Data rows, each a list of strings aligned to *headers*.
+        alignments: Per-column ``"left"`` / ``"right"`` / ``"center"``.
+            Defaults to all-left.
+
+    Returns:
+        Multi-line markdown table string (no trailing newline).
+    """
+    if alignments is None:
+        alignments = ["left"] * len(headers)
+
+    # Column widths: max content width, bumped to a 3-char minimum
+    # so the separator row can always render ``---``.
+    widths: list[int] = []
+    for column in range(len(headers)):
+        cell_widths = [len(headers[column])]
+        cell_widths.extend(len(row[column]) for row in rows)
+        widths.append(max(max(cell_widths), 3))
+
+    def pad(text: str, width: int, alignment: str) -> str:
+        if alignment == "right":
+            return text.rjust(width)
+        if alignment == "center":
+            return text.center(width)
+        return text.ljust(width)
+
+    def separator(width: int, alignment: str) -> str:
+        if alignment == "right":
+            return "-" * (width - 1) + ":"
+        if alignment == "center":
+            return ":" + "-" * (width - 2) + ":"
+        return "-" * width
+
+    lines = []
+    header_cells = [
+        pad(headers[column], widths[column], alignments[column])
+        for column in range(len(headers))
+    ]
+    lines.append("| " + " | ".join(header_cells) + " |")
+    separator_cells = [
+        separator(widths[column], alignments[column])
+        for column in range(len(headers))
+    ]
+    lines.append("| " + " | ".join(separator_cells) + " |")
+    for row in rows:
+        cells = [
+            pad(row[column], widths[column], alignments[column])
+            for column in range(len(row))
+        ]
+        lines.append("| " + " | ".join(cells) + " |")
+    return "\n".join(lines)
+
+
+#: Summary table column headers, in render order.
+_SUMMARY_HEADERS = [
+    "Device", "Runtime", "Board", "Mode",
+    "Passed", "Failed", "Errors", "Duration",
+]
+#: Per-column alignment for the summary table.
+_SUMMARY_ALIGNMENTS = [
+    "left", "left", "left", "left",
+    "right", "right", "right", "right",
+]
+#: Per-file detail table headers.
+_FILE_HEADERS = ["File", "Passed", "Failed", "Errors", "Duration"]
+_FILE_ALIGNMENTS = ["left", "right", "right", "right", "right"]
+#: Per-test detail table headers.
+_TEST_HEADERS = ["Test", "Status", "Duration", "Notes"]
+_TEST_ALIGNMENTS = ["left", "left", "right", "left"]
+
+
 def _format_pr_summary_block(
     command: str,
     per_device_results: list[DeviceRunResult],
@@ -771,30 +857,35 @@ def _format_pr_summary_block(
 ) -> str:
     """Render a markdown block for the PR template's Device testing section.
 
-    Drop-in paste for the ``## Device testing`` section of
-    ``.github/PULL_REQUEST_TEMPLATE.md``.  Layout::
+    Layout::
 
         - Command: `...`
         - Duration: 12.34s
-        - `<device>` (<runtime> <version> on <machine>, <mode> mode,
-          `<address>`): P passed, F failed, E errors in Xs
-          - <per-file or per-test sub-bullets, see below>
-        - **Total: P passed, F failed, E errors**
 
-    When a device ran exactly one file, the sub-bullets list each
-    test function with its status and duration so single-file runs
-    surface method-level detail.  When multiple files ran, the
-    sub-bullets list each file with its own aggregate counts and
-    duration instead — avoids overwhelming multi-library runs.
+        | Device | Runtime | Board | Mode | Passed | Failed | Errors | Duration |
+        | ... one row per device ...                                           |
+
+        **Total: P passed, F failed, E errors**
+
+        #### `<device>` — per-file breakdown (`<address>`)
+        | File | Passed | Failed | Errors | Duration |
+        | ... one row per file ...                    |
+
+    Table rows are padded so the block is equally readable in a
+    terminal (monospace) and on GitHub (rendered markdown).  A device
+    with exactly one file gets a per-test table instead of per-file —
+    the PASS / FAIL / SKIP status and duration of each method show so
+    single-file runs surface method-level detail.  A device that
+    crashed before running anything gets no detail section; its
+    summary row is enough.
 
     Args:
         command: Reconstructed ``test-device`` invocation string.
         per_device_results: Per-device :class:`DeviceRunResult`
             instances in the order they ran.
         total_duration_seconds: Total wall-clock time for the whole
-            invocation (measured around the per-device loop in
-            :func:`test_device`).  ``None`` omits the ``Duration:``
-            line — used by tests that render blocks without timing.
+            invocation.  ``None`` omits the ``Duration:`` line — used
+            by tests that render blocks without timing.
 
     Returns:
         Multi-line markdown body (no trailing newline).
@@ -803,85 +894,120 @@ def _format_pr_summary_block(
     if total_duration_seconds is not None:
         lines.append(f"- Duration: {_format_duration(total_duration_seconds)}")
 
-    total_passed = 0
-    total_failed = 0
-    total_errors = 0
-    for device_result in per_device_results:
-        device_entry = device_result.device
-        runtime_label = _runtime_display_name(device_entry.runtime)
-        implementation = device_result.implementation
-        if implementation is not None:
-            firmware = f"{runtime_label} {implementation.version}"
-            if implementation.machine:
-                firmware += f" on {implementation.machine}"
-        else:
-            firmware = runtime_label
-        lines.append(
-            f"- `{device_entry.identifier}` ({firmware}, "
-            f"{device_result.deploy_mode} mode, "
-            f"`{device_entry.address}`): "
-            f"{device_result.passed} passed, "
-            f"{device_result.failed} failed, "
-            f"{device_result.errors} errors "
-            f"in {_format_duration(device_result.duration_seconds)}"
-        )
-        lines.extend(_render_device_sub_bullets(device_result))
-        total_passed += device_result.passed
-        total_failed += device_result.failed
-        total_errors += device_result.errors
+    if per_device_results:
+        lines.append("")
+        lines.append(_format_markdown_table(
+            _SUMMARY_HEADERS,
+            [_device_summary_row(device) for device in per_device_results],
+            _SUMMARY_ALIGNMENTS,
+        ))
+
+    total_passed = sum(device.passed for device in per_device_results)
+    total_failed = sum(device.failed for device in per_device_results)
+    total_errors = sum(device.errors for device in per_device_results)
+    lines.append("")
     lines.append(
-        f"- **Total: {total_passed} passed, {total_failed} failed, "
+        f"**Total: {total_passed} passed, {total_failed} failed, "
         f"{total_errors} errors**"
     )
+
+    for device in per_device_results:
+        detail = _format_device_detail_section(device)
+        if detail:
+            lines.append("")
+            lines.append(detail)
+
     return "\n".join(lines)
 
 
-def _render_device_sub_bullets(device_result: DeviceRunResult) -> list[str]:
-    """Return the sub-bullets that belong under a device bullet.
+def _device_summary_row(device: DeviceRunResult) -> list[str]:
+    """Build one row of the device summary table."""
+    entry = device.device
+    runtime_label = _runtime_display_name(entry.runtime)
+    implementation = device.implementation
+    if implementation is not None and implementation.version:
+        runtime_cell = f"{runtime_label} {implementation.version}"
+    else:
+        runtime_cell = runtime_label
+    board_cell = implementation.machine if implementation is not None else ""
+    return [
+        f"`{entry.identifier}`",
+        runtime_cell,
+        board_cell,
+        device.deploy_mode,
+        str(device.passed),
+        str(device.failed),
+        str(device.errors),
+        _format_duration(device.duration_seconds),
+    ]
 
-    Decision rule:
 
-    - 0 files → no sub-bullets (device failed before running anything).
-    - 1 file → per-test sub-bullets so method names and statuses show.
-      The file line is skipped; it would just repeat the Command's
-      library/test context.
-    - 2+ files → per-file sub-bullets (library/filename + counts +
-      duration).  Keeps large multi-library runs readable.
+def _format_device_detail_section(device: DeviceRunResult) -> str:
+    """Render the per-file or per-test detail section for one device.
+
+    Decision rule (preserved from the earlier bullet format):
+
+    - 0 files → no detail (device failed before running anything).
+    - 1 file with test detail → per-test table.
+    - 1 file without test detail (bulk-stage failure, unparsable
+      output) → per-file table with the single row so readers see a
+      placeholder instead of a missing section.
+    - 2+ files → per-file table.
     """
-    if not device_result.files:
-        return []
-    if len(device_result.files) == 1:
-        file_result = device_result.files[0]
-        if not file_result.tests:
-            # File ran but the harness produced no per-test output
-            # (bulk-stage failure or unparsable output).  Fall back to
-            # the file bullet so the reader sees something.
-            return [_format_file_bullet(file_result)]
-        return [_format_test_bullet(test) for test in file_result.tests]
-    return [_format_file_bullet(file_result) for file_result in device_result.files]
-
-
-def _format_file_bullet(file_result: FileRunResult) -> str:
-    """Render a single file's sub-bullet line."""
+    if not device.files:
+        return ""
+    heading = _detail_section_heading(device)
+    if len(device.files) == 1 and device.files[0].tests:
+        return (
+            f"{heading}\n"
+            + _format_markdown_table(
+                _TEST_HEADERS,
+                [_test_row(test) for test in device.files[0].tests],
+                _TEST_ALIGNMENTS,
+            )
+        )
     return (
-        f"  - `{file_result.library}/{file_result.file_name}`: "
-        f"{file_result.passed} passed, {file_result.failed} failed, "
-        f"{file_result.errors} errors in "
-        f"{_format_duration(file_result.duration_seconds)}"
+        f"{heading}\n"
+        + _format_markdown_table(
+            _FILE_HEADERS,
+            [_file_row(file_result) for file_result in device.files],
+            _FILE_ALIGNMENTS,
+        )
     )
 
 
-def _format_test_bullet(test_result: TestResult) -> str:
-    """Render a single test function's sub-bullet line."""
-    duration = (
-        f" ({_format_duration(test_result.duration)})"
+def _detail_section_heading(device: DeviceRunResult) -> str:
+    """Return the ``#### ...`` heading line for a device's detail section."""
+    entry = device.device
+    subject = "per-test breakdown" if (
+        len(device.files) == 1 and device.files[0].tests
+    ) else "per-file breakdown"
+    return f"#### `{entry.identifier}` — {subject} (`{entry.address}`)"
+
+
+def _file_row(file_result: FileRunResult) -> list[str]:
+    """One row of the per-file detail table."""
+    return [
+        f"`{file_result.library}/{file_result.file_name}`",
+        str(file_result.passed),
+        str(file_result.failed),
+        str(file_result.errors),
+        _format_duration(file_result.duration_seconds),
+    ]
+
+
+def _test_row(test_result: TestResult) -> list[str]:
+    """One row of the per-test detail table."""
+    duration_cell = (
+        _format_duration(test_result.duration)
         if test_result.duration is not None else ""
     )
-    message_suffix = f" — {test_result.message}" if test_result.message else ""
-    return (
-        f"  - `{test_result.name}`: "
-        f"{test_result.status}{duration}{message_suffix}"
-    )
+    return [
+        f"`{test_result.name}`",
+        test_result.status,
+        duration_cell,
+        test_result.message or "",
+    ]
 
 
 def _runtime_display_name(runtime_name: str) -> str:
