@@ -101,8 +101,15 @@ def parse_probe_output(output: str) -> DeviceImplementation | None:
 class TransportProtocol(Protocol):
     """Minimum transport contract every device transport must satisfy."""
 
+    #: User-facing deploy mode label.  ``"ram"`` / ``"flash"`` for
+    #: CircuitPython, ``"mount"`` / ``"copy"`` for MicroPython.  The
+    #: orchestration layer branches on this to decide per-library vs.
+    #: bulk staging, soft-reset cadence, and inline vs. import bootstraps.
+    mode: str
+
     def connect(self) -> None:
         """Verify the device is reachable."""
+        ...
 
     def stage(
         self,
@@ -111,21 +118,31 @@ class TransportProtocol(Protocol):
         harness_source: Path,
     ) -> None:
         """Prepare the host-side staging area and (mode-dependent) push to device."""
+        ...
 
     def execute(self, bootstrap_script: str) -> str:
         """Run *bootstrap_script* on the device and return captured stdout."""
+        ...
 
     def soft_reset(self) -> None:
         """Soft-reset the interpreter to clear modules and free heap."""
+        ...
 
     def reset(self) -> None:
         """Planned reset between healthy library groups."""
+        ...
 
     def recover(self) -> None:
         """Aggressive reset after a failure when board state is unknown."""
+        ...
 
     def disconnect(self) -> None:
         """Release transport resources (serial port, mounts, staging dir)."""
+        ...
+
+    def probe_implementation(self) -> DeviceImplementation | None:
+        """Query ``sys.implementation`` on the board for PR-summary metadata."""
+        ...
 
 
 @runtime_checkable
@@ -137,11 +154,19 @@ class ExtendedTransportProtocol(TransportProtocol, Protocol):
     before calling the chunked-execute helpers.
     """
 
+    #: Module sources captured by ``stage()`` for RAM-mode inline
+    #: execution.  Each entry is ``(dotted_module_name, source_text)``.
+    #: ``None`` before ``stage()`` has been called.
+    staged_sources: list[tuple[str, str]] | None
+
     def execute_scripts(self, bootstrap_scripts: list[str]) -> str:
         """Run multiple bootstrap scripts in one interpreter session."""
+        ...
 
     def probe_free_memory(self) -> int:
         """Return free heap bytes reported by the connected board."""
+        ...
 
     def inline_script_budget_bytes(self) -> int:
         """Return a conservative per-script budget based on live free heap."""
+        ...

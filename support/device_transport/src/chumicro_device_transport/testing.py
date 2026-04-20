@@ -94,6 +94,9 @@ class FakeTransport:
     #: Canned return value for ``probe_implementation``.  ``None``
     #: simulates a probe that couldn't complete.
     probe_result: DeviceImplementation | None = None
+    #: Module sources to return from ``staged_sources``; matches the
+    #: ``ExtendedTransportProtocol`` shape used by the RAM-mode path.
+    staged_sources: list[tuple[str, str]] | None = None
     calls: list[tuple[str, tuple]] = field(default_factory=list)
     connected: bool = False
 

@@ -14,10 +14,17 @@ import ast
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import cast
 
+from chumicro_device_transport import (
+    DeviceImplementation,
+    ExtendedTransportProtocol,
+    TransportProtocol,
+)
 from device_config import (
     DeviceConfigError,
     DeviceDefaults,
+    DeviceEntry,
     load_device_registry,
     resolve_ide_devices,
 )
@@ -85,11 +92,11 @@ class DeviceRunResult:
         files: Per-file results in test-plan order.
     """
 
-    device: object
+    device: DeviceEntry
     passed: int
     failed: int
     errors: int
-    implementation: object | None
+    implementation: DeviceImplementation | None
     deploy_mode: str
     duration_seconds: float = 0.0
     files: list[FileRunResult] = field(default_factory=list)
@@ -325,7 +332,7 @@ def _resolve_library_source_dirs(
 
 
 def _resolve_effective_deploy_mode(
-    device_entry,
+    device_entry: DeviceEntry,
     deploy_mode_override: str | None,
 ) -> str:
     """Return the user-facing deploy mode that will actually run for a device.
@@ -353,7 +360,10 @@ def _resolve_effective_deploy_mode(
     return deploy_mode_override or device_entry.deploy_mode or "ram"
 
 
-def _create_transport(device_entry, deploy_mode: str | None = None):
+def _create_transport(
+    device_entry: DeviceEntry,
+    deploy_mode: str | None = None,
+) -> TransportProtocol:
     """Create the appropriate transport for a device entry.
 
     Args:
@@ -394,11 +404,11 @@ def _create_transport(device_entry, deploy_mode: str | None = None):
 
 
 def _build_device_bootstrap(
-    device_entry,
-    transport,
-    test_file,
-    function_filter,
-):
+    device_entry: DeviceEntry,
+    transport: TransportProtocol,
+    test_file: Path,
+    function_filter: str | None,
+) -> str | list[str]:
     """Build the bootstrap script for the given device and test file.
 
     MicroPython uses the standard import-based bootstrap.
@@ -423,11 +433,17 @@ def _build_device_bootstrap(
 
         # The CircuitPython RAM transport always exposes the chunking
         # helpers via ExtendedTransportProtocol — no need to guard.
+        cp_transport = cast(ExtendedTransportProtocol, transport)
+        staged_sources = cp_transport.staged_sources
+        assert staged_sources is not None, (
+            "stage() must be called before _build_device_bootstrap on the "
+            "CircuitPython RAM path"
+        )
         return build_circuitpython_bootstrap_scripts(
-            transport.staged_sources,
+            staged_sources,
             test_file,
             name_filter=function_filter,
-            max_chunk_size_bytes=transport.inline_script_budget_bytes(),
+            max_chunk_size_bytes=cp_transport.inline_script_budget_bytes(),
         )
 
     return build_bootstrap(
@@ -436,7 +452,10 @@ def _build_device_bootstrap(
     )
 
 
-def _execute_device_bootstrap(transport, bootstrap):
+def _execute_device_bootstrap(
+    transport: TransportProtocol,
+    bootstrap: str | list[str],
+) -> str:
     """Execute either a single bootstrap script or a chunked script sequence.
 
     A list bootstrap is only produced for the CircuitPython RAM path,
@@ -447,16 +466,16 @@ def _execute_device_bootstrap(transport, bootstrap):
     transport that does not support chunking.
     """
     if isinstance(bootstrap, list):
-        return transport.execute_scripts(bootstrap)
+        return cast(ExtendedTransportProtocol, transport).execute_scripts(bootstrap)
     return transport.execute(bootstrap)
 
 
 def _run_tests_on_device(
-    device_entry,
-    test_plan,
-    harness_source,
-    function_filter,
-    deploy_mode=None,
+    device_entry: DeviceEntry,
+    test_plan: list[tuple[str, Path, list[Path]]],
+    harness_source: Path,
+    function_filter: str | None,
+    deploy_mode: str | None = None,
 ) -> DeviceRunResult:
     """Run all planned tests on a single device.
 

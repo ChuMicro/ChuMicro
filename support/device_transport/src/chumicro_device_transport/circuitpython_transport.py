@@ -98,6 +98,18 @@ class SerialPort(Protocol):
     def reset_input_buffer(self) -> None: ...
 
 
+class TimeSource(Protocol):
+    """Structural interface for an injectable time source.
+
+    Matches the subset of Python's ``time`` module used by the transport.
+    ``FakeTime`` from ``chumicro_abstractions`` satisfies this protocol
+    so tests can eliminate wall-clock waits.
+    """
+
+    def monotonic(self) -> float: ...
+    def sleep(self, seconds: float) -> None: ...
+
+
 class CircuitpythonTransportError(Exception):
     """Raised when a CircuitPython serial operation fails."""
 
@@ -138,7 +150,7 @@ class CircuitpythonTransport:
         mode: str = "ram",
         circuitpy_drive_path: str | None = None,
         serial_port_factory: Callable[..., object] | None = None,
-        time: object | None = None,
+        time: TimeSource | None = None,
     ) -> None:
         self.address = address
         self.baudrate = baudrate
@@ -148,7 +160,7 @@ class CircuitpythonTransport:
         self._serial_port_factory: Callable[..., object] = (
             serial_port_factory or self._default_serial_factory
         )
-        self._time = time or _time_module
+        self._time: TimeSource = time or cast(TimeSource, _time_module)
         self._port: SerialPort | None = None
         self._staged_sources: list[tuple[str, str]] | None = None
 

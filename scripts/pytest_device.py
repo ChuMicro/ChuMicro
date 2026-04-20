@@ -35,6 +35,7 @@ import ast
 from pathlib import Path
 
 import pytest
+from chumicro_device_transport import TransportProtocol
 from device_config import (
     DeviceConfigError,
     DeviceEntry,
@@ -47,7 +48,7 @@ from device_testing import (
     _execute_device_bootstrap,
     _resolve_library_source_dirs,
 )
-from result_parser import parse_output
+from result_parser import RunResult, parse_output
 from workspace import ROOT
 
 #: Path to the test harness source directory.
@@ -208,17 +209,19 @@ class _TransportCache:
     """
 
     def __init__(self) -> None:
-        self._transports: dict[str, object] = {}
+        self._transports: dict[str, TransportProtocol] = {}
         self._last_staged: dict[str, tuple[str, str]] = {}
         #: Device IDs that have been bulk-staged (flash/copy modes).
         self._fully_staged: set[str] = set()
         #: Cached batch results keyed by (device_id, library, file).
         #: Value is (parsed_result_or_None, raw_output_or_error).
         self._batch_results: dict[
-            tuple[str, str, str], tuple[object | None, str]
+            tuple[str, str, str], tuple[RunResult | None, str]
         ] = {}
 
-    def get_transport(self, device_entry: DeviceEntry, deploy_mode: str | None):
+    def get_transport(
+        self, device_entry: DeviceEntry, deploy_mode: str | None,
+    ) -> TransportProtocol:
         """Get or create a connected transport for the device.
 
         Args:
@@ -283,7 +286,7 @@ class _TransportCache:
         device_id: str,
         library_name: str,
         test_file_name: str,
-    ) -> tuple[object | None, str] | None:
+    ) -> tuple[RunResult | None, str] | None:
         """Return cached batch result, or ``None`` if not yet executed.
 
         Args:
@@ -304,7 +307,7 @@ class _TransportCache:
         device_id: str,
         library_name: str,
         test_file_name: str,
-        parsed_result: object | None,
+        parsed_result: RunResult | None,
         raw_output: str,
     ) -> None:
         """Store a batch execution result.
@@ -528,7 +531,7 @@ class DeviceRuntimeItem(pytest.Item):
     def _ensure_batch_result(
         self,
         device_entry: DeviceEntry,
-    ) -> tuple[object | None, str]:
+    ) -> tuple[RunResult | None, str]:
         """Run the file batch once if needed and return its cached result."""
         cache: _TransportCache = self.session._device_transport_cache  # type: ignore[attr-defined]
         batch_key = self._batch_key(device_entry)
