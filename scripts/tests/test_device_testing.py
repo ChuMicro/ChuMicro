@@ -526,7 +526,7 @@ class TestDeviceOrchestration:
 
 
 class TestCreateTransport:
-    """Tests for _create_transport deploy mode routing."""
+    """Tests for create_transport deploy mode routing."""
 
     def _make_device_entry(
         self,
@@ -544,19 +544,19 @@ class TestCreateTransport:
     def test_micropython_ram_uses_mount_mode(self) -> None:
         """RAM deploy mode should map to mount for MicroPython."""
         entry = self._make_device_entry(runtime="micropython")
-        transport = device_testing._create_transport(entry, deploy_mode="ram")
+        transport = device_testing.create_transport(entry, deploy_mode="ram")
         assert transport.mode == "mount"
 
     def test_micropython_flash_uses_copy_mode(self) -> None:
         """Flash deploy mode should map to copy for MicroPython."""
         entry = self._make_device_entry(runtime="micropython")
-        transport = device_testing._create_transport(entry, deploy_mode="flash")
+        transport = device_testing.create_transport(entry, deploy_mode="flash")
         assert transport.mode == "copy"
 
     def test_circuitpython_ram_mode(self) -> None:
         """RAM deploy mode should pass ram to CircuitPython transport."""
         entry = self._make_device_entry(runtime="circuitpython")
-        transport = device_testing._create_transport(entry, deploy_mode="ram")
+        transport = device_testing.create_transport(entry, deploy_mode="ram")
         assert transport.mode == "ram"
 
     def test_circuitpython_flash_mode(self) -> None:
@@ -565,7 +565,7 @@ class TestCreateTransport:
             runtime="circuitpython",
             circuitpy_drive_path="/Volumes/CIRCUITPY",
         )
-        transport = device_testing._create_transport(entry, deploy_mode="flash")
+        transport = device_testing.create_transport(entry, deploy_mode="flash")
         assert transport.mode == "flash"
         assert transport.circuitpy_drive_path == "/Volumes/CIRCUITPY"
 
@@ -577,12 +577,12 @@ class TestCreateTransport:
         # Override runtime since DeviceEntry doesn't validate.
         entry.runtime = "unknown"
         with pytest.raises(ValueError, match="Unsupported runtime"):
-            device_testing._create_transport(entry)
+            device_testing.create_transport(entry)
 
     def test_default_deploy_mode_is_ram(self) -> None:
         """Default deploy mode (from device entry) should be ram → mount."""
         entry = self._make_device_entry(runtime="micropython")
-        transport = device_testing._create_transport(entry)
+        transport = device_testing.create_transport(entry)
         assert transport.mode == "mount"
 
     def test_device_entry_deploy_mode_flash(self) -> None:
@@ -590,7 +590,7 @@ class TestCreateTransport:
         entry = self._make_device_entry(
             runtime="micropython", deploy_mode="flash",
         )
-        transport = device_testing._create_transport(entry)
+        transport = device_testing.create_transport(entry)
         assert transport.mode == "copy"
 
     def test_cli_overrides_device_entry_deploy_mode(self) -> None:
@@ -598,7 +598,7 @@ class TestCreateTransport:
         entry = self._make_device_entry(
             runtime="micropython", deploy_mode="flash",
         )
-        transport = device_testing._create_transport(entry, deploy_mode="ram")
+        transport = device_testing.create_transport(entry, deploy_mode="ram")
         assert transport.mode == "mount"
 
     def test_circuitpython_device_entry_flash(self) -> None:
@@ -608,12 +608,12 @@ class TestCreateTransport:
             deploy_mode="flash",
             circuitpy_drive_path="/Volumes/CIRCUITPY",
         )
-        transport = device_testing._create_transport(entry)
+        transport = device_testing.create_transport(entry)
         assert transport.mode == "flash"
 
 
 class TestBuildDeviceBootstrap:
-    """Tests for _build_device_bootstrap mode routing."""
+    """Tests for build_device_bootstrap mode routing."""
 
     def test_circuitpython_ram_uses_inline_bootstrap(self, tmp_path) -> None:
         """CP ram mode should use inline bootstrap with module injection."""
@@ -634,7 +634,7 @@ class TestBuildDeviceBootstrap:
         test_file = tmp_path / "test_example.py"
         test_file.write_text("def test_ok(): pass")
 
-        bootstrap = device_testing._build_device_bootstrap(
+        bootstrap = device_testing.build_device_bootstrap(
             entry, FakeTransport(), test_file, None,
         )
         assert isinstance(bootstrap, list)
@@ -684,7 +684,7 @@ class TestBuildDeviceBootstrap:
             fake_build_circuitpython_bootstrap_scripts,
         )
 
-        bootstrap = device_testing._build_device_bootstrap(
+        bootstrap = device_testing.build_device_bootstrap(
             entry, FakeTransport(), test_file, None,
         )
 
@@ -711,7 +711,7 @@ class TestBuildDeviceBootstrap:
         test_file = tmp_path / "test_example.py"
         test_file.write_text("def test_ok(): pass")
 
-        bootstrap = device_testing._build_device_bootstrap(
+        bootstrap = device_testing.build_device_bootstrap(
             entry, FakeTransport(), test_file, None,
         )
         # Standard bootstrap uses import, not _populate_module.
@@ -733,7 +733,7 @@ class TestBuildDeviceBootstrap:
         test_file = tmp_path / "test_example.py"
         test_file.write_text("def test_ok(): pass")
 
-        bootstrap = device_testing._build_device_bootstrap(
+        bootstrap = device_testing.build_device_bootstrap(
             entry, FakeTransport(), test_file, None,
         )
         assert "_make_lazy_module" not in bootstrap
@@ -742,7 +742,7 @@ class TestBuildDeviceBootstrap:
 
 
 class TestResolveLibrarySourceDirs:
-    """Tests for _resolve_library_source_dirs."""
+    """Tests for resolve_library_source_dirs."""
 
     def test_resolves_chumicro_imports_from_test_files(self) -> None:
         """Functional test imports should stage additional ChuMicro libraries."""
@@ -755,7 +755,7 @@ class TestResolveLibrarySourceDirs:
             / "test_integration.py"
         )
 
-        result = device_testing._resolve_library_source_dirs(
+        result = device_testing.resolve_library_source_dirs(
             runner_dir, test_files=[integration_test],
         )
 
@@ -767,13 +767,13 @@ class TestResolveLibrarySourceDirs:
     def test_includes_own_source_dir(self) -> None:
         """Should include the library's own src/ directory."""
         timing_dir = device_testing.ROOT / "libraries" / "timing"
-        result = device_testing._resolve_library_source_dirs(timing_dir)
+        result = device_testing.resolve_library_source_dirs(timing_dir)
         assert timing_dir / "src" in result
 
     def test_includes_dependency_source_dirs(self) -> None:
         """Runner depends on timing — both src/ dirs should appear."""
         runner_dir = device_testing.ROOT / "libraries" / "runner"
-        result = device_testing._resolve_library_source_dirs(runner_dir)
+        result = device_testing.resolve_library_source_dirs(runner_dir)
         timing_source = device_testing.ROOT / "libraries" / "timing" / "src"
         runner_source = runner_dir / "src"
         assert timing_source in result
@@ -782,7 +782,7 @@ class TestResolveLibrarySourceDirs:
     def test_dependency_comes_before_library(self) -> None:
         """Dependencies should appear before the library itself."""
         runner_dir = device_testing.ROOT / "libraries" / "runner"
-        result = device_testing._resolve_library_source_dirs(runner_dir)
+        result = device_testing.resolve_library_source_dirs(runner_dir)
         timing_source = device_testing.ROOT / "libraries" / "timing" / "src"
         runner_source = runner_dir / "src"
         assert result.index(timing_source) < result.index(runner_source)
@@ -798,7 +798,7 @@ class TestResolveLibrarySourceDirs:
             / "test_integration.py"
         )
 
-        result = device_testing._resolve_library_source_dirs(
+        result = device_testing.resolve_library_source_dirs(
             runner_dir, test_files=[integration_test],
         )
 
@@ -810,7 +810,7 @@ class TestResolveLibrarySourceDirs:
 
 
 class TestExecuteDeviceBootstrap:
-    """Tests for _execute_device_bootstrap."""
+    """Tests for execute_device_bootstrap."""
 
     def test_runs_chunked_bootstraps_with_execute_scripts(self) -> None:
         """List bootstraps should use execute_scripts when the transport has it."""
@@ -823,7 +823,7 @@ class TestExecuteDeviceBootstrap:
                 FakeTransport.captured_bootstrap = bootstrap_scripts
                 return "chunked output"
 
-        result = device_testing._execute_device_bootstrap(
+        result = device_testing.execute_device_bootstrap(
             FakeTransport(), ["chunk-1", "chunk-2"],
         )
 
@@ -841,7 +841,7 @@ class TestExecuteDeviceBootstrap:
                 FakeTransport.captured_bootstrap = bootstrap_script
                 return "single output"
 
-        result = device_testing._execute_device_bootstrap(
+        result = device_testing.execute_device_bootstrap(
             FakeTransport(), "single bootstrap",
         )
 
@@ -851,18 +851,18 @@ class TestExecuteDeviceBootstrap:
     def test_library_without_dependencies(self) -> None:
         """A library with no deps should return only its own src/."""
         timing_dir = device_testing.ROOT / "libraries" / "timing"
-        result = device_testing._resolve_library_source_dirs(timing_dir)
+        result = device_testing.resolve_library_source_dirs(timing_dir)
         assert result == [timing_dir / "src"]
 
     def test_nonexistent_library_returns_empty(self, tmp_path) -> None:
         """A nonexistent library dir should return an empty list."""
-        result = device_testing._resolve_library_source_dirs(tmp_path / "nope")
+        result = device_testing.resolve_library_source_dirs(tmp_path / "nope")
         assert result == []
 
     def test_no_duplicate_entries(self) -> None:
         """Source dirs should not appear more than once."""
         runner_dir = device_testing.ROOT / "libraries" / "runner"
-        result = device_testing._resolve_library_source_dirs(runner_dir)
+        result = device_testing.resolve_library_source_dirs(runner_dir)
         assert len(result) == len(set(result))
 
 
@@ -1019,7 +1019,7 @@ class TestRunTestsOnDevice:
         """One library + one file + one passing test → passed=1, failed=0."""
         transport = _RecordingTransport(outputs=[_PASS_OUTPUT])
         monkeypatch.setattr(
-            device_testing, "_create_transport",
+            device_testing, "create_transport",
             lambda device_entry, deploy_mode=None: transport,
         )
 
@@ -1049,7 +1049,7 @@ class TestRunTestsOnDevice:
             connect_raises=RuntimeError("no device"),
         )
         monkeypatch.setattr(
-            device_testing, "_create_transport",
+            device_testing, "create_transport",
             lambda device_entry, deploy_mode=None: transport,
         )
 
@@ -1075,7 +1075,7 @@ class TestRunTestsOnDevice:
             stage_raises=RuntimeError("mount denied"),
         )
         monkeypatch.setattr(
-            device_testing, "_create_transport",
+            device_testing, "create_transport",
             lambda device_entry, deploy_mode=None: transport,
         )
 
@@ -1113,7 +1113,7 @@ class TestRunTestsOnDevice:
             outputs=[_PASS_OUTPUT, _PASS_OUTPUT],
         )
         monkeypatch.setattr(
-            device_testing, "_create_transport",
+            device_testing, "create_transport",
             lambda device_entry, deploy_mode=None: transport,
         )
         monkeypatch.setattr(device_testing, "discover_library_dirs", lambda: [])
@@ -1135,7 +1135,7 @@ class TestRunTestsOnDevice:
             mode="ram", outputs=[_PASS_OUTPUT, _PASS_OUTPUT],
         )
         monkeypatch.setattr(
-            device_testing, "_create_transport",
+            device_testing, "create_transport",
             lambda device_entry, deploy_mode=None: transport,
         )
 
@@ -1173,7 +1173,7 @@ class TestRunTestsOnDevice:
 
         transport = _FailFirstTransport()
         monkeypatch.setattr(
-            device_testing, "_create_transport",
+            device_testing, "create_transport",
             lambda device_entry, deploy_mode=None: transport,
         )
 
@@ -1211,7 +1211,7 @@ class TestRunTestsOnDevice:
 
         transport = _FatalTransport()
         monkeypatch.setattr(
-            device_testing, "_create_transport",
+            device_testing, "create_transport",
             lambda device_entry, deploy_mode=None: transport,
         )
 
@@ -1234,7 +1234,7 @@ class TestRunTestsOnDevice:
             mode="ram", outputs=[_NO_SUMMARY_OUTPUT],
         )
         monkeypatch.setattr(
-            device_testing, "_create_transport",
+            device_testing, "create_transport",
             lambda device_entry, deploy_mode=None: transport,
         )
 
@@ -1255,7 +1255,7 @@ class TestRunTestsOnDevice:
             mode="ram", outputs=[_MIXED_OUTPUT],
         )
         monkeypatch.setattr(
-            device_testing, "_create_transport",
+            device_testing, "create_transport",
             lambda device_entry, deploy_mode=None: transport,
         )
 
@@ -1281,12 +1281,12 @@ class TestRunTestsOnDevice:
             mode="ram", outputs=[_PASS_OUTPUT, _PASS_OUTPUT],
         )
         monkeypatch.setattr(
-            device_testing, "_create_transport",
+            device_testing, "create_transport",
             lambda device_entry, deploy_mode=None: transport,
         )
         # Stub the source-dir resolver so we don't need real pyproject data.
         monkeypatch.setattr(
-            device_testing, "_resolve_library_source_dirs",
+            device_testing, "resolve_library_source_dirs",
             lambda library_dir, test_files=None: [library_dir / "src"],
         )
 
@@ -1322,11 +1322,11 @@ class TestRunTestsOnDevice:
 
         transport = _StageOnceTransport()
         monkeypatch.setattr(
-            device_testing, "_create_transport",
+            device_testing, "create_transport",
             lambda device_entry, deploy_mode=None: transport,
         )
         monkeypatch.setattr(
-            device_testing, "_resolve_library_source_dirs",
+            device_testing, "resolve_library_source_dirs",
             lambda library_dir, test_files=None: [library_dir / "src"],
         )
 

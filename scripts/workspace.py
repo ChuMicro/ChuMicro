@@ -15,6 +15,7 @@ import re
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any, Protocol
 
 #: Absolute path to the repository root (parent of the scripts/ directory).
 ROOT = Path(__file__).resolve().parent.parent
@@ -90,7 +91,19 @@ def library_name_from_module(module_name: str) -> str | None:
     return module_name.removeprefix("chumicro_").split(".", 1)[0]
 
 
-def load_tomllib():
+class _TomllibModule(Protocol):
+    """Minimal structural interface shared by ``tomllib`` and ``tomli``.
+
+    Both modules expose ``load(fp)`` returning a ``dict[str, Any]``; we
+    use only that one entry point.  A ``Protocol`` keeps the lazy-import
+    return type precise without forcing a dependency on either module
+    at import time.
+    """
+
+    def load(self, fp: Any, /) -> dict[str, Any]: ...
+
+
+def load_tomllib() -> _TomllibModule:
     """Import tomllib lazily.
 
     Stdlib from 3.11+; the ``tomli`` backport covers 3.9–3.10.
@@ -101,10 +114,12 @@ def load_tomllib():
         import tomllib
     except ModuleNotFoundError:
         import tomli as tomllib  # type: ignore[import-not-found,no-redef]
-    return tomllib
+    # Both modules expose ``load(fp) -> dict[str, Any]``; cast to the
+    # shared structural protocol so callers get precise typing.
+    return tomllib  # pyright: ignore[reportReturnType]
 
 
-def read_runtime_versions() -> dict:
+def read_runtime_versions() -> dict[str, Any]:
     """Read pinned target runtime versions from ``target-runtimes.toml``."""
     tomllib = load_tomllib()
     with (ROOT / "target-runtimes.toml").open("rb") as runtimes_file:

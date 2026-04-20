@@ -332,16 +332,16 @@ class TestTransportCache:
             address="/dev/ttyUSB0",
         )
 
-        # Monkey-patch _create_transport to avoid real hardware.
-        original = pytest_device._create_transport
-        pytest_device._create_transport = fake_create
+        # Monkey-patch create_transport to avoid real hardware.
+        original = pytest_device.create_transport
+        pytest_device.create_transport = fake_create
         try:
             transport_a = cache.get_transport(device, None)
             transport_b = cache.get_transport(device, None)
             assert transport_a is transport_b
             assert len(calls) == 1
         finally:
-            pytest_device._create_transport = original
+            pytest_device.create_transport = original
 
     def test_fully_staged_not_set_initially(self) -> None:
         """A fresh cache should not report any device as fully staged."""
@@ -370,8 +370,8 @@ class TestTransportCache:
             runtime="micropython",
             address="/dev/ttyUSB0",
         )
-        original = pytest_device._create_transport
-        pytest_device._create_transport = lambda device_entry, deploy_mode=None: FakeTransport()
+        original = pytest_device.create_transport
+        pytest_device.create_transport = lambda device_entry, deploy_mode=None: FakeTransport()
         try:
             transport = cache.get_transport(device, None)
             cache.mark_staged("dev1", "timing", "test_ticks.py")
@@ -388,7 +388,7 @@ class TestTransportCache:
             # Disconnect was called on the transport.
             assert transport.calls[-1] == ("disconnect", ())
         finally:
-            pytest_device._create_transport = original
+            pytest_device.create_transport = original
 
     def test_invalidate_device_keeps_batch_results(self) -> None:
         """Cached batch results survive invalidate_device.
@@ -696,7 +696,7 @@ def _prime_cache_with_transport(
     device_entry: DeviceEntry,
     transport: _HotPathTransport,
 ) -> None:
-    """Install *transport* in *cache* without hitting _create_transport."""
+    """Install *transport* in *cache* without hitting create_transport."""
     cache._transports[device_entry.identifier] = transport
 
 
@@ -720,9 +720,9 @@ def _make_prepare_item(session, device_entry, test_file) -> pytest_device.Device
     item = pytest_device.DevicePrepareItem.__new__(pytest_device.DevicePrepareItem)
     item.session = session
     item.test_file = test_file
-    item._target_device = device_entry
-    item._library_dir = test_file.parent.parent
-    item._library_name = item._library_dir.name
+    item.target_device = device_entry
+    item.library_dir = test_file.parent.parent
+    item._library_name = item.library_dir.name
     item._reported_duration = None
     item._reported_test_total_duration = None
     return item
@@ -732,9 +732,9 @@ def _make_run_file_item(session, device_entry, test_file) -> pytest_device.Devic
     item = pytest_device.DeviceRunFileItem.__new__(pytest_device.DeviceRunFileItem)
     item.session = session
     item.test_file = test_file
-    item._target_device = device_entry
-    item._library_dir = test_file.parent.parent
-    item._library_name = item._library_dir.name
+    item.target_device = device_entry
+    item.library_dir = test_file.parent.parent
+    item._library_name = item.library_dir.name
     item._reported_duration = None
     item._reported_test_total_duration = None
     return item
@@ -746,9 +746,9 @@ def _make_test_item(
     item = pytest_device.DeviceTestItem.__new__(pytest_device.DeviceTestItem)
     item.session = session
     item.test_file = test_file
-    item._target_device = device_entry
-    item._library_dir = test_file.parent.parent
-    item._library_name = item._library_dir.name
+    item.target_device = device_entry
+    item.library_dir = test_file.parent.parent
+    item._library_name = item.library_dir.name
     item._function_name = function_name
     item._reported_duration = None
     item._reported_test_total_duration = None
@@ -803,7 +803,7 @@ class TestEnsurePrepared:
         _prime_cache_with_transport(hot_path_cache, device, transport)
 
         monkeypatch.setattr(
-            pytest_device, "_resolve_library_source_dirs",
+            pytest_device, "resolve_library_source_dirs",
             lambda library_dir, test_files=None: [library_dir / "src"],
         )
 
@@ -830,7 +830,7 @@ class TestEnsurePrepared:
         def raise_on_create(device_entry, deploy_mode=None):
             raise RuntimeError("device not reachable")
 
-        monkeypatch.setattr(pytest_device, "_create_transport", raise_on_create)
+        monkeypatch.setattr(pytest_device, "create_transport", raise_on_create)
 
         test_file = _make_functional_test_file(tmp_path, "alpha")
         item = _make_prepare_item(hot_path_session, device, test_file)
@@ -859,7 +859,7 @@ class TestEnsureBatchResult:
         _prime_cache_with_transport(hot_path_cache, device, transport)
 
         monkeypatch.setattr(
-            pytest_device, "_resolve_library_source_dirs",
+            pytest_device, "resolve_library_source_dirs",
             lambda library_dir, test_files=None: [library_dir / "src"],
         )
 
@@ -887,7 +887,7 @@ class TestEnsureBatchResult:
         _prime_cache_with_transport(hot_path_cache, device, transport)
 
         monkeypatch.setattr(
-            pytest_device, "_resolve_library_source_dirs",
+            pytest_device, "resolve_library_source_dirs",
             lambda library_dir, test_files=None: [library_dir / "src"],
         )
 
@@ -917,7 +917,7 @@ class TestEnsureBatchResult:
         _prime_cache_with_transport(hot_path_cache, device, transport)
 
         monkeypatch.setattr(
-            pytest_device, "_resolve_library_source_dirs",
+            pytest_device, "resolve_library_source_dirs",
             lambda library_dir, test_files=None: [library_dir / "src"],
         )
 
@@ -955,7 +955,7 @@ class TestEnsureBatchResult:
         _prime_cache_with_transport(hot_path_cache, device, transport)
 
         monkeypatch.setattr(
-            pytest_device, "_resolve_library_source_dirs",
+            pytest_device, "resolve_library_source_dirs",
             lambda library_dir, test_files=None: [library_dir / "src"],
         )
 
@@ -1006,7 +1006,7 @@ class TestDeviceRunFileItemRuntest:
         transport = _HotPathTransport(mode="ram", outputs=[_PASS_OUTPUT])
         _prime_cache_with_transport(hot_path_cache, device, transport)
         monkeypatch.setattr(
-            pytest_device, "_resolve_library_source_dirs",
+            pytest_device, "resolve_library_source_dirs",
             lambda library_dir, test_files=None: [library_dir / "src"],
         )
 
@@ -1044,7 +1044,7 @@ class TestDeviceTestItemRuntest:
         transport = _HotPathTransport(mode="ram", outputs=[_PASS_OUTPUT])
         _prime_cache_with_transport(hot_path_cache, device, transport)
         monkeypatch.setattr(
-            pytest_device, "_resolve_library_source_dirs",
+            pytest_device, "resolve_library_source_dirs",
             lambda library_dir, test_files=None: [library_dir / "src"],
         )
 
@@ -1063,7 +1063,7 @@ class TestDeviceTestItemRuntest:
         transport = _HotPathTransport(mode="ram", outputs=[_TWO_TESTS_OUTPUT])
         _prime_cache_with_transport(hot_path_cache, device, transport)
         monkeypatch.setattr(
-            pytest_device, "_resolve_library_source_dirs",
+            pytest_device, "resolve_library_source_dirs",
             lambda library_dir, test_files=None: [library_dir / "src"],
         )
 
@@ -1082,7 +1082,7 @@ class TestDeviceTestItemRuntest:
         transport = _HotPathTransport(mode="ram", outputs=[_PASS_OUTPUT])
         _prime_cache_with_transport(hot_path_cache, device, transport)
         monkeypatch.setattr(
-            pytest_device, "_resolve_library_source_dirs",
+            pytest_device, "resolve_library_source_dirs",
             lambda library_dir, test_files=None: [library_dir / "src"],
         )
 
@@ -1105,7 +1105,7 @@ class TestDeviceTestItemRuntest:
         transport = _HotPathTransport(mode="ram", outputs=[_TWO_TESTS_OUTPUT])
         _prime_cache_with_transport(hot_path_cache, device, transport)
         monkeypatch.setattr(
-            pytest_device, "_resolve_library_source_dirs",
+            pytest_device, "resolve_library_source_dirs",
             lambda library_dir, test_files=None: [library_dir / "src"],
         )
 

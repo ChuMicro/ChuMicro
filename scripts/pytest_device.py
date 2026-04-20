@@ -32,7 +32,9 @@ See Decision 0027 (IDE integration section).
 from __future__ import annotations
 
 import ast
+from collections.abc import Generator, Iterable, Iterator
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 from chumicro_device_transport import TransportProtocol
@@ -43,13 +45,34 @@ from device_config import (
     resolve_ide_devices,
 )
 from device_testing import (
-    _build_device_bootstrap,
-    _create_transport,
-    _execute_device_bootstrap,
-    _resolve_library_source_dirs,
+    build_device_bootstrap,
+    create_transport,
+    execute_device_bootstrap,
+    resolve_library_source_dirs,
 )
-from result_parser import RunResult, parse_output
+from result_parser import RunResult, TestResult, parse_output
 from workspace import ROOT
+
+
+def _session_cache(session: pytest.Session) -> _TransportCache:
+    """Return the session-scoped ``_TransportCache``, asserting it exists.
+
+    ``pytest_sessionstart`` populates the dynamic attribute; any code
+    path that uses the cache runs strictly after that hook.  The cast
+    keeps the rest of the module free of ``# type: ignore`` noise from
+    pytest's dynamic ``session`` attributes.
+    """
+    cache = getattr(session, "_device_transport_cache", None)
+    assert cache is not None, "pytest_sessionstart must run before cache access"
+    return cast("_TransportCache", cache)
+
+
+def _session_targets(session: pytest.Session) -> list[DeviceEntry] | None:
+    """Return the resolved target devices from ``pytest_sessionstart``."""
+    targets = getattr(session, "_device_targets", None)
+    if targets is None:
+        return None
+    return cast("list[DeviceEntry]", targets)
 
 #: Path to the test harness source directory.
 HARNESS_SOURCE = ROOT / "support" / "test_harness" / "src"
@@ -94,7 +117,7 @@ def _resolve_library_dir(test_file: Path) -> Path:
 def _iter_runtime_variants(
     function_names: list[str],
     targets: list[DeviceEntry],
-):
+) -> Iterator[tuple[str, DeviceEntry]]:
     """Yield ``(function_name, device)`` pairs in IDE-friendly order.
 
     When collecting a whole file for both runtimes, keep the runtime
@@ -140,7 +163,7 @@ def _runtime_run_file_name(device_entry: DeviceEntry) -> str:
     return f"Run overhead — {_runtime_display_name(device_entry.runtime)}"
 
 
-def _sum_reported_test_durations(test_results) -> float:
+def _sum_reported_test_durations(test_results: Iterable[TestResult]) -> float:
     """Return the total device-reported duration across parsed tests.
 
     Args:
@@ -157,7 +180,9 @@ def _sum_reported_test_durations(test_results) -> float:
     return total_duration
 
 
-def _apply_reported_duration(item, report) -> None:
+def _apply_reported_duration(
+    item: DeviceRuntimeItem, report: pytest.TestReport,
+) -> None:
     """Override pytest timing with parsed device timing when available.
 
     Real device runs batch a whole file at once. Without this adjustment,
@@ -233,7 +258,7 @@ class _TransportCache:
         """
         key = device_entry.identifier
         if key not in self._transports:
-            transport = _create_transport(device_entry, deploy_mode=deploy_mode)
+            transport = create_transport(device_entry, deploy_mode=deploy_mode)
             transport.connect()
             self._transports[key] = transport
         return self._transports[key]
@@ -393,29 +418,31 @@ class DeviceTestFile(pytest.File):
     pytest shows separate results for each board.
     """
 
-    def collect(self):
+    def collect(self) -> Iterator[pytest.Item]:
         """Yield a :class:`DeviceTestItem` for each test function and target device."""
         function_names = _parse_test_functions(self.path)
-        targets = getattr(self.session, "_device_targets", None)
+        targets = _session_targets(self.session)
 
         if targets is None or len(targets) <= 1:
             # No config, single target, or no devices — one item per function.
             device = targets[0] if targets else None
             if device is not None:
-                yield DevicePrepareItem.from_parent(
+                # pytest.Item.from_parent accepts **kwargs, so pyright's
+                # strict mode flags it as partially unknown — suppress.
+                yield DevicePrepareItem.from_parent(  # pyright: ignore[reportUnknownMemberType]
                     self,
                     name=_runtime_prepare_name(device),
                     test_file=self.path,
                     target_device=device,
                 )
-                yield DeviceRunFileItem.from_parent(
+                yield DeviceRunFileItem.from_parent(  # pyright: ignore[reportUnknownMemberType]
                     self,
                     name=_runtime_run_file_name(device),
                     test_file=self.path,
                     target_device=device,
                 )
             for name in function_names:
-                yield DeviceTestItem.from_parent(
+                yield DeviceTestItem.from_parent(  # pyright: ignore[reportUnknownMemberType]
                     self,
                     name=name,
                     test_file=self.path,
@@ -425,13 +452,15 @@ class DeviceTestFile(pytest.File):
         else:
             # Multiple targets (both mode) — parametrize by runtime.
             for device in targets:
-                yield DevicePrepareItem.from_parent(
+                # pytest.Item.from_parent accepts **kwargs, so pyright's
+                # strict mode flags it as partially unknown — suppress.
+                yield DevicePrepareItem.from_parent(  # pyright: ignore[reportUnknownMemberType]
                     self,
                     name=_runtime_prepare_name(device),
                     test_file=self.path,
                     target_device=device,
                 )
-                yield DeviceRunFileItem.from_parent(
+                yield DeviceRunFileItem.from_parent(  # pyright: ignore[reportUnknownMemberType]
                     self,
                     name=_runtime_run_file_name(device),
                     test_file=self.path,
@@ -439,7 +468,7 @@ class DeviceTestFile(pytest.File):
                 )
             for name, device in _iter_runtime_variants(function_names, targets):
                 display_name = f"{name}[{_runtime_display_name(device.runtime)}]"
-                yield DeviceTestItem.from_parent(
+                yield DeviceTestItem.from_parent(  # pyright: ignore[reportUnknownMemberType]
                     self,
                     name=display_name,
                     test_file=self.path,
@@ -462,22 +491,22 @@ class DeviceRuntimeItem(pytest.Item):
         *,
         test_file: Path,
         target_device: DeviceEntry | None,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
-        super().__init__(**kwargs)
+        super().__init__(**kwargs)  # pyright: ignore[reportUnknownMemberType]
         self.test_file = test_file
-        self._target_device = target_device
-        self._library_dir = _resolve_library_dir(test_file)
-        self._library_name = self._library_dir.name
+        self.target_device: DeviceEntry | None = target_device
+        self.library_dir: Path = _resolve_library_dir(test_file)
+        self._library_name = self.library_dir.name
         self._reported_duration: float | None = None
         self._reported_test_total_duration: float | None = None
 
     def _resolve_device_entry(self) -> DeviceEntry:
         """Return the resolved target device for this item."""
-        device_entry = self._target_device
+        device_entry = self.target_device
         if device_entry is None:
             device_entry = _load_fallback_device()
-            self._target_device = device_entry
+            self.target_device = device_entry
         return device_entry
 
     def _batch_key(self, device_entry: DeviceEntry) -> tuple[str, str, str]:
@@ -491,7 +520,7 @@ class DeviceRuntimeItem(pytest.Item):
     def _ensure_prepared(self, device_entry: DeviceEntry) -> None:
         """Connect to the device and stage source files if needed."""
 
-        cache: _TransportCache = self.session._device_transport_cache  # type: ignore[attr-defined]
+        cache = _session_cache(self.session)
 
         try:
             transport = cache.get_transport(device_entry, None)
@@ -520,8 +549,8 @@ class DeviceRuntimeItem(pytest.Item):
                         transport.soft_reset()
                     except Exception as error:
                         pytest.fail(f"Device reset failed between test files: {error}")
-                source_dirs = _resolve_library_source_dirs(
-                    self._library_dir, test_files=[self.test_file],
+                source_dirs = resolve_library_source_dirs(
+                    self.library_dir, test_files=[self.test_file],
                 )
                 transport.stage(
                     source_dirs, [self.test_file], HARNESS_SOURCE,
@@ -533,7 +562,7 @@ class DeviceRuntimeItem(pytest.Item):
         device_entry: DeviceEntry,
     ) -> tuple[RunResult | None, str]:
         """Run the file batch once if needed and return its cached result."""
-        cache: _TransportCache = self.session._device_transport_cache  # type: ignore[attr-defined]
+        cache = _session_cache(self.session)
         batch_key = self._batch_key(device_entry)
 
         # Check for cached batch result from a previous item.
@@ -546,11 +575,11 @@ class DeviceRuntimeItem(pytest.Item):
 
             # Run ALL tests in the file (no name_filter) to amortize
             # the per-invocation overhead.
-            bootstrap = _build_device_bootstrap(
+            bootstrap = build_device_bootstrap(
                 device_entry, transport, self.test_file, None,
             )
             try:
-                raw_output = _execute_device_bootstrap(transport, bootstrap)
+                raw_output = execute_device_bootstrap(transport, bootstrap)
             except Exception as error:
                 # Try to recover the board so the next file can run
                 # independently of this failure; if recovery itself
@@ -580,11 +609,15 @@ class DeviceRuntimeItem(pytest.Item):
 
         return batch
 
-    def repr_failure(self, excinfo, style=None):
+    def repr_failure(
+        self,
+        excinfo: pytest.ExceptionInfo[BaseException],
+        style: str | None = None,
+    ) -> str:
         """Produce a readable failure representation."""
         return str(excinfo.value)
 
-    def reportinfo(self):
+    def reportinfo(self) -> tuple[Path, int | None, str]:
         """Return location info for test reporting."""
         return self.path, None, f"[device] {self._library_name}::{self.name}"
 
@@ -622,7 +655,7 @@ class DeviceTestItem(DeviceRuntimeItem):
         test_file: Path,
         function_name: str,
         target_device: DeviceEntry | None,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         super().__init__(
             test_file=test_file,
@@ -710,7 +743,7 @@ _IN_MEMORY_MODES = ("ram", "mount")
 def _should_soft_reset_before_stage(
     cache: _TransportCache,
     device_entry: DeviceEntry,
-    transport,
+    transport: TransportProtocol,
     library_name: str,
     test_file_name: str,
 ) -> bool:
@@ -754,7 +787,11 @@ def _should_soft_reset_before_stage(
     )
 
 
-def _bulk_stage_for_device(session, device_entry: DeviceEntry, transport) -> None:
+def _bulk_stage_for_device(
+    session: pytest.Session,
+    device_entry: DeviceEntry,
+    transport: TransportProtocol,
+) -> None:
     """Stage all sources and test files for a device in one pass.
 
     In flash/copy modes, files persist on the device filesystem so
@@ -779,13 +816,13 @@ def _bulk_stage_for_device(session, device_entry: DeviceEntry, transport) -> Non
     for item in session.items:
         if not isinstance(item, DeviceTestItem):
             continue
-        target = item._target_device
+        target = item.target_device
         if target is None or target.identifier != device_entry.identifier:
             continue
 
         # Collect source dirs for this item's library.
-        for source_dir in _resolve_library_source_dirs(
-            item._library_dir, test_files=[item.test_file],
+        for source_dir in resolve_library_source_dirs(
+            item.library_dir, test_files=[item.test_file],
         ):
             if source_dir not in seen_source_dirs:
                 seen_source_dirs.append(source_dir)
@@ -804,7 +841,9 @@ def _bulk_stage_for_device(session, device_entry: DeviceEntry, transport) -> Non
 # ---------------------------------------------------------------------------
 
 
-def pytest_collect_file(parent, file_path):
+def pytest_collect_file(
+    parent: pytest.Collector, file_path: Path,
+) -> DeviceTestFile | None:
     """Collect functional test files as device test items.
 
     Activates for any ``test_*.py`` file inside a ``functional_tests/``
@@ -817,12 +856,14 @@ def pytest_collect_file(parent, file_path):
         and file_path.name.startswith("test_")
         and "functional_tests" in file_path.parts
     ):
-        return DeviceTestFile.from_parent(parent, path=file_path)
+        return DeviceTestFile.from_parent(parent, path=file_path)  # pyright: ignore[reportUnknownMemberType]
 
     return None
 
 
-def pytest_collection_modifyitems(config, items):
+def pytest_collection_modifyitems(
+    config: pytest.Config, items: list[pytest.Item],
+) -> None:
     """Remove normal pytest items for functional test files.
 
     ``pytest_collect_file`` adds DeviceTestItems but does not suppress
@@ -831,8 +872,8 @@ def pytest_collection_modifyitems(config, items):
     functional tests only run through the device transport — never
     locally on CPython.
     """
-    deselected = []
-    selected = []
+    deselected: list[pytest.Item] = []
+    selected: list[pytest.Item] = []
     for item in items:
         if "functional_tests" in item.nodeid and not isinstance(item, DeviceRuntimeItem):
             deselected.append(item)
@@ -843,30 +884,32 @@ def pytest_collection_modifyitems(config, items):
         items[:] = selected
 
 
-def pytest_sessionstart(session):
+def pytest_sessionstart(session: pytest.Session) -> None:
     """Initialize the transport cache and resolve target devices."""
-    session._device_transport_cache = _TransportCache()
+    session._device_transport_cache = _TransportCache()  # type: ignore[attr-defined]
 
     # Eagerly resolve target devices so collection can parametrize
     # by runtime when ide_runtime is "both".
     try:
         devices, defaults = load_device_registry(workspace_root=ROOT)
-        session._device_targets = resolve_ide_devices(devices, defaults)
+        session._device_targets = resolve_ide_devices(devices, defaults)  # type: ignore[attr-defined]
     except DeviceConfigError:
-        session._device_targets = None
+        session._device_targets = None  # type: ignore[attr-defined]
 
 
-def pytest_sessionfinish(session, exitstatus):
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     """Disconnect all cached transports at session end."""
     cache = getattr(session, "_device_transport_cache", None)
     if cache is not None:
-        cache.disconnect_all()
+        cast("_TransportCache", cache).disconnect_all()
 
 
 @pytest.hookimpl(hookwrapper=True)
-def pytest_runtest_makereport(item, call):
+def pytest_runtest_makereport(
+    item: pytest.Item, call: pytest.CallInfo[None],
+) -> Generator[None, None, None]:
     """Inject parsed device durations into call-phase pytest reports."""
     outcome = yield
-    report = outcome.get_result()
+    report = cast(pytest.TestReport, outcome.get_result())  # type: ignore[attr-defined]
     if isinstance(item, DeviceRuntimeItem):
         _apply_reported_duration(item, report)

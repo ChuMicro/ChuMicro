@@ -14,7 +14,7 @@ import ast
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 from chumicro_device_transport import (
     DeviceImplementation,
@@ -64,7 +64,7 @@ class FileRunResult:
     passed: int
     failed: int
     errors: int
-    tests: list[TestResult] = field(default_factory=list)
+    tests: list[TestResult] = field(default_factory=list)  # pyright: ignore[reportUnknownVariableType]
     duration_seconds: float = 0.0
 
 
@@ -99,7 +99,7 @@ class DeviceRunResult:
     implementation: DeviceImplementation | None
     deploy_mode: str
     duration_seconds: float = 0.0
-    files: list[FileRunResult] = field(default_factory=list)
+    files: list[FileRunResult] = field(default_factory=list)  # pyright: ignore[reportUnknownVariableType]
 
 
 def discover_functional_tests(
@@ -251,7 +251,7 @@ def _resolve_test_imported_library_names(test_files: list[Path]) -> list[str]:
     return sorted(imported_library_names)
 
 
-def _resolve_library_source_dirs(
+def resolve_library_source_dirs(
     library_dir: Path,
     *,
     test_files: list[Path] | None = None,
@@ -299,8 +299,8 @@ def _resolve_library_source_dirs(
     dependency_library_names: list[str] = []
     if pyproject_file.exists():
         with pyproject_file.open("rb") as toml_file:
-            data = tomllib.load(toml_file)
-        dependencies = data.get("project", {}).get("dependencies", [])
+            data: dict[str, Any] = tomllib.load(toml_file)
+        dependencies: list[str] = data.get("project", {}).get("dependencies", [])
         for dependency in dependencies:
             dep_library = library_name_from_pip_dependency(dependency)
             if dep_library is not None:
@@ -315,7 +315,7 @@ def _resolve_library_source_dirs(
 
     for dependency_library_name in dependency_library_names:
         dependency_library_dir = libraries_root / dependency_library_name
-        for transitive_dir in _resolve_library_source_dirs(
+        for transitive_dir in resolve_library_source_dirs(
             dependency_library_dir,
             visited_library_names=visited_library_names,
         ):
@@ -360,7 +360,7 @@ def _resolve_effective_deploy_mode(
     return deploy_mode_override or device_entry.deploy_mode or "ram"
 
 
-def _create_transport(
+def create_transport(
     device_entry: DeviceEntry,
     deploy_mode: str | None = None,
 ) -> TransportProtocol:
@@ -403,7 +403,7 @@ def _create_transport(
     raise ValueError(f"Unsupported runtime: {device_entry.runtime}")
 
 
-def _build_device_bootstrap(
+def build_device_bootstrap(
     device_entry: DeviceEntry,
     transport: TransportProtocol,
     test_file: Path,
@@ -436,7 +436,7 @@ def _build_device_bootstrap(
         cp_transport = cast(ExtendedTransportProtocol, transport)
         staged_sources = cp_transport.staged_sources
         assert staged_sources is not None, (
-            "stage() must be called before _build_device_bootstrap on the "
+            "stage() must be called before build_device_bootstrap on the "
             "CircuitPython RAM path"
         )
         return build_circuitpython_bootstrap_scripts(
@@ -452,7 +452,7 @@ def _build_device_bootstrap(
     )
 
 
-def _execute_device_bootstrap(
+def execute_device_bootstrap(
     transport: TransportProtocol,
     bootstrap: str | list[str],
 ) -> str:
@@ -534,7 +534,7 @@ def _stage_library_for_test_files(
         entries that the caller should append and count as errors.
     """
     library_dir = source_dir.parent
-    library_source_dirs = _resolve_library_source_dirs(
+    library_source_dirs = resolve_library_source_dirs(
         library_dir, test_files=test_files,
     )
     try:
@@ -583,10 +583,10 @@ def _run_single_test_file(
     abort = False
 
     try:
-        bootstrap = _build_device_bootstrap(
+        bootstrap = build_device_bootstrap(
             device_entry, transport, test_file, function_filter,
         )
-        raw_output = _execute_device_bootstrap(transport, bootstrap)
+        raw_output = execute_device_bootstrap(transport, bootstrap)
         print(raw_output)
 
         parsed = parse_output(raw_output)
@@ -686,7 +686,7 @@ def _run_tests_on_device(
 
     # --- connect + probe ----------------------------------------------
     try:
-        transport = _create_transport(device_entry, deploy_mode=deploy_mode)
+        transport = create_transport(device_entry, deploy_mode=deploy_mode)
     except ValueError as runtime_error:
         print(f"  Skipping — {runtime_error}")
         return _finalize()
@@ -762,12 +762,12 @@ def _run_tests_on_device(
 
 
 def _resolve_selected_devices(
-    all_devices,
+    all_devices: list[DeviceEntry],
     defaults: DeviceDefaults,
     runtime: str | None,
     micropython_device: str | None,
     circuitpython_device: str | None,
-) -> list:
+) -> list[DeviceEntry]:
     """Resolve the device target set for the test-device CLI.
 
     Selection precedence:
@@ -907,7 +907,7 @@ def _format_markdown_table(
             return ":" + "-" * (width - 2) + ":"
         return "-" * width
 
-    lines = []
+    lines: list[str] = []
     header_cells = [
         pad(headers[column], widths[column], alignments[column])
         for column in range(len(headers))
@@ -1125,7 +1125,7 @@ def _report_empty_test_plan(
     pass.  An empty plan with no filters is a benign no-op on a fresh
     project (exit 0).
     """
-    filter_parts = []
+    filter_parts: list[str] = []
     if library:
         filter_parts.append(f"--library {library}")
     if file_filter:
