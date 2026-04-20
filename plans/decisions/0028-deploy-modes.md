@@ -48,7 +48,7 @@ Flash mode in `execute()`:
 
 Some functional tests inline multiple ChuMicro libraries plus the test harness and test file into the CircuitPython raw REPL. Sending that entire payload in one submission can destabilize the USB connection on lower-memory boards instead of producing a normal traceback.
 
-To avoid that failure mode, CircuitPython RAM mode now probes live free heap from the connected board with `gc.mem_free()` after `gc.collect()`, derives a conservative per-script budget from that measurement, and splits the inline bootstrap into multiple raw-REPL chunks. The transport runs those chunks sequentially, collecting garbage between them. If a single required chunk still exceeds the measured RAM budget, the run fails early with guidance to use flash deploy mode.
+To avoid that failure mode, CircuitPython RAM mode now probes live free heap from the connected board with `gc.mem_free()` after `gc.collect()`, removes comments and docstrings from staged inline library and harness source, derives a conservative per-script budget from that measurement, and splits the inline bootstrap into multiple raw-REPL chunks. The transport runs those chunks sequentially, collecting garbage between them. If a single required chunk still exceeds the measured RAM budget, the run fails early with guidance to use flash deploy mode.
 
 Flash mode in `disconnect()`:
 

@@ -8,6 +8,7 @@ import pytest
 from chumicro_device_transport.circuitpython_bootstrap import (
     CircuitpythonBootstrapTooLargeError,
     _escape_source,
+    _prepare_inline_source,
     build_circuitpython_bootstrap,
     build_circuitpython_bootstrap_scripts,
 )
@@ -27,8 +28,9 @@ class TestBuildCircuitpythonBootstrap:
 
         result = build_circuitpython_bootstrap(staged_sources, test_file)
 
-        assert "_populate_module('chumicro_timing'" in result
-        assert "_populate_module('chumicro_timing.ticks'" in result
+        assert "_m='chumicro_timing'" in result
+        assert "_m='chumicro_timing.ticks'" in result
+        assert "_populate_module(_m,_s)" in result
 
     def test_includes_module_helpers(self, tmp_path: Path) -> None:
         """Bootstrap should define stub and populate helpers."""
@@ -113,7 +115,7 @@ class TestBuildCircuitpythonBootstrap:
         )
 
         # The helper should contain parent-attachment logic.
-        assert "setattr(sys.modules[parent]" in result
+        assert "setattr(sys.modules[parts[0]],parts[1]" in result
 
     def test_registers_stubs_before_population(self, tmp_path: Path) -> None:
         """Bootstrap should register stubs before populating modules."""
@@ -235,6 +237,62 @@ class TestBuildCircuitpythonBootstrap:
                 test_file,
                 max_chunk_size_bytes=64,
             )
+
+    def test_population_block_does_not_duplicate_embedded_source(
+        self, tmp_path: Path,
+    ) -> None:
+        """Each module source should appear once in its population block."""
+        test_file = tmp_path / "test_example.py"
+        module_source = "def helper():\n    return 'value'\n"
+        test_file.write_text("def test_ok(): pass")
+
+        result = build_circuitpython_bootstrap(
+            [("chumicro_sample", module_source)],
+            test_file,
+        )
+
+        prepared_source = _prepare_inline_source(module_source)
+        assert result.count(repr(prepared_source)) == 1
+
+    def test_strips_comments_and_docstrings_from_staged_source(
+        self, tmp_path: Path,
+    ) -> None:
+        """Staged library source should be minified before inline embedding."""
+        test_file = tmp_path / "test_example.py"
+        test_file.write_text("def test_ok(): pass")
+        staged_source = (
+            '"""module doc"""\n'
+            '# top-level comment\n'
+            'def helper():\n'
+            '    """function doc"""\n'
+            '    value = 1  # inline comment\n'
+            '    return value\n'
+        )
+
+        result = build_circuitpython_bootstrap(
+            [("chumicro_sample", staged_source)],
+            test_file,
+        )
+
+        assert "module doc" not in result
+        assert "top-level comment" not in result
+        assert "function doc" not in result
+
+    def test_docstring_only_classes_remain_valid_after_minification(
+        self, tmp_path: Path,
+    ) -> None:
+        """Stripping class docstrings should still leave syntactically valid code."""
+        test_file = tmp_path / "test_example.py"
+        test_file.write_text("def test_ok(): pass")
+        staged_source = 'class OnlyDoc:\n    """doc"""\n'
+
+        result = build_circuitpython_bootstrap(
+            [("chumicro_sample", staged_source)],
+            test_file,
+        )
+
+        compile(result, "<bootstrap>", "exec")
+        assert repr("class OnlyDoc:\n    pass") in result
 
 
 class TestEscapeSource:

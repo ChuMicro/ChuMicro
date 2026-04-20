@@ -19,6 +19,7 @@ constraints.
 
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 _TEMPLATE_PATH = Path(__file__).parent / "circuitpython_bootstrap_template.txt"
@@ -149,12 +150,12 @@ def _build_helper_script() -> str:
     deferred_retry_helper = """
 def _retry_deferred():
     while _deferred:
-        remaining = []
-        progress_made = False
+        remaining=[]
+        progress_made=False
         for module_name, source_code in _deferred:
             try:
                 _populate_module(module_name, source_code)
-                progress_made = True
+                progress_made=True
             except ImportError:
                 remaining.append((module_name, source_code))
         if not progress_made:
@@ -163,7 +164,7 @@ def _retry_deferred():
                     module_name for module_name, _ in remaining
                 )
             )
-        _deferred[:] = remaining
+        _deferred[:]=remaining
 """
     return helper_template + deferred_retry_helper + "\n_deferred = []\n"
 
@@ -180,8 +181,7 @@ def _build_test_execution_script(
     escaped_test = _escape_source(test_source)
     filter_repr = repr(name_filter) if name_filter else "None"
     return (
-        "_retry_deferred()\n\n"
-        + _TEST_EXECUTION_MARKER
+        "_retry_deferred()\n"
         + test_execution_template
         .replace("$TEST_SOURCE", escaped_test)
         .replace("$FILTER_REPR", filter_repr)
@@ -192,13 +192,68 @@ def _build_test_execution_script(
 
 def _build_population_block(module_name: str, source_text: str) -> str:
     """Return the population block for one staged module."""
-    escaped_source = _escape_source(source_text)
+    escaped_source = _escape_source(_prepare_inline_source(source_text))
     return "\n".join([
-        "try:",
-        f"    _populate_module({module_name!r}, {escaped_source})",
-        "except ImportError:",
-        f"    _deferred.append(({module_name!r}, {escaped_source}))",
+        f"_m={module_name!r};_s={escaped_source}",
+        "try:_populate_module(_m,_s)",
+        "except ImportError:_deferred.append((_m,_s))",
     ])
+
+
+class _InlineDocstringStripper(ast.NodeTransformer):
+    """Remove docstrings before AST unparsing shrinks inline source."""
+
+    def visit_Module(self, node: ast.Module) -> ast.Module:
+        node.body = _strip_docstring_from_body(node.body)
+        return self.generic_visit(node)
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> ast.ClassDef:
+        node.body = _strip_docstring_from_body(node.body, require_nonempty=True)
+        return self.generic_visit(node)
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.FunctionDef:
+        node.body = _strip_docstring_from_body(node.body, require_nonempty=True)
+        return self.generic_visit(node)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> ast.AsyncFunctionDef:
+        node.body = _strip_docstring_from_body(node.body, require_nonempty=True)
+        return self.generic_visit(node)
+
+
+def _prepare_inline_source(source_text: str) -> str:
+    """Strip comments and docstrings from inline RAM-mode source text."""
+    try:
+        syntax_tree = ast.parse(source_text)
+    except SyntaxError:
+        return source_text
+
+    stripped_tree = _InlineDocstringStripper().visit(syntax_tree)
+    ast.fix_missing_locations(stripped_tree)
+    return ast.unparse(stripped_tree)
+
+
+def _strip_docstring_from_body(
+    body: list[ast.stmt],
+    *,
+    require_nonempty: bool = False,
+) -> list[ast.stmt]:
+    """Return a body list with a leading docstring expression removed."""
+    if not body:
+        return [ast.Pass()] if require_nonempty else body
+
+    first_statement = body[0]
+    if not isinstance(first_statement, ast.Expr):
+        return body
+    if not isinstance(first_statement.value, ast.Constant):
+        return body
+    if not isinstance(first_statement.value.value, str):
+        return body
+    stripped_body = body[1:]
+    if stripped_body:
+        return stripped_body
+    if require_nonempty:
+        return [ast.Pass()]
+    return stripped_body
 
 
 def _chunk_script_blocks(
