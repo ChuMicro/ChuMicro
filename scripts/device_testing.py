@@ -249,6 +249,35 @@ def _resolve_library_source_dirs(
     return dependency_dirs
 
 
+def _resolve_effective_deploy_mode(
+    device_entry,
+    deploy_mode_override: str | None,
+) -> str:
+    """Return the user-facing deploy mode that will actually run for a device.
+
+    Resolution order:
+
+    1. CLI ``--deploy-mode`` override (highest precedence).
+    2. Per-device ``deploy_mode`` from ``devices.yml``.
+    3. Global ``defaults.deploy_mode`` from ``devices.yml`` (already
+       folded into ``device_entry.deploy_mode`` at load time).
+    4. ``"ram"`` as a last-resort default.
+
+    Callers use the return value both to construct the transport and
+    to label per-device bullets in the PR summary — reviewers ask
+    "what mode ran on this board" and the CLI reconstruction alone
+    cannot answer that when the user invoked bare ``test-device``.
+
+    Args:
+        device_entry: A DeviceEntry from the config loader.
+        deploy_mode_override: ``--deploy-mode`` value, or ``None``.
+
+    Returns:
+        ``"ram"`` or ``"flash"``.
+    """
+    return deploy_mode_override or device_entry.deploy_mode or "ram"
+
+
 def _create_transport(device_entry, deploy_mode: str | None = None):
     """Create the appropriate transport for a device entry.
 
@@ -264,7 +293,7 @@ def _create_transport(device_entry, deploy_mode: str | None = None):
         ValueError: If the runtime is not supported or flash mode
             is missing required configuration.
     """
-    effective_mode = deploy_mode or device_entry.deploy_mode
+    effective_mode = _resolve_effective_deploy_mode(device_entry, deploy_mode)
 
     if device_entry.runtime == "micropython":
         from chumicro_device_transport import MicropythonTransport
@@ -372,27 +401,35 @@ def _run_tests_on_device(
             device entry's ``deploy_mode`` field.
 
     Returns:
-        Tuple of ``(passed, failed, errors, implementation)`` counts
-        plus a :class:`DeviceImplementation` (or ``None`` if the probe
-        could not complete).  The probe runs once right after
-        ``connect()``; a probe failure never blocks the test run.
+        Tuple of ``(passed, failed, errors, implementation, deploy_mode)``.
+        ``implementation`` is a :class:`DeviceImplementation` or
+        ``None`` if the probe could not complete.  ``deploy_mode`` is
+        the resolved user-facing mode (``"ram"`` or ``"flash"``) the
+        transport was built with — surfaced so the PR summary can show
+        reviewers how each device actually ran, regardless of whether
+        the user passed ``--deploy-mode``.  The probe runs once right
+        after ``connect()``; a probe failure never blocks the test
+        run.
     """
     passed = 0
     failed = 0
     errors = 0
     implementation = None
+    effective_deploy_mode = _resolve_effective_deploy_mode(
+        device_entry, deploy_mode,
+    )
 
     try:
         transport = _create_transport(device_entry, deploy_mode=deploy_mode)
     except ValueError as runtime_error:
         print(f"  Skipping — {runtime_error}")
-        return passed, failed, errors, implementation
+        return passed, failed, errors, implementation, effective_deploy_mode
 
     try:
         transport.connect()
     except Exception as connect_error:
         print(f"  Connection failed: {connect_error}")
-        return 0, 0, 1, implementation
+        return 0, 0, 1, implementation, effective_deploy_mode
 
     # Probe the board's ``sys.implementation`` once per session so the
     # PR summary can show the exact firmware version and board model.
@@ -435,7 +472,10 @@ def _run_tests_on_device(
         except Exception as stage_error:
             print(f"  Stage failed: {stage_error}")
             transport.disconnect()
-            return 0, 0, len(all_test_files), implementation
+            return (
+                0, 0, len(all_test_files),
+                implementation, effective_deploy_mode,
+            )
 
     abort = False
     previous_library_ran = False
@@ -529,7 +569,7 @@ def _run_tests_on_device(
             f"{disconnect_error}"
         )
 
-    return passed, failed, errors, implementation
+    return passed, failed, errors, implementation, effective_deploy_mode
 
 
 def _resolve_selected_devices(
@@ -610,7 +650,7 @@ def _format_test_device_command(
 
 def _format_pr_summary_block(
     command: str,
-    per_device_results: list[tuple[object, int, int, int, object]],
+    per_device_results: list[tuple[object, int, int, int, object, str]],
 ) -> str:
     """Render a markdown block for the PR template's Device testing section.
 
@@ -622,15 +662,18 @@ def _format_pr_summary_block(
     When the device's ``probe_implementation`` succeeded, the bullet
     includes the firmware version and board model reported by
     ``sys.implementation`` — reviewers no longer have to cross-reference
-    ``devices.yml`` to learn what actually ran.
+    ``devices.yml`` to learn what actually ran.  The deploy mode
+    (``ram`` or ``flash``) is always shown so a bare ``test-device``
+    invocation still tells reviewers how the device was exercised.
 
     Args:
         command: Reconstructed ``test-device`` invocation string.
         per_device_results: Per-device tuples of
-            ``(device_entry, passed, failed, errors, implementation)``
-            where ``implementation`` is a
+            ``(device_entry, passed, failed, errors, implementation,
+            deploy_mode)`` where ``implementation`` is a
             :class:`chumicro_device_transport.DeviceImplementation` or
-            ``None``.
+            ``None``, and ``deploy_mode`` is the resolved user-facing
+            mode (``"ram"`` or ``"flash"``).
 
     Returns:
         Multi-line markdown body (no trailing newline).
@@ -639,7 +682,9 @@ def _format_pr_summary_block(
     total_passed = 0
     total_failed = 0
     total_errors = 0
-    for device_entry, passed, failed, errors, implementation in per_device_results:
+    for (
+        device_entry, passed, failed, errors, implementation, deploy_mode,
+    ) in per_device_results:
         runtime_label = _runtime_display_name(device_entry.runtime)
         if implementation is not None:
             firmware = f"{runtime_label} {implementation.version}"
@@ -649,7 +694,7 @@ def _format_pr_summary_block(
             firmware = runtime_label
         lines.append(
             f"- `{device_entry.identifier}` ({firmware}, "
-            f"`{device_entry.address}`): "
+            f"{deploy_mode} mode, `{device_entry.address}`): "
             f"{passed} passed, {failed} failed, {errors} errors"
         )
         total_passed += passed
@@ -736,7 +781,9 @@ def test_device(
     # at least one device produced a row — even if a later device's
     # transport raises something unexpected mid-run.  Contributors used
     # to lose the summary entirely in that case.
-    per_device_results: list[tuple[object, int, int, int, object]] = []
+    per_device_results: list[
+        tuple[object, int, int, int, object, str]
+    ] = []
     command = _format_test_device_command(
         runtime, micropython_device, circuitpython_device,
         library, test_filter, deploy_mode,
@@ -744,16 +791,22 @@ def test_device(
 
     try:
         for device_entry in selected:
+            effective_deploy_mode = _resolve_effective_deploy_mode(
+                device_entry, deploy_mode,
+            )
             print(f"\n{'=' * 60}")
             print(
                 f"Device: {device_entry.identifier} "
-                f"({device_entry.runtime})"
+                f"({device_entry.runtime}, {effective_deploy_mode} mode)"
             )
             print(f"Address: {device_entry.address}")
             print(f"{'=' * 60}")
 
             try:
-                passed, failed, errors, implementation = _run_tests_on_device(
+                (
+                    passed, failed, errors, implementation,
+                    effective_deploy_mode,
+                ) = _run_tests_on_device(
                     device_entry, test_plan, harness_source, test_filter,
                     deploy_mode=deploy_mode,
                 )
@@ -763,25 +816,28 @@ def test_device(
                 # move on.
                 print(f"  FATAL: Device run raised: {device_error}")
                 per_device_results.append(
-                    (device_entry, 0, 0, 1, None),
+                    (device_entry, 0, 0, 1, None, effective_deploy_mode),
                 )
                 continue
 
             per_device_results.append(
-                (device_entry, passed, failed, errors, implementation),
+                (
+                    device_entry, passed, failed, errors,
+                    implementation, effective_deploy_mode,
+                ),
             )
     finally:
         if per_device_results:
             _print_device_test_summary(command, per_device_results)
 
-    total_failed = sum(failed for _, _, failed, _, _ in per_device_results)
-    total_errors = sum(errors for _, _, _, errors, _ in per_device_results)
+    total_failed = sum(failed for _, _, failed, _, _, _ in per_device_results)
+    total_errors = sum(errors for _, _, _, errors, _, _ in per_device_results)
     return 1 if (total_failed or total_errors) else 0
 
 
 def _print_device_test_summary(
     command: str,
-    per_device_results: list[tuple[object, int, int, int, object]],
+    per_device_results: list[tuple[object, int, int, int, object, str]],
 ) -> None:
     """Print the end-of-run totals banner and the paste-ready PR block.
 
@@ -793,11 +849,12 @@ def _print_device_test_summary(
     Args:
         command: Reconstructed ``test-device`` CLI invocation.
         per_device_results: Per-device tuples of
-            ``(device_entry, passed, failed, errors, implementation)``.
+            ``(device_entry, passed, failed, errors, implementation,
+            deploy_mode)``.
     """
-    total_passed = sum(passed for _, passed, _, _, _ in per_device_results)
-    total_failed = sum(failed for _, _, failed, _, _ in per_device_results)
-    total_errors = sum(errors for _, _, _, errors, _ in per_device_results)
+    total_passed = sum(passed for _, passed, _, _, _, _ in per_device_results)
+    total_failed = sum(failed for _, _, failed, _, _, _ in per_device_results)
+    total_errors = sum(errors for _, _, _, errors, _, _ in per_device_results)
 
     print(f"\n{'=' * 60}")
     print(

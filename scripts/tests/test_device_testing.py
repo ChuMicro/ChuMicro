@@ -132,7 +132,7 @@ class TestDeviceOrchestration:
             deploy_mode=None,
         ):
             selected_device_ids.append(device_entry.identifier)
-            return 1, 0, 0, None
+            return 1, 0, 0, None, "ram"
 
         monkeypatch.setattr(
             device_testing,
@@ -193,7 +193,7 @@ class TestDeviceOrchestration:
             deploy_mode=None,
         ):
             selected_device_ids.append(device_entry.identifier)
-            return 1, 0, 0, None
+            return 1, 0, 0, None, "ram"
 
         monkeypatch.setattr(
             device_testing,
@@ -251,7 +251,7 @@ class TestDeviceOrchestration:
             deploy_mode=None,
         ):
             selected_device_ids.append(device_entry.identifier)
-            return 1, 0, 0, None
+            return 1, 0, 0, None, "ram"
 
         monkeypatch.setattr(
             device_testing,
@@ -315,7 +315,7 @@ class TestDeviceOrchestration:
             deploy_mode=None,
         ):
             selected_device_ids.append(device_entry.identifier)
-            return 1, 0, 0, None
+            return 1, 0, 0, None, "ram"
 
         monkeypatch.setattr(
             device_testing,
@@ -380,7 +380,7 @@ class TestDeviceOrchestration:
             deploy_mode=None,
         ):
             selected_device_ids.append(device_entry.identifier)
-            return 1, 0, 0, None
+            return 1, 0, 0, None, "ram"
 
         monkeypatch.setattr(
             device_testing,
@@ -906,7 +906,7 @@ class TestRunTestsOnDevice:
         )
 
         plan = [_plan_entry(tmp_path, "alpha")]
-        passed, failed, errors, _implementation = device_testing._run_tests_on_device(
+        passed, failed, errors, _implementation, _deploy_mode = device_testing._run_tests_on_device(
             _circuitpython_device(),
             plan,
             harness_source=tmp_path / "harness",
@@ -936,7 +936,7 @@ class TestRunTestsOnDevice:
         )
 
         plan = [_plan_entry(tmp_path, "alpha"), _plan_entry(tmp_path, "beta")]
-        passed, failed, errors, _implementation = device_testing._run_tests_on_device(
+        passed, failed, errors, _implementation, _deploy_mode = device_testing._run_tests_on_device(
             _circuitpython_device(), plan,
             harness_source=tmp_path / "harness", test_filter=None,
         )
@@ -969,7 +969,7 @@ class TestRunTestsOnDevice:
         # stub it out to avoid hitting the real workspace.
         monkeypatch.setattr(device_testing, "discover_library_dirs", lambda: [])
 
-        passed, failed, errors, _implementation = device_testing._run_tests_on_device(
+        passed, failed, errors, _implementation, _deploy_mode = device_testing._run_tests_on_device(
             _micropython_device(), plan,
             harness_source=tmp_path / "harness", test_filter=None,
         )
@@ -1060,7 +1060,7 @@ class TestRunTestsOnDevice:
         )
 
         plan = [_plan_entry(tmp_path, "alpha", file_count=2)]
-        passed, failed, errors, _implementation = device_testing._run_tests_on_device(
+        passed, failed, errors, _implementation, _deploy_mode = device_testing._run_tests_on_device(
             _circuitpython_device(), plan,
             harness_source=tmp_path / "harness", test_filter=None,
         )
@@ -1098,7 +1098,7 @@ class TestRunTestsOnDevice:
         )
 
         plan = [_plan_entry(tmp_path, "alpha", file_count=3)]
-        passed, failed, errors, _implementation = device_testing._run_tests_on_device(
+        passed, failed, errors, _implementation, _deploy_mode = device_testing._run_tests_on_device(
             _circuitpython_device(), plan,
             harness_source=tmp_path / "harness", test_filter=None,
         )
@@ -1121,7 +1121,7 @@ class TestRunTestsOnDevice:
         )
 
         plan = [_plan_entry(tmp_path, "alpha")]
-        passed, failed, errors, _implementation = device_testing._run_tests_on_device(
+        passed, failed, errors, _implementation, _deploy_mode = device_testing._run_tests_on_device(
             _circuitpython_device(), plan,
             harness_source=tmp_path / "harness", test_filter=None,
         )
@@ -1142,7 +1142,7 @@ class TestRunTestsOnDevice:
         )
 
         plan = [_plan_entry(tmp_path, "alpha")]
-        passed, failed, errors, _implementation = device_testing._run_tests_on_device(
+        passed, failed, errors, _implementation, _deploy_mode = device_testing._run_tests_on_device(
             _circuitpython_device(), plan,
             harness_source=tmp_path / "harness", test_filter=None,
         )
@@ -1216,7 +1216,7 @@ class TestRunTestsOnDevice:
             _plan_entry(tmp_path, "alpha", file_count=2),
             _plan_entry(tmp_path, "beta", file_count=1),
         ]
-        passed, failed, errors, _implementation = device_testing._run_tests_on_device(
+        passed, failed, errors, _implementation, _deploy_mode = device_testing._run_tests_on_device(
             _circuitpython_device(), plan,
             harness_source=tmp_path / "harness", test_filter=None,
         )
@@ -1289,7 +1289,7 @@ class TestFormatPrSummaryBlock:
         )
 
     def test_single_device_renders_one_bullet(self) -> None:
-        """Each device gets its own bullet with identifier, runtime, and address."""
+        """Each device gets its own bullet with runtime, deploy mode, and address."""
         device = DeviceEntry(
             identifier="pico-w",
             runtime="micropython",
@@ -1297,14 +1297,14 @@ class TestFormatPrSummaryBlock:
         )
         block = device_testing._format_pr_summary_block(
             command="python scripts/run.py test-device --runtime micropython",
-            per_device_results=[(device, 5, 0, 0, None)],
+            per_device_results=[(device, 5, 0, 0, None, "ram")],
         )
         lines = block.splitlines()
         assert lines[0] == (
             "- Command: `python scripts/run.py test-device --runtime micropython`"
         )
         assert lines[1] == (
-            "- `pico-w` (MicroPython, `/dev/cu.usbmodem1`): "
+            "- `pico-w` (MicroPython, ram mode, `/dev/cu.usbmodem1`): "
             "5 passed, 0 failed, 0 errors"
         )
         assert lines[2] == "- **Total: 5 passed, 0 failed, 0 errors**"
@@ -1324,8 +1324,8 @@ class TestFormatPrSummaryBlock:
         block = device_testing._format_pr_summary_block(
             command="python scripts/run.py test-device --runtime both",
             per_device_results=[
-                (mp_device, 4, 1, 0, None),
-                (cp_device, 3, 0, 2, None),
+                (mp_device, 4, 1, 0, None, "ram"),
+                (cp_device, 3, 0, 2, None, "flash"),
             ],
         )
         assert "`pico-w` (MicroPython" in block
@@ -1344,8 +1344,8 @@ class TestFormatPrSummaryBlock:
         block = device_testing._format_pr_summary_block(
             command="cmd",
             per_device_results=[
-                (mp_device, 0, 0, 0, None),
-                (cp_device, 0, 0, 0, None),
+                (mp_device, 0, 0, 0, None, "ram"),
+                (cp_device, 0, 0, 0, None, "ram"),
             ],
         )
         assert "(MicroPython," in block
@@ -1370,10 +1370,10 @@ class TestFormatPrSummaryBlock:
         )
         block = device_testing._format_pr_summary_block(
             command="python scripts/run.py test-device",
-            per_device_results=[(device, 5, 0, 0, implementation)],
+            per_device_results=[(device, 5, 0, 0, implementation, "ram")],
         )
         assert (
-            "(MicroPython 1.26.0 on Raspberry Pi Pico W with RP2040,"
+            "(MicroPython 1.26.0 on Raspberry Pi Pico W with RP2040, ram mode,"
             in block
         )
 
@@ -1393,10 +1393,80 @@ class TestFormatPrSummaryBlock:
         )
         block = device_testing._format_pr_summary_block(
             command="cmd",
-            per_device_results=[(device, 0, 0, 0, implementation)],
+            per_device_results=[(device, 0, 0, 0, implementation, "ram")],
         )
-        assert "(CircuitPython 10.1.4, `/dev/cu.usbmodem2`)" in block
+        assert (
+            "(CircuitPython 10.1.4, ram mode, `/dev/cu.usbmodem2`)"
+            in block
+        )
         assert " on " not in block
+
+    def test_deploy_mode_surfaces_even_without_probe(self) -> None:
+        """Bare ``test-device`` (no probe result) still shows the deploy mode.
+
+        This is the critical "my PR summary doesn't say what mode it
+        ran" regression — ``--deploy-mode`` absent from the command
+        must not mean the mode is absent from the bullet.
+        """
+        device = DeviceEntry(
+            identifier="cp",
+            runtime="circuitpython",
+            address="/dev/cu.usbmodem2",
+        )
+        block = device_testing._format_pr_summary_block(
+            command="python scripts/run.py test-device",
+            per_device_results=[(device, 1, 0, 0, None, "flash")],
+        )
+        assert "flash mode" in block
+
+    def test_different_devices_can_show_different_modes(self) -> None:
+        """Per-device modes render independently so mixed runs are legible."""
+        mp_device = DeviceEntry(
+            identifier="mp", runtime="micropython", address="/dev/a",
+        )
+        cp_device = DeviceEntry(
+            identifier="cp", runtime="circuitpython", address="/dev/b",
+        )
+        block = device_testing._format_pr_summary_block(
+            command="cmd",
+            per_device_results=[
+                (mp_device, 0, 0, 0, None, "ram"),
+                (cp_device, 0, 0, 0, None, "flash"),
+            ],
+        )
+        assert "`mp` (MicroPython, ram mode," in block
+        assert "`cp` (CircuitPython, flash mode," in block
+
+
+class TestResolveEffectiveDeployMode:
+    """Tests for _resolve_effective_deploy_mode — deploy-mode precedence."""
+
+    def test_cli_override_wins(self) -> None:
+        """CLI ``--deploy-mode`` takes precedence over the device entry."""
+        device = DeviceEntry(
+            identifier="d", runtime="micropython", address="/dev/a",
+            deploy_mode="flash",
+        )
+        assert device_testing._resolve_effective_deploy_mode(device, "ram") == "ram"
+
+    def test_device_entry_used_when_override_none(self) -> None:
+        """Without a CLI override the device entry's ``deploy_mode`` applies."""
+        device = DeviceEntry(
+            identifier="d", runtime="micropython", address="/dev/a",
+            deploy_mode="flash",
+        )
+        assert device_testing._resolve_effective_deploy_mode(device, None) == "flash"
+
+    def test_defaults_to_ram_when_device_entry_field_empty(self) -> None:
+        """Belt-and-braces: an empty ``deploy_mode`` falls back to ram."""
+        # The loader always populates deploy_mode, but the helper's
+        # ``or "ram"`` tail protects against a future code path that
+        # constructs a DeviceEntry by hand.
+        device = DeviceEntry(
+            identifier="d", runtime="micropython", address="/dev/a",
+        )
+        object.__setattr__(device, "deploy_mode", "")
+        assert device_testing._resolve_effective_deploy_mode(device, None) == "ram"
 
 
 class TestSummaryAlwaysPrints:
@@ -1445,7 +1515,7 @@ class TestSummaryAlwaysPrints:
         self._stub_functional_tests(monkeypatch)
         monkeypatch.setattr(
             device_testing, "_run_tests_on_device",
-            lambda device_entry, *args, **kwargs: (2, 1, 0, None),
+            lambda device_entry, *args, **kwargs: (2, 1, 0, None, "ram"),
         )
 
         result = device_testing.test_device()
@@ -1516,7 +1586,7 @@ class TestSummaryAlwaysPrints:
         def half_exploding_run(device_entry, *args, **kwargs):
             if device_entry.identifier == "mp-one":
                 raise RuntimeError("mpremote hung")
-            return 3, 0, 0, None
+            return 3, 0, 0, None, "ram"
 
         monkeypatch.setattr(
             device_testing, "_run_tests_on_device", half_exploding_run,
