@@ -1119,18 +1119,12 @@ def _build_parser() -> argparse.ArgumentParser:
     test_everything_parser.add_argument(
         "--file",
         dest="file_filter",
-        help=(
-            "limit the optional device phase to test files whose name "
-            "contains this substring"
-        ),
+        help="limit the optional device phase by test file name substring",
     )
     test_everything_parser.add_argument(
-        "--test",
+        "--function",
         dest="function_filter",
-        help=(
-            "limit the optional device phase to test functions whose name "
-            "contains this substring"
-        ),
+        help="limit the optional device phase by test function name substring",
     )
     test_everything_parser.add_argument(
         "--deploy-mode",
@@ -1176,19 +1170,12 @@ def _build_parser() -> argparse.ArgumentParser:
     test_device_parser.add_argument(
         "--file",
         dest="file_filter",
-        help=(
-            "limit to test files whose name contains this substring "
-            "(e.g. --file test_heartbeat matches test_heartbeat.py)"
-        ),
+        help="limit to test files whose name contains this substring",
     )
     test_device_parser.add_argument(
-        "--test",
+        "--function",
         dest="function_filter",
-        help=(
-            "limit to test functions whose name contains this substring. "
-            "Matches functions only, not filenames — use --file to filter "
-            "by filename."
-        ),
+        help="limit to test functions whose name contains this substring",
     )
     test_device_parser.add_argument(
         "--deploy-mode",

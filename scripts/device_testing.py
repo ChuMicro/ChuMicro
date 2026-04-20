@@ -771,7 +771,7 @@ def _format_test_device_command(
     if file_filter is not None:
         parts.append(f"--file {file_filter}")
     if function_filter is not None:
-        parts.append(f"--test {function_filter}")
+        parts.append(f"--function {function_filter}")
     if deploy_mode is not None:
         parts.append(f"--deploy-mode {deploy_mode}")
     return " ".join(parts)
@@ -1128,16 +1128,9 @@ def test_device(
             if file_filter:
                 filter_parts.append(f"--file {file_filter}")
             if function_filter:
-                filter_parts.append(f"--test {function_filter}")
+                filter_parts.append(f"--function {function_filter}")
             print(
-                "No functional test files matched the given filter "
-                f"({', '.join(filter_parts)})."
-            )
-            print(
-                "Check the filter spelling or widen the match (substring, "
-                "not exact).  For file filters, --file matches test file "
-                "names only; for function filters, --test matches test "
-                "function names only."
+                f"No functional tests matched: {', '.join(filter_parts)}"
             )
             return 2
         print("No functional test files found.")

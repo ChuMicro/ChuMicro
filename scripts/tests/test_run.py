@@ -410,7 +410,7 @@ class TestMainDispatch:
             "--with-device",
             "--runtime", "both",
             "--library", "timing",
-            "--test", "heartbeat",
+            "--function", "heartbeat",
             "--deploy-mode", "flash",
             "--micropython-binary", "/tmp/mpy",
             "--circuitpython-binary", "/tmp/cpy",
@@ -471,7 +471,7 @@ class TestMainDispatch:
             "--runtime", "circuitpython",
             "--library", "timing",
             "--file", "test_heartbeat",
-            "--test", "heartbeat_fires",
+            "--function", "heartbeat_fires",
             "--deploy-mode", "flash",
         ])
 

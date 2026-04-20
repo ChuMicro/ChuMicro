@@ -163,25 +163,48 @@ python scripts/run.py test-device --runtime both
 python scripts/run.py test-device --micropython-device office-esp32-mp
 python scripts/run.py test-device --circuitpython-device office-esp32-cp
 
-# Limit to one library
+# Scope to a library
 python scripts/run.py test-device --library timing
 
-# Limit to one file by filename substring (matches filenames only)
+# Scope to files whose name contains the substring
 python scripts/run.py test-device --library timing --file test_heartbeat
 
-# Limit to one test function by function-name substring
-# (matches function names only — does NOT match filenames)
-python scripts/run.py test-device --library timing --test heartbeat_fires
+# Scope to functions whose name contains the substring
+python scripts/run.py test-device --library timing --function heartbeat_fires
 
-# Both filters compose as AND — one file AND one function
-python scripts/run.py test-device \
-    --library timing --file test_heartbeat --test heartbeat_fires
-
-# Force flash mode for this run
+# Force flash mode
 python scripts/run.py test-device --library timing --deploy-mode flash
 ```
 
-## 5. Run `functional_tests/` from an IDE
+**Scoping flags:**
+
+- `--library <name>` — restrict to one library.
+- `--file <substring>` — match test file names (not function names).
+- `--function <substring>` — match test function names (not file names).
+- Flags compose as AND: `--library timing --file test_heartbeat --function fires_on_interval` runs only `fires_on_interval` inside `test_heartbeat.py` in `timing/`.
+- Any filter that matches nothing exits 2 so typos don't silently pass.
+
+## 5. Run functional tests via pytest directly
+
+The device plugin is registered at the repo root, so plain `pytest` works against any `functional_tests/` path — useful when you want pytest-native UX (a specific folder, file, or method) without going through `scripts/run.py`.
+
+```bash
+# Whole directory
+pytest libraries/timing/functional_tests/
+
+# One file
+pytest libraries/timing/functional_tests/test_heartbeat.py
+
+# One function
+pytest libraries/timing/functional_tests/test_heartbeat.py::test_heartbeat_fires
+
+# Keyword filter (pytest-native)
+pytest libraries/timing/functional_tests/ -k heartbeat
+```
+
+Target device selection still follows `devices.yml` defaults. Without a populated `devices.yml`, the tests skip with a clear message rather than failing.
+
+## 6. Run `functional_tests/` from an IDE
 
 The repository registers a pytest plugin that intercepts explicit `functional_tests/` targets and routes them to hardware instead of importing them on the host.
 
@@ -205,7 +228,7 @@ VS Code uses the same pytest entrypoint and committed workspace settings/tasks a
 
 A dedicated live end-to-end VS Code validation pass remains on `plans/next-up.md`, so if you hit a VS Code-only issue, treat that as a real bug rather than user error.
 
-## 6. How functional tests differ from host tests
+## 7. How functional tests differ from host tests
 
 | Test type | Location | How to run |
 |---|---|---|
@@ -213,7 +236,7 @@ A dedicated live end-to-end VS Code validation pass remains on `plans/next-up.md
 | Real-board functional tests | `libraries/<name>/functional_tests/` | `python scripts/run.py test-device --library <name>` or an IDE play button |
 | Cross-runtime unix-port tests | reuses `tests/` | `python scripts/run.py test-runtime-matrix` |
 
-## 7. CI and environment overrides
+## 8. CI and environment overrides
 
 Two environment variables are supported for file-path overrides:
 

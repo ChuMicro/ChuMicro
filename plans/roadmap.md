@@ -57,7 +57,7 @@ Key choices confirmed (Decision 0027):
 - CircuitPython flash mode auto-detects CIRCUITPY drive, controls autoreload via raw REPL
 - two gitignored config files: `devices.yml` (board registry) + `device-config.yml` (shared environment like WiFi)
 - `devices.yml` has a top-level `defaults:` block for IDE and bare-CLI target selection
-- `test-device` command in run.py with `--runtime`, `--micropython-device`, `--circuitpython-device`, `--library`, `--file`, `--test`, `--deploy-mode` flags (`--file` filters by filename; `--test` filters by function name — kept orthogonal for precision)
+- `test-device` command in run.py with `--runtime`, `--micropython-device`, `--circuitpython-device`, `--library`, `--file`, `--function`, `--deploy-mode` flags
 - IDE integration via pytest conftest/plugin that routes explicit `functional_tests/` targets to the configured device(s)
 - harness gains `name_filter` parameter for single-test execution
 - transport implementations live in `support/device_transport/`, not published

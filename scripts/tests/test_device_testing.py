@@ -97,6 +97,21 @@ class TestDiscoverFunctionalTests:
         # File name matches but no function matches → excluded.
         assert plan == []
 
+    def test_library_scope_binds_file_and_function_filters(self) -> None:
+        """Filters apply within the selected library only.
+
+        A function name that exists in another library must not drag
+        that library into a ``--library timing`` run.
+        """
+        plan = device_testing.discover_functional_tests(
+            library="timing",
+            function_filter="test_",  # matches in every library
+        )
+        library_names = {library_name for library_name, _, _ in plan}
+        # Even with a very permissive function filter, only ``timing``
+        # is in the plan — the library scope binds everything else.
+        assert library_names == {"timing"}
+
 
 class TestDeviceOrchestration:
     """Tests for the top-level test_device orchestration."""
@@ -155,9 +170,9 @@ class TestDeviceOrchestration:
 
         captured = capsys.readouterr()
         assert result == 2
-        assert "No functional test files matched" in captured.out
+        assert "No functional tests matched" in captured.out
         assert "--library timing" in captured.out
-        assert "--test definitely_not_a_test" in captured.out
+        assert "--function definitely_not_a_test" in captured.out
 
     def test_empty_plan_without_filters_still_returns_0(
         self, monkeypatch, tmp_path,
@@ -1357,7 +1372,7 @@ class TestFormatTestDeviceCommand:
         assert "--circuitpython-device s2-mini" in command
         assert "--library timing" in command
         assert "--file test_heartbeat" in command
-        assert "--test fires_on_interval" in command
+        assert "--function fires_on_interval" in command
         assert "--deploy-mode flash" in command
         assert command.startswith("python scripts/run.py test-device ")
 
@@ -1377,7 +1392,7 @@ class TestFormatTestDeviceCommand:
         )
 
     def test_file_and_function_flags_render_distinct_options(self) -> None:
-        """``--file`` and ``--test`` are separate flags in the rendered command."""
+        """``--file`` and ``--function`` are separate flags in the rendered command."""
         command = device_testing._format_test_device_command(
             runtime=None,
             micropython_device=None,
@@ -1388,7 +1403,7 @@ class TestFormatTestDeviceCommand:
             deploy_mode=None,
         )
         assert "--file test_heartbeat" in command
-        assert "--test fires" in command
+        assert "--function fires" in command
 
 
 def _make_device_result(

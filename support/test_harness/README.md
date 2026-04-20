@@ -86,11 +86,11 @@ python scripts/run.py test-device --runtime both --library timing
 # Override a specific board selection
 python scripts/run.py test-device --micropython-device sample-mp-board --library timing
 
-# Filter to one file by filename substring (file-name match only)
+# Scope to a file (filename substring)
 python scripts/run.py test-device --library timing --file test_heartbeat
 
-# Filter to one function by function-name substring (function-name match only)
-python scripts/run.py test-device --library timing --test heartbeat_fires
+# Scope to a function (function-name substring)
+python scripts/run.py test-device --library timing --function heartbeat_fires
 
 # Force flash deployment for this run
 python scripts/run.py test-device --library timing --deploy-mode flash

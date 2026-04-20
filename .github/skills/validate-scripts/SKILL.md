@@ -262,7 +262,7 @@ python scripts/run.py check-api 2>&1 | tail -5
 
 ```bash
 # ✅ Bare CLI run uses the default target device(s) from devices.yml
-python scripts/run.py test-device --library timing --test progress_on_runtime 2>&1 | tail -20
+python scripts/run.py test-device --library timing --function progress_on_runtime 2>&1 | tail -20
 # 🔍 Output contains either:
 #    "Device: <id>" lines for the defaults-selected board(s)
 #    OR "Device config error" / "No matching devices found" if local board config is incomplete

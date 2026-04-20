@@ -154,7 +154,7 @@ Conventions:
 | `python scripts/run.py test-circuitpython-compatibility` | CircuitPython cross-runtime unit tests |
 | `python scripts/run.py test-runtime-matrix` | Test all packages on CPython + MicroPython + CircuitPython |
 | `python scripts/run.py test-everything` | Deep developer test sweep: CPython, scripts, unix-port runtimes, and optional device tests |
-| `python scripts/run.py test-device` | Run functional tests on the default device target(s) from `devices.yml`. Override with `--runtime micropython\|circuitpython\|both`, `--micropython-device <id>`, `--circuitpython-device <id>`, `--library <name>`, `--file <filename-substring>`, `--test <function-substring>`, `--deploy-mode ram\|flash`. `--file` filters by file name only; `--test` filters by test function name only (no filename-and-function overlap). |
+| `python scripts/run.py test-device` | Run functional tests on the default device target(s) from `devices.yml`. Scope with `--library`, `--file`, `--function`, `--runtime`, `--micropython-device`, `--circuitpython-device`, or `--deploy-mode`. See [docs/contributing/device-testing.md](docs/contributing/device-testing.md) for flag semantics and pytest-direct usage. |
 | `python scripts/run.py check-version` | Check VERSION enforcement for changed libraries |
 | `python scripts/run.py check-api` | Check API breakages against last release tag |
 
