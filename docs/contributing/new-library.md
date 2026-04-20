@@ -4,7 +4,7 @@ This guide walks you through the full lifecycle of adding a new library to ChuMi
 
 ## Before you start
 
-Check [open issues](https://github.com/ChuMicro/ChuMicro/issues) and [discussions](https://github.com/ChuMicro/ChuMicro/discussions) to see if your idea overlaps with planned work. If you're unsure whether the library fits the project, open a discussion first — it's much faster to align on scope before building.
+Check [open issues](https://github.com/ChuMicro/ChuMicro/issues) and [discussions](https://github.com/ChuMicro/ChuMicro/discussions), and skim [`plans/roadmap.md`](../../plans/roadmap.md) and [`plans/decisions/`](../../plans/decisions/) to see if your idea overlaps with planned work or settled design choices. If you're unsure whether the library fits the project, open a discussion first — it's much faster to align on scope before building.
 
 ## 1. Scaffold
 

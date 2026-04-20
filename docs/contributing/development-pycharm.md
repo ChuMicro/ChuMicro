@@ -141,7 +141,7 @@ Process finished with exit code 0
 
 | What you see | What it means | How to fix |
 |---|---|---|
-| `Required test coverage of 85.0% not reached` | Tests don't cover enough code | Follow the hint below the FAIL line — it points to the `Missing` column. (Agents who pass `--coverage-threshold 94` will see `94.0%` instead — see [Decision 0025](../../plans/decisions/0025-dual-coverage-thresholds.md).) |
+| `Required test coverage of 85.0% not reached` | Tests don't cover enough code | Follow the hint below the FAIL line — it points to the `Missing` column. |
 | `ruff check` errors | Code style violation — see [Style Guide](style-guide.md) | Click the file:line link in the output to jump to the issue |
 | `griffe warnings detected` | Bad or missing docstrings | Add type annotations to the signature; `Args:` uses `name: description` (no type), `Returns:` uses just the description |
 | `check-version` failure | Source changed without VERSION bump | Edit `libraries/<name>/VERSION` |

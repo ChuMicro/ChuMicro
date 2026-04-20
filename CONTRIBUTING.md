@@ -50,8 +50,6 @@ Start here, then pick the guide that matches your task:
 
 Each page is self-contained for its topic. You don't need to read all of them — just the ones relevant to what you're doing.
 
-> **First contribution?** Start with the [cheat sheet](docs/contributing/cheat-sheet.md) for the short version, or read the [Quick Start](#quick-start) below for the full walkthrough. Run `preflight` before pushing — that's all you need to remember.
-
 ## Prerequisites
 
 | Tool | Version | Notes |
@@ -254,7 +252,7 @@ Repeat until the rebase finishes, then push with `--force-with-lease` as above.
 
 All work happens on branches off `main`. PRs target `main`. There is no `develop` branch.
 
-Name your branch `topic/short-description` — the topic gives context, the name describes the work. Keep it short and relevant:
+Prefix your branch name with `fix/`, `docs/`, or `feature/` to give reviewers context at a glance, then add a short description of the work:
 
 ```bash
 git checkout -b fix/timing-wraparound
@@ -262,7 +260,7 @@ git checkout -b docs/install-guide
 git checkout -b feature/settings-lib
 ```
 
-Common topics: `fix/`, `docs/`, `feature/`. Use whatever fits — the name matters more than the prefix.
+Use whatever prefix fits — the description matters more than the prefix.
 
 After [syncing your fork](#keeping-your-fork-in-sync), create a branch:
 
@@ -370,6 +368,8 @@ When your PR merges to `main` with a VERSION bump, the library is **automaticall
 
 > **Full guide:** See [Adding a New Library](docs/contributing/new-library.md) for the complete lifecycle from idea to published package.
 
+**Before you scaffold:** read [new-library.md § Before you start](docs/contributing/new-library.md#before-you-start) — a 2-minute scope check (issues, discussions, `plans/roadmap.md`, `plans/decisions/`) saves rewrites if your idea overlaps with planned work or settled design choices.
+
 The short version:
 
 ```bash
@@ -428,7 +428,7 @@ We use full words so everyone can read the code without looking things up — ne
 
 ## Project decisions
 
-Major design choices are documented in [`plans/decisions/`](plans/decisions/) — each file explains what was decided, why, and when. You don't need to read them all, but **search there before proposing structural changes**. If your idea was already considered, the decision doc will tell you the reasoning and whether circumstances have changed.
+Major design choices live in [`plans/decisions/`](plans/decisions/) — each file explains what was decided, why, and when. Current direction lives in [`plans/roadmap.md`](plans/roadmap.md). Unresolved threads live in [`plans/open-questions.md`](plans/open-questions.md). **Search these before proposing structural changes** — if your idea was already considered, the decision doc tells you the reasoning and whether circumstances have changed.
 
 ## Getting help
 

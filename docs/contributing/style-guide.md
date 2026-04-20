@@ -155,7 +155,7 @@ class PacketReader:
 
 ## Coverage exclusions
 
-Every library must meet the coverage threshold. Human contributors target the **85 %** baseline configured in `pyproject.toml` (`fail_under = 85`); agents pass `--coverage-threshold 94` on every `test`, `preflight`, and `test-everything` invocation per [Decision 0025](../../plans/decisions/0025-dual-coverage-thresholds.md). Sometimes code genuinely can't be exercised in CPython tests — runtime-specific branches, hardware fallbacks, or defensive guards that only fire on a real board. Mark those lines so they don't drag down your coverage.
+Every library must meet the **85 %** coverage threshold configured in `pyproject.toml` (`fail_under = 85`). Sometimes code genuinely can't be exercised in CPython tests — runtime-specific branches, hardware fallbacks, or defensive guards that only fire on a real board. Mark those lines so they don't drag down your coverage.
 
 ### `# pragma: no cover` — exclude a line or block
 

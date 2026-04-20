@@ -107,16 +107,16 @@ For structured task scheduling with multiple services, see [runner](https://gith
 
 ## Platform support
 
-You don't need to pick a tick source — the library detects your runtime and uses the best one available:
+You don't need to pick a tick source — the library picks the best one available on your runtime. Behavior is identical regardless of which source is used.
 
-| Priority | Source | Runtime |
-|---|---|---|
-| 1 | `supervisor.ticks_ms` | CircuitPython 7+ |
-| 2 | `time.ticks_ms` | MicroPython, some CircuitPython builds |
-| 3 | `time.monotonic_ns` | CPython, some CircuitPython boards |
-| 4 | `time.monotonic` | Final fallback (float seconds → int ms) |
+| Source | Runtime |
+|---|---|
+| `supervisor.ticks_ms` | CircuitPython 7+ |
+| `time.ticks_ms` | MicroPython, some CircuitPython builds |
+| `time.monotonic_ns` | CPython, some CircuitPython boards |
+| `time.monotonic` | Final fallback (float seconds → int ms) |
 
-Behavior is identical regardless of which source is used — you don't need to think about this, it just works.
+The library tries them top-to-bottom and uses the first one your runtime supports.
 
 <details>
 <summary>Technical detail: tick wraparound</summary>

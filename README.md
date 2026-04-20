@@ -57,6 +57,8 @@ msgpack   (no dependencies)
 
 Pick the install method for your runtime — swap `chumicro-timing` for whichever library you need.
 
+> **A note on naming:** pip uses hyphens (`chumicro-timing`); the import name and bundle path use underscores (`chumicro_timing`). That's standard across the Python ecosystem — PyPI uses hyphens by convention, but Python import names must be valid identifiers. Copy commands from the blocks below as-is.
+
 **CircuitPython ([circup](https://github.com/adafruit/circup)):**
 
 circup is CircuitPython's package manager — it uses [bundles](https://learn.adafruit.com/keep-your-circuitpython-libraries-on-devices-up-to-date-with-circup/bundle-commands) to find third-party packages. Register the ChuMicro bundle once, then install any library by name:

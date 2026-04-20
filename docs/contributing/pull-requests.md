@@ -11,6 +11,8 @@ Make sure you've:
 3. Created a branch (see [Branching conventions](../../CONTRIBUTING.md#branching-conventions))
 4. Made your changes and validated them
 
+> **Trivial docs fix?** GitHub's web editor (the pencil icon on any file) + the PR template is a legitimate path for typos, broken links, and one-line clarifications. You skip the local setup entirely; CI still runs the checks. Save the full local workflow for changes that need preflight.
+
 If you haven't validated yet, run preflight:
 
 ```bash
