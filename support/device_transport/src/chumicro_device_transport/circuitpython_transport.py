@@ -21,13 +21,13 @@ from __future__ import annotations
 
 import os
 import shutil
-import subprocess
-import sys as _sys_module
 import tempfile
 import time as _time_module
 from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol, cast
+
+from . import flash_drive
 
 _CTRL_A = b"\x01"
 _CTRL_B = b"\x02"
@@ -44,13 +44,6 @@ _INTERRUPT_DELAY = 0.1
 
 #: Delay after entering raw REPL in seconds.
 _ENTER_DELAY = 0.1
-
-#: Delay after flushing writes to the USB drive in seconds.
-#: Gives the USB controller time to finish writing to FAT32 media.
-#: May need increasing for boards with slower USB controllers or
-#: larger file sets.  Tune by running flash tests with ``--verbose``
-#: and watching for stale-read failures after sync.
-_FLUSH_SETTLE_DELAY = 0.5
 
 #: Volume name CircuitPython uses by default.
 _CIRCUITPY_VOLUME_NAME = "CIRCUITPY"
@@ -289,7 +282,7 @@ class CircuitpythonTransport:
 
         # Prevent macOS Spotlight from indexing the drive — it creates
         # hidden metadata files and slows down FAT32 writes.
-        self._disable_spotlight_indexing(drive_path)
+        flash_drive.disable_spotlight_indexing(drive_path)
 
         # Disable autoreload to prevent restarts during file copy.
         self._send_repl_command(
@@ -306,8 +299,8 @@ class CircuitpythonTransport:
             lib_staging = staging_path / "lib"
             lib_staging.mkdir()
             for source_directory in source_dirs:
-                self._merge_packages(source_directory, lib_staging)
-            self._merge_packages(harness_source, lib_staging)
+                flash_drive.merge_packages(source_directory, lib_staging)
+            flash_drive.merge_packages(harness_source, lib_staging)
 
             # Test files at root.
             for test_file in test_files:
@@ -316,20 +309,23 @@ class CircuitpythonTransport:
             # Strip macOS extended attributes from the staging dir
             # before rsyncing — xattrs cause slow FAT32 transfers and
             # generate ._ resource fork files.
-            self._strip_extended_attributes(staging_path)
+            flash_drive.strip_extended_attributes(staging_path)
 
-            self._rsync(staging_path, drive_path)
+            try:
+                flash_drive.rsync(staging_path, drive_path)
+            except flash_drive.FlashDriveError as error:
+                raise CircuitpythonTransportError(str(error)) from error
 
         # Remove ._ resource fork files that macOS may have created
         # on the FAT32 volume despite rsync's --exclude=._* flag.
-        self._clean_dot_files(drive_path)
+        flash_drive.clean_dot_files(drive_path)
 
         # Flush the volume so the device reads current content.
-        self._flush_volume(drive_path)
+        flash_drive.flush_volume(drive_path, sleep=self._time.sleep)
 
         # Verify that files are readable after the flush.  If the
         # settle delay is too short, the drive may return stale or
-        # empty content.  A failure here means _FLUSH_SETTLE_DELAY
+        # empty content.  A failure here means flash_drive.FLUSH_SETTLE_DELAY
         # needs increasing for this board.
         if test_files:
             probe_file = drive_path / test_files[0].name
@@ -338,198 +334,10 @@ class CircuitpythonTransport:
                 if len(content) == 0:
                     print(
                         f"WARNING: {probe_file.name} is empty after flush — "
-                        f"_FLUSH_SETTLE_DELAY ({_FLUSH_SETTLE_DELAY}s) may be "
+                        f"FLUSH_SETTLE_DELAY "
+                        f"({flash_drive.FLUSH_SETTLE_DELAY}s) may be "
                         f"too short for this board"
                     )
-
-    @staticmethod
-    def _merge_packages(
-        source_directory: Path,
-        staging_destination: Path,
-    ) -> None:
-        """Copy top-level packages from a source directory to a staging dir.
-
-        Merges into the staging destination using ``dirs_exist_ok=True``
-        so multiple source directories can contribute packages.  This
-        operates on the local filesystem (not the USB drive), so
-        ``shutil.copytree`` is reliable here.
-
-        Args:
-            source_directory: A ``src/`` directory containing packages.
-            staging_destination: Local staging directory to merge into.
-        """
-        if not source_directory.is_dir():
-            return
-        for child in sorted(source_directory.iterdir()):
-            if not child.is_dir():
-                continue
-            init_file = child / "__init__.py"
-            if not init_file.exists():
-                continue
-            target = staging_destination / child.name
-            shutil.copytree(
-                child,
-                target,
-                ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
-                dirs_exist_ok=True,
-            )
-
-    @staticmethod
-    def _rsync(source: Path, destination: Path) -> None:
-        """Rsync a source directory's contents to a destination.
-
-        Uses ``--checksum`` to verify content (FAT32 timestamps are
-        unreliable), ``--inplace`` to write directly into files (avoids
-        temp-file rename races on FAT32), and ``--delete`` to remove
-        stale files from the destination.
-
-        Device config files and build artifacts that live on the drive
-        but are not part of the test deployment are excluded from
-        deletion.
-
-        Raises:
-            CircuitpythonTransportError: If rsync is not installed or
-                the sync fails.
-
-        Args:
-            source: Source directory whose contents to sync.
-            destination: Destination directory.
-        """
-        command = [
-            "rsync",
-            "--recursive",
-            "--checksum",
-            "--inplace",
-            "--delete",
-            "--exclude=__pycache__",
-            "--exclude=*.pyc",
-            "--exclude=.DS_Store",
-            "--exclude=._*",
-            "--exclude=boot.py",
-            "--exclude=boot_out.txt",
-            "--exclude=code.py",
-            "--exclude=settings.toml",
-            str(source) + "/",
-            str(destination) + "/",
-        ]
-        try:
-            subprocess.run(command, capture_output=True, text=True, check=True)
-        except FileNotFoundError as not_found_error:
-            raise CircuitpythonTransportError(
-                "rsync is required for flash deploy mode but was not found.  "
-                "Install rsync and ensure it is on your PATH."
-            ) from not_found_error
-        except subprocess.CalledProcessError as rsync_error:
-            raise CircuitpythonTransportError(
-                f"rsync failed: {rsync_error.stderr}"
-            ) from rsync_error
-
-
-    def _flush_volume(self, drive_path: Path) -> None:
-        """Flush pending writes to the volume containing *drive_path*.
-
-        On macOS, calls the ``sync`` command; on other platforms, uses
-        ``os.sync()``.  Always waits briefly afterward to let the USB
-        controller finish writing to FAT32 media.
-
-        The settle delay goes through the injected ``self._time`` (per
-        Decision 0010 — constructor injection) so tests can use
-        ``FakeTime`` to skip it without sleeping for real.
-
-        Args:
-            drive_path: Path on the volume to flush.
-        """
-        if _sys_module.platform == "darwin":
-            try:
-                subprocess.run(["sync"], check=True, capture_output=True)
-            except Exception:  # pragma: no cover
-                print("WARNING: sync command failed — falling back to os.sync()")
-                os.sync()
-        else:
-            os.sync()  # pragma: no cover — tests run on macOS
-
-        # Allow time for the USB controller to finish writing to the
-        # FAT32 media.  Without this pause, the device may read stale
-        # content even after sync returns.
-        self._time.sleep(_FLUSH_SETTLE_DELAY)
-
-    @staticmethod
-    def _strip_extended_attributes(path: Path) -> None:
-        """Remove macOS extended attributes from all files under *path*.
-
-        Extended attributes (xattrs) cause slow transfers to FAT32
-        volumes and generate ``._`` resource fork files.  Stripping
-        them from the staging directory before rsync prevents these
-        artifacts from reaching the device.
-
-        No-op on non-macOS platforms.
-
-        Args:
-            path: Root directory to strip recursively.
-        """
-        if _sys_module.platform != "darwin":
-            return  # pragma: no cover — tests run on macOS
-        try:
-            subprocess.run(
-                ["xattr", "-cr", str(path)],
-                capture_output=True,
-                check=False,
-            )
-        except FileNotFoundError:
-            print("WARNING: xattr not found — skipping extended attribute removal")
-
-    @staticmethod
-    def _clean_dot_files(drive_path: Path) -> None:
-        """Merge or remove ``._`` resource fork files on a FAT32 volume.
-
-        macOS creates ``._`` files on FAT32 drives even when rsync
-        excludes them, because the OS itself writes them during
-        filesystem operations.  ``dot_clean`` merges these back into
-        the native file or removes them if the native file is absent.
-
-        No-op on non-macOS platforms.
-
-        Args:
-            drive_path: Mount point of the FAT32 volume.
-        """
-        if _sys_module.platform != "darwin":
-            return  # pragma: no cover — tests run on macOS
-        try:
-            subprocess.run(
-                ["dot_clean", str(drive_path)],
-                capture_output=True,
-                check=False,
-            )
-        except FileNotFoundError:
-            print("WARNING: dot_clean not found — skipping ._ file cleanup")
-
-    @staticmethod
-    def _disable_spotlight_indexing(drive_path: Path) -> None:
-        """Disable Spotlight indexing on a mounted volume.
-
-        Spotlight indexing creates ``.Spotlight-V100`` metadata and
-        slows down FAT32 writes.  ``mdutil -i off`` is idempotent
-        but resets on remount, so it is called each time the drive
-        is used.
-
-        May require elevated privileges on some macOS versions; if
-        the command fails, indexing continues and no error is raised.
-
-        No-op on non-macOS platforms.
-
-        Args:
-            drive_path: Mount point of the volume.
-        """
-        if _sys_module.platform != "darwin":
-            return  # pragma: no cover — tests run on macOS
-        try:
-            subprocess.run(
-                ["mdutil", "-i", "off", str(drive_path)],
-                capture_output=True,
-                check=False,
-            )
-        except FileNotFoundError:
-            print("WARNING: mdutil not found — skipping Spotlight indexing disable")
 
     def _collect_package_sources(self, source_directory: Path) -> None:
         """Walk a source directory and collect all .py files as module entries.
