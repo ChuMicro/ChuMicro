@@ -307,7 +307,7 @@ When you do want real-board coverage, the current workflow is:
 
 1. Run `python scripts/run.py setup` once to generate local `devices.yml` and `device-config.yml` files.
 2. Fill in your board details in `devices.yml` and any shared environment data in `device-config.yml`. The top-level `defaults:` block in `devices.yml` picks the runtime(s) and per-runtime board IDs that bare `test-device` and IDE play buttons target.
-3. Run `python scripts/run.py test-device` for the defaults-backed target set, or override with `--library timing`, `--runtime micropython|circuitpython|both`, `--micropython-device <id>`, `--circuitpython-device <id>`, `--test <filter>`, or `--deploy-mode ram|flash`.
+3. Run `python scripts/run.py test-device` for the defaults-backed target set, or override with `--library timing`, `--runtime micropython|circuitpython|both`, `--micropython-device <id>`, `--circuitpython-device <id>`, `--file <filename-substring>` (file-name match only), `--test <function-substring>` (test-function match only), or `--deploy-mode ram|flash`. `--file` and `--test` compose — e.g. `--file test_heartbeat --test fires_on_interval` narrows to one file and one function.
 4. For IDE-driven runs, target an explicit `functional_tests/` file, directory, or function — the pytest device plugin routes it to the board selected by `devices.yml`.
 
 The full schema and workflow live in the [device testing guide](docs/contributing/device-testing.md).

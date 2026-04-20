@@ -166,8 +166,16 @@ python scripts/run.py test-device --circuitpython-device office-esp32-cp
 # Limit to one library
 python scripts/run.py test-device --library timing
 
-# Limit to one file or one function name substring
-python scripts/run.py test-device --library timing --test heartbeat
+# Limit to one file by filename substring (matches filenames only)
+python scripts/run.py test-device --library timing --file test_heartbeat
+
+# Limit to one test function by function-name substring
+# (matches function names only — does NOT match filenames)
+python scripts/run.py test-device --library timing --test heartbeat_fires
+
+# Both filters compose as AND — one file AND one function
+python scripts/run.py test-device \
+    --library timing --file test_heartbeat --test heartbeat_fires
 
 # Force flash mode for this run
 python scripts/run.py test-device --library timing --deploy-mode flash

@@ -387,7 +387,8 @@ class TestMainDispatch:
                 "micropython_device": None,
                 "circuitpython_device": None,
                 "library": None,
-                "test_filter": None,
+                "file_filter": None,
+                "function_filter": None,
                 "deploy_mode": None,
             }),
         ]
@@ -432,7 +433,8 @@ class TestMainDispatch:
                 "micropython_device": None,
                 "circuitpython_device": None,
                 "library": "timing",
-                "test_filter": "heartbeat",
+                "file_filter": None,
+                "function_filter": "heartbeat",
                 "deploy_mode": "flash",
             }),
         ]
@@ -453,7 +455,8 @@ class TestMainDispatch:
                 "micropython_device": None,
                 "circuitpython_device": None,
                 "library": None,
-                "test_filter": None,
+                "file_filter": None,
+                "function_filter": None,
                 "deploy_mode": None,
             }),
         ]
@@ -467,7 +470,8 @@ class TestMainDispatch:
             "run.py", "test-device",
             "--runtime", "circuitpython",
             "--library", "timing",
-            "--test", "heartbeat",
+            "--file", "test_heartbeat",
+            "--test", "heartbeat_fires",
             "--deploy-mode", "flash",
         ])
 
@@ -478,7 +482,8 @@ class TestMainDispatch:
                 "micropython_device": None,
                 "circuitpython_device": None,
                 "library": "timing",
-                "test_filter": "heartbeat",
+                "file_filter": "test_heartbeat",
+                "function_filter": "heartbeat_fires",
                 "deploy_mode": "flash",
             }),
         ]
@@ -497,7 +502,8 @@ class TestMainDispatch:
                 "micropython_device": None,
                 "circuitpython_device": None,
                 "library": None,
-                "test_filter": None,
+                "file_filter": None,
+                "function_filter": None,
                 "deploy_mode": None,
             }),
         ]
@@ -523,7 +529,8 @@ class TestMainDispatch:
                 "micropython_device": "mp-alt",
                 "circuitpython_device": "cp-alt",
                 "library": None,
-                "test_filter": None,
+                "file_filter": None,
+                "function_filter": None,
                 "deploy_mode": None,
             }),
         ]
@@ -620,7 +627,8 @@ class TestCompositeTestCommands:
                 "micropython_device": None,
                 "circuitpython_device": None,
                 "library": "timing",
-                "test_filter": None,
+                "file_filter": None,
+                "function_filter": None,
                 "deploy_mode": None,
             }),
             ((), {
@@ -628,7 +636,8 @@ class TestCompositeTestCommands:
                 "micropython_device": None,
                 "circuitpython_device": None,
                 "library": "runner",
-                "test_filter": None,
+                "file_filter": None,
+                "function_filter": None,
                 "deploy_mode": None,
             }),
         ]

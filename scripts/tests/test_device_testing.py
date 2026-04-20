@@ -49,29 +49,52 @@ class TestDiscoverFunctionalTests:
         plan = device_testing.discover_functional_tests(library="nonexistent_lib_xyz")
         assert plan == []
 
-    def test_test_filter(self) -> None:
-        """Should filter test files by name substring."""
+    def test_file_filter_matches_file_names_only(self) -> None:
+        """``file_filter`` should include every file whose name matches the substring."""
         plan = device_testing.discover_functional_tests(
-            library="timing", test_filter="heartbeat"
+            library="timing", file_filter="heartbeat",
         )
         if plan:
             for _, _, test_files in plan:
                 assert all("heartbeat" in path.name for path in test_files)
 
-    def test_test_filter_matches_function_name(self) -> None:
-        """Function-name filters should include the containing test file."""
+    def test_function_filter_restricts_to_files_with_matching_functions(self) -> None:
+        """``function_filter`` should keep only files that define a matching function.
+
+        Critical regression: the old combined filter would also match
+        against filenames and let irrelevant files slip into the plan
+        purely on function-name substrings.  ``function_filter`` is now
+        strictly function-only.
+        """
         plan = device_testing.discover_functional_tests(
-            library="timing", test_filter="non_negative"
+            library="timing", function_filter="non_negative",
         )
         assert len(plan) == 1
         _library_name, _source_dir, test_files = plan[0]
         assert [path.name for path in test_files] == ["test_ticks_arithmetic.py"]
 
-    def test_test_filter_non_matching_function_returns_empty(self) -> None:
-        """A filter matching neither filename nor function names should exclude the file."""
+    def test_function_filter_does_not_match_file_names(self) -> None:
+        """Using a function filter whose text appears only in a filename excludes the file.
+
+        This is the explicit contract with the old behavior: passing
+        ``function_filter="heartbeat"`` must not include a file just
+        because the filename contains "heartbeat" — only function-name
+        matches count.
+        """
         plan = device_testing.discover_functional_tests(
-            library="timing", test_filter="definitely_not_a_real_test_name"
+            library="timing",
+            function_filter="this_function_name_does_not_exist_anywhere",
         )
+        assert plan == []
+
+    def test_file_and_function_filters_compose(self) -> None:
+        """Both filters apply as an AND — file must match and contain a matching function."""
+        plan = device_testing.discover_functional_tests(
+            library="timing",
+            file_filter="heartbeat",
+            function_filter="definitely_not_a_real_test_name",
+        )
+        # File name matches but no function matches → excluded.
         assert plan == []
 
 
@@ -98,6 +121,67 @@ class TestDeviceOrchestration:
         monkeypatch.setenv("CHUMICRO_DEVICES", str(devices_file))
         result = device_testing.test_device(micropython_device="nonexistent")
         assert result == 2
+
+    def test_no_matching_files_with_filter_returns_2(
+        self, monkeypatch, tmp_path, capsys,
+    ) -> None:
+        """A filter that matches nothing must exit 2 (not silently pass).
+
+        Regression: bare invocations on an empty workspace return 0
+        (nothing to run, nothing to fail).  But when the user explicitly
+        filters with ``--library`` / ``--file`` / ``--test``, a zero
+        plan means the filter was wrong — exit 2 so CI and scripts
+        don't mistake a typo for a clean run.
+        """
+        devices_file = tmp_path / "devices.yml"
+        devices_file.write_text(
+            "defaults:\n"
+            "  micropython: mp-one\n"
+            "  ide_runtime: micropython\n"
+            "devices:\n"
+            "  - id: mp-one\n"
+            "    runtime: micropython\n"
+            "    address: /dev/ttyUSB0\n"
+        )
+        monkeypatch.setenv("CHUMICRO_DEVICES", str(devices_file))
+        monkeypatch.setattr(
+            device_testing, "discover_functional_tests",
+            lambda library=None, file_filter=None, function_filter=None: [],
+        )
+
+        result = device_testing.test_device(
+            library="timing", function_filter="definitely_not_a_test",
+        )
+
+        captured = capsys.readouterr()
+        assert result == 2
+        assert "No functional test files matched" in captured.out
+        assert "--library timing" in captured.out
+        assert "--test definitely_not_a_test" in captured.out
+
+    def test_empty_plan_without_filters_still_returns_0(
+        self, monkeypatch, tmp_path,
+    ) -> None:
+        """No filter + empty plan remains a benign exit 0 (fresh-project case)."""
+        devices_file = tmp_path / "devices.yml"
+        devices_file.write_text(
+            "defaults:\n"
+            "  micropython: mp-one\n"
+            "  ide_runtime: micropython\n"
+            "devices:\n"
+            "  - id: mp-one\n"
+            "    runtime: micropython\n"
+            "    address: /dev/ttyUSB0\n"
+        )
+        monkeypatch.setenv("CHUMICRO_DEVICES", str(devices_file))
+        monkeypatch.setattr(
+            device_testing, "discover_functional_tests",
+            lambda library=None, file_filter=None, function_filter=None: [],
+        )
+
+        result = device_testing.test_device()
+
+        assert result == 0
 
     def test_no_filters_use_devices_yml_defaults(
         self, monkeypatch, tmp_path,
@@ -128,7 +212,7 @@ class TestDeviceOrchestration:
             device_entry,
             test_plan,
             harness_source,
-            test_filter,
+            function_filter,
             deploy_mode=None,
         ):
             selected_device_ids.append(device_entry.identifier)
@@ -140,7 +224,7 @@ class TestDeviceOrchestration:
         monkeypatch.setattr(
             device_testing,
             "discover_functional_tests",
-            lambda library=None, test_filter=None: [
+            lambda library=None, file_filter=None, function_filter=None: [
                 (
                     "timing",
                     device_testing.ROOT / "libraries" / "timing" / "src",
@@ -192,7 +276,7 @@ class TestDeviceOrchestration:
             device_entry,
             test_plan,
             harness_source,
-            test_filter,
+            function_filter,
             deploy_mode=None,
         ):
             selected_device_ids.append(device_entry.identifier)
@@ -204,7 +288,7 @@ class TestDeviceOrchestration:
         monkeypatch.setattr(
             device_testing,
             "discover_functional_tests",
-            lambda library=None, test_filter=None: [
+            lambda library=None, file_filter=None, function_filter=None: [
                 (
                     "timing",
                     device_testing.ROOT / "libraries" / "timing" / "src",
@@ -253,7 +337,7 @@ class TestDeviceOrchestration:
             device_entry,
             test_plan,
             harness_source,
-            test_filter,
+            function_filter,
             deploy_mode=None,
         ):
             selected_device_ids.append(device_entry.identifier)
@@ -265,7 +349,7 @@ class TestDeviceOrchestration:
         monkeypatch.setattr(
             device_testing,
             "discover_functional_tests",
-            lambda library=None, test_filter=None: [
+            lambda library=None, file_filter=None, function_filter=None: [
                 (
                     "timing",
                     device_testing.ROOT / "libraries" / "timing" / "src",
@@ -320,7 +404,7 @@ class TestDeviceOrchestration:
             device_entry,
             test_plan,
             harness_source,
-            test_filter,
+            function_filter,
             deploy_mode=None,
         ):
             selected_device_ids.append(device_entry.identifier)
@@ -332,7 +416,7 @@ class TestDeviceOrchestration:
         monkeypatch.setattr(
             device_testing,
             "discover_functional_tests",
-            lambda library=None, test_filter=None: [
+            lambda library=None, file_filter=None, function_filter=None: [
                 (
                     "timing",
                     device_testing.ROOT / "libraries" / "timing" / "src",
@@ -388,7 +472,7 @@ class TestDeviceOrchestration:
             device_entry,
             test_plan,
             harness_source,
-            test_filter,
+            function_filter,
             deploy_mode=None,
         ):
             selected_device_ids.append(device_entry.identifier)
@@ -400,7 +484,7 @@ class TestDeviceOrchestration:
         monkeypatch.setattr(
             device_testing,
             "discover_functional_tests",
-            lambda library=None, test_filter=None: [
+            lambda library=None, file_filter=None, function_filter=None: [
                 (
                     "timing",
                     device_testing.ROOT / "libraries" / "timing" / "src",
@@ -925,7 +1009,7 @@ class TestRunTestsOnDevice:
             _circuitpython_device(),
             plan,
             harness_source=tmp_path / "harness",
-            test_filter=None,
+            function_filter=None,
         )
 
         assert (device_result.passed, device_result.failed, device_result.errors) == (1, 0, 0)
@@ -953,7 +1037,7 @@ class TestRunTestsOnDevice:
         plan = [_plan_entry(tmp_path, "alpha"), _plan_entry(tmp_path, "beta")]
         device_result = device_testing._run_tests_on_device(
             _circuitpython_device(), plan,
-            harness_source=tmp_path / "harness", test_filter=None,
+            harness_source=tmp_path / "harness", function_filter=None,
         )
 
         assert (device_result.passed, device_result.failed, device_result.errors) == (0, 0, 1)
@@ -986,7 +1070,7 @@ class TestRunTestsOnDevice:
 
         device_result = device_testing._run_tests_on_device(
             _micropython_device(), plan,
-            harness_source=tmp_path / "harness", test_filter=None,
+            harness_source=tmp_path / "harness", function_filter=None,
         )
 
         # 3 test files total: all become errors.
@@ -1018,7 +1102,7 @@ class TestRunTestsOnDevice:
         plan = [_plan_entry(tmp_path, "alpha"), _plan_entry(tmp_path, "beta")]
         device_testing._run_tests_on_device(
             _micropython_device(), plan,
-            harness_source=tmp_path / "harness", test_filter=None,
+            harness_source=tmp_path / "harness", function_filter=None,
         )
 
         # Soft reset happened at least once (between alpha and beta).
@@ -1039,7 +1123,7 @@ class TestRunTestsOnDevice:
         plan = [_plan_entry(tmp_path, "alpha"), _plan_entry(tmp_path, "beta")]
         device_testing._run_tests_on_device(
             _circuitpython_device(), plan,
-            harness_source=tmp_path / "harness", test_filter=None,
+            harness_source=tmp_path / "harness", function_filter=None,
         )
 
         # Soft reset happened at least once (between alpha and beta).
@@ -1077,7 +1161,7 @@ class TestRunTestsOnDevice:
         plan = [_plan_entry(tmp_path, "alpha", file_count=2)]
         device_result = device_testing._run_tests_on_device(
             _circuitpython_device(), plan,
-            harness_source=tmp_path / "harness", test_filter=None,
+            harness_source=tmp_path / "harness", function_filter=None,
         )
 
         # First file errored; second passed.
@@ -1115,7 +1199,7 @@ class TestRunTestsOnDevice:
         plan = [_plan_entry(tmp_path, "alpha", file_count=3)]
         device_result = device_testing._run_tests_on_device(
             _circuitpython_device(), plan,
-            harness_source=tmp_path / "harness", test_filter=None,
+            harness_source=tmp_path / "harness", function_filter=None,
         )
 
         # Only the first file ran; the rest were aborted.
@@ -1138,7 +1222,7 @@ class TestRunTestsOnDevice:
         plan = [_plan_entry(tmp_path, "alpha")]
         device_result = device_testing._run_tests_on_device(
             _circuitpython_device(), plan,
-            harness_source=tmp_path / "harness", test_filter=None,
+            harness_source=tmp_path / "harness", function_filter=None,
         )
 
         assert device_result.errors == 1
@@ -1159,7 +1243,7 @@ class TestRunTestsOnDevice:
         plan = [_plan_entry(tmp_path, "alpha")]
         device_result = device_testing._run_tests_on_device(
             _circuitpython_device(), plan,
-            harness_source=tmp_path / "harness", test_filter=None,
+            harness_source=tmp_path / "harness", function_filter=None,
         )
 
         # total=2, failed=1 → passed=1, failed=1, errors=0.
@@ -1190,7 +1274,7 @@ class TestRunTestsOnDevice:
         plan = [_plan_entry(tmp_path, "alpha"), _plan_entry(tmp_path, "beta")]
         device_testing._run_tests_on_device(
             _circuitpython_device(), plan,
-            harness_source=tmp_path / "harness", test_filter=None,
+            harness_source=tmp_path / "harness", function_filter=None,
         )
 
         # Two stage calls (per library), not one.
@@ -1233,7 +1317,7 @@ class TestRunTestsOnDevice:
         ]
         device_result = device_testing._run_tests_on_device(
             _circuitpython_device(), plan,
-            harness_source=tmp_path / "harness", test_filter=None,
+            harness_source=tmp_path / "harness", function_filter=None,
         )
 
         # alpha: 2 errors (stage failed).  beta: 1 pass (stage succeeded).
@@ -1251,7 +1335,8 @@ class TestFormatTestDeviceCommand:
             micropython_device=None,
             circuitpython_device=None,
             library=None,
-            test_filter=None,
+            file_filter=None,
+            function_filter=None,
             deploy_mode=None,
         )
         assert command == "python scripts/run.py test-device"
@@ -1263,14 +1348,16 @@ class TestFormatTestDeviceCommand:
             micropython_device="pico-w",
             circuitpython_device="s2-mini",
             library="timing",
-            test_filter="heartbeat",
+            file_filter="test_heartbeat",
+            function_filter="fires_on_interval",
             deploy_mode="flash",
         )
         assert "--runtime both" in command
         assert "--micropython-device pico-w" in command
         assert "--circuitpython-device s2-mini" in command
         assert "--library timing" in command
-        assert "--test heartbeat" in command
+        assert "--file test_heartbeat" in command
+        assert "--test fires_on_interval" in command
         assert "--deploy-mode flash" in command
         assert command.startswith("python scripts/run.py test-device ")
 
@@ -1281,12 +1368,27 @@ class TestFormatTestDeviceCommand:
             micropython_device=None,
             circuitpython_device=None,
             library="runner",
-            test_filter=None,
+            file_filter=None,
+            function_filter=None,
             deploy_mode=None,
         )
         assert command == (
             "python scripts/run.py test-device --runtime micropython --library runner"
         )
+
+    def test_file_and_function_flags_render_distinct_options(self) -> None:
+        """``--file`` and ``--test`` are separate flags in the rendered command."""
+        command = device_testing._format_test_device_command(
+            runtime=None,
+            micropython_device=None,
+            circuitpython_device=None,
+            library=None,
+            file_filter="test_heartbeat",
+            function_filter="fires",
+            deploy_mode=None,
+        )
+        assert "--file test_heartbeat" in command
+        assert "--test fires" in command
 
 
 def _make_device_result(
@@ -1698,7 +1800,7 @@ class TestSummaryAlwaysPrints:
         monkeypatch.setattr(
             device_testing,
             "discover_functional_tests",
-            lambda library=None, test_filter=None: [
+            lambda library=None, file_filter=None, function_filter=None: [
                 (
                     "timing",
                     device_testing.ROOT / "libraries" / "timing" / "src",

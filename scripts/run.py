@@ -807,7 +807,8 @@ def test_everything(
     micropython_device: str | None = None,
     circuitpython_device: str | None = None,
     library: str | None = None,
-    test_filter: str | None = None,
+    file_filter: str | None = None,
+    function_filter: str | None = None,
     deploy_mode: str | None = None,
 ) -> int:
     """Run the deepest developer-oriented test sweep.
@@ -862,7 +863,8 @@ def test_everything(
                     micropython_device=micropython_device,
                     circuitpython_device=circuitpython_device,
                     library=library,
-                    test_filter=test_filter,
+                    file_filter=file_filter,
+                    function_filter=function_filter,
                     deploy_mode=deploy_mode,
                 ),
             ))
@@ -878,7 +880,8 @@ def test_everything(
                             micropython_device=micropython_device,
                             circuitpython_device=circuitpython_device,
                             library=library_name,
-                            test_filter=test_filter,
+                            file_filter=file_filter,
+                            function_filter=function_filter,
                             deploy_mode=deploy_mode,
                         ),
                     ))
@@ -890,7 +893,8 @@ def test_everything(
                     micropython_device=micropython_device,
                     circuitpython_device=circuitpython_device,
                     library=None,
-                    test_filter=test_filter,
+                    file_filter=file_filter,
+                    function_filter=function_filter,
                     deploy_mode=deploy_mode,
                 ),
             ))
@@ -910,7 +914,8 @@ def test_device(
     micropython_device: str | None = None,
     circuitpython_device: str | None = None,
     library: str | None = None,
-    test_filter: str | None = None,
+    file_filter: str | None = None,
+    function_filter: str | None = None,
     deploy_mode: str | None = None,
 ) -> int:
     """Run functional tests on connected devices.
@@ -927,7 +932,8 @@ def test_device(
         micropython_device=micropython_device,
         circuitpython_device=circuitpython_device,
         library=library,
-        test_filter=test_filter,
+        file_filter=file_filter,
+        function_filter=function_filter,
         deploy_mode=deploy_mode,
     )
 
@@ -1111,9 +1117,20 @@ def _build_parser() -> argparse.ArgumentParser:
         help="limit the optional device phase to one library",
     )
     test_everything_parser.add_argument(
+        "--file",
+        dest="file_filter",
+        help=(
+            "limit the optional device phase to test files whose name "
+            "contains this substring"
+        ),
+    )
+    test_everything_parser.add_argument(
         "--test",
-        dest="test_filter",
-        help="filter the optional device phase to test files or functions matching this substring",
+        dest="function_filter",
+        help=(
+            "limit the optional device phase to test functions whose name "
+            "contains this substring"
+        ),
     )
     test_everything_parser.add_argument(
         "--deploy-mode",
@@ -1157,9 +1174,21 @@ def _build_parser() -> argparse.ArgumentParser:
         help="limit to one library's functional tests",
     )
     test_device_parser.add_argument(
+        "--file",
+        dest="file_filter",
+        help=(
+            "limit to test files whose name contains this substring "
+            "(e.g. --file test_heartbeat matches test_heartbeat.py)"
+        ),
+    )
+    test_device_parser.add_argument(
         "--test",
-        dest="test_filter",
-        help="filter to test files or functions matching this substring",
+        dest="function_filter",
+        help=(
+            "limit to test functions whose name contains this substring. "
+            "Matches functions only, not filenames — use --file to filter "
+            "by filename."
+        ),
     )
     test_device_parser.add_argument(
         "--deploy-mode",
@@ -1400,7 +1429,8 @@ def main(argv: list[str]) -> int:
             micropython_device=args.micropython_device,
             circuitpython_device=args.circuitpython_device,
             library=args.library,
-            test_filter=args.test_filter,
+            file_filter=args.file_filter,
+            function_filter=args.function_filter,
             deploy_mode=args.deploy_mode,
         )
 
@@ -1410,7 +1440,8 @@ def main(argv: list[str]) -> int:
             micropython_device=args.micropython_device,
             circuitpython_device=args.circuitpython_device,
             library=args.library,
-            test_filter=args.test_filter,
+            file_filter=args.file_filter,
+            function_filter=args.function_filter,
             deploy_mode=args.deploy_mode,
         )
 

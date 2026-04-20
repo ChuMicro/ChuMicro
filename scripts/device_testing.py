@@ -92,14 +92,31 @@ class DeviceRunResult:
 def discover_functional_tests(
     *,
     library: str | None = None,
-    test_filter: str | None = None,
+    file_filter: str | None = None,
+    function_filter: str | None = None,
 ) -> list[tuple[str, Path, list[Path]]]:
     """Discover functional test files across libraries.
 
+    ``file_filter`` and ``function_filter`` are orthogonal substring
+    filters.  A file passes when:
+
+    - No ``file_filter`` is given, OR the filter substring appears in
+      the file's name.
+    - AND no ``function_filter`` is given, OR at least one ``test_*``
+      function in the file has the filter substring in its name.
+
+    The old behavior was a single ``test_filter`` that matched either
+    file names OR function names — which let a file slip into the plan
+    on function-name alone and surprised users who passed something
+    like ``--test test_runner`` expecting only ``test_runner.py`` to
+    run.  Splitting the filters makes the intent unambiguous.
+
     Args:
         library: Limit to a single library name.
-        test_filter: Only include test files whose filename or ``test_*``
-            function names contain this substring.
+        file_filter: Optional substring matched against test file names.
+        function_filter: Optional substring matched against ``test_*``
+            function names (matches only — file names are never
+            considered by this filter).
 
     Returns:
         List of ``(library_name, source_dir, test_files)`` tuples.
@@ -119,10 +136,15 @@ def discover_functional_tests(
             path for path in functional_dir.iterdir()
             if path.name.startswith("test_") and path.name.endswith(".py")
         )
-        if test_filter:
+        if file_filter:
             test_files = [
                 path for path in test_files
-                if _functional_test_matches_filter(path, test_filter)
+                if file_filter in path.name
+            ]
+        if function_filter:
+            test_files = [
+                path for path in test_files
+                if _file_contains_matching_function(path, function_filter)
             ]
         if test_files:
             source_dir = library_dir / "src"
@@ -131,20 +153,22 @@ def discover_functional_tests(
     return test_plan
 
 
-def _functional_test_matches_filter(test_file: Path, test_filter: str) -> bool:
-    """Return whether a functional test file matches a CLI filter.
+def _file_contains_matching_function(test_file: Path, name_filter: str) -> bool:
+    """Return whether a test file defines a ``test_*`` function matching the filter.
+
+    Parses the file's AST (never imports it — these files target
+    on-device runtimes and may reference modules CPython doesn't have)
+    and checks each module-level function name against the substring
+    filter.
 
     Args:
         test_file: Path to a ``functional_tests/test_*.py`` file.
-        test_filter: User-provided substring filter.
+        name_filter: Substring to match against function names.
 
     Returns:
-        ``True`` when the filename or any module-level ``test_*`` function
-        name contains the filter substring.
+        ``True`` when at least one ``test_*`` function in the file has
+        the filter substring in its name.
     """
-    if test_filter in test_file.name:
-        return True
-
     source_text = test_file.read_text(encoding="utf-8")
     syntax_tree = ast.parse(source_text, filename=str(test_file))
     for node in ast.iter_child_nodes(syntax_tree):
@@ -152,7 +176,7 @@ def _functional_test_matches_filter(test_file: Path, test_filter: str) -> bool:
             continue
         if not node.name.startswith("test_"):
             continue
-        if test_filter in node.name:
+        if name_filter in node.name:
             return True
     return False
 
@@ -388,7 +412,7 @@ def _build_device_bootstrap(
     device_entry,
     transport,
     test_file,
-    test_filter,
+    function_filter,
 ):
     """Build the bootstrap script for the given device and test file.
 
@@ -402,7 +426,8 @@ def _build_device_bootstrap(
         transport: The transport instance (needed for staged sources
             on CircuitPython RAM mode).
         test_file: Path to the test file.
-        test_filter: Optional name filter for ``run_module``.
+        function_filter: Optional substring filter for the on-device
+            ``run_module`` ``name_filter``.
 
     Returns:
         Python source code string, or a list of chunked raw-REPL scripts for
@@ -419,19 +444,19 @@ def _build_device_bootstrap(
             return build_circuitpython_bootstrap_scripts(
                 transport.staged_sources,
                 test_file,
-                name_filter=test_filter,
+                name_filter=function_filter,
             )
 
         return build_circuitpython_bootstrap_scripts(
             transport.staged_sources,
             test_file,
-            name_filter=test_filter,
+            name_filter=function_filter,
             max_chunk_size_bytes=max_chunk_size_bytes,
         )
 
     return build_bootstrap(
         test_file.name,
-        name_filter=test_filter,
+        name_filter=function_filter,
     )
 
 
@@ -453,7 +478,7 @@ def _run_tests_on_device(
     device_entry,
     test_plan,
     harness_source,
-    test_filter,
+    function_filter,
     deploy_mode=None,
 ) -> DeviceRunResult:
     """Run all planned tests on a single device.
@@ -462,7 +487,9 @@ def _run_tests_on_device(
         device_entry: A DeviceEntry from the config loader.
         test_plan: List of ``(library_name, source_dir, test_files)``.
         harness_source: Path to the test harness ``src/`` directory.
-        test_filter: Optional name filter for ``run_module``.
+        function_filter: Optional substring filter passed to the
+            on-device ``run_module`` as ``name_filter`` so only test
+            functions whose names contain it actually execute.
         deploy_mode: ``"ram"`` or ``"flash"``.  When ``None``, uses the
             device entry's ``deploy_mode`` field.
 
@@ -612,7 +639,7 @@ def _run_tests_on_device(
 
             try:
                 bootstrap = _build_device_bootstrap(
-                    device_entry, transport, test_file, test_filter,
+                    device_entry, transport, test_file, function_filter,
                 )
                 raw_output = _execute_device_bootstrap(transport, bootstrap)
                 print(raw_output)
@@ -711,7 +738,8 @@ def _format_test_device_command(
     micropython_device: str | None,
     circuitpython_device: str | None,
     library: str | None,
-    test_filter: str | None,
+    file_filter: str | None,
+    function_filter: str | None,
     deploy_mode: str | None,
 ) -> str:
     """Reconstruct the ``test-device`` CLI invocation from its args.
@@ -724,7 +752,8 @@ def _format_test_device_command(
         micropython_device: ``--micropython-device`` value, or ``None``.
         circuitpython_device: ``--circuitpython-device`` value, or ``None``.
         library: ``--library`` value, or ``None``.
-        test_filter: ``--test`` value, or ``None``.
+        file_filter: ``--file`` value, or ``None``.
+        function_filter: ``--test`` value, or ``None``.
         deploy_mode: ``--deploy-mode`` value, or ``None``.
 
     Returns:
@@ -739,8 +768,10 @@ def _format_test_device_command(
         parts.append(f"--circuitpython-device {circuitpython_device}")
     if library is not None:
         parts.append(f"--library {library}")
-    if test_filter is not None:
-        parts.append(f"--test {test_filter}")
+    if file_filter is not None:
+        parts.append(f"--file {file_filter}")
+    if function_filter is not None:
+        parts.append(f"--test {function_filter}")
     if deploy_mode is not None:
         parts.append(f"--deploy-mode {deploy_mode}")
     return " ".join(parts)
@@ -1023,7 +1054,8 @@ def test_device(
     micropython_device: str | None = None,
     circuitpython_device: str | None = None,
     library: str | None = None,
-    test_filter: str | None = None,
+    file_filter: str | None = None,
+    function_filter: str | None = None,
     deploy_mode: str | None = None,
 ) -> int:
     """Run functional tests on connected devices.
@@ -1034,14 +1066,22 @@ def test_device(
         micropython_device: Override the selected MicroPython device ID.
         circuitpython_device: Override the selected CircuitPython device ID.
         library: Limit to a single library's functional tests.
-        test_filter: Filter to test files or functions matching this
-            substring.
+        file_filter: Only run test files whose name contains this
+            substring.  Matches file names only — use
+            ``function_filter`` to filter by test-function name.
+        function_filter: Only run test functions whose name contains
+            this substring.  Used both to narrow which files are
+            considered (files must define at least one matching
+            function) and as the on-device ``run_module`` name filter
+            so non-matching functions in kept files are skipped.
         deploy_mode: ``"ram"`` or ``"flash"``.  When ``None``, each
             device uses its own ``deploy_mode`` from ``devices.yml``
             (default ``"ram"``).
 
     Returns:
-        0 for all-pass, 1 for any failure, 2 for configuration issues.
+        0 for all-pass, 1 for any failure, 2 for configuration issues
+        (no matching device, no matching test files, or unreadable
+        ``devices.yml``).
     """
     # Load device registry.  Pass ROOT explicitly so device_config
     # remains decoupled from the workspace's repo layout (Decision 0028
@@ -1071,9 +1111,35 @@ def test_device(
 
     # Discover functional tests.
     test_plan = discover_functional_tests(
-        library=library, test_filter=test_filter,
+        library=library,
+        file_filter=file_filter,
+        function_filter=function_filter,
     )
     if not test_plan:
+        # When a filter was provided but yielded nothing, treat it as
+        # a configuration error so CI and scripts don't silently pass.
+        # Without a filter, an empty plan on a fresh project is still
+        # a benign no-op.
+        any_filter = bool(library or file_filter or function_filter)
+        if any_filter:
+            filter_parts = []
+            if library:
+                filter_parts.append(f"--library {library}")
+            if file_filter:
+                filter_parts.append(f"--file {file_filter}")
+            if function_filter:
+                filter_parts.append(f"--test {function_filter}")
+            print(
+                "No functional test files matched the given filter "
+                f"({', '.join(filter_parts)})."
+            )
+            print(
+                "Check the filter spelling or widen the match (substring, "
+                "not exact).  For file filters, --file matches test file "
+                "names only; for function filters, --test matches test "
+                "function names only."
+            )
+            return 2
         print("No functional test files found.")
         return 0
 
@@ -1087,7 +1153,7 @@ def test_device(
     per_device_results: list[DeviceRunResult] = []
     command = _format_test_device_command(
         runtime, micropython_device, circuitpython_device,
-        library, test_filter, deploy_mode,
+        library, file_filter, function_filter, deploy_mode,
     )
     total_start = time.perf_counter()
     total_duration = 0.0
@@ -1107,7 +1173,8 @@ def test_device(
 
             try:
                 device_result = _run_tests_on_device(
-                    device_entry, test_plan, harness_source, test_filter,
+                    device_entry, test_plan, harness_source,
+                    function_filter,
                     deploy_mode=deploy_mode,
                 )
             except Exception as device_error:
