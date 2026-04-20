@@ -29,3 +29,4 @@ libraries/*/docs/assets/
 devices.yml
 device-config.yml
 
+typings/

@@ -107,18 +107,34 @@ def install_editable(python: str | Path | None = None) -> int:
     return run_command([*install_command(python), *editable_args])
 
 
+#: Directory where the embedded-runtime type stubs live, outside the
+#: interpreter's ``site-packages``.  ``circuitpython-stubs`` and
+#: ``micropython-esp32-stubs`` ship bare ``time.pyi`` / ``gc.pyi`` /
+#: ``sys.pyi`` files at the package root (they predate PEP 561's
+#: ``<pkg>-stubs`` convention); dropping those into ``site-packages``
+#: shadows the real stdlib stubs for every CPython script that pyright
+#: analyzes.  Isolating them into ``typings/`` preserves embedded
+#: autocomplete for library code (via the ``extraPaths`` exposed only
+#: under ``libraries/`` and ``support/test_harness/`` in
+#: ``pyrightconfig.json``) without polluting the workspace-wide
+#: stdlib view.
+TYPINGS_DIR = ROOT / "typings" / "embedded-stubs"
+
+
 def install_workspace(python: Path | None = None) -> int:
     """Install the full ChuMicro workspace into *python*.
 
     This is the canonical "set up everything" routine that both
     ``run.py setup`` and ``prepare_workspace.py`` delegate to.  Steps:
 
-    1. Install ``requirements-dev.txt`` plus runtime-pinned type stubs
-       (``circuitpython-stubs``, ``micropython-esp32-stubs``).
-    2. Editable-install every publishable library and support package.
-    3. Generate starter ``devices.yml`` / ``device-config.yml`` if they
+    1. Install ``requirements-dev.txt`` into the interpreter.
+    2. Install runtime-pinned type stubs (``circuitpython-stubs``,
+       ``micropython-esp32-stubs``) into ``typings/embedded-stubs/``
+       so they don't shadow stdlib stubs in ``site-packages``.
+    3. Editable-install every publishable library and support package.
+    4. Generate starter ``devices.yml`` / ``device-config.yml`` if they
        don't already exist.
-    4. Regenerate IDE configs for PyCharm and VS Code.
+    5. Regenerate IDE configs for PyCharm and VS Code.
 
     Each step short-circuits on a non-zero exit code.
 
@@ -133,18 +149,38 @@ def install_workspace(python: Path | None = None) -> int:
     cp_version = versions["circuitpython"]["version"]
     mp_version = versions["micropython"]["version"].lstrip("v")
     requirements_file = str(ROOT / "requirements-dev.txt")
+
+    result = run_command([*install_command(python), "-U", "-r", requirements_file])
+    if result != 0:
+        return result
+
+    # Install embedded-runtime stubs into an isolated typings directory so
+    # their top-level ``.pyi`` files (``time.pyi``, ``gc.pyi``, ``sys.pyi``)
+    # cannot shadow stdlib stubs for the CPython task-runner code.
+    TYPINGS_DIR.mkdir(parents=True, exist_ok=True)
     stubs = [
         f"circuitpython-stubs=={cp_version}",
         f"micropython-esp32-stubs=={mp_version}.*",
     ]
-
-    result = run_command([*install_command(python), "-U", "-r", requirements_file, *stubs])
+    # Use pip directly (not uv) for --target; uv pip lacks a --target flag.
+    interpreter = str(python) if python is not None else sys.executable
+    result = run_command([
+        interpreter, "-m", "pip", "install",
+        "--target", str(TYPINGS_DIR),
+        "--upgrade",
+        *stubs,
+    ])
     if result != 0:
         return result
 
     result = install_editable(python=python)
     if result != 0:
         return result
+
+    # Clean up stubs previously installed into site-packages by older
+    # versions of this routine.  Keeps the interpreter's view of
+    # ``time``, ``gc``, ``sys`` tied to typeshed / stdlib.
+    _clean_stub_leftovers_from_site_packages(python)
 
     # Late imports — these modules are part of the workspace itself
     # (not third-party deps), but deferring keeps shared.py importable
@@ -157,6 +193,57 @@ def install_workspace(python: Path | None = None) -> int:
     from ide_sync import sync_ide
 
     return sync_ide()
+
+
+def _clean_stub_leftovers_from_site_packages(python: Path | None) -> None:
+    """Remove top-level ``.pyi`` files and stub dirs from site-packages.
+
+    ``circuitpython-stubs`` and ``micropython-esp32-stubs`` ship bare
+    ``time.pyi`` / ``gc.pyi`` / ``sys.pyi`` at the package root, which
+    shadow stdlib stubs workspace-wide when installed into a regular
+    ``site-packages``.  Older ``install_workspace`` runs put them there;
+    this cleanup evicts them so the typings-dir install becomes the
+    single source.
+
+    The cleanup is best-effort — it only removes things whose RECORD
+    lists them as coming from the two stub packages.  Any file not owned
+    by those packages is left alone.
+    """
+    interpreter = str(python) if python is not None else sys.executable
+    result = subprocess.run(
+        [interpreter, "-c",
+         "import sysconfig; print(sysconfig.get_paths()['purelib'])"],
+        capture_output=True, text=True, check=False,
+    )
+    if result.returncode != 0:
+        return
+    site_packages = Path(result.stdout.strip())
+    if not site_packages.is_dir():
+        return
+
+    # Iterate over RECORD files for the two stub packages.
+    for dist_info in site_packages.glob("*.dist-info"):
+        name = dist_info.name.split("-", 1)[0].lower()
+        if name not in ("circuitpython_stubs", "micropython_esp32_stubs"):
+            continue
+        record_file = dist_info / "RECORD"
+        if not record_file.is_file():
+            continue
+        for line in record_file.read_text().splitlines():
+            relative = line.split(",", 1)[0].strip()
+            if not relative or relative.startswith(".."):
+                continue
+            target = site_packages / relative
+            if target.is_file():
+                try:
+                    target.unlink()
+                except OSError:  # pragma: no cover - best-effort cleanup
+                    pass
+        # Remove the dist-info metadata itself.
+        try:
+            shutil.rmtree(dist_info)
+        except OSError:  # pragma: no cover - best-effort cleanup
+            pass
 
 
 # ---------------------------------------------------------------------------

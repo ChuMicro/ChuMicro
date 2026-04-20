@@ -8,5 +8,48 @@
     "libraries/runner/src",
     "libraries/timing/src",
     "scripts"
+  ],
+  "executionEnvironments": [
+    {
+      "root": "libraries",
+      "extraPaths": [
+        "typings/embedded-stubs",
+        "support/abstractions/src",
+        "support/device_transport/src",
+        "support/test_harness/src",
+        "libraries/compat/src",
+        "libraries/msgpack/src",
+        "libraries/runner/src",
+        "libraries/timing/src",
+        "scripts"
+      ]
+    },
+    {
+      "root": "support/test_harness",
+      "extraPaths": [
+        "typings/embedded-stubs",
+        "support/abstractions/src",
+        "support/device_transport/src",
+        "support/test_harness/src",
+        "libraries/compat/src",
+        "libraries/msgpack/src",
+        "libraries/runner/src",
+        "libraries/timing/src",
+        "scripts"
+      ]
+    },
+    {
+      "root": ".",
+      "extraPaths": [
+        "support/abstractions/src",
+        "support/device_transport/src",
+        "support/test_harness/src",
+        "libraries/compat/src",
+        "libraries/msgpack/src",
+        "libraries/runner/src",
+        "libraries/timing/src",
+        "scripts"
+      ]
+    }
   ]
 }

@@ -180,7 +180,7 @@ def _sum_reported_test_durations(test_results: Iterable[TestResult]) -> float:
     return total_duration
 
 
-def _apply_reported_duration(
+def _applyreported_duration(
     item: DeviceRuntimeItem, report: pytest.TestReport,
 ) -> None:
     """Override pytest timing with parsed device timing when available.
@@ -202,18 +202,16 @@ def _apply_reported_duration(
     if report.when != "call":
         return
 
-    reported_duration = getattr(item, "_reported_duration", None)
-    if reported_duration is not None:
-        report.duration = reported_duration
+    if item.reported_duration is not None:
+        report.duration = item.reported_duration
         return
 
-    reported_test_total_duration = getattr(
-        item, "_reported_test_total_duration", None,
+    if item.reported_test_total_duration is None:
+        return
+
+    report.duration = max(
+        report.duration - item.reported_test_total_duration, 0.0,
     )
-    if reported_test_total_duration is None:
-        return
-
-    report.duration = max(report.duration - reported_test_total_duration, 0.0)
 
 
 class _TransportCache:
@@ -498,8 +496,8 @@ class DeviceRuntimeItem(pytest.Item):
         self.target_device: DeviceEntry | None = target_device
         self.library_dir: Path = _resolve_library_dir(test_file)
         self._library_name = self.library_dir.name
-        self._reported_duration: float | None = None
-        self._reported_test_total_duration: float | None = None
+        self.reported_duration: float | None = None
+        self.reported_test_total_duration: float | None = None
 
     def _resolve_device_entry(self) -> DeviceEntry:
         """Return the resolved target device for this item."""
@@ -643,7 +641,7 @@ class DeviceRunFileItem(DeviceRuntimeItem):
             pytest.fail(raw_output)
         if not result.tests:
             pytest.fail(f"No test results in device output:\n{raw_output}")
-        self._reported_test_total_duration = _sum_reported_test_durations(result.tests)
+        self.reported_test_total_duration = _sum_reported_test_durations(result.tests)
 
 
 class DeviceTestItem(DeviceRuntimeItem):
@@ -681,7 +679,7 @@ class DeviceTestItem(DeviceRuntimeItem):
         # Find this specific test in the results.
         for test_result in result.tests:
             if test_result.name == self._function_name:
-                self._reported_duration = test_result.duration
+                self.reported_duration = test_result.duration
                 if test_result.status == "FAIL":
                     pytest.fail(
                         f"Device test FAIL: {self._function_name}\n{raw_output}"
@@ -912,4 +910,4 @@ def pytest_runtest_makereport(
     outcome = yield
     report = cast(pytest.TestReport, outcome.get_result())  # type: ignore[attr-defined]
     if isinstance(item, DeviceRuntimeItem):
-        _apply_reported_duration(item, report)
+        _applyreported_duration(item, report)

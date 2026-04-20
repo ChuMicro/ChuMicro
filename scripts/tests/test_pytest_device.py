@@ -172,51 +172,51 @@ class TestReportedDurations:
 
         assert total_duration == pytest.approx(0.625)
 
-    def test_apply_reported_duration_uses_per_test_value(self) -> None:
+    def test_applyreported_duration_uses_per_test_value(self) -> None:
         """Per-test items should show the parsed device runtime in pytest."""
         item = SimpleNamespace(
-            _reported_duration=0.321,
-            _reported_test_total_duration=None,
+            reported_duration=0.321,
+            reported_test_total_duration=None,
         )
         report = SimpleNamespace(when="call", duration=1.5)
 
-        pytest_device._apply_reported_duration(item, report)
+        pytest_device._applyreported_duration(item, report)
 
         assert report.duration == pytest.approx(0.321)
 
-    def test_apply_reported_duration_keeps_only_batch_overhead(self) -> None:
+    def test_applyreported_duration_keeps_only_batch_overhead(self) -> None:
         """Batch items should retain only residual host-side overhead."""
         item = SimpleNamespace(
-            _reported_duration=None,
-            _reported_test_total_duration=1.2,
+            reported_duration=None,
+            reported_test_total_duration=1.2,
         )
         report = SimpleNamespace(when="call", duration=1.75)
 
-        pytest_device._apply_reported_duration(item, report)
+        pytest_device._applyreported_duration(item, report)
 
         assert report.duration == pytest.approx(0.55)
 
-    def test_apply_reported_duration_never_goes_negative(self) -> None:
+    def test_applyreported_duration_never_goes_negative(self) -> None:
         """Rounded device timings should not produce negative batch durations."""
         item = SimpleNamespace(
-            _reported_duration=None,
-            _reported_test_total_duration=1.8,
+            reported_duration=None,
+            reported_test_total_duration=1.8,
         )
         report = SimpleNamespace(when="call", duration=1.2)
 
-        pytest_device._apply_reported_duration(item, report)
+        pytest_device._applyreported_duration(item, report)
 
         assert report.duration == 0.0
 
-    def test_apply_reported_duration_ignores_non_call_phase(self) -> None:
+    def test_applyreported_duration_ignores_non_call_phase(self) -> None:
         """Setup and teardown timings should keep their original values."""
         item = SimpleNamespace(
-            _reported_duration=0.321,
-            _reported_test_total_duration=0.654,
+            reported_duration=0.321,
+            reported_test_total_duration=0.654,
         )
         report = SimpleNamespace(when="setup", duration=1.5)
 
-        pytest_device._apply_reported_duration(item, report)
+        pytest_device._applyreported_duration(item, report)
 
         assert report.duration == pytest.approx(1.5)
 
@@ -723,8 +723,8 @@ def _make_prepare_item(session, device_entry, test_file) -> pytest_device.Device
     item.target_device = device_entry
     item.library_dir = test_file.parent.parent
     item._library_name = item.library_dir.name
-    item._reported_duration = None
-    item._reported_test_total_duration = None
+    item.reported_duration = None
+    item.reported_test_total_duration = None
     return item
 
 
@@ -735,8 +735,8 @@ def _make_run_file_item(session, device_entry, test_file) -> pytest_device.Devic
     item.target_device = device_entry
     item.library_dir = test_file.parent.parent
     item._library_name = item.library_dir.name
-    item._reported_duration = None
-    item._reported_test_total_duration = None
+    item.reported_duration = None
+    item.reported_test_total_duration = None
     return item
 
 
@@ -750,8 +750,8 @@ def _make_test_item(
     item.library_dir = test_file.parent.parent
     item._library_name = item.library_dir.name
     item._function_name = function_name
-    item._reported_duration = None
-    item._reported_test_total_duration = None
+    item.reported_duration = None
+    item.reported_test_total_duration = None
     return item
 
 
@@ -1015,7 +1015,7 @@ class TestDeviceRunFileItemRuntest:
         item.runtest()
 
         # The reported total duration is set from parsed test durations.
-        assert item._reported_test_total_duration is not None
+        assert item.reported_test_total_duration is not None
 
     def test_runtest_fails_when_cached_batch_has_no_result(
         self, tmp_path, hot_path_session, hot_path_cache,
@@ -1053,7 +1053,7 @@ class TestDeviceTestItemRuntest:
             hot_path_session, device, test_file, "test_one",
         )
         item.runtest()  # must not raise.
-        assert item._reported_duration == pytest.approx(0.001)
+        assert item.reported_duration == pytest.approx(0.001)
 
     def test_fails_when_individual_test_failed(
         self, tmp_path, hot_path_session, hot_path_cache, monkeypatch,
