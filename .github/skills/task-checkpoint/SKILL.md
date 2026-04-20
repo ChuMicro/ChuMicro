@@ -48,4 +48,3 @@ If you couldn't complete something, or noticed something that needs follow-up, s
 - **Don't skip step 1.** A `git status` catches surprises — files you forgot, files you didn't mean to change, merge artifacts.
 - **Don't skip step 2.** Preflight is the single gate. If it passes, CI will pass. Narrow checks miss cross-cutting breakage.
 - **Commit and push early.** Small commits are easier to review and revert than large ones. If you've done something useful, commit and push it.
-

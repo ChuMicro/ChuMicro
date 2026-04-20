@@ -79,4 +79,3 @@ This repo is generated automatically by the [ChuMicro release workflow]({source_
 - **Documentation:** [chumicro.github.io/ChuMicro]({docs_url})
 - **{alt_channel} bundle:** [{github_org}/{alt_repo}]({alt_repo_url})
 - **License:** [MIT](LICENSE)
-

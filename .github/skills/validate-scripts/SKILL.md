@@ -475,5 +475,3 @@ python scripts/run.py nonexistent-task 2>&1 | tail -3
 python scripts/run.py test-micropython-compatibility --micropython-binary /nonexistent 2>&1 | tail -3
 python scripts/run.py test-circuitpython-compatibility --circuitpython-binary /nonexistent 2>&1 | tail -3
 ```
-
-

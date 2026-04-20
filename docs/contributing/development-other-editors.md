@@ -128,4 +128,3 @@ Run preflight before opening a PR:
 python scripts/run.py preflight
 # Expected: "Preflight passed — required CI checks should pass."
 ```
-

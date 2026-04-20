@@ -200,4 +200,3 @@ piecemeal.  Parked for a rainy day.
 
 Resolved by Decision 0025: dual thresholds — 85 % baseline for humans
 (in `pyproject.toml`), 94 % for agents (via `--coverage-threshold 94`).
-

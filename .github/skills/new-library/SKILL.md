@@ -165,4 +165,3 @@ Use the `git-commit` skill. Write a message naming the new library and summarizi
 [ ] Preflight passes
 [ ] Committed with clean tree
 ```
-

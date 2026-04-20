@@ -25,4 +25,3 @@ The working test pyramid is:
 - `pytest` remains the primary host framework, but it is not assumed to run directly on constrained boards
 
 > **Note:** See also [Decision 0027](0027-device-testing-infrastructure.md) which defines the transport layer, config schema, and IDE integration for real-device functional tests.
-

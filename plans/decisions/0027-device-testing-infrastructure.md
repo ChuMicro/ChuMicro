@@ -218,5 +218,3 @@ Tested USB-drive deployment with autoreload control via raw REPL:
 | 3 — Deploy `lib/` package | ✅ | Package copied (3.3 s), import + function call worked from REPL |
 | 4 — `code.py` + reload | ✅ | Wrote code.py, soft-reset triggered standalone run, `DEPLOY_VERIFIED` appeared in serial output |
 | 5 — Clean up | ✅ | Original code.py restored, flash at 99 % free |
-
-

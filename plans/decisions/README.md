@@ -21,4 +21,3 @@ Promote to `accepted` once the tradeoff is confirmed.
 
 If a decision resolves an open question from `plans/open-questions.md`, update that
 file — move the question to Resolved with a one-line answer and link to the decision.
-

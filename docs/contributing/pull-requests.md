@@ -187,4 +187,3 @@ git checkout -b fix/next-change
 | Commit | `git add -A && git commit` |
 | Push | `git push -u origin <branch>` |
 | Open PR | GitHub UI — click "Compare & pull request" on your fork |
-

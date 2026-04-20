@@ -66,4 +66,3 @@ No copies, no build artifacts, no version ambiguity.
   installs along with everything else.
 - Adding a new library (via `new-library`) automatically makes it
   importable workspace-wide.
-

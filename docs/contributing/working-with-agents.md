@@ -36,15 +36,15 @@ If you're using an AI coding tool (GitHub Copilot, Cursor, Claude, etc.), you ca
 ```
 You: "Add a test for ticks_add with a negative delta at the wraparound boundary"
 
-Agent: reads the codebase, writes the test, runs it, checks coverage, 
+Agent: reads the codebase, writes the test, runs it, checks coverage,
        commits with a proper message — done.
 ```
 
 ```
 You: "Create a new library called 'settings' for persistent key-value storage"
 
-Agent: runs the scaffold command, generates starter code following the 
-       project patterns, writes tests to pass the coverage gate, builds docs — 
+Agent: runs the scaffold command, generates starter code following the
+       project patterns, writes tests to pass the coverage gate, builds docs —
        ready for your review.
 ```
 
@@ -74,4 +74,3 @@ If you've never used an AI coding agent, this project is a good place to try. Th
 - Ask it to generate an example script
 
 You might be surprised how much of the "getting started" friction disappears when you can just ask.
-

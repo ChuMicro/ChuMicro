@@ -53,4 +53,3 @@ the same minimum bar.  Agent tooling raises the bar on the agent side.
   they didn't touch.
 - Human contributors benefit from a lower barrier to entry.
 - The open question "Should the coverage gate be higher?" is resolved.
-

@@ -103,4 +103,3 @@ If the decision affects an existing decision, add a note to the old one:
 - Write in present tense ("Libraries must..." not "Libraries should...").
 - Include code snippets only when they clarify a contract or API.
 - Name the alternatives that were considered and why they were rejected — this is the most valuable part for future readers.
-

@@ -254,4 +254,3 @@ Never run bare `pytest` from the repo root.  The test runner sets
 PYTHONPATH and coverage configuration automatically.
 
 Related: Decision 0009, `debug-test-failure` skill.
-

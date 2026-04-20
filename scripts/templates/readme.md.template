@@ -106,4 +106,3 @@ Before running device tests, generate local board config files with `python scri
 - **Bundle:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle/tree/main/{import_name}) (CircuitPython & MicroPython)
 - **Experimental bundle:** [ChuMicro-Bundle-Experimental](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental/tree/main/{import_name})
 - **Source:** [libraries/{name}](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/{name})
-

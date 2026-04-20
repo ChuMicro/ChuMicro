@@ -85,4 +85,3 @@ This is intentionally deferred.  The current work shapes the transport API to ma
 - Implemented: per-device `deploy_mode` overrides, workspace-wide `defaults.deploy_mode`, and CLI `--deploy-mode` overrides.
 - Implemented: CircuitPython RAM-mode chunking based on live free-heap measurements to keep large inline test payloads workable on lower-memory boards.
 - Still pending: extraction of the transport layer into `chumicro-deploy` and any serial-only CircuitPython flash workflow that would remove the CIRCUITPY drive dependency.
-

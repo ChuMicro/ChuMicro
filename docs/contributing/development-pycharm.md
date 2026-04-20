@@ -178,4 +178,3 @@ open htmlcov/index.html
 - **PyCharm may suggest installing packages.** Ignore these suggestions — the project resolves imports through source roots, not pip installs.
 - **If a new library is added**, run `python scripts/run.py sync-ide` to regenerate the `.iml` file. New source roots appear after reloading.
 - **The `.idea/` directory is partially committed** — run configurations and the `.iml` file are shared. Workspace-specific files (`.idea/workspace.xml`, etc.) are gitignored.
-

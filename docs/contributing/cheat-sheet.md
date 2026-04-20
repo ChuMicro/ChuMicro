@@ -72,5 +72,4 @@ Every failure message tells you exactly what to do.
 - [Style guide](style-guide.md)
 - [PR guide](pull-requests.md)
 - [Device testing](device-testing.md)
-- [Design decisions](../../plans/decisions/)
-
+- [Design decisions](../../plans/decisions/README.md)

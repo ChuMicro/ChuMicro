@@ -258,4 +258,3 @@ open htmlcov/index.html
 - **`.vscode/tasks.json` and `.vscode/settings.json` are committed** and shared. Workspace-specific settings (`.vscode/launch.json`, etc.) are gitignored if not present.
 - **Terminal links are clickable.** When a lint error or test failure shows `file.py:42`, `Ctrl+click` / `⌘+click` to jump directly to that line.
 - **Device-testing support is wired through ordinary pytest.** The committed VS Code settings and tasks are generated from `sync-ide`, and explicit `functional_tests/` targets go through the same plugin path PyCharm uses. A dedicated live VS Code validation pass remains on the project plan, so VS Code-specific bugs are worth reporting.
-

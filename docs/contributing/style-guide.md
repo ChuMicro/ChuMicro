@@ -205,7 +205,6 @@ open htmlcov/index.html
 Covered lines show in green, missed lines in red. Much easier than reading line numbers from the terminal output. (`htmlcov/` is gitignored.)
 
 
-
 `python scripts/run.py lint` runs two tools back to back. If both pass, your code is style-correct.
 
 **Ruff** — a fast Python linter that enforces:
@@ -226,4 +225,3 @@ Covered lines show in green, missed lines in red. Much easier than reading line 
 - Those same abbreviations as suffixes (`base_ref` → `base_reference`, `build_env` → `build_environment`)
 
 If lint passes, your style is correct. You don't need to memorize any of this — the error messages tell you exactly what to fix and why.
-

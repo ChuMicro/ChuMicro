@@ -120,4 +120,3 @@ After generating, check:
 - [ ] No placeholder comments remain (`<!-- ... -->`)
 - [ ] Examples table lists all files from `examples/`
 - [ ] Footer div with Source/PyPI/Bundle links is present
-

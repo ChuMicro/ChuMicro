@@ -50,4 +50,3 @@ The `workflow_call` trigger, `checkout_ref` input, and `attestations` input are 
 - Experimental releases created before this change lack source archives and cannot be promoted with the new workflow.  They must be re-released or handled manually.
 - Some build logic is duplicated between `release.yml` and `promote.yml`.  This is an acceptable tradeoff for single-page visibility and correct OIDC identity.
 - PyPI trusted publisher settings must list both `release.yml` (for `chumicro-*-experimental`) and `promote.yml` (for `chumicro-*`).
-
