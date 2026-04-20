@@ -23,44 +23,20 @@ Usage (via task runner)::
 
 from __future__ import annotations
 
-import subprocess
 import sys
 
 from shared import (
+    RuntimePrep,
+    RuntimePrepStep,
     build_jobs,
-    ensure_build_tools,
-    ensure_source_tree,
     macos_build_environment,
-    run_build_command,
-    running_on_native_windows,
+    prepare_runtime,
     runtime_versions,
 )
 from workspace import TOOLS
 
 _CP_REPO_URL = "https://github.com/adafruit/circuitpython.git"
 _MP_REPO_URL = "https://github.com/micropython/micropython.git"
-
-
-def _cp_source_dir():
-    """Return the CircuitPython source directory (computed lazily)."""
-    cp_version = runtime_versions()["circuitpython"]["version"]
-    return TOOLS / f"circuitpython-{cp_version}"
-
-
-def _mp_source_dir():
-    """Return the MicroPython source directory (computed lazily)."""
-    mp_version = runtime_versions()["micropython"]["version"]
-    return TOOLS / f"micropython-{mp_version}"
-
-
-def _cp_mpy_cross():
-    """Return the expected CircuitPython mpy-cross path (computed lazily)."""
-    return _cp_source_dir() / "mpy-cross" / "build" / "mpy-cross"
-
-
-def _mp_mpy_cross():
-    """Return the expected MicroPython mpy-cross path (computed lazily)."""
-    return _mp_source_dir() / "mpy-cross" / "build" / "mpy-cross"
 
 
 def prepare_mpy_cross() -> int:
@@ -70,72 +46,60 @@ def prepare_mpy_cross() -> int:
     (cache-friendly).  Does NOT build the full unix-port interpreters —
     use ``prepare-micropython`` / ``prepare-circuitpython`` for that.
     """
-    if running_on_native_windows():
-        print(
-            "Native Windows preparation is out of scope for this workspace phase. "
-            "Use WSL2 for `prepare-mpy-cross`."
-        )
-        return 2
+    jobs = f"-j{build_jobs()}"
+    environment = macos_build_environment()
 
-    try:
-        ensure_build_tools()
+    # MicroPython mpy-cross.
+    mp_version = runtime_versions()["micropython"]["version"]
+    mp_source_dir = TOOLS / f"micropython-{mp_version}"
+    mp_mpy_cross = mp_source_dir / "mpy-cross" / "build" / "mpy-cross"
+    if mp_mpy_cross.exists():
+        print(f"MicroPython mpy-cross already built: {mp_mpy_cross}")
+    else:
+        print("Building MicroPython mpy-cross...")
+        result = prepare_runtime(RuntimePrep(
+            label="MicroPython mpy-cross",
+            source_dir=mp_source_dir,
+            repo_url=_MP_REPO_URL,
+            release=mp_version,
+            build_steps=(
+                RuntimePrepStep(
+                    ["make", "-C", mp_source_dir / "mpy-cross", jobs],
+                    environment=environment,
+                ),
+            ),
+            expected_binary=mp_mpy_cross,
+        ))
+        if result != 0:
+            return result
 
-        jobs = f"-j{build_jobs()}"
-        environment = macos_build_environment()
-
-        # --- MicroPython mpy-cross ---
-        mp_mpy_cross = _mp_mpy_cross()
-        if mp_mpy_cross.exists():
-            print(f"MicroPython mpy-cross already built: {mp_mpy_cross}")
-        else:
-            print("Building MicroPython mpy-cross...")
-            mp_source_dir = _mp_source_dir()
-            mp_version = runtime_versions()["micropython"]["version"]
-            ensure_source_tree(mp_source_dir, _MP_REPO_URL, mp_version)
-            run_build_command(
-                ["make", "-C", str(mp_source_dir / "mpy-cross"), jobs],
-                environment=environment,
-            )
-            if not mp_mpy_cross.exists():
-                print(
-                    f"MicroPython mpy-cross build did not produce "
-                    f"expected binary: {mp_mpy_cross}"
-                )
-                return 1
-            print(f"Built MicroPython mpy-cross: {mp_mpy_cross}")
-
-        # --- CircuitPython mpy-cross ---
-        cp_mpy_cross = _cp_mpy_cross()
-        if cp_mpy_cross.exists():
-            print(f"CircuitPython mpy-cross already built: {cp_mpy_cross}")
-        else:
-            print("Building CircuitPython mpy-cross...")
-            cp_source_dir = _cp_source_dir()
-            cp_version = runtime_versions()["circuitpython"]["version"]
-            ensure_source_tree(cp_source_dir, _CP_REPO_URL, cp_version)
-            # CircuitPython's ci_fetch_deps.py fetches the git submodules
-            # and vendored dependencies that the mpy-cross Makefile needs.
-            run_build_command(
-                [sys.executable, "tools/ci_fetch_deps.py", "mpy-cross"],
-                cwd=cp_source_dir,
-            )
-            run_build_command(
-                ["make", "-C", str(cp_source_dir / "mpy-cross"), jobs],
-                environment=environment,
-            )
-            if not cp_mpy_cross.exists():
-                print(
-                    f"CircuitPython mpy-cross build did not produce "
-                    f"expected binary: {cp_mpy_cross}"
-                )
-                return 1
-            print(f"Built CircuitPython mpy-cross: {cp_mpy_cross}")
-
-    except subprocess.CalledProcessError as error:
-        print(f"Command failed with exit code {error.returncode}: {error.cmd}")
-        return error.returncode or 1
-    except RuntimeError as error:
-        print(error)
-        return 1
+    # CircuitPython mpy-cross.
+    cp_version = runtime_versions()["circuitpython"]["version"]
+    cp_source_dir = TOOLS / f"circuitpython-{cp_version}"
+    cp_mpy_cross = cp_source_dir / "mpy-cross" / "build" / "mpy-cross"
+    if cp_mpy_cross.exists():
+        print(f"CircuitPython mpy-cross already built: {cp_mpy_cross}")
+    else:
+        print("Building CircuitPython mpy-cross...")
+        result = prepare_runtime(RuntimePrep(
+            label="CircuitPython mpy-cross",
+            source_dir=cp_source_dir,
+            repo_url=_CP_REPO_URL,
+            release=cp_version,
+            build_steps=(
+                # ci_fetch_deps.py fetches git submodules and vendored
+                # dependencies that the mpy-cross Makefile needs.
+                RuntimePrepStep(
+                    [sys.executable, "tools/ci_fetch_deps.py", "mpy-cross"],
+                ),
+                RuntimePrepStep(
+                    ["make", "-C", cp_source_dir / "mpy-cross", jobs],
+                    environment=environment,
+                ),
+            ),
+            expected_binary=cp_mpy_cross,
+        ))
+        if result != 0:
+            return result
 
     return 0

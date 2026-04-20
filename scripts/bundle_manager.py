@@ -65,6 +65,7 @@ from workspace import (
     find_package_dir,
     load_tomllib,
     read_pyproject_description,
+    run_git,
 )
 
 
@@ -620,10 +621,9 @@ def next_date_tag(bundle_dir: Path) -> str:
     """
     today = datetime.now(timezone.utc).strftime("%Y%m%d")  # noqa: UP017
 
-    result = subprocess.run(
-        ["git", "-C", str(bundle_dir), "tag", "-l", f"{today}*",
-         "--sort=v:refname"],
-        capture_output=True, text=True, check=False,
+    result = run_git(
+        "tag", "-l", f"{today}*", "--sort=v:refname",
+        cwd=bundle_dir,
     )
     tags = [tag for tag in result.stdout.strip().splitlines() if tag]
 

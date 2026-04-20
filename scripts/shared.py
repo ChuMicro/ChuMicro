@@ -14,6 +14,7 @@ This module provides:
 
 from __future__ import annotations
 
+import dataclasses
 import functools
 import os
 import shutil
@@ -278,6 +279,113 @@ def ensure_source_tree(
         run_build_command(
             ["git", "submodule", "update", "--init", "--recursive"], cwd=source_dir
         )
+
+
+# ---------------------------------------------------------------------------
+# Declarative runtime preparation pipeline
+# ---------------------------------------------------------------------------
+
+
+@dataclasses.dataclass(frozen=True)
+class RuntimePrepStep:
+    """A single shell-out step in a runtime build pipeline.
+
+    Attributes:
+        command: Command + arguments to run.
+        cwd: Working directory; ``None`` means use the source tree.
+        environment: Override environment variables.
+    """
+
+    command: list[str | Path]
+    cwd: Path | None = None
+    environment: dict[str, str] | None = None
+
+
+@dataclasses.dataclass(frozen=True)
+class RuntimePrep:
+    """Declarative description of one runtime's preparation pipeline.
+
+    The same pipeline shape works for the full unix-port build
+    (MicroPython / CircuitPython) and the lighter mpy-cross-only build,
+    so all three ``prepare_*.py`` wrappers reduce to a single
+    :func:`prepare_runtime` call.
+
+    Attributes:
+        label: Human-readable runtime name (e.g. ``"MicroPython"``).
+        source_dir: Directory the source tree is cloned into.
+        repo_url: Git repository URL.
+        release: Git tag or branch to check out.
+        init_submodules: Targeted submodule paths to initialize.  Empty
+            tuple skips submodule init entirely.
+        build_steps: Ordered build commands to run after the source
+            tree is ready.
+        expected_binary: Path that must exist after the build.  ``None``
+            skips the post-build existence check.
+        marker_file: Path to write the absolute binary path to so other
+            commands can find it without recompiling.  ``None`` skips
+            the marker write.
+    """
+
+    label: str
+    source_dir: Path
+    repo_url: str
+    release: str
+    init_submodules: tuple[str, ...] = ()
+    build_steps: tuple[RuntimePrepStep, ...] = ()
+    expected_binary: Path | None = None
+    marker_file: Path | None = None
+
+
+def prepare_runtime(prep: RuntimePrep) -> int:
+    """Execute a runtime preparation pipeline.
+
+    Returns the exit code suitable for surfacing from the CLI:
+    0 on success, 2 when refused on native Windows, or the failing
+    subprocess's exit code.
+
+    Args:
+        prep: Declarative pipeline description.
+    """
+    if running_on_native_windows():
+        print(
+            "Native Windows preparation is out of scope for this workspace phase. "
+            "Use WSL2 for runtime preparation."
+        )
+        return 2
+
+    try:
+        ensure_build_tools()
+        ensure_source_tree(prep.source_dir, prep.repo_url, prep.release)
+        for submodule in prep.init_submodules:
+            run_build_command(
+                ["git", "submodule", "update", "--init", submodule],
+                cwd=prep.source_dir,
+            )
+        for step in prep.build_steps:
+            run_build_command(
+                [str(arg) for arg in step.command],
+                cwd=step.cwd or prep.source_dir,
+                environment=step.environment,
+            )
+    except subprocess.CalledProcessError as error:
+        print(f"Command failed with exit code {error.returncode}: {error.cmd}")
+        return error.returncode or 1
+    except RuntimeError as error:
+        print(error)
+        return 1
+
+    if prep.expected_binary is not None and not prep.expected_binary.exists():
+        print(
+            f"Prepared source tree does not contain the expected binary: "
+            f"{prep.expected_binary}"
+        )
+        return 1
+
+    if prep.expected_binary is not None:
+        print(f"Prepared {prep.label} binary: {prep.expected_binary}")
+        if prep.marker_file is not None:
+            prep.marker_file.write_text(str(prep.expected_binary))
+    return 0
 
 
 # ---------------------------------------------------------------------------

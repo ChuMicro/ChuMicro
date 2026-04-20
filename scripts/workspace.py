@@ -228,17 +228,52 @@ def discover_doc_dirs(package_dirs: list[Path] | None = None) -> list[Path]:
     ]
 
 
+def run_git(
+    *arguments: str,
+    cwd: Path | None = None,
+    capture: bool = True,
+    check: bool = False,
+    input_text: str | None = None,
+) -> subprocess.CompletedProcess:
+    """Run a ``git`` subprocess from the repository root.
+
+    Workspace-wide wrapper that consolidates the dozen+ inline
+    ``subprocess.run(["git", ...])`` call sites scattered across
+    ``workspace.py``, ``bundle_manager.py``, ``docs_deploy.py``, and
+    ``run.py``.  Defaults match the most common usage:
+
+    - ``cwd`` defaults to :data:`ROOT`
+    - ``capture=True`` returns text stdout/stderr (set ``False`` to let
+      output flow to the terminal)
+    - ``check=False`` lets callers inspect the return code instead of
+      raising
+
+    Args:
+        *arguments: Arguments passed after ``git`` (e.g. ``"rev-parse",
+            "HEAD"``).
+        cwd: Working directory; ``None`` means the repository root.
+        capture: When ``True``, capture stdout/stderr as text.
+        check: When ``True``, raise :class:`subprocess.CalledProcessError`
+            on a non-zero exit code.
+        input_text: Optional stdin text for the subprocess.
+    """
+    return subprocess.run(
+        ["git", *arguments],
+        cwd=cwd or ROOT,
+        capture_output=capture,
+        text=capture,
+        check=check,
+        input=input_text,
+    )
+
+
 def is_ref_reachable(reference: str) -> bool:
     """Return True if *reference* is a valid git ref that can be diffed against.
 
     Args:
         reference: Git ref to check (e.g. ``"origin/main"``).
     """
-    result = subprocess.run(
-        ["git", "rev-parse", "--verify", reference],
-        capture_output=True, cwd=ROOT, check=False,
-    )
-    return result.returncode == 0
+    return run_git("rev-parse", "--verify", reference).returncode == 0
 
 
 def resolve_named_packages(names: list[str]) -> list[Path]:
@@ -281,14 +316,12 @@ def detect_changed_packages() -> list[Path] | None:
         #   2. Unstaged working-tree changes
         #   3. Staged but uncommitted changes
         # This ensures we never miss files regardless of commit state.
-        for diff_command in (
-            ["git", "diff", "--name-only", "origin/main...HEAD"],
-            ["git", "diff", "--name-only"],
-            ["git", "diff", "--name-only", "--cached"],
+        for diff_args in (
+            ("diff", "--name-only", "origin/main...HEAD"),
+            ("diff", "--name-only"),
+            ("diff", "--name-only", "--cached"),
         ):
-            result = subprocess.run(
-                diff_command, capture_output=True, text=True, cwd=ROOT, check=False
-            )
+            result = run_git(*diff_args)
             if result.returncode == 0 and result.stdout.strip():
                 changed.update(result.stdout.strip().splitlines())
     except (FileNotFoundError, OSError):
@@ -459,9 +492,8 @@ def release_tags(library_name: str) -> list[str]:
     Args:
         library_name: Library name (e.g. ``"timing"``).
     """
-    result = subprocess.run(
-        ["git", "tag", "--list", f"{library_name}-v*", "--sort=-v:refname"],
-        capture_output=True, text=True, cwd=ROOT, check=False,
+    result = run_git(
+        "tag", "--list", f"{library_name}-v*", "--sort=-v:refname",
     )
     if result.returncode != 0 or not result.stdout.strip():
         return []
@@ -502,21 +534,9 @@ def changed_files(base_reference: str) -> list[str]:
     # merge-base commit is not fetched.  The two-arg fallback gives a
     # full diff between the two refs — a superset that may include extra
     # files, but is safe (we'd rather over-test than under-test).
-    result = subprocess.run(
-        ["git", "diff", "--name-only", f"{base_reference}...HEAD"],
-        capture_output=True,
-        text=True,
-        cwd=ROOT,
-        check=False,
-    )
+    result = run_git("diff", "--name-only", f"{base_reference}...HEAD")
     if result.returncode != 0:
-        result = subprocess.run(
-            ["git", "diff", "--name-only", base_reference, "HEAD"],
-            capture_output=True,
-            text=True,
-            cwd=ROOT,
-            check=False,
-        )
+        result = run_git("diff", "--name-only", base_reference, "HEAD")
     if result.returncode != 0:
         raise RuntimeError(f"git diff failed: {result.stderr.strip()}")
     return [line for line in result.stdout.strip().splitlines() if line]

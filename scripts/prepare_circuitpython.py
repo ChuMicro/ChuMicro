@@ -15,94 +15,67 @@ that ``resolve_circuitpython_binary()`` can find it without recompiling.
 
 Note: CircuitPython is an Adafruit fork of MicroPython.  The unix-port
 binary is named ``micropython`` (inherited from the upstream project),
-which is expected — see ``_BINARY_FILE`` below.
+which is expected — see ``binary`` below.
 """
 
 from __future__ import annotations
 
-import subprocess
 import sys
 
 from shared import (
+    RuntimePrep,
+    RuntimePrepStep,
     build_environment,
     build_jobs,
-    ensure_build_tools,
-    ensure_source_tree,
-    run_build_command,
-    running_on_native_windows,
+    prepare_runtime,
     runtime_versions,
 )
 from workspace import TOOLS
 
+#: Repository for the CircuitPython upstream source tree.
 _REPO_URL = "https://github.com/adafruit/circuitpython.git"
+
+#: Variant subdirectory under ``ports/unix``.
 _UNIX_VARIANT = "standard"
-
-
-def _source_dir():
-    """Return the CircuitPython source directory (computed lazily)."""
-    release = runtime_versions()["circuitpython"]["version"]
-    return TOOLS / f"circuitpython-{release}"
-
-
-def _binary_file():
-    """Return the expected binary path (computed lazily).
-
-    The CircuitPython unix-port binary is named "micropython" — inherited
-    from the MicroPython fork.  This is expected, not a misconfiguration.
-    """
-    return _source_dir() / "ports" / "unix" / f"build-{_UNIX_VARIANT}" / "micropython"
 
 
 def prepare_circuitpython() -> int:
     """Prepare the pinned CircuitPython unix-port runtime inside the workspace."""
-    if running_on_native_windows():
-        print(
-            "Native Windows preparation is out of scope for this workspace phase. "
-            "Use WSL2 for `prepare-circuitpython` and unix-port validation."
-        )
-        return 2
+    release = runtime_versions()["circuitpython"]["version"]
+    source_dir = TOOLS / f"circuitpython-{release}"
+    # The CircuitPython unix-port binary is named "micropython" — inherited
+    # from the MicroPython fork.  This is expected, not a misconfiguration.
+    binary = source_dir / "ports" / "unix" / f"build-{_UNIX_VARIANT}" / "micropython"
+    jobs = f"-j{build_jobs()}"
 
-    try:
-        ensure_build_tools()
-
-        source_dir = _source_dir()
-        release = runtime_versions()["circuitpython"]["version"]
-        ensure_source_tree(source_dir, _REPO_URL, release)
-
-        jobs = f"-j{build_jobs()}"
-        # Build steps must run in this exact order:
-        #   1. ci_fetch_deps.py — fetches git submodules and vendored dependencies
-        #      that mpy-cross and the unix-port Makefile both depend on.
-        #   2. mpy-cross — the bytecode compiler, needed before the port.
-        #   3. ports/unix make — the actual unix-port binary.
-        run_build_command(
-            [sys.executable, "tools/ci_fetch_deps.py", "mpy-cross", "tests"],
-            cwd=source_dir,
-        )
-        run_build_command(["make", "-C", str(source_dir / "mpy-cross"), jobs])
-        # CircuitPython 10.1.4 has a bug in py/py.mk: objringio.c is listed
-        # in py.cmake but missing from py.mk.  The workaround disables the
-        # RingIO type so the missing object file is not required.
-        # See plans/decisions/0017-circuitpython-ringio-bug.md.
-        run_build_command(
-            [
-                "make", "-C", str(source_dir / "ports/unix"),
-                f"VARIANT={_UNIX_VARIANT}", jobs,
-            ],
-            environment=build_environment("-DMICROPY_PY_MICROPYTHON_RINGIO=0"),
-        )
-    except subprocess.CalledProcessError as error:
-        print(f"Command failed with exit code {error.returncode}: {error.cmd}")
-        return error.returncode or 1
-    except RuntimeError as error:
-        print(error)
-        return 1
-
-    binary_file = _binary_file()
-    if not binary_file.exists():
-        print(f"Prepared source tree does not contain the expected binary: {binary_file}")
-        return 1
-
-    print(f"Prepared CircuitPython binary: {binary_file}")
-    (TOOLS / "circuitpython.path").write_text(str(binary_file))
-    return 0
+    return prepare_runtime(RuntimePrep(
+        label="CircuitPython",
+        source_dir=source_dir,
+        repo_url=_REPO_URL,
+        release=release,
+        # CircuitPython's own helper handles submodule + vendored dep fetches.
+        init_submodules=(),
+        build_steps=(
+            # ci_fetch_deps.py fetches git submodules and vendored dependencies
+            # that mpy-cross and the unix-port Makefile both depend on.
+            RuntimePrepStep(
+                [sys.executable, "tools/ci_fetch_deps.py", "mpy-cross", "tests"],
+            ),
+            # mpy-cross is the bytecode compiler — required before the port build.
+            RuntimePrepStep(["make", "-C", source_dir / "mpy-cross", jobs]),
+            # The actual unix-port binary.  CircuitPython 10.1.4 has a bug in
+            # py/py.mk: objringio.c is listed in py.cmake but missing from
+            # py.mk.  The workaround disables the RingIO type so the missing
+            # object file is not required.  See
+            # plans/decisions/0017-circuitpython-ringio-bug.md.
+            RuntimePrepStep(
+                [
+                    "make", "-C", source_dir / "ports/unix",
+                    f"VARIANT={_UNIX_VARIANT}", jobs,
+                ],
+                environment=build_environment("-DMICROPY_PY_MICROPYTHON_RINGIO=0"),
+            ),
+        ),
+        expected_binary=binary,
+        marker_file=TOOLS / "circuitpython.path",
+    ))
