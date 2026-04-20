@@ -208,23 +208,45 @@ class MicropythonTransport:
     def soft_reset(self) -> None:
         """Soft-reset the device to clear interpreter state.
 
-        Re-enters the raw REPL with ``soft_reset=True`` if the persistent
-        transport is open; otherwise subprocess ``mpremote reset``.  Used
-        between test groups so each group starts with a clean
-        interpreter.
+        Sends Ctrl-D through the persistent raw REPL.  This clears
+        ``sys.modules`` and the device heap without toggling USB, so
+        it is safe to run between every file.
+
+        The mount is **not** restored by this method.  The caller (the
+        device orchestration layer) always calls ``stage()`` next, and
+        ``stage()`` owns the fresh mount.  Restoring the mount here
+        instead would double-wrap mpremote's ``SerialIntercept``
+        (``mount_local`` unconditionally wraps ``self.serial``) and
+        garble subsequent I/O — that was the cause of the
+        ``ImportError: no module named 'chumicro_test_harness'`` seen
+        on the second file of an IDE folder run.
+
+        Used between test groups so each group starts with a clean
+        interpreter and an un-wrapped serial.  If no persistent
+        transport is open, falls back to a subprocess ``mpremote
+        reset``.
         """
-        if self._serial is not None:
+        if self._serial is None:
+            self._run_mpremote(["reset"])
+            return
+
+        # Umount while the device-side mount state is still live — after
+        # Ctrl-D the ``os`` module and mount hook are gone and
+        # ``umount_local`` would error when it tries to run
+        # ``os.umount(...)``.  umount_local also unwraps the
+        # SerialIntercept on the host side, which is required before
+        # the next mount_local wraps again.
+        if self._mounted:
             try:
-                self._serial.exit_raw_repl()
+                self._serial.umount_local()
             except Exception:  # pragma: no cover - best-effort cleanup
                 pass
-            # Re-enter with soft_reset=True so sys.modules / heap clear.
-            self._serial.enter_raw_repl(soft_reset=True)
-            # If we had a mount, restore it.
-            if self._mounted and self._staging_path is not None:
-                self._serial.mount_local(str(self._staging_path))
-        else:
-            self._run_mpremote(["reset"])
+            self._mounted = False
+        try:
+            self._serial.exit_raw_repl()
+        except Exception:  # pragma: no cover - best-effort cleanup
+            pass
+        self._serial.enter_raw_repl(soft_reset=True)
 
     def reset(self) -> None:
         """Soft-reset the device.

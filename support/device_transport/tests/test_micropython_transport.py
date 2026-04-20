@@ -409,8 +409,14 @@ class TestReset:
         command = runner.calls[0][0]
         assert command == ["mpremote", "connect", "/dev/ttyUSB0", "reset"]
 
-    def test_reset_with_serial_re_enters_raw_repl(self, tmp_path) -> None:
-        """reset() with an open serial transport re-enters raw REPL with soft_reset=True."""
+    def test_reset_with_serial_umounts_then_re_enters_raw_repl(self, tmp_path) -> None:
+        """reset() with an open serial transport umounts, exits, then soft-resets.
+
+        The mount is deliberately *not* restored inside ``soft_reset``;
+        ``stage()`` owns remounting.  Re-mounting here would double-wrap
+        ``mpremote``'s ``SerialIntercept`` and break I/O on the next
+        file.  This test locks in that contract.
+        """
         source_dir = tmp_path / "src"
         source_dir.mkdir()
         harness_dir = tmp_path / "harness"
@@ -426,16 +432,72 @@ class TestReset:
         )
         transport.stage([source_dir], [], harness_dir)
 
-        # Reset path: exit_raw_repl, then enter_raw_repl(soft_reset=True),
-        # then mount_local again to restore the staged mount.
         prior_call_count = len(serial.calls)
         transport.reset()
         new_calls = [name for name, _ in serial.calls[prior_call_count:]]
+        # Contract: umount_local must come before enter_raw_repl so the
+        # SerialIntercept is unwrapped while device-side mount state is
+        # still live.
+        assert "umount_local" in new_calls
         assert "exit_raw_repl" in new_calls
         assert "enter_raw_repl" in new_calls
-        assert "mount_local" in new_calls
+        assert new_calls.index("umount_local") < new_calls.index("enter_raw_repl")
+        # soft_reset must NOT re-mount — that belongs to stage().
+        assert "mount_local" not in new_calls
+        # _mounted flag cleared so the next stage() won't try to umount
+        # twice.
+        assert transport._mounted is False
         # No mpremote subprocess call.
         assert runner.calls == []
+
+        transport.disconnect()
+
+    def test_soft_reset_followed_by_stage_mounts_new_path_cleanly(
+        self, tmp_path,
+    ) -> None:
+        """End-to-end: soft_reset then stage() must unwrap, reset, and remount.
+
+        Regression: after soft_reset the device globals are gone, so
+        attempting to umount the old mount later would fail because
+        ``os.umount`` has nothing to call.  stage() must not try to
+        umount again (soft_reset already did), but must still create a
+        fresh tempdir and mount it.
+        """
+        source_a = tmp_path / "src_a"
+        source_a.mkdir()
+        source_b = tmp_path / "src_b"
+        source_b.mkdir()
+        harness_dir = tmp_path / "harness"
+        harness_dir.mkdir()
+
+        runner = FakeRunner()
+        serial = FakeSerialTransport(address="/dev/ttyUSB0")
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0",
+            mode="mount",
+            runner=runner,
+            transport_factory=_factory_for(serial),
+        )
+        transport.stage([source_a], [], harness_dir)
+        transport.soft_reset()
+        transport.stage([source_b], [], harness_dir)
+
+        # Two mount_local calls total — one per stage() — never from
+        # soft_reset.  Each must be immediately preceded by either the
+        # initial raw REPL entry or a soft-reset enter_raw_repl.
+        mount_calls = [
+            index for index, (name, _) in enumerate(serial.calls)
+            if name == "mount_local"
+        ]
+        umount_calls = [
+            index for index, (name, _) in enumerate(serial.calls)
+            if name == "umount_local"
+        ]
+        assert len(mount_calls) == 2
+        # Exactly one umount: inside soft_reset (stage() skipped its
+        # own umount because soft_reset already cleared _mounted).
+        assert len(umount_calls) == 1
+        assert umount_calls[0] < mount_calls[1]
 
         transport.disconnect()
 
