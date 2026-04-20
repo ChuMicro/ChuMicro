@@ -115,9 +115,12 @@ git remote -v
 
 ```bash
 python scripts/prepare_workspace.py --create-venv
+source .venv/bin/activate
 ```
 
-This creates a virtual environment, installs all dependencies, and runs lint + tests. When you see `Workspace is ready`, you're good. If you already have a virtual environment activated, drop `--create-venv`.
+`prepare_workspace.py` creates a virtual environment and installs all dependencies. When you see `Workspace is ready`, you're good. If you already have a virtual environment activated, drop `--create-venv`.
+
+> **Why this command and not `run.py setup`?** `prepare_workspace.py` is the first-time bootstrap — it's the only script that runs on a fresh clone before any third-party packages exist. Once your `.venv` is in place, `python scripts/run.py setup` handles everyday refreshes (new libraries, updated dependencies) and does the same install work idempotently. Use `prepare_workspace.py` once; use `run.py setup` forever after.
 
 ### 5. Verify everything works
 
