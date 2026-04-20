@@ -132,7 +132,10 @@ class TestDeviceOrchestration:
             deploy_mode=None,
         ):
             selected_device_ids.append(device_entry.identifier)
-            return 1, 0, 0, None, "ram"
+            return device_testing.DeviceRunResult(
+                device=device_entry, passed=1, failed=0, errors=0,
+                implementation=None, deploy_mode="ram",
+            )
 
         monkeypatch.setattr(
             device_testing,
@@ -193,7 +196,10 @@ class TestDeviceOrchestration:
             deploy_mode=None,
         ):
             selected_device_ids.append(device_entry.identifier)
-            return 1, 0, 0, None, "ram"
+            return device_testing.DeviceRunResult(
+                device=device_entry, passed=1, failed=0, errors=0,
+                implementation=None, deploy_mode="ram",
+            )
 
         monkeypatch.setattr(
             device_testing,
@@ -251,7 +257,10 @@ class TestDeviceOrchestration:
             deploy_mode=None,
         ):
             selected_device_ids.append(device_entry.identifier)
-            return 1, 0, 0, None, "ram"
+            return device_testing.DeviceRunResult(
+                device=device_entry, passed=1, failed=0, errors=0,
+                implementation=None, deploy_mode="ram",
+            )
 
         monkeypatch.setattr(
             device_testing,
@@ -315,7 +324,10 @@ class TestDeviceOrchestration:
             deploy_mode=None,
         ):
             selected_device_ids.append(device_entry.identifier)
-            return 1, 0, 0, None, "ram"
+            return device_testing.DeviceRunResult(
+                device=device_entry, passed=1, failed=0, errors=0,
+                implementation=None, deploy_mode="ram",
+            )
 
         monkeypatch.setattr(
             device_testing,
@@ -380,7 +392,10 @@ class TestDeviceOrchestration:
             deploy_mode=None,
         ):
             selected_device_ids.append(device_entry.identifier)
-            return 1, 0, 0, None, "ram"
+            return device_testing.DeviceRunResult(
+                device=device_entry, passed=1, failed=0, errors=0,
+                implementation=None, deploy_mode="ram",
+            )
 
         monkeypatch.setattr(
             device_testing,
@@ -906,14 +921,14 @@ class TestRunTestsOnDevice:
         )
 
         plan = [_plan_entry(tmp_path, "alpha")]
-        passed, failed, errors, _implementation, _deploy_mode = device_testing._run_tests_on_device(
+        device_result = device_testing._run_tests_on_device(
             _circuitpython_device(),
             plan,
             harness_source=tmp_path / "harness",
             test_filter=None,
         )
 
-        assert (passed, failed, errors) == (1, 0, 0)
+        assert (device_result.passed, device_result.failed, device_result.errors) == (1, 0, 0)
         # Transport lifecycle: connect → stage → execute(_scripts) → reset → disconnect.
         call_names = [name for name, _ in transport.calls]
         assert call_names[0] == "connect"
@@ -936,12 +951,12 @@ class TestRunTestsOnDevice:
         )
 
         plan = [_plan_entry(tmp_path, "alpha"), _plan_entry(tmp_path, "beta")]
-        passed, failed, errors, _implementation, _deploy_mode = device_testing._run_tests_on_device(
+        device_result = device_testing._run_tests_on_device(
             _circuitpython_device(), plan,
             harness_source=tmp_path / "harness", test_filter=None,
         )
 
-        assert (passed, failed, errors) == (0, 0, 1)
+        assert (device_result.passed, device_result.failed, device_result.errors) == (0, 0, 1)
         # No stage / execute after the connect failure.
         names = [name for name, _ in transport.calls]
         assert "stage" not in names
@@ -969,13 +984,13 @@ class TestRunTestsOnDevice:
         # stub it out to avoid hitting the real workspace.
         monkeypatch.setattr(device_testing, "discover_library_dirs", lambda: [])
 
-        passed, failed, errors, _implementation, _deploy_mode = device_testing._run_tests_on_device(
+        device_result = device_testing._run_tests_on_device(
             _micropython_device(), plan,
             harness_source=tmp_path / "harness", test_filter=None,
         )
 
         # 3 test files total: all become errors.
-        assert (passed, failed, errors) == (0, 0, 3)
+        assert (device_result.passed, device_result.failed, device_result.errors) == (0, 0, 3)
         names = [name for name, _ in transport.calls]
         assert "disconnect" in names
 
@@ -1060,14 +1075,14 @@ class TestRunTestsOnDevice:
         )
 
         plan = [_plan_entry(tmp_path, "alpha", file_count=2)]
-        passed, failed, errors, _implementation, _deploy_mode = device_testing._run_tests_on_device(
+        device_result = device_testing._run_tests_on_device(
             _circuitpython_device(), plan,
             harness_source=tmp_path / "harness", test_filter=None,
         )
 
         # First file errored; second passed.
-        assert errors == 1
-        assert passed == 1
+        assert device_result.errors == 1
+        assert device_result.passed == 1
         # recover() was called after the exception.
         names = [name for name, _ in transport.calls]
         assert "recover" in names
@@ -1098,15 +1113,15 @@ class TestRunTestsOnDevice:
         )
 
         plan = [_plan_entry(tmp_path, "alpha", file_count=3)]
-        passed, failed, errors, _implementation, _deploy_mode = device_testing._run_tests_on_device(
+        device_result = device_testing._run_tests_on_device(
             _circuitpython_device(), plan,
             harness_source=tmp_path / "harness", test_filter=None,
         )
 
         # Only the first file ran; the rest were aborted.
         assert transport._execute_count == 1
-        assert errors == 1
-        assert passed == 0
+        assert device_result.errors == 1
+        assert device_result.passed == 0
 
     def test_missing_summary_counts_as_error(
         self, tmp_path, monkeypatch,
@@ -1121,13 +1136,13 @@ class TestRunTestsOnDevice:
         )
 
         plan = [_plan_entry(tmp_path, "alpha")]
-        passed, failed, errors, _implementation, _deploy_mode = device_testing._run_tests_on_device(
+        device_result = device_testing._run_tests_on_device(
             _circuitpython_device(), plan,
             harness_source=tmp_path / "harness", test_filter=None,
         )
 
-        assert errors == 1
-        assert (passed, failed) == (0, 0)
+        assert device_result.errors == 1
+        assert (device_result.passed, device_result.failed) == (0, 0)
 
     def test_mixed_pass_fail_summary_counted_correctly(
         self, tmp_path, monkeypatch,
@@ -1142,13 +1157,13 @@ class TestRunTestsOnDevice:
         )
 
         plan = [_plan_entry(tmp_path, "alpha")]
-        passed, failed, errors, _implementation, _deploy_mode = device_testing._run_tests_on_device(
+        device_result = device_testing._run_tests_on_device(
             _circuitpython_device(), plan,
             harness_source=tmp_path / "harness", test_filter=None,
         )
 
         # total=2, failed=1 → passed=1, failed=1, errors=0.
-        assert (passed, failed, errors) == (1, 1, 0)
+        assert (device_result.passed, device_result.failed, device_result.errors) == (1, 1, 0)
 
     def test_ram_mode_stages_per_library(
         self, tmp_path, monkeypatch,
@@ -1216,14 +1231,14 @@ class TestRunTestsOnDevice:
             _plan_entry(tmp_path, "alpha", file_count=2),
             _plan_entry(tmp_path, "beta", file_count=1),
         ]
-        passed, failed, errors, _implementation, _deploy_mode = device_testing._run_tests_on_device(
+        device_result = device_testing._run_tests_on_device(
             _circuitpython_device(), plan,
             harness_source=tmp_path / "harness", test_filter=None,
         )
 
         # alpha: 2 errors (stage failed).  beta: 1 pass (stage succeeded).
-        assert errors == 2
-        assert passed == 1
+        assert device_result.errors == 2
+        assert device_result.passed == 1
 
 
 class TestFormatTestDeviceCommand:
@@ -1274,6 +1289,32 @@ class TestFormatTestDeviceCommand:
         )
 
 
+def _make_device_result(
+    identifier: str = "mp-one",
+    runtime: str = "micropython",
+    address: str = "/dev/cu.usbmodem1",
+    *,
+    passed: int = 0,
+    failed: int = 0,
+    errors: int = 0,
+    implementation=None,
+    deploy_mode: str = "ram",
+    duration_seconds: float = 0.0,
+    files=None,
+):
+    """Build a DeviceRunResult with a synthetic DeviceEntry for tests."""
+    device = DeviceEntry(
+        identifier=identifier, runtime=runtime, address=address,
+    )
+    return device_testing.DeviceRunResult(
+        device=device,
+        passed=passed, failed=failed, errors=errors,
+        implementation=implementation, deploy_mode=deploy_mode,
+        duration_seconds=duration_seconds,
+        files=list(files) if files is not None else [],
+    )
+
+
 class TestFormatPrSummaryBlock:
     """Tests for _format_pr_summary_block — paste-ready PR markdown."""
 
@@ -1288,69 +1329,65 @@ class TestFormatPrSummaryBlock:
             "- **Total: 0 passed, 0 failed, 0 errors**"
         )
 
-    def test_single_device_renders_one_bullet(self) -> None:
-        """Each device gets its own bullet with runtime, deploy mode, and address."""
-        device = DeviceEntry(
-            identifier="pico-w",
-            runtime="micropython",
-            address="/dev/cu.usbmodem1",
+    def test_duration_line_included_when_provided(self) -> None:
+        """``Duration:`` line appears right after the Command when passed."""
+        block = device_testing._format_pr_summary_block(
+            command="cmd",
+            per_device_results=[],
+            total_duration_seconds=12.345,
+        )
+        assert "- Duration: 12.35s\n" in block
+        # Ordering: Command first, Duration second.
+        lines = block.splitlines()
+        assert lines[0].startswith("- Command:")
+        assert lines[1].startswith("- Duration:")
+
+    def test_single_device_renders_one_bullet_with_duration(self) -> None:
+        """Each device bullet carries its own wall-clock label."""
+        result = _make_device_result(
+            identifier="pico-w", passed=5, duration_seconds=1.5,
         )
         block = device_testing._format_pr_summary_block(
             command="python scripts/run.py test-device --runtime micropython",
-            per_device_results=[(device, 5, 0, 0, None, "ram")],
+            per_device_results=[result],
         )
-        lines = block.splitlines()
-        assert lines[0] == (
-            "- Command: `python scripts/run.py test-device --runtime micropython`"
-        )
-        assert lines[1] == (
+        assert (
             "- `pico-w` (MicroPython, ram mode, `/dev/cu.usbmodem1`): "
-            "5 passed, 0 failed, 0 errors"
-        )
-        assert lines[2] == "- **Total: 5 passed, 0 failed, 0 errors**"
+            "5 passed, 0 failed, 0 errors in 1.50s"
+        ) in block
+        assert "- **Total: 5 passed, 0 failed, 0 errors**" in block
 
     def test_multiple_devices_sum_into_bold_total(self) -> None:
         """Per-device counts accumulate into the bolded final line."""
-        mp_device = DeviceEntry(
-            identifier="pico-w",
-            runtime="micropython",
-            address="/dev/cu.usbmodem1",
+        mp_result = _make_device_result(
+            identifier="pico-w", passed=4, failed=1,
         )
-        cp_device = DeviceEntry(
-            identifier="s2-mini",
-            runtime="circuitpython",
+        cp_result = _make_device_result(
+            identifier="s2-mini", runtime="circuitpython",
             address="/dev/cu.usbmodem2",
+            passed=3, errors=2, deploy_mode="flash",
         )
         block = device_testing._format_pr_summary_block(
             command="python scripts/run.py test-device --runtime both",
-            per_device_results=[
-                (mp_device, 4, 1, 0, None, "ram"),
-                (cp_device, 3, 0, 2, None, "flash"),
-            ],
+            per_device_results=[mp_result, cp_result],
         )
         assert "`pico-w` (MicroPython" in block
         assert "`s2-mini` (CircuitPython" in block
-        # 4+3=7 passed, 1+0=1 failed, 0+2=2 errors.
         assert "**Total: 7 passed, 1 failed, 2 errors**" in block
 
     def test_uses_human_friendly_runtime_labels(self) -> None:
         """Internal runtime names render as human labels in the block."""
-        mp_device = DeviceEntry(
-            identifier="x", runtime="micropython", address="/dev/a",
-        )
-        cp_device = DeviceEntry(
-            identifier="y", runtime="circuitpython", address="/dev/b",
-        )
         block = device_testing._format_pr_summary_block(
             command="cmd",
             per_device_results=[
-                (mp_device, 0, 0, 0, None, "ram"),
-                (cp_device, 0, 0, 0, None, "ram"),
+                _make_device_result(identifier="x", address="/dev/a"),
+                _make_device_result(
+                    identifier="y", runtime="circuitpython", address="/dev/b",
+                ),
             ],
         )
         assert "(MicroPython," in block
         assert "(CircuitPython," in block
-        # Internal identifiers should NOT leak into the rendered block.
         assert "(micropython," not in block
         assert "(circuitpython," not in block
 
@@ -1358,19 +1395,17 @@ class TestFormatPrSummaryBlock:
         """When the probe succeeded, version and machine show up in the bullet."""
         from chumicro_device_transport import DeviceImplementation
 
-        device = DeviceEntry(
-            identifier="pico-w",
-            runtime="micropython",
-            address="/dev/cu.usbmodem1",
-        )
-        implementation = DeviceImplementation(
-            name="micropython",
-            version="1.26.0",
-            machine="Raspberry Pi Pico W with RP2040",
+        result = _make_device_result(
+            identifier="pico-w", passed=5,
+            implementation=DeviceImplementation(
+                name="micropython",
+                version="1.26.0",
+                machine="Raspberry Pi Pico W with RP2040",
+            ),
         )
         block = device_testing._format_pr_summary_block(
             command="python scripts/run.py test-device",
-            per_device_results=[(device, 5, 0, 0, implementation, "ram")],
+            per_device_results=[result],
         )
         assert (
             "(MicroPython 1.26.0 on Raspberry Pi Pico W with RP2040, ram mode,"
@@ -1381,61 +1416,137 @@ class TestFormatPrSummaryBlock:
         """Empty ``machine`` renders just the runtime + version, no ``on ...``."""
         from chumicro_device_transport import DeviceImplementation
 
-        device = DeviceEntry(
-            identifier="cp",
-            runtime="circuitpython",
+        result = _make_device_result(
+            identifier="cp", runtime="circuitpython",
             address="/dev/cu.usbmodem2",
-        )
-        implementation = DeviceImplementation(
-            name="circuitpython",
-            version="10.1.4",
-            machine="",
+            implementation=DeviceImplementation(
+                name="circuitpython",
+                version="10.1.4",
+                machine="",
+            ),
         )
         block = device_testing._format_pr_summary_block(
             command="cmd",
-            per_device_results=[(device, 0, 0, 0, implementation, "ram")],
+            per_device_results=[result],
         )
-        assert (
-            "(CircuitPython 10.1.4, ram mode, `/dev/cu.usbmodem2`)"
-            in block
-        )
-        assert " on " not in block
+        assert "(CircuitPython 10.1.4, ram mode, `/dev/cu.usbmodem2`)" in block
 
     def test_deploy_mode_surfaces_even_without_probe(self) -> None:
-        """Bare ``test-device`` (no probe result) still shows the deploy mode.
-
-        This is the critical "my PR summary doesn't say what mode it
-        ran" regression — ``--deploy-mode`` absent from the command
-        must not mean the mode is absent from the bullet.
-        """
-        device = DeviceEntry(
-            identifier="cp",
-            runtime="circuitpython",
+        """Bare ``test-device`` (no probe result) still shows the deploy mode."""
+        result = _make_device_result(
+            identifier="cp", runtime="circuitpython",
             address="/dev/cu.usbmodem2",
+            passed=1, deploy_mode="flash",
         )
         block = device_testing._format_pr_summary_block(
             command="python scripts/run.py test-device",
-            per_device_results=[(device, 1, 0, 0, None, "flash")],
+            per_device_results=[result],
         )
         assert "flash mode" in block
 
     def test_different_devices_can_show_different_modes(self) -> None:
         """Per-device modes render independently so mixed runs are legible."""
-        mp_device = DeviceEntry(
-            identifier="mp", runtime="micropython", address="/dev/a",
-        )
-        cp_device = DeviceEntry(
-            identifier="cp", runtime="circuitpython", address="/dev/b",
-        )
         block = device_testing._format_pr_summary_block(
             command="cmd",
             per_device_results=[
-                (mp_device, 0, 0, 0, None, "ram"),
-                (cp_device, 0, 0, 0, None, "flash"),
+                _make_device_result(identifier="mp", address="/dev/a"),
+                _make_device_result(
+                    identifier="cp", runtime="circuitpython",
+                    address="/dev/b", deploy_mode="flash",
+                ),
             ],
         )
         assert "`mp` (MicroPython, ram mode," in block
         assert "`cp` (CircuitPython, flash mode," in block
+
+    def test_single_file_run_renders_per_test_sub_bullets(self) -> None:
+        """One file → sub-bullets list the test method names and statuses."""
+        from result_parser import TestResult
+
+        files = [device_testing.FileRunResult(
+            library="timing",
+            file_name="test_heartbeat.py",
+            passed=2,
+            failed=1,
+            errors=0,
+            tests=[
+                TestResult(
+                    name="test_heartbeat_fires",
+                    status="PASS",
+                    duration=0.012,
+                ),
+                TestResult(
+                    name="test_heartbeat_resets",
+                    status="FAIL",
+                    duration=0.008,
+                    message="",
+                ),
+                TestResult(
+                    name="test_heartbeat_period",
+                    status="PASS",
+                    duration=0.002,
+                ),
+            ],
+            duration_seconds=0.045,
+        )]
+        result = _make_device_result(
+            passed=2, failed=1, duration_seconds=1.2, files=files,
+        )
+        block = device_testing._format_pr_summary_block(
+            command="cmd",
+            per_device_results=[result],
+        )
+        assert "  - `test_heartbeat_fires`: PASS (12ms)" in block
+        assert "  - `test_heartbeat_resets`: FAIL (8ms)" in block
+        assert "  - `test_heartbeat_period`: PASS (2ms)" in block
+        # Per-file sub-bullet should NOT appear when only one file ran.
+        assert "  - `timing/test_heartbeat.py`" not in block
+
+    def test_multi_file_run_renders_per_file_sub_bullets(self) -> None:
+        """Multiple files → sub-bullets list file counts (no per-test detail)."""
+        files = [
+            device_testing.FileRunResult(
+                library="timing", file_name="test_heartbeat.py",
+                passed=3, failed=0, errors=0, duration_seconds=0.120,
+            ),
+            device_testing.FileRunResult(
+                library="timing", file_name="test_ticks.py",
+                passed=2, failed=0, errors=0, duration_seconds=0.080,
+            ),
+        ]
+        result = _make_device_result(
+            passed=5, duration_seconds=0.5, files=files,
+        )
+        block = device_testing._format_pr_summary_block(
+            command="cmd",
+            per_device_results=[result],
+        )
+        assert (
+            "  - `timing/test_heartbeat.py`: 3 passed, 0 failed, 0 errors in 120ms"
+            in block
+        )
+        assert (
+            "  - `timing/test_ticks.py`: 2 passed, 0 failed, 0 errors in 80ms"
+            in block
+        )
+        # Should not leak test-level detail when there are multiple files.
+        assert "PASS (" not in block
+        assert "FAIL (" not in block
+
+    def test_device_without_files_has_no_sub_bullets(self) -> None:
+        """A device that never ran any file gets only the device bullet."""
+        result = _make_device_result(errors=1, duration_seconds=0.05)
+        block = device_testing._format_pr_summary_block(
+            command="cmd",
+            per_device_results=[result],
+        )
+        # No sub-bullets — but the device bullet exists.
+        lines = [
+            line for line in block.splitlines()
+            if line.startswith("  - ")
+        ]
+        assert lines == []
+        assert "`mp-one`" in block
 
 
 class TestResolveEffectiveDeployMode:
@@ -1515,7 +1626,10 @@ class TestSummaryAlwaysPrints:
         self._stub_functional_tests(monkeypatch)
         monkeypatch.setattr(
             device_testing, "_run_tests_on_device",
-            lambda device_entry, *args, **kwargs: (2, 1, 0, None, "ram"),
+            lambda device_entry, *args, **kwargs: device_testing.DeviceRunResult(
+                device=device_entry, passed=2, failed=1, errors=0,
+                implementation=None, deploy_mode="ram",
+            ),
         )
 
         result = device_testing.test_device()
@@ -1525,6 +1639,8 @@ class TestSummaryAlwaysPrints:
         assert "Device test summary: 2 passed, 1 failed, 0 errors" in captured.out
         assert "PR summary (paste into the 'Device testing' section" in captured.out
         assert "**Total: 2 passed, 1 failed, 0 errors**" in captured.out
+        # Duration line always present in non-empty runs.
+        assert "\n- Duration: " in captured.out
 
     def test_summary_prints_when_device_run_raises(
         self, tmp_path, monkeypatch, capsys,
@@ -1586,7 +1702,10 @@ class TestSummaryAlwaysPrints:
         def half_exploding_run(device_entry, *args, **kwargs):
             if device_entry.identifier == "mp-one":
                 raise RuntimeError("mpremote hung")
-            return 3, 0, 0, None, "ram"
+            return device_testing.DeviceRunResult(
+                device=device_entry, passed=3, failed=0, errors=0,
+                implementation=None, deploy_mode="ram",
+            )
 
         monkeypatch.setattr(
             device_testing, "_run_tests_on_device", half_exploding_run,

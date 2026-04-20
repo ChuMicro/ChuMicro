@@ -11,6 +11,8 @@ See Decision 0027 for the transport protocol and config schema.
 from __future__ import annotations
 
 import ast
+import time
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from device_config import (
@@ -19,8 +21,72 @@ from device_config import (
     load_device_registry,
     resolve_ide_devices,
 )
-from result_parser import parse_output
+from result_parser import TestResult, parse_output
 from workspace import ROOT, discover_library_dirs, load_tomllib
+
+
+@dataclass
+class FileRunResult:
+    """Results captured for a single test file run on a single device.
+
+    Populated once per ``(device, test_file)`` pair inside
+    :func:`_run_tests_on_device`.  Used by the PR summary to build
+    per-file sub-bullets (or per-test sub-bullets when only one file
+    ran on a device).
+
+    Attributes:
+        library: Library directory name (e.g. ``"timing"``).
+        file_name: Test file name without its path (e.g.
+            ``"test_heartbeat.py"``).
+        passed: ``summary.total - summary.failed`` from the harness.
+        failed: ``summary.failed`` from the harness.
+        errors: 1 if the harness produced no summary line, else 0.
+        tests: Per-test results emitted by the harness — available so
+            single-file runs can show method-level pass/fail.
+        duration_seconds: Wall-clock time spent running this file.
+    """
+
+    library: str
+    file_name: str
+    passed: int
+    failed: int
+    errors: int
+    tests: list[TestResult] = field(default_factory=list)
+    duration_seconds: float = 0.0
+
+
+@dataclass
+class DeviceRunResult:
+    """Aggregate results for one device across its whole test plan.
+
+    Returned by :func:`_run_tests_on_device` and consumed by the PR
+    summary.  ``files`` is empty when the device never reached the
+    per-file loop (transport creation failure, connect failure, or
+    bulk-stage failure).
+
+    Attributes:
+        device: The originating :class:`DeviceEntry`.
+        passed: Total passing tests across all files.
+        failed: Total failing tests across all files.
+        errors: Total errors (per-file raises + missing summary lines +
+            bulk-stage failures).
+        implementation: Probe result, or ``None`` if the probe
+            couldn't complete.
+        deploy_mode: User-facing deploy mode (``"ram"`` or
+            ``"flash"``).
+        duration_seconds: Wall-clock time spent on this device,
+            measured from transport creation through disconnect.
+        files: Per-file results in test-plan order.
+    """
+
+    device: object
+    passed: int
+    failed: int
+    errors: int
+    implementation: object | None
+    deploy_mode: str
+    duration_seconds: float = 0.0
+    files: list[FileRunResult] = field(default_factory=list)
 
 
 def discover_functional_tests(
@@ -389,7 +455,7 @@ def _run_tests_on_device(
     harness_source,
     test_filter,
     deploy_mode=None,
-):
+) -> DeviceRunResult:
     """Run all planned tests on a single device.
 
     Args:
@@ -401,35 +467,45 @@ def _run_tests_on_device(
             device entry's ``deploy_mode`` field.
 
     Returns:
-        Tuple of ``(passed, failed, errors, implementation, deploy_mode)``.
-        ``implementation`` is a :class:`DeviceImplementation` or
-        ``None`` if the probe could not complete.  ``deploy_mode`` is
-        the resolved user-facing mode (``"ram"`` or ``"flash"``) the
-        transport was built with — surfaced so the PR summary can show
-        reviewers how each device actually ran, regardless of whether
-        the user passed ``--deploy-mode``.  The probe runs once right
-        after ``connect()``; a probe failure never blocks the test
+        A :class:`DeviceRunResult` containing aggregate counts, the
+        probe result, the resolved user-facing deploy mode, per-device
+        wall-clock, and per-file results in test-plan order.  Early
+        exits (transport creation failure, connect failure, bulk-stage
+        failure) still return a populated result — ``files`` is
+        whatever was completed before the exit.  The probe runs once
+        right after ``connect()``; a probe failure never blocks the
         run.
     """
-    passed = 0
-    failed = 0
-    errors = 0
-    implementation = None
     effective_deploy_mode = _resolve_effective_deploy_mode(
         device_entry, deploy_mode,
     )
+
+    result = DeviceRunResult(
+        device=device_entry,
+        passed=0,
+        failed=0,
+        errors=0,
+        implementation=None,
+        deploy_mode=effective_deploy_mode,
+    )
+    device_start = time.perf_counter()
+
+    def _finalize() -> DeviceRunResult:
+        result.duration_seconds = time.perf_counter() - device_start
+        return result
 
     try:
         transport = _create_transport(device_entry, deploy_mode=deploy_mode)
     except ValueError as runtime_error:
         print(f"  Skipping — {runtime_error}")
-        return passed, failed, errors, implementation, effective_deploy_mode
+        return _finalize()
 
     try:
         transport.connect()
     except Exception as connect_error:
         print(f"  Connection failed: {connect_error}")
-        return 0, 0, 1, implementation, effective_deploy_mode
+        result.errors = 1
+        return _finalize()
 
     # Probe the board's ``sys.implementation`` once per session so the
     # PR summary can show the exact firmware version and board model.
@@ -437,10 +513,9 @@ def _run_tests_on_device(
     # to the per-device metadata from ``devices.yml``.
     if hasattr(transport, "probe_implementation"):
         try:
-            implementation = transport.probe_implementation()
+            result.implementation = transport.probe_implementation()
         except Exception as probe_error:  # pragma: no cover - hardware-only
             print(f"  WARNING: Implementation probe failed: {probe_error}")
-            implementation = None
 
     # RAM mode sends all source code inline through the serial REPL,
     # so we re-stage per library with only the source dirs that library
@@ -472,10 +547,8 @@ def _run_tests_on_device(
         except Exception as stage_error:
             print(f"  Stage failed: {stage_error}")
             transport.disconnect()
-            return (
-                0, 0, len(all_test_files),
-                implementation, effective_deploy_mode,
-            )
+            result.errors = len(all_test_files)
+            return _finalize()
 
     abort = False
     previous_library_ran = False
@@ -518,13 +591,24 @@ def _run_tests_on_device(
                 )
             except Exception as stage_error:
                 print(f"  Stage failed for {library_name}: {stage_error}")
-                errors += len(test_files)
+                for test_file in test_files:
+                    result.files.append(FileRunResult(
+                        library=library_name,
+                        file_name=test_file.name,
+                        passed=0, failed=0, errors=1,
+                    ))
+                result.errors += len(test_files)
                 continue
 
         for test_file in test_files:
             if abort:
                 break
             print(f"\n  {library_name}/{test_file.name}")
+            file_start = time.perf_counter()
+            file_passed = 0
+            file_failed = 0
+            file_errors = 0
+            file_tests: list[TestResult] = []
 
             try:
                 bootstrap = _build_device_bootstrap(
@@ -533,17 +617,18 @@ def _run_tests_on_device(
                 raw_output = _execute_device_bootstrap(transport, bootstrap)
                 print(raw_output)
 
-                result = parse_output(raw_output)
-                if result.summary:
-                    passed += result.summary.total - result.summary.failed
-                    failed += result.summary.failed
+                parsed = parse_output(raw_output)
+                file_tests = list(parsed.tests)
+                if parsed.summary:
+                    file_passed = parsed.summary.total - parsed.summary.failed
+                    file_failed = parsed.summary.failed
                 else:
                     print("  WARNING: No summary line in output.")
-                    errors += 1
+                    file_errors = 1
 
             except Exception as run_error:
                 print(f"  ERROR: {run_error}")
-                errors += 1
+                file_errors = 1
                 # Try to recover raw REPL so the next test can run.
                 try:
                     transport.recover()
@@ -551,6 +636,19 @@ def _run_tests_on_device(
                     print(f"  FATAL: Cannot recover board state: {recover_error}")
                     print("  Aborting remaining tests on this device.")
                     abort = True
+
+            result.files.append(FileRunResult(
+                library=library_name,
+                file_name=test_file.name,
+                passed=file_passed,
+                failed=file_failed,
+                errors=file_errors,
+                tests=file_tests,
+                duration_seconds=time.perf_counter() - file_start,
+            ))
+            result.passed += file_passed
+            result.failed += file_failed
+            result.errors += file_errors
 
         previous_library_ran = True
 
@@ -569,7 +667,7 @@ def _run_tests_on_device(
             f"{disconnect_error}"
         )
 
-    return passed, failed, errors, implementation, effective_deploy_mode
+    return _finalize()
 
 
 def _resolve_selected_devices(
@@ -648,44 +746,70 @@ def _format_test_device_command(
     return " ".join(parts)
 
 
+def _format_duration(seconds: float) -> str:
+    """Format a wall-clock duration for PR summary output.
+
+    Uses ``ms`` for sub-second values so per-test rows stay compact,
+    ``s`` otherwise.  Keeps two-digit precision on seconds so readers
+    can tell ``0.12s`` apart from ``1.20s``.
+
+    Args:
+        seconds: Elapsed seconds (non-negative).
+
+    Returns:
+        Short human label (e.g. ``"124ms"``, ``"3.42s"``).
+    """
+    if seconds < 1.0:
+        return f"{int(round(seconds * 1000))}ms"
+    return f"{seconds:.2f}s"
+
+
 def _format_pr_summary_block(
     command: str,
-    per_device_results: list[tuple[object, int, int, int, object, str]],
+    per_device_results: list[DeviceRunResult],
+    total_duration_seconds: float | None = None,
 ) -> str:
     """Render a markdown block for the PR template's Device testing section.
 
     Drop-in paste for the ``## Device testing`` section of
-    ``.github/PULL_REQUEST_TEMPLATE.md``.  Each line is one bullet; the
-    command goes first, each device gets its own line, and the bold
-    total is last.
+    ``.github/PULL_REQUEST_TEMPLATE.md``.  Layout::
 
-    When the device's ``probe_implementation`` succeeded, the bullet
-    includes the firmware version and board model reported by
-    ``sys.implementation`` — reviewers no longer have to cross-reference
-    ``devices.yml`` to learn what actually ran.  The deploy mode
-    (``ram`` or ``flash``) is always shown so a bare ``test-device``
-    invocation still tells reviewers how the device was exercised.
+        - Command: `...`
+        - Duration: 12.34s
+        - `<device>` (<runtime> <version> on <machine>, <mode> mode,
+          `<address>`): P passed, F failed, E errors in Xs
+          - <per-file or per-test sub-bullets, see below>
+        - **Total: P passed, F failed, E errors**
+
+    When a device ran exactly one file, the sub-bullets list each
+    test function with its status and duration so single-file runs
+    surface method-level detail.  When multiple files ran, the
+    sub-bullets list each file with its own aggregate counts and
+    duration instead — avoids overwhelming multi-library runs.
 
     Args:
         command: Reconstructed ``test-device`` invocation string.
-        per_device_results: Per-device tuples of
-            ``(device_entry, passed, failed, errors, implementation,
-            deploy_mode)`` where ``implementation`` is a
-            :class:`chumicro_device_transport.DeviceImplementation` or
-            ``None``, and ``deploy_mode`` is the resolved user-facing
-            mode (``"ram"`` or ``"flash"``).
+        per_device_results: Per-device :class:`DeviceRunResult`
+            instances in the order they ran.
+        total_duration_seconds: Total wall-clock time for the whole
+            invocation (measured around the per-device loop in
+            :func:`test_device`).  ``None`` omits the ``Duration:``
+            line — used by tests that render blocks without timing.
 
     Returns:
         Multi-line markdown body (no trailing newline).
     """
     lines = [f"- Command: `{command}`"]
+    if total_duration_seconds is not None:
+        lines.append(f"- Duration: {_format_duration(total_duration_seconds)}")
+
     total_passed = 0
     total_failed = 0
     total_errors = 0
-    for (
-        device_entry, passed, failed, errors, implementation, deploy_mode,
-    ) in per_device_results:
+    for device_result in per_device_results:
+        device_entry = device_result.device
         runtime_label = _runtime_display_name(device_entry.runtime)
+        implementation = device_result.implementation
         if implementation is not None:
             firmware = f"{runtime_label} {implementation.version}"
             if implementation.machine:
@@ -694,17 +818,70 @@ def _format_pr_summary_block(
             firmware = runtime_label
         lines.append(
             f"- `{device_entry.identifier}` ({firmware}, "
-            f"{deploy_mode} mode, `{device_entry.address}`): "
-            f"{passed} passed, {failed} failed, {errors} errors"
+            f"{device_result.deploy_mode} mode, "
+            f"`{device_entry.address}`): "
+            f"{device_result.passed} passed, "
+            f"{device_result.failed} failed, "
+            f"{device_result.errors} errors "
+            f"in {_format_duration(device_result.duration_seconds)}"
         )
-        total_passed += passed
-        total_failed += failed
-        total_errors += errors
+        lines.extend(_render_device_sub_bullets(device_result))
+        total_passed += device_result.passed
+        total_failed += device_result.failed
+        total_errors += device_result.errors
     lines.append(
         f"- **Total: {total_passed} passed, {total_failed} failed, "
         f"{total_errors} errors**"
     )
     return "\n".join(lines)
+
+
+def _render_device_sub_bullets(device_result: DeviceRunResult) -> list[str]:
+    """Return the sub-bullets that belong under a device bullet.
+
+    Decision rule:
+
+    - 0 files → no sub-bullets (device failed before running anything).
+    - 1 file → per-test sub-bullets so method names and statuses show.
+      The file line is skipped; it would just repeat the Command's
+      library/test context.
+    - 2+ files → per-file sub-bullets (library/filename + counts +
+      duration).  Keeps large multi-library runs readable.
+    """
+    if not device_result.files:
+        return []
+    if len(device_result.files) == 1:
+        file_result = device_result.files[0]
+        if not file_result.tests:
+            # File ran but the harness produced no per-test output
+            # (bulk-stage failure or unparsable output).  Fall back to
+            # the file bullet so the reader sees something.
+            return [_format_file_bullet(file_result)]
+        return [_format_test_bullet(test) for test in file_result.tests]
+    return [_format_file_bullet(file_result) for file_result in device_result.files]
+
+
+def _format_file_bullet(file_result: FileRunResult) -> str:
+    """Render a single file's sub-bullet line."""
+    return (
+        f"  - `{file_result.library}/{file_result.file_name}`: "
+        f"{file_result.passed} passed, {file_result.failed} failed, "
+        f"{file_result.errors} errors in "
+        f"{_format_duration(file_result.duration_seconds)}"
+    )
+
+
+def _format_test_bullet(test_result: TestResult) -> str:
+    """Render a single test function's sub-bullet line."""
+    duration = (
+        f" ({_format_duration(test_result.duration)})"
+        if test_result.duration is not None else ""
+    )
+    message_suffix = f" — {test_result.message}" if test_result.message else ""
+    return (
+        f"  - `{test_result.name}`: "
+        f"{test_result.status}{duration}{message_suffix}"
+    )
 
 
 def _runtime_display_name(runtime_name: str) -> str:
@@ -781,13 +958,13 @@ def test_device(
     # at least one device produced a row — even if a later device's
     # transport raises something unexpected mid-run.  Contributors used
     # to lose the summary entirely in that case.
-    per_device_results: list[
-        tuple[object, int, int, int, object, str]
-    ] = []
+    per_device_results: list[DeviceRunResult] = []
     command = _format_test_device_command(
         runtime, micropython_device, circuitpython_device,
         library, test_filter, deploy_mode,
     )
+    total_start = time.perf_counter()
+    total_duration = 0.0
 
     try:
         for device_entry in selected:
@@ -803,10 +980,7 @@ def test_device(
             print(f"{'=' * 60}")
 
             try:
-                (
-                    passed, failed, errors, implementation,
-                    effective_deploy_mode,
-                ) = _run_tests_on_device(
+                device_result = _run_tests_on_device(
                     device_entry, test_plan, harness_source, test_filter,
                     deploy_mode=deploy_mode,
                 )
@@ -815,29 +989,31 @@ def test_device(
                 # other devices.  Record the crash as an error row and
                 # move on.
                 print(f"  FATAL: Device run raised: {device_error}")
-                per_device_results.append(
-                    (device_entry, 0, 0, 1, None, effective_deploy_mode),
-                )
+                per_device_results.append(DeviceRunResult(
+                    device=device_entry,
+                    passed=0, failed=0, errors=1,
+                    implementation=None,
+                    deploy_mode=effective_deploy_mode,
+                ))
                 continue
 
-            per_device_results.append(
-                (
-                    device_entry, passed, failed, errors,
-                    implementation, effective_deploy_mode,
-                ),
-            )
+            per_device_results.append(device_result)
     finally:
+        total_duration = time.perf_counter() - total_start
         if per_device_results:
-            _print_device_test_summary(command, per_device_results)
+            _print_device_test_summary(
+                command, per_device_results, total_duration,
+            )
 
-    total_failed = sum(failed for _, _, failed, _, _, _ in per_device_results)
-    total_errors = sum(errors for _, _, _, errors, _, _ in per_device_results)
+    total_failed = sum(device.failed for device in per_device_results)
+    total_errors = sum(device.errors for device in per_device_results)
     return 1 if (total_failed or total_errors) else 0
 
 
 def _print_device_test_summary(
     command: str,
-    per_device_results: list[tuple[object, int, int, int, object, str]],
+    per_device_results: list[DeviceRunResult],
+    total_duration_seconds: float,
 ) -> None:
     """Print the end-of-run totals banner and the paste-ready PR block.
 
@@ -848,22 +1024,25 @@ def _print_device_test_summary(
 
     Args:
         command: Reconstructed ``test-device`` CLI invocation.
-        per_device_results: Per-device tuples of
-            ``(device_entry, passed, failed, errors, implementation,
-            deploy_mode)``.
+        per_device_results: Per-device :class:`DeviceRunResult` rows.
+        total_duration_seconds: Wall-clock time for the whole
+            ``test-device`` invocation.
     """
-    total_passed = sum(passed for _, passed, _, _, _, _ in per_device_results)
-    total_failed = sum(failed for _, _, failed, _, _, _ in per_device_results)
-    total_errors = sum(errors for _, _, _, errors, _, _ in per_device_results)
+    total_passed = sum(device.passed for device in per_device_results)
+    total_failed = sum(device.failed for device in per_device_results)
+    total_errors = sum(device.errors for device in per_device_results)
 
     print(f"\n{'=' * 60}")
     print(
         f"Device test summary: {total_passed} passed, "
-        f"{total_failed} failed, {total_errors} errors"
+        f"{total_failed} failed, {total_errors} errors "
+        f"in {_format_duration(total_duration_seconds)}"
     )
     print(f"{'=' * 60}")
 
-    pr_block = _format_pr_summary_block(command, per_device_results)
+    pr_block = _format_pr_summary_block(
+        command, per_device_results, total_duration_seconds,
+    )
     print("\nPR summary (paste into the 'Device testing' section of your PR):")
     print("-" * 60)
     print(pr_block)
