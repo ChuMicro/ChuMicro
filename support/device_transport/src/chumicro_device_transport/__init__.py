@@ -3,14 +3,12 @@
 Provides transport implementations for deploying code and running tests
 on MicroPython and CircuitPython hardware.  See Decision 0027.
 
-Transport protocol (duck-typed)::
+The transport contract is captured in :mod:`protocol`:
 
-    connect() -> None
-    stage(source_dirs, test_files, harness_source) -> None
-    execute(bootstrap_script) -> str
-    soft_reset() -> None
-    reset() -> None
-    disconnect() -> None
+- :class:`TransportProtocol` — minimum every transport must implement.
+- :class:`ExtendedTransportProtocol` — adds the CircuitPython RAM-mode
+  chunking helpers (``execute_scripts``, ``probe_free_memory``,
+  ``inline_script_budget_bytes``).
 """
 
 from .circuitpython_bootstrap import (
@@ -24,14 +22,17 @@ from .circuitpython_transport import (
     find_circuitpy_drive,
 )
 from .micropython_transport import MicropythonTransport
+from .protocol import ExtendedTransportProtocol, TransportProtocol
 from .testing import FakeTransport
 
 __all__ = [
     "CircuitpythonTransport",
     "CircuitpythonTransportError",
+    "ExtendedTransportProtocol",
     "FakeTransport",
     "MicropythonTransport",
     "SerialPort",
+    "TransportProtocol",
     "build_circuitpython_bootstrap",
     "build_circuitpython_bootstrap_scripts",
     "find_circuitpy_drive",

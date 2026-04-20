@@ -21,12 +21,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
-from workspace import ROOT
 
-#: Default path to the device registry file.
-DEFAULT_DEVICES_PATH = ROOT / "devices.yml"
-#: Default path to the shared test environment config file.
-DEFAULT_DEVICE_CONFIG_PATH = ROOT / "device-config.yml"
+#: Default filename for the device registry — looked up relative to the
+#: workspace root passed in by the caller (or ``Path.cwd()`` when no
+#: root is given).  Kept as a filename rather than an absolute path so
+#: the module has no compile-time dependency on ChuMicro's repo
+#: layout — simplifies the future ``chumicro-deploy`` extraction
+#: (Decision 0028).
+DEFAULT_DEVICES_FILENAME = "devices.yml"
+#: Default filename for the shared test environment config.
+DEFAULT_DEVICE_CONFIG_FILENAME = "device-config.yml"
 
 #: Required fields for each device entry in devices.yml.
 _REQUIRED_DEVICE_FIELDS = ("id", "runtime", "address")
@@ -75,18 +79,23 @@ class DeviceConfigError(Exception):
 
 def _resolve_path(
     environment_variable: str,
-    default_path: Path,
+    default_filename: str,
+    workspace_root: Path | None = None,
 ) -> Path:
     """Resolve a config file path from an environment variable or default.
 
     Args:
         environment_variable: Name of the environment variable to check.
-        default_path: Fallback path when the variable is not set.
+        default_filename: Filename to look up under *workspace_root*
+            when the variable is unset.
+        workspace_root: Directory that contains the config file.
+            Defaults to :func:`Path.cwd`.
     """
     override = os.environ.get(environment_variable)
     if override:
         return Path(override)
-    return default_path
+    root = workspace_root if workspace_root is not None else Path.cwd()
+    return root / default_filename
 
 
 def _load_yaml(path: Path) -> dict:
@@ -203,6 +212,8 @@ def _validate_device(raw: dict, index: int, *, global_deploy_mode: str = "ram") 
 
 def load_device_registry(
     path: Path | None = None,
+    *,
+    workspace_root: Path | None = None,
 ) -> tuple[list[DeviceEntry], DeviceDefaults]:
     """Load and validate the device registry with defaults.
 
@@ -213,7 +224,11 @@ def load_device_registry(
 
     Args:
         path: Explicit path to devices.yml.  When ``None``, checks
-            ``CHUMICRO_DEVICES`` then falls back to the workspace default.
+            ``CHUMICRO_DEVICES`` then falls back to ``workspace_root /
+            devices.yml`` (or ``Path.cwd() / devices.yml`` when no
+            workspace root is given).
+        workspace_root: Directory that contains ``devices.yml``.  When
+            ``None``, defaults to :func:`Path.cwd`.
 
     Returns:
         Tuple of ``(devices, defaults)``.
@@ -222,7 +237,9 @@ def load_device_registry(
         DeviceConfigError: If the file is missing, invalid, or contains
             entries with missing required fields.
     """
-    resolved = path or _resolve_path("CHUMICRO_DEVICES", DEFAULT_DEVICES_PATH)
+    resolved = path or _resolve_path(
+        "CHUMICRO_DEVICES", DEFAULT_DEVICES_FILENAME, workspace_root,
+    )
     data = _load_yaml(resolved)
 
     defaults = _parse_defaults(data.get("defaults") or {})
@@ -242,7 +259,11 @@ def load_device_registry(
     )
 
 
-def load_devices(path: Path | None = None) -> list[DeviceEntry]:
+def load_devices(
+    path: Path | None = None,
+    *,
+    workspace_root: Path | None = None,
+) -> list[DeviceEntry]:
     """Load and validate the device registry.
 
     Convenience wrapper around :func:`load_device_registry` that
@@ -252,6 +273,8 @@ def load_devices(path: Path | None = None) -> list[DeviceEntry]:
     Args:
         path: Explicit path to devices.yml.  When ``None``, checks
             ``CHUMICRO_DEVICES`` then falls back to the workspace default.
+        workspace_root: Directory that contains ``devices.yml``.  When
+            ``None``, defaults to :func:`Path.cwd`.
 
     Returns:
         List of validated DeviceEntry objects.
@@ -260,17 +283,23 @@ def load_devices(path: Path | None = None) -> list[DeviceEntry]:
         DeviceConfigError: If the file is missing, invalid, or contains
             entries with missing required fields.
     """
-    devices, _defaults = load_device_registry(path)
+    devices, _defaults = load_device_registry(path, workspace_root=workspace_root)
     return devices
 
 
-def load_device_config(path: Path | None = None) -> dict:
+def load_device_config(
+    path: Path | None = None,
+    *,
+    workspace_root: Path | None = None,
+) -> dict:
     """Load the shared test environment configuration.
 
     Args:
         path: Explicit path to device-config.yml.  When ``None``, checks
             ``CHUMICRO_DEVICE_CONFIG`` then falls back to the workspace
             default.
+        workspace_root: Directory that contains ``device-config.yml``.
+            When ``None``, defaults to :func:`Path.cwd`.
 
     Returns:
         Dict of environment configuration (WiFi, MQTT, NTP, etc.).
@@ -278,7 +307,9 @@ def load_device_config(path: Path | None = None) -> dict:
     Raises:
         DeviceConfigError: If the file is missing or not valid YAML.
     """
-    resolved = path or _resolve_path("CHUMICRO_DEVICE_CONFIG", DEFAULT_DEVICE_CONFIG_PATH)
+    resolved = path or _resolve_path(
+        "CHUMICRO_DEVICE_CONFIG", DEFAULT_DEVICE_CONFIG_FILENAME, workspace_root,
+    )
     return _load_yaml(resolved)
 
 

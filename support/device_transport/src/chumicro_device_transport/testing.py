@@ -68,10 +68,18 @@ class FakeSerialPort:
 class FakeTransport:
     """In-memory fake that records transport calls and returns canned output.
 
+    Implements both :class:`TransportProtocol` and the
+    :class:`ExtendedTransportProtocol` (CircuitPython chunked-execution
+    helpers) so tests for either path can use a single fake.  The
+    chunked methods default to delegating to ``execute`` so callers
+    that don't care about the chunked behavior get sensible defaults.
+
     Attributes:
         execute_output: The string returned by ``execute()``.
         mode: Deploy mode label (e.g. ``"ram"``, ``"flash"``, ``"mount"``,
             ``"copy"``).  Defaults to ``"ram"``.
+        free_memory_bytes: The value returned by ``probe_free_memory()``
+            and the basis for ``inline_script_budget_bytes()``.
         calls: List of ``(method_name, args_tuple)`` recording every call.
         connected: Whether ``connect()`` has been called without a
             subsequent ``disconnect()``.
@@ -79,6 +87,8 @@ class FakeTransport:
 
     execute_output: str = ""
     mode: str = "ram"
+    #: Default ~64 KB matches the real CP transport's lower bound.
+    free_memory_bytes: int = 64 * 1024
     calls: list[tuple[str, tuple]] = field(default_factory=list)
     connected: bool = False
 
@@ -109,6 +119,30 @@ class FakeTransport:
         self.calls.append(("execute", (bootstrap_script,)))
         return self.execute_output
 
+    def execute_scripts(self, bootstrap_scripts: list[str]) -> str:
+        """Record a chunked-execute call and return the configured output.
+
+        Mirrors :meth:`CircuitpythonTransport.execute_scripts`.  Records
+        the full list of scripts as one call, then synthetic per-script
+        ``execute`` entries so existing tests that count ``execute``
+        invocations still work.
+        """
+        self.calls.append(("execute_scripts", (list(bootstrap_scripts),)))
+        last_output = self.execute_output
+        for bootstrap_script in bootstrap_scripts:
+            last_output = self.execute(bootstrap_script)
+        return last_output
+
+    def probe_free_memory(self) -> int:
+        """Record a probe call and return the configured free-heap value."""
+        self.calls.append(("probe_free_memory", ()))
+        return self.free_memory_bytes
+
+    def inline_script_budget_bytes(self) -> int:
+        """Return half the configured free-memory budget (matches CP heuristic)."""
+        self.calls.append(("inline_script_budget_bytes", ()))
+        return max(8 * 1024, self.free_memory_bytes // 2)
+
     def reset(self) -> None:
         """Record a reset call."""
         self.calls.append(("reset", ()))
@@ -116,6 +150,10 @@ class FakeTransport:
     def soft_reset(self) -> None:
         """Record a soft_reset call."""
         self.calls.append(("soft_reset", ()))
+
+    def recover(self) -> None:
+        """Record a recover call (post-failure recovery hook)."""
+        self.calls.append(("recover", ()))
 
     def disconnect(self) -> None:
         """Record a disconnect call."""

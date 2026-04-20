@@ -568,9 +568,11 @@ def test_device(
     Returns:
         0 for all-pass, 1 for any failure, 2 for configuration issues.
     """
-    # Load device registry.
+    # Load device registry.  Pass ROOT explicitly so device_config
+    # remains decoupled from the workspace's repo layout (Decision 0028
+    # extraction prep).
     try:
-        all_devices, defaults = load_device_registry()
+        all_devices, defaults = load_device_registry(workspace_root=ROOT)
     except DeviceConfigError as error:
         print(f"Device config error: {error}")
         return 2

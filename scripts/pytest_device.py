@@ -681,7 +681,7 @@ def _load_fallback_device() -> DeviceEntry:
         pytest.fail: If devices.yml is malformed.
     """
     try:
-        devices, defaults = load_device_registry()
+        devices, defaults = load_device_registry(workspace_root=ROOT)
     except DeviceConfigError as error:
         error_message = str(error)
         if "not found" in error_message:
@@ -843,7 +843,7 @@ def pytest_sessionstart(session):
     # Eagerly resolve target devices so collection can parametrize
     # by runtime when ide_runtime is "both".
     try:
-        devices, defaults = load_device_registry()
+        devices, defaults = load_device_registry(workspace_root=ROOT)
         session._device_targets = resolve_ide_devices(devices, defaults)
     except DeviceConfigError:
         session._device_targets = None
