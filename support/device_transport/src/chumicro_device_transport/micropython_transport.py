@@ -24,6 +24,12 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from .protocol import (
+    PROBE_IMPLEMENTATION_SCRIPT,
+    DeviceImplementation,
+    parse_probe_output,
+)
+
 if TYPE_CHECKING:  # pragma: no cover - type-only
     from mpremote.transport_serial import SerialTransport
 
@@ -274,6 +280,40 @@ class MicropythonTransport:
             self._run_mpremote(["reset"])
         except MicropythonTransportError:  # pragma: no cover - hardware-only
             pass
+
+    def probe_implementation(self) -> DeviceImplementation | None:
+        """Query ``sys.implementation`` on the board for PR-summary metadata.
+
+        Opens the persistent raw REPL if needed and runs a short inline
+        script — no staging required because ``sys.implementation`` is a
+        built-in attribute.  Failures are swallowed (``None`` returned)
+        so a flaky or unusual firmware never blocks the real test run.
+
+        Returns:
+            :class:`DeviceImplementation` on success, or ``None`` if the
+            probe could not complete or its output did not contain the
+            expected marker line.
+        """
+        try:
+            self._ensure_serial()
+            result = self._serial.exec_raw(
+                PROBE_IMPLEMENTATION_SCRIPT, timeout=10,
+            )
+        except Exception:  # pragma: no cover - hardware-only error paths
+            return None
+        if isinstance(result, tuple):
+            stdout_bytes, stderr_bytes = result
+            output = (
+                stdout_bytes.decode("utf-8", errors="replace")
+                if stdout_bytes else ""
+            )
+            if stderr_bytes:
+                output += stderr_bytes.decode("utf-8", errors="replace")
+        elif isinstance(result, bytes):
+            output = result.decode("utf-8", errors="replace")
+        else:
+            output = result
+        return parse_probe_output(output)
 
     def disconnect(self) -> None:
         """Clean up staging directory and close the persistent serial transport."""

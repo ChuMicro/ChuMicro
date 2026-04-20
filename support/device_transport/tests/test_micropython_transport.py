@@ -603,3 +603,70 @@ class TestFakeTransport:
         assert fake.connected
         fake.disconnect()
         assert not fake.connected
+
+
+class TestProbeImplementation:
+    """Tests for MicropythonTransport.probe_implementation."""
+
+    def test_parses_probe_marker_from_exec_raw_tuple(self) -> None:
+        """mpremote's (stdout, stderr) tuple is decoded and parsed for the marker."""
+        from chumicro_device_transport import DeviceImplementation
+
+        runner = FakeRunner()
+        probe_stdout = (
+            b"__CHU_IMPL__:micropython|1.26.0|Raspberry Pi Pico W with RP2040\n"
+        )
+        serial = FakeSerialTransport(
+            address="/dev/ttyUSB0",
+            exec_outputs=[(probe_stdout, b"")],
+        )
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0",
+            mode="mount",
+            runner=runner,
+            transport_factory=_factory_for(serial),
+        )
+
+        result = transport.probe_implementation()
+
+        assert result == DeviceImplementation(
+            name="micropython",
+            version="1.26.0",
+            machine="Raspberry Pi Pico W with RP2040",
+        )
+        # Probe opens the persistent serial lazily but does NOT require
+        # stage() — the probe script only touches sys.implementation.
+        exec_calls = [args for name, args in serial.calls if name == "exec_raw"]
+        assert len(exec_calls) == 1
+
+    def test_probe_failure_returns_none(self) -> None:
+        """A raising exec_raw yields None so the test run still proceeds."""
+        runner = FakeRunner()
+        serial = FakeSerialTransport(
+            address="/dev/ttyUSB0",
+            raise_on_execute=RuntimeError("serial dropped"),
+        )
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0",
+            mode="mount",
+            runner=runner,
+            transport_factory=_factory_for(serial),
+        )
+
+        assert transport.probe_implementation() is None
+
+    def test_probe_missing_marker_returns_none(self) -> None:
+        """Output without the marker returns None, does not raise."""
+        runner = FakeRunner()
+        serial = FakeSerialTransport(
+            address="/dev/ttyUSB0",
+            exec_outputs=[(b"no marker here\n", b"")],
+        )
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0",
+            mode="mount",
+            runner=runner,
+            transport_factory=_factory_for(serial),
+        )
+
+        assert transport.probe_implementation() is None

@@ -21,8 +21,80 @@ constrained to the embedded-runtime subset).
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol, runtime_checkable
+
+
+@dataclass(frozen=True)
+class DeviceImplementation:
+    """Runtime identity probed from a connected board.
+
+    Populated by ``probe_implementation`` on transports that support it
+    (both :class:`MicropythonTransport` and :class:`CircuitpythonTransport`
+    do).  Consumed by the ``test-device`` PR-summary output so reviewers
+    see the exact firmware version and board model that exercised the
+    tests — without contributors having to hand-fill the template.
+
+    Attributes:
+        name: ``sys.implementation.name`` — ``"circuitpython"`` or
+            ``"micropython"``.
+        version: Dotted version from ``sys.implementation.version``
+            (e.g. ``"10.1.4"`` or ``"1.26.0"``).
+        machine: ``sys.implementation._machine`` on both runtimes —
+            a free-form string describing the board (e.g.
+            ``"Raspberry Pi Pico W with rp2040"``).  Empty when the
+            firmware does not expose it.
+    """
+
+    name: str
+    version: str
+    machine: str
+
+
+#: On-device probe script.  Prints one ``__CHU_IMPL__:`` line with
+#: pipe-delimited ``name|version|machine`` so the host can locate the
+#: probe output among any incidental boot banners.  Uses only
+#: ``sys.implementation`` which exists on both CircuitPython and
+#: MicroPython and needs no staged files — safe to run immediately
+#: after ``connect()``.
+PROBE_IMPLEMENTATION_SCRIPT = (
+    "import sys\n"
+    "_probe_version = sys.implementation.version\n"
+    "_probe_machine = getattr(sys.implementation, '_machine', '')\n"
+    "print('__CHU_IMPL__:' + sys.implementation.name"
+    " + '|' + '.'.join(str(_probe_part) for _probe_part in _probe_version)"
+    " + '|' + _probe_machine)\n"
+)
+
+
+def parse_probe_output(output: str) -> DeviceImplementation | None:
+    """Extract a :class:`DeviceImplementation` from probe stdout.
+
+    Scans for the ``__CHU_IMPL__:`` marker line emitted by
+    :data:`PROBE_IMPLEMENTATION_SCRIPT` and ignores any surrounding
+    output.  Returns ``None`` when the marker is missing or the
+    payload is malformed — callers treat that as "probe unavailable"
+    and fall back to per-device metadata from ``devices.yml``.
+
+    Args:
+        output: Combined stdout (and stderr if merged) from the probe
+            script's ``execute`` call.
+    """
+    for line in output.splitlines():
+        if not line.startswith("__CHU_IMPL__:"):
+            continue
+        payload = line[len("__CHU_IMPL__:"):]
+        parts = payload.split("|", 2)
+        if len(parts) != 3:
+            return None
+        name, version, machine = parts
+        return DeviceImplementation(
+            name=name.strip(),
+            version=version.strip(),
+            machine=machine.strip(),
+        )
+    return None
 
 
 @runtime_checkable

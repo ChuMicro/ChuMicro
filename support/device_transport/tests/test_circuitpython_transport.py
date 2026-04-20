@@ -599,6 +599,70 @@ class TestMemoryProbe:
         transport.disconnect()
 
 
+class TestProbeImplementation:
+    """Tests for CircuitpythonTransport.probe_implementation."""
+
+    def test_parses_probe_marker_from_raw_repl_response(self) -> None:
+        """A well-formed __CHU_IMPL__ line in raw REPL output is parsed."""
+        from chumicro_device_transport import DeviceImplementation
+
+        marker_line = (
+            "__CHU_IMPL__:circuitpython|10.1.4"
+            "|Raspberry Pi Pico W with rp2040"
+        )
+        port = FakeSerialPort(
+            read_responses=[
+                _RAW_REPL_PROMPT,
+                b"OK" + marker_line.encode("utf-8") + b"\n\x04\x04>",
+            ],
+        )
+
+        def factory(**kwargs):
+            return port
+
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            serial_port_factory=factory,
+            time=FakeTime(),
+        )
+        transport.connect()
+
+        result = transport.probe_implementation()
+
+        assert result == DeviceImplementation(
+            name="circuitpython",
+            version="10.1.4",
+            machine="Raspberry Pi Pico W with rp2040",
+        )
+
+        transport.disconnect()
+
+    def test_probe_failure_returns_none(self) -> None:
+        """A malformed raw-REPL response yields None, never a raise."""
+        port = FakeSerialPort(
+            read_responses=[
+                _RAW_REPL_PROMPT,
+                # Missing "OK" prefix — _send_repl_command will raise;
+                # probe must swallow it.
+                b"nope\x04\x04>",
+            ],
+        )
+
+        def factory(**kwargs):
+            return port
+
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            serial_port_factory=factory,
+            time=FakeTime(),
+        )
+        transport.connect()
+
+        assert transport.probe_implementation() is None
+
+        transport.disconnect()
+
+
 class TestReset:
     """Tests for CircuitpythonTransport.reset."""
 

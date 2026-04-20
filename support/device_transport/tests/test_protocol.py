@@ -8,10 +8,15 @@ from __future__ import annotations
 
 from chumicro_device_transport import (
     CircuitpythonTransport,
+    DeviceImplementation,
     ExtendedTransportProtocol,
     FakeTransport,
     MicropythonTransport,
     TransportProtocol,
+)
+from chumicro_device_transport.protocol import (
+    PROBE_IMPLEMENTATION_SCRIPT,
+    parse_probe_output,
 )
 
 
@@ -94,3 +99,87 @@ class TestFakeTransportExtended:
         fake = FakeTransport()
         fake.recover()
         assert fake.calls == [("recover", ())]
+
+    def test_probe_implementation_returns_canned_result(self) -> None:
+        """probe_implementation returns the configured DeviceImplementation."""
+        expected = DeviceImplementation(
+            name="micropython", version="1.26.0", machine="Pico W",
+        )
+        fake = FakeTransport(probe_result=expected)
+        assert fake.probe_implementation() is expected
+        assert ("probe_implementation", ()) in fake.calls
+
+    def test_probe_implementation_defaults_to_none(self) -> None:
+        """Without a canned result, probe_implementation returns None."""
+        fake = FakeTransport()
+        assert fake.probe_implementation() is None
+
+
+class TestParseProbeOutput:
+    """Tests for parse_probe_output — the on-device probe marker parser."""
+
+    def test_parses_marker_line(self) -> None:
+        """A well-formed __CHU_IMPL__ line yields a DeviceImplementation."""
+        output = "__CHU_IMPL__:micropython|1.26.0|Raspberry Pi Pico W with RP2040\n"
+        result = parse_probe_output(output)
+        assert result == DeviceImplementation(
+            name="micropython",
+            version="1.26.0",
+            machine="Raspberry Pi Pico W with RP2040",
+        )
+
+    def test_ignores_surrounding_output(self) -> None:
+        """Boot banners and other lines before/after the marker are ignored."""
+        output = (
+            "MPY: soft reboot\n"
+            "MicroPython v1.26.0 on 2025-08-14\n"
+            "__CHU_IMPL__:micropython|1.26.0|rp2\n"
+            ">>> \n"
+        )
+        result = parse_probe_output(output)
+        assert result is not None
+        assert result.name == "micropython"
+        assert result.version == "1.26.0"
+        assert result.machine == "rp2"
+
+    def test_missing_marker_returns_none(self) -> None:
+        """Output without the marker line returns None (probe unavailable)."""
+        assert parse_probe_output("just some boot text\n") is None
+        assert parse_probe_output("") is None
+
+    def test_malformed_payload_returns_none(self) -> None:
+        """A marker line missing fields returns None rather than partial data."""
+        output = "__CHU_IMPL__:only_one_field\n"
+        assert parse_probe_output(output) is None
+
+    def test_machine_may_contain_pipe_when_last(self) -> None:
+        """Only the first two ``|`` separators are significant — machine keeps its own."""
+        # maxsplit=2 means extra pipes belong to the machine field.
+        output = "__CHU_IMPL__:circuitpython|10.1.4|Board | variant\n"
+        result = parse_probe_output(output)
+        assert result is not None
+        assert result.machine == "Board | variant"
+
+
+class TestProbeImplementationScript:
+    """Tests for the PROBE_IMPLEMENTATION_SCRIPT constant."""
+
+    def test_script_is_syntactically_valid_python(self) -> None:
+        """The on-device probe script must be executable Python."""
+        compile(PROBE_IMPLEMENTATION_SCRIPT, "<probe>", "exec")
+
+    def test_script_emits_chu_impl_marker(self) -> None:
+        """The probe's print statement must use the expected marker prefix."""
+        assert "__CHU_IMPL__:" in PROBE_IMPLEMENTATION_SCRIPT
+
+    def test_script_does_not_require_staged_files(self) -> None:
+        """No imports beyond ``sys`` — probe must work pre-stage."""
+        # Only ``sys`` is imported; staged modules (``chumicro_test_harness``
+        # etc.) are not referenced.  If this ever changes the probe may
+        # run before stage() and fail.
+        imported_modules = [
+            line.split()[1]
+            for line in PROBE_IMPLEMENTATION_SCRIPT.splitlines()
+            if line.startswith("import ")
+        ]
+        assert imported_modules == ["sys"]

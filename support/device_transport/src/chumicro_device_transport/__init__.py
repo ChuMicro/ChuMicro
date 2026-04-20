@@ -22,12 +22,17 @@ from .circuitpython_transport import (
     find_circuitpy_drive,
 )
 from .micropython_transport import MicropythonTransport
-from .protocol import ExtendedTransportProtocol, TransportProtocol
+from .protocol import (
+    DeviceImplementation,
+    ExtendedTransportProtocol,
+    TransportProtocol,
+)
 from .testing import FakeTransport
 
 __all__ = [
     "CircuitpythonTransport",
     "CircuitpythonTransportError",
+    "DeviceImplementation",
     "ExtendedTransportProtocol",
     "FakeTransport",
     "MicropythonTransport",

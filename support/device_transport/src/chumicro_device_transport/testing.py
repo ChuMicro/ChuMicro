@@ -15,6 +15,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .protocol import DeviceImplementation
+
 __all__ = ["FakeSerialPort", "FakeTransport"]
 
 
@@ -89,6 +91,9 @@ class FakeTransport:
     mode: str = "ram"
     #: Default ~64 KB matches the real CP transport's lower bound.
     free_memory_bytes: int = 64 * 1024
+    #: Canned return value for ``probe_implementation``.  ``None``
+    #: simulates a probe that couldn't complete.
+    probe_result: DeviceImplementation | None = None
     calls: list[tuple[str, tuple]] = field(default_factory=list)
     connected: bool = False
 
@@ -142,6 +147,11 @@ class FakeTransport:
         """Return half the configured free-memory budget (matches CP heuristic)."""
         self.calls.append(("inline_script_budget_bytes", ()))
         return max(8 * 1024, self.free_memory_bytes // 2)
+
+    def probe_implementation(self) -> DeviceImplementation | None:
+        """Record a probe call and return the canned result."""
+        self.calls.append(("probe_implementation", ()))
+        return self.probe_result
 
     def reset(self) -> None:
         """Record a reset call."""

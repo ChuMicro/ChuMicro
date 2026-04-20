@@ -132,7 +132,7 @@ class TestDeviceOrchestration:
             deploy_mode=None,
         ):
             selected_device_ids.append(device_entry.identifier)
-            return 1, 0, 0
+            return 1, 0, 0, None
 
         monkeypatch.setattr(
             device_testing,
@@ -193,7 +193,7 @@ class TestDeviceOrchestration:
             deploy_mode=None,
         ):
             selected_device_ids.append(device_entry.identifier)
-            return 1, 0, 0
+            return 1, 0, 0, None
 
         monkeypatch.setattr(
             device_testing,
@@ -251,7 +251,7 @@ class TestDeviceOrchestration:
             deploy_mode=None,
         ):
             selected_device_ids.append(device_entry.identifier)
-            return 1, 0, 0
+            return 1, 0, 0, None
 
         monkeypatch.setattr(
             device_testing,
@@ -315,7 +315,7 @@ class TestDeviceOrchestration:
             deploy_mode=None,
         ):
             selected_device_ids.append(device_entry.identifier)
-            return 1, 0, 0
+            return 1, 0, 0, None
 
         monkeypatch.setattr(
             device_testing,
@@ -380,7 +380,7 @@ class TestDeviceOrchestration:
             deploy_mode=None,
         ):
             selected_device_ids.append(device_entry.identifier)
-            return 1, 0, 0
+            return 1, 0, 0, None
 
         monkeypatch.setattr(
             device_testing,
@@ -906,7 +906,7 @@ class TestRunTestsOnDevice:
         )
 
         plan = [_plan_entry(tmp_path, "alpha")]
-        passed, failed, errors = device_testing._run_tests_on_device(
+        passed, failed, errors, _implementation = device_testing._run_tests_on_device(
             _circuitpython_device(),
             plan,
             harness_source=tmp_path / "harness",
@@ -936,7 +936,7 @@ class TestRunTestsOnDevice:
         )
 
         plan = [_plan_entry(tmp_path, "alpha"), _plan_entry(tmp_path, "beta")]
-        passed, failed, errors = device_testing._run_tests_on_device(
+        passed, failed, errors, _implementation = device_testing._run_tests_on_device(
             _circuitpython_device(), plan,
             harness_source=tmp_path / "harness", test_filter=None,
         )
@@ -969,7 +969,7 @@ class TestRunTestsOnDevice:
         # stub it out to avoid hitting the real workspace.
         monkeypatch.setattr(device_testing, "discover_library_dirs", lambda: [])
 
-        passed, failed, errors = device_testing._run_tests_on_device(
+        passed, failed, errors, _implementation = device_testing._run_tests_on_device(
             _micropython_device(), plan,
             harness_source=tmp_path / "harness", test_filter=None,
         )
@@ -1060,7 +1060,7 @@ class TestRunTestsOnDevice:
         )
 
         plan = [_plan_entry(tmp_path, "alpha", file_count=2)]
-        passed, failed, errors = device_testing._run_tests_on_device(
+        passed, failed, errors, _implementation = device_testing._run_tests_on_device(
             _circuitpython_device(), plan,
             harness_source=tmp_path / "harness", test_filter=None,
         )
@@ -1098,7 +1098,7 @@ class TestRunTestsOnDevice:
         )
 
         plan = [_plan_entry(tmp_path, "alpha", file_count=3)]
-        passed, failed, errors = device_testing._run_tests_on_device(
+        passed, failed, errors, _implementation = device_testing._run_tests_on_device(
             _circuitpython_device(), plan,
             harness_source=tmp_path / "harness", test_filter=None,
         )
@@ -1121,7 +1121,7 @@ class TestRunTestsOnDevice:
         )
 
         plan = [_plan_entry(tmp_path, "alpha")]
-        passed, failed, errors = device_testing._run_tests_on_device(
+        passed, failed, errors, _implementation = device_testing._run_tests_on_device(
             _circuitpython_device(), plan,
             harness_source=tmp_path / "harness", test_filter=None,
         )
@@ -1142,7 +1142,7 @@ class TestRunTestsOnDevice:
         )
 
         plan = [_plan_entry(tmp_path, "alpha")]
-        passed, failed, errors = device_testing._run_tests_on_device(
+        passed, failed, errors, _implementation = device_testing._run_tests_on_device(
             _circuitpython_device(), plan,
             harness_source=tmp_path / "harness", test_filter=None,
         )
@@ -1216,7 +1216,7 @@ class TestRunTestsOnDevice:
             _plan_entry(tmp_path, "alpha", file_count=2),
             _plan_entry(tmp_path, "beta", file_count=1),
         ]
-        passed, failed, errors = device_testing._run_tests_on_device(
+        passed, failed, errors, _implementation = device_testing._run_tests_on_device(
             _circuitpython_device(), plan,
             harness_source=tmp_path / "harness", test_filter=None,
         )
@@ -1297,7 +1297,7 @@ class TestFormatPrSummaryBlock:
         )
         block = device_testing._format_pr_summary_block(
             command="python scripts/run.py test-device --runtime micropython",
-            per_device_results=[(device, 5, 0, 0)],
+            per_device_results=[(device, 5, 0, 0, None)],
         )
         lines = block.splitlines()
         assert lines[0] == (
@@ -1324,8 +1324,8 @@ class TestFormatPrSummaryBlock:
         block = device_testing._format_pr_summary_block(
             command="python scripts/run.py test-device --runtime both",
             per_device_results=[
-                (mp_device, 4, 1, 0),
-                (cp_device, 3, 0, 2),
+                (mp_device, 4, 1, 0, None),
+                (cp_device, 3, 0, 2, None),
             ],
         )
         assert "`pico-w` (MicroPython" in block
@@ -1343,10 +1343,57 @@ class TestFormatPrSummaryBlock:
         )
         block = device_testing._format_pr_summary_block(
             command="cmd",
-            per_device_results=[(mp_device, 0, 0, 0), (cp_device, 0, 0, 0)],
+            per_device_results=[
+                (mp_device, 0, 0, 0, None),
+                (cp_device, 0, 0, 0, None),
+            ],
         )
         assert "(MicroPython," in block
         assert "(CircuitPython," in block
         # Internal identifiers should NOT leak into the rendered block.
         assert "(micropython," not in block
         assert "(circuitpython," not in block
+
+    def test_probe_result_surfaces_version_and_board(self) -> None:
+        """When the probe succeeded, version and machine show up in the bullet."""
+        from chumicro_device_transport import DeviceImplementation
+
+        device = DeviceEntry(
+            identifier="pico-w",
+            runtime="micropython",
+            address="/dev/cu.usbmodem1",
+        )
+        implementation = DeviceImplementation(
+            name="micropython",
+            version="1.26.0",
+            machine="Raspberry Pi Pico W with RP2040",
+        )
+        block = device_testing._format_pr_summary_block(
+            command="python scripts/run.py test-device",
+            per_device_results=[(device, 5, 0, 0, implementation)],
+        )
+        assert (
+            "(MicroPython 1.26.0 on Raspberry Pi Pico W with RP2040,"
+            in block
+        )
+
+    def test_probe_result_without_machine_skips_board_label(self) -> None:
+        """Empty ``machine`` renders just the runtime + version, no ``on ...``."""
+        from chumicro_device_transport import DeviceImplementation
+
+        device = DeviceEntry(
+            identifier="cp",
+            runtime="circuitpython",
+            address="/dev/cu.usbmodem2",
+        )
+        implementation = DeviceImplementation(
+            name="circuitpython",
+            version="10.1.4",
+            machine="",
+        )
+        block = device_testing._format_pr_summary_block(
+            command="cmd",
+            per_device_results=[(device, 0, 0, 0, implementation)],
+        )
+        assert "(CircuitPython 10.1.4, `/dev/cu.usbmodem2`)" in block
+        assert " on " not in block

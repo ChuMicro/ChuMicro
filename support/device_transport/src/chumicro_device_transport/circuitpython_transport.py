@@ -28,6 +28,11 @@ from pathlib import Path
 from typing import Protocol, cast
 
 from . import flash_drive
+from .protocol import (
+    PROBE_IMPLEMENTATION_SCRIPT,
+    DeviceImplementation,
+    parse_probe_output,
+)
 
 _CTRL_A = b"\x01"
 _CTRL_B = b"\x02"
@@ -459,6 +464,24 @@ class CircuitpythonTransport:
                 self._send_repl_command("import gc\ngc.collect()")
 
         return last_output
+
+    def probe_implementation(self) -> DeviceImplementation | None:
+        """Query ``sys.implementation`` on the board for PR-summary metadata.
+
+        Uses the persistent raw REPL ``_send_repl_command`` helper so
+        no staging is required — ``sys.implementation`` is a built-in.
+        Failures are swallowed (``None`` returned) so a flaky firmware
+        never blocks the real test run.
+
+        Returns:
+            :class:`DeviceImplementation` on success, or ``None`` if
+            the probe could not complete.
+        """
+        try:
+            output = self._send_repl_command(PROBE_IMPLEMENTATION_SCRIPT)
+        except Exception:  # pragma: no cover - hardware-only error paths
+            return None
+        return parse_probe_output(output)
 
     def probe_free_memory(self) -> int:
         """Return free heap bytes reported by the connected board."""

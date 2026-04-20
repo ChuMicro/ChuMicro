@@ -372,23 +372,38 @@ def _run_tests_on_device(
             device entry's ``deploy_mode`` field.
 
     Returns:
-        Tuple of ``(passed, failed, errors)`` counts.
+        Tuple of ``(passed, failed, errors, implementation)`` counts
+        plus a :class:`DeviceImplementation` (or ``None`` if the probe
+        could not complete).  The probe runs once right after
+        ``connect()``; a probe failure never blocks the test run.
     """
     passed = 0
     failed = 0
     errors = 0
+    implementation = None
 
     try:
         transport = _create_transport(device_entry, deploy_mode=deploy_mode)
     except ValueError as runtime_error:
         print(f"  Skipping — {runtime_error}")
-        return passed, failed, errors
+        return passed, failed, errors, implementation
 
     try:
         transport.connect()
     except Exception as connect_error:
         print(f"  Connection failed: {connect_error}")
-        return 0, 0, 1
+        return 0, 0, 1, implementation
+
+    # Probe the board's ``sys.implementation`` once per session so the
+    # PR summary can show the exact firmware version and board model.
+    # Never fatal — if the probe fails, the summary simply falls back
+    # to the per-device metadata from ``devices.yml``.
+    if hasattr(transport, "probe_implementation"):
+        try:
+            implementation = transport.probe_implementation()
+        except Exception as probe_error:  # pragma: no cover - hardware-only
+            print(f"  WARNING: Implementation probe failed: {probe_error}")
+            implementation = None
 
     # RAM mode sends all source code inline through the serial REPL,
     # so we re-stage per library with only the source dirs that library
@@ -420,7 +435,7 @@ def _run_tests_on_device(
         except Exception as stage_error:
             print(f"  Stage failed: {stage_error}")
             transport.disconnect()
-            return 0, 0, len(all_test_files)
+            return 0, 0, len(all_test_files), implementation
 
     abort = False
     previous_library_ran = False
@@ -505,7 +520,7 @@ def _run_tests_on_device(
         print(f"  WARNING: Failed to reset device after test run: {reset_error}")
     transport.disconnect()
 
-    return passed, failed, errors
+    return passed, failed, errors, implementation
 
 
 def _resolve_selected_devices(
@@ -586,7 +601,7 @@ def _format_test_device_command(
 
 def _format_pr_summary_block(
     command: str,
-    per_device_results: list[tuple[object, int, int, int]],
+    per_device_results: list[tuple[object, int, int, int, object]],
 ) -> str:
     """Render a markdown block for the PR template's Device testing section.
 
@@ -595,10 +610,18 @@ def _format_pr_summary_block(
     command goes first, each device gets its own line, and the bold
     total is last.
 
+    When the device's ``probe_implementation`` succeeded, the bullet
+    includes the firmware version and board model reported by
+    ``sys.implementation`` — reviewers no longer have to cross-reference
+    ``devices.yml`` to learn what actually ran.
+
     Args:
         command: Reconstructed ``test-device`` invocation string.
         per_device_results: Per-device tuples of
-            ``(device_entry, passed, failed, errors)``.
+            ``(device_entry, passed, failed, errors, implementation)``
+            where ``implementation`` is a
+            :class:`chumicro_device_transport.DeviceImplementation` or
+            ``None``.
 
     Returns:
         Multi-line markdown body (no trailing newline).
@@ -607,10 +630,16 @@ def _format_pr_summary_block(
     total_passed = 0
     total_failed = 0
     total_errors = 0
-    for device_entry, passed, failed, errors in per_device_results:
+    for device_entry, passed, failed, errors, implementation in per_device_results:
         runtime_label = _runtime_display_name(device_entry.runtime)
+        if implementation is not None:
+            firmware = f"{runtime_label} {implementation.version}"
+            if implementation.machine:
+                firmware += f" on {implementation.machine}"
+        else:
+            firmware = runtime_label
         lines.append(
-            f"- `{device_entry.identifier}` ({runtime_label}, "
+            f"- `{device_entry.identifier}` ({firmware}, "
             f"`{device_entry.address}`): "
             f"{passed} passed, {failed} failed, {errors} errors"
         )
@@ -694,7 +723,7 @@ def test_device(
     harness_source = ROOT / "support" / "test_harness" / "src"
 
     # Run tests on each device.
-    per_device_results: list[tuple[object, int, int, int]] = []
+    per_device_results: list[tuple[object, int, int, int, object]] = []
 
     for device_entry in selected:
         print(f"\n{'=' * 60}")
@@ -705,15 +734,17 @@ def test_device(
         print(f"Address: {device_entry.address}")
         print(f"{'=' * 60}")
 
-        passed, failed, errors = _run_tests_on_device(
+        passed, failed, errors, implementation = _run_tests_on_device(
             device_entry, test_plan, harness_source, test_filter,
             deploy_mode=deploy_mode,
         )
-        per_device_results.append((device_entry, passed, failed, errors))
+        per_device_results.append(
+            (device_entry, passed, failed, errors, implementation),
+        )
 
-    total_passed = sum(passed for _, passed, _, _ in per_device_results)
-    total_failed = sum(failed for _, _, failed, _ in per_device_results)
-    total_errors = sum(errors for _, _, _, errors in per_device_results)
+    total_passed = sum(passed for _, passed, _, _, _ in per_device_results)
+    total_failed = sum(failed for _, _, failed, _, _ in per_device_results)
+    total_errors = sum(errors for _, _, _, errors, _ in per_device_results)
 
     # Final summary.
     print(f"\n{'=' * 60}")
