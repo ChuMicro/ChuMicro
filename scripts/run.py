@@ -25,19 +25,16 @@ from docs_deploy import (
     docs_deploy,
     inject_landing_page,
 )
-from generate_config_files import generate_config_files
 from ide_sync import sync_ide
 from new_library_scaffold import new_library
 from prepare_circuitpython import prepare_circuitpython
 from prepare_micropython import prepare_micropython
 from prepare_mpy_cross import prepare_mpy_cross
 from shared import (
-    install_command,
-    install_editable,
+    install_workspace,
     resolve_circuitpython_binary,
     resolve_micropython_binary,
     run_command,
-    runtime_versions,
 )
 from validate_mip_install import validate_local_staging, validate_mip_install
 from verify_examples import verify_examples
@@ -67,33 +64,14 @@ COMPAT_SCRIPT = "support/test_harness/run_cross_runtime.py"
 # ---------------------------------------------------------------------------
 
 def setup() -> int:
-    """Install development dependencies and regenerate IDE configuration."""
-    versions = runtime_versions()
-    circuitpython_version = versions["circuitpython"]["version"]
-    micropython_version = versions["micropython"]["version"].lstrip("v")
+    """Install development dependencies, libraries, and IDE configuration.
 
-    # Static dependencies come from requirements-dev.txt.  Type stubs for
-    # CircuitPython and MicroPython are pinned to the runtime versions
-    # in target-runtimes.toml so IDE type-checking matches the actual
-    # runtime APIs (Decision 0012).
-    requirements_file = str(ROOT / "requirements-dev.txt")
-    stubs = [
-        f"circuitpython-stubs=={circuitpython_version}",
-        f"micropython-esp32-stubs=={micropython_version}.*",
-    ]
-
-    result = run_command([*install_command(), "-U", "-r", requirements_file, *stubs])
-    if result != 0:
-        return result
-
-    result = install_editable()
-    if result != 0:
-        return result
-
-    print("== generate config files ==")
-    generate_config_files()
-
-    return sync_ide()
+    Thin CLI wrapper around :func:`shared.install_workspace`, which is the
+    single source of truth shared with ``scripts/prepare_workspace.py``.
+    See [Decision 0012](../plans/decisions/0012-ide-type-stubs.md) for the
+    runtime-pinned type-stub policy.
+    """
+    return install_workspace()
 
 
 def lint() -> int:
@@ -1406,8 +1384,10 @@ def main(argv: list[str]) -> int:
     if args.task in no_arg:
         return no_arg[args.task]()
 
-    print(f"Unknown task: {args.task}")
-    return 1
+    # Defense in depth: argparse rejects unknown subcommands before
+    # reaching here, so this branch is unreachable in normal CLI use.
+    print(f"Unknown task: {args.task}")  # pragma: no cover
+    return 1  # pragma: no cover
 
 
 if __name__ == "__main__":

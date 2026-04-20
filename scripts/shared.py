@@ -19,6 +19,7 @@ import os
 import shutil
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 from workspace import (
@@ -103,6 +104,58 @@ def install_editable(python: str | Path | None = None) -> int:
         editable_args.extend(["-e", package])
 
     return run_command([*install_command(python), *editable_args])
+
+
+def install_workspace(python: Path | None = None) -> int:
+    """Install the full ChuMicro workspace into *python*.
+
+    This is the canonical "set up everything" routine that both
+    ``run.py setup`` and ``prepare_workspace.py`` delegate to.  Steps:
+
+    1. Install ``requirements-dev.txt`` plus runtime-pinned type stubs
+       (``circuitpython-stubs``, ``micropython-esp32-stubs``).
+    2. Editable-install every publishable library and support package.
+    3. Generate starter ``devices.yml`` / ``device-config.yml`` if they
+       don't already exist.
+    4. Regenerate IDE configs for PyCharm and VS Code.
+
+    Each step short-circuits on a non-zero exit code.
+
+    Args:
+        python: Interpreter to install into.  Defaults to the running
+            interpreter when *None*.
+
+    Returns:
+        Process exit code (0 on success).
+    """
+    versions = runtime_versions()
+    cp_version = versions["circuitpython"]["version"]
+    mp_version = versions["micropython"]["version"].lstrip("v")
+    requirements_file = str(ROOT / "requirements-dev.txt")
+    stubs = [
+        f"circuitpython-stubs=={cp_version}",
+        f"micropython-esp32-stubs=={mp_version}.*",
+    ]
+
+    result = run_command([*install_command(python), "-U", "-r", requirements_file, *stubs])
+    if result != 0:
+        return result
+
+    result = install_editable(python=python)
+    if result != 0:
+        return result
+
+    # Late imports — these modules are part of the workspace itself
+    # (not third-party deps), but deferring keeps shared.py importable
+    # on a fresh clone before requirements-dev have been installed.
+    print("== generate config files ==")
+    from generate_config_files import generate_config_files
+
+    generate_config_files()
+
+    from ide_sync import sync_ide
+
+    return sync_ide()
 
 
 # ---------------------------------------------------------------------------
@@ -249,46 +302,70 @@ def _read_prepared_binary(marker_name: str) -> str | None:
     return None
 
 
-def resolve_micropython_binary(binary: str | None = None) -> str | None:
-    """Resolve a MicroPython binary from an explicit path, repository-local tools, or PATH.
+def _resolve_binary(
+    *,
+    label: str,
+    binary: str | None,
+    marker_name: str | None = None,
+    prepared_path: Callable[[], Path | None] | None = None,
+    path_lookup: str | None = None,
+) -> str | None:
+    """Resolve a binary path from CLI override, prepared tree, or PATH.
 
     Resolution order (first match wins):
-      1. *binary* — explicit override from CLI (``--micropython-binary``).
-      2. Marker file from ``prepare-micropython`` — local repository-managed build.
-      3. System PATH lookup — globally installed binary as last resort.
+      1. *binary* — explicit override; raises :class:`SystemExit` if it does
+         not exist on disk.
+      2. *marker_name* — read from ``.tools/<marker>`` if set.
+      3. *prepared_path* — call to compute a candidate path under ``.tools/``
+         (used when the candidate depends on ``runtime_versions()``).
+      4. *path_lookup* — fall back to ``shutil.which(<name>)``.
 
-    Raises :class:`SystemExit` if *binary* is given but does not exist.
+    Args:
+        label: Human-readable name used in error messages (e.g.
+            ``"MicroPython binary"``).
+        binary: Explicit override from the CLI (or ``None``).
+        marker_name: Name of a file under ``.tools/`` that holds an absolute
+            path to a prepared binary (written by the ``prepare-*`` scripts).
+        prepared_path: Callable returning a :class:`Path` candidate (or
+            ``None``) that is checked for existence before being returned.
+        path_lookup: Name to look up via ``shutil.which`` as a last resort.
     """
     if binary:
         if not Path(binary).exists():
-            print(f"MicroPython binary not found: {binary}")
+            print(f"{label} not found: {binary}")
             raise SystemExit(1)
         return binary
-    prepared = _read_prepared_binary("micropython.path")
-    if prepared:
-        return prepared
-    return shutil.which("micropython")
+    if marker_name is not None:
+        prepared = _read_prepared_binary(marker_name)
+        if prepared:
+            return prepared
+    if prepared_path is not None:
+        candidate = prepared_path()
+        if candidate is not None and candidate.exists():
+            return str(candidate)
+    if path_lookup is not None:
+        return shutil.which(path_lookup)
+    return None
+
+
+def resolve_micropython_binary(binary: str | None = None) -> str | None:
+    """Resolve a MicroPython binary from an explicit path, prepared tree, or PATH."""
+    return _resolve_binary(
+        label="MicroPython binary",
+        binary=binary,
+        marker_name="micropython.path",
+        path_lookup="micropython",
+    )
 
 
 def resolve_circuitpython_binary(binary: str | None = None) -> str | None:
-    """Resolve a CircuitPython binary from an explicit path, repository-local tools, or PATH.
-
-    Resolution order (first match wins):
-      1. *binary* — explicit override from CLI (``--circuitpython-binary``).
-      2. Marker file from ``prepare-circuitpython`` — local repository-managed build.
-      3. System PATH lookup — globally installed binary as last resort.
-
-    Raises :class:`SystemExit` if *binary* is given but does not exist.
-    """
-    if binary:
-        if not Path(binary).exists():
-            print(f"CircuitPython binary not found: {binary}")
-            raise SystemExit(1)
-        return binary
-    prepared = _read_prepared_binary("circuitpython.path")
-    if prepared:
-        return prepared
-    return shutil.which("circuitpython")
+    """Resolve a CircuitPython binary from an explicit path, prepared tree, or PATH."""
+    return _resolve_binary(
+        label="CircuitPython binary",
+        binary=binary,
+        marker_name="circuitpython.path",
+        path_lookup="circuitpython",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -296,57 +373,31 @@ def resolve_circuitpython_binary(binary: str | None = None) -> str | None:
 # ---------------------------------------------------------------------------
 
 
+def _mpy_cross_candidate(runtime_name: str) -> Path | None:
+    """Return the prepared mpy-cross path for *runtime_name*, or ``None``."""
+    version = runtime_versions().get(runtime_name, {}).get("version")
+    if not version:
+        return None
+    return TOOLS / f"{runtime_name}-{version}" / "mpy-cross" / "build" / "mpy-cross"
+
+
 def resolve_cp_mpy_cross(binary: str | None = None) -> str | None:
     """Resolve CircuitPython's mpy-cross from an explicit path or the prepared source tree.
 
-    Resolution order (first match wins):
-      1. *binary* — explicit override from CLI (``--cp-mpy-cross``).
-      2. Prepared source tree — ``.tools/circuitpython-{version}/mpy-cross/build/mpy-cross``
-         where *version* comes from ``target-runtimes.toml``.
-
     No PATH fallback — CircuitPython's mpy-cross is not pip-installable.
-    Raises :class:`SystemExit` if *binary* is given but does not exist.
-
-    Args:
-        binary: Explicit path to the mpy-cross binary, or ``None`` for
-            auto-discovery.
     """
-    if binary:
-        if not Path(binary).exists():
-            print(f"CircuitPython mpy-cross not found: {binary}")
-            raise SystemExit(1)
-        return binary
-    cp_version = runtime_versions().get("circuitpython", {}).get("version")
-    if cp_version:
-        candidate = TOOLS / f"circuitpython-{cp_version}" / "mpy-cross" / "build" / "mpy-cross"
-        if candidate.exists():
-            return str(candidate)
-    return None
+    return _resolve_binary(
+        label="CircuitPython mpy-cross",
+        binary=binary,
+        prepared_path=lambda: _mpy_cross_candidate("circuitpython"),
+    )
 
 
 def resolve_mp_mpy_cross(binary: str | None = None) -> str | None:
-    """Resolve MicroPython's mpy-cross from an explicit path, prepared tree, or PATH.
-
-    Resolution order (first match wins):
-      1. *binary* — explicit override from CLI (``--mp-mpy-cross``).
-      2. Prepared source tree — ``.tools/micropython-{version}/mpy-cross/build/mpy-cross``
-         where *version* comes from ``target-runtimes.toml``.
-      3. System PATH lookup — pip-installed ``mpy-cross``.
-
-    Raises :class:`SystemExit` if *binary* is given but does not exist.
-
-    Args:
-        binary: Explicit path to the mpy-cross binary, or ``None`` for
-            auto-discovery.
-    """
-    if binary:
-        if not Path(binary).exists():
-            print(f"MicroPython mpy-cross not found: {binary}")
-            raise SystemExit(1)
-        return binary
-    mp_version = runtime_versions().get("micropython", {}).get("version")
-    if mp_version:
-        candidate = TOOLS / f"micropython-{mp_version}" / "mpy-cross" / "build" / "mpy-cross"
-        if candidate.exists():
-            return str(candidate)
-    return shutil.which("mpy-cross")
+    """Resolve MicroPython's mpy-cross from an explicit path, prepared tree, or PATH."""
+    return _resolve_binary(
+        label="MicroPython mpy-cross",
+        binary=binary,
+        prepared_path=lambda: _mpy_cross_candidate("micropython"),
+        path_lookup="mpy-cross",
+    )

@@ -27,7 +27,7 @@ import sys
 import venv
 from pathlib import Path
 
-from shared import install_command, install_editable, running_on_native_windows
+from shared import install_workspace, running_on_native_windows
 from workspace import ROOT
 
 VENV_DIR = ROOT / ".venv"
@@ -202,23 +202,22 @@ def resolve_python(create_venv: bool) -> Path:
 
 
 def install_dependencies(python: Path) -> None:
-    """Install development dependencies using the chosen interpreter.
+    """Install the full workspace into *python*.
+
+    Delegates to :func:`shared.install_workspace`, which is the single
+    source of truth shared with ``run.py setup``.  Installs
+    ``requirements-dev.txt`` + runtime-pinned type stubs + editable
+    libraries and support packages, then generates starter
+    ``devices.yml`` / ``device-config.yml`` and refreshes IDE configs.
 
     Args:
-        python: Path to the Python interpreter.
+        python: Path to the Python interpreter to install into.
     """
-    requirements_file = str(ROOT / "requirements-dev.txt")
-    _run(
-        [*install_command(python), "-U", "-r", requirements_file],
-        "Installing development dependencies",
-    )
-
-    # Editable-install all libraries so imports work in any tool
-    # (editors, debuggers, REPLs) without manual PYTHONPATH setup.
-    _banner("Installing libraries (editable)")
-    result = install_editable(python=python)
+    _banner("Installing workspace")
+    print(f"+ Target interpreter: {python}\n")
+    result = install_workspace(python=python)
     if result != 0:
-        print("\nFailed: Installing libraries (editable)")
+        print("\nFailed: Installing workspace")
         raise SystemExit(result)
 
 
@@ -283,6 +282,12 @@ def main() -> None:
         action="store_true",
         help="Create a .venv virtual environment (otherwise uses the active interpreter).",
     )
+    parser.add_argument(
+        "--verify",
+        action="store_true",
+        help="After install, run lint + test to verify the workspace is functional. "
+        "Off by default — run `python scripts/run.py preflight` for the full CI mirror.",
+    )
     args = parser.parse_args()
 
     _banner("Preparing ChuMicro workspace")
@@ -291,7 +296,8 @@ def main() -> None:
     python = resolve_python(args.create_venv)
     _check_python_version(python)
     install_dependencies(python)
-    verify_workspace(python)
+    if args.verify:
+        verify_workspace(python)
     print_summary(python)
 
 

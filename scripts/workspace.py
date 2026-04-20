@@ -40,14 +40,9 @@ def load_tomllib():
     return tomllib
 
 
-# Backward compatibility — some call sites may still reference the
-# private name.  New code should use ``load_tomllib()``.
-_load_tomllib = load_tomllib
-
-
 def read_runtime_versions() -> dict:
     """Read pinned target runtime versions from ``target-runtimes.toml``."""
-    tomllib = _load_tomllib()
+    tomllib = load_tomllib()
     with (ROOT / "target-runtimes.toml").open("rb") as runtimes_file:
         return tomllib.load(runtimes_file)
 
@@ -68,7 +63,7 @@ def read_platforms(package_dir: Path) -> tuple[str, ...]:
     pyproject_file = package_dir / "pyproject.toml"
     if not pyproject_file.exists():
         return ALL_PLATFORMS
-    tomllib = _load_tomllib()
+    tomllib = load_tomllib()
     with pyproject_file.open("rb") as toml_file:
         data = tomllib.load(toml_file)
     platforms = data.get("tool", {}).get("chumicro", {}).get("platforms")
