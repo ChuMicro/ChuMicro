@@ -979,13 +979,16 @@ class TestRunTestsOnDevice:
         names = [name for name, _ in transport.calls]
         assert "disconnect" in names
 
-    def test_soft_reset_is_skipped_for_micropython(
+    def test_soft_reset_fires_between_libraries_for_micropython(
         self, tmp_path, monkeypatch,
     ) -> None:
-        """MicroPython runs never call soft_reset between libraries.
+        """MicroPython soft_resets between library groups so state is clean.
 
-        mpremote starts a fresh interpreter per invocation so a soft reset
-        is both unnecessary and actively causes USB disconnection issues.
+        The persistent-serial ``SerialTransport`` keeps one interpreter
+        alive across files, so ``sys.modules`` would accumulate until
+        RAM runs out on Tier-2 boards (RP2040 class, 264 KB SRAM).  The
+        soft reset is a VM-level Ctrl-D via raw REPL — it does not
+        toggle USB, unlike the older ``mpremote reset`` subprocess path.
         """
         transport = _RecordingTransport(
             mode="mount",
@@ -1003,7 +1006,8 @@ class TestRunTestsOnDevice:
             harness_source=tmp_path / "harness", test_filter=None,
         )
 
-        assert "soft_reset" not in [name for name, _ in transport.calls]
+        # Soft reset happened at least once (between alpha and beta).
+        assert "soft_reset" in [name for name, _ in transport.calls]
 
     def test_soft_reset_fires_between_libraries_for_circuitpython(
         self, tmp_path, monkeypatch,

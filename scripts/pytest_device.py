@@ -701,6 +701,15 @@ def _load_fallback_device() -> DeviceEntry:
     return targets[0]
 
 
+#: Transport modes that hold a persistent interpreter across test files.
+#: Both CircuitPython ``"ram"`` (inline bootstrap) and MicroPython
+#: ``"mount"`` (mpremote ``mount_local``) reuse the same live VM from
+#: one file to the next, so ``sys.modules`` accumulates until a soft
+#: reset clears it.  Other modes copy files to flash and import fresh
+#: per call, so they don't need the inter-file reset.
+_IN_MEMORY_MODES = ("ram", "mount")
+
+
 def _should_soft_reset_before_stage(
     cache: _TransportCache,
     device_entry: DeviceEntry,
@@ -708,19 +717,25 @@ def _should_soft_reset_before_stage(
     library_name: str,
     test_file_name: str,
 ) -> bool:
-    """Return whether RAM-mode re-staging should soft-reset first.
+    """Return whether in-memory re-staging should soft-reset first.
 
-    CircuitPython RAM mode injects library modules and test code into the
-    live interpreter via raw REPL. When switching to a different test file,
-    the previous file's injected modules can remain in ``sys.modules`` and
-    consume heap. On low-RAM boards this can cause the next inline bootstrap
-    to fail with ``MemoryError`` before execution even begins.
+    Both CircuitPython RAM mode and MicroPython mount mode keep the same
+    interpreter across test files (raw REPL or persistent serial via
+    mpremote).  Without a soft reset between files the previous file's
+    modules stay in ``sys.modules`` and consume heap; on Tier-2 boards
+    (RP2040 class, 264 KB SRAM) that can exhaust RAM after a handful
+    of libraries and fail the next bootstrap with ``MemoryError`` before
+    execution even begins.
 
-    To preserve batching within a file while reclaiming memory across files,
-    soft-reset only when all of the following are true:
+    The soft reset is a VM-level Ctrl-D via raw REPL — it does not
+    toggle USB or re-enumerate the CDC, so it is safe to run between
+    every file.
 
-    - the target runtime is CircuitPython,
-    - the transport is in RAM mode,
+    To preserve batching within a file while reclaiming memory across
+    files, soft-reset only when all of the following are true:
+
+    - the transport exposes a ``soft_reset`` method,
+    - the transport is in an in-memory mode (``ram`` or ``mount``),
     - the device previously staged a file in this session, and
     - the current staging target differs from the last one.
 
@@ -734,11 +749,9 @@ def _should_soft_reset_before_stage(
     Returns:
         ``True`` when a soft reset should run before ``stage()``.
     """
-    if device_entry.runtime != "circuitpython":
-        return False
     if not hasattr(transport, "soft_reset"):
         return False
-    if getattr(transport, "mode", None) != "ram":
+    if getattr(transport, "mode", None) not in _IN_MEMORY_MODES:
         return False
     if not cache.has_staged_file(device_entry.identifier):
         return False

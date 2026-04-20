@@ -531,8 +531,13 @@ class TestShouldSoftResetBeforeStage:
 
         assert should_reset is False
 
-    def test_false_for_micropython_mount_mode(self) -> None:
-        """MicroPython already gets clean execution without this reset path."""
+    def test_true_when_switching_files_in_micropython_mount_mode(self) -> None:
+        """A new mount-mode file should soft-reset to reclaim interpreter heap.
+
+        Persistent-serial ``mpremote`` keeps one VM across files, so
+        ``sys.modules`` accumulates until a soft reset evicts it.  The
+        reset is Ctrl-D via raw REPL — no USB re-enumeration.
+        """
         from chumicro_device_transport.testing import FakeTransport
 
         cache = pytest_device._TransportCache()
@@ -543,6 +548,25 @@ class TestShouldSoftResetBeforeStage:
             address="/dev/ttyUSB0",
         )
         transport = FakeTransport(mode="mount")
+
+        should_reset = pytest_device._should_soft_reset_before_stage(
+            cache, device, transport, "timing", "test_heartbeat_ticks.py",
+        )
+
+        assert should_reset is True
+
+    def test_false_for_micropython_copy_mode(self) -> None:
+        """Copy mode stages to flash and imports fresh per call — no per-file reset needed."""
+        from chumicro_device_transport.testing import FakeTransport
+
+        cache = pytest_device._TransportCache()
+        cache.mark_staged("mp_dev", "timing", "test_heartbeat.py")
+        device = DeviceEntry(
+            identifier="mp_dev",
+            runtime="micropython",
+            address="/dev/ttyUSB0",
+        )
+        transport = FakeTransport(mode="copy")
 
         should_reset = pytest_device._should_soft_reset_before_stage(
             cache, device, transport, "timing", "test_heartbeat_ticks.py",

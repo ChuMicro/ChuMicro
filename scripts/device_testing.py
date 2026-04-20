@@ -430,19 +430,20 @@ def _run_tests_on_device(
 
         # Soft-reset between library groups so modules from the
         # previous library are evicted from the interpreter.  This
-        # ensures test isolation: a test cannot accidentally pass
-        # because a dependency was left in sys.modules by an earlier
-        # library's tests.
+        # ensures test isolation (no stale ``sys.modules`` from an
+        # earlier library) and reclaims heap on constrained boards
+        # before the next library runs.
         #
-        # MicroPython does not need this: mount mode starts a fresh
-        # mpremote process per execute() call (clean interpreter),
-        # and copy mode uses separate mpremote invocations too.
-        # Calling mpremote reset between libraries actively causes
-        # USB disconnection issues.
+        # Both runtimes now hold a persistent interpreter across
+        # files (CircuitPython via raw REPL, MicroPython via
+        # ``mpremote``'s persistent ``SerialTransport``), so both
+        # need this reset.  The reset is a VM-level Ctrl-D — it does
+        # not toggle USB or re-enumerate the CDC.  (The older
+        # ``mpremote reset`` subprocess path *did* cause USB drops;
+        # the persistent-serial ``soft_reset`` does not.)
         needs_soft_reset = (
             previous_library_ran
             and hasattr(transport, "soft_reset")
-            and device_entry.runtime != "micropython"
         )
         if needs_soft_reset:
             try:
