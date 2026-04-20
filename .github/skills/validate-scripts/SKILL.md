@@ -132,6 +132,19 @@ python scripts/run.py test --all --libraries timing 2>&1 | tail -5
 # Exit code: 2 (argparse error)
 ```
 
+### Deep test sweep
+
+```bash
+# ✅ Run the developer-oriented deep test sweep without device tests
+python scripts/run.py test-everything --libraries timing --no-cov 2>&1 | tail -20
+# 🔍 Output contains the step headers:
+#    "== test =="
+#    "== test-scripts =="
+#    "== test-micropython-compatibility =="
+#    "== test-circuitpython-compatibility =="
+# Exit code: 0
+```
+
 ## 4. build
 
 ```bash

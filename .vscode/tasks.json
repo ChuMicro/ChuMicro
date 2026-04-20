@@ -189,6 +189,20 @@
             }
         },
         {
+            "label": "Test Everything",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "scripts/run.py",
+                "test-everything"
+            ],
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
             "label": "Test Device",
             "type": "shell",
             "command": "python",

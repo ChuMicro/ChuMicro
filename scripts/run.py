@@ -377,6 +377,22 @@ def test_scripts(
     )
 
 
+def _selected_library_dirs(package_dirs: list[Path] | None) -> list[Path]:
+    """Return the selected publishable library directories.
+
+    Args:
+        package_dirs: Optional scoped package directories from the CLI.
+            ``None`` means "all publishable libraries".
+    """
+    if package_dirs is None:
+        return discover_library_dirs()
+    libraries_root = ROOT / "libraries"
+    return [
+        package_dir for package_dir in package_dirs
+        if package_dir.parent == libraries_root
+    ]
+
+
 def build() -> int:
     """Build all publishable package distributions.
 
@@ -651,6 +667,7 @@ def _test_runtime_compat(
     label: str,
     resolve_binary: Callable[[], str | None],
     prepare_function: Callable[[], int],
+    package_dirs: list[Path] | None = None,
 ) -> int:
     """Run cross-runtime unit tests for a single runtime.
 
@@ -680,13 +697,19 @@ def _test_runtime_compat(
     # Only publishable libraries under libraries/ are tested against
     # non-CPython runtimes.  support/ packages are CPython-only
     # infrastructure and are excluded from cross-runtime validation.
-    library_dirs = discover_library_dirs()
+    library_dirs = _selected_library_dirs(package_dirs)
     platform_libraries = filter_by_platform(library_dirs, platform)
+    if not platform_libraries:
+        print(f"No publishable {label} libraries selected for compatibility tests.")
+        return 0
     library_names = [library_dir.name for library_dir in platform_libraries]
     return run_command([binary, COMPAT_SCRIPT, *library_names])
 
 
-def test_micropython_compatibility(binary: str | None = None) -> int:
+def test_micropython_compatibility(
+    binary: str | None = None,
+    package_dirs: list[Path] | None = None,
+) -> int:
     """Run the cross-runtime unit tests with the MicroPython Unix binary.
 
     Skips libraries that do not target MicroPython.
@@ -694,10 +717,14 @@ def test_micropython_compatibility(binary: str | None = None) -> int:
     return _test_runtime_compat(
         "micropython", "MicroPython",
         lambda: resolve_micropython_binary(binary), prepare_micropython,
+        package_dirs,
     )
 
 
-def test_circuitpython_compatibility(binary: str | None = None) -> int:
+def test_circuitpython_compatibility(
+    binary: str | None = None,
+    package_dirs: list[Path] | None = None,
+) -> int:
     """Run the cross-runtime unit tests with a configured or repo-managed CircuitPython binary.
 
     Skips libraries that do not target CircuitPython.
@@ -705,26 +732,144 @@ def test_circuitpython_compatibility(binary: str | None = None) -> int:
     return _test_runtime_compat(
         "circuitpython", "CircuitPython",
         lambda: resolve_circuitpython_binary(binary), prepare_circuitpython,
+        package_dirs,
     )
 
 
 def test_runtime_matrix(
     micropython_binary: str | None = None,
     circuitpython_binary: str | None = None,
+    package_dirs: list[Path] | None = None,
 ) -> int:
     """Run host tests and cross-runtime unit tests across all proven runtimes."""
-    all_packages = discover_package_dirs()
+    all_packages = package_dirs if package_dirs is not None else discover_package_dirs()
     steps = (
         ("test", lambda: test_cpython(all_packages)),
         (
             "test-micropython-compatibility",
-            lambda: test_micropython_compatibility(micropython_binary),
+            lambda: test_micropython_compatibility(
+                micropython_binary, package_dirs,
+            ),
         ),
         (
             "test-circuitpython-compatibility",
-            lambda: test_circuitpython_compatibility(circuitpython_binary),
+            lambda: test_circuitpython_compatibility(
+                circuitpython_binary, package_dirs,
+            ),
         ),
     )
+
+    for step_name, step in steps:
+        print(f"== {step_name} ==")
+        result = step()
+        if result != 0:
+            print(f"Step failed: {step_name}")
+            return result
+
+    return 0
+
+
+def test_everything(
+    package_dirs: list[Path] | None = None,
+    *,
+    micropython_binary: str | None = None,
+    circuitpython_binary: str | None = None,
+    exit_first: bool = False,
+    verbose: bool = False,
+    no_cov: bool = False,
+    coverage_threshold: int | None = None,
+    with_device: bool = False,
+    runtime: str | None = None,
+    micropython_device: str | None = None,
+    circuitpython_device: str | None = None,
+    library: str | None = None,
+    test_filter: str | None = None,
+    deploy_mode: str | None = None,
+) -> int:
+    """Run the deepest developer-oriented test sweep.
+
+    Unlike :func:`preflight`, this command focuses on testing rather than CI/PR
+    validation tasks.  It runs CPython package tests, scripts infrastructure
+    tests, unix-port compatibility tests, and optionally real-device
+    functional tests.
+    """
+    selected_packages = (
+        package_dirs if package_dirs is not None else discover_package_dirs()
+    )
+    selected_library_names = [
+        library_dir.name for library_dir in _selected_library_dirs(package_dirs)
+    ]
+
+    steps: list[tuple[str, Callable[[], int]]] = [
+        (
+            "test",
+            lambda: test_cpython(
+                selected_packages,
+                exit_first=exit_first,
+                verbose=verbose,
+                no_cov=no_cov,
+                coverage_threshold=coverage_threshold,
+            ),
+        ),
+        (
+            "test-scripts",
+            lambda: test_scripts(exit_first=exit_first, verbose=verbose),
+        ),
+        (
+            "test-micropython-compatibility",
+            lambda: test_micropython_compatibility(
+                micropython_binary, package_dirs,
+            ),
+        ),
+        (
+            "test-circuitpython-compatibility",
+            lambda: test_circuitpython_compatibility(
+                circuitpython_binary, package_dirs,
+            ),
+        ),
+    ]
+
+    if with_device:
+        if library is not None:
+            steps.append((
+                f"test-device ({library})",
+                lambda: test_device(
+                    runtime=runtime,
+                    micropython_device=micropython_device,
+                    circuitpython_device=circuitpython_device,
+                    library=library,
+                    test_filter=test_filter,
+                    deploy_mode=deploy_mode,
+                ),
+            ))
+        elif package_dirs is not None:
+            if not selected_library_names:
+                print("No publishable libraries selected for device tests.")
+            else:
+                for library_name in selected_library_names:
+                    steps.append((
+                        f"test-device ({library_name})",
+                        lambda library_name=library_name: test_device(
+                            runtime=runtime,
+                            micropython_device=micropython_device,
+                            circuitpython_device=circuitpython_device,
+                            library=library_name,
+                            test_filter=test_filter,
+                            deploy_mode=deploy_mode,
+                        ),
+                    ))
+        else:
+            steps.append((
+                "test-device",
+                lambda: test_device(
+                    runtime=runtime,
+                    micropython_device=micropython_device,
+                    circuitpython_device=circuitpython_device,
+                    library=None,
+                    test_filter=test_filter,
+                    deploy_mode=deploy_mode,
+                ),
+            ))
 
     for step_name, step in steps:
         print(f"== {step_name} ==")
@@ -883,18 +1028,75 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     subparsers.add_parser(
         "test-micropython-compatibility",
-        parents=[binary],
+        parents=[scope, binary],
         help="MicroPython cross-runtime unit tests",
     )
     subparsers.add_parser(
         "test-circuitpython-compatibility",
-        parents=[binary],
+        parents=[scope, binary],
         help="CircuitPython cross-runtime unit tests",
     )
     subparsers.add_parser(
         "test-runtime-matrix",
-        parents=[binary],
+        parents=[scope, binary],
         help="test all packages on CPython + MicroPython + CircuitPython",
+    )
+    test_everything_parser = subparsers.add_parser(
+        "test-everything",
+        parents=[scope, binary],
+        help="deep developer test sweep across host, scripts, runtimes, and optional devices",
+    )
+    test_everything_parser.add_argument(
+        "-x", "--exit-first", action="store_true",
+        help="stop the CPython and scripts test phases on first failure",
+    )
+    test_everything_parser.add_argument(
+        "-v", "--verbose", action="store_true",
+        help="verbose CPython and scripts test output",
+    )
+    test_everything_parser.add_argument(
+        "--no-cov", action="store_true",
+        help="skip CPython coverage collection",
+    )
+    test_everything_parser.add_argument(
+        "--coverage-threshold", type=int, metavar="PCT",
+        help=(
+            "override CPython coverage fail-under percentage "
+            "(default: from pyproject.toml)"
+        ),
+    )
+    test_everything_parser.add_argument(
+        "--with-device", action="store_true",
+        help="also run real-device functional tests",
+    )
+    test_everything_parser.add_argument(
+        "--runtime",
+        choices=["micropython", "circuitpython", "both"],
+        help="runtime override for the optional device phase",
+    )
+    test_everything_parser.add_argument(
+        "--micropython-device",
+        help="override the default MicroPython device ID for the optional device phase",
+    )
+    test_everything_parser.add_argument(
+        "--circuitpython-device",
+        help="override the default CircuitPython device ID for the optional device phase",
+    )
+    test_everything_parser.add_argument(
+        "--library",
+        help="limit the optional device phase to one library",
+    )
+    test_everything_parser.add_argument(
+        "--test",
+        dest="test_filter",
+        help="filter the optional device phase to test files or functions matching this substring",
+    )
+    test_everything_parser.add_argument(
+        "--deploy-mode",
+        dest="deploy_mode",
+        choices=["ram", "flash"],
+        default=None,
+        help="deploy mode override for the optional device phase",
     )
     test_device_parser = subparsers.add_parser(
         "test-device",
@@ -1074,6 +1276,13 @@ def _resolve_scoped_packages(args) -> list[Path]:
     )
 
 
+def _resolve_optional_scope(args) -> list[Path] | None:
+    """Resolve package scope only when explicit scope flags were provided."""
+    if args.all_packages or args.libraries:
+        return _resolve_scoped_packages(args)
+    return None
+
+
 def main(argv: list[str]) -> int:
     """Dispatch a named repository-level task."""
     parser = _build_parser()
@@ -1139,14 +1348,36 @@ def main(argv: list[str]) -> int:
         )
 
     if args.task == "test-micropython-compatibility":
-        return test_micropython_compatibility(args.micropython_binary)
+        package_dirs = _resolve_optional_scope(args)
+        return test_micropython_compatibility(args.micropython_binary, package_dirs)
 
     if args.task == "test-circuitpython-compatibility":
-        return test_circuitpython_compatibility(args.circuitpython_binary)
+        package_dirs = _resolve_optional_scope(args)
+        return test_circuitpython_compatibility(args.circuitpython_binary, package_dirs)
 
     if args.task == "test-runtime-matrix":
+        package_dirs = _resolve_optional_scope(args)
         return test_runtime_matrix(
-            args.micropython_binary, args.circuitpython_binary,
+            args.micropython_binary, args.circuitpython_binary, package_dirs,
+        )
+
+    if args.task == "test-everything":
+        package_dirs = _resolve_optional_scope(args)
+        return test_everything(
+            package_dirs,
+            micropython_binary=args.micropython_binary,
+            circuitpython_binary=args.circuitpython_binary,
+            exit_first=args.exit_first,
+            verbose=args.verbose,
+            no_cov=args.no_cov,
+            coverage_threshold=args.coverage_threshold,
+            with_device=args.with_device,
+            runtime=args.runtime,
+            micropython_device=args.micropython_device,
+            circuitpython_device=args.circuitpython_device,
+            library=args.library,
+            test_filter=args.test_filter,
+            deploy_mode=args.deploy_mode,
         )
 
     if args.task == "test-device":

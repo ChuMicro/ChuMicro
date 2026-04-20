@@ -307,8 +307,29 @@ class TestMainDispatch:
 
         assert micropython_result == 43
         assert circuitpython_result == 47
-        assert micropython_calls == [(("/tmp/mpy",), {})]
-        assert circuitpython_calls == [(("/tmp/cpy",), {})]
+        assert micropython_calls == [(("/tmp/mpy", None), {})]
+        assert circuitpython_calls == [(("/tmp/cpy", None), {})]
+
+    def test_runtime_compatibility_commands_dispatch_scoped_packages(
+        self, monkeypatch,
+    ) -> None:
+        """Scoped runtime-compat commands should resolve package scope first."""
+        resolved_packages = [Path("/tmp/timing")]
+        monkeypatch.setattr(
+            run, "resolve_scope", lambda **kwargs: resolved_packages,
+        )
+        command_calls, fake_micropython = _make_fake_command(return_value=49)
+        monkeypatch.setattr(
+            run, "test_micropython_compatibility", fake_micropython,
+        )
+
+        result = run.main([
+            "run.py", "test-micropython-compatibility",
+            "--libraries", "timing",
+        ])
+
+        assert result == 49
+        assert command_calls == [((None, resolved_packages), {})]
 
     def test_test_runtime_matrix_dispatches_binary_paths(self, monkeypatch) -> None:
         """test-runtime-matrix should receive both optional binary overrides."""
@@ -322,7 +343,99 @@ class TestMainDispatch:
         ])
 
         assert result == 53
-        assert command_calls == [(("/tmp/mpy", "/tmp/cpy"), {})]
+        assert command_calls == [(("/tmp/mpy", "/tmp/cpy", None), {})]
+
+    def test_test_runtime_matrix_dispatches_scoped_packages(self, monkeypatch) -> None:
+        """test-runtime-matrix should forward an explicit package scope."""
+        resolved_packages = [Path("/tmp/timing")]
+        monkeypatch.setattr(
+            run, "resolve_scope", lambda **kwargs: resolved_packages,
+        )
+        command_calls, fake_test_runtime_matrix = _make_fake_command(return_value=57)
+        monkeypatch.setattr(run, "test_runtime_matrix", fake_test_runtime_matrix)
+
+        result = run.main([
+            "run.py", "test-runtime-matrix", "--libraries", "timing",
+        ])
+
+        assert result == 57
+        assert command_calls == [((None, None, resolved_packages), {})]
+
+    def test_test_everything_uses_all_packages_by_default(self, monkeypatch) -> None:
+        """test-everything should default to its own all-packages behavior."""
+        command_calls, fake_test_everything = _make_fake_command(return_value=63)
+
+        def fail_resolve_scope(*, all_packages, libraries):
+            raise AssertionError("resolve_scope should not run without scope flags")
+
+        monkeypatch.setattr(run, "resolve_scope", fail_resolve_scope)
+        monkeypatch.setattr(run, "test_everything", fake_test_everything)
+
+        result = run.main(["run.py", "test-everything", "--no-cov"])
+
+        assert result == 63
+        assert command_calls == [
+            ((None,), {
+                "micropython_binary": None,
+                "circuitpython_binary": None,
+                "exit_first": False,
+                "verbose": False,
+                "no_cov": True,
+                "coverage_threshold": None,
+                "with_device": False,
+                "runtime": None,
+                "micropython_device": None,
+                "circuitpython_device": None,
+                "library": None,
+                "test_filter": None,
+                "deploy_mode": None,
+            }),
+        ]
+
+    def test_test_everything_dispatches_scope_and_device_arguments(
+        self, monkeypatch,
+    ) -> None:
+        """test-everything should forward both scope and optional device flags."""
+        resolved_packages = [Path("/tmp/timing")]
+        monkeypatch.setattr(
+            run, "resolve_scope", lambda **kwargs: resolved_packages,
+        )
+        command_calls, fake_test_everything = _make_fake_command(return_value=65)
+        monkeypatch.setattr(run, "test_everything", fake_test_everything)
+
+        result = run.main([
+            "run.py", "test-everything",
+            "--libraries", "timing",
+            "--with-device",
+            "--runtime", "both",
+            "--library", "timing",
+            "--test", "heartbeat",
+            "--deploy-mode", "flash",
+            "--micropython-binary", "/tmp/mpy",
+            "--circuitpython-binary", "/tmp/cpy",
+            "--coverage-threshold", "94",
+            "-x",
+            "-v",
+        ])
+
+        assert result == 65
+        assert command_calls == [
+            ((resolved_packages,), {
+                "micropython_binary": "/tmp/mpy",
+                "circuitpython_binary": "/tmp/cpy",
+                "exit_first": True,
+                "verbose": True,
+                "no_cov": False,
+                "coverage_threshold": 94,
+                "with_device": True,
+                "runtime": "both",
+                "micropython_device": None,
+                "circuitpython_device": None,
+                "library": "timing",
+                "test_filter": "heartbeat",
+                "deploy_mode": "flash",
+            }),
+        ]
 
     def test_test_device_without_filters_passes_none_values(
         self, monkeypatch,
@@ -422,3 +535,100 @@ class TestMainDispatch:
                 "run.py", "test-device",
                 "--device", "board-1",
             ])
+
+
+class TestCompositeTestCommands:
+    """Tests for aggregated developer test commands."""
+
+    def test_test_runtime_matrix_forwards_package_scope(self, monkeypatch) -> None:
+        """test-runtime-matrix should pass scoped packages to every phase."""
+        package_dirs = [Path("/tmp/timing")]
+        cpython_calls, fake_cpython = _make_fake_command(return_value=0)
+        micropython_calls, fake_micropython = _make_fake_command(return_value=0)
+        circuitpython_calls, fake_circuitpython = _make_fake_command(return_value=0)
+        monkeypatch.setattr(run, "test_cpython", fake_cpython)
+        monkeypatch.setattr(run, "test_micropython_compatibility", fake_micropython)
+        monkeypatch.setattr(run, "test_circuitpython_compatibility", fake_circuitpython)
+
+        result = run.test_runtime_matrix(
+            "/tmp/mpy", "/tmp/cpy", package_dirs,
+        )
+
+        assert result == 0
+        assert cpython_calls == [((package_dirs,), {})]
+        assert micropython_calls == [(("/tmp/mpy", package_dirs), {})]
+        assert circuitpython_calls == [(("/tmp/cpy", package_dirs), {})]
+
+    def test_test_everything_runs_all_non_device_phases(self, monkeypatch) -> None:
+        """test-everything should aggregate CPython, scripts, and unix-port tests."""
+        package_dirs = [Path("/tmp/timing")]
+        cpython_calls, fake_cpython = _make_fake_command(return_value=0)
+        scripts_calls, fake_scripts = _make_fake_command(return_value=0)
+        micropython_calls, fake_micropython = _make_fake_command(return_value=0)
+        circuitpython_calls, fake_circuitpython = _make_fake_command(return_value=0)
+        monkeypatch.setattr(run, "test_cpython", fake_cpython)
+        monkeypatch.setattr(run, "test_scripts", fake_scripts)
+        monkeypatch.setattr(run, "test_micropython_compatibility", fake_micropython)
+        monkeypatch.setattr(run, "test_circuitpython_compatibility", fake_circuitpython)
+
+        result = run.test_everything(
+            package_dirs,
+            micropython_binary="/tmp/mpy",
+            circuitpython_binary="/tmp/cpy",
+            exit_first=True,
+            verbose=True,
+            no_cov=True,
+            coverage_threshold=94,
+        )
+
+        assert result == 0
+        assert cpython_calls == [((package_dirs,), {
+            "exit_first": True,
+            "verbose": True,
+            "no_cov": True,
+            "coverage_threshold": 94,
+        })]
+        assert scripts_calls == [((), {"exit_first": True, "verbose": True})]
+        assert micropython_calls == [(("/tmp/mpy", package_dirs), {})]
+        assert circuitpython_calls == [(("/tmp/cpy", package_dirs), {})]
+
+    def test_test_everything_scopes_device_phase_by_selected_libraries(
+        self, monkeypatch,
+    ) -> None:
+        """Scoped test-everything runs should execute device tests per selected library."""
+        package_dirs = [
+            run.ROOT / "libraries" / "timing",
+            run.ROOT / "libraries" / "runner",
+        ]
+        monkeypatch.setattr(run, "test_cpython", lambda *args, **kwargs: 0)
+        monkeypatch.setattr(run, "test_scripts", lambda *args, **kwargs: 0)
+        monkeypatch.setattr(
+            run, "test_micropython_compatibility", lambda *args, **kwargs: 0,
+        )
+        monkeypatch.setattr(
+            run, "test_circuitpython_compatibility", lambda *args, **kwargs: 0,
+        )
+        device_calls, fake_test_device = _make_fake_command(return_value=0)
+        monkeypatch.setattr(run, "test_device", fake_test_device)
+
+        result = run.test_everything(package_dirs, with_device=True, runtime="both")
+
+        assert result == 0
+        assert device_calls == [
+            ((), {
+                "runtime": "both",
+                "micropython_device": None,
+                "circuitpython_device": None,
+                "library": "timing",
+                "test_filter": None,
+                "deploy_mode": None,
+            }),
+            ((), {
+                "runtime": "both",
+                "micropython_device": None,
+                "circuitpython_device": None,
+                "library": "runner",
+                "test_filter": None,
+                "deploy_mode": None,
+            }),
+        ]
