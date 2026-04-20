@@ -544,6 +544,94 @@ def _resolve_selected_devices(
     return resolve_ide_devices(all_devices, effective_defaults)
 
 
+def _format_test_device_command(
+    runtime: str | None,
+    micropython_device: str | None,
+    circuitpython_device: str | None,
+    library: str | None,
+    test_filter: str | None,
+    deploy_mode: str | None,
+) -> str:
+    """Reconstruct the ``test-device`` CLI invocation from its args.
+
+    Only includes flags the caller explicitly passed (non-``None`` values)
+    so the rendered command matches what the user actually typed.
+
+    Args:
+        runtime: ``--runtime`` flag value, or ``None``.
+        micropython_device: ``--micropython-device`` value, or ``None``.
+        circuitpython_device: ``--circuitpython-device`` value, or ``None``.
+        library: ``--library`` value, or ``None``.
+        test_filter: ``--test`` value, or ``None``.
+        deploy_mode: ``--deploy-mode`` value, or ``None``.
+
+    Returns:
+        A single-line shell command, ready to drop into a PR body.
+    """
+    parts = ["python scripts/run.py test-device"]
+    if runtime is not None:
+        parts.append(f"--runtime {runtime}")
+    if micropython_device is not None:
+        parts.append(f"--micropython-device {micropython_device}")
+    if circuitpython_device is not None:
+        parts.append(f"--circuitpython-device {circuitpython_device}")
+    if library is not None:
+        parts.append(f"--library {library}")
+    if test_filter is not None:
+        parts.append(f"--test {test_filter}")
+    if deploy_mode is not None:
+        parts.append(f"--deploy-mode {deploy_mode}")
+    return " ".join(parts)
+
+
+def _format_pr_summary_block(
+    command: str,
+    per_device_results: list[tuple[object, int, int, int]],
+) -> str:
+    """Render a markdown block for the PR template's Device testing section.
+
+    Drop-in paste for the ``## Device testing`` section of
+    ``.github/PULL_REQUEST_TEMPLATE.md``.  Each line is one bullet; the
+    command goes first, each device gets its own line, and the bold
+    total is last.
+
+    Args:
+        command: Reconstructed ``test-device`` invocation string.
+        per_device_results: Per-device tuples of
+            ``(device_entry, passed, failed, errors)``.
+
+    Returns:
+        Multi-line markdown body (no trailing newline).
+    """
+    lines = [f"- Command: `{command}`"]
+    total_passed = 0
+    total_failed = 0
+    total_errors = 0
+    for device_entry, passed, failed, errors in per_device_results:
+        runtime_label = _runtime_display_name(device_entry.runtime)
+        lines.append(
+            f"- `{device_entry.identifier}` ({runtime_label}, "
+            f"`{device_entry.address}`): "
+            f"{passed} passed, {failed} failed, {errors} errors"
+        )
+        total_passed += passed
+        total_failed += failed
+        total_errors += errors
+    lines.append(
+        f"- **Total: {total_passed} passed, {total_failed} failed, "
+        f"{total_errors} errors**"
+    )
+    return "\n".join(lines)
+
+
+def _runtime_display_name(runtime_name: str) -> str:
+    """Return a human-friendly runtime label for the PR summary."""
+    return {
+        "micropython": "MicroPython",
+        "circuitpython": "CircuitPython",
+    }.get(runtime_name, runtime_name)
+
+
 def test_device(
     runtime: str | None = None,
     micropython_device: str | None = None,
@@ -606,9 +694,7 @@ def test_device(
     harness_source = ROOT / "support" / "test_harness" / "src"
 
     # Run tests on each device.
-    total_passed = 0
-    total_failed = 0
-    total_errors = 0
+    per_device_results: list[tuple[object, int, int, int]] = []
 
     for device_entry in selected:
         print(f"\n{'=' * 60}")
@@ -623,9 +709,11 @@ def test_device(
             device_entry, test_plan, harness_source, test_filter,
             deploy_mode=deploy_mode,
         )
-        total_passed += passed
-        total_failed += failed
-        total_errors += errors
+        per_device_results.append((device_entry, passed, failed, errors))
+
+    total_passed = sum(passed for _, passed, _, _ in per_device_results)
+    total_failed = sum(failed for _, _, failed, _ in per_device_results)
+    total_errors = sum(errors for _, _, _, errors in per_device_results)
 
     # Final summary.
     print(f"\n{'=' * 60}")
@@ -634,5 +722,19 @@ def test_device(
         f"{total_failed} failed, {total_errors} errors"
     )
     print(f"{'=' * 60}")
+
+    # Paste-ready block for the PR template's ``## Device testing``
+    # section.  Reviewers ask for board, runtime, command, and counts;
+    # this renders all four in markdown so contributors don't hand-fill
+    # the section from the console log.
+    command = _format_test_device_command(
+        runtime, micropython_device, circuitpython_device,
+        library, test_filter, deploy_mode,
+    )
+    pr_block = _format_pr_summary_block(command, per_device_results)
+    print("\nPR summary (paste into the 'Device testing' section of your PR):")
+    print("-" * 60)
+    print(pr_block)
+    print("-" * 60)
 
     return 1 if (total_failed or total_errors) else 0

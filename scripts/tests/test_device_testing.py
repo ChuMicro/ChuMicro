@@ -1224,3 +1224,129 @@ class TestRunTestsOnDevice:
         # alpha: 2 errors (stage failed).  beta: 1 pass (stage succeeded).
         assert errors == 2
         assert passed == 1
+
+
+class TestFormatTestDeviceCommand:
+    """Tests for _format_test_device_command — PR summary command reconstruction."""
+
+    def test_no_flags_when_all_args_none(self) -> None:
+        """Default invocation renders just the base command."""
+        command = device_testing._format_test_device_command(
+            runtime=None,
+            micropython_device=None,
+            circuitpython_device=None,
+            library=None,
+            test_filter=None,
+            deploy_mode=None,
+        )
+        assert command == "python scripts/run.py test-device"
+
+    def test_includes_every_flag_when_all_args_set(self) -> None:
+        """Each non-None arg maps to its CLI flag with a hyphenated name."""
+        command = device_testing._format_test_device_command(
+            runtime="both",
+            micropython_device="pico-w",
+            circuitpython_device="s2-mini",
+            library="timing",
+            test_filter="heartbeat",
+            deploy_mode="flash",
+        )
+        assert "--runtime both" in command
+        assert "--micropython-device pico-w" in command
+        assert "--circuitpython-device s2-mini" in command
+        assert "--library timing" in command
+        assert "--test heartbeat" in command
+        assert "--deploy-mode flash" in command
+        assert command.startswith("python scripts/run.py test-device ")
+
+    def test_skips_flags_that_are_none(self) -> None:
+        """Partial invocations only render the flags the user actually passed."""
+        command = device_testing._format_test_device_command(
+            runtime="micropython",
+            micropython_device=None,
+            circuitpython_device=None,
+            library="runner",
+            test_filter=None,
+            deploy_mode=None,
+        )
+        assert command == (
+            "python scripts/run.py test-device --runtime micropython --library runner"
+        )
+
+
+class TestFormatPrSummaryBlock:
+    """Tests for _format_pr_summary_block — paste-ready PR markdown."""
+
+    def test_empty_results_still_renders_command_and_zero_total(self) -> None:
+        """No devices run → block shows the command and a bold zero total."""
+        block = device_testing._format_pr_summary_block(
+            command="python scripts/run.py test-device",
+            per_device_results=[],
+        )
+        assert block == (
+            "- Command: `python scripts/run.py test-device`\n"
+            "- **Total: 0 passed, 0 failed, 0 errors**"
+        )
+
+    def test_single_device_renders_one_bullet(self) -> None:
+        """Each device gets its own bullet with identifier, runtime, and address."""
+        device = DeviceEntry(
+            identifier="pico-w",
+            runtime="micropython",
+            address="/dev/cu.usbmodem1",
+        )
+        block = device_testing._format_pr_summary_block(
+            command="python scripts/run.py test-device --runtime micropython",
+            per_device_results=[(device, 5, 0, 0)],
+        )
+        lines = block.splitlines()
+        assert lines[0] == (
+            "- Command: `python scripts/run.py test-device --runtime micropython`"
+        )
+        assert lines[1] == (
+            "- `pico-w` (MicroPython, `/dev/cu.usbmodem1`): "
+            "5 passed, 0 failed, 0 errors"
+        )
+        assert lines[2] == "- **Total: 5 passed, 0 failed, 0 errors**"
+
+    def test_multiple_devices_sum_into_bold_total(self) -> None:
+        """Per-device counts accumulate into the bolded final line."""
+        mp_device = DeviceEntry(
+            identifier="pico-w",
+            runtime="micropython",
+            address="/dev/cu.usbmodem1",
+        )
+        cp_device = DeviceEntry(
+            identifier="s2-mini",
+            runtime="circuitpython",
+            address="/dev/cu.usbmodem2",
+        )
+        block = device_testing._format_pr_summary_block(
+            command="python scripts/run.py test-device --runtime both",
+            per_device_results=[
+                (mp_device, 4, 1, 0),
+                (cp_device, 3, 0, 2),
+            ],
+        )
+        assert "`pico-w` (MicroPython" in block
+        assert "`s2-mini` (CircuitPython" in block
+        # 4+3=7 passed, 1+0=1 failed, 0+2=2 errors.
+        assert "**Total: 7 passed, 1 failed, 2 errors**" in block
+
+    def test_uses_human_friendly_runtime_labels(self) -> None:
+        """Internal runtime names render as human labels in the block."""
+        mp_device = DeviceEntry(
+            identifier="x", runtime="micropython", address="/dev/a",
+        )
+        cp_device = DeviceEntry(
+            identifier="y", runtime="circuitpython", address="/dev/b",
+        )
+        block = device_testing._format_pr_summary_block(
+            command="cmd",
+            per_device_results=[(mp_device, 0, 0, 0), (cp_device, 0, 0, 0)],
+        )
+        assert "(MicroPython," in block
+        assert "(CircuitPython," in block
+        # Internal identifiers should NOT leak into the rendered block.
+        assert "(micropython," not in block
+        assert "(circuitpython," not in block
