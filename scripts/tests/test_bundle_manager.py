@@ -1,15 +1,20 @@
 """Tests for bundle.py — bundle staging, manifest generation, and utilities."""
 
+import json
+import os
+import stat
 from pathlib import Path
 
 from bundle_manager import (
     CP_MPY_FOLDER,
     EXPERIMENTAL_BUNDLE_REPO,
+    MPY_FORMAT_FOLDER,
     STABLE_BUNDLE_REPO,
     _collect_library_metadata,
     _derive_bundle_id,
     _find_bundle_modules,
     _read_chumicro_dependencies,
+    build_bundle,
     build_circup_zips,
     generate_bundle_readme,
     next_date_tag,
@@ -106,7 +111,6 @@ class TestNextDateTag:
 
     def _git(self, *arguments: str, cwd: Path) -> None:
         """Run a git command with CI-safe identity."""
-        import os
         import subprocess
 
         merged = {**os.environ, **self._GIT_ENV}
@@ -354,3 +358,211 @@ class TestBundleRepoConstants:
     def test_experimental_repo_name(self):
         """Experimental bundle repo has expected name."""
         assert EXPERIMENTAL_BUNDLE_REPO == "ChuMicro-Bundle-Experimental"
+
+
+def _make_fake_mpy_cross(directory: Path) -> Path:
+    """Create a fake mpy-cross executable that just writes a stub .mpy file.
+
+    Args:
+        directory: Where to write the fake binary.
+
+    Returns:
+        Path to the executable.
+    """
+    directory.mkdir(parents=True, exist_ok=True)
+    fake = directory / "fake_mpy_cross.py"
+    fake.write_text(
+        "#!/usr/bin/env python3\n"
+        "import sys\n"
+        "args = sys.argv[1:]\n"
+        # Expect: -o <output> <source>
+        "output = args[args.index('-o') + 1]\n"
+        "source = args[-1]\n"
+        "with open(source, 'rb') as src, open(output, 'wb') as dst:\n"
+        "    # Magic byte 'M' for MicroPython, 'C' for CircuitPython — fake\n"
+        "    dst.write(b'M\\x06\\x00\\x1f' + src.read())\n",
+    )
+    fake.chmod(fake.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    return fake
+
+
+def _make_test_library(tmp_path: Path, name: str = "fakelib") -> Path:
+    """Create a fake library directory with the minimum bundle-able shape."""
+    library_dir = tmp_path / name
+    package_dir = library_dir / "src" / f"chumicro_{name}"
+    package_dir.mkdir(parents=True)
+    (package_dir / "__init__.py").write_text(
+        f"\"\"\"Fake {name} package for testing.\"\"\"\n"
+        f"VERSION = '0.1.0'\n",
+    )
+    (package_dir / "core.py").write_text("def hello():\n    return 'world'\n")
+    (library_dir / "VERSION").write_text("0.1.0\n")
+    (library_dir / "pyproject.toml").write_text(
+        "[project]\n"
+        f'name = "chumicro-{name}"\n'
+        'version = "0.1.0"\n'
+        'dependencies = []\n',
+    )
+    (library_dir / "README.md").write_text(f"# chumicro-{name}\n\nFake.\n")
+    return library_dir
+
+
+class TestBuildBundle:
+    """Tests for build_bundle staging behavior."""
+
+    def test_stages_py_source_and_manifest(self, tmp_path: Path) -> None:
+        """build_bundle copies .py files and writes a package.json manifest."""
+        library_dir = _make_test_library(tmp_path)
+        staging_dir = tmp_path / "staging"
+        staging_dir.mkdir()
+
+        build_bundle(library_dir, "0.1.0", staging_dir)
+
+        package_dir = staging_dir / "chumicro_fakelib"
+        assert (package_dir / "__init__.py").is_file()
+        assert (package_dir / "core.py").is_file()
+        assert (package_dir / "package.json").is_file()
+        assert (package_dir / "README.md").is_file()
+
+        manifest = json.loads((package_dir / "package.json").read_text())
+        assert manifest["version"] == "0.1.0"
+        assert "urls" in manifest
+        # Each url is [target, github source].
+        assert all(len(entry) == 2 for entry in manifest["urls"])
+        assert any("__init__.py" in entry[0] for entry in manifest["urls"])
+        assert any("core.py" in entry[0] for entry in manifest["urls"])
+
+    def test_stable_uses_stable_bundle_repo_in_urls(self, tmp_path: Path) -> None:
+        """Stable bundle URLs reference the stable bundle repo."""
+        library_dir = _make_test_library(tmp_path)
+        staging_dir = tmp_path / "staging"
+        staging_dir.mkdir()
+        build_bundle(library_dir, "0.1.0", staging_dir, experimental=False)
+
+        manifest = json.loads(
+            (staging_dir / "chumicro_fakelib" / "package.json").read_text(),
+        )
+        for _, source in manifest["urls"]:
+            assert STABLE_BUNDLE_REPO in source
+
+    def test_experimental_uses_experimental_bundle_repo_in_urls(
+        self, tmp_path: Path,
+    ) -> None:
+        """Experimental bundle URLs reference the experimental bundle repo."""
+        library_dir = _make_test_library(tmp_path)
+        staging_dir = tmp_path / "staging"
+        staging_dir.mkdir()
+        build_bundle(library_dir, "0.1.0", staging_dir, experimental=True)
+
+        manifest = json.loads(
+            (staging_dir / "chumicro_fakelib" / "package.json").read_text(),
+        )
+        for _, source in manifest["urls"]:
+            assert EXPERIMENTAL_BUNDLE_REPO in source
+
+    def test_dependencies_emit_deps_in_manifest(self, tmp_path: Path) -> None:
+        """A library with chumicro deps gets a `deps` array in package.json."""
+        library_dir = _make_test_library(tmp_path)
+        # Rewrite pyproject to add a dep.
+        (library_dir / "pyproject.toml").write_text(
+            "[project]\n"
+            'name = "chumicro-fakelib"\n'
+            'version = "0.1.0"\n'
+            'dependencies = ["chumicro-timing>=0.1"]\n',
+        )
+        staging_dir = tmp_path / "staging"
+        staging_dir.mkdir()
+        build_bundle(library_dir, "0.1.0", staging_dir)
+
+        manifest = json.loads(
+            (staging_dir / "chumicro_fakelib" / "package.json").read_text(),
+        )
+        assert "deps" in manifest
+        # Each dep entry is [github reference, ref].
+        assert any(
+            "chumicro_timing" in dep[0] for dep in manifest["deps"]
+        )
+
+    def test_cp_mpy_compilation_creates_circuitpython_folder(
+        self, tmp_path: Path,
+    ) -> None:
+        """When cp_mpy_cross is provided, .mpy files land in circuitpython-10.x-mpy/."""
+        library_dir = _make_test_library(tmp_path)
+        staging_dir = tmp_path / "staging"
+        staging_dir.mkdir()
+        fake_mpy = _make_fake_mpy_cross(tmp_path / "tools")
+
+        build_bundle(
+            library_dir, "0.1.0", staging_dir,
+            cp_mpy_cross=str(fake_mpy),
+        )
+
+        cp_mpy_dir = staging_dir / CP_MPY_FOLDER / "chumicro_fakelib"
+        assert cp_mpy_dir.is_dir()
+        assert (cp_mpy_dir / "__init__.mpy").is_file()
+        assert (cp_mpy_dir / "core.mpy").is_file()
+        # No package.json in the CircuitPython folder (circup uses zip naming).
+        assert not (cp_mpy_dir / "package.json").exists()
+
+    def test_mp_mpy_compilation_creates_mpy_folder_with_manifest(
+        self, tmp_path: Path,
+    ) -> None:
+        """When mp_mpy_cross is provided, .mpy files + manifest land in mpy6/."""
+        library_dir = _make_test_library(tmp_path)
+        staging_dir = tmp_path / "staging"
+        staging_dir.mkdir()
+        fake_mpy = _make_fake_mpy_cross(tmp_path / "tools")
+
+        build_bundle(
+            library_dir, "0.1.0", staging_dir,
+            mp_mpy_cross=str(fake_mpy),
+        )
+
+        mpy_dir = staging_dir / MPY_FORMAT_FOLDER / "chumicro_fakelib"
+        assert mpy_dir.is_dir()
+        assert (mpy_dir / "__init__.mpy").is_file()
+        assert (mpy_dir / "core.mpy").is_file()
+        # mpy6 folder has its own package.json (mip needs it).
+        manifest = json.loads((mpy_dir / "package.json").read_text())
+        assert manifest["version"] == "0.1.0"
+        for target, _ in manifest["urls"]:
+            assert target.endswith(".mpy")
+
+    def test_both_runtimes_produce_separate_artifacts(self, tmp_path: Path) -> None:
+        """Providing both mpy-cross binaries produces both folder layouts."""
+        library_dir = _make_test_library(tmp_path)
+        staging_dir = tmp_path / "staging"
+        staging_dir.mkdir()
+        fake_mpy = _make_fake_mpy_cross(tmp_path / "tools")
+
+        build_bundle(
+            library_dir, "0.1.0", staging_dir,
+            cp_mpy_cross=str(fake_mpy),
+            mp_mpy_cross=str(fake_mpy),
+        )
+
+        assert (staging_dir / CP_MPY_FOLDER / "chumicro_fakelib").is_dir()
+        assert (staging_dir / MPY_FORMAT_FOLDER / "chumicro_fakelib").is_dir()
+
+    def test_no_importable_package_exits(self, tmp_path: Path) -> None:
+        """A library with src/ but no chumicro_* package directory exits."""
+        library_dir = tmp_path / "empty"
+        (library_dir / "src").mkdir(parents=True)
+        # No package subdirectory under src/.
+        (library_dir / "VERSION").write_text("0.1.0\n")
+        (library_dir / "pyproject.toml").write_text(
+            "[project]\n"
+            'name = "chumicro-empty"\n'
+            'version = "0.1.0"\n'
+            'dependencies = []\n',
+        )
+
+        staging_dir = tmp_path / "staging"
+        staging_dir.mkdir()
+
+        try:
+            build_bundle(library_dir, "0.1.0", staging_dir)
+        except SystemExit as exit_signal:
+            assert "No importable package" in str(exit_signal)
+        else:  # pragma: no cover - test should never reach here
+            raise AssertionError("expected SystemExit for empty package")

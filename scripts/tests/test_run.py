@@ -632,3 +632,312 @@ class TestCompositeTestCommands:
                 "deploy_mode": None,
             }),
         ]
+
+
+# ---------------------------------------------------------------------------
+# Direct tests for run.test_cpython
+# ---------------------------------------------------------------------------
+
+
+def _make_test_package(tmp_path: Path, name: str) -> Path:
+    """Create a fake library directory with a tests/ subdir."""
+    package_dir = tmp_path / name
+    (package_dir / "tests").mkdir(parents=True)
+    (package_dir / "src" / f"chumicro_{name}").mkdir(parents=True)
+    return package_dir
+
+
+@pytest.fixture
+def fake_root(monkeypatch, tmp_path):
+    """Repoint run.ROOT at a tmp_path so relative_to() works for fake packages."""
+    monkeypatch.setattr(run, "ROOT", tmp_path)
+    return tmp_path
+
+
+class TestTestCpython:
+    """Direct tests for the test_cpython orchestration function."""
+
+    def test_no_testable_packages_returns_zero(self, monkeypatch, fake_root):
+        """A package with no tests/ directory short-circuits to success."""
+        package_dir = fake_root / "empty"
+        package_dir.mkdir()
+        # No tests/ subdirectory.
+
+        called: list[tuple] = []
+
+        def fake_run_command(command, **kwargs):
+            called.append(command)
+            return 0
+
+        monkeypatch.setattr(run, "run_command", fake_run_command)
+        result = run.test_cpython([package_dir])
+        assert result == 0
+        assert called == []
+
+    def test_runs_pytest_for_each_package(self, monkeypatch, fake_root):
+        """Each package with tests/ produces a pytest invocation."""
+        package_a = _make_test_package(fake_root, "alpha")
+        package_b = _make_test_package(fake_root, "beta")
+
+        commands: list[list[str]] = []
+
+        def fake_run_command(command, **kwargs):
+            commands.append(command)
+            return 0
+
+        monkeypatch.setattr(run, "run_command", fake_run_command)
+        result = run.test_cpython([package_a, package_b], no_cov=True)
+        assert result == 0
+        # Two pytest runs (one per package).
+        pytest_runs = [command for command in commands if "pytest" in command[0] or "-m" in command]
+        assert len(pytest_runs) == 2
+
+    def test_unknown_filter_library_returns_one(self, monkeypatch, fake_root):
+        """A -k filter referencing an unknown library returns 1 with a clear message."""
+        package_dir = _make_test_package(fake_root, "timing")
+        monkeypatch.setattr(run, "discover_package_dirs", lambda: [package_dir])
+
+        result = run.test_cpython(
+            [package_dir], filter_expression="ghost/test_thing",
+        )
+        assert result == 1
+
+    def test_filter_with_missing_test_file_returns_one(self, monkeypatch, fake_root):
+        """A file-scoped filter for a nonexistent test file returns 1."""
+        package_dir = _make_test_package(fake_root, "timing")
+        monkeypatch.setattr(run, "discover_package_dirs", lambda: [package_dir])
+
+        commands: list[list[str]] = []
+        monkeypatch.setattr(
+            run, "run_command",
+            lambda command, **kwargs: (commands.append(command), 0)[1],
+        )
+
+        result = run.test_cpython(
+            [package_dir], filter_expression="timing/no_such_file/test_thing",
+        )
+        assert result == 1
+        # No pytest run before the file-existence check failed.
+        assert commands == []
+
+    def test_filter_swallows_exit_code_5(self, monkeypatch, fake_root):
+        """pytest exit code 5 (no tests collected) does not propagate as a failure."""
+        package_dir = _make_test_package(fake_root, "timing")
+        monkeypatch.setattr(run, "discover_package_dirs", lambda: [package_dir])
+
+        def fake_run_command(command, **kwargs):
+            # Pytest invocations have "pytest" as the third element
+            # (PYTHON, "-m", "pytest", ...); coverage runs use "coverage".
+            if len(command) > 2 and command[2] == "pytest":
+                return 5
+            return 0
+
+        monkeypatch.setattr(run, "run_command", fake_run_command)
+        result = run.test_cpython(
+            [package_dir],
+            filter_expression="timing/test_nothing_matches",
+            no_cov=True,
+        )
+        assert result == 0
+
+    def test_real_failure_propagates(self, monkeypatch, fake_root):
+        """Non-zero non-5 exit codes from pytest propagate as the function's return."""
+        package_dir = _make_test_package(fake_root, "timing")
+
+        monkeypatch.setattr(run, "run_command", lambda command, **kwargs: 17)
+        result = run.test_cpython([package_dir], no_cov=True)
+        assert result == 17
+
+    def test_coverage_threshold_passes_through(self, monkeypatch, fake_root):
+        """coverage_threshold appears as --cov-fail-under in the pytest command."""
+        package_dir = _make_test_package(fake_root, "timing")
+
+        recorded: list[list[str]] = []
+
+        def fake_run_command(command, **kwargs):
+            recorded.append(command)
+            return 0
+
+        monkeypatch.setattr(run, "run_command", fake_run_command)
+        run.test_cpython([package_dir], coverage_threshold=94)
+
+        pytest_calls = [command for command in recorded if "-m" in command and "pytest" in command]
+        assert any("--cov-fail-under=94" in command for command in pytest_calls)
+
+    def test_elevated_packages_only_apply_threshold_to_listed_packages(
+        self, monkeypatch, fake_root,
+    ):
+        """elevated_packages constrains which packages get the elevated threshold."""
+        package_a = _make_test_package(fake_root, "alpha")
+        package_b = _make_test_package(fake_root, "beta")
+
+        recorded: list[list[str]] = []
+
+        def fake_run_command(command, **kwargs):
+            recorded.append(command)
+            return 0
+
+        monkeypatch.setattr(run, "run_command", fake_run_command)
+        run.test_cpython(
+            [package_a, package_b],
+            coverage_threshold=94,
+            elevated_packages={"alpha"},
+        )
+
+        # Only the alpha pytest run should carry --cov-fail-under=94.
+        pytest_calls = [command for command in recorded if "-m" in command and "pytest" in command]
+        alpha_calls = [
+            command for command in pytest_calls
+            if any("alpha" in str(arg) for arg in command)
+        ]
+        beta_calls = [
+            command for command in pytest_calls
+            if any("beta" in str(arg) for arg in command) and not any(
+                "alpha" in str(arg) for arg in command
+            )
+        ]
+        assert any("--cov-fail-under=94" in command for command in alpha_calls)
+        assert not any("--cov-fail-under=94" in command for command in beta_calls)
+
+    def test_no_cov_skips_coverage_collection(self, monkeypatch, fake_root):
+        """no_cov=True omits --cov= collection flags (--cov-fail-under=0 still set)."""
+        package_dir = _make_test_package(fake_root, "timing")
+
+        recorded: list[list[str]] = []
+        monkeypatch.setattr(
+            run, "run_command",
+            lambda command, **kwargs: (recorded.append(command), 0)[1],
+        )
+
+        run.test_cpython([package_dir], no_cov=True)
+        pytest_calls = [command for command in recorded if "-m" in command and "pytest" in command]
+        for command in pytest_calls:
+            # No --cov= collection target.
+            assert not any(arg.startswith("--cov=") for arg in command)
+            # Implementation passes --cov-fail-under=0 to skip the gate when
+            # no_cov is set; just ensure no real threshold is enforced.
+            for arg in command:
+                if arg.startswith("--cov-fail-under="):
+                    assert arg == "--cov-fail-under=0"
+
+    def test_filter_skips_coverage_gate(self, monkeypatch, fake_root):
+        """filter_expression sets cov-fail-under=0 since filters reduce coverage."""
+        package_dir = _make_test_package(fake_root, "timing")
+        monkeypatch.setattr(run, "discover_package_dirs", lambda: [package_dir])
+
+        recorded: list[list[str]] = []
+        monkeypatch.setattr(
+            run, "run_command",
+            lambda command, **kwargs: (recorded.append(command), 0)[1],
+        )
+
+        run.test_cpython(
+            [package_dir], filter_expression="timing/test_thing",
+        )
+        pytest_calls = [command for command in recorded if "-m" in command and "pytest" in command]
+        assert any("--cov-fail-under=0" in command for command in pytest_calls)
+
+    def test_exit_first_passes_x_flag(self, monkeypatch, fake_root):
+        """exit_first=True adds -x to the pytest command."""
+        package_dir = _make_test_package(fake_root, "timing")
+        recorded: list[list[str]] = []
+        monkeypatch.setattr(
+            run, "run_command",
+            lambda command, **kwargs: (recorded.append(command), 0)[1],
+        )
+        run.test_cpython([package_dir], exit_first=True, no_cov=True)
+        pytest_calls = [command for command in recorded if "-m" in command and "pytest" in command]
+        assert any("-x" in command for command in pytest_calls)
+
+    def test_verbose_passes_v_flag(self, monkeypatch, fake_root):
+        """verbose=True adds -v to the pytest command."""
+        package_dir = _make_test_package(fake_root, "timing")
+        recorded: list[list[str]] = []
+        monkeypatch.setattr(
+            run, "run_command",
+            lambda command, **kwargs: (recorded.append(command), 0)[1],
+        )
+        run.test_cpython([package_dir], verbose=True, no_cov=True)
+        pytest_calls = [command for command in recorded if "-m" in command and "pytest" in command]
+        assert any("-v" in command for command in pytest_calls)
+
+
+# ---------------------------------------------------------------------------
+# Tests for _run_phases_in_parallel (parallel test_runtime_matrix)
+# ---------------------------------------------------------------------------
+
+
+class TestRunPhasesInParallel:
+    """Tests for _run_phases_in_parallel buffered-output behavior."""
+
+    def test_runs_all_phases_concurrently(self, capsys):
+        """All phases run; their outputs appear in submission order."""
+        log: list[str] = []
+
+        def phase_one() -> int:
+            print("from phase one")
+            log.append("one")
+            return 0
+
+        def phase_two() -> int:
+            print("from phase two")
+            log.append("two")
+            return 0
+
+        result = run._run_phases_in_parallel((
+            ("first", phase_one),
+            ("second", phase_two),
+        ))
+        assert result == 0
+        # Both phases ran.
+        assert sorted(log) == ["one", "two"]
+        # Output order matches submission order regardless of scheduling.
+        out = capsys.readouterr().out
+        first_index = out.index("from phase one")
+        second_index = out.index("from phase two")
+        assert first_index < second_index
+        assert "== first ==" in out
+        assert "== second ==" in out
+
+    def test_first_failure_short_circuits_return_value(self):
+        """A failing phase's exit code (in submission order) becomes the return."""
+
+        def phase_failing() -> int:
+            return 7
+
+        def phase_succeeding() -> int:
+            return 0
+
+        result = run._run_phases_in_parallel((
+            ("succeeded", phase_succeeding),
+            ("failed", phase_failing),
+        ))
+        assert result == 7
+
+    def test_first_failure_in_submission_order(self):
+        """When two phases fail, the first one in submission order wins."""
+
+        def phase_a() -> int:
+            return 11
+
+        def phase_b() -> int:
+            return 13
+
+        result = run._run_phases_in_parallel((
+            ("a", phase_a),
+            ("b", phase_b),
+        ))
+        assert result == 11
+
+    def test_phase_crash_treated_as_failure(self, capsys):
+        """An exception in a phase is captured and treated as exit code 1."""
+
+        def phase_crashes() -> int:
+            raise RuntimeError("oh no")
+
+        result = run._run_phases_in_parallel((
+            ("crashy", phase_crashes),
+        ))
+        assert result == 1
+        out = capsys.readouterr().out
+        assert "crashed" in out
