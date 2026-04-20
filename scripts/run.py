@@ -719,10 +719,23 @@ def test_runtime_matrix(
     circuitpython_binary: str | None = None,
     package_dirs: list[Path] | None = None,
 ) -> int:
-    """Run host tests and cross-runtime unit tests across all proven runtimes."""
+    """Run host tests and cross-runtime unit tests across all proven runtimes.
+
+    CPython tests run first (often the source of failures and the
+    fastest signal).  The two unix-port compatibility phases then run
+    **in parallel** since they're independent subprocess invocations
+    against different runtime binaries.  Output is buffered per phase
+    and printed when each phase finishes so phase logs don't interleave.
+    """
     all_packages = package_dirs if package_dirs is not None else discover_package_dirs()
-    steps = (
-        ("test", lambda: test_cpython(all_packages)),
+
+    print("== test ==")
+    cpython_result = test_cpython(all_packages)
+    if cpython_result != 0:
+        print("Step failed: test")
+        return cpython_result
+
+    parallel_phases: tuple[tuple[str, Callable[[], int]], ...] = (
         (
             "test-micropython-compatibility",
             lambda: test_micropython_compatibility(
@@ -736,15 +749,48 @@ def test_runtime_matrix(
             ),
         ),
     )
+    return _run_phases_in_parallel(parallel_phases)
 
-    for step_name, step in steps:
-        print(f"== {step_name} ==")
-        result = step()
-        if result != 0:
-            print(f"Step failed: {step_name}")
-            return result
 
-    return 0
+def _run_phases_in_parallel(
+    phases: tuple[tuple[str, Callable[[], int]], ...],
+) -> int:
+    """Run the given phases concurrently with buffered output.
+
+    Each phase's print output is captured into a buffer and flushed in
+    submission order once all phases complete, so the on-screen log
+    reads as if they ran sequentially.  Returns the first non-zero exit
+    code (in submission order), or 0 if all phases succeed.
+    """
+    import contextlib
+    import io
+    from concurrent.futures import ThreadPoolExecutor
+
+    def run_phase(label: str, work: Callable[[], int]) -> tuple[int, str]:
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
+            try:
+                exit_code = work()
+            except Exception as error:  # pragma: no cover - defensive
+                print(f"Phase {label!r} crashed: {error}")
+                exit_code = 1
+        return exit_code, buffer.getvalue()
+
+    with ThreadPoolExecutor(max_workers=len(phases)) as executor:
+        futures = [
+            executor.submit(run_phase, label, work) for label, work in phases
+        ]
+        results = [future.result() for future in futures]
+
+    first_failure: int = 0
+    for (label, _), (exit_code, captured) in zip(phases, results, strict=True):
+        print(f"== {label} ==")
+        if captured:
+            print(captured, end="")
+        if exit_code != 0 and first_failure == 0:
+            first_failure = exit_code
+            print(f"Step failed: {label}")
+    return first_failure
 
 
 def test_everything(

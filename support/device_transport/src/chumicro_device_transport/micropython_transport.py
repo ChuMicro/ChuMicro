@@ -1,12 +1,17 @@
 """MicroPython device transport using mpremote.
 
-Uses the ``mpremote`` CLI tool (subprocess) to connect to MicroPython
-boards, stage files, and execute test scripts.  Two modes:
+Two execution paths:
 
-- **Mount mode** (default): ``mpremote mount`` streams files from the
-  host — no flash wear, fast iteration.
-- **Copy mode** (fallback): ``mpremote fs cp -r`` writes files to flash,
-  then runs the bootstrap script.
+- **Persistent serial transport** (mount mode and per-execute path):
+  uses ``mpremote.transport_serial.SerialTransport`` directly — opens
+  the serial port once per session, enters raw REPL once, mounts the
+  staging directory once, and runs each bootstrap via ``exec_raw``.
+  Eliminates the ~2-3 s cold-start cost of spawning ``mpremote`` per
+  ``execute()`` call.
+- **Subprocess fallback** (copy mode staging, reset/recover): uses the
+  ``mpremote`` CLI for operations that are one-shot and easier to express
+  via the CLI.  The serial port is closed before these calls and
+  reopened on the next ``execute()``.
 
 See Decision 0027 for the full transport protocol.
 """
@@ -17,38 +22,77 @@ import subprocess
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:  # pragma: no cover - type-only
+    from mpremote.transport_serial import SerialTransport
 
 
 class MicropythonTransportError(Exception):
     """Raised when an mpremote command fails."""
 
 
+def _default_transport_factory(address: str, baudrate: int) -> SerialTransport:
+    """Default :class:`SerialTransport` factory.
+
+    Importing inside the call so test environments that monkey-patch
+    the factory don't need ``mpremote`` installed.
+
+    Args:
+        address: Serial port path (e.g. ``/dev/cu.usbmodem1234``).
+        baudrate: Serial baud rate.
+    """
+    # pragma: no cover - exercised on real hardware only
+    from mpremote.transport_serial import SerialTransport
+
+    return SerialTransport(address, baudrate=baudrate)
+
+
 class MicropythonTransport:
-    """Transport for MicroPython boards via mpremote.
+    """Transport for MicroPython boards.
 
     Args:
         address: Serial port or network address of the device.
+        baudrate: Serial baud rate (default 115200).  Only used for the
+            persistent serial transport — subprocess ``mpremote``
+            invocations negotiate baud rate themselves.
         mode: ``"mount"`` (default) or ``"copy"``.
         runner: Callable that executes subprocess commands.  Accepts
             the same signature as ``subprocess.run``.  Defaults to
             ``subprocess.run``.  Inject a fake for testing.
+        transport_factory: Callable that builds a :class:`SerialTransport`
+            given ``(address, baudrate)``.  Defaults to
+            :func:`_default_transport_factory`.  Inject a fake to avoid
+            opening real serial ports in tests.
     """
 
     def __init__(
         self,
         address: str,
         *,
+        baudrate: int = 115200,
         mode: str = "mount",
         runner: Callable[..., subprocess.CompletedProcess] | None = None,
+        transport_factory: Callable[[str, int], Any] | None = None,
     ) -> None:
         self.address = address
+        self.baudrate = baudrate
         self.mode = mode
         self._runner = runner or subprocess.run
+        self._transport_factory = transport_factory or _default_transport_factory
         self._staging_dir: tempfile.TemporaryDirectory | None = None
         self._staging_path: Path | None = None
+        self._serial: Any = None
+        self._mounted: bool = False
 
     def connect(self) -> None:
-        """Verify the device is reachable by running a no-op command."""
+        """Verify the device is reachable by running a no-op command.
+
+        Uses subprocess so the persistent serial transport is opened
+        lazily on the first ``execute()`` (or eagerly during mount-mode
+        ``stage()``).  Avoids holding the serial port during the gap
+        between ``connect()`` and ``stage()``.
+        """
         self._run_mpremote(["exec", "print('ok')"])
 
     def stage(
@@ -59,8 +103,9 @@ class MicropythonTransport:
     ) -> None:
         """Prepare a staging directory with library sources, tests, and harness.
 
-        In mount mode, the staging directory is mounted on the device.
-        In copy mode, it is recursively copied to flash.
+        In mount mode, the staging directory is mounted on the device
+        via the persistent serial transport.  In copy mode, it is
+        recursively copied to flash via ``mpremote fs cp -r``.
 
         Args:
             source_dirs: Library ``src/`` directories to include.
@@ -84,18 +129,27 @@ class MicropythonTransport:
             destination.write_bytes(test_file.read_bytes())
 
         if self.mode == "copy":
+            # Subprocess `fs cp -r` — release the serial port if held.
+            self._close_serial()
             self._run_mpremote([
                 "fs", "cp", "-r",
                 str(staging_path) + "/.",
                 ":",
             ])
+        else:
+            # Mount mode — open the persistent transport now and mount
+            # the staging dir so every subsequent execute() reuses both.
+            self._ensure_serial()
+            self._serial.mount_local(str(staging_path))
+            self._mounted = True
 
     def execute(self, bootstrap_script: str) -> str:
         """Execute a bootstrap script on the device and return captured output.
 
-        In mount mode, the staging directory is mounted and the bootstrap
-        script is run directly.  In copy mode, files are already on flash
-        so the script is executed via ``exec``.
+        Uses the persistent serial transport's ``exec_raw`` so each call
+        amortizes the one-time mpremote-cold-start cost.  In copy mode
+        the serial transport is opened lazily (since ``stage()`` released
+        it for the ``fs cp`` subprocess).
 
         Args:
             bootstrap_script: Python code to execute on the device.
@@ -107,30 +161,37 @@ class MicropythonTransport:
             raise MicropythonTransportError(
                 "stage() must be called before execute()"
             )
-
-        # Write bootstrap to a temp file.
-        bootstrap_file = self._staging_path / "_bootstrap.py"
-        bootstrap_file.write_text(bootstrap_script)
-
-        if self.mode == "mount":
-            result = self._run_mpremote([
-                "mount", str(self._staging_path),
-                "run", str(bootstrap_file),
-            ])
-        else:
-            result = self._run_mpremote(["run", str(bootstrap_file)])
-
-        return result.stdout
+        self._ensure_serial()
+        try:
+            output_bytes = self._serial.exec_raw(bootstrap_script, timeout=120)
+        except Exception as error:
+            raise MicropythonTransportError(
+                f"Device exec failed: {error}"
+            ) from error
+        if isinstance(output_bytes, bytes):
+            return output_bytes.decode("utf-8", errors="replace")
+        return output_bytes
 
     def soft_reset(self) -> None:
         """Soft-reset the device to clear interpreter state.
 
-        Runs ``mpremote reset`` to trigger a soft reboot, which clears
-        ``sys.modules`` and frees RAM from previously loaded modules.
-        Use between test groups so each group starts with a clean
+        Re-enters the raw REPL with ``soft_reset=True`` if the persistent
+        transport is open; otherwise subprocess ``mpremote reset``.  Used
+        between test groups so each group starts with a clean
         interpreter.
         """
-        self._run_mpremote(["reset"])
+        if self._serial is not None:
+            try:
+                self._serial.exit_raw_repl()
+            except Exception:  # pragma: no cover - best-effort cleanup
+                pass
+            # Re-enter with soft_reset=True so sys.modules / heap clear.
+            self._serial.enter_raw_repl(soft_reset=True)
+            # If we had a mount, restore it.
+            if self._mounted and self._staging_path is not None:
+                self._serial.mount_local(str(self._staging_path))
+        else:
+            self._run_mpremote(["reset"])
 
     def reset(self) -> None:
         """Soft-reset the device.
@@ -138,30 +199,64 @@ class MicropythonTransport:
         Used between library groups so each group starts with a clean
         interpreter.  Distinct from :meth:`recover` only in intent: this
         is a planned reset between healthy runs, while :meth:`recover` is
-        called after a failed test when the board state is unknown.  The
-        MicroPython implementation happens to be the same `mpremote
-        reset` call for both, but keeping them separate lets the
-        CircuitPython transport implement a different recovery path
-        (Ctrl-C interrupts + Ctrl-A) without leaking that asymmetry into
-        the orchestrator.
+        called after a failed test when the board state is unknown.
+        Both share :meth:`soft_reset`'s implementation.
         """
-        self._run_mpremote(["reset"])
+        self.soft_reset()
 
     def recover(self) -> None:
         """Attempt to recover after a failed test.
 
-        See :meth:`reset` for the rationale on why this is a separate
-        method even though MicroPython implements both with the same
-        `mpremote reset` call.
+        Closes the persistent transport (if open) and reconnects from
+        scratch — more aggressive than :meth:`soft_reset` because the
+        previous failure might have left the raw REPL in an unknown
+        state where ``exit_raw_repl`` itself could hang.
         """
-        self._run_mpremote(["reset"])
+        self._close_serial()
+        # Subprocess reset so we don't immediately try to grab the port
+        # again — mpremote handles the whole open/reset/close cycle.
+        try:
+            self._run_mpremote(["reset"])
+        except MicropythonTransportError:  # pragma: no cover - hardware-only
+            pass
 
     def disconnect(self) -> None:
-        """Clean up staging directory."""
+        """Clean up staging directory and close the persistent serial transport."""
+        self._close_serial()
         if self._staging_dir is not None:
             self._staging_dir.cleanup()
             self._staging_dir = None
             self._staging_path = None
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _ensure_serial(self) -> None:
+        """Open the persistent serial transport and enter raw REPL if needed."""
+        if self._serial is not None:
+            return
+        self._serial = self._transport_factory(self.address, self.baudrate)
+        self._serial.enter_raw_repl(soft_reset=True)
+
+    def _close_serial(self) -> None:
+        """Close the persistent serial transport if open."""
+        if self._serial is None:
+            return
+        try:
+            if self._mounted:
+                try:
+                    self._serial.umount_local()
+                except Exception:  # pragma: no cover - best-effort cleanup
+                    pass
+                self._mounted = False
+            try:
+                self._serial.exit_raw_repl()
+            except Exception:  # pragma: no cover - best-effort cleanup
+                pass
+            self._serial.close()
+        finally:
+            self._serial = None
 
     def _run_mpremote(self, arguments: list[str]) -> subprocess.CompletedProcess:
         """Run an mpremote command and return the result.
