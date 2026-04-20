@@ -113,6 +113,57 @@ def test_run_module_includes_total_duration(capsys) -> None:
     assert re.search(r"time=\d+\.\d{3}s", output)
 
 
+def test_run_module_duration_excludes_gc_collect_time(
+    monkeypatch, capsys,
+) -> None:
+    """Per-test duration must exclude time spent in ``gc.collect``.
+
+    Regression: on ESP32-S2 with PSRAM a single ``gc.collect`` can
+    cost hundreds of ms.  The harness used to run the pre- and
+    post-test collects *inside* the timed region, inflating a 50 ms
+    test to well over a second.  The duration now brackets only
+    ``function()``.
+    """
+    slow_collect_seconds = 0.5
+    fake_time = {"now": 1000.0}
+
+    def advance(delta_seconds: float) -> None:
+        fake_time["now"] += delta_seconds
+
+    fake_gc = SimpleNamespace(
+        collect=lambda: advance(slow_collect_seconds),
+        mem_free=lambda: 50000,
+        disable=lambda: None,
+        enable=lambda: None,
+    )
+    monkeypatch.setattr(runner_module, "_gc", fake_gc)
+    monkeypatch.setattr(runner_module, "_MEM_FREE_AVAILABLE", True)
+    monkeypatch.setattr(
+        runner_module, "_now_seconds", lambda: fake_time["now"],
+    )
+
+    def test_quick() -> None:
+        advance(0.05)  # 50 ms of real work inside the test
+
+    module = SimpleNamespace(test_quick=test_quick)
+    run_module(module)
+    output = capsys.readouterr().out
+
+    pass_line = next(
+        line for line in output.splitlines() if line.startswith("PASS ")
+    )
+    match = re.search(r"\((\d+\.\d{3})s", pass_line)
+    assert match is not None
+    reported_duration = float(match.group(1))
+    # Duration should be ~0.05 s (the test body) — never the ~0.55 s
+    # that includes the post-test gc.collect.  Give a generous
+    # tolerance to keep the test stable on CI timing jitter.
+    assert reported_duration < 0.20, (
+        f"Duration {reported_duration}s should exclude GC time "
+        f"(expected ~0.05s)"
+    )
+
+
 def test_run_module_reports_heap_when_available(monkeypatch, capsys) -> None:
     """When gc.mem_free is available, per-test and module-level heap stats should appear."""
     fake_gc = SimpleNamespace(

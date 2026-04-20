@@ -118,36 +118,42 @@ def run_module(module, name_filter=None):
 			continue
 		total += 1
 
-		# Allocate the timing float *before* the heap baseline so it
-		# does not count towards the test's delta.
-		test_start = _now_seconds()
+		# GC calls stay *outside* the timed region.  On boards with large
+		# heaps (ESP32-S2 with PSRAM in particular) a full ``gc.collect``
+		# can take hundreds of ms, which would swamp the runtime of a
+		# sub-100 ms test.  The heap baseline is captured before the
+		# timer starts; the post-test collect happens after the timer
+		# stops.  ``test_delta`` is still an accurate "bytes retained
+		# by this test" measurement because both ``mem_free`` samples
+		# straddle only ``function()`` itself.
 		if gc_tracking:
 			_gc.collect()
 			test_heap_before = _gc.mem_free()
 
+		test_start = _now_seconds()
 		try:
 			function()
 		except Exception as error:  # pragma: no cover - exercised indirectly by tests.
-			# Take the heap snapshot *before* computing duration so the
-			# duration float does not inflate the delta.
+			test_end = _now_seconds()
 			heap_suffix = ""
 			if gc_tracking:
 				_gc.collect()
 				test_delta = _gc.mem_free() - test_heap_before
 				sign = "+" if test_delta >= 0 else ""
 				heap_suffix = f", heap {sign}{test_delta}"
-			duration = _now_seconds() - test_start
+			duration = test_end - test_start
 			failed += 1
 			print(f"FAIL {name} ({duration:.3f}s{heap_suffix})")
 			_print_exception(error)
 		else:
+			test_end = _now_seconds()
 			heap_suffix = ""
 			if gc_tracking:
 				_gc.collect()
 				test_delta = _gc.mem_free() - test_heap_before
 				sign = "+" if test_delta >= 0 else ""
 				heap_suffix = f", heap {sign}{test_delta}"
-			duration = _now_seconds() - test_start
+			duration = test_end - test_start
 			print(f"PASS {name} ({duration:.3f}s{heap_suffix})")
 
 	if gc_tracking:
