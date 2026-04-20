@@ -54,11 +54,44 @@ import time
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 
+from bundle_layout import MPY_FORMAT_FOLDER as _MPY_FORMAT_FOLDER
 from shared import resolve_micropython_binary
-from workspace import GITHUB_ORG, discover_library_dirs
+from workspace import (
+    GITHUB_ORG,
+    ROOT,
+    discover_library_dirs,
+    load_tomllib,
+    order_libraries_by_dependency,
+)
 
-#: mpy bytecode format folder (must match bundle_manager.MPY_FORMAT_FOLDER).
-_MPY_FORMAT_FOLDER = "mpy6"
+#: Strips PyPI version specifiers, environment markers, and extras
+#: from a dependency string so ``"chumicro-timing>=0.1"`` → ``"chumicro-timing"``.
+#: Same shape as ``bundle_manager._dependency_to_mip_reference``.
+_DEP_VERSION_SPLITTER = re.compile(r"[><=!;~\[]")
+
+
+def _intra_workspace_deps(library_name: str) -> list[str]:
+    """Return workspace library names that *library_name* depends on.
+
+    Reads the library's ``pyproject.toml`` once per call (no caching —
+    only invoked at validation startup).  Returns dependency *library
+    names* with the ``chumicro-`` prefix stripped (e.g. ``"timing"``,
+    not ``"chumicro-timing"``) so they match the ``library_names``
+    arguments used by the validator.
+    """
+    pyproject_file = ROOT / "libraries" / library_name / "pyproject.toml"
+    if not pyproject_file.is_file():
+        return []
+    tomllib = load_tomllib()
+    with pyproject_file.open("rb") as handle:
+        data = tomllib.load(handle)
+    raw_deps = data.get("project", {}).get("dependencies", [])
+    workspace_deps: list[str] = []
+    for dependency in raw_deps:
+        name = _DEP_VERSION_SPLITTER.split(dependency, maxsplit=1)[0].strip()
+        if name.startswith("chumicro-"):
+            workspace_deps.append(name[len("chumicro-"):])
+    return workspace_deps
 
 #: Maximum number of retries for mip install (handles CDN propagation delay).
 _MAX_RETRIES = 3
@@ -270,13 +303,11 @@ def validate_mip_install(
     print(f"Libraries:          {', '.join(library_names)}")
     print()
 
-    # Sort so libraries without intra-workspace deps run first.  This
-    # ensures that when runner (which depends on timing) is tested, the
-    # dependency resolution path is exercised against the live bundle repo.
-    # A simple heuristic: libraries that appear as dependencies of others
-    # go first.  For now, just move "runner" to the end since it's the
-    # only library with deps.
-    sorted_names = sorted(library_names, key=lambda name: name == "runner")
+    # Topologically sort so each library's intra-workspace deps run
+    # first.  This ensures dependency resolution against the bundle
+    # repo is exercised in the right order — runner sees a satisfiable
+    # `chumicro-timing` import because timing was installed first.
+    sorted_names = order_libraries_by_dependency(library_names, _intra_workspace_deps)
 
     total = 0
     passed = 0
@@ -355,7 +386,7 @@ def validate_local_staging(
     print(f"Libraries:          {', '.join(library_names)}")
     print()
 
-    sorted_names = sorted(library_names, key=lambda name: name == "runner")
+    sorted_names = order_libraries_by_dependency(library_names, _intra_workspace_deps)
 
     total = 0
     passed = 0

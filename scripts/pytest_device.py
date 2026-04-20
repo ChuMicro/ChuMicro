@@ -342,6 +342,29 @@ class _TransportCache:
         """
         self._fully_staged.add(device_id)
 
+    def invalidate_device(self, device_id: str) -> None:
+        """Drop all cached state for a device after a fatal transport error.
+
+        Called when a batch execution fails and ``transport.recover()``
+        cannot guarantee the board is in a usable state.  Removes the
+        transport (so the next item reconnects from scratch), the
+        staging records (so the next item re-stages), and the
+        fully-staged marker.  Cached batch results are kept so subsequent
+        items from the same file still see the original failure rather
+        than retrying and getting confusing partial output.
+
+        Args:
+            device_id: Device identifier.
+        """
+        transport = self._transports.pop(device_id, None)
+        if transport is not None:
+            try:
+                transport.disconnect()
+            except Exception:  # pragma: no cover - best-effort cleanup
+                pass
+        self._last_staged.pop(device_id, None)
+        self._fully_staged.discard(device_id)
+
     def disconnect_all(self) -> None:
         """Reset and disconnect all cached transports."""
         for transport in self._transports.values():
@@ -529,10 +552,30 @@ class DeviceRuntimeItem(pytest.Item):
             try:
                 raw_output = _execute_device_bootstrap(transport, bootstrap)
             except Exception as error:
-                cache.cache_batch_result(
-                    *batch_key, None, f"Device execution failed: {error}",
-                )
-                pytest.fail(f"Device execution failed: {error}")
+                # Try to recover the board so the next file can run
+                # independently of this failure; if recovery itself
+                # fails, evict the transport so the next item reconnects
+                # from scratch.  Without this, every subsequent file
+                # cascade-failed because the cached transport was stuck
+                # mid-raw-REPL or mid-mpremote.
+                error_message = f"Device execution failed: {error}"
+                recovery_failed = False
+                if hasattr(transport, "recover"):
+                    try:
+                        transport.recover()
+                    except Exception as recover_error:  # pragma: no cover - hardware-only
+                        recovery_failed = True
+                        error_message = (
+                            f"{error_message}\n"
+                            f"Recovery failed: {recover_error}; "
+                            f"evicting transport for {device_entry.identifier}"
+                        )
+                else:  # pragma: no cover - all real transports define recover()
+                    recovery_failed = True
+                if recovery_failed:
+                    cache.invalidate_device(device_entry.identifier)
+                cache.cache_batch_result(*batch_key, None, error_message)
+                pytest.fail(error_message)
 
             result = parse_output(raw_output)
             cache.cache_batch_result(*batch_key, result, raw_output)

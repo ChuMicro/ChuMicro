@@ -1288,14 +1288,55 @@ class TestRsyncHelpers:
         def fake_run(command, **kwargs):
             sync_called.append(command)
 
+        transport = CircuitpythonTransport(
+            address="/dev/null", time=FakeTime(),
+        )
         with patch(
             "chumicro_device_transport.circuitpython_transport"
             ".subprocess.run",
             side_effect=fake_run,
         ):
-            CircuitpythonTransport._flush_volume(tmp_path)
+            transport._flush_volume(tmp_path)
 
         assert ["sync"] in sync_called
+
+    def test_flush_volume_routes_settle_through_injected_time(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """_flush_volume.sleep goes through self._time, not the real time module.
+
+        Ensures Decision 0010 constructor injection holds for the flush
+        settle delay so flash-mode tests don't sleep for real seconds.
+        """
+        monkeypatch.setattr(
+            "chumicro_device_transport.circuitpython_transport"
+            "._sys_module.platform",
+            "darwin",
+        )
+        sleep_durations: list[float] = []
+
+        class RecordingTime:
+            """Minimal time stand-in that records sleep() calls."""
+
+            def sleep(self, duration: float) -> None:
+                sleep_durations.append(duration)
+
+            def monotonic(self) -> float:
+                return 0.0
+
+        transport = CircuitpythonTransport(address="/dev/null", time=RecordingTime())
+
+        with patch(
+            "chumicro_device_transport.circuitpython_transport"
+            ".subprocess.run",
+            side_effect=lambda command, **kwargs: None,
+        ):
+            transport._flush_volume(tmp_path)
+
+        # The exact value lives in _FLUSH_SETTLE_DELAY; just assert one
+        # positive sleep happened on the injected time source.
+        assert sleep_durations, "expected _flush_volume to call self._time.sleep"
+        assert all(duration > 0 for duration in sleep_durations)
 
     def test_strip_extended_attributes_calls_xattr(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,

@@ -2,7 +2,9 @@
 
 from pathlib import Path
 
+import validate_mip_install
 from validate_mip_install import (
+    _intra_workspace_deps,
     _resolve_library_names,
     _write_import_script,
     _write_install_script,
@@ -125,3 +127,95 @@ class TestResolveLibraryNames:
         )
         result = _resolve_library_names("")
         assert result == ["timing"]
+
+
+class TestIntraWorkspaceDeps:
+    """Tests for _intra_workspace_deps — pyproject dependency parsing."""
+
+    def test_returns_empty_for_missing_pyproject(self, tmp_path: Path, monkeypatch):
+        """A library with no pyproject.toml returns no deps."""
+        monkeypatch.setattr(validate_mip_install, "ROOT", tmp_path)
+        assert _intra_workspace_deps("nonexistent") == []
+
+    def test_returns_empty_for_no_deps(self, tmp_path: Path, monkeypatch):
+        """A library with no project.dependencies returns no deps."""
+        library_dir = tmp_path / "libraries" / "lonely"
+        library_dir.mkdir(parents=True)
+        (library_dir / "pyproject.toml").write_text(
+            '[project]\nname = "chumicro-lonely"\nversion = "0.1.0"\n',
+        )
+        monkeypatch.setattr(validate_mip_install, "ROOT", tmp_path)
+        assert _intra_workspace_deps("lonely") == []
+
+    def test_extracts_chumicro_deps_only(self, tmp_path: Path, monkeypatch):
+        """Only chumicro-* deps are returned; third-party deps are skipped."""
+        library_dir = tmp_path / "libraries" / "consumer"
+        library_dir.mkdir(parents=True)
+        (library_dir / "pyproject.toml").write_text(
+            "[project]\n"
+            'name = "chumicro-consumer"\n'
+            'version = "0.1.0"\n'
+            'dependencies = [\n'
+            '  "chumicro-timing>=0.1",\n'
+            '  "chumicro-runner>=0.1.5",\n'
+            '  "requests>=2.0",\n'
+            "]\n",
+        )
+        monkeypatch.setattr(validate_mip_install, "ROOT", tmp_path)
+        assert _intra_workspace_deps("consumer") == ["timing", "runner"]
+
+    def test_strips_version_specifiers(self, tmp_path: Path, monkeypatch):
+        """Version specifiers, env markers, and extras are all stripped."""
+        library_dir = tmp_path / "libraries" / "consumer"
+        library_dir.mkdir(parents=True)
+        (library_dir / "pyproject.toml").write_text(
+            "[project]\n"
+            'name = "chumicro-consumer"\n'
+            'version = "0.1.0"\n'
+            'dependencies = [\n'
+            '  "chumicro-timing>=0.1,<0.2",\n'
+            '  "chumicro-runner==1.0",\n'
+            '  "chumicro-msgpack[extra]",\n'
+            '  "chumicro-compat;python_version<\'3.11\'",\n'
+            "]\n",
+        )
+        monkeypatch.setattr(validate_mip_install, "ROOT", tmp_path)
+        assert _intra_workspace_deps("consumer") == [
+            "timing",
+            "runner",
+            "msgpack",
+            "compat",
+        ]
+
+
+class TestBundleLayout:
+    """Tests for the shared bundle_layout constants."""
+
+    def test_constants_match_expected_values(self):
+        """The mpy folder constants are the expected current values."""
+        from bundle_layout import (
+            CP_MPY_FOLDER,
+            EXPERIMENTAL_BUNDLE_REPO,
+            MPY_FORMAT_FOLDER,
+            STABLE_BUNDLE_REPO,
+        )
+
+        assert MPY_FORMAT_FOLDER == "mpy6"
+        assert CP_MPY_FOLDER == "circuitpython-10.x-mpy"
+        assert STABLE_BUNDLE_REPO == "ChuMicro-Bundle"
+        assert EXPERIMENTAL_BUNDLE_REPO == "ChuMicro-Bundle-Experimental"
+
+    def test_validate_mip_uses_bundle_layout(self):
+        """validate_mip_install consumes the same MPY_FORMAT_FOLDER as bundle_manager."""
+        from bundle_layout import MPY_FORMAT_FOLDER as canonical
+        from bundle_manager import MPY_FORMAT_FOLDER as via_bundle_manager
+        from validate_mip_install import _MPY_FORMAT_FOLDER as via_validator
+
+        assert canonical == via_bundle_manager == via_validator
+
+    def test_folder_helpers_return_tuples(self):
+        """mpy_format_folders/cp_mpy_folders return single-element tuples today."""
+        from bundle_layout import cp_mpy_folders, mpy_format_folders
+
+        assert mpy_format_folders() == ("mpy6",)
+        assert cp_mpy_folders() == ("circuitpython-10.x-mpy",)

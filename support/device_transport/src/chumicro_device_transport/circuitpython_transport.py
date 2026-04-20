@@ -425,13 +425,16 @@ class CircuitpythonTransport:
             ) from rsync_error
 
 
-    @staticmethod
-    def _flush_volume(drive_path: Path) -> None:
+    def _flush_volume(self, drive_path: Path) -> None:
         """Flush pending writes to the volume containing *drive_path*.
 
         On macOS, calls the ``sync`` command; on other platforms, uses
         ``os.sync()``.  Always waits briefly afterward to let the USB
         controller finish writing to FAT32 media.
+
+        The settle delay goes through the injected ``self._time`` (per
+        Decision 0010 — constructor injection) so tests can use
+        ``FakeTime`` to skip it without sleeping for real.
 
         Args:
             drive_path: Path on the volume to flush.
@@ -448,7 +451,7 @@ class CircuitpythonTransport:
         # Allow time for the USB controller to finish writing to the
         # FAT32 media.  Without this pause, the device may read stale
         # content even after sync returns.
-        _time_module.sleep(_FLUSH_SETTLE_DELAY)
+        self._time.sleep(_FLUSH_SETTLE_DELAY)
 
     @staticmethod
     def _strip_extended_attributes(path: Path) -> None:

@@ -20,6 +20,7 @@ from workspace import (
     find_publishable_packages,
     is_ref_reachable,
     load_tomllib,
+    order_libraries_by_dependency,
     pythonpath_environment,
     read_platforms,
     read_pyproject_description,
@@ -571,3 +572,68 @@ class TestIsRefReachable:
     def test_nonexistent_reference(self):
         """A clearly nonexistent ref is not reachable."""
         assert is_ref_reachable("nonexistent-ref-abc123xyz") is False
+
+
+class TestOrderLibrariesByDependency:
+    """Tests for order_libraries_by_dependency topological sort."""
+
+    def test_no_deps_preserves_input_order(self):
+        """Libraries with no deps are returned in input order."""
+        result = order_libraries_by_dependency(
+            ["a", "b", "c"], deps_for=lambda _: [],
+        )
+        assert result == ["a", "b", "c"]
+
+    def test_dep_listed_first(self):
+        """A library is placed after the libraries it depends on."""
+        deps = {"runner": ["timing"]}
+        result = order_libraries_by_dependency(
+            ["runner", "timing"], deps_for=lambda name: deps.get(name, []),
+        )
+        assert result.index("timing") < result.index("runner")
+
+    def test_dep_chain(self):
+        """Multi-link chains are ordered correctly."""
+        deps = {"c": ["b"], "b": ["a"]}
+        result = order_libraries_by_dependency(
+            ["c", "b", "a"], deps_for=lambda name: deps.get(name, []),
+        )
+        assert result == ["a", "b", "c"]
+
+    def test_external_deps_ignored(self):
+        """Dependencies outside the requested set are skipped silently."""
+        deps = {"timing": ["external_thing"]}
+        result = order_libraries_by_dependency(
+            ["timing"], deps_for=lambda name: deps.get(name, []),
+        )
+        assert result == ["timing"]
+
+    def test_diamond_dependencies(self):
+        """A library depended on by two others appears once, before both."""
+        deps = {"top": ["left", "right"], "left": ["bottom"], "right": ["bottom"]}
+        result = order_libraries_by_dependency(
+            ["top", "left", "right", "bottom"],
+            deps_for=lambda name: deps.get(name, []),
+        )
+        assert result.count("bottom") == 1
+        assert result.index("bottom") < result.index("left")
+        assert result.index("bottom") < result.index("right")
+        assert result.index("left") < result.index("top")
+        assert result.index("right") < result.index("top")
+
+    def test_cycle_raises(self):
+        """A dependency cycle raises ValueError."""
+        deps = {"a": ["b"], "b": ["a"]}
+        with pytest.raises(ValueError, match="cycle"):
+            order_libraries_by_dependency(
+                ["a", "b"], deps_for=lambda name: deps.get(name, []),
+            )
+
+    def test_self_dependency_is_a_cycle(self):
+        """A library that lists itself as a dep raises ValueError."""
+        with pytest.raises(ValueError, match="cycle"):
+            order_libraries_by_dependency(["a"], deps_for=lambda _: ["a"])
+
+    def test_empty_input(self):
+        """Empty input returns empty output."""
+        assert order_libraries_by_dependency([], deps_for=lambda _: []) == []

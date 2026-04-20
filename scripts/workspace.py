@@ -12,6 +12,7 @@ from __future__ import annotations
 import functools
 import os
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 
 #: Absolute path to the repository root (parent of the scripts/ directory).
@@ -403,6 +404,53 @@ def read_version(library_dir: Path) -> str | None:
     if not version_file.exists():
         return None
     return version_file.read_text().strip() or None
+
+
+def order_libraries_by_dependency(
+    library_names: list[str],
+    deps_for: Callable[[str], list[str]],
+) -> list[str]:
+    """Topologically sort library names so each library's deps come first.
+
+    Used by validators (e.g. ``validate_mip_install``) to make sure a
+    dependency is installed before the library that depends on it.
+
+    Args:
+        library_names: Library names to order (e.g. ``["runner", "timing"]``).
+        deps_for: Callable returning the intra-workspace dependency
+            library names for a given library name.  Dependencies that
+            aren't in *library_names* are silently ignored (they're not
+            in the validation set).
+
+    Returns:
+        A new list containing every entry of *library_names*, ordered
+        so that each library follows everything it depends on.
+
+    Raises:
+        ValueError: If a dependency cycle is detected.
+    """
+    requested = set(library_names)
+    permanent: set[str] = set()
+    temporary: set[str] = set()
+    ordered: list[str] = []
+
+    def visit(name: str) -> None:
+        if name in permanent:
+            return
+        if name in temporary:
+            cycle_path = " → ".join([*sorted(temporary), name])
+            raise ValueError(f"Dependency cycle detected: {cycle_path}")
+        temporary.add(name)
+        for dep in deps_for(name):
+            if dep in requested:
+                visit(dep)
+        temporary.discard(name)
+        permanent.add(name)
+        ordered.append(name)
+
+    for name in library_names:
+        visit(name)
+    return ordered
 
 
 def release_tags(library_name: str) -> list[str]:

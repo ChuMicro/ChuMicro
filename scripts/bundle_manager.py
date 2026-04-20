@@ -48,6 +48,16 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
+# Bundle repository names and mpy folder layout live in
+# ``scripts/bundle_layout`` so the producer (this module) and the
+# consumer (``validate_mip_install``) cannot drift.  Re-export the
+# names here for backward compatibility with existing call sites.
+from bundle_layout import (
+    CP_MPY_FOLDER,
+    EXPERIMENTAL_BUNDLE_REPO,
+    MPY_FORMAT_FOLDER,
+    STABLE_BUNDLE_REPO,
+)
 from shared import TEMPLATES_DIR, resolve_cp_mpy_cross, resolve_mp_mpy_cross
 from workspace import (
     GITHUB_ORG,
@@ -57,22 +67,7 @@ from workspace import (
     read_pyproject_description,
 )
 
-#: Bundle repository names for each channel.  Experimental uses a separate repository
-#: so that circup's latest_tag works per-channel without prerelease tag tricks.
-STABLE_BUNDLE_REPO = "ChuMicro-Bundle"
-EXPERIMENTAL_BUNDLE_REPO = "ChuMicro-Bundle-Experimental"
 
-#: MicroPython mpy bytecode format version folder name.  mpy v6 is used by
-#: MicroPython 1.24+.  Contains .mpy files compiled with MicroPython's
-#: mpy-cross (magic byte 'M') and package.json manifests for mip.
-#: See Decision 0024.
-MPY_FORMAT_FOLDER = "mpy6"
-
-#: CircuitPython .mpy folder name.  Follows Adafruit's naming convention
-#: where "10.x" reflects the CircuitPython version range.  Contains .mpy
-#: files compiled with CircuitPython's mpy-cross (magic byte 'C'), consumed
-#: by circup via zip bundles.  See Decision 0024.
-CP_MPY_FOLDER = "circuitpython-10.x-mpy"
 def _find_bundle_modules(library_dir: Path) -> tuple[str, Path, list[Path]]:
     """Discover the package name, package dir, and deployable .py files.
 

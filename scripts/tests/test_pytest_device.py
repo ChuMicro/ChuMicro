@@ -360,6 +360,54 @@ class TestTransportCache:
         cache.mark_fully_staged("dev1")
         assert cache.is_fully_staged("dev2") is False
 
+    def test_invalidate_device_disconnects_and_drops_state(self) -> None:
+        """invalidate_device should disconnect the cached transport and drop staging."""
+        from chumicro_device_transport.testing import FakeTransport
+
+        cache = pytest_device._TransportCache()
+        device = DeviceEntry(
+            identifier="dev1",
+            runtime="micropython",
+            address="/dev/ttyUSB0",
+        )
+        original = pytest_device._create_transport
+        pytest_device._create_transport = lambda device_entry, deploy_mode=None: FakeTransport()
+        try:
+            transport = cache.get_transport(device, None)
+            cache.mark_staged("dev1", "timing", "test_ticks.py")
+            cache.mark_fully_staged("dev1")
+            assert cache.is_fully_staged("dev1") is True
+            assert "dev1" in cache._transports
+
+            cache.invalidate_device("dev1")
+
+            # Transport gone, staging cleared.
+            assert "dev1" not in cache._transports
+            assert cache.has_staged_file("dev1") is False
+            assert cache.is_fully_staged("dev1") is False
+            # Disconnect was called on the transport.
+            assert transport.calls[-1] == ("disconnect", ())
+        finally:
+            pytest_device._create_transport = original
+
+    def test_invalidate_device_keeps_batch_results(self) -> None:
+        """Cached batch results survive invalidate_device.
+
+        Subsequent items from the same file should report the original
+        failure rather than retry and get partial output.
+        """
+        cache = pytest_device._TransportCache()
+        cache.cache_batch_result("dev1", "timing", "test_ticks.py", None, "boom")
+
+        cache.invalidate_device("dev1")
+
+        assert cache.get_batch_result("dev1", "timing", "test_ticks.py") == (None, "boom")
+
+    def test_invalidate_device_safe_when_not_cached(self) -> None:
+        """invalidate_device on a never-seen device is a no-op."""
+        cache = pytest_device._TransportCache()
+        cache.invalidate_device("never_seen")  # should not raise
+
 
 class TestLoadFallbackDevice:
     """Tests for _load_fallback_device."""
