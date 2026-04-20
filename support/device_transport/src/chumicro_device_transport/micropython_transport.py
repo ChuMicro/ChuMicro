@@ -38,6 +38,30 @@ class MicropythonTransportError(Exception):
     """Raised when an mpremote command fails."""
 
 
+def _decode_exec_result(result: Any) -> str:
+    """Normalize an ``mpremote.SerialTransport.exec_raw`` return value to text.
+
+    mpremote returns ``(stdout_bytes, stderr_bytes)`` in newer versions and
+    raw ``bytes`` (or already-decoded ``str``) in older ones.  Tracebacks
+    land on stderr, so both streams are merged — callers downstream parse
+    the combined output with ``result_parser.parse_output``.
+
+    Args:
+        result: Return value from ``exec_raw`` (tuple, bytes, or str).
+
+    Returns:
+        UTF-8 decoded text with stderr appended to stdout.
+    """
+    if isinstance(result, tuple):
+        stdout_bytes, stderr_bytes = result
+        stdout = stdout_bytes.decode("utf-8", errors="replace") if stdout_bytes else ""
+        stderr = stderr_bytes.decode("utf-8", errors="replace") if stderr_bytes else ""
+        return stdout + stderr
+    if isinstance(result, bytes):
+        return result.decode("utf-8", errors="replace")
+    return result
+
+
 def _default_transport_factory(address: str, baudrate: int) -> SerialTransport:
     """Default :class:`SerialTransport` factory.
 
@@ -193,23 +217,7 @@ class MicropythonTransport:
             raise MicropythonTransportError(
                 f"Device exec failed: {error}"
             ) from error
-        # mpremote's exec_raw returns (stdout_bytes, stderr_bytes).  Merge
-        # them so tracebacks surface in the captured output that
-        # ``result_parser.parse_output`` sees.
-        if isinstance(result, tuple):
-            stdout_bytes, stderr_bytes = result
-            stdout = (
-                stdout_bytes.decode("utf-8", errors="replace")
-                if stdout_bytes else ""
-            )
-            stderr = (
-                stderr_bytes.decode("utf-8", errors="replace")
-                if stderr_bytes else ""
-            )
-            return stdout + stderr
-        if isinstance(result, bytes):
-            return result.decode("utf-8", errors="replace")
-        return result
+        return _decode_exec_result(result)
 
     def soft_reset(self) -> None:
         """Soft-reset the device to clear interpreter state.
@@ -301,19 +309,7 @@ class MicropythonTransport:
             )
         except Exception:  # pragma: no cover - hardware-only error paths
             return None
-        if isinstance(result, tuple):
-            stdout_bytes, stderr_bytes = result
-            output = (
-                stdout_bytes.decode("utf-8", errors="replace")
-                if stdout_bytes else ""
-            )
-            if stderr_bytes:
-                output += stderr_bytes.decode("utf-8", errors="replace")
-        elif isinstance(result, bytes):
-            output = result.decode("utf-8", errors="replace")
-        else:
-            output = result
-        return parse_probe_output(output)
+        return parse_probe_output(_decode_exec_result(result))
 
     def disconnect(self) -> None:
         """Clean up staging directory and close the persistent serial transport."""

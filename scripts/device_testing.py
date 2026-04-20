@@ -22,7 +22,13 @@ from device_config import (
     resolve_ide_devices,
 )
 from result_parser import TestResult, parse_output
-from workspace import ROOT, discover_library_dirs, load_tomllib
+from workspace import (
+    ROOT,
+    discover_library_dirs,
+    library_name_from_module,
+    library_name_from_pip_dependency,
+    load_tomllib,
+)
 
 
 @dataclass
@@ -207,21 +213,6 @@ def build_bootstrap(
     )
 
 
-def _library_name_for_chumicro_module(module_name: str) -> str | None:
-    """Return the workspace library name for a `chumicro_*` module.
-
-    Args:
-        module_name: Imported module name.
-
-    Returns:
-        The library directory name, or ``None`` for non-ChuMicro modules.
-    """
-    if not module_name.startswith("chumicro_"):
-        return None
-    suffix = module_name.removeprefix("chumicro_")
-    return suffix.split(".", 1)[0]
-
-
 def _resolve_test_imported_library_names(test_files: list[Path]) -> list[str]:
     """Return workspace library names imported by functional test files.
 
@@ -240,13 +231,13 @@ def _resolve_test_imported_library_names(test_files: list[Path]) -> list[str]:
         for node in ast.walk(syntax_tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    library_name = _library_name_for_chumicro_module(alias.name)
+                    library_name = library_name_from_module(alias.name)
                     if library_name is not None:
                         imported_library_names.add(library_name)
             elif isinstance(node, ast.ImportFrom):
                 if node.module is None:
                     continue
-                library_name = _library_name_for_chumicro_module(node.module)
+                library_name = library_name_from_module(node.module)
                 if library_name is not None:
                     imported_library_names.add(library_name)
 
@@ -304,15 +295,9 @@ def _resolve_library_source_dirs(
             data = tomllib.load(toml_file)
         dependencies = data.get("project", {}).get("dependencies", [])
         for dependency in dependencies:
-            dependency_name = dependency.strip()
-            if not dependency_name.startswith("chumicro-"):
-                continue
-            # "chumicro-timing>=0.1" → "timing"
-            bare_name = dependency_name.split(">")[0].split("<")[0]
-            bare_name = bare_name.split("=")[0].split("!")[0].strip()
-            dependency_library_names.append(
-                bare_name.removeprefix("chumicro-")
-            )
+            dep_library = library_name_from_pip_dependency(dependency)
+            if dep_library is not None:
+                dependency_library_names.append(dep_library)
 
     if test_files:
         for imported_library_name in _resolve_test_imported_library_names(

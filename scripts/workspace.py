@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import functools
 import os
+import re
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
@@ -25,6 +26,68 @@ ALL_PLATFORMS = ("cpython", "micropython", "circuitpython")
 
 #: GitHub organization name used across bundle, docs, and distribution URLs.
 GITHUB_ORG = "ChuMicro"
+
+#: PEP 508 version specifiers, environment markers, and extras.
+#: Splits a dependency string so ``"chumicro-timing>=0.1"`` → ``"chumicro-timing"``.
+_DEPENDENCY_VERSION_SPLITTER = re.compile(r"[><=!;~\[]")
+
+
+def strip_pip_dependency_version(dependency: str) -> str:
+    """Return *dependency* with any version specifier / marker / extra stripped.
+
+    Examples::
+
+        "chumicro-timing>=0.1"      -> "chumicro-timing"
+        "chumicro-timing[extra]"    -> "chumicro-timing"
+        "chumicro-timing; python_version>='3.11'" -> "chumicro-timing"
+    """
+    return _DEPENDENCY_VERSION_SPLITTER.split(dependency, maxsplit=1)[0].strip()
+
+
+def library_name_from_pip_dependency(dependency: str) -> str | None:
+    """Return the workspace library name for a ``chumicro-*`` pip dependency.
+
+    Parses a ``project.dependencies`` entry (including PEP 508 version
+    specifiers and extras) and returns the bare library directory name.
+
+    Returns ``None`` for dependencies that are not intra-workspace
+    (anything without the ``chumicro-`` prefix).
+
+    Examples::
+
+        "chumicro-timing>=0.1"  -> "timing"
+        "chumicro-runner"       -> "runner"
+        "pyserial"              -> None
+
+    Args:
+        dependency: A ``project.dependencies`` entry from ``pyproject.toml``.
+    """
+    name = strip_pip_dependency_version(dependency)
+    if not name.startswith("chumicro-"):
+        return None
+    return name[len("chumicro-"):]
+
+
+def library_name_from_module(module_name: str) -> str | None:
+    """Return the workspace library name for a ``chumicro_*`` Python module.
+
+    Handles dotted paths — ``chumicro_timing.ticks`` still resolves to
+    ``timing``.  Returns ``None`` for modules that are not part of a
+    ChuMicro library.
+
+    Examples::
+
+        "chumicro_timing"        -> "timing"
+        "chumicro_timing.ticks"  -> "timing"
+        "time"                   -> None
+
+    Args:
+        module_name: A Python module name as written in an ``import``
+            statement.
+    """
+    if not module_name.startswith("chumicro_"):
+        return None
+    return module_name.removeprefix("chumicro_").split(".", 1)[0]
 
 
 def load_tomllib():

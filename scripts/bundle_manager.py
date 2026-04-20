@@ -40,7 +40,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import shutil
 import subprocess
 import sys
@@ -66,6 +65,7 @@ from workspace import (
     load_tomllib,
     read_pyproject_description,
     run_git,
+    strip_pip_dependency_version,
 )
 
 
@@ -113,10 +113,7 @@ def _dependency_to_mip_reference(dependency: str, bundle_repo: str) -> str:
         dependency: PyPI dependency string (e.g. ``"chumicro-timing>=0.1"``).
         bundle_repo: Bundle repository name (e.g. ``"ChuMicro-Bundle"``).
     """
-    # Strip version specifiers (e.g. "chumicro-timing>=0.1" → "chumicro-timing").
-    # Splits on the first comparison operator, extras bracket, or environment marker.
-    name = re.split(r"[><=!;~\[]", dependency, maxsplit=1)[0]
-    package = name.strip().replace("-", "_")
+    package = strip_pip_dependency_version(dependency).replace("-", "_")
     return f"github:{GITHUB_ORG}/{bundle_repo}/{package}"
 
 
@@ -127,8 +124,7 @@ def _dependency_to_mpy_mip_reference(dependency: str, bundle_repo: str) -> str:
         dependency: PyPI dependency string (e.g. ``"chumicro-timing>=0.1"``).
         bundle_repo: Bundle repository name (e.g. ``"ChuMicro-Bundle"``).
     """
-    name = re.split(r"[><=!;~\[]", dependency, maxsplit=1)[0]
-    package = name.strip().replace("-", "_")
+    package = strip_pip_dependency_version(dependency).replace("-", "_")
     return f"github:{GITHUB_ORG}/{bundle_repo}/{MPY_FORMAT_FOLDER}/{package}"
 
 

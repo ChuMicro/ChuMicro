@@ -60,14 +60,10 @@ from workspace import (
     GITHUB_ORG,
     ROOT,
     discover_library_dirs,
+    library_name_from_pip_dependency,
     load_tomllib,
     order_libraries_by_dependency,
 )
-
-#: Strips PyPI version specifiers, environment markers, and extras
-#: from a dependency string so ``"chumicro-timing>=0.1"`` → ``"chumicro-timing"``.
-#: Same shape as ``bundle_manager._dependency_to_mip_reference``.
-_DEP_VERSION_SPLITTER = re.compile(r"[><=!;~\[]")
 
 
 def _intra_workspace_deps(library_name: str) -> list[str]:
@@ -88,9 +84,9 @@ def _intra_workspace_deps(library_name: str) -> list[str]:
     raw_deps = data.get("project", {}).get("dependencies", [])
     workspace_deps: list[str] = []
     for dependency in raw_deps:
-        name = _DEP_VERSION_SPLITTER.split(dependency, maxsplit=1)[0].strip()
-        if name.startswith("chumicro-"):
-            workspace_deps.append(name[len("chumicro-"):])
+        dep_library = library_name_from_pip_dependency(dependency)
+        if dep_library is not None:
+            workspace_deps.append(dep_library)
     return workspace_deps
 
 #: Maximum number of retries for mip install (handles CDN propagation delay).
