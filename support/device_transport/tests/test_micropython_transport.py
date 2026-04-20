@@ -46,7 +46,10 @@ class FakeSerialTransport:
 
     address: str
     baudrate: int = 115200
-    exec_outputs: list[bytes] = field(default_factory=list)
+    # Real mpremote returns ``(stdout_bytes, stderr_bytes)`` from ``exec_raw``.
+    # Tests may pass either a tuple or a bare bytes value for convenience;
+    # bare bytes are wrapped into ``(bytes, b"")`` to mirror hardware.
+    exec_outputs: list[tuple[bytes, bytes] | bytes] = field(default_factory=list)
     raise_on_execute: Exception | None = None
     calls: list[tuple[str, tuple]] = field(default_factory=list)
 
@@ -62,13 +65,16 @@ class FakeSerialTransport:
     def umount_local(self) -> None:
         self.calls.append(("umount_local", ()))
 
-    def exec_raw(self, command: str, timeout: int = 10) -> bytes:
+    def exec_raw(self, command: str, timeout: int = 10) -> tuple[bytes, bytes]:
         self.calls.append(("exec_raw", (command, timeout)))
         if self.raise_on_execute is not None:
             raise self.raise_on_execute
         if self.exec_outputs:
-            return self.exec_outputs.pop(0)
-        return b""
+            value = self.exec_outputs.pop(0)
+            if isinstance(value, tuple):
+                return value
+            return (value, b"")
+        return (b"", b"")
 
     def close(self) -> None:
         self.calls.append(("close", ()))
@@ -266,6 +272,42 @@ class TestExecute:
         assert "mount_local" not in method_names
 
         assert output == "PASS test_ok (0.001s)\n"
+
+        transport.disconnect()
+
+    def test_execute_merges_stdout_and_stderr(self, tmp_path) -> None:
+        """execute() unpacks mpremote's ``(stdout, stderr)`` tuple and merges both.
+
+        Regression: mpremote's :meth:`SerialTransport.exec_raw` returns a
+        ``(stdout_bytes, stderr_bytes)`` tuple, not a single ``bytes``.
+        A prior implementation returned the tuple unchanged, which later
+        caused ``'tuple' object has no attribute 'splitlines'`` when the
+        result parser tried to process the captured output.  Stderr must
+        be merged in so a device-side traceback shows up in the log.
+        """
+        source_dir = tmp_path / "src"
+        source_dir.mkdir()
+        harness_dir = tmp_path / "harness"
+        harness_dir.mkdir()
+
+        runner = FakeRunner()
+        serial = FakeSerialTransport(
+            address="/dev/ttyUSB0",
+            exec_outputs=[(b"PASS test_ok (0.001s)\n", b"Traceback boom\n")],
+        )
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0",
+            mode="mount",
+            runner=runner,
+            transport_factory=_factory_for(serial),
+        )
+        transport.stage([source_dir], [], harness_dir)
+
+        output = transport.execute("import test_example")
+
+        assert isinstance(output, str)
+        assert "PASS test_ok (0.001s)" in output
+        assert "Traceback boom" in output
 
         transport.disconnect()
 

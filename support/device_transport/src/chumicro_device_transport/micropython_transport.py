@@ -163,14 +163,28 @@ class MicropythonTransport:
             )
         self._ensure_serial()
         try:
-            output_bytes = self._serial.exec_raw(bootstrap_script, timeout=120)
+            result = self._serial.exec_raw(bootstrap_script, timeout=120)
         except Exception as error:
             raise MicropythonTransportError(
                 f"Device exec failed: {error}"
             ) from error
-        if isinstance(output_bytes, bytes):
-            return output_bytes.decode("utf-8", errors="replace")
-        return output_bytes
+        # mpremote's exec_raw returns (stdout_bytes, stderr_bytes).  Merge
+        # them so tracebacks surface in the captured output that
+        # ``result_parser.parse_output`` sees.
+        if isinstance(result, tuple):
+            stdout_bytes, stderr_bytes = result
+            stdout = (
+                stdout_bytes.decode("utf-8", errors="replace")
+                if stdout_bytes else ""
+            )
+            stderr = (
+                stderr_bytes.decode("utf-8", errors="replace")
+                if stderr_bytes else ""
+            )
+            return stdout + stderr
+        if isinstance(result, bytes):
+            return result.decode("utf-8", errors="replace")
+        return result
 
     def soft_reset(self) -> None:
         """Soft-reset the device to clear interpreter state.
