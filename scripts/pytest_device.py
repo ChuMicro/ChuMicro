@@ -369,8 +369,7 @@ class _TransportCache:
         """Reset and disconnect all cached transports."""
         for transport in self._transports.values():
             try:
-                if hasattr(transport, "reset"):
-                    transport.reset()
+                transport.reset()
             except Exception:  # pragma: no cover
                 pass
             try:
@@ -504,9 +503,7 @@ class DeviceRuntimeItem(pytest.Item):
         # so we bulk-stage ALL sources + ALL test files in one pass
         # (one rsync) on first use.  RAM mode embeds source inline,
         # so it re-stages per file.
-        is_filesystem_mode = (
-            hasattr(transport, "mode") and transport.mode not in ("ram", "mount")
-        )
+        is_filesystem_mode = transport.mode not in ("ram", "mount")
         if is_filesystem_mode and not cache.is_fully_staged(device_entry.identifier):
             _bulk_stage_for_device(self.session, device_entry, transport)
             cache.mark_fully_staged(device_entry.identifier)
@@ -560,18 +557,15 @@ class DeviceRuntimeItem(pytest.Item):
                 # mid-raw-REPL or mid-mpremote.
                 error_message = f"Device execution failed: {error}"
                 recovery_failed = False
-                if hasattr(transport, "recover"):
-                    try:
-                        transport.recover()
-                    except Exception as recover_error:  # pragma: no cover - hardware-only
-                        recovery_failed = True
-                        error_message = (
-                            f"{error_message}\n"
-                            f"Recovery failed: {recover_error}; "
-                            f"evicting transport for {device_entry.identifier}"
-                        )
-                else:  # pragma: no cover - all real transports define recover()
+                try:
+                    transport.recover()
+                except Exception as recover_error:  # pragma: no cover - hardware-only
                     recovery_failed = True
+                    error_message = (
+                        f"{error_message}\n"
+                        f"Recovery failed: {recover_error}; "
+                        f"evicting transport for {device_entry.identifier}"
+                    )
                 if recovery_failed:
                     cache.invalidate_device(device_entry.identifier)
                 cache.cache_batch_result(*batch_key, None, error_message)
@@ -734,7 +728,6 @@ def _should_soft_reset_before_stage(
     To preserve batching within a file while reclaiming memory across
     files, soft-reset only when all of the following are true:
 
-    - the transport exposes a ``soft_reset`` method,
     - the transport is in an in-memory mode (``ram`` or ``mount``),
     - the device previously staged a file in this session, and
     - the current staging target differs from the last one.
@@ -749,9 +742,7 @@ def _should_soft_reset_before_stage(
     Returns:
         ``True`` when a soft reset should run before ``stage()``.
     """
-    if not hasattr(transport, "soft_reset"):
-        return False
-    if getattr(transport, "mode", None) not in _IN_MEMORY_MODES:
+    if transport.mode not in _IN_MEMORY_MODES:
         return False
     if not cache.has_staged_file(device_entry.identifier):
         return False

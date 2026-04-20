@@ -627,6 +627,10 @@ class TestBuildDeviceBootstrap:
             mode = "ram"
             staged_sources = [("chumicro_timing", "# init")]
 
+            @staticmethod
+            def inline_script_budget_bytes() -> int:
+                return 32 * 1024
+
         test_file = tmp_path / "test_example.py"
         test_file.write_text("def test_ok(): pass")
 

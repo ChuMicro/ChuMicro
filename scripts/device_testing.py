@@ -421,22 +421,13 @@ def _build_device_bootstrap(
     if device_entry.runtime == "circuitpython" and transport.mode == "ram":
         from chumicro_device_transport import build_circuitpython_bootstrap_scripts
 
-        max_chunk_size_bytes = None
-        if hasattr(transport, "inline_script_budget_bytes"):
-            max_chunk_size_bytes = transport.inline_script_budget_bytes()
-
-        if max_chunk_size_bytes is None:
-            return build_circuitpython_bootstrap_scripts(
-                transport.staged_sources,
-                test_file,
-                name_filter=function_filter,
-            )
-
+        # The CircuitPython RAM transport always exposes the chunking
+        # helpers via ExtendedTransportProtocol — no need to guard.
         return build_circuitpython_bootstrap_scripts(
             transport.staged_sources,
             test_file,
             name_filter=function_filter,
-            max_chunk_size_bytes=max_chunk_size_bytes,
+            max_chunk_size_bytes=transport.inline_script_budget_bytes(),
         )
 
     return build_bootstrap(
@@ -446,16 +437,17 @@ def _build_device_bootstrap(
 
 
 def _execute_device_bootstrap(transport, bootstrap):
-    """Execute either a single bootstrap script or a chunked script sequence."""
+    """Execute either a single bootstrap script or a chunked script sequence.
+
+    A list bootstrap is only produced for the CircuitPython RAM path,
+    where the transport implements ExtendedTransportProtocol and
+    therefore exposes ``execute_scripts``.  Calling ``execute_scripts``
+    directly (instead of guarding with ``hasattr``) surfaces a clear
+    AttributeError if a future code path passes a list bootstrap to a
+    transport that does not support chunking.
+    """
     if isinstance(bootstrap, list):
-        if hasattr(transport, "execute_scripts"):
-            return transport.execute_scripts(bootstrap)
-
-        last_output = ""
-        for bootstrap_script in bootstrap:
-            last_output = transport.execute(bootstrap_script)
-        return last_output
-
+        return transport.execute_scripts(bootstrap)
     return transport.execute(bootstrap)
 
 
@@ -523,20 +515,17 @@ def _run_tests_on_device(
     # PR summary can show the exact firmware version and board model.
     # Never fatal — if the probe fails, the summary simply falls back
     # to the per-device metadata from ``devices.yml``.
-    if hasattr(transport, "probe_implementation"):
-        try:
-            result.implementation = transport.probe_implementation()
-        except Exception as probe_error:  # pragma: no cover - hardware-only
-            print(f"  WARNING: Implementation probe failed: {probe_error}")
+    try:
+        result.implementation = transport.probe_implementation()
+    except Exception as probe_error:  # pragma: no cover - hardware-only
+        print(f"  WARNING: Implementation probe failed: {probe_error}")
 
     # RAM mode sends all source code inline through the serial REPL,
     # so we re-stage per library with only the source dirs that library
     # actually needs (itself + its intra-workspace dependencies).
     # Flash mode (and MicroPython mount mode) can stage everything once
     # since files live on disk, not in RAM.
-    use_per_library_staging = (
-        hasattr(transport, "mode") and transport.mode == "ram"
-    )
+    use_per_library_staging = transport.mode == "ram"
 
     if not use_per_library_staging:
         source_dirs = [
@@ -581,11 +570,7 @@ def _run_tests_on_device(
         # not toggle USB or re-enumerate the CDC.  (The older
         # ``mpremote reset`` subprocess path *did* cause USB drops;
         # the persistent-serial ``soft_reset`` does not.)
-        needs_soft_reset = (
-            previous_library_ran
-            and hasattr(transport, "soft_reset")
-        )
-        if needs_soft_reset:
+        if previous_library_ran:
             try:
                 transport.soft_reset()
             except Exception as reset_error:
