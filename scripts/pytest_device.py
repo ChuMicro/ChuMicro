@@ -180,7 +180,7 @@ def _sum_reported_test_durations(test_results: Iterable[TestResult]) -> float:
     return total_duration
 
 
-def _applyreported_duration(
+def _apply_reported_duration(
     item: DeviceRuntimeItem, report: pytest.TestReport,
 ) -> None:
     """Override pytest timing with parsed device timing when available.
@@ -261,9 +261,7 @@ class _TransportCache:
             self._transports[key] = transport
         return self._transports[key]
 
-    def needs_staging(
-        self, device_id: str, library_name: str, test_file_name: str,
-    ) -> bool:
+    def needs_staging(self, batch_key: tuple[str, str, str]) -> bool:
         """Check whether the library/test file needs to be staged.
 
         In RAM mode, staged sources include the test file content.
@@ -271,25 +269,23 @@ class _TransportCache:
         changes.
 
         Args:
-            device_id: Device identifier.
-            library_name: Library name.
-            test_file_name: Name of the test file.
+            batch_key: ``(device_id, library_name, test_file_name)``
+                from ``DeviceRuntimeItem._batch_key``.
 
         Returns:
             ``True`` if staging is needed.
         """
+        device_id, library_name, test_file_name = batch_key
         return self._last_staged.get(device_id) != (library_name, test_file_name)
 
-    def mark_staged(
-        self, device_id: str, library_name: str, test_file_name: str,
-    ) -> None:
+    def mark_staged(self, batch_key: tuple[str, str, str]) -> None:
         """Record that a library/test file has been staged on a device.
 
         Args:
-            device_id: Device identifier.
-            library_name: Library name.
-            test_file_name: Name of the test file.
+            batch_key: ``(device_id, library_name, test_file_name)``
+                from ``DeviceRuntimeItem._batch_key``.
         """
+        device_id, library_name, test_file_name = batch_key
         self._last_staged[device_id] = (library_name, test_file_name)
 
     def has_staged_file(self, device_id: str) -> bool:
@@ -305,17 +301,13 @@ class _TransportCache:
         return device_id in self._last_staged
 
     def get_batch_result(
-        self,
-        device_id: str,
-        library_name: str,
-        test_file_name: str,
+        self, batch_key: tuple[str, str, str],
     ) -> tuple[RunResult | None, str] | None:
         """Return cached batch result, or ``None`` if not yet executed.
 
         Args:
-            device_id: Device identifier.
-            library_name: Library name.
-            test_file_name: Name of the test file.
+            batch_key: ``(device_id, library_name, test_file_name)``
+                from ``DeviceRuntimeItem._batch_key``.
 
         Returns:
             Tuple of ``(parsed_result, raw_output)`` if cached, else
@@ -323,28 +315,23 @@ class _TransportCache:
             ``parsed_result`` is ``None`` and ``raw_output`` contains
             the error message.
         """
-        return self._batch_results.get((device_id, library_name, test_file_name))
+        return self._batch_results.get(batch_key)
 
     def cache_batch_result(
         self,
-        device_id: str,
-        library_name: str,
-        test_file_name: str,
+        batch_key: tuple[str, str, str],
         parsed_result: RunResult | None,
         raw_output: str,
     ) -> None:
         """Store a batch execution result.
 
         Args:
-            device_id: Device identifier.
-            library_name: Library name.
-            test_file_name: Name of the test file.
+            batch_key: ``(device_id, library_name, test_file_name)``
+                from ``DeviceRuntimeItem._batch_key``.
             parsed_result: Parsed harness output, or ``None`` on failure.
             raw_output: Raw device output or error message.
         """
-        self._batch_results[
-            (device_id, library_name, test_file_name)
-        ] = (parsed_result, raw_output)
+        self._batch_results[batch_key] = (parsed_result, raw_output)
 
     def is_fully_staged(self, device_id: str) -> bool:
         """Check whether a device has been bulk-staged.
@@ -523,9 +510,10 @@ class DeviceRuntimeItem(pytest.Item):
         try:
             transport = cache.get_transport(device_entry, None)
         except Exception as error:
-            batch_key = self._batch_key(device_entry)
             cache.cache_batch_result(
-                *batch_key, None, f"Transport connection failed: {error}",
+                self._batch_key(device_entry),
+                None,
+                f"Transport connection failed: {error}",
             )
             pytest.fail(f"Transport connection failed: {error}")
 
@@ -539,7 +527,7 @@ class DeviceRuntimeItem(pytest.Item):
             cache.mark_fully_staged(device_entry.identifier)
         elif not is_filesystem_mode:
             staging_key = self._batch_key(device_entry)
-            if cache.needs_staging(*staging_key):
+            if cache.needs_staging(staging_key):
                 if _should_soft_reset_before_stage(
                     cache, device_entry, transport, self._library_name, self.test_file.name,
                 ):
@@ -553,7 +541,7 @@ class DeviceRuntimeItem(pytest.Item):
                 transport.stage(
                     source_dirs, [self.test_file], HARNESS_SOURCE,
                 )
-                cache.mark_staged(*staging_key)
+                cache.mark_staged(staging_key)
 
     def _ensure_batch_result(
         self,
@@ -564,7 +552,7 @@ class DeviceRuntimeItem(pytest.Item):
         batch_key = self._batch_key(device_entry)
 
         # Check for cached batch result from a previous item.
-        batch = cache.get_batch_result(*batch_key)
+        batch = cache.get_batch_result(batch_key)
 
         if batch is None:
             # First item for this (device, file) — run all tests.
@@ -598,11 +586,11 @@ class DeviceRuntimeItem(pytest.Item):
                     )
                 if recovery_failed:
                     cache.invalidate_device(device_entry.identifier)
-                cache.cache_batch_result(*batch_key, None, error_message)
+                cache.cache_batch_result(batch_key, None, error_message)
                 pytest.fail(error_message)
 
             result = parse_output(raw_output)
-            cache.cache_batch_result(*batch_key, result, raw_output)
+            cache.cache_batch_result(batch_key, result, raw_output)
             return result, raw_output
 
         return batch
@@ -781,7 +769,7 @@ def _should_soft_reset_before_stage(
     if not cache.has_staged_file(device_entry.identifier):
         return False
     return cache.needs_staging(
-        device_entry.identifier, library_name, test_file_name,
+        (device_entry.identifier, library_name, test_file_name),
     )
 
 
@@ -910,4 +898,4 @@ def pytest_runtest_makereport(
     outcome = yield
     report = cast(pytest.TestReport, outcome.get_result())  # type: ignore[attr-defined]
     if isinstance(item, DeviceRuntimeItem):
-        _applyreported_duration(item, report)
+        _apply_reported_duration(item, report)

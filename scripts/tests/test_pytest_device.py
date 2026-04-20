@@ -172,7 +172,7 @@ class TestReportedDurations:
 
         assert total_duration == pytest.approx(0.625)
 
-    def test_applyreported_duration_uses_per_test_value(self) -> None:
+    def test_apply_reported_duration_uses_per_test_value(self) -> None:
         """Per-test items should show the parsed device runtime in pytest."""
         item = SimpleNamespace(
             reported_duration=0.321,
@@ -180,11 +180,11 @@ class TestReportedDurations:
         )
         report = SimpleNamespace(when="call", duration=1.5)
 
-        pytest_device._applyreported_duration(item, report)
+        pytest_device._apply_reported_duration(item, report)
 
         assert report.duration == pytest.approx(0.321)
 
-    def test_applyreported_duration_keeps_only_batch_overhead(self) -> None:
+    def test_apply_reported_duration_keeps_only_batch_overhead(self) -> None:
         """Batch items should retain only residual host-side overhead."""
         item = SimpleNamespace(
             reported_duration=None,
@@ -192,11 +192,11 @@ class TestReportedDurations:
         )
         report = SimpleNamespace(when="call", duration=1.75)
 
-        pytest_device._applyreported_duration(item, report)
+        pytest_device._apply_reported_duration(item, report)
 
         assert report.duration == pytest.approx(0.55)
 
-    def test_applyreported_duration_never_goes_negative(self) -> None:
+    def test_apply_reported_duration_never_goes_negative(self) -> None:
         """Rounded device timings should not produce negative batch durations."""
         item = SimpleNamespace(
             reported_duration=None,
@@ -204,11 +204,11 @@ class TestReportedDurations:
         )
         report = SimpleNamespace(when="call", duration=1.2)
 
-        pytest_device._applyreported_duration(item, report)
+        pytest_device._apply_reported_duration(item, report)
 
         assert report.duration == 0.0
 
-    def test_applyreported_duration_ignores_non_call_phase(self) -> None:
+    def test_apply_reported_duration_ignores_non_call_phase(self) -> None:
         """Setup and teardown timings should keep their original values."""
         item = SimpleNamespace(
             reported_duration=0.321,
@@ -216,7 +216,7 @@ class TestReportedDurations:
         )
         report = SimpleNamespace(when="setup", duration=1.5)
 
-        pytest_device._applyreported_duration(item, report)
+        pytest_device._apply_reported_duration(item, report)
 
         assert report.duration == pytest.approx(1.5)
 
@@ -227,13 +227,13 @@ class TestTransportCache:
     def test_needs_staging_initially(self) -> None:
         """A fresh cache should report staging needed."""
         cache = pytest_device._TransportCache()
-        assert cache.needs_staging("dev1", "timing", "test_ticks.py") is True
+        assert cache.needs_staging(("dev1", "timing", "test_ticks.py")) is True
 
     def test_mark_staged_clears_need(self) -> None:
         """After marking staged, needs_staging returns False."""
         cache = pytest_device._TransportCache()
-        cache.mark_staged("dev1", "timing", "test_ticks.py")
-        assert cache.needs_staging("dev1", "timing", "test_ticks.py") is False
+        cache.mark_staged(("dev1", "timing", "test_ticks.py"))
+        assert cache.needs_staging(("dev1", "timing", "test_ticks.py")) is False
 
     def test_has_staged_file_false_initially(self) -> None:
         """A fresh cache should report no prior staged files."""
@@ -243,75 +243,71 @@ class TestTransportCache:
     def test_has_staged_file_true_after_mark_staged(self) -> None:
         """mark_staged should record that the device has staged a file."""
         cache = pytest_device._TransportCache()
-        cache.mark_staged("dev1", "timing", "test_ticks.py")
+        cache.mark_staged(("dev1", "timing", "test_ticks.py"))
         assert cache.has_staged_file("dev1") is True
 
     def test_different_library_needs_staging(self) -> None:
         """A different library should still need staging."""
         cache = pytest_device._TransportCache()
-        cache.mark_staged("dev1", "timing", "test_ticks.py")
-        assert cache.needs_staging("dev1", "runner", "test_ticks.py") is True
+        cache.mark_staged(("dev1", "timing", "test_ticks.py"))
+        assert cache.needs_staging(("dev1", "runner", "test_ticks.py")) is True
 
     def test_different_test_file_needs_staging(self) -> None:
         """A different test file in the same library should need staging."""
         cache = pytest_device._TransportCache()
-        cache.mark_staged("dev1", "timing", "test_ticks.py")
-        assert cache.needs_staging("dev1", "timing", "test_heartbeat.py") is True
+        cache.mark_staged(("dev1", "timing", "test_ticks.py"))
+        assert cache.needs_staging(("dev1", "timing", "test_heartbeat.py")) is True
 
     def test_different_device_needs_staging(self) -> None:
         """A different device should still need staging."""
         cache = pytest_device._TransportCache()
-        cache.mark_staged("dev1", "timing", "test_ticks.py")
-        assert cache.needs_staging("dev2", "timing", "test_ticks.py") is True
+        cache.mark_staged(("dev1", "timing", "test_ticks.py"))
+        assert cache.needs_staging(("dev2", "timing", "test_ticks.py")) is True
 
     def test_disconnect_all_clears_state(self) -> None:
         """disconnect_all should clear all cached state including batch results."""
         cache = pytest_device._TransportCache()
-        cache.mark_staged("dev1", "timing", "test_ticks.py")
-        cache.cache_batch_result("dev1", "timing", "test_ticks.py", "result", "output")
+        cache.mark_staged(("dev1", "timing", "test_ticks.py"))
+        cache.cache_batch_result(("dev1", "timing", "test_ticks.py"), "result", "output")
         cache.mark_fully_staged("dev1")
         cache.disconnect_all()
-        assert cache.needs_staging("dev1", "timing", "test_ticks.py") is True
-        assert cache.get_batch_result("dev1", "timing", "test_ticks.py") is None
+        assert cache.needs_staging(("dev1", "timing", "test_ticks.py")) is True
+        assert cache.get_batch_result(("dev1", "timing", "test_ticks.py")) is None
         assert cache.is_fully_staged("dev1") is False
 
     def test_batch_result_not_cached_initially(self) -> None:
         """A fresh cache should have no batch results."""
         cache = pytest_device._TransportCache()
-        assert cache.get_batch_result("dev1", "timing", "test_ticks.py") is None
+        assert cache.get_batch_result(("dev1", "timing", "test_ticks.py")) is None
 
     def test_cache_and_retrieve_batch_result(self) -> None:
         """Cached batch results should be retrievable."""
         cache = pytest_device._TransportCache()
-        cache.cache_batch_result(
-            "dev1", "timing", "test_ticks.py", "parsed", "raw output",
+        cache.cache_batch_result(("dev1", "timing", "test_ticks.py"), "parsed", "raw output",
         )
-        result = cache.get_batch_result("dev1", "timing", "test_ticks.py")
+        result = cache.get_batch_result(("dev1", "timing", "test_ticks.py"))
         assert result == ("parsed", "raw output")
 
     def test_batch_result_separate_per_device(self) -> None:
         """Batch results should be keyed per device."""
         cache = pytest_device._TransportCache()
-        cache.cache_batch_result(
-            "dev1", "timing", "test_ticks.py", "result_1", "output_1",
+        cache.cache_batch_result(("dev1", "timing", "test_ticks.py"), "result_1", "output_1",
         )
-        assert cache.get_batch_result("dev2", "timing", "test_ticks.py") is None
+        assert cache.get_batch_result(("dev2", "timing", "test_ticks.py")) is None
 
     def test_batch_result_separate_per_file(self) -> None:
         """Batch results should be keyed per test file."""
         cache = pytest_device._TransportCache()
-        cache.cache_batch_result(
-            "dev1", "timing", "test_ticks.py", "result_1", "output_1",
+        cache.cache_batch_result(("dev1", "timing", "test_ticks.py"), "result_1", "output_1",
         )
-        assert cache.get_batch_result("dev1", "timing", "test_heartbeat.py") is None
+        assert cache.get_batch_result(("dev1", "timing", "test_heartbeat.py")) is None
 
     def test_batch_result_caches_failure(self) -> None:
         """A None parsed result (failure) should be cached and retrievable."""
         cache = pytest_device._TransportCache()
-        cache.cache_batch_result(
-            "dev1", "timing", "test_ticks.py", None, "connection error",
+        cache.cache_batch_result(("dev1", "timing", "test_ticks.py"), None, "connection error",
         )
-        result = cache.get_batch_result("dev1", "timing", "test_ticks.py")
+        result = cache.get_batch_result(("dev1", "timing", "test_ticks.py"))
         assert result == (None, "connection error")
 
     def test_get_transport_creates_and_caches(self) -> None:
@@ -374,7 +370,7 @@ class TestTransportCache:
         pytest_device.create_transport = lambda device_entry, deploy_mode=None: FakeTransport()
         try:
             transport = cache.get_transport(device, None)
-            cache.mark_staged("dev1", "timing", "test_ticks.py")
+            cache.mark_staged(("dev1", "timing", "test_ticks.py"))
             cache.mark_fully_staged("dev1")
             assert cache.is_fully_staged("dev1") is True
             assert "dev1" in cache._transports
@@ -397,11 +393,11 @@ class TestTransportCache:
         failure rather than retry and get partial output.
         """
         cache = pytest_device._TransportCache()
-        cache.cache_batch_result("dev1", "timing", "test_ticks.py", None, "boom")
+        cache.cache_batch_result(("dev1", "timing", "test_ticks.py"), None, "boom")
 
         cache.invalidate_device("dev1")
 
-        assert cache.get_batch_result("dev1", "timing", "test_ticks.py") == (None, "boom")
+        assert cache.get_batch_result(("dev1", "timing", "test_ticks.py")) == (None, "boom")
 
     def test_invalidate_device_safe_when_not_cached(self) -> None:
         """invalidate_device on a never-seen device is a no-op."""
@@ -479,7 +475,7 @@ class TestShouldSoftResetBeforeStage:
         from chumicro_device_transport.testing import FakeTransport
 
         cache = pytest_device._TransportCache()
-        cache.mark_staged("cp_dev", "timing", "test_heartbeat.py")
+        cache.mark_staged(("cp_dev", "timing", "test_heartbeat.py"))
         device = DeviceEntry(
             identifier="cp_dev",
             runtime="circuitpython",
@@ -498,7 +494,7 @@ class TestShouldSoftResetBeforeStage:
         from chumicro_device_transport.testing import FakeTransport
 
         cache = pytest_device._TransportCache()
-        cache.mark_staged("cp_dev", "timing", "test_heartbeat.py")
+        cache.mark_staged(("cp_dev", "timing", "test_heartbeat.py"))
         device = DeviceEntry(
             identifier="cp_dev",
             runtime="circuitpython",
@@ -517,7 +513,7 @@ class TestShouldSoftResetBeforeStage:
         from chumicro_device_transport.testing import FakeTransport
 
         cache = pytest_device._TransportCache()
-        cache.mark_staged("cp_dev", "timing", "test_heartbeat.py")
+        cache.mark_staged(("cp_dev", "timing", "test_heartbeat.py"))
         device = DeviceEntry(
             identifier="cp_dev",
             runtime="circuitpython",
@@ -541,7 +537,7 @@ class TestShouldSoftResetBeforeStage:
         from chumicro_device_transport.testing import FakeTransport
 
         cache = pytest_device._TransportCache()
-        cache.mark_staged("mp_dev", "timing", "test_heartbeat.py")
+        cache.mark_staged(("mp_dev", "timing", "test_heartbeat.py"))
         device = DeviceEntry(
             identifier="mp_dev",
             runtime="micropython",
@@ -560,7 +556,7 @@ class TestShouldSoftResetBeforeStage:
         from chumicro_device_transport.testing import FakeTransport
 
         cache = pytest_device._TransportCache()
-        cache.mark_staged("mp_dev", "timing", "test_heartbeat.py")
+        cache.mark_staged(("mp_dev", "timing", "test_heartbeat.py"))
         device = DeviceEntry(
             identifier="mp_dev",
             runtime="micropython",
@@ -841,7 +837,7 @@ class TestEnsurePrepared:
         # Error was cached for the batch so subsequent items in the
         # same file surface the same message.
         cached = hot_path_cache.get_batch_result(
-            device.identifier, "alpha", test_file.name,
+            (device.identifier, "alpha", test_file.name),
         )
         assert cached is not None
         assert "not reachable" in cached[1]
@@ -874,7 +870,7 @@ class TestEnsureBatchResult:
 
         # Cache populated.
         cached = hot_path_cache.get_batch_result(
-            device.identifier, "alpha", test_file.name,
+            (device.identifier, "alpha", test_file.name),
         )
         assert cached == (result, raw)
 
@@ -931,7 +927,7 @@ class TestEnsureBatchResult:
         assert ("recover", ()) in transport.calls
         # Error cached with parsed_result=None so subsequent items fail the same way.
         cached = hot_path_cache.get_batch_result(
-            device.identifier, "alpha", test_file.name,
+            (device.identifier, "alpha", test_file.name),
         )
         assert cached is not None
         parsed_result, error_text = cached
@@ -969,7 +965,7 @@ class TestEnsureBatchResult:
         assert device.identifier not in hot_path_cache._transports
         # Batch error still cached so subsequent items see the same failure.
         cached = hot_path_cache.get_batch_result(
-            device.identifier, "alpha", test_file.name,
+            (device.identifier, "alpha", test_file.name),
         )
         assert cached is not None
         assert cached[0] is None
@@ -1024,7 +1020,7 @@ class TestDeviceRunFileItemRuntest:
         device = _hot_path_device()
         test_file = _make_functional_test_file(tmp_path, "alpha")
         hot_path_cache.cache_batch_result(
-            device.identifier, "alpha", test_file.name,
+            (device.identifier, "alpha", test_file.name),
             None, "Previous boot failure",
         )
 
