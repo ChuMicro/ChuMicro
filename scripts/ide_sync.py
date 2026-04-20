@@ -130,7 +130,16 @@ def _sync_vscode_tasks() -> None:
             "presentation": {"reveal": "always", "panel": "shared"},
         })
 
-    content = {"version": "2.0.0", "tasks": tasks}
+    content = {
+        "//": (
+            "Managed by scripts/ide_sync.py — regenerated on every "
+            "`python scripts/run.py setup` and `new-library` run. "
+            "Edits to this file will be lost. Add personal tasks to "
+            "a separate config or extend via VS Code user tasks."
+        ),
+        "version": "2.0.0",
+        "tasks": tasks,
+    }
     tasks_file = vscode_dir / "tasks.json"
     tasks_file.write_text(json.dumps(content, indent=4) + "\n")
     print(f"  Updated .vscode/tasks.json ({len(tasks)} tasks)")

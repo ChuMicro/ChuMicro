@@ -153,32 +153,45 @@ def test_cpython(
     the libraries they changed without failing on pre-existing coverage
     in libraries they didn't touch.
 
-    *filter_expression* requires library-scoped syntax::
+    *filter_expression* accepts two forms::
 
-        timing/test_heartbeat                 # by name in a library
-        timing/test_ticks/ticks_add           # by file and name
-        timing/ticks_diff,runner/task_handle  # comma-separated
+        heartbeat                             # bare pytest -k — applied to all selected libraries
+        timing/test_heartbeat                 # library-scoped: by name in one library
+        timing/test_ticks/ticks_add           # library-scoped: by file and name
+        timing/ticks_diff,runner/task_handle  # comma-separated library-scoped entries
+
+    Bare filters (no ``/``) match vanilla pytest's ``-k`` semantics and
+    preserve whatever scope was already selected (``--all``,
+    ``--libraries``, or change detection).  Library-scoped filters
+    override the scope and target only the named libraries.
     """
-    # Parse library-scoped filters from filter_expression.
-    # When -k is set, library names extracted from the filter expression
-    # completely replace package_dirs (from --all / --libraries / change
-    # detection).  -k takes precedence over scope flags.
     per_library: dict[str, list[tuple[str | None, str]]] | None = None
     if filter_expression:
-        parsed = _parse_library_filters(filter_expression)
-        # Library prefixes override package_dirs.
-        all_package_dirs = discover_package_dirs()
-        by_name = {package_dir.name: package_dir for package_dir in all_package_dirs}
-        resolved: list[Path] = []
-        for name in parsed:
-            if name not in by_name:
-                available = ", ".join(sorted(by_name))
-                print(f"Unknown library in -k: {name}")
-                print(f"Available: {available}")
-                return 1
-            resolved.append(by_name[name])
-        package_dirs = resolved
-        per_library = parsed
+        entries = [entry.strip() for entry in filter_expression.split(",") if entry.strip()]
+        if entries and all("/" not in entry for entry in entries):
+            # Bare pytest-style filter — apply unchanged to all selected
+            # packages and leave package_dirs alone so `--libraries` and
+            # change detection still scope the run.
+            per_library = {
+                package_dir.name: [(None, filter_expression)]
+                for package_dir in package_dirs
+            }
+        else:
+            # Library-scoped — library names override package_dirs from
+            # --all / --libraries / change detection.
+            parsed = _parse_library_filters(filter_expression)
+            all_package_dirs = discover_package_dirs()
+            by_name = {package_dir.name: package_dir for package_dir in all_package_dirs}
+            resolved: list[Path] = []
+            for name in parsed:
+                if name not in by_name:
+                    available = ", ".join(sorted(by_name))
+                    print(f"Unknown library in -k: {name}")
+                    print(f"Available: {available}")
+                    return 1
+                resolved.append(by_name[name])
+            package_dirs = resolved
+            per_library = parsed
 
     # Keep only packages that actually have a tests/ directory.
     testable = [package_dir for package_dir in package_dirs if (package_dir / "tests").is_dir()]
@@ -1335,10 +1348,12 @@ def main(argv: list[str]) -> int:
     # --- scoped tasks (--all / --libraries) ---
 
     if args.task == "test":
-        if args.filter_expression:
-            # -k provides its own library scope via the filter expression,
-            # so skip resolve_scope() to avoid a misleading "Running for
-            # all packages" message that would immediately be overridden.
+        if args.filter_expression and "/" in args.filter_expression:
+            # Library-scoped -k provides its own library scope via the
+            # filter expression, so skip resolve_scope() to avoid a
+            # misleading "Running for all packages" message that would
+            # immediately be overridden.  Bare -k falls through and
+            # honors --all / --libraries / change detection.
             package_dirs = []
         else:
             package_dirs = _resolve_scoped_packages(args)

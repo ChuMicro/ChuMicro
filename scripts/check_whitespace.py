@@ -229,6 +229,7 @@ def check_paths(paths: list[str]) -> int:
         print(f"\nFound {len(all_errors)} whitespace violation(s).")
         print("Fix: ensure files end with exactly one newline, remove excess")
         print("blank lines, and strip trailing whitespace.")
+        print("Rule reference: docs/contributing/style-guide.md (CHU002–CHU005)")
         return 1
     return 0
 

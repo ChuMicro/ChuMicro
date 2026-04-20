@@ -42,28 +42,54 @@ git push -u origin fix/my-change      # then open PR on GitHub
 
 ## Common commands
 
+Grouped by what you're trying to do. Preflight is the one command you actually have to remember — everything else is reference.
+
+### Every PR
+
 | What | Command |
-|------|---------|
-| Run all checks | `python scripts/run.py preflight` |
+|---|---|
+| Run everything CI will run | `python scripts/run.py preflight` |
 | Lint only | `python scripts/run.py lint` |
-| Test one library | `python scripts/run.py test --libraries timing` |
+| Scaffold a new library | `python scripts/run.py new-library my-thing` |
+
+### Testing
+
+| What | Command |
+|---|---|
 | Run all CPython package tests | `python scripts/run.py test --all` |
+| Test one library | `python scripts/run.py test --libraries timing` |
+| Filter by test name (vanilla pytest style) | `python scripts/run.py test -k heartbeat` |
+| Filter scoped to one library | `python scripts/run.py test -k timing/test_heartbeat` |
+| Quick test (no coverage, stop on first failure) | `python scripts/run.py test -k heartbeat -x -v --no-cov` |
 | Test scripts infrastructure | `python scripts/run.py test-scripts` |
-| Test MicroPython unix-port compatibility | `python scripts/run.py test-micropython-compatibility` |
-| Test CircuitPython unix-port compatibility | `python scripts/run.py test-circuitpython-compatibility` |
-| Test all runtimes (host + both unix ports) | `python scripts/run.py test-runtime-matrix` |
-| Deep local test sweep (host + scripts + unix ports; add `--with-device` for real boards) | `python scripts/run.py test-everything` |
-| Prepare MicroPython unix-port (one-time, slow — needed before unix-port commands) | `python scripts/run.py prepare-micropython` |
+| Verify examples | `python scripts/run.py verify-examples --libraries timing` |
+
+### Cross-runtime testing
+
+| What | Command |
+|---|---|
+| MicroPython unix-port compatibility | `python scripts/run.py test-micropython-compatibility` |
+| CircuitPython unix-port compatibility | `python scripts/run.py test-circuitpython-compatibility` |
+| All runtimes (host + both unix ports) | `python scripts/run.py test-runtime-matrix` |
+| Deep local sweep (host + scripts + unix ports; `--with-device` for real boards) | `python scripts/run.py test-everything` |
+| Prepare MicroPython unix-port (one-time, slow) | `python scripts/run.py prepare-micropython` |
 | Prepare CircuitPython unix-port (one-time, slow) | `python scripts/run.py prepare-circuitpython` |
-| Build mpy-cross for both runtimes (faster than full unix-port build) | `python scripts/run.py prepare-mpy-cross` |
+| Build mpy-cross only (faster than full unix-port) | `python scripts/run.py prepare-mpy-cross` |
+
+### Device testing
+
+| What | Command |
+|---|---|
 | Refresh workspace + generate starter device configs | `python scripts/run.py setup` |
 | Run real-board functional tests | `python scripts/run.py test-device --library timing` |
 | Run real-board tests on both runtimes | `python scripts/run.py test-device --runtime both` |
+
+### Docs and publishing
+
+| What | Command |
+|---|---|
+| Build docs for one library | `python scripts/run.py docs --libraries timing` |
 | Validate mip install against a bundle repo | `python scripts/run.py validate-mip --bundle-repo ChuMicro-Bundle-Experimental --libraries timing` |
-| Quick test (no coverage) | `python scripts/run.py test -k timing/test_heartbeat -x -v --no-cov` |
-| Build docs | `python scripts/run.py docs --libraries timing` |
-| Verify examples | `python scripts/run.py verify-examples --libraries timing` |
-| Scaffold a new library | `python scripts/run.py new-library my-thing` |
 
 ## When something fails
 
