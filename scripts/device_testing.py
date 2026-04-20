@@ -518,7 +518,16 @@ def _run_tests_on_device(
         transport.reset()
     except Exception as reset_error:
         print(f"  WARNING: Failed to reset device after test run: {reset_error}")
-    transport.disconnect()
+    try:
+        transport.disconnect()
+    except Exception as disconnect_error:  # pragma: no cover - hardware-only
+        # A disconnect raise used to propagate all the way up and skip
+        # the final PR summary.  Swallow it — the serial port will be
+        # reclaimed on process exit if nothing else.
+        print(
+            f"  WARNING: Failed to disconnect device cleanly: "
+            f"{disconnect_error}"
+        )
 
     return passed, failed, errors, implementation
 
@@ -722,31 +731,74 @@ def test_device(
 
     harness_source = ROOT / "support" / "test_harness" / "src"
 
-    # Run tests on each device.
+    # Run tests on each device.  The per-device loop is wrapped in
+    # try/finally so the summary + PR block always print as long as
+    # at least one device produced a row — even if a later device's
+    # transport raises something unexpected mid-run.  Contributors used
+    # to lose the summary entirely in that case.
     per_device_results: list[tuple[object, int, int, int, object]] = []
+    command = _format_test_device_command(
+        runtime, micropython_device, circuitpython_device,
+        library, test_filter, deploy_mode,
+    )
 
-    for device_entry in selected:
-        print(f"\n{'=' * 60}")
-        print(
-            f"Device: {device_entry.identifier} "
-            f"({device_entry.runtime})"
-        )
-        print(f"Address: {device_entry.address}")
-        print(f"{'=' * 60}")
+    try:
+        for device_entry in selected:
+            print(f"\n{'=' * 60}")
+            print(
+                f"Device: {device_entry.identifier} "
+                f"({device_entry.runtime})"
+            )
+            print(f"Address: {device_entry.address}")
+            print(f"{'=' * 60}")
 
-        passed, failed, errors, implementation = _run_tests_on_device(
-            device_entry, test_plan, harness_source, test_filter,
-            deploy_mode=deploy_mode,
-        )
-        per_device_results.append(
-            (device_entry, passed, failed, errors, implementation),
-        )
+            try:
+                passed, failed, errors, implementation = _run_tests_on_device(
+                    device_entry, test_plan, harness_source, test_filter,
+                    deploy_mode=deploy_mode,
+                )
+            except Exception as device_error:
+                # One device crashing must not hide passing results from
+                # other devices.  Record the crash as an error row and
+                # move on.
+                print(f"  FATAL: Device run raised: {device_error}")
+                per_device_results.append(
+                    (device_entry, 0, 0, 1, None),
+                )
+                continue
 
+            per_device_results.append(
+                (device_entry, passed, failed, errors, implementation),
+            )
+    finally:
+        if per_device_results:
+            _print_device_test_summary(command, per_device_results)
+
+    total_failed = sum(failed for _, _, failed, _, _ in per_device_results)
+    total_errors = sum(errors for _, _, _, errors, _ in per_device_results)
+    return 1 if (total_failed or total_errors) else 0
+
+
+def _print_device_test_summary(
+    command: str,
+    per_device_results: list[tuple[object, int, int, int, object]],
+) -> None:
+    """Print the end-of-run totals banner and the paste-ready PR block.
+
+    Always emits both — the banner for quick at-a-glance results and
+    the PR block for dropping into the template.  Called from a
+    ``finally`` in :func:`test_device` so partial results still
+    surface when a later device run raises unexpectedly.
+
+    Args:
+        command: Reconstructed ``test-device`` CLI invocation.
+        per_device_results: Per-device tuples of
+            ``(device_entry, passed, failed, errors, implementation)``.
+    """
     total_passed = sum(passed for _, passed, _, _, _ in per_device_results)
     total_failed = sum(failed for _, _, failed, _, _ in per_device_results)
     total_errors = sum(errors for _, _, _, errors, _ in per_device_results)
 
-    # Final summary.
     print(f"\n{'=' * 60}")
     print(
         f"Device test summary: {total_passed} passed, "
@@ -754,18 +806,8 @@ def test_device(
     )
     print(f"{'=' * 60}")
 
-    # Paste-ready block for the PR template's ``## Device testing``
-    # section.  Reviewers ask for board, runtime, command, and counts;
-    # this renders all four in markdown so contributors don't hand-fill
-    # the section from the console log.
-    command = _format_test_device_command(
-        runtime, micropython_device, circuitpython_device,
-        library, test_filter, deploy_mode,
-    )
     pr_block = _format_pr_summary_block(command, per_device_results)
     print("\nPR summary (paste into the 'Device testing' section of your PR):")
     print("-" * 60)
     print(pr_block)
     print("-" * 60)
-
-    return 1 if (total_failed or total_errors) else 0

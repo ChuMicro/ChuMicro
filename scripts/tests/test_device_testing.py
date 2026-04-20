@@ -1397,3 +1397,138 @@ class TestFormatPrSummaryBlock:
         )
         assert "(CircuitPython 10.1.4, `/dev/cu.usbmodem2`)" in block
         assert " on " not in block
+
+
+class TestSummaryAlwaysPrints:
+    """Summary + PR block must print on every non-empty run — pass, fail, or crash.
+
+    Contributors rely on the PR block for copy/paste; losing it because
+    one device raised an exception mid-run was painful and confusing.
+    """
+
+    def _write_devices_yml(self, tmp_path, monkeypatch) -> None:
+        """Write a minimal devices.yml and set CHUMICRO_DEVICES."""
+        devices_file = tmp_path / "devices.yml"
+        devices_file.write_text(
+            "defaults:\n"
+            "  micropython: mp-one\n"
+            "  ide_runtime: micropython\n"
+            "devices:\n"
+            "  - id: mp-one\n"
+            "    runtime: micropython\n"
+            "    address: /dev/ttyUSB0\n"
+        )
+        monkeypatch.setenv("CHUMICRO_DEVICES", str(devices_file))
+
+    def _stub_functional_tests(self, monkeypatch) -> None:
+        """Stub out discover_functional_tests with a single plan entry."""
+        monkeypatch.setattr(
+            device_testing,
+            "discover_functional_tests",
+            lambda library=None, test_filter=None: [
+                (
+                    "timing",
+                    device_testing.ROOT / "libraries" / "timing" / "src",
+                    [
+                        device_testing.ROOT / "libraries" / "timing"
+                        / "functional_tests" / "test_heartbeat.py",
+                    ],
+                ),
+            ],
+        )
+
+    def test_summary_prints_when_tests_fail(
+        self, tmp_path, monkeypatch, capsys,
+    ) -> None:
+        """A failing run (failed>0) still prints the summary banner and PR block."""
+        self._write_devices_yml(tmp_path, monkeypatch)
+        self._stub_functional_tests(monkeypatch)
+        monkeypatch.setattr(
+            device_testing, "_run_tests_on_device",
+            lambda device_entry, *args, **kwargs: (2, 1, 0, None),
+        )
+
+        result = device_testing.test_device()
+
+        captured = capsys.readouterr()
+        assert result == 1  # non-zero because of failed=1
+        assert "Device test summary: 2 passed, 1 failed, 0 errors" in captured.out
+        assert "PR summary (paste into the 'Device testing' section" in captured.out
+        assert "**Total: 2 passed, 1 failed, 0 errors**" in captured.out
+
+    def test_summary_prints_when_device_run_raises(
+        self, tmp_path, monkeypatch, capsys,
+    ) -> None:
+        """A ``_run_tests_on_device`` crash still yields the full summary.
+
+        Regression: an unwrapped ``transport.disconnect()`` raise used
+        to propagate out of ``test_device`` and skip the summary
+        entirely.  The crashing device gets a ``(0, 0, 1)`` row so the
+        PR block still shows the failure visibly.
+        """
+        self._write_devices_yml(tmp_path, monkeypatch)
+        self._stub_functional_tests(monkeypatch)
+
+        def exploding_run(device_entry, *args, **kwargs):
+            raise RuntimeError("serial port yanked mid-run")
+
+        monkeypatch.setattr(
+            device_testing, "_run_tests_on_device", exploding_run,
+        )
+
+        result = device_testing.test_device()
+
+        captured = capsys.readouterr()
+        assert result == 1
+        assert "FATAL: Device run raised: serial port yanked mid-run" in captured.out
+        assert "Device test summary: 0 passed, 0 failed, 1 errors" in captured.out
+        assert "PR summary (paste into the 'Device testing' section" in captured.out
+        # Crashed device still shows up as a bullet so reviewers see the
+        # failure, not silence.
+        assert "`mp-one`" in captured.out
+        assert "**Total: 0 passed, 0 failed, 1 errors**" in captured.out
+
+    def test_partial_results_survive_one_bad_device(
+        self, tmp_path, monkeypatch, capsys,
+    ) -> None:
+        """When one device crashes and another passes, both rows appear.
+
+        The loop must not abort after a crash — other devices should
+        still run and land in the per-device block.
+        """
+        devices_file = tmp_path / "devices.yml"
+        devices_file.write_text(
+            "defaults:\n"
+            "  micropython: mp-one\n"
+            "  circuitpython: cp-one\n"
+            "  ide_runtime: both\n"
+            "devices:\n"
+            "  - id: mp-one\n"
+            "    runtime: micropython\n"
+            "    address: /dev/ttyUSB0\n"
+            "  - id: cp-one\n"
+            "    runtime: circuitpython\n"
+            "    address: /dev/cu.usbmodem1\n"
+        )
+        monkeypatch.setenv("CHUMICRO_DEVICES", str(devices_file))
+        self._stub_functional_tests(monkeypatch)
+
+        def half_exploding_run(device_entry, *args, **kwargs):
+            if device_entry.identifier == "mp-one":
+                raise RuntimeError("mpremote hung")
+            return 3, 0, 0, None
+
+        monkeypatch.setattr(
+            device_testing, "_run_tests_on_device", half_exploding_run,
+        )
+
+        result = device_testing.test_device()
+
+        captured = capsys.readouterr()
+        assert result == 1  # mp-one errored
+        assert "`mp-one`" in captured.out
+        assert "`cp-one`" in captured.out
+        assert "3 passed, 0 failed, 0 errors" in captured.out
+        assert "0 passed, 0 failed, 1 errors" in captured.out
+        # Final total: 3 passed from cp-one, 1 error from mp-one.
+        assert "**Total: 3 passed, 0 failed, 1 errors**" in captured.out
