@@ -1,5 +1,13 @@
 """Periodic heartbeat driven by cross-runtime tick helpers."""
 
+# Default tick helpers are imported eagerly (not lazily inside
+# ``Heartbeat.__init__``) so that MicroPython mount-mode functional tests
+# don't pay the mpremote RPC cost for an extra file read the *first* time
+# a ``Heartbeat()`` is constructed.  See the companion comment in
+# ``chumicro_runner.core`` for the broader rationale.
+from chumicro_timing.ticks import ticks_diff as _DEFAULT_TICKS_DIFF
+from chumicro_timing.ticks import ticks_ms as _DEFAULT_TICKS_MS
+
 
 class Heartbeat:
     """Track whether a periodic heartbeat is due based on monotonic ticks.
@@ -33,10 +41,8 @@ class Heartbeat:
             self._ticks_diff = ticks.ticks_diff
             self._last_beat_ms = ticks.ticks_ms()
         else:
-            from chumicro_timing.ticks import ticks_diff, ticks_ms
-
-            self._ticks_diff = ticks_diff
-            self._last_beat_ms = ticks_ms()
+            self._ticks_diff = _DEFAULT_TICKS_DIFF
+            self._last_beat_ms = _DEFAULT_TICKS_MS()
 
     @property
     def period_ms(self) -> int:

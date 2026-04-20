@@ -14,6 +14,16 @@ All classes are cross-runtime compatible (CPython, MicroPython, CircuitPython).
 See ``plans/decisions/0014-runner-pattern.md`` for the design rationale.
 """
 
+# Default tick source is imported eagerly at module load (rather than lazily
+# inside ``Runner.__init__``) so that MicroPython mount-mode runs don't pay
+# the mpremote RPC cost for two extra file reads the *first* time a
+# ``Runner()`` is constructed inside a test.  That lazy import used to add
+# ~1 s to the first test on the Lolin S2 mini because
+# ``chumicro_timing/__init__.py`` and ``ticks.py`` were fetched over the
+# serial mount at test-execution time.  Eager import pushes the cost to
+# module-import time, which happens before the harness starts its timer.
+from chumicro_timing import ticks as _DEFAULT_TICKS
+
 
 class _TaskEntry:
     """Internal record for a single task registered with the runner.
@@ -190,12 +200,7 @@ class Runner:
         """
         self._entries = []
         self._pending = []
-        if ticks is not None:
-            self._ticks = ticks
-        else:
-            from chumicro_timing import ticks as _ticks_mod
-
-            self._ticks = _ticks_mod
+        self._ticks = ticks if ticks is not None else _DEFAULT_TICKS
 
     def add(self, task: object | None = None,
             handler: object | None = None,
