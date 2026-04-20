@@ -470,6 +470,177 @@ def _execute_device_bootstrap(
     return transport.execute(bootstrap)
 
 
+def _bulk_stage_test_plan(
+    transport: TransportProtocol,
+    test_plan: list[tuple[str, Path, list[Path]]],
+    harness_source: Path,
+) -> int:
+    """Stage every library + test file for a non-RAM-mode device in one pass.
+
+    Flash and MicroPython mount modes persist files on the device
+    filesystem, so we can stage everything up front instead of per
+    library.  On FAT32 drives that avoids N rsync passes.
+
+    Args:
+        transport: Connected transport.
+        test_plan: List of ``(library_name, source_dir, test_files)``.
+        harness_source: Path to the test harness ``src/`` directory.
+
+    Returns:
+        ``0`` on success; on failure, the number of test files that
+        never reached the per-file loop (caller attributes these to
+        ``result.errors``).
+    """
+    source_dirs = [
+        library_dir / "src"
+        for library_dir in discover_library_dirs()
+        if (library_dir / "src").is_dir()
+    ]
+    all_test_files = [
+        test_file
+        for _library_name, _source_dir, test_files in test_plan
+        for test_file in test_files
+    ]
+    try:
+        transport.stage(source_dirs, all_test_files, harness_source)
+    except Exception as stage_error:
+        print(f"  Stage failed: {stage_error}")
+        return len(all_test_files)
+    return 0
+
+
+def _stage_library_for_test_files(
+    transport: TransportProtocol,
+    library_name: str,
+    source_dir: Path,
+    test_files: list[Path],
+    harness_source: Path,
+) -> list[FileRunResult] | None:
+    """Stage one library's sources + test files for RAM-mode execution.
+
+    RAM mode sends every module source inline through the serial REPL,
+    so we re-stage per library with only the source dirs that library
+    actually needs — itself plus its intra-workspace dependencies.
+
+    Args:
+        transport: Connected transport.
+        library_name: Library directory name (for diagnostics).
+        source_dir: The library's ``src/`` directory.
+        test_files: Test files to stage.
+        harness_source: Path to the test harness ``src/`` directory.
+
+    Returns:
+        ``None`` on success, or a list of error-row ``FileRunResult``
+        entries that the caller should append and count as errors.
+    """
+    library_dir = source_dir.parent
+    library_source_dirs = _resolve_library_source_dirs(
+        library_dir, test_files=test_files,
+    )
+    try:
+        transport.stage(library_source_dirs, test_files, harness_source)
+    except Exception as stage_error:
+        print(f"  Stage failed for {library_name}: {stage_error}")
+        return [
+            FileRunResult(
+                library=library_name,
+                file_name=test_file.name,
+                passed=0, failed=0, errors=1,
+            )
+            for test_file in test_files
+        ]
+    return None
+
+
+def _run_single_test_file(
+    device_entry: DeviceEntry,
+    transport: TransportProtocol,
+    library_name: str,
+    test_file: Path,
+    function_filter: str | None,
+) -> tuple[FileRunResult, bool]:
+    """Build, execute, and parse a single on-device test file.
+
+    Args:
+        device_entry: Target device.
+        transport: Connected transport.
+        library_name: Library directory name.
+        test_file: The ``test_*.py`` file to run.
+        function_filter: Optional substring filter passed to the on-device
+            ``run_module`` as ``name_filter``.
+
+    Returns:
+        ``(file_result, abort)``: the ``FileRunResult`` for this file
+        and a flag indicating whether the rest of the device's plan
+        should be abandoned because ``recover()`` itself failed.
+    """
+    print(f"\n  {library_name}/{test_file.name}")
+    file_start = time.perf_counter()
+    file_passed = 0
+    file_failed = 0
+    file_errors = 0
+    file_tests: list[TestResult] = []
+    abort = False
+
+    try:
+        bootstrap = _build_device_bootstrap(
+            device_entry, transport, test_file, function_filter,
+        )
+        raw_output = _execute_device_bootstrap(transport, bootstrap)
+        print(raw_output)
+
+        parsed = parse_output(raw_output)
+        file_tests = list(parsed.tests)
+        if parsed.summary:
+            file_passed = parsed.summary.total - parsed.summary.failed
+            file_failed = parsed.summary.failed
+        else:
+            print("  WARNING: No summary line in output.")
+            file_errors = 1
+
+    except Exception as run_error:
+        print(f"  ERROR: {run_error}")
+        file_errors = 1
+        # Try to recover raw REPL so the next test can run.
+        try:
+            transport.recover()
+        except Exception as recover_error:
+            print(f"  FATAL: Cannot recover board state: {recover_error}")
+            print("  Aborting remaining tests on this device.")
+            abort = True
+
+    file_result = FileRunResult(
+        library=library_name,
+        file_name=test_file.name,
+        passed=file_passed,
+        failed=file_failed,
+        errors=file_errors,
+        tests=file_tests,
+        duration_seconds=time.perf_counter() - file_start,
+    )
+    return file_result, abort
+
+
+def _teardown_transport(transport: TransportProtocol) -> None:
+    """Reset and disconnect a transport, swallowing hardware-only failures.
+
+    A disconnect raise used to propagate all the way up and skip the
+    final PR summary.  Both steps are best-effort — the serial port
+    will be reclaimed on process exit if something stays stuck.
+    """
+    try:
+        transport.reset()
+    except Exception as reset_error:
+        print(f"  WARNING: Failed to reset device after test run: {reset_error}")
+    try:
+        transport.disconnect()
+    except Exception as disconnect_error:  # pragma: no cover - hardware-only
+        print(
+            f"  WARNING: Failed to disconnect device cleanly: "
+            f"{disconnect_error}"
+        )
+
+
 def _run_tests_on_device(
     device_entry: DeviceEntry,
     test_plan: list[tuple[str, Path, list[Path]]],
@@ -499,17 +670,13 @@ def _run_tests_on_device(
         right after ``connect()``; a probe failure never blocks the
         run.
     """
-    effective_deploy_mode = _resolve_effective_deploy_mode(
-        device_entry, deploy_mode,
-    )
-
     result = DeviceRunResult(
         device=device_entry,
         passed=0,
         failed=0,
         errors=0,
         implementation=None,
-        deploy_mode=effective_deploy_mode,
+        deploy_mode=_resolve_effective_deploy_mode(device_entry, deploy_mode),
     )
     device_start = time.perf_counter()
 
@@ -517,6 +684,7 @@ def _run_tests_on_device(
         result.duration_seconds = time.perf_counter() - device_start
         return result
 
+    # --- connect + probe ----------------------------------------------
     try:
         transport = _create_transport(device_entry, deploy_mode=deploy_mode)
     except ValueError as runtime_error:
@@ -530,65 +698,37 @@ def _run_tests_on_device(
         result.errors = 1
         return _finalize()
 
-    # Probe the board's ``sys.implementation`` once per session so the
-    # PR summary can show the exact firmware version and board model.
-    # Never fatal — if the probe fails, the summary simply falls back
+    # The probe feeds the PR summary; failure is never fatal — fall back
     # to the per-device metadata from ``devices.yml``.
     try:
         result.implementation = transport.probe_implementation()
     except Exception as probe_error:  # pragma: no cover - hardware-only
         print(f"  WARNING: Implementation probe failed: {probe_error}")
 
-    # RAM mode sends all source code inline through the serial REPL,
-    # so we re-stage per library with only the source dirs that library
-    # actually needs (itself + its intra-workspace dependencies).
-    # Flash mode (and MicroPython mount mode) can stage everything once
-    # since files live on disk, not in RAM.
+    # --- initial staging ----------------------------------------------
     use_per_library_staging = transport.mode == "ram"
-
     if not use_per_library_staging:
-        source_dirs = [
-            library_dir / "src"
-            for library_dir in discover_library_dirs()
-            if (library_dir / "src").is_dir()
-        ]
-
-        # Collect all test files across libraries and stage them in one
-        # rsync pass.  Running stage() per test file would re-sync the
-        # entire drive for each test — expensive on FAT32 USB drives.
-        all_test_files = [
-            test_file
-            for _library_name, _source_dir, test_files in test_plan
-            for test_file in test_files
-        ]
-
-        try:
-            transport.stage(source_dirs, all_test_files, harness_source)
-        except Exception as stage_error:
-            print(f"  Stage failed: {stage_error}")
+        bulk_stage_errors = _bulk_stage_test_plan(
+            transport, test_plan, harness_source,
+        )
+        if bulk_stage_errors:
             transport.disconnect()
-            result.errors = len(all_test_files)
+            result.errors = bulk_stage_errors
             return _finalize()
 
+    # --- per-library loop ---------------------------------------------
+    # Soft-reset between library groups evicts the previous library's
+    # modules from the interpreter — both runtimes now hold a persistent
+    # VM across files (raw REPL on CircuitPython, mpremote's persistent
+    # SerialTransport on MicroPython), and without the reset ``sys.modules``
+    # accumulates until low-memory boards fail their next bootstrap with
+    # ``MemoryError``.
     abort = False
     previous_library_ran = False
     for library_name, source_dir, test_files in test_plan:
         if abort:
             break
 
-        # Soft-reset between library groups so modules from the
-        # previous library are evicted from the interpreter.  This
-        # ensures test isolation (no stale ``sys.modules`` from an
-        # earlier library) and reclaims heap on constrained boards
-        # before the next library runs.
-        #
-        # Both runtimes now hold a persistent interpreter across
-        # files (CircuitPython via raw REPL, MicroPython via
-        # ``mpremote``'s persistent ``SerialTransport``), so both
-        # need this reset.  The reset is a VM-level Ctrl-D — it does
-        # not toggle USB or re-enumerate the CDC.  (The older
-        # ``mpremote reset`` subprocess path *did* cause USB drops;
-        # the persistent-serial ``soft_reset`` does not.)
         if previous_library_ran:
             try:
                 transport.soft_reset()
@@ -596,93 +736,28 @@ def _run_tests_on_device(
                 print(f"  WARNING: soft_reset failed between libraries: {reset_error}")
 
         if use_per_library_staging:
-            # Resolve only the source dirs this library needs.
-            library_dir = source_dir.parent
-            library_source_dirs = _resolve_library_source_dirs(
-                library_dir, test_files=test_files,
+            failure_rows = _stage_library_for_test_files(
+                transport, library_name, source_dir, test_files, harness_source,
             )
-            try:
-                transport.stage(
-                    library_source_dirs, test_files, harness_source,
-                )
-            except Exception as stage_error:
-                print(f"  Stage failed for {library_name}: {stage_error}")
-                for test_file in test_files:
-                    result.files.append(FileRunResult(
-                        library=library_name,
-                        file_name=test_file.name,
-                        passed=0, failed=0, errors=1,
-                    ))
-                result.errors += len(test_files)
+            if failure_rows is not None:
+                result.files.extend(failure_rows)
+                result.errors += len(failure_rows)
                 continue
 
         for test_file in test_files:
             if abort:
                 break
-            print(f"\n  {library_name}/{test_file.name}")
-            file_start = time.perf_counter()
-            file_passed = 0
-            file_failed = 0
-            file_errors = 0
-            file_tests: list[TestResult] = []
-
-            try:
-                bootstrap = _build_device_bootstrap(
-                    device_entry, transport, test_file, function_filter,
-                )
-                raw_output = _execute_device_bootstrap(transport, bootstrap)
-                print(raw_output)
-
-                parsed = parse_output(raw_output)
-                file_tests = list(parsed.tests)
-                if parsed.summary:
-                    file_passed = parsed.summary.total - parsed.summary.failed
-                    file_failed = parsed.summary.failed
-                else:
-                    print("  WARNING: No summary line in output.")
-                    file_errors = 1
-
-            except Exception as run_error:
-                print(f"  ERROR: {run_error}")
-                file_errors = 1
-                # Try to recover raw REPL so the next test can run.
-                try:
-                    transport.recover()
-                except Exception as recover_error:
-                    print(f"  FATAL: Cannot recover board state: {recover_error}")
-                    print("  Aborting remaining tests on this device.")
-                    abort = True
-
-            result.files.append(FileRunResult(
-                library=library_name,
-                file_name=test_file.name,
-                passed=file_passed,
-                failed=file_failed,
-                errors=file_errors,
-                tests=file_tests,
-                duration_seconds=time.perf_counter() - file_start,
-            ))
-            result.passed += file_passed
-            result.failed += file_failed
-            result.errors += file_errors
+            file_result, abort = _run_single_test_file(
+                device_entry, transport, library_name, test_file, function_filter,
+            )
+            result.files.append(file_result)
+            result.passed += file_result.passed
+            result.failed += file_result.failed
+            result.errors += file_result.errors
 
         previous_library_ran = True
 
-    try:
-        transport.reset()
-    except Exception as reset_error:
-        print(f"  WARNING: Failed to reset device after test run: {reset_error}")
-    try:
-        transport.disconnect()
-    except Exception as disconnect_error:  # pragma: no cover - hardware-only
-        # A disconnect raise used to propagate all the way up and skip
-        # the final PR summary.  Swallow it — the serial port will be
-        # reclaimed on process exit if nothing else.
-        print(
-            f"  WARNING: Failed to disconnect device cleanly: "
-            f"{disconnect_error}"
-        )
-
+    _teardown_transport(transport)
     return _finalize()
 
 
