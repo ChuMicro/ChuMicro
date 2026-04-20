@@ -42,7 +42,8 @@ git push -u origin fix/my-change      # then open PR on GitHub
 | Run all checks | `python scripts/run.py preflight` |
 | Lint only | `python scripts/run.py lint` |
 | Test one library | `python scripts/run.py test --libraries timing` |
-| Test everything | `python scripts/run.py test --all` |
+| Run all CPython package tests | `python scripts/run.py test --all` |
+| Test scripts infrastructure | `python scripts/run.py test-scripts` |
 | Test MicroPython unix-port compatibility | `python scripts/run.py test-micropython-compatibility` |
 | Test CircuitPython unix-port compatibility | `python scripts/run.py test-circuitpython-compatibility` |
 | Test all runtimes (host + both unix ports) | `python scripts/run.py test-runtime-matrix` |
