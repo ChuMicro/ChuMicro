@@ -746,3 +746,477 @@ class TestExecuteDeviceBootstrap:
         runner_dir = device_testing.ROOT / "libraries" / "runner"
         result = device_testing._resolve_library_source_dirs(runner_dir)
         assert len(result) == len(set(result))
+
+
+# ---------------------------------------------------------------------------
+# Direct tests for _run_tests_on_device — the 150-line orchestration hot path
+# ---------------------------------------------------------------------------
+
+
+class _RecordingTransport:
+    """FakeTransport variant that lets each test drive exact orchestration outcomes.
+
+    Exposes the same duck-typed transport surface ``_run_tests_on_device``
+    uses (``connect``, ``stage``, ``execute``, ``reset``, ``soft_reset``,
+    ``recover``, ``disconnect``, plus the ``mode`` attribute).  Tests
+    configure per-method behavior via callables on the instance.
+    """
+
+    def __init__(
+        self,
+        *,
+        mode: str = "ram",
+        outputs: list[str] | None = None,
+        connect_raises: Exception | None = None,
+        stage_raises: Exception | None = None,
+        execute_raises: Exception | None = None,
+        recover_raises: Exception | None = None,
+        soft_reset_raises: Exception | None = None,
+        reset_raises: Exception | None = None,
+    ) -> None:
+        self.mode = mode
+        # Canned outputs queued for each execute() call.  When exhausted,
+        # returns an empty string (which surfaces as "no summary" in
+        # _run_tests_on_device).
+        self._outputs = list(outputs or [])
+        self._connect_raises = connect_raises
+        self._stage_raises = stage_raises
+        self._execute_raises = execute_raises
+        self._recover_raises = recover_raises
+        self._soft_reset_raises = soft_reset_raises
+        self._reset_raises = reset_raises
+        self.calls: list[tuple[str, tuple]] = []
+        self.staged_sources: list[tuple[str, str]] = []
+
+    def connect(self) -> None:
+        self.calls.append(("connect", ()))
+        if self._connect_raises is not None:
+            raise self._connect_raises
+
+    def stage(self, source_dirs, test_files, harness_source) -> None:
+        self.calls.append(("stage", (source_dirs, test_files, harness_source)))
+        if self._stage_raises is not None:
+            raise self._stage_raises
+
+    def execute(self, bootstrap_script: str) -> str:
+        self.calls.append(("execute", (bootstrap_script,)))
+        if self._execute_raises is not None:
+            raise self._execute_raises
+        if self._outputs:
+            return self._outputs.pop(0)
+        return ""
+
+    def execute_scripts(self, bootstrap_scripts: list[str]) -> str:
+        """Return one canned output per chunked-execute call.
+
+        Mirrors ``CircuitpythonTransport.execute_scripts``: runs the full
+        list at once and returns the output for the whole batch (not
+        per-script).  Counts as ONE outputs-queue pop so tests can
+        reason about per-file behavior the same as regular execute().
+        """
+        self.calls.append(("execute_scripts", (list(bootstrap_scripts),)))
+        if self._execute_raises is not None:
+            raise self._execute_raises
+        if self._outputs:
+            return self._outputs.pop(0)
+        return ""
+
+    def inline_script_budget_bytes(self) -> int:
+        """Let RAM-mode bootstrap builders chunk to any reasonable size."""
+        return 32 * 1024
+
+    def reset(self) -> None:
+        self.calls.append(("reset", ()))
+        if self._reset_raises is not None:
+            raise self._reset_raises
+
+    def soft_reset(self) -> None:
+        self.calls.append(("soft_reset", ()))
+        if self._soft_reset_raises is not None:
+            raise self._soft_reset_raises
+
+    def recover(self) -> None:
+        self.calls.append(("recover", ()))
+        if self._recover_raises is not None:
+            raise self._recover_raises
+
+    def disconnect(self) -> None:
+        self.calls.append(("disconnect", ()))
+
+
+#: A realistic harness summary line with one passing test.
+#: ``_run_tests_on_device`` parses this and increments ``passed`` by
+#: ``total - failed``.  Format matches result_parser._SUMMARY_PATTERN.
+_PASS_OUTPUT = "PASS test_one (0.001s)\nSUMMARY total=1 failed=0 time=0.001s\n"
+
+#: Mixed summary — two tests, one failed.
+_MIXED_OUTPUT = (
+    "PASS test_one (0.001s)\n"
+    "FAIL test_two (0.002s): boom\n"
+    "SUMMARY total=2 failed=1 time=0.003s\n"
+)
+
+#: Empty output — no SUMMARY line — triggers the "No summary line in output" path.
+_NO_SUMMARY_OUTPUT = "PASS test_one (0.001s)\n"
+
+
+def _circuitpython_device(identifier: str = "cp-1") -> DeviceEntry:
+    return DeviceEntry(
+        identifier=identifier,
+        runtime="circuitpython",
+        address="/dev/ttyUSB-cp",
+        deploy_mode="ram",
+    )
+
+
+def _micropython_device(identifier: str = "mp-1") -> DeviceEntry:
+    return DeviceEntry(
+        identifier=identifier,
+        runtime="micropython",
+        address="/dev/ttyUSB-mp",
+        deploy_mode="ram",
+    )
+
+
+def _plan_entry(tmp_path, library_name: str, file_count: int = 1):
+    """Build a synthetic (library_name, source_dir, [test_files]) entry."""
+    library_dir = tmp_path / library_name
+    source_dir = library_dir / "src"
+    source_dir.mkdir(parents=True)
+    (source_dir / f"chumicro_{library_name}").mkdir()
+    (source_dir / f"chumicro_{library_name}" / "__init__.py").write_text("")
+    test_files = []
+    for file_index in range(file_count):
+        test_file = library_dir / "functional_tests" / f"test_{file_index}.py"
+        test_file.parent.mkdir(parents=True, exist_ok=True)
+        test_file.write_text("def test_ok(): pass\n")
+        test_files.append(test_file)
+    return (library_name, source_dir, test_files)
+
+
+class TestRunTestsOnDevice:
+    """Direct tests for the 150-line orchestration hot path."""
+
+    def test_single_library_all_pass(self, tmp_path, monkeypatch) -> None:
+        """One library + one file + one passing test → passed=1, failed=0."""
+        transport = _RecordingTransport(outputs=[_PASS_OUTPUT])
+        monkeypatch.setattr(
+            device_testing, "_create_transport",
+            lambda device_entry, deploy_mode=None: transport,
+        )
+
+        plan = [_plan_entry(tmp_path, "alpha")]
+        passed, failed, errors = device_testing._run_tests_on_device(
+            _circuitpython_device(),
+            plan,
+            harness_source=tmp_path / "harness",
+            test_filter=None,
+        )
+
+        assert (passed, failed, errors) == (1, 0, 0)
+        # Transport lifecycle: connect → stage → execute(_scripts) → reset → disconnect.
+        call_names = [name for name, _ in transport.calls]
+        assert call_names[0] == "connect"
+        assert "stage" in call_names
+        # CircuitPython RAM mode uses the chunked-execution path; other paths
+        # call execute() directly.  Accept either.
+        assert "execute" in call_names or "execute_scripts" in call_names
+        assert call_names[-2:] == ["reset", "disconnect"]
+
+    def test_connection_failure_returns_one_error_and_skips_rest(
+        self, tmp_path, monkeypatch,
+    ) -> None:
+        """A failed connect short-circuits the whole run with a single error."""
+        transport = _RecordingTransport(
+            connect_raises=RuntimeError("no device"),
+        )
+        monkeypatch.setattr(
+            device_testing, "_create_transport",
+            lambda device_entry, deploy_mode=None: transport,
+        )
+
+        plan = [_plan_entry(tmp_path, "alpha"), _plan_entry(tmp_path, "beta")]
+        passed, failed, errors = device_testing._run_tests_on_device(
+            _circuitpython_device(), plan,
+            harness_source=tmp_path / "harness", test_filter=None,
+        )
+
+        assert (passed, failed, errors) == (0, 0, 1)
+        # No stage / execute after the connect failure.
+        names = [name for name, _ in transport.calls]
+        assert "stage" not in names
+        assert "execute" not in names
+
+    def test_stage_failure_in_non_ram_mode_returns_errors_for_all_files(
+        self, tmp_path, monkeypatch,
+    ) -> None:
+        """MicroPython mount mode bulk-stages upfront; a stage failure fails
+        every collected test file as an error and disconnects."""
+        transport = _RecordingTransport(
+            mode="mount",
+            stage_raises=RuntimeError("mount denied"),
+        )
+        monkeypatch.setattr(
+            device_testing, "_create_transport",
+            lambda device_entry, deploy_mode=None: transport,
+        )
+
+        plan = [
+            _plan_entry(tmp_path, "alpha", file_count=2),
+            _plan_entry(tmp_path, "beta", file_count=1),
+        ]
+        # Drain the generator of source dirs (it calls discover_library_dirs);
+        # stub it out to avoid hitting the real workspace.
+        monkeypatch.setattr(device_testing, "discover_library_dirs", lambda: [])
+
+        passed, failed, errors = device_testing._run_tests_on_device(
+            _micropython_device(), plan,
+            harness_source=tmp_path / "harness", test_filter=None,
+        )
+
+        # 3 test files total: all become errors.
+        assert (passed, failed, errors) == (0, 0, 3)
+        names = [name for name, _ in transport.calls]
+        assert "disconnect" in names
+
+    def test_soft_reset_is_skipped_for_micropython(
+        self, tmp_path, monkeypatch,
+    ) -> None:
+        """MicroPython runs never call soft_reset between libraries.
+
+        mpremote starts a fresh interpreter per invocation so a soft reset
+        is both unnecessary and actively causes USB disconnection issues.
+        """
+        transport = _RecordingTransport(
+            mode="mount",
+            outputs=[_PASS_OUTPUT, _PASS_OUTPUT],
+        )
+        monkeypatch.setattr(
+            device_testing, "_create_transport",
+            lambda device_entry, deploy_mode=None: transport,
+        )
+        monkeypatch.setattr(device_testing, "discover_library_dirs", lambda: [])
+
+        plan = [_plan_entry(tmp_path, "alpha"), _plan_entry(tmp_path, "beta")]
+        device_testing._run_tests_on_device(
+            _micropython_device(), plan,
+            harness_source=tmp_path / "harness", test_filter=None,
+        )
+
+        assert "soft_reset" not in [name for name, _ in transport.calls]
+
+    def test_soft_reset_fires_between_libraries_for_circuitpython(
+        self, tmp_path, monkeypatch,
+    ) -> None:
+        """CircuitPython soft_resets between library groups so state is clean."""
+        transport = _RecordingTransport(
+            mode="ram", outputs=[_PASS_OUTPUT, _PASS_OUTPUT],
+        )
+        monkeypatch.setattr(
+            device_testing, "_create_transport",
+            lambda device_entry, deploy_mode=None: transport,
+        )
+
+        plan = [_plan_entry(tmp_path, "alpha"), _plan_entry(tmp_path, "beta")]
+        device_testing._run_tests_on_device(
+            _circuitpython_device(), plan,
+            harness_source=tmp_path / "harness", test_filter=None,
+        )
+
+        # Soft reset happened at least once (between alpha and beta).
+        assert "soft_reset" in [name for name, _ in transport.calls]
+
+    def test_execute_failure_calls_recover_and_continues(
+        self, tmp_path, monkeypatch,
+    ) -> None:
+        """A failed test execute triggers recover() and lets subsequent files run.
+
+        The cascade-fail protection: without this, a timeout on one file
+        would leave the board stuck and every subsequent file would
+        cascade-fail.  With recover(), the next file starts clean.
+        """
+        outputs = [_PASS_OUTPUT]
+
+        class _FailFirstTransport(_RecordingTransport):
+            def __init__(self) -> None:
+                super().__init__(mode="ram", outputs=outputs)
+                self._execute_count = 0
+
+            def execute_scripts(self, bootstrap_scripts: list[str]) -> str:
+                self._execute_count += 1
+                self.calls.append(("execute_scripts", (list(bootstrap_scripts),)))
+                if self._execute_count == 1:
+                    raise RuntimeError("timeout on test 1")
+                return outputs.pop(0) if outputs else ""
+
+        transport = _FailFirstTransport()
+        monkeypatch.setattr(
+            device_testing, "_create_transport",
+            lambda device_entry, deploy_mode=None: transport,
+        )
+
+        plan = [_plan_entry(tmp_path, "alpha", file_count=2)]
+        passed, failed, errors = device_testing._run_tests_on_device(
+            _circuitpython_device(), plan,
+            harness_source=tmp_path / "harness", test_filter=None,
+        )
+
+        # First file errored; second passed.
+        assert errors == 1
+        assert passed == 1
+        # recover() was called after the exception.
+        names = [name for name, _ in transport.calls]
+        assert "recover" in names
+
+    def test_recover_failure_aborts_remaining_tests(
+        self, tmp_path, monkeypatch,
+    ) -> None:
+        """If recover() itself fails, remaining tests are skipped with abort."""
+
+        class _FatalTransport(_RecordingTransport):
+            def __init__(self) -> None:
+                super().__init__(
+                    mode="ram",
+                    outputs=[],
+                    recover_raises=RuntimeError("board is wedged"),
+                )
+                self._execute_count = 0
+
+            def execute_scripts(self, bootstrap_scripts: list[str]) -> str:
+                self._execute_count += 1
+                self.calls.append(("execute_scripts", (list(bootstrap_scripts),)))
+                raise RuntimeError("first failure")
+
+        transport = _FatalTransport()
+        monkeypatch.setattr(
+            device_testing, "_create_transport",
+            lambda device_entry, deploy_mode=None: transport,
+        )
+
+        plan = [_plan_entry(tmp_path, "alpha", file_count=3)]
+        passed, failed, errors = device_testing._run_tests_on_device(
+            _circuitpython_device(), plan,
+            harness_source=tmp_path / "harness", test_filter=None,
+        )
+
+        # Only the first file ran; the rest were aborted.
+        assert transport._execute_count == 1
+        assert errors == 1
+        assert passed == 0
+
+    def test_missing_summary_counts_as_error(
+        self, tmp_path, monkeypatch,
+    ) -> None:
+        """Output without a SUMMARY line increments the error counter."""
+        transport = _RecordingTransport(
+            mode="ram", outputs=[_NO_SUMMARY_OUTPUT],
+        )
+        monkeypatch.setattr(
+            device_testing, "_create_transport",
+            lambda device_entry, deploy_mode=None: transport,
+        )
+
+        plan = [_plan_entry(tmp_path, "alpha")]
+        passed, failed, errors = device_testing._run_tests_on_device(
+            _circuitpython_device(), plan,
+            harness_source=tmp_path / "harness", test_filter=None,
+        )
+
+        assert errors == 1
+        assert (passed, failed) == (0, 0)
+
+    def test_mixed_pass_fail_summary_counted_correctly(
+        self, tmp_path, monkeypatch,
+    ) -> None:
+        """A 2/2 passed, 1 failed summary counts as passed=1, failed=1."""
+        transport = _RecordingTransport(
+            mode="ram", outputs=[_MIXED_OUTPUT],
+        )
+        monkeypatch.setattr(
+            device_testing, "_create_transport",
+            lambda device_entry, deploy_mode=None: transport,
+        )
+
+        plan = [_plan_entry(tmp_path, "alpha")]
+        passed, failed, errors = device_testing._run_tests_on_device(
+            _circuitpython_device(), plan,
+            harness_source=tmp_path / "harness", test_filter=None,
+        )
+
+        # total=2, failed=1 → passed=1, failed=1, errors=0.
+        assert (passed, failed, errors) == (1, 1, 0)
+
+    def test_ram_mode_stages_per_library(
+        self, tmp_path, monkeypatch,
+    ) -> None:
+        """RAM mode stages each library separately (not bulk upfront).
+
+        RAM-mode bootstraps embed source inline and have a per-script
+        RAM budget; staging per library ensures only the library under
+        test and its dependencies land in each bootstrap.
+        """
+        transport = _RecordingTransport(
+            mode="ram", outputs=[_PASS_OUTPUT, _PASS_OUTPUT],
+        )
+        monkeypatch.setattr(
+            device_testing, "_create_transport",
+            lambda device_entry, deploy_mode=None: transport,
+        )
+        # Stub the source-dir resolver so we don't need real pyproject data.
+        monkeypatch.setattr(
+            device_testing, "_resolve_library_source_dirs",
+            lambda library_dir, test_files=None: [library_dir / "src"],
+        )
+
+        plan = [_plan_entry(tmp_path, "alpha"), _plan_entry(tmp_path, "beta")]
+        device_testing._run_tests_on_device(
+            _circuitpython_device(), plan,
+            harness_source=tmp_path / "harness", test_filter=None,
+        )
+
+        # Two stage calls (per library), not one.
+        stage_calls = [call for call in transport.calls if call[0] == "stage"]
+        assert len(stage_calls) == 2
+
+    def test_stage_failure_in_ram_mode_errors_only_that_library(
+        self, tmp_path, monkeypatch,
+    ) -> None:
+        """A RAM-mode stage failure errors only the files in that library."""
+
+        class _StageOnceTransport(_RecordingTransport):
+            def __init__(self) -> None:
+                super().__init__(
+                    mode="ram", outputs=[_PASS_OUTPUT],
+                )
+                self._stage_count = 0
+
+            def stage(self, source_dirs, test_files, harness_source) -> None:
+                self._stage_count += 1
+                self.calls.append(
+                    ("stage", (source_dirs, test_files, harness_source)),
+                )
+                if self._stage_count == 1:
+                    raise RuntimeError("chunk too big")
+
+        transport = _StageOnceTransport()
+        monkeypatch.setattr(
+            device_testing, "_create_transport",
+            lambda device_entry, deploy_mode=None: transport,
+        )
+        monkeypatch.setattr(
+            device_testing, "_resolve_library_source_dirs",
+            lambda library_dir, test_files=None: [library_dir / "src"],
+        )
+
+        plan = [
+            _plan_entry(tmp_path, "alpha", file_count=2),
+            _plan_entry(tmp_path, "beta", file_count=1),
+        ]
+        passed, failed, errors = device_testing._run_tests_on_device(
+            _circuitpython_device(), plan,
+            harness_source=tmp_path / "harness", test_filter=None,
+        )
+
+        # alpha: 2 errors (stage failed).  beta: 1 pass (stage succeeded).
+        assert errors == 2
+        assert passed == 1
