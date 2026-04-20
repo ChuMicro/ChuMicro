@@ -107,11 +107,30 @@ class MicropythonTransport:
         via the persistent serial transport.  In copy mode, it is
         recursively copied to flash via ``mpremote fs cp -r``.
 
+        Safe to call repeatedly on the same transport (RAM-mode
+        orchestration re-stages per file).  On re-stage in mount mode
+        the existing mount is dropped first — otherwise mpremote's
+        ``mount_local`` hits ``OSError: [Errno 1] EPERM`` because the
+        device-side mount hook refuses to replace a live mount.
+
         Args:
             source_dirs: Library ``src/`` directories to include.
             test_files: Test files to stage.
             harness_source: Path to the test harness ``src/`` directory.
         """
+        # Drop any mount/tempdir left from a prior stage() on this
+        # transport so re-staging is idempotent.
+        if self._mounted and self._serial is not None:
+            try:
+                self._serial.umount_local()
+            except Exception:  # pragma: no cover - best-effort cleanup
+                pass
+            self._mounted = False
+        if self._staging_dir is not None:
+            self._staging_dir.cleanup()
+            self._staging_dir = None
+            self._staging_path = None
+
         self._staging_dir = tempfile.TemporaryDirectory(prefix="chumicro_device_")
         staging_path = Path(self._staging_dir.name)
         self._staging_path = staging_path

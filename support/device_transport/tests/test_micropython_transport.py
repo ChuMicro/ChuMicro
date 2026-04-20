@@ -160,6 +160,58 @@ class TestStage:
 
         transport.disconnect()
 
+    def test_re_stage_unmounts_before_remounting(self, tmp_path) -> None:
+        """Re-staging on a live transport must umount before the next mount_local.
+
+        Regression: pytest_device's RAM-mode orchestration calls
+        ``stage()`` once per test file on the *same* transport.  Without
+        this, mpremote's on-device mount hook raises
+        ``OSError: [Errno 1] EPERM`` on the second ``mount_local``
+        because the first mount is still live — breaking every
+        multi-file IDE session on MicroPython.
+        """
+        source_a = tmp_path / "src_a"
+        source_a.mkdir()
+        source_b = tmp_path / "src_b"
+        source_b.mkdir()
+        harness_dir = tmp_path / "harness"
+        harness_dir.mkdir()
+
+        runner = FakeRunner()
+        serial = FakeSerialTransport(address="/dev/ttyUSB0")
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0",
+            mode="mount",
+            runner=runner,
+            transport_factory=_factory_for(serial),
+        )
+
+        transport.stage([source_a], [], harness_dir)
+        first_staging_path = transport._staging_path
+        transport.stage([source_b], [], harness_dir)
+        second_staging_path = transport._staging_path
+
+        # A fresh tempdir was created and the old one cleaned up.
+        assert first_staging_path != second_staging_path
+        assert not first_staging_path.exists()
+        assert second_staging_path.exists()
+
+        # Lifecycle: mount → umount → mount, with the second mount
+        # targeting the new staging path.
+        lifecycle = [name for name, _ in serial.calls]
+        first_mount_index = lifecycle.index("mount_local")
+        umount_index = lifecycle.index("umount_local", first_mount_index)
+        second_mount_index = lifecycle.index("mount_local", umount_index)
+        assert first_mount_index < umount_index < second_mount_index
+
+        mount_targets = [
+            args[0] for name, args in serial.calls if name == "mount_local"
+        ]
+        assert mount_targets[0] == str(first_staging_path)
+        assert mount_targets[1] == str(second_staging_path)
+
+        transport.disconnect()
+
     def test_copy_mode_runs_fs_cp_and_does_not_open_serial(self, tmp_path) -> None:
         """In copy mode, stage() runs mpremote fs cp -r and leaves serial closed."""
         source_dir = tmp_path / "src"
