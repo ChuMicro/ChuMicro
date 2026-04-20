@@ -152,6 +152,16 @@ Each library has its own docs with a version selector so you can switch between 
 
 We welcome contributors of all experience levels. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup, guidelines, and how to submit a pull request. Want the short version? Check the [contributor cheat sheet](docs/contributing/cheat-sheet.md). Not sure where to start? Check out [good first contributions](CONTRIBUTING.md#good-first-contributions).
 
+If you want to work on real-board validation or IDE-driven `functional_tests/`, start with the [device testing guide](docs/contributing/device-testing.md). It documents how `python scripts/run.py setup` generates `devices.yml` and `device-config.yml`, how bare `python scripts/run.py test-device` uses the `defaults:` section in `devices.yml`, and how PyCharm / VS Code route explicit `functional_tests/` targets through the device pytest plugin.
+
+### Development quick links
+
+- [Contributor cheat sheet](docs/contributing/cheat-sheet.md)
+- [Device testing](docs/contributing/device-testing.md)
+- [PyCharm guide](docs/contributing/development-pycharm.md)
+- [VS Code guide](docs/contributing/development-vscode.md)
+- [Other editors / CLI guide](docs/contributing/development-other-editors.md)
+
 ## Repository layout
 
 ```text

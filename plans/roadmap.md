@@ -32,7 +32,7 @@ Settled choices: single-branch model with tag-based stable releases (Decision 00
 
 Status: `in-progress`
 
-Goal: add simulation-first device validation and optional home testbed execution.
+Goal: add simulation-first validation, practical local real-board execution, and a path toward CI-managed device runs.
 
 Exit criteria:
 
@@ -41,6 +41,14 @@ Exit criteria:
 - ✅ hardware workflow can target user-managed boards when configured
 - ✅ functional test harness contract is defined and exercised
 
+Current implementation status:
+
+- `python scripts/run.py test-device` is a real command, not a placeholder
+- bare `test-device` runs use the `defaults:` section in `devices.yml` to choose runtime(s), board(s), and deploy behavior
+- `functional_tests/` can be targeted from pytest-based IDE play buttons once `devices.yml` exists
+- CircuitPython now supports both RAM-mode inline execution and flash-mode CIRCUITPY deployment, including chunked RAM-mode bootstraps for low-memory boards
+- the main gaps are CI-injected device config, CI-hosted/manual-trigger device jobs, and a live end-to-end VS Code validation pass
+
 Key choices confirmed (Decision 0027):
 
 - MicroPython transport uses `mpremote` (mount mode default, copy mode fallback)
@@ -48,16 +56,17 @@ Key choices confirmed (Decision 0027):
 - Deploy modes: `--deploy-mode ram|flash` — RAM for inline execution, flash for USB drive copy (CP) or file copy (MP)
 - CircuitPython flash mode auto-detects CIRCUITPY drive, controls autoreload via raw REPL
 - two gitignored config files: `devices.yml` (board registry) + `device-config.yml` (shared environment like WiFi)
+- `devices.yml` has a top-level `defaults:` block for IDE and bare-CLI target selection
 - `test-device` command in run.py with `--runtime`, `--micropython-device`, `--circuitpython-device`, `--library`, `--test`, `--deploy-mode` flags
-- IDE integration via pytest conftest that routes `functional_tests/` to device when `CHUMICRO_DEVICE_RUNTIME` env var is set
+- IDE integration via pytest conftest/plugin that routes explicit `functional_tests/` targets to the configured device(s)
 - harness gains `name_filter` parameter for single-test execution
 - transport implementations live in `support/device_transport/`, not published
 
 Current answer:
 
-- hardware workflows should be manual only at first; promote once board transport tooling has proven reliable
+- local hardware workflows now exist through both CLI and pytest-driven IDE targeting; CI-hosted device execution remains a future step
 - MicroPython should use CPython + Unix-port validation + later real-board runs
-- CircuitPython should use the same ladder if the unix port is practical; otherwise start with mocks and then real boards
+- CircuitPython follows the same ladder and now has working RAM + flash real-board execution paths
 - Windows should use native CPython for general development and WSL2 for unix-port-based validation
 - first-class test target: ESP32-S2 (Wemos S2-Mini); matrix will expand later
 - CI-hosted hardware is a future goal but high-security; users configure local test matrices via `devices.yml`
@@ -65,5 +74,5 @@ Current answer:
 ## Settled questions
 
 - MicroPython and CircuitPython CI compatibility checks are now required status checks on PRs, gated by platform targeting (Decision 0011).
-- Hardware workflows stay manual-only until board transport tooling exists and has proven reliable.
+- Local hardware workflows are available via `test-device` and the pytest device plugin; CI-managed device runs are still deferred.
 - Release automation stages artifacts for all three targets (PyPI, circup, mip) from the start — do not wait for PyPI to go first.

@@ -158,6 +158,17 @@ assert heartbeat.poll(now) is True
 | `micropython_blink.py` | LED blink on MicroPython hardware |
 | `micropython_debounce.py` | GPIO button debounce on MicroPython |
 
+## Developing this library
+
+Host-side tests live in `tests/`; real-board functional tests live in `functional_tests/`.
+
+```bash
+python scripts/run.py test --libraries timing
+python scripts/run.py test-device --library timing
+```
+
+Before running device tests, generate local board config files with `python scripts/run.py setup`, then fill in `devices.yml`. See the [contributing guide](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md) and the [device testing guide](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/device-testing.md) for the full workflow.
+
 ## Docs
 
 📖 **[Stable docs](https://chumicro.github.io/ChuMicro/timing/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/timing/experimental/)**

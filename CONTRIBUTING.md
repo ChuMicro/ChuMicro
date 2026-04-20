@@ -41,6 +41,7 @@ Start here, then pick the guide that matches your task:
 | **Get the short version** | [Contributor Cheat Sheet](docs/contributing/cheat-sheet.md) — one page, everything you need |
 | **Find something to work on** | [Good first contributions](#good-first-contributions) |
 | **Set up and develop** | This page → then your [development environment guide](#development-environment) |
+| **Configure real-board testing** | [Device Testing](docs/contributing/device-testing.md) |
 | **Understand the code style** | [Style Guide](docs/contributing/style-guide.md) |
 | **Open a pull request** | [Creating a Pull Request](docs/contributing/pull-requests.md) |
 | **Add a new library** | [Adding a New Library](docs/contributing/new-library.md) |
@@ -68,6 +69,8 @@ Pick whichever workflow you're comfortable with:
 - **[PyCharm](docs/contributing/development-pycharm.md)** — run configurations, test explorer, source root management
 - **[VS Code](docs/contributing/development-vscode.md)** — tasks, extensions, Pylance integration
 - **[Other Editors / Command Line](docs/contributing/development-other-editors.md)** — Neovim, Zed, Emacs, Sublime, or anything with a terminal
+
+If you plan to run `functional_tests/` on real boards, also read **[Device Testing](docs/contributing/device-testing.md)**. That guide covers `devices.yml`, `device-config.yml`, deploy modes, CLI usage, and IDE play-button routing.
 
 You only need one. All three reach the same place.
 
@@ -298,7 +301,16 @@ If it prints `Preflight passed`, you're good — CI will pass too. That's the on
 
 Device testing is **optional**. If your change could behave differently on a real board than in tests, including console output from a device is appreciated but never required to open a PR. If you're not sure, submit the PR without it and note that in the description — a reviewer will tell you if it's needed.
 
-**Most contributions don't need this.** Docs-only, test-only, infrastructure, and trivial fixes are exempt. Libraries with no hardware interaction (like `compat` and `msgpack`) are also exempt. See [Device Testing](docs/contributing/pull-requests.md#device-testing) in the PR guide for details on what to include when you do test.
+**Most contributions don't need this.** Docs-only, test-only, infrastructure, and trivial fixes are exempt. Libraries with no hardware interaction (like `compat` and `msgpack`) are also exempt. See the [device testing guide](docs/contributing/device-testing.md) for setup and workflow, and the [PR guide's device-testing section](docs/contributing/pull-requests.md#device-testing) for what to include when you do test.
+
+When you do want real-board coverage, the current workflow is:
+
+1. Run `python scripts/run.py setup` once to generate local `devices.yml` and `device-config.yml` files.
+2. Fill in your board details in `devices.yml` and any shared environment data in `device-config.yml`.
+3. Run `python scripts/run.py test-device` for the defaults-backed target set, or add filters such as `--library timing`, `--runtime both`, or `--deploy-mode flash`.
+4. For IDE-driven runs, target an explicit `functional_tests/` file, directory, or function — the pytest device plugin routes it to the board selected by `devices.yml`.
+
+The full schema and workflow live in the [device testing guide](docs/contributing/device-testing.md).
 
 ### Commit messages
 
@@ -383,6 +395,7 @@ These aren't arbitrary — each one traces to a design decision with rationale. 
 | Symptom | Cause | Fix |
 |---|---|---|
 | `ImportError` when running `pytest` directly | Bare `pytest` doesn't know about the per-library layout | Use `python scripts/run.py test --libraries <name>` instead |
+| A `functional_tests/` play button says no device is configured | `devices.yml` is missing, empty, or points at the wrong board IDs | Run `python scripts/run.py setup`, then update `devices.yml` defaults and device entries. See [Device Testing](docs/contributing/device-testing.md) |
 | `check-version` fails but you only changed tests | CI checks source changes under `src/` | No VERSION bump needed for test-only, docs-only, or infra changes — delete the failing step's output note in your PR |
 | Coverage fails on code you didn't touch | Pre-existing gap in another file | Note it in the PR description — a maintainer can help fill the gap or mark an exception |
 | `griffe warnings detected` in docs build | Missing type annotation on a function parameter | Add the type to the signature: `def foo(x: int)` — docstrings carry descriptions only |
@@ -393,6 +406,9 @@ These aren't arbitrary — each one traces to a design decision with rationale. 
 
 **Do I need a device to contribute?**
 No. Most contributions don't need device testing. If yours does and you don't have a board, say so in the PR — a maintainer can help.
+
+**How do I set up `devices.yml`?**
+Run `python scripts/run.py setup`, then edit the generated `devices.yml` and `device-config.yml` files. `devices.yml` picks the default MicroPython/CircuitPython boards and deploy mode; `device-config.yml` carries shared values like WiFi credentials. See [Device Testing](docs/contributing/device-testing.md) for the schema and examples.
 
 **What if coverage fails on code I didn't write?**
 Note it in the PR description. A maintainer can help fill the gap or mark an exception. Don't let someone else's uncovered code block your contribution.

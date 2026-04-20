@@ -91,6 +91,7 @@ The project provides pre-configured tasks in `.vscode/tasks.json`. Open the Comm
 | **Runtime Matrix** | Test across all three runtimes |
 | **Setup** | Install dev dependencies |
 | **Prepare Workspace** | Full workspace setup |
+| **Test Device** | Run defaults-backed real-board functional tests |
 
 Output appears in the Terminal panel at the bottom of the window.
 
@@ -105,6 +106,16 @@ Command Palette → **Tasks: Run Task** → **Test**. This runs all libraries wi
 VS Code's Testing panel (beaker icon in the sidebar, or `⌘⇧T` / `Ctrl+Shift+T`) discovers tests via the `python.testing.pytestArgs` setting in `.vscode/settings.json`.
 
 Click the ▶ button next to any test file or function to run it. This is fast for iterating but does not produce coverage data or enforce the coverage threshold.
+
+For real-board `functional_tests/`, the same Testing panel can target the explicit `functional_tests/` file, directory, or function. The repository's pytest device plugin intercepts those targets and routes them to hardware instead of importing them on the host.
+
+To enable that workflow:
+
+1. Run `python scripts/run.py setup`
+2. Fill in `devices.yml` and `device-config.yml`
+3. Open a `libraries/<name>/functional_tests/test_*.py` file and use the normal VS Code play button
+
+If no device is configured yet, pytest skips the run with a message telling you to generate or fill in `devices.yml`. See [Device Testing](device-testing.md) for the schema and CLI options.
 
 ### From the terminal
 
@@ -158,6 +169,25 @@ python scripts/run.py test --libraries timing
 
 # Quick test — no coverage, stop on first failure
 python scripts/run.py test -k timing/test_heartbeat -x -v --no-cov
+```
+
+### Device functional tests from the terminal or task runner
+
+The committed VS Code workspace also includes a **Test Device** task, which runs:
+
+```bash
+python scripts/run.py test-device
+```
+
+That command uses the `defaults:` section in `devices.yml` to choose the target runtime(s), board(s), and default deploy mode.
+
+Common overrides:
+
+```bash
+python scripts/run.py test-device --library timing
+python scripts/run.py test-device --runtime both
+python scripts/run.py test-device --circuitpython-device desk-cp-board
+python scripts/run.py test-device --library timing --deploy-mode flash
 ```
 
 ## What "valid" means
@@ -227,4 +257,5 @@ open htmlcov/index.html
 - **If a new library is added**, run `python scripts/run.py sync-ide` to regenerate `pyrightconfig.json` and `.vscode/settings.json`. Reload the window afterward.
 - **`.vscode/tasks.json` and `.vscode/settings.json` are committed** and shared. Workspace-specific settings (`.vscode/launch.json`, etc.) are gitignored if not present.
 - **Terminal links are clickable.** When a lint error or test failure shows `file.py:42`, `Ctrl+click` / `⌘+click` to jump directly to that line.
+- **Device-testing support is wired through ordinary pytest.** The committed VS Code settings and tasks are generated from `sync-ide`, and explicit `functional_tests/` targets go through the same plugin path PyCharm uses. A dedicated live VS Code validation pass remains on the project plan, so VS Code-specific bugs are worth reporting.
 

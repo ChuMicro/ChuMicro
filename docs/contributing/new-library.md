@@ -140,6 +140,19 @@ If downstream libraries or users would benefit from test fakes, keep `src/chumic
 3. Remove `- Testing Helpers: testing.md` from `mkdocs.yml`
 4. Remove the Testing Helpers link from `docs/index.md` and `README.md`
 
+### Functional tests on real boards
+
+Every new library scaffold also includes `functional_tests/` for behavior that needs a real board. You do **not** need to fill this directory immediately, but if the library has timing-, transport-, GPIO-, or storage-sensitive behavior, plan to add real-board tests here once the host/unit tests are stable.
+
+Run them with:
+
+```bash
+python scripts/run.py setup
+python scripts/run.py test-device --library my-thing
+```
+
+See [Device Testing](device-testing.md) for `devices.yml`, deploy modes, and IDE play-button behavior.
+
 ## 4. Write docs
 
 ### User guide (`docs/guide.md`)
@@ -199,6 +212,8 @@ Update `libraries/my-thing/pyproject.toml`:
 - `dependencies` — if your library depends on other ChuMicro libraries (e.g., `"chumicro-timing>=0.1"`)
 
 Update `libraries/my-thing/README.md` — replace all TODO placeholders.
+
+The README template now includes a short development/testing section. Keep it accurate for the library you are adding so contributors can see the host-test and device-test entry points without hunting through the repository docs.
 
 ## 7. Preflight and PR
 

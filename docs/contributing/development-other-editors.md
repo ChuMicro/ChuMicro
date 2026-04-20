@@ -35,11 +35,31 @@ All tasks go through `scripts/run.py` in the terminal. There are no editor-speci
 
 ```bash
 python scripts/run.py test --libraries timing   # test one library
+python scripts/run.py test-device --library timing  # real-board functional tests
 python scripts/run.py lint                       # lint the workspace
 python scripts/run.py preflight                  # full CI mirror
 ```
 
 See the [Cheat Sheet](cheat-sheet.md) for the full command list.
+
+## Real-board functional tests
+
+When you need to run `functional_tests/` on a real board:
+
+```bash
+python scripts/run.py setup
+python scripts/run.py test-device
+```
+
+`setup` generates local `devices.yml` and `device-config.yml` starter files if they do not exist yet. Fill those in, then use:
+
+```bash
+python scripts/run.py test-device --library timing
+python scripts/run.py test-device --runtime both
+python scripts/run.py test-device --library timing --deploy-mode flash
+```
+
+If your editor has a pytest integration, explicit `functional_tests/` targets use the same pytest device plugin as PyCharm and VS Code. The CLI path above is still the canonical fallback. See [Device Testing](device-testing.md) for the config schema and workflow details.
 
 ## Editor-specific tips
 

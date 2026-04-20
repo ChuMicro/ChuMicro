@@ -71,6 +71,7 @@ The project includes pre-configured run configurations in `.idea/runConfiguratio
 | **Runtime Matrix** | Test all packages across CPython + MicroPython + CircuitPython |
 | **Setup** | Install dev dependencies |
 | **Prepare Workspace** | Full workspace setup |
+| **Test Device** | Run defaults-backed real-board functional tests |
 
 Click the ▶ button or press `⌃R` / `Shift+F10` to run the selected configuration.
 
@@ -90,6 +91,8 @@ python scripts/run.py test --libraries timing
 
 Right-click a test file or test function in the editor → **Run 'test_...'**. PyCharm runs it with pytest using the source roots from `.idea/chumicro.iml`. This is fast for iterating on a single test but does not produce coverage data.
 
+For real-board `functional_tests/`, the same play buttons route to hardware once `devices.yml` is configured. Run `python scripts/run.py setup`, fill in `devices.yml` and `device-config.yml`, then right-click a `libraries/<name>/functional_tests/test_*.py` file, function, or the whole `functional_tests/` directory.
+
 For device-backed `functional_tests/`, the test tree includes synthetic nodes such as `Setup — MicroPython`, `Run overhead — MicroPython`, `Setup — CircuitPython`, and `Run overhead — CircuitPython`. The setup node owns staging time. Individual test functions show the durations reported by the on-device harness, while the run-overhead node keeps only the remaining batch overhead that is not attributable to a single test.
 
 Large CircuitPython RAM-mode functional tests are sent in multiple raw-REPL chunks instead of one giant inline bootstrap. Before sending those chunks, the transport asks the board for its live free heap, strips comments and docstrings from staged library and harness source, and sizes each chunk conservatively from the measured RAM budget. If a single chunk still cannot fit, the run fails early with a flash-mode hint. In that case, set the board's `deploy_mode: flash` in `devices.yml` or use the CLI with `--deploy-mode flash`.
@@ -103,6 +106,16 @@ The built-in terminal (`⌥F12` / `Alt+F12`) works the same as any terminal:
 ```bash
 python scripts/run.py test --libraries timing
 ```
+
+For real-board runs:
+
+```bash
+python scripts/run.py test-device
+python scripts/run.py test-device --library timing
+python scripts/run.py test-device --runtime both
+```
+
+Bare `test-device` uses the `defaults:` section in `devices.yml` to choose the active board(s) and runtime(s). See [Device Testing](device-testing.md) for the schema, deploy modes, and per-runtime override flags.
 
 ## Validating your work
 

@@ -5,6 +5,7 @@
 (empty — pick from Next)
 
 ## Next
+- [ ] Validate VS Code workspace end-to-end for on-device `functional_tests/` (tasks/settings are generated and explicit `functional_tests/` targets use the pytest device plugin, but a live editor verification pass is still wanted).
 - [ ] `chumicro-deploy` standalone pip package — extract transport layer into a publishable tool for deploying user projects to boards. Companion project template repo. See Decision 0028.
 - [ ] Enable GitHub Copilot code review as a PR quality gate (low priority — defer until community contributions begin).
 - [ ] Implement `chumicro-settings` — dict-like persistent storage for microcontrollers.
@@ -17,7 +18,6 @@
   - ESP32 NVS backend deferred (different semantics — per-key, not blob).
 - [ ] Add digital I/O as the second library seam (alongside CI/release work, not sequentially).
 - [ ] Explore test ergonomics: reduce repeated boilerplate across test files.
-- [ ] Validate VS Code workspace end-to-end (configs are generated and structurally correct — needs a live VS Code session to confirm test discovery and import resolution work interactively).
 - [ ] Design a performance and resource benchmarking infrastructure. Goals:
   - Measure memory footprint (heap allocations, peak usage) and CPU cost of library operations.
   - Control GC explicitly during benchmarks so allocation measurements are stable and reproducible across runs.
@@ -31,7 +31,11 @@
 
 ## Done (recent)
 
-- [x] Device testing Phase 3: IDE integration — `scripts/pytest_device.py` plugin routes `functional_tests/` to device automatically. `devices.yml` is the gate — no env var setup needed, just click play. AST-based test discovery (no import), session-scoped transport caching, per-function `name_filter` execution. Optional `CHUMICRO_DEVICE_RUNTIME`/`CHUMICRO_DEVICE_ID`/`CHUMICRO_DEPLOY_MODE` env vars for filtering when multiple boards are configured. Decision 0027.
+- [x] Docs and planning sync for device testing and IDE workflows — refreshed `README.md`, `CONTRIBUTING.md`, IDE guides, `support/test_harness/README.md`, library README development notes, and the active planning/docs files so they describe `devices.yml`, `device-config.yml`, `test-device`, deploy modes, and current VS Code/PyCharm status.
+
+- [x] Device-testing UX refinements — bare `test-device` now uses `devices.yml` defaults, `--runtime both` is explicit, the legacy `--device` flag was removed in favor of `--micropython-device` / `--circuitpython-device`, and large CircuitPython RAM-mode bootstraps are chunked against live free-heap measurements.
+
+- [x] Device testing Phase 3: IDE integration — `scripts/pytest_device.py` routes explicit `functional_tests/` targets to hardware using `devices.yml` as the gate. AST-based test discovery (no import), session-scoped transport caching, per-file batch execution, synthetic setup/run-overhead nodes, per-function `name_filter` execution, and defaults-backed runtime/device selection are in place. Decision 0027.
 
 - [x] Whitespace linter (CHU002–CHU005) — `scripts/check_whitespace.py` wired into `run.py lint`, fixed 42 pre-existing violations. Rules: file ends with one newline, no excess blank lines, no trailing whitespace, no blank line after block opener.
 - [x] Scripts consolidation — `ensure_build_tools` → `shared.py`; `load_tomllib`, `GITHUB_ORG`, `discover_library_dirs`, `read_pyproject_description`, `discover_doc_dirs`, `is_ref_reachable` → `workspace.py`. Tests aligned.
@@ -39,7 +43,7 @@
 - [x] Editable-install support packages — `install_editable()` now installs both libraries and support packages. Previously support packages relied on `conftest.py` `sys.path` manipulation.
 - [x] Deploy modes: RAM and flash (Decision 0028) — `--deploy-mode ram|flash` flag on `test-device`, CircuitPython flash transport (USB drive copy with autoreload control), `circuitpy_drive_path` device config field, bootstrap routing (inline for CP ram, standard imports for CP flash). MicroPython `ram`→`mount`, `flash`→`copy`.
 - [x] Device testing Phase 2: CircuitPython serial transport — `CircuitpythonTransport` (pyserial raw REPL: Ctrl-C interrupt, Ctrl-A enter, Ctrl-D execute, OK/stdout/stderr parsing), `build_circuitpython_bootstrap` (class-as-module injection, inline harness, test exec), orchestrator routing for CP devices. `pyserial` added to dev deps.
-- [x] Device testing infrastructure — Phase 1 complete (Decision 0027): `device_config.py` config loader, `result_parser.py` structured output parsing, `support/device_transport/` with `MicropythonTransport` (mount + copy modes), `name_filter` on `runner.run_module`, real `test-device` orchestration in `run.py` with `--runtime`/`--micropython-device`/`--circuitpython-device`/`--library`/`--test` flags, `mpremote` + `pyyaml` in requirements-dev.txt. 49 new host-side tests.
+- [x] Device testing infrastructure — Phase 1 complete (Decision 0027): `device_config.py` config loader, `result_parser.py` structured output parsing, `support/device_transport/` with `MicropythonTransport` (mount + copy modes), `name_filter` on `runner.run_module`, real `test-device` orchestration in `run.py`, and `mpremote` + `pyyaml` in dev dependencies.
 - [x] Populate "What's new" sections in library guides — all four libraries now have version entries.
 - [x] CI build and cache optimizations: `--no-isolation` build (~7x faster), MicroPython submodule pruning (87% cache size reduction), explicit pip caching for docs deploy.
 - [x] Documentation sync: run.py commands synced across README, AGENTS.md, and development-cli.md.

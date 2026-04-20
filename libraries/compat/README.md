@@ -105,6 +105,17 @@ The public API (`.func`, `.args`, `.keywords`, `__call__`, `__repr__`) is identi
 | `partial_keyword_override.py` | Freeze keyword args, override at call time |
 | `partial_callback.py` | Wire a callback with frozen context (embedded pattern) |
 
+## Developing this library
+
+Host-side tests live in `tests/`; real-board functional tests live in `functional_tests/` when a behavior needs hardware-backed validation.
+
+```bash
+python scripts/run.py test --libraries compat
+python scripts/run.py test-device --library compat
+```
+
+Before running device tests, generate local board config files with `python scripts/run.py setup`, then fill in `devices.yml`. See the [contributing guide](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md) and the [device testing guide](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/device-testing.md) for the full workflow.
+
 ## Docs
 
 📖 **[Stable docs](https://chumicro.github.io/ChuMicro/compat/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/compat/experimental/)**

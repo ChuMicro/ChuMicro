@@ -128,6 +128,17 @@ Use `pack`/`unpack` when writing to files, sockets, or NVM.  Use `packb`/`unpack
 | `stream_roundtrip.py` | Use the stream-based `pack` / `unpack` API with `BytesIO` |
 | `circuitpython_nvm_settings.py` | Store and load settings in non-volatile memory (hardware) |
 
+## Developing this library
+
+Host-side tests live in `tests/`; real-board functional tests live in `functional_tests/` when a behavior needs hardware-backed validation.
+
+```bash
+python scripts/run.py test --libraries msgpack
+python scripts/run.py test-device --library msgpack
+```
+
+Before running device tests, generate local board config files with `python scripts/run.py setup`, then fill in `devices.yml`. See the [contributing guide](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md) and the [device testing guide](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/device-testing.md) for the full workflow.
+
 ## Docs
 
 📖 **[Stable docs](https://chumicro.github.io/ChuMicro/msgpack/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/msgpack/experimental/)**

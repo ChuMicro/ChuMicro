@@ -54,25 +54,49 @@ python scripts/run.py test-runtime-matrix
 
 This runs the current verified CPython host test suite, prepares the repo-local runtimes if needed, and then runs the MicroPython and CircuitPython cross-runtime test paths.
 
-## Device registration
+## Device testing on real boards
 
-Real-board execution is being built out as Milestone 3 (Decision 0027).
+Real-board execution is now wired through `python scripts/run.py test-device` and the pytest device plugin used by IDE play buttons for `functional_tests/`.
 
-- Run `python scripts/run.py setup` to generate starter `devices.yml` and `device-config.yml` files.
-- Fill in your board details and WiFi credentials.
-- Both files are gitignored — they will not be committed.
+### Local config files
 
-Once transport tooling is implemented:
+Run this once to generate local starter files if they do not already exist:
 
 ```zsh
-# Run all functional tests on all configured devices
-python scripts/run.py test-device
-
-# Target a specific runtime and library
-python scripts/run.py test-device --runtime micropython --library timing
-
-# Target a specific device and test
-python scripts/run.py test-device --device sample-mp-board --test test_heartbeat_ticks
+python scripts/run.py setup
 ```
 
-See Decision 0027 and `plans/workstreams/device-validation.md` for the full design.
+That creates two gitignored files:
+
+- `devices.yml` — board registry plus the `defaults:` section used by bare `test-device` runs and IDE play buttons
+- `device-config.yml` — shared environment data (WiFi, MQTT, NTP, and similar settings)
+
+### CLI examples
+
+```zsh
+# Run the defaults-backed target set from devices.yml
+python scripts/run.py test-device
+
+# One runtime only
+python scripts/run.py test-device --runtime micropython --library timing
+
+# Both runtimes using defaults-backed device IDs
+python scripts/run.py test-device --runtime both --library timing
+
+# Override a specific board selection
+python scripts/run.py test-device --micropython-device sample-mp-board --library timing
+
+# Filter to one file or function name substring
+python scripts/run.py test-device --library timing --test heartbeat
+
+# Force flash deployment for this run
+python scripts/run.py test-device --library timing --deploy-mode flash
+```
+
+### IDE / pytest integration
+
+Normal host-side pytest discovery ignores `functional_tests/`. When you explicitly target a `functional_tests/` file, directory, or function from an IDE, `scripts/pytest_device.py` intercepts that target and runs it on the board(s) selected by `devices.yml`.
+
+If `devices.yml` does not exist yet, the run is skipped with a message telling you to run setup.
+
+See `docs/contributing/device-testing.md`, Decision 0027, and `plans/workstreams/device-validation.md` for the full workflow and current status.

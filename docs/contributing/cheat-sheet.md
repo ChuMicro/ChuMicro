@@ -43,6 +43,8 @@ git push -u origin fix/my-change      # then open PR on GitHub
 | Lint only | `python scripts/run.py lint` |
 | Test one library | `python scripts/run.py test --libraries timing` |
 | Test everything | `python scripts/run.py test --all` |
+| Generate device config files | `python scripts/run.py setup` |
+| Run real-board functional tests | `python scripts/run.py test-device --library timing` |
 | Quick test (no coverage) | `python scripts/run.py test -k timing/test_heartbeat -x -v --no-cov` |
 | Build docs | `python scripts/run.py docs --libraries timing` |
 | Verify examples | `python scripts/run.py verify-examples --libraries timing` |
@@ -59,6 +61,7 @@ Every failure message tells you exactly what to do.
 | Coverage too low | The coverage gate is 85%. Check the `Missing` column in the coverage report for uncovered line numbers. If it's code you didn't write, note it in the PR. For hardware-only code that can't be tested on CPython, see [coverage exclusions](style-guide.md#coverage-exclusions) |
 | `check-version` | Edit `libraries/<name>/VERSION` (patch bump is usually right) |
 | `griffe warnings` | Add type annotations to function signatures |
+| `functional_tests/` say no device is configured | Run `python scripts/run.py setup`, then fill in `devices.yml`. See [device testing](device-testing.md) |
 | Stuck or confused | Ask in the PR — someone will help |
 
 **Browsing coverage in detail:** After running tests, generate an HTML report with `python -m coverage html` and open `htmlcov/index.html`. Covered lines show in green, missed lines in red — much easier than reading line numbers from the terminal. (`htmlcov/` is gitignored.)
@@ -68,5 +71,6 @@ Every failure message tells you exactly what to do.
 - [Full contributing guide](../../CONTRIBUTING.md)
 - [Style guide](style-guide.md)
 - [PR guide](pull-requests.md)
+- [Device testing](device-testing.md)
 - [Design decisions](../../plans/decisions/)
 

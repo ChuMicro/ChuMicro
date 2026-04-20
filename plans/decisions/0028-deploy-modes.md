@@ -19,7 +19,7 @@ The flash deployment path also lays groundwork for a future `chumicro-deploy` pi
 
 ### Unified deploy mode flag
 
-`test-device` accepts `--deploy-mode ram|flash` (default: `ram`).
+`test-device` accepts `--deploy-mode ram|flash` as a per-run override. When the flag is omitted, each selected device uses its own `deploy_mode` from `devices.yml`, falling back to `defaults.deploy_mode` and then `ram`.
 
 The flag maps to runtime-specific transport modes:
 
@@ -74,9 +74,15 @@ This is intentionally deferred.  The current work shapes the transport API to ma
 
 - `CircuitpythonTransport` gains `mode` and `circuitpy_drive_path` parameters.
 - `DeviceEntry` gains a `circuitpy_drive_path` field.
-- `--deploy-mode` becomes the user-facing CLI override; `deploy_mode` in `devices.yml` is the per-device default (both runtimes, ``"ram"`` when omitted).
+- `--deploy-mode` becomes the user-facing CLI override; `deploy_mode` in `devices.yml` is the per-device default, with `defaults.deploy_mode` as the workspace-wide fallback.
 - Flash mode for CircuitPython uses `circuitpy_drive_path` from device config, falling back to auto-detection via `find_circuitpy_drive()`.
 - Oversized CircuitPython RAM-mode submissions are chunked using a live free-heap probe instead of static board-family metadata. If even the chunked path cannot fit, the run fails early and directs the user to flash mode.
 - The transport API's `stage()`/`execute()`/`disconnect()` protocol remains stable — mode is an internal concern.
 - The `chumicro-deploy` package and project template are recorded as future work in `open-questions.md`.
+
+## Implementation status update (2026-04-19)
+
+- Implemented: per-device `deploy_mode` overrides, workspace-wide `defaults.deploy_mode`, and CLI `--deploy-mode` overrides.
+- Implemented: CircuitPython RAM-mode chunking based on live free-heap measurements to keep large inline test payloads workable on lower-memory boards.
+- Still pending: extraction of the transport layer into `chumicro-deploy` and any serial-only CircuitPython flash workflow that would remove the CIRCUITPY drive dependency.
 

@@ -385,3 +385,11 @@ This was the largest single session. It addressed three areas: the workspace was
 
 **run.py hardening:** Explicit `bundle_repo` guard in `validate_mip`, unhandled-task guard in `main()` dispatch, type-narrowing fixes across device transport modules.
 
+### 2026-04-19 — Device-testing ergonomics and documentation sync
+
+**Device-selection ergonomics:** Bare `python scripts/run.py test-device` now resolves its runtime and board target set from the `defaults:` section in `devices.yml`. Added explicit `--runtime both` for dual-runtime runs and removed the legacy single `--device` flag in favor of `--micropython-device` / `--circuitpython-device`, matching the now-separate runtime defaults.
+
+**IDE/device-test performance:** `scripts/pytest_device.py` now batches all tests from the same `(device, file)` into one on-device execution, caches parsed results per file, and exposes synthetic setup/run-overhead nodes so PyCharm shows useful timing instead of attributing almost everything to zero-duration leaf items. CircuitPython RAM-mode staging now soft-resets between files when needed, bulk-stages flash/copy-mode payloads, and chunks large inline bootstraps against live free-heap measurements to avoid low-memory disconnects.
+
+**Documentation and planning audit:** Refreshed root docs, contributor docs, IDE guides, `support/test_harness/README.md`, library README development notes, and the active device-testing planning/decision files so they describe the implemented `devices.yml` / `device-config.yml` workflow, current `test-device` flags, deploy modes, and the remaining VS Code + CI device-test gaps accurately.
+

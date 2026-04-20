@@ -80,21 +80,22 @@ Replace the placeholder `test-device` command with real orchestration:
 
 ```
 python scripts/run.py test-device
-    --runtime micropython|circuitpython|both   # override the default runtime set
+    --runtime micropython|circuitpython|both   # override the defaults-backed runtime set
     --micropython-device <id>                  # override the selected MicroPython board
     --circuitpython-device <id>                # override the selected CircuitPython board
     --library <name>                           # limit to one library
     --test <name>                              # filter to test file or function name
+    --deploy-mode ram|flash                    # override the configured deploy mode
 ```
 
-Flow: load config → select transport → for each library, stage `src/` + `functional_tests/` + harness → run each test file → parse output → report summary.
+Flow: load config → resolve target devices from `devices.yml` defaults and CLI overrides → select transport → for each library, stage `src/` + `functional_tests/` + harness → run each test file → parse output → report summary.
 
 ### IDE integration
 
-A pytest plugin (`scripts/pytest_device.py`) intercepts `functional_tests/` collection automatically.  Each collected `test_*` function becomes a pytest item that stages, executes on device, parses output, and reports as pytest pass/fail.  **No environment variable setup is required** — `devices.yml` is the gate.
+A pytest plugin (`scripts/pytest_device.py`) intercepts explicit `functional_tests/` targets.  Each collected `test_*` function becomes a pytest item that stages, executes on device, parses output, and reports as pytest pass/fail.  **No environment variable setup is required** — `devices.yml` is the gate.
 
 - The plugin is always registered via the root `conftest.py`.
-- When a functional test file is targeted (e.g. IDE play button), the plugin collects it as `DeviceTestItem` instances and deselects the normal pytest items to prevent local CPython execution.
+- Normal host-side discovery still ignores `functional_tests/`; when a functional-test path is explicitly targeted (e.g. IDE play button), the plugin collects it as device-backed pytest items and prevents local CPython execution.
 - A top-level `defaults:` section in `devices.yml` controls which board(s) the IDE targets:
   - `micropython` / `circuitpython` — device IDs to use for each runtime
   - `deploy_mode` — global default (`ram` or `flash`), not per-device
@@ -103,6 +104,7 @@ A pytest plugin (`scripts/pytest_device.py`) intercepts `functional_tests/` coll
 - **PyCharm / VS Code:** Just click the play button on any `functional_tests/test_*.py` file or function — it runs on the connected board(s).
 - Per-library staging (`_resolve_library_source_dirs`) ensures only the library under test and its intra-workspace dependencies are staged — not the entire workspace.  Critical for RAM mode where all source is sent inline.
 - Staging tracks both library name and test file name, so switching test files within the same library triggers re-staging (RAM mode includes test file content in staged sources).
+- Session-scoped transport caching and per-file batch execution keep repeated IDE runs fast enough to use interactively.
 
 ### File deployment to flash
 
@@ -148,9 +150,15 @@ A `result_parser.py` module parses the harness's structured output (`PASS`, `FAI
 - `device-config.yml` and `devices.yml` must be in `.gitignore`.
 - The harness `runner.run_module` gains a backward-compatible `name_filter` parameter.
 - `test-device` becomes a real command instead of a placeholder.
-- IDE play buttons work for functional tests when the device runtime env var is set.
+- IDE play buttons work for explicit `functional_tests/` targets when `devices.yml` is configured.
 - Transport implementations are workspace-internal (in `support/`), not published libraries.
 - Decision 0016's staging requirement is addressed by the bootstrap/staging mechanism.
+
+## Implementation status update (2026-04-19)
+
+- Implemented: `devices.yml` top-level `defaults:` section, bare `test-device` defaults-backed selection, runtime-specific `--micropython-device` / `--circuitpython-device` overrides, per-file batch execution, and IDE-targeted `functional_tests/` collection.
+- Implemented: PyCharm-centered IDE workflow plus generated VS Code settings/tasks that use the same pytest plugin path.
+- Still pending: CI-injected device config, CI-hosted/manual-trigger board runs, and a dedicated live end-to-end VS Code verification pass.
 
 ## Hardware-validated findings (2026-04-12)
 

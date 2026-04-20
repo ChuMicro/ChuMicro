@@ -119,6 +119,13 @@ If your change could behave differently on a real board than in tests — timing
 3. **Runtime and version** (e.g., "CircuitPython 10.1.4" or "MicroPython v1.26.0")
 4. **What was tested** — which examples or functional tests you ran, and their results
 
+Typical verification commands:
+
+```bash
+python scripts/run.py test-device --library timing
+python scripts/run.py test-device --runtime both --library timing
+```
+
 Paste the output directly in the PR description or as a comment.
 
 ### Don't have a device?
