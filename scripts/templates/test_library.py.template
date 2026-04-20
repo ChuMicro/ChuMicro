@@ -1,29 +1,33 @@
-"""Tests for {import_name}."""
+"""Tests for {import_name}.
+
+Cross-runtime: runs on CPython (via pytest), and — if you import
+``raises`` from ``chumicro_test_harness`` for exception assertions —
+on MicroPython and CircuitPython through the lightweight test harness.
+"""
 
 import {import_name}
 
 
-class Test{class_name}:
-    """Tests for the {class_name} class."""
+def test_default_value() -> None:
+    """Default value is zero."""
+    thing = {import_name}.{class_name}()
+    assert thing.value == 0
 
-    def test_default_value(self):
-        """Default value is zero."""
-        thing = {import_name}.{class_name}()
-        assert thing.value == 0
 
-    def test_initial_value(self):
-        """{class_name} stores the initial value."""
-        thing = {import_name}.{class_name}(value=42)
-        assert thing.value == 42
+def test_initial_value() -> None:
+    """{class_name} stores the initial value."""
+    thing = {import_name}.{class_name}(value=42)
+    assert thing.value == 42
 
-    def test_update(self):
-        """update() changes the stored value."""
-        thing = {import_name}.{class_name}(value=1)
-        thing.update(99)
-        assert thing.value == 99
 
-    def test_check_returns_false(self):
-        """Placeholder check always returns False."""
-        thing = {import_name}.{class_name}()
-        assert thing.check(now_ms=0) is False
+def test_update() -> None:
+    """update() changes the stored value."""
+    thing = {import_name}.{class_name}(value=1)
+    thing.update(99)
+    assert thing.value == 99
 
+
+def test_check_returns_false() -> None:
+    """Placeholder check always returns False."""
+    thing = {import_name}.{class_name}()
+    assert thing.check(now_ms=0) is False

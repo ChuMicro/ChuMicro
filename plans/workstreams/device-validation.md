@@ -60,10 +60,10 @@ Purpose:
 - validate actual MicroPython and CircuitPython interpreter behavior on real hardware
 - validate board-facing integration points (GPIO, WiFi, real-time)
 
-Transport (Decision 0027):
+Transport (Decision 0027 + Decision 0028):
 
-- MicroPython: `mpremote` (mount mode default, copy mode fallback)
-- CircuitPython: pyserial raw REPL (Ctrl-A mode) for serial, CIRCUITPY USB copy for flash
+- MicroPython: `mpremote` — `--deploy-mode ram` uses `mpremote mount`, `--deploy-mode flash` uses `mpremote fs cp -r`
+- CircuitPython: pyserial raw REPL (Ctrl-A mode) — `--deploy-mode ram` execs source inline (with chunking against live free heap on lower-memory boards), `--deploy-mode flash` copies to the CIRCUITPY USB drive with autoreload control
 
 ## Implementation phases
 
@@ -118,7 +118,7 @@ Current verified state:
 - `scripts/generate_config_files.py` holds the canonical starter content
 - `scripts/device_config.py` loads and validates both config files with environment variable overrides
 - `devices.yml` has a `defaults:` section that controls bare `test-device` runs and IDE targeting
-- `support/device_transport/` provides `MicropythonTransport` (ram → mount, flash → copy via mpremote)
+- `support/device_transport/` provides `MicropythonTransport` (ram → mpremote mount, flash → mpremote fs cp -r) and `CircuitpythonTransport` (ram → inline raw-REPL exec, flash → copy to CIRCUITPY drive with autoreload control)
 - `scripts/result_parser.py` parses structured harness output (PASS/FAIL/SKIP/SUMMARY/HEAP)
 - `test-device` is a real orchestration command with `--runtime`, `--micropython-device`, `--circuitpython-device`, `--library`, `--test` flags
 - `runner.run_module` supports `name_filter` for single-test execution

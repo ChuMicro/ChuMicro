@@ -16,8 +16,16 @@
 
 ## Device testing
 
-N/A <!-- Replace with console output, board name, and runtime version
-         if your PR changes library source code that interacts with hardware.
+N/A <!-- Replace with the following when your PR changes library source
+         code that interacts with hardware:
+         - Board name + connection (e.g., "Wemos S2 Mini, USB serial")
+         - Runtime + version (e.g., "CircuitPython 10.1.4" or "MicroPython v1.26.0")
+         - The exact `test-device` command you ran (so reviewers know
+           which runtime, device ID, and deploy mode were exercised —
+           e.g., `test-device --runtime both --library timing
+           --deploy-mode flash`)
+         - Console output (scrub PII — WiFi passwords, IP addresses, etc.)
+
          If you don't have a device, say so — a maintainer can help test. -->
 
 ## Version impact

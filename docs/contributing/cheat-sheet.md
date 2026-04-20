@@ -8,8 +8,11 @@ Everything you need to know on one page. The full docs are linked if you want de
 git clone https://github.com/<your-username>/ChuMicro.git
 cd ChuMicro
 git remote add upstream https://github.com/ChuMicro/ChuMicro.git
-python scripts/prepare_workspace.py --create-venv
+python scripts/prepare_workspace.py --create-venv   # creates .venv + bootstraps the workspace
+python scripts/run.py setup                          # idempotent — re-run anytime to refresh
 ```
+
+After the first `prepare_workspace.py --create-venv` run, `python scripts/run.py setup` is the canonical front door — it installs deps, runs editable installs for libraries and support packages, regenerates IDE configs, and creates starter `devices.yml` / `device-config.yml` if they're missing.
 
 ## Workflow (every change)
 
@@ -47,9 +50,14 @@ git push -u origin fix/my-change      # then open PR on GitHub
 | Test MicroPython unix-port compatibility | `python scripts/run.py test-micropython-compatibility` |
 | Test CircuitPython unix-port compatibility | `python scripts/run.py test-circuitpython-compatibility` |
 | Test all runtimes (host + both unix ports) | `python scripts/run.py test-runtime-matrix` |
-| Deep local test sweep | `python scripts/run.py test-everything` |
-| Generate device config files | `python scripts/run.py setup` |
+| Deep local test sweep (host + scripts + unix ports; add `--with-device` for real boards) | `python scripts/run.py test-everything` |
+| Prepare MicroPython unix-port (one-time, slow — needed before unix-port commands) | `python scripts/run.py prepare-micropython` |
+| Prepare CircuitPython unix-port (one-time, slow) | `python scripts/run.py prepare-circuitpython` |
+| Build mpy-cross for both runtimes (faster than full unix-port build) | `python scripts/run.py prepare-mpy-cross` |
+| Refresh workspace + generate starter device configs | `python scripts/run.py setup` |
 | Run real-board functional tests | `python scripts/run.py test-device --library timing` |
+| Run real-board tests on both runtimes | `python scripts/run.py test-device --runtime both` |
+| Validate mip install against a bundle repo | `python scripts/run.py validate-mip --bundle-repo ChuMicro-Bundle-Experimental --libraries timing` |
 | Quick test (no coverage) | `python scripts/run.py test -k timing/test_heartbeat -x -v --no-cov` |
 | Build docs | `python scripts/run.py docs --libraries timing` |
 | Verify examples | `python scripts/run.py verify-examples --libraries timing` |
@@ -63,7 +71,7 @@ Every failure message tells you exactly what to do.
 |---|---|
 | Lint error | Run `python scripts/run.py lint`, fix the flagged lines — the error message tells you what's wrong |
 | Test failure | Read the assertion error — the test name and line number point you right to it |
-| Coverage too low | The coverage gate is 85%. Check the `Missing` column in the coverage report for uncovered line numbers. If it's code you didn't write, note it in the PR. For hardware-only code that can't be tested on CPython, see [coverage exclusions](style-guide.md#coverage-exclusions) |
+| Coverage too low | Human contributors target the 85 % baseline (configured in `pyproject.toml`); agents pass `--coverage-threshold 94` per [Decision 0025](../../plans/decisions/0025-dual-coverage-thresholds.md). Check the `Missing` column for uncovered line numbers. If it's code you didn't write, note it in the PR. For hardware-only code that can't be tested on CPython, see [coverage exclusions](style-guide.md#coverage-exclusions) |
 | `check-version` | Edit `libraries/<name>/VERSION` (patch bump is usually right) |
 | `griffe warnings` | Add type annotations to function signatures |
 | `functional_tests/` say no device is configured | Run `python scripts/run.py setup`, then fill in `devices.yml`. See [device testing](device-testing.md) |

@@ -98,7 +98,7 @@ A pytest plugin (`scripts/pytest_device.py`) intercepts explicit `functional_tes
 - Normal host-side discovery still ignores `functional_tests/`; when a functional-test path is explicitly targeted (e.g. IDE play button), the plugin collects it as device-backed pytest items and prevents local CPython execution.
 - A top-level `defaults:` section in `devices.yml` controls which board(s) the IDE targets:
   - `micropython` / `circuitpython` — device IDs to use for each runtime
-  - `deploy_mode` — global default (`ram` or `flash`), not per-device
+  - `deploy_mode` — workspace default (`ram` or `flash`); individual devices may override via their own `deploy_mode` field, and `--deploy-mode` on the CLI overrides both (Decision 0028)
   - `ide_runtime` — `micropython`, `circuitpython`, or `both`
 - When `ide_runtime` is `both`, each test function is collected twice (once per runtime) so the IDE shows separate pass/fail results.
 - **PyCharm / VS Code:** Just click the play button on any `functional_tests/test_*.py` file or function — it runs on the connected board(s).
@@ -157,8 +157,8 @@ A `result_parser.py` module parses the harness's structured output (`PASS`, `FAI
 ## Implementation status update (2026-04-19)
 
 - Implemented: `devices.yml` top-level `defaults:` section, bare `test-device` defaults-backed selection, runtime-specific `--micropython-device` / `--circuitpython-device` overrides, per-file batch execution, and IDE-targeted `functional_tests/` collection.
-- Implemented: PyCharm-centered IDE workflow plus generated VS Code settings/tasks that use the same pytest plugin path.
-- Still pending: CI-injected device config, CI-hosted/manual-trigger board runs, and a dedicated live end-to-end VS Code verification pass.
+- Implemented: PyCharm-centered IDE workflow (verified live with the multi-runtime test tree showing synthetic `Setup —` and `Run overhead —` nodes) plus generated VS Code settings/tasks that use the same pytest plugin path.
+- Still pending: CI-injected device config, CI-hosted/manual-trigger board runs, and a dedicated live end-to-end VS Code Testing-panel verification pass against hardware.
 
 ## Hardware-validated findings (2026-04-12)
 

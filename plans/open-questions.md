@@ -26,9 +26,10 @@ in `support/device_transport/` is shaped for extraction, but questions remain:
   its structure look like?
 - Should `.mpy` compilation be built-in or opt-in?
 
-Not blocking any current work.  Phase 2 (CircuitPython transport) and deploy
-modes (Decision 0028) are complete.  Revisit when the transport layer
-stabilizes after Phase 3 (IDE integration) and real-world usage.
+Not blocking any current work.  Phase 2 (CircuitPython transport), deploy
+modes (Decision 0028), and Phase 3 (IDE integration) are complete (live VS
+Code Testing-panel verification against hardware is the only outstanding
+piece).  Revisit when the transport layer has more real-world usage.
 
 
 ### Is ESP32 NVS worth a dedicated backend?
@@ -190,6 +191,30 @@ Currently scripts use `print()` for warnings and status.  A unified
 `logging` setup would allow log levels, consistent formatting, and
 filtering — but only makes sense if applied across all scripts, not
 piecemeal.  Parked for a rainy day.
+
+### Is `test-everything` the right name for an opt-in-device sweep?
+
+`python scripts/run.py test-everything` runs CPython tests, scripts
+infrastructure tests, and the unix-port runtime matrix in one pass.
+Real-board functional tests are intentionally **opt-in** via
+`--with-device` because they are slow and require connected hardware.
+
+That gap between what the name implies ("everything") and what it
+actually runs is mildly confusing — a user reading the name might
+expect device tests too.  The current behavior is correct (functional
+tests should not run by default), but the name oversells.
+
+Options:
+
+1. Rename to `test-deep` or `test-sweep` — clearer that it's a
+   developer-oriented broad sweep, not literally everything.
+2. Make `--with-device` the default and add `--no-device` as the
+   opt-out — closer to the name, but slow by default for anyone
+   running a quick sweep.
+3. Leave the name and document the carve-out clearly (current state).
+
+Not blocking any work.  Worth revisiting when more contributors start
+using the command in their default workflow.
 
 ---
 

@@ -66,3 +66,21 @@ No copies, no build artifacts, no version ambiguity.
   installs along with everything else.
 - Adding a new library (via `new-library`) automatically makes it
   importable workspace-wide.
+
+## Update 2026-04-18 — extend editable installs to support packages
+
+Originally `install_editable()` only installed publishable libraries
+under `libraries/`.  Support packages under `support/` (`abstractions`,
+`device_transport`, `test_harness`) relied on the root `conftest.py`'s
+`sys.path` manipulation, which only helped pytest-driven workflows.
+
+`install_editable()` now installs **both** publishable libraries and
+support packages, using `find_publishable_packages()` and a new
+`find_support_packages()` in `workspace.py`.  This means support
+packages are importable from any Python tool (REPL, scripts, debuggers)
+on the same footing as libraries.
+
+The legacy `_ensure_support_importable()` runtime `sys.path` shim was
+removed from `scripts/device_testing.py` once support packages had a
+real install path.  Root `conftest.py` still adds `sys.path` entries as
+a fallback for fresh clones before `setup` has run.

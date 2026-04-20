@@ -133,13 +133,26 @@ class MicropythonTransport:
         self._run_mpremote(["reset"])
 
     def reset(self) -> None:
-        """Soft-reset the device."""
+        """Soft-reset the device.
+
+        Used between library groups so each group starts with a clean
+        interpreter.  Distinct from :meth:`recover` only in intent: this
+        is a planned reset between healthy runs, while :meth:`recover` is
+        called after a failed test when the board state is unknown.  The
+        MicroPython implementation happens to be the same `mpremote
+        reset` call for both, but keeping them separate lets the
+        CircuitPython transport implement a different recovery path
+        (Ctrl-C interrupts + Ctrl-A) without leaking that asymmetry into
+        the orchestrator.
+        """
         self._run_mpremote(["reset"])
 
     def recover(self) -> None:
         """Attempt to recover after a failed test.
 
-        For MicroPython, this is a soft reset via mpremote.
+        See :meth:`reset` for the rationale on why this is a separate
+        method even though MicroPython implements both with the same
+        `mpremote reset` call.
         """
         self._run_mpremote(["reset"])
 

@@ -5,6 +5,8 @@ build-backend = "hatchling.build"
 [project]
 name = "chumicro-{name}"
 dynamic = ["version"]
+# TODO: replace with a one-line description; rendered on the docs landing page
+# and on PyPI. An empty value renders as an empty card.
 description = ""
 readme = "README.md"
 requires-python = ">=3.11"

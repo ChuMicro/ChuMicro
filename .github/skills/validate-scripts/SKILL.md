@@ -451,9 +451,12 @@ Use this to track which tasks have been validated:
 [ ] docs-deploy --channel invalid      (negative)
 [ ] preflight
 [ ] setup
+[ ] test-everything --libraries <name> --no-cov
+[ ] prepare-mpy-cross                  (slow — only when validating mpy build path)
 [ ] validate-mip (no --bundle-repo)  (negative)
 [ ] validate-mip --bundle-repo <repo> --libraries <name>
 [ ] validate-mip --bundle-repo <repo> --libraries <dep-lib>  (deps)
+[ ] validate-mip --staging-dir <dir> --libraries <name>      (pre-publish gate)
 [ ] unknown task                       (negative)
 ```
 
@@ -469,7 +472,10 @@ python scripts/run.py sync-ide                                  # sync-ide
 python scripts/run.py build 2>&1 | tail -5                     # build
 python scripts/run.py check-version 2>&1 | tail -5             # check-version
 python scripts/run.py check-api 2>&1 | tail -5                 # check-api
-python scripts/run.py test-device                               # test-device
+
+# Note: test-device is NOT fast when boards are connected — typical run is
+# tens of seconds per board, longer in flash mode. Run it intentionally,
+# not as part of an "all fast tasks" sweep.
 
 # Medium tasks (< 2 minutes total)
 python scripts/run.py test --all 2>&1 | tail -10                # test

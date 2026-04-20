@@ -29,18 +29,26 @@
 - [ ] Expand the device test matrix beyond ESP32-S2 once transport tooling is proven.
 - [ ] Device testing Phase 4: CI integration (`device-test.yml` with `workflow_dispatch`) — blocked on Phase 2 + deploy modes proving reliable on real hardware.
 
+## Investigations
+
+- [ ] **Investigate slow MicroPython RAM-mode functional test runs** — observed during 2026-04-19 live PyCharm testing that MicroPython RAM-mode functional tests took noticeably longer than expected. CircuitPython RAM-mode is fast in comparison. Suspects: per-file `mpremote mount` cost, cold-start interpreter overhead, batch-vs-per-test trade-off. Profile against the new batch-execute path and identify whether amortization can be improved.
+
 ## Done (recent)
 
 - [x] Docs and planning sync for device testing and IDE workflows — refreshed `README.md`, `CONTRIBUTING.md`, IDE guides, `support/test_harness/README.md`, library README development notes, and the active planning/docs files so they describe `devices.yml`, `device-config.yml`, `test-device`, deploy modes, and current VS Code/PyCharm status.
 
 - [x] Device-testing UX refinements — bare `test-device` now uses `devices.yml` defaults, `--runtime both` is explicit, the legacy `--device` flag was removed in favor of `--micropython-device` / `--circuitpython-device`, and large CircuitPython RAM-mode bootstraps are chunked against live free-heap measurements.
 
-- [x] Device testing Phase 3: IDE integration — `scripts/pytest_device.py` routes explicit `functional_tests/` targets to hardware using `devices.yml` as the gate. AST-based test discovery (no import), session-scoped transport caching, per-file batch execution, synthetic setup/run-overhead nodes, per-function `name_filter` execution, and defaults-backed runtime/device selection are in place. Decision 0027.
+- [x] Device testing Phase 3: IDE integration — `scripts/pytest_device.py` routes explicit `functional_tests/` targets to hardware using `devices.yml` as the gate. AST-based test discovery (no import), session-scoped transport caching, per-file batch execution, synthetic setup/run-overhead nodes, per-function `name_filter` execution, and defaults-backed runtime/device selection are in place. Decision 0027. Verified live in PyCharm (multi-runtime test tree); a dedicated VS Code Testing-panel verification pass against hardware is still pending.
+
+- [x] `test-everything` deep developer test sweep — single command that runs CPython tests, scripts tests, and the unix-port runtime matrix in one pass, with optional `--with-device` for real-board functional tests. Wired into PyCharm and VS Code as the **Test Everything** task. (Note: the name is slightly misleading because `--with-device` is opt-in, not the default — see open question.)
+
+- [x] CircuitPython flash/RAM hardening — many April-19 fixes: bulk-stage all sources in one rsync pass, soft-reset between library groups, `recover()` on transports after a failed test, FAT32 race fixes, `os.sync()` after flash writes, `__pycache__` exclusions, raw-REPL re-entry on disconnect, RAM bootstrap chunking against live `gc.mem_free()`, ESP32 budget relaxation, and per-file batch execution to amortize mpremote serial-connect overhead.
 
 - [x] Whitespace linter (CHU002–CHU005) — `scripts/check_whitespace.py` wired into `run.py lint`, fixed 42 pre-existing violations. Rules: file ends with one newline, no excess blank lines, no trailing whitespace, no blank line after block opener.
 - [x] Scripts consolidation — `ensure_build_tools` → `shared.py`; `load_tomllib`, `GITHUB_ORG`, `discover_library_dirs`, `read_pyproject_description`, `discover_doc_dirs`, `is_ref_reachable` → `workspace.py`. Tests aligned.
-- [x] Support package rename — `support/testing/` (`chumicro_testing`) → `support/abstractions/` (`chumicro_abstractions`). Contains both `RealTime` (production) and `FakeTime` (test fake).
-- [x] Editable-install support packages — `install_editable()` now installs both libraries and support packages. Previously support packages relied on `conftest.py` `sys.path` manipulation.
+- [x] Support package rename — `support/testing/` (`chumicro_testing`) → `support/abstractions/` (`chumicro_abstractions`). Now exports `FakeTime` only; production code defaults to Python's `time` module directly (`RealTime` was removed in commit `70393db` as a trivial wrapper).
+- [x] Editable-install support packages — `install_editable()` now installs both publishable libraries and support packages (`find_support_packages()` in `workspace.py`). Removed the legacy `_ensure_support_importable()` runtime `sys.path` fallback in `scripts/device_testing.py`.
 - [x] Deploy modes: RAM and flash (Decision 0028) — `--deploy-mode ram|flash` flag on `test-device`, CircuitPython flash transport (USB drive copy with autoreload control), `circuitpy_drive_path` device config field, bootstrap routing (inline for CP ram, standard imports for CP flash). MicroPython `ram`→`mount`, `flash`→`copy`.
 - [x] Device testing Phase 2: CircuitPython serial transport — `CircuitpythonTransport` (pyserial raw REPL: Ctrl-C interrupt, Ctrl-A enter, Ctrl-D execute, OK/stdout/stderr parsing), `build_circuitpython_bootstrap` (class-as-module injection, inline harness, test exec), orchestrator routing for CP devices. `pyserial` added to dev deps.
 - [x] Device testing infrastructure — Phase 1 complete (Decision 0027): `device_config.py` config loader, `result_parser.py` structured output parsing, `support/device_transport/` with `MicropythonTransport` (mount + copy modes), `name_filter` on `runner.run_module`, real `test-device` orchestration in `run.py`, and `mpremote` + `pyyaml` in dev dependencies.

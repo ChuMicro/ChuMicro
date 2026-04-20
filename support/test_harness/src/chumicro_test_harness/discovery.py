@@ -114,6 +114,8 @@ class _Namespace:
     two by copying dict entries into object attributes.
     """
 
+    pass
+
 
 def _exec_as_namespace(file_path, name="__main__", package=""):
     """Execute a ``.py`` file and return a namespace object with its globals.

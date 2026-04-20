@@ -41,7 +41,7 @@ def read(self, timeout: Optional[int] = None) -> Optional[bytes]: ...
 
 Infrastructure code (`scripts/`) may use `typing` imports since it runs only on CPython. Most of `support/` is also CPython-only, **except `support/test_harness/`** which runs on all three runtimes — treat it like library code.
 
-([Decision 0021](plans/decisions/0021-docstring-type-policy.md))
+([Decision 0021](../../plans/decisions/0021-docstring-type-policy.md))
 
 ## Docstrings
 
@@ -68,7 +68,7 @@ The sections you'll use most:
 
 The docs build fails on [griffe](https://mkdocstrings.github.io/griffe/) warnings about missing or malformed sections, so you'll know right away if something needs fixing.
 
-([Decision 0021](plans/decisions/0021-docstring-type-policy.md))
+([Decision 0021](../../plans/decisions/0021-docstring-type-policy.md))
 
 ## String formatting
 
@@ -155,7 +155,7 @@ class PacketReader:
 
 ## Coverage exclusions
 
-Every library must meet the coverage threshold (configured in `pyproject.toml`). Sometimes code genuinely can't be exercised in CPython tests — runtime-specific branches, hardware fallbacks, or defensive guards that only fire on a real board. Mark those lines so they don't drag down your coverage.
+Every library must meet the coverage threshold. Human contributors target the **85 %** baseline configured in `pyproject.toml` (`fail_under = 85`); agents pass `--coverage-threshold 94` on every `test`, `preflight`, and `test-everything` invocation per [Decision 0025](../../plans/decisions/0025-dual-coverage-thresholds.md). Sometimes code genuinely can't be exercised in CPython tests — runtime-specific branches, hardware fallbacks, or defensive guards that only fire on a real board. Mark those lines so they don't drag down your coverage.
 
 ### `# pragma: no cover` — exclude a line or block
 
@@ -205,7 +205,7 @@ open htmlcov/index.html
 Covered lines show in green, missed lines in red. Much easier than reading line numbers from the terminal output. (`htmlcov/` is gitignored.)
 
 
-`python scripts/run.py lint` runs two tools back to back. If both pass, your code is style-correct.
+`python scripts/run.py lint` runs three tools back to back. If all three pass, your code is style-correct.
 
 **Ruff** — a fast Python linter that enforces:
 
@@ -217,11 +217,20 @@ Covered lines show in green, missed lines in red. Much easier than reading line 
 | `B` — bugbear | Common pitfalls like mutable default arguments, bare `except:`, unused loop variables |
 | `UP` — pyupgrade | Modernization — replaces old syntax with newer Python equivalents |
 
-**CHU001** — a custom naming check that catches:
+**`scripts/check_names.py` — `CHU001`** catches:
 
 - Single-letter variable names in assignments, parameters, and function names (`x` → use a descriptive name, `e` → `error`)
 - For-loop targets are exempt — `for i in range(10)` is fine
 - Abbreviated names we prefer spelled out (`env` → `environment`, `buf` → `buffer`)
 - Those same abbreviations as suffixes (`base_ref` → `base_reference`, `build_env` → `build_environment`)
+
+**`scripts/check_whitespace.py` — `CHU002`–`CHU005`** catches whitespace bugs that diff noisily and are easy to miss in review:
+
+| Rule | What it catches |
+|---|---|
+| `CHU002` | File does not end with exactly one newline |
+| `CHU003` | More than two consecutive blank lines inside a file |
+| `CHU004` | Trailing whitespace on any line |
+| `CHU005` | Blank line immediately after a block opener (`def`, `class`, `if:`, `for:`, etc.) |
 
 If lint passes, your style is correct. You don't need to memorize any of this — the error messages tell you exactly what to fix and why.

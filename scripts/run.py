@@ -586,8 +586,8 @@ def preflight(
 
     Mirrors the CI matrix as closely as possible on the local machine:
     lint, build, docs (with griffe warning detection), CPython tests,
-    example verification, version-check, api-check, MicroPython and
-    CircuitPython cross-runtime unit tests.
+    scripts infrastructure tests, example verification, version-check,
+    api-check, MicroPython and CircuitPython cross-runtime unit tests.
 
     Pass *coverage_threshold* to override the ``pyproject.toml`` default
     (85 %).  Agents should pass ``--coverage-threshold 94`` (Decision 0025).

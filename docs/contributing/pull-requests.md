@@ -147,9 +147,11 @@ Common failures:
 | Check | Typical cause | Fix |
 |---|---|---|
 | `test` | Coverage below threshold | Follow the hint below the FAIL line — it points to the uncovered lines |
-| `lint` | Formatting issue | Run `python scripts/run.py lint` locally and fix |
+| `lint` | Formatting issue or banned name/whitespace | Run `python scripts/run.py lint` locally — it runs Ruff plus the workspace's `CHU001` (names) and `CHU002`–`CHU005` (whitespace) checks |
 | `version-check` | Changed source without bumping VERSION | Edit `libraries/<name>/VERSION` |
 | `api-check` | Removed or renamed a public function | Bump VERSION to next minor/major |
+| `validate-mpy` | mpy-cross failed to compile a library, or the staged bundle's `package.json` is broken | Build the bundle locally (`python scripts/run.py build`) and check the validate-mpy job log for the failing library |
+| `runtime-compatibility` (MicroPython / CircuitPython) | Test fails under the unix-port build of one runtime | Reproduce locally with `python scripts/run.py test-micropython-compatibility` or `test-circuitpython-compatibility` |
 
 For detailed output examples (success and failure), see your [development environment guide](../../CONTRIBUTING.md#development-environment).
 

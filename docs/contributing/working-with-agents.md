@@ -12,7 +12,10 @@ An AI coding agent is a tool that reads code, proposes changes, runs tests, and 
 - **Fixing lint errors** and formatting issues
 - **Exploring the codebase** to answer "how does X work?" questions
 
-Agents follow the same rules as human contributors — they run preflight, their code goes through review, and their PRs must pass CI. The difference is that agents have a stricter rule set ([`AGENTS.md`](../../AGENTS.md)) because they need explicit instructions for things a human would intuit, like "don't reformat code you didn't change" or "check whether this was already decided."
+Agents follow the same rules as human contributors — they run preflight, their code goes through review, and their PRs must pass CI. The difference is that agents have a stricter rule set ([`AGENTS.md`](../../AGENTS.md)) because they need explicit instructions for things a human would intuit, like "don't reformat code you didn't change" or "check whether this was already decided." Two agent-specific rules worth knowing about as a human collaborator:
+
+- **`task-checkpoint`** — agents run preflight and commit after each unit of work, so the tree stays clean as you collaborate.
+- **94 % coverage threshold** — humans target the 85 % baseline configured in `pyproject.toml`; agents pass `--coverage-threshold 94` on every `test`, `preflight`, and `test-everything` invocation per [Decision 0025](../../plans/decisions/0025-dual-coverage-thresholds.md). If your agent's coverage failure shows `94.0%`, that's why.
 
 ## What agents don't replace
 

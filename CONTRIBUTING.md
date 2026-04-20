@@ -306,11 +306,15 @@ Device testing is **optional**. If your change could behave differently on a rea
 When you do want real-board coverage, the current workflow is:
 
 1. Run `python scripts/run.py setup` once to generate local `devices.yml` and `device-config.yml` files.
-2. Fill in your board details in `devices.yml` and any shared environment data in `device-config.yml`.
-3. Run `python scripts/run.py test-device` for the defaults-backed target set, or add filters such as `--library timing`, `--runtime both`, or `--deploy-mode flash`.
+2. Fill in your board details in `devices.yml` and any shared environment data in `device-config.yml`. The top-level `defaults:` block in `devices.yml` picks the runtime(s) and per-runtime board IDs that bare `test-device` and IDE play buttons target.
+3. Run `python scripts/run.py test-device` for the defaults-backed target set, or override with `--library timing`, `--runtime micropython|circuitpython|both`, `--micropython-device <id>`, `--circuitpython-device <id>`, `--test <filter>`, or `--deploy-mode ram|flash`.
 4. For IDE-driven runs, target an explicit `functional_tests/` file, directory, or function — the pytest device plugin routes it to the board selected by `devices.yml`.
 
 The full schema and workflow live in the [device testing guide](docs/contributing/device-testing.md).
+
+### End-of-session housekeeping
+
+If you've been working through a longer session, the **[end-of-session checklist](.github/skills/end-of-session/SKILL.md)** has the full cleanup pass — preflight, VERSION bump check, IDE config sync, planning-doc audit, and a clean-tree verification. Most one-off contributions don't need it; longer or multi-PR sessions do.
 
 ### Commit messages
 

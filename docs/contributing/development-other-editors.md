@@ -11,7 +11,9 @@ cd ChuMicro
 python scripts/prepare_workspace.py --create-venv
 ```
 
-This creates a `.venv`, installs dependencies, runs **editable installs** (`pip install -e`) for every library, and verifies the workspace. Look for `Workspace is ready` at the end.
+This creates a `.venv`, installs dependencies, runs **editable installs** (`pip install -e`) for every library and support package, and verifies the workspace. Look for `Workspace is ready` at the end.
+
+After the first run, `python scripts/run.py setup` is the canonical front door for refreshing the workspace — same install + IDE sync + starter device-config generation.
 
 Activate the venv before opening your editor so it picks up the right interpreter:
 

@@ -27,10 +27,10 @@ Follow steps 1–4 of the [quick start](../../CONTRIBUTING.md#quick-start) in th
 Open the built-in terminal (**View → Tool Windows → Terminal**, or `⌥F12` / `Alt+F12`) and run:
 
 ```bash
-python scripts/prepare_workspace.py
+python scripts/run.py setup
 ```
 
-This installs dependencies and verifies the workspace. It produces a lot of output — look for this at the end:
+This installs dependencies, runs editable installs for every library and support package, regenerates IDE configs, and creates starter `devices.yml` / `device-config.yml` if they are missing. It produces a lot of output — look for this at the end:
 
 ```
 ============================================================
@@ -69,8 +69,9 @@ The project includes pre-configured run configurations in `.idea/runConfiguratio
 | **MicroPython Compatibility** | Cross-runtime tests under MicroPython unix port |
 | **CircuitPython Compatibility** | Cross-runtime tests under CircuitPython unix port |
 | **Runtime Matrix** | Test all packages across CPython + MicroPython + CircuitPython |
-| **Setup** | Install dev dependencies |
-| **Prepare Workspace** | Full workspace setup |
+| **Test Everything** | Deep developer test sweep — CPython, scripts, and the unix-port runtime matrix in one pass (real-board tests opt-in via `--with-device`) |
+| **Setup** | `python scripts/run.py setup` — installs dev deps, runs editable installs, regenerates IDE configs, generates starter device configs |
+| **Prepare Workspace** | Lower-level workspace prep — invokes `scripts/prepare_workspace.py` directly (advanced users; `Setup` is usually what you want) |
 | **Test Device** | Run defaults-backed real-board functional tests |
 
 Click the ▶ button or press `⌃R` / `Shift+F10` to run the selected configuration.
@@ -95,7 +96,7 @@ For real-board `functional_tests/`, the same play buttons route to hardware once
 
 For device-backed `functional_tests/`, the test tree includes synthetic nodes such as `Setup — MicroPython`, `Run overhead — MicroPython`, `Setup — CircuitPython`, and `Run overhead — CircuitPython`. The setup node owns staging time. Individual test functions show the durations reported by the on-device harness, while the run-overhead node keeps only the remaining batch overhead that is not attributable to a single test.
 
-Large CircuitPython RAM-mode functional tests are sent in multiple raw-REPL chunks instead of one giant inline bootstrap. Before sending those chunks, the transport asks the board for its live free heap, strips comments and docstrings from staged library and harness source, and sizes each chunk conservatively from the measured RAM budget. If a single chunk still cannot fit, the run fails early with a flash-mode hint. In that case, set the board's `deploy_mode: flash` in `devices.yml` or use the CLI with `--deploy-mode flash`.
+Large CircuitPython RAM-mode functional tests are sent in multiple raw-REPL chunks instead of one giant inline bootstrap. Before sending those chunks, the transport asks the board for its live free heap (`gc.collect()` then `gc.mem_free()`), strips docstrings from staged library and harness source, and sizes each chunk conservatively from the measured RAM budget. If a single chunk still cannot fit, the run fails early with a flash-mode hint. In that case, set the board's `deploy_mode: flash` in `devices.yml` or use the CLI with `--deploy-mode flash`.
 
 > **Note:** PyCharm also offers **Run with Coverage** (shield icon). This uses PyCharm's built-in coverage runner, which doesn't understand the project's multi-library layout. Use the **Test** run config or the terminal for accurate coverage.
 
@@ -140,7 +141,7 @@ Process finished with exit code 0
 
 | What you see | What it means | How to fix |
 |---|---|---|
-| `Required test coverage of 94.0% not reached` | Tests don't cover enough code | Follow the hint below the FAIL line — it points to the `Missing` column |
+| `Required test coverage of 85.0% not reached` | Tests don't cover enough code | Follow the hint below the FAIL line — it points to the `Missing` column. (Agents who pass `--coverage-threshold 94` will see `94.0%` instead — see [Decision 0025](../../plans/decisions/0025-dual-coverage-thresholds.md).) |
 | `ruff check` errors | Code style violation — see [Style Guide](style-guide.md) | Click the file:line link in the output to jump to the issue |
 | `griffe warnings detected` | Bad or missing docstrings | Add type annotations to the signature; `Args:` uses `name: description` (no type), `Returns:` uses just the description |
 | `check-version` failure | Source changed without VERSION bump | Edit `libraries/<name>/VERSION` |

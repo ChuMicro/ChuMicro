@@ -4,13 +4,11 @@
 
 **Compact [MessagePack](https://msgpack.org) serialization — much smaller than JSON.**
 
-Turns Python dicts, lists, and values into binary bytes, typically 30–50% smaller than JSON. Good for NVM storage, serial protocols, and anywhere bytes matter. On CircuitPython boards with the native `msgpack` C module, everything delegates to the built-in — the pure-Python code is never loaded, saving ~700 bytes of heap.
+Turns Python dicts, lists, and values into binary bytes, typically 30–50% smaller than JSON. Good for NVM storage, serial protocols, and anywhere bytes matter. On CircuitPython boards with the native `msgpack` C module, everything delegates to the built-in — the pure-Python code is never loaded, saving ~700 bytes of heap. Works on CircuitPython, MicroPython, and CPython.
 
 <br clear="left">
 
 > Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family — small, focused Python libraries for microcontrollers and laptops. [See all libraries.](https://github.com/ChuMicro/ChuMicro#whats-in-the-box)
-
-Works on CircuitPython, MicroPython, and CPython.
 
 ## Installation
 
@@ -130,7 +128,7 @@ Use `pack`/`unpack` when writing to files, sockets, or NVM.  Use `packb`/`unpack
 
 ## Developing this library
 
-Host-side tests live in `tests/`; real-board functional tests live in `functional_tests/` when a behavior needs hardware-backed validation.
+Host-side tests live in `tests/`; real-board functional tests live in `functional_tests/`.
 
 ```bash
 python scripts/run.py test --libraries msgpack

@@ -4,7 +4,7 @@
 
 **Standard library features that CircuitPython and MicroPython are missing.**
 
-Import from `chumicro_compat` instead of the stdlib and your code works everywhere. On CPython it re-exports the real C implementations (zero overhead); on microcontrollers it provides lightweight pure-Python versions.
+Import from `chumicro_compat` instead of the stdlib and your code works everywhere. On CPython it re-exports the real C implementations (zero overhead); on microcontrollers it provides lightweight pure-Python versions. Works on CircuitPython, MicroPython, and CPython.
 
 <br clear="left">
 
@@ -107,7 +107,7 @@ The public API (`.func`, `.args`, `.keywords`, `__call__`, `__repr__`) is identi
 
 ## Developing this library
 
-Host-side tests live in `tests/`; real-board functional tests live in `functional_tests/` when a behavior needs hardware-backed validation.
+Host-side tests live in `tests/`; real-board functional tests live in `functional_tests/`.
 
 ```bash
 python scripts/run.py test --libraries compat

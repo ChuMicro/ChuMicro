@@ -160,6 +160,7 @@ Simulated examples run on CPython.  Hardware examples (`circuitpython_*` / `micr
      One bullet per change. Internal refactors don't need entries.
      At stable promotion, collapse/edit as needed. -->
 
+- **0.1.25**: Functional tests for timing on real boards; doc and template fixes from the device-testing audit.
 - **0.1.24**: Documentation sync and CI build performance improvements.
 
 ---

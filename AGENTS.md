@@ -21,7 +21,7 @@ Before proposing a structural or pattern change, check `plans/decisions/` first.
 - **Large output:** Pipe through `tail`, `head`, or `grep`. Redirect to `.scratch/` when full output is needed.
 - **Disable pagers:** Use `git --no-pager` or `| cat`.
 - **Use per-library pytest via `python scripts/run.py test`** — never run bare `pytest` from the repository root.
-- **Maintain the coverage gate** per library — the human baseline is 85 % (configured in `pyproject.toml`). **Agents must pass `--coverage-threshold 94`** on every `test` and `preflight` invocation (Decision 0025). Use `# pragma: no cover` where code genuinely cannot be exercised in CPython tests (runtime-only branches, hardware fallbacks) — see the [coverage exclusions](docs/contributing/style-guide.md#coverage-exclusions) section in the style guide.
+- **Maintain the coverage gate** per library — the human baseline is 85 % (configured in `pyproject.toml`). **Agents must pass `--coverage-threshold 94`** on every `test`, `preflight`, and `test-everything` invocation (Decision 0025). Use `# pragma: no cover` where code genuinely cannot be exercised in CPython tests (runtime-only branches, hardware fallbacks) — see the [coverage exclusions](docs/contributing/style-guide.md#coverage-exclusions) section in the style guide.
 - **No `async`/`await`, no ISRs** — use the tick-based runner pattern from Decision 0014.
 - **Use constructor injection** for time, I/O, and network dependencies. Put fakes in the library's `testing.py` submodule. See Decision 0010.
 - **Use f-strings everywhere.** Use `const()`, `memoryview`, and pre-allocated buffers in library code only.
@@ -63,6 +63,8 @@ Procedural knowledge lives in `.github/skills/`. Read the relevant skill file be
 | `new-decision` | When recording a structural or pattern decision |
 | `guide-generation` | When writing or refreshing `docs/guide.md` |
 | `validate-scripts` | When changing or validating `scripts/` infrastructure |
+
+`end-of-session` lives under `.github/skills/` for human contributors only — agents should use `task-checkpoint` after each unit of work instead.
 
 ### Context recovery
 
@@ -152,7 +154,7 @@ Conventions:
 | `python scripts/run.py test-circuitpython-compatibility` | CircuitPython cross-runtime unit tests |
 | `python scripts/run.py test-runtime-matrix` | Test all packages on CPython + MicroPython + CircuitPython |
 | `python scripts/run.py test-everything` | Deep developer test sweep: CPython, scripts, unix-port runtimes, and optional device tests |
-| `python scripts/run.py test-device` | Run functional tests on the default device target(s) from `devices.yml` (`--deploy-mode ram\|flash`) |
+| `python scripts/run.py test-device` | Run functional tests on the default device target(s) from `devices.yml`. Override with `--runtime micropython\|circuitpython\|both`, `--micropython-device <id>`, `--circuitpython-device <id>`, `--library <name>`, `--test <filter>`, `--deploy-mode ram\|flash` |
 | `python scripts/run.py check-version` | Check VERSION enforcement for changed libraries |
 | `python scripts/run.py check-api` | Check API breakages against last release tag |
 

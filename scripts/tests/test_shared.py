@@ -2,6 +2,7 @@
 
 import os
 import shutil
+import sys
 from pathlib import Path
 
 import pytest
@@ -25,21 +26,24 @@ class TestRunCommand:
 
     def test_successful_command(self, capsys):
         """Successful command returns 0."""
-        result = run_command(["python", "-c", "print('ok')"])
+        # Use sys.executable so the test works on systems where the
+        # bare ``python`` symlink isn't on PATH (Homebrew installs only
+        # python3 / python3.14).
+        result = run_command([sys.executable, "-c", "print('ok')"])
         assert result == 0
         # Prints the command with + prefix.
         assert "+" in capsys.readouterr().out
 
     def test_failing_command(self):
         """Failing command returns non-zero exit code."""
-        result = run_command(["python", "-c", "raise SystemExit(42)"])
+        result = run_command([sys.executable, "-c", "raise SystemExit(42)"])
         assert result == 42
 
     def test_prints_command(self, capsys):
         """Command is printed before execution."""
-        run_command(["python", "-c", "pass"])
+        run_command([sys.executable, "-c", "pass"])
         captured = capsys.readouterr().out
-        assert "+ python -c pass" in captured
+        assert f"+ {sys.executable} -c pass" in captured
 
 
 class TestInstallCommand:

@@ -34,8 +34,11 @@ libraries/my-thing/
 │   └── testing.md                   # testing helpers docs
 ├── examples/
 │   └── quickstart.py                # working example using MyThing
-└── functional_tests/                # on-device tests
+└── functional_tests/
+    └── .gitkeep                     # on-device tests live here
 ```
+
+In addition to creating the library directory, the scaffolder runs an editable install (`pip install -e libraries/my-thing`) and re-runs `sync-ide`, which updates `.idea/chumicro.iml`, `.idea/runConfigurations/`, `pyrightconfig.json`, `.vscode/tasks.json`, and `.vscode/settings.json` so your IDE picks up the new package immediately. Don't be surprised by those files appearing in `git status` after running `new-library` — they're managed configs.
 
 The scaffold is immediately runnable — tests pass at 100% coverage, lint is clean, and the example executes. Start by replacing the starter `MyThing` class in `core.py` with your real implementation.
 
@@ -138,7 +141,8 @@ If downstream libraries or users would benefit from test fakes, keep `src/chumic
 1. Delete `src/chumicro_my_thing/testing.py`
 2. Delete `docs/testing.md`
 3. Remove `- Testing Helpers: testing.md` from `mkdocs.yml`
-4. Remove the Testing Helpers link from `docs/index.md` and `README.md`
+4. Remove the Testing Helpers link from `docs/index.md`
+5. Remove the Testing Helpers link from `README.md`
 
 ### Functional tests on real boards
 

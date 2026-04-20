@@ -12,13 +12,13 @@ The agent terminal **cannot reliably handle** multi-line input. This includes:
 - Heredocs (`<< EOF ... EOF`) for creating files
 - `echo` / `printf` / `cat` with embedded newlines
 
-**Always write the content to a `.scratch/` file using `create_file`, then run or use it from the terminal.**
+**Always write the content to a `.scratch/` file using your harness's file-write tool, then run or use it from the terminal.**
 
 ## Running Python code
 
 ### Step 1 — Write the script
 
-Use `create_file` to write the Python code to `.scratch/<descriptive-name>.py`. This overwrites any previous content.
+Use your harness's file-write tool (Claude Code's `Write`, Copilot's `create_file`, Cursor's editor, etc.) to write the Python code to `.scratch/<descriptive-name>.py`. This overwrites any previous content.
 
 ### Step 2 — Run it
 

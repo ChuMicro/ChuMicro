@@ -41,7 +41,8 @@ Then read `.scratch/preflight.log` with a file tool if more context is needed.
 |---------|---------------|----------------|
 | `preflight` | `Preflight passed` | `Preflight failed at: <step>` |
 | `test` | `X passed` | `FAILED` or `ERROR` in pytest output |
-| `lint` | `All checks passed!` | Ruff violation lines (file:line:col) |
+| `test-everything` | Each phase prints `== <step> ==` then `Preflight passed`-style summary at the end. Use `grep -E '^== '` to see the phase headers without the per-phase noise | `FAIL` lines or `Preflight failed at: <step>`-style output from a sub-phase |
+| `lint` | `All checks passed!` | Ruff violation lines (file:line:col), or `CHU001`/`CHU002`–`CHU005` lines from the in-tree linters |
 | `build` | `Built N package(s)` | Python traceback |
 
 ## Rules

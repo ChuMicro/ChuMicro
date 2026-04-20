@@ -18,19 +18,23 @@ Classes that depend on external services (time, I/O, network) must accept those 
 ```python
 # Good — testable
 class Heartbeat:
-    def __init__(self, interval_ms: int, ticks_ms: object, ticks_diff: object) -> None:
-        self._interval_ms = interval_ms
-        self._ticks_ms = ticks_ms
-        self._ticks_diff = ticks_diff
+    def __init__(self, period_ms: int, ticks: object | None = None) -> None:
+        self._period_ms = period_ms
+        # Inject a ticks source (e.g. FakeTicks) for tests; default to the
+        # real clock in production.
+        self._ticks = ticks
 
 # Bad — not testable without monkeypatching
 class Heartbeat:
-    def __init__(self, interval_ms: int) -> None:
-        self._interval_ms = interval_ms
+    def __init__(self, period_ms: int) -> None:
+        self._period_ms = period_ms
 
     def is_due(self) -> bool:
         now = time.monotonic_ns()  # hard-wired
 ```
+
+The real signature in `chumicro_timing.heartbeat.Heartbeat` follows this shape:
+`__init__(self, period_ms: int, ticks: object | None = None)`.
 
 ### 2. Provide fakes for things you own
 
