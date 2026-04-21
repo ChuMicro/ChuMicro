@@ -1068,10 +1068,9 @@ class TestRunTestsOnDevice:
     def test_stage_failure_in_non_ram_mode_returns_errors_for_all_files(
         self, tmp_path, monkeypatch,
     ) -> None:
-        """MicroPython mount mode bulk-stages upfront; a stage failure fails
-        every collected test file as an error and disconnects."""
+        """Non-RAM deploy modes bulk-stage upfront; a stage failure errors every file."""
         transport = _RecordingTransport(
-            mode="mount",
+            mode="copy",
             stage_raises=RuntimeError("mount denied"),
         )
         monkeypatch.setattr(
@@ -1299,6 +1298,42 @@ class TestRunTestsOnDevice:
         # Two stage calls (per library), not one.
         stage_calls = [call for call in transport.calls if call[0] == "stage"]
         assert len(stage_calls) == 2
+
+    def test_micropython_mount_ram_mode_stages_per_library(
+        self, tmp_path, monkeypatch,
+    ) -> None:
+        """MicroPython RAM mode must re-stage per library after each soft reset.
+
+        Regression: the orchestrator used ``transport.mode == \"ram\"`` to
+        decide whether staging was per-library. MicroPython RAM mode reports
+        ``mode == \"mount\"``, so the run bulk-staged once, soft-reset after
+        the first library, dropped the mount, and then the second library's
+        bootstrap failed with ``ImportError: no module named
+        'chumicro_test_harness'``.
+        """
+        transport = _RecordingTransport(
+            mode="mount", outputs=[_PASS_OUTPUT, _PASS_OUTPUT],
+        )
+        monkeypatch.setattr(
+            device_testing, "create_transport",
+            lambda device_entry, deploy_mode=None: transport,
+        )
+        monkeypatch.setattr(
+            device_testing, "resolve_library_source_dirs",
+            lambda library_dir, test_files=None: [library_dir / "src"],
+        )
+
+        plan = [_plan_entry(tmp_path, "alpha"), _plan_entry(tmp_path, "beta")]
+        device_result = device_testing._run_tests_on_device(
+            _micropython_device(), plan,
+            harness_source=tmp_path / "harness", function_filter=None,
+        )
+
+        assert (device_result.passed, device_result.failed, device_result.errors) == (2, 0, 0)
+        stage_calls = [call for call in transport.calls if call[0] == "stage"]
+        assert len(stage_calls) == 2
+        soft_reset_calls = [call for call in transport.calls if call[0] == "soft_reset"]
+        assert len(soft_reset_calls) == 1
 
     def test_stage_failure_in_ram_mode_errors_only_that_library(
         self, tmp_path, monkeypatch,

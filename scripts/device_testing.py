@@ -477,9 +477,10 @@ def _bulk_stage_test_plan(
 ) -> int:
     """Stage every library + test file for a non-RAM-mode device in one pass.
 
-    Flash and MicroPython mount modes persist files on the device
-    filesystem, so we can stage everything up front instead of per
-    library.  On FAT32 drives that avoids N rsync passes.
+    Non-RAM deploy modes persist files on the device filesystem, so we can
+    stage everything up front instead of per library. On FAT32 drives that
+    avoids N rsync passes, and on MicroPython copy mode it avoids repeated
+    ``fs cp -r`` calls.
 
     Args:
         transport: Connected transport.
@@ -706,7 +707,12 @@ def _run_tests_on_device(
         print(f"  WARNING: Implementation probe failed: {probe_error}")
 
     # --- initial staging ----------------------------------------------
-    use_per_library_staging = transport.mode == "ram"
+    # The transport's internal ``mode`` names differ by runtime
+    # (MicroPython RAM mode is ``mount``; CircuitPython RAM mode is ``ram``),
+    # but the user-facing deploy mode is consistently ``ram`` / ``flash``.
+    # Use that resolved deploy mode to decide whether staging must happen per
+    # library after each soft reset.
+    use_per_library_staging = result.deploy_mode == "ram"
     if not use_per_library_staging:
         bulk_stage_errors = _bulk_stage_test_plan(
             transport, test_plan, harness_source,
@@ -722,7 +728,8 @@ def _run_tests_on_device(
     # VM across files (raw REPL on CircuitPython, mpremote's persistent
     # SerialTransport on MicroPython), and without the reset ``sys.modules``
     # accumulates until low-memory boards fail their next bootstrap with
-    # ``MemoryError``.
+    # ``MemoryError``. RAM-mode runs must re-stage after that reset because
+    # the staged modules live only in the reset interpreter / mount session.
     abort = False
     previous_library_ran = False
     for library_name, source_dir, test_files in test_plan:
