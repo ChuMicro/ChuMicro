@@ -94,7 +94,7 @@ On your laptop, install from PyPI — no bundle needed:
 pip install chumicro-timing
 ```
 
-*Just getting started? Skip this — the install commands above are all you need.*
+*New here? The install commands above are all you need — the experimental-builds section below is only for users who want to track pre-release versions.*
 
 <details>
 <summary>Experimental (pre-release) builds and channel switching</summary>
