@@ -5,6 +5,7 @@
 (empty — pick from Next)
 
 ## Next
+- [ ] **Rebrand ChuMicro → ChipPy** (see `plans/workstreams/rename-to-chippy.md`). Full org + package + bundle rename, all library `VERSION` files reset to `0.0.0`. Execute when the project is ready for first public opening; sheds accumulated test-churn releases from PyPI since the namespace changes.
 - [ ] Validate VS Code workspace end-to-end for on-device `functional_tests/` (tasks/settings are generated and explicit `functional_tests/` targets use the pytest device plugin, but a live editor verification pass is still wanted).
 - [ ] `chumicro-deploy` standalone pip package — extract transport layer into a publishable tool for deploying user projects to boards. Companion project template repo. See Decision 0028.
 - [ ] Enable GitHub Copilot code review as a PR quality gate (low priority — defer until community contributions begin).
