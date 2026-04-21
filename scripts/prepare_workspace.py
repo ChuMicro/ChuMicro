@@ -1,13 +1,26 @@
 #!/usr/bin/env python3
 """Prepare the ChuMicro workspace for development and testing.
 
-Uses whatever Python interpreter runs it.  Works with an IDE-managed
-virtual environment, uv, or ``--create-venv`` for a fresh start.
+This is the first-clone bootstrap script.  It auto-detects the Python
+environment and always verifies the install before reporting success:
+
+1. Reuse the current interpreter if it is an active venv or conda env.
+2. Otherwise reuse an existing ``.venv`` at the repository root.
+3. Otherwise create ``.venv`` (via ``uv`` if available, else stdlib
+   ``venv``).
+
+After installing dependencies and editable libraries it runs lint and
+host tests to confirm the workspace is functional; use
+``python scripts/run.py preflight`` for the full CI mirror.
+
+If you already have a ready-to-use workspace (venv active, deps
+installed), ``python scripts/run.py setup`` is the everyday refresh
+entry point — ``prepare_workspace.py`` is the bootstrap that runs
+before any third-party packages exist.
 
 Usage::
 
-    python scripts/prepare_workspace.py              # install dependencies + verify
-    python scripts/prepare_workspace.py --create-venv  # create .venv first
+    python scripts/prepare_workspace.py    # auto-detect or create .venv, then verify
 
 This script imports ``workspace`` and ``shared`` for shared helpers
 (ROOT, editable-install logic).  Both modules are safe to import on a
@@ -147,40 +160,15 @@ def _has_uv() -> bool:
     return shutil.which("uv") is not None
 
 
-def resolve_python(create_venv: bool) -> Path:
+def resolve_python() -> Path:
     """Decide which Python interpreter to use for the remaining steps.
 
-    If *create_venv* is True, create ``.venv`` (or reuse it) and return
-    its interpreter.
-
-    If *create_venv* is False, the script looks for an active virtual
-    environment or conda environment first, then checks whether a
-    ``.venv`` directory already exists.
-
-    Args:
-        create_venv: Whether to create a new virtual environment.
+    Looks for an active virtual environment or conda environment first,
+    then an existing ``.venv`` directory, and finally creates ``.venv``
+    at the repository root when nothing else is available.  This makes
+    the script safe to run on a completely fresh clone without any
+    flags.
     """
-    if create_venv:
-        if _venv_python().exists():
-            print(f"Virtual environment exists: {VENV_DIR}")
-        elif _has_uv():
-            minimum_version = ".".join(str(part) for part in MIN_PYTHON)
-            _banner("Creating virtual environment (uv)")
-            print(f"  {VENV_DIR}\n")
-            subprocess.run(
-                ["uv", "venv", "--python", f">={minimum_version}",
-                 str(VENV_DIR)],
-                cwd=ROOT, check=True,
-            )
-        else:
-            # stdlib venv inherits the running interpreter's version —
-            # check it first to avoid creating a useless venv.
-            _check_python_version()
-            _banner("Creating virtual environment")
-            print(f"  {VENV_DIR}\n")
-            venv.create(str(VENV_DIR), with_pip=True)
-        return _venv_python()
-
     # Already inside a virtual environment or conda — use it.
     if _in_virtual_environment() or os.environ.get("CONDA_PREFIX"):
         print(f"Using {_describe_environment()}")
@@ -191,14 +179,24 @@ def resolve_python(create_venv: bool) -> Path:
         print(f"Found existing virtual environment: {VENV_DIR}")
         return _venv_python()
 
-    # No environment available — refuse to install into system Python.
-    print("No virtual environment detected.")
-    print()
-    print("Options:")
-    print("  python scripts/prepare_workspace.py --create-venv   # create .venv")
-    print("  source .venv/bin/activate                           # activate existing")
-    print("  uv venv && source .venv/bin/activate                # create with uv")
-    raise SystemExit(1)
+    # No environment anywhere — create one automatically.
+    if _has_uv():
+        minimum_version = ".".join(str(part) for part in MIN_PYTHON)
+        _banner("Creating virtual environment (uv)")
+        print(f"  {VENV_DIR}\n")
+        subprocess.run(
+            ["uv", "venv", "--python", f">={minimum_version}",
+             str(VENV_DIR)],
+            cwd=ROOT, check=True,
+        )
+    else:
+        # stdlib venv inherits the running interpreter's version —
+        # check it first to avoid creating a useless venv.
+        _check_python_version()
+        _banner("Creating virtual environment")
+        print(f"  {VENV_DIR}\n")
+        venv.create(str(VENV_DIR), with_pip=True)
+    return _venv_python()
 
 
 def install_dependencies(python: Path) -> None:
@@ -223,6 +221,13 @@ def install_dependencies(python: Path) -> None:
 
 def verify_workspace(python: Path) -> None:
     """Run lint and host tests to confirm the workspace is functional.
+
+    Runs unconditionally at the end of :func:`main`.  Bootstrap only
+    earns the "ready" banner once lint and host tests have actually
+    passed — otherwise a fresh clone could report success while the
+    interpreter cannot import the libraries.  Use
+    ``python scripts/run.py preflight`` for the full CI mirror when
+    preparing a PR.
 
     Args:
         python: Path to the Python interpreter.
@@ -276,28 +281,19 @@ def print_summary(python: Path) -> None:
 
 def main() -> None:
     """Prepare the workspace for development and testing."""
-    parser = argparse.ArgumentParser(description="Prepare the ChuMicro workspace.")
-    parser.add_argument(
-        "--create-venv",
-        action="store_true",
-        help="Create a .venv virtual environment (otherwise uses the active interpreter).",
-    )
-    parser.add_argument(
-        "--verify",
-        action="store_true",
-        help="After install, run lint + test to verify the workspace is functional. "
-        "Off by default — run `python scripts/run.py preflight` for the full CI mirror.",
-    )
-    args = parser.parse_args()
+    argparse.ArgumentParser(
+        description="Prepare the ChuMicro workspace. Auto-creates .venv when "
+        "no environment is active or present at the repository root, installs "
+        "dependencies, then runs lint + host tests to confirm the install.",
+    ).parse_args()
 
     _banner("Preparing ChuMicro workspace")
     print()
 
-    python = resolve_python(args.create_venv)
+    python = resolve_python()
     _check_python_version(python)
     install_dependencies(python)
-    if args.verify:
-        verify_workspace(python)
+    verify_workspace(python)
     print_summary(python)
 
 

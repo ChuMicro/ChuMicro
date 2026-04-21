@@ -33,7 +33,7 @@ If you already have a `.venv`:
 If not, create one first:
 
 ```bash
-python scripts/prepare_workspace.py --create-venv
+python scripts/prepare_workspace.py
 ```
 
 Then select the `.venv` interpreter from the Command Palette.

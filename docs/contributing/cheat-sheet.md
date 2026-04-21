@@ -8,11 +8,11 @@ Everything you need to know on one page. The full docs are linked if you want de
 git clone https://github.com/<your-username>/ChuMicro.git
 cd ChuMicro
 git remote add upstream https://github.com/ChuMicro/ChuMicro.git
-python scripts/prepare_workspace.py --create-venv   # first-time bootstrap
+python scripts/prepare_workspace.py                 # first-time bootstrap
 source .venv/bin/activate                           # then activate the venv
 ```
 
-**Why `prepare_workspace.py`?** It's the only command that runs on a fresh clone with zero third-party packages installed — it creates `.venv`, installs all dependencies, and does editable installs for every library and support package. After that, your environment is live.
+**Why `prepare_workspace.py`?** It's the only command that runs on a fresh clone with zero third-party packages installed — it auto-detects or creates `.venv`, installs every library and support package, and runs lint + host tests to confirm the install. After that, your environment is live.
 
 **For everyday refreshes** — after a `git pull` that touches dependencies or adds a library — run `python scripts/run.py setup`. It's idempotent and does the same install/refresh work, but it assumes the venv already exists.
 

@@ -8,10 +8,10 @@ Follow steps 1–4 of the [quick start](../../CONTRIBUTING.md#quick-start) in th
 
 ```bash
 cd ChuMicro
-python scripts/prepare_workspace.py --create-venv
+python scripts/prepare_workspace.py
 ```
 
-This creates a `.venv`, installs dependencies, runs **editable installs** (`pip install -e`) for every library and support package, and verifies the workspace. Look for `Workspace is ready` at the end.
+This auto-detects or creates `.venv`, installs dependencies, runs **editable installs** (`pip install -e`) for every library and support package, then runs lint + host tests to verify the install. Look for `Workspace is ready` at the end.
 
 After the first run, `python scripts/run.py setup` is the canonical front door for refreshing the workspace — same install + IDE sync + starter device-config generation.
 

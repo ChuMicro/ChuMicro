@@ -190,7 +190,7 @@ class TestResolvePython:
         monkeypatch.setattr(prepare_workspace.sys, "base_prefix", "/usr/local")
         monkeypatch.setattr(prepare_workspace.sys, "executable", "/fake/venv/bin/python")
         monkeypatch.delenv("CONDA_PREFIX", raising=False)
-        result = resolve_python(create_venv=False)
+        result = resolve_python()
         assert result == Path("/fake/venv/bin/python")
         assert "virtual environment" in capsys.readouterr().out
 
@@ -200,7 +200,7 @@ class TestResolvePython:
         monkeypatch.setattr(prepare_workspace.sys, "base_prefix", "/usr/local")
         monkeypatch.setattr(prepare_workspace.sys, "executable", "/opt/conda/bin/python")
         monkeypatch.setenv("CONDA_PREFIX", "/opt/conda")
-        result = resolve_python(create_venv=False)
+        result = resolve_python()
         assert result == Path("/opt/conda/bin/python")
         assert "conda" in capsys.readouterr().out
 
@@ -215,34 +215,31 @@ class TestResolvePython:
         monkeypatch.delenv("CONDA_PREFIX", raising=False)
         monkeypatch.setattr(prepare_workspace, "_venv_python", lambda: venv_python)
 
-        result = resolve_python(create_venv=False)
+        result = resolve_python()
         assert result == venv_python
         assert "Found existing" in capsys.readouterr().out
 
-    def test_aborts_when_no_environment(self, monkeypatch, tmp_path, capsys):
-        """No active environment + no .venv refuses to install into system Python."""
+    def test_creates_venv_when_missing(self, monkeypatch, tmp_path, capsys):
+        """No active env + no .venv triggers automatic venv creation."""
+        venv_python = tmp_path / "bin" / "python"
+        venv_calls: list[tuple] = []
+
         monkeypatch.setattr(prepare_workspace.sys, "prefix", "/usr/local")
         monkeypatch.setattr(prepare_workspace.sys, "base_prefix", "/usr/local")
         monkeypatch.delenv("CONDA_PREFIX", raising=False)
-        monkeypatch.setattr(prepare_workspace, "_venv_python", lambda: tmp_path / "missing")
-
-        with pytest.raises(SystemExit) as excinfo:
-            resolve_python(create_venv=False)
-        assert excinfo.value.code == 1
-        captured = capsys.readouterr()
-        assert "No virtual environment" in captured.out
-
-    def test_create_venv_reuses_existing(self, monkeypatch, tmp_path, capsys):
-        """create_venv=True reuses an existing .venv if the python binary is present."""
-        venv_python = tmp_path / "bin" / "python"
-        venv_python.parent.mkdir(parents=True)
-        venv_python.touch()
-
         monkeypatch.setattr(prepare_workspace, "_venv_python", lambda: venv_python)
+        monkeypatch.setattr(prepare_workspace, "_has_uv", lambda: False)
+        monkeypatch.setattr(prepare_workspace, "_check_python_version", lambda python=None: None)
 
-        result = resolve_python(create_venv=True)
+        def fake_create(path, with_pip):
+            venv_calls.append((path, with_pip))
+
+        monkeypatch.setattr(prepare_workspace.venv, "create", fake_create)
+
+        result = resolve_python()
         assert result == venv_python
-        assert "Virtual environment exists" in capsys.readouterr().out
+        assert venv_calls == [(str(prepare_workspace.VENV_DIR), True)]
+        assert "Creating virtual environment" in capsys.readouterr().out
 
 
 class TestInstallDependencies:
@@ -398,14 +395,14 @@ class TestMain:
     """Tests for prepare_workspace.main entry point."""
 
     def test_main_invokes_steps_in_order(self, monkeypatch, capsys, tmp_path):
-        """main() runs resolve_python -> _check_python_version -> install -> summary."""
+        """main() runs resolve -> check -> install -> verify -> summary."""
         called: list[str] = []
         fake_python = tmp_path / "python"
 
         monkeypatch.setattr(prepare_workspace.sys, "argv", ["prepare_workspace.py"])
         monkeypatch.setattr(
             prepare_workspace, "resolve_python",
-            lambda create_venv: (called.append(f"resolve({create_venv})"), fake_python)[1],
+            lambda: (called.append("resolve"), fake_python)[1],
         )
         monkeypatch.setattr(
             prepare_workspace, "_check_python_version",
@@ -426,70 +423,35 @@ class TestMain:
 
         prepare_workspace.main()
 
-        # Default: no --verify, no --create-venv.
+        # Verify always runs now — no flag.
         assert called == [
-            "resolve(False)",
+            "resolve",
             f"check({fake_python})",
             f"install({fake_python})",
+            f"verify({fake_python})",
             f"summary({fake_python})",
         ]
 
-    def test_main_verify_flag_runs_verify_step(self, monkeypatch, tmp_path):
-        """--verify adds the verify_workspace step before the summary."""
-        called: list[str] = []
-        fake_python = tmp_path / "python"
-
-        monkeypatch.setattr(prepare_workspace.sys, "argv", ["prepare_workspace.py", "--verify"])
-        monkeypatch.setattr(
-            prepare_workspace, "resolve_python", lambda create_venv: fake_python,
-        )
-        monkeypatch.setattr(prepare_workspace, "_check_python_version", lambda python: None)
-        monkeypatch.setattr(
-            prepare_workspace, "install_dependencies",
-            lambda python: called.append("install"),
-        )
-        monkeypatch.setattr(
-            prepare_workspace, "verify_workspace",
-            lambda python: called.append("verify"),
-        )
-        monkeypatch.setattr(
-            prepare_workspace, "print_summary",
-            lambda python: called.append("summary"),
-        )
-
-        prepare_workspace.main()
-        assert called == ["install", "verify", "summary"]
-
-    def test_main_create_venv_flag_passed_through(self, monkeypatch, tmp_path):
-        """--create-venv is forwarded to resolve_python."""
-        captured: list[bool] = []
-        fake_python = tmp_path / "python"
-
+    def test_main_rejects_unknown_flag(self, monkeypatch, capsys):
+        """argparse still rejects unknown flags so old --verify / --create-venv fail loudly."""
         monkeypatch.setattr(
             prepare_workspace.sys, "argv", ["prepare_workspace.py", "--create-venv"],
         )
-
-        def fake_resolve(create_venv):
-            captured.append(create_venv)
-            return fake_python
-
-        monkeypatch.setattr(prepare_workspace, "resolve_python", fake_resolve)
-        monkeypatch.setattr(prepare_workspace, "_check_python_version", lambda python: None)
-        monkeypatch.setattr(prepare_workspace, "install_dependencies", lambda python: None)
-        monkeypatch.setattr(prepare_workspace, "print_summary", lambda python: None)
-
-        prepare_workspace.main()
-        assert captured == [True]
+        with pytest.raises(SystemExit):
+            prepare_workspace.main()
 
 
-class TestResolvePythonCreateVenv:
-    """Tests for resolve_python's create_venv branches that exercise venv creation."""
+class TestResolvePythonCreatesVenvWithUv:
+    """Automatic .venv creation uses uv when available."""
 
-    def test_create_venv_uses_uv_when_available(self, monkeypatch, tmp_path, capsys):
-        """When uv is on PATH and .venv doesn't exist, resolve_python invokes uv venv."""
+    def test_uses_uv_when_available(self, monkeypatch, tmp_path, capsys):
+        """No env anywhere + uv on PATH → resolve_python calls uv venv."""
         venv_python = tmp_path / "bin" / "python"
         captured: list[list[str]] = []
 
+        monkeypatch.setattr(prepare_workspace.sys, "prefix", "/usr/local")
+        monkeypatch.setattr(prepare_workspace.sys, "base_prefix", "/usr/local")
+        monkeypatch.delenv("CONDA_PREFIX", raising=False)
         monkeypatch.setattr(prepare_workspace, "_venv_python", lambda: venv_python)
         monkeypatch.setattr(prepare_workspace, "_has_uv", lambda: True)
 
@@ -499,25 +461,8 @@ class TestResolvePythonCreateVenv:
 
         monkeypatch.setattr(prepare_workspace.subprocess, "run", fake_run)
 
-        result = resolve_python(create_venv=True)
+        result = resolve_python()
         assert result == venv_python
-        assert any("uv" in part and "venv" in command for command in captured for part in command)
-
-    def test_create_venv_falls_back_to_stdlib(self, monkeypatch, tmp_path, capsys):
-        """Without uv, resolve_python falls back to stdlib venv.create."""
-        venv_python = tmp_path / "bin" / "python"
-        venv_calls: list[tuple] = []
-
-        monkeypatch.setattr(prepare_workspace, "_venv_python", lambda: venv_python)
-        monkeypatch.setattr(prepare_workspace, "_has_uv", lambda: False)
-        # Skip the version check in this stdlib path.
-        monkeypatch.setattr(prepare_workspace, "_check_python_version", lambda python=None: None)
-
-        def fake_create(path, with_pip):
-            venv_calls.append((path, with_pip))
-
-        monkeypatch.setattr(prepare_workspace.venv, "create", fake_create)
-
-        result = resolve_python(create_venv=True)
-        assert result == venv_python
-        assert venv_calls == [(str(prepare_workspace.VENV_DIR), True)]
+        assert any(
+            "uv" in part and "venv" in command for command in captured for part in command
+        )

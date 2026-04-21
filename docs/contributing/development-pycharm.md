@@ -44,7 +44,7 @@ This installs dependencies, runs editable installs for every library and support
 
 The mono-workspace layout means each library has its own `src/` directory. PyCharm resolves imports via source roots configured in `.idea/chumicro.iml`. This file is tracked in git so source roots stay in sync across contributors — `sync-ide` regenerates it from the live workspace layout, and the committed copy uses `<orderEntry type="inheritedJdk" />` so it does not pin anyone to a specific SDK name. You should see no red underlines on imports like `from chumicro_timing import ticks_ms`.
 
-PyCharm may rewrite `chumicro.iml` when the interpreter or module settings change (most commonly right after you pick or swap the project SDK). When that happens, restore the managed layout before committing by running `python scripts/run.py sync-ide` — or, since re-syncing is common, click the **Sync IDE** run configuration from the toolbar. `python scripts/run.py setup` and `python scripts/prepare_workspace.py --create-venv` also regenerate it as part of their normal workflow.
+PyCharm may rewrite `chumicro.iml` when the interpreter or module settings change (most commonly right after you pick or swap the project SDK). When that happens, restore the managed layout before committing by running `python scripts/run.py sync-ide` — or, since re-syncing is common, click the **Sync IDE** run configuration from the toolbar. `python scripts/run.py setup` and `python scripts/prepare_workspace.py` also regenerate it as part of their normal workflow.
 
 If imports show as unresolved:
 

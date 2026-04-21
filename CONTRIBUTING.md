@@ -114,11 +114,11 @@ git remote -v
 ### 4. Set up the development environment
 
 ```bash
-python scripts/prepare_workspace.py --create-venv
+python scripts/prepare_workspace.py
 source .venv/bin/activate
 ```
 
-`prepare_workspace.py` creates a virtual environment and installs all dependencies. When you see `Workspace is ready`, you're good. If you already have a virtual environment activated, drop `--create-venv`.
+`prepare_workspace.py` auto-detects your environment: it reuses an active venv or conda env, reuses an existing `.venv` at the repo root, or creates a fresh `.venv` (via `uv` if available, else stdlib `venv`). It then installs every library and runs lint + host tests to confirm the install. When you see `Workspace is ready`, you're good.
 
 > **Why this command and not `run.py setup`?** `prepare_workspace.py` is the first-time bootstrap — it's the only script that runs on a fresh clone before any third-party packages exist. Once your `.venv` is in place, `python scripts/run.py setup` handles everyday refreshes (new libraries, updated dependencies) and does the same install work idempotently. Use `prepare_workspace.py` once; use `run.py setup` forever after.
 
@@ -408,7 +408,7 @@ These aren't arbitrary — each one traces to a design decision with rationale. 
 | `griffe warnings detected` in docs build | Missing type annotation on a function parameter | Add the type to the signature: `def foo(x: int)` — docstrings carry descriptions only |
 | Merge conflicts after pushing | `main` moved while you were working | [Rebase your branch](#what-if-main-moves-while-im-working) onto the latest `main` |
 | PyCharm/VS Code shows red import underlines | IDE configs are stale | Run `python scripts/run.py sync-ide`, then reload the project |
-| PyCharm changed `.idea/chumicro.iml` after you picked an interpreter | PyCharm may rewrite the local generated module file while adjusting SDK/module state | Run `python scripts/run.py sync-ide` to regenerate it, or rerun `python scripts/run.py setup` / `python scripts/prepare_workspace.py --create-venv` for a fuller reset |
+| PyCharm changed `.idea/chumicro.iml` after you picked an interpreter | PyCharm rewrites the tracked module file while adjusting SDK/module state | Click the **Sync IDE** run configuration (or run `python scripts/run.py sync-ide`) before committing so the managed source-root layout is restored. `setup` / `prepare_workspace` do the same regeneration for a fuller reset |
 
 ## Contributor FAQ
 
