@@ -27,6 +27,14 @@
     </content>
     <orderEntry type="jdk" jdkName="Python 3.14 (chumicro)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
-    <orderEntry type="library" name="embedded-stubs" level="project" />
+    <orderEntry type="module-library">
+      <library>
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/typings/embedded-stubs" />
+        </CLASSES>
+        <JAVADOC />
+        <SOURCES />
+      </library>
+    </orderEntry>
   </component>
 </module>

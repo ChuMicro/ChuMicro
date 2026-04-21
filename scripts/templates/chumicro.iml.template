@@ -7,6 +7,14 @@
       <excludeFolder url="file://$MODULE_DIR$/.tools" />
     </content>{jdk}
     <orderEntry type="sourceFolder" forTests="false" />
-    <orderEntry type="library" name="embedded-stubs" level="project" />
+    <orderEntry type="module-library">
+      <library>
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/typings/embedded-stubs" />
+        </CLASSES>
+        <JAVADOC />
+        <SOURCES />
+      </library>
+    </orderEntry>
   </component>
 </module>
