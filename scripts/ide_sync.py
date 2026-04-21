@@ -215,51 +215,18 @@ def _sync_pycharm_iml() -> None:
 
 
 def _sync_pyrightconfig() -> None:
-    """Regenerate pyrightconfig.json extraPaths from the workspace structure.
-
-    ``extraPaths`` holds the union of every source root plus ``scripts``
-    so imports resolve workspace-wide.
-
-    ``executionEnvironments`` carves out the embedded-runtime stubs
-    (``typings/embedded-stubs/``) so pyright applies them *only* to
-    ``libraries/`` and ``support/test_harness/`` — code that actually
-    targets CircuitPython / MicroPython.  Under ``scripts/`` and the
-    rest of ``support/`` (CPython-only orchestration), the stubs are
-    excluded so their top-level ``time.pyi`` / ``gc.pyi`` / ``sys.pyi``
-    files don't shadow stdlib stubs.
-    """
+    """Regenerate pyrightconfig.json extraPaths from the workspace structure."""
     config_file = ROOT / "pyrightconfig.json"
 
-    # Preserve any existing user settings; only overwrite extraPaths +
-    # executionEnvironments.
+    # Preserve any existing user settings; only overwrite extraPaths.
     if config_file.exists():
         config = json.loads(config_file.read_text())
     else:
         config = {}
 
-    source_paths = [
+    config["extraPaths"] = [
         str(source_dir.relative_to(ROOT)) for source_dir in discover_source_roots()
     ] + ["scripts"]
-
-    config["extraPaths"] = source_paths
-    config["executionEnvironments"] = [
-        # Library and on-device harness code — include the embedded stubs
-        # so `time.ticks_ms`, `gc.mem_free`, etc. resolve.
-        {
-            "root": "libraries",
-            "extraPaths": ["typings/embedded-stubs", *source_paths],
-        },
-        {
-            "root": "support/test_harness",
-            "extraPaths": ["typings/embedded-stubs", *source_paths],
-        },
-        # Everything else (scripts, support orchestration) — stdlib
-        # only, no embedded stubs.
-        {
-            "root": ".",
-            "extraPaths": source_paths,
-        },
-    ]
 
     config_file.write_text(json.dumps(config, indent=2) + "\n")
     print(f"  Updated {config_file.relative_to(ROOT)}")

@@ -202,16 +202,18 @@ def _apply_reported_duration(
     if report.when != "call":
         return
 
-    if item.reported_duration is not None:
-        report.duration = item.reported_duration
+    reported_duration = getattr(item, "_reported_duration", None)
+    if reported_duration is not None:
+        report.duration = reported_duration
         return
 
-    if item.reported_test_total_duration is None:
-        return
-
-    report.duration = max(
-        report.duration - item.reported_test_total_duration, 0.0,
+    reported_test_total_duration = getattr(
+        item, "_reported_test_total_duration", None,
     )
+    if reported_test_total_duration is None:
+        return
+
+    report.duration = max(report.duration - reported_test_total_duration, 0.0)
 
 
 class _TransportCache:
@@ -483,8 +485,8 @@ class DeviceRuntimeItem(pytest.Item):
         self.target_device: DeviceEntry | None = target_device
         self.library_dir: Path = _resolve_library_dir(test_file)
         self._library_name = self.library_dir.name
-        self.reported_duration: float | None = None
-        self.reported_test_total_duration: float | None = None
+        self._reported_duration: float | None = None
+        self._reported_test_total_duration: float | None = None
 
     def _resolve_device_entry(self) -> DeviceEntry:
         """Return the resolved target device for this item."""
@@ -629,7 +631,7 @@ class DeviceRunFileItem(DeviceRuntimeItem):
             pytest.fail(raw_output)
         if not result.tests:
             pytest.fail(f"No test results in device output:\n{raw_output}")
-        self.reported_test_total_duration = _sum_reported_test_durations(result.tests)
+        self._reported_test_total_duration = _sum_reported_test_durations(result.tests)
 
 
 class DeviceTestItem(DeviceRuntimeItem):
@@ -667,7 +669,7 @@ class DeviceTestItem(DeviceRuntimeItem):
         # Find this specific test in the results.
         for test_result in result.tests:
             if test_result.name == self._function_name:
-                self.reported_duration = test_result.duration
+                self._reported_duration = test_result.duration
                 if test_result.status == "FAIL":
                     pytest.fail(
                         f"Device test FAIL: {self._function_name}\n{raw_output}"
