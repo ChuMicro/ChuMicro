@@ -169,7 +169,17 @@ def _sync_vscode_settings() -> None:
 
 
 def _sync_pycharm_iml() -> None:
-    """Regenerate .idea/chumicro.iml source roots from the workspace structure."""
+    """Regenerate .idea/chumicro.iml source roots from the workspace structure.
+
+    Also writes a sibling ``.idea/libraries/embedded_stubs.xml`` that
+    registers ``typings/embedded-stubs/`` as an external library so
+    PyCharm indexes the CircuitPython / MicroPython type stubs for
+    autocomplete in library code without marking the directory as a
+    project source root (which would risk shadowing stdlib stubs for
+    the CPython task-runner code).  The ``.iml`` references that
+    library via ``<orderEntry type="library">`` so PyCharm loads it as
+    part of the project's classpath.
+    """
     iml_file = ROOT / ".idea" / "chumicro.iml"
 
     # Preserve the existing SDK reference so users keep their interpreter
@@ -212,6 +222,38 @@ def _sync_pycharm_iml() -> None:
     iml_file.parent.mkdir(parents=True, exist_ok=True)
     iml_file.write_text(content)
     print(f"  Updated {iml_file.relative_to(ROOT)}")
+
+    _sync_pycharm_embedded_stubs_library()
+
+
+def _sync_pycharm_embedded_stubs_library() -> None:
+    """Write the ``.idea/libraries/embedded_stubs.xml`` library definition.
+
+    The library registers ``typings/embedded-stubs/`` as an
+    external-library classpath entry so PyCharm's on-device module
+    autocomplete (``time.ticks_ms``, ``gc.mem_free``, ``board.*``,
+    ``busio.*``, etc.) picks up the MicroPython and CircuitPython
+    stubs.  PyCharm's bundled typeshed stubs still take precedence for
+    stdlib modules, so the CPython ``time.perf_counter()`` calls in
+    ``scripts/`` continue to resolve against the real stdlib.  This
+    mirrors pyright's ``executionEnvironments`` split but works under
+    PyCharm's own type inference.
+    """
+    library_dir = ROOT / ".idea" / "libraries"
+    library_dir.mkdir(parents=True, exist_ok=True)
+    library_file = library_dir / "embedded_stubs.xml"
+    library_file.write_text(
+        '<component name="libraryTable">\n'
+        '  <library name="embedded-stubs">\n'
+        "    <CLASSES>\n"
+        '      <root url="file://$PROJECT_DIR$/typings/embedded-stubs" />\n'
+        "    </CLASSES>\n"
+        "    <JAVADOC />\n"
+        "    <SOURCES />\n"
+        "  </library>\n"
+        "</component>\n",
+    )
+    print(f"  Updated {library_file.relative_to(ROOT)}")
 
 
 def _sync_pyrightconfig() -> None:
