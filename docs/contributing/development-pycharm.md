@@ -42,6 +42,8 @@ This installs dependencies, runs editable installs for every library and support
 
 The mono-workspace layout means each library has its own `src/` directory. PyCharm resolves imports via source roots configured in `.idea/chumicro.iml`. This file is generated locally by `sync-ide` (called automatically during setup) and is intentionally gitignored because PyCharm may rewrite it while the project is open. You should see no red underlines on imports like `from chumicro_timing import ticks_ms`.
 
+In practice, the most common time PyCharm touches the file is right after you choose or change the project interpreter. If that happens, treat `.idea/chumicro.iml` as a resettable local artifact: run `python scripts/run.py sync-ide` to put back the intended source/test root layout. `python scripts/run.py setup` and `python scripts/prepare_workspace.py --create-venv` also regenerate it as part of their normal workflow.
+
 If imports show as unresolved:
 
 1. Run `python scripts/run.py sync-ide` in the terminal
@@ -178,4 +180,5 @@ open htmlcov/index.html
 
 - **PyCharm may suggest installing packages.** Ignore these suggestions — the project resolves imports through source roots, not pip installs.
 - **If a new library is added**, run `python scripts/run.py sync-ide` to regenerate the `.iml` file. New source roots appear after reloading.
+- **If choosing an interpreter rewrites `.idea/chumicro.iml`,** run `python scripts/run.py sync-ide` to reset it. `Setup` and `Prepare Workspace` do the same regeneration if you want a fuller refresh.
 - **The `.idea/` directory is partially committed** — `modules.xml`, run configurations, and inspection profiles are shared. The generated `.idea/chumicro.iml` stays local because PyCharm may rewrite it when interpreter or module settings change. Workspace-specific files (`.idea/workspace.xml`, `.idea/misc.xml`, etc.) are gitignored.

@@ -408,6 +408,7 @@ These aren't arbitrary — each one traces to a design decision with rationale. 
 | `griffe warnings detected` in docs build | Missing type annotation on a function parameter | Add the type to the signature: `def foo(x: int)` — docstrings carry descriptions only |
 | Merge conflicts after pushing | `main` moved while you were working | [Rebase your branch](#what-if-main-moves-while-im-working) onto the latest `main` |
 | PyCharm/VS Code shows red import underlines | IDE configs are stale | Run `python scripts/run.py sync-ide`, then reload the project |
+| PyCharm changed `.idea/chumicro.iml` after you picked an interpreter | PyCharm may rewrite the local generated module file while adjusting SDK/module state | Run `python scripts/run.py sync-ide` to regenerate it, or rerun `python scripts/run.py setup` / `python scripts/prepare_workspace.py --create-venv` for a fuller reset |
 
 ## Contributor FAQ
 
