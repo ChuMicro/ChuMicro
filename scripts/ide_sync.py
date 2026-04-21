@@ -173,12 +173,13 @@ def _sync_pycharm_iml() -> None:
     """Regenerate .idea/chumicro.iml source roots from the workspace structure.
 
     The template uses ``<orderEntry type="inheritedJdk" />`` so the
-    committed ``.iml`` doesn't pin every contributor to one user's
-    Python SDK.  Each user's interpreter choice lives in the gitignored
-    ``.idea/misc.xml`` (``project-jdk-name``) and the module inherits
-    it — so the same ``.iml`` works regardless of venv location or
-    name.  That also keeps the file stable under ``sync-ide``: every
-    regeneration produces byte-identical output.
+    generated local ``.iml`` does not pin every contributor to one
+    user's Python SDK. Each user's interpreter choice lives in the
+    gitignored ``.idea/misc.xml`` (``project-jdk-name``) and the module
+    inherits it, so ``sync-ide`` can regenerate a portable source-root
+    file regardless of venv location or name. The file is still kept
+    local-only because PyCharm may rewrite it live while the project is
+    open.
     """
     iml_file = ROOT / ".idea" / "chumicro.iml"
 

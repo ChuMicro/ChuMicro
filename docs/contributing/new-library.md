@@ -38,7 +38,7 @@ libraries/my-thing/
     └── .gitkeep                     # on-device tests live here
 ```
 
-In addition to creating the library directory, the scaffolder runs an editable install (`pip install -e libraries/my-thing`) and re-runs `sync-ide`, which updates `.idea/chumicro.iml`, `.idea/runConfigurations/`, `pyrightconfig.json`, `.vscode/tasks.json`, and `.vscode/settings.json` so your IDE picks up the new package immediately. Don't be surprised by those files appearing in `git status` after running `new-library` — they're managed configs.
+In addition to creating the library directory, the scaffolder runs an editable install (`pip install -e libraries/my-thing`) and re-runs `sync-ide`, which updates the local `.idea/chumicro.iml` plus the tracked `.idea/runConfigurations/`, `pyrightconfig.json`, `.vscode/tasks.json`, and `.vscode/settings.json` so your IDE picks up the new package immediately. The `.iml` stays local and gitignored because PyCharm may rewrite it while the project is open; the tracked config files are the ones you may see in `git status` after running `new-library`.
 
 The scaffold is immediately runnable — tests pass at 100% coverage, lint is clean, and the example executes. Start by replacing the starter `MyThing` class in `core.py` with your real implementation.
 
