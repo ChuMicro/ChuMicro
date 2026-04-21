@@ -101,7 +101,10 @@ class TestConnect:
 
         assert len(runner.calls) == 1
         command = runner.calls[0][0]
-        assert command == ["mpremote", "connect", "/dev/ttyUSB0", "exec", "print('ok')"]
+        # command[0] is a resolved path (e.g. .venv/bin/mpremote) — just
+        # confirm it points at an mpremote binary, then check the rest.
+        assert command[0].endswith("mpremote") or command[0].endswith("mpremote.exe")
+        assert command[1:] == ["connect", "/dev/ttyUSB0", "exec", "print('ok')"]
 
     def test_connect_failure_raises(self) -> None:
         """connect() should raise when mpremote fails."""
@@ -407,7 +410,8 @@ class TestReset:
         transport.reset()
 
         command = runner.calls[0][0]
-        assert command == ["mpremote", "connect", "/dev/ttyUSB0", "reset"]
+        assert command[0].endswith("mpremote") or command[0].endswith("mpremote.exe")
+        assert command[1:] == ["connect", "/dev/ttyUSB0", "reset"]
 
     def test_reset_with_serial_umounts_then_re_enters_raw_repl(self, tmp_path) -> None:
         """reset() with an open serial transport umounts, exits, then soft-resets.
@@ -670,3 +674,77 @@ class TestProbeImplementation:
         )
 
         assert transport.probe_implementation() is None
+
+
+class TestResolveMpremoteBinary:
+    """The subprocess fallback must locate mpremote without a pre-activated .venv."""
+
+    def test_prefers_venv_bin_sibling_of_sys_executable(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path
+    ) -> None:
+        """When mpremote sits next to sys.executable, subprocess uses that path."""
+        from chumicro_device_transport import micropython_transport as module
+
+        venv_bin = tmp_path / "bin"
+        venv_bin.mkdir()
+        fake_python = venv_bin / "python"
+        fake_python.touch()
+        fake_mpremote = venv_bin / "mpremote"
+        fake_mpremote.write_text("#!/usr/bin/env python\n")
+        fake_mpremote.chmod(0o755)
+
+        monkeypatch.setattr(module.sys, "executable", str(fake_python))
+
+        runner = FakeRunner()
+        transport = MicropythonTransport("/dev/ttyUSB0", runner=runner)
+        transport._run_mpremote(["reset"])
+
+        command, _ = runner.calls[-1]
+        assert command[0] == str(fake_mpremote), (
+            f"expected venv-local mpremote, got {command[0]!r}"
+        )
+
+    def test_falls_back_to_path_lookup_when_venv_bin_missing(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path
+    ) -> None:
+        """Without a venv-local binary, shutil.which on PATH is used."""
+        from chumicro_device_transport import micropython_transport as module
+
+        empty_bin = tmp_path / "bin"
+        empty_bin.mkdir()
+        fake_python = empty_bin / "python"
+        fake_python.touch()
+
+        monkeypatch.setattr(module.sys, "executable", str(fake_python))
+        monkeypatch.setattr(
+            "shutil.which",
+            lambda name: "/opt/homebrew/bin/mpremote" if name == "mpremote" else None,
+        )
+
+        runner = FakeRunner()
+        transport = MicropythonTransport("/dev/ttyUSB0", runner=runner)
+        transport._run_mpremote(["reset"])
+
+        command, _ = runner.calls[-1]
+        assert command[0] == "/opt/homebrew/bin/mpremote"
+
+    def test_final_fallback_keeps_bare_name(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path
+    ) -> None:
+        """Neither venv-local nor PATH hit → command stays as bare ``mpremote``."""
+        from chumicro_device_transport import micropython_transport as module
+
+        empty_bin = tmp_path / "bin"
+        empty_bin.mkdir()
+        fake_python = empty_bin / "python"
+        fake_python.touch()
+
+        monkeypatch.setattr(module.sys, "executable", str(fake_python))
+        monkeypatch.setattr("shutil.which", lambda name: None)
+
+        runner = FakeRunner()
+        transport = MicropythonTransport("/dev/ttyUSB0", runner=runner)
+        transport._run_mpremote(["reset"])
+
+        command, _ = runner.calls[-1]
+        assert command[0] == "mpremote"

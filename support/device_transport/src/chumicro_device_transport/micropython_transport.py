@@ -18,7 +18,9 @@ See Decision 0027 for the full transport protocol.
 
 from __future__ import annotations
 
+import os
 import subprocess
+import sys
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
@@ -36,6 +38,32 @@ if TYPE_CHECKING:  # pragma: no cover - type-only
 
 class MicropythonTransportError(Exception):
     """Raised when an mpremote command fails."""
+
+
+def _resolve_mpremote_binary() -> str:
+    """Return the ``mpremote`` executable path to invoke via subprocess.
+
+    ``mpremote`` is a ``requirements-dev.txt`` dependency, so it lands in
+    ``.venv/bin/mpremote`` after workspace setup.  Shelling out with the
+    bare name only works when ``.venv/bin`` is on ``PATH``
+    (i.e. after ``source .venv/bin/activate``), which fails for direct
+    ``.venv/bin/python scripts/run.py test-device`` invocations and for
+    IDE play buttons that launch via the interpreter path without an
+    activated shell.
+
+    Prefer the binary next to the running interpreter; fall back to the
+    bare name so a system-wide or externally-managed ``mpremote`` still
+    works.  Windows resolution is handled via ``shutil.which`` since the
+    binary there is ``mpremote.exe``.
+    """
+    import shutil
+
+    interpreter_bin = Path(sys.executable).parent
+    for candidate in (interpreter_bin / "mpremote", interpreter_bin / "mpremote.exe"):
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
+    resolved = shutil.which("mpremote")
+    return resolved or "mpremote"
 
 
 def _decode_exec_result(result: Any) -> str:
@@ -358,7 +386,7 @@ class MicropythonTransport:
         Raises:
             MicropythonTransportError: If the command exits with a non-zero code.
         """
-        command = ["mpremote", "connect", self.address] + arguments
+        command = [_resolve_mpremote_binary(), "connect", self.address] + arguments
         result = self._runner(
             command,
             capture_output=True,
