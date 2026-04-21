@@ -68,9 +68,9 @@ Pick whichever workflow you're comfortable with:
 - **[VS Code](docs/contributing/development-vscode.md)** — tasks, extensions, Pylance integration
 - **[Other Editors / Command Line](docs/contributing/development-other-editors.md)** — Neovim, Zed, Emacs, Sublime, or anything with a terminal
 
-If you plan to run `functional_tests/` on real boards, also read **[Device Testing](docs/contributing/device-testing.md)**. That guide covers `devices.yml`, `device-config.yml`, deploy modes, CLI usage, and IDE play-button routing.
+You only need one of the three — they all reach the same place.
 
-You only need one. All three reach the same place.
+If you plan to run `functional_tests/` on real boards, also read **[Device Testing](docs/contributing/device-testing.md)**. That guide covers `devices.yml`, `device-config.yml`, deploy modes, CLI usage, and IDE play-button routing.
 
 ## Quick start
 
@@ -283,6 +283,8 @@ python scripts/run.py preflight
 
 If it prints `Preflight passed`, you're good — CI will pass too. That's the only command you need to remember. Everything else below is what preflight checks behind the scenes.
 
+> **Coverage note:** The test suite catches real edge cases that lower thresholds miss. If coverage fails on code you didn't change, that's not your fault — note it in the PR description. A maintainer can help fill the gap or mark an exception. Don't let someone else's uncovered code block your contribution.
+
 <details>
 <summary>What preflight checks (expand for details)</summary>
 
@@ -295,8 +297,6 @@ If it prints `Preflight passed`, you're good — CI will pass too. That's the on
 - **Cross-runtime compatibility.** CI runs your code under MicroPython and CircuitPython unix ports.
 
 </details>
-
-> **Coverage note:** The test suite catches real edge cases that lower thresholds miss. If coverage fails on code you didn't change, that's not your fault — note it in the PR description. A maintainer can help fill the gap or mark an exception. Don't let someone else's uncovered code block your contribution.
 
 ### Device testing
 

@@ -100,7 +100,7 @@ They apply to **publishable library code under `libraries/`** and **`support/tes
 <details>
 <summary>Examples (expand when you're ready to optimize)</summary>
 
-#### `const()` — compile-time constants
+### `const()` — compile-time constants
 
 On MicroPython and CircuitPython, `const()` inlines the value at compile time instead of creating a runtime object. On CPython it doesn't exist, so every library that uses it needs a fallback:
 
@@ -119,7 +119,7 @@ _MAX = const(_PERIOD - 1)
 
 Prefix internal constants with `_` (module-private). See `libraries/timing/src/chumicro_timing/ticks.py` for a real example.
 
-#### `memoryview` — zero-copy slicing
+### `memoryview` — zero-copy slicing
 
 Normal `bytearray` slicing creates a copy every time. `memoryview` gives you a slice that points to the original data:
 
