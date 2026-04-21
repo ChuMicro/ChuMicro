@@ -41,6 +41,7 @@ _TASKS: list[tuple[str, str, str, str]] = [
     ("Prepare Workspace", "scripts/prepare_workspace.py", "", "build"),
     ("Runtime Matrix", "scripts/run.py", "test-runtime-matrix", "test"),
     ("Setup", "scripts/run.py", "setup", "build"),
+    ("Sync IDE", "scripts/run.py", "sync-ide", "build"),
     ("Test", "scripts/run.py", "test --all", "test"),
     ("Test Everything", "scripts/run.py", "test-everything", "test"),
     ("Test Device", "scripts/run.py", "test-device", "test"),

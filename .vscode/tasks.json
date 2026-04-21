@@ -175,6 +175,20 @@
             }
         },
         {
+            "label": "Sync IDE",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "scripts/run.py",
+                "sync-ide"
+            ],
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
             "label": "Test",
             "type": "shell",
             "command": "python",
