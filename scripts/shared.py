@@ -182,6 +182,14 @@ def install_workspace(python: Path | None = None) -> int:
     # ``time``, ``gc``, ``sys`` tied to typeshed / stdlib.
     _clean_stub_leftovers_from_site_packages(python)
 
+    # Prune top-level stub files that shadow stdlib module names so
+    # PyCharm (which lacks pyright's per-path ``executionEnvironments``)
+    # can't resolve ``time``, ``gc``, ``sys`` etc. against the embedded
+    # MicroPython / CircuitPython stubs.  Pyright ignores the deleted
+    # files anyway because its ``executionEnvironments`` scope keeps
+    # the stubs away from ``scripts/``.
+    _prune_stdlib_shadows_from_typings()
+
     # Late imports — these modules are part of the workspace itself
     # (not third-party deps), but deferring keeps shared.py importable
     # on a fresh clone before requirements-dev have been installed.
@@ -193,6 +201,47 @@ def install_workspace(python: Path | None = None) -> int:
     from ide_sync import sync_ide
 
     return sync_ide()
+
+
+def _prune_stdlib_shadows_from_typings() -> None:
+    """Remove embedded stubs whose name shadows a CPython stdlib module.
+
+    ``circuitpython-stubs`` and ``micropython-esp32-stubs`` ship
+    ``.pyi`` files for names that exist in the standard library —
+    ``time``, ``gc``, ``sys``, ``socket``, ``hashlib``, etc.  The
+    MicroPython / CircuitPython variants drop or rename members that
+    the CPython stdlib provides (``time.perf_counter`` isn't in
+    MicroPython's ``time``, for instance), so leaving those files in
+    ``typings/embedded-stubs/`` shadows typeshed everywhere PyCharm
+    looks.
+
+    Pyright's ``executionEnvironments`` already scopes the whole
+    directory to ``libraries/`` and ``support/test_harness/``, so it
+    doesn't need the stdlib shadows inside either — typeshed covers
+    ``libraries/`` code that imports ``time`` etc. the same way it
+    covers ``scripts/``.  Library code that needs MicroPython-only
+    members (``time.ticks_ms``, ``gc.mem_free``) uses the
+    ``getattr(time, "ticks_ms", None)`` idiom from
+    ``chumicro_timing.ticks`` — no stub dependency.
+
+    What we keep: every embedded-only stub (``board``, ``busio``,
+    ``neopixel``, ``supervisor``, ``machine``, ``micropython``, the
+    ``u``-prefixed MicroPython aliases like ``utime`` / ``usys`` which
+    are not stdlib names, and every ``-stubs`` subdirectory).
+    """
+    if not TYPINGS_DIR.is_dir():
+        return
+    shadowed = set(sys.stdlib_module_names) | {"__builtins__"}
+    removed: list[str] = []
+    for path in TYPINGS_DIR.glob("*.pyi"):
+        if path.stem in shadowed:
+            path.unlink()
+            removed.append(path.name)
+    if removed:
+        print(
+            f"  Pruned {len(removed)} stdlib-shadow stub(s) from "
+            f"{TYPINGS_DIR.relative_to(ROOT)}: {', '.join(sorted(removed))}",
+        )
 
 
 def _clean_stub_leftovers_from_site_packages(python: Path | None) -> None:
