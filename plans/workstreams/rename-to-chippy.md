@@ -199,6 +199,26 @@ All `plans/**.md` references. Decisions are "append-only" per repo policy, but r
 - `requirements-dev.txt`
 - `.gitignore`
 
+#### 1l. Collapse "What's new" sections to initial release
+
+Each library's `docs/guide.md` carries a running changelog whose entries are all test-churn releases from the ChuMicro era. Post-rename, that history is noise — the first public release under the `chippy-*` name is a fresh genesis.
+
+Affected files:
+- `libraries/timing/docs/guide.md` — currently lists `0.1.24`, `0.1.25`
+- `libraries/runner/docs/guide.md` — same pattern
+- `libraries/compat/docs/guide.md` — same pattern
+- `libraries/msgpack/docs/guide.md` — same pattern
+
+Action: replace every bullet in each "What's new" section with a single entry keyed to whatever first release version Phase 3 picks (`0.1.0` recommended). Example:
+
+```markdown
+## What's new
+
+- **0.1.0**: Initial release.
+```
+
+Do this in the same atomic rename commit — don't leave dangling `0.1.25` mentions behind. The scaffold template at `scripts/templates/guide.md.template` already uses a `*No changes yet*` placeholder and stays as-is; new libraries scaffolded after the rename will fill in their own initial entry on first release.
+
 ### Phase 2 — Commit, preflight, push
 
 1. Run `python scripts/run.py setup` to regenerate editable installs under the new package names
@@ -317,6 +337,7 @@ rg -l 'chumicro|ChuMicro|CHUMICRO|CHU00\d'
 - [ ] Phase 1i: IDE configs regenerated
 - [ ] Phase 1j: planning docs
 - [ ] Phase 1k: root-level files
+- [ ] Phase 1l: "What's new" sections collapsed to initial release
 - [ ] Phase 2: preflight green, wheels build, single commit pushed
 - [ ] Phase 3: first real release (`chippy-timing` 0.1.0) end-to-end verified
 - [ ] Phase 3: remaining libraries released
