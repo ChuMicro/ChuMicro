@@ -14,7 +14,7 @@
   <a href="https://github.com/ChuMicro/ChuMicro-Bundle">Bundle</a> •
   <a href="https://github.com/ChuMicro/ChuMicro-Bundle-Experimental">Experimental</a> •
   <a href="https://github.com/ChuMicro/ChuMicro/issues">Issues</a> •
-  <a href="#get-started">Get Started</a>
+  <a href="#install">Install</a>
 </p>
 
 ---
@@ -53,7 +53,7 @@ msgpack   (no dependencies)
 
 </details>
 
-## Get started
+## Install
 
 Pick the install method for your runtime — swap `chumicro-timing` for whichever library you need.
 
@@ -121,7 +121,7 @@ pip install chumicro-timing-experimental
 
 </details>
 
-### Your first program
+## Your first program
 
 A blink that doesn't freeze — the embedded hello world:
 
