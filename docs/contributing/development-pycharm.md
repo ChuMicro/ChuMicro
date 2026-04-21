@@ -22,6 +22,8 @@ Follow steps 1–4 of the [quick start](../../CONTRIBUTING.md#quick-start) in th
 - Location: leave as default (`.venv` in project root)
 - Click **OK**
 
+PyCharm names the SDK `Python <major>.<minor> (chumicro)` by default. `sync-ide` seeds `.idea/misc.xml` with that same name so the committed run configurations and `chumicro.iml` resolve with no extra clicks. If you attach an interpreter that is already registered under a different name — a shared `uv` env, a system Python, or a reused SDK from another project — just pick it; PyCharm rewrites `misc.xml` with the correct name.
+
 ### 4. Run workspace setup
 
 Open the built-in terminal (**View → Tool Windows → Terminal**, or `⌥F12` / `Alt+F12`) and run:
@@ -40,9 +42,9 @@ This installs dependencies, runs editable installs for every library and support
 
 ## Import resolution
 
-The mono-workspace layout means each library has its own `src/` directory. PyCharm resolves imports via source roots configured in `.idea/chumicro.iml`. This file is generated locally by `sync-ide` (called automatically during setup) and is intentionally gitignored because PyCharm may rewrite it while the project is open. You should see no red underlines on imports like `from chumicro_timing import ticks_ms`.
+The mono-workspace layout means each library has its own `src/` directory. PyCharm resolves imports via source roots configured in `.idea/chumicro.iml`. This file is tracked in git so source roots stay in sync across contributors — `sync-ide` regenerates it from the live workspace layout, and the committed copy uses `<orderEntry type="inheritedJdk" />` so it does not pin anyone to a specific SDK name. You should see no red underlines on imports like `from chumicro_timing import ticks_ms`.
 
-In practice, the most common time PyCharm touches the file is right after you choose or change the project interpreter. If that happens, treat `.idea/chumicro.iml` as a resettable local artifact: run `python scripts/run.py sync-ide` to put back the intended source/test root layout. `python scripts/run.py setup` and `python scripts/prepare_workspace.py --create-venv` also regenerate it as part of their normal workflow.
+PyCharm may rewrite `chumicro.iml` when the interpreter or module settings change (most commonly right after you pick or swap the project SDK). When that happens, restore the managed layout before committing by running `python scripts/run.py sync-ide` — or, since re-syncing is common, click the **Sync IDE** run configuration from the toolbar. `python scripts/run.py setup` and `python scripts/prepare_workspace.py --create-venv` also regenerate it as part of their normal workflow.
 
 If imports show as unresolved:
 
@@ -179,6 +181,6 @@ open htmlcov/index.html
 ## Quirks and tips
 
 - **PyCharm may suggest installing packages.** Ignore these suggestions — the project resolves imports through source roots, not pip installs.
-- **If a new library is added**, run `python scripts/run.py sync-ide` to regenerate the `.iml` file. New source roots appear after reloading.
-- **If choosing an interpreter rewrites `.idea/chumicro.iml`,** run `python scripts/run.py sync-ide` to reset it. `Setup` and `Prepare Workspace` do the same regeneration if you want a fuller refresh.
-- **The `.idea/` directory is partially committed** — `modules.xml`, run configurations, and inspection profiles are shared. The generated `.idea/chumicro.iml` stays local because PyCharm may rewrite it when interpreter or module settings change. Workspace-specific files (`.idea/workspace.xml`, `.idea/misc.xml`, etc.) are gitignored.
+- **If a new library is added**, run `python scripts/run.py sync-ide` (or click the **Sync IDE** run configuration). New source roots appear after reloading.
+- **If choosing an interpreter rewrites `.idea/chumicro.iml`,** run **Sync IDE** (or `python scripts/run.py sync-ide`) to restore the managed source-root layout before committing. `Setup` and `Prepare Workspace` do the same regeneration if you want a fuller refresh.
+- **The `.idea/` directory is partially committed** — `modules.xml`, `chumicro.iml`, run configurations, and inspection profiles are shared. Workspace-specific files (`.idea/workspace.xml`, `.idea/misc.xml`, etc.) are gitignored. `sync-ide` seeds `misc.xml` with a `Python <major>.<minor> (chumicro)` SDK hint only when it is missing — PyCharm owns it after that.

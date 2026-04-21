@@ -16,6 +16,7 @@ Called via ``python scripts/run.py sync-ide`` or automatically after
 from __future__ import annotations
 
 import json
+import sys
 
 from shared import load_template
 from workspace import ROOT, discover_package_dirs, discover_source_roots
@@ -172,14 +173,15 @@ def _sync_vscode_settings() -> None:
 def _sync_pycharm_iml() -> None:
     """Regenerate .idea/chumicro.iml source roots from the workspace structure.
 
-    The template uses ``<orderEntry type="inheritedJdk" />`` so the
-    generated local ``.iml`` does not pin every contributor to one
-    user's Python SDK. Each user's interpreter choice lives in the
-    gitignored ``.idea/misc.xml`` (``project-jdk-name``) and the module
-    inherits it, so ``sync-ide`` can regenerate a portable source-root
-    file regardless of venv location or name. The file is still kept
-    local-only because PyCharm may rewrite it live while the project is
-    open.
+    The file is tracked in git so source roots stay in sync across
+    contributors.  The template uses ``<orderEntry type="inheritedJdk" />``
+    so the committed ``.iml`` never pins anyone to a specific SDK name;
+    each user's interpreter choice lives in the gitignored
+    ``.idea/misc.xml`` (``project-jdk-name``) and the module inherits
+    it.  PyCharm may still rewrite the ``.iml`` when the interpreter or
+    module settings change — contributors should re-run
+    ``python scripts/run.py sync-ide`` (or click the Sync IDE run
+    configuration) before committing if that happens.
     """
     iml_file = ROOT / ".idea" / "chumicro.iml"
 
@@ -214,6 +216,47 @@ def _sync_pycharm_iml() -> None:
     print(f"  Updated {iml_file.relative_to(ROOT)}")
 
 
+def _pycharm_default_jdk_name() -> str:
+    """Return the SDK name PyCharm auto-generates for a project-local venv.
+
+    PyCharm names virtual environments added via the UI with
+    ``Python <major>.<minor> (<project-folder-name>)``.  Matching that
+    convention means a contributor who lets PyCharm create or attach a
+    .venv by the defaults sees no broken-SDK warning on first open.
+
+    Uses the running interpreter's version — this is correct when
+    ``sync-ide`` runs from the workspace venv, which is the expected
+    flow (setup / prepare_workspace run it after the interpreter is
+    resolved).
+    """
+    major, minor = sys.version_info[:2]
+    return f"Python {major}.{minor} ({ROOT.name})"
+
+
+def _sync_pycharm_misc_xml() -> None:
+    """Write a starter ``.idea/misc.xml`` when the contributor has none yet.
+
+    ``misc.xml`` is user-local (gitignored) and PyCharm fully manages it
+    once the project SDK is set.  Writing a convention-based
+    ``project-jdk-name`` the first time gives PyCharm a matching SDK
+    hint — if the contributor's auto-created venv carries that exact
+    name, imports and run configs resolve immediately; otherwise
+    PyCharm prompts once to pick the interpreter and overwrites this
+    file with the correct name.  Never overwrite an existing
+    ``misc.xml`` — that would clobber user state.
+    """
+    misc_file = ROOT / ".idea" / "misc.xml"
+    if misc_file.exists():
+        return
+
+    content = load_template("misc.xml.template").format(
+        jdk_name=_pycharm_default_jdk_name(),
+    )
+    misc_file.parent.mkdir(parents=True, exist_ok=True)
+    misc_file.write_text(content)
+    print(f"  Created {misc_file.relative_to(ROOT)} (project SDK hint)")
+
+
 def _sync_pyrightconfig() -> None:
     """Regenerate pyrightconfig.json extraPaths from the workspace structure."""
     config_file = ROOT / "pyrightconfig.json"
@@ -235,6 +278,7 @@ def _sync_pyrightconfig() -> None:
 def sync_ide() -> int:
     """Regenerate IDE configuration files from the workspace structure."""
     _sync_pycharm_iml()
+    _sync_pycharm_misc_xml()
     _sync_run_configurations()
     _sync_pyrightconfig()
     _sync_vscode_tasks()
