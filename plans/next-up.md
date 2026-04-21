@@ -7,6 +7,7 @@
 ## Next
 - [ ] **Rebrand ChuMicro → ChipPy** (see `plans/workstreams/rename-to-chippy.md`). Full org + package + bundle rename, all library `VERSION` files reset to `0.0.0`. Execute when the project is ready for first public opening; sheds accumulated test-churn releases from PyPI since the namespace changes.
 - [ ] Validate VS Code workspace end-to-end for on-device `functional_tests/` (tasks/settings are generated and explicit `functional_tests/` targets use the pytest device plugin, but a live editor verification pass is still wanted).
+- [ ] Expand the device test matrix beyond ESP32-S2 now that transport tooling is proven on both MicroPython and CircuitPython.
 - [ ] `chumicro-deploy` standalone pip package — extract transport layer into a publishable tool for deploying user projects to boards. Companion project template repo. See Decision 0028.
 - [ ] Enable GitHub Copilot code review as a PR quality gate (low priority — defer until community contributions begin).
 - [ ] Implement `chumicro-settings` — dict-like persistent storage for microcontrollers.
@@ -25,10 +26,10 @@
   - Define per-benchmark thresholds that fail the run if exceeded, catching regressions over time.
   - Benchmarks may be slow; they should not run as part of the standard `test` path. Consider a separate `bench` task or a deeper test tier that can also run in CI on a schedule.
 
-## Blocked / waiting
+## Out of scope (until revisited)
 
-- [ ] Expand the device test matrix beyond ESP32-S2 once transport tooling is proven.
-- [ ] Device testing Phase 4: CI integration (`device-test.yml` with `workflow_dispatch`) — blocked on Phase 2 + deploy modes proving reliable on real hardware.
+- CI-hosted device testing (`device-test.yml` / `workflow_dispatch`, CI-injected `devices.yml` / `device-config.yml`). Parked over security concerns around shared-runner device access; bring back up before any design work resumes.
+- CI simulation/emulation path (renode etc.). Not being explored until the above is revisited.
 
 ## Investigations
 

@@ -8,11 +8,11 @@ Add a simulation-first validation path, then layer on optional hardware executio
 
 ## Scope
 
-- emulation and simulation options for CI
 - local device registry and templates
-- optional workflow integration for real devices
 - functional test harness planning
 - transport and execution mechanics for board runs
+
+Out of scope (parked): CI-hosted device execution, CI-injected `devices.yml` / `device-config.yml`, and CI simulation/emulation. Parked over security concerns around shared-runner device access; revisit before resuming design work.
 
 ## Current verified slice
 
@@ -91,23 +91,20 @@ Transport (Decision 0027 + Decision 0028):
 - [x] Verify single-test/file/directory play-button flows in PyCharm during implementation
 - [ ] Verify the VS Code Testing panel end-to-end against live hardware
 
-### Phase 4: CI integration (manual-trigger only)
+### Phase 4 — parked (out of scope)
 
-- [ ] Create `device-test.yml` workflow with `workflow_dispatch` trigger
-- [ ] Support CI-injected `devices.yml` and `device-config.yml` via env vars / secrets
-- [ ] Document home testbed setup for CI runners
+CI integration (`device-test.yml` with `workflow_dispatch`, CI-injected `devices.yml` / `device-config.yml`, home-testbed runner setup) is parked over security concerns around shared-runner device access. Do not design or implement until the user revisits this.
 
 ## Proposed first device strategy
 
 - keep `devices.yml` and `device-config.yml` out of version control (gitignored)
 - generate starter configs during `python scripts/run.py setup`
-- use manually triggered workflows first
 - allow a local home testbed to be attached later without changing library code
 - keep the functional test harness tiny and purpose-built
 
 Current decision:
 
-- hardware workflows are available locally through both `test-device` and pytest-driven IDE targeting; CI-hosted execution remains deferred
+- hardware workflows are available locally through both `test-device` and pytest-driven IDE targeting; CI-hosted execution is out of scope
 - MicroPython path should be: CPython tests, then MicroPython Unix port where practical, then later real board runs
 - CircuitPython should follow the same ladder if the unix port is practical enough for this repo; otherwise start with mocks and then real board runs
 - on Windows, unix-port validation should target WSL2 rather than native Windows first
@@ -154,11 +151,11 @@ The likely right split is:
 
 Do not design hardware orchestration until at least one library needs it. Keep the contract small and testable.
 
-This workstream remains active because CI-managed device execution, live VS Code validation, and broader board-matrix coverage are still intentionally incomplete.
+This workstream remains active because live VS Code validation and broader board-matrix coverage are still intentionally incomplete. CI-managed device execution is parked (see Scope).
 
 ## Resolved feedback
 
 - **CircuitPython unix-port host-runtime path:** Already pursued and verified. The pinned CircuitPython 10.1.4 unix-port builds locally on macOS and passes the cross-runtime unit tests. It runs as a required CI job.
-- **Hardware workflow promotion:** Local CLI + IDE hardware workflows are now in place. Promote to CI-hosted/manual-trigger workflows once injected config and runner setup are designed.
-- **First-class test boards:** ESP32-S2 — specifically the [Wemos S2-Mini](https://www.wemos.cc/en/latest/s2/s2_mini.html) as the initial target. The device matrix will expand later. A future goal is CI-hosted hardware, but that is a high-security concern and will not be user-accessible. Users configure their own local test matrix via `devices.yml`.
+- **Hardware workflow promotion:** Local CLI + IDE hardware workflows are in place. CI-hosted promotion is parked on security concerns.
+- **First-class test boards:** ESP32-S2 — specifically the [Wemos S2-Mini](https://www.wemos.cc/en/latest/s2/s2_mini.html) as the initial target. The device matrix will expand later. Users configure their own local test matrix via `devices.yml`; CI-hosted hardware is out of scope.
 - **Transport and config design:** Decision 0027 accepted — defines the transport protocol, config schema, CLI integration, and IDE approach.
