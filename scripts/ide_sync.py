@@ -169,17 +169,17 @@ def _sync_vscode_settings() -> None:
 
 
 def _sync_pycharm_iml() -> None:
-    """Regenerate .idea/chumicro.iml source roots from the workspace structure."""
-    iml_file = ROOT / ".idea" / "chumicro.iml"
+    """Regenerate .idea/chumicro.iml source roots from the workspace structure.
 
-    # Preserve the existing SDK reference so users keep their interpreter
-    # setting across regenerations.
-    jdk_line = ""
-    if iml_file.exists():
-        for line in iml_file.read_text().splitlines():
-            if 'type="jdk"' in line:
-                jdk_line = line
-                break
+    The template uses ``<orderEntry type="inheritedJdk" />`` so the
+    committed ``.iml`` doesn't pin every contributor to one user's
+    Python SDK.  Each user's interpreter choice lives in the gitignored
+    ``.idea/misc.xml`` (``project-jdk-name``) and the module inherits
+    it — so the same ``.iml`` works regardless of venv location or
+    name.  That also keeps the file stable under ``sync-ide``: every
+    regeneration produces byte-identical output.
+    """
+    iml_file = ROOT / ".idea" / "chumicro.iml"
 
     source_lines: list[str] = []
     for package_dir in discover_package_dirs():
@@ -203,10 +203,8 @@ def _sync_pycharm_iml() -> None:
             '      <sourceFolder url="file://$MODULE_DIR$/scripts/tests" isTestSource="true" />'
         )
 
-    sources = "\n".join(source_lines)
-    jdk_entry = f"\n{jdk_line}" if jdk_line else ""
     content = load_template("chumicro.iml.template").format(
-        sources=sources, jdk=jdk_entry,
+        sources="\n".join(source_lines),
     )
 
     iml_file.parent.mkdir(parents=True, exist_ok=True)
