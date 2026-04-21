@@ -12,24 +12,31 @@ Questions that lead to structural tradeoffs should become decisions in
 
 ## Active
 
-### When should the transport layer be extracted into `chumicro-deploy`?
+### Remaining sub-questions from the workspace workstream
 
-Decision 0028 envisions a standalone pip-installable package for deploying
-user projects to MicroPython and CircuitPython boards.  The transport layer
-in `support/device_transport/` is shaped for extraction, but questions remain:
+Decision 0029 scopes the `chumicro-deploy` extraction plus a full project
+workspace (template repo, UID-based identity, onboarding, import-graph
+deploy, REPL TUI).  Its top-level shape answers most of the originally
+open sub-questions — CLI is `run.py` in the template (no global install),
+there is a Python API surface exposed by `chumicro-workspace-runtime`,
+dependency resolution is import-graph-driven rather than bundle-manifest,
+a companion `chumicro-workspace-template` repo is a first-class deliverable,
+and `.mpy` compilation remains opt-in where `mpy-cross` is available.
 
-- What public API should `chumicro-deploy` expose?  CLI only, or also a
-  Python API?
-- Should it handle dependency resolution from bundle repos, or just raw
-  file deployment?
-- Should a companion `chumicro-project-template` repo exist, and what does
-  its structure look like?
-- Should `.mpy` compilation be built-in or opt-in?
+Sub-questions that remain open and worth revisiting as the workstream
+executes:
 
-Not blocking any current work.  Phase 2 (CircuitPython transport), deploy
-modes (Decision 0028), and Phase 3 (IDE integration) are complete (live VS
-Code Testing-panel verification against hardware is the only outstanding
-piece).  Revisit when the transport layer has more real-world usage.
+- Sequencing across the five libraries — does `chumicro-mqtt` refactor
+  need to land before the first full end-to-end "sensor" template, or
+  can an MQTT-less headless thing be the first proving ground?
+- Conditional-import edge cases for import-graph deploy on heavily
+  platform-gated modules — is AST parsing sufficient or is runtime
+  trace-collection on CPython sim worth adding?
+- `ruamel.yaml` round-trip of `devices.yml` on unusual user edits
+  (anchors, merge keys, multi-doc) — what does the write-safety contract
+  promise versus what the library actually preserves?
+
+Related: Decision 0028, Decision 0029.
 
 
 ### Is ESP32 NVS worth a dedicated backend?

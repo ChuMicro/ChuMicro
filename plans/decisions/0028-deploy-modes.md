@@ -2,7 +2,9 @@
 
 Status: `accepted`
 Date: `2026-04-18`
-Related: Decision 0027
+Related: Decision 0027, Decision 0029
+
+> **Note:** See also [Decision 0029](0029-project-workspace.md) which extends the "future `chumicro-deploy` package" section with the full project-workspace scope (template repo, UID-based identity, onboarding, import-graph deploy, REPL TUI).
 
 ## Context
 
