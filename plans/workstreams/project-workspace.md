@@ -6,6 +6,8 @@ Status: `proposed`
 
 Give users a template-repo project workspace that unifies CircuitPython, MicroPython, and CPython at project scope — onboard a board, write app code, deploy to one or many targets, and watch the REPL.  Companion to Decision 0029, which records the design tradeoffs.
 
+**When starting a session on this workstream, read `plans/workstreams/project-workspace-research.md` first.**  It holds the source-pinned facts, pythonProject3 MQTT refactor line references, API sketches, rejected alternatives, and URL list — picks up where the prior sessions' research left off so it does not have to be redone.
+
 ## Scope
 
 - A `chumicro-workspace-template` repo: checked-in `run.py`, `workspace.yml`, `devices.yml`, `things/_template/`, `packages/` (gitignored), `libs/`, `.venv/` (gitignored), baseline `AGENTS.md`, lint + coverage knobs, `.pre-commit-config.yaml`.
