@@ -361,10 +361,19 @@ Without this library, every downstream networking library re-implements the same
 #### Public surface
 
 ```python
-from chumicro_sockets import tcp_client_socket, TCPClientSocket
+from chumicro_sockets import tcp_client_socket, tls_client_socket, ssl_context_with_ca, TCPClientSocket
 from chumicro_sockets.testing import FakeSocket
 
-sock = tcp_client_socket(host="broker.example.com", port=8883, ssl=True, radio=wifi.radio)
+# Plain TCP
+sock = tcp_client_socket("broker.example.com", 1883, radio=wifi.radio)
+
+# TLS, runtime default CA store
+sock = tls_client_socket("broker.example.com", 8883, radio=wifi.radio)
+
+# TLS with injected custom-CA context (CPython / MP ESP32 / MP Pico W)
+ctx = ssl_context_with_ca(ca_pem=CA_PEM)
+sock = tls_client_socket("broker.example.com", 8883, context=ctx, radio=wifi.radio)
+
 sock.setblocking(False)
 sent = sock.send(packet_bytes)                     # int
 nbytes = sock.recv_into(rx_buffer, 256)            # int; OSError(errno=11) on EAGAIN
@@ -372,15 +381,17 @@ fd = sock.fileno()                                 # for select.poll().register(
 sock.close()
 ```
 
-Protocol minimum: `connect`, `send`, `recv_into`, `close`, `setblocking`, `settimeout`, `fileno`.  No `recv()` (CP-incompatible idiom).
+Two sibling factories (`tcp_client_socket`, `tls_client_socket`) so TLS config stays a proper injected dependency rather than an overloaded `ssl=bool|context` flag.  Connection happens inside the factory — callers never see a disconnected socket.  Protocol minimum on the returned object: `send`, `recv_into`, `close`, `setblocking`, `settimeout`, `fileno`.  No `recv()` (CP-incompatible idiom).
 
 #### Tasks
 
 - [ ] New library: `libraries/sockets/` via `scripts/run.py new-library sockets`.
 - [ ] `TCPClientSocket` protocol (duck-typed, not ABC).
 - [ ] Four adapters under `chumicro_sockets/_adapters/`: `cp.py`, `mp_esp32.py`, `mp_rp2.py`, `cpython.py`.
-- [ ] Adapter selection via `sys.implementation.name` + board probe in `tcp_client_socket()` factory.
-- [ ] TLS is a `connect(..., ssl=True)` flag; adapters route it correctly (radio flag on CP / Pico W MP, `ssl` module on ESP32 MP / CPython).  `UnsupportedSSLConfigError` raised when a user passes an `ssl.SSLContext` to an adapter that can't use it.
+- [ ] Adapter selection via `sys.implementation.name` + board probe inside each factory.
+- [ ] Two sibling factories: `tcp_client_socket(host, port, *, radio=None)` and `tls_client_socket(host, port, *, context=None, radio=None)`.  No overloaded `ssl=` parameter.
+- [ ] `ssl_context_with_ca(ca_pem: bytes) -> ssl.SSLContext` helper for the common "custom CA, default everything else" path.  Raises `UnsupportedSSLConfigError` on CP-radio runtimes so the failure is early and obvious.
+- [ ] On CP-radio adapters, passing `context=<SSLContext>` to `tls_client_socket` raises `UnsupportedSSLConfigError` with a message directing the user to load the custom CA via the radio's board-level config.  `context=None` routes through the radio's default trust store.
 - [ ] `testing.FakeSocket` — full protocol, scripted recv sequences, scripted `EAGAIN` injection, `sent` bytearray assertion surface.
 - [ ] Host-side tests on CPython covering protocol conformance + FakeSocket behavior.
 - [ ] Cross-runtime tests on CP + MP unix-ports that exercise the adapter selection + FakeSocket.

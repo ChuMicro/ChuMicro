@@ -35,11 +35,15 @@ chumicro_sockets/
   testing.py            # FakeSocket for unit tests
 ```
 
-Adapter selection via `sys.implementation.name` + board probe, wrapped in `tcp_client_socket(host, port, ssl=False, radio=None)`.
+Adapter selection via `sys.implementation.name` + board probe, wrapped in two sibling factories — one per transport kind:
+
+```python
+tcp_client_socket(host, port, *, radio=None) -> TCPClientSocket
+tls_client_socket(host, port, *, context=None, radio=None) -> TCPClientSocket
+```
 
 **Protocol surface** (minimum that downstream libs touch):
 
-- `connect(host: str, port: int, ssl: bool = False) -> None`
 - `send(data: bytes | memoryview) -> int`
 - `recv_into(buffer: bytearray | memoryview, nbytes: int | None = None) -> int`
 - `close() -> None`
@@ -47,23 +51,31 @@ Adapter selection via `sys.implementation.name` + board probe, wrapped in `tcp_c
 - `settimeout(seconds: float | None) -> None`
 - `fileno() -> int` (for `select.poll()` registration)
 
+`connect()` happens inside the factory — the returned socket is already connected.  Callers do not see a disconnected socket or a separate connect step.
+
 No `recv()`.  Downstream code allocates its own buffer and uses `recv_into()` — the CP-compatible idiom.  MP + CPython adapters implement `recv_into()` using stdlib `sock.recv_into()` directly.  Older MP ports without `recv_into` fall back to `recv()` + memcpy internally.
 
 **Rejected alternative (b):** "A copy of CP's `socketpool` shape with MP/CPython adapters."  Rejected because `socketpool.SocketPool(radio)` ceremony is CP-specific; forcing every other runtime to fake a radio object is overhead for no gain.
 
 **Rejected alternative (c):** "A lower-level byte-stream abstraction that hides 'is this a socket' entirely."  Rejected because MQTT and HTTP care about connect-shutdown-reconnect lifecycle, not just byte streams; hiding the socket boundary hides bugs.
 
-### 3. TLS is a first-class parameter, not a separate wrap step
+### 3. TLS is a separate entrypoint, not an overloaded flag
 
-`connect(host, port, ssl=True)` rather than `connect(host, port)` followed by `ssl_context.wrap_socket(sock)`.  Reasoning:
+Two sibling factories: `tcp_client_socket()` and `tls_client_socket()`.  Each does one job.  TLS config is a proper injected dependency (`context=<ssl.SSLContext>`) not a dressed-up boolean — consistent with chumicro's constructor-injection policy (Decision 0010).
 
-- CP radios require TLS mode passed to `connect()` — wrapping afterwards is not supported.
-- MP on Pico W has no `ssl` module — TLS must be delivered via the radio at connect time.
-- Keeping TLS as a connect-time flag lets each adapter route it correctly.
+```python
+sock = tcp_client_socket("host", 1883, radio=radio)                  # plain TCP
+sock = tls_client_socket("host", 8883, radio=radio)                  # TLS, runtime default CA
+sock = tls_client_socket("host", 8883, context=ctx, radio=radio)     # TLS, injected context
+```
 
-Users who need `ssl.SSLContext`-style advanced config pass a context object as `ssl=context`; adapters that support it (CPython, MP on ESP32, MP on Pico W via mbedTLS) use it; adapters that don't (CP radios) raise `UnsupportedSSLConfigError` with a clear message and the `ssl=True` bool path that routes through the radio.
+`tls_client_socket(..., context=None)` uses the runtime's default CA store where the runtime supports a context-shaped call (CPython, MP ESP32, MP Pico W via mbedTLS) and routes through the radio's built-in trust store on CP.  Passing a non-None `context` on a CP radio raises `UnsupportedSSLConfigError` with a clear message directing the user to load the custom CA via their radio's board-level config.
 
-**Rejected:** separate `wrap_socket()` step.  Works on CPython and MP-ESP32, breaks on CP and MP Pico W.  Non-starter.
+A helper `ssl_context_with_ca(ca_pem: bytes) -> ssl.SSLContext` is provided for the common "custom CA + default everything else" path; on CP-radio runtimes it raises `UnsupportedSSLConfigError` at call time so the failure is early and obvious.
+
+**Rejected:** `connect(host, port, ssl=False|True|context)` overloaded parameter.  Three types (bool false, bool true, SSLContext instance) collapsed into one argument reads as a flag but acts as a dependency.  Violates chumicro DI spirit and is harder to skim at call sites.
+
+**Rejected:** separate post-connect `wrap_socket()` step.  Works on CPython and MP-ESP32, breaks on CP radios and pre-mbedTLS MP builds where TLS must be declared at connect time.  Non-starter.
 
 ### 4. `FakeSocket` ships in `testing.py`
 
