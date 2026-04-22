@@ -32,11 +32,11 @@ executes:
 - Conditional-import edge cases for import-graph deploy on heavily
   platform-gated modules — is AST parsing sufficient or is runtime
   trace-collection on CPython sim worth adding?
-- `ruamel.yaml` round-trip of `devices.yml` on unusual user edits
-  (anchors, merge keys, multi-doc) — what does the write-safety contract
-  promise versus what the library actually preserves?
+- `devices.yml` round-trip contract on unusual user edits (anchors,
+  merge keys, multi-doc) — what does the write-safety contract promise
+  versus what the underlying YAML library actually preserves?
 
-Related: Decision 0028, Decision 0029.
+Related: Decision 0028, Decision 0029, `plans/workstreams/project-workspace.md`.
 
 
 ### Is ESP32 NVS worth a dedicated backend?
