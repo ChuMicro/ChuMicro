@@ -313,15 +313,6 @@ The previously-sketched `chumicro-wifi` credential consumption reads from the co
 - `store.capacity` returns a correct byte count per backend; `KVStoreFull` is raised before overflow.
 - CP NVM backend flags `is_corrupt=True` on CRC mismatch after a mid-write power loss (tested via a deliberately corrupted blob), then resets to empty.
 
-#### Device verification still wanted
-
-Docs settle most numbers; these need boards:
-
-- `print(len(microcontroller.nvm))` on ESP32-S3 and Pico W CP — confirms actual sizes match the `CIRCUITPY_INTERNAL_NVM_SIZE` defaults (8192 and 4096 respectively).
-- MP ESP32 `esp32.NVS` commit survives hard reset — confirms the commit semantics in `ports/esp32/esp32_nvs.c:127-131`.
-- Write latency for a 512 B blob across CP NVM, MP NVS, MP Pico W LittleFS — informs documentation guidance on write-budgets.
-- Pico W MP LittleFS atomic rename survives pull-power mid-rename — confirms safe-update pattern.
-
 ### Phase 4a: `chumicro-workspace-runtime`
 
 - [ ] New library: `libraries/workspace-runtime/`.
