@@ -238,6 +238,92 @@ From `plans/open-questions.md` under the workstream entry:
 - Import-graph conditional imports — AST parsing sufficient for `try: import wifi; except ImportError` and `importlib.import_module(name)` cases?  Or is runtime trace-collection on CPython sim worth adding?
 - `devices.yml` round-trip contract on unusual user edits (anchors, merge keys, multi-doc) — what does the write-safety contract promise vs what the YAML library actually preserves?
 
+## OTA — deferred until after Phase 7
+
+Explored as a later phase (Phase 8 in `project-workspace.md`).  Not in active scope.  Captured here so the next session doesn't have to reconstruct the thinking.
+
+### Scope intent
+
+Application-level OTA (code + libs), not firmware OTA.  Target audience: a thing on a wall / in a yard / stuck somewhere inconvenient, where pulling it back to a laptop to reflash is painful.  "Deploy without crawling behind the couch."
+
+### Proposed shape
+
+New library: `chumicro-update`.  Runner-shaped service.  Primary delivery over MQTT (already in the stack from Phase 6); HTTP delivery as an optional later adapter.
+
+- Device subscribes to `chumicro/<device-id>/update`.
+- Host publishes a msgpack-encoded payload: a manifest (version counter, per-file SHA256) + file tree.
+- Device stages each file with `.new` suffix, verifies all hashes, atomic rename swap, `machine.soft_reset()` / `supervisor.reload()`.
+- Failure at any step: discard `.new` files, keep running.
+
+Host side: `chumicro-deploy` grows an `OTATransport` sibling to the serial transports it already has (Decision 0028 / 0031).  `python run.py deploy back-porch --via ota` packages files the same way as serial deploy, publishes over MQTT instead.
+
+### CP filesystem-mode auto-detect
+
+CP's CIRCUITPY drive vs filesystem-writable-from-code is mutually exclusive.  The workspace template ships a `boot.py` that picks by USB presence at boot:
+
+```python
+# boot.py — shipped by workspace template
+import supervisor, storage
+
+if supervisor.runtime.usb_connected:
+    # Plugged into a host: keep CIRCUITPY drive visible for drag-drop dev.
+    # FS stays readonly from code this session.  OTA is off.
+    pass
+else:
+    # Running untethered: no host has the drive.  Open FS to code so OTA works.
+    storage.remount("/", readonly=False)
+```
+
+Best-of-both without a config flag.  Caveats to document in the template:
+
+- Mode is locked at boot.  Plug in USB mid-session → host won't get drag-drop until next reset.
+- Unplug mid-session in dev mode → FS stays readonly that session; next boot auto-switches.
+- UX hint: light an onboard LED per-mode so the user knows which session they're in.
+- MP doesn't need this — FS always writable, OTA always available.
+
+### Security — tiered
+
+Hobbyist threat model.  Physical access to a board = game over on CP/MP-class hardware (no secure enclave, flash readable).  Realistic threats: on-subnet attacker, internet attacker if broker is exposed, replay of captured updates.  Goal: block network attackers and raise the bar on casual physical attacks.
+
+**Tier 1 (baked in from v1):**
+
+1. **TLS to broker + pinned CA** — already available via `chumicro-sockets` + `chumicro-mqtt` + `ssl_context_with_ca()`.  Blocks on-subnet sniffing and MITM.  Biggest single win.
+2. **HMAC-SHA256 over payload** — pre-shared secret, computed over manifest + files.  Device rejects anything that doesn't verify.  Secret baked into device via `secrets.yml` → `/runtime_config.msgpack` pipeline (Decision 0030); rotatable per-deploy.
+3. **Monotonic version counter** — manifest has `version: N`.  Device stores last-installed version in `chumicro-kvstore`.  Rejects `version <= stored`.  Defeats replay of old updates.
+4. **MQTT broker ACLs + per-device credentials** — broker-side config.  Each device authenticates with its own creds; broker allows publish to `chumicro/<device-id>/update` only for the matching admin identity.
+5. **Per-file SHA256 in manifest** — corruption detection at the protocol level.
+
+Tier 1 combined defeats the realistic threats (on-subnet and internet attackers without broker creds or HMAC secret).
+
+**Tier 2 (opt-in, v2+):**
+
+6. **Ed25519 asymmetric signing** — private key on host laptop, public key on device.  A compromised device cannot forge updates.  Pure-Python Ed25519 verify is ~300 lines but slow (~5 s on ESP32).  Opt-in.
+7. **Rollback on boot failure** — `app/` + `app_last_good/`, try new, revert on crash/reset-loop.  Hard to implement cleanly without a supervisor outside the Python process; needs `esp32.Partition` A/B (MP ESP32 only) or a watchdog + marker file pattern (flakier).
+8. **Secrets-at-rest encryption** — encrypt the secrets section of `runtime_config.msgpack` with a key derived from `microcontroller.cpu.uid` / `machine.unique_id()`.  Defeats casual flash dumps; doesn't stop targeted extraction.
+
+**Tier 3 (out of scope for chumicro):**
+
+9. Secure boot via ESP32-S2/S3 fuses — requires custom firmware builds, abandons the stock CP/MP story.
+10. ATECC608A / external secure element — board-specific, out of scope.
+11. Attestation — builds on Tier 3 foundations.
+
+### What's explicitly NOT in this phase
+
+- **CP firmware self-update.** No exposed API.  `run.py upgrade-firmware` over serial / UF2 stays the firmware-update story.
+- **MP ESP32 A/B firmware OTA via `esp32.Partition`.** Possible but a separate spike with its own signing / rollback / failure-mode design.  Not required for the common case.
+- **Switching runtime to Zephyr / MCUboot.** Different ecosystem entirely; abandons the Python-focus that is chumicro's reason to exist.
+
+### Revisit trigger
+
+Someone has a thing running on a wall for >30 days and actually needs to push a code change without physical access.  Until then, `run.py deploy --via serial` and `run.py deploy --via ram` cover the real usage pattern.
+
+### Open questions to resolve at explore-time
+
+- Chunked delivery vs single-payload?  A 60 KB update payload is fine single-shot on MQTT; a 1 MB one (bundled lib/, rare) needs chunking.  Start single-shot, chunk when a real use case shows up.
+- Update while runner is live vs stage-then-reset?  Runner-shaped service can stage files during normal operation, only soft-reset at swap time — short downtime window.
+- Log channel for OTA status back to host — reuse `chumicro/<device-id>/log` MQTT topic or create a dedicated status topic?  Probably the general log topic.
+- Relationship to `chumicro-repl`'s `tail()` — can `run.py deploy --via ota` feed post-update REPL output back the same way the serial transport does?  Yes, via MQTT log topic.
+
 ## Runtime source trees (pinned, gitignored)
 
 - CircuitPython: `/Users/chuxor/circuitpython/chumicro/.tools/circuitpython-10.1.4/`

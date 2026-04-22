@@ -473,6 +473,17 @@ End-to-end proving ground for the full stack (deploy + repl + wifi + kvstore + s
 
 A user clones the template, runs `python run.py setup`, plugs in a board, runs `python run.py add-device`, edits one line of `things/example-sensor/config.toml` with their broker URL, runs `python run.py deploy`, and sees heartbeat messages arriving at their broker while the board's REPL streams to the terminal.  Under ten minutes from clone to first message.
 
+### Phase 8: application-level OTA (deferred — explore after Phase 7)
+
+Not in scope until after Phase 7 ships and a real sensor has been in the field long enough for "deploy without crawling behind the couch" to be a felt need.  Design notes captured in `plans/workstreams/project-workspace-research.md` §OTA so a future session picks up where exploration left off:
+
+- Application-file OTA (code + libs), not firmware OTA.
+- Proposed name: `chumicro-update`.  Runner-shaped service on top of `chumicro-mqtt` (primary) or HTTP (later).
+- CP constraint: CIRCUITPY drive vs filesystem-writable-from-code is mutually exclusive.  Default boot.py auto-detects `supervisor.runtime.usb_connected` — plugged in → dev mode, untethered → OTA mode.  No config flag required.
+- Security Tier 1 (baked in from v1): TLS + pinned CA, HMAC-SHA256 over payload, monotonic version counter, per-file SHA256, per-device broker ACL.
+- Explicitly out of scope: CP firmware self-update (no exposed API), MP ESP32 A/B firmware OTA via `esp32.Partition` (possible but separate spike), Zephyr / MCUboot / secure-boot fuses (different ecosystem).
+- Revisit trigger: user has a thing on a wall for >30 days and needs an update pushed to it without physical access.
+
 ## Success criteria
 
 - A user goes from `git clone <template-repo>` to a blinking-LED thing deployed on a board they've never connected before, in under ten minutes, on a laptop with only Python and a USB cable.
