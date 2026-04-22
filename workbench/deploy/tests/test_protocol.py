@@ -6,7 +6,7 @@ the protocols, so the orchestrator can swap them transparently.
 
 from __future__ import annotations
 
-from chumicro_device_transport import (
+from chumicro_deploy import (
     CircuitpythonTransport,
     DeviceImplementation,
     ExtendedTransportProtocol,
@@ -14,7 +14,7 @@ from chumicro_device_transport import (
     MicropythonTransport,
     TransportProtocol,
 )
-from chumicro_device_transport.protocol import (
+from chumicro_deploy.protocol import (
     PROBE_IMPLEMENTATION_SCRIPT,
     parse_probe_output,
 )

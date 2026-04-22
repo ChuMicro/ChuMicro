@@ -1,0 +1,48 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "chumicro-deploy"
+dynamic = ["version"]
+description = "Host-side device transports and deploy tooling for CircuitPython and MicroPython boards."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [
+    { name = "ChuMicro" },
+]
+keywords = [
+    "circuitpython", "micropython", "microcontroller", "embedded",
+    "deploy", "mpremote", "serial",
+]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Software Development :: Build Tools",
+    "Topic :: Software Development :: Embedded Systems",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "mpremote>=1.26",
+    "pyserial>=3.5",
+    "pyyaml>=6.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/ChuMicro/ChuMicro"
+Source = "https://github.com/ChuMicro/ChuMicro/tree/main/workbench/deploy"
+Issues = "https://github.com/ChuMicro/ChuMicro/issues"
+
+[tool.hatch.version]
+path = "VERSION"
+pattern = "(?P<version>\\S+)"
+
+[tool.hatch.build.targets.sdist]
+include = ["src/", "VERSION", "README.md"]
+exclude = [".gitignore"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/chumicro_deploy"]

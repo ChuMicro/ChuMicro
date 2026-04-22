@@ -25,9 +25,13 @@ A `scripts/device_config.py` module loads, validates, and exposes the config to 
 
 ### Transport protocol
 
-Transport implementations live in `support/device_transport/`.  The
-protocol is captured as a ``typing.Protocol`` class
-(``chumicro_device_transport.protocol.TransportProtocol``) — structural
+Transport implementations live in `workbench/deploy/` as part of the
+publishable `chumicro-deploy` package (previously in
+`support/device_transport/` as workspace-internal; moved per
+Decision 0032 once the project-workspace workstream began needing
+third-party consumers).  The protocol is captured as a
+``typing.Protocol`` class
+(``chumicro_deploy.protocol.TransportProtocol``) — structural
 typing, not inheritance, so the two concrete transports stay
 independent while type checkers and ``isinstance`` checks (via
 ``@runtime_checkable``) can still verify the contract:

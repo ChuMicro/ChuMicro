@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from chumicro_device_transport.circuitpython_bootstrap import (
+from chumicro_deploy.circuitpython_bootstrap import (
     CircuitpythonBootstrapTooLargeError,
     _escape_source,
     _prepare_inline_source,

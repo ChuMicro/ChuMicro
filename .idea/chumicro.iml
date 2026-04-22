@@ -10,8 +10,6 @@
     <content url="file://$MODULE_DIR$">
       <sourceFolder url="file://$MODULE_DIR$/support/abstractions/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/support/abstractions/tests" isTestSource="true" />
-      <sourceFolder url="file://$MODULE_DIR$/support/device_transport/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/support/device_transport/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/support/test_harness/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/support/test_harness/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/compat/src" isTestSource="false" />
@@ -26,6 +24,8 @@
       <sourceFolder url="file://$MODULE_DIR$/libraries/timing/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/timing/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/timing/functional_tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/workbench/deploy/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/workbench/deploy/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/scripts" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/scripts/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/.venv" />

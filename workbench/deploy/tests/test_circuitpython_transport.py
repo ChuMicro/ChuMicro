@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 from chumicro_abstractions import FakeTime
-from chumicro_device_transport.circuitpython_transport import (
+from chumicro_deploy.circuitpython_transport import (
     _CTRL_A,
     _CTRL_C,
     _CTRL_D,
@@ -15,7 +15,7 @@ from chumicro_device_transport.circuitpython_transport import (
     CircuitpythonTransportError,
     find_circuitpy_drive,
 )
-from chumicro_device_transport.testing import (
+from chumicro_deploy.testing import (
     FakeSerialPort,
 )
 
@@ -604,7 +604,7 @@ class TestProbeImplementation:
 
     def test_parses_probe_marker_from_raw_repl_response(self) -> None:
         """A well-formed __CHU_IMPL__ line in raw REPL output is parsed."""
-        from chumicro_device_transport import DeviceImplementation
+        from chumicro_deploy import DeviceImplementation
 
         marker_line = (
             "__CHU_IMPL__:circuitpython|10.1.4"
@@ -720,7 +720,7 @@ class TestSoftReset:
 
         transport.soft_reset()
 
-        from chumicro_device_transport.circuitpython_transport import _CTRL_B
+        from chumicro_deploy.circuitpython_transport import _CTRL_B
         # Should have: Ctrl-B (exit raw), Ctrl-D (reboot),
         # then Ctrl-C×2 + Ctrl-A (re-enter raw REPL).
         assert _CTRL_B in port.writes
@@ -902,7 +902,7 @@ class TestFlashMode:
         """stage() in flash mode should raise when drive is not found."""
         # Ensure auto-detection finds nothing.
         monkeypatch.setattr(
-            "chumicro_device_transport.circuitpython_transport"
+            "chumicro_deploy.circuitpython_transport"
             ".find_circuitpy_drive",
             lambda: None,
         )
@@ -1154,7 +1154,7 @@ class TestFlashMode:
         # Should NOT send autoreload commands in ram mode.
         assert b"autoreload" not in written_data
         # Should still send Ctrl-B (exit raw REPL) and Ctrl-D (soft reboot).
-        from chumicro_device_transport.circuitpython_transport import _CTRL_B
+        from chumicro_deploy.circuitpython_transport import _CTRL_B
         assert _CTRL_B in port.writes
         assert _CTRL_D in port.writes
 
@@ -1394,7 +1394,7 @@ class TestFindCircuitpyDrive:
 
         # Make find_circuitpy_drive return our fake path.
         monkeypatch.setattr(
-            "chumicro_device_transport.circuitpython_transport"
+            "chumicro_deploy.circuitpython_transport"
             ".find_circuitpy_drive",
             lambda: str(fake_drive),
         )

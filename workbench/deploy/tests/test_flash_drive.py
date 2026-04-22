@@ -7,8 +7,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from chumicro_device_transport import flash_drive
-from chumicro_device_transport.flash_drive import FlashDriveError
+from chumicro_deploy import flash_drive
+from chumicro_deploy.flash_drive import FlashDriveError
 
 
 class TestMergePackages:
@@ -99,7 +99,7 @@ class TestRsync:
         destination.mkdir()
 
         with patch(
-            "chumicro_device_transport.flash_drive.subprocess.run",
+            "chumicro_deploy.flash_drive.subprocess.run",
             side_effect=subprocess.CalledProcessError(
                 1, "rsync", stderr="permission denied",
             ),
@@ -115,7 +115,7 @@ class TestRsync:
         destination.mkdir()
 
         with patch(
-            "chumicro_device_transport.flash_drive.subprocess.run",
+            "chumicro_deploy.flash_drive.subprocess.run",
             side_effect=FileNotFoundError("rsync"),
         ):
             with pytest.raises(FlashDriveError, match="rsync is required"):
@@ -135,7 +135,7 @@ class TestRsync:
             return subprocess.CompletedProcess(args=command, returncode=0)
 
         with patch(
-            "chumicro_device_transport.flash_drive.subprocess.run",
+            "chumicro_deploy.flash_drive.subprocess.run",
             side_effect=fake_run,
         ):
             flash_drive.rsync(source, destination)
@@ -166,7 +166,7 @@ class TestMacOSHelpers:
     ) -> None:
         """On macOS, strip_extended_attributes runs `xattr -cr <path>`."""
         monkeypatch.setattr(
-            "chumicro_device_transport.flash_drive._sys_module.platform",
+            "chumicro_deploy.flash_drive._sys_module.platform",
             "darwin",
         )
         captured: list[list[str]] = []
@@ -176,7 +176,7 @@ class TestMacOSHelpers:
             return subprocess.CompletedProcess(args=command, returncode=0)
 
         with patch(
-            "chumicro_device_transport.flash_drive.subprocess.run",
+            "chumicro_deploy.flash_drive.subprocess.run",
             side_effect=fake_run,
         ):
             flash_drive.strip_extended_attributes(tmp_path)
@@ -188,11 +188,11 @@ class TestMacOSHelpers:
     ) -> None:
         """Missing xattr binary is a warning, not a raise."""
         monkeypatch.setattr(
-            "chumicro_device_transport.flash_drive._sys_module.platform",
+            "chumicro_deploy.flash_drive._sys_module.platform",
             "darwin",
         )
         with patch(
-            "chumicro_device_transport.flash_drive.subprocess.run",
+            "chumicro_deploy.flash_drive.subprocess.run",
             side_effect=FileNotFoundError("xattr"),
         ):
             flash_drive.strip_extended_attributes(tmp_path)  # must not raise
@@ -202,7 +202,7 @@ class TestMacOSHelpers:
     ) -> None:
         """On macOS, clean_dot_files runs dot_clean on the drive path."""
         monkeypatch.setattr(
-            "chumicro_device_transport.flash_drive._sys_module.platform",
+            "chumicro_deploy.flash_drive._sys_module.platform",
             "darwin",
         )
         captured: list[list[str]] = []
@@ -212,7 +212,7 @@ class TestMacOSHelpers:
             return subprocess.CompletedProcess(args=command, returncode=0)
 
         with patch(
-            "chumicro_device_transport.flash_drive.subprocess.run",
+            "chumicro_deploy.flash_drive.subprocess.run",
             side_effect=fake_run,
         ):
             flash_drive.clean_dot_files(tmp_path)
@@ -224,11 +224,11 @@ class TestMacOSHelpers:
     ) -> None:
         """Missing dot_clean binary does not raise."""
         monkeypatch.setattr(
-            "chumicro_device_transport.flash_drive._sys_module.platform",
+            "chumicro_deploy.flash_drive._sys_module.platform",
             "darwin",
         )
         with patch(
-            "chumicro_device_transport.flash_drive.subprocess.run",
+            "chumicro_deploy.flash_drive.subprocess.run",
             side_effect=FileNotFoundError("dot_clean"),
         ):
             flash_drive.clean_dot_files(tmp_path)  # must not raise
@@ -238,7 +238,7 @@ class TestMacOSHelpers:
     ) -> None:
         """On macOS, disable_spotlight_indexing runs mdutil -i off."""
         monkeypatch.setattr(
-            "chumicro_device_transport.flash_drive._sys_module.platform",
+            "chumicro_deploy.flash_drive._sys_module.platform",
             "darwin",
         )
         captured: list[list[str]] = []
@@ -248,7 +248,7 @@ class TestMacOSHelpers:
             return subprocess.CompletedProcess(args=command, returncode=0)
 
         with patch(
-            "chumicro_device_transport.flash_drive.subprocess.run",
+            "chumicro_deploy.flash_drive.subprocess.run",
             side_effect=fake_run,
         ):
             flash_drive.disable_spotlight_indexing(tmp_path)
@@ -260,11 +260,11 @@ class TestMacOSHelpers:
     ) -> None:
         """Missing mdutil binary does not raise."""
         monkeypatch.setattr(
-            "chumicro_device_transport.flash_drive._sys_module.platform",
+            "chumicro_deploy.flash_drive._sys_module.platform",
             "darwin",
         )
         with patch(
-            "chumicro_device_transport.flash_drive.subprocess.run",
+            "chumicro_deploy.flash_drive.subprocess.run",
             side_effect=FileNotFoundError("mdutil"),
         ):
             flash_drive.disable_spotlight_indexing(tmp_path)  # must not raise
@@ -278,7 +278,7 @@ class TestFlushVolume:
     ) -> None:
         """On macOS, flush_volume runs the `sync` command."""
         monkeypatch.setattr(
-            "chumicro_device_transport.flash_drive._sys_module.platform",
+            "chumicro_deploy.flash_drive._sys_module.platform",
             "darwin",
         )
         captured: list[list[str]] = []
@@ -289,7 +289,7 @@ class TestFlushVolume:
 
         sleep_calls: list[float] = []
         with patch(
-            "chumicro_device_transport.flash_drive.subprocess.run",
+            "chumicro_deploy.flash_drive.subprocess.run",
             side_effect=fake_run,
         ):
             flash_drive.flush_volume(tmp_path, sleep=sleep_calls.append)
@@ -305,13 +305,13 @@ class TestFlushVolume:
         tests can skip the real 0.5 s settle delay.
         """
         monkeypatch.setattr(
-            "chumicro_device_transport.flash_drive._sys_module.platform",
+            "chumicro_deploy.flash_drive._sys_module.platform",
             "darwin",
         )
         sleep_durations: list[float] = []
 
         with patch(
-            "chumicro_device_transport.flash_drive.subprocess.run",
+            "chumicro_deploy.flash_drive.subprocess.run",
             side_effect=lambda command, **kwargs: subprocess.CompletedProcess(
                 args=command, returncode=0,
             ),
@@ -325,13 +325,13 @@ class TestFlushVolume:
     ) -> None:
         """Callers can override the settle delay per-invocation."""
         monkeypatch.setattr(
-            "chumicro_device_transport.flash_drive._sys_module.platform",
+            "chumicro_deploy.flash_drive._sys_module.platform",
             "darwin",
         )
         sleep_durations: list[float] = []
 
         with patch(
-            "chumicro_device_transport.flash_drive.subprocess.run",
+            "chumicro_deploy.flash_drive.subprocess.run",
             side_effect=lambda command, **kwargs: subprocess.CompletedProcess(
                 args=command, returncode=0,
             ),

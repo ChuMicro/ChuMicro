@@ -5,11 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import pytest
-from chumicro_device_transport.micropython_transport import (
+from chumicro_deploy.micropython_transport import (
     MicropythonTransport,
     MicropythonTransportError,
 )
-from chumicro_device_transport.testing import FakeTransport
+from chumicro_deploy.testing import FakeTransport
 
 
 @dataclass
@@ -614,7 +614,7 @@ class TestProbeImplementation:
 
     def test_parses_probe_marker_from_exec_raw_tuple(self) -> None:
         """mpremote's (stdout, stderr) tuple is decoded and parsed for the marker."""
-        from chumicro_device_transport import DeviceImplementation
+        from chumicro_deploy import DeviceImplementation
 
         runner = FakeRunner()
         probe_stdout = (
@@ -683,7 +683,7 @@ class TestResolveMpremoteBinary:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path
     ) -> None:
         """When mpremote sits next to sys.executable, subprocess uses that path."""
-        from chumicro_device_transport import micropython_transport as module
+        from chumicro_deploy import micropython_transport as module
 
         venv_bin = tmp_path / "bin"
         venv_bin.mkdir()
@@ -708,7 +708,7 @@ class TestResolveMpremoteBinary:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path
     ) -> None:
         """Without a venv-local binary, shutil.which on PATH is used."""
-        from chumicro_device_transport import micropython_transport as module
+        from chumicro_deploy import micropython_transport as module
 
         empty_bin = tmp_path / "bin"
         empty_bin.mkdir()
@@ -732,7 +732,7 @@ class TestResolveMpremoteBinary:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path
     ) -> None:
         """Neither venv-local nor PATH hit → command stays as bare ``mpremote``."""
-        from chumicro_device_transport import micropython_transport as module
+        from chumicro_deploy import micropython_transport as module
 
         empty_bin = tmp_path / "bin"
         empty_bin.mkdir()

@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
 
-from chumicro_device_transport import (
+from chumicro_deploy import (
     DeviceImplementation,
     ExtendedTransportProtocol,
     TransportProtocol,
@@ -381,7 +381,7 @@ def create_transport(
     effective_mode = _resolve_effective_deploy_mode(device_entry, deploy_mode)
 
     if device_entry.runtime == "micropython":
-        from chumicro_device_transport import MicropythonTransport
+        from chumicro_deploy import MicropythonTransport
 
         # Map deploy mode to mpremote transport terminology.
         mpremote_mode = "mount" if effective_mode == "ram" else "copy"
@@ -391,7 +391,7 @@ def create_transport(
         )
 
     if device_entry.runtime == "circuitpython":
-        from chumicro_device_transport import CircuitpythonTransport
+        from chumicro_deploy import CircuitpythonTransport
 
         return CircuitpythonTransport(
             device_entry.address,
@@ -429,7 +429,7 @@ def build_device_bootstrap(
         CircuitPython RAM mode.
     """
     if device_entry.runtime == "circuitpython" and transport.mode == "ram":
-        from chumicro_device_transport import build_circuitpython_bootstrap_scripts
+        from chumicro_deploy import build_circuitpython_bootstrap_scripts
 
         # The CircuitPython RAM transport always exposes the chunking
         # helpers via ExtendedTransportProtocol — no need to guard.

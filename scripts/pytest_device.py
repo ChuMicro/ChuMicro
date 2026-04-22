@@ -37,7 +37,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
-from chumicro_device_transport import TransportProtocol
+from chumicro_deploy import TransportProtocol
 from device_config import (
     DeviceConfigError,
     DeviceEntry,

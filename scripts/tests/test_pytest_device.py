@@ -312,7 +312,7 @@ class TestTransportCache:
 
     def test_get_transport_creates_and_caches(self) -> None:
         """get_transport should create a transport and reuse it."""
-        from chumicro_device_transport.testing import FakeTransport
+        from chumicro_deploy.testing import FakeTransport
 
         calls: list[str] = []
 
@@ -358,7 +358,7 @@ class TestTransportCache:
 
     def test_invalidate_device_disconnects_and_drops_state(self) -> None:
         """invalidate_device should disconnect the cached transport and drop staging."""
-        from chumicro_device_transport.testing import FakeTransport
+        from chumicro_deploy.testing import FakeTransport
 
         cache = pytest_device._TransportCache()
         device = DeviceEntry(
@@ -454,7 +454,7 @@ class TestShouldSoftResetBeforeStage:
 
     def test_false_for_first_file_on_device(self) -> None:
         """The first RAM-mode file should not soft-reset before staging."""
-        from chumicro_device_transport.testing import FakeTransport
+        from chumicro_deploy.testing import FakeTransport
 
         cache = pytest_device._TransportCache()
         device = DeviceEntry(
@@ -472,7 +472,7 @@ class TestShouldSoftResetBeforeStage:
 
     def test_true_when_switching_files_in_circuitpython_ram_mode(self) -> None:
         """A new RAM-mode file should soft-reset to reclaim interpreter heap."""
-        from chumicro_device_transport.testing import FakeTransport
+        from chumicro_deploy.testing import FakeTransport
 
         cache = pytest_device._TransportCache()
         cache.mark_staged(("cp_dev", "timing", "test_heartbeat.py"))
@@ -491,7 +491,7 @@ class TestShouldSoftResetBeforeStage:
 
     def test_false_for_same_file_in_circuitpython_ram_mode(self) -> None:
         """Repeated items from the same file should keep the current batch alive."""
-        from chumicro_device_transport.testing import FakeTransport
+        from chumicro_deploy.testing import FakeTransport
 
         cache = pytest_device._TransportCache()
         cache.mark_staged(("cp_dev", "timing", "test_heartbeat.py"))
@@ -510,7 +510,7 @@ class TestShouldSoftResetBeforeStage:
 
     def test_false_for_circuitpython_flash_mode(self) -> None:
         """Flash mode should not use the RAM-mode per-file reset rule."""
-        from chumicro_device_transport.testing import FakeTransport
+        from chumicro_deploy.testing import FakeTransport
 
         cache = pytest_device._TransportCache()
         cache.mark_staged(("cp_dev", "timing", "test_heartbeat.py"))
@@ -534,7 +534,7 @@ class TestShouldSoftResetBeforeStage:
         ``sys.modules`` accumulates until a soft reset evicts it.  The
         reset is Ctrl-D via raw REPL — no USB re-enumeration.
         """
-        from chumicro_device_transport.testing import FakeTransport
+        from chumicro_deploy.testing import FakeTransport
 
         cache = pytest_device._TransportCache()
         cache.mark_staged(("mp_dev", "timing", "test_heartbeat.py"))
@@ -553,7 +553,7 @@ class TestShouldSoftResetBeforeStage:
 
     def test_false_for_micropython_copy_mode(self) -> None:
         """Copy mode stages to flash and imports fresh per call — no per-file reset needed."""
-        from chumicro_device_transport.testing import FakeTransport
+        from chumicro_deploy.testing import FakeTransport
 
         cache = pytest_device._TransportCache()
         cache.mark_staged(("mp_dev", "timing", "test_heartbeat.py"))

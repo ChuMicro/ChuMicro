@@ -645,7 +645,7 @@ class TestBuildDeviceBootstrap:
         self, tmp_path, monkeypatch,
     ) -> None:
         """CP ram mode should pass the transport's live chunk budget through."""
-        import chumicro_device_transport
+        import chumicro_deploy
 
         entry = DeviceEntry(
             identifier="cp-board",
@@ -679,7 +679,7 @@ class TestBuildDeviceBootstrap:
             return ["inline bootstrap"]
 
         monkeypatch.setattr(
-            chumicro_device_transport,
+            chumicro_deploy,
             "build_circuitpython_bootstrap_scripts",
             fake_build_circuitpython_bootstrap_scripts,
         )
@@ -1567,7 +1567,7 @@ class TestFormatPrSummaryBlock:
 
     def test_probe_result_surfaces_version_and_board(self) -> None:
         """When the probe succeeded, version and machine fill their table columns."""
-        from chumicro_device_transport import DeviceImplementation
+        from chumicro_deploy import DeviceImplementation
 
         result = _make_device_result(
             identifier="pico-w", passed=5,
@@ -1587,7 +1587,7 @@ class TestFormatPrSummaryBlock:
 
     def test_probe_result_without_machine_keeps_board_cell_empty(self) -> None:
         """Empty ``machine`` leaves the Board cell blank (not missing)."""
-        from chumicro_device_transport import DeviceImplementation
+        from chumicro_deploy import DeviceImplementation
 
         result = _make_device_result(
             identifier="cp", runtime="circuitpython",

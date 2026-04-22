@@ -7,7 +7,7 @@ that need to verify orchestration logic without touching real hardware.
 Also provides ``FakeSerialPort`` for testing ``CircuitpythonTransport``
 internals without real hardware::
 
-    from chumicro_device_transport.testing import FakeSerialPort
+    from chumicro_deploy.testing import FakeSerialPort
     from chumicro_abstractions import FakeTime
 """
 
