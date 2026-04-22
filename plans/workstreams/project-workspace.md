@@ -59,16 +59,21 @@ Rationale: Phase 1 unblocks everything.  Phase 2 is used by Phase 4's deploy-the
 
 Acceptance: chumicro's own `test-device` orchestration uses `chumicro-deploy` via its Python API, no behavior change.
 
-### Phase 2: `chumicro-repl`
+### Phase 2: `chumicro-repl` (minimum-viable core)
+
+This phase delivers only what `run.py deploy` and basic interactive use need.  Richer interactive and scripting features live in a sibling workstream (`plans/workstreams/repl-playground.md`) and can evolve independently once this minimum lands.
 
 - [ ] New library: `libraries/repl/`.
 - [ ] Core: pyserial wrapper with UTF-8 safe framing, key bindings matching `mpremote` (Ctrl-C/D/X/E).
 - [ ] Pattern detectors for CP `Traceback`, `Safe mode`, `Hard fault`; MP `Traceback`, `MPY: soft reboot`.  Color highlighting.
 - [ ] Programmatic `tail(device_entry, seconds, fail_on_traceback) -> ExitCode`.
+- [ ] Programmatic `ReplSession` context manager exposing `exec(code)`, `call(func, *args, **kwargs)`, `read_until(pattern, timeout)` — used by deploy orchestration, by `run.py repl`, and by test fixtures.
 - [ ] Host-side tests: fake serial byte-stream fixtures + pattern assertions.
 - [ ] Functional test: open REPL to at least one CP and one MP board, exchange Ctrl-C / Ctrl-D, verify clean exit.
 
-Acceptance: `python -m chumicro_repl --device <id>` opens an interactive session indistinguishable from `mpremote` for basic workflows, with traceback highlighting as the visible differentiator.
+Acceptance: `python -m chumicro_repl --device <id>` opens an interactive session indistinguishable from `mpremote` for basic workflows, with traceback highlighting as the visible differentiator, and the `ReplSession` API is good enough for downstream phases to build on.
+
+See `plans/workstreams/repl-playground.md` for the larger "side portal" feature set (history, editor handoff, snippets, device introspection commands, multi-device pane, recording) — not blocking this phase.
 
 ### Phase 3a: `chumicro-wifi`
 
