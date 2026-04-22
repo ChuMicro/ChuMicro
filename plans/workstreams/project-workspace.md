@@ -202,11 +202,80 @@ See `plans/workstreams/repl-playground.md` for the larger "side portal" feature 
 
 ### Phase 3a: `chumicro-wifi`
 
-- [ ] New library: `libraries/wifi/`.
-- [ ] Non-blocking `WifiService` implementing runner `check`/`handle` protocol.
-- [ ] Backoff + reconnect.  Works on CP (`wifi.radio`), MP (`network.WLAN`), and CPython-stub (always "connected", for sim).
-- [ ] Host-side tests with `FakeWifi` in a `testing.py` submodule.
-- [ ] Functional test: connect to the home testbed network, publish a heartbeat.
+Goal: one unified `WifiService` that owns connection and reconnect across CP, MP-ESP32, and MP-Pico-W.  No runtime or firmware-level supervisor competes with the library.
+
+#### Ownership stance
+
+Library is the sole wifi supervisor.  This means:
+
+- **CircuitPython**: the workspace template ships `settings.toml` **without** `CIRCUITPY_WIFI_SSID` / `CIRCUITPY_WIFI_PASSWORD` keys, so the supervisor auto-connect path in `web_workflow.c` never fires.  The library calls `wifi.radio.connect()` itself.  The blocking nature of CP's connect is accepted — documented as a one-time main-loop stall of up to the connect timeout on first attempt.  Subsequent reconnects are driven by the library with the same blocking call, budgeted per tick.
+- **MicroPython ESP32**: after the first successful `wlan.connect()`, the library calls `wlan.config(reconnects=0)` to disable the firmware-level auto-reconnect ([network_wlan.c:594-600](../../.tools/micropython-v1.26.0/ports/esp32/network_wlan.c)).  Semantics per source: `reconnects=-1` unlimited (default), `reconnects=0` one attempt then stop, `reconnects=N` N retries after initial.  `0` is effectively "off."  Library drives retries itself with uniform backoff.
+- **MicroPython Pi Pico W (CYW43)**: no firmware supervisor exists; library is sole owner by default.  Library additionally applies `wlan.config(pm=0xa11140)` to disable power-save (eliminates idle unresponsiveness).
+- **CPython**: fake — always "connected."
+
+The previously sketched `ownership="delegate"` mode (let CP's `settings.toml` auto-connect win) is **dropped**.  Uniform behavior beats matching CP's default UX; settings.toml wifi keys are treated as a footgun and excluded from the template.
+
+#### API sketch
+
+```python
+from chumicro_wifi import WifiService, WifiConfig, State
+
+config = WifiConfig(
+    ssid="HomeNet",
+    password="...",
+    hostname="back-porch",               # optional
+    static_ip=None,                      # or IPv4 tuple
+    power_save=False,                    # always applied on Pico W
+    connect_timeout_ms=15_000,           # CP blocking cap
+    reconnect_backoff_start_ms=1_000,
+    reconnect_backoff_max_ms=60_000,
+    reconnect_max=None,                  # None = unlimited
+)
+
+wifi = WifiService(config, ticks=ticks)
+runner.add(wifi)                         # runner check/handle protocol
+
+wifi.state                               # State.DISCONNECTED | CONNECTING | CONNECTED | RECONNECTING | FAILED
+wifi.connected                           # live bool
+wifi.ip                                  # str | None
+wifi.last_error                          # exception | None
+wifi.on_state_change(callback)           # (old_state, new_state) -> None
+```
+
+State machine:
+
+```
+DISCONNECTED -> CONNECTING -> CONNECTED
+                    |            |
+                    |            v
+                    |       RECONNECTING (on drop)
+                    |            |
+                    v            v
+                 FAILED <--- backoff exhausted (if reconnect_max set)
+```
+
+Per-runtime adapters live in `chumicro_wifi._adapters/`: `cp.py`, `mp_esp32.py`, `mp_rp2.py`, `cpython.py`.  Adapter selection happens at `WifiService` construction via `sys.implementation.name` + board probe.
+
+#### Tasks
+
+- [ ] New library: `libraries/wifi/` via `scripts/run.py new-library wifi`.
+- [ ] `WifiConfig` dataclass + `WifiService` class implementing runner `check`/`handle`.
+- [ ] Four runtime adapters with a shared protocol.  Each adapter: `connect()`, `disconnect()`, `is_linked()`, `configure()`, `ip()`.
+- [ ] Reconnect supervisor in `WifiService` — exponential backoff, capped at `reconnect_backoff_max_ms`, honors `reconnect_max`.
+- [ ] `testing.py` with `FakeWifi` — drives state transitions explicitly for downstream library tests.
+- [ ] Host-side tests covering state machine, backoff math, adapter selection, and failure paths.
+- [ ] Cross-runtime tests (CP + MP unix-port) for the state machine and adapter contract.
+- [ ] Functional test on the home testbed: connect to AP, verify reconnect after manual deassoc (`wlan.disconnect()` on MP; radio toggle on CP).
+- [ ] Template `AGENTS.md` note: "do not add `CIRCUITPY_WIFI_SSID` to settings.toml — chumicro-wifi owns the radio."
+
+#### Device verification still wanted
+
+Docs do not settle these; run on plugged-in boards:
+
+- Does `wifi.radio.enabled = False` in `boot.py` actually veto the CP supervisor auto-connect path before it fires?  If yes, the library can belt-and-suspenders this alongside the "no SSID key" approach.
+- How long does CP's blocking `connect()` stall on a routable-but-unresponsive AP?  Informs `connect_timeout_ms` default.
+- Does `wlan.config(reconnects=0)` on MP ESP32 take effect mid-session (after initial connect), or must it be set pre-connect?  Source suggests either works (it's just a config variable read at event time) but confirm on hardware.
+- Pico W MP with `pm=0xa11140`: how much does responsiveness improve in practice?  Expected yes per community reports.
 
 ### Phase 3b: `chumicro-settings`
 
