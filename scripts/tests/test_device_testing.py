@@ -576,7 +576,7 @@ class TestCreateTransport:
         entry = self._make_device_entry(runtime="unknown")
         # Override runtime since DeviceEntry doesn't validate.
         entry.runtime = "unknown"
-        with pytest.raises(ValueError, match="Unsupported runtime"):
+        with pytest.raises(ValueError, match="Unsupported transport"):
             device_testing.create_transport(entry)
 
     def test_default_deploy_mode_is_ram(self) -> None:

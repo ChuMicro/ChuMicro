@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from chumicro_deploy import (
+    Device,
     DeviceImplementation,
     ExtendedTransportProtocol,
     TransportProtocol,
@@ -366,6 +367,10 @@ def create_transport(
 ) -> TransportProtocol:
     """Create the appropriate transport for a device entry.
 
+    Thin wrapper around :meth:`chumicro_deploy.Device.create_transport`
+    — builds a ``Device`` from the chumicro-shaped ``DeviceEntry`` and
+    delegates runtime-branching to the package.
+
     Args:
         device_entry: A DeviceEntry from the config loader.
         deploy_mode: ``"ram"`` or ``"flash"``.  When ``None``, uses the
@@ -375,32 +380,17 @@ def create_transport(
         A transport instance for the device's runtime.
 
     Raises:
-        ValueError: If the runtime is not supported or flash mode
-            is missing required configuration.
+        ValueError: If the runtime is not supported.
     """
     effective_mode = _resolve_effective_deploy_mode(device_entry, deploy_mode)
-
-    if device_entry.runtime == "micropython":
-        from chumicro_deploy import MicropythonTransport
-
-        # Map deploy mode to mpremote transport terminology.
-        mpremote_mode = "mount" if effective_mode == "ram" else "copy"
-        return MicropythonTransport(
-            device_entry.address,
-            mode=mpremote_mode,
-        )
-
-    if device_entry.runtime == "circuitpython":
-        from chumicro_deploy import CircuitpythonTransport
-
-        return CircuitpythonTransport(
-            device_entry.address,
-            baudrate=device_entry.serial_baudrate,
-            mode=effective_mode,
-            circuitpy_drive_path=device_entry.circuitpy_drive_path,
-        )
-
-    raise ValueError(f"Unsupported runtime: {device_entry.runtime}")
+    device = Device(
+        transport=device_entry.runtime,
+        address=device_entry.address,
+        baudrate=device_entry.serial_baudrate,
+        deploy_mode=effective_mode,
+        circuitpy_drive_path=device_entry.circuitpy_drive_path,
+    )
+    return device.create_transport()
 
 
 def build_device_bootstrap(
