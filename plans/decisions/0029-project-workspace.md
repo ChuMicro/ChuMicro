@@ -2,7 +2,7 @@
 
 Status: `proposed`
 Date: `2026-04-21`
-Related: Decision 0026, Decision 0027, Decision 0028, Decision 0030
+Related: Decision 0026, Decision 0027, Decision 0028, Decision 0030, Decision 0031
 
 ## Context
 
@@ -90,7 +90,7 @@ Three commented zones: user-owned (never overwritten without `--force` or prompt
 
 ## Consequences
 
-- Five new libraries land in this repo: `chumicro-deploy`, `chumicro-repl`, `chumicro-wifi`, `chumicro-mqtt`, `chumicro-workspace-runtime`.  `chumicro-settings` (already planned) is the sixth assumed-necessity.
+- Six new libraries land in this repo: `chumicro-deploy`, `chumicro-repl`, `chumicro-wifi`, `chumicro-sockets` (see Decision 0031), `chumicro-mqtt`, `chumicro-workspace-runtime`.  `chumicro-kvstore` (already planned; formerly `chumicro-settings`, see Decision 0030) is the seventh assumed-necessity.
 - `chumicro-workspace-template` is a new companion repo.
 - `devices.yml` gains three-zone structure; existing chumicro use (device testing) remains compatible — new fields are additive.
 - A monthly scrape-and-cache job is needed for MicroPython BOARD names; the reflash family table is shipped and versioned with `chumicro-workspace-runtime`.

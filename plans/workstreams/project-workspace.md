@@ -9,7 +9,7 @@ Give users a template-repo project workspace that unifies CircuitPython, MicroPy
 ## Scope
 
 - A `chumicro-workspace-template` repo: checked-in `run.py`, `workspace.yml`, `devices.yml`, `things/_template/`, `packages/` (gitignored), `libs/`, `.venv/` (gitignored), baseline `AGENTS.md`, lint + coverage knobs, `.pre-commit-config.yaml`.
-- Five new chumicro libraries: `chumicro-deploy`, `chumicro-repl`, `chumicro-wifi`, `chumicro-mqtt`, `chumicro-workspace-runtime`.  The already-planned `chumicro-settings` is an assumed-necessity but is owned by its own next-up entry, not this workstream.
+- Six new chumicro libraries: `chumicro-deploy`, `chumicro-repl`, `chumicro-wifi`, `chumicro-sockets`, `chumicro-mqtt`, `chumicro-workspace-runtime`.  The already-planned `chumicro-kvstore` (formerly `chumicro-settings`, see Decision 0030) is an assumed-necessity but is owned by its own next-up entry, not this workstream.
 - Onboarding UX: `run.py add-device` handles responsive boards, boards in UF2 bootloader, and blank chips detectable by esptool.
 - Firmware install + upgrade: `run.py install-firmware`, `run.py upgrade-firmware`, `--prerelease`, `--approve-board-storage-reset`, programmatic bootloader-entry where supported.
 - Local library dogfooding: `library_sources:` maps a package name or mono-repo root to a local clone; reuses the Decision 0026 editable-install pattern.
@@ -32,19 +32,21 @@ Nothing shipped from this workstream yet.  Prerequisites that already exist:
 
 ## Library sequencing
 
-Six libraries (five new + `chumicro-settings`) land in a deliberate order so each phase has working dependencies.
+Seven libraries (six new + `chumicro-kvstore`) land in a deliberate order so each phase has working dependencies.
 
 | Phase | Library | Role | Depends on |
 |-------|---------|------|------------|
 | 1 | `chumicro-deploy` | Extraction of `support/device_transport/` into publishable package. Public API: Python + thin CLI. | Decision 0028 transport |
 | 2 | `chumicro-repl` | CP/MP-aware serial TUI. UTF-8 + emoji safe. Traceback highlighting. `tail()` API for deploy. | pyserial |
-| 3 | `chumicro-settings` | Already planned, lands here in this sequencing. Dict-like persistent storage. | msgpack |
-| 3 | `chumicro-wifi` | Non-blocking connection manager. CP + MP + CPython-stub. | runner, settings |
-| 4 | `chumicro-workspace-runtime` | Host-side CLI implementation + on-device `workspace_runtime` boot module. | deploy, repl, settings, wifi |
+| 3 | `chumicro-kvstore` | Already planned, lands here in this sequencing. Tiny mutable KV for persisted runtime state. | msgpack |
+| 3 | `chumicro-wifi` | Non-blocking connection manager. CP + MP + CPython-stub. | runner, kvstore |
+| 4 | `chumicro-workspace-runtime` | Host-side CLI implementation + on-device `workspace_runtime` boot module. | deploy, repl, kvstore, wifi |
 | 4 | `chumicro-workspace-template` repo | The checked-in `run.py`, `workspace.yml`, `things/_template/`, scaffolding files. | workspace-runtime |
-| 5 | `chumicro-mqtt` | Refactor pythonProject3's 1043-line hand-rolled client into a runner-shaped service. | runner, wifi |
+| 5 | `chumicro-sockets` | Thin TCP client + TLS abstraction over CP `socketpool` / MP `socket` / CPython `socket`. Prereq for MQTT and future requests lib. See Decision 0031. | none (pure platform shim) |
+| 6 | `chumicro-mqtt` | Refactor pythonProject3's 1043-line hand-rolled client into a runner-shaped service on top of chumicro-sockets. QoS 0 + 1; internal shape allows QoS 2 later. | runner, wifi, sockets |
+| 7 | `chumicro-workspace-template` first-sensor thing | End-to-end proving ground: a temperature sensor that connects via wifi, publishes via mqtt, persists a counter via kvstore. | all prior |
 
-Rationale: Phase 1 unblocks everything.  Phase 2 is used by Phase 4's deploy-then-tail UX.  Phase 3 is two libraries in parallel (independent).  Phase 4 is the integration phase — the CLI plus the template.  Phase 5 lands the first non-trivial thing-template (MQTT sensor) and proves end-to-end.
+Rationale: Phase 1 unblocks everything.  Phase 2 is used by Phase 4's deploy-then-tail UX.  Phase 3 is two libraries in parallel (independent).  Phase 4 is the integration phase — the CLI plus the template.  Phase 5 (`chumicro-sockets`) is a small but strict prereq for MQTT that also sets up the future HTTP client.  Phase 6 (`chumicro-mqtt`) refactors the pythonProject3 client against the new sockets base.  Phase 7 lands the first non-trivial thing-template and proves the whole stack end-to-end.
 
 ## Implementation phases
 
@@ -341,13 +343,122 @@ Docs settle most numbers; these need boards:
 
 Acceptance: a user clones the template, runs `python run.py setup`, plugs in a board, runs `python run.py add-device`, edits `things/example-hello/app.py`, runs `python run.py deploy`, sees output in REPL.  Zero additional setup.
 
-### Phase 5: `chumicro-mqtt` refactor + first sensor thing template
+### Phase 5: `chumicro-sockets`
 
-- [ ] New library: `libraries/mqtt/`.
-- [ ] Port the 1043-line `MQTTClient` from `/Users/chuxor/circuitpython/pythonProject3/basefilesystem/lib/basefs/mqtt_client.py` into runner `check`/`handle` shape.  Non-blocking `select.poll` dispatch.  Pre-allocated bytearray buffers.  Will + publisher + subscriber.
-- [ ] Host-side tests against a local broker fixture (mosquitto in CI? or a Python MQTT server fake).
-- [ ] Functional test: publish + subscribe on a real board against the home testbed broker.
-- [ ] Add `things/example-sensor/` to the template repo — temperature → MQTT publish on a heartbeat.
+Thin TCP client + TLS abstraction over the three runtimes' divergent socket stories.  Prerequisite for `chumicro-mqtt` and a future `chumicro-requests`.  Architecture recorded in Decision 0031.
+
+#### Why this phase exists
+
+Source-level research confirmed the runtimes do not share a usable common socket shape:
+
+- **CircuitPython** has no raw `socket` module (only `socketpool.SocketPool(radio)`), no `recv()` (only `recv_into()`), no `ssl` module (TLS via radio `TLS_MODE` flag).
+- **MicroPython** has stdlib `socket` with both `recv()` and `recv_into()`, `ssl` on ESP32 builds but **not on Pi Pico W (CYW43)**.
+- **CPython** has stdlib `socket` + stdlib `ssl`.
+- `adafruit_connection_manager` solves the CP side but is CP-only.
+
+Without this library, every downstream networking library re-implements the same shim or picks a runtime and abandons the other.
+
+#### Public surface
+
+```python
+from chumicro_sockets import tcp_client_socket, TCPClientSocket
+from chumicro_sockets.testing import FakeSocket
+
+sock = tcp_client_socket(host="broker.example.com", port=8883, ssl=True, radio=wifi.radio)
+sock.setblocking(False)
+sent = sock.send(packet_bytes)                     # int
+nbytes = sock.recv_into(rx_buffer, 256)            # int; OSError(errno=11) on EAGAIN
+fd = sock.fileno()                                 # for select.poll().register(fd, ...)
+sock.close()
+```
+
+Protocol minimum: `connect`, `send`, `recv_into`, `close`, `setblocking`, `settimeout`, `fileno`.  No `recv()` (CP-incompatible idiom).
+
+#### Tasks
+
+- [ ] New library: `libraries/sockets/` via `scripts/run.py new-library sockets`.
+- [ ] `TCPClientSocket` protocol (duck-typed, not ABC).
+- [ ] Four adapters under `chumicro_sockets/_adapters/`: `cp.py`, `mp_esp32.py`, `mp_rp2.py`, `cpython.py`.
+- [ ] Adapter selection via `sys.implementation.name` + board probe in `tcp_client_socket()` factory.
+- [ ] TLS is a `connect(..., ssl=True)` flag; adapters route it correctly (radio flag on CP / Pico W MP, `ssl` module on ESP32 MP / CPython).  `UnsupportedSSLConfigError` raised when a user passes an `ssl.SSLContext` to an adapter that can't use it.
+- [ ] `testing.FakeSocket` — full protocol, scripted recv sequences, scripted `EAGAIN` injection, `sent` bytearray assertion surface.
+- [ ] Host-side tests on CPython covering protocol conformance + FakeSocket behavior.
+- [ ] Cross-runtime tests on CP + MP unix-ports that exercise the adapter selection + FakeSocket.
+- [ ] `libraries/sockets/docs/` explaining why the library exists, comparison to `adafruit_connection_manager` and `umqtt.simple` raw-socket pattern.
+
+#### Acceptance
+
+- `chumicro-mqtt` (Phase 6) imports only from `chumicro_sockets` — no `socketpool`, `socket`, or `ssl` import in MQTT source.
+- `FakeSocket` drives MQTT unit tests to 94 % coverage without hitting a real network.
+- A minimal TCP echo-client example runs identically on all three runtimes.
+
+### Phase 6: `chumicro-mqtt` refactor
+
+Port and redesign the ~1043-line MQTT client at `/Users/chuxor/circuitpython/pythonProject3/basefilesystem/lib/basefs/mqtt_client.py` into a new library.  Keep the solid parts; rewrite the parts that got weird.  Land on top of `chumicro-sockets` (Phase 5) and `chumicro-timing` + `chumicro-runner`.  QoS 0 and QoS 1 supported; internal shape permits QoS 2 but it is not implemented.
+
+#### Preserve from the original
+
+- **Packet encoder/decoder primitives** — `_encode_varlen`, `_decode_varlen`, `_encode_string`, `topic_matches` are solid and stay mostly verbatim.
+- **Non-blocking loop shape** — `select.poll()` + `ipoll(0)` cooperative dispatch, per-tick incremental work.
+- **Pre-allocated 256 B static RX buffer** plus the degraded-state partial buffer for oversized messages; static allocation avoids fragmentation.
+- **Callback registration API** — `on_message`, `on_connect`, `on_disconnect`, `on_subscribe`, `on_unsubscribe`, `on_publish`, pattern-routed `on_message_handlers` list.
+- **Keepalive via PINGREQ** with `ticks_diff` / `ticks_add` — swap `adafruit_ticks` for `chumicro-timing`.
+- **Will / retain** — feature-complete already.
+
+#### Rewrite
+
+- **QoS 1 in-flight tracking.**  Replace the single `_publish_retransmit` boolean and the practice of storing whole `MQTTMessage` objects in `_waiting_state_args` with a dict keyed by `packet_id`: `{packet_id: (msg_bytes, retry_count, deadline_ticks, completion_callback)}`.  Supports multiple concurrent QoS 1 publishes.  PUBACK matching compares bytes against the dict key, not against a live object that could be garbage-collected or mutated.
+- **Callback dispatch.**  Remove the `popleft`-then-requeue pattern that desyncs when two publishes race (lines 489-499).  Callbacks for QoS 1 publish-completion are stored in the in-flight dict, keyed by `packet_id`, fired once on PUBACK.  Inbound-message callbacks fire immediately during `_handle_incoming_publish()` as today.
+- **State machine.**  Explicit states: `DISCONNECTED`, `CONNECTING`, `CONNECTED`, `DISCONNECTING`, `FAILED`.  Separate `ProtocolState` (connection lifecycle) from `PendingWork` (which specific responses the library is awaiting: CONNACK, SUBACK, UNSUBACK, PINGRESP).  Current code conflates them via `_waiting_state` — the rewrite names the two surfaces independently.
+- **Handshake lock.**  Current code refuses to send anything while `_waiting_state` is set.  The rewrite only blocks packets of the *specific* type that would confuse the response (e.g. don't send a second CONNECT while waiting for CONNACK), and allows unrelated work (PUBLISH while waiting for SUBACK) to proceed.
+- **Partial-send timeout.**  `_packet_count_that_must_send` counter leak (increment in `_send_from_queue` without a bounded-wait contract) is fixed by giving partial sends their own deadline and aborting into the reconnect path on exceed.
+- **Oversized-message policy.**  Current `PARTIAL_STATE_DISCARDING` silently PUBACKs the broker and returns `b""` to user callback.  New policy is a `WhenOversized` enum: `DROP_SILENT` (current behavior, opt-in), `DROP_WITH_EVENT` (default, calls `on_oversized(topic, reported_length)` but still PUBACKs), `DISCONNECT` (treat as a protocol error).
+- **Socket layer.**  Remove `adafruit_connection_manager` dependency.  Take a `TCPClientSocket` in constructor; default adapter via `chumicro_sockets.tcp_client_socket(...)`.  FakeSocket drives unit tests.
+- **Timer layer.**  Replace `adafruit_ticks` imports with `chumicro-timing` `ticks_ms` / `ticks_add` / `ticks_diff`.
+- **Runner integration.**  Implement the `check(now_ms) -> bool` / `handle(now_ms)` contract from Decision 0014.  Running under `chumicro-runner` means the LED-toggle-while-publishing requirement comes for free — per-tick budget caps work done, big blobs chunk naturally.
+
+#### Allow but don't implement
+
+- **QoS 2.**  Reserve `packet_type` constants (PUBREC 0x50, PUBREL 0x62, PUBCOMP 0x70) and allocate a parallel in-flight dict shape that would hold PUBREC / PUBREL / PUBCOMP state.  Do not wire handlers.  Document that the state-dict shape is forward-compatible.  Tests assert QoS 2 raises `UnsupportedQoSError`.
+
+#### Tasks
+
+- [ ] New library: `libraries/mqtt/` via `scripts/run.py new-library mqtt`.
+- [ ] Port `_encode_varlen`, `_decode_varlen`, `_encode_string`, `topic_matches`.
+- [ ] Port static-buffer RX + degraded-state partial buffer.
+- [ ] Implement new `ProtocolState` + `PendingWork` state machines.
+- [ ] Implement per-`packet_id` in-flight dict for QoS 1.
+- [ ] Implement `WhenOversized` policy.
+- [ ] Implement `MqttService` as a runner service (`check` / `handle`).
+- [ ] Sit on `chumicro-sockets`; no direct `socketpool` / `socket` / `ssl` imports.
+- [ ] Use `chumicro-timing` for all time math.
+- [ ] `testing.py` with `FakeMqttBroker` (drives a FakeSocket with scripted CONNACK / SUBACK / PUBACK / PUBLISH sequences) to reach 94 % coverage.
+- [ ] Host-side tests: state machine, QoS 1 concurrent publishes, PUBACK matching, oversized-message policy matrix, callback dispatch order, partial-send timeout, reconnect after socket close.
+- [ ] Cross-runtime tests on CP + MP unix-ports for the state machine.
+- [ ] Functional test on the home testbed: publish + subscribe against a real broker on both a CP board and a MP board.
+- [ ] Example: `libraries/mqtt/examples/publish_heartbeat.py` runnable on all three runtimes.
+- [ ] Rock-solid `libraries/mqtt/docs/` — architecture, usage, design rationale, migration guide from `adafruit_minimqtt` and `umqtt.simple`.
+
+#### Acceptance
+
+- Two concurrent QoS 1 publishes with different payloads both get their correct completion callbacks after two PUBACKs in any order.
+- A big inbound PUBLISH (say 10 KB) does not stall a sibling runner service — an LED-heartbeat service on the same runner continues to toggle while the PUBLISH is chunking in.
+- `WhenOversized.DISCONNECT` closes the socket cleanly and triggers the reconnect path.
+- 94 % coverage on `chumicro-mqtt` sources.
+- Publish + subscribe round-trip works on at least one CP board and one MP board against a live broker.
+
+### Phase 7: first sensor thing template
+
+End-to-end proving ground for the full stack (deploy + repl + wifi + kvstore + sockets + mqtt + workspace-runtime).
+
+- [ ] Add `things/example-sensor/` to `chumicro-workspace-template`: reads a temperature (fake if no sensor wired), publishes via mqtt on a heartbeat, persists a boot-counter via kvstore.
+- [ ] `config.toml` for broker + topic + heartbeat period; merged with workspace env/secrets at deploy time per Decision 0030.
+- [ ] Template-side functional test: deploy → connect → publish → verify broker received N messages → tail REPL output → teardown.
+- [ ] Example README walking a new user from clone to first heartbeat on a plugged-in board.
+
+#### Acceptance
+
+A user clones the template, runs `python run.py setup`, plugs in a board, runs `python run.py add-device`, edits one line of `things/example-sensor/config.toml` with their broker URL, runs `python run.py deploy`, and sees heartbeat messages arriving at their broker while the board's REPL streams to the terminal.  Under ten minutes from clone to first message.
 
 ## Success criteria
 
