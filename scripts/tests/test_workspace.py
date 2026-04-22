@@ -241,10 +241,12 @@ class TestFindPublishablePackages:
     """Tests for find_publishable_packages."""
 
     def test_returns_library_paths(self):
-        """Returns relative paths to publishable libraries."""
+        """Returns relative paths to publishable packages under libraries/ or workbench/."""
         packages = find_publishable_packages()
         assert len(packages) > 0
-        assert all(package.startswith("libraries/") for package in packages)
+        assert all(
+            package.startswith(("libraries/", "workbench/")) for package in packages
+        )
 
     def test_all_have_version_file(self):
         """Every publishable package has a VERSION file."""

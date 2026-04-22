@@ -13,8 +13,8 @@ ROOT = SCRIPTS_DIR.parent
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-# Also add library src/ dirs so imports that discovery triggers work.
-for parent in [ROOT / "support", ROOT / "libraries"]:
+# Also add package src/ dirs so imports that discovery triggers work.
+for parent in [ROOT / "support", ROOT / "libraries", ROOT / "workbench"]:
     if not parent.is_dir():
         continue
     for child in sorted(parent.iterdir()):

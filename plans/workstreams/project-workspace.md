@@ -36,17 +36,19 @@ Nothing shipped from this workstream yet.  Prerequisites that already exist:
 
 Seven libraries (six new + `chumicro-kvstore`) land in a deliberate order so each phase has working dependencies.
 
-| Phase | Library | Role | Depends on |
-|-------|---------|------|------------|
-| 1 | `chumicro-deploy` | Extraction of `support/device_transport/` into publishable package. Public API: Python + thin CLI. | Decision 0028 transport |
-| 2 | `chumicro-repl` | CP/MP-aware serial TUI. UTF-8 + emoji safe. Traceback highlighting. `tail()` API for deploy. | pyserial |
-| 3 | `chumicro-kvstore` | Already planned, lands here in this sequencing. Tiny mutable KV for persisted runtime state. | msgpack |
-| 3 | `chumicro-wifi` | Non-blocking connection manager. CP + MP + CPython-stub. | runner, kvstore |
-| 4 | `chumicro-workspace-runtime` | Host-side CLI implementation + on-device `workspace_runtime` boot module. | deploy, repl, kvstore, wifi |
-| 4 | `chumicro-workspace-template` repo | The checked-in `run.py`, `workspace.yml`, `things/_template/`, scaffolding files. | workspace-runtime |
-| 5 | `chumicro-sockets` | Thin TCP client + TLS abstraction over CP `socketpool` / MP `socket` / CPython `socket`. Prereq for MQTT and future requests lib. See Decision 0031. | none (pure platform shim) |
-| 6 | `chumicro-mqtt` | Refactor pythonProject3's 1043-line hand-rolled client into a runner-shaped service on top of chumicro-sockets. QoS 0 + 1; internal shape allows QoS 2 later. | runner, wifi, sockets |
-| 7 | `chumicro-workspace-template` first-sensor thing | End-to-end proving ground: a temperature sensor that connects via wifi, publishes via mqtt, persists a counter via kvstore. | all prior |
+Per Decision 0032, each package lives in `libraries/` (installer puts code on a microcontroller) or `workbench/` (installer puts code on a laptop).  `chumicro-workspace-runtime` lives in `workbench/`: the host CLI is what third parties `pip install`, and its on-device boot module ships as a data file that the CLI deploys onto the board — payload, not an installable package.
+
+| Phase | Package | Folder | Role | Depends on |
+|-------|---------|--------|------|------------|
+| 1 | `chumicro-deploy` | `workbench/` | Extraction of `support/device_transport/` into publishable package. Public API: Python + thin CLI. | Decision 0028 transport |
+| 2 | `chumicro-repl` | `workbench/` | CP/MP-aware serial TUI. UTF-8 + emoji safe. Traceback highlighting. `tail()` API for deploy. | pyserial |
+| 3 | `chumicro-kvstore` | `libraries/` | Already planned, lands here in this sequencing. Tiny mutable KV for persisted runtime state. | msgpack |
+| 3 | `chumicro-wifi` | `libraries/` | Non-blocking connection manager. CP + MP + CPython-stub. | runner, kvstore |
+| 4 | `chumicro-workspace-runtime` | `workbench/` | Host CLI that manages things/devices/deploys. Ships the on-device `workspace_runtime` boot module as a data payload that the CLI writes onto the board at deploy time. | deploy, repl, kvstore, wifi |
+| 4 | `chumicro-workspace-template` repo | *separate repo* | The checked-in `run.py`, `workspace.yml`, `things/_template/`, scaffolding files. | workspace-runtime |
+| 5 | `chumicro-sockets` | `libraries/` | Thin TCP client + TLS abstraction over CP `socketpool` / MP `socket` / CPython `socket`. Prereq for MQTT and future requests lib. See Decision 0031. | none (pure platform shim) |
+| 6 | `chumicro-mqtt` | `libraries/` | Refactor pythonProject3's 1043-line hand-rolled client into a runner-shaped service on top of chumicro-sockets. QoS 0 + 1; internal shape allows QoS 2 later. | runner, wifi, sockets |
+| 7 | `chumicro-workspace-template` first-sensor thing | *template repo* | End-to-end proving ground: a temperature sensor that connects via wifi, publishes via mqtt, persists a counter via kvstore. | all prior |
 
 Rationale: Phase 1 unblocks everything.  Phase 2 is used by Phase 4's deploy-then-tail UX.  Phase 3 is two libraries in parallel (independent).  Phase 4 is the integration phase — the CLI plus the template.  Phase 5 (`chumicro-sockets`) is a small but strict prereq for MQTT that also sets up the future HTTP client.  Phase 6 (`chumicro-mqtt`) refactors the pythonProject3 client against the new sockets base.  Phase 7 lands the first non-trivial thing-template and proves the whole stack end-to-end.
 

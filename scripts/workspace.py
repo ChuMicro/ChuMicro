@@ -189,12 +189,15 @@ _package_dirs_cache: list[Path] | None = None
 
 
 def discover_package_dirs() -> list[Path]:
-    """Find directories under support/ and libraries/ that contain a pyproject.toml.
+    """Find directories under support/, libraries/, and workbench/ that contain a pyproject.toml.
 
     This is the primary discovery function — it defines which packages
     exist in the workspace.  The task runner, IDE sync, and coverage
     tools all derive their package lists from this function.  No
     hard-coded package lists exist anywhere in the codebase.
+
+    See Decision 0032 for why ``workbench/`` exists alongside
+    ``libraries/``.
 
     Results are cached for the lifetime of the process.
     """
@@ -202,7 +205,7 @@ def discover_package_dirs() -> list[Path]:
     if _package_dirs_cache is not None:
         return list(_package_dirs_cache)
     package_dirs: list[Path] = []
-    for parent_dir in [ROOT / "support", ROOT / "libraries"]:
+    for parent_dir in [ROOT / "support", ROOT / "libraries", ROOT / "workbench"]:
         if not parent_dir.is_dir():
             continue
         for child in sorted(parent_dir.iterdir()):
@@ -216,8 +219,11 @@ def discover_library_dirs() -> list[Path]:
     """Return package directories that live under ``libraries/``.
 
     Convenience wrapper around :func:`discover_package_dirs` that filters
-    to publishable library directories only — excludes ``support/``
-    packages.
+    to device-library directories only — excludes ``support/`` packages
+    (internal, not published) and ``workbench/`` packages (host-only
+    publishable tools; Decision 0032).  Used by bundle staging,
+    cross-runtime tests, and docs — all CircuitPython / MicroPython
+    concerns that don't apply to host-only packages.
     """
     return [
         package_dir for package_dir in discover_package_dirs()
@@ -425,7 +431,7 @@ def detect_changed_packages() -> list[Path] | None:
     # Extract unique package dirs from changed file paths
     package_dirs: set[Path] = set()
     for path in changed:
-        for prefix in ("libraries/", "support/"):
+        for prefix in ("libraries/", "support/", "workbench/"):
             if path.startswith(prefix):
                 parts = path.split("/")
                 if len(parts) >= 2:
@@ -466,21 +472,24 @@ def resolve_scope(
 
 
 def find_publishable_packages() -> list[str]:
-    """Return relative paths to publishable libraries under ``libraries/``.
+    """Return relative paths to every publishable package in the workspace.
 
-    A library is publishable when it has both a ``VERSION`` file (which
+    A package is publishable when it has both a ``VERSION`` file (which
     provides the release version) and a ``pyproject.toml`` (which
-    defines build metadata).  Support packages under ``support/`` are
-    workspace-internal and are never published.
+    defines build metadata).  Publishable packages live under
+    ``libraries/`` (device libraries that ship to PyPI and the
+    CircuitPython bundle) or ``workbench/`` (host-only tools that ship
+    to PyPI only; Decision 0032).  Support packages under ``support/``
+    are workspace-internal and are never published.
     """
-    libraries_dir = ROOT / "libraries"
-    if not libraries_dir.is_dir():
-        return []
     packages = []
-    for version_file in sorted(libraries_dir.rglob("VERSION")):
-        package_dir = version_file.parent
-        if (package_dir / "pyproject.toml").exists():
-            packages.append(str(package_dir.relative_to(ROOT)))
+    for publishable_root in (ROOT / "libraries", ROOT / "workbench"):
+        if not publishable_root.is_dir():
+            continue
+        for version_file in sorted(publishable_root.rglob("VERSION")):
+            package_dir = version_file.parent
+            if (package_dir / "pyproject.toml").exists():
+                packages.append(str(package_dir.relative_to(ROOT)))
     return packages
 
 

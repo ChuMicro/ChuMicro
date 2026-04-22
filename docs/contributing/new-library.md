@@ -6,6 +6,8 @@ This guide walks you through the full lifecycle of adding a new library to ChuMi
 
 Check [open issues](https://github.com/ChuMicro/ChuMicro/issues) and [discussions](https://github.com/ChuMicro/ChuMicro/discussions), and skim [`plans/roadmap.md`](../../plans/roadmap.md) and [`plans/decisions/`](../../plans/decisions/) to see if your idea overlaps with planned work or settled design choices. If you're unsure whether the library fits the project, open a discussion first — it's much faster to align on scope before building.
 
+> **Is your package host-only?**  This guide is for *device libraries* — code that runs on CircuitPython, MicroPython, and CPython.  If you're adding a tool that runs only on the developer's laptop (a CLI that drives devices, a REPL client, a firmware helper), it belongs in `workbench/` instead.  See [`workbench.md`](workbench.md) for the layout and conventions — the scaffolder does not yet create workbench packages, so for now you hand-roll the layout off this guide as a template.
+
 ## 1. Scaffold
 
 ```bash

@@ -53,9 +53,9 @@ def pytest_ignore_collect(collection_path, config):
 
 
 def _discover_source_roots() -> list[str]:
-    """Return src/ directories for all packages under libraries/ and support/."""
+    """Return src/ directories for all packages under libraries/, support/, and workbench/."""
     roots: list[str] = []
-    for parent in [ROOT / "support", ROOT / "libraries"]:
+    for parent in [ROOT / "support", ROOT / "libraries", ROOT / "workbench"]:
         if not parent.is_dir():
             continue
         for child in sorted(parent.iterdir()):

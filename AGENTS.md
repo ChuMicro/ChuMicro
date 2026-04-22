@@ -107,24 +107,29 @@ Libraries must be compatible across all three runtimes. If a third-party library
 
 This is a mono-workspace.
 
-- Publishable libraries live under `libraries/<name>/`
-- Shared internal packages live under `support/`
-- Developer tooling lives under `scripts/`
-- Planning docs live under `plans/`
+- Publishable device libraries live under `libraries/<name>/` — installed code ends up on a microcontroller (via `circup install`, `mip install`, or `pip install` on a CPython-capable board). Ship to PyPI **and** the CircuitPython bundle.
+- Publishable host-only tools live under `workbench/<name>/` — installed code ends up on a laptop (`pip install` only). Ship to PyPI only. See Decision 0032.
+- Shared internal packages live under `support/<name>/` (not published).
+- Developer tooling lives under `scripts/`.
+- Planning docs live under `plans/`.
 
 Conventions:
 
-- Publishable libraries use `libraries/<name>/` with `pyproject.toml` and `VERSION`
-- Support packages use `support/<name>/` and are not published
-- `scripts/run.py` auto-discovers packages by scanning for `pyproject.toml`
-- `python scripts/run.py new-library <name>` scaffolds a new library and regenerates IDE configs
+- **The installer's destination decides the folder.** Files a workbench package ships as *payload* — data a host CLI writes onto a device at deploy time — do not shift the folder. Payload is not an installable package. See Decision 0032 §Rules 1–2 for the worked example (`chumicro-workspace-runtime`).
+- Workbench packages follow the **same release lifecycle** as libraries: `VERSION` (SemVer), `check-version` / `check-api` gates, experimental (`chumicro-deploy-experimental`) → stable (`chumicro-deploy`) promotion on PyPI. The only delta vs libraries is the absence of bundle staging and `.mpy` compilation — CP/MP-consumer concerns that don't apply to host-only packages.
+- Publishable libraries use `libraries/<name>/` with `pyproject.toml` and `VERSION`. Use `[tool.chumicro].platforms` to declare runtime support (not to mark file-level host/device ownership).
+- Publishable host-only tools use `workbench/<name>/` with `pyproject.toml` and `VERSION`. No `functional_tests/` slot, no cross-runtime test coverage, no bundle / `.mpy` path. CPython-only third-party deps (`pyserial`, `pyyaml`, `rich`) are fine — `libraries/` avoids them only because a CPython-only dep can't be imported on a device, and workbench doesn't target devices.
+- Support packages use `support/<name>/` and are not published.
+- `scripts/run.py` auto-discovers packages by scanning for `pyproject.toml`.
+- `python scripts/run.py new-library <name>` scaffolds a new device library and regenerates IDE configs. Host-only tools have no scaffolder yet — see [`docs/contributing/workbench.md`](docs/contributing/workbench.md) for the manual layout until the first workbench package lands.
 
 ### File routing
 
 | Task | Where it goes |
 |------|--------------|
-| New library | `python scripts/run.py new-library <name>` |
-| Shared infrastructure | `support/` |
+| New device library (runs on CP + MP + CPython) | `python scripts/run.py new-library <name>` |
+| New host-only tool (CPython only, PyPI only) | `workbench/<name>/` — hand-scaffolded for now; see [`docs/contributing/workbench.md`](docs/contributing/workbench.md) |
+| Shared infrastructure (internal, not published) | `support/` |
 | Build / CI tooling | `scripts/` |
 | Design decision | `plans/decisions/NNNN-<slug>.md` |
 | Docs assets | `support/docs/` |

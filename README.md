@@ -170,8 +170,9 @@ If you want to work on real-board validation or IDE-driven `functional_tests/`, 
 
 ```text
 chumicro/
-├── libraries/             # Publishable libraries (one folder each)
-├── support/               # Internal packages (docs assets, test harness)
+├── libraries/             # Publishable libraries that run on microcontrollers (CP + MP + CPython)
+├── workbench/             # Publishable host-only tools that run on your laptop (CPython only)
+├── support/               # Internal packages (docs assets, test harness) — never published
 ├── scripts/               # Developer tasks (run.py is the entry point)
 ├── docs/contributing/     # Style guide, cheat sheet, setup guides
 ├── plans/                 # Roadmap, decisions, design history
