@@ -34,6 +34,12 @@ from .protocol import (
     TransportProtocol,
 )
 from .result import DeployError, DeployResult
+from .sources import (
+    DirectorySource,
+    FileMapSource,
+    FileSource,
+    ImportGraphSource,
+)
 from .testing import FakeTransport
 
 __all__ = [
@@ -43,8 +49,12 @@ __all__ = [
     "DeployResult",
     "Device",
     "DeviceImplementation",
+    "DirectorySource",
     "ExtendedTransportProtocol",
     "FakeTransport",
+    "FileMapSource",
+    "FileSource",
+    "ImportGraphSource",
     "MicropythonTransport",
     "SerialPort",
     "TransportProtocol",
