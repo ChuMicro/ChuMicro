@@ -50,14 +50,139 @@ Rationale: Phase 1 unblocks everything.  Phase 2 is used by Phase 4's deploy-the
 
 ### Phase 1: `chumicro-deploy` extraction
 
+Three-audience package: chumicro mono repo (replaces `support/device_transport/` callers), chumicro-workspace-template (`run.py deploy`), and third parties building their own project templates.  Decision 0029 §8 records the workspace-agnostic + plugin-shaped requirement.
+
+#### Public API sketch
+
+```python
+# chumicro_deploy/__init__.py — top-level surface
+from chumicro_deploy import Deployer, Device, DeployResult, DeployError
+from chumicro_deploy.transport import TransportProtocol
+from chumicro_deploy.sources import FileSource, DirectorySource, FileMapSource, ImportGraphSource
+```
+
+Device construction — explicit, dict-based, env-based, or via opt-in loader:
+
+```python
+device = Device(
+    transport="circuitpython",          # "micropython" | "circuitpython" | TransportProtocol instance
+    address="/dev/cu.usbmodem1101",
+    baudrate=115200,
+    deploy_mode="ram",                  # "ram" | "flash"
+    circuitpy_drive_path=None,          # auto-detected if omitted
+    entrypoint_name="code.py",          # override if the device runs something else
+    resource_prefix="/lib",             # where lib files land on device
+)
+
+# Or: from a dict (third parties build it however they want)
+device = Device.from_dict({...})
+
+# Or: from env vars (MYBOARD_ADDRESS, MYBOARD_TRANSPORT, ...)
+device = Device.from_env(prefix="MYBOARD_")
+
+# Or: opt-in chumicro-shaped devices.yml loader
+from chumicro_deploy.config.chumicro import load_devices_yml
+devices = load_devices_yml("devices.yml")
+device = devices["back porch"]
+```
+
+File sources — pluggable, not tied to chumicro layout:
+
+```python
+# Ship a pre-built dict (third party handled assembly)
+source = FileMapSource({"code.py": "...", "lib/wifi.py": "..."})
+
+# Ship a directory tree as-is
+source = DirectorySource(Path("./staging"), entrypoint="code.py")
+
+# Let the library walk imports (used by workspace-runtime; available to anyone)
+source = ImportGraphSource(
+    entrypoint=Path("app.py"),
+    search_paths=[Path("libs"), Path("packages")],
+    extra_modules=["my.dynamic.module"],
+)
+
+# Or bring your own
+class MySource(FileSource):
+    def files(self) -> dict[str, bytes]: ...
+    def entrypoint(self) -> str: ...
+```
+
+Deploy:
+
+```python
+deployer = Deployer(device)
+result: DeployResult = deployer.deploy(
+    source,
+    on_progress=lambda pct, msg: ...,
+    on_file_staged=lambda path: ...,
+    on_execute_line=lambda line: ...,
+)
+# result.success, result.staged_files, result.execute_output, result.traceback
+```
+
+Probe / firmware — separate modules, usable without Deployer:
+
+```python
+from chumicro_deploy.probe import probe_device, DeviceInfo
+info: DeviceInfo = probe_device(device)          # runtime_version, board_id, uid, modules_available
+
+from chumicro_deploy.firmware import resolve_firmware_url, flash_firmware
+url = resolve_firmware_url(board_id="adafruit_feather_esp32s3_...", runtime="circuitpython")
+flash_firmware(url, device, reflash_method="uf2", on_progress=...)
+```
+
+Third-party config loader registration (Python entry points):
+
+```toml
+# third party's pyproject.toml
+[project.entry-points."chumicro_deploy.config_loaders"]
+myformat = "my_pkg.loader:load"
+```
+
+The CLI (`python -m chumicro_deploy deploy --device <id> --config devices.yml ...`) is a thin wrapper.  Every CLI action has a programmatic equivalent.  Default config loader tries chumicro's `devices.yml` shape; third parties override via entry point.
+
+#### Portability knobs
+
+- `Device.entrypoint_name` — default `code.py` for CP, `main.py` for MP; override freely.
+- `Device.resource_prefix` — where lib files land on device, default `/lib`.
+- `Deployer.skip_precheck`, `skip_soft_reset`, `skip_gc_collect` — opt out of built-in behaviors.
+- `Deployer.pre_execute_hook(session)` — callback for third-party custom code between stage and execute.
+
+#### What is NOT in `chumicro-deploy`
+
+Stays out of scope (belongs to `chumicro-workspace-runtime`):
+
+- `workspace.yml`, `things/`, `library_sources:`, `active.py`, `packages/` vs `libs/` distinction.
+- Import-graph analysis specialized for chumicro library conventions.
+- Interactive onboarding flows (`add-device`, `rename`, `discover`).
+- REPL tailing orchestration (provided by `chumicro-repl`).
+
+#### Tasks
+
 - [ ] Create `libraries/deploy/` via `scripts/run.py new-library deploy`.
 - [ ] Move transport protocol + `MicropythonTransport` + `CircuitpythonTransport` + harness bootstrap from `support/device_transport/` into `libraries/deploy/src/chumicro_deploy/`.
-- [ ] Keep `support/device_transport/` as a thin re-export during transition; delete once nothing else imports it.
-- [ ] Expose a Python API: `Deployer(device_entry).deploy(source_root, entrypoint)`.  Expose a minimal CLI: `python -m chumicro_deploy deploy --device <id> ...`.
-- [ ] Host-side tests parity with existing `support/device_transport/` test coverage.
+- [ ] Implement `Device`, `Deployer`, `DeployResult`, `DeployError` top-level classes.
+- [ ] Implement `FileSource` protocol + `FileMapSource`, `DirectorySource`, `ImportGraphSource` built-ins.
+- [ ] Implement `probe_device()` returning `DeviceInfo`.
+- [ ] Implement `resolve_firmware_url()` + `flash_firmware()` with the shipped reflash family table.
+- [ ] Implement `chumicro_deploy.config.chumicro.load_devices_yml()` as opt-in import.
+- [ ] Implement `Device.from_dict()` + `Device.from_env()`.
+- [ ] Implement entry-point discovery for third-party config loaders.
+- [ ] Implement progress / file-staged / execute-line callbacks across deploy pipeline.
+- [ ] Keep `support/device_transport/` as a thin re-export during transition; delete once nothing in the mono repo imports it directly.
+- [ ] Migrate chumicro's `scripts/device_testing.py` to consume the new Python API.
+- [ ] CLI: `python -m chumicro_deploy {deploy,probe,flash-firmware}` with `--config` loader resolution.
+- [ ] Host-side tests parity with existing `support/device_transport/` coverage, plus new tests for each source type, config loader path, callback surface, and entry-point discovery.
 - [ ] Functional test: deploy a minimal app to at least one CP and one MP board via the new package.
+- [ ] Functional test: a standalone "third party" fixture repo (outside chumicro's tree, in `tests/fixtures/third_party_template/`) uses `chumicro-deploy` with its own non-chumicro file layout and a custom `FileSource` — proves portability.
 
-Acceptance: chumicro's own `test-device` orchestration uses `chumicro-deploy` via its Python API, no behavior change.
+#### Acceptance
+
+- chumicro's `test-device` orchestration uses `chumicro-deploy` via its Python API with no behavior change.
+- The `tests/fixtures/third_party_template/` fixture deploys successfully to both runtimes without importing any `chumicro_workspace_runtime` symbol and without touching any chumicro-specific file convention.
+- Every CLI action has a documented programmatic equivalent.
+- Zero references to `workspace.yml`, `things/`, or `library_sources:` in the deploy package source (enforced by a grep check in CI).
 
 ### Phase 2: `chumicro-repl` (minimum-viable core)
 

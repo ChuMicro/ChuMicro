@@ -68,7 +68,21 @@ A small per-chip-family reflash table (`esp32* → esptool`, `rp2040/rp2350/nrf5
 
 **Rejected:** published-only resolution.  Blocks chumicro developers from dogfooding library changes against a downstream workspace.
 
-### 8. `devices.yml` zones
+### 8. `chumicro-deploy` stays workspace-agnostic and plugin-shaped
+
+The deploy package must be usable three ways: by the chumicro mono repo's existing test orchestration, by the chumicro-workspace-template, and by third parties building their own project templates that do not adopt workspace conventions.
+
+Consequences for the API shape:
+
+- Nothing from `workspace.yml`, `things/`, `library_sources:`, `packages/`, or `libs/` leaks into the deploy package.  Those concepts live in `chumicro-workspace-runtime`.
+- Transports, file sources, and config loaders are pluggable protocols, not hard-coded to chumicro file layouts.
+- Convenience readers for the chumicro-shaped `devices.yml` live behind an opt-in import (`chumicro_deploy.config.chumicro`), never at the top level.
+- Third parties register custom config loaders via Python entry points (`chumicro_deploy.config_loaders`), not by subclassing workspace internals.
+- The CLI (`python -m chumicro_deploy`) is a thin wrapper over the Python API — every CLI action has a supported programmatic equivalent.
+
+**Rejected:** tight coupling to `chumicro-workspace-runtime`.  Deploy is a reusable primitive; the workspace is one consumer among several.
+
+### 9. `devices.yml` zones
 
 Three commented zones: user-owned (never overwritten without `--force` or prompt, except cached `address:`), hardware-once (written on first probe, prompt before later overwrite), probed-always (fully tool-owned, regenerated freely).  The tool preserves user comments and field ordering on round-trip.
 
