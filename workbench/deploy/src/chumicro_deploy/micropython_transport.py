@@ -347,6 +347,90 @@ class MicropythonTransport:
             self._staging_dir = None
             self._staging_path = None
 
+    def deploy_files(
+        self,
+        files: dict[str, bytes],
+        entrypoint: str,
+        *,
+        on_file_staged: Callable[[str], None] | None = None,
+        on_execute_line: Callable[[str], None] | None = None,
+    ) -> str:
+        """Write *files* onto the device and execute *entrypoint*.
+
+        Mount mode writes the file tree to a host-side staging dir,
+        mounts it through the persistent raw REPL, and execs the
+        entrypoint from the mount point.  Copy mode writes to the
+        host-side staging dir and uses ``mpremote fs cp -r`` to push
+        to the device's flash, then execs via the persistent raw REPL.
+
+        Args:
+            files: On-device-path -> bytes mapping.  Paths may start
+                with ``/``; the leading slash is stripped before
+                joining with the staging dir / device root.
+            entrypoint: On-device path (must be a key of *files*).
+            on_file_staged: Per-file callback invoked with the
+                on-device path as each file is written to staging.
+            on_execute_line: Callback invoked once per line of the
+                execute output (in order) after execution completes.
+
+        Returns:
+            Combined stdout captured from the entrypoint execution.
+        """
+        if entrypoint not in files:
+            raise MicropythonTransportError(
+                f"entrypoint {entrypoint!r} missing from files "
+                f"({sorted(files.keys())!r})"
+            )
+
+        if self._staging_dir is not None:
+            self._staging_dir.cleanup()
+        if self._mounted and self._serial is not None:
+            try:
+                self._serial.umount_local()
+            except Exception:  # pragma: no cover — best-effort cleanup
+                pass
+            self._mounted = False
+
+        self._staging_dir = tempfile.TemporaryDirectory(prefix="chumicro_deploy_")
+        staging_path = Path(self._staging_dir.name)
+        self._staging_path = staging_path
+
+        for device_path in sorted(files.keys()):
+            relative = device_path.lstrip("/")
+            destination = staging_path / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(files[device_path])
+            if on_file_staged is not None:
+                on_file_staged(device_path)
+
+        if self.mode == "copy":
+            self._close_serial()
+            self._run_mpremote([
+                "fs", "cp", "-r",
+                str(staging_path) + "/.",
+                ":",
+            ])
+            self._ensure_serial()
+            entrypoint_on_device = entrypoint if entrypoint.startswith("/") else f"/{entrypoint}"
+        else:
+            self._ensure_serial()
+            self._serial.mount_local(str(staging_path))
+            self._mounted = True
+            entrypoint_on_device = entrypoint if entrypoint.startswith("/") else f"/{entrypoint}"
+
+        script = f"exec(open({entrypoint_on_device!r}).read())"
+        try:
+            result = self._serial.exec_raw(script, timeout=120)
+        except Exception as error:
+            raise MicropythonTransportError(
+                f"Device deploy-execute failed: {error}"
+            ) from error
+        output = _decode_exec_result(result)
+        if on_execute_line is not None:
+            for output_line in output.splitlines():
+                on_execute_line(output_line)
+        return output
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------

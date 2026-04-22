@@ -23,6 +23,11 @@ from chumicro_deploy.testing import (
 _OK_RESPONSE = b"OK\x04\x04>"
 
 
+def _repl_response(stdout: bytes = b"", stderr: bytes = b"") -> bytes:
+    """Build a raw-REPL response with *stdout* / *stderr* payloads."""
+    return b"OK" + stdout + b"\x04" + stderr + b"\x04>"
+
+
 class TestConnect:
     """Tests for CircuitpythonTransport.connect."""
 
@@ -1429,3 +1434,133 @@ class TestFindCircuitpyDrive:
         assert (fake_drive / "lib").is_dir()
 
         transport.disconnect()
+
+
+class TestDeployFiles:
+    """Tests for CircuitpythonTransport.deploy_files (Slice 1d)."""
+
+    def _connect(
+        self,
+        *,
+        mode: str = "flash",
+        drive_path: str | None = None,
+        extra_responses: list[bytes] | None = None,
+    ) -> tuple[CircuitpythonTransport, FakeSerialPort]:
+        # Responses for: connect (prompt) + re-enter raw REPL (prompt) +
+        # autoreload-off command (OK) + entrypoint exec (OK with output).
+        # Tests supply the extra OK responses for additional commands.
+        reads = [_RAW_REPL_PROMPT]
+        if extra_responses:
+            reads.extend(extra_responses)
+        port = FakeSerialPort(read_responses=reads)
+
+        def factory(**kwargs):
+            return port
+
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            mode=mode,
+            circuitpy_drive_path=drive_path,
+            serial_port_factory=factory,
+            time=FakeTime(),
+        )
+        transport.connect()
+        return transport, port
+
+    def test_ram_mode_raises_unsupported(self, tmp_path: Path) -> None:
+        transport, _ = self._connect(mode="ram", drive_path=str(tmp_path))
+        with pytest.raises(CircuitpythonTransportError, match="does not support"):
+            transport.deploy_files({"/code.py": b"pass"}, "/code.py")
+
+    def test_writes_files_to_drive_and_execs_entrypoint(
+        self, tmp_path: Path
+    ) -> None:
+        drive = tmp_path / "CIRCUITPY"
+        drive.mkdir()
+        extra = [
+            _RAW_REPL_PROMPT,              # _enter_raw_repl reentry
+            _OK_RESPONSE,                  # autoreload-off ack
+            _repl_response(stdout=b"hello\n"),  # entrypoint exec
+        ]
+        transport, _ = self._connect(
+            drive_path=str(drive), extra_responses=extra
+        )
+        output = transport.deploy_files(
+            {"/code.py": b"print('hi')", "/lib/util.py": b"X = 1"},
+            "/code.py",
+        )
+        assert output == "hello\n"
+        assert (drive / "code.py").read_bytes() == b"print('hi')"
+        assert (drive / "lib" / "util.py").read_bytes() == b"X = 1"
+
+    def test_autoreload_disabled_before_writes(self, tmp_path: Path) -> None:
+        drive = tmp_path / "CIRCUITPY"
+        drive.mkdir()
+        extra = [_RAW_REPL_PROMPT, _OK_RESPONSE, _OK_RESPONSE]
+        transport, port = self._connect(
+            drive_path=str(drive), extra_responses=extra
+        )
+        transport.deploy_files({"/code.py": b"pass"}, "/code.py")
+        combined_writes = b"".join(port.writes).decode("utf-8", errors="replace")
+        assert "supervisor.runtime.autoreload = False" in combined_writes
+
+    def test_on_file_staged_invoked_per_file_sorted(self, tmp_path: Path) -> None:
+        drive = tmp_path / "CIRCUITPY"
+        drive.mkdir()
+        extra = [_RAW_REPL_PROMPT, _OK_RESPONSE, _OK_RESPONSE]
+        transport, _ = self._connect(
+            drive_path=str(drive), extra_responses=extra
+        )
+        staged: list[str] = []
+        transport.deploy_files(
+            {"/lib/util.py": b"X = 1", "/code.py": b"pass"},
+            "/code.py",
+            on_file_staged=staged.append,
+        )
+        assert staged == ["/code.py", "/lib/util.py"]
+
+    def test_on_execute_line_emits_per_line(self, tmp_path: Path) -> None:
+        drive = tmp_path / "CIRCUITPY"
+        drive.mkdir()
+        extra = [
+            _RAW_REPL_PROMPT,
+            _OK_RESPONSE,
+            _repl_response(stdout=b"one\ntwo\nthree\n"),
+        ]
+        transport, _ = self._connect(
+            drive_path=str(drive), extra_responses=extra
+        )
+        lines: list[str] = []
+        transport.deploy_files(
+            {"/code.py": b"pass"}, "/code.py", on_execute_line=lines.append
+        )
+        assert lines == ["one", "two", "three"]
+
+    def test_missing_entrypoint_raises(self, tmp_path: Path) -> None:
+        drive = tmp_path / "CIRCUITPY"
+        drive.mkdir()
+        transport, _ = self._connect(drive_path=str(drive))
+        with pytest.raises(CircuitpythonTransportError, match="entrypoint"):
+            transport.deploy_files({"/code.py": b"pass"}, "/missing.py")
+
+    def test_missing_drive_raises(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            "chumicro_deploy.circuitpython_transport.find_circuitpy_drive",
+            lambda: None,
+        )
+        transport, _ = self._connect(drive_path=None)
+        with pytest.raises(CircuitpythonTransportError, match="CIRCUITPY drive not found"):
+            transport.deploy_files({"/code.py": b"pass"}, "/code.py")
+
+    def test_unconnected_raises(self, tmp_path: Path) -> None:
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            mode="flash",
+            circuitpy_drive_path=str(tmp_path),
+            serial_port_factory=lambda **_: FakeSerialPort(),
+            time=FakeTime(),
+        )
+        with pytest.raises(CircuitpythonTransportError, match="connect"):
+            transport.deploy_files({"/code.py": b"pass"}, "/code.py")

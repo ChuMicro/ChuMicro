@@ -607,6 +607,97 @@ class CircuitpythonTransport:
             )
         self._enter_raw_repl()
 
+    def deploy_files(
+        self,
+        files: dict[str, bytes],
+        entrypoint: str,
+        *,
+        on_file_staged: Callable[[str], None] | None = None,
+        on_execute_line: Callable[[str], None] | None = None,
+    ) -> str:
+        """Write *files* to the CIRCUITPY drive and execute *entrypoint*.
+
+        Flash mode only.  Writes every entry of *files* to the CIRCUITPY
+        USB drive (auto-detecting the mount path when not configured),
+        flushes the volume, then execs the entrypoint through the
+        persistent raw REPL.  Autoreload is disabled during writes so
+        the board does not reset mid-deploy.
+
+        RAM-mode deploy is deliberately not implemented — it would
+        require a generalised module-injection path (the existing
+        test-harness-specific ``build_circuitpython_bootstrap`` is
+        tightly coupled to dotted-module-name sources and the test
+        runner).  Use ``deploy_mode="flash"`` for deploy-then-exec;
+        stick with ``stage()`` + ``execute_scripts()`` for the test-
+        harness RAM-mode flow.
+
+        Args:
+            files: On-device-path -> bytes mapping.  The leading slash
+                is stripped before joining with the drive mount point.
+            entrypoint: On-device path (must be a key of *files*).
+            on_file_staged: Per-file callback invoked after each file
+                is written to the drive.
+            on_execute_line: Callback invoked once per line of captured
+                output (in order) after the entrypoint returns.
+
+        Returns:
+            Combined stdout from the entrypoint execution.
+
+        Raises:
+            CircuitpythonTransportError: If RAM mode is selected, the
+                port is not connected, the CIRCUITPY drive cannot be
+                located, or the entrypoint is not in *files*.
+        """
+        if self.mode == "ram":
+            raise CircuitpythonTransportError(
+                "CircuitpythonTransport.deploy_files does not support "
+                "deploy_mode='ram' — use deploy_mode='flash' for "
+                "deploy-then-exec, or the test-harness stage/execute "
+                "flow for RAM-mode test runs."
+            )
+        if self._port is None:
+            raise CircuitpythonTransportError(
+                "connect() must be called before deploy_files()"
+            )
+        if entrypoint not in files:
+            raise CircuitpythonTransportError(
+                f"entrypoint {entrypoint!r} missing from files "
+                f"({sorted(files.keys())!r})"
+            )
+
+        drive_path_string = self.circuitpy_drive_path or find_circuitpy_drive()
+        if drive_path_string is None:
+            raise CircuitpythonTransportError(
+                "CIRCUITPY drive not found — pass circuitpy_drive_path "
+                "explicitly or mount the drive before calling deploy_files()."
+            )
+        drive_path = Path(drive_path_string)
+
+        self._enter_raw_repl()
+        self._send_repl_command(
+            "import supervisor; supervisor.runtime.autoreload = False"
+        )
+
+        for device_path in sorted(files.keys()):
+            relative = device_path.lstrip("/")
+            destination = drive_path / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(files[device_path])
+            if on_file_staged is not None:
+                on_file_staged(device_path)
+
+        flash_drive.flush_volume(drive_path, sleep=self._time.sleep)
+
+        entrypoint_on_device = (
+            entrypoint if entrypoint.startswith("/") else f"/{entrypoint}"
+        )
+        script = f"exec(open({entrypoint_on_device!r}).read())"
+        output = self._send_repl_command(script)
+        if on_execute_line is not None:
+            for output_line in output.splitlines():
+                on_execute_line(output_line)
+        return output
+
     def disconnect(self) -> None:
         """Close the serial port and clear staged data.
 

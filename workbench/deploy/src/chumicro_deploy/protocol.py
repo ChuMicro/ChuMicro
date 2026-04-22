@@ -21,6 +21,7 @@ constrained to the embedded-runtime subset).
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol, runtime_checkable
@@ -142,6 +143,39 @@ class TransportProtocol(Protocol):
 
     def probe_implementation(self) -> DeviceImplementation | None:
         """Query ``sys.implementation`` on the board for PR-summary metadata."""
+        ...
+
+    def deploy_files(
+        self,
+        files: dict[str, bytes],
+        entrypoint: str,
+        *,
+        on_file_staged: Callable[[str], None] | None = None,
+        on_execute_line: Callable[[str], None] | None = None,
+    ) -> str:
+        """Write files onto the device and execute the entrypoint.
+
+        Distinct from :meth:`stage` + :meth:`execute` — the former pair
+        is test-harness-shaped (dirs + test files + harness source),
+        while this method takes a generic path-to-bytes map and a
+        single entrypoint path.  Used by :class:`Deployer` and by any
+        third party shipping an app rather than running tests.
+
+        Args:
+            files: On-device-path -> file-bytes mapping.  Paths may
+                start with ``/``; transports normalise as needed.
+            entrypoint: On-device path (must be a key of *files*) for
+                the runtime to execute after staging.
+            on_file_staged: Optional per-file callback invoked with
+                the on-device path as each file is written.
+            on_execute_line: Optional callback invoked once per line
+                of captured execute output, in order.  Not guaranteed
+                to stream live — transports may call it after
+                execute() completes.
+
+        Returns:
+            Combined stdout from the entrypoint execution.
+        """
         ...
 
 

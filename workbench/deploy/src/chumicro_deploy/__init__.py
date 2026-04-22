@@ -26,6 +26,7 @@ from .circuitpython_transport import (
     SerialPort,
     find_circuitpy_drive,
 )
+from .deployer import Deployer
 from .device import Device
 from .micropython_transport import MicropythonTransport
 from .protocol import (
@@ -47,6 +48,7 @@ __all__ = [
     "CircuitpythonTransportError",
     "DeployError",
     "DeployResult",
+    "Deployer",
     "Device",
     "DeviceImplementation",
     "DirectorySource",

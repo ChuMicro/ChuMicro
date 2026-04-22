@@ -13,6 +13,7 @@ internals without real hardware::
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from .protocol import DeviceImplementation
@@ -172,3 +173,28 @@ class FakeTransport:
         """Record a disconnect call."""
         self.calls.append(("disconnect", ()))
         self.connected = False
+
+    def deploy_files(
+        self,
+        files: dict[str, bytes],
+        entrypoint: str,
+        *,
+        on_file_staged: Callable[[str], None] | None = None,
+        on_execute_line: Callable[[str], None] | None = None,
+    ) -> str:
+        """Record a deploy_files call and return the configured output.
+
+        Emits ``on_file_staged`` per file (sorted to keep tests
+        deterministic) and ``on_execute_line`` per line of
+        ``execute_output`` before returning.  The ``calls`` entry uses
+        a dict-of-bytes + entrypoint tuple so tests can assert on both
+        the payload and the callback ordering.
+        """
+        self.calls.append(("deploy_files", (dict(files), entrypoint)))
+        for device_path in sorted(files.keys()):
+            if on_file_staged is not None:
+                on_file_staged(device_path)
+        if on_execute_line is not None and self.execute_output:
+            for output_line in self.execute_output.splitlines():
+                on_execute_line(output_line)
+        return self.execute_output

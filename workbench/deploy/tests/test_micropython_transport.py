@@ -748,3 +748,140 @@ class TestResolveMpremoteBinary:
 
         command, _ = runner.calls[-1]
         assert command[0] == "mpremote"
+
+
+class TestDeployFiles:
+    """Tests for MicropythonTransport.deploy_files (Slice 1d)."""
+
+    def _prepare_transport(
+        self,
+        *,
+        mode: str = "mount",
+        exec_output: bytes = b"entry ran\n",
+        runner: FakeRunner | None = None,
+    ) -> tuple[MicropythonTransport, FakeSerialTransport, FakeRunner]:
+        serial = FakeSerialTransport(address="/dev/ttyUSB0")
+        serial.exec_outputs = [(exec_output, b"")]
+        runner = runner or FakeRunner()
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0",
+            mode=mode,
+            runner=runner,
+            transport_factory=_factory_for(serial),
+        )
+        return transport, serial, runner
+
+    def test_mount_mode_writes_files_mounts_and_execs_entrypoint(
+        self,
+    ) -> None:
+        transport, serial, _ = self._prepare_transport(mode="mount")
+        try:
+            output = transport.deploy_files(
+                {"/code.py": b"print('hi')", "/lib/helper.py": b"X = 1"},
+                "/code.py",
+            )
+            assert output == "entry ran\n"
+
+            staging_dir = transport._staging_path
+            assert staging_dir is not None
+            assert (staging_dir / "code.py").read_bytes() == b"print('hi')"
+            assert (staging_dir / "lib" / "helper.py").read_bytes() == b"X = 1"
+
+            method_names = [call[0] for call in serial.calls]
+            assert "mount_local" in method_names
+            exec_call = next(call for call in serial.calls if call[0] == "exec_raw")
+            script = exec_call[1][0]
+            assert "/code.py" in script
+            assert "exec(open" in script
+        finally:
+            transport.disconnect()
+
+    def test_copy_mode_uses_mpremote_fs_cp_then_execs(self) -> None:
+        transport, serial, runner = self._prepare_transport(mode="copy")
+        try:
+            transport.deploy_files(
+                {"/code.py": b"print('hi')", "/lib/helper.py": b"X = 1"},
+                "/code.py",
+            )
+
+            fs_cp_call = next(
+                (call for call in runner.calls if "fs" in call[0]),
+                None,
+            )
+            assert fs_cp_call is not None
+            command = fs_cp_call[0]
+            assert "cp" in command
+            assert "-r" in command
+            assert any(segment.endswith(":") for segment in command)
+
+            exec_call = next(call for call in serial.calls if call[0] == "exec_raw")
+            assert "/code.py" in exec_call[1][0]
+        finally:
+            transport.disconnect()
+
+    def test_on_file_staged_called_per_file_in_sorted_order(self) -> None:
+        transport, _, _ = self._prepare_transport()
+        try:
+            staged: list[str] = []
+            transport.deploy_files(
+                {"/lib/helper.py": b"X = 1", "/code.py": b"pass"},
+                "/code.py",
+                on_file_staged=staged.append,
+            )
+            assert staged == ["/code.py", "/lib/helper.py"]
+        finally:
+            transport.disconnect()
+
+    def test_on_execute_line_emits_one_per_line(self) -> None:
+        transport, serial, _ = self._prepare_transport()
+        try:
+            serial.exec_outputs = [(b"first\nsecond\nthird\n", b"")]
+            lines: list[str] = []
+            transport.deploy_files(
+                {"/code.py": b"pass"}, "/code.py", on_execute_line=lines.append
+            )
+            assert lines == ["first", "second", "third"]
+        finally:
+            transport.disconnect()
+
+    def test_entrypoint_missing_raises(self) -> None:
+        transport, _, _ = self._prepare_transport()
+        try:
+            with pytest.raises(MicropythonTransportError, match="entrypoint"):
+                transport.deploy_files({"/code.py": b"pass"}, "/missing.py")
+        finally:
+            transport.disconnect()
+
+    def test_exec_raw_failure_wraps_error(self) -> None:
+        transport, serial, _ = self._prepare_transport()
+        try:
+            serial.raise_on_execute = RuntimeError("link down")
+            with pytest.raises(MicropythonTransportError, match="deploy-execute failed"):
+                transport.deploy_files({"/code.py": b"pass"}, "/code.py")
+        finally:
+            transport.disconnect()
+
+    def test_entrypoint_without_leading_slash_still_resolves(self) -> None:
+        transport, serial, _ = self._prepare_transport()
+        try:
+            transport.deploy_files({"code.py": b"pass"}, "code.py")
+            exec_call = next(call for call in serial.calls if call[0] == "exec_raw")
+            script = exec_call[1][0]
+            assert "/code.py" in script
+        finally:
+            transport.disconnect()
+
+    def test_re_deploy_clears_prior_staging_and_mount(self) -> None:
+        transport, serial, _ = self._prepare_transport(mode="mount")
+        try:
+            serial.exec_outputs = [(b"first\n", b""), (b"second\n", b"")]
+            transport.deploy_files({"/code.py": b"one"}, "/code.py")
+            first_staging = transport._staging_path
+            transport.deploy_files({"/code.py": b"two"}, "/code.py")
+            second_staging = transport._staging_path
+            assert second_staging is not None
+            assert (second_staging / "code.py").read_bytes() == b"two"
+            # Prior staging directory was cleaned up (re-deploy creates a fresh tempdir).
+            assert first_staging != second_staging
+        finally:
+            transport.disconnect()
