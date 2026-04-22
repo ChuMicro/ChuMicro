@@ -352,7 +352,7 @@ Thin TCP client + TLS abstraction over the three runtimes' divergent socket stor
 Source-level research confirmed the runtimes do not share a usable common socket shape:
 
 - **CircuitPython** has no raw `socket` module (only `socketpool.SocketPool(radio)`), no `recv()` (only `recv_into()`), no `ssl` module (TLS via radio `TLS_MODE` flag).
-- **MicroPython** has stdlib `socket` with both `recv()` and `recv_into()`, `ssl` on ESP32 builds but **not on Pi Pico W (CYW43)**.
+- **MicroPython** has stdlib `socket` with both `recv()` and `recv_into()`, `ssl` module shipped on ESP32 and on Pi Pico W (both via mbedTLS, `MICROPY_SSL_MBEDTLS=1` in current 1.26 source).
 - **CPython** has stdlib `socket` + stdlib `ssl`.
 - `adafruit_connection_manager` solves the CP side but is CP-only.
 

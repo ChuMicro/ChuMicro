@@ -9,12 +9,12 @@ Related: Decision 0029
 `chumicro-mqtt` (Phase 6 of `plans/workstreams/project-workspace.md`) and a future `chumicro-requests` HTTP client both need portable TCP sockets with non-blocking semantics and optional TLS.  Source-level research confirmed the runtimes diverge in ways a library cannot paper over implicitly:
 
 - **CircuitPython** has no raw `socket` module.  Sockets come from `socketpool.SocketPool(radio)`.  **CircuitPython has no `recv()`** — only `recv_into()`.  There is no `ssl` module; TLS is delivered via a radio-specific `TLS_MODE` flag, typically abstracted by `adafruit_connection_manager`.
-- **MicroPython** exposes stdlib-style `import socket`.  `recv()` and `recv_into()` both available on most ports.  TLS: `ssl` module present on ESP32-family builds, **absent on Pi Pico W (CYW43)** where TLS requires a radio-specific wrapper or third-party lib.
+- **MicroPython** exposes stdlib-style `import socket`.  `recv()` and `recv_into()` both available on most ports.  TLS: `ssl` module present on both ESP32 and Pi Pico W builds — `MICROPY_SSL_MBEDTLS=1` + `MICROPY_PY_SSL=1` are set in `ports/rp2/mpconfigport.h` (confirmed in MP 1.26.0).  Older builds (~MP 1.21 era) lacked mbedTLS on Pico W, which is where the "no TLS on Pico W" folklore came from; current-LTS and newer builds have it.
 - **CPython** has stdlib `socket` and stdlib `ssl` with full feature coverage.
 
 `adafruit_connection_manager` solves the CP side of this neatly and is the reason `adafruit_minimqtt` + `adafruit_requests` are portable across CP radios — but it is **CP-only**, which is precisely the wall the pythonProject3 MQTT client hit when we needed MicroPython support.
 
-Non-blocking error semantics converge: `OSError(errno=11)` (`EAGAIN`) on would-block across all three runtimes.  `select.poll()` works on all three, with a documented CP quirk on listening sockets (non-issue for client-side use).
+Non-blocking error semantics converge: `OSError(errno=11)` (`EAGAIN`) on would-block across all three runtimes.  `select.poll()` works correctly on all three for **client-side connected sockets** — CP and MP share `extmod/modselect.c`.  A quirk has been reported on listening sockets waiting for `accept()` (spurious `POLLIN`); MQTT and HTTP clients are connected-socket users only and are not affected.
 
 ## Decisions
 
@@ -61,7 +61,7 @@ No `recv()`.  Downstream code allocates its own buffer and uses `recv_into()` �
 - MP on Pico W has no `ssl` module — TLS must be delivered via the radio at connect time.
 - Keeping TLS as a connect-time flag lets each adapter route it correctly.
 
-Users who need `ssl.SSLContext`-style advanced config pass a context object as `ssl=context`; adapters that support it (CPython, MP on ESP32) use it; adapters that don't (CP radios, MP Pico W) raise `UnsupportedSSLConfigError` with a clear message.
+Users who need `ssl.SSLContext`-style advanced config pass a context object as `ssl=context`; adapters that support it (CPython, MP on ESP32, MP on Pico W via mbedTLS) use it; adapters that don't (CP radios) raise `UnsupportedSSLConfigError` with a clear message and the `ssl=True` bool path that routes through the radio.
 
 **Rejected:** separate `wrap_socket()` step.  Works on CPython and MP-ESP32, breaks on CP and MP Pico W.  Non-starter.
 
