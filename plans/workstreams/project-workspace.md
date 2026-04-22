@@ -387,7 +387,7 @@ Two sibling factories (`tcp_client_socket`, `tls_client_socket`) so TLS config s
 
 - [ ] New library: `libraries/sockets/` via `scripts/run.py new-library sockets`.
 - [ ] `TCPClientSocket` protocol (duck-typed, not ABC).
-- [ ] Four adapters under `chumicro_sockets/_adapters/`: `cp.py`, `mp_esp32.py`, `mp_rp2.py`, `cpython.py`.
+- [ ] Four adapters under `chumicro_sockets/_adapters/`: `cp.py`, `mp_esp32.py`, `mp_rp2.py`, `cpython.py`.  CP adapter implements the `SocketPool(radio)` memoization + `TLS_MODE` fake-context patterns in-tree (borrowing shape, not dependency, from `adafruit_connection_manager`; rationale in Decision 0031 §5).
 - [ ] Adapter selection via `sys.implementation.name` + board probe inside each factory.
 - [ ] Two sibling factories: `tcp_client_socket(host, port, *, radio=None)` and `tls_client_socket(host, port, *, context=None, radio=None)`.  No overloaded `ssl=` parameter.
 - [ ] `ssl_context_with_ca(ca_pem: bytes) -> ssl.SSLContext` helper for the common "custom CA, default everything else" path.  Raises `UnsupportedSSLConfigError` on CP-radio runtimes so the failure is early and obvious.

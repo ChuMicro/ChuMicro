@@ -83,7 +83,33 @@ Testability across 94 % coverage requires injectable sockets.  `chumicro_sockets
 
 Shipped with the library (not in a separate `-testing` package) so downstream libs can `from chumicro_sockets.testing import FakeSocket` without extra deps.  Mirrors the Decision 0010 pattern (testing submodules in every library).
 
-### 5. No SSL certificate validation enforcement in the library
+### 5. Don't depend on `adafruit_connection_manager`; borrow ideas in-adapter
+
+`adafruit_connection_manager` (ACM) is the mature CP-only answer for socketpool + radio TLS.  The chumicro-sockets CP adapter **reimplements the small well-understood patterns in-tree** rather than taking ACM as a runtime dependency.
+
+Reasons:
+
+- ACM is CP-only.  Requiring it would make CP builds carry an extra `circup install` step while MP builds do not — asymmetric footprint for a cross-runtime library.
+- The CP surface ACM covers (roughly 100 lines: `SocketPool(radio)` memoization, `TLS_MODE`-flag TLS fake-context wrapping) is small, well-understood, and reimplements cleanly.
+- Adafruit's release cadence should not dictate chumicro's.
+- ACM's module-level singleton `get_connection_manager()` conflicts with chumicro's constructor-injection policy (Decision 0010).  Our factories take explicit `radio=` args.
+
+Ideas borrowed from reading ACM source, reimplemented in the CP adapter:
+
+1. **Stdlib-shaped `SSLContext` fake** — mimics `ssl.SSLContext` API on CP radios so downstream code written against stdlib shapes Just Works.  Our `ssl_context_with_ca()` helper follows this pattern (ACM's `_FakeSSLContext`).
+2. **Radio → SocketPool memoization** — module-level cache keyed by radio id, one pool per radio, prevents reinit on every connect.
+3. **Explicit close-on-shutdown tracking** — weakly-held set of open sockets, close all at adapter teardown so CP's late-GC doesn't leak sockets across soft-resets.
+4. **CP-specific error translation** — normalize socketpool errors into stdlib-shaped `ConnectionError` / `TimeoutError` subclasses so downstream code (`chumicro-mqtt`, future `chumicro-requests`) has one error shape across runtimes.
+
+Ideas **not** borrowed:
+
+- Module-level singleton access (`get_connection_manager()`) — hidden state, conflicts with DI.
+- Broad cross-caller connection reuse/pooling — downstream-lib concern.  MQTT never reuses; a future HTTP lib may add its own pooling layer.
+- Per-host CA cert dict — ACM has deprecated this; `ssl_context_with_ca()` covers the common case more cleanly.
+
+**Rejected:** take ACM as a CP-side runtime dependency.  Asymmetric cross-runtime footprint and release-cadence coupling outweigh the re-implementation cost.
+
+### 6. No SSL certificate validation enforcement in the library
 
 Adapters default to "trust the system's default CA bundle" on CPython / MP-ESP32 and "radio default" on CP / MP Pico W.  Users who need custom validation pass a pre-configured context (where supported).  The library does not attempt to bundle or enforce a CA policy — out of scope, varies by deployment.
 
