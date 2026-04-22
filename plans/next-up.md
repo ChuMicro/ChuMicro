@@ -10,14 +10,13 @@
 - [ ] Expand the device test matrix beyond ESP32-S2 now that transport tooling is proven on both MicroPython and CircuitPython.
 - [ ] **ChuMicro project-workspace workstream** — Decision 0029 records the design tradeoffs; `plans/workstreams/project-workspace.md` carries the execution plan (phases, library sequencing, acceptance criteria). Five new libraries (`chumicro-deploy`, `chumicro-repl`, `chumicro-wifi`, `chumicro-mqtt`, `chumicro-workspace-runtime`) plus a companion `chumicro-workspace-template` repo.
 - [ ] Enable GitHub Copilot code review as a PR quality gate (low priority — defer until community contributions begin).
-- [ ] Implement `chumicro-settings` — dict-like persistent storage for microcontrollers.
-  - Uses `chumicro-msgpack` for serialization (2-byte length prefix + msgpack payload).
-  - `Settings(backend, *, defaults=None)` with dict-like API (`__getitem__`, `__setitem__`, `get`, `__contains__`, `__len__`, `__iter__`).
-  - Explicit `load()` / `save()` — no implicit auto-save (flash wear). `is_dirty` property tracks unsaved changes.
-  - Injectable backend protocol (duck-typed): `NvmBackend(nvm)` for CircuitPython, `FileBackend(path)` for MicroPython/CPython, `MemoryBackend(size)` for tests.
-  - `testing.py` submodule with `FakeBackend` (wraps MemoryBackend + call recording).
-  - Corruption recovery: `load()` catches decode failures, resets to defaults, sets dirty.
-  - ESP32 NVS backend deferred (different semantics — per-key, not blob).
+- [ ] Implement `chumicro-kvstore` — tiny mutable key-value store for persisted runtime state. Replaces the previously-scoped `chumicro-settings` (see Decision 0030).
+  - Not a config system. Documented contract: small per-backend capacities (256 B on SAMD21 up to ~24 KB on MP ESP32 NVS), wear mitigation via `commit_if_changed`, CRC-wrapped payload on CP NVM for power-loss-corruption detection.
+  - Per-runtime backends: `microcontroller.nvm` (CP, all boards), `esp32.NVS` namespace with per-key msgpack blobs (MP ESP32), single LittleFS file with tmpfile+rename atomic update (MP Pi Pico W / other non-NVS MP boards), in-memory dict (CPython / tests).
+  - Values round-trip via `chumicro-msgpack` — strings, ints, bytes, lists, dicts.
+  - `KVStore(backend="auto")`, `commit()`, `commit_if_changed()`, `capacity`, `bytes_used`, `is_corrupt`. `KVStoreFull` / `KVStoreCorrupt` exceptions.
+  - `testing.py` with `FakeKVStore` (wraps MemoryBackend + call recording).
+  - App **config** (wifi creds, MQTT broker, pin map, feature flags) is NOT stored here. Config ships as `things/<name>/config.toml`, transformed to `/runtime_config.msgpack` at deploy time by `chumicro-workspace-runtime`, read once at boot. See Decision 0030.
 - [ ] Add digital I/O as the second library seam (alongside CI/release work, not sequentially).
 - [ ] Explore test ergonomics: reduce repeated boilerplate across test files.
 - [ ] Design a performance and resource benchmarking infrastructure. Goals:

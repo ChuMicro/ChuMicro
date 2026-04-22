@@ -2,7 +2,7 @@
 
 Status: `proposed`
 Date: `2026-04-21`
-Related: Decision 0026, Decision 0027, Decision 0028
+Related: Decision 0026, Decision 0027, Decision 0028, Decision 0030
 
 ## Context
 

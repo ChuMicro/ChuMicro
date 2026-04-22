@@ -277,9 +277,50 @@ Docs do not settle these; run on plugged-in boards:
 - Does `wlan.config(reconnects=0)` on MP ESP32 take effect mid-session (after initial connect), or must it be set pre-connect?  Source suggests either works (it's just a config variable read at event time) but confirm on hardware.
 - Pico W MP with `pm=0xa11140`: how much does responsiveness improve in practice?  Expected yes per community reports.
 
-### Phase 3b: `chumicro-settings`
+### Phase 3b: `chumicro-kvstore` + config pipeline (supersedes `chumicro-settings`)
 
-Tracked in `next-up.md`; coordinate merge window with Phase 3a since `chumicro-wifi` consumes it for credential storage.
+Decision 0030 splits the old `chumicro-settings` scope into two unrelated concerns: read-only app **config** (shipped with the thing, TOML on host → msgpack on device, transformed at deploy) and mutable **persisted state** (a new, narrower library `chumicro-kvstore`).
+
+The previously-sketched `chumicro-wifi` credential consumption reads from the config pipeline, not from `chumicro-kvstore`.  Credentials never land in any KV backend.
+
+#### Config pipeline tasks (owned by `chumicro-workspace-runtime`, not a new library)
+
+- [ ] Deployer merges `workspace.yml` environment defaults + `secrets.yml` entries + `things/<name>/config.toml` into a single dict.
+- [ ] Deployer writes merged dict as `/runtime_config.msgpack` onto the device at deploy time.
+- [ ] `secrets.yml` values referenced via `!secret <name>` are resolved at merge time and never travel with commits.
+- [ ] Thing template `app.py` reads the file once at boot: `config = msgpack.unpackb(open("/runtime_config.msgpack", "rb").read())`.
+- [ ] YAML host format accepted via `things/<name>/config.yml` when present; TOML wins when both exist.  JSON on device accepted via a per-thing `format: json` flag in its `thing.yml`.
+- [ ] Template `AGENTS.md` documents: "do not reuse `settings.toml` for app config; do not store wifi creds in the KV store."
+
+#### `chumicro-kvstore` tasks
+
+- [ ] New library: `libraries/kvstore/` via `scripts/run.py new-library kvstore`.
+- [ ] `KVStore` class with `backend="auto" | "nvm" | "nvs" | "littlefs" | "memory"` selection.  Default `auto` picks per `sys.implementation.name` + board probe.
+- [ ] Per-runtime adapters under `chumicro_kvstore._backends/`: `cp_nvm.py`, `mp_nvs.py`, `mp_littlefs.py`, `memory.py`.
+- [ ] Values encoded via `chumicro-msgpack`; CP NVM backend prepends a length + CRC header for power-loss-corruption detection.
+- [ ] `commit_if_changed()` wear-mitigation helper.
+- [ ] `KVStoreFull` and `KVStoreCorrupt` exceptions.
+- [ ] `capacity`, `bytes_used`, `is_corrupt` properties.
+- [ ] `testing.py` with `FakeKVStore` (wraps `MemoryBackend`, records calls).
+- [ ] Host-side tests covering each backend via fakes.
+- [ ] Cross-runtime tests on CP + MP unix-ports.
+- [ ] Functional test: write a boot-counter across a hard reset on at least one CP board (NVM) and one MP board (NVS).
+
+#### Acceptance
+
+- A thing can ship a `config.toml`, have it deployed as `/runtime_config.msgpack`, and read it at boot with a single-line `msgpack.unpackb()` call.
+- `KVStore` round-trips `{str, int, bytes, list, dict}` values across a hard reset on each supported backend.
+- `store.capacity` returns a correct byte count per backend; `KVStoreFull` is raised before overflow.
+- CP NVM backend flags `is_corrupt=True` on CRC mismatch after a mid-write power loss (tested via a deliberately corrupted blob), then resets to empty.
+
+#### Device verification still wanted
+
+Docs settle most numbers; these need boards:
+
+- `print(len(microcontroller.nvm))` on ESP32-S3 and Pico W CP — confirms actual sizes match the `CIRCUITPY_INTERNAL_NVM_SIZE` defaults (8192 and 4096 respectively).
+- MP ESP32 `esp32.NVS` commit survives hard reset — confirms the commit semantics in `ports/esp32/esp32_nvs.c:127-131`.
+- Write latency for a 512 B blob across CP NVM, MP NVS, MP Pico W LittleFS — informs documentation guidance on write-budgets.
+- Pico W MP LittleFS atomic rename survives pull-power mid-rename — confirms safe-update pattern.
 
 ### Phase 4a: `chumicro-workspace-runtime`
 
