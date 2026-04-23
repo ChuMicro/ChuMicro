@@ -26,6 +26,7 @@
       <sourceFolder url="file://$MODULE_DIR$/libraries/timing/functional_tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/workbench/deploy/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/workbench/deploy/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/workbench/deploy/functional_tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/scripts" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/scripts/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/.venv" />

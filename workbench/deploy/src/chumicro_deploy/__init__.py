@@ -28,7 +28,13 @@ from .circuitpython_transport import (
 )
 from .deployer import Deployer
 from .device import Device
+from .firmware import (
+    CIRCUITPYTHON_FIRMWARE_URL_TEMPLATE,
+    UnresolvedFirmwareError,
+    resolve_firmware_url,
+)
 from .micropython_transport import MicropythonTransport
+from .probe import DeviceInfo, probe_device
 from .protocol import (
     DeviceImplementation,
     ExtendedTransportProtocol,
@@ -44,6 +50,7 @@ from .sources import (
 from .testing import FakeTransport
 
 __all__ = [
+    "CIRCUITPYTHON_FIRMWARE_URL_TEMPLATE",
     "CircuitpythonTransport",
     "CircuitpythonTransportError",
     "DeployError",
@@ -51,6 +58,7 @@ __all__ = [
     "Deployer",
     "Device",
     "DeviceImplementation",
+    "DeviceInfo",
     "DirectorySource",
     "ExtendedTransportProtocol",
     "FakeTransport",
@@ -60,7 +68,10 @@ __all__ = [
     "MicropythonTransport",
     "SerialPort",
     "TransportProtocol",
+    "UnresolvedFirmwareError",
     "build_circuitpython_bootstrap",
     "build_circuitpython_bootstrap_scripts",
     "find_circuitpy_drive",
+    "probe_device",
+    "resolve_firmware_url",
 ]
