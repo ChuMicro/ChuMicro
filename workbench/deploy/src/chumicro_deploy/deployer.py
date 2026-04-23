@@ -23,6 +23,7 @@ from .result import DeployResult
 
 if TYPE_CHECKING:  # pragma: no cover — type-only
     from .device import Device
+    from .sources import FileSource
 
 #: Matches MicroPython / CircuitPython traceback output.  Both runtimes
 #: prefix tracebacks with ``Traceback (most recent call last):``.  The
@@ -61,7 +62,7 @@ class Deployer:
 
     def deploy(
         self,
-        source,  # noqa: ANN001 — FileSource is structural; see sources.py
+        source: FileSource,
         *,
         on_progress: Callable[[float, str], None] | None = None,
         on_file_staged: Callable[[str], None] | None = None,

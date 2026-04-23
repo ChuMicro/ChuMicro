@@ -63,6 +63,10 @@ Workbench packages go through the same release flow as libraries, minus the bund
 - Promotion to **stable** publishes the base name (`chumicro-deploy`) — same `promote.yml` flow libraries use, same stable/experimental channel discipline.
 - No bundle staging, no `.mpy` compilation, no `ChuMicro-Bundle` publishing.  Those exist for CircuitPython / MicroPython consumers; workbench tools don't have those consumers.
 
+### Docs — same as libraries
+
+Workbench packages ship the same `mkdocs.yml` + `docs/` layout as device libraries (Zensical + mkdocstrings + mike-versioned pages at `https://chumicro.github.io/ChuMicro/<package>/`).  Build locally with `python scripts/run.py docs --libraries <name>` — the `discover_doc_dirs` helper picks up workbench packages the same way it picks up libraries, and griffe + 94 % coverage gates apply identically.
+
 ### Differences from libraries at a glance
 
 - **No `functional_tests/` slot** — workbench tools are the thing *driving* devices from the host, not code running on a device.  Host-side tests that happen to touch hardware can gate on `devices.yml` the way `scripts/pytest_device.py` already does for libraries.

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from .protocol import DeviceImplementation
 
@@ -106,7 +107,12 @@ class FakeTransport:
         self.calls.append(("connect", ()))
         self.connected = True
 
-    def stage(self, source_dirs, test_files, harness_source) -> None:
+    def stage(
+        self,
+        source_dirs: list[Path],
+        test_files: list[Path],
+        harness_source: Path,
+    ) -> None:
         """Record a stage call.
 
         Args:

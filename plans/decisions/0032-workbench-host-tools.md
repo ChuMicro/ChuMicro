@@ -150,10 +150,15 @@ CPython packages.  The three folders now have clean, independent axes:
   packages the same way they gate libraries.  Neither workflow
   touches `mpy-cross`, bundle repos, or docs deploys for workbench
   packages.
-- Docs: workbench packages may have their own `mkdocs.yml`
-  eventually, but the versioned-docs pipeline stays libraries-only
-  for now.  Workbench package README is the primary docs surface
-  until a reason emerges to upgrade.
+- Docs: workbench packages ship the same `mkdocs.yml` + `docs/`
+  layout as device libraries (Zensical + mkdocstrings + mike for
+  versioning).  `scripts/run.py docs --libraries <name>` discovers
+  and builds them via the existing `discover_doc_dirs` helper; the
+  versioned-docs deploy pipeline routes workbench packages the same
+  way it routes libraries, onto the same `https://chumicro.github.io/
+  ChuMicro/<package>/` URL space.  This matches the
+  release-lifecycle parity rule (Rule 4) — workbench packages
+  ship to PyPI and the docs site, just not the bundle.
 - Scaffolding: `python scripts/run.py new-library <name>` stays
   device-library-shaped.  A sibling command (likely
   `new-workbench <name>`) scaffolds the host-tool variant.  Scope
