@@ -51,6 +51,20 @@ _INTERRUPT_DELAY = 0.1
 #: Delay after entering raw REPL in seconds.
 _ENTER_DELAY = 0.1
 
+#: How many times to poll the board's view of a just-written entrypoint
+#: before giving up.  USB MSC writes can trail the host-side ``sync`` +
+#: settle delay on slower controllers (observed on Pi Pico W), and
+#: soft-rebooting before CP sees the new blocks produces a one-cycle-
+#: delayed capture (the previous ``code.py`` runs again against the
+#: cached FAT view).  Polling ``os.stat`` via raw REPL gives us a
+#: deterministic sync point.
+_BOARD_FILE_VISIBLE_POLL_ATTEMPTS = 20
+
+#: Sleep between ``os.stat`` polls when waiting for a just-written
+#: entrypoint to become visible to CP (see
+#: :data:`_BOARD_FILE_VISIBLE_POLL_ATTEMPTS`).
+_BOARD_FILE_VISIBLE_POLL_INTERVAL = 0.25
+
 #: Volume name CircuitPython uses by default.
 _CIRCUITPY_VOLUME_NAME = "CIRCUITPY"
 
@@ -951,6 +965,14 @@ class CircuitpythonTransport:
 
         flash_drive.flush_volume(drive_path, sleep=self._time.sleep)
 
+        # Wait for the board to see the new entrypoint before soft-
+        # rebooting.  Without this check, a slower USB-MSC controller
+        # (Pi Pico W) can report "write complete" on the host side
+        # while CP's FatFs view is still the previous run's, so the
+        # soft-reboot re-executes the stale file and the captured
+        # output is one cycle behind the deploy.
+        self._wait_for_board_to_see_entrypoint(entrypoint, len(files[entrypoint]))
+
         # CP caches the FAT32 filesystem view in-memory; with autoreload
         # disabled, exec(open()) would read stale content.  Soft-reboot
         # from normal REPL so the board re-reads its filesystem and
@@ -1011,30 +1033,98 @@ class CircuitpythonTransport:
                 on_execute_line(output_line)
         return output
 
+    def _wait_for_board_to_see_entrypoint(
+        self,
+        entrypoint: str,
+        expected_size: int,
+    ) -> None:
+        """Poll ``os.stat`` on the board until the entrypoint matches *expected_size*.
+
+        Deterministic sync point that covers the gap between host-side
+        ``sync`` + settle delay and CP actually seeing the USB-MSC
+        write in its FatFs view.  Slower USB-CDC controllers (Pi Pico W
+        is the observed case) finish the host-visible write before CP
+        has processed all block-write callbacks, so the next
+        soft-reboot can re-execute the previous file — the capture is
+        one cycle behind.
+
+        Polls up to :data:`_BOARD_FILE_VISIBLE_POLL_ATTEMPTS` times with
+        :data:`_BOARD_FILE_VISIBLE_POLL_INTERVAL` seconds between
+        attempts, using the same raw-REPL session the caller is
+        already holding.
+
+        Raises:
+            CircuitpythonTransportError: If the board never reports the
+                expected size within the poll budget.
+        """
+        stat_command = (
+            "import os\n"
+            "try:\n"
+            f"    print(os.stat({entrypoint!r})[6])\n"
+            "except OSError:\n"
+            "    print(-1)\n"
+        )
+        last_observed = "<no response>"
+        for _ in range(_BOARD_FILE_VISIBLE_POLL_ATTEMPTS):
+            response = self._send_repl_command(stat_command).strip()
+            last_observed = response
+            try:
+                if int(response) == expected_size:
+                    return
+            except ValueError:
+                pass
+            self._time.sleep(_BOARD_FILE_VISIBLE_POLL_INTERVAL)
+        total_wait = (
+            _BOARD_FILE_VISIBLE_POLL_ATTEMPTS
+            * _BOARD_FILE_VISIBLE_POLL_INTERVAL
+        )
+        raise CircuitpythonTransportError(
+            f"Board did not see {entrypoint!r} at {expected_size} bytes "
+            f"within {total_wait:.1f}s (last reported size: "
+            f"{last_observed!r}) — USB-MSC write may not have committed."
+        )
+
     def _read_code_py_output(self) -> str:
         """Read serial output from a fresh boot until code.py completes.
 
-        CircuitPython prints ``Code done running.`` when code.py
-        returns (or raises).  For infinite-loop entrypoints the
-        marker never appears and the read times out at
-        :attr:`timeout` seconds — callers receive the accumulated
-        output up to that point.
+        CircuitPython prints ``soft reboot`` when the interpreter
+        restarts (in response to Ctrl-D from the friendly REPL) and
+        ``Code done running.`` when code.py returns (or raises).  The
+        read synchronises on ``soft reboot`` first so any pre-reboot
+        bytes still in the host's serial buffer (slow boards can hold
+        a complete previous-cycle ``code.py output: ... Code done
+        running.`` pair, especially when autoreload had been enabled
+        during the last session) are discarded rather than mistaken
+        for this cycle's output.
+
+        For infinite-loop entrypoints the ``Code done running.`` marker
+        never appears and the read times out at :attr:`timeout`
+        seconds — callers receive the accumulated output up to that
+        point.
 
         Returns:
             The portion of captured serial output between the
-            ``soft reboot`` marker and the ``Code done running.``
+            ``code.py output:`` header and the ``Code done running.``
             marker (if present), or everything after ``soft reboot``
-            if the marker is absent.
+            otherwise.  When ``soft reboot`` is never observed the
+            raw accumulated bytes are returned so callers / tests
+            can still diagnose the failure.
         """
         assert self._port is not None
         done_marker = b"Code done running."
         accumulated = b""
         deadline = self._time.monotonic() + self.timeout
+        soft_reboot_seen = False
         while self._time.monotonic() < deadline:
             waiting = self._port.in_waiting
             if waiting > 0:
                 accumulated += self._port.read(waiting)
-                if done_marker in accumulated:
+                if not soft_reboot_seen:
+                    marker_index = accumulated.find(_SOFT_REBOOT_MARKER)
+                    if marker_index != -1:
+                        accumulated = accumulated[marker_index:]
+                        soft_reboot_seen = True
+                if soft_reboot_seen and done_marker in accumulated:
                     break
             else:
                 self._time.sleep(0.01)

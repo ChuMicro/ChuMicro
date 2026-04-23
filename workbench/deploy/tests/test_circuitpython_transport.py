@@ -1626,6 +1626,11 @@ class TestDeployFiles:
             + b"\r\nCode done running.\r\n\r\nPress any key to enter the REPL.\r\n"
         )
 
+    @staticmethod
+    def _stat_response(size: int) -> bytes:
+        """Canned raw-REPL response for the board-side ``os.stat`` poll."""
+        return _repl_response(stdout=f"{size}\r\n".encode("ascii"))
+
     def test_writes_files_to_drive_and_execs_entrypoint(
         self, tmp_path: Path
     ) -> None:
@@ -1634,6 +1639,7 @@ class TestDeployFiles:
         extra = [
             _RAW_REPL_PROMPT,         # _enter_raw_repl reentry (pre-writes)
             _OK_RESPONSE,             # autoreload-off ack
+            self._stat_response(len(b"print('hi')")),  # board sees entrypoint
             self._boot_output(b"hello"),  # soft-reboot output capture
             _RAW_REPL_PROMPT,         # _enter_raw_repl after soft-reboot
         ]
@@ -1654,6 +1660,7 @@ class TestDeployFiles:
         extra = [
             _RAW_REPL_PROMPT,
             _OK_RESPONSE,
+            self._stat_response(len(b"pass")),
             self._boot_output(b""),
             _RAW_REPL_PROMPT,
         ]
@@ -1670,6 +1677,7 @@ class TestDeployFiles:
         extra = [
             _RAW_REPL_PROMPT,
             _OK_RESPONSE,
+            self._stat_response(len(b"pass")),
             self._boot_output(b""),
             _RAW_REPL_PROMPT,
         ]
@@ -1690,6 +1698,7 @@ class TestDeployFiles:
         extra = [
             _RAW_REPL_PROMPT,
             _OK_RESPONSE,
+            self._stat_response(len(b"pass")),
             self._boot_output(b"one\r\ntwo\r\nthree"),
             _RAW_REPL_PROMPT,
         ]
@@ -1730,6 +1739,104 @@ class TestDeployFiles:
         )
         with pytest.raises(CircuitpythonTransportError, match="connect"):
             transport.deploy_files({"/code.py": b"pass"}, "/code.py")
+
+    def test_stale_pre_reboot_banner_is_discarded(
+        self, tmp_path: Path
+    ) -> None:
+        """Pre-reboot stale output must not leak into the capture.
+
+        Reproduces the Pi Pico W "one-cycle-delayed capture" failure
+        mode: host opens the port, drain doesn't fully clear CP's
+        USB-CDC buffer, and the buffer still holds a complete
+        ``code.py output: ... Code done running.`` pair from the
+        *previous* deploy.  The new ``_read_code_py_output`` sync on
+        the ``soft reboot`` marker keeps the old pair out of the
+        returned capture so callers see only the fresh run's output.
+        """
+        drive = tmp_path / "CIRCUITPY"
+        drive.mkdir()
+        stale = (
+            b"code.py output:\r\n"
+            b"\x1b]0;board | code.py | X.Y.Z\x1b\\"
+            b"old-output\r\nTraceback (most recent call last):\r\n"
+            b"  File \"code.py\", line 2, in <module>\r\n"
+            b"ZeroDivisionError: division by zero\r\n"
+            b"\x1b]0;board | Done | X.Y.Z\x1b\\"
+            b"\r\nCode done running.\r\n\r\n"
+        )
+        extra = [
+            _RAW_REPL_PROMPT,
+            _OK_RESPONSE,
+            self._stat_response(len(b"print('fresh')")),
+            stale,                         # noise left over from last run
+            self._boot_output(b"fresh-output"),  # real soft-reboot output
+            _RAW_REPL_PROMPT,
+        ]
+        transport, _ = self._connect(
+            drive_path=str(drive), extra_responses=extra
+        )
+        output = transport.deploy_files(
+            {"/code.py": b"print('fresh')"}, "/code.py",
+        )
+        assert "fresh-output" in output
+        assert "old-output" not in output
+        assert "ZeroDivisionError" not in output
+
+    def test_waits_for_board_to_see_new_entrypoint(
+        self, tmp_path: Path
+    ) -> None:
+        """USB-MSC write visibility to CP is polled, not assumed.
+
+        On a slow controller the first ``os.stat`` can still report
+        the previous file's size; the transport retries until the
+        board sees the new length, guaranteeing that the soft-reboot
+        runs the file we just wrote rather than a stale cached one.
+        """
+        drive = tmp_path / "CIRCUITPY"
+        drive.mkdir()
+        new_contents = b"print('fresh')\n"
+        stale_size = len(b"print('old-bigger-file')\n")
+        extra = [
+            _RAW_REPL_PROMPT,
+            _OK_RESPONSE,
+            self._stat_response(stale_size),          # first poll: stale
+            self._stat_response(stale_size),          # second poll: stale
+            self._stat_response(len(new_contents)),   # third poll: fresh
+            self._boot_output(b"fresh-output"),
+            _RAW_REPL_PROMPT,
+        ]
+        transport, _ = self._connect(
+            drive_path=str(drive), extra_responses=extra
+        )
+        output = transport.deploy_files(
+            {"/code.py": new_contents}, "/code.py",
+        )
+        assert "fresh-output" in output
+
+    def test_raises_if_board_never_sees_new_entrypoint(
+        self, tmp_path: Path
+    ) -> None:
+        """If the board never reports the expected size, deploy fails loudly."""
+        drive = tmp_path / "CIRCUITPY"
+        drive.mkdir()
+        new_contents = b"print('never-visible')\n"
+        stale = self._stat_response(99)
+        # Supply enough stale responses to exhaust the poll budget.
+        extra = [
+            _RAW_REPL_PROMPT,
+            _OK_RESPONSE,
+            *([stale] * 20),
+        ]
+        transport, _ = self._connect(
+            drive_path=str(drive), extra_responses=extra
+        )
+        with pytest.raises(
+            CircuitpythonTransportError,
+            match="did not see .* bytes",
+        ):
+            transport.deploy_files(
+                {"/code.py": new_contents}, "/code.py",
+            )
 
 
 class TestDriveVerification:
