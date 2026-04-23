@@ -113,23 +113,6 @@ def resolve_firmware_url(
 # ---------------------------------------------------------------------------
 
 
-#: Bootloader-mode scripts the transport can exec to put the board
-#: into its UF2 bootloader.  CP has a canonical API;
-#: MicroPython's ``machine.bootloader()`` works on RP2040/RP2350 but
-#: is absent on many ESP32 ports (where esptool is the right path
-#: anyway).
-_BOOTLOADER_SCRIPTS: dict[str, str] = {
-    "circuitpython": (
-        "import microcontroller\n"
-        "microcontroller.on_next_reset(microcontroller.RunMode.BOOTLOADER)\n"
-        "microcontroller.reset()\n"
-    ),
-    "micropython": (
-        "import machine\n"
-        "machine.bootloader()\n"
-    ),
-}
-
 #: Where a UF2 bootloader drive typically mounts per platform.
 #: Polling every candidate directory for an INFO_UF2.TXT file keeps
 #: the check board-agnostic — we don't need to hard-code per-board
@@ -324,36 +307,28 @@ def _enter_uf2_bootloader_programmatic(
 ) -> bool:
     """Try to put *device* into UF2 bootloader via the transport.
 
-    Returns ``True`` on success, ``False`` when the runtime doesn't
-    support programmatic entry or the board didn't respond.
-    Exceptions are caught — this is a best-effort path that is
-    expected to fail sometimes (ESP32 ROM bootloader, boards in
-    safe mode, disconnected serial).  The caller falls back to an
-    interactive prompt.
+    Delegates to :meth:`TransportProtocol.reset_into_bootloader`,
+    which knows the right runtime-specific script to send
+    (``machine.bootloader()`` on MP, the ``microcontroller`` API on
+    CP).  Returns ``True`` when the command was dispatched; the
+    caller's drive-poll remains the authoritative success signal
+    because the board's serial link drops as it resets.  Returns
+    ``False`` when connect() failed, the runtime does not expose a
+    bootloader API, or the dispatch raised — callers fall back to
+    the interactive manual-entry prompt.
     """
-    script = _BOOTLOADER_SCRIPTS.get(device.transport)
-    if script is None:
-        return False
     transport = device.create_transport()
     try:
         transport.connect()
-        try:
-            # Bootloader entry resets the board; the transport
-            # usually never gets a clean response.  Swallow all
-            # exceptions — the drive-detection poll is the
-            # authoritative success signal.
-            try:
-                transport.execute(script)
-            except Exception:  # pragma: no cover — hardware-only failure modes
-                pass
-        finally:
-            try:
-                transport.disconnect()
-            except Exception:  # pragma: no cover — serial may already be gone
-                pass
-    except Exception:  # pragma: no cover — connect-level failure
+    except Exception:  # pragma: no cover — hardware-only connect failures
         return False
-    return True
+    try:
+        return transport.reset_into_bootloader()
+    finally:
+        try:
+            transport.disconnect()
+        except Exception:  # pragma: no cover — serial may already be gone
+            pass
 
 
 def _prompt_manual_bootloader_entry(

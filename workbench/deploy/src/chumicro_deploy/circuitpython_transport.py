@@ -509,6 +509,29 @@ class CircuitpythonTransport:
 
         return last_output
 
+    def reset_into_bootloader(self) -> bool:
+        """Reset into the UF2 bootloader via ``microcontroller`` module.
+
+        CircuitPython's ``microcontroller.on_next_reset`` +
+        ``microcontroller.reset()`` sequence is the canonical way to
+        drop out of user code and enter the board's UF2 bootloader.
+        The raw-REPL session is killed as the board resets —
+        expected — so read-side exceptions are swallowed.  The
+        caller's drive-poll is the authoritative success signal.
+        """
+        if self._port is None:
+            return False
+        try:
+            self._send_repl_command(
+                "import microcontroller\n"
+                "microcontroller.on_next_reset("
+                "microcontroller.RunMode.BOOTLOADER)\n"
+                "microcontroller.reset()\n"
+            )
+        except Exception:
+            pass
+        return True
+
     def probe_implementation(self) -> DeviceImplementation | None:
         """Query ``sys.implementation`` on the board for PR-summary metadata.
 

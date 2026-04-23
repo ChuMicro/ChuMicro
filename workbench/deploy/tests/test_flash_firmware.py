@@ -233,39 +233,50 @@ class TestCopyUf2:
 
 
 class TestBootloaderEntry:
-    def test_unsupported_runtime_returns_false(self) -> None:
-        class DeviceWithFakeRuntime(Device):
-            def __init__(self) -> None:
-                # Bypass __post_init__ validation; set transport to an
-                # unknown string without raising.
-                object.__setattr__(self, "transport", "zephyr")
-                object.__setattr__(self, "address", "/dev/x")
-                object.__setattr__(self, "baudrate", 115200)
-                object.__setattr__(self, "deploy_mode", "ram")
-                object.__setattr__(self, "circuitpy_drive_path", None)
-                object.__setattr__(self, "entrypoint_name", None)
-                object.__setattr__(self, "resource_prefix", "/lib")
+    def test_delegates_to_transport_reset_into_bootloader(self) -> None:
+        from chumicro_deploy import FakeTransport as PublicFakeTransport
 
-        assert _enter_uf2_bootloader_programmatic(DeviceWithFakeRuntime()) is False
+        fake = PublicFakeTransport(bootloader_reset_result=True)
 
-    def test_programmatic_entry_uses_transport_execute(self) -> None:
-        calls: list[tuple[str, tuple]] = []
+        class DeviceForTest(Device):
+            def create_transport(self):  # type: ignore[override]
+                return fake
 
-        class FakeTransport:
+        device = DeviceForTest(transport="circuitpython", address="/dev/x")
+        assert _enter_uf2_bootloader_programmatic(device) is True
+        method_order = [call[0] for call in fake.calls]
+        assert method_order == ["connect", "reset_into_bootloader", "disconnect"]
+
+    def test_returns_false_when_transport_says_unsupported(self) -> None:
+        from chumicro_deploy import FakeTransport as PublicFakeTransport
+
+        fake = PublicFakeTransport(bootloader_reset_result=False)
+
+        class DeviceForTest(Device):
+            def create_transport(self):  # type: ignore[override]
+                return fake
+
+        device = DeviceForTest(transport="micropython", address="/dev/x")
+        assert _enter_uf2_bootloader_programmatic(device) is False
+
+    def test_connect_failure_returns_false(self) -> None:
+        class FailingTransport:
             mode = "ram"
 
             def connect(self) -> None:
-                calls.append(("connect", ()))
+                raise RuntimeError("serial busy")
 
-            def execute(self, script: str) -> str:
-                calls.append(("execute", (script,)))
-                return ""
+            def reset_into_bootloader(self) -> bool:
+                raise AssertionError("should not be called if connect fails")
 
             def disconnect(self) -> None:
-                calls.append(("disconnect", ()))
+                pass
 
             def stage(self, *args: Any, **kwargs: Any) -> None:
                 pass
+
+            def execute(self, script: str) -> str:
+                return ""
 
             def soft_reset(self) -> None:
                 pass
@@ -284,13 +295,10 @@ class TestBootloaderEntry:
 
         class DeviceForTest(Device):
             def create_transport(self):  # type: ignore[override]
-                return FakeTransport()
+                return FailingTransport()
 
         device = DeviceForTest(transport="circuitpython", address="/dev/x")
-        assert _enter_uf2_bootloader_programmatic(device) is True
-        method_order = [call[0] for call in calls]
-        assert method_order == ["connect", "execute", "disconnect"]
-        assert "microcontroller.RunMode.BOOTLOADER" in calls[1][1][0]
+        assert _enter_uf2_bootloader_programmatic(device) is False
 
 
 class TestManualBootloaderPrompt:
@@ -411,6 +419,9 @@ class TestFlashFirmwareUf2End2End:
 
                     def probe_implementation(self):
                         return None
+
+                    def reset_into_bootloader(self) -> bool:
+                        return True
 
                     def deploy_files(self, *args, **kwargs):
                         return ""

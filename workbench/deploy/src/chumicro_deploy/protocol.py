@@ -145,6 +145,30 @@ class TransportProtocol(Protocol):
         """Query ``sys.implementation`` on the board for PR-summary metadata."""
         ...
 
+    def reset_into_bootloader(self) -> bool:
+        """Try to put the board into its UF2 bootloader via the running runtime.
+
+        Called by :func:`~chumicro_deploy.firmware.flash_firmware`
+        before it begins polling for the bootloader drive.  The
+        implementation issues a runtime-specific reset command
+        (``machine.bootloader()`` on MicroPython,
+        ``microcontroller.on_next_reset(RunMode.BOOTLOADER)`` +
+        ``microcontroller.reset()`` on CircuitPython) and swallows
+        the connection-drop that follows — the serial link is torn
+        down as the board resets, so a clean response is not
+        expected.
+
+        Returns:
+            ``True`` when the command was dispatched (the board
+            should be rebooting into its bootloader).
+            ``False`` when the runtime does not expose a
+            bootloader-entry API, the transport could not be opened,
+            or the command failed before reaching the board.
+            Callers fall back to an interactive prompt in the
+            ``False`` case.
+        """
+        ...
+
     def deploy_files(
         self,
         files: dict[str, bytes],

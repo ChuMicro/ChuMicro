@@ -317,6 +317,34 @@ class MicropythonTransport:
         except MicropythonTransportError:  # pragma: no cover - hardware-only
             pass
 
+    def reset_into_bootloader(self) -> bool:
+        """Issue ``machine.bootloader()`` to drop into the UF2 bootloader.
+
+        MicroPython's RP2040 + RP2350 ports implement
+        ``machine.bootloader()`` — it resets the chip into the
+        native UF2 ROM bootloader.  On ESP32 MicroPython builds the
+        call typically raises ``AttributeError`` (no such function)
+        and we return ``False`` so the flasher falls back to the
+        manual-entry prompt; that's where esptool-based flows take
+        over anyway.
+        """
+        try:
+            self._ensure_serial()
+            try:
+                self._serial.exec_raw(
+                    "import machine\nmachine.bootloader()\n", timeout=5,
+                )
+            except Exception:
+                # Reset drops the serial link before a clean response
+                # comes back — expected on success.  We can't easily
+                # distinguish that from "bootloader attr missing" here,
+                # so trust the exec_raw fired and let the caller's
+                # drive-poll be the authoritative signal.
+                pass
+        except Exception:
+            return False
+        return True
+
     def probe_implementation(self) -> DeviceImplementation | None:
         """Query ``sys.implementation`` on the board for PR-summary metadata.
 

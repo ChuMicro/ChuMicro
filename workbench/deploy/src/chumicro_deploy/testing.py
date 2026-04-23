@@ -99,6 +99,10 @@ class FakeTransport:
     #: Module sources to return from ``staged_sources``; matches the
     #: ``ExtendedTransportProtocol`` shape used by the RAM-mode path.
     staged_sources: list[tuple[str, str]] | None = None
+    #: Canned return value for :meth:`reset_into_bootloader`.  ``True``
+    #: simulates a successful dispatch; ``False`` exercises the
+    #: flasher's interactive-manual-entry fallback path.
+    bootloader_reset_result: bool = True
     calls: list[tuple[str, tuple]] = field(default_factory=list)
     connected: bool = False
 
@@ -179,6 +183,18 @@ class FakeTransport:
         """Record a disconnect call."""
         self.calls.append(("disconnect", ()))
         self.connected = False
+
+    def reset_into_bootloader(self) -> bool:
+        """Record the call and return the configured result.
+
+        Defaults to ``True`` (pretending the dispatch succeeded) so
+        tests that don't care about the branch get sensible
+        behavior; override via :attr:`bootloader_reset_result` when
+        exercising the "runtime doesn't support bootloader entry"
+        fallback.
+        """
+        self.calls.append(("reset_into_bootloader", ()))
+        return self.bootloader_reset_result
 
     def deploy_files(
         self,
