@@ -350,7 +350,58 @@ class TestEsptoolPath:
         assert runner_calls[0][0] == "/fake/esptool"
         assert "--port" in runner_calls[0]
         assert "/dev/ttyUSB0" in runner_calls[0]
-        assert "write_flash" in runner_calls[0]
+        assert "write-flash" in runner_calls[0]
+
+    def test_erase_flash_runs_erase_before_write(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    ) -> None:
+        monkeypatch.setattr(
+            "shutil.which",
+            lambda name: "/fake/esptool" if name == "esptool" else None,
+        )
+
+        invocations: list[list[str]] = []
+
+        def fake_runner(command, **_kwargs):  # noqa: ANN001
+            invocations.append(list(command))
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        device = Device(transport="micropython", address="/dev/ttyUSB0")
+        firmware = tmp_path / "fw.bin"
+        firmware.write_bytes(b"x")
+        _flash_firmware_esptool(
+            firmware, device, on_progress=None,
+            erase_flash=True, runner=fake_runner,
+        )
+
+        assert len(invocations) == 2
+        assert "erase-flash" in invocations[0]
+        # Erase step must pin --after no_reset so the board stays in
+        # ROM bootloader for the chained write-flash — without this
+        # the chip hard-resets and an empty flash strands the board.
+        assert "no_reset" in invocations[0]
+        assert "write-flash" in invocations[1]
+        assert "no_reset" not in invocations[1]
+
+    def test_erase_flash_failure_wraps_with_step_name(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    ) -> None:
+        monkeypatch.setattr(
+            "shutil.which",
+            lambda name: "/fake/esptool" if name == "esptool" else None,
+        )
+
+        def fake_runner(command, **_kwargs):  # noqa: ANN001
+            return subprocess.CompletedProcess(command, 1, "", "erase boom")
+
+        device = Device(transport="micropython", address="/dev/ttyUSB0")
+        firmware = tmp_path / "fw.bin"
+        firmware.write_bytes(b"x")
+        with pytest.raises(FlashFirmwareError, match="erase-flash exited"):
+            _flash_firmware_esptool(
+                firmware, device, on_progress=None,
+                erase_flash=True, runner=fake_runner,
+            )
 
     def test_nonzero_exit_wraps_with_recovery_hint(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
