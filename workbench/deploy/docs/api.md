@@ -26,6 +26,10 @@ Auto-generated from docstrings via mkdocstrings.
 
 ::: chumicro_deploy.firmware
 
+## Interactive recovery
+
+::: chumicro_deploy.recovery
+
 ## Transport protocol
 
 ::: chumicro_deploy.protocol

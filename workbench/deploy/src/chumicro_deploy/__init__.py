@@ -35,12 +35,19 @@ from .firmware import (
     flash_firmware,
     resolve_firmware_url,
 )
-from .micropython_transport import MicropythonTransport
+from .micropython_transport import MicropythonTransport, MicropythonTransportError
 from .probe import DeviceInfo, probe_device
 from .protocol import (
     DeviceImplementation,
     ExtendedTransportProtocol,
     TransportProtocol,
+)
+from .recovery import (
+    DeployFailureKind,
+    InteractiveDeployer,
+    RecoveryPlan,
+    classify_deploy_failure,
+    recovery_plan_for,
 )
 from .result import DeployError, DeployResult
 from .sources import (
@@ -56,6 +63,7 @@ __all__ = [
     "CircuitpythonTransport",
     "CircuitpythonTransportError",
     "DeployError",
+    "DeployFailureKind",
     "DeployResult",
     "Deployer",
     "Device",
@@ -68,14 +76,19 @@ __all__ = [
     "FileSource",
     "FlashFirmwareError",
     "ImportGraphSource",
+    "InteractiveDeployer",
     "MicropythonTransport",
+    "MicropythonTransportError",
+    "RecoveryPlan",
     "SerialPort",
     "TransportProtocol",
     "UnresolvedFirmwareError",
     "build_circuitpython_bootstrap",
     "build_circuitpython_bootstrap_scripts",
+    "classify_deploy_failure",
     "find_circuitpy_drive",
     "flash_firmware",
     "probe_device",
+    "recovery_plan_for",
     "resolve_firmware_url",
 ]

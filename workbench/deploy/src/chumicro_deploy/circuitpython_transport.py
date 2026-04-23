@@ -163,6 +163,10 @@ class CircuitpythonTransport:
         self._time: TimeSource = time or cast(TimeSource, _time_module)
         self._port: SerialPort | None = None
         self._staged_sources: list[tuple[str, str]] | None = None
+        # Set true by reset_into_bootloader() so the next disconnect()
+        # skips its "restore board state" dance — the board is gone
+        # from USB and any raw-REPL traffic at that point is noise.
+        self._reset_pending = False
 
     @staticmethod
     def _default_serial_factory(**kwargs) -> SerialPort:  # pragma: no cover
@@ -518,9 +522,15 @@ class CircuitpythonTransport:
         The raw-REPL session is killed as the board resets —
         expected — so read-side exceptions are swallowed.  The
         caller's drive-poll is the authoritative success signal.
+
+        Sets :attr:`_reset_pending` so a subsequent :meth:`disconnect`
+        does not try to restore board state on a USB link that just
+        went away — that dance would produce misleading warnings
+        when the user specifically asked for a bootloader reset.
         """
         if self._port is None:
             return False
+        self._reset_pending = True
         try:
             self._send_repl_command(
                 "import microcontroller\n"
@@ -800,29 +810,38 @@ class CircuitpythonTransport:
         4. Soft-reboots with Ctrl-D so code.py runs normally.
         5. Waits briefly for the reboot to complete.
         6. Closes the serial port.
+
+        When :attr:`_reset_pending` is set (e.g. after
+        :meth:`reset_into_bootloader`), steps 1–5 are skipped —
+        the board is already mid-reset and there's nothing sensible
+        to talk to.  The port is closed silently; no warnings are
+        printed for a link that went away on purpose.
         """
         if self._port is not None:
-            try:
-                self._enter_raw_repl()
-                if self.mode == "flash":
-                    self._send_repl_command(
-                        "import supervisor; "
-                        "supervisor.runtime.autoreload = True"
-                    )
-                # Exit raw REPL back to normal REPL.
-                self._port.write(_CTRL_B)
-                self._time.sleep(_ENTER_DELAY)
-                # Soft-reboot so code.py starts normally.
-                self._port.write(_CTRL_D)
-                self._time.sleep(0.5)
-            except Exception as restore_error:
-                print(f"WARNING: Failed to restore board state on disconnect: {restore_error}")
+            if not self._reset_pending:
+                try:
+                    self._enter_raw_repl()
+                    if self.mode == "flash":
+                        self._send_repl_command(
+                            "import supervisor; "
+                            "supervisor.runtime.autoreload = True"
+                        )
+                    # Exit raw REPL back to normal REPL.
+                    self._port.write(_CTRL_B)
+                    self._time.sleep(_ENTER_DELAY)
+                    # Soft-reboot so code.py starts normally.
+                    self._port.write(_CTRL_D)
+                    self._time.sleep(0.5)
+                except Exception as restore_error:
+                    print(f"WARNING: Failed to restore board state on disconnect: {restore_error}")
             try:
                 self._port.close()
             except Exception as close_error:  # pragma: no cover
-                print(f"WARNING: Failed to close serial port on disconnect: {close_error}")
+                if not self._reset_pending:
+                    print(f"WARNING: Failed to close serial port on disconnect: {close_error}")
             self._port = None
         self._staged_sources = None
+        self._reset_pending = False
 
     @property
     def staged_sources(self) -> list[tuple[str, str]] | None:

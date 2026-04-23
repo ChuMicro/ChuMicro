@@ -14,6 +14,7 @@ Pre-alpha.  Currently a lift-and-shift of `support/device_transport/` into a pub
 - `MicropythonTransport` — mpremote-driven transport with `mount` and `copy` deploy modes (Decision 0028).
 - `CircuitpythonTransport` — pyserial raw-REPL transport with `ram` and `flash` deploy modes.
 - `build_circuitpython_bootstrap(_scripts)` — on-device test-harness bootstrap builders.
+- `Deployer` / `InteractiveDeployer` — programmatic + interactive deploy orchestration.  The interactive variant classifies failures and coaches the user through a retry loop (unplug, raw-REPL stuck, drive ejected, source traceback).
 - `FakeTransport` — deterministic host-side fake for unit tests.
 
 ## Install

@@ -175,6 +175,71 @@ The lifecycle is always `create_transport() -> connect() -> transport.deploy_fil
 
 Callbacks are all optional. `on_progress` emits coarse milestones (0.0 connecting, 0.1 collecting, 0.2 staging, 0.9 executing, 1.0 done). `on_file_staged` and `on_execute_line` are forwarded to the transport; the real transports emit them after the fact rather than live-streaming.
 
+## Recover from deploy failures — `InteractiveDeployer`
+
+`Deployer.deploy()` raises transport errors directly — it's the deterministic programmatic surface that automation pipelines depend on.  For interactive use (the CLI, a human invocation), `InteractiveDeployer` wraps a `Deployer` with classification, retry-loop, and user-facing coaching on failure.
+
+```python
+from chumicro_deploy import Deployer, InteractiveDeployer
+
+interactive = InteractiveDeployer(
+    Deployer(device),
+    max_attempts=3,         # retry ceiling per deploy() call
+)
+
+result = interactive.deploy(source)
+```
+
+When the underlying `Deployer.deploy()` raises a `CircuitpythonTransportError` or `MicropythonTransportError`, the interactive deployer:
+
+1. Classifies the error into a `DeployFailureKind` — one of `PORT_UNAVAILABLE`, `RAW_REPL_UNRESPONSIVE`, `CIRCUITPY_DRIVE_MISSING`, `FLASH_COPY_FAILED`, `BOOTSTRAP_EXEC_FAILED`, `INSUFFICIENT_MEMORY`, `CONFIGURATION_ERROR`, or `UNKNOWN`.
+2. Prints a headline, the underlying error, and the canned `RecoveryPlan` for that kind (the physical actions that typically fix it — close the app holding the port, tap RESET, replug USB, switch to flash mode, etc.).
+3. Prompts the user to fix the condition and press Enter to retry, up to `max_attempts` times.  Typing `q` / `quit` / `abort` / `exit` at the prompt stops retrying and re-raises the last error.
+4. For non-retryable kinds (`INSUFFICIENT_MEMORY`, `CONFIGURATION_ERROR`, `TRACEBACK_RETURNED`) it prints the coaching once and returns / re-raises without prompting — a source-level bug can't be fixed by replugging, and a too-small board can't grow more RAM by retrying.
+
+When `Deployer.deploy()` returns a `DeployResult` with `success=False` and a `traceback`, `InteractiveDeployer` prints the traceback and a source-fix recovery plan, then returns the unchanged result.
+
+### Plug in your own prompt and output
+
+Both are injectable for testing and for embedding in a non-stdin environment:
+
+```python
+from collections.abc import Callable
+
+def my_prompt(text: str) -> str:
+    # e.g. feed from a scripted queue in a test, or a TUI dialog.
+    ...
+
+def my_output(line: str) -> None:
+    # e.g. push to a logging framework or a progress widget.
+    ...
+
+interactive = InteractiveDeployer(
+    Deployer(device),
+    prompt=my_prompt,
+    output=my_output,
+)
+```
+
+### Classify errors directly
+
+`classify_deploy_failure(exception)` is exported so you can build your own orchestrator without using `InteractiveDeployer`:
+
+```python
+from chumicro_deploy import DeployFailureKind, classify_deploy_failure
+
+try:
+    Deployer(device).deploy(source)
+except Exception as error:
+    kind = classify_deploy_failure(error)
+    if kind is DeployFailureKind.PORT_UNAVAILABLE:
+        ...
+```
+
+### Try it against real boards
+
+[`workbench/deploy/functional_tests/demo_recovery_hand_holding.py`](https://github.com/ChuMicro/ChuMicro/blob/main/workbench/deploy/functional_tests/demo_recovery_hand_holding.py) walks every configured `devices.yml` board through each failure scenario and prints the coaching output live.  Run it when you want to see what the CLI actually says to the user on a real cable-out / drive-ejected / board-rebooted failure.
+
 ## Probe a board — `probe_device`
 
 ```python

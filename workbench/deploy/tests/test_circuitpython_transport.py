@@ -1474,6 +1474,38 @@ class TestResetIntoBootloader:
         transport.connect()
         assert transport.reset_into_bootloader() is True
 
+    def test_disconnect_after_reset_is_silent(
+        self, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """After reset_into_bootloader, disconnect() skips the restore
+        dance and emits no warnings — the USB link is gone on purpose.
+        """
+        # Read sequence: connect (prompt) + reset OK + (no more reads
+        # because disconnect now skips _enter_raw_repl + autoreload).
+        port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT, _OK_RESPONSE])
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            mode="flash",  # exercises autoreload-restore code path
+            serial_port_factory=lambda **_kwargs: port,
+            time=FakeTime(),
+        )
+        transport.connect()
+        assert transport.reset_into_bootloader() is True
+
+        # Drain whatever the connect + reset produced so we can
+        # assert disconnect itself stays silent.
+        capsys.readouterr()
+
+        transport.disconnect()
+
+        captured = capsys.readouterr()
+        assert "WARNING" not in captured.out
+        assert "WARNING" not in captured.err
+        assert port.closed
+        # _reset_pending is cleared so the transport can be reused if
+        # the caller reconnects after the board comes back.
+        assert transport._reset_pending is False
+
 
 class TestDeployFiles:
     """Tests for CircuitpythonTransport.deploy_files (Slice 1d)."""
