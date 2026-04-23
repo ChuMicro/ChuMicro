@@ -1,6 +1,6 @@
 # Decision 0029: Project workspace shape
 
-Status: `proposed`
+Status: `in-progress` — Phase 1 (`chumicro-deploy`) shipped 2026-04-22; Phases 2–7 pending, Phase 8 deferred.  Execution plan and status: `plans/workstreams/project-workspace.md`.
 Date: `2026-04-21`
 Related: Decision 0026, Decision 0027, Decision 0028, Decision 0030, Decision 0031
 
@@ -90,7 +90,7 @@ Three commented zones: user-owned (never overwritten without `--force` or prompt
 
 ## Consequences
 
-- Six new libraries land in this repo: `chumicro-deploy`, `chumicro-repl`, `chumicro-wifi`, `chumicro-sockets` (see Decision 0031), `chumicro-mqtt`, `chumicro-workspace-runtime`.  `chumicro-kvstore` (already planned; formerly `chumicro-settings`, see Decision 0030) is the seventh assumed-necessity.
+- Six new publishable packages land across `libraries/` and `workbench/` (folder split per Decision 0032): `chumicro-deploy` (✅ shipped 2026-04-22 in `workbench/`), `chumicro-repl` (`workbench/`), `chumicro-wifi` (`libraries/`), `chumicro-sockets` (`libraries/`; see Decision 0031), `chumicro-mqtt` (`libraries/`), `chumicro-workspace-runtime` (`workbench/`).  `chumicro-kvstore` (already planned; formerly `chumicro-settings`, see Decision 0030) is the seventh assumed-necessity.
 - `chumicro-workspace-template` is a new companion repo.
 - `devices.yml` gains three-zone structure; existing chumicro use (device testing) remains compatible — new fields are additive.
 - A monthly scrape-and-cache job is needed for MicroPython BOARD names; the reflash family table is shipped and versioned with `chumicro-workspace-runtime`.

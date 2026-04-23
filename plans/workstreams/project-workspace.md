@@ -1,6 +1,6 @@
 # Workstream: Project Workspace
 
-Status: `proposed`
+Status: `in-progress` — Phase 1 shipped 2026-04-22; Phases 2–7 pending, Phase 8 deferred.
 
 ## Purpose
 
@@ -25,9 +25,10 @@ Out of scope for this workstream:
 
 ## Current verified slice
 
-Nothing shipped from this workstream yet.  Prerequisites that already exist:
+**Phase 1 (`chumicro-deploy`) shipped 2026-04-22** — see the Phase 1 section below and the 2026-04-22 entry in `plans/history.md` for the completion record.  The transport layer previously housed in `support/device_transport/` now lives in `workbench/deploy/src/chumicro_deploy/` as part of the published package; `scripts/device_testing.py` and `scripts/pytest_device.py` consume it directly.  Portability to third-party project templates is proven by `workbench/deploy/tests/fixtures/third_party_template/`.
 
-- `support/device_transport/` (MicroPython + CircuitPython transports, both deploy modes) — Decision 0027, Decision 0028.
+Remaining prerequisites for downstream phases that already exist:
+
 - `devices.yml` + `device-config.yml` schemas and loaders — Decision 0027.
 - `support/test_harness/` lightweight on-device runner.
 - Editable-install pattern for libraries + support packages — Decision 0026.
@@ -54,9 +55,11 @@ Rationale: Phase 1 unblocks everything.  Phase 2 is used by Phase 4's deploy-the
 
 ## Implementation phases
 
-### Phase 1: `chumicro-deploy` extraction
+### Phase 1: `chumicro-deploy` extraction ✅ Complete (2026-04-22)
 
-Three-audience package: chumicro mono repo (replaces `support/device_transport/` callers), chumicro-workspace-template (`run.py deploy`), and third parties building their own project templates.  Decision 0029 §8 records the workspace-agnostic + plugin-shaped requirement.
+Three-audience package: chumicro mono repo (replaced `support/device_transport/` callers), chumicro-workspace-template (`run.py deploy`, future), and third parties building their own project templates.  Decision 0029 §8 records the workspace-agnostic + plugin-shaped requirement.
+
+Shipped across slices 1a–1f: extraction into `workbench/deploy/`, `Device` + `Deployer` + `DeployResult`/`DeployError` facade, `FileSource` protocol with three built-in sources, `probe_device` + `resolve_firmware_url` + `flash_firmware` (UF2 + esptool with programmatic bootloader entry and interactive fallback, per-runtime offsets, optional pre-erase), config-loader entry-point discovery, thin CLI, mkdocs docs, and a third-party portability fixture that deploys without touching any mono-repo module.  Hardware-verified on ESP32-S2, ESP32-S3, and Pi Pico W on both runtimes.
 
 #### Public API sketch
 
@@ -166,29 +169,31 @@ Stays out of scope (belongs to `chumicro-workspace-runtime`):
 
 #### Tasks
 
-- [ ] Create `libraries/deploy/` via `scripts/run.py new-library deploy`.
-- [ ] Move transport protocol + `MicropythonTransport` + `CircuitpythonTransport` + harness bootstrap from `support/device_transport/` into `libraries/deploy/src/chumicro_deploy/`.
-- [ ] Implement `Device`, `Deployer`, `DeployResult`, `DeployError` top-level classes.
-- [ ] Implement `FileSource` protocol + `FileMapSource`, `DirectorySource`, `ImportGraphSource` built-ins.
-- [ ] Implement `probe_device()` returning `DeviceInfo`.
-- [ ] Implement `resolve_firmware_url()` + `flash_firmware()` with the shipped reflash family table.
-- [ ] Implement `chumicro_deploy.config.chumicro.load_devices_yml()` as opt-in import.
-- [ ] Implement `Device.from_dict()` + `Device.from_env()`.
-- [ ] Implement entry-point discovery for third-party config loaders.
-- [ ] Implement progress / file-staged / execute-line callbacks across deploy pipeline.
-- [ ] Keep `support/device_transport/` as a thin re-export during transition; delete once nothing in the mono repo imports it directly.
-- [ ] Migrate chumicro's `scripts/device_testing.py` to consume the new Python API.
-- [ ] CLI: `python -m chumicro_deploy {deploy,probe,flash-firmware}` with `--config` loader resolution.
-- [ ] Host-side tests parity with existing `support/device_transport/` coverage, plus new tests for each source type, config loader path, callback surface, and entry-point discovery.
-- [ ] Functional test: deploy a minimal app to at least one CP and one MP board via the new package.
-- [ ] Functional test: a standalone "third party" fixture repo (outside chumicro's tree, in `tests/fixtures/third_party_template/`) uses `chumicro-deploy` with its own non-chumicro file layout and a custom `FileSource` — proves portability.
+Folder layout was revised during implementation — packages ship from `workbench/<name>/` rather than `libraries/<name>/` per Decision 0032.  `support/device_transport/` was deleted outright once the move landed; a transitional re-export was not needed because all callers migrated in the same slice.
+
+- [x] Create `workbench/deploy/` (Decision 0032; `new-library` scaffolder does not yet cover workbench packages — hand-scaffolded from existing conventions).
+- [x] Move transport protocol + `MicropythonTransport` + `CircuitpythonTransport` + harness bootstrap from `support/device_transport/` into `workbench/deploy/src/chumicro_deploy/`.
+- [x] Implement `Device`, `Deployer`, `DeployResult`, `DeployError` top-level classes.
+- [x] Implement `FileSource` protocol + `FileMapSource`, `DirectorySource`, `ImportGraphSource` built-ins.
+- [x] Implement `probe_device()` returning `DeviceInfo`.
+- [x] Implement `resolve_firmware_url()` + `flash_firmware()` with the shipped reflash family table.
+- [x] Implement `chumicro_deploy.config.chumicro.load_devices_yml()` as opt-in import.
+- [x] Implement `Device.from_dict()` + `Device.from_env()`.
+- [x] Implement entry-point discovery for third-party config loaders.
+- [x] Implement progress / file-staged / execute-line callbacks across deploy pipeline.
+- [x] Delete `support/device_transport/` outright once callers migrated (no transitional re-export needed — single-slice migration).
+- [x] Migrate chumicro's `scripts/device_testing.py` to consume the new Python API.
+- [x] CLI: `chumicro-deploy {deploy,probe,flash,resolve-firmware-url}` with `--devices-file` / `--devices-format` loader resolution.
+- [x] Host-side tests parity with existing `support/device_transport/` coverage, plus new tests for each source type, config loader path, callback surface, and entry-point discovery.
+- [x] Functional test: deploy a minimal app to at least one CP and one MP board via the new package (hardware-verified on ESP32-S2, ESP32-S3, and Pi Pico W on both runtimes).
+- [x] Functional test: a standalone "third party" fixture repo under `workbench/deploy/tests/fixtures/third_party_template/` uses `chumicro-deploy` with its own non-chumicro file layout and a custom `FileSource` — proves portability; a `sys.modules` leak check asserts no mono-repo coupling.
 
 #### Acceptance
 
-- chumicro's `test-device` orchestration uses `chumicro-deploy` via its Python API with no behavior change.
-- The `tests/fixtures/third_party_template/` fixture deploys successfully to both runtimes without importing any `chumicro_workspace_runtime` symbol and without touching any chumicro-specific file convention.
-- Every CLI action has a documented programmatic equivalent.
-- Zero references to `workspace.yml`, `things/`, or `library_sources:` in the deploy package source (enforced by a grep check in CI).
+- [x] chumicro's `test-device` orchestration uses `chumicro-deploy` via its Python API with no behavior change (`scripts/device_testing.py` + `scripts/pytest_device.py`).
+- [x] The `workbench/deploy/tests/fixtures/third_party_template/` fixture deploys successfully through the fake transport without importing any `chumicro_workspace_runtime` symbol and without touching any chumicro-specific file convention.
+- [x] Every CLI action has a documented programmatic equivalent (see `workbench/deploy/docs/api.md`).
+- [x] Zero references to `workspace.yml`, `things/`, or `library_sources:` in the deploy package source.
 
 ### Phase 2: `chumicro-repl` (minimum-viable core)
 

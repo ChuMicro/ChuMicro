@@ -187,10 +187,14 @@ Open sub-questions:
   A board in development mode wouldn't have a drive path.
 
 Not worth implementing now — the device transport layer works for current
-needs.  Revisit when `chumicro-deploy` extraction begins or when the CIRCUITPY
-drive becomes a real friction point in daily development.
+needs.  `chumicro-deploy` extraction is done (project-workspace Phase 1,
+2026-04-22) and did not change the CIRCUITPY-drive dependency for CP flash
+mode; drive-mode toggling would now be a feature added on top of the
+shipped `chumicro-deploy` package rather than a preparatory refactor.
+Revisit when the CIRCUITPY drive becomes a real friction point in daily
+development.
 
-Related: Decision 0027 (device testing), Decision 0028 (deploy modes).
+Related: Decision 0027 (device testing), Decision 0028 (deploy modes), Decision 0032 (workbench folder).
 
 ### Should we use a unified logging framework across scripts?
 

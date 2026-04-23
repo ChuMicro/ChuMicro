@@ -16,7 +16,7 @@ Companion to `plans/workstreams/project-workspace.md` (execution plan) and the t
 
 | Phase | Library | Depends on |
 |-------|---------|-----------|
-| 1 | `chumicro-deploy` | Decision 0028 transport |
+| 1 ✅ | `chumicro-deploy` (shipped 2026-04-22, `workbench/deploy/`, v0.0.0) | Decision 0028 transport |
 | 2 | `chumicro-repl` | pyserial |
 | 3 | `chumicro-kvstore` | msgpack |
 | 3 | `chumicro-wifi` | runner, kvstore |
