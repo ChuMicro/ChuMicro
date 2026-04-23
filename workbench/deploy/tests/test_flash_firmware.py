@@ -13,6 +13,7 @@ from chumicro_deploy import Device, FlashFirmwareError, flash_firmware
 from chumicro_deploy.firmware import (
     _copy_uf2_to_drive,
     _download_firmware,
+    _enter_esp32_rom_bootloader,
     _enter_uf2_bootloader_programmatic,
     _flash_firmware_esptool,
     _flash_firmware_uf2,
@@ -428,6 +429,137 @@ class TestEsptoolPath:
         firmware.write_bytes(b"x")
         with pytest.raises(FlashFirmwareError, match="write"):
             _flash_firmware_esptool(firmware, device, on_progress=None, runner=fake_runner)
+
+
+class TestEnterEsp32RomBootloader:
+    """Tests for the automated-with-fallback ESP32 bootloader-entry helper."""
+
+    def test_bootloader_address_short_circuits(self, tmp_path: Path) -> None:
+        device = Device(
+            transport="micropython", address="/dev/cu.usbmodem01",
+        )
+        # With a bootloader-style address, no transport calls should fire
+        # and no polling is needed — the helper returns the address
+        # unchanged.
+        result = _enter_esp32_rom_bootloader(
+            device, interactive=False,
+        )
+        assert result == "/dev/cu.usbmodem01"
+
+    def test_programmatic_entry_detects_new_port(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from chumicro_deploy import FakeTransport as PublicFakeTransport
+
+        fake = PublicFakeTransport(bootloader_reset_result=True)
+
+        class DeviceForTest(Device):
+            def create_transport(self):  # type: ignore[override]
+                return fake
+
+        device = DeviceForTest(
+            transport="circuitpython", address="/dev/cu.usbmodem12345",
+        )
+
+        port_sequence = [
+            {"/dev/cu.usbmodem12345"},  # baseline snapshot
+            {"/dev/cu.usbmodem12345"},  # still only running port
+            {"/dev/cu.usbmodem12345", "/dev/cu.usbmodem01"},  # bootloader up
+        ]
+
+        def fake_list_ports(*_args, **_kwargs):
+            return port_sequence.pop(0) if port_sequence else set()
+
+        monkeypatch.setattr(
+            "chumicro_deploy.firmware._list_candidate_serial_ports",
+            fake_list_ports,
+        )
+
+        clock = _FakeClock()
+        result = _enter_esp32_rom_bootloader(
+            device,
+            interactive=False,
+            sleep=clock.sleep,
+            monotonic=clock.monotonic,
+        )
+        assert result == "/dev/cu.usbmodem01"
+        assert ("reset_into_bootloader", ()) in fake.calls
+
+    def test_non_interactive_failure_raises(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from chumicro_deploy import FakeTransport as PublicFakeTransport
+
+        fake = PublicFakeTransport(bootloader_reset_result=False)
+
+        class DeviceForTest(Device):
+            def create_transport(self):  # type: ignore[override]
+                return fake
+
+        device = DeviceForTest(
+            transport="micropython", address="/dev/cu.usbmodem211101",
+        )
+
+        # Port list never changes — programmatic entry never produces a
+        # new port.
+        monkeypatch.setattr(
+            "chumicro_deploy.firmware._list_candidate_serial_ports",
+            lambda *_args, **_kwargs: {"/dev/cu.usbmodem211101"},
+        )
+        clock = _FakeClock()
+        with pytest.raises(FlashFirmwareError, match="ROM bootloader"):
+            _enter_esp32_rom_bootloader(
+                device,
+                interactive=False,
+                sleep=clock.sleep,
+                monotonic=clock.monotonic,
+            )
+
+    def test_interactive_fallback_recovers(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from chumicro_deploy import FakeTransport as PublicFakeTransport
+
+        fake = PublicFakeTransport(bootloader_reset_result=False)
+
+        class DeviceForTest(Device):
+            def create_transport(self):  # type: ignore[override]
+                return fake
+
+        device = DeviceForTest(
+            transport="micropython", address="/dev/cu.usbmodem211101",
+        )
+
+        prompt_fired = [False]
+
+        def fake_list_ports(*_args, **_kwargs):
+            if prompt_fired[0]:
+                return {"/dev/cu.usbmodem211101", "/dev/cu.usbmodem01"}
+            return {"/dev/cu.usbmodem211101"}
+
+        monkeypatch.setattr(
+            "chumicro_deploy.firmware._list_candidate_serial_ports",
+            fake_list_ports,
+        )
+
+        prompt_inputs: list[str] = []
+
+        def fake_prompt(message: str) -> str:
+            prompt_inputs.append(message)
+            prompt_fired[0] = True
+            return ""
+
+        clock = _FakeClock()
+        result = _enter_esp32_rom_bootloader(
+            device,
+            interactive=True,
+            prompt=fake_prompt,
+            sleep=clock.sleep,
+            monotonic=clock.monotonic,
+        )
+        assert result == "/dev/cu.usbmodem01"
+        assert len(prompt_inputs) == 1
+        assert "BOOT" in prompt_inputs[0]
 
 
 class TestFlashFirmware:

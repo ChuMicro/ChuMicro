@@ -1436,6 +1436,45 @@ class TestFindCircuitpyDrive:
         transport.disconnect()
 
 
+class TestResetIntoBootloader:
+    """Tests for CircuitpythonTransport.reset_into_bootloader."""
+
+    def test_sends_microcontroller_reset_script(self) -> None:
+        port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT, _OK_RESPONSE])
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            serial_port_factory=lambda **_kwargs: port,
+            time=FakeTime(),
+        )
+        transport.connect()
+        assert transport.reset_into_bootloader() is True
+        combined_writes = b"".join(port.writes).decode("utf-8", errors="replace")
+        assert "microcontroller.RunMode.BOOTLOADER" in combined_writes
+        assert "microcontroller.reset()" in combined_writes
+
+    def test_returns_false_when_port_is_none(self) -> None:
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            serial_port_factory=lambda **_kwargs: FakeSerialPort(),
+            time=FakeTime(),
+        )
+        # connect() was never called — _port stays None.
+        assert transport.reset_into_bootloader() is False
+
+    def test_send_exception_swallowed_returns_true(self) -> None:
+        # No _OK_RESPONSE supplied — _send_repl_command will raise when
+        # it fails to parse.  That's the expected success signal (board
+        # resets mid-command).
+        port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            serial_port_factory=lambda **_kwargs: port,
+            time=FakeTime(),
+        )
+        transport.connect()
+        assert transport.reset_into_bootloader() is True
+
+
 class TestDeployFiles:
     """Tests for CircuitpythonTransport.deploy_files (Slice 1d)."""
 

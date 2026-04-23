@@ -470,6 +470,177 @@ def _flash_firmware_uf2(
     _report(on_progress, 1.0, "flash complete")
 
 
+#: Glob pattern for macOS / Linux serial ports that typically host
+#: an ESP32 ROM bootloader.  Used by
+#: :func:`_list_candidate_serial_ports` to snapshot "before" and
+#: "after" states when detecting a bootloader-mode re-enumeration.
+_SERIAL_PORT_GLOBS: tuple[str, ...] = (
+    "/dev/cu.usbmodem*",
+    "/dev/ttyACM*",
+    "/dev/ttyUSB*",
+)
+
+
+def _list_candidate_serial_ports(
+    globs: tuple[str, ...] = _SERIAL_PORT_GLOBS,
+) -> set[str]:
+    """Return the set of serial ports currently present on the host."""
+    import glob
+
+    ports: set[str] = set()
+    for pattern in globs:
+        ports.update(glob.glob(pattern))
+    return ports
+
+
+def _wait_for_new_serial_port(
+    baseline: set[str],
+    *,
+    timeout: float,
+    sleep: Callable[[float], None] = time.sleep,
+    monotonic: Callable[[], float] = time.monotonic,
+    globs: tuple[str, ...] = _SERIAL_PORT_GLOBS,
+) -> str | None:
+    """Poll for a serial port that was not in *baseline* to appear."""
+    deadline = monotonic() + timeout
+    while monotonic() < deadline:
+        current = _list_candidate_serial_ports(globs)
+        new_ports = current - baseline
+        if new_ports:
+            return sorted(new_ports)[0]
+        sleep(0.5)
+    return None
+
+
+def _prompt_manual_esp32_bootloader(
+    device: Device,
+    *,
+    prompt: Callable[[str], str] = input,
+) -> None:
+    """Ask the user to manually put an ESP32 board in ROM bootloader.
+
+    Used by the esptool path when programmatic bootloader entry
+    either isn't supported by the runtime (MicroPython on ESP32
+    boards without a working ``machine.bootloader()``) or doesn't
+    produce a bootloader port (Lolin S2 Mini where
+    ``machine.bootloader()`` leaves the chip half-running).
+    """
+    message = (
+        f"\n[chumicro-deploy] Could not put {device.address!r} into "
+        f"ESP32 ROM bootloader automatically.\n"
+        f"[chumicro-deploy] Please hold the BOOT (GPIO0) button, "
+        f"briefly press RESET, then release BOOT.\n"
+        f"[chumicro-deploy] When a new serial port appears "
+        f"(typically /dev/cu.usbmodem01 on macOS), press Enter.\n"
+        f"[chumicro-deploy] > "
+    )
+    prompt(message)
+
+
+def _enter_esp32_rom_bootloader(
+    device: Device,
+    *,
+    interactive: bool,
+    prompt: Callable[[str], str] = input,
+    sleep: Callable[[float], None] = time.sleep,
+    monotonic: Callable[[], float] = time.monotonic,
+    globs: tuple[str, ...] = _SERIAL_PORT_GLOBS,
+) -> str:
+    """Put *device* into ESP32 ROM bootloader and return the new serial port.
+
+    Resolution order:
+
+    1. If *device.address* itself already looks like a bootloader
+       port (exists and esptool can reach it later), return it
+       unchanged — the caller may already have opened bootloader
+       manually and passed that address.
+    2. Otherwise snapshot the current serial ports, dispatch a
+       runtime-specific ``reset_into_bootloader`` via the
+       transport, and poll for a new port (typically
+       ``/dev/cu.usbmodem01`` on macOS).  Programmatic entry works
+       on Pi Pico W for both runtimes, some bootstrap-wired ESP32
+       boards, and any CircuitPython target.
+    3. If no new port appears, and *interactive* is ``True``,
+       prompt the user to hold BOOT + press RESET, then poll
+       again.  This is the only path that works on native-USB-CDC
+       ESP32 boards (Lolin S2 Mini, some Feather boards) where
+       neither ``machine.bootloader()`` nor esptool's RTS/DTR
+       dance are wired to the bootstrap circuit.
+
+    Args:
+        device: Target device.
+        interactive: When ``True``, fall back to a human prompt
+            after the programmatic path fails.  When ``False``,
+            raise :class:`FlashFirmwareError` instead.
+        prompt: Injectable prompt callable — tests override.
+        sleep: Injectable sleep for port polling.
+        monotonic: Injectable clock for timeouts.
+        globs: Serial-port path glob patterns (macOS + Linux
+            defaults).
+
+    Returns:
+        Absolute path to the serial port now hosting the ROM
+        bootloader.  Callers address esptool at this path.
+
+    Raises:
+        FlashFirmwareError: If no bootloader port appeared after
+            programmatic entry and (for non-interactive flows)
+            the user-prompt fallback is disabled, or if the
+            user's manual-entry attempt also produces no new port.
+    """
+    baseline = _list_candidate_serial_ports(globs)
+
+    # 1. If device.address is already a bootloader-style address,
+    #    trust the caller — they put the board in bootloader manually.
+    if "cu.usbmodem01" in device.address or device.address.endswith("usbmodem01"):
+        return device.address
+
+    # 2. Programmatic entry via the transport.
+    try:
+        transport = device.create_transport()
+        try:
+            transport.connect()
+            transport.reset_into_bootloader()
+        finally:
+            try:
+                transport.disconnect()
+            except Exception:  # pragma: no cover — serial may already be gone
+                pass
+    except Exception:  # pragma: no cover — best-effort hardware path
+        pass
+
+    new_port = _wait_for_new_serial_port(
+        baseline, timeout=8.0, sleep=sleep, monotonic=monotonic, globs=globs,
+    )
+    if new_port is not None:
+        return new_port
+
+    # 3. Interactive fallback.
+    if not interactive:
+        raise FlashFirmwareError(
+            f"Could not enter ESP32 ROM bootloader on "
+            f"{device.address!r} via transport.reset_into_bootloader().  "
+            f"Pass interactive=True to prompt for manual entry, or "
+            f"put the board in bootloader yourself "
+            f"(hold BOOT + press RESET) and retry with the new "
+            f"bootloader serial address as device.address."
+        )
+
+    baseline = _list_candidate_serial_ports(globs)
+    _prompt_manual_esp32_bootloader(device, prompt=prompt)
+    new_port = _wait_for_new_serial_port(
+        baseline, timeout=30.0, sleep=sleep, monotonic=monotonic, globs=globs,
+    )
+    if new_port is None:
+        raise FlashFirmwareError(
+            "No new serial port appeared after the manual "
+            "bootloader-entry prompt.  Verify the board is "
+            "enumerating in ROM bootloader (/dev/cu.usbmodem01 on "
+            "macOS) and retry."
+        )
+    return new_port
+
+
 def _flash_firmware_esptool(
     firmware_path: Path,
     device: Device,
@@ -684,9 +855,27 @@ def flash_firmware(
                 on_progress=on_progress,
             )
         else:
+            _report(on_progress, 0.3, "entering ESP32 ROM bootloader")
+            bootloader_port = _enter_esp32_rom_bootloader(
+                device, interactive=interactive,
+            )
+            # Address esptool at the bootloader port rather than the
+            # (now-gone) runtime serial port.  The flash completes with
+            # a default hard_reset so the board comes back on its usual
+            # runtime address — callers' subsequent probe_device /
+            # Deployer calls keep working against the original Device.
+            bootloader_device = Device(
+                transport=device.transport,
+                address=bootloader_port,
+                baudrate=device.baudrate,
+                deploy_mode=device.deploy_mode,
+                circuitpy_drive_path=device.circuitpy_drive_path,
+                entrypoint_name=device.entrypoint_name,
+                resource_prefix=device.resource_prefix,
+            )
             _flash_firmware_esptool(
                 local_firmware,
-                device,
+                bootloader_device,
                 erase_flash=erase_flash,
                 on_progress=on_progress,
             )

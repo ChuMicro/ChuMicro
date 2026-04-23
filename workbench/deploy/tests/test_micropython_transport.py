@@ -750,6 +750,49 @@ class TestResolveMpremoteBinary:
         assert command[0] == "mpremote"
 
 
+class TestResetIntoBootloader:
+    """Tests for MicropythonTransport.reset_into_bootloader."""
+
+    def test_dispatches_machine_bootloader_and_returns_true(self) -> None:
+        serial = FakeSerialTransport(address="/dev/ttyUSB0")
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0",
+            transport_factory=_factory_for(serial),
+            runner=FakeRunner(),
+        )
+        assert transport.reset_into_bootloader() is True
+        exec_call = next(
+            (call for call in serial.calls if call[0] == "exec_raw"), None,
+        )
+        assert exec_call is not None
+        assert "machine.bootloader" in exec_call[1][0]
+
+    def test_exec_raw_failure_swallowed_returns_true(self) -> None:
+        serial = FakeSerialTransport(address="/dev/ttyUSB0")
+        serial.raise_on_execute = RuntimeError("reset drops serial link")
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0",
+            transport_factory=_factory_for(serial),
+            runner=FakeRunner(),
+        )
+        # exec_raw raising is the EXPECTED success signal — the board
+        # resets mid-exec and the serial link drops before a clean
+        # response comes back.  Helper returns True so the caller
+        # polls for the new port.
+        assert transport.reset_into_bootloader() is True
+
+    def test_ensure_serial_failure_returns_false(self) -> None:
+        def failing_factory(address: str, baudrate: int):
+            raise OSError("port busy")
+
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0",
+            transport_factory=failing_factory,
+            runner=FakeRunner(),
+        )
+        assert transport.reset_into_bootloader() is False
+
+
 class TestDeployFiles:
     """Tests for MicropythonTransport.deploy_files (Slice 1d)."""
 
