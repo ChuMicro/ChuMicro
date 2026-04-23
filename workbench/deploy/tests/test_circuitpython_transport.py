@@ -1730,3 +1730,223 @@ class TestDeployFiles:
         )
         with pytest.raises(CircuitpythonTransportError, match="connect"):
             transport.deploy_files({"/code.py": b"pass"}, "/code.py")
+
+
+class TestDriveVerification:
+    """Tests for the mount-order-safe drive verification path.
+
+    macOS assigns ``/Volumes/CIRCUITPY`` by mount order, so a
+    ``circuitpy_drive_path`` pinned in ``devices.yml`` can silently
+    target the other board when two CP boards are plugged in at once.
+    :meth:`CircuitpythonTransport._verify_drive_for_board` reads
+    ``boot_out.txt`` on the configured drive, probes the connected
+    board, and either confirms the match, auto-corrects to a sibling
+    mount, or raises with guidance.
+    """
+
+    @staticmethod
+    def _boot_out(machine: str) -> str:
+        return (
+            f"Adafruit CircuitPython 10.2.0-rc.0 on 2026-04-16; {machine}\n"
+            "Board ID:test_board\n"
+            "UID:DEADBEEF\n"
+            "MAC:00:00:00:00:00:00\n"
+        )
+
+    @staticmethod
+    def _probe_response(machine: str) -> bytes:
+        marker_line = f"__CHU_IMPL__:circuitpython|10.2.0|{machine}"
+        return b"OK" + marker_line.encode("utf-8") + b"\n\x04\x04>"
+
+    def _make_transport(
+        self,
+        *,
+        drive_path: str,
+        reads: list[bytes],
+    ) -> tuple[CircuitpythonTransport, FakeSerialPort]:
+        port = FakeSerialPort(read_responses=reads)
+
+        def factory(**kwargs):
+            return port
+
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            mode="flash",
+            circuitpy_drive_path=drive_path,
+            serial_port_factory=factory,
+            time=FakeTime(),
+        )
+        transport.connect()
+        return transport, port
+
+    def test_skips_verification_when_boot_out_missing(
+        self, tmp_path: Path,
+    ) -> None:
+        """No boot_out.txt -> no probe roundtrip, drive path unchanged."""
+        drive = tmp_path / "CIRCUITPY"
+        drive.mkdir()
+        transport, _ = self._make_transport(
+            drive_path=str(drive),
+            reads=[_RAW_REPL_PROMPT],  # connect only — no probe expected
+        )
+        assert transport._verify_drive_for_board(drive) == drive
+
+    def test_returns_unchanged_on_machine_match(
+        self, tmp_path: Path,
+    ) -> None:
+        """boot_out.txt machine matches probe -> original path returned."""
+        drive = tmp_path / "CIRCUITPY"
+        drive.mkdir()
+        (drive / "boot_out.txt").write_text(
+            self._boot_out("S2Mini with ESP32S2-S2FN4R2"),
+            encoding="utf-8",
+        )
+        transport, _ = self._make_transport(
+            drive_path=str(drive),
+            reads=[
+                _RAW_REPL_PROMPT,
+                self._probe_response("S2Mini with ESP32S2-S2FN4R2"),
+            ],
+        )
+        assert transport._verify_drive_for_board(drive) == drive
+
+    def test_auto_corrects_to_sibling_mount_on_mismatch(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Wrong drive + a sibling mount that matches -> corrected path + warning."""
+        wrong_drive = tmp_path / "CIRCUITPY"
+        wrong_drive.mkdir()
+        (wrong_drive / "boot_out.txt").write_text(
+            self._boot_out("Raspberry Pi Pico W with rp2040"),
+            encoding="utf-8",
+        )
+        right_drive = tmp_path / "CIRCUITPY 1"
+        right_drive.mkdir()
+        (right_drive / "boot_out.txt").write_text(
+            self._boot_out("S2Mini with ESP32S2-S2FN4R2"),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(
+            "chumicro_deploy.circuitpython_transport"
+            "._circuitpy_volume_candidates",
+            lambda: [wrong_drive, right_drive],
+        )
+        transport, _ = self._make_transport(
+            drive_path=str(wrong_drive),
+            reads=[
+                _RAW_REPL_PROMPT,
+                self._probe_response("S2Mini with ESP32S2-S2FN4R2"),
+            ],
+        )
+        corrected = transport._verify_drive_for_board(wrong_drive)
+        assert corrected == right_drive
+        captured = capsys.readouterr()
+        assert "auto-correcting" in captured.out
+        assert "S2Mini" in captured.out
+
+    def test_raises_when_no_matching_mount_exists(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Wrong drive + no sibling match -> error with devices.yml guidance."""
+        wrong_drive = tmp_path / "CIRCUITPY"
+        wrong_drive.mkdir()
+        (wrong_drive / "boot_out.txt").write_text(
+            self._boot_out("Raspberry Pi Pico W with rp2040"),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(
+            "chumicro_deploy.circuitpython_transport"
+            "._circuitpy_volume_candidates",
+            lambda: [wrong_drive],
+        )
+        transport, _ = self._make_transport(
+            drive_path=str(wrong_drive),
+            reads=[
+                _RAW_REPL_PROMPT,
+                self._probe_response("S2Mini with ESP32S2-S2FN4R2"),
+            ],
+        )
+        with pytest.raises(
+            CircuitpythonTransportError, match="devices.yml",
+        ):
+            transport._verify_drive_for_board(wrong_drive)
+
+    def test_fails_open_when_probe_unavailable(
+        self, tmp_path: Path,
+    ) -> None:
+        """Probe returns None -> verification proceeds with original path."""
+        drive = tmp_path / "CIRCUITPY"
+        drive.mkdir()
+        (drive / "boot_out.txt").write_text(
+            self._boot_out("S2Mini with ESP32S2-S2FN4R2"),
+            encoding="utf-8",
+        )
+        # Probe response with no __CHU_IMPL__ marker -> parse returns None.
+        transport, _ = self._make_transport(
+            drive_path=str(drive),
+            reads=[
+                _RAW_REPL_PROMPT,
+                b"OK\x04\x04>",  # empty stdout -> no marker
+            ],
+        )
+        assert transport._verify_drive_for_board(drive) == drive
+
+    def test_read_boot_out_machine_extracts_suffix(
+        self, tmp_path: Path,
+    ) -> None:
+        """``on DATE; MACHINE`` suffix is returned; malformed files -> None."""
+        from chumicro_deploy.circuitpython_transport import (
+            _read_boot_out_machine,
+        )
+
+        drive = tmp_path / "CIRCUITPY"
+        drive.mkdir()
+        (drive / "boot_out.txt").write_text(
+            "Adafruit CircuitPython 10.2.0 on 2026-01-02; Foo Board with xyz\n"
+            "Board ID:foo\n",
+            encoding="utf-8",
+        )
+        assert _read_boot_out_machine(drive) == "Foo Board with xyz"
+
+        # Missing file
+        empty = tmp_path / "OTHER"
+        empty.mkdir()
+        assert _read_boot_out_machine(empty) is None
+
+        # Malformed (no semicolon)
+        bad = tmp_path / "BAD"
+        bad.mkdir()
+        (bad / "boot_out.txt").write_text("weird line\n", encoding="utf-8")
+        assert _read_boot_out_machine(bad) is None
+
+    def test_find_circuitpy_drive_for_machine_scans_mounts(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Scans mounts and returns the first one whose machine matches."""
+        from chumicro_deploy.circuitpython_transport import (
+            find_circuitpy_drive_for_machine,
+        )
+
+        first = tmp_path / "CIRCUITPY"
+        first.mkdir()
+        (first / "boot_out.txt").write_text(
+            self._boot_out("Raspberry Pi Pico W with rp2040"),
+            encoding="utf-8",
+        )
+        second = tmp_path / "CIRCUITPY 1"
+        second.mkdir()
+        (second / "boot_out.txt").write_text(
+            self._boot_out("S2Mini with ESP32S2-S2FN4R2"),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(
+            "chumicro_deploy.circuitpython_transport"
+            "._circuitpy_volume_candidates",
+            lambda: [first, second],
+        )
+        assert find_circuitpy_drive_for_machine(
+            "S2Mini with ESP32S2-S2FN4R2",
+        ) == str(second)
+        assert find_circuitpy_drive_for_machine("") is None
+        assert find_circuitpy_drive_for_machine("Not A Board") is None

@@ -84,6 +84,83 @@ def find_circuitpy_drive() -> str | None:
     return None
 
 
+def _circuitpy_volume_candidates() -> list[Path]:
+    """Return all mounted CIRCUITPY* directories across common OS mount points.
+
+    macOS assigns ``/Volumes/CIRCUITPY`` by mount order; additional
+    CircuitPython boards get ``/Volumes/CIRCUITPY 1``, ``CIRCUITPY 2``,
+    etc.  This helper globs for all of them so the drive-verification
+    path can search across every mounted device to find the one whose
+    ``boot_out.txt`` matches the connected board.
+    """
+    username = os.environ.get("USER", "")
+    bases = [
+        Path("/Volumes"),
+        Path("/media") / username,
+        Path("/run/media") / username,
+    ]
+    found: list[Path] = []
+    for base in bases:
+        if not base.is_dir():
+            continue
+        for candidate in sorted(base.glob(f"{_CIRCUITPY_VOLUME_NAME}*")):
+            if candidate.is_dir():
+                found.append(candidate)
+    return found
+
+
+def _read_boot_out_machine(drive_path: Path) -> str | None:
+    """Return the board-machine suffix from ``boot_out.txt`` on *drive_path*.
+
+    CircuitPython writes ``boot_out.txt`` at boot with a first line of
+    the form::
+
+        Adafruit CircuitPython 10.2.0-rc.0 on 2026-04-16; Raspberry Pi Pico W with rp2040
+
+    The portion after ``on DATE; `` matches ``sys.implementation._machine``
+    on the running board, so comparing the two tells us whether this
+    drive actually belongs to the connected board.  Returns ``None``
+    when the file is missing, unreadable, or doesn't follow the
+    expected shape — callers treat that as "can't verify" and proceed.
+    """
+    boot_out = drive_path / "boot_out.txt"
+    if not boot_out.is_file():
+        return None
+    try:
+        first_line = boot_out.read_text(
+            encoding="utf-8", errors="replace",
+        ).splitlines()[0]
+    except (OSError, IndexError):  # pragma: no cover — hard to mock read_text
+        return None
+    semicolon_index = first_line.find(";")
+    if semicolon_index == -1:
+        return None
+    return first_line[semicolon_index + 1:].strip()
+
+
+def find_circuitpy_drive_for_machine(target_machine: str) -> str | None:
+    """Return the mounted CIRCUITPY drive whose board matches *target_machine*.
+
+    Scans every mounted ``CIRCUITPY*`` volume, reads ``boot_out.txt``,
+    and returns the first path whose board identity equals
+    *target_machine* (as reported by ``sys.implementation._machine``
+    on the running board).  Returns ``None`` when no mount matches —
+    which can happen if the target board's drive isn't mounted, or if
+    the probe couldn't read a machine string.
+
+    Used by :meth:`CircuitpythonTransport._verify_drive_for_board` to
+    recover from mount-order-dependent ``circuitpy_drive_path`` entries
+    in ``devices.yml``.
+    """
+    if not target_machine:
+        return None
+    for candidate in _circuitpy_volume_candidates():
+        machine = _read_boot_out_machine(candidate)
+        if machine and machine == target_machine:
+            return str(candidate)
+    return None
+
+
 class SerialPort(Protocol):
     """Structural interface for a serial port.
 
@@ -251,6 +328,52 @@ class CircuitpythonTransport:
         if self.mode == "flash":
             self._stage_to_flash(source_dirs, test_files, harness_source)
 
+    def _verify_drive_for_board(self, drive_path: Path) -> Path:
+        """Confirm *drive_path* is the CIRCUITPY mount for the connected board.
+
+        macOS assigns ``/Volumes/CIRCUITPY`` in mount order, so a
+        ``circuitpy_drive_path`` pinned in ``devices.yml`` can silently
+        refer to the other board when two boards are attached.  This
+        method reads ``boot_out.txt`` from *drive_path* and compares
+        it against ``sys.implementation._machine`` on the connected
+        board.  When they disagree, every mounted ``CIRCUITPY*``
+        volume is scanned for one that matches; the match wins.
+        When no match is found, a :class:`CircuitpythonTransportError`
+        is raised with guidance pointing at ``devices.yml``.
+
+        Fails open — when either side of the comparison is unavailable
+        (``boot_out.txt`` missing/malformed, probe returns ``None``)
+        the original path is returned unchanged.  ``boot_out.txt`` is
+        checked first so the serial-probe roundtrip is skipped entirely
+        in environments that don't have it (test drives mocked with a
+        bare ``tmp_path``, for instance).
+        """
+        boot_machine = _read_boot_out_machine(drive_path)
+        if boot_machine is None:
+            return drive_path
+        probe = self.probe_implementation()
+        if probe is None or not probe.machine:
+            return drive_path
+        if boot_machine == probe.machine:
+            return drive_path
+        corrected = find_circuitpy_drive_for_machine(probe.machine)
+        if corrected is None:
+            raise CircuitpythonTransportError(
+                f"Configured CIRCUITPY drive {drive_path} belongs to "
+                f"{boot_machine!r} but the connected board is "
+                f"{probe.machine!r}.  No other mounted CIRCUITPY* volume "
+                f"matches the connected board.  Fix circuitpy_drive_path "
+                f"in devices.yml or unmount the wrong drive."
+            )
+        print(
+            f"WARNING: configured CIRCUITPY drive {drive_path} belongs "
+            f"to {boot_machine!r} but the connected board is "
+            f"{probe.machine!r} — auto-correcting to {corrected}.  "
+            f"Update circuitpy_drive_path in devices.yml to silence "
+            f"this warning."
+        )
+        return Path(corrected)
+
     def _resolve_circuitpy_drive(self) -> Path:
         """Return the CIRCUITPY drive path, raising if it isn't usable.
 
@@ -363,6 +486,7 @@ class CircuitpythonTransport:
                 be found or is not writable.
         """
         drive_path = self._resolve_circuitpy_drive()
+        drive_path = self._verify_drive_for_board(drive_path)
 
         # Prevent macOS Spotlight from indexing the drive — it creates
         # hidden metadata files and slows down FAT32 writes.
@@ -714,6 +838,7 @@ class CircuitpythonTransport:
         drive_path = Path(drive_path_string)
 
         self._enter_raw_repl()
+        drive_path = self._verify_drive_for_board(drive_path)
         self._send_repl_command(
             "import supervisor; supervisor.runtime.autoreload = False"
         )
