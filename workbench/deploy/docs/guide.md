@@ -8,7 +8,40 @@ This guide walks through everything `chumicro-deploy` offers today — from the 
 pip install chumicro-deploy
 ```
 
-Host-only. No bundle registration or device-side install needed.
+Host-only. No bundle registration or device-side install needed. After install, a `chumicro-deploy` console script is on your PATH — see the [CLI section](#command-line-interface) at the end for the quick-invocation shortcuts.
+
+## Command-line interface
+
+Every Python API has a matching CLI subcommand so you don't need to write a script for one-off flashes, probes, or URL lookups.
+
+```bash
+# Probe a connected board.
+chumicro-deploy probe --transport micropython --address /dev/cu.usbmodem213101
+
+# Look up a firmware URL.
+chumicro-deploy resolve-firmware-url \
+    --board-id raspberry_pi_pico_w --runtime circuitpython --version 10.1.4
+
+# Flash a Pi Pico W (UF2 path, programmatic bootloader entry).
+chumicro-deploy flash \
+    --transport circuitpython --address /dev/cu.usbmodem11401 \
+    --url https://downloads.circuitpython.org/bin/raspberry_pi_pico_w/en_US/adafruit-circuitpython-raspberry_pi_pico_w-en_US-10.1.4.uf2 \
+    --method uf2
+
+# Flash a Lolin S2 Mini running MicroPython (esptool, erase, offset 0x1000).
+chumicro-deploy flash \
+    --transport micropython --address /dev/cu.usbmodem211101 \
+    --url https://micropython.org/resources/firmware/LOLIN_S2_MINI-20260406-v1.28.0.bin \
+    --method esptool --erase --offset 0x1000
+
+# Deploy a directory of Python files and run the entrypoint.
+chumicro-deploy deploy \
+    --transport circuitpython --address /dev/cu.usbmodem11401 \
+    --deploy-mode flash --drive "/Volumes/CIRCUITPY" \
+    --directory ./my_app --entrypoint /code.py
+```
+
+All subcommands accept `--help` for their full option list. `chumicro-deploy flash` supports `--non-interactive` for automated flows that don't have stdin.
 
 ## Configure a target — `Device`
 
