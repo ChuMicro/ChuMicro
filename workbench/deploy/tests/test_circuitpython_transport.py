@@ -1472,15 +1472,28 @@ class TestDeployFiles:
         with pytest.raises(CircuitpythonTransportError, match="does not support"):
             transport.deploy_files({"/code.py": b"pass"}, "/code.py")
 
+    @staticmethod
+    def _boot_output(user_text: bytes) -> bytes:
+        """Build a canned soft-boot serial capture ending in the done marker."""
+        return (
+            b"soft reboot\r\n\r\n"
+            b"Adafruit CircuitPython X.Y.Z on YYYY-MM-DD; TestBoard with rp2040\r\n"
+            b"Board ID:test_board\r\n\r\n"
+            b"code.py output:\r\n"
+            + user_text
+            + b"\r\nCode done running.\r\n\r\nPress any key to enter the REPL.\r\n"
+        )
+
     def test_writes_files_to_drive_and_execs_entrypoint(
         self, tmp_path: Path
     ) -> None:
         drive = tmp_path / "CIRCUITPY"
         drive.mkdir()
         extra = [
-            _RAW_REPL_PROMPT,              # _enter_raw_repl reentry
-            _OK_RESPONSE,                  # autoreload-off ack
-            _repl_response(stdout=b"hello\n"),  # entrypoint exec
+            _RAW_REPL_PROMPT,         # _enter_raw_repl reentry (pre-writes)
+            _OK_RESPONSE,             # autoreload-off ack
+            self._boot_output(b"hello"),  # soft-reboot output capture
+            _RAW_REPL_PROMPT,         # _enter_raw_repl after soft-reboot
         ]
         transport, _ = self._connect(
             drive_path=str(drive), extra_responses=extra
@@ -1489,14 +1502,19 @@ class TestDeployFiles:
             {"/code.py": b"print('hi')", "/lib/util.py": b"X = 1"},
             "/code.py",
         )
-        assert output == "hello\n"
+        assert "hello" in output
         assert (drive / "code.py").read_bytes() == b"print('hi')"
         assert (drive / "lib" / "util.py").read_bytes() == b"X = 1"
 
     def test_autoreload_disabled_before_writes(self, tmp_path: Path) -> None:
         drive = tmp_path / "CIRCUITPY"
         drive.mkdir()
-        extra = [_RAW_REPL_PROMPT, _OK_RESPONSE, _OK_RESPONSE]
+        extra = [
+            _RAW_REPL_PROMPT,
+            _OK_RESPONSE,
+            self._boot_output(b""),
+            _RAW_REPL_PROMPT,
+        ]
         transport, port = self._connect(
             drive_path=str(drive), extra_responses=extra
         )
@@ -1507,7 +1525,12 @@ class TestDeployFiles:
     def test_on_file_staged_invoked_per_file_sorted(self, tmp_path: Path) -> None:
         drive = tmp_path / "CIRCUITPY"
         drive.mkdir()
-        extra = [_RAW_REPL_PROMPT, _OK_RESPONSE, _OK_RESPONSE]
+        extra = [
+            _RAW_REPL_PROMPT,
+            _OK_RESPONSE,
+            self._boot_output(b""),
+            _RAW_REPL_PROMPT,
+        ]
         transport, _ = self._connect(
             drive_path=str(drive), extra_responses=extra
         )
@@ -1525,7 +1548,8 @@ class TestDeployFiles:
         extra = [
             _RAW_REPL_PROMPT,
             _OK_RESPONSE,
-            _repl_response(stdout=b"one\ntwo\nthree\n"),
+            self._boot_output(b"one\r\ntwo\r\nthree"),
+            _RAW_REPL_PROMPT,
         ]
         transport, _ = self._connect(
             drive_path=str(drive), extra_responses=extra

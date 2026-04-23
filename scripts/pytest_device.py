@@ -832,21 +832,35 @@ def _bulk_stage_for_device(
 def pytest_collect_file(
     parent: pytest.Collector, file_path: Path,
 ) -> DeviceTestFile | None:
-    """Collect functional test files as device test items.
+    """Collect library functional test files as device test items.
 
-    Activates for any ``test_*.py`` file inside a ``functional_tests/``
-    directory.  No environment variable required — ``devices.yml``
-    is the gate (checked at collection/run time).
+    Activates only for ``test_*.py`` under
+    ``libraries/<name>/functional_tests/`` — the test-harness-based
+    on-device flow (stage/execute, result_parser).  Workbench
+    packages (Decision 0032) also keep hardware-gated tests under a
+    ``functional_tests/`` directory, but those are plain host-side
+    pytest that call ``chumicro_deploy`` against a real board; they
+    must not be routed through the library test harness and are left
+    to run as ordinary pytest collection.
+
+    No environment variable required — ``devices.yml`` is the gate
+    (checked at collection/run time).
     """
 
-    if (
+    if not (
         file_path.suffix == ".py"
         and file_path.name.startswith("test_")
         and "functional_tests" in file_path.parts
     ):
-        return DeviceTestFile.from_parent(parent, path=file_path)  # pyright: ignore[reportUnknownMemberType]
+        return None
 
-    return None
+    # Only library functional_tests get routed through the device
+    # harness.  Layout is ``libraries/<name>/functional_tests/<file>``.
+    functional_index = file_path.parts.index("functional_tests")
+    if functional_index < 2 or file_path.parts[functional_index - 2] != "libraries":
+        return None
+
+    return DeviceTestFile.from_parent(parent, path=file_path)  # pyright: ignore[reportUnknownMemberType]
 
 
 def pytest_collection_modifyitems(
@@ -863,7 +877,11 @@ def pytest_collection_modifyitems(
     deselected: list[pytest.Item] = []
     selected: list[pytest.Item] = []
     for item in items:
-        if "functional_tests" in item.nodeid and not isinstance(item, DeviceRuntimeItem):
+        if (
+            "functional_tests" in item.nodeid
+            and "libraries/" in item.nodeid
+            and not isinstance(item, DeviceRuntimeItem)
+        ):
             deselected.append(item)
         else:
             selected.append(item)

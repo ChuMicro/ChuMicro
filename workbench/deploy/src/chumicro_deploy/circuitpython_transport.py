@@ -688,15 +688,83 @@ class CircuitpythonTransport:
 
         flash_drive.flush_volume(drive_path, sleep=self._time.sleep)
 
-        entrypoint_on_device = (
-            entrypoint if entrypoint.startswith("/") else f"/{entrypoint}"
-        )
-        script = f"exec(open({entrypoint_on_device!r}).read())"
-        output = self._send_repl_command(script)
+        # CP caches the FAT32 filesystem view in-memory; with autoreload
+        # disabled, exec(open()) would read stale content.  Soft-reboot
+        # from normal REPL so the board re-reads its filesystem and
+        # runs the new code.py fresh.
+        self._port.write(_CTRL_B)  # exit raw REPL
+        self._time.sleep(_ENTER_DELAY)
+        self._port.write(_CTRL_D)  # trigger soft-reboot
+        output = self._read_code_py_output()
+
+        # Re-enter raw REPL so disconnect()'s cleanup (autoreload on,
+        # soft-reboot, exit) has a live session to work from.
+        self._enter_raw_repl()
+
         if on_execute_line is not None:
             for output_line in output.splitlines():
                 on_execute_line(output_line)
         return output
+
+    def _read_code_py_output(self) -> str:
+        """Read serial output from a fresh boot until code.py completes.
+
+        CircuitPython prints ``Code done running.`` when code.py
+        returns (or raises).  For infinite-loop entrypoints the
+        marker never appears and the read times out at
+        :attr:`timeout` seconds — callers receive the accumulated
+        output up to that point.
+
+        Returns:
+            The portion of captured serial output between the
+            ``soft reboot`` marker and the ``Code done running.``
+            marker (if present), or everything after ``soft reboot``
+            if the marker is absent.
+        """
+        assert self._port is not None
+        done_marker = b"Code done running."
+        accumulated = b""
+        deadline = self._time.monotonic() + self.timeout
+        while self._time.monotonic() < deadline:
+            waiting = self._port.in_waiting
+            if waiting > 0:
+                accumulated += self._port.read(waiting)
+                if done_marker in accumulated:
+                    break
+            else:
+                self._time.sleep(0.01)
+        return self._extract_code_output(accumulated)
+
+    @staticmethod
+    def _extract_code_output(raw_boot_output: bytes) -> str:
+        """Extract the code.py portion from a fresh-boot serial capture.
+
+        CircuitPython's boot banner + "Code done running." marker are
+        stripped so callers see only the user code's output.  The
+        boundary used is the "code.py output:" heading CP prints just
+        before user output, with the trailing "Code done running."
+        marker used as the end-of-output boundary.  When neither
+        marker is present the raw text is returned so short-lived or
+        untethered sessions still surface *something* useful.
+
+        Args:
+            raw_boot_output: Bytes captured between soft-reboot and
+                the done marker (or timeout).
+        """
+        text = raw_boot_output.decode("utf-8", errors="replace")
+        header_marker = "code.py output:"
+        header_index = text.find(header_marker)
+        if header_index != -1:
+            # Skip past the header + its trailing newline.
+            trailing_newline = text.find("\n", header_index)
+            if trailing_newline != -1:
+                text = text[trailing_newline + 1:]
+        for marker in ("Code done running.", "Press any key"):
+            marker_index = text.find(marker)
+            if marker_index != -1:
+                text = text[:marker_index]
+                break
+        return text.strip("\r\n") + "\n"
 
     def disconnect(self) -> None:
         """Close the serial port and clear staged data.

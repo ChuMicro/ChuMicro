@@ -403,7 +403,13 @@ class MicropythonTransport:
             if on_file_staged is not None:
                 on_file_staged(device_path)
 
+        relative_entrypoint = entrypoint.lstrip("/")
         if self.mode == "copy":
+            # Copy mode pushes files to the device's real filesystem,
+            # so on-device paths start at ``/`` as written.  MP does
+            # not include /lib on sys.path by default; add it so a
+            # callers' ``from helper import x`` resolves without
+            # boilerplate.
             self._close_serial()
             self._run_mpremote([
                 "fs", "cp", "-r",
@@ -411,14 +417,26 @@ class MicropythonTransport:
                 ":",
             ])
             self._ensure_serial()
-            entrypoint_on_device = entrypoint if entrypoint.startswith("/") else f"/{entrypoint}"
+            entrypoint_on_device = f"/{relative_entrypoint}"
+            sys_path_prefix = "import sys\nsys.path.insert(0, '/lib')\n"
         else:
+            # mpremote mount_local mounts the staging dir at /remote
+            # (not /), so entrypoint paths the caller wrote as
+            # ``/main.py`` resolve to ``/remote/main.py`` on device.
+            # Add /remote and /remote/lib to sys.path so relative
+            # imports inside the user's code work the same way copy
+            # mode and CircuitPython flash mode do.
             self._ensure_serial()
             self._serial.mount_local(str(staging_path))
             self._mounted = True
-            entrypoint_on_device = entrypoint if entrypoint.startswith("/") else f"/{entrypoint}"
+            entrypoint_on_device = f"/remote/{relative_entrypoint}"
+            sys_path_prefix = (
+                "import sys\n"
+                "sys.path.insert(0, '/remote/lib')\n"
+                "sys.path.insert(0, '/remote')\n"
+            )
 
-        script = f"exec(open({entrypoint_on_device!r}).read())"
+        script = f"{sys_path_prefix}exec(open({entrypoint_on_device!r}).read())"
         try:
             result = self._serial.exec_raw(script, timeout=120)
         except Exception as error:
