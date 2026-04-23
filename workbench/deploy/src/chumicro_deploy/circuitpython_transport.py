@@ -65,6 +65,16 @@ _BOARD_FILE_VISIBLE_POLL_ATTEMPTS = 20
 #: :data:`_BOARD_FILE_VISIBLE_POLL_ATTEMPTS`).
 _BOARD_FILE_VISIBLE_POLL_INTERVAL = 0.25
 
+#: Belt-and-suspenders settle after ``os.stat`` first reports the
+#: expected size.  ``os.stat`` proves CP has seen the directory entry,
+#: but there can still be in-flight block writes on the board side
+#: (flash program/erase, FAT bookkeeping) that our polling can't
+#: observe.  Sleeping a fraction of a second here gives those a
+#: chance to quiesce before Ctrl-D kicks the VM into soft-reboot —
+#: cheap insurance against hardware-level races the software layer
+#: has no signal for.
+_BOARD_FILE_VISIBLE_POST_SETTLE = 0.5
+
 #: Volume name CircuitPython uses by default.
 _CIRCUITPY_VOLUME_NAME = "CIRCUITPY"
 
@@ -1070,6 +1080,11 @@ class CircuitpythonTransport:
             last_observed = response
             try:
                 if int(response) == expected_size:
+                    # Board has seen the directory entry; give any
+                    # in-flight block writes / flash bookkeeping a
+                    # moment to quiesce before we trigger the
+                    # soft-reboot.
+                    self._time.sleep(_BOARD_FILE_VISIBLE_POST_SETTLE)
                     return
             except ValueError:
                 pass
