@@ -299,13 +299,18 @@ def read_pyproject_description(library_dir: Path) -> str:
 
 
 def discover_doc_dirs(package_dirs: list[Path] | None = None) -> list[Path]:
-    """Return library directories that contain a ``mkdocs.yml``.
+    """Return package directories that contain a ``mkdocs.yml``.
 
     Args:
         package_dirs: Package directories to filter.  When ``None``,
-            uses :func:`discover_library_dirs`.
+            uses :func:`discover_package_dirs` — covers both
+            ``libraries/`` and ``workbench/`` packages so docs-deploy
+            and the landing page pick up host-only tools alongside
+            device libraries.  Support packages are not published and
+            typically don't carry ``mkdocs.yml``, so they drop out at
+            the filter step below.
     """
-    candidates = package_dirs if package_dirs is not None else discover_library_dirs()
+    candidates = package_dirs if package_dirs is not None else discover_package_dirs()
     return [
         package_dir for package_dir in candidates
         if (package_dir / "mkdocs.yml").exists()

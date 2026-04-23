@@ -548,6 +548,11 @@ class TestDiscoverDocDirs:
         names = {doc_dir.name for doc_dir in discover_doc_dirs()}
         assert "timing" in names
 
+    def test_includes_workbench_packages(self):
+        """Workbench packages with mkdocs.yml are discovered by default."""
+        names = {doc_dir.name for doc_dir in discover_doc_dirs()}
+        assert "deploy" in names
+
     def test_accepts_custom_package_dirs(self, tmp_path: Path):
         """Accepts a custom list of package dirs."""
         library_dir = tmp_path / "mylib"
