@@ -27,11 +27,9 @@ import time
 import urllib.request
 from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING
 from urllib.error import URLError
 
-if TYPE_CHECKING:  # pragma: no cover — type-only
-    from .device import Device
+from .device import Device
 
 _DEFAULT_LANGUAGE = "en_US"
 
