@@ -352,9 +352,18 @@ class TestEsptoolPath:
         assert "/dev/ttyUSB0" in runner_calls[0]
         assert "write-flash" in runner_calls[0]
 
-    def test_erase_flash_runs_erase_before_write(
+    def test_erase_flash_uses_two_invocations_with_no_reset_on_erase(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
     ) -> None:
+        """Erase and write are separate esptool calls.
+
+        esptool v5 dropped chained sub-commands; each sub-command
+        is its own invocation.  The erase call must pass
+        ``--after no_reset`` so the chip stays in ROM bootloader
+        for the write call — otherwise esptool's default hard_reset
+        strands the (now empty-flash) board until the user holds
+        GPIO0 and re-plugs.
+        """
         monkeypatch.setattr(
             "shutil.which",
             lambda name: "/fake/esptool" if name == "esptool" else None,
@@ -375,15 +384,13 @@ class TestEsptoolPath:
         )
 
         assert len(invocations) == 2
-        assert "erase-flash" in invocations[0]
-        # Erase step must pin --after no_reset so the board stays in
-        # ROM bootloader for the chained write-flash — without this
-        # the chip hard-resets and an empty flash strands the board.
-        assert "no_reset" in invocations[0]
-        assert "write-flash" in invocations[1]
-        assert "no_reset" not in invocations[1]
+        erase_command, write_command = invocations
+        assert "erase-flash" in erase_command
+        assert "no_reset" in erase_command
+        assert "write-flash" in write_command
+        assert "no_reset" not in write_command
 
-    def test_erase_flash_failure_wraps_with_step_name(
+    def test_erase_flash_failure_surfaces_step_name(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
     ) -> None:
         monkeypatch.setattr(
@@ -419,7 +426,7 @@ class TestEsptoolPath:
         device = Device(transport="micropython", address="/dev/ttyUSB0")
         firmware = tmp_path / "fw.bin"
         firmware.write_bytes(b"x")
-        with pytest.raises(FlashFirmwareError, match="GPIO0"):
+        with pytest.raises(FlashFirmwareError, match="write"):
             _flash_firmware_esptool(firmware, device, on_progress=None, runner=fake_runner)
 
 

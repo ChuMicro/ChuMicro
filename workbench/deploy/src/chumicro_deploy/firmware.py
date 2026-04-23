@@ -526,6 +526,14 @@ def _flash_firmware_esptool(
             "retry."
         )
 
+    # esptool v5 dropped chained sub-commands (its click-based CLI
+    # treats each sub-command as its own invocation).  Erase and
+    # write-flash run as two separate esptool calls.  Add
+    # `--after no_reset` to the erase step so the chip stays in ROM
+    # bootloader for the write step — esptool's default
+    # `--after hard_reset` after erase would leave an empty-flash
+    # chip without firmware to boot, and ESP32-S2 does not
+    # consistently re-enumerate its ROM bootloader on its own.
     def _invoke(command: list[str], *, step_name: str) -> None:
         try:
             result = runner(
@@ -547,14 +555,7 @@ def _flash_firmware_esptool(
             )
 
     if erase_flash:
-        _report(on_progress, 0.0, f"erasing flash via {esptool_binary}")
-        # --after no_reset keeps the board in ROM bootloader for the
-        # chained write-flash step.  esptool's default hard_reset after
-        # erase would otherwise hard-reset the chip; on a freshly-erased
-        # board that usually means the chip stays dark (no firmware to
-        # run) and the ROM bootloader does not always re-enumerate
-        # automatically, stranding the board until the user holds GPIO0
-        # and replugs.
+        _report(on_progress, 0.0, f"esptool erase-flash via {esptool_binary}")
         _invoke(
             [
                 esptool_binary,
@@ -565,8 +566,18 @@ def _flash_firmware_esptool(
             ],
             step_name="erase-flash",
         )
+        # Give macOS a moment to release the serial port.  Without
+        # this, the next invocation trips "Resource busy" because
+        # the kernel still holds the cu.usbmodem FD briefly after
+        # esptool returns.  1 second is a conservative delay that
+        # matches Adafruit's tooling.
+        time.sleep(1.0)
 
-    _report(on_progress, 0.5 if erase_flash else 0.0, "writing firmware via esptool")
+    _report(
+        on_progress,
+        0.5 if erase_flash else 0.0,
+        "esptool write-flash",
+    )
     _invoke(
         [
             esptool_binary,
