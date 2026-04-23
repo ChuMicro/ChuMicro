@@ -40,6 +40,7 @@ if str(_SCRIPTS_DIR) not in sys.path:
 from chumicro_deploy import (  # noqa: E402
     CircuitpythonTransportError,
     Deployer,
+    DeployFailureKind,
     Device,
     FileMapSource,
     InteractiveDeployer,
@@ -162,17 +163,12 @@ def _entrypoint_for(runtime: str) -> str:
 def _deploy_device_for(context: BoardContext) -> Device | None:
     """Pick the Device config that's actually usable for a deploy.
 
-    ``Deployer.deploy()`` on CircuitPython requires ``deploy_mode='flash'``
-    — the RAM-mode path is reserved for the in-tree test harness and
-    is rejected by ``CircuitpythonTransport.deploy_files``.  On
-    MicroPython either mode works; RAM (mount) is cheaper so we pick
-    it when available.
-
-    Returns ``None`` when no usable deploy device is configured for
-    this board (e.g. a CP board without a mounted CIRCUITPY drive).
+    RAM mode now works on both runtimes (CP inlines the files into
+    ``sys.modules`` via raw REPL; MP mounts the host dir).  Preferring
+    RAM across the board keeps the demo fast and avoids depending on
+    a mounted CIRCUITPY drive for scenarios that don't need one.
+    Flash-specific scenarios use ``context.device_flash`` directly.
     """
-    if context.runtime == "circuitpython":
-        return context.device_flash
     return context.device_ram
 
 
@@ -250,7 +246,43 @@ def scenario_traceback_returned(context: BoardContext) -> bool:
         },
         entrypoint=entrypoint,
     )
-    result = interactive.deploy(source)
+    # Two semantic paths land here:
+    #
+    # - MP (both modes) and CP flash mode: the board prints the
+    #   traceback to stdout after the soft-reboot / exec returns.
+    #   Deployer extracts it and returns a DeployResult(success=False,
+    #   traceback=...).  InteractiveDeployer prints the
+    #   TRACEBACK_RETURNED plan once and returns the result — the
+    #   normal "source bug, not a transport failure" path.
+    # - CP RAM mode: the raw REPL separates stdout / stderr with \x04
+    #   markers, and a stderr-on-chunk gets raised as
+    #   CircuitpythonTransportError containing the traceback inline.
+    #   InteractiveDeployer classifies that as TRACEBACK_RETURNED
+    #   (non-retryable) via the "Traceback (most recent call last)"
+    #   substring rule in classify_deploy_failure, prints the same
+    #   coaching block, and re-raises.  Either outcome is "correct"
+    #   hand-holding for the user.
+    try:
+        result = interactive.deploy(source)
+    except (CircuitpythonTransportError, MicropythonTransportError) as error:
+        kind = classify_deploy_failure(error)
+        if kind is not DeployFailureKind.TRACEBACK_RETURNED:
+            _print_warn(
+                f"Unexpected exception classified as {kind.value}: {error}"
+            )
+            return False
+        if "ZeroDivisionError" not in str(error):
+            _print_warn(
+                f"Exception did not mention ZeroDivisionError: {error}"
+            )
+            return False
+        _print_ok(
+            "Traceback coaching rendered; the raised error was "
+            "routed to TRACEBACK_RETURNED (non-retryable) — expected "
+            "for CP RAM-mode source bugs."
+        )
+        return True
+
     if result.traceback is None:
         _print_warn("Expected a traceback but none was returned.")
         return False

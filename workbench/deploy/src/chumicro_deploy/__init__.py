@@ -19,6 +19,7 @@ details + deploy-mode preference into a single object that
 from .circuitpython_bootstrap import (
     build_circuitpython_bootstrap,
     build_circuitpython_bootstrap_scripts,
+    build_circuitpython_deploy_scripts,
 )
 from .circuitpython_transport import (
     CircuitpythonTransport,
@@ -85,6 +86,7 @@ __all__ = [
     "UnresolvedFirmwareError",
     "build_circuitpython_bootstrap",
     "build_circuitpython_bootstrap_scripts",
+    "build_circuitpython_deploy_scripts",
     "classify_deploy_failure",
     "find_circuitpy_drive",
     "flash_firmware",

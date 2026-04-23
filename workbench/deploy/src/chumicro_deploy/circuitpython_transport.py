@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Protocol, cast
 
 from . import flash_drive
+from .circuitpython_bootstrap import build_circuitpython_deploy_scripts
 from .protocol import (
     PROBE_IMPLEMENTATION_SCRIPT,
     DeviceImplementation,
@@ -648,28 +649,33 @@ class CircuitpythonTransport:
         on_file_staged: Callable[[str], None] | None = None,
         on_execute_line: Callable[[str], None] | None = None,
     ) -> str:
-        """Write *files* to the CIRCUITPY drive and execute *entrypoint*.
+        """Deploy *files* and execute *entrypoint* in the configured mode.
 
-        Flash mode only.  Writes every entry of *files* to the CIRCUITPY
-        USB drive (auto-detecting the mount path when not configured),
+        Flash mode writes every entry of *files* to the CIRCUITPY USB
+        drive (auto-detecting the mount path when not configured),
         flushes the volume, then execs the entrypoint through the
         persistent raw REPL.  Autoreload is disabled during writes so
         the board does not reset mid-deploy.
 
-        RAM-mode deploy is deliberately not implemented — it would
-        require a generalised module-injection path (the existing
-        test-harness-specific ``build_circuitpython_bootstrap`` is
-        tightly coupled to dotted-module-name sources and the test
-        runner).  Use ``deploy_mode="flash"`` for deploy-then-exec;
-        stick with ``stage()`` + ``execute_scripts()`` for the test-
-        harness RAM-mode flow.
+        RAM mode skips the filesystem entirely: every non-entrypoint
+        ``.py`` file is injected into ``sys.modules`` via the
+        class-as-module pattern (see
+        :func:`build_circuitpython_deploy_scripts`), then the
+        entrypoint runs as ``__main__``.  No CIRCUITPY drive is
+        required.  Non-``.py`` payload is silently skipped — callers
+        that need to ship assets must use flash mode.
 
         Args:
-            files: On-device-path -> bytes mapping.  The leading slash
-                is stripped before joining with the drive mount point.
+            files: On-device-path -> bytes mapping.  In flash mode the
+                leading slash is stripped before joining with the drive
+                mount point; in RAM mode the path is used to derive
+                the dotted module name (``/lib/foo/bar.py`` ->
+                ``foo.bar``).
             entrypoint: On-device path (must be a key of *files*).
             on_file_staged: Per-file callback invoked after each file
-                is written to the drive.
+                is written to the drive (flash mode) or before the
+                inline scripts run (RAM mode, in sorted-key order so
+                tests get a deterministic sequence).
             on_execute_line: Callback invoked once per line of captured
                 output (in order) after the entrypoint returns.
 
@@ -677,17 +683,10 @@ class CircuitpythonTransport:
             Combined stdout from the entrypoint execution.
 
         Raises:
-            CircuitpythonTransportError: If RAM mode is selected, the
-                port is not connected, the CIRCUITPY drive cannot be
-                located, or the entrypoint is not in *files*.
+            CircuitpythonTransportError: The port is not connected,
+                the entrypoint is missing from *files*, or (flash
+                mode) the CIRCUITPY drive cannot be located.
         """
-        if self.mode == "ram":
-            raise CircuitpythonTransportError(
-                "CircuitpythonTransport.deploy_files does not support "
-                "deploy_mode='ram' — use deploy_mode='flash' for "
-                "deploy-then-exec, or the test-harness stage/execute "
-                "flow for RAM-mode test runs."
-            )
         if self._port is None:
             raise CircuitpythonTransportError(
                 "connect() must be called before deploy_files()"
@@ -696,6 +695,14 @@ class CircuitpythonTransport:
             raise CircuitpythonTransportError(
                 f"entrypoint {entrypoint!r} missing from files "
                 f"({sorted(files.keys())!r})"
+            )
+
+        if self.mode == "ram":
+            return self._deploy_files_ram(
+                files,
+                entrypoint,
+                on_file_staged=on_file_staged,
+                on_execute_line=on_execute_line,
             )
 
         drive_path_string = self.circuitpy_drive_path or find_circuitpy_drive()
@@ -733,6 +740,48 @@ class CircuitpythonTransport:
         # Re-enter raw REPL so disconnect()'s cleanup (autoreload on,
         # soft-reboot, exit) has a live session to work from.
         self._enter_raw_repl()
+
+        if on_execute_line is not None:
+            for output_line in output.splitlines():
+                on_execute_line(output_line)
+        return output
+
+    def _deploy_files_ram(
+        self,
+        files: dict[str, bytes],
+        entrypoint: str,
+        *,
+        on_file_staged: Callable[[str], None] | None,
+        on_execute_line: Callable[[str], None] | None,
+    ) -> str:
+        """RAM-mode branch of :meth:`deploy_files`.
+
+        Uses :func:`build_circuitpython_deploy_scripts` to turn the
+        ``files`` dict into an ordered list of raw-REPL scripts
+        (helpers, stub registrations, module populations, entrypoint
+        exec) and runs them through :meth:`execute_scripts`, which
+        reuses the persistent raw-REPL session.  No CIRCUITPY drive
+        or soft-reboot is involved.
+
+        ``execute_scripts`` delegates to :meth:`execute`, which
+        guards against use without a prior :meth:`stage` call —
+        that contract is a test-harness invariant, not a deploy
+        one.  We set ``_staged_sources`` to an empty list here so
+        the guard is satisfied; disconnect clears it back to
+        ``None``.  The alternative (duplicating the raw-REPL send
+        loop) would drift from the test path every time
+        ``execute`` is touched.
+        """
+        if on_file_staged is not None:
+            for device_path in sorted(files):
+                on_file_staged(device_path)
+
+        script_budget_bytes = self.inline_script_budget_bytes()
+        deploy_scripts = build_circuitpython_deploy_scripts(
+            files, entrypoint, max_chunk_size_bytes=script_budget_bytes,
+        )
+        self._staged_sources = []
+        output = self.execute_scripts(deploy_scripts)
 
         if on_execute_line is not None:
             for output_line in output.splitlines():

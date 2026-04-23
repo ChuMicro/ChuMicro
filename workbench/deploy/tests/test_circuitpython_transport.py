@@ -1538,10 +1538,81 @@ class TestDeployFiles:
         transport.connect()
         return transport, port
 
-    def test_ram_mode_raises_unsupported(self, tmp_path: Path) -> None:
+    def test_ram_mode_deploys_inline(self, tmp_path: Path) -> None:
+        """RAM mode inlines the files via raw REPL and execs __main__.
+
+        Read sequence (FakeSerialPort returns these in order):
+
+        - ``_RAW_REPL_PROMPT`` for the initial ``connect()``.
+        - ``OK<free_memory>\\x04\\x04>`` for
+          ``inline_script_budget_bytes`` -> ``probe_free_memory``.
+        - One OK per bootstrap chunk (4 chunks: helpers, stubs,
+          populations, final).  The final chunk returns the
+          entrypoint's stdout.
+        - One OK per gc.collect interstitial between chunks (3).
+        """
+        probe_response = b"OK65536\r\n\x04\x04>"
+        final_chunk_response = b"OKinline-main\r\n\x04\x04>"
+        # execute() loop: chunk, (gc), chunk, (gc), chunk, (gc), chunk.
+        # The last chunk has no trailing gc.collect.
+        chunk_and_gc_pairs = [
+            _OK_RESPONSE,  # chunk 1 (helpers)
+            _OK_RESPONSE,  # gc.collect after chunk 1
+            _OK_RESPONSE,  # chunk 2 (stub registrations)
+            _OK_RESPONSE,  # gc.collect after chunk 2
+            _OK_RESPONSE,  # chunk 3 (populations)
+            _OK_RESPONSE,  # gc.collect after chunk 3
+            final_chunk_response,  # chunk 4 (final entrypoint exec)
+        ]
+        port = FakeSerialPort(
+            read_responses=[
+                _RAW_REPL_PROMPT,
+                probe_response,
+                *chunk_and_gc_pairs,
+            ],
+        )
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            mode="ram",
+            serial_port_factory=lambda **_kwargs: port,
+            time=FakeTime(),
+        )
+        transport.connect()
+
+        staged: list[str] = []
+        lines: list[str] = []
+        output = transport.deploy_files(
+            {
+                "/code.py": b"print('inline-main')\n",
+                "/lib/helper.py": b"CONSTANT = 42\n",
+            },
+            "/code.py",
+            on_file_staged=staged.append,
+            on_execute_line=lines.append,
+        )
+
+        assert "inline-main" in output
+        # Sorted order: /code.py before /lib/helper.py.
+        assert staged == ["/code.py", "/lib/helper.py"]
+        assert lines == list(output.splitlines())
+        # The raw REPL traffic should include a populate-block for
+        # the helper module and an exec() of the entrypoint.
+        combined_writes = b"".join(port.writes).decode("utf-8", errors="replace")
+        assert "_register_stub('helper')" in combined_writes
+        assert "_populate_module" in combined_writes
+        assert "'__main__'" in combined_writes
+
+    def test_ram_mode_requires_entrypoint_in_files(
+        self, tmp_path: Path,
+    ) -> None:
         transport, _ = self._connect(mode="ram", drive_path=str(tmp_path))
-        with pytest.raises(CircuitpythonTransportError, match="does not support"):
-            transport.deploy_files({"/code.py": b"pass"}, "/code.py")
+        with pytest.raises(
+            CircuitpythonTransportError,
+            match="missing from files",
+        ):
+            transport.deploy_files(
+                {"/code.py": b"pass"}, "/boot.py",
+            )
 
     @staticmethod
     def _boot_output(user_text: bytes) -> bytes:

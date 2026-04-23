@@ -128,6 +128,16 @@ _CONFIGURATION_PATTERNS = (
     "does not support deploy_mode",
 )
 
+#: Signature of a Python traceback embedded in an error message.
+#: On CircuitPython RAM mode the raw REPL raises
+#: ``CircuitpythonTransportError`` with the board's stderr inline —
+#: including ``Traceback (most recent call last):``.  Detecting that
+#: substring lets the classifier route user-code errors to
+#: :attr:`DeployFailureKind.TRACEBACK_RETURNED` (non-retryable, "fix
+#: source") regardless of whether they surface as an exception (CP
+#: RAM) or a :class:`DeployResult` (MP mount, CP flash).
+_TRACEBACK_IN_MESSAGE_PATTERN = "traceback (most recent call last)"
+
 
 def classify_deploy_failure(error: Exception) -> DeployFailureKind:
     """Map a deploy-path exception to a :class:`DeployFailureKind`.
@@ -161,6 +171,13 @@ def classify_deploy_failure(error: Exception) -> DeployFailureKind:
     for pattern in _CONFIGURATION_PATTERNS:
         if pattern in message:
             return DeployFailureKind.CONFIGURATION_ERROR
+    # An embedded Python traceback is a user-code failure no matter
+    # which wrapper exception carries it.  Route to TRACEBACK_RETURNED
+    # before the broader bootstrap / flash-copy buckets so CP RAM mode
+    # (which raises with the traceback inline) lands alongside CP
+    # flash + MP (which return a DeployResult with a traceback field).
+    if _TRACEBACK_IN_MESSAGE_PATTERN in message:
+        return DeployFailureKind.TRACEBACK_RETURNED
     for pattern in _PORT_UNAVAILABLE_PATTERNS:
         if pattern in message:
             return DeployFailureKind.PORT_UNAVAILABLE

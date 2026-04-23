@@ -7,10 +7,12 @@ from pathlib import Path
 import pytest
 from chumicro_deploy.circuitpython_bootstrap import (
     CircuitpythonBootstrapTooLargeError,
+    _derive_module_name,
     _escape_source,
     _prepare_inline_source,
     build_circuitpython_bootstrap,
     build_circuitpython_bootstrap_scripts,
+    build_circuitpython_deploy_scripts,
 )
 
 
@@ -293,6 +295,131 @@ class TestBuildCircuitpythonBootstrap:
 
         compile(result, "<bootstrap>", "exec")
         assert repr("class OnlyDoc:\n    pass") in result
+
+
+class TestBuildCircuitpythonDeployScripts:
+    """Tests for build_circuitpython_deploy_scripts — RAM-mode deploy."""
+
+    def test_single_file_entrypoint(self) -> None:
+        """A one-file deploy produces helpers + empty stubs + final exec."""
+        scripts = build_circuitpython_deploy_scripts(
+            {"/code.py": b"print('hi')\n"},
+            entrypoint="/code.py",
+        )
+        # Helpers are always the first chunk; entrypoint is always last.
+        assert "def _register_stub(" in scripts[0]
+        assert "_retry_deferred()" in scripts[-1]
+        assert "'__main__'" in scripts[-1]
+        # With no lib modules the entrypoint source is the one thing
+        # that has to survive.  Round-trip through repr/eval to assert.
+        joined = "\n".join(scripts)
+        assert "print('hi')" in joined
+
+    def test_lib_modules_are_injected(self) -> None:
+        """Files under /lib/ become importable via sys.modules."""
+        scripts = build_circuitpython_deploy_scripts(
+            {
+                "/code.py": b"from helper import CONSTANT\nprint(CONSTANT)\n",
+                "/lib/helper.py": b"CONSTANT = 42\n",
+                "/lib/pkg/__init__.py": b"VALUE = 'pkg'\n",
+                "/lib/pkg/sub.py": b"from pkg import VALUE\n",
+            },
+            entrypoint="/code.py",
+        )
+        joined = "\n".join(scripts)
+        assert "_register_stub('helper')" in joined
+        assert "_register_stub('pkg')" in joined
+        assert "_register_stub('pkg.sub')" in joined
+        # Entrypoint must not appear as a registered module.
+        assert "_register_stub('code')" not in joined
+
+    def test_non_python_files_are_skipped(self) -> None:
+        """Assets (.toml, .json) are not importable — silently skipped."""
+        scripts = build_circuitpython_deploy_scripts(
+            {
+                "/code.py": b"print('ok')\n",
+                "/settings.toml": b"[wifi]\nssid = 'net'\n",
+                "/data/payload.json": b'{"x": 1}\n',
+            },
+            entrypoint="/code.py",
+        )
+        joined = "\n".join(scripts)
+        assert "settings" not in joined
+        assert "payload" not in joined
+        assert "print('ok')" in joined
+
+    def test_decodes_bytes_payload(self) -> None:
+        """Both bytes and str inputs round-trip through the builder."""
+        scripts = build_circuitpython_deploy_scripts(
+            {
+                "/code.py": "print('str')\n",  # type: ignore[dict-item]
+                "/lib/a.py": b"A = 1\n",
+            },
+            entrypoint="/code.py",
+        )
+        joined = "\n".join(scripts)
+        assert "print('str')" in joined
+        assert "_register_stub('a')" in joined
+
+    def test_missing_entrypoint_raises(self) -> None:
+        with pytest.raises(ValueError, match="missing from files"):
+            build_circuitpython_deploy_scripts(
+                {"/code.py": b"pass"}, entrypoint="/boot.py",
+            )
+
+    def test_zero_budget_raises(self) -> None:
+        with pytest.raises(ValueError, match="max_chunk_size_bytes"):
+            build_circuitpython_deploy_scripts(
+                {"/code.py": b"pass"},
+                entrypoint="/code.py",
+                max_chunk_size_bytes=0,
+            )
+
+    def test_too_large_entrypoint_raises(self) -> None:
+        giant_source = "x = " + ("'x' * 100\n" * 200)
+        with pytest.raises(CircuitpythonBootstrapTooLargeError):
+            build_circuitpython_deploy_scripts(
+                {"/code.py": giant_source.encode()},
+                entrypoint="/code.py",
+                max_chunk_size_bytes=256,
+            )
+
+    def test_generated_scripts_compile(self) -> None:
+        """Every returned script must be syntactically valid Python."""
+        scripts = build_circuitpython_deploy_scripts(
+            {
+                "/code.py": b"from helper import CONSTANT\nprint(CONSTANT)\n",
+                "/lib/helper.py": b"CONSTANT = 42\n",
+            },
+            entrypoint="/code.py",
+        )
+        for script in scripts:
+            compile(script, "<deploy-bootstrap>", "exec")
+
+
+class TestDeriveModuleName:
+    """Tests for _derive_module_name helper."""
+
+    @pytest.mark.parametrize(
+        ("device_path", "expected"),
+        [
+            ("/lib/foo.py", "foo"),
+            ("/lib/foo/__init__.py", "foo"),
+            ("/lib/foo/bar.py", "foo.bar"),
+            ("/lib/foo/bar/baz.py", "foo.bar.baz"),
+            ("/foo.py", "foo"),
+            ("foo.py", "foo"),  # already-relative paths also accepted
+            ("/settings.toml", None),
+            ("/data.json", None),
+            ("/", None),
+            ("/lib/", None),
+            ("/lib/foo.txt", None),
+        ],
+    )
+    def test_derivations(
+        self, device_path: str, expected: str | None,
+    ) -> None:
+        assert _derive_module_name(device_path) == expected
 
 
 class TestEscapeSource:

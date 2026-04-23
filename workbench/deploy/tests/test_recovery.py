@@ -155,6 +155,39 @@ def test_classify_is_case_insensitive() -> None:
     )
 
 
+def test_classify_traceback_in_message_routes_to_traceback_returned() -> None:
+    # CP RAM mode raises CircuitpythonTransportError with the board's
+    # stderr inline — including a Python traceback.  The classifier
+    # routes those to TRACEBACK_RETURNED (non-retryable, source-bug)
+    # instead of BOOTSTRAP_EXEC_FAILED so the user gets the same
+    # coaching as MP + CP flash paths for the same underlying cause.
+    error = CircuitpythonTransportError(
+        "CircuitPython inline bootstrap chunk 2/2 failed: "
+        "CircuitPython reported an error:\n"
+        "Traceback (most recent call last):\n"
+        '  File "<stdin>", line 2, in <module>\n'
+        "ZeroDivisionError: division by zero"
+    )
+    assert (
+        classify_deploy_failure(error)
+        is DeployFailureKind.TRACEBACK_RETURNED
+    )
+
+
+def test_classify_traceback_routing_beats_bootstrap_substring() -> None:
+    # Message contains BOTH "inline bootstrap chunk" (→ BOOTSTRAP_EXEC)
+    # and a Python traceback.  Traceback wins — the user-visible issue
+    # is source code, not a transport hiccup.
+    error = CircuitpythonTransportError(
+        "CircuitPython inline bootstrap chunk 4/4 failed: "
+        "Traceback (most recent call last):\n  ImportError: no mod"
+    )
+    assert (
+        classify_deploy_failure(error)
+        is DeployFailureKind.TRACEBACK_RETURNED
+    )
+
+
 def test_classify_configuration_wins_over_drive_missing() -> None:
     # A config-style message that also says "CIRCUITPY drive not found"
     # should still land in CONFIGURATION — configuration errors are

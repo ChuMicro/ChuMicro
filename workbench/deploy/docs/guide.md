@@ -71,9 +71,9 @@ Validation runs in `__post_init__`:
 | Runtime | `"ram"` | `"flash"` |
 |---|---|---|
 | MicroPython | mpremote `mount` — stages host dir, mounts at `/remote` on device, runs from the mount | mpremote `copy` — copies to device flash, then execs |
-| CircuitPython | inline raw-REPL exec (used by the test harness; **not** supported by `Deployer.deploy()` today) | write to CIRCUITPY drive, soft-reboot, capture output |
+| CircuitPython | inline raw-REPL exec — every `.py` in *files* is injected into `sys.modules` via the class-as-module pattern, then the entrypoint runs as `__main__` | write to CIRCUITPY drive, soft-reboot, capture output |
 
-`Deployer.deploy()` on CircuitPython currently requires `deploy_mode="flash"`. A RAM-mode deploy for CP would need on-the-fly module injection, which is deliberately deferred — use flash mode or the lower-level `stage()` / `execute()` flow until that lands.
+`Deployer.deploy()` supports both modes on both runtimes. CP RAM mode does not require a mounted CIRCUITPY drive — it deploys purely over the serial raw REPL, which makes it the fastest option for a dev loop where the board is reachable over USB but you do not want to wait for the flash round-trip. The tradeoff is that RAM mode cannot ship non-`.py` assets (TOML config, JSON data, images) because it has no device filesystem to write to — use flash mode if the payload needs those.
 
 ## Pick a `FileSource`
 
