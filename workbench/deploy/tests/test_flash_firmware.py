@@ -1,0 +1,497 @@
+"""Tests for flash_firmware and its helpers."""
+
+from __future__ import annotations
+
+import io
+import subprocess
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+import pytest
+from chumicro_deploy import Device, FlashFirmwareError, flash_firmware
+from chumicro_deploy.firmware import (
+    _copy_uf2_to_drive,
+    _download_firmware,
+    _enter_uf2_bootloader_programmatic,
+    _flash_firmware_esptool,
+    _flash_firmware_uf2,
+    _prompt_manual_bootloader_entry,
+    _scan_for_uf2_drive,
+    _uf2_mount_candidates,
+    _wait_for_drive_gone,
+    _wait_for_uf2_drive,
+)
+
+
+class _FakeUrlResponse:
+    """Minimal urlopen return fake — supports read(chunk), getheader, close."""
+
+    def __init__(self, payload: bytes, *, content_length: bool = True) -> None:
+        self._stream = io.BytesIO(payload)
+        self._content_length = str(len(payload)) if content_length else None
+        self.closed = False
+
+    def read(self, size: int = -1) -> bytes:
+        return self._stream.read(size)
+
+    def getheader(self, name: str, default: str | None = None) -> str | None:
+        if name.lower() == "content-length":
+            return self._content_length
+        return default
+
+    def close(self) -> None:
+        self.closed = True
+
+
+@dataclass
+class _FakeClock:
+    """Monotonic that advances on demand; sleep advances it."""
+
+    now: float = 0.0
+
+    def monotonic(self) -> float:
+        return self.now
+
+    def sleep(self, seconds: float) -> None:
+        self.now += seconds
+
+
+class TestDownloadFirmware:
+    def test_writes_payload_to_destination(self, tmp_path: Path) -> None:
+        destination = tmp_path / "fw.uf2"
+
+        def fake_urlopen(url: str) -> _FakeUrlResponse:
+            assert url == "https://example/fw.uf2"
+            return _FakeUrlResponse(b"ABC" * 100)
+
+        _download_firmware(
+            "https://example/fw.uf2", destination, urlopen=fake_urlopen
+        )
+        assert destination.read_bytes() == b"ABC" * 100
+
+    def test_creates_parent_dirs(self, tmp_path: Path) -> None:
+        destination = tmp_path / "nested" / "dir" / "fw.uf2"
+
+        def fake_urlopen(_url: str) -> _FakeUrlResponse:
+            return _FakeUrlResponse(b"payload")
+
+        _download_firmware(
+            "url", destination, urlopen=fake_urlopen
+        )
+        assert destination.read_bytes() == b"payload"
+
+    def test_progress_reported_with_content_length(self, tmp_path: Path) -> None:
+        # Payload larger than the 64 KiB chunk size so multiple progress
+        # events fire.
+        payload = b"x" * (64 * 1024 * 3)
+        destination = tmp_path / "fw.uf2"
+
+        def fake_urlopen(_url: str) -> _FakeUrlResponse:
+            return _FakeUrlResponse(payload)
+
+        events: list[tuple[float, str]] = []
+
+        def record(fraction: float, message: str) -> None:
+            events.append((fraction, message))
+
+        _download_firmware(
+            "url", destination, on_progress=record, urlopen=fake_urlopen,
+        )
+        assert events[0] == (0.0, "downloading url")
+        assert events[-1] == (1.0, "download complete")
+        mid_events = events[1:-1]
+        assert mid_events, "expected incremental progress events"
+        assert 0.0 < mid_events[-1][0] <= 1.0
+
+    def test_url_error_wraps_with_recovery_hint(self, tmp_path: Path) -> None:
+        from urllib.error import URLError
+
+        def fake_urlopen(_url: str) -> _FakeUrlResponse:
+            raise URLError("dns fail")
+
+        with pytest.raises(FlashFirmwareError, match="Check the URL"):
+            _download_firmware(
+                "url", tmp_path / "fw.uf2", urlopen=fake_urlopen,
+            )
+
+
+class TestUf2DriveDetection:
+    def test_scan_finds_drive_with_info_marker(self, tmp_path: Path) -> None:
+        drive = tmp_path / "RPI-RP2"
+        drive.mkdir()
+        (drive / "INFO_UF2.TXT").write_text("UF2 Bootloader\r\n")
+        other = tmp_path / "Other"
+        other.mkdir()
+        found = _scan_for_uf2_drive([tmp_path])
+        assert found == drive
+
+    def test_scan_skips_non_uf2_directories(self, tmp_path: Path) -> None:
+        (tmp_path / "A").mkdir()
+        (tmp_path / "B").mkdir()
+        assert _scan_for_uf2_drive([tmp_path]) is None
+
+    def test_scan_ignores_files(self, tmp_path: Path) -> None:
+        (tmp_path / "loose.txt").write_text("not a drive")
+        assert _scan_for_uf2_drive([tmp_path]) is None
+
+    def test_scan_tolerates_missing_search_root(self, tmp_path: Path) -> None:
+        assert _scan_for_uf2_drive([tmp_path / "missing"]) is None
+
+    def test_wait_for_drive_polls(self, tmp_path: Path) -> None:
+        clock = _FakeClock()
+        drive = tmp_path / "RPI-RP2"
+
+        # Create the drive after two poll intervals so we exercise
+        # the retry branch.
+        def sleep_that_creates(_seconds: float) -> None:
+            clock.now += _seconds
+            if clock.now >= 1.0 and not drive.exists():
+                drive.mkdir()
+                (drive / "INFO_UF2.TXT").write_text("marker")
+
+        found = _wait_for_uf2_drive(
+            [tmp_path],
+            sleep=sleep_that_creates,
+            monotonic=clock.monotonic,
+        )
+        assert found == drive
+
+    def test_wait_for_drive_times_out(self, tmp_path: Path) -> None:
+        clock = _FakeClock()
+        found = _wait_for_uf2_drive(
+            [tmp_path],
+            timeout=0.2,
+            sleep=clock.sleep,
+            monotonic=clock.monotonic,
+        )
+        assert found is None
+
+    def test_wait_for_drive_gone_detects_unmount(self, tmp_path: Path) -> None:
+        clock = _FakeClock()
+        drive = tmp_path / "RPI-RP2"
+        drive.mkdir()
+        (drive / "INFO_UF2.TXT").write_text("marker")
+
+        def sleep_that_removes(_seconds: float) -> None:
+            clock.now += _seconds
+            if clock.now >= 1.0 and (drive / "INFO_UF2.TXT").exists():
+                (drive / "INFO_UF2.TXT").unlink()
+
+        assert _wait_for_drive_gone(
+            drive,
+            timeout=5.0,
+            sleep=sleep_that_removes,
+            monotonic=clock.monotonic,
+        ) is True
+
+    def test_wait_for_drive_gone_times_out(self, tmp_path: Path) -> None:
+        clock = _FakeClock()
+        drive = tmp_path / "RPI-RP2"
+        drive.mkdir()
+        (drive / "INFO_UF2.TXT").write_text("marker")
+        assert _wait_for_drive_gone(
+            drive, timeout=0.2, sleep=clock.sleep, monotonic=clock.monotonic,
+        ) is False
+
+
+class TestUf2MountCandidates:
+    def test_uses_explicit_paths_when_provided(self, tmp_path: Path) -> None:
+        assert _uf2_mount_candidates([tmp_path]) == [tmp_path]
+
+    def test_platform_defaults_returns_a_list(self) -> None:
+        result = _uf2_mount_candidates()
+        assert isinstance(result, list)
+
+
+class TestCopyUf2:
+    def test_copies_and_reports_progress(self, tmp_path: Path) -> None:
+        firmware = tmp_path / "firmware.uf2"
+        firmware.write_bytes(b"UF2 bytes")
+        drive = tmp_path / "RPI-RP2"
+        drive.mkdir()
+
+        events: list[tuple[float, str]] = []
+
+        def record(fraction: float, message: str) -> None:
+            events.append((fraction, message))
+
+        _copy_uf2_to_drive(firmware, drive, on_progress=record)
+
+        assert (drive / "firmware.uf2").read_bytes() == b"UF2 bytes"
+        assert events[0][0] == 0.0
+        assert events[-1][0] == 1.0
+
+    def test_copy_failure_wraps_with_recovery_hint(self, tmp_path: Path) -> None:
+        firmware = tmp_path / "firmware.uf2"
+        firmware.write_bytes(b"x")
+        # Drive target that exists as a file, so shutil.copy fails.
+        fake_drive = tmp_path / "drive_file"
+        fake_drive.write_text("not a dir")
+        with pytest.raises(FlashFirmwareError, match="bootloader mode"):
+            _copy_uf2_to_drive(firmware, fake_drive / "firmware.uf2")
+
+
+class TestBootloaderEntry:
+    def test_unsupported_runtime_returns_false(self) -> None:
+        class DeviceWithFakeRuntime(Device):
+            def __init__(self) -> None:
+                # Bypass __post_init__ validation; set transport to an
+                # unknown string without raising.
+                object.__setattr__(self, "transport", "zephyr")
+                object.__setattr__(self, "address", "/dev/x")
+                object.__setattr__(self, "baudrate", 115200)
+                object.__setattr__(self, "deploy_mode", "ram")
+                object.__setattr__(self, "circuitpy_drive_path", None)
+                object.__setattr__(self, "entrypoint_name", None)
+                object.__setattr__(self, "resource_prefix", "/lib")
+
+        assert _enter_uf2_bootloader_programmatic(DeviceWithFakeRuntime()) is False
+
+    def test_programmatic_entry_uses_transport_execute(self) -> None:
+        calls: list[tuple[str, tuple]] = []
+
+        class FakeTransport:
+            mode = "ram"
+
+            def connect(self) -> None:
+                calls.append(("connect", ()))
+
+            def execute(self, script: str) -> str:
+                calls.append(("execute", (script,)))
+                return ""
+
+            def disconnect(self) -> None:
+                calls.append(("disconnect", ()))
+
+            def stage(self, *args: Any, **kwargs: Any) -> None:
+                pass
+
+            def soft_reset(self) -> None:
+                pass
+
+            def reset(self) -> None:
+                pass
+
+            def recover(self) -> None:
+                pass
+
+            def probe_implementation(self) -> None:
+                return None
+
+            def deploy_files(self, *args: Any, **kwargs: Any) -> str:
+                return ""
+
+        class DeviceForTest(Device):
+            def create_transport(self):  # type: ignore[override]
+                return FakeTransport()
+
+        device = DeviceForTest(transport="circuitpython", address="/dev/x")
+        assert _enter_uf2_bootloader_programmatic(device) is True
+        method_order = [call[0] for call in calls]
+        assert method_order == ["connect", "execute", "disconnect"]
+        assert "microcontroller.RunMode.BOOTLOADER" in calls[1][1][0]
+
+
+class TestManualBootloaderPrompt:
+    def test_prompt_message_names_address(self) -> None:
+        captured: list[str] = []
+
+        def fake_prompt(message: str) -> str:
+            captured.append(message)
+            return ""
+
+        device = Device(transport="circuitpython", address="/dev/my-fancy-port")
+        _prompt_manual_bootloader_entry(device, prompt=fake_prompt)
+
+        assert "my-fancy-port" in captured[0]
+        assert "bootloader" in captured[0].lower()
+
+
+class TestEsptoolPath:
+    def test_missing_esptool_raises_with_install_hint(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    ) -> None:
+        monkeypatch.setattr("shutil.which", lambda _name: None)
+        device = Device(transport="micropython", address="/dev/ttyUSB0")
+        firmware = tmp_path / "fw.bin"
+        firmware.write_bytes(b"x")
+        with pytest.raises(FlashFirmwareError, match="Install it with"):
+            _flash_firmware_esptool(firmware, device, on_progress=None)
+
+    def test_successful_invocation(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    ) -> None:
+        monkeypatch.setattr(
+            "shutil.which",
+            lambda name: "/fake/esptool" if name == "esptool" else None,
+        )
+
+        runner_calls: list[list[str]] = []
+
+        def fake_runner(command, **_kwargs):  # noqa: ANN001
+            runner_calls.append(list(command))
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        device = Device(transport="micropython", address="/dev/ttyUSB0")
+        firmware = tmp_path / "fw.bin"
+        firmware.write_bytes(b"x")
+        _flash_firmware_esptool(firmware, device, on_progress=None, runner=fake_runner)
+
+        assert len(runner_calls) == 1
+        assert runner_calls[0][0] == "/fake/esptool"
+        assert "--port" in runner_calls[0]
+        assert "/dev/ttyUSB0" in runner_calls[0]
+        assert "write_flash" in runner_calls[0]
+
+    def test_nonzero_exit_wraps_with_recovery_hint(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    ) -> None:
+        monkeypatch.setattr(
+            "shutil.which",
+            lambda name: "/fake/esptool" if name == "esptool" else None,
+        )
+
+        def fake_runner(command, **_kwargs):  # noqa: ANN001
+            return subprocess.CompletedProcess(
+                command, 1, "", "bootloader not found",
+            )
+
+        device = Device(transport="micropython", address="/dev/ttyUSB0")
+        firmware = tmp_path / "fw.bin"
+        firmware.write_bytes(b"x")
+        with pytest.raises(FlashFirmwareError, match="GPIO0"):
+            _flash_firmware_esptool(firmware, device, on_progress=None, runner=fake_runner)
+
+
+class TestFlashFirmware:
+    def test_unknown_method_rejects(self) -> None:
+        device = Device(transport="micropython", address="/dev/x")
+        with pytest.raises(ValueError, match="Unsupported reflash_method"):
+            flash_firmware("https://ex/fw.uf2", device, reflash_method="dfu")
+
+
+class TestFlashFirmwareUf2End2End:
+    def test_happy_path_with_explicit_drive(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Integration-style: download → copy → reboot (all faked)."""
+        firmware_path = tmp_path / "fw.uf2"
+        firmware_path.write_bytes(b"UF2 MAGIC")
+
+        drive = tmp_path / "RPI-RP2"
+        drive.mkdir()
+        (drive / "INFO_UF2.TXT").write_text("marker")
+
+        class DeviceForTest(Device):
+            def create_transport(self):  # type: ignore[override]
+                class NeverUsedTransport:
+                    mode = "ram"
+
+                    def connect(self):
+                        return
+
+                    def execute(self, script):
+                        return ""
+
+                    def disconnect(self):
+                        return
+
+                    def stage(self, *args, **kwargs):
+                        return
+
+                    def soft_reset(self):
+                        return
+
+                    def reset(self):
+                        return
+
+                    def recover(self):
+                        return
+
+                    def probe_implementation(self):
+                        return None
+
+                    def deploy_files(self, *args, **kwargs):
+                        return ""
+
+                return NeverUsedTransport()
+
+        device = DeviceForTest(transport="circuitpython", address="/dev/x")
+
+        clock = _FakeClock()
+
+        def sleep_marking(_seconds: float) -> None:
+            clock.sleep(_seconds)
+            # Simulate the drive disappearing after reboot.
+            info = drive / "INFO_UF2.TXT"
+            if clock.now > 1.0 and info.exists():
+                info.unlink()
+
+        _flash_firmware_uf2(
+            firmware_path,
+            device,
+            bootloader_drive_path=drive,
+            interactive=False,
+            on_progress=None,
+            sleep=sleep_marking,
+            monotonic=clock.monotonic,
+        )
+
+        assert (drive / "fw.uf2").read_bytes() == b"UF2 MAGIC"
+
+    def test_drive_never_appears_raises_with_recovery_hint(
+        self, tmp_path: Path,
+    ) -> None:
+        firmware_path = tmp_path / "fw.uf2"
+        firmware_path.write_bytes(b"x")
+
+        class DeviceForTest(Device):
+            def create_transport(self):  # type: ignore[override]
+                class FailConnectTransport:
+                    mode = "ram"
+
+                    def connect(self):
+                        raise RuntimeError("no serial")
+
+                    def execute(self, script):
+                        return ""
+
+                    def disconnect(self):
+                        return
+
+                    def stage(self, *args, **kwargs):
+                        return
+
+                    def soft_reset(self):
+                        return
+
+                    def reset(self):
+                        return
+
+                    def recover(self):
+                        return
+
+                    def probe_implementation(self):
+                        return None
+
+                    def deploy_files(self, *args, **kwargs):
+                        return ""
+
+                return FailConnectTransport()
+
+        device = DeviceForTest(transport="circuitpython", address="/dev/x")
+        empty_parent = tmp_path / "empty"
+        empty_parent.mkdir()
+        clock = _FakeClock()
+        with pytest.raises(FlashFirmwareError, match="INFO_UF2"):
+            _flash_firmware_uf2(
+                firmware_path,
+                device,
+                bootloader_drive_path=None,
+                interactive=False,
+                on_progress=None,
+                search_paths=[empty_parent],
+                sleep=clock.sleep,
+                monotonic=clock.monotonic,
+            )

@@ -30,7 +30,9 @@ from .deployer import Deployer
 from .device import Device
 from .firmware import (
     CIRCUITPYTHON_FIRMWARE_URL_TEMPLATE,
+    FlashFirmwareError,
     UnresolvedFirmwareError,
+    flash_firmware,
     resolve_firmware_url,
 )
 from .micropython_transport import MicropythonTransport
@@ -64,6 +66,7 @@ __all__ = [
     "FakeTransport",
     "FileMapSource",
     "FileSource",
+    "FlashFirmwareError",
     "ImportGraphSource",
     "MicropythonTransport",
     "SerialPort",
@@ -72,6 +75,7 @@ __all__ = [
     "build_circuitpython_bootstrap",
     "build_circuitpython_bootstrap_scripts",
     "find_circuitpy_drive",
+    "flash_firmware",
     "probe_device",
     "resolve_firmware_url",
 ]
