@@ -645,6 +645,7 @@ def _flash_firmware_esptool(
     *,
     on_progress: Callable[[float, str], None] | None,
     erase_flash: bool = False,
+    flash_offset: str = "0x0",
     runner: Callable[..., subprocess.CompletedProcess] = subprocess.run,
 ) -> None:
     """Shell out to ``esptool`` to write *firmware_path* to *device*.
@@ -752,7 +753,7 @@ def _flash_firmware_esptool(
             esptool_binary,
             "--port", device.address,
             "--baud", "460800",
-            "write-flash", "0x0", str(firmware_path),
+            "write-flash", flash_offset, str(firmware_path),
         ],
         step_name="write-flash",
     )
@@ -767,6 +768,7 @@ def flash_firmware(
     bootloader_drive_path: Path | None = None,
     interactive: bool = True,
     erase_flash: bool = False,
+    flash_offset: str = "0x0",
     on_progress: Callable[[float, str], None] | None = None,
 ) -> None:
     """Download *url* and flash it onto *device*.
@@ -821,6 +823,23 @@ def flash_firmware(
             Recommended for first-install and recovery workflows;
             default ``False`` preserves user data on ordinary
             upgrades.
+        flash_offset: esptool path only.  Address to ``write-flash``
+            at.  Different firmware sources use different layouts:
+
+              - CircuitPython combined ``.bin`` (Adafruit's
+                ``adafruit-circuitpython-<board>-<lang>-<ver>.bin``)
+                → ``"0x0"`` (the default).
+              - MicroPython ESP32 / S2 / S3 ``.bin`` (separate
+                bootloader + partition table + app layout) →
+                ``"0x1000"``.
+
+            Using the wrong offset for a MicroPython build writes
+            the application image over the bootloader region,
+            leaving an unbootable chip that needs a manual BOOT +
+            RESET hold and a re-flash.  The flasher cannot
+            auto-detect reliably because ``.bin`` files from both
+            ecosystems share the extension; callers supply the
+            offset explicitly.
         on_progress: Optional ``(fraction, message)`` callback.
 
     Raises:
@@ -875,5 +894,6 @@ def flash_firmware(
                 local_firmware,
                 bootloader_device,
                 erase_flash=erase_flash,
+                flash_offset=flash_offset,
                 on_progress=on_progress,
             )

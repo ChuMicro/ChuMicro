@@ -352,6 +352,35 @@ class TestEsptoolPath:
         assert "--port" in runner_calls[0]
         assert "/dev/ttyUSB0" in runner_calls[0]
         assert "write-flash" in runner_calls[0]
+        # Default offset is 0x0; the offset slot is the argv
+        # position immediately after ``write-flash``.
+        assert runner_calls[0][runner_calls[0].index("write-flash") + 1] == "0x0"
+
+    def test_custom_flash_offset_is_passed_to_esptool(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    ) -> None:
+        """MicroPython ESP32 .bin needs 0x1000 — custom offset must round-trip."""
+        monkeypatch.setattr(
+            "shutil.which",
+            lambda name: "/fake/esptool" if name == "esptool" else None,
+        )
+
+        captured: list[list[str]] = []
+
+        def fake_runner(command, **_kwargs):  # noqa: ANN001
+            captured.append(list(command))
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        device = Device(transport="micropython", address="/dev/ttyUSB0")
+        firmware = tmp_path / "fw.bin"
+        firmware.write_bytes(b"x")
+        _flash_firmware_esptool(
+            firmware, device, on_progress=None,
+            flash_offset="0x1000", runner=fake_runner,
+        )
+
+        assert len(captured) == 1
+        assert captured[0][captured[0].index("write-flash") + 1] == "0x1000"
 
     def test_erase_flash_uses_two_invocations_with_no_reset_on_erase(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
