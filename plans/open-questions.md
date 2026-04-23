@@ -39,34 +39,6 @@ executes:
 Related: Decision 0028, Decision 0029, `plans/workstreams/project-workspace.md`.
 
 
-### Lolin S2 CP flash deploys occasionally surface `OSError: [Errno 5]`
-
-After fixing the `devices.yml` drive-path swap (`CircuitpythonTransport`
-now auto-detects mismatches via `boot_out.txt` + probe-machine match and
-rewrites the target drive with a `WARNING`), the Lolin S2 still
-intermittently surfaces `OSError: [Errno 5] Input/output error` from
-the board itself mid-deploy when several flash deploys run back-to-back.
-Pi Pico W never exhibits this on the same run.  Symptoms: `code.py`
-runs after the soft-reboot but CP's own filesystem layer raises EIO
-while loading/running it, so the returned `execute_output` is just that
-error string instead of the intended deploy output.
-
-Likely root cause: ESP32-S2 USB-CDC + FAT32 settle timing — the host's
-writes haven't been fully absorbed by the device's MSC layer before
-`deploy_files()` issues `Ctrl-B` + `Ctrl-D` for the soft-reboot.  The
-current `flash_drive.FLUSH_SETTLE_DELAY` is 0.5 s (plenty for the Pi
-Pico W); the S2 needs a longer window, or a transport-level per-board
-override, or a retry on EIO.
-
-Reproduces via the `demo_recovery_hand_holding.py` "all / 1,2" path —
-roughly 1-in-3 runs fail on the Lolin S2 traceback scenario with the
-drive-verification fix in place.  Low priority for now: the primary
-(drive-swap) bug is fixed, and the remaining intermittency does not
-affect boards the team uses day-to-day outside this demo.
-
-Related: [circuitpython_transport.py](workbench/deploy/src/chumicro_deploy/circuitpython_transport.py),
-[flash_drive.py](workbench/deploy/src/chumicro_deploy/flash_drive.py).
-
 ### Is ESP32 NVS worth a dedicated backend?
 
 The settings library design (next-up.md) defers an NVS backend because NVS
@@ -264,3 +236,18 @@ using the command in their default workflow.
 
 Resolved by Decision 0025: dual thresholds — 85 % baseline for humans
 (in `pyproject.toml`), 94 % for agents (via `--coverage-threshold 94`).
+
+### Lolin S2 CP flash deploys occasionally surface `OSError: [Errno 5]`
+
+Resolved by [`75dfdaf` "Fix one-cycle-delayed capture on slow CP flash
+deploy"](https://github.com/ChuMicro/ChuMicro/commit/75dfdaf) and
+[`2163927` "Add post-visible settle delay after board sees new
+entrypoint"](https://github.com/ChuMicro/ChuMicro/commit/2163927).
+`CircuitpythonTransport._wait_for_board_to_see_entrypoint` polls
+`os.stat` over raw REPL until the board reports the just-written
+entrypoint at its new length, then sleeps
+`_BOARD_FILE_VISIBLE_POST_SETTLE` (0.5 s) to let in-flight flash /
+FAT bookkeeping quiesce before `Ctrl-D` triggers the soft-reboot.
+Paired with the UID-based drive verification from the sibling branch,
+`demo_recovery_hand_holding.py` "all / 1,2" is now 5/5 green across
+both CP boards (40/40 scenarios, zero EIOs, zero stale captures).
