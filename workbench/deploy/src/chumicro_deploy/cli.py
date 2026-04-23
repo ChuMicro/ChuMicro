@@ -69,18 +69,27 @@ def _add_device_args(parser: argparse.ArgumentParser) -> None:
         type=Path,
         default=None,
         help=(
-            "Path to a chumicro-shape devices.yml.  When set, "
-            "--transport / --address / --baudrate / --deploy-mode / "
-            "--drive are filled from the entry selected by --device "
-            "(or the single runtime default if --device is omitted)."
+            "Path to a device-config file.  When set, --transport / "
+            "--address / --baudrate / --deploy-mode / --drive are "
+            "filled from the entry selected by --device (or the "
+            "single runtime default if --device is omitted)."
         ),
     )
     parser.add_argument(
         "--device",
         dest="device_id",
         default=None,
-        help="Device id from --devices-file; required if the file has "
-             "no unique runtime default.",
+        help="Device id within --devices-file.",
+    )
+    parser.add_argument(
+        "--devices-format",
+        default="chumicro",
+        help=(
+            "Config-file format name.  Built-in: 'chumicro' (reads "
+            "the devices.yml shape from Decision 0027).  Third "
+            "parties register custom loaders via the "
+            "'chumicro_deploy.config_loaders' entry-point group."
+        ),
     )
 
 
@@ -92,11 +101,20 @@ def _device_from_args(args: argparse.Namespace) -> Device:
     explicit ``--transport`` + ``--address`` path.
     """
     if args.devices_file is not None:
-        # Import here so invocations that don't use devices.yml don't
-        # pay the yaml-parser cost.
-        from .config.chumicro import load_devices_yml
+        # Lazy-import the loader registry so runs that don't touch
+        # device configs don't pay the discovery cost.
+        from .config import discover_config_loaders
 
-        return load_devices_yml(args.devices_file, device_id=args.device_id)
+        loaders = discover_config_loaders()
+        loader_name = args.devices_format
+        if loader_name not in loaders:
+            raise SystemExit(
+                f"error: unknown --devices-format: {loader_name!r}.  "
+                f"Registered: {sorted(loaders.keys())!r}"
+            )
+        return loaders[loader_name](
+            args.devices_file, device_id=args.device_id,
+        )
 
     if args.transport is None or args.address is None:
         raise SystemExit(
