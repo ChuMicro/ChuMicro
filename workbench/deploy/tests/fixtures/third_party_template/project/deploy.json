@@ -1,0 +1,7 @@
+{
+    "entrypoint": "/code.py",
+    "layout": {
+        "/code.py": "project/source/app.py",
+        "/lib/greeter.py": "project/helpers/greeter.py"
+    }
+}
