@@ -124,6 +124,74 @@ class TestCommandProbe:
         assert exit_code == 1
 
 
+class TestDevicesFileWiring:
+    """--devices-file routes through load_devices_yml instead of explicit flags."""
+
+    def _write_devices_yml(self, tmp_path: Path) -> Path:
+        yaml_path = tmp_path / "devices.yml"
+        yaml_path.write_text(
+            "defaults:\n"
+            "  micropython: mp-board\n"
+            "  deploy_mode: ram\n"
+            "devices:\n"
+            "  - id: mp-board\n"
+            "    runtime: micropython\n"
+            "    address: /dev/ttyACM0\n"
+            "    serial_baudrate: 115200\n"
+        )
+        return yaml_path
+
+    def test_probe_reads_device_from_devices_file(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        yaml_path = self._write_devices_yml(tmp_path)
+
+        captured: dict[str, Any] = {}
+
+        def fake_probe(device):  # noqa: ANN001
+            captured["device"] = device
+            return DeviceInfo(
+                implementation=DeviceImplementation(
+                    name="micropython", version="1.28", machine="x",
+                ),
+            )
+
+        monkeypatch.setattr("chumicro_deploy.cli.probe_device", fake_probe)
+        exit_code = main([
+            "probe",
+            "--devices-file", str(yaml_path),
+            "--device", "mp-board",
+        ])
+        assert exit_code == 0
+        device = captured["device"]
+        assert device.transport == "micropython"
+        assert device.address == "/dev/ttyACM0"
+
+    def test_probe_with_single_runtime_default_omits_device_id(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        yaml_path = self._write_devices_yml(tmp_path)
+
+        monkeypatch.setattr(
+            "chumicro_deploy.cli.probe_device",
+            lambda device: DeviceInfo(
+                implementation=DeviceImplementation(
+                    name="micropython", version="1.28", machine="x",
+                ),
+            ),
+        )
+        # No --device flag — defaults.micropython is the sole default.
+        exit_code = main([
+            "probe", "--devices-file", str(yaml_path),
+        ])
+        assert exit_code == 0
+
+
 class TestCommandFlash:
     def test_forwards_flags_to_flash_firmware(
         self, monkeypatch: pytest.MonkeyPatch,

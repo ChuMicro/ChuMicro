@@ -25,17 +25,25 @@ from .sources import DirectorySource, FileMapSource
 
 
 def _add_device_args(parser: argparse.ArgumentParser) -> None:
-    """Attach the shared Device construction flags."""
+    """Attach the shared Device construction flags.
+
+    Two mutually-exclusive ways to specify the target:
+
+    - Explicit: ``--transport`` + ``--address`` plus optional
+      ``--baudrate``, ``--deploy-mode``, ``--drive``.
+    - Chumicro ``devices.yml``: ``--devices-file PATH`` +
+      ``--device ID`` reads the entry and fills in every field.
+      ``--devices-file PATH`` with no ``--device`` picks the
+      single runtime default from the ``defaults:`` block.
+    """
     parser.add_argument(
         "--transport",
         choices=("circuitpython", "micropython"),
-        required=True,
-        help="Runtime target identifier.",
+        help="Runtime target identifier (required without --devices-file).",
     )
     parser.add_argument(
         "--address",
-        required=True,
-        help="Serial port path (e.g. /dev/cu.usbmodem1101).",
+        help="Serial port path (required without --devices-file).",
     )
     parser.add_argument(
         "--baudrate",
@@ -56,10 +64,46 @@ def _add_device_args(parser: argparse.ArgumentParser) -> None:
         default=None,
         help="CIRCUITPY drive mount path (CP flash mode).",
     )
+    parser.add_argument(
+        "--devices-file",
+        type=Path,
+        default=None,
+        help=(
+            "Path to a chumicro-shape devices.yml.  When set, "
+            "--transport / --address / --baudrate / --deploy-mode / "
+            "--drive are filled from the entry selected by --device "
+            "(or the single runtime default if --device is omitted)."
+        ),
+    )
+    parser.add_argument(
+        "--device",
+        dest="device_id",
+        default=None,
+        help="Device id from --devices-file; required if the file has "
+             "no unique runtime default.",
+    )
 
 
 def _device_from_args(args: argparse.Namespace) -> Device:
-    """Build a :class:`Device` from a parsed subcommand namespace."""
+    """Build a :class:`Device` from a parsed subcommand namespace.
+
+    Routes through :func:`chumicro_deploy.config.chumicro.load_devices_yml`
+    when ``--devices-file`` is supplied; otherwise falls back to the
+    explicit ``--transport`` + ``--address`` path.
+    """
+    if args.devices_file is not None:
+        # Import here so invocations that don't use devices.yml don't
+        # pay the yaml-parser cost.
+        from .config.chumicro import load_devices_yml
+
+        return load_devices_yml(args.devices_file, device_id=args.device_id)
+
+    if args.transport is None or args.address is None:
+        raise SystemExit(
+            "error: --transport and --address are required unless "
+            "--devices-file is supplied"
+        )
+
     return Device(
         transport=args.transport,
         address=args.address,

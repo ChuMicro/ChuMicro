@@ -83,6 +83,119 @@ class TestEffectiveEntrypoint:
         assert device.effective_entrypoint == "app.py"
 
 
+class TestFromDict:
+    def test_minimum_required(self):
+        device = Device.from_dict(
+            {"transport": "circuitpython", "address": "/dev/cu.x"},
+        )
+        assert device.transport == "circuitpython"
+        assert device.address == "/dev/cu.x"
+        assert device.baudrate == 115200
+        assert device.deploy_mode == "ram"
+        assert device.circuitpy_drive_path is None
+
+    def test_all_fields(self):
+        device = Device.from_dict(
+            {
+                "transport": "circuitpython",
+                "address": "COM7",
+                "baudrate": 230400,
+                "deploy_mode": "flash",
+                "circuitpy_drive_path": "/Volumes/CIRCUITPY",
+                "entrypoint_name": "app.py",
+                "resource_prefix": "/pkg",
+            },
+        )
+        assert device.baudrate == 230400
+        assert device.deploy_mode == "flash"
+        assert device.circuitpy_drive_path == Path("/Volumes/CIRCUITPY")
+        assert device.entrypoint_name == "app.py"
+        assert device.resource_prefix == "/pkg"
+
+    def test_ignores_unknown_keys(self):
+        device = Device.from_dict(
+            {
+                "transport": "micropython",
+                "address": "/dev/x",
+                "id": "mp-board-1",
+                "description": "extra metadata",
+            },
+        )
+        assert device.transport == "micropython"
+
+    def test_missing_transport_raises(self):
+        with pytest.raises(ValueError, match="transport"):
+            Device.from_dict({"address": "/dev/x"})
+
+    def test_missing_address_raises(self):
+        with pytest.raises(ValueError, match="address"):
+            Device.from_dict({"transport": "micropython"})
+
+    def test_empty_string_drive_path_treated_as_none(self):
+        device = Device.from_dict(
+            {
+                "transport": "circuitpython",
+                "address": "/dev/x",
+                "circuitpy_drive_path": "",
+            },
+        )
+        assert device.circuitpy_drive_path is None
+
+    def test_validation_propagates(self):
+        with pytest.raises(ValueError, match="Unsupported transport"):
+            Device.from_dict({"transport": "zephyr", "address": "/dev/x"})
+
+
+class TestFromEnv:
+    def test_minimum_required(self):
+        device = Device.from_env(
+            environment={
+                "CHUMICRO_DEPLOY_TRANSPORT": "micropython",
+                "CHUMICRO_DEPLOY_ADDRESS": "/dev/ttyACM0",
+            },
+        )
+        assert device.transport == "micropython"
+        assert device.address == "/dev/ttyACM0"
+
+    def test_custom_prefix(self):
+        device = Device.from_env(
+            prefix="MYBOARD_",
+            environment={
+                "MYBOARD_TRANSPORT": "circuitpython",
+                "MYBOARD_ADDRESS": "/dev/cu.x",
+                "MYBOARD_BAUDRATE": "460800",
+            },
+        )
+        assert device.baudrate == 460800
+
+    def test_all_fields(self):
+        device = Device.from_env(
+            environment={
+                "CHUMICRO_DEPLOY_TRANSPORT": "circuitpython",
+                "CHUMICRO_DEPLOY_ADDRESS": "COM5",
+                "CHUMICRO_DEPLOY_BAUDRATE": "230400",
+                "CHUMICRO_DEPLOY_DEPLOY_MODE": "flash",
+                "CHUMICRO_DEPLOY_CIRCUITPY_DRIVE_PATH": "D:\\",
+                "CHUMICRO_DEPLOY_ENTRYPOINT_NAME": "app.py",
+                "CHUMICRO_DEPLOY_RESOURCE_PREFIX": "/pkg",
+            },
+        )
+        assert device.baudrate == 230400
+        assert device.deploy_mode == "flash"
+        assert device.entrypoint_name == "app.py"
+        assert device.resource_prefix == "/pkg"
+
+    def test_missing_required_raises(self):
+        with pytest.raises(ValueError, match="missing required env var"):
+            Device.from_env(environment={})
+
+    def test_missing_only_address(self):
+        with pytest.raises(ValueError, match="CHUMICRO_DEPLOY_ADDRESS"):
+            Device.from_env(
+                environment={"CHUMICRO_DEPLOY_TRANSPORT": "micropython"},
+            )
+
+
 class TestCreateTransport:
     """create_transport branches on runtime and maps deploy_mode."""
 
