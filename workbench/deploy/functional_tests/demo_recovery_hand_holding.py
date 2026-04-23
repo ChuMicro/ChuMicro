@@ -159,6 +159,23 @@ def _entrypoint_for(runtime: str) -> str:
     return "/code.py" if runtime == "circuitpython" else "/main.py"
 
 
+def _deploy_device_for(context: BoardContext) -> Device | None:
+    """Pick the Device config that's actually usable for a deploy.
+
+    ``Deployer.deploy()`` on CircuitPython requires ``deploy_mode='flash'``
+    — the RAM-mode path is reserved for the in-tree test harness and
+    is rejected by ``CircuitpythonTransport.deploy_files``.  On
+    MicroPython either mode works; RAM (mount) is cheaper so we pick
+    it when available.
+
+    Returns ``None`` when no usable deploy device is configured for
+    this board (e.g. a CP board without a mounted CIRCUITPY drive).
+    """
+    if context.runtime == "circuitpython":
+        return context.device_flash
+    return context.device_ram
+
+
 # ---------------------------------------------------------------------------
 # Scenarios
 # ---------------------------------------------------------------------------
@@ -166,15 +183,23 @@ def _entrypoint_for(runtime: str) -> str:
 
 def scenario_happy_path_ram(context: BoardContext) -> bool:
     """Baseline — confirm the board is wired right before inducing failures."""
-    _print_step("Scenario 0: happy-path RAM-mode deploy (baseline)")
+    _print_step("Scenario: happy-path deploy (baseline)")
     _print_note(
         "Sanity check.  No hand-holding expected.  Deploys a single "
         "print() entrypoint and verifies the output comes back.  If "
         "this fails the board is in a bad state — fix that before "
         "running the failure-path scenarios below."
     )
+    device = _deploy_device_for(context)
+    if device is None:
+        _print_warn(
+            "No usable deploy device — CircuitPython boards need a "
+            "mounted CIRCUITPY drive (flash mode) for Deployer.deploy; "
+            "update devices.yml to set circuitpy_drive_path."
+        )
+        return False
     interactive = InteractiveDeployer(
-        Deployer(context.device_ram),
+        Deployer(device),
         max_attempts=1,  # no retry loop on the baseline run
     )
     entrypoint = _entrypoint_for(context.runtime)
@@ -195,7 +220,7 @@ def scenario_happy_path_ram(context: BoardContext) -> bool:
 
 def scenario_traceback_returned(context: BoardContext) -> bool:
     """Deploy code that raises — expect the traceback coaching block."""
-    _print_step("Scenario 1: entrypoint raises (TRACEBACK_RETURNED)")
+    _print_step("Scenario: entrypoint raises (TRACEBACK_RETURNED)")
     _print_note(
         "Deploys an entrypoint that raises a ZeroDivisionError.  The "
         "InteractiveDeployer should NOT retry — source-level bugs "
@@ -203,8 +228,15 @@ def scenario_traceback_returned(context: BoardContext) -> bool:
         "'--- traceback ---' block followed by the recovery plan "
         "(fix source, open REPL, etc.)."
     )
+    device = _deploy_device_for(context)
+    if device is None:
+        _print_warn(
+            "No usable deploy device for this board — see "
+            "the baseline scenario's message above."
+        )
+        return False
     interactive = InteractiveDeployer(
-        Deployer(context.device_ram),
+        Deployer(device),
         max_attempts=1,
     )
     entrypoint = _entrypoint_for(context.runtime)
@@ -237,7 +269,7 @@ def scenario_traceback_returned(context: BoardContext) -> bool:
 
 def scenario_port_unavailable(context: BoardContext) -> bool:
     """Walk the user through a physical unplug → retry → replug cycle."""
-    _print_step("Scenario 2: serial port unavailable (PORT_UNAVAILABLE)")
+    _print_step("Scenario: serial port unavailable (PORT_UNAVAILABLE)")
     _print_note(
         "This scenario requires you to PHYSICALLY UNPLUG the USB "
         "cable on the target board before the deploy starts.  The "
@@ -257,8 +289,14 @@ def scenario_port_unavailable(context: BoardContext) -> bool:
         f"start the deploy.",
     )
     _pause()
+    device = _deploy_device_for(context)
+    if device is None:
+        _print_warn(
+            "No usable deploy device — skipping the unplug scenario.",
+        )
+        return False
     interactive = InteractiveDeployer(
-        Deployer(context.device_ram),
+        Deployer(device),
         max_attempts=3,
     )
     entrypoint = _entrypoint_for(context.runtime)
@@ -289,7 +327,7 @@ def scenario_port_unavailable(context: BoardContext) -> bool:
 
 def scenario_circuitpy_drive_missing(context: BoardContext) -> bool:
     """CP flash only — walk the user through an eject → retry cycle."""
-    _print_step("Scenario 3: CIRCUITPY drive missing (CIRCUITPY_DRIVE_MISSING)")
+    _print_step("Scenario: CIRCUITPY drive missing (CIRCUITPY_DRIVE_MISSING)")
     if context.runtime != "circuitpython":
         _print_note("Skipped — this scenario is CircuitPython-only.")
         return True
@@ -346,7 +384,7 @@ def scenario_circuitpy_drive_missing(context: BoardContext) -> bool:
 def scenario_bootloader_reset_silent(context: BoardContext) -> bool:
     """CP only — verify the disconnect fix: no spurious warnings on intentional reset."""
     _print_step(
-        "Scenario 4: intentional bootloader reset emits no warnings",
+        "Scenario: intentional bootloader reset emits no warnings",
     )
     if context.runtime != "circuitpython":
         _print_note(
@@ -397,12 +435,12 @@ def scenario_bootloader_reset_silent(context: BoardContext) -> bool:
 
 
 _SCENARIOS: list[tuple[str, Callable[[BoardContext], bool]]] = [
-    ("0. happy-path baseline RAM deploy", scenario_happy_path_ram),
-    ("1. entrypoint raises (TRACEBACK_RETURNED)", scenario_traceback_returned),
-    ("2. unplug USB mid-run (PORT_UNAVAILABLE)", scenario_port_unavailable),
-    ("3. eject CIRCUITPY drive (CIRCUITPY_DRIVE_MISSING, CP flash only)",
+    ("happy-path baseline deploy", scenario_happy_path_ram),
+    ("entrypoint raises (TRACEBACK_RETURNED)", scenario_traceback_returned),
+    ("unplug USB mid-run (PORT_UNAVAILABLE)", scenario_port_unavailable),
+    ("eject CIRCUITPY drive (CIRCUITPY_DRIVE_MISSING, CP flash only)",
      scenario_circuitpy_drive_missing),
-    ("4. intentional bootloader reset is silent (CP only)",
+    ("intentional bootloader reset is silent (CP only)",
      scenario_bootloader_reset_silent),
 ]
 
