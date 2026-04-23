@@ -35,7 +35,9 @@ class DeviceImplementation:
     (both :class:`MicropythonTransport` and :class:`CircuitpythonTransport`
     do).  Consumed by the ``test-device`` PR-summary output so reviewers
     see the exact firmware version and board model that exercised the
-    tests — without contributors having to hand-fill the template.
+    tests, and by :meth:`CircuitpythonTransport._verify_drive_for_board`
+    to match a mounted CIRCUITPY drive to its connected board (so
+    ``devices.yml`` doesn't have to pin a mount-order-dependent path).
 
     Attributes:
         name: ``sys.implementation.name`` — ``"circuitpython"`` or
@@ -46,26 +48,53 @@ class DeviceImplementation:
             a free-form string describing the board (e.g.
             ``"Raspberry Pi Pico W with rp2040"``).  Empty when the
             firmware does not expose it.
+        uid: Hex-uppercase CPU / module unique ID, sourced from
+            ``microcontroller.cpu.uid`` on CircuitPython and
+            ``machine.unique_id()`` on MicroPython.  Matches the
+            ``UID:...`` line CircuitPython writes to
+            ``boot_out.txt`` on mount, so the host can disambiguate
+            two identical boards that would otherwise share a
+            ``machine`` string.  Empty on firmware too old to expose
+            the probe path or if the probe itself raised.
     """
 
     name: str
     version: str
     machine: str
+    uid: str = ""
 
 
-#: On-device probe script.  Prints one ``__CHU_IMPL__:`` line with
-#: pipe-delimited ``name|version|machine`` so the host can locate the
-#: probe output among any incidental boot banners.  Uses only
-#: ``sys.implementation`` which exists on both CircuitPython and
-#: MicroPython and needs no staged files — safe to run immediately
-#: after ``connect()``.
+#: On-device probe script.  Prints two marker lines:
+#:
+#: - ``__CHU_IMPL__:name|version|machine`` — parsed unchanged from its
+#:   original three-field contract so a machine string that itself
+#:   contains ``|`` (rare but legal) still round-trips intact.
+#: - ``__CHU_UID__:<hex>`` — emitted on a best-effort basis from
+#:   ``microcontroller.cpu.uid`` (CircuitPython) or
+#:   ``machine.unique_id()`` (MicroPython); an empty value means the
+#:   probe couldn't read a UID on this firmware.
+#:
+#: Uses only ``sys.implementation`` (present on both CP and MP) and
+#: the UID modules above; needs no staged files and is safe to run
+#: immediately after ``connect()``.
 PROBE_IMPLEMENTATION_SCRIPT = (
     "import sys\n"
     "_probe_version = sys.implementation.version\n"
     "_probe_machine = getattr(sys.implementation, '_machine', '')\n"
+    "_probe_uid = ''\n"
+    "try:\n"
+    "    if sys.implementation.name == 'circuitpython':\n"
+    "        import microcontroller as _probe_mod\n"
+    "        _probe_uid = _probe_mod.cpu.uid.hex().upper()\n"
+    "    else:\n"
+    "        import machine as _probe_mod\n"
+    "        _probe_uid = _probe_mod.unique_id().hex().upper()\n"
+    "except Exception:\n"
+    "    pass\n"
     "print('__CHU_IMPL__:' + sys.implementation.name"
     " + '|' + '.'.join(str(_probe_part) for _probe_part in _probe_version)"
     " + '|' + _probe_machine)\n"
+    "print('__CHU_UID__:' + _probe_uid)\n"
 )
 
 
@@ -74,28 +103,38 @@ def parse_probe_output(output: str) -> DeviceImplementation | None:
 
     Scans for the ``__CHU_IMPL__:`` marker line emitted by
     :data:`PROBE_IMPLEMENTATION_SCRIPT` and ignores any surrounding
-    output.  Returns ``None`` when the marker is missing or the
-    payload is malformed — callers treat that as "probe unavailable"
-    and fall back to per-device metadata from ``devices.yml``.
+    output.  When an accompanying ``__CHU_UID__:`` line is present
+    (new probe path), its hex payload is attached to
+    :attr:`DeviceImplementation.uid`; output from older recordings
+    that pre-date the UID line still parses cleanly with
+    ``uid=""``.  Returns ``None`` when the ``__CHU_IMPL__:`` marker
+    is missing or its payload is malformed — callers treat that as
+    "probe unavailable" and fall back to per-device metadata from
+    ``devices.yml``.
 
     Args:
         output: Combined stdout (and stderr if merged) from the probe
             script's ``execute`` call.
     """
+    implementation_payload: str | None = None
+    uid: str = ""
     for line in output.splitlines():
-        if not line.startswith("__CHU_IMPL__:"):
-            continue
-        payload = line[len("__CHU_IMPL__:"):]
-        parts = payload.split("|", 2)
-        if len(parts) != 3:
-            return None
-        name, version, machine = parts
-        return DeviceImplementation(
-            name=name.strip(),
-            version=version.strip(),
-            machine=machine.strip(),
-        )
-    return None
+        if line.startswith("__CHU_IMPL__:"):
+            implementation_payload = line[len("__CHU_IMPL__:"):]
+        elif line.startswith("__CHU_UID__:"):
+            uid = line[len("__CHU_UID__:"):].strip().upper()
+    if implementation_payload is None:
+        return None
+    parts = implementation_payload.split("|", 2)
+    if len(parts) != 3:
+        return None
+    name, version, machine = parts
+    return DeviceImplementation(
+        name=name.strip(),
+        version=version.strip(),
+        machine=machine.strip(),
+        uid=uid,
+    )
 
 
 @runtime_checkable

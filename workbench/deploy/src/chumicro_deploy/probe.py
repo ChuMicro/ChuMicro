@@ -4,10 +4,13 @@ Thin wrapper over :meth:`TransportProtocol.probe_implementation` that
 owns the transport lifecycle (connect / probe / disconnect) and
 returns a :class:`DeviceInfo` callers can surface to users.
 
-Board ID and CPU UID discovery is planned but not yet wired up —
-those fields are reserved on :class:`DeviceInfo` and populated with
-empty strings for now.  When a future slice adds them, callers don't
-need to change: the fields are already part of the return type.
+CPU UID is populated from the probe script itself —
+:data:`~chumicro_deploy.protocol.PROBE_IMPLEMENTATION_SCRIPT` reads
+``microcontroller.cpu.uid`` on CircuitPython and
+``machine.unique_id()`` on MicroPython and emits it as the fourth
+field of the ``__CHU_IMPL__:`` marker line.  Board ID discovery is
+still planned but not yet wired up — the field is reserved on
+:class:`DeviceInfo` and populated with the empty string for now.
 """
 
 from __future__ import annotations
@@ -34,9 +37,11 @@ class DeviceInfo:
             ``"raspberry_pi_pico_w"``).  Reserved — populated in a
             later slice via a board-specific probe.  Empty string
             today.
-        uid: Hex-encoded CPU UID.  Reserved — populated in a later
-            slice via ``microcontroller.cpu.uid`` (CP) or
-            ``machine.unique_id()`` (MP).  Empty string today.
+        uid: Hex-uppercase CPU UID probed from
+            ``microcontroller.cpu.uid`` (CP) or ``machine.unique_id()``
+            (MP) via :data:`PROBE_IMPLEMENTATION_SCRIPT`.  Empty when
+            the probe couldn't read the ID (older firmware, ROM
+            without the hardware ID, or the module raised).
     """
 
     implementation: DeviceImplementation | None
@@ -57,8 +62,10 @@ def probe_device(device: Device) -> DeviceInfo:
 
     Returns:
         :class:`DeviceInfo` with the implementation field populated
-        when the board returned the probe marker; board_id and uid
-        stay empty until the richer probe ships in a later slice.
+        when the board returned the probe marker.  ``uid`` mirrors
+        ``implementation.uid`` when the probe could read it;
+        ``board_id`` stays empty until the board-ID probe ships in a
+        later slice.
     """
     transport = device.create_transport()
     transport.connect()
@@ -66,4 +73,5 @@ def probe_device(device: Device) -> DeviceInfo:
         implementation = transport.probe_implementation()
     finally:
         transport.disconnect()
-    return DeviceInfo(implementation=implementation)
+    uid = implementation.uid if implementation is not None else ""
+    return DeviceInfo(implementation=implementation, uid=uid)

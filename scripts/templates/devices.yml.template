@@ -32,7 +32,15 @@ devices:
     # deploy_mode: flash
     # Path to the CIRCUITPY USB drive mount point on the host.
     # Used for flash deploy mode.
-    # Auto-detected if omitted; set explicitly with multiple boards.
+    # OPTIONAL — leave this commented out.  chumicro-deploy probes
+    # `microcontroller.cpu.uid` over raw REPL and matches it against
+    # each mounted CIRCUITPY*/boot_out.txt UID line, so the right
+    # drive is auto-selected even when macOS assigned `CIRCUITPY 1` /
+    # `CIRCUITPY 2` in a different order this session.  Set this only
+    # when UID matching can't disambiguate — two physically identical
+    # boards connected at once, or a non-standard mount point.  If
+    # set and wrong, chumicro-deploy auto-corrects and prints a
+    # warning nudging you to remove the override.
     # circuitpy_drive_path: /Volumes/CIRCUITPY
 
   - id: sample-micropython-board

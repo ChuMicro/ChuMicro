@@ -109,6 +109,22 @@ def _circuitpy_volume_candidates() -> list[Path]:
     return found
 
 
+def _read_boot_out_text(drive_path: Path) -> str | None:
+    """Return the full text of ``boot_out.txt`` on *drive_path*, or ``None``.
+
+    Centralised so the machine / UID readers share one read (and one
+    error-swallowing policy).  A missing or unreadable file yields
+    ``None`` and the caller degrades gracefully.
+    """
+    boot_out = drive_path / "boot_out.txt"
+    if not boot_out.is_file():
+        return None
+    try:
+        return boot_out.read_text(encoding="utf-8", errors="replace")
+    except OSError:  # pragma: no cover — hard to mock read_text
+        return None
+
+
 def _read_boot_out_machine(drive_path: Path) -> str | None:
     """Return the board-machine suffix from ``boot_out.txt`` on *drive_path*.
 
@@ -123,34 +139,70 @@ def _read_boot_out_machine(drive_path: Path) -> str | None:
     when the file is missing, unreadable, or doesn't follow the
     expected shape — callers treat that as "can't verify" and proceed.
     """
-    boot_out = drive_path / "boot_out.txt"
-    if not boot_out.is_file():
+    text = _read_boot_out_text(drive_path)
+    if text is None:
         return None
-    try:
-        first_line = boot_out.read_text(
-            encoding="utf-8", errors="replace",
-        ).splitlines()[0]
-    except (OSError, IndexError):  # pragma: no cover — hard to mock read_text
+    lines = text.splitlines()
+    if not lines:
         return None
+    first_line = lines[0]
     semicolon_index = first_line.find(";")
     if semicolon_index == -1:
         return None
     return first_line[semicolon_index + 1:].strip()
 
 
+def _read_boot_out_uid(drive_path: Path) -> str | None:
+    """Return the hex-uppercase CPU UID from ``boot_out.txt`` on *drive_path*.
+
+    CircuitPython writes a ``UID:...`` line to ``boot_out.txt`` at
+    boot, matching what ``microcontroller.cpu.uid`` reports over
+    raw REPL (see :data:`PROBE_IMPLEMENTATION_SCRIPT`).  Matching by
+    UID — rather than the looser machine string — disambiguates two
+    boards of the same model connected at once.  Returns ``None``
+    when the file is missing, unreadable, or has no UID line.
+    """
+    text = _read_boot_out_text(drive_path)
+    if text is None:
+        return None
+    for line in text.splitlines():
+        if line.startswith("UID:"):
+            return line[len("UID:"):].strip().upper()
+    return None
+
+
+def find_circuitpy_drive_for_uid(target_uid: str) -> str | None:
+    """Return the mounted CIRCUITPY drive whose UID matches *target_uid*.
+
+    Scans every mounted ``CIRCUITPY*`` volume, reads the ``UID:...``
+    line from ``boot_out.txt``, and returns the first path whose UID
+    equals *target_uid* (case-insensitive).  Returns ``None`` when no
+    mount matches.  This is the preferred discovery path —
+    :meth:`CircuitpythonTransport._verify_drive_for_board` only falls
+    back to :func:`find_circuitpy_drive_for_machine` when the UID
+    probe is unavailable on either side of the comparison.
+    """
+    if not target_uid:
+        return None
+    target = target_uid.upper()
+    for candidate in _circuitpy_volume_candidates():
+        uid = _read_boot_out_uid(candidate)
+        if uid and uid == target:
+            return str(candidate)
+    return None
+
+
 def find_circuitpy_drive_for_machine(target_machine: str) -> str | None:
     """Return the mounted CIRCUITPY drive whose board matches *target_machine*.
 
-    Scans every mounted ``CIRCUITPY*`` volume, reads ``boot_out.txt``,
-    and returns the first path whose board identity equals
-    *target_machine* (as reported by ``sys.implementation._machine``
-    on the running board).  Returns ``None`` when no mount matches —
-    which can happen if the target board's drive isn't mounted, or if
-    the probe couldn't read a machine string.
-
-    Used by :meth:`CircuitpythonTransport._verify_drive_for_board` to
-    recover from mount-order-dependent ``circuitpy_drive_path`` entries
-    in ``devices.yml``.
+    Fallback path when UID-based discovery isn't possible (older
+    firmware that doesn't expose the UID probe, or a ``boot_out.txt``
+    missing its ``UID:...`` line).  Scans every mounted ``CIRCUITPY*``
+    volume, reads ``boot_out.txt``, and returns the first path whose
+    board identity equals *target_machine*.  Returns ``None`` when no
+    mount matches.  Cannot disambiguate two boards of the same model
+    — prefer :func:`find_circuitpy_drive_for_uid` when the UID is
+    known.
     """
     if not target_machine:
         return None
@@ -334,43 +386,89 @@ class CircuitpythonTransport:
         macOS assigns ``/Volumes/CIRCUITPY`` in mount order, so a
         ``circuitpy_drive_path`` pinned in ``devices.yml`` can silently
         refer to the other board when two boards are attached.  This
-        method reads ``boot_out.txt`` from *drive_path* and compares
-        it against ``sys.implementation._machine`` on the connected
-        board.  When they disagree, every mounted ``CIRCUITPY*``
-        volume is scanned for one that matches; the match wins.
-        When no match is found, a :class:`CircuitpythonTransportError`
-        is raised with guidance pointing at ``devices.yml``.
+        method probes the connected board and compares its identity
+        against ``boot_out.txt`` on *drive_path*:
 
-        Fails open — when either side of the comparison is unavailable
-        (``boot_out.txt`` missing/malformed, probe returns ``None``)
-        the original path is returned unchanged.  ``boot_out.txt`` is
-        checked first so the serial-probe roundtrip is skipped entirely
-        in environments that don't have it (test drives mocked with a
-        bare ``tmp_path``, for instance).
+        1. **UID** (``microcontroller.cpu.uid`` ↔ ``UID:...`` line
+           in ``boot_out.txt``) is preferred — it disambiguates two
+           boards of the same model.
+        2. **machine string** (``sys.implementation._machine`` ↔
+           ``...; <machine>`` suffix on line 1) is the fallback for
+           older firmware whose probe or ``boot_out.txt`` doesn't
+           expose a UID.
+
+        On a mismatch, every mounted ``CIRCUITPY*`` volume is scanned
+        for one whose identity matches; the match wins, with a
+        :func:`print` WARNING nudging the user to drop or fix the
+        devices.yml override.  When no match is found a
+        :class:`CircuitpythonTransportError` is raised.
+
+        Fails open — when either side of either comparison is
+        unavailable (``boot_out.txt`` missing/malformed, probe
+        returns ``None``) the original path is returned unchanged.
+        ``boot_out.txt`` is checked first so the serial-probe
+        roundtrip is skipped entirely in environments that don't have
+        it (test drives mocked with a bare ``tmp_path``, for instance).
         """
+        boot_uid = _read_boot_out_uid(drive_path)
         boot_machine = _read_boot_out_machine(drive_path)
-        if boot_machine is None:
+        if boot_uid is None and boot_machine is None:
             return drive_path
         probe = self.probe_implementation()
-        if probe is None or not probe.machine:
+        if probe is None:
             return drive_path
-        if boot_machine == probe.machine:
+        if probe.uid and boot_uid is not None:
+            return self._resolve_identity_match(
+                drive_path,
+                identity_label="UID",
+                drive_identity=boot_uid,
+                probe_identity=probe.uid,
+                mount_finder=find_circuitpy_drive_for_uid,
+            )
+        if probe.machine and boot_machine is not None:
+            return self._resolve_identity_match(
+                drive_path,
+                identity_label="machine",
+                drive_identity=boot_machine,
+                probe_identity=probe.machine,
+                mount_finder=find_circuitpy_drive_for_machine,
+            )
+        return drive_path
+
+    def _resolve_identity_match(
+        self,
+        drive_path: Path,
+        *,
+        identity_label: str,
+        drive_identity: str,
+        probe_identity: str,
+        mount_finder: Callable[[str], str | None],
+    ) -> Path:
+        """Compare drive ↔ board identity; auto-correct or raise.
+
+        Extracted helper so the UID and machine-string branches of
+        :meth:`_verify_drive_for_board` share their compare-and-fix
+        logic.  ``identity_label`` is only used for the user-facing
+        WARNING / error messages.
+        """
+        if drive_identity == probe_identity:
             return drive_path
-        corrected = find_circuitpy_drive_for_machine(probe.machine)
+        corrected = mount_finder(probe_identity)
         if corrected is None:
             raise CircuitpythonTransportError(
-                f"Configured CIRCUITPY drive {drive_path} belongs to "
-                f"{boot_machine!r} but the connected board is "
-                f"{probe.machine!r}.  No other mounted CIRCUITPY* volume "
-                f"matches the connected board.  Fix circuitpy_drive_path "
-                f"in devices.yml or unmount the wrong drive."
+                f"Configured CIRCUITPY drive {drive_path} "
+                f"{identity_label}={drive_identity!r} does not match the "
+                f"connected board ({identity_label}={probe_identity!r}).  "
+                f"No other mounted CIRCUITPY* volume matches.  Remove or "
+                f"fix circuitpy_drive_path in devices.yml (auto-detection "
+                f"by UID works without it)."
             )
         print(
-            f"WARNING: configured CIRCUITPY drive {drive_path} belongs "
-            f"to {boot_machine!r} but the connected board is "
-            f"{probe.machine!r} — auto-correcting to {corrected}.  "
-            f"Update circuitpy_drive_path in devices.yml to silence "
-            f"this warning."
+            f"WARNING: configured CIRCUITPY drive {drive_path} "
+            f"{identity_label}={drive_identity!r} does not match the "
+            f"connected board ({identity_label}={probe_identity!r}) — "
+            f"auto-correcting to {corrected}.  Remove circuitpy_drive_path "
+            f"from devices.yml to rely on UID-based auto-detection."
         )
         return Path(corrected)
 

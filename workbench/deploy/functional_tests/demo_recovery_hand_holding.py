@@ -139,14 +139,18 @@ def _build_flash_device(entry: DeviceEntry) -> Device | None:
     # build a flash device for MP too.
     if entry.runtime == "circuitpython":
         drive_path = entry.circuitpy_drive_path
-        if not drive_path or not Path(drive_path).is_dir():
+        # Explicit path is optional — CircuitpythonTransport auto-
+        # detects the drive by matching the connected board's UID
+        # against every mounted CIRCUITPY*/boot_out.txt.  Only skip
+        # when the user set an explicit path that no longer exists.
+        if drive_path and not Path(drive_path).is_dir():
             return None
         return Device(
             transport=entry.runtime,
             address=entry.address,
             baudrate=entry.serial_baudrate,
             deploy_mode="flash",
-            circuitpy_drive_path=Path(drive_path),
+            circuitpy_drive_path=Path(drive_path) if drive_path else None,
         )
     return Device(
         transport=entry.runtime,

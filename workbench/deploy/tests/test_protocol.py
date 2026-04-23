@@ -160,6 +160,33 @@ class TestParseProbeOutput:
         assert result is not None
         assert result.machine == "Board | variant"
 
+    def test_uid_marker_populates_implementation_uid(self) -> None:
+        """A second ``__CHU_UID__:`` line populates ``DeviceImplementation.uid``."""
+        output = (
+            "__CHU_IMPL__:circuitpython|10.2.0|Raspberry Pi Pico W\n"
+            "__CHU_UID__:E6614103E7174624\n"
+        )
+        result = parse_probe_output(output)
+        assert result is not None
+        assert result.uid == "E6614103E7174624"
+
+    def test_uid_marker_is_uppercased(self) -> None:
+        """UID probes are normalised to upper-case hex."""
+        output = (
+            "__CHU_IMPL__:circuitpython|10.2.0|S2Mini\n"
+            "__CHU_UID__:487f301f0224\n"
+        )
+        result = parse_probe_output(output)
+        assert result is not None
+        assert result.uid == "487F301F0224"
+
+    def test_missing_uid_marker_leaves_uid_empty(self) -> None:
+        """Output with no UID line (older firmware) still parses; uid is empty."""
+        output = "__CHU_IMPL__:micropython|1.26.0|rp2\n"
+        result = parse_probe_output(output)
+        assert result is not None
+        assert result.uid == ""
+
 
 class TestProbeImplementationScript:
     """Tests for the PROBE_IMPLEMENTATION_SCRIPT constant."""

@@ -1745,17 +1745,21 @@ class TestDriveVerification:
     """
 
     @staticmethod
-    def _boot_out(machine: str) -> str:
+    def _boot_out(machine: str, uid: str = "DEADBEEF") -> str:
         return (
             f"Adafruit CircuitPython 10.2.0-rc.0 on 2026-04-16; {machine}\n"
             "Board ID:test_board\n"
-            "UID:DEADBEEF\n"
+            f"UID:{uid}\n"
             "MAC:00:00:00:00:00:00\n"
         )
 
     @staticmethod
-    def _probe_response(machine: str) -> bytes:
+    def _probe_response(machine: str, uid: str = "") -> bytes:
         marker_line = f"__CHU_IMPL__:circuitpython|10.2.0|{machine}"
+        if uid:
+            marker_line += f"\n__CHU_UID__:{uid}"
+        else:
+            marker_line += "\n__CHU_UID__:"
         return b"OK" + marker_line.encode("utf-8") + b"\n\x04\x04>"
 
     def _make_transport(
@@ -1950,3 +1954,160 @@ class TestDriveVerification:
         ) == str(second)
         assert find_circuitpy_drive_for_machine("") is None
         assert find_circuitpy_drive_for_machine("Not A Board") is None
+
+    def test_uid_match_preferred_over_machine_when_both_available(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Two identical-machine boards → UID disambiguates; machine alone can't.
+
+        Regression guard for the "two identical boards connected at
+        once" case: both drives report the same ``_machine`` string,
+        but ``UID:`` in ``boot_out.txt`` (and ``microcontroller.cpu.uid``
+        over REPL) is unique.  The verifier must pick the UID-matching
+        mount, even though the configured drive's machine-string
+        already matches the probe.
+        """
+        configured = tmp_path / "CIRCUITPY"
+        configured.mkdir()
+        (configured / "boot_out.txt").write_text(
+            self._boot_out("S2Mini with ESP32S2-S2FN4R2", uid="AAAAAAAA"),
+            encoding="utf-8",
+        )
+        sibling = tmp_path / "CIRCUITPY 1"
+        sibling.mkdir()
+        (sibling / "boot_out.txt").write_text(
+            self._boot_out("S2Mini with ESP32S2-S2FN4R2", uid="BBBBBBBB"),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(
+            "chumicro_deploy.circuitpython_transport"
+            "._circuitpy_volume_candidates",
+            lambda: [configured, sibling],
+        )
+        transport, _ = self._make_transport(
+            drive_path=str(configured),
+            reads=[
+                _RAW_REPL_PROMPT,
+                self._probe_response(
+                    "S2Mini with ESP32S2-S2FN4R2", uid="BBBBBBBB",
+                ),
+            ],
+        )
+        corrected = transport._verify_drive_for_board(configured)
+        assert corrected == sibling
+        captured = capsys.readouterr()
+        assert "UID" in captured.out
+
+    def test_machine_fallback_when_probe_has_no_uid(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Old firmware → probe has no uid → machine-string fallback kicks in."""
+        wrong = tmp_path / "CIRCUITPY"
+        wrong.mkdir()
+        (wrong / "boot_out.txt").write_text(
+            self._boot_out("Raspberry Pi Pico W with rp2040", uid="11111111"),
+            encoding="utf-8",
+        )
+        right = tmp_path / "CIRCUITPY 1"
+        right.mkdir()
+        (right / "boot_out.txt").write_text(
+            self._boot_out("S2Mini with ESP32S2-S2FN4R2", uid="22222222"),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(
+            "chumicro_deploy.circuitpython_transport"
+            "._circuitpy_volume_candidates",
+            lambda: [wrong, right],
+        )
+        transport, _ = self._make_transport(
+            drive_path=str(wrong),
+            reads=[
+                _RAW_REPL_PROMPT,
+                # No uid in the probe response — machine fallback applies.
+                self._probe_response("S2Mini with ESP32S2-S2FN4R2"),
+            ],
+        )
+        assert transport._verify_drive_for_board(wrong) == right
+
+    def test_returns_unchanged_when_uid_matches(
+        self, tmp_path: Path,
+    ) -> None:
+        """UID on drive matches probe UID → no correction, no warning."""
+        drive = tmp_path / "CIRCUITPY"
+        drive.mkdir()
+        (drive / "boot_out.txt").write_text(
+            self._boot_out("S2Mini with ESP32S2-S2FN4R2", uid="487F301F0224"),
+            encoding="utf-8",
+        )
+        transport, _ = self._make_transport(
+            drive_path=str(drive),
+            reads=[
+                _RAW_REPL_PROMPT,
+                self._probe_response(
+                    "S2Mini with ESP32S2-S2FN4R2", uid="487F301F0224",
+                ),
+            ],
+        )
+        assert transport._verify_drive_for_board(drive) == drive
+
+    def test_read_boot_out_uid_extracts_uid_line(
+        self, tmp_path: Path,
+    ) -> None:
+        """``UID:`` line is extracted and normalised to uppercase."""
+        from chumicro_deploy.circuitpython_transport import (
+            _read_boot_out_uid,
+        )
+
+        drive = tmp_path / "CIRCUITPY"
+        drive.mkdir()
+        (drive / "boot_out.txt").write_text(
+            self._boot_out("S2Mini with ESP32S2-S2FN4R2", uid="487f301f0224"),
+            encoding="utf-8",
+        )
+        assert _read_boot_out_uid(drive) == "487F301F0224"
+
+        # Missing file
+        empty = tmp_path / "OTHER"
+        empty.mkdir()
+        assert _read_boot_out_uid(empty) is None
+
+        # File without UID line
+        bad = tmp_path / "BAD"
+        bad.mkdir()
+        (bad / "boot_out.txt").write_text(
+            "Adafruit CircuitPython 10.2.0 on 2026-01-02; Foo Board\n"
+            "Board ID:foo\n",
+            encoding="utf-8",
+        )
+        assert _read_boot_out_uid(bad) is None
+
+    def test_find_circuitpy_drive_for_uid_scans_mounts(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Scans mounts and matches by UID (case-insensitive)."""
+        from chumicro_deploy.circuitpython_transport import (
+            find_circuitpy_drive_for_uid,
+        )
+
+        first = tmp_path / "CIRCUITPY"
+        first.mkdir()
+        (first / "boot_out.txt").write_text(
+            self._boot_out("Board A", uid="AAAA1111"),
+            encoding="utf-8",
+        )
+        second = tmp_path / "CIRCUITPY 1"
+        second.mkdir()
+        (second / "boot_out.txt").write_text(
+            self._boot_out("Board B", uid="BBBB2222"),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(
+            "chumicro_deploy.circuitpython_transport"
+            "._circuitpy_volume_candidates",
+            lambda: [first, second],
+        )
+        # Lower-case input matches upper-case UID in boot_out.txt.
+        assert find_circuitpy_drive_for_uid("bbbb2222") == str(second)
+        assert find_circuitpy_drive_for_uid("") is None
+        assert find_circuitpy_drive_for_uid("CCCC3333") is None
