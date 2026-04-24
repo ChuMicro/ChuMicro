@@ -186,7 +186,7 @@ python scripts/run.py test-device --library timing --deploy-mode flash
 
 ## 5. Run functional tests via pytest directly
 
-The device plugin is registered at the repo root, so plain `pytest` works against any `functional_tests/` path — useful when you want pytest-native UX (a specific folder, file, or method) without going through `scripts/run.py`.
+`scripts/run.py test-device` is a thin wrapper over pytest — it runs `pytest libraries/<name>/functional_tests/` with the `--chumicro-*` flags the device plugin exposes.  Invoking pytest directly is useful when you want pytest-native UX (a specific folder, file, or method) without going through `scripts/run.py`.
 
 ```bash
 # Whole directory
@@ -204,7 +204,37 @@ pytest libraries/timing/functional_tests/ -k heartbeat
 
 Target device selection still follows `devices.yml` defaults. Without a populated `devices.yml`, the tests skip with a clear message rather than failing.
 
-## 6. Run `functional_tests/` from an IDE
+### `--chumicro-*` plugin options
+
+Driving pytest directly gives you access to the same overrides `test-device` passes through the plugin:
+
+| Flag | Purpose |
+|---|---|
+| `--chumicro-runtime {micropython,circuitpython,both}` | Override `defaults.ide_runtime` from `devices.yml`. |
+| `--chumicro-micropython-device <id>` | Override `defaults.micropython` for this run. |
+| `--chumicro-circuitpython-device <id>` | Override `defaults.circuitpython` for this run. |
+| `--chumicro-deploy-mode {ram,flash}` | Override each device's `deploy_mode`. |
+| `--chumicro-pr-summary` | Print the Markdown PR block at session end (paste-ready).  Opt-in so IDE play-button runs stay quiet. |
+| `--chumicro-pr-summary-command <str>` | Literal command string rendered inside the PR block's `- Command:` line.  `test-device` passes its reconstructed CLI invocation here; direct pytest runs can supply their own label or omit it and get a bare `pytest`. |
+
+## 6. Run workbench functional tests — `test-workbench`
+
+Workbench packages (`workbench/<name>/`, Decision 0032) can ship their own `functional_tests/` directories.  Unlike library functional tests, these run host-side — the workbench tool is the thing *driving* a connected board through its public API rather than code that ships onto the device.
+
+```bash
+# Run every workbench's functional_tests/ suite.
+python scripts/run.py test-workbench
+
+# One workbench package.
+python scripts/run.py test-workbench --workbench deploy
+
+# Scope by file / function like test-device.
+python scripts/run.py test-workbench --file test_deploy_files_hardware --function circuitpython_ram -v
+```
+
+Device selection lives inside each suite's own `conftest.py` (typically by reading `devices.yml` defaults), so `test-workbench` itself exposes no runtime / device flags — change the target board via `devices.yml` defaults or by editing the suite's fixtures.  Suites skip cleanly when `devices.yml` is missing or no matching board is configured.
+
+## 7. Run `functional_tests/` from an IDE
 
 The repository registers a pytest plugin that intercepts explicit `functional_tests/` targets and routes them to hardware instead of importing them on the host.
 
@@ -228,15 +258,16 @@ VS Code uses the same pytest entrypoint and committed workspace settings/tasks a
 
 A dedicated live end-to-end VS Code validation pass remains on `plans/next-up.md`, so if you hit a VS Code-only issue, treat that as a real bug rather than user error.
 
-## 7. How functional tests differ from host tests
+## 8. How functional tests differ from host tests
 
 | Test type | Location | How to run |
 |---|---|---|
 | Host/unit tests | `libraries/<name>/tests/` | `python scripts/run.py test --libraries <name>` |
 | Real-board functional tests | `libraries/<name>/functional_tests/` | `python scripts/run.py test-device --library <name>` or an IDE play button |
+| Workbench hardware-gated tests | `workbench/<name>/functional_tests/` | `python scripts/run.py test-workbench --workbench <name>` |
 | Cross-runtime unix-port tests | reuses `tests/` | `python scripts/run.py test-runtime-matrix` |
 
-## 8. CI and environment overrides
+## 9. CI and environment overrides
 
 Two environment variables are supported for file-path overrides:
 

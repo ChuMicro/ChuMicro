@@ -27,8 +27,10 @@ print(result.execute_output)
 
 - **`Device`** — configure a target board (runtime, address, deploy mode).
 - **`Deployer`** — write files onto the board and run the entrypoint.
+- **`InteractiveDeployer`** — sibling deployer that classifies transport failures and coaches the user through a retry loop (unplug, drive ejected, REPL stuck, macOS FSKit wedge).
 - **`FileSource` variants** — `FileMapSource` for in-memory dicts, `DirectorySource` for a host directory, `ImportGraphSource` to walk Python imports.
-- **`probe_device`** — identify a connected board (runtime, version, machine).
+- **`probe_device`** — identify a connected board (runtime, version, machine, CPU UID).
+- **`flash_firmware`** — download and flash firmware via UF2 (Pi Pico family) or esptool (ESP32 family), with programmatic bootloader entry + interactive fallback.
 - **`resolve_firmware_url`** — turn a board ID + version into a download URL.
 - **`MicropythonTransport` / `CircuitpythonTransport`** — the lower-level transport layer if you need to drive stage / execute yourself.
 

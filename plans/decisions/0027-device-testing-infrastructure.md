@@ -184,6 +184,14 @@ A `result_parser.py` module parses the harness's structured output (`PASS`, `FAI
 - Implemented: PyCharm-centered IDE workflow (verified live with the multi-runtime test tree showing synthetic `Setup —` and `Run overhead —` nodes) plus generated VS Code settings/tasks that use the same pytest plugin path.
 - Still pending: CI-injected device config, CI-hosted/manual-trigger board runs, and a dedicated live end-to-end VS Code Testing-panel verification pass against hardware.
 
+## Implementation status update (2026-04-24)
+
+- Collapsed CLI + IDE onto the plugin.  `run.py test-device` used to drive its own 1300-line orchestrator in `scripts/device_testing.py`, parallel to the `pytest_device.py` plugin path the IDE play-button already used.  Both paths reached the same device-touching primitives but via two separate top-level loops with divergent reporting, meaning every behavior change had to land in both places or drift.
+- `test-device` is now a thin wrapper that invokes `pytest libraries/<name>/functional_tests/` with a new set of `--chumicro-*` pytest options (`--chumicro-runtime`, `--chumicro-micropython-device`, `--chumicro-circuitpython-device`, `--chumicro-deploy-mode`, `--chumicro-pr-summary`, `--chumicro-pr-summary-command`).  The plugin owns collection, routing, transport caching, and the Markdown PR summary; CLI and IDE runs share the exact same hooks end-to-end.
+- Markdown PR-summary rendering moved into a new `scripts/pr_summary.py` module (dataclasses + formatters) so the plugin and anything else that wants to render the same block use one shared source.  A `_PRSummaryCollector` inside `pytest_device.py` aggregates per-test reports during `pytest_runtest_makereport` and emits the block on `pytest_sessionfinish` when `--chumicro-pr-summary` is set.
+- Net effect: `scripts/device_testing.py` shrank from 1313 to 295 lines, now holds only the shared device-touching primitives (`create_transport`, `build_device_bootstrap`, `execute_device_bootstrap`, `resolve_library_source_dirs`, `resolve_effective_deploy_mode`).  CLI flags and PR-block output are unchanged at the user-visible surface; verified on both Pi Pico W and Lolin S2 board pairs (96/96 tests).
+- Added `run.py test-workbench` as the counterpart to `test-device` for host-only workbench packages (Decision 0032).  Each `workbench/<name>/functional_tests/` suite is plain host-side pytest; the task iterates every such directory and the suites' own `conftest.py` fixtures own device selection from `devices.yml`.
+
 ## Hardware-validated findings (2026-04-12)
 
 ### MicroPython — Lolin S2 Mini (ESP32-S2-S2FN4R2), MicroPython v1.28.0

@@ -1,6 +1,6 @@
 # User Guide
 
-This guide walks through everything `chumicro-deploy` offers today — from the `Device` struct to `Deployer.deploy()`, file sources, probing, and firmware URL resolution. Flashing firmware (`flash_firmware`) is planned for a near-future release; it is not yet available.
+This guide walks through everything `chumicro-deploy` offers today — from the `Device` struct to `Deployer.deploy()`, file sources, probing, firmware URL resolution, and end-to-end firmware flashing with `flash_firmware`. The interactive recovery layer (`InteractiveDeployer`) classifies transport failures and coaches the user through retry loops for unplug / ejected-drive / REPL-stuck failures.
 
 ## Install
 
@@ -285,6 +285,61 @@ cp_url = resolve_firmware_url(
 ```
 
 MicroPython URLs embed a per-build date that cannot be inferred from the version alone. Calling with `runtime="micropython"` raises `UnresolvedFirmwareError` with a clear roadmap message until live listing lookup lands in a later slice; for now, supply the URL yourself.
+
+## Flash firmware — `flash_firmware`
+
+`flash_firmware` downloads a firmware image and writes it to a connected board.  Destructive: overwrites whatever firmware is currently installed.  Two reflash backends:
+
+- **`uf2`** — for RP2040 / RP2350 (Pi Pico family) and any board shipping TinyUF2.  Uses the UF2 bootloader drive; requires a `.uf2` URL.  Programmatic bootloader entry works on CircuitPython and on MicroPython ports that implement `machine.bootloader()`.
+- **`esptool`** — for the ESP32 family (ESP32, S2, S3, C3, C6) regardless of runtime.  Shells out to `esptool` over serial; requires a `.bin` URL.
+
+```python
+from chumicro_deploy import Device, flash_firmware, resolve_firmware_url
+
+device = Device(
+    transport="circuitpython",
+    address="/dev/cu.usbmodem11401",
+)
+
+# UF2 path — Pi Pico W to a specific CircuitPython build.
+url = resolve_firmware_url(
+    board_id="raspberry_pi_pico_w",
+    runtime="circuitpython",
+    version="10.1.4",
+)
+flash_firmware(url, device, reflash_method="uf2")
+
+# esptool path — Lolin S2 Mini with MicroPython, erase first, offset 0x1000.
+flash_firmware(
+    "https://micropython.org/resources/firmware/LOLIN_S2_MINI-20260406-v1.28.0.bin",
+    Device(transport="micropython", address="/dev/cu.usbmodem211101"),
+    reflash_method="esptool",
+    erase_flash=True,
+    flash_offset="0x1000",
+)
+```
+
+**Method selection notes:**
+
+- CircuitPython `.bin` images use offset `"0x0"` (the default).  MicroPython ESP32 / S2 / S3 `.bin` images need `"0x1000"`.  Using the wrong offset bricks the bootloader region and requires a manual BOOT + RESET hold to recover — `chumicro-deploy` cannot auto-detect which ecosystem a `.bin` came from.
+- Pass `interactive=False` in automated flows without stdin.  When programmatic bootloader entry fails, the default is to prompt the user to hold BOOTSEL / GPIO0; `interactive=False` raises `FlashFirmwareError` instead.
+- `erase_flash=True` wipes every user partition (CIRCUITPY drive, stored WiFi credentials, NVS).  Recommended for first-install and recovery workflows; default `False` preserves user data on ordinary upgrades.
+- `on_progress` takes an optional `(fraction, message)` callback for UI integration — the CLI wires it to a stderr progress line.
+
+## Interactive recovery — `InteractiveDeployer`
+
+`InteractiveDeployer` wraps a `Deployer` with a classify-and-coach retry loop.  On a `CircuitpythonTransportError` or `MicropythonTransportError`, it routes the failure through `classify_deploy_failure`, prints the matching `RecoveryPlan` (headline + ordered fix-steps), and — when the plan is retryable — prompts the user to fix the condition and press Enter to retry.  After `max_attempts` attempts the last exception re-raises.
+
+```python
+from chumicro_deploy import Deployer, InteractiveDeployer
+
+deployer = InteractiveDeployer(Deployer(device), max_attempts=3)
+result = deployer.deploy(source)
+```
+
+Use it from the CLI or any interactive tool where a human is present and can unplug, tap RESET, or close a conflicting app; stick with the plain `Deployer` for scripts where retries would just confuse the output.
+
+On macOS, the `CIRCUITPY_DRIVE_MISSING` kind auto-promotes to `MACOS_FSKIT_WEDGED` when `detect_fskit_wedge()` confirms the FSKit / DiskArbitration daemons are stuck — the recovery block then prints the exact `sudo killall … && launchctl kickstart …` command to unstick them.
 
 ## Runtime notes
 
