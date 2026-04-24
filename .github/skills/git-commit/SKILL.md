@@ -33,6 +33,8 @@ Use whichever file tool your harness exposes (a "write file" / "overwrite file" 
 
 Follow the project's commit-message conventions: imperative subject line, body explaining *why*.
 
+**Do not add a `Co-Authored-By: Claude …` trailer (or any other agent-authorship trailer).** This repository's convention is that commits are authored by the human running the agent — the agent is a tool, not a co-author.  Claude Code's default commit template includes such a trailer; strip it before writing to `.scratch/commit-msg.txt`.
+
 ### Step 2 — Stage and commit
 
 ```bash
