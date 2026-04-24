@@ -66,7 +66,7 @@ from workspace import ROOT
 def pytest_addoption(parser: pytest.Parser) -> None:
     """Register ``--chumicro-*`` command-line options on the pytest CLI.
 
-    These are the knobs the ``scripts/run.py test-device`` task turns
+    These are the knobs the ``scripts/run.py test-libraries-functional`` task turns
     into pytest flags.  They all override the corresponding
     ``defaults:`` entries in ``devices.yml`` when supplied; when
     omitted, ``devices.yml`` defaults still drive selection so IDE
@@ -82,11 +82,11 @@ def pytest_addoption(parser: pytest.Parser) -> None:
       the per-device ``deploy_mode`` and ``defaults.deploy_mode``.
     - ``--chumicro-pr-summary`` — when set, prints a Markdown
       device-testing block at session end (the same block the
-      ``test-device`` task used to print directly).  Opt-in so IDE
+      ``test-libraries-functional`` task used to print directly).  Opt-in so IDE
       play-button runs stay quiet.
     - ``--chumicro-pr-summary-command`` — literal command string to
       render in the ``- Command:`` line of the PR block.  The
-      ``test-device`` wrapper passes the reconstructed invocation;
+      ``test-libraries-functional`` wrapper passes the reconstructed invocation;
       direct pytest runs can omit it and get the raw ``pytest ...``.
     """
     group = parser.getgroup("chumicro", "ChuMicro device-test plugin")
@@ -169,7 +169,7 @@ class _PRSummaryCollector:
     :class:`DeviceRunResult` shape ``pr_summary.format_pr_summary_block``
     expects.  Empty containers are populated on first encounter and
     the overall order — device declaration order, then file
-    declaration order — matches the ``test-device`` orchestrator's
+    declaration order — matches the ``test-libraries-functional`` orchestrator's
     output so the Markdown is stable across the two code paths.
     """
 
@@ -1134,7 +1134,7 @@ def pytest_sessionstart(session: pytest.Session) -> None:
     Applies ``--chumicro-runtime`` / ``--chumicro-micropython-device`` /
     ``--chumicro-circuitpython-device`` overrides on top of the
     ``devices.yml`` defaults before picking target devices, so the
-    pytest invocation mirrors what the ``test-device`` CLI used to do
+    pytest invocation mirrors what the ``test-libraries-functional`` CLI used to do
     in its own orchestrator.  Omitted options leave the defaults
     untouched, so IDE play-button runs continue to use
     ``devices.yml`` defaults with no explicit flags.

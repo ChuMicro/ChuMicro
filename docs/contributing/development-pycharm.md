@@ -115,12 +115,12 @@ python scripts/run.py test --libraries timing
 For real-board runs:
 
 ```bash
-python scripts/run.py test-device
-python scripts/run.py test-device --library timing
-python scripts/run.py test-device --runtime both
+python scripts/run.py test-libraries-functional
+python scripts/run.py test-libraries-functional --library timing
+python scripts/run.py test-libraries-functional --runtime both
 ```
 
-Bare `test-device` uses the `defaults:` section in `devices.yml` to choose the active board(s) and runtime(s). See [Device Testing](device-testing.md) for the schema, deploy modes, and per-runtime override flags.
+Bare `test-libraries-functional` uses the `defaults:` section in `devices.yml` to choose the active board(s) and runtime(s). See [Device Testing](device-testing.md) for the schema, deploy modes, and per-runtime override flags.
 
 ## Validating your work
 

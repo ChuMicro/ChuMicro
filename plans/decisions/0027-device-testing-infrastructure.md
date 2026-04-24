@@ -92,10 +92,10 @@ Add an optional `name_filter` parameter to `runner.run_module(module, name_filte
 
 ### run.py integration
 
-Replace the placeholder `test-device` command with real orchestration:
+Replace the placeholder `test-libraries-functional` command with real orchestration:
 
 ```
-python scripts/run.py test-device
+python scripts/run.py test-libraries-functional
     --runtime micropython|circuitpython|both   # override the defaults-backed runtime set
     --micropython-device <id>                  # override the selected MicroPython board
     --circuitpython-device <id>                # override the selected CircuitPython board
@@ -173,7 +173,7 @@ A `result_parser.py` module parses the harness's structured output (`PASS`, `FAI
 - `mpremote` and `pyserial` are added to `requirements-dev.txt`.
 - `device-config.yml` and `devices.yml` must be in `.gitignore`.
 - The harness `runner.run_module` gains a backward-compatible `name_filter` parameter.
-- `test-device` becomes a real command instead of a placeholder.
+- `test-libraries-functional` becomes a real command instead of a placeholder.
 - IDE play buttons work for explicit `functional_tests/` targets when `devices.yml` is configured.
 - Transport implementations are workspace-internal (in `support/`), not published libraries.
 - Decision 0016's staging requirement is addressed by the bootstrap/staging mechanism.

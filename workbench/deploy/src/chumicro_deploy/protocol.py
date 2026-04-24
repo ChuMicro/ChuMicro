@@ -77,7 +77,7 @@ class DeviceImplementation:
 
     Populated by ``probe_implementation`` on transports that support it
     (both :class:`MicropythonTransport` and :class:`CircuitpythonTransport`
-    do).  Consumed by the ``test-device`` PR-summary output so reviewers
+    do).  Consumed by the ``test-libraries-functional`` PR-summary output so reviewers
     see the exact firmware version and board model that exercised the
     tests, and by :meth:`CircuitpythonTransport._verify_drive_for_board`
     to match a mounted CIRCUITPY drive to its connected board (so

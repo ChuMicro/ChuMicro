@@ -164,7 +164,7 @@ Host-side tests live in `tests/`; real-board functional tests live in `functiona
 
 ```bash
 python scripts/run.py test --libraries timing
-python scripts/run.py test-device --library timing
+python scripts/run.py test-libraries-functional --library timing
 ```
 
 Before running device tests, generate local board config files with `python scripts/run.py setup`, then fill in `devices.yml`. See the [contributing guide](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md) and the [device testing guide](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/device-testing.md) for the full workflow.

@@ -21,7 +21,7 @@ The flash deployment path also lays groundwork for a future `chumicro-deploy` pi
 
 ### Unified deploy mode flag
 
-`test-device` accepts `--deploy-mode ram|flash` as a per-run override. When the flag is omitted, each selected device uses its own `deploy_mode` from `devices.yml`, falling back to `defaults.deploy_mode` and then `ram`.
+`test-libraries-functional` accepts `--deploy-mode ram|flash` as a per-run override. When the flag is omitted, each selected device uses its own `deploy_mode` from `devices.yml`, falling back to `defaults.deploy_mode` and then `ram`.
 
 The flag maps to runtime-specific transport modes:
 

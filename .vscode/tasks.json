@@ -45,20 +45,6 @@
             }
         },
         {
-            "label": "CircuitPython Compatibility",
-            "type": "shell",
-            "command": "python",
-            "args": [
-                "scripts/run.py",
-                "test-circuitpython-compatibility"
-            ],
-            "group": "test",
-            "presentation": {
-                "reveal": "always",
-                "panel": "shared"
-            }
-        },
-        {
             "label": "Docs",
             "type": "shell",
             "command": "python",
@@ -103,20 +89,6 @@
             }
         },
         {
-            "label": "MicroPython Compatibility",
-            "type": "shell",
-            "command": "python",
-            "args": [
-                "scripts/run.py",
-                "test-micropython-compatibility"
-            ],
-            "group": "test",
-            "presentation": {
-                "reveal": "always",
-                "panel": "shared"
-            }
-        },
-        {
             "label": "Preflight",
             "type": "shell",
             "command": "python",
@@ -141,20 +113,6 @@
                 "scripts/prepare_workspace.py"
             ],
             "group": "build",
-            "presentation": {
-                "reveal": "always",
-                "panel": "shared"
-            }
-        },
-        {
-            "label": "Runtime Matrix",
-            "type": "shell",
-            "command": "python",
-            "args": [
-                "scripts/run.py",
-                "test-runtime-matrix"
-            ],
-            "group": "test",
             "presentation": {
                 "reveal": "always",
                 "panel": "shared"
@@ -204,12 +162,12 @@
             }
         },
         {
-            "label": "Test Everything",
+            "label": "Test All Runtimes",
             "type": "shell",
             "command": "python",
             "args": [
                 "scripts/run.py",
-                "test-everything"
+                "test-all-runtimes"
             ],
             "group": "test",
             "presentation": {
@@ -218,12 +176,54 @@
             }
         },
         {
-            "label": "Test Device",
+            "label": "Test CircuitPython",
             "type": "shell",
             "command": "python",
             "args": [
                 "scripts/run.py",
-                "test-device"
+                "test-circuitpython"
+            ],
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Test Functional",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "scripts/run.py",
+                "test-functional"
+            ],
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Test Libraries Functional",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "scripts/run.py",
+                "test-libraries-functional"
+            ],
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Test MicroPython",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "scripts/run.py",
+                "test-micropython"
             ],
             "group": "test",
             "presentation": {
@@ -238,6 +238,20 @@
             "args": [
                 "scripts/run.py",
                 "test-scripts"
+            ],
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Test Workbench Functional",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "scripts/run.py",
+                "test-workbench-functional"
             ],
             "group": "test",
             "presentation": {

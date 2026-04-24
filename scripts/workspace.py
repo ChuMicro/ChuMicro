@@ -235,7 +235,7 @@ def discover_workbench_dirs() -> list[Path]:
     """Return package directories that live under ``workbench/``.
 
     Counterpart to :func:`discover_library_dirs` for host-only
-    publishable tools.  Used by the ``test-workbench`` task to drive
+    publishable tools.  Used by the ``test-workbench-functional`` task to drive
     pytest at every workbench package's ``functional_tests/``
     directory.  Device-side routing is not relevant — workbench
     packages are CPython-only and reach hardware through the public

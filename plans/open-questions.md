@@ -203,34 +203,20 @@ Currently scripts use `print()` for warnings and status.  A unified
 filtering — but only makes sense if applied across all scripts, not
 piecemeal.  Parked for a rainy day.
 
-### Is `test-everything` the right name for an opt-in-device sweep?
-
-`python scripts/run.py test-everything` runs CPython tests, scripts
-infrastructure tests, and the unix-port runtime matrix in one pass.
-Real-board functional tests are intentionally **opt-in** via
-`--with-device` because they are slow and require connected hardware.
-
-That gap between what the name implies ("everything") and what it
-actually runs is mildly confusing — a user reading the name might
-expect device tests too.  The current behavior is correct (functional
-tests should not run by default), but the name oversells.
-
-Options:
-
-1. Rename to `test-deep` or `test-sweep` — clearer that it's a
-   developer-oriented broad sweep, not literally everything.
-2. Make `--with-device` the default and add `--no-device` as the
-   opt-out — closer to the name, but slow by default for anyone
-   running a quick sweep.
-3. Leave the name and document the carve-out clearly (current state).
-
-Not blocking any work.  Worth revisiting when more contributors start
-using the command in their default workflow.
-
 ---
 
 ## Resolved
 
+
+### Is `test-everything` the right name for an opt-in-device sweep?
+
+Resolved by the 2026-04-24 `run.py` command audit: dropped
+`test-everything` entirely.  The CI-mirror sweep is `preflight`
+(append `--with-functional` to also run hardware-gated suites);
+hardware-only runs are `test-functional` (libraries + workbench)
+or the individual `test-libraries-functional` /
+`test-workbench-functional` commands.  The unit-only deep sweep
+that prompted the original question is `test-all-runtimes`.
 
 ### Should the coverage gate be higher?
 

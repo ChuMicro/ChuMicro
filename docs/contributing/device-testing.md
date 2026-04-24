@@ -6,7 +6,7 @@ Use it when you want to:
 
 - run `functional_tests/` on a connected MicroPython or CircuitPython board
 - understand how `devices.yml` and `device-config.yml` are structured
-- use `python scripts/run.py test-device`
+- use `python scripts/run.py test-libraries-functional`
 - use IDE play buttons for `functional_tests/`
 
 Host-side `tests/` still run through normal CPython pytest. Real-board validation is an extra layer for behavior that mocks and unix-port checks cannot prove.
@@ -37,7 +37,7 @@ If the files already exist, setup leaves them alone.
 
 ### `defaults:`
 
-`defaults:` controls what happens when you run `python scripts/run.py test-device` with no board-selection flags, and what the IDE play button targets for `functional_tests/`.
+`defaults:` controls what happens when you run `python scripts/run.py test-libraries-functional` with no board-selection flags, and what the IDE play button targets for `functional_tests/`.
 
 ```yaml
 defaults:
@@ -141,7 +141,7 @@ If a library does not need shared environment data, the file can stay mostly emp
 ### Default target set
 
 ```bash
-python scripts/run.py test-device
+python scripts/run.py test-libraries-functional
 ```
 
 This uses `devices.yml` defaults:
@@ -154,26 +154,26 @@ This uses `devices.yml` defaults:
 
 ```bash
 # One runtime only
-python scripts/run.py test-device --runtime micropython
+python scripts/run.py test-libraries-functional --runtime micropython
 
 # Both runtimes, using defaults-backed board selection
-python scripts/run.py test-device --runtime both
+python scripts/run.py test-libraries-functional --runtime both
 
 # Override just one selected board
-python scripts/run.py test-device --micropython-device office-esp32-mp
-python scripts/run.py test-device --circuitpython-device office-esp32-cp
+python scripts/run.py test-libraries-functional --micropython-device office-esp32-mp
+python scripts/run.py test-libraries-functional --circuitpython-device office-esp32-cp
 
 # Scope to a library
-python scripts/run.py test-device --library timing
+python scripts/run.py test-libraries-functional --library timing
 
 # Scope to files whose name contains the substring
-python scripts/run.py test-device --library timing --file test_heartbeat
+python scripts/run.py test-libraries-functional --library timing --file test_heartbeat
 
 # Scope to functions whose name contains the substring
-python scripts/run.py test-device --library timing --function heartbeat_fires
+python scripts/run.py test-libraries-functional --library timing --function heartbeat_fires
 
 # Force flash mode
-python scripts/run.py test-device --library timing --deploy-mode flash
+python scripts/run.py test-libraries-functional --library timing --deploy-mode flash
 ```
 
 **Scoping flags:**
@@ -186,7 +186,7 @@ python scripts/run.py test-device --library timing --deploy-mode flash
 
 ## 5. Run functional tests via pytest directly
 
-`scripts/run.py test-device` is a thin wrapper over pytest — it runs `pytest libraries/<name>/functional_tests/` with the `--chumicro-*` flags the device plugin exposes.  Invoking pytest directly is useful when you want pytest-native UX (a specific folder, file, or method) without going through `scripts/run.py`.
+`scripts/run.py test-libraries-functional` is a thin wrapper over pytest — it runs `pytest libraries/<name>/functional_tests/` with the `--chumicro-*` flags the device plugin exposes.  Invoking pytest directly is useful when you want pytest-native UX (a specific folder, file, or method) without going through `scripts/run.py`.
 
 ```bash
 # Whole directory
@@ -206,7 +206,7 @@ Target device selection still follows `devices.yml` defaults. Without a populate
 
 ### `--chumicro-*` plugin options
 
-Driving pytest directly gives you access to the same overrides `test-device` passes through the plugin:
+Driving pytest directly gives you access to the same overrides `test-libraries-functional` passes through the plugin:
 
 | Flag | Purpose |
 |---|---|
@@ -215,24 +215,24 @@ Driving pytest directly gives you access to the same overrides `test-device` pas
 | `--chumicro-circuitpython-device <id>` | Override `defaults.circuitpython` for this run. |
 | `--chumicro-deploy-mode {ram,flash}` | Override each device's `deploy_mode`. |
 | `--chumicro-pr-summary` | Print the Markdown PR block at session end (paste-ready).  Opt-in so IDE play-button runs stay quiet. |
-| `--chumicro-pr-summary-command <str>` | Literal command string rendered inside the PR block's `- Command:` line.  `test-device` passes its reconstructed CLI invocation here; direct pytest runs can supply their own label or omit it and get a bare `pytest`. |
+| `--chumicro-pr-summary-command <str>` | Literal command string rendered inside the PR block's `- Command:` line.  `test-libraries-functional` passes its reconstructed CLI invocation here; direct pytest runs can supply their own label or omit it and get a bare `pytest`. |
 
-## 6. Run workbench functional tests — `test-workbench`
+## 6. Run workbench functional tests — `test-workbench-functional`
 
 Workbench packages (`workbench/<name>/`, Decision 0032) can ship their own `functional_tests/` directories.  Unlike library functional tests, these run host-side — the workbench tool is the thing *driving* a connected board through its public API rather than code that ships onto the device.
 
 ```bash
 # Run every workbench's functional_tests/ suite.
-python scripts/run.py test-workbench
+python scripts/run.py test-workbench-functional
 
 # One workbench package.
-python scripts/run.py test-workbench --workbench deploy
+python scripts/run.py test-workbench-functional --workbench deploy
 
-# Scope by file / function like test-device.
-python scripts/run.py test-workbench --file test_deploy_files_hardware --function circuitpython_ram -v
+# Scope by file / function like test-libraries-functional.
+python scripts/run.py test-workbench-functional --file test_deploy_files_hardware --function circuitpython_ram -v
 ```
 
-Device selection lives inside each suite's own `conftest.py` (typically by reading `devices.yml` defaults), so `test-workbench` itself exposes no runtime / device flags — change the target board via `devices.yml` defaults or by editing the suite's fixtures.  Suites skip cleanly when `devices.yml` is missing or no matching board is configured.
+Device selection lives inside each suite's own `conftest.py` (typically by reading `devices.yml` defaults), so `test-workbench-functional` itself exposes no runtime / device flags — change the target board via `devices.yml` defaults or by editing the suite's fixtures.  Suites skip cleanly when `devices.yml` is missing or no matching board is configured.
 
 ## 7. Run `functional_tests/` from an IDE
 
@@ -263,9 +263,9 @@ A dedicated live end-to-end VS Code validation pass remains on `plans/next-up.md
 | Test type | Location | How to run |
 |---|---|---|
 | Host/unit tests | `libraries/<name>/tests/` | `python scripts/run.py test --libraries <name>` |
-| Real-board functional tests | `libraries/<name>/functional_tests/` | `python scripts/run.py test-device --library <name>` or an IDE play button |
-| Workbench hardware-gated tests | `workbench/<name>/functional_tests/` | `python scripts/run.py test-workbench --workbench <name>` |
-| Cross-runtime unix-port tests | reuses `tests/` | `python scripts/run.py test-runtime-matrix` |
+| Real-board functional tests | `libraries/<name>/functional_tests/` | `python scripts/run.py test-libraries-functional --library <name>` or an IDE play button |
+| Workbench hardware-gated tests | `workbench/<name>/functional_tests/` | `python scripts/run.py test-workbench-functional --workbench <name>` |
+| Cross-runtime unix-port tests | reuses `tests/` | `python scripts/run.py test-all-runtimes` |
 
 ## 9. CI and environment overrides
 
@@ -284,7 +284,7 @@ These are intended for CI or unusual local layouts. They do **not** replace the 
 | `No devices configured in devices.yml` | The file exists but `devices:` is empty or defaults do not match real entries | Add at least one board entry and update `defaults:` |
 | CircuitPython RAM-mode run fails before tests start | Inline payload is too large for available heap | Re-run with `--deploy-mode flash` or set that board's `deploy_mode: flash` |
 | Flash mode cannot find CIRCUITPY | Host mount path not auto-detected | Set `circuitpy_drive_path` explicitly in `devices.yml` |
-| A normal `python scripts/run.py test` run ignores `functional_tests/` | Expected behavior | Use `test-device` or explicitly target the `functional_tests/` path from your IDE |
+| A normal `python scripts/run.py test` run ignores `functional_tests/` | Expected behavior | Use `test-libraries-functional` or explicitly target the `functional_tests/` path from your IDE |
 
 ## Related guides
 

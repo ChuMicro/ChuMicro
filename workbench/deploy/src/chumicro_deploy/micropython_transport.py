@@ -48,7 +48,7 @@ def _resolve_mpremote_binary() -> str:
     ``.venv/bin/mpremote`` after workspace setup.  Shelling out with the
     bare name only works when ``.venv/bin`` is on ``PATH``
     (i.e. after ``source .venv/bin/activate``), which fails for direct
-    ``.venv/bin/python scripts/run.py test-device`` invocations and for
+    ``.venv/bin/python scripts/run.py test-libraries-functional`` invocations and for
     IDE play buttons that launch via the interpreter path without an
     activated shell.
 

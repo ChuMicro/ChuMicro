@@ -1,5 +1,5 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="MicroPython Compatibility" type="PythonConfigurationType" factoryName="Python">
+  <configuration default="false" name="Test MicroPython" type="PythonConfigurationType" factoryName="Python">
     <module name="chumicro" />
     <option name="INTERPRETER_OPTIONS" value="" />
     <option name="PARENT_ENVS" value="true" />
@@ -11,7 +11,7 @@
     <option name="ADD_SOURCE_ROOTS" value="true" />
     <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
     <option name="SCRIPT_NAME" value="$PROJECT_DIR$/scripts/run.py" />
-    <option name="PARAMETERS" value="test-micropython-compatibility" />
+    <option name="PARAMETERS" value="test-micropython" />
     <method v="2" />
   </configuration>
 </component>

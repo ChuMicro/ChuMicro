@@ -85,7 +85,7 @@ class TestMainDispatch:
         captured = capsys.readouterr()
         assert result == 1
         assert "usage:" in captured.out
-        assert "test-device" in captured.out
+        assert "test-libraries-functional" in captured.out
 
     @pytest.mark.parametrize(
         ("task_name", "function_name"),
@@ -282,7 +282,10 @@ class TestMainDispatch:
 
         assert result == 41
         assert command_calls == [
-            (("/tmp/mpy", "/tmp/cpy"), {"coverage_threshold": 94}),
+            (
+                ("/tmp/mpy", "/tmp/cpy"),
+                {"coverage_threshold": 94, "with_functional": False},
+            ),
         ]
 
     def test_runtime_compatibility_commands_dispatch(self, monkeypatch) -> None:
@@ -290,18 +293,18 @@ class TestMainDispatch:
         micropython_calls, fake_micropython = _make_fake_command(return_value=43)
         circuitpython_calls, fake_circuitpython = _make_fake_command(return_value=47)
         monkeypatch.setattr(
-            run, "test_micropython_compatibility", fake_micropython,
+            run, "test_micropython", fake_micropython,
         )
         monkeypatch.setattr(
-            run, "test_circuitpython_compatibility", fake_circuitpython,
+            run, "test_circuitpython", fake_circuitpython,
         )
 
         micropython_result = run.main([
-            "run.py", "test-micropython-compatibility",
+            "run.py", "test-micropython",
             "--micropython-binary", "/tmp/mpy",
         ])
         circuitpython_result = run.main([
-            "run.py", "test-circuitpython-compatibility",
+            "run.py", "test-circuitpython",
             "--circuitpython-binary", "/tmp/cpy",
         ])
 
@@ -320,24 +323,24 @@ class TestMainDispatch:
         )
         command_calls, fake_micropython = _make_fake_command(return_value=49)
         monkeypatch.setattr(
-            run, "test_micropython_compatibility", fake_micropython,
+            run, "test_micropython", fake_micropython,
         )
 
         result = run.main([
-            "run.py", "test-micropython-compatibility",
+            "run.py", "test-micropython",
             "--libraries", "timing",
         ])
 
         assert result == 49
         assert command_calls == [((None, resolved_packages), {})]
 
-    def test_test_runtime_matrix_dispatches_binary_paths(self, monkeypatch) -> None:
-        """test-runtime-matrix should receive both optional binary overrides."""
-        command_calls, fake_test_runtime_matrix = _make_fake_command(return_value=53)
-        monkeypatch.setattr(run, "test_runtime_matrix", fake_test_runtime_matrix)
+    def test_test_all_runtimes_dispatches_binary_paths(self, monkeypatch) -> None:
+        """test-all-runtimes should receive both optional binary overrides."""
+        command_calls, fake_test_all_runtimes = _make_fake_command(return_value=53)
+        monkeypatch.setattr(run, "test_all_runtimes", fake_test_all_runtimes)
 
         result = run.main([
-            "run.py", "test-runtime-matrix",
+            "run.py", "test-all-runtimes",
             "--micropython-binary", "/tmp/mpy",
             "--circuitpython-binary", "/tmp/cpy",
         ])
@@ -345,108 +348,56 @@ class TestMainDispatch:
         assert result == 53
         assert command_calls == [(("/tmp/mpy", "/tmp/cpy", None), {})]
 
-    def test_test_runtime_matrix_dispatches_scoped_packages(self, monkeypatch) -> None:
-        """test-runtime-matrix should forward an explicit package scope."""
+    def test_test_all_runtimes_dispatches_scoped_packages(self, monkeypatch) -> None:
+        """test-all-runtimes should forward an explicit package scope."""
         resolved_packages = [Path("/tmp/timing")]
         monkeypatch.setattr(
             run, "resolve_scope", lambda **kwargs: resolved_packages,
         )
-        command_calls, fake_test_runtime_matrix = _make_fake_command(return_value=57)
-        monkeypatch.setattr(run, "test_runtime_matrix", fake_test_runtime_matrix)
+        command_calls, fake_test_all_runtimes = _make_fake_command(return_value=57)
+        monkeypatch.setattr(run, "test_all_runtimes", fake_test_all_runtimes)
 
         result = run.main([
-            "run.py", "test-runtime-matrix", "--libraries", "timing",
+            "run.py", "test-all-runtimes", "--libraries", "timing",
         ])
 
         assert result == 57
         assert command_calls == [((None, None, resolved_packages), {})]
 
-    def test_test_everything_uses_all_packages_by_default(self, monkeypatch) -> None:
-        """test-everything should default to its own all-packages behavior."""
-        command_calls, fake_test_everything = _make_fake_command(return_value=63)
+    def test_preflight_with_functional_flag_dispatches_through(
+        self, monkeypatch,
+    ) -> None:
+        """preflight --with-functional should propagate the flag to preflight()."""
+        command_calls, fake_preflight = _make_fake_command(return_value=42)
+        monkeypatch.setattr(run, "preflight", fake_preflight)
 
-        def fail_resolve_scope(*, all_packages, libraries):
-            raise AssertionError("resolve_scope should not run without scope flags")
+        result = run.main(["run.py", "preflight", "--with-functional"])
 
-        monkeypatch.setattr(run, "resolve_scope", fail_resolve_scope)
-        monkeypatch.setattr(run, "test_everything", fake_test_everything)
+        assert result == 42
+        assert command_calls == [
+            ((None, None), {"coverage_threshold": None, "with_functional": True}),
+        ]
 
-        result = run.main(["run.py", "test-everything", "--no-cov"])
+    def test_test_functional_dispatches_flags(self, monkeypatch) -> None:
+        """test-functional should forward -v and -x to test_functional()."""
+        command_calls, fake_test_functional = _make_fake_command(return_value=63)
+        monkeypatch.setattr(run, "test_functional", fake_test_functional)
+
+        result = run.main(["run.py", "test-functional", "-v", "-x"])
 
         assert result == 63
         assert command_calls == [
-            ((None,), {
-                "micropython_binary": None,
-                "circuitpython_binary": None,
-                "exit_first": False,
-                "verbose": False,
-                "no_cov": True,
-                "coverage_threshold": None,
-                "with_device": False,
-                "runtime": None,
-                "micropython_device": None,
-                "circuitpython_device": None,
-                "library": None,
-                "file_filter": None,
-                "function_filter": None,
-                "deploy_mode": None,
-            }),
+            ((), {"verbose": True, "exit_first": True}),
         ]
 
-    def test_test_everything_dispatches_scope_and_device_arguments(
+    def test_test_libraries_functional_without_filters_passes_none_values(
         self, monkeypatch,
     ) -> None:
-        """test-everything should forward both scope and optional device flags."""
-        resolved_packages = [Path("/tmp/timing")]
-        monkeypatch.setattr(
-            run, "resolve_scope", lambda **kwargs: resolved_packages,
-        )
-        command_calls, fake_test_everything = _make_fake_command(return_value=65)
-        monkeypatch.setattr(run, "test_everything", fake_test_everything)
+        """Bare test-libraries-functional should defer device selection to lower-level defaults."""
+        command_calls, fake_test_libraries_functional = _make_fake_command(return_value=59)
+        monkeypatch.setattr(run, "test_libraries_functional", fake_test_libraries_functional)
 
-        result = run.main([
-            "run.py", "test-everything",
-            "--libraries", "timing",
-            "--with-device",
-            "--runtime", "both",
-            "--library", "timing",
-            "--function", "heartbeat",
-            "--deploy-mode", "flash",
-            "--micropython-binary", "/tmp/mpy",
-            "--circuitpython-binary", "/tmp/cpy",
-            "--coverage-threshold", "94",
-            "-x",
-            "-v",
-        ])
-
-        assert result == 65
-        assert command_calls == [
-            ((resolved_packages,), {
-                "micropython_binary": "/tmp/mpy",
-                "circuitpython_binary": "/tmp/cpy",
-                "exit_first": True,
-                "verbose": True,
-                "no_cov": False,
-                "coverage_threshold": 94,
-                "with_device": True,
-                "runtime": "both",
-                "micropython_device": None,
-                "circuitpython_device": None,
-                "library": "timing",
-                "file_filter": None,
-                "function_filter": "heartbeat",
-                "deploy_mode": "flash",
-            }),
-        ]
-
-    def test_test_device_without_filters_passes_none_values(
-        self, monkeypatch,
-    ) -> None:
-        """Bare test-device should defer device selection to lower-level defaults."""
-        command_calls, fake_test_device = _make_fake_command(return_value=59)
-        monkeypatch.setattr(run, "test_device", fake_test_device)
-
-        result = run.main(["run.py", "test-device"])
+        result = run.main(["run.py", "test-libraries-functional"])
 
         assert result == 59
         assert command_calls == [
@@ -461,13 +412,13 @@ class TestMainDispatch:
             }),
         ]
 
-    def test_test_device_forwards_explicit_cli_filters(self, monkeypatch) -> None:
-        """test-device should forward explicit runtime and filter flags."""
-        command_calls, fake_test_device = _make_fake_command(return_value=61)
-        monkeypatch.setattr(run, "test_device", fake_test_device)
+    def test_test_libraries_functional_forwards_explicit_cli_filters(self, monkeypatch) -> None:
+        """test-libraries-functional should forward explicit runtime and filter flags."""
+        command_calls, fake_test_libraries_functional = _make_fake_command(return_value=61)
+        monkeypatch.setattr(run, "test_libraries_functional", fake_test_libraries_functional)
 
         result = run.main([
-            "run.py", "test-device",
+            "run.py", "test-libraries-functional",
             "--runtime", "circuitpython",
             "--library", "timing",
             "--file", "test_heartbeat",
@@ -488,12 +439,12 @@ class TestMainDispatch:
             }),
         ]
 
-    def test_test_device_accepts_explicit_both_runtime(self, monkeypatch) -> None:
-        """test-device should allow `--runtime both` as an explicit defaults alias."""
-        command_calls, fake_test_device = _make_fake_command(return_value=67)
-        monkeypatch.setattr(run, "test_device", fake_test_device)
+    def test_test_libraries_functional_accepts_explicit_both_runtime(self, monkeypatch) -> None:
+        """test-libraries-functional should allow `--runtime both` as an explicit defaults alias."""
+        command_calls, fake_test_libraries_functional = _make_fake_command(return_value=67)
+        monkeypatch.setattr(run, "test_libraries_functional", fake_test_libraries_functional)
 
-        result = run.main(["run.py", "test-device", "--runtime", "both"])
+        result = run.main(["run.py", "test-libraries-functional", "--runtime", "both"])
 
         assert result == 67
         assert command_calls == [
@@ -508,15 +459,15 @@ class TestMainDispatch:
             }),
         ]
 
-    def test_test_device_forwards_per_runtime_device_overrides(
+    def test_test_libraries_functional_forwards_per_runtime_device_overrides(
         self, monkeypatch,
     ) -> None:
-        """test-device should forward explicit per-runtime device overrides."""
-        command_calls, fake_test_device = _make_fake_command(return_value=71)
-        monkeypatch.setattr(run, "test_device", fake_test_device)
+        """test-libraries-functional should forward explicit per-runtime device overrides."""
+        command_calls, fake_test_libraries_functional = _make_fake_command(return_value=71)
+        monkeypatch.setattr(run, "test_libraries_functional", fake_test_libraries_functional)
 
         result = run.main([
-            "run.py", "test-device",
+            "run.py", "test-libraries-functional",
             "--runtime", "both",
             "--micropython-device", "mp-alt",
             "--circuitpython-device", "cp-alt",
@@ -535,22 +486,22 @@ class TestMainDispatch:
             }),
         ]
 
-    def test_test_device_rejects_removed_legacy_device_flag(self) -> None:
+    def test_test_libraries_functional_rejects_removed_legacy_device_flag(self) -> None:
         """The removed --device flag should fail with an argparse error."""
         with pytest.raises(SystemExit, match="2"):
             run.main([
-                "run.py", "test-device",
+                "run.py", "test-libraries-functional",
                 "--device", "board-1",
             ])
 
-    def test_test_workbench_without_filters_passes_none_values(
+    def test_test_workbench_functional_without_filters_passes_none_values(
         self, monkeypatch,
     ) -> None:
-        """Bare test-workbench forwards no filters and uses devices.yml defaults."""
-        command_calls, fake_test_workbench = _make_fake_command(return_value=79)
-        monkeypatch.setattr(run, "test_workbench", fake_test_workbench)
+        """Bare test-workbench-functional forwards no filters and uses devices.yml defaults."""
+        command_calls, fake_test_workbench_functional = _make_fake_command(return_value=79)
+        monkeypatch.setattr(run, "test_workbench_functional", fake_test_workbench_functional)
 
-        result = run.main(["run.py", "test-workbench"])
+        result = run.main(["run.py", "test-workbench-functional"])
 
         assert result == 79
         assert command_calls == [
@@ -563,13 +514,13 @@ class TestMainDispatch:
             }),
         ]
 
-    def test_test_workbench_forwards_explicit_cli_filters(self, monkeypatch) -> None:
-        """test-workbench should forward --workbench / --file / --function / -v / -x."""
-        command_calls, fake_test_workbench = _make_fake_command(return_value=83)
-        monkeypatch.setattr(run, "test_workbench", fake_test_workbench)
+    def test_test_workbench_functional_forwards_explicit_cli_filters(self, monkeypatch) -> None:
+        """test-workbench-functional should forward --workbench / --file / --function / -v / -x."""
+        command_calls, fake_test_workbench_functional = _make_fake_command(return_value=83)
+        monkeypatch.setattr(run, "test_workbench_functional", fake_test_workbench_functional)
 
         result = run.main([
-            "run.py", "test-workbench",
+            "run.py", "test-workbench-functional",
             "--workbench", "deploy",
             "--file", "test_deploy_files_hardware",
             "--function", "circuitpython_ram",
@@ -589,8 +540,8 @@ class TestMainDispatch:
         ]
 
 
-class TestTestWorkbench:
-    """Tests for run.test_workbench — workbench functional-test orchestration."""
+class TestTestWorkbenchFunctional:
+    """Tests for run.test_workbench_functional — workbench functional-test orchestration."""
 
     def _stub_discovery(self, monkeypatch, tmp_path: Path) -> list[Path]:
         """Build two fake workbench packages and return their paths.
@@ -623,20 +574,20 @@ class TestTestWorkbench:
         alpha, _beta = self._stub_discovery(monkeypatch, tmp_path)
         invocations = self._record_invocations(monkeypatch)
 
-        result = run.test_workbench()
+        result = run.test_workbench_functional()
 
         assert result == 0
         assert len(invocations) == 1
         assert str(alpha / "functional_tests") in invocations[0]
 
-    def test_workbench_filter_limits_to_named_package(
+    def test_workbench_functional_filter_limits_to_named_package(
         self, monkeypatch, tmp_path: Path,
     ) -> None:
         """--workbench alpha keeps only the alpha suite."""
         alpha, _beta = self._stub_discovery(monkeypatch, tmp_path)
         invocations = self._record_invocations(monkeypatch)
 
-        result = run.test_workbench(workbench="alpha")
+        result = run.test_workbench_functional(workbench="alpha")
 
         assert result == 0
         assert len(invocations) == 1
@@ -649,7 +600,7 @@ class TestTestWorkbench:
         self._stub_discovery(monkeypatch, tmp_path)
         monkeypatch.setattr(run, "run_command", lambda *_args, **_kwargs: 0)
 
-        result = run.test_workbench(workbench="ghost")
+        result = run.test_workbench_functional(workbench="ghost")
 
         assert result == 1
         captured = capsys.readouterr()
@@ -662,7 +613,7 @@ class TestTestWorkbench:
         self._stub_discovery(monkeypatch, tmp_path)
         invocations = self._record_invocations(monkeypatch)
 
-        result = run.test_workbench(
+        result = run.test_workbench_functional(
             file_filter="test_deploy_files_hardware",
             function_filter="circuitpython_ram",
         )
@@ -687,7 +638,7 @@ class TestTestWorkbench:
         return_values = iter([5, 0])
         monkeypatch.setattr(run, "run_command", lambda *_args, **_kwargs: next(return_values))
 
-        result = run.test_workbench()
+        result = run.test_workbench_functional()
 
         assert result == 5
 
@@ -698,7 +649,7 @@ class TestTestWorkbench:
         monkeypatch.setattr(run, "discover_workbench_dirs", lambda: [])
         monkeypatch.setattr(run, "run_command", lambda *_args, **_kwargs: 0)
 
-        result = run.test_workbench()
+        result = run.test_workbench_functional()
 
         assert result == 0
         assert "No functional_tests/" in capsys.readouterr().out
@@ -707,17 +658,17 @@ class TestTestWorkbench:
 class TestCompositeTestCommands:
     """Tests for aggregated developer test commands."""
 
-    def test_test_runtime_matrix_forwards_package_scope(self, monkeypatch) -> None:
-        """test-runtime-matrix should pass scoped packages to every phase."""
+    def test_test_all_runtimes_forwards_package_scope(self, monkeypatch) -> None:
+        """test-all-runtimes should pass scoped packages to every phase."""
         package_dirs = [Path("/tmp/timing")]
         cpython_calls, fake_cpython = _make_fake_command(return_value=0)
         micropython_calls, fake_micropython = _make_fake_command(return_value=0)
         circuitpython_calls, fake_circuitpython = _make_fake_command(return_value=0)
         monkeypatch.setattr(run, "test_cpython", fake_cpython)
-        monkeypatch.setattr(run, "test_micropython_compatibility", fake_micropython)
-        monkeypatch.setattr(run, "test_circuitpython_compatibility", fake_circuitpython)
+        monkeypatch.setattr(run, "test_micropython", fake_micropython)
+        monkeypatch.setattr(run, "test_circuitpython", fake_circuitpython)
 
-        result = run.test_runtime_matrix(
+        result = run.test_all_runtimes(
             "/tmp/mpy", "/tmp/cpy", package_dirs,
         )
 
@@ -726,81 +677,82 @@ class TestCompositeTestCommands:
         assert micropython_calls == [(("/tmp/mpy", package_dirs), {})]
         assert circuitpython_calls == [(("/tmp/cpy", package_dirs), {})]
 
-    def test_test_everything_runs_all_non_device_phases(self, monkeypatch) -> None:
-        """test-everything should aggregate CPython, scripts, and unix-port tests."""
-        package_dirs = [Path("/tmp/timing")]
-        cpython_calls, fake_cpython = _make_fake_command(return_value=0)
-        scripts_calls, fake_scripts = _make_fake_command(return_value=0)
-        micropython_calls, fake_micropython = _make_fake_command(return_value=0)
-        circuitpython_calls, fake_circuitpython = _make_fake_command(return_value=0)
-        monkeypatch.setattr(run, "test_cpython", fake_cpython)
-        monkeypatch.setattr(run, "test_scripts", fake_scripts)
-        monkeypatch.setattr(run, "test_micropython_compatibility", fake_micropython)
-        monkeypatch.setattr(run, "test_circuitpython_compatibility", fake_circuitpython)
-
-        result = run.test_everything(
-            package_dirs,
-            micropython_binary="/tmp/mpy",
-            circuitpython_binary="/tmp/cpy",
-            exit_first=True,
-            verbose=True,
-            no_cov=True,
-            coverage_threshold=94,
-        )
-
-        assert result == 0
-        assert cpython_calls == [((package_dirs,), {
-            "exit_first": True,
-            "verbose": True,
-            "no_cov": True,
-            "coverage_threshold": 94,
-        })]
-        assert scripts_calls == [((), {"exit_first": True, "verbose": True})]
-        assert micropython_calls == [(("/tmp/mpy", package_dirs), {})]
-        assert circuitpython_calls == [(("/tmp/cpy", package_dirs), {})]
-
-    def test_test_everything_scopes_device_phase_by_selected_libraries(
+    def test_test_functional_runs_libraries_then_workbench(
         self, monkeypatch,
     ) -> None:
-        """Scoped test-everything runs should execute device tests per selected library."""
-        package_dirs = [
-            run.ROOT / "libraries" / "timing",
-            run.ROOT / "libraries" / "runner",
-        ]
-        monkeypatch.setattr(run, "test_cpython", lambda *args, **kwargs: 0)
-        monkeypatch.setattr(run, "test_scripts", lambda *args, **kwargs: 0)
-        monkeypatch.setattr(
-            run, "test_micropython_compatibility", lambda *args, **kwargs: 0,
-        )
-        monkeypatch.setattr(
-            run, "test_circuitpython_compatibility", lambda *args, **kwargs: 0,
-        )
-        device_calls, fake_test_device = _make_fake_command(return_value=0)
-        monkeypatch.setattr(run, "test_device", fake_test_device)
+        """test_functional() should run libraries-functional then workbench-functional."""
+        order: list[str] = []
 
-        result = run.test_everything(package_dirs, with_device=True, runtime="both")
+        def fake_libraries() -> int:
+            order.append("libraries")
+            return 0
+
+        workbench_calls: list[dict] = []
+
+        def fake_workbench(**kwargs) -> int:
+            order.append("workbench")
+            workbench_calls.append(kwargs)
+            return 0
+
+        monkeypatch.setattr(run, "test_libraries_functional", fake_libraries)
+        monkeypatch.setattr(run, "test_workbench_functional", fake_workbench)
+
+        result = run.test_functional(verbose=True, exit_first=True)
 
         assert result == 0
-        assert device_calls == [
-            ((), {
-                "runtime": "both",
-                "micropython_device": None,
-                "circuitpython_device": None,
-                "library": "timing",
-                "file_filter": None,
-                "function_filter": None,
-                "deploy_mode": None,
-            }),
-            ((), {
-                "runtime": "both",
-                "micropython_device": None,
-                "circuitpython_device": None,
-                "library": "runner",
-                "file_filter": None,
-                "function_filter": None,
-                "deploy_mode": None,
-            }),
-        ]
+        assert order == ["libraries", "workbench"]
+        assert workbench_calls == [{"verbose": True, "exit_first": True}]
+
+    def test_test_functional_first_failure_short_circuits(
+        self, monkeypatch,
+    ) -> None:
+        """A failing libraries phase should prevent the workbench phase from running."""
+        monkeypatch.setattr(
+            run, "test_libraries_functional", lambda: 7,
+        )
+
+        def fail_workbench(**_kwargs) -> int:
+            raise AssertionError("workbench phase should not run after libraries fail")
+
+        monkeypatch.setattr(run, "test_workbench_functional", fail_workbench)
+
+        result = run.test_functional()
+
+        assert result == 7
+
+    def test_preflight_with_functional_appends_functional_phases(
+        self, monkeypatch,
+    ) -> None:
+        """preflight(with_functional=True) should append both functional phases."""
+        # Stub the unit-test phases that preflight already runs, then verify
+        # the two functional phases get called when --with-functional is set.
+        monkeypatch.setattr(run, "lint", lambda: 0)
+        monkeypatch.setattr(run, "build", lambda: 0)
+        monkeypatch.setattr(run, "docs", lambda *args, **kwargs: 0)
+        monkeypatch.setattr(run, "test_cpython", lambda *args, **kwargs: 0)
+        monkeypatch.setattr(run, "test_scripts", lambda *args, **kwargs: 0)
+        monkeypatch.setattr(run, "verify_examples", lambda *args, **kwargs: 0)
+        monkeypatch.setattr(run, "check_version", lambda: 0)
+        monkeypatch.setattr(run, "check_api", lambda: 0)
+        monkeypatch.setattr(run, "test_micropython", lambda *args, **kwargs: 0)
+        monkeypatch.setattr(run, "test_circuitpython", lambda *args, **kwargs: 0)
+        monkeypatch.setattr(run, "is_ref_reachable", lambda *_args, **_kwargs: True)
+        monkeypatch.setattr(run, "discover_package_dirs", lambda: [])
+
+        functional_calls: list[str] = []
+        monkeypatch.setattr(
+            run, "test_libraries_functional",
+            lambda: functional_calls.append("libraries") or 0,
+        )
+        monkeypatch.setattr(
+            run, "test_workbench_functional",
+            lambda **_kwargs: functional_calls.append("workbench") or 0,
+        )
+
+        result = run.preflight(with_functional=True)
+
+        assert result == 0
+        assert functional_calls == ["libraries", "workbench"]
 
 
 # ---------------------------------------------------------------------------
@@ -1032,7 +984,7 @@ class TestTestCpython:
 
 
 # ---------------------------------------------------------------------------
-# Tests for _run_phases_in_parallel (parallel test_runtime_matrix)
+# Tests for _run_phases_in_parallel (parallel test_all_runtimes)
 # ---------------------------------------------------------------------------
 
 

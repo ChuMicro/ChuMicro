@@ -132,17 +132,20 @@ python scripts/run.py test --all --libraries timing 2>&1 | tail -5
 # Exit code: 2 (argparse error)
 ```
 
-### Deep test sweep
+### CI-mirror sweep with optional functional phase
 
 ```bash
-# ✅ Run the developer-oriented deep test sweep without device tests
-python scripts/run.py test-everything --libraries timing --no-cov 2>&1 | tail -20
-# 🔍 Output contains the step headers:
-#    "== test =="
-#    "== test-scripts =="
-#    "== test-micropython-compatibility =="
-#    "== test-circuitpython-compatibility =="
+# ✅ Run the full CI mirror locally (no hardware needed)
+python scripts/run.py preflight 2>&1 | tail -20
+# 🔍 Output contains the step headers including:
+#    "== test =="  "== test-scripts =="
+#    "== test-micropython =="  "== test-circuitpython =="
 # Exit code: 0
+# ✅ Append the hardware-gated functional phases (requires connected boards)
+python scripts/run.py preflight --with-functional 2>&1 | tail -20
+# 🔍 Adds at the end:
+#    "== test-libraries-functional =="
+#    "== test-workbench-functional =="
 ```
 
 ## 4. build
@@ -258,11 +261,11 @@ python scripts/run.py check-api 2>&1 | tail -5
 # Exit code: 0 if compliant, 1 if enforcement fails
 ```
 
-## 11. test-device
+## 11. test-libraries-functional
 
 ```bash
 # ✅ Bare CLI run uses the default target device(s) from devices.yml
-python scripts/run.py test-device --library timing --function progress_on_runtime 2>&1 | tail -20
+python scripts/run.py test-libraries-functional --library timing --function progress_on_runtime 2>&1 | tail -20
 # 🔍 Output contains either:
 #    "Device: <id>" lines for the defaults-selected board(s)
 #    OR "Device config error" / "No matching devices found" if local board config is incomplete
@@ -272,43 +275,43 @@ python scripts/run.py test-device --library timing --function progress_on_runtim
 # 🔍 CircuitPython RAM mode now probes live free heap and sends large inline payloads in multiple chunks; low-memory failures should mention the measured RAM budget and suggest flash mode
 ```
 
-## 12. test-micropython-compatibility
+## 12. test-micropython
 
 ```bash
 # ⏭️ Skip if MicroPython binary not available
 # ✅ Run cross-runtime tests with auto-detection
-python scripts/run.py test-micropython-compatibility 2>&1 | tail -10
+python scripts/run.py test-micropython 2>&1 | tail -10
 # 🔍 If binary found: runs tests, exit code 0 on pass
 # 🔍 If binary not found: "MicroPython binary not found. Preparing unix-port runtime first."
 #    Then either prepares and runs, or fails if build tools missing
 
 # ❌ Explicit path to nonexistent binary
-python scripts/run.py test-micropython-compatibility --micropython-binary /nonexistent/path 2>&1 | tail -5
+python scripts/run.py test-micropython --micropython-binary /nonexistent/path 2>&1 | tail -5
 # 🔍 Output contains: "MicroPython binary not found: /nonexistent/path"
 # Exit code: 1
 ```
 
-## 13. test-circuitpython-compatibility
+## 13. test-circuitpython
 
 ```bash
 # ⏭️ Skip if CircuitPython binary not available
 # ✅ Run cross-runtime tests with auto-detection
-python scripts/run.py test-circuitpython-compatibility 2>&1 | tail -10
+python scripts/run.py test-circuitpython 2>&1 | tail -10
 # 🔍 If binary found: runs tests, exit code 0 on pass
 # 🔍 If binary not found: "CircuitPython binary not found. Preparing unix-port runtime first."
 
 # ❌ Explicit path to nonexistent binary
-python scripts/run.py test-circuitpython-compatibility --circuitpython-binary /nonexistent/path 2>&1 | tail -5
+python scripts/run.py test-circuitpython --circuitpython-binary /nonexistent/path 2>&1 | tail -5
 # 🔍 Output contains: "CircuitPython binary not found: /nonexistent/path"
 # Exit code: 1
 ```
 
-## 14. test-runtime-matrix
+## 14. test-all-runtimes
 
 ```bash
 # ⏭️ Skip if runtime binaries not available
-python scripts/run.py test-runtime-matrix 2>&1 | tail -10
-# 🔍 Output contains: "== test ==" followed by "== test-micropython-compatibility ==" etc.
+python scripts/run.py test-all-runtimes 2>&1 | tail -10
+# 🔍 Output contains: "== test ==" followed by "== test-micropython ==" etc.
 # Exit code: 0 if all pass
 ```
 
@@ -341,7 +344,7 @@ python scripts/run.py preflight 2>&1 | tail -5
 # 🔍 Success: "Preflight passed — required CI checks should pass."
 # 🔍 Failure: "Preflight failed at: <step name>"
 # This runs: lint, build, docs, test, verify-examples, check-version, check-api,
-# test-micropython-compatibility, test-circuitpython-compatibility
+# test-micropython, test-circuitpython
 ```
 
 ## 17. setup
@@ -442,16 +445,19 @@ Use this to track which tasks have been validated:
 [ ] new-library <existing>             (negative)
 [ ] check-version
 [ ] check-api
-[ ] test-device
-[ ] test-micropython-compatibility
-[ ] test-micropython-compat --micropython-binary /bad  (negative)
-[ ] test-circuitpython-compatibility
-[ ] test-circuitpython-compat --circuitpython-binary /bad  (negative)
+[ ] test-libraries-functional
+[ ] test-workbench-functional
+[ ] test-functional
+[ ] test-micropython
+[ ] test-micropython --micropython-binary /bad  (negative)
+[ ] test-circuitpython
+[ ] test-circuitpython --circuitpython-binary /bad  (negative)
+[ ] test-all-runtimes
 [ ] docs-deploy (no --channel)         (negative)
 [ ] docs-deploy --channel invalid      (negative)
 [ ] preflight
+[ ] preflight --with-functional        (slow — requires connected board)
 [ ] setup
-[ ] test-everything --libraries <name> --no-cov
 [ ] prepare-mpy-cross                  (slow — only when validating mpy build path)
 [ ] validate-mip (no --bundle-repo)  (negative)
 [ ] validate-mip --bundle-repo <repo> --libraries <name>
@@ -473,7 +479,7 @@ python scripts/run.py build 2>&1 | tail -5                     # build
 python scripts/run.py check-version 2>&1 | tail -5             # check-version
 python scripts/run.py check-api 2>&1 | tail -5                 # check-api
 
-# Note: test-device is NOT fast when boards are connected — typical run is
+# Note: test-libraries-functional is NOT fast when boards are connected — typical run is
 # tens of seconds per board, longer in flash mode. Run it intentionally,
 # not as part of an "all fast tasks" sweep.
 
@@ -491,6 +497,6 @@ python scripts/run.py docs-deploy 2>&1 | tail -3
 python scripts/run.py docs-deploy --channel invalid 2>&1 | tail -3
 python scripts/run.py validate-mip 2>&1 | tail -3
 python scripts/run.py nonexistent-task 2>&1 | tail -3
-python scripts/run.py test-micropython-compatibility --micropython-binary /nonexistent 2>&1 | tail -3
-python scripts/run.py test-circuitpython-compatibility --circuitpython-binary /nonexistent 2>&1 | tail -3
+python scripts/run.py test-micropython --micropython-binary /nonexistent 2>&1 | tail -3
+python scripts/run.py test-circuitpython --circuitpython-binary /nonexistent 2>&1 | tail -3
 ```

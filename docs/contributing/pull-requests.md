@@ -128,8 +128,8 @@ Paste the output directly in the PR description or as a comment.
 If you want a quick way to collect that information, these commands are typical:
 
 ```bash
-python scripts/run.py test-device --library timing
-python scripts/run.py test-device --runtime both --library timing
+python scripts/run.py test-libraries-functional --library timing
+python scripts/run.py test-libraries-functional --runtime both --library timing
 ```
 
 ### Don't have a device?
@@ -153,7 +153,7 @@ Common failures:
 | `version-check` | Changed source without bumping VERSION | Edit `libraries/<name>/VERSION` |
 | `api-check` | Removed or renamed a public function | Bump VERSION to next minor/major |
 | `validate-mpy` | mpy-cross failed to compile a library, or the staged bundle's `package.json` is broken | Build the bundle locally (`python scripts/run.py build`) and check the validate-mpy job log for the failing library |
-| `runtime-compatibility` (MicroPython / CircuitPython) | Test fails under the unix-port build of one runtime | Reproduce locally with `python scripts/run.py test-micropython-compatibility` or `test-circuitpython-compatibility` |
+| `cross-runtime-tests` (MicroPython / CircuitPython) | Test fails under the unix-port build of one runtime | Reproduce locally with `python scripts/run.py test-micropython` or `test-circuitpython` |
 
 For detailed output examples (success and failure), see your [development environment guide](../../CONTRIBUTING.md#development-environment).
 

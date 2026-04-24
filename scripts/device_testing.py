@@ -4,7 +4,7 @@ Owns the primitives that actually touch device hardware — bootstrap
 generation, transport construction, and the intra-workspace source
 discovery that staging depends on.  Orchestration (test selection,
 per-device loops, PR-summary rendering) lives in
-:mod:`pytest_device` now; ``run.py test-device`` is a thin wrapper
+:mod:`pytest_device` now; ``run.py test-libraries-functional`` is a thin wrapper
 that invokes pytest with the plugin's ``--chumicro-*`` options.
 
 See Decision 0027 for the transport protocol and config schema.
@@ -184,7 +184,7 @@ def resolve_effective_deploy_mode(
     Callers use the return value both to construct the transport and
     to label per-device bullets in the PR summary — reviewers ask
     "what mode ran on this board" and the CLI reconstruction alone
-    cannot answer that when the user invoked bare ``test-device``.
+    cannot answer that when the user invoked bare ``test-libraries-functional``.
 
     Args:
         device_entry: A DeviceEntry from the config loader.

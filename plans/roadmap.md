@@ -46,8 +46,8 @@ Exit criteria:
 
 Current implementation status:
 
-- `python scripts/run.py test-device` is a real command, not a placeholder
-- bare `test-device` runs use the `defaults:` section in `devices.yml` to choose runtime(s), board(s), and deploy behavior
+- `python scripts/run.py test-libraries-functional` is a real command, not a placeholder
+- bare `test-libraries-functional` runs use the `defaults:` section in `devices.yml` to choose runtime(s), board(s), and deploy behavior
 - `functional_tests/` can be targeted from pytest-based IDE play buttons once `devices.yml` exists
 - CircuitPython now supports both RAM-mode inline execution and flash-mode CIRCUITPY deployment, including chunked RAM-mode bootstraps for low-memory boards
 - the remaining gaps are a live end-to-end VS Code validation pass and broader board-matrix coverage
@@ -60,7 +60,7 @@ Key choices confirmed (Decision 0027):
 - CircuitPython flash mode auto-detects CIRCUITPY drive, controls autoreload via raw REPL
 - two gitignored config files: `devices.yml` (board registry) + `device-config.yml` (shared environment like WiFi)
 - `devices.yml` has a top-level `defaults:` block for IDE and bare-CLI target selection
-- `test-device` command in run.py with `--runtime`, `--micropython-device`, `--circuitpython-device`, `--library`, `--file`, `--function`, `--deploy-mode` flags
+- `test-libraries-functional` command in run.py with `--runtime`, `--micropython-device`, `--circuitpython-device`, `--library`, `--file`, `--function`, `--deploy-mode` flags
 - IDE integration via pytest conftest/plugin that routes explicit `functional_tests/` targets to the configured device(s)
 - harness gains `name_filter` parameter for single-test execution
 - transport implementations live in `workbench/deploy/` and are published as `chumicro-deploy` (moved out of `support/device_transport/` as part of project-workspace Phase 1; Decision 0032)
@@ -77,5 +77,5 @@ Current answer:
 ## Settled questions
 
 - MicroPython and CircuitPython CI compatibility checks are now required status checks on PRs, gated by platform targeting (Decision 0011).
-- Local hardware workflows are available via `test-device` and the pytest device plugin; CI-managed device runs are out of scope (see Milestone 3 scope note).
+- Local hardware workflows are available via `test-libraries-functional` and the pytest device plugin; CI-managed device runs are out of scope (see Milestone 3 scope note).
 - Release automation stages artifacts for all three targets (PyPI, circup, mip) from the start — do not wait for PyPI to go first.

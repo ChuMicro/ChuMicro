@@ -99,8 +99,8 @@ CPython packages.  The three folders now have clean, independent axes:
    package's public API.  Unlike library functional tests, these
    are *not* routed through the on-device test harness — the
    workbench tool is the thing driving the device from the host,
-   not code running on a device.  `scripts/run.py test-workbench`
-   is the counterpart to `test-device`: it iterates every
+   not code running on a device.  `scripts/run.py test-workbench-functional`
+   is the counterpart to `test-libraries-functional`: it iterates every
    `workbench/<name>/functional_tests/` directory and runs plain
    pytest against each, and each suite's own `conftest.py` owns
    device selection (typically by reading `devices.yml` defaults).

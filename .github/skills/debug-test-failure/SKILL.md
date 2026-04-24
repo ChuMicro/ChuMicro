@@ -95,7 +95,7 @@ A test passes alone but fails when run with others.
 ### Cross-runtime compatibility failures
 
 ```
-Preflight failed at: test-micropython-compatibility
+Preflight failed at: test-micropython
 ```
 
 **Fix:** The cross-runtime tests run under MicroPython/CircuitPython unix-port. Common causes:
@@ -107,7 +107,7 @@ Preflight failed at: test-micropython-compatibility
 Check the compat test output:
 
 ```bash
-python scripts/run.py test-micropython-compatibility 2>&1 | tail -20
+python scripts/run.py test-micropython 2>&1 | tail -20
 ```
 
 ### Griffe warnings in docs build

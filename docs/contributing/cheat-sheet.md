@@ -68,10 +68,10 @@ Grouped by what you're trying to do. Preflight is the one command you actually h
 
 | What | Command |
 |---|---|
-| MicroPython unix-port compatibility | `python scripts/run.py test-micropython-compatibility` |
-| CircuitPython unix-port compatibility | `python scripts/run.py test-circuitpython-compatibility` |
-| All runtimes (host + both unix ports) | `python scripts/run.py test-runtime-matrix` |
-| Deep local sweep (host + scripts + unix ports; `--with-device` for real boards) | `python scripts/run.py test-everything` |
+| Library unit tests on MicroPython unix-port | `python scripts/run.py test-micropython` |
+| Library unit tests on CircuitPython unix-port | `python scripts/run.py test-circuitpython` |
+| Unit tests on all three runtimes (CPython + both unix ports, parallelized) | `python scripts/run.py test-all-runtimes` |
+| Full CI mirror including hardware-gated functional tests | `python scripts/run.py preflight --with-functional` |
 | Prepare MicroPython unix-port (one-time, slow) | `python scripts/run.py prepare-micropython` |
 | Prepare CircuitPython unix-port (one-time, slow) | `python scripts/run.py prepare-circuitpython` |
 | Build mpy-cross only (faster than full unix-port) | `python scripts/run.py prepare-mpy-cross` |
@@ -81,9 +81,10 @@ Grouped by what you're trying to do. Preflight is the one command you actually h
 | What | Command |
 |---|---|
 | Refresh workspace + generate starter device configs | `python scripts/run.py setup` |
-| Run real-board functional tests | `python scripts/run.py test-device --library timing` |
-| Run real-board tests on both runtimes | `python scripts/run.py test-device --runtime both` |
-| Run workbench hardware-gated functional tests | `python scripts/run.py test-workbench --workbench deploy` |
+| Run all hardware-gated functional tests (libraries + workbench) | `python scripts/run.py test-functional` |
+| Run real-board functional tests for one library | `python scripts/run.py test-libraries-functional --library timing` |
+| Run real-board tests on both runtimes | `python scripts/run.py test-libraries-functional --runtime both` |
+| Run workbench hardware-gated functional tests | `python scripts/run.py test-workbench-functional --workbench deploy` |
 
 ### Docs and publishing
 

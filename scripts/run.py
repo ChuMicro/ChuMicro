@@ -651,6 +651,7 @@ def preflight(
     micropython_binary: str | None = None,
     circuitpython_binary: str | None = None,
     coverage_threshold: int | None = None,
+    with_functional: bool = False,
 ) -> int:
     """Run the full check suite that CI requires on every pull request.
 
@@ -665,7 +666,11 @@ def preflight(
     Tests run once with the current Python interpreter (CI runs 3.11,
     3.12, and 3.13 separately).  Version-check and api-check require
     ``origin/main`` to be reachable; they skip gracefully if it is not.
-    Functional tests are excluded — they require physical hardware.
+
+    Functional tests on real hardware are skipped by default — they
+    require a connected board.  Pass *with_functional* to append
+    ``test-libraries-functional`` and ``test-workbench-functional``
+    (running with ``devices.yml`` defaults) to the end of the sweep.
     """
     python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
     all_packages = discover_package_dirs()
@@ -706,14 +711,18 @@ def preflight(
         ("check-version", check_version),
         ("check-api", check_api),
         (
-            "test-micropython-compatibility",
-            lambda: test_micropython_compatibility(micropython_binary),
+            "test-micropython",
+            lambda: test_micropython(micropython_binary),
         ),
         (
-            "test-circuitpython-compatibility",
-            lambda: test_circuitpython_compatibility(circuitpython_binary),
+            "test-circuitpython",
+            lambda: test_circuitpython(circuitpython_binary),
         ),
     ]
+
+    if with_functional:
+        steps.append(("test-libraries-functional", test_libraries_functional))
+        steps.append(("test-workbench-functional", test_workbench_functional))
 
     for step_name, step in steps:
         # Skip diff-based checks when the base ref is unreachable.
@@ -741,8 +750,8 @@ def _test_runtime_compat(
 ) -> int:
     """Run cross-runtime unit tests for a single runtime.
 
-    Shared implementation for :func:`test_micropython_compatibility` and
-    :func:`test_circuitpython_compatibility`.  Resolves the binary,
+    Shared implementation for :func:`test_micropython` and
+    :func:`test_circuitpython`.  Resolves the binary,
     auto-prepares when missing, then runs the compatibility script for libraries
     that target *platform*.
     """
@@ -776,7 +785,7 @@ def _test_runtime_compat(
     return run_command([binary, COMPAT_SCRIPT, *library_names])
 
 
-def test_micropython_compatibility(
+def test_micropython(
     binary: str | None = None,
     package_dirs: list[Path] | None = None,
 ) -> int:
@@ -791,7 +800,7 @@ def test_micropython_compatibility(
     )
 
 
-def test_circuitpython_compatibility(
+def test_circuitpython(
     binary: str | None = None,
     package_dirs: list[Path] | None = None,
 ) -> int:
@@ -806,7 +815,7 @@ def test_circuitpython_compatibility(
     )
 
 
-def test_runtime_matrix(
+def test_all_runtimes(
     micropython_binary: str | None = None,
     circuitpython_binary: str | None = None,
     package_dirs: list[Path] | None = None,
@@ -829,14 +838,14 @@ def test_runtime_matrix(
 
     parallel_phases: tuple[tuple[str, Callable[[], int]], ...] = (
         (
-            "test-micropython-compatibility",
-            lambda: test_micropython_compatibility(
+            "test-micropython",
+            lambda: test_micropython(
                 micropython_binary, package_dirs,
             ),
         ),
         (
-            "test-circuitpython-compatibility",
-            lambda: test_circuitpython_compatibility(
+            "test-circuitpython",
+            lambda: test_circuitpython(
                 circuitpython_binary, package_dirs,
             ),
         ),
@@ -885,111 +894,27 @@ def _run_phases_in_parallel(
     return first_failure
 
 
-def test_everything(
-    package_dirs: list[Path] | None = None,
+def test_functional(
     *,
-    micropython_binary: str | None = None,
-    circuitpython_binary: str | None = None,
-    exit_first: bool = False,
     verbose: bool = False,
-    no_cov: bool = False,
-    coverage_threshold: int | None = None,
-    with_device: bool = False,
-    runtime: str | None = None,
-    micropython_device: str | None = None,
-    circuitpython_device: str | None = None,
-    library: str | None = None,
-    file_filter: str | None = None,
-    function_filter: str | None = None,
-    deploy_mode: str | None = None,
+    exit_first: bool = False,
 ) -> int:
-    """Run the deepest developer-oriented test sweep.
+    """Run every hardware-gated functional suite end-to-end.
 
-    Unlike :func:`preflight`, this command focuses on testing rather than CI/PR
-    validation tasks.  It runs CPython package tests, scripts infrastructure
-    tests, unix-port compatibility tests, and optionally real-device
-    functional tests.
+    Composes :func:`test_libraries_functional` (library code on
+    connected MCUs) and :func:`test_workbench_functional` (host-side
+    CPython tests that drive a board).  Both phases use ``devices.yml``
+    defaults — for narrower runs, call the individual commands directly.
     """
-    selected_packages = (
-        package_dirs if package_dirs is not None else discover_package_dirs()
-    )
-    selected_library_names = [
-        library_dir.name for library_dir in _selected_library_dirs(package_dirs)
-    ]
-
     steps: list[tuple[str, Callable[[], int]]] = [
+        ("test-libraries-functional", test_libraries_functional),
         (
-            "test",
-            lambda: test_cpython(
-                selected_packages,
-                exit_first=exit_first,
-                verbose=verbose,
-                no_cov=no_cov,
-                coverage_threshold=coverage_threshold,
-            ),
-        ),
-        (
-            "test-scripts",
-            lambda: test_scripts(exit_first=exit_first, verbose=verbose),
-        ),
-        (
-            "test-micropython-compatibility",
-            lambda: test_micropython_compatibility(
-                micropython_binary, package_dirs,
-            ),
-        ),
-        (
-            "test-circuitpython-compatibility",
-            lambda: test_circuitpython_compatibility(
-                circuitpython_binary, package_dirs,
+            "test-workbench-functional",
+            lambda: test_workbench_functional(
+                verbose=verbose, exit_first=exit_first,
             ),
         ),
     ]
-
-    if with_device:
-        if library is not None:
-            steps.append((
-                f"test-device ({library})",
-                lambda: test_device(
-                    runtime=runtime,
-                    micropython_device=micropython_device,
-                    circuitpython_device=circuitpython_device,
-                    library=library,
-                    file_filter=file_filter,
-                    function_filter=function_filter,
-                    deploy_mode=deploy_mode,
-                ),
-            ))
-        elif package_dirs is not None:
-            if not selected_library_names:
-                print("No publishable libraries selected for device tests.")
-            else:
-                for library_name in selected_library_names:
-                    steps.append((
-                        f"test-device ({library_name})",
-                        lambda library_name=library_name: test_device(
-                            runtime=runtime,
-                            micropython_device=micropython_device,
-                            circuitpython_device=circuitpython_device,
-                            library=library_name,
-                            file_filter=file_filter,
-                            function_filter=function_filter,
-                            deploy_mode=deploy_mode,
-                        ),
-                    ))
-        else:
-            steps.append((
-                "test-device",
-                lambda: test_device(
-                    runtime=runtime,
-                    micropython_device=micropython_device,
-                    circuitpython_device=circuitpython_device,
-                    library=None,
-                    file_filter=file_filter,
-                    function_filter=function_filter,
-                    deploy_mode=deploy_mode,
-                ),
-            ))
 
     for step_name, step in steps:
         print(f"== {step_name} ==")
@@ -1001,7 +926,7 @@ def test_everything(
     return 0
 
 
-def test_device(
+def test_libraries_functional(
     runtime: str | None = None,
     micropython_device: str | None = None,
     circuitpython_device: str | None = None,
@@ -1078,7 +1003,7 @@ def test_device(
     command.extend([
         "--chumicro-pr-summary",
         "--chumicro-pr-summary-command",
-        _format_test_device_command(
+        _format_test_libraries_functional_command(
             runtime, micropython_device, circuitpython_device,
             library, file_filter, function_filter, deploy_mode,
         ),
@@ -1086,7 +1011,7 @@ def test_device(
     return run_command(command, environment=pythonpath_environment())
 
 
-def _format_test_device_command(
+def _format_test_libraries_functional_command(
     runtime: str | None,
     micropython_device: str | None,
     circuitpython_device: str | None,
@@ -1095,13 +1020,13 @@ def _format_test_device_command(
     function_filter: str | None,
     deploy_mode: str | None,
 ) -> str:
-    """Reconstruct the ``test-device`` CLI invocation from its args.
+    """Reconstruct the ``test-libraries-functional`` CLI invocation from its args.
 
     Only includes flags the caller explicitly passed (non-``None`` values)
     so the rendered command matches what the user actually typed.  Used
     by the plugin's PR-summary block to render the ``- Command:`` line.
     """
-    parts = ["python scripts/run.py test-device"]
+    parts = ["python scripts/run.py test-libraries-functional"]
     if runtime is not None:
         parts.append(f"--runtime {runtime}")
     if micropython_device is not None:
@@ -1119,7 +1044,7 @@ def _format_test_device_command(
     return " ".join(parts)
 
 
-def test_workbench(
+def test_workbench_functional(
     workbench: str | None = None,
     file_filter: str | None = None,
     function_filter: str | None = None,
@@ -1128,7 +1053,7 @@ def test_workbench(
 ) -> int:
     """Run functional tests for workbench packages against real hardware.
 
-    Counterpart to :func:`test_device` for workbench packages.  Each
+    Counterpart to :func:`test_libraries_functional` for workbench packages.  Each
     ``workbench/<name>/functional_tests/`` directory is a plain
     host-side pytest suite that drives a connected board through the
     public ``chumicro_deploy`` API (or each workbench's own entrypoint)
@@ -1198,11 +1123,11 @@ def test_workbench(
     # — hardware-interacting tests routinely surface warnings from
     # upstream libraries (mpremote's mount/unmount leaves a file
     # finalizer; pyserial's cleanup) that are out of our control.
-    # Matches ``test-device``'s behavior for the same reason.
+    # Matches ``test-libraries-functional``'s behavior for the same reason.
     first_failure = 0
     environment = pythonpath_environment()
     for suite in suites:
-        print(f"== test-workbench ({suite.parent.name}) ==")
+        print(f"== test-workbench-functional ({suite.parent.name}) ==")
         result = run_command(
             [
                 PYTHON, "-m", "pytest",
@@ -1318,14 +1243,23 @@ def _build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("sync-ide", help="regenerate IDE configuration files")
     subparsers.add_parser("lint", help="run Ruff across the workspace")
     subparsers.add_parser("build", help="build all publishable packages")
-    subparsers.add_parser(
+    preflight_parser = subparsers.add_parser(
         "preflight", parents=[binary],
         help="lint + test + examples + compatibility + build",
-    ).add_argument(
+    )
+    preflight_parser.add_argument(
         "--coverage-threshold", type=int, metavar="PCT",
         help=(
             "override coverage fail-under percentage "
             "(default: from pyproject.toml)"
+        ),
+    )
+    preflight_parser.add_argument(
+        "--with-functional", action="store_true",
+        help=(
+            "also run test-libraries-functional and "
+            "test-workbench-functional after the unit-test phases "
+            "(requires connected hardware)"
         ),
     )
     subparsers.add_parser("prepare-micropython", help="prepare MicroPython unix-port")
@@ -1335,84 +1269,44 @@ def _build_parser() -> argparse.ArgumentParser:
         help="build mpy-cross compilers for both runtimes (no unix-port)",
     )
     subparsers.add_parser(
-        "test-micropython-compatibility",
+        "test-micropython",
         parents=[scope, binary],
         help="MicroPython cross-runtime unit tests",
     )
     subparsers.add_parser(
-        "test-circuitpython-compatibility",
+        "test-circuitpython",
         parents=[scope, binary],
         help="CircuitPython cross-runtime unit tests",
     )
     subparsers.add_parser(
-        "test-runtime-matrix",
+        "test-all-runtimes",
         parents=[scope, binary],
         help="test all packages on CPython + MicroPython + CircuitPython",
     )
-    test_everything_parser = subparsers.add_parser(
-        "test-everything",
-        parents=[scope, binary],
-        help="deep developer test sweep across host, scripts, runtimes, and optional devices",
-    )
-    test_everything_parser.add_argument(
-        "-x", "--exit-first", action="store_true",
-        help="stop the CPython and scripts test phases on first failure",
-    )
-    test_everything_parser.add_argument(
-        "-v", "--verbose", action="store_true",
-        help="verbose CPython and scripts test output",
-    )
-    test_everything_parser.add_argument(
-        "--no-cov", action="store_true",
-        help="skip CPython coverage collection",
-    )
-    test_everything_parser.add_argument(
-        "--coverage-threshold", type=int, metavar="PCT",
+    test_functional_parser = subparsers.add_parser(
+        "test-functional",
+        description=(
+            "Run every hardware-gated functional suite in the workspace: "
+            "test-libraries-functional (library code on connected MCUs) "
+            "followed by test-workbench-functional (host-side workbench "
+            "tests that drive a board).  Both phases use devices.yml "
+            "defaults — for narrower runs, use the individual commands."
+        ),
         help=(
-            "override CPython coverage fail-under percentage "
-            "(default: from pyproject.toml)"
+            "run all hardware-gated functional tests "
+            "(libraries + workbench, devices.yml defaults)"
         ),
     )
-    test_everything_parser.add_argument(
-        "--with-device", action="store_true",
-        help="also run real-device functional tests",
+    test_functional_parser.add_argument(
+        "-v", "--verbose", action="store_true",
+        help="verbose test output (forwarded to test-workbench-functional)",
     )
-    test_everything_parser.add_argument(
-        "--runtime",
-        choices=["micropython", "circuitpython", "both"],
-        help="runtime override for the optional device phase",
+    test_functional_parser.add_argument(
+        "-x", "--exit-first", action="store_true",
+        help="stop the workbench phase on first failure",
     )
-    test_everything_parser.add_argument(
-        "--micropython-device",
-        help="override the default MicroPython device ID for the optional device phase",
-    )
-    test_everything_parser.add_argument(
-        "--circuitpython-device",
-        help="override the default CircuitPython device ID for the optional device phase",
-    )
-    test_everything_parser.add_argument(
-        "--library",
-        help="limit the optional device phase to one library",
-    )
-    test_everything_parser.add_argument(
-        "--file",
-        dest="file_filter",
-        help="limit the optional device phase by test file name substring",
-    )
-    test_everything_parser.add_argument(
-        "--function",
-        dest="function_filter",
-        help="limit the optional device phase by test function name substring",
-    )
-    test_everything_parser.add_argument(
-        "--deploy-mode",
-        dest="deploy_mode",
-        choices=["ram", "flash"],
-        default=None,
-        help="deploy mode override for the optional device phase",
-    )
-    test_device_parser = subparsers.add_parser(
-        "test-device",
+    test_libraries_functional_parser = subparsers.add_parser(
+        "test-libraries-functional",
         description=(
             "Run functional tests on connected devices. When runtime and "
             "runtime-specific device flags are omitted, the command uses the default target "
@@ -1425,7 +1319,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "(uses devices.yml defaults when unfiltered)"
         ),
     )
-    test_device_parser.add_argument(
+    test_libraries_functional_parser.add_argument(
         "--runtime",
         choices=["micropython", "circuitpython", "both"],
         help=(
@@ -1433,29 +1327,29 @@ def _build_parser() -> argparse.ArgumentParser:
             "defaults-backed dual-runtime target set"
         ),
     )
-    test_device_parser.add_argument(
+    test_libraries_functional_parser.add_argument(
         "--micropython-device",
         help="override the default MicroPython device ID",
     )
-    test_device_parser.add_argument(
+    test_libraries_functional_parser.add_argument(
         "--circuitpython-device",
         help="override the default CircuitPython device ID",
     )
-    test_device_parser.add_argument(
+    test_libraries_functional_parser.add_argument(
         "--library",
         help="limit to one library's functional tests",
     )
-    test_device_parser.add_argument(
+    test_libraries_functional_parser.add_argument(
         "--file",
         dest="file_filter",
         help="limit to test files whose name contains this substring",
     )
-    test_device_parser.add_argument(
+    test_libraries_functional_parser.add_argument(
         "--function",
         dest="function_filter",
         help="limit to test functions whose name contains this substring",
     )
-    test_device_parser.add_argument(
+    test_libraries_functional_parser.add_argument(
         "--deploy-mode",
         dest="deploy_mode",
         choices=["ram", "flash"],
@@ -1463,11 +1357,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="deploy mode: ram (default, no flash wear) or flash (persistent). "
              "Overrides the per-device deploy_mode in devices.yml.",
     )
-    test_workbench_parser = subparsers.add_parser(
-        "test-workbench",
+    test_workbench_functional_parser = subparsers.add_parser(
+        "test-workbench-functional",
         description=(
             "Run functional tests for workbench packages against "
-            "connected hardware.  Counterpart to test-device, for "
+            "connected hardware.  Counterpart to test-libraries-functional, for "
             "the host-only CPython tools under workbench/ that drive "
             "boards through the public chumicro_deploy API.  Device "
             "selection lives inside each suite's conftest.py — "
@@ -1478,25 +1372,25 @@ def _build_parser() -> argparse.ArgumentParser:
             "(hardware-gated via devices.yml fixtures)"
         ),
     )
-    test_workbench_parser.add_argument(
+    test_workbench_functional_parser.add_argument(
         "--workbench",
         help="limit to one workbench package (e.g. deploy)",
     )
-    test_workbench_parser.add_argument(
+    test_workbench_functional_parser.add_argument(
         "--file",
         dest="file_filter",
         help="limit to test files whose name contains this substring",
     )
-    test_workbench_parser.add_argument(
+    test_workbench_functional_parser.add_argument(
         "--function",
         dest="function_filter",
         help="limit to test functions whose name contains this substring",
     )
-    test_workbench_parser.add_argument(
+    test_workbench_functional_parser.add_argument(
         "-v", "--verbose", action="store_true",
         help="verbose test output",
     )
-    test_workbench_parser.add_argument(
+    test_workbench_functional_parser.add_argument(
         "-x", "--exit-first", action="store_true",
         help="stop on first failure",
     )
@@ -1703,33 +1597,30 @@ def main(argv: list[str]) -> int:
             args.micropython_binary,
             args.circuitpython_binary,
             coverage_threshold=args.coverage_threshold,
+            with_functional=args.with_functional,
         )
 
-    if args.task == "test-micropython-compatibility":
+    if args.task == "test-micropython":
         package_dirs = _resolve_optional_scope(args)
-        return test_micropython_compatibility(args.micropython_binary, package_dirs)
+        return test_micropython(args.micropython_binary, package_dirs)
 
-    if args.task == "test-circuitpython-compatibility":
+    if args.task == "test-circuitpython":
         package_dirs = _resolve_optional_scope(args)
-        return test_circuitpython_compatibility(args.circuitpython_binary, package_dirs)
+        return test_circuitpython(args.circuitpython_binary, package_dirs)
 
-    if args.task == "test-runtime-matrix":
+    if args.task == "test-all-runtimes":
         package_dirs = _resolve_optional_scope(args)
-        return test_runtime_matrix(
+        return test_all_runtimes(
             args.micropython_binary, args.circuitpython_binary, package_dirs,
         )
 
-    if args.task == "test-everything":
-        package_dirs = _resolve_optional_scope(args)
-        return test_everything(
-            package_dirs,
-            micropython_binary=args.micropython_binary,
-            circuitpython_binary=args.circuitpython_binary,
-            exit_first=args.exit_first,
-            verbose=args.verbose,
-            no_cov=args.no_cov,
-            coverage_threshold=args.coverage_threshold,
-            with_device=args.with_device,
+    if args.task == "test-functional":
+        return test_functional(
+            verbose=args.verbose, exit_first=args.exit_first,
+        )
+
+    if args.task == "test-libraries-functional":
+        return test_libraries_functional(
             runtime=args.runtime,
             micropython_device=args.micropython_device,
             circuitpython_device=args.circuitpython_device,
@@ -1739,19 +1630,8 @@ def main(argv: list[str]) -> int:
             deploy_mode=args.deploy_mode,
         )
 
-    if args.task == "test-device":
-        return test_device(
-            runtime=args.runtime,
-            micropython_device=args.micropython_device,
-            circuitpython_device=args.circuitpython_device,
-            library=args.library,
-            file_filter=args.file_filter,
-            function_filter=args.function_filter,
-            deploy_mode=args.deploy_mode,
-        )
-
-    if args.task == "test-workbench":
-        return test_workbench(
+    if args.task == "test-workbench-functional":
+        return test_workbench_functional(
             workbench=args.workbench,
             file_filter=args.file_filter,
             function_filter=args.function_filter,

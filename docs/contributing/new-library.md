@@ -154,7 +154,7 @@ Run them with:
 
 ```bash
 python scripts/run.py setup
-python scripts/run.py test-device --library my-thing
+python scripts/run.py test-libraries-functional --library my-thing
 ```
 
 See [Device Testing](device-testing.md) for `devices.yml`, deploy modes, and IDE play-button behavior.

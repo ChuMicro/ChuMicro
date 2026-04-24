@@ -308,8 +308,8 @@ Device testing is **optional**. If your change could behave differently on a rea
 When you do want real-board coverage, the current workflow is:
 
 1. Run `python scripts/run.py setup` once to generate local `devices.yml` and `device-config.yml` files.
-2. Fill in your board details in `devices.yml` and any shared environment data in `device-config.yml`. The top-level `defaults:` block in `devices.yml` picks the runtime(s) and per-runtime board IDs that bare `test-device` and IDE play buttons target.
-3. Run `python scripts/run.py test-device` on the defaults-backed target set, or use one of the scoping flags (`--library`, `--file`, `--function`, `--runtime`, `--deploy-mode`) to narrow the run. Full flag reference and pytest-direct usage are in [Device testing](docs/contributing/device-testing.md).
+2. Fill in your board details in `devices.yml` and any shared environment data in `device-config.yml`. The top-level `defaults:` block in `devices.yml` picks the runtime(s) and per-runtime board IDs that bare `test-libraries-functional` and IDE play buttons target.
+3. Run `python scripts/run.py test-libraries-functional` on the defaults-backed target set, or use one of the scoping flags (`--library`, `--file`, `--function`, `--runtime`, `--deploy-mode`) to narrow the run. Full flag reference and pytest-direct usage are in [Device testing](docs/contributing/device-testing.md).
 4. For IDE-driven runs, target an explicit `functional_tests/` file, directory, or function — the pytest device plugin routes it to the board selected by `devices.yml`.
 
 The full schema and workflow live in the [device testing guide](docs/contributing/device-testing.md).

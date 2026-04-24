@@ -257,7 +257,7 @@ def print_summary(python: Path) -> None:
     print("Common tasks:")
     print("  python scripts/run.py preflight          # verify before pushing")
     if not running_on_native_windows():
-        print("  python scripts/run.py test-runtime-matrix # full cross-runtime tests")
+        print("  python scripts/run.py test-all-runtimes # full cross-runtime tests")
     print("  python scripts/run.py test                # CPython tests only")
 
     if running_on_native_windows():

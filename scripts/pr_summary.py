@@ -1,6 +1,6 @@
 """Markdown PR-summary rendering for device test runs.
 
-Shared between the ``scripts/run.py test-device`` CLI and the
+Shared between the ``scripts/run.py test-libraries-functional`` CLI and the
 ``pytest_device`` plugin's ``--chumicro-pr-summary`` hook.  The CLI
 invokes pytest and the plugin consumes per-test reports; both feed
 :func:`format_pr_summary_block` the same :class:`DeviceRunResult`
@@ -8,7 +8,7 @@ list to render the final Markdown block users paste into PRs.
 
 Keep the output stable — it lands in PR bodies and reviewers skim it
 at-a-glance.  Any behavior change here should be paired with a
-baseline update on the ``test-device`` smoke runs.
+baseline update on the ``test-libraries-functional`` smoke runs.
 """
 
 from __future__ import annotations
@@ -218,7 +218,7 @@ def format_pr_summary_block(
     summary row is enough.
 
     Args:
-        command: Reconstructed ``test-device`` invocation string.
+        command: Reconstructed ``test-libraries-functional`` invocation string.
         per_device_results: Per-device :class:`DeviceRunResult`
             instances in the order they ran.
         total_duration_seconds: Total wall-clock time for the whole

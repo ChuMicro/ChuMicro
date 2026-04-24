@@ -28,7 +28,7 @@ python support/test_harness/run_cross_runtime.py
 ```zsh
 cd /path/to/chumicro
 python scripts/run.py prepare-micropython
-python scripts/run.py test-micropython-compatibility
+python scripts/run.py test-micropython
 ```
 
 If no explicit binary is given, `scripts/run.py` first tries the repo-local prepared runtime under `.tools/`, then a `micropython` executable on `PATH`, and otherwise triggers the repo-managed prepare step automatically.  To override, pass `--micropython-binary /path/to/binary`.
@@ -38,7 +38,7 @@ If no explicit binary is given, `scripts/run.py` first tries the repo-local prep
 ```zsh
 cd /path/to/chumicro
 python scripts/run.py prepare-circuitpython
-python scripts/run.py test-circuitpython-compatibility
+python scripts/run.py test-circuitpython
 ```
 
 If no explicit binary is given, `scripts/run.py` first tries the repo-local prepared runtime under `.tools/`, then a `circuitpython` executable on `PATH`, and otherwise triggers the repo-managed prepare step automatically.  To override, pass `--circuitpython-binary /path/to/binary`.
@@ -49,14 +49,14 @@ In this workspace on macOS, the pinned upstream `10.1.4` unix-port build complet
 
 ```zsh
 cd /path/to/chumicro
-python scripts/run.py test-runtime-matrix
+python scripts/run.py test-all-runtimes
 ```
 
 This runs the current verified CPython host test suite, prepares the repo-local runtimes if needed, and then runs the MicroPython and CircuitPython cross-runtime test paths.
 
 ## Device testing on real boards
 
-Real-board execution is now wired through `python scripts/run.py test-device` and the pytest device plugin used by IDE play buttons for `functional_tests/`.
+Real-board execution is now wired through `python scripts/run.py test-libraries-functional` and the pytest device plugin used by IDE play buttons for `functional_tests/`.
 
 ### Local config files
 
@@ -68,32 +68,32 @@ python scripts/run.py setup
 
 That creates two gitignored files:
 
-- `devices.yml` — board registry plus the `defaults:` section used by bare `test-device` runs and IDE play buttons
+- `devices.yml` — board registry plus the `defaults:` section used by bare `test-libraries-functional` runs and IDE play buttons
 - `device-config.yml` — shared environment data (WiFi, MQTT, NTP, and similar settings)
 
 ### CLI examples
 
 ```zsh
 # Run the defaults-backed target set from devices.yml
-python scripts/run.py test-device
+python scripts/run.py test-libraries-functional
 
 # One runtime only
-python scripts/run.py test-device --runtime micropython --library timing
+python scripts/run.py test-libraries-functional --runtime micropython --library timing
 
 # Both runtimes using defaults-backed device IDs
-python scripts/run.py test-device --runtime both --library timing
+python scripts/run.py test-libraries-functional --runtime both --library timing
 
 # Override a specific board selection
-python scripts/run.py test-device --micropython-device sample-mp-board --library timing
+python scripts/run.py test-libraries-functional --micropython-device sample-mp-board --library timing
 
 # Scope to a file (filename substring)
-python scripts/run.py test-device --library timing --file test_heartbeat
+python scripts/run.py test-libraries-functional --library timing --file test_heartbeat
 
 # Scope to a function (function-name substring)
-python scripts/run.py test-device --library timing --function heartbeat_fires
+python scripts/run.py test-libraries-functional --library timing --function heartbeat_fires
 
 # Force flash deployment for this run
-python scripts/run.py test-device --library timing --deploy-mode flash
+python scripts/run.py test-libraries-functional --library timing --deploy-mode flash
 ```
 
 ### IDE / pytest integration

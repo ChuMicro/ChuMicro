@@ -177,7 +177,7 @@ python scripts/run.py test -k timing/test_heartbeat -x -v --no-cov
 The committed VS Code workspace also includes a **Test Device** task, which runs:
 
 ```bash
-python scripts/run.py test-device
+python scripts/run.py test-libraries-functional
 ```
 
 That command uses the `defaults:` section in `devices.yml` to choose the target runtime(s), board(s), and default deploy mode.
@@ -185,10 +185,10 @@ That command uses the `defaults:` section in `devices.yml` to choose the target 
 Common overrides:
 
 ```bash
-python scripts/run.py test-device --library timing
-python scripts/run.py test-device --runtime both
-python scripts/run.py test-device --circuitpython-device desk-cp-board
-python scripts/run.py test-device --library timing --deploy-mode flash
+python scripts/run.py test-libraries-functional --library timing
+python scripts/run.py test-libraries-functional --runtime both
+python scripts/run.py test-libraries-functional --circuitpython-device desk-cp-board
+python scripts/run.py test-libraries-functional --library timing --deploy-mode flash
 ```
 
 ## What "valid" means

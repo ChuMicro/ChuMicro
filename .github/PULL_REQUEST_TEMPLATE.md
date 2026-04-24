@@ -17,7 +17,7 @@
 ## Device testing
 
 N/A <!-- When your PR changes library source code that interacts with
-         hardware, run `python scripts/run.py test-device` (with any flags
+         hardware, run `python scripts/run.py test-libraries-functional` (with any flags
          you needed) and paste the "PR summary" block it prints at the end
          here — it already includes the exact command, per-device board ID,
          runtime, address, and pass/fail counts.

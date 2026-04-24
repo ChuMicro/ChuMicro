@@ -21,7 +21,7 @@ Before proposing a structural or pattern change, check `plans/decisions/` first.
 - **Large output:** Pipe through `tail`, `head`, or `grep`. Redirect to `.scratch/` when full output is needed.
 - **Disable pagers:** Use `git --no-pager` or `| cat`.
 - **Use per-library pytest via `python scripts/run.py test`** — never run bare `pytest` from the repository root.
-- **Maintain the coverage gate** per library — the human baseline is 85 % (configured in `pyproject.toml`). **Agents must pass `--coverage-threshold 94`** on every `test`, `preflight`, and `test-everything` invocation (Decision 0025). Use `# pragma: no cover` where code genuinely cannot be exercised in CPython tests (runtime-only branches, hardware fallbacks) — see the [coverage exclusions](docs/contributing/style-guide.md#coverage-exclusions) section in the style guide.
+- **Maintain the coverage gate** per library — the human baseline is 85 % (configured in `pyproject.toml`). **Agents must pass `--coverage-threshold 94`** on every `test` and `preflight` invocation (Decision 0025). Use `# pragma: no cover` where code genuinely cannot be exercised in CPython tests (runtime-only branches, hardware fallbacks) — see the [coverage exclusions](docs/contributing/style-guide.md#coverage-exclusions) section in the style guide.
 - **No `async`/`await`, no ISRs** — use the tick-based runner pattern from Decision 0014.
 - **Use constructor injection** for time, I/O, and network dependencies. Put fakes in the library's `testing.py` submodule. See Decision 0010.
 - **Use f-strings everywhere.** Use `const()`, `memoryview`, and pre-allocated buffers in library code only.
@@ -140,8 +140,8 @@ Conventions:
 | Command | Purpose |
 |---------|---------|
 | `python scripts/run.py setup` | Install dependencies and regenerate IDE configs |
-| `python scripts/run.py preflight` | Full CI mirror |
-| `python scripts/run.py test` | CPython tests |
+| `python scripts/run.py preflight` | Full CI mirror (lint + build + docs + unit tests on all runtimes + checks). Add `--with-functional` to also run hardware-gated functional tests at the end. |
+| `python scripts/run.py test` | CPython unit tests (only changed packages by default; pass `--all` for the full sweep) |
 | `python scripts/run.py test-scripts` | Run scripts infrastructure tests |
 | `python scripts/run.py lint` | Ruff across the workspace |
 | `python scripts/run.py build` | Build publishable packages |
@@ -156,12 +156,12 @@ Conventions:
 | `python scripts/run.py prepare-circuitpython` | Prepare CircuitPython unix-port |
 | `python scripts/run.py prepare-mpy-cross` | Build mpy-cross compilers for both runtimes |
 | `python scripts/run.py verify-examples` | Import-check example scripts |
-| `python scripts/run.py test-micropython-compatibility` | MicroPython cross-runtime unit tests |
-| `python scripts/run.py test-circuitpython-compatibility` | CircuitPython cross-runtime unit tests |
-| `python scripts/run.py test-runtime-matrix` | Test all packages on CPython + MicroPython + CircuitPython |
-| `python scripts/run.py test-everything` | Deep developer test sweep: CPython, scripts, unix-port runtimes, and optional device tests |
-| `python scripts/run.py test-device` | Run functional tests on the default device target(s) from `devices.yml`. Scope with `--library`, `--file`, `--function`, `--runtime`, `--micropython-device`, `--circuitpython-device`, or `--deploy-mode`. See [docs/contributing/device-testing.md](docs/contributing/device-testing.md) for flag semantics and pytest-direct usage. |
-| `python scripts/run.py test-workbench` | Run hardware-gated functional tests for every `workbench/*/functional_tests/` suite. Device selection lives inside each suite's `conftest.py` (typically reading `devices.yml` defaults); scope with `--workbench`, `--file`, `--function`, `-v`, `-x`. |
+| `python scripts/run.py test-micropython` | Run library unit tests on the MicroPython unix-port |
+| `python scripts/run.py test-circuitpython` | Run library unit tests on the CircuitPython unix-port |
+| `python scripts/run.py test-all-runtimes` | Run unit tests across CPython + MicroPython + CircuitPython (parallelized) |
+| `python scripts/run.py test-functional` | Run every hardware-gated functional suite end-to-end (libraries + workbench, devices.yml defaults). For scoped runs, use the individual commands below. |
+| `python scripts/run.py test-libraries-functional` | Run library functional tests on the default device target(s) from `devices.yml`. Scope with `--library`, `--file`, `--function`, `--runtime`, `--micropython-device`, `--circuitpython-device`, or `--deploy-mode`. See [docs/contributing/device-testing.md](docs/contributing/device-testing.md) for flag semantics and pytest-direct usage. |
+| `python scripts/run.py test-workbench-functional` | Run hardware-gated functional tests for every `workbench/*/functional_tests/` suite. Device selection lives inside each suite's `conftest.py` (typically reading `devices.yml` defaults); scope with `--workbench`, `--file`, `--function`, `-v`, `-x`. |
 | `python scripts/run.py check-version` | Check VERSION enforcement for changed libraries |
 | `python scripts/run.py check-api` | Check API breakages against last release tag |
 

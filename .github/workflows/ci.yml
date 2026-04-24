@@ -170,13 +170,13 @@ jobs:
 
 
   # -------------------------------------------------------------------------
-  # Runtime compatibility — pull request only to conserve CI minutes.
+  # Cross-runtime unit tests — pull request only to conserve CI minutes.
   # Parametrized as a matrix to avoid duplicating near-identical job
   # definitions for each runtime.
   # -------------------------------------------------------------------------
-  runtime-compatibility:
+  cross-runtime-tests:
     if: github.event_name == 'pull_request'
-    name: "${{ matrix.runtime_label }} compatibility"
+    name: "${{ matrix.runtime_label }} unit tests"
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -207,8 +207,8 @@ jobs:
       - name: "Prepare ${{ matrix.runtime_label }} unix-port runtime"
         if: steps.runtime-cache.outputs.cache-hit != 'true'
         run: python scripts/run.py prepare-${{ matrix.runtime_slug }}
-      - name: "Run ${{ matrix.runtime_label }} compatibility tests"
-        run: python scripts/run.py test-${{ matrix.runtime_slug }}-compatibility
+      - name: "Run ${{ matrix.runtime_label }} unit tests"
+        run: python scripts/run.py test-${{ matrix.runtime_slug }}
 
   # -------------------------------------------------------------------------
   # Validate mpy bytecode — build mpy-cross, stage all libraries into a

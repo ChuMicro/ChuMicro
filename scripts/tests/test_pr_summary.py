@@ -38,11 +38,11 @@ class TestFormatPrSummaryBlock:
     def test_empty_results_still_renders_command_and_zero_total(self) -> None:
         """No devices run → block shows just the command and a bold zero total."""
         block = pr_summary.format_pr_summary_block(
-            command="python scripts/run.py test-device",
+            command="python scripts/run.py test-libraries-functional",
             per_device_results=[],
         )
         lines = block.splitlines()
-        assert lines[0] == "- Command: `python scripts/run.py test-device`"
+        assert lines[0] == "- Command: `python scripts/run.py test-libraries-functional`"
         assert "**Total: 0 passed, 0 failed, 0 errors**" in block
         # No table when there are no devices.
         assert "| Device" not in block
@@ -64,7 +64,7 @@ class TestFormatPrSummaryBlock:
             identifier="pico-w", passed=5, duration_seconds=1.5,
         )
         block = pr_summary.format_pr_summary_block(
-            command="python scripts/run.py test-device --runtime micropython",
+            command="python scripts/run.py test-libraries-functional --runtime micropython",
             per_device_results=[result],
         )
         # Header + separator + data row present.
@@ -98,7 +98,7 @@ class TestFormatPrSummaryBlock:
             passed=3, errors=2, deploy_mode="flash",
         )
         block = pr_summary.format_pr_summary_block(
-            command="python scripts/run.py test-device --runtime both",
+            command="python scripts/run.py test-libraries-functional --runtime both",
             per_device_results=[mp_result, cp_result],
         )
         # Both devices appear as table rows.
@@ -139,7 +139,7 @@ class TestFormatPrSummaryBlock:
             ),
         )
         block = pr_summary.format_pr_summary_block(
-            command="python scripts/run.py test-device",
+            command="python scripts/run.py test-libraries-functional",
             per_device_results=[result],
         )
         # Version lives in the Runtime column, machine in the Board column.
@@ -173,14 +173,14 @@ class TestFormatPrSummaryBlock:
         assert data_row.count("|") == 9
 
     def test_deploy_mode_surfaces_even_without_probe(self) -> None:
-        """Bare ``test-device`` (no probe result) still shows the deploy mode."""
+        """Bare ``test-libraries-functional`` (no probe result) still shows the deploy mode."""
         result = _make_device_result(
             identifier="cp", runtime="circuitpython",
             address="/dev/cu.usbmodem2",
             passed=1, deploy_mode="flash",
         )
         block = pr_summary.format_pr_summary_block(
-            command="python scripts/run.py test-device",
+            command="python scripts/run.py test-libraries-functional",
             per_device_results=[result],
         )
         data_row = next(

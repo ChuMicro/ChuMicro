@@ -156,7 +156,7 @@ We welcome contributors of all experience levels. See [`CONTRIBUTING.md`](CONTRI
 
 If you use PyCharm, note that choosing or changing the project interpreter may rewrite `.idea/chumicro.iml`. The file is tracked in git so source roots stay in sync across contributors — click the **Sync IDE** run configuration (or run `python scripts/run.py sync-ide`) to restore the managed source-root layout before committing. `python scripts/run.py setup` and `python scripts/prepare_workspace.py` do the same regeneration as part of their normal workflow.
 
-If you want to work on real-board validation or IDE-driven `functional_tests/`, start with the [device testing guide](docs/contributing/device-testing.md). It documents how `python scripts/run.py setup` generates `devices.yml` and `device-config.yml`, how bare `python scripts/run.py test-device` uses the `defaults:` section in `devices.yml`, and how PyCharm / VS Code route explicit `functional_tests/` targets through the device pytest plugin.
+If you want to work on real-board validation or IDE-driven `functional_tests/`, start with the [device testing guide](docs/contributing/device-testing.md). It documents how `python scripts/run.py setup` generates `devices.yml` and `device-config.yml`, how bare `python scripts/run.py test-libraries-functional` uses the `defaults:` section in `devices.yml`, and how PyCharm / VS Code route explicit `functional_tests/` targets through the device pytest plugin.
 
 ### Development quick links
 

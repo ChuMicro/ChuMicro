@@ -190,7 +190,7 @@ Folder layout was revised during implementation — packages ship from `workbenc
 
 #### Acceptance
 
-- [x] chumicro's `test-device` orchestration uses `chumicro-deploy` via its Python API with no behavior change (`scripts/device_testing.py` + `scripts/pytest_device.py`).
+- [x] chumicro's `test-libraries-functional` orchestration uses `chumicro-deploy` via its Python API with no behavior change (`scripts/device_testing.py` + `scripts/pytest_device.py`).
 - [x] The `workbench/deploy/tests/fixtures/third_party_template/` fixture deploys successfully through the fake transport without importing any `chumicro_workspace_runtime` symbol and without touching any chumicro-specific file convention.
 - [x] Every CLI action has a documented programmatic equivalent (see `workbench/deploy/docs/api.md`).
 - [x] Zero references to `workspace.yml`, `things/`, or `library_sources:` in the deploy package source.
