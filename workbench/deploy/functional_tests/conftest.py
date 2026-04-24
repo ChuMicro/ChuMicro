@@ -78,6 +78,19 @@ def micropython_device() -> DeviceEntry:
 
 
 @pytest.fixture
+def circuitpython_device() -> DeviceEntry:
+    """A CircuitPython DeviceEntry from devices.yml, or skip the test.
+
+    No drive-mount predicate — RAM-mode deploy reaches the board
+    through the raw REPL alone and does not require a CIRCUITPY
+    drive.  Flash-mode tests should use :func:`circuitpython_flash_device`
+    instead.
+    """
+    devices, defaults = _load_registry_or_skip()
+    return _pick_device(devices, defaults, "circuitpython")
+
+
+@pytest.fixture
 def circuitpython_flash_device() -> DeviceEntry:
     """A CircuitPython DeviceEntry suitable for flash-mode deploy.
 
