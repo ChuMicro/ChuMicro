@@ -46,7 +46,8 @@ Per Decision 0032, each package lives in `libraries/` (installer puts code on a 
 | 3 | `chumicro-kvstore` | `libraries/` | Already planned, lands here in this sequencing. Tiny mutable KV for persisted runtime state. | msgpack |
 | 3 | `chumicro-wifi` | `libraries/` | Non-blocking connection manager. CP + MP + CPython-stub. | runner, kvstore |
 | 4 | `chumicro-workspace-runtime` | `workbench/` | Host CLI that manages things/devices/deploys. Ships the on-device `workspace_runtime` boot module as a data payload that the CLI writes onto the board at deploy time. | deploy, repl, kvstore, wifi |
-| 4 | `chumicro-workspace-template` repo | *separate repo* | The checked-in `run.py`, `workspace.yml`, `things/_template/`, scaffolding files. | workspace-runtime |
+| 4 | `chumicro-workspace-template` | `workbench/` | Scaffolder + updater.  Applies the template files into a new workspace, and later updates an existing workspace when the template evolves (Copier-style).  Imports `devices.yml` schema from `chumicro_deploy.config.default` — single source of truth for that shape. | deploy, workspace-runtime |
+| 4 | `chumicro-workspace-template` repo | *separate repo* | The canonical template source: checked-in `run.py`, `workspace.yml`, `things/_template/`, scaffolding files that the `chumicro-workspace-template` package copies / updates from.  Versioned and forkable independently — third parties can host their own template repos that the same package applies. | — (data, not code) |
 | 5 | `chumicro-sockets` | `libraries/` | Thin TCP client + TLS abstraction over CP `socketpool` / MP `socket` / CPython `socket`. Prereq for MQTT and future requests lib. See Decision 0031. | none (pure platform shim) |
 | 6 | `chumicro-mqtt` | `libraries/` | Refactor pythonProject3's 1043-line hand-rolled client into a runner-shaped service on top of chumicro-sockets. QoS 0 + 1; internal shape allows QoS 2 later. | runner, wifi, sockets |
 | 7 | `chumicro-workspace-template` first-sensor thing | *template repo* | End-to-end proving ground: a temperature sensor that connects via wifi, publishes via mqtt, persists a counter via kvstore. | all prior |
@@ -342,14 +343,26 @@ Docs settle most numbers; these need boards:
 - [ ] Import-graph resolver (AST walk starting from thing entrypoint, `library_sources:` override support).
 - [ ] Device-side `workspace_runtime` module: `boot()` reads `active.py`, imports thing, calls `run()`.
 
-### Phase 4b: `chumicro-workspace-template` repo
+### Phase 4b: `chumicro-workspace-template` package
+
+- [ ] New workbench package: `workbench/workspace-template/`.
+- [ ] Scaffold command — `chumicro-workspace-template init <dir> [--from <repo-or-path>]`.  Applies the template files (default: the companion repo `chumicro-workspace-template` at a pinned version; custom templates supported via `--from`) into an empty or existing directory.
+- [ ] Update command — `chumicro-workspace-template update [<dir>]`.  Re-applies the newer template over an existing workspace, preserving user-owned files and merging conflicts in the same Copier-style three-zone model `devices.yml` uses (user-owned, hardware-once, tool-owned).
+- [ ] Schema consumption — import the `devices.yml` schema definition from `chumicro_deploy.config.default` and write the seed `devices.yml` against that schema; do NOT reimplement the shape (Decision 0032 rule 8).
+- [ ] Template discovery — support local paths, Git URLs, and a pinned-by-version default pointing at the companion repo.  Version pin is updatable via the same `update` command.
+- [ ] Tests — fixture-based: apply a frozen template snapshot into a `tmp_path`, assert the expanded tree matches; apply an updated snapshot over the first output, assert the merge preserves user-owned zones.
+
+Acceptance: `pip install chumicro-workspace-template && chumicro-workspace-template init my-house` produces a working workspace that `python run.py setup` + `python run.py deploy` can drive end-to-end.  Later, `chumicro-workspace-template update my-house` pulls template evolutions without clobbering user code.
+
+### Phase 4c: `chumicro-workspace-template` repo
 
 - [ ] Initialize companion repo.
 - [ ] Ship: `run.py` shim, `workspace.yml`, `devices.yml` skeleton with three-zone comments, `secrets.yml.example`, `AGENTS.md`, `pyproject.toml` with pinned workspace-runtime + quality knobs, `.pre-commit-config.yaml`, `.gitignore`, `things/_template/`, `libs/` with `.gitkeep`, `packages/.gitignore`.
 - [ ] One worked example thing under `things/example-hello/` that runs on all three runtimes via sim + on a real board.
 - [ ] Template-side CI: lint + CPython tests + sim run + (optional, user-configured) device test.
+- [ ] Release discipline — each repo tag corresponds to a template version that the `chumicro-workspace-template` package can pin to; breaking changes to the template shape bump a major tag so `update` can signal the user before applying.
 
-Acceptance: a user clones the template, runs `python run.py setup`, plugs in a board, runs `python run.py add-device`, edits `things/example-hello/app.py`, runs `python run.py deploy`, sees output in REPL.  Zero additional setup.
+Acceptance: a user runs `chumicro-workspace-template init`, the repo's checked-in files land in their workspace, `python run.py setup` + `add-device` + `deploy` work without additional setup.
 
 ### Phase 5: `chumicro-sockets`
 

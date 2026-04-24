@@ -90,8 +90,10 @@ Three commented zones: user-owned (never overwritten without `--force` or prompt
 
 ## Consequences
 
-- Six new publishable packages land across `libraries/` and `workbench/` (folder split per Decision 0032): `chumicro-deploy` (✅ shipped 2026-04-22 in `workbench/`), `chumicro-repl` (`workbench/`), `chumicro-wifi` (`libraries/`), `chumicro-sockets` (`libraries/`; see Decision 0031), `chumicro-mqtt` (`libraries/`), `chumicro-workspace-runtime` (`workbench/`).  `chumicro-kvstore` (already planned; formerly `chumicro-settings`, see Decision 0030) is the seventh assumed-necessity.
-- `chumicro-workspace-template` is a new companion repo.
+- Seven new publishable packages land across `libraries/` and `workbench/` (folder split per Decision 0032): `chumicro-deploy` (✅ shipped 2026-04-22 in `workbench/`), `chumicro-repl` (`workbench/`), `chumicro-wifi` (`libraries/`), `chumicro-sockets` (`libraries/`; see Decision 0031), `chumicro-mqtt` (`libraries/`), `chumicro-workspace-runtime` (`workbench/`), `chumicro-workspace-template` (`workbench/`).  `chumicro-kvstore` (already planned; formerly `chumicro-settings`, see Decision 0030) is the eighth assumed-necessity.
+- `chumicro-workspace-template` is both:
+  - A **workbench package** — the scaffolder + updater.  Installed on the user's laptop; applies the template files into a new directory, and later updates an existing workspace when the template evolves (Copier-style).  Imports the `devices.yml` schema from `chumicro_deploy.config.default` so there is a single source of truth for that shape.  Scope is template *management*; deploy behaviour is delegated to `chumicro-deploy` and runtime orchestration to `chumicro-workspace-runtime`.
+  - A **companion repo** — the canonical source of the template files (`run.py` shim, `workspace.yml`, `things/_template/`, etc.) that the workbench package copies / updates from.  Versioned and forkable independently; third parties can maintain their own template repos that the same workbench package applies.
 - `devices.yml` gains three-zone structure; existing chumicro use (device testing) remains compatible — new fields are additive.
 - A monthly scrape-and-cache job is needed for MicroPython BOARD names; the reflash family table is shipped and versioned with `chumicro-workspace-runtime`.
 - Decision 0028's "project template repo" is promoted from parenthetical future work to a top-line deliverable governed by this decision and its workstream.
