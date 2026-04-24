@@ -46,6 +46,7 @@ from workspace import (
     discover_library_dirs,
     discover_package_dirs,
     discover_ruff_paths,
+    discover_workbench_dirs,
     filter_by_platform,
     find_publishable_packages,
     is_ref_reachable,
@@ -1029,6 +1030,103 @@ def test_device(
     )
 
 
+def test_workbench(
+    workbench: str | None = None,
+    file_filter: str | None = None,
+    function_filter: str | None = None,
+    verbose: bool = False,
+    exit_first: bool = False,
+) -> int:
+    """Run functional tests for workbench packages against real hardware.
+
+    Counterpart to :func:`test_device` for workbench packages.  Each
+    ``workbench/<name>/functional_tests/`` directory is a plain
+    host-side pytest suite that drives a connected board through the
+    public ``chumicro_deploy`` API (or each workbench's own entrypoint)
+    — no test-harness plugin routes these, since workbench code is
+    CPython-only and talks to hardware itself.
+
+    Device selection happens inside each suite's ``conftest.py``
+    (typically by reading ``devices.yml``), so this task exposes no
+    runtime or device flags.  Change the default board by editing
+    ``devices.yml`` defaults, or pass through the fixtures the test
+    suite documents.
+
+    Args:
+        workbench: Name of one workbench package (``deploy``, etc.) to
+            limit the run to.  ``None`` runs every workbench package
+            that ships a ``functional_tests/`` directory.
+        file_filter: Substring passed to pytest ``-k`` that narrows
+            collection to test files whose filename contains this
+            string.  Composed with *function_filter* via ``and``.
+        function_filter: Substring passed to pytest ``-k`` that
+            narrows collection to test functions whose name contains
+            this string.  Composed with *file_filter* via ``and``.
+        verbose: Forward ``-v`` to pytest for per-test PASS/FAIL lines.
+        exit_first: Forward ``-x`` to pytest so the run stops at the
+            first failure.
+
+    Returns:
+        ``0`` when every selected suite passes; the first non-zero
+        pytest exit code otherwise.  ``0`` with a warning when no
+        workbench package has a ``functional_tests/`` directory.
+    """
+    workbench_dirs = discover_workbench_dirs()
+    if workbench is not None:
+        workbench_dirs = [
+            package_dir for package_dir in workbench_dirs
+            if package_dir.name == workbench
+        ]
+        if not workbench_dirs:
+            print(f"No workbench package matches --workbench {workbench!r}.")
+            return 1
+
+    suites = [
+        package_dir / "functional_tests"
+        for package_dir in workbench_dirs
+        if (package_dir / "functional_tests").is_dir()
+    ]
+    if not suites:
+        scope = f"--workbench {workbench!r}" if workbench else "any workbench package"
+        print(f"No functional_tests/ directory found for {scope}.")
+        return 0
+
+    keyword_parts: list[str] = []
+    if file_filter:
+        keyword_parts.append(file_filter)
+    if function_filter:
+        keyword_parts.append(function_filter)
+
+    extra_args: list[str] = []
+    if exit_first:
+        extra_args.append("-x")
+    if verbose:
+        extra_args.append("-v")
+    if keyword_parts:
+        extra_args.extend(["-k", " and ".join(keyword_parts)])
+
+    # Unlike host-only ``test``, this task does not pass ``-W error``
+    # — hardware-interacting tests routinely surface warnings from
+    # upstream libraries (mpremote's mount/unmount leaves a file
+    # finalizer; pyserial's cleanup) that are out of our control.
+    # Matches ``test-device``'s behavior for the same reason.
+    first_failure = 0
+    environment = pythonpath_environment()
+    for suite in suites:
+        print(f"== test-workbench ({suite.parent.name}) ==")
+        result = run_command(
+            [
+                PYTHON, "-m", "pytest",
+                str(suite),
+                *extra_args,
+            ],
+            environment=environment,
+        )
+        if result != 0 and first_failure == 0:
+            first_failure = result
+    return first_failure
+
+
 def validate_mip(
     bundle_repo: str | None = None,
     libraries: str | None = None,
@@ -1276,6 +1374,44 @@ def _build_parser() -> argparse.ArgumentParser:
         help="deploy mode: ram (default, no flash wear) or flash (persistent). "
              "Overrides the per-device deploy_mode in devices.yml.",
     )
+    test_workbench_parser = subparsers.add_parser(
+        "test-workbench",
+        description=(
+            "Run functional tests for workbench packages against "
+            "connected hardware.  Counterpart to test-device, for "
+            "the host-only CPython tools under workbench/ that drive "
+            "boards through the public chumicro_deploy API.  Device "
+            "selection lives inside each suite's conftest.py — "
+            "change the target board via devices.yml defaults."
+        ),
+        help=(
+            "run workbench functional tests "
+            "(hardware-gated via devices.yml fixtures)"
+        ),
+    )
+    test_workbench_parser.add_argument(
+        "--workbench",
+        help="limit to one workbench package (e.g. deploy)",
+    )
+    test_workbench_parser.add_argument(
+        "--file",
+        dest="file_filter",
+        help="limit to test files whose name contains this substring",
+    )
+    test_workbench_parser.add_argument(
+        "--function",
+        dest="function_filter",
+        help="limit to test functions whose name contains this substring",
+    )
+    test_workbench_parser.add_argument(
+        "-v", "--verbose", action="store_true",
+        help="verbose test output",
+    )
+    test_workbench_parser.add_argument(
+        "-x", "--exit-first", action="store_true",
+        help="stop on first failure",
+    )
+
     subparsers.add_parser("check-version", help="check VERSION enforcement for changed libraries")
     subparsers.add_parser("check-api", help="check API breakages against last release tag")
 
@@ -1523,6 +1659,15 @@ def main(argv: list[str]) -> int:
             file_filter=args.file_filter,
             function_filter=args.function_filter,
             deploy_mode=args.deploy_mode,
+        )
+
+    if args.task == "test-workbench":
+        return test_workbench(
+            workbench=args.workbench,
+            file_filter=args.file_filter,
+            function_filter=args.function_filter,
+            verbose=args.verbose,
+            exit_first=args.exit_first,
         )
 
     # --- no-arg tasks ---

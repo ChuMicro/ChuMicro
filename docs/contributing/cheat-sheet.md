@@ -83,6 +83,7 @@ Grouped by what you're trying to do. Preflight is the one command you actually h
 | Refresh workspace + generate starter device configs | `python scripts/run.py setup` |
 | Run real-board functional tests | `python scripts/run.py test-device --library timing` |
 | Run real-board tests on both runtimes | `python scripts/run.py test-device --runtime both` |
+| Run workbench hardware-gated functional tests | `python scripts/run.py test-workbench --workbench deploy` |
 
 ### Docs and publishing
 

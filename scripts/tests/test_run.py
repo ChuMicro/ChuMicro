@@ -543,6 +543,166 @@ class TestMainDispatch:
                 "--device", "board-1",
             ])
 
+    def test_test_workbench_without_filters_passes_none_values(
+        self, monkeypatch,
+    ) -> None:
+        """Bare test-workbench forwards no filters and uses devices.yml defaults."""
+        command_calls, fake_test_workbench = _make_fake_command(return_value=79)
+        monkeypatch.setattr(run, "test_workbench", fake_test_workbench)
+
+        result = run.main(["run.py", "test-workbench"])
+
+        assert result == 79
+        assert command_calls == [
+            ((), {
+                "workbench": None,
+                "file_filter": None,
+                "function_filter": None,
+                "verbose": False,
+                "exit_first": False,
+            }),
+        ]
+
+    def test_test_workbench_forwards_explicit_cli_filters(self, monkeypatch) -> None:
+        """test-workbench should forward --workbench / --file / --function / -v / -x."""
+        command_calls, fake_test_workbench = _make_fake_command(return_value=83)
+        monkeypatch.setattr(run, "test_workbench", fake_test_workbench)
+
+        result = run.main([
+            "run.py", "test-workbench",
+            "--workbench", "deploy",
+            "--file", "test_deploy_files_hardware",
+            "--function", "circuitpython_ram",
+            "-v",
+            "-x",
+        ])
+
+        assert result == 83
+        assert command_calls == [
+            ((), {
+                "workbench": "deploy",
+                "file_filter": "test_deploy_files_hardware",
+                "function_filter": "circuitpython_ram",
+                "verbose": True,
+                "exit_first": True,
+            }),
+        ]
+
+
+class TestTestWorkbench:
+    """Tests for run.test_workbench — workbench functional-test orchestration."""
+
+    def _stub_discovery(self, monkeypatch, tmp_path: Path) -> list[Path]:
+        """Build two fake workbench packages and return their paths.
+
+        Only ``alpha`` has a ``functional_tests/`` directory so tests
+        can exercise the "skip-suites-without-fn-dir" path cleanly.
+        """
+        alpha = tmp_path / "alpha"
+        (alpha / "functional_tests").mkdir(parents=True)
+        beta = tmp_path / "beta"
+        beta.mkdir()
+        monkeypatch.setattr(run, "discover_workbench_dirs", lambda: [alpha, beta])
+        return [alpha, beta]
+
+    def _record_invocations(self, monkeypatch) -> list[list[str]]:
+        """Replace ``run.run_command`` with a recorder that returns 0."""
+        invocations: list[list[str]] = []
+
+        def fake_run_command(command, **_kwargs):
+            invocations.append(command)
+            return 0
+
+        monkeypatch.setattr(run, "run_command", fake_run_command)
+        return invocations
+
+    def test_runs_pytest_for_every_workbench_with_functional_tests(
+        self, monkeypatch, tmp_path: Path,
+    ) -> None:
+        """Every workbench that ships functional_tests/ contributes one pytest call."""
+        alpha, _beta = self._stub_discovery(monkeypatch, tmp_path)
+        invocations = self._record_invocations(monkeypatch)
+
+        result = run.test_workbench()
+
+        assert result == 0
+        assert len(invocations) == 1
+        assert str(alpha / "functional_tests") in invocations[0]
+
+    def test_workbench_filter_limits_to_named_package(
+        self, monkeypatch, tmp_path: Path,
+    ) -> None:
+        """--workbench alpha keeps only the alpha suite."""
+        alpha, _beta = self._stub_discovery(monkeypatch, tmp_path)
+        invocations = self._record_invocations(monkeypatch)
+
+        result = run.test_workbench(workbench="alpha")
+
+        assert result == 0
+        assert len(invocations) == 1
+        assert str(alpha / "functional_tests") in invocations[0]
+
+    def test_unknown_workbench_returns_nonzero(
+        self, monkeypatch, tmp_path: Path, capsys,
+    ) -> None:
+        """--workbench with no matching package errors out."""
+        self._stub_discovery(monkeypatch, tmp_path)
+        monkeypatch.setattr(run, "run_command", lambda *_args, **_kwargs: 0)
+
+        result = run.test_workbench(workbench="ghost")
+
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "ghost" in captured.out
+
+    def test_file_and_function_filters_compose_via_and(
+        self, monkeypatch, tmp_path: Path,
+    ) -> None:
+        """Both filters combine into a single pytest ``-k A and B`` expression."""
+        self._stub_discovery(monkeypatch, tmp_path)
+        invocations = self._record_invocations(monkeypatch)
+
+        result = run.test_workbench(
+            file_filter="test_deploy_files_hardware",
+            function_filter="circuitpython_ram",
+        )
+
+        assert result == 0
+        keyword_index = invocations[0].index("-k")
+        assert invocations[0][keyword_index + 1] == (
+            "test_deploy_files_hardware and circuitpython_ram"
+        )
+
+    def test_first_failing_suite_exit_code_wins(
+        self, monkeypatch, tmp_path: Path,
+    ) -> None:
+        """When two suites run and the first fails, its exit code is returned."""
+        alpha = tmp_path / "alpha"
+        (alpha / "functional_tests").mkdir(parents=True)
+        gamma = tmp_path / "gamma"
+        (gamma / "functional_tests").mkdir(parents=True)
+        monkeypatch.setattr(
+            run, "discover_workbench_dirs", lambda: [alpha, gamma],
+        )
+        return_values = iter([5, 0])
+        monkeypatch.setattr(run, "run_command", lambda *_args, **_kwargs: next(return_values))
+
+        result = run.test_workbench()
+
+        assert result == 5
+
+    def test_empty_workbench_space_returns_zero(
+        self, monkeypatch, capsys,
+    ) -> None:
+        """No workbench package with fn-tests prints a note and returns 0."""
+        monkeypatch.setattr(run, "discover_workbench_dirs", lambda: [])
+        monkeypatch.setattr(run, "run_command", lambda *_args, **_kwargs: 0)
+
+        result = run.test_workbench()
+
+        assert result == 0
+        assert "No functional_tests/" in capsys.readouterr().out
+
 
 class TestCompositeTestCommands:
     """Tests for aggregated developer test commands."""

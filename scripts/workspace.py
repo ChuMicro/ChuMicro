@@ -231,6 +231,23 @@ def discover_library_dirs() -> list[Path]:
     ]
 
 
+def discover_workbench_dirs() -> list[Path]:
+    """Return package directories that live under ``workbench/``.
+
+    Counterpart to :func:`discover_library_dirs` for host-only
+    publishable tools.  Used by the ``test-workbench`` task to drive
+    pytest at every workbench package's ``functional_tests/``
+    directory.  Device-side routing is not relevant — workbench
+    packages are CPython-only and reach hardware through the public
+    ``chumicro_deploy`` API (or through their own subprocess shells)
+    rather than the test-harness plugin.
+    """
+    return [
+        package_dir for package_dir in discover_package_dirs()
+        if package_dir.parent.name == "workbench"
+    ]
+
+
 def discover_source_roots() -> list[Path]:
     """Return src/ directories for all discovered packages.
 

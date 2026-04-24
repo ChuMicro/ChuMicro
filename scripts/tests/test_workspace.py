@@ -15,6 +15,7 @@ from workspace import (
     discover_package_dirs,
     discover_ruff_paths,
     discover_source_roots,
+    discover_workbench_dirs,
     filter_by_platform,
     find_package_dir,
     find_publishable_packages,
@@ -497,6 +498,32 @@ class TestDiscoverLibraryDirs:
         all_dirs = set(str(directory) for directory in discover_package_dirs())
         library_dirs = set(str(directory) for directory in discover_library_dirs())
         assert library_dirs.issubset(all_dirs)
+
+
+class TestDiscoverWorkbenchDirs:
+    """Tests for discover_workbench_dirs."""
+
+    def test_returns_list(self):
+        """discover_workbench_dirs returns a list of Paths."""
+        dirs = discover_workbench_dirs()
+        assert isinstance(dirs, list)
+
+    def test_all_under_workbench(self):
+        """Every returned directory is under workbench/."""
+        for workbench_dir in discover_workbench_dirs():
+            assert workbench_dir.parent.name == "workbench"
+
+    def test_excludes_libraries(self):
+        """Library packages are not included."""
+        names = {workbench_dir.name for workbench_dir in discover_workbench_dirs()}
+        library_names = {library_dir.name for library_dir in discover_library_dirs()}
+        assert names.isdisjoint(library_names)
+
+    def test_subset_of_discover_package_dirs(self):
+        """Results are a subset of discover_package_dirs."""
+        all_dirs = {str(directory) for directory in discover_package_dirs()}
+        workbench_dirs = {str(directory) for directory in discover_workbench_dirs()}
+        assert workbench_dirs.issubset(all_dirs)
 
 
 class TestReadPyprojectDescription:
