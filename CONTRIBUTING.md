@@ -47,6 +47,7 @@ Start here, then pick the guide that matches your task:
 | **Add a new library** | [Adding a New Library](docs/contributing/new-library.md) |
 | **Understand releases** | [Releases and Promotion](docs/contributing/releases.md) |
 | **Use an AI coding agent** | [Working with Agents](docs/contributing/working-with-agents.md) |
+| **Recover from a broken state** | [Troubleshooting](docs/troubleshooting/) — macOS CIRCUITPY wedge, stale mounts, multi-board drive disambiguation |
 
 Each page is self-contained for its topic. You don't need to read all of them — just the ones relevant to what you're doing.
 

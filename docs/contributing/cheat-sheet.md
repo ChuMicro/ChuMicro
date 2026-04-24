@@ -104,6 +104,7 @@ Every failure message tells you exactly what to do.
 | `check-version` | Edit `libraries/<name>/VERSION` (patch bump is usually right) |
 | `griffe warnings` | Add type annotations to function signatures |
 | `functional_tests/` say no device is configured | Run `python scripts/run.py setup`, then fill in `devices.yml`. See [device testing](device-testing.md) |
+| macOS CIRCUITPY drive won't mount, `diskutil list` hangs, flash-mode deploys fail | You hit the FSKit / DiskArbitration wedge.  See [macOS CIRCUITPY troubleshooting](../troubleshooting/macos-circuitpy.md) for the `sudo killall … && launchctl kickstart -k …` recovery |
 | Stuck or confused | Ask in the PR — someone will help |
 
 **Browsing coverage in detail:** After running tests, generate an HTML report with `python -m coverage html` and open `htmlcov/index.html`. Covered lines show in green, missed lines in red — much easier than reading line numbers from the terminal. (`htmlcov/` is gitignored.)
@@ -114,4 +115,5 @@ Every failure message tells you exactly what to do.
 - [Style guide](style-guide.md)
 - [PR guide](pull-requests.md)
 - [Device testing](device-testing.md)
+- [Troubleshooting](../troubleshooting/)
 - [Design decisions](../../plans/decisions/README.md)

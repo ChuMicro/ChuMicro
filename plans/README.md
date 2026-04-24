@@ -44,3 +44,32 @@ Use these states consistently in planning documents:
 - `blocked`
 - `done`
 - `deferred`
+
+## Where each kind of knowledge lives
+
+`plans/` is one of four homes for the assistive knowledge an agent or human needs to work in this repo.  Each is scoped to a different audience + purpose; avoid duplicating content between them.
+
+| Kind of knowledge | Home |
+|---|---|
+| **Why** the workspace has its current shape (tradeoffs, alternatives rejected) | `plans/decisions/` (ADRs) |
+| **What was tried before** — rejected approaches, design principles, build-up timeline | `plans/history.md` |
+| **What's next / what's active** — queue, milestones, in-flight workstreams | `plans/next-up.md`, `plans/roadmap.md`, `plans/workstreams/` |
+| **What's unresolved** — open questions that aren't blocking | `plans/open-questions.md` |
+| **Reusable implementation patterns** (code shape, mpremote internals, subprocess-binary resolution) | `plans/patterns.md` |
+| **How to contribute as a human** — setup, workflow, per-IDE setup, PR process, release process, new library, new workbench package | [`docs/contributing/`](../docs/contributing/) |
+| **How to contribute as an agent** — workspace rules, skills table, context recovery, non-negotiable rules | [`AGENTS.md`](../AGENTS.md) |
+| **Agent procedural scripts** — step-by-step procedures for common tasks (commit, checkpoint, debug-test-failure, etc.) | [`.github/skills/`](../.github/skills/) |
+| **Operational recovery / paste-this-command troubleshooting** when something broke | [`docs/troubleshooting/`](../docs/troubleshooting/) |
+| **Project overview for consumers** — what ChuMicro is, how to install | [`README.md`](../README.md) |
+| **Human entry point** | [`CONTRIBUTING.md`](../CONTRIBUTING.md) |
+
+**The right home depends on the shape of the content, not who's reading it:**
+
+- Decisions + tradeoffs → `plans/decisions/`.
+- Multi-step recovery for a failure mode (e.g. macOS FSKit wedge) → `docs/troubleshooting/`, with a short inline pointer from the error message.
+- Reusable "how to implement X" pattern with code → `plans/patterns.md`.
+- One-shot "here's what happened in this session / on this date" → `plans/history.md`.
+- Forward-looking "we plan to do X" → `plans/next-up.md` or a workstream doc.
+- Guidance for a contributor doing task X (add a library, open a PR, run device tests) → `docs/contributing/X.md`.
+
+If content feels like it fits two homes, pick the audience-agnostic one and cross-link — don't duplicate.

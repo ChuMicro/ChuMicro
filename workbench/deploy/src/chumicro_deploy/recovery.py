@@ -299,6 +299,11 @@ _PLANS: dict[DeployFailureKind, RecoveryPlan] = {
             "If the wedge persists after the command, reboot — "
             "that always clears it and also resets the Finder "
             "sidebar classifier.",
+            "Full write-up (why each daemon is killed, what the "
+            "Finder sidebar regression is, and when to reboot) "
+            "lives at "
+            "https://github.com/ChuMicro/ChuMicro/blob/main/"
+            "docs/troubleshooting/macos-circuitpy.md.",
         ),
         retryable=True,
     ),

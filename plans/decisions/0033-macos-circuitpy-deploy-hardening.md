@@ -103,49 +103,12 @@ layer can't observe.
 
 ### 4. Detect and recover from the FSKit wedge
 
-Commit `6fdc132`.  Recent macOS releases replaced the
-in-kernel `msdosfs` driver with a user-space FSKit extension
-(`com.apple.fskit.msdos.appex`).  When that extension errors
-out mid-probe on a small CIRCUITPY FAT12 volume,
-`diskarbitrationd` gets stuck in uninterruptible kernel wait
-(`ps` state `Us`).  Symptoms: `/Volumes/CIRCUITPY` never
-appears after unplug/replug, `diskutil list` hangs
-indefinitely, every flash-mode deploy fails with a
-misleading error.
+Commit `6fdc132`.  Recent macOS replaced the in-kernel `msdosfs` driver with a user-space FSKit extension; it can wedge `diskarbitrationd` in uninterruptible kernel wait when a small CIRCUITPY FAT12 volume trips it, and every subsequent DiskArbitration call queues behind the stuck one.  The symptoms, the exact `sudo killall … && launchctl kickstart -k …` recovery chain, and the operational how-to live in [`docs/troubleshooting/macos-circuitpy.md`](../../docs/troubleshooting/macos-circuitpy.md); this decision section covers *why* `chumicro-deploy` handles the wedge the way it does.
 
-`chumicro_deploy.macos_fskit.detect_fskit_wedge()` probes
-`ps -o state= -p $(pgrep diskarbitrationd)` with short
-timeouts and returns `True` when the state contains `U`.
-`InteractiveDeployer` promotes `CIRCUITPY_DRIVE_MISSING` →
-`MACOS_FSKIT_WEDGED` on a match and surfaces the exact
-recovery command:
-
-```
-sudo killall -9 com.apple.fskit.msdos fskit_helper fskitd \
-    fskit_agent diskarbitrationd && \
-launchctl kickstart -k gui/$(id -u)/com.apple.DiskArbitrationAgent
-```
-
-The per-user `DiskArbitrationAgent` specifically needs
-`launchctl kickstart -k` rather than `killall`: its launchd
-plist has `KeepAlive=false`, so a plain kill leaves the agent
-dead.  Drives then mount at `/Volumes/` but never register
-with Finder's Locations sidebar.
-
-Sudo is **not** auto-run — detection surfaces the command for
-the user to paste.  Auto-escalating privileges belongs to a
-`--auto-fix-fskit-wedge` opt-in flag if we ever need one;
-detect-and-coach is the default.
-
-One downstream caveat: after the chain clears the wedge,
-drives are fully functional (mounted, readable, writable,
-deployable), but on recent macOS they may **not** appear in
-Finder's Locations sidebar.  That is an Apple FSKit-Finder
-regression unrelated to this recovery — reach them via
-Shift+Cmd+C (Computer view) or drag one into the Favorites
-sidebar section.  A reboot clears it.  The
-`MACOS_FSKIT_WEDGED` recovery plan calls this out explicitly
-so users stop chasing a non-bug after a successful recovery.
+- **Detect automatically.** `chumicro_deploy.macos_fskit.detect_fskit_wedge()` probes `ps -o state= -p $(pgrep diskarbitrationd)` with short timeouts and returns `True` when the state contains `U` (uninterruptible kernel wait).  Fails open on every subprocess error — a missing `pgrep` / `ps` binary, a permission issue, or a timeout all return `False` rather than blocking a legitimate `CIRCUITPY_DRIVE_MISSING` retry.
+- **Promote the failure kind.** `InteractiveDeployer` takes an injected `fskit_wedge_detector` and, on a `CIRCUITPY_DRIVE_MISSING` failure, promotes the kind to `MACOS_FSKIT_WEDGED` when the detector matches.  The promoted kind carries a different recovery plan that prints the paste-this-command block instead of the generic "tap RESET" steps.
+- **Do not auto-run `sudo`.**  Auto-escalating privileges is a blast-radius decision the tool should not take without an explicit opt-in.  Detect + surface + paste keeps the human in the loop.  A future `--auto-fix-fskit-wedge` flag could opt into running the command for CI or scripted use, but that is not the default.
+- **Kill the per-user agent via `launchctl kickstart -k`, not `killall`.**  The per-user `DiskArbitrationAgent` has `KeepAlive=false` in its plist — a plain kill leaves it dead and drives mount but do not register with Finder.  `launchctl kickstart -k` stops and restarts the service via launchd, matching the recovery chain's intent.
 
 ### 5. Probe the mount before staging; re-raise uniformly
 
