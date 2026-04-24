@@ -253,7 +253,7 @@ PyCharm is the primary live-tested IDE path during current device-testing develo
 VS Code uses the same pytest entrypoint and committed workspace settings/tasks as PyCharm. The structural support is present:
 
 - `.vscode/settings.json` enables pytest and points Pylance at all workspace source roots
-- `.vscode/tasks.json` includes a `Test Device` task
+- `.vscode/tasks.json` includes a `Test Libraries Functional` task
 - explicit `functional_tests/` targets go through the same pytest plugin
 
 A dedicated live end-to-end VS Code validation pass remains on `plans/next-up.md`, so if you hit a VS Code-only issue, treat that as a real bug rather than user error.

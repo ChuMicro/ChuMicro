@@ -19,7 +19,7 @@ class TestConfigFilename:
 
     def test_multi_word(self):
         """Multi-word names are fully converted."""
-        assert _config_filename("CircuitPython Compatibility") == "CircuitPython_Compatibility.xml"
+        assert _config_filename("Test Libraries Functional") == "Test_Libraries_Functional.xml"
 
 
 class TestSyncIde:

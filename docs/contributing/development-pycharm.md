@@ -70,13 +70,14 @@ The project includes pre-configured run configurations in `.idea/runConfiguratio
 | **Docs Preview** | Deploy and serve versioned docs locally |
 | **Check API** | Detect API breakages against the last release tag |
 | **Check Version** | Verify VERSION bumps for changed libraries |
-| **MicroPython Compatibility** | Cross-runtime tests under MicroPython unix port |
-| **CircuitPython Compatibility** | Cross-runtime tests under CircuitPython unix port |
-| **Runtime Matrix** | Test all packages across CPython + MicroPython + CircuitPython |
-| **Test Everything** | Deep developer test sweep — CPython, scripts, and the unix-port runtime matrix in one pass (real-board tests opt-in via `--with-device`) |
+| **Test MicroPython** | Library unit tests on the MicroPython unix port |
+| **Test CircuitPython** | Library unit tests on the CircuitPython unix port |
+| **Test All Runtimes** | Unit tests on CPython + MicroPython + CircuitPython (parallelized) |
 | **Setup** | `python scripts/run.py setup` — installs dev deps, runs editable installs, regenerates IDE configs, generates starter device configs |
 | **Prepare Workspace** | Lower-level workspace prep — invokes `scripts/prepare_workspace.py` directly (advanced users; `Setup` is usually what you want) |
-| **Test Device** | Run defaults-backed real-board functional tests |
+| **Test Functional** | Run all hardware-gated functional suites — `test-libraries-functional` then `test-workbench-functional` against `devices.yml` defaults |
+| **Test Libraries Functional** | Run defaults-backed real-board functional tests for library code |
+| **Test Workbench Functional** | Run hardware-gated functional tests for every `workbench/*/functional_tests/` suite |
 
 Click the ▶ button or press `⌃R` / `Shift+F10` to run the selected configuration.
 
