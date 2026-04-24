@@ -32,14 +32,17 @@ See Decision 0027 (IDE integration section).
 from __future__ import annotations
 
 import ast
+import time
+from collections import defaultdict
 from collections.abc import Generator, Iterable, Iterator
 from pathlib import Path
 from typing import Any, cast
 
 import pytest
-from chumicro_deploy import TransportProtocol
+from chumicro_deploy import DeviceImplementation, TransportProtocol
 from device_config import (
     DeviceConfigError,
+    DeviceDefaults,
     DeviceEntry,
     load_device_registry,
     resolve_ide_devices,
@@ -48,10 +51,78 @@ from device_testing import (
     build_device_bootstrap,
     create_transport,
     execute_device_bootstrap,
+    resolve_effective_deploy_mode,
     resolve_library_source_dirs,
+)
+from pr_summary import (
+    DeviceRunResult,
+    FileRunResult,
+    format_pr_summary_block,
 )
 from result_parser import RunResult, TestResult, parse_output
 from workspace import ROOT
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    """Register ``--chumicro-*`` command-line options on the pytest CLI.
+
+    These are the knobs the ``scripts/run.py test-device`` task turns
+    into pytest flags.  They all override the corresponding
+    ``defaults:`` entries in ``devices.yml`` when supplied; when
+    omitted, ``devices.yml`` defaults still drive selection so IDE
+    play-button runs keep working with zero configuration.
+
+    Options:
+
+    - ``--chumicro-runtime`` (``micropython`` / ``circuitpython`` /
+      ``both``) — overrides ``defaults.ide_runtime``.
+    - ``--chumicro-micropython-device`` / ``--chumicro-circuitpython-device``
+      — per-runtime device-ID overrides.
+    - ``--chumicro-deploy-mode`` (``ram`` / ``flash``) — overrides
+      the per-device ``deploy_mode`` and ``defaults.deploy_mode``.
+    - ``--chumicro-pr-summary`` — when set, prints a Markdown
+      device-testing block at session end (the same block the
+      ``test-device`` task used to print directly).  Opt-in so IDE
+      play-button runs stay quiet.
+    - ``--chumicro-pr-summary-command`` — literal command string to
+      render in the ``- Command:`` line of the PR block.  The
+      ``test-device`` wrapper passes the reconstructed invocation;
+      direct pytest runs can omit it and get the raw ``pytest ...``.
+    """
+    group = parser.getgroup("chumicro", "ChuMicro device-test plugin")
+    group.addoption(
+        "--chumicro-runtime",
+        choices=("micropython", "circuitpython", "both"),
+        default=None,
+        help="override devices.yml defaults.ide_runtime",
+    )
+    group.addoption(
+        "--chumicro-micropython-device",
+        default=None,
+        help="override devices.yml defaults.micropython device ID",
+    )
+    group.addoption(
+        "--chumicro-circuitpython-device",
+        default=None,
+        help="override devices.yml defaults.circuitpython device ID",
+    )
+    group.addoption(
+        "--chumicro-deploy-mode",
+        choices=("ram", "flash"),
+        default=None,
+        help="override per-device deploy_mode (ram / flash)",
+    )
+    group.addoption(
+        "--chumicro-pr-summary",
+        action="store_true",
+        default=False,
+        help="print a Markdown PR block at session end",
+    )
+    group.addoption(
+        "--chumicro-pr-summary-command",
+        default=None,
+        help="command string to render inside the PR block",
+    )
 
 
 def _session_cache(session: pytest.Session) -> _TransportCache:
@@ -73,6 +144,170 @@ def _session_targets(session: pytest.Session) -> list[DeviceEntry] | None:
     if targets is None:
         return None
     return cast("list[DeviceEntry]", targets)
+
+
+def _session_deploy_mode_override(session: pytest.Session) -> str | None:
+    """Return the ``--chumicro-deploy-mode`` override, if any."""
+    return cast(
+        "str | None",
+        session.config.getoption("--chumicro-deploy-mode", default=None),
+    )
+
+
+def _session_pr_summary(
+    session: pytest.Session,
+) -> _PRSummaryCollector | None:
+    """Return the PR-summary collector when ``--chumicro-pr-summary`` is set."""
+    return getattr(session, "_chumicro_pr_summary", None)
+
+
+class _PRSummaryCollector:
+    """Accumulate per-(device, file, test) outcomes for the PR block.
+
+    The collector receives one call per pytest report (via
+    ``pytest_runtest_makereport``) and rolls the results up into the
+    :class:`DeviceRunResult` shape ``pr_summary.format_pr_summary_block``
+    expects.  Empty containers are populated on first encounter and
+    the overall order — device declaration order, then file
+    declaration order — matches the ``test-device`` orchestrator's
+    output so the Markdown is stable across the two code paths.
+    """
+
+    def __init__(self) -> None:
+        self._devices: dict[str, DeviceEntry] = {}
+        self._file_order: dict[str, list[tuple[str, str]]] = defaultdict(list)
+        self._file_results: dict[tuple[str, str, str], FileRunResult] = {}
+        self._implementations: dict[str, DeviceImplementation | None] = {}
+        self._deploy_modes: dict[str, str] = {}
+        self._device_duration: dict[str, float] = defaultdict(float)
+        self._session_start = time.perf_counter()
+        self._session_end = self._session_start
+        self._bulk_stage_errors: dict[str, int] = defaultdict(int)
+
+    def record(
+        self,
+        item: DeviceRuntimeItem,
+        report: pytest.TestReport,
+    ) -> None:
+        """Fold one call-phase report into the accumulated per-device results."""
+        device = item.target_device
+        if device is None:
+            return
+        device_id = device.identifier
+        self._devices.setdefault(device_id, device)
+        self._device_duration[device_id] += max(report.duration or 0.0, 0.0)
+        self._session_end = time.perf_counter()
+
+        # Probe once, lazily, when the transport is live.
+        if device_id not in self._implementations:
+            self._deploy_modes.setdefault(
+                device_id,
+                resolve_effective_deploy_mode(
+                    device,
+                    _session_deploy_mode_override(item.session),
+                ),
+            )
+            cache = _session_cache(item.session)
+            transport = cache._transports.get(device_id)  # noqa: SLF001
+            if transport is not None:
+                try:
+                    self._implementations[device_id] = (
+                        transport.probe_implementation()
+                    )
+                except Exception:  # pragma: no cover — hardware-only
+                    self._implementations[device_id] = None
+
+        if isinstance(item, DevicePrepareItem):
+            # A failing prepare step means bulk-stage / connect failed;
+            # no per-test items will produce results for this file.
+            if report.failed:
+                self._bulk_stage_errors[device_id] += 1
+            return
+
+        if isinstance(item, DeviceRunFileItem):
+            # A failing run-file means the batch exec failed; count one
+            # error per file and keep going.
+            if report.failed:
+                file_result = self._ensure_file_result(
+                    device_id, item.library_dir.name, item.test_file.name,
+                )
+                file_result.errors = 1
+            return
+
+        if not isinstance(item, DeviceTestItem):
+            return
+
+        file_result = self._ensure_file_result(
+            device_id, item.library_dir.name, item.test_file.name,
+        )
+        status: str
+        if report.passed:
+            status = "PASS"
+            file_result.passed += 1
+        elif report.skipped:
+            status = "SKIP"
+        else:
+            status = "FAIL"
+            file_result.failed += 1
+
+        per_test_duration = item._reported_duration  # noqa: SLF001
+        if per_test_duration is not None:
+            file_result.duration_seconds += per_test_duration
+        file_result.tests.append(TestResult(
+            name=item._function_name,  # noqa: SLF001
+            status=status,
+            duration=per_test_duration,
+            message=None,
+        ))
+
+    def _ensure_file_result(
+        self,
+        device_id: str,
+        library_name: str,
+        file_name: str,
+    ) -> FileRunResult:
+        key = (device_id, library_name, file_name)
+        if key not in self._file_results:
+            self._file_results[key] = FileRunResult(
+                library=library_name,
+                file_name=file_name,
+                passed=0,
+                failed=0,
+                errors=0,
+            )
+            self._file_order[device_id].append((library_name, file_name))
+        return self._file_results[key]
+
+    def render(self) -> list[DeviceRunResult]:
+        """Return the accumulated per-device results in report order."""
+        results: list[DeviceRunResult] = []
+        for device_id, device in self._devices.items():
+            files = [
+                self._file_results[(device_id, library_name, file_name)]
+                for library_name, file_name in self._file_order.get(device_id, [])
+            ]
+            total_passed = sum(file_result.passed for file_result in files)
+            total_failed = sum(file_result.failed for file_result in files)
+            total_errors = (
+                sum(file_result.errors for file_result in files)
+                + self._bulk_stage_errors.get(device_id, 0)
+            )
+            duration = self._device_duration.get(device_id, 0.0)
+            results.append(DeviceRunResult(
+                device=device,
+                passed=total_passed,
+                failed=total_failed,
+                errors=total_errors,
+                implementation=self._implementations.get(device_id),
+                deploy_mode=self._deploy_modes.get(device_id, "ram"),
+                duration_seconds=duration,
+                files=files,
+            ))
+        return results
+
+    def session_duration(self) -> float:
+        """Total wall-clock span of the session, in seconds."""
+        return max(self._session_end - self._session_start, 0.0)
 
 #: Path to the test harness source directory.
 HARNESS_SOURCE = ROOT / "support" / "test_harness" / "src"
@@ -508,9 +743,10 @@ class DeviceRuntimeItem(pytest.Item):
         """Connect to the device and stage source files if needed."""
 
         cache = _session_cache(self.session)
+        deploy_mode = _session_deploy_mode_override(self.session)
 
         try:
-            transport = cache.get_transport(device_entry, None)
+            transport = cache.get_transport(device_entry, deploy_mode)
         except Exception as error:
             cache.cache_batch_result(
                 self._batch_key(device_entry),
@@ -559,7 +795,9 @@ class DeviceRuntimeItem(pytest.Item):
         if batch is None:
             # First item for this (device, file) — run all tests.
             self._ensure_prepared(device_entry)
-            transport = cache.get_transport(device_entry, None)
+            transport = cache.get_transport(
+                device_entry, _session_deploy_mode_override(self.session),
+            )
 
             # Run ALL tests in the file (no name_filter) to amortize
             # the per-invocation overhead.
@@ -891,31 +1129,114 @@ def pytest_collection_modifyitems(
 
 
 def pytest_sessionstart(session: pytest.Session) -> None:
-    """Initialize the transport cache and resolve target devices."""
+    """Initialize the transport cache and resolve target devices.
+
+    Applies ``--chumicro-runtime`` / ``--chumicro-micropython-device`` /
+    ``--chumicro-circuitpython-device`` overrides on top of the
+    ``devices.yml`` defaults before picking target devices, so the
+    pytest invocation mirrors what the ``test-device`` CLI used to do
+    in its own orchestrator.  Omitted options leave the defaults
+    untouched, so IDE play-button runs continue to use
+    ``devices.yml`` defaults with no explicit flags.
+    """
     session._device_transport_cache = _TransportCache()  # type: ignore[attr-defined]
+
+    runtime_override = cast(
+        "str | None",
+        session.config.getoption("--chumicro-runtime", default=None),
+    )
+    mp_override = cast(
+        "str | None",
+        session.config.getoption("--chumicro-micropython-device", default=None),
+    )
+    cp_override = cast(
+        "str | None",
+        session.config.getoption("--chumicro-circuitpython-device", default=None),
+    )
+    deploy_mode_override = cast(
+        "str | None",
+        session.config.getoption("--chumicro-deploy-mode", default=None),
+    )
 
     # Eagerly resolve target devices so collection can parametrize
     # by runtime when ide_runtime is "both".
     try:
         devices, defaults = load_device_registry(workspace_root=ROOT)
-        session._device_targets = resolve_ide_devices(devices, defaults)  # type: ignore[attr-defined]
     except DeviceConfigError:
         session._device_targets = None  # type: ignore[attr-defined]
+    else:
+        effective_defaults = DeviceDefaults(
+            micropython=mp_override or defaults.micropython,
+            circuitpython=cp_override or defaults.circuitpython,
+            deploy_mode=deploy_mode_override or defaults.deploy_mode,
+            ide_runtime=runtime_override or defaults.ide_runtime,
+        )
+        session._device_targets = resolve_ide_devices(  # type: ignore[attr-defined]
+            devices, effective_defaults,
+        )
+
+    if session.config.getoption("--chumicro-pr-summary", default=False):
+        session._chumicro_pr_summary = _PRSummaryCollector()  # type: ignore[attr-defined]
 
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
-    """Disconnect all cached transports at session end."""
+    """Disconnect transports at session end; emit the PR block when requested."""
     cache = getattr(session, "_device_transport_cache", None)
     if cache is not None:
         cast("_TransportCache", cache).disconnect_all()
+
+    collector = _session_pr_summary(session)
+    if collector is None:
+        return
+    per_device_results = collector.render()
+    if not per_device_results:
+        return
+    command = cast(
+        "str | None",
+        session.config.getoption("--chumicro-pr-summary-command", default=None),
+    )
+    if not command:
+        command = "pytest"
+    total_duration = collector.session_duration()
+
+    total_passed = sum(device.passed for device in per_device_results)
+    total_failed = sum(device.failed for device in per_device_results)
+    total_errors = sum(device.errors for device in per_device_results)
+
+    print(f"\n{'=' * 60}")
+    print(
+        f"Device test summary: {total_passed} passed, "
+        f"{total_failed} failed, {total_errors} errors "
+        f"in {_format_seconds(total_duration)}"
+    )
+    print(f"{'=' * 60}")
+
+    pr_block = format_pr_summary_block(
+        command, per_device_results, total_duration,
+    )
+    print("\nPR summary (paste into the 'Device testing' section of your PR):")
+    print("-" * 60)
+    print(pr_block)
+    print("-" * 60)
+
+
+def _format_seconds(seconds: float) -> str:
+    """Format a wall-clock span for the top-of-summary banner."""
+    if seconds < 1.0:
+        return f"{int(round(seconds * 1000))}ms"
+    return f"{seconds:.2f}s"
 
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(
     item: pytest.Item, call: pytest.CallInfo[None],
 ) -> Generator[None, None, None]:
-    """Inject parsed device durations into call-phase pytest reports."""
+    """Inject device durations into reports and feed the PR-summary collector."""
     outcome = yield
     report = cast(pytest.TestReport, outcome.get_result())  # type: ignore[attr-defined]
     if isinstance(item, DeviceRuntimeItem):
         _apply_reported_duration(item, report)
+        if report.when == "call":
+            collector = _session_pr_summary(item.session)
+            if collector is not None:
+                collector.record(item, report)

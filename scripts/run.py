@@ -1012,22 +1012,111 @@ def test_device(
 ) -> int:
     """Run functional tests on connected devices.
 
-    Delegates to ``device_testing.test_device`` — see that module for
-    the full orchestration logic (Decision 0027). When no runtime or
-    runtime-specific device overrides are provided, the CLI uses the
-    default target device(s) from ``devices.yml``.
-    """
-    from device_testing import test_device as _test_device
+    Thin wrapper that invokes ``pytest libraries/<name>/functional_tests/``
+    with the ``--chumicro-*`` flags the :mod:`pytest_device` plugin
+    exposes.  The plugin owns collection, routing, transport caching,
+    and the PR-summary block — the IDE play-button path uses exactly
+    the same hooks, so CLI and IDE runs are now byte-for-byte
+    equivalent in behavior (device selection, mode overrides,
+    reporting).
 
-    return _test_device(
-        runtime=runtime,
-        micropython_device=micropython_device,
-        circuitpython_device=circuitpython_device,
-        library=library,
-        file_filter=file_filter,
-        function_filter=function_filter,
-        deploy_mode=deploy_mode,
-    )
+    Args:
+        runtime: Override ``defaults.ide_runtime`` (``micropython`` /
+            ``circuitpython`` / ``both``).
+        micropython_device: Override ``defaults.micropython`` device ID.
+        circuitpython_device: Override ``defaults.circuitpython`` device ID.
+        library: Limit to one library's ``functional_tests/``.
+        file_filter: Substring added to pytest ``-k`` to narrow by test
+            file name.  Composed with *function_filter* via ``and``.
+        function_filter: Substring added to pytest ``-k`` to narrow by
+            test-function name.  Composed with *file_filter* via ``and``.
+        deploy_mode: Override the per-device deploy mode (``ram`` /
+            ``flash``).  Falls back to ``devices.yml`` per-device or
+            defaults when omitted.
+
+    Returns:
+        The pytest exit code — ``0`` on all-pass, ``1`` on failures,
+        ``2`` for configuration problems (unknown library, collection
+        errors).
+    """
+    if library is not None:
+        library_dir = ROOT / "libraries" / library
+        if not (library_dir / "functional_tests").is_dir():
+            print(
+                f"No functional_tests/ directory found for "
+                f"--library {library!r}."
+            )
+            return 2
+        suites = [library_dir / "functional_tests"]
+    else:
+        suites = [
+            library_dir / "functional_tests"
+            for library_dir in discover_library_dirs()
+            if (library_dir / "functional_tests").is_dir()
+        ]
+    if not suites:
+        print("No functional tests to run.")
+        return 0
+
+    keyword_parts: list[str] = []
+    if file_filter:
+        keyword_parts.append(file_filter)
+    if function_filter:
+        keyword_parts.append(function_filter)
+
+    command = [PYTHON, "-m", "pytest", *[str(path) for path in suites]]
+    if keyword_parts:
+        command.extend(["-k", " and ".join(keyword_parts)])
+    if runtime is not None:
+        command.extend(["--chumicro-runtime", runtime])
+    if micropython_device is not None:
+        command.extend(["--chumicro-micropython-device", micropython_device])
+    if circuitpython_device is not None:
+        command.extend(["--chumicro-circuitpython-device", circuitpython_device])
+    if deploy_mode is not None:
+        command.extend(["--chumicro-deploy-mode", deploy_mode])
+    command.extend([
+        "--chumicro-pr-summary",
+        "--chumicro-pr-summary-command",
+        _format_test_device_command(
+            runtime, micropython_device, circuitpython_device,
+            library, file_filter, function_filter, deploy_mode,
+        ),
+    ])
+    return run_command(command, environment=pythonpath_environment())
+
+
+def _format_test_device_command(
+    runtime: str | None,
+    micropython_device: str | None,
+    circuitpython_device: str | None,
+    library: str | None,
+    file_filter: str | None,
+    function_filter: str | None,
+    deploy_mode: str | None,
+) -> str:
+    """Reconstruct the ``test-device`` CLI invocation from its args.
+
+    Only includes flags the caller explicitly passed (non-``None`` values)
+    so the rendered command matches what the user actually typed.  Used
+    by the plugin's PR-summary block to render the ``- Command:`` line.
+    """
+    parts = ["python scripts/run.py test-device"]
+    if runtime is not None:
+        parts.append(f"--runtime {runtime}")
+    if micropython_device is not None:
+        parts.append(f"--micropython-device {micropython_device}")
+    if circuitpython_device is not None:
+        parts.append(f"--circuitpython-device {circuitpython_device}")
+    if library is not None:
+        parts.append(f"--library {library}")
+    if file_filter is not None:
+        parts.append(f"--file {file_filter}")
+    if function_filter is not None:
+        parts.append(f"--function {function_filter}")
+    if deploy_mode is not None:
+        parts.append(f"--deploy-mode {deploy_mode}")
+    return " ".join(parts)
 
 
 def test_workbench(

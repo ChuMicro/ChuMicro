@@ -671,11 +671,19 @@ class _HotPathTransport:
         self.calls.append(("disconnect", ()))
 
 
+class _FakeConfig:
+    """Minimal pytest.Config stand-in that returns None for every option."""
+
+    def getoption(self, name: str, default=None):  # noqa: D401, ANN001
+        return default
+
+
 class _FakeSession:
     """Minimal pytest.Session stand-in that hosts a _TransportCache."""
 
     def __init__(self, cache: pytest_device._TransportCache) -> None:
         self._device_transport_cache = cache
+        self.config = _FakeConfig()
 
 
 def _hot_path_device(runtime: str = "circuitpython") -> DeviceEntry:
