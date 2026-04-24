@@ -254,3 +254,104 @@ Never run bare `pytest` from the repo root.  The test runner sets
 PYTHONPATH and coverage configuration automatically.
 
 Related: Decision 0009, `debug-test-failure` skill.
+
+## mpremote internals we depend on
+
+`MicropythonTransport` is a thin layer over the vendored
+`mpremote.transport_serial.SerialTransport`.  Several behaviours of
+that class are undocumented upstream and have bitten us before — they
+are captured here so future edits do not unwittingly re-break them.
+
+### 1. `exec_raw` returns a tuple, not bytes
+
+```python
+stdout_bytes, stderr_bytes = serial_transport.exec_raw(code)
+```
+
+`SerialTransport.exec_raw` returns a `(stdout, stderr)` tuple of
+`bytes`, not a single `bytes` object.  `MicropythonTransport.execute()`
+unpacks both halves, decodes each, and concatenates stdout + stderr so
+tracebacks surface in the captured output.  A belt-and-suspenders
+`isinstance(result, bytes)` branch is kept for future mpremote API
+drift.  Commit `41f5391`.
+
+### 2. `mount_local` wraps every call
+
+Calling `SerialTransport.mount_local(...)` wraps `self.serial` in a
+`SerialIntercept` **every time it's invoked** — not idempotently.  A
+second call produces `SerialIntercept(SerialIntercept(raw))` and
+corrupts every subsequent I/O (even a bare `import` fails).
+
+Invariants:
+
+- `umount_local` must run *before* any Ctrl-D soft-reset — after
+  the reset, the device globals are gone, and a later `umount_local`
+  would try to run `os.umount(...)` with `os` no longer imported.
+- `soft_reset()` does not re-mount.  The mount is owned by
+  `stage()`, which is the next orchestration step and re-mounts
+  once cleanly.
+
+Commit `5698100`.
+
+### 3. Don't `mpremote reset` between test batches
+
+`mpremote reset` cycles the USB stack on the board.  The next
+`mpremote` invocation then connects before the port is ready and
+fails with `"Device not configured"`.  mpremote already spawns a
+fresh subprocess per `exec_raw()` call, so test isolation is
+automatic on the MicroPython path — `soft_reset()` is a
+CircuitPython-only operation (both RAM and flash modes) where the
+persistent raw-REPL session would otherwise accumulate modules in
+`sys.modules` across calls.  Commit `cd9fe3b`.
+
+### 4. Hold one `SerialTransport` per session
+
+Creating a fresh mpremote subprocess per file costs ~2–3 s on most
+boards — the floor is the serial connect handshake, not the actual
+`exec`.  `MicropythonTransport` keeps a single
+`SerialTransport` instance alive across the session and routes
+every `execute()` through it.  Combined with bulk rsync (one pass
+for all files, not per-file), this brought the "per MP test file"
+floor from seconds to milliseconds.  Commits `9e6174c` + `cb4efa9`.
+
+Related: Decision 0027 (device testing infrastructure), Decision 0028
+(deploy modes).
+
+## Subprocess binary resolution (host tools)
+
+When a host-side tool shells out to an installable CLI binary
+(`mpremote`, `esptool`, `rshell`, future `ampy`), resolve the binary
+by the running interpreter's sibling `bin/` first, not by a bare
+name on `PATH`:
+
+```python
+import shutil
+import sys
+from pathlib import Path
+
+def _resolve_binary(name: str) -> str:
+    candidate = Path(sys.executable).parent / name
+    if candidate.is_file():
+        return str(candidate)
+    located = shutil.which(name)
+    if located:
+        return located
+    return name  # last-resort — let the subprocess error surface
+```
+
+**Why:** PyCharm and VS Code launch test runs via the interpreter
+path without activating a shell, so `.venv/bin` is not on `PATH`
+even on a freshly prepared workspace.  A bare `"mpremote"` in an
+argv list fails with
+`[Errno 2] No such file or directory: 'mpremote'` on that code
+path while the same command works fine from an activated terminal.
+Resolving next to `sys.executable` makes `.venv/bin/mpremote` the
+primary candidate, `shutil.which` handles system-wide installs and
+Windows `Scripts/mpremote.exe`, and the bare-name fallback preserves
+the subprocess-level error message when nothing resolves.
+
+Only the first element of the argv list changes — the rest of the
+command stays identical.  `MicropythonTransport._run_mpremote`
+implements this pattern; apply it to any future shell-out.  Commit
+`e4f669e`.
+

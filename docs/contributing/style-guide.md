@@ -109,6 +109,50 @@ print("Found %d items in %s" % (count, directory))
 print("Found {} items in {}".format(count, directory))
 ```
 
+## Error handling
+
+Do not silently swallow exceptions in host-side infrastructure (`scripts/`, `workbench/*/src/`, `support/` outside `test_harness`).  Every `except:` branch that chooses not to re-raise must log a visible message — a WARNING at minimum — so problems are noticed instead of hidden.
+
+```python
+# ✅ visible
+try:
+    subprocess.run(["xattr", "-cr", str(path)], check=True)
+except FileNotFoundError:
+    print("WARNING: xattr not found — skipping extended attribute removal")
+except subprocess.CalledProcessError as exc:
+    print(f"WARNING: xattr failed: {exc}")
+
+# ❌ silent
+try:
+    subprocess.run(["xattr", "-cr", str(path)], check=True)
+except Exception:
+    pass
+```
+
+Library code (`libraries/*/src/`, `support/test_harness/`, `support/abstractions/`) is held to the same bar, with an added constraint: `print()` costs RAM and I/O time on devices, so prefer raising a specific exception type the caller can react to, or (where the library exposes a logging seam) emit through that.  Still never `except: pass`.
+
+Catching an exception and re-raising a different one is fine — the chained `__cause__` preserves the origin.  Catching to translate errno strings into classifier-friendly message shapes (e.g. the transport's `CIRCUITPY drive not found or not writable` re-raise) is the pattern, not the exception.
+
+## Subprocess binary resolution (host tools)
+
+When a host-side tool shells out to an installable CLI binary (`mpremote`, `esptool`, `rshell`), resolve the binary relative to the running interpreter first, not by a bare name on `PATH`:
+
+```python
+import shutil
+import sys
+from pathlib import Path
+
+def _resolve_binary(name: str) -> str:
+    candidate = Path(sys.executable).parent / name
+    if candidate.is_file():
+        return str(candidate)
+    return shutil.which(name) or name
+```
+
+**Why:** PyCharm and VS Code launch test runs via the interpreter path without activating a shell, so `.venv/bin` is not on `PATH` even on a freshly-prepared workspace.  Resolving next to `sys.executable` makes `.venv/bin/<name>` the primary candidate; `shutil.which` handles system-wide installs and Windows `Scripts/<name>.exe`; the bare-name fallback preserves the subprocess-level error when nothing resolves.
+
+Only the first element of the argv list changes — the rest of the command stays identical.  See `plans/patterns.md` "Subprocess binary resolution" for the worked example and rationale.
+
 ## Memory patterns (library code only)
 
 Microcontrollers have limited RAM and no virtual memory. These patterns help library code run efficiently on constrained devices. **You don't need to apply these patterns from day one** — they matter most in performance-sensitive code. If you're writing your first library, focus on correctness first and optimize later.
