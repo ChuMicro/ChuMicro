@@ -34,6 +34,7 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 from .circuitpython_transport import CircuitpythonTransportError
+from .macos_fskit import MACOS_FSKIT_RECOVERY_COMMAND, detect_fskit_wedge
 from .micropython_transport import MicropythonTransportError
 from .result import DeployResult
 
@@ -55,6 +56,7 @@ class DeployFailureKind(Enum):
     PORT_UNAVAILABLE = "port_unavailable"
     RAW_REPL_UNRESPONSIVE = "raw_repl_unresponsive"
     CIRCUITPY_DRIVE_MISSING = "circuitpy_drive_missing"
+    MACOS_FSKIT_WEDGED = "macos_fskit_wedged"
     FLASH_COPY_FAILED = "flash_copy_failed"
     BOOTSTRAP_EXEC_FAILED = "bootstrap_exec_failed"
     INSUFFICIENT_MEMORY = "insufficient_memory"
@@ -65,7 +67,9 @@ class DeployFailureKind(Enum):
 
 #: Substrings that indicate the serial port couldn't be opened.
 #: Covers pyserial's ``SerialException`` text, macOS / Linux errno
-#: strings, and mpremote's subprocess error output.
+#: strings, and mpremote's subprocess error output (including
+#: ``failed to access`` + ``it may be in use by another program``,
+#: which mpremote emits for both missing and busy devices).
 _PORT_UNAVAILABLE_PATTERNS = (
     "failed to open serial port",
     "could not open port",
@@ -74,12 +78,19 @@ _PORT_UNAVAILABLE_PATTERNS = (
     "resource temporarily unavailable",
     "permission denied",
     "device not configured",
+    "failed to access",
+    "it may be in use by another program",
 )
 
-#: CIRCUITPY drive detection / mount failures.
+#: CIRCUITPY drive detection / mount failures.  The "not writable"
+#: variant covers the stale-mount case where ``/Volumes/CIRCUITPY``
+#: lingers after a Finder eject (or macOS FSKit wedge) — the
+#: directory exists but writes fail with EACCES, which the transport
+#: surfaces as "CIRCUITPY drive not found or not writable".
 _CIRCUITPY_DRIVE_PATTERNS = (
     "circuitpy drive not found",
     "circuitpy drive not mounted",
+    "circuitpy drive not found or not writable",
 )
 
 #: Raw REPL did not hand back its prompt or acknowledged garbage.
@@ -178,12 +189,20 @@ def classify_deploy_failure(error: Exception) -> DeployFailureKind:
     # flash + MP (which return a DeployResult with a traceback field).
     if _TRACEBACK_IN_MESSAGE_PATTERN in message:
         return DeployFailureKind.TRACEBACK_RETURNED
-    for pattern in _PORT_UNAVAILABLE_PATTERNS:
-        if pattern in message:
-            return DeployFailureKind.PORT_UNAVAILABLE
+    # CIRCUITPY drive checks come BEFORE port-unavailable: the stale
+    # mount path in CircuitpythonTransport._resolve_circuitpy_drive
+    # raises with a message that starts "CIRCUITPY drive not found
+    # or not writable" but wraps a PermissionError whose text
+    # ("permission denied") collides with the generic port patterns.
+    # A message that literally says "CIRCUITPY drive" should never
+    # land in PORT_UNAVAILABLE — the drive prefix is strictly more
+    # informative than the nested errno string.
     for pattern in _CIRCUITPY_DRIVE_PATTERNS:
         if pattern in message:
             return DeployFailureKind.CIRCUITPY_DRIVE_MISSING
+    for pattern in _PORT_UNAVAILABLE_PATTERNS:
+        if pattern in message:
+            return DeployFailureKind.PORT_UNAVAILABLE
     for pattern in _RAW_REPL_PATTERNS:
         if pattern in message:
             return DeployFailureKind.RAW_REPL_UNRESPONSIVE
@@ -247,12 +266,39 @@ _PLANS: dict[DeployFailureKind, RecoveryPlan] = {
     DeployFailureKind.CIRCUITPY_DRIVE_MISSING: RecoveryPlan(
         headline="The CIRCUITPY drive is not mounted.",
         fix_steps=(
-            "If the board was running in flash deploy mode, tap "
-            "RESET once so CircuitPython re-exposes the drive.",
-            "If you ejected the drive manually, unplug + replug "
-            "the board.",
+            "Tap RESET on the board — this re-exposes the drive "
+            "whether it was hidden by flash deploy mode or ejected "
+            "manually from Finder.",
+            "If the board has no RESET button, unplug and replug it.",
             "If the board isn't running CircuitPython, reflash it "
             "first with `chumicro-deploy flash --method uf2`.",
+        ),
+        retryable=True,
+    ),
+    DeployFailureKind.MACOS_FSKIT_WEDGED: RecoveryPlan(
+        headline=(
+            "macOS FSKit / DiskArbitration is wedged — CIRCUITPY drives "
+            "cannot mount until the stuck daemons are killed."
+        ),
+        fix_steps=(
+            "Paste this into another terminal (it needs sudo):",
+            f"    {MACOS_FSKIT_RECOVERY_COMMAND}",
+            "The system daemons respawn via launchd; the "
+            "launchctl kickstart -k bounces the per-user agent "
+            "(which does not auto-respawn).  Pending CIRCUITPY "
+            "drives will mount + become readable.  Press Enter "
+            "here to retry the deploy.",
+            "Heads-up: after the paste your drives will be fully "
+            "functional (mounted at /Volumes, readable, writable, "
+            "and chumicro-deploy works against them), but on "
+            "recent macOS they may NOT appear in Finder's "
+            "Locations sidebar.  That's an Apple FSKit-Finder "
+            "regression unrelated to this recovery — reach them "
+            "via Shift+Cmd+C (Computer view) or drag one into "
+            "the Favorites sidebar section.",
+            "If the wedge persists after the command, reboot — "
+            "that always clears it and also resets the Finder "
+            "sidebar classifier.",
         ),
         retryable=True,
     ),
@@ -365,6 +411,13 @@ class InteractiveDeployer:
         output: Injectable output sink.  Defaults to
             :func:`print` (so messages go to stdout).  Tests inject
             a list-append to make assertions.
+        fskit_wedge_detector: Injectable probe for the macOS
+            FSKit / DiskArbitration wedge (see :mod:`macos_fskit`).
+            Called only on ``CIRCUITPY_DRIVE_MISSING`` failures; if
+            it returns ``True``, the kind is promoted to
+            :attr:`DeployFailureKind.MACOS_FSKIT_WEDGED` so the
+            user sees the exact ``sudo`` command that unsticks the
+            daemons instead of the generic "tap RESET" steps.
     """
 
     def __init__(
@@ -374,6 +427,7 @@ class InteractiveDeployer:
         max_attempts: int = _DEFAULT_MAX_ATTEMPTS,
         prompt: Callable[[str], str] = input,
         output: Callable[[str], None] = print,
+        fskit_wedge_detector: Callable[[], bool] = detect_fskit_wedge,
     ) -> None:
         if max_attempts < 1:
             raise ValueError(
@@ -383,6 +437,7 @@ class InteractiveDeployer:
         self._max_attempts = max_attempts
         self._prompt = prompt
         self._output = output
+        self._fskit_wedge_detector = fskit_wedge_detector
 
     @property
     def deployer(self) -> Deployer:
@@ -420,6 +475,11 @@ class InteractiveDeployer:
             ) as error:
                 last_error = error
                 kind = classify_deploy_failure(error)
+                if (
+                    kind is DeployFailureKind.CIRCUITPY_DRIVE_MISSING
+                    and self._fskit_wedge_detector()
+                ):
+                    kind = DeployFailureKind.MACOS_FSKIT_WEDGED
                 plan = recovery_plan_for(kind)
                 self._report_failure(attempt, error, kind, plan)
                 if not plan.retryable:

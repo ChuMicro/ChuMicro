@@ -501,8 +501,12 @@ class CircuitpythonTransport:
 
         Uses the configured ``circuitpy_drive_path`` when set, otherwise
         falls back to :func:`find_circuitpy_drive`.  Raises when no drive
-        can be found or the resolved path is not a directory (e.g. the
-        board ejected mid-run).
+        can be found, the resolved path is not a directory, or the mount
+        is stale/unwritable (e.g. the board was ejected from Finder and
+        ``/Volumes/CIRCUITPY`` remains as an inaccessible placeholder —
+        ``is_dir()`` returns True but file I/O fails with EACCES).
+        The probe writes a tiny marker, so we catch the error up-front
+        rather than halfway through the rsync / write-bytes pass.
         """
         drive_path_str = self.circuitpy_drive_path or find_circuitpy_drive()
         if not drive_path_str:
@@ -515,6 +519,15 @@ class CircuitpythonTransport:
             raise CircuitpythonTransportError(
                 f"CIRCUITPY drive not found: {drive_path}"
             )
+        probe = drive_path / ".chu-probe"
+        try:
+            probe.write_bytes(b"")
+            probe.unlink()
+        except OSError as error:
+            raise CircuitpythonTransportError(
+                f"CIRCUITPY drive not found or not writable: "
+                f"{drive_path} ({error.__class__.__name__}: {error})"
+            ) from error
         return drive_path
 
     @staticmethod
@@ -951,13 +964,7 @@ class CircuitpythonTransport:
                 on_execute_line=on_execute_line,
             )
 
-        drive_path_string = self.circuitpy_drive_path or find_circuitpy_drive()
-        if drive_path_string is None:
-            raise CircuitpythonTransportError(
-                "CIRCUITPY drive not found — pass circuitpy_drive_path "
-                "explicitly or mount the drive before calling deploy_files()."
-            )
-        drive_path = Path(drive_path_string)
+        drive_path = self._resolve_circuitpy_drive()
 
         self._enter_raw_repl()
         drive_path = self._verify_drive_for_board(drive_path)
@@ -965,13 +972,22 @@ class CircuitpythonTransport:
             "import supervisor; supervisor.runtime.autoreload = False"
         )
 
-        for device_path in sorted(files.keys()):
-            relative = device_path.lstrip("/")
-            destination = drive_path / relative
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            destination.write_bytes(files[device_path])
-            if on_file_staged is not None:
-                on_file_staged(device_path)
+        try:
+            for device_path in sorted(files.keys()):
+                relative = device_path.lstrip("/")
+                destination = drive_path / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_bytes(files[device_path])
+                if on_file_staged is not None:
+                    on_file_staged(device_path)
+        except OSError as error:
+            # A probe-pass doesn't guarantee the drive stays writable —
+            # the user could eject between the probe and the real copy.
+            # Re-raise with the classifier's CIRCUITPY_DRIVE_MISSING hook.
+            raise CircuitpythonTransportError(
+                f"CIRCUITPY drive not found or not writable: "
+                f"{drive_path} ({error.__class__.__name__}: {error})"
+            ) from error
 
         flash_drive.flush_volume(drive_path, sleep=self._time.sleep)
 

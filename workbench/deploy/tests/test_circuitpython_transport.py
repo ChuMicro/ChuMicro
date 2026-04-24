@@ -967,6 +967,48 @@ class TestFlashMode:
 
         transport.disconnect()
 
+    def test_flash_stage_raises_when_drive_is_unwritable(
+        self, tmp_path: Path,
+    ) -> None:
+        """stage() should catch a stale/unwritable mount via the probe.
+
+        On macOS, ejecting CIRCUITPY from Finder can leave
+        ``/Volumes/CIRCUITPY`` as a directory that ``is_dir()`` accepts
+        but that raises ``PermissionError`` on write.  Simulated here
+        by chmod-ing tmp_path to read-only so the probe's
+        ``write_bytes()`` fails.  The wrapped error preserves the
+        "CIRCUITPY drive not found" substring so
+        :func:`classify_deploy_failure` routes it to
+        :attr:`DeployFailureKind.CIRCUITPY_DRIVE_MISSING`.
+        """
+        import os
+
+        drive = tmp_path / "CIRCUITPY"
+        drive.mkdir()
+        port = FakeSerialPort(
+            read_responses=[_RAW_REPL_PROMPT, _RAW_REPL_PROMPT, _OK_RESPONSE],
+        )
+        transport = self._make_flash_transport(port, str(drive))
+        transport.connect()
+
+        source_dir = tmp_path / "src"
+        source_dir.mkdir()
+        harness_dir = tmp_path / "harness"
+        harness_dir.mkdir()
+
+        original_mode = drive.stat().st_mode
+        os.chmod(drive, 0o500)
+        try:
+            with pytest.raises(
+                CircuitpythonTransportError,
+                match="CIRCUITPY drive not found or not writable",
+            ):
+                transport.stage([source_dir], [], harness_dir)
+        finally:
+            os.chmod(drive, original_mode)
+
+        transport.disconnect()
+
     def test_flash_stage_copies_packages_to_lib(
         self, tmp_path: Path,
     ) -> None:
@@ -1727,6 +1769,97 @@ class TestDeployFiles:
         )
         transport, _ = self._connect(drive_path=None)
         with pytest.raises(CircuitpythonTransportError, match="CIRCUITPY drive not found"):
+            transport.deploy_files({"/code.py": b"pass"}, "/code.py")
+
+    def test_inline_script_budget_raises_on_low_memory(self) -> None:
+        """inline_script_budget_bytes() must refuse when probe reports too little RAM."""
+        port = FakeSerialPort(
+            read_responses=[_RAW_REPL_PROMPT, b"OK128\n\x04\x04>"],
+        )
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            serial_port_factory=lambda **_kwargs: port,
+            time=FakeTime(),
+        )
+        transport.connect()
+        with pytest.raises(
+            CircuitpythonTransportError, match="too little free RAM",
+        ):
+            transport.inline_script_budget_bytes()
+
+    def test_warn_if_flush_produced_empty_file_skips_when_probe_absent(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """No warning when the probe file didn't land on the drive at all."""
+        test_file = tmp_path / "t.py"
+        test_file.write_bytes(b"pass")
+        CircuitpythonTransport._warn_if_flush_produced_empty_file(
+            tmp_path / "elsewhere", [test_file],
+        )
+        assert capsys.readouterr().out == ""
+
+    def test_warn_if_flush_produced_empty_file_warns_on_empty(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Warn when the probe landed on the drive but is empty."""
+        test_file = tmp_path / "t.py"
+        test_file.write_bytes(b"pass")
+        (tmp_path / "t.py").write_bytes(b"pass")
+        drive = tmp_path / "drive"
+        drive.mkdir()
+        (drive / "t.py").write_bytes(b"")
+        CircuitpythonTransport._warn_if_flush_produced_empty_file(
+            drive, [test_file],
+        )
+        assert "empty after flush" in capsys.readouterr().out
+
+    def test_recover_without_connection_raises(self) -> None:
+        """recover() must refuse to run on a transport that never connected."""
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            mode="ram",
+            serial_port_factory=lambda **_kwargs: FakeSerialPort(),
+            time=FakeTime(),
+        )
+        with pytest.raises(
+            CircuitpythonTransportError, match="port is not open",
+        ):
+            transport.recover()
+
+    def test_oserror_during_copy_is_classified_as_drive_missing(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Eject-between-probe-and-copy should surface as drive-missing.
+
+        The probe in :meth:`_resolve_circuitpy_drive` catches the
+        common case, but the drive can disappear between the probe
+        and the write loop.  Simulate by letting the probe succeed and
+        raising :class:`PermissionError` on the real file write.  The
+        wrapper should re-raise as
+        :class:`CircuitpythonTransportError` with the
+        classifier-matching "CIRCUITPY drive not found" phrase.
+        """
+        drive = tmp_path / "CIRCUITPY"
+        drive.mkdir()
+        # Extra responses: _enter_raw_repl prompt + autoreload-off OK.
+        transport, _ = self._connect(
+            drive_path=str(drive),
+            extra_responses=[_RAW_REPL_PROMPT, _OK_RESPONSE],
+        )
+
+        original_write_bytes = Path.write_bytes
+
+        def selective_write_bytes(self: Path, data: bytes) -> int:
+            if self.name == ".chu-probe":
+                return original_write_bytes(self, data)
+            raise PermissionError(13, "Permission denied", str(self))
+
+        monkeypatch.setattr(Path, "write_bytes", selective_write_bytes)
+
+        with pytest.raises(
+            CircuitpythonTransportError,
+            match="CIRCUITPY drive not found or not writable",
+        ):
             transport.deploy_files({"/code.py": b"pass"}, "/code.py")
 
     def test_unconnected_raises(self, tmp_path: Path) -> None:

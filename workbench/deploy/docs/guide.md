@@ -192,7 +192,7 @@ result = interactive.deploy(source)
 
 When the underlying `Deployer.deploy()` raises a `CircuitpythonTransportError` or `MicropythonTransportError`, the interactive deployer:
 
-1. Classifies the error into a `DeployFailureKind` — one of `PORT_UNAVAILABLE`, `RAW_REPL_UNRESPONSIVE`, `CIRCUITPY_DRIVE_MISSING`, `FLASH_COPY_FAILED`, `BOOTSTRAP_EXEC_FAILED`, `INSUFFICIENT_MEMORY`, `CONFIGURATION_ERROR`, or `UNKNOWN`.
+1. Classifies the error into a `DeployFailureKind` — one of `PORT_UNAVAILABLE`, `RAW_REPL_UNRESPONSIVE`, `CIRCUITPY_DRIVE_MISSING`, `MACOS_FSKIT_WEDGED`, `FLASH_COPY_FAILED`, `BOOTSTRAP_EXEC_FAILED`, `INSUFFICIENT_MEMORY`, `TRACEBACK_RETURNED`, `CONFIGURATION_ERROR`, or `UNKNOWN`.
 2. Prints a headline, the underlying error, and the canned `RecoveryPlan` for that kind (the physical actions that typically fix it — close the app holding the port, tap RESET, replug USB, switch to flash mode, etc.).
 3. Prompts the user to fix the condition and press Enter to retry, up to `max_attempts` times.  Typing `q` / `quit` / `abort` / `exit` at the prompt stops retrying and re-raises the last error.
 4. For non-retryable kinds (`INSUFFICIENT_MEMORY`, `CONFIGURATION_ERROR`, `TRACEBACK_RETURNED`) it prints the coaching once and returns / re-raises without prompting — a source-level bug can't be fixed by replugging, and a too-small board can't grow more RAM by retrying.
@@ -236,9 +236,25 @@ except Exception as error:
         ...
 ```
 
+### macOS FSKit / DiskArbitration wedge
+
+Recent macOS releases replaced the in-kernel `msdosfs` driver with a user-space FSKit extension.  When that extension errors out mid-probe — most often on a small CIRCUITPY FAT12 volume — it can leave `diskarbitrationd` stuck in an uninterruptible kernel wait, and newly inserted CIRCUITPY drives never appear under `/Volumes`.
+
+`InteractiveDeployer` auto-detects this condition.  On a `CIRCUITPY_DRIVE_MISSING` failure it calls `detect_fskit_wedge()` (from `chumicro_deploy.macos_fskit`); if the daemon is wedged, it promotes the kind to `MACOS_FSKIT_WEDGED` and prints a coaching block with the exact recovery command:
+
+```
+sudo killall -9 com.apple.fskit.msdos fskit_helper fskitd fskit_agent diskarbitrationd && launchctl kickstart -k gui/$(id -u)/com.apple.DiskArbitrationAgent
+```
+
+The system daemons respawn via launchd; the `launchctl kickstart -k` bounces the per-user agent (which doesn't auto-respawn).  After the paste, CIRCUITPY drives mount and `chumicro-deploy` can proceed — hit Enter at the retry prompt to continue.
+
+Heads-up: on recent macOS the drives may be fully functional (mounted at `/Volumes`, readable, writable, deployable) but *not* appear in Finder's Locations sidebar.  That's an Apple FSKit-Finder regression unrelated to the deploy — reach them via Shift+Cmd+C (Computer view) or drag one into the Favorites sidebar section.  A reboot clears it.
+
+Detection is non-darwin-safe (returns `False` immediately on Linux / Windows) and fails open on any subprocess error, so it never blocks a legitimate `CIRCUITPY_DRIVE_MISSING` retry.
+
 ### Try it against real boards
 
-[`workbench/deploy/functional_tests/demo_recovery_hand_holding.py`](https://github.com/ChuMicro/ChuMicro/blob/main/workbench/deploy/functional_tests/demo_recovery_hand_holding.py) walks every configured `devices.yml` board through each failure scenario and prints the coaching output live.  Run it when you want to see what the CLI actually says to the user on a real cable-out / drive-ejected / board-rebooted failure.
+[`workbench/deploy/functional_tests/demo_recovery_hand_holding.py`](https://github.com/ChuMicro/ChuMicro/blob/main/workbench/deploy/functional_tests/demo_recovery_hand_holding.py) walks every configured `devices.yml` board through each failure scenario and prints the coaching output live.  Scenarios today: happy-path baseline, traceback-on-board, physical unplug (`PORT_UNAVAILABLE`), drive-ejected (`CIRCUITPY_DRIVE_MISSING`, with `MACOS_FSKIT_WEDGED` promotion when the wedge is live), oversized-payload (`FLASH_COPY_FAILED`), and silent bootloader-reset verification.  Run it when you want to see what the CLI actually says to the user on a real cable-out / drive-ejected / board-rebooted failure.
 
 ## Probe a board — `probe_device`
 

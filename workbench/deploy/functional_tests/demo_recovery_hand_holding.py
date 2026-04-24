@@ -102,6 +102,77 @@ def _pause(message: str = "Press Enter when ready…") -> None:
     input(f"{_DIM}{message}{_RESET}")
 
 
+def _board_tag(context: BoardContext) -> str:
+    """Human-identifiable descriptor for confirmation prompts.
+
+    Includes description, configured id, runtime, and serial address so
+    the user can tell which physical board to unplug / eject / reset.
+    """
+    entry = context.entry
+    description = entry.description or entry.identifier
+    return (
+        f"{_BOLD}{description}{_RESET} "
+        f"[{entry.runtime} · id={entry.identifier} · {entry.address}]"
+    )
+
+
+_CP_BLINK_SCRIPT = (
+    "import time\n"
+    "try:\n"
+    "    import board, digitalio\n"
+    "    led = digitalio.DigitalInOut(board.LED)\n"
+    "    led.direction = digitalio.Direction.OUTPUT\n"
+    "    for _ in range(8):\n"
+    "        led.value = not led.value\n"
+    "        time.sleep(0.15)\n"
+    "    led.deinit()\n"
+    "    print('blink-ok')\n"
+    "except Exception as exc:\n"
+    "    print('no-led:', exc)\n"
+)
+
+# Pi Pico W MP: Pin("LED"); Lolin S2 MP: GPIO 15; common fallbacks after.
+_MP_BLINK_SCRIPT = (
+    "import time\n"
+    "from machine import Pin\n"
+    "led = None\n"
+    "for spec in ('LED', 15, 2, 25):\n"
+    "    try:\n"
+    "        led = Pin(spec, Pin.OUT)\n"
+    "        break\n"
+    "    except (ValueError, TypeError):\n"
+    "        continue\n"
+    "if led is None:\n"
+    "    print('no-led')\n"
+    "else:\n"
+    "    for _ in range(8):\n"
+    "        led.value(not led.value())\n"
+    "        time.sleep(0.15)\n"
+    "    print('blink-ok')\n"
+)
+
+
+def _blink_identify(context: BoardContext) -> None:
+    """Best-effort onboard-LED blink so the user can spot the target.
+
+    Deploys a short RAM-mode script.  Silent on any failure — the
+    descriptive prompt is the primary identification signal; LED blink
+    is a bonus for boards that expose a plain onboard LED.
+    """
+    device = _deploy_device_for(context)
+    if device is None:
+        return
+    script = (
+        _CP_BLINK_SCRIPT if context.runtime == "circuitpython" else _MP_BLINK_SCRIPT
+    )
+    entrypoint = _entrypoint_for(context.runtime)
+    source = FileMapSource({entrypoint: script}, entrypoint=entrypoint)
+    try:
+        Deployer(device).deploy(source)
+    except (CircuitpythonTransportError, MicropythonTransportError) as error:
+        _print_note(f"LED blink skipped ({error}).")
+
+
 # ---------------------------------------------------------------------------
 # Board descriptor + scenario plumbing
 # ---------------------------------------------------------------------------
@@ -314,15 +385,19 @@ def scenario_port_unavailable(context: BoardContext) -> bool:
         "Plug the board back in, wait for it to re-enumerate, then "
         "press Enter at the retry prompt."
     )
+    _print_note(
+        "Flashing the onboard LED so you can spot the target board "
+        "before you unplug it…"
+    )
+    _blink_identify(context)
     if not _confirm(
-        f"Ready to run the unplug scenario on "
-        f"{context.entry.address!r}?",
+        f"Ready to run the unplug scenario on {_board_tag(context)}?",
     ):
         _print_note("Skipped.")
         return True
     print(
-        f"{_RED}UNPLUG{_RESET} the board now, then press Enter to "
-        f"start the deploy.",
+        f"{_RED}UNPLUG{_RESET} {_board_tag(context)} now, then press "
+        f"Enter to start the deploy.",
     )
     _pause()
     device = _deploy_device_for(context)
@@ -367,7 +442,18 @@ def scenario_circuitpy_drive_missing(context: BoardContext) -> bool:
     if context.runtime != "circuitpython":
         _print_note("Skipped — this scenario is CircuitPython-only.")
         return True
-    if context.device_flash is None:
+    # _load_boards evaluates _build_flash_device once at startup.  If
+    # the configured drive path was briefly unavailable then (e.g.
+    # the macOS FSKit wedge had CIRCUITPY unmounted, or the board had
+    # just been replugged), context.device_flash latched to None for
+    # the whole session.  Re-resolve on demand so a drive that has
+    # since come back lets the scenario run without restarting the
+    # script.  BoardContext is frozen, so keep the resolved value
+    # local and thread it through the rest of the function.
+    device_flash = context.device_flash
+    if device_flash is None:
+        device_flash = _build_flash_device(context.entry)
+    if device_flash is None:
         _print_warn(
             "No circuitpy_drive_path configured for this board in "
             "devices.yml and the drive is not currently mounted — "
@@ -383,17 +469,25 @@ def scenario_circuitpy_drive_missing(context: BoardContext) -> bool:
         "unplug/replug) to remount, then press Enter at the retry "
         "prompt."
     )
-    if not _confirm("Ready to run the eject-drive scenario?"):
+    _print_note(
+        "Flashing the onboard LED so you can spot the target board "
+        "before you eject its drive…"
+    )
+    _blink_identify(context)
+    if not _confirm(
+        f"Ready to run the eject-drive scenario on {_board_tag(context)}?",
+    ):
         _print_note("Skipped.")
         return True
     print(
-        f"{_RED}EJECT{_RESET} the CIRCUITPY drive now "
-        f"({context.entry.circuitpy_drive_path!r}), then press "
+        f"{_RED}EJECT{_RESET} the CIRCUITPY drive for "
+        f"{_board_tag(context)} "
+        f"({context.entry.circuitpy_drive_path!r}) now, then press "
         f"Enter to start the deploy.",
     )
     _pause()
     interactive = InteractiveDeployer(
-        Deployer(context.device_flash),
+        Deployer(device_flash),
         max_attempts=3,
     )
     source = FileMapSource(
@@ -439,7 +533,8 @@ def scenario_bootloader_reset_silent(context: BoardContext) -> bool:
         "to get it out of the bootloader and back to CIRCUITPY."
     )
     if not _confirm(
-        "Proceed?  (Board will enter the UF2 bootloader)",
+        f"Proceed on {_board_tag(context)}?  "
+        f"(Board will enter the UF2 bootloader)",
         default_yes=False,
     ):
         _print_note("Skipped.")
@@ -470,12 +565,86 @@ def scenario_bootloader_reset_silent(context: BoardContext) -> bool:
     return True
 
 
+def scenario_flash_copy_failed(context: BoardContext) -> bool:
+    """CP flash only — force an oversized payload to trigger rsync failure."""
+    _print_step("Scenario: flash copy fails (FLASH_COPY_FAILED)")
+    if context.runtime != "circuitpython":
+        _print_note("Skipped — this scenario is CircuitPython-only.")
+        return True
+    # Same latching-guard as scenario_circuitpy_drive_missing: re-
+    # resolve on demand so a drive that came back mid-session works.
+    device_flash = context.device_flash
+    if device_flash is None:
+        device_flash = _build_flash_device(context.entry)
+    if device_flash is None:
+        _print_warn(
+            "No circuitpy_drive_path configured for this board in "
+            "devices.yml and the drive is not currently mounted — "
+            "can't run the flash-mode scenario."
+        )
+        return False
+    _print_note(
+        "Stages a payload that is guaranteed to exceed a CIRCUITPY "
+        "drive's capacity (~2 MiB of junk on a 512 KiB–1 MiB FAT12 "
+        "volume).  The rsync inside flash mode should fail with "
+        "'No space left on device', the error should classify as "
+        "FLASH_COPY_FAILED, and the InteractiveDeployer should print "
+        "the free-space / read-only / unplug-replug coaching.  We "
+        "deliberately do NOT retry — the fix (free up space) is a "
+        "user action outside the scope of this demo."
+    )
+    if not _confirm(
+        f"Ready to force a disk-full failure on {_board_tag(context)}? "
+        f"(No files will be written to the board — the deploy is "
+        f"rejected at rsync time.)",
+    ):
+        _print_note("Skipped.")
+        return True
+    oversized = b"X" * (2 * 1024 * 1024)
+    source = FileMapSource(
+        {
+            "/code.py": b"print('unreachable-oversized')\n",
+            "/chu_fill.bin": oversized,
+        },
+        entrypoint="/code.py",
+    )
+    # max_attempts=1 — retrying the same oversized payload would hit
+    # the same error.  Real recovery is "free space + smaller
+    # payload", which isn't a physical retry action.
+    interactive = InteractiveDeployer(
+        Deployer(device_flash),
+        max_attempts=1,
+    )
+    try:
+        result = interactive.deploy(source)
+    except CircuitpythonTransportError as error:
+        kind = classify_deploy_failure(error)
+        if kind is not DeployFailureKind.FLASH_COPY_FAILED:
+            _print_warn(
+                f"Unexpected exception classified as {kind.value}: {error}"
+            )
+            return False
+        _print_ok(
+            "Oversized payload rejected at rsync time and coaching "
+            "routed to FLASH_COPY_FAILED — expected behaviour."
+        )
+        return True
+    _print_warn(
+        f"Deploy unexpectedly succeeded with the 2 MiB payload.  "
+        f"Either the drive has more free space than expected or "
+        f"the rsync never ran.  Result: {result!r}"
+    )
+    return False
+
+
 _SCENARIOS: list[tuple[str, Callable[[BoardContext], bool]]] = [
     ("happy-path baseline deploy", scenario_happy_path_ram),
     ("entrypoint raises (TRACEBACK_RETURNED)", scenario_traceback_returned),
     ("unplug USB mid-run (PORT_UNAVAILABLE)", scenario_port_unavailable),
     ("eject CIRCUITPY drive (CIRCUITPY_DRIVE_MISSING, CP flash only)",
      scenario_circuitpy_drive_missing),
+    ("oversized payload (FLASH_COPY_FAILED, CP flash only)",
+     scenario_flash_copy_failed),
     ("intentional bootloader reset is silent (CP only)",
      scenario_bootloader_reset_silent),
 ]
@@ -610,7 +779,21 @@ def main() -> int:
                     f"Scenario '{label}' raised unexpectedly: "
                     f"{type(error).__name__}: {error}"
                 )
+                _print_note(
+                    "The board may be in an unusual state (ejected "
+                    "drive, bootloader, stopped mid-deploy).  The next "
+                    "scenario assumes a working baseline — continuing "
+                    "blindly will probably fail too."
+                )
                 results.append((context.label, label, False))
+                if not _confirm(
+                    "Continue with the next scenario on this board?",
+                    default_yes=False,
+                ):
+                    _print_note(
+                        f"Skipping remaining scenarios on {context.label}."
+                    )
+                    break
                 continue
             results.append((context.label, label, ok))
 

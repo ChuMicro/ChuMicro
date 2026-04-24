@@ -36,6 +36,7 @@ from .firmware import (
     flash_firmware,
     resolve_firmware_url,
 )
+from .macos_fskit import MACOS_FSKIT_RECOVERY_COMMAND, detect_fskit_wedge
 from .micropython_transport import MicropythonTransport, MicropythonTransportError
 from .probe import DeviceInfo, probe_device
 from .protocol import (
@@ -78,6 +79,7 @@ __all__ = [
     "FlashFirmwareError",
     "ImportGraphSource",
     "InteractiveDeployer",
+    "MACOS_FSKIT_RECOVERY_COMMAND",
     "MicropythonTransport",
     "MicropythonTransportError",
     "RecoveryPlan",
@@ -88,6 +90,7 @@ __all__ = [
     "build_circuitpython_bootstrap_scripts",
     "build_circuitpython_deploy_scripts",
     "classify_deploy_failure",
+    "detect_fskit_wedge",
     "find_circuitpy_drive",
     "flash_firmware",
     "probe_device",

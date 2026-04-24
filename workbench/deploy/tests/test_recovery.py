@@ -43,6 +43,20 @@ from chumicro_deploy.result import DeployResult
             "Failed to open serial port: device not configured",
             DeployFailureKind.PORT_UNAVAILABLE,
         ),
+        # mpremote's message for a missing-or-busy device — wraps
+        # both the generic "mpremote command failed" bootstrap-exec
+        # substring AND the real cause ("failed to access ...").
+        # The real cause must win so unplugged boards don't get
+        # "fix your source code" coaching.
+        (
+            "mpremote command failed (exit 1):\n"
+            "  command: /path/to/.venv/bin/mpremote connect "
+            "/dev/cu.usbmodem211101 exec print('ok')\n"
+            "  stderr: mpremote: failed to access "
+            "/dev/cu.usbmodem211101 (it may be in use by another "
+            "program)",
+            DeployFailureKind.PORT_UNAVAILABLE,
+        ),
         # CIRCUITPY drive missing — distinct from port-level failure.
         (
             "CIRCUITPY drive not found.  Either set circuitpy_drive_path "
@@ -51,6 +65,17 @@ from chumicro_deploy.result import DeployResult
         ),
         (
             "CIRCUITPY drive not mounted: /Volumes/CIRCUITPY",
+            DeployFailureKind.CIRCUITPY_DRIVE_MISSING,
+        ),
+        # Stale-mount case — /Volumes/CIRCUITPY exists but writes
+        # fail with EACCES (Finder eject leaves the placeholder; the
+        # FSKit wedge does too).  The nested "Permission denied" text
+        # collides with _PORT_UNAVAILABLE_PATTERNS, but the CIRCUITPY
+        # prefix is more specific and must win.
+        (
+            "CIRCUITPY drive not found or not writable: /Volumes/CIRCUITPY "
+            "(PermissionError: [Errno 13] Permission denied: "
+            "'/Volumes/CIRCUITPY/.chu-probe')",
             DeployFailureKind.CIRCUITPY_DRIVE_MISSING,
         ),
         # Raw REPL unresponsive.
@@ -239,6 +264,7 @@ def test_traceback_is_not_retryable() -> None:
         DeployFailureKind.PORT_UNAVAILABLE,
         DeployFailureKind.RAW_REPL_UNRESPONSIVE,
         DeployFailureKind.CIRCUITPY_DRIVE_MISSING,
+        DeployFailureKind.MACOS_FSKIT_WEDGED,
         DeployFailureKind.FLASH_COPY_FAILED,
         DeployFailureKind.BOOTSTRAP_EXEC_FAILED,
         DeployFailureKind.UNKNOWN,
@@ -464,6 +490,8 @@ def test_quit_aliases(quit_response: str) -> None:
         fake,  # type: ignore[arg-type]
         prompt=prompt,
         output=sink,
+        # Pin the detector so tests don't shell out on macOS CI.
+        fskit_wedge_detector=lambda: False,
     )
 
     with pytest.raises(CircuitpythonTransportError):
@@ -583,3 +611,144 @@ def test_deployer_property_exposes_wrapped_instance() -> None:
         output=sink,
     )
     assert interactive.deployer is fake
+
+
+# ---------------------------------------------------------------------------
+# macOS FSKit / DiskArbitration wedge — plan + InteractiveDeployer promotion
+# ---------------------------------------------------------------------------
+
+
+def test_macos_fskit_wedged_plan_contains_recovery_command() -> None:
+    # The pasted sudo command is the contract between the coaching
+    # output and the user — guard against accidental edits that drop
+    # or typo it.
+    from chumicro_deploy.macos_fskit import MACOS_FSKIT_RECOVERY_COMMAND
+    plan = recovery_plan_for(DeployFailureKind.MACOS_FSKIT_WEDGED)
+    assert plan.retryable is True
+    joined = "\n".join(plan.fix_steps)
+    assert MACOS_FSKIT_RECOVERY_COMMAND in joined
+    assert "FSKit" in plan.headline or "fskit" in plan.headline.lower()
+
+
+def test_stale_mount_eaccess_message_promotes_to_fskit_wedged() -> None:
+    # End-to-end regression for the wild-caught bug: the stale-mount
+    # error carries an inner "Permission denied" that used to win the
+    # classifier race and route to PORT_UNAVAILABLE, which in turn
+    # skipped the FSKit wedge detector.  After the reorder + pattern
+    # additions, the wedged path should promote correctly.
+    from chumicro_deploy.macos_fskit import MACOS_FSKIT_RECOVERY_COMMAND
+    fake = _FakeDeployer(
+        [
+            CircuitpythonTransportError(
+                "CIRCUITPY drive not found or not writable: "
+                "/Volumes/CIRCUITPY "
+                "(PermissionError: [Errno 13] Permission denied: "
+                "'/Volumes/CIRCUITPY/.chu-probe')",
+            ),
+        ],
+    )
+    sink, lines = _capturing_output()
+    prompt = _ScriptedPrompt(["quit"])
+    interactive = InteractiveDeployer(
+        fake,  # type: ignore[arg-type]
+        prompt=prompt,
+        output=sink,
+        fskit_wedge_detector=lambda: True,
+    )
+
+    with pytest.raises(CircuitpythonTransportError):
+        interactive.deploy(_DUMMY_SOURCE)  # type: ignore[arg-type]
+
+    joined = "\n".join(lines)
+    assert "macos_fskit_wedged" in joined
+    assert MACOS_FSKIT_RECOVERY_COMMAND in joined
+    # Must NOT land in port_unavailable — that's the exact regression
+    # we're guarding against.
+    assert "port_unavailable" not in joined
+
+
+def test_drive_missing_is_promoted_to_fskit_wedged_when_detector_trips() -> None:
+    # Quit on the first prompt so the test stays focused on the
+    # classification → plan promotion path.  The assertion is that
+    # the coaching output shows the wedged plan, not the generic
+    # tap-RESET plan.
+    from chumicro_deploy.macos_fskit import MACOS_FSKIT_RECOVERY_COMMAND
+    fake = _FakeDeployer(
+        [CircuitpythonTransportError("CIRCUITPY drive not found.")],
+    )
+    sink, lines = _capturing_output()
+    prompt = _ScriptedPrompt(["quit"])
+    interactive = InteractiveDeployer(
+        fake,  # type: ignore[arg-type]
+        prompt=prompt,
+        output=sink,
+        fskit_wedge_detector=lambda: True,
+    )
+
+    with pytest.raises(CircuitpythonTransportError):
+        interactive.deploy(_DUMMY_SOURCE)  # type: ignore[arg-type]
+
+    joined = "\n".join(lines)
+    assert "macos_fskit_wedged" in joined
+    assert MACOS_FSKIT_RECOVERY_COMMAND in joined
+    # The generic drive-missing coaching should NOT appear — if both
+    # plans leaked into the output the user would see conflicting
+    # instructions.
+    assert "tap RESET once so CircuitPython re-exposes" not in joined
+
+
+def test_drive_missing_stays_generic_when_detector_says_healthy() -> None:
+    # The detector returning False keeps the existing
+    # CIRCUITPY_DRIVE_MISSING coaching — no false-positive promotion
+    # to the wedged plan.
+    fake = _FakeDeployer(
+        [CircuitpythonTransportError("CIRCUITPY drive not found.")],
+    )
+    sink, lines = _capturing_output()
+    prompt = _ScriptedPrompt(["quit"])
+    interactive = InteractiveDeployer(
+        fake,  # type: ignore[arg-type]
+        prompt=prompt,
+        output=sink,
+        fskit_wedge_detector=lambda: False,
+    )
+
+    with pytest.raises(CircuitpythonTransportError):
+        interactive.deploy(_DUMMY_SOURCE)  # type: ignore[arg-type]
+
+    joined = "\n".join(lines)
+    assert "circuitpy_drive_missing" in joined
+    assert "macos_fskit_wedged" not in joined
+
+
+def test_detector_not_called_for_unrelated_failure_kinds() -> None:
+    # We only run the detector on CIRCUITPY_DRIVE_MISSING — other
+    # kinds should skip it so a laggy subprocess call does not
+    # creep into the port-unavailable / raw-REPL retry paths.
+    detector_calls = 0
+
+    def _spy_detector() -> bool:
+        nonlocal detector_calls
+        detector_calls += 1
+        return True
+
+    fake = _FakeDeployer(
+        [
+            CircuitpythonTransportError(
+                "Failed to open serial port: Resource busy",
+            ),
+        ],
+    )
+    sink, _lines = _capturing_output()
+    prompt = _ScriptedPrompt(["quit"])
+    interactive = InteractiveDeployer(
+        fake,  # type: ignore[arg-type]
+        prompt=prompt,
+        output=sink,
+        fskit_wedge_detector=_spy_detector,
+    )
+
+    with pytest.raises(CircuitpythonTransportError):
+        interactive.deploy(_DUMMY_SOURCE)  # type: ignore[arg-type]
+
+    assert detector_calls == 0
