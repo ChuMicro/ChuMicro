@@ -1,6 +1,6 @@
 # Decision 0029: Project workspace shape
 
-Status: `in-progress` — Phase 1 (`chumicro-deploy`) shipped 2026-04-22; Phases 2–7 pending, Phase 8 deferred.  Execution plan and status: `plans/workstreams/project-workspace.md`.
+Status: `accepted`
 Date: `2026-04-21`
 Related: Decision 0026, Decision 0027, Decision 0028, Decision 0030, Decision 0031
 

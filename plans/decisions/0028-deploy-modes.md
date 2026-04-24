@@ -80,16 +80,4 @@ This is intentionally deferred.  The current work shapes the transport API to ma
 - Flash mode for CircuitPython uses `circuitpy_drive_path` from device config, falling back to auto-detection via `find_circuitpy_drive()`.
 - Oversized CircuitPython RAM-mode submissions are chunked using a live free-heap probe instead of static board-family metadata. If even the chunked path cannot fit, the run fails early and directs the user to flash mode.
 - The transport API's `stage()`/`execute()`/`disconnect()` protocol remains stable — mode is an internal concern.
-- The `chumicro-deploy` package and project template are recorded as future work in `open-questions.md`.
-
-## Implementation status update (2026-04-19)
-
-- Implemented: per-device `deploy_mode` overrides, workspace-wide `defaults.deploy_mode`, and CLI `--deploy-mode` overrides.
-- Implemented: CircuitPython RAM-mode chunking based on live free-heap measurements to keep large inline test payloads workable on lower-memory boards.
-- Still pending: extraction of the transport layer into `chumicro-deploy` and any serial-only CircuitPython flash workflow that would remove the CIRCUITPY drive dependency.
-
-## Implementation status update (2026-04-22)
-
-- Implemented: transport-layer extraction into `chumicro-deploy` (project-workspace Phase 1; Decision 0032).  `MicropythonTransport`, `CircuitpythonTransport`, `ExtendedTransportProtocol`, `FakeTransport`, and the CP-RAM chunking helpers now live in `workbench/deploy/src/chumicro_deploy/`.  `support/device_transport/` was deleted outright; `scripts/device_testing.py` and `scripts/pytest_device.py` import from `chumicro_deploy` directly.
-- Implemented: `Device.deploy_mode` + `Device.circuitpy_drive_path` are the package-level public surface for the modes defined in this ADR; the runtime-branching that used to live in `scripts/device_testing.py` now lives on `Device.create_transport()`.
-- Still pending: serial-only CircuitPython flash workflow that would remove the CIRCUITPY drive dependency (tracked under the "drive mode toggle" open question).
+- The `chumicro-deploy` package split is handled by Decision 0032; a serial-only CircuitPython flash workflow that would remove the CIRCUITPY drive dependency remains tracked under the "drive mode toggle" entry in `plans/open-questions.md`.

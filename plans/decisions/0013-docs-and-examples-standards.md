@@ -1,6 +1,7 @@
 # Decision 0013: Documentation and Examples Standards
 
 Status: `accepted`
+Date: `2026-04-02`
 
 ## Context
 
@@ -176,25 +177,7 @@ Examples are verified via static analysis in `scripts/run.py verify-examples`:
 
 **Why top-level style:**  CircuitPython and MicroPython run `code.py` at the top level — there is no `__name__ == "__main__"` mechanism.  Adafruit's own examples use top-level `while True` loops without guards.  Matching this convention means examples can be deployed to boards unchanged.
 
-### Contributor expectations
-
-- New libraries must include docs and examples before their first release. The `new-library` scaffolder already creates empty `docs/` and `examples/` directories.
-- PRs that add or change public API must update `docs/api.md` for the affected library.
-- PRs that add new features should include or update at least one example.
-- Examples must use top-level code (no `def main()` / `__main__` guard) and pass `verify-examples`.
-- Docs and examples are reviewed as part of normal code review.
-
-### Release pipeline integration
-
-- `docs-build` CI job verifies all library docs build on every PR (Zensical).
-- `docs-deploy.yml` workflow deploys experimental docs on push to `main` and accepts `workflow_dispatch` for ad-hoc deploys:
-  - **push to main**: deploys each library at version `dev` with alias `experimental`.
-  - Stable docs are deployed inline by `promote.yml` (not via `docs-deploy.yml`) to avoid silent cancellation from the shared concurrency group.
-  - **promote (stable)**: `promote.yml` deploys each promoted library at its VERSION (e.g., `0.1.0`) with alias `stable`, sets `stable` as the default redirect for `/<lib>/`.
-  - Uses mike with `--deploy-prefix <lib>` per library, pushing to the `gh-pages` branch.
-  - Concurrency group prevents conflicting deploys.
-- The `mkdocs.yml` configs, `docs` task in `scripts/run.py`, and the `new-library` scaffolder are all wired.
-- GitHub Pages must be configured to serve from the `gh-pages` branch (repository setting).
+Contributor expectations and the release-pipeline wiring that implement this decision live outside the ADR: [`docs/contributing/new-library.md`](../../docs/contributing/new-library.md) covers the "every library ships docs + examples, AST-verified" authoring flow, and [`docs/contributing/releases.md`](../../docs/contributing/releases.md) covers the CI and `promote.yml` / `docs-deploy.yml` pipeline that publishes the versioned docs.
 
 ## Alternatives considered
 

@@ -94,12 +94,16 @@ CPython packages.  The three folders now have clean, independent axes:
    (circup and mpremote copy source files per manifest; they do not
    resolve `pyproject.toml` deps), so a workbench package's deps have
    zero effect on device-side installation.
-7. Workbench packages do not have a `functional_tests/` slot — they
-   either drive devices (in which case the device is under test, not
-   the workbench tool in isolation) or they are pure host tools.
-   Device-driving workbench packages may ship host-side tests that
-   gate on `devices.yml` the same way `scripts/pytest_device.py`
-   does today.
+7. Workbench packages may ship a `functional_tests/` slot for
+   host-side tests that drive connected boards through the
+   package's public API.  Unlike library functional tests, these
+   are *not* routed through the on-device test harness — the
+   workbench tool is the thing driving the device from the host,
+   not code running on a device.  `scripts/run.py test-workbench`
+   is the counterpart to `test-device`: it iterates every
+   `workbench/<name>/functional_tests/` directory and runs plain
+   pytest against each, and each suite's own `conftest.py` owns
+   device selection (typically by reading `devices.yml` defaults).
 8. **Scripts consume workbench packages, not the other way around.**
    When a mono-repo `scripts/` file re-implements functionality that a
    workbench package owns (YAML schema parsing, transport construction,
