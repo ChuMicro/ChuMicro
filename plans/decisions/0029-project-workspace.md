@@ -76,8 +76,8 @@ Consequences for the API shape:
 
 - Nothing from `workspace.yml`, `things/`, `library_sources:`, `packages/`, or `libs/` leaks into the deploy package.  Those concepts live in `chumicro-workspace-runtime`.
 - Transports, file sources, and config loaders are pluggable protocols, not hard-coded to chumicro file layouts.
-- Convenience readers for the chumicro-shaped `devices.yml` live behind an opt-in import (`chumicro_deploy.config.chumicro`), never at the top level.
-- Third parties register custom config loaders via Python entry points (`chumicro_deploy.config_loaders`), not by subclassing workspace internals.
+- The built-in `devices.yml` schema is owned by `chumicro-deploy` and read by the built-in loader at `chumicro_deploy.config.default`, registered in the loader registry under the reserved name `"default"`.  The loader is behind an opt-in import — importing it pulls in PyYAML, so consumers who only want the top-level `Device` / `Deployer` API never pay that cost.  The schema is shared across the `chumicro` mono repo, the eventual project-workspace template repo, and any third-party consumer.
+- Third parties register custom config loaders via Python entry points (`chumicro_deploy.config_loaders`), not by subclassing workspace internals.  The mono repo consumes the loader via the editable-install of `workbench/deploy` so the YAML schema has a single source of truth; see the corresponding scripts-consumption principle in Decision 0032.
 - The CLI (`python -m chumicro_deploy`) is a thin wrapper over the Python API — every CLI action has a supported programmatic equivalent.
 
 **Rejected:** tight coupling to `chumicro-workspace-runtime`.  Deploy is a reusable primitive; the workspace is one consumer among several.

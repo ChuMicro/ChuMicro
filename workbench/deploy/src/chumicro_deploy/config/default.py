@@ -1,12 +1,12 @@
-"""Opt-in loader for chumicro's ``devices.yml`` shape.
+"""Default YAML config loader that ships with ``chumicro-deploy``.
 
-chumicro's mono repo already ships a rich ``devices.yml`` schema
-(see ``scripts/device_config.py`` — Decision 0027).  This module
-reads the same shape into :class:`~chumicro_deploy.Device`
-instances so scripts / CLIs can reuse that config file without
-depending on the chumicro mono repo's ``scripts/`` package.
+This is the built-in loader for the ``devices.yml`` schema that
+``chumicro-deploy`` defines and owns.  Any project — the `chumicro`
+mono repo, a project-workspace template, or a third-party consumer —
+can write this shape to configure its deploy targets without
+depending on any upstream tooling.
 
-The file shape (stable subset that matters for deploy):
+The schema (stable subset that the loader accepts):
 
 .. code-block:: yaml
 
@@ -24,9 +24,19 @@ The file shape (stable subset that matters for deploy):
         # description, setup_command, and other keys are tolerated
         # but ignored by this loader.
 
+Required fields per device: ``id``, ``runtime``, ``address``.
+Everything else is optional.  Extra keys are silently ignored so
+consumers that carry additional metadata (test-orchestration hints,
+setup commands, descriptions) can share the same file.
+
 Importing this module pulls in PyYAML (already a dependency of
-:mod:`chumicro-deploy` via the workbench / device testing tooling),
-so the import cost is paid only when devices.yml is actually used.
+:mod:`chumicro-deploy`), so the import cost is paid only when
+``devices.yml`` is actually used.
+
+Third parties that need a different shape (JSON, TOML, a custom
+YAML layout) can register their own loader via the
+``chumicro_deploy.config_loaders`` entry-point group — see
+:func:`chumicro_deploy.config.discover_config_loaders`.
 """
 
 from __future__ import annotations
@@ -42,17 +52,17 @@ def _normalise_device_entry(
     *,
     default_deploy_mode: str | None,
 ) -> dict[str, Any]:
-    """Translate chumicro's device-entry shape into :meth:`Device.from_dict` keys.
+    """Translate a raw YAML entry into :meth:`Device.from_dict` keys.
 
-    Differences between the two shapes:
+    Schema vs. :class:`Device` differences:
 
-    - chumicro's entry uses ``runtime`` (``"micropython"`` /
-      ``"circuitpython"``); ``Device`` uses ``transport``.
-    - chumicro's entry uses ``serial_baudrate``; ``Device`` uses
+    - Schema uses ``runtime`` (``"micropython"`` / ``"circuitpython"``);
+      :class:`Device` uses ``transport``.
+    - Schema uses ``serial_baudrate``; :class:`Device` uses
       ``baudrate``.
-    - ``deploy_mode`` falls back to ``defaults.deploy_mode`` in
-      chumicro's config; the fallback is applied here so the
-      ``Device`` is complete.
+    - ``deploy_mode`` falls back to ``defaults.deploy_mode`` when
+      absent from the entry; the fallback is applied here so the
+      :class:`Device` is complete.
     """
     normalised: dict[str, Any] = {
         "transport": entry["runtime"],
@@ -75,7 +85,7 @@ def load_devices_yml(
     *,
     device_id: str | None = None,
 ) -> Device:
-    """Load one device from a chumicro-shape ``devices.yml`` file.
+    """Load one device from a ``devices.yml`` file.
 
     Args:
         path: Filesystem path to the YAML file.

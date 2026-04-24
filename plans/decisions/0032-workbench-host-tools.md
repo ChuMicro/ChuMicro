@@ -100,6 +100,25 @@ CPython packages.  The three folders now have clean, independent axes:
    Device-driving workbench packages may ship host-side tests that
    gate on `devices.yml` the same way `scripts/pytest_device.py`
    does today.
+8. **Scripts consume workbench packages, not the other way around.**
+   When a mono-repo `scripts/` file re-implements functionality that a
+   workbench package owns (YAML schema parsing, transport construction,
+   device probing, firmware flashing, recovery coaching, etc.), the
+   `scripts/` version migrates to import from the workbench package via
+   its editable install.  Rationale: the workbench package is the
+   published source of truth — if the mono repo keeps a parallel
+   implementation it will drift from what external consumers see, and
+   the eventual project-workspace template repo would have to choose
+   between the two.  Migrations can happen in stages (schema parsing
+   first, richer orchestration later); each stage moves the
+   mono-repo-only surface area (test-orchestration hints, IDE-specific
+   defaults) into a thin wrapper on top of the workbench package rather
+   than a reimplementation of it.  As more workbench packages land
+   (`chumicro-workspace-runtime`, others), the `scripts/` shrinks and
+   the workbench shelf carries progressively more of the developer
+   surface area.  Any `scripts/` file that could live in a workbench
+   package instead belongs on the migration backlog in
+   `plans/next-up.md`.
 
 ### Alternatives considered
 

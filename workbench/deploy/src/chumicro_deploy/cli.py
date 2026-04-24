@@ -83,11 +83,12 @@ def _add_device_args(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--devices-format",
-        default="chumicro",
+        default="default",
         help=(
-            "Config-file format name.  Built-in: 'chumicro' (reads "
-            "the devices.yml shape from Decision 0027).  Third "
-            "parties register custom loaders via the "
+            "Config-file format name.  Built-in: 'default' (reads "
+            "the devices.yml schema defined by "
+            "chumicro_deploy.config.default).  Third parties "
+            "register custom loaders via the "
             "'chumicro_deploy.config_loaders' entry-point group."
         ),
     )
@@ -96,7 +97,7 @@ def _add_device_args(parser: argparse.ArgumentParser) -> None:
 def _device_from_args(args: argparse.Namespace) -> Device:
     """Build a :class:`Device` from a parsed subcommand namespace.
 
-    Routes through :func:`chumicro_deploy.config.chumicro.load_devices_yml`
+    Routes through :func:`chumicro_deploy.config.default.load_devices_yml`
     when ``--devices-file`` is supplied; otherwise falls back to the
     explicit ``--transport`` + ``--address`` path.
     """

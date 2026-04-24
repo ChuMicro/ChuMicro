@@ -1,11 +1,11 @@
-"""Tests for the chumicro-shape devices.yml loader."""
+"""Tests for the built-in devices.yml loader."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
-from chumicro_deploy.config.chumicro import load_devices_yml
+from chumicro_deploy.config.default import load_devices_yml
 
 _MINIMAL_YAML = """\
 defaults:

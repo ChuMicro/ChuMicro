@@ -44,9 +44,11 @@ class Device:
 
     Constructed explicitly in code, from a dict
     (``Device.from_dict(...)``), from environment variables
-    (``Device.from_env(prefix=...)``), or via a workspace-specific
-    loader (see ``chumicro_deploy.config.chumicro.load_devices_yml``
-    once Slice 1e lands).
+    (``Device.from_env(prefix=...)``), or via the built-in
+    ``devices.yml`` loader
+    (``chumicro_deploy.config.default.load_devices_yml``) — or a
+    third-party loader registered through the
+    ``chumicro_deploy.config_loaders`` entry-point group.
 
     Attributes:
         transport: Runtime identifier — ``"circuitpython"`` or

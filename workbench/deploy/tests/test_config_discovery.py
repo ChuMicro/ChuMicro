@@ -30,9 +30,9 @@ def _my_format_loader(path: Path | str, *, device_id: str | None = None) -> Devi
 
 
 class TestDiscoverConfigLoaders:
-    def test_always_includes_chumicro_builtin(self) -> None:
+    def test_always_includes_default_builtin(self) -> None:
         loaders = discover_config_loaders()
-        assert "chumicro" in loaders
+        assert "default" in loaders
 
     def test_registers_third_party_loaders(
         self, monkeypatch: pytest.MonkeyPatch,
@@ -48,7 +48,7 @@ class TestDiscoverConfigLoaders:
         loaders = discover_config_loaders()
         assert "myformat" in loaders
         assert loaders["myformat"] is _my_format_loader
-        assert "chumicro" in loaders  # builtin still present
+        assert "default" in loaders  # builtin still present
 
     def test_third_party_cannot_shadow_builtin(
         self, monkeypatch: pytest.MonkeyPatch,
@@ -57,14 +57,14 @@ class TestDiscoverConfigLoaders:
 
         def fake_entry_points(**kwargs):
             if kwargs.get("group") == CONFIG_LOADERS_ENTRY_POINT_GROUP:
-                return [_FakeEntryPoint("chumicro", _my_format_loader)]
+                return [_FakeEntryPoint("default", _my_format_loader)]
             return []
 
         monkeypatch.setattr(metadata, "entry_points", fake_entry_points)
         with pytest.raises(ValueError, match="reserved for the built-in"):
             discover_config_loaders()
 
-    def test_builtin_loads_chumicro_yaml(self, tmp_path: Path) -> None:
+    def test_builtin_loads_devices_yaml(self, tmp_path: Path) -> None:
         yaml_path = tmp_path / "devices.yml"
         yaml_path.write_text(
             "defaults:\n"
@@ -77,6 +77,6 @@ class TestDiscoverConfigLoaders:
             "    serial_baudrate: 115200\n"
         )
         loaders = discover_config_loaders()
-        device = loaders["chumicro"](yaml_path)
+        device = loaders["default"](yaml_path)
         assert device.transport == "micropython"
         assert device.address == "/dev/ttyACM0"

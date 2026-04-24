@@ -89,10 +89,9 @@ device = Device.from_dict({...})
 # Or: from env vars (MYBOARD_ADDRESS, MYBOARD_TRANSPORT, ...)
 device = Device.from_env(prefix="MYBOARD_")
 
-# Or: opt-in chumicro-shaped devices.yml loader
-from chumicro_deploy.config.chumicro import load_devices_yml
-devices = load_devices_yml("devices.yml")
-device = devices["back porch"]
+# Or: opt-in built-in devices.yml loader
+from chumicro_deploy.config.default import load_devices_yml
+device = load_devices_yml("devices.yml", device_id="back-porch")
 ```
 
 File sources — pluggable, not tied to chumicro layout:
@@ -149,7 +148,7 @@ Third-party config loader registration (Python entry points):
 myformat = "my_pkg.loader:load"
 ```
 
-The CLI (`python -m chumicro_deploy deploy --device <id> --config devices.yml ...`) is a thin wrapper.  Every CLI action has a programmatic equivalent.  Default config loader tries chumicro's `devices.yml` shape; third parties override via entry point.
+The CLI (`python -m chumicro_deploy deploy --device <id> --config devices.yml ...`) is a thin wrapper.  Every CLI action has a programmatic equivalent.  The built-in loader (registered as `"default"`) reads the `devices.yml` schema that `chumicro-deploy` owns; third parties override via entry point with their own registered name.
 
 #### Portability knobs
 
@@ -177,7 +176,7 @@ Folder layout was revised during implementation — packages ship from `workbenc
 - [x] Implement `FileSource` protocol + `FileMapSource`, `DirectorySource`, `ImportGraphSource` built-ins.
 - [x] Implement `probe_device()` returning `DeviceInfo`.
 - [x] Implement `resolve_firmware_url()` + `flash_firmware()` with the shipped reflash family table.
-- [x] Implement `chumicro_deploy.config.chumicro.load_devices_yml()` as opt-in import.
+- [x] Implement `chumicro_deploy.config.default.load_devices_yml()` as opt-in import (renamed from `config.chumicro` on 2026-04-24 to reflect that `chumicro-deploy` owns the schema).
 - [x] Implement `Device.from_dict()` + `Device.from_env()`.
 - [x] Implement entry-point discovery for third-party config loaders.
 - [x] Implement progress / file-staged / execute-line callbacks across deploy pipeline.
