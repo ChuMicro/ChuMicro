@@ -30,6 +30,7 @@ from .protocol import (
     PROBE_IMPLEMENTATION_SCRIPT,
     DeviceImplementation,
     parse_probe_output,
+    validate_entrypoint_in_files,
 )
 
 if TYPE_CHECKING:  # pragma: no cover - type-only
@@ -404,11 +405,9 @@ class MicropythonTransport:
         Returns:
             Combined stdout captured from the entrypoint execution.
         """
-        if entrypoint not in files:
-            raise MicropythonTransportError(
-                f"entrypoint {entrypoint!r} missing from files "
-                f"({sorted(files.keys())!r})"
-            )
+        validate_entrypoint_in_files(
+            files, entrypoint, error_cls=MicropythonTransportError,
+        )
 
         if self._staging_dir is not None:
             self._staging_dir.cleanup()

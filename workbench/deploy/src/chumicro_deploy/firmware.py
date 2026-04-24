@@ -27,9 +27,11 @@ import time
 import urllib.request
 from collections.abc import Callable
 from pathlib import Path
+from typing import TypeVar
 from urllib.error import URLError
 
 from .device import Device
+from .protocol import ReflashMethod, Runtime
 
 _DEFAULT_LANGUAGE = "en_US"
 
@@ -89,20 +91,20 @@ def resolve_firmware_url(
         raise UnresolvedFirmwareError("board_id is required")
     if not version:
         raise UnresolvedFirmwareError("version is required")
-    if runtime == "circuitpython":
+    if runtime == Runtime.CIRCUITPYTHON:
         return CIRCUITPYTHON_FIRMWARE_URL_TEMPLATE.format(
             board_id=board_id, version=version, language=language,
         )
-    if runtime == "micropython":
+    if runtime == Runtime.MICROPYTHON:
         raise UnresolvedFirmwareError(
             "MicroPython firmware URLs embed a per-build date that "
             "cannot be inferred from the version alone.  Live listing "
             "lookup is not yet implemented; supply the URL directly "
             "until Slice 1e.2 adds scraping."
         )
+    allowed = ", ".join(f"{member.value!r}" for member in Runtime)
     raise UnresolvedFirmwareError(
-        f"Unsupported runtime: {runtime!r} "
-        f"(expected 'circuitpython' or 'micropython')"
+        f"Unsupported runtime: {runtime!r} (expected {allowed})"
     )
 
 
@@ -225,6 +227,34 @@ def _download_firmware(
     _report(on_progress, 1.0, "download complete")
 
 
+_PollResult = TypeVar("_PollResult")
+
+
+def _poll_until_deadline(
+    probe: Callable[[], _PollResult | None],
+    *,
+    timeout: float,
+    interval: float,
+    sleep: Callable[[float], None],
+    monotonic: Callable[[], float],
+) -> _PollResult | None:
+    """Poll *probe* every *interval* seconds until it returns a value.
+
+    Returns the first non-``None`` value *probe* yields, or ``None`` if
+    *timeout* seconds elapse first.  *interval* and *timeout* are
+    taken from the caller (every wait-for helper here carries its
+    own hardware-tuned budget) so nothing about the cadence changes
+    when helpers switch to this shared skeleton.
+    """
+    deadline = monotonic() + timeout
+    while monotonic() < deadline:
+        result = probe()
+        if result is not None:
+            return result
+        sleep(interval)
+    return None
+
+
 def _uf2_mount_candidates(
     search_paths: list[Path] | None = None,
 ) -> list[Path]:
@@ -269,13 +299,13 @@ def _wait_for_uf2_drive(
     monotonic: Callable[[], float] = time.monotonic,
 ) -> Path | None:
     """Poll *search_paths* until a UF2 drive appears or *timeout* expires."""
-    deadline = monotonic() + timeout
-    while monotonic() < deadline:
-        found = _scan_for_uf2_drive(search_paths)
-        if found is not None:
-            return found
-        sleep(_UF2_POLL_INTERVAL)
-    return None
+    return _poll_until_deadline(
+        lambda: _scan_for_uf2_drive(search_paths),
+        timeout=timeout,
+        interval=_UF2_POLL_INTERVAL,
+        sleep=sleep,
+        monotonic=monotonic,
+    )
 
 
 def _wait_for_drive_gone(
@@ -292,12 +322,18 @@ def _wait_for_drive_gone(
     case.  Timeout returns ``False`` — caller decides whether to
     surface as an error or just proceed.
     """
-    deadline = monotonic() + timeout
-    while monotonic() < deadline:
+    def _probe() -> bool | None:
         if not drive_path.is_dir() or not (drive_path / "INFO_UF2.TXT").exists():
             return True
-        sleep(_UF2_POLL_INTERVAL)
-    return False
+        return None
+
+    return _poll_until_deadline(
+        _probe,
+        timeout=timeout,
+        interval=_UF2_POLL_INTERVAL,
+        sleep=sleep,
+        monotonic=monotonic,
+    ) is True
 
 
 def _enter_uf2_bootloader_programmatic(
@@ -491,6 +527,14 @@ def _list_candidate_serial_ports(
     return ports
 
 
+#: Interval between :func:`_wait_for_new_serial_port` probes.  Half a
+#: second balances responsiveness against the ~1s typical bootloader
+#: re-enumeration window on macOS — the faster we poll, the earlier
+#: we'd catch a bounce, but the more churn we generate while a board
+#: is mid-reset.
+_SERIAL_PORT_POLL_INTERVAL = 0.5
+
+
 def _wait_for_new_serial_port(
     baseline: set[str],
     *,
@@ -500,14 +544,17 @@ def _wait_for_new_serial_port(
     globs: tuple[str, ...] = _SERIAL_PORT_GLOBS,
 ) -> str | None:
     """Poll for a serial port that was not in *baseline* to appear."""
-    deadline = monotonic() + timeout
-    while monotonic() < deadline:
-        current = _list_candidate_serial_ports(globs)
-        new_ports = current - baseline
-        if new_ports:
-            return sorted(new_ports)[0]
-        sleep(0.5)
-    return None
+    def _probe() -> str | None:
+        new_ports = _list_candidate_serial_ports(globs) - baseline
+        return sorted(new_ports)[0] if new_ports else None
+
+    return _poll_until_deadline(
+        _probe,
+        timeout=timeout,
+        interval=_SERIAL_PORT_POLL_INTERVAL,
+        sleep=sleep,
+        monotonic=monotonic,
+    )
 
 
 def _prompt_manual_esp32_bootloader(
@@ -849,10 +896,11 @@ def flash_firmware(
             guidance.
         ValueError: Unknown *reflash_method*.
     """
-    if reflash_method not in ("uf2", "esptool"):
+    if reflash_method not in ReflashMethod._value2member_map_:
+        allowed = ", ".join(f"{member.value!r}" for member in ReflashMethod)
         raise ValueError(
             f"Unsupported reflash_method: {reflash_method!r} "
-            f"(expected 'uf2' or 'esptool')"
+            f"(expected {allowed})"
         )
 
     import tempfile
@@ -863,7 +911,7 @@ def flash_firmware(
         local_firmware = staging_path / filename
         _download_firmware(url, local_firmware, on_progress=on_progress)
 
-        if reflash_method == "uf2":
+        if reflash_method == ReflashMethod.UF2:
             _flash_firmware_uf2(
                 local_firmware,
                 device,

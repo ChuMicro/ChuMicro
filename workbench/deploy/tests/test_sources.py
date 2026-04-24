@@ -138,8 +138,13 @@ class TestDirectorySource:
 
     def test_missing_entrypoint_raises(self, tmp_path: Path):
         self._make_tree(tmp_path)
+        # DirectorySource walks lazily on the first files() call so
+        # construction is cheap for callers that only inspect the
+        # entrypoint property.  The entrypoint-vs-tree check fires on
+        # the first files() access.
+        source = DirectorySource(tmp_path, entrypoint="/not_present.py")
         with pytest.raises(ValueError, match="entrypoint"):
-            DirectorySource(tmp_path, entrypoint="/not_present.py")
+            source.files()
 
     def test_entrypoint_accessor(self, tmp_path: Path):
         self._make_tree(tmp_path)

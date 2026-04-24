@@ -33,6 +33,7 @@ from .protocol import (
     PROBE_IMPLEMENTATION_SCRIPT,
     DeviceImplementation,
     parse_probe_output,
+    validate_entrypoint_in_files,
 )
 
 _CTRL_A = b"\x01"
@@ -216,6 +217,66 @@ def find_circuitpy_drive_for_uid(target_uid: str) -> str | None:
     return None
 
 
+def _walk_package_sources(
+    source_directory: Path,
+) -> list[tuple[str, str]]:
+    """Return every ``.py`` under packages rooted at *source_directory*.
+
+    Only top-level children of *source_directory* that carry an
+    ``__init__.py`` are treated as packages; other entries (README
+    files, configuration, non-package directories) are skipped so
+    RAM-mode payloads don't pick up files that aren't importable.
+
+    Each returned entry is ``(dotted_module_name, source_text)``.
+    Within a package, the ``__init__.py`` entry is emitted **after**
+    every submodule so RAM-mode registration can resolve relative
+    imports during the init block.
+    """
+    if not source_directory.is_dir():
+        return []
+    collected: list[tuple[str, str]] = []
+    for package_directory in sorted(source_directory.iterdir()):
+        if not package_directory.is_dir():
+            continue
+        init_file = package_directory / "__init__.py"
+        if not init_file.exists():
+            continue
+        collected.extend(
+            _walk_package_files(package_directory, package_directory.name),
+        )
+    return collected
+
+
+def _walk_package_files(
+    directory: Path,
+    dotted_prefix: str,
+) -> list[tuple[str, str]]:
+    """Return ``.py`` entries inside *directory* with ``__init__.py`` last."""
+    collected: list[tuple[str, str]] = []
+    init_entry: tuple[str, str] | None = None
+    for child in sorted(directory.iterdir()):
+        if child.is_dir():
+            child_init = child / "__init__.py"
+            if child_init.exists():
+                collected.extend(
+                    _walk_package_files(
+                        child, f"{dotted_prefix}.{child.name}",
+                    ),
+                )
+        elif child.suffix == ".py":
+            source_text = child.read_text(encoding="utf-8")
+            if child.name == "__init__.py":
+                # Deferred — the init block relies on submodules that
+                # need to land in sys.modules first.
+                init_entry = (dotted_prefix, source_text)
+            else:
+                module_name = f"{dotted_prefix}.{child.stem}"
+                collected.append((module_name, source_text))
+    if init_entry is not None:
+        collected.append(init_entry)
+    return collected
+
+
 def find_circuitpy_drive_for_machine(target_machine: str) -> str | None:
     """Return the mounted CIRCUITPY drive whose board matches *target_machine*.
 
@@ -317,10 +378,11 @@ class CircuitpythonTransport:
         self._time: TimeSource = time or cast(TimeSource, _time_module)
         self._port: SerialPort | None = None
         self._staged_sources: list[tuple[str, str]] | None = None
-        # Set true by reset_into_bootloader() so the next disconnect()
-        # skips its "restore board state" dance — the board is gone
-        # from USB and any raw-REPL traffic at that point is noise.
-        self._reset_pending = False
+        #: True once ``stage()`` or the RAM-mode ``deploy_files`` path
+        #: has prepared the transport for ``execute()`` calls.  Kept
+        #: separate from ``_staged_sources`` so the deploy path does
+        #: not have to pretend it staged modules it did not collect.
+        self._staged: bool = False
 
     @staticmethod
     def _default_serial_factory(**kwargs) -> SerialPort:  # pragma: no cover
@@ -403,6 +465,7 @@ class CircuitpythonTransport:
 
         if self.mode == "flash":
             self._stage_to_flash(source_dirs, test_files, harness_source)
+        self._staged = True
 
     def _verify_drive_for_board(self, drive_path: Path) -> Path:
         """Confirm *drive_path* is the CIRCUITPY mount for the connected board.
@@ -653,63 +716,13 @@ class CircuitpythonTransport:
         self._warn_if_flush_produced_empty_file(drive_path, test_files)
 
     def _collect_package_sources(self, source_directory: Path) -> None:
-        """Walk a source directory and collect all .py files as module entries.
+        """Walk a source directory and extend ``_staged_sources``.
 
-        Each entry is ``(dotted_module_name, source_text)``.
-
-        Args:
-            source_directory: A ``src/`` directory containing packages.
-        """
-        if not source_directory.is_dir():
-            return
-        for package_directory in sorted(source_directory.iterdir()):
-            if not package_directory.is_dir():
-                continue
-            init_file = package_directory / "__init__.py"
-            if not init_file.exists():
-                continue
-            self._collect_package_files(
-                package_directory,
-                package_directory.name,
-            )
-
-    def _collect_package_files(
-        self,
-        directory: Path,
-        dotted_prefix: str,
-    ) -> None:
-        """Recursively collect .py files from a package directory.
-
-        Collects ``__init__.py`` last so that submodules are already
-        registered in ``sys.modules`` when the package init executes
-        relative imports.
-
-        Args:
-            directory: Directory to walk.
-            dotted_prefix: Dotted module name prefix for this directory.
+        Thin adaptor around :func:`_walk_package_sources` that keeps
+        the transport's mutable state contained to this one method.
         """
         assert self._staged_sources is not None
-        init_entry: tuple[str, str] | None = None
-        for child in sorted(directory.iterdir()):
-            if child.is_dir():
-                child_init = child / "__init__.py"
-                if child_init.exists():
-                    self._collect_package_files(
-                        child,
-                        f"{dotted_prefix}.{child.name}",
-                    )
-            elif child.suffix == ".py":
-                if child.name == "__init__.py":
-                    # Defer __init__.py until after submodules.
-                    source_text = child.read_text(encoding="utf-8")
-                    init_entry = (dotted_prefix, source_text)
-                else:
-                    module_name = f"{dotted_prefix}.{child.stem}"
-                    source_text = child.read_text(encoding="utf-8")
-                    self._staged_sources.append((module_name, source_text))
-        # Append __init__.py last.
-        if init_entry is not None:
-            self._staged_sources.append(init_entry)
+        self._staged_sources.extend(_walk_package_sources(source_directory))
 
     def execute(self, bootstrap_script: str) -> str:
         """Send a code block through raw REPL and return captured stdout.
@@ -724,7 +737,7 @@ class CircuitpythonTransport:
             CircuitpythonTransportError: If stage() has not been called,
                 the device returns an error, or communication fails.
         """
-        if self._staged_sources is None:
+        if not self._staged:
             raise CircuitpythonTransportError(
                 "stage() must be called before execute()"
             )
@@ -783,14 +796,14 @@ class CircuitpythonTransport:
         expected — so read-side exceptions are swallowed.  The
         caller's drive-poll is the authoritative success signal.
 
-        Sets :attr:`_reset_pending` so a subsequent :meth:`disconnect`
-        does not try to restore board state on a USB link that just
-        went away — that dance would produce misleading warnings
-        when the user specifically asked for a bootloader reset.
+        Closes the serial port directly so a subsequent
+        :meth:`disconnect` becomes a no-op — the USB link is gone on
+        purpose and running the normal restore dance (``_enter_raw_repl``
+        + autoreload-on + Ctrl-D) against a dying link only produces
+        misleading warnings.
         """
         if self._port is None:
             return False
-        self._reset_pending = True
         try:
             self._send_repl_command(
                 "import microcontroller\n"
@@ -800,6 +813,11 @@ class CircuitpythonTransport:
             )
         except Exception:
             pass
+        try:
+            self._port.close()
+        except Exception:  # pragma: no cover — port is already dying
+            pass
+        self._port = None
         return True
 
     def probe_implementation(self) -> DeviceImplementation | None:
@@ -950,11 +968,9 @@ class CircuitpythonTransport:
             raise CircuitpythonTransportError(
                 "connect() must be called before deploy_files()"
             )
-        if entrypoint not in files:
-            raise CircuitpythonTransportError(
-                f"entrypoint {entrypoint!r} missing from files "
-                f"({sorted(files.keys())!r})"
-            )
+        validate_entrypoint_in_files(
+            files, entrypoint, error_cls=CircuitpythonTransportError,
+        )
 
         if self.mode == "ram":
             return self._deploy_files_ram(
@@ -1034,14 +1050,14 @@ class CircuitpythonTransport:
         reuses the persistent raw-REPL session.  No CIRCUITPY drive
         or soft-reboot is involved.
 
-        ``execute_scripts`` delegates to :meth:`execute`, which
-        guards against use without a prior :meth:`stage` call —
-        that contract is a test-harness invariant, not a deploy
-        one.  We set ``_staged_sources`` to an empty list here so
-        the guard is satisfied; disconnect clears it back to
-        ``None``.  The alternative (duplicating the raw-REPL send
-        loop) would drift from the test path every time
-        ``execute`` is touched.
+        ``execute_scripts`` delegates to :meth:`execute`, whose
+        guard covers a test-harness invariant ("``stage()`` must be
+        called before ``execute()``").  The RAM-mode deploy path
+        flips :attr:`_staged` itself so the guard passes without
+        mutating :attr:`_staged_sources` — deploy doesn't collect
+        modules the same way ``stage()`` does, and pretending
+        otherwise would leak the test path's shape into the deploy
+        API surface.
         """
         if on_file_staged is not None:
             for device_path in sorted(files):
@@ -1051,7 +1067,7 @@ class CircuitpythonTransport:
         deploy_scripts = build_circuitpython_deploy_scripts(
             files, entrypoint, max_chunk_size_bytes=script_budget_bytes,
         )
-        self._staged_sources = []
+        self._staged = True
         output = self.execute_scripts(deploy_scripts)
 
         if on_execute_line is not None:
@@ -1204,37 +1220,34 @@ class CircuitpythonTransport:
         5. Waits briefly for the reboot to complete.
         6. Closes the serial port.
 
-        When :attr:`_reset_pending` is set (e.g. after
-        :meth:`reset_into_bootloader`), steps 1–5 are skipped —
-        the board is already mid-reset and there's nothing sensible
-        to talk to.  The port is closed silently; no warnings are
-        printed for a link that went away on purpose.
+        When :meth:`reset_into_bootloader` has already been called,
+        it closes the port itself and nulls :attr:`_port` — this
+        method then finds nothing to restore or close and only
+        clears :attr:`_staged_sources`.
         """
         if self._port is not None:
-            if not self._reset_pending:
-                try:
-                    self._enter_raw_repl()
-                    if self.mode == "flash":
-                        self._send_repl_command(
-                            "import supervisor; "
-                            "supervisor.runtime.autoreload = True"
-                        )
-                    # Exit raw REPL back to normal REPL.
-                    self._port.write(_CTRL_B)
-                    self._time.sleep(_ENTER_DELAY)
-                    # Soft-reboot so code.py starts normally.
-                    self._port.write(_CTRL_D)
-                    self._time.sleep(0.5)
-                except Exception as restore_error:
-                    print(f"WARNING: Failed to restore board state on disconnect: {restore_error}")
+            try:
+                self._enter_raw_repl()
+                if self.mode == "flash":
+                    self._send_repl_command(
+                        "import supervisor; "
+                        "supervisor.runtime.autoreload = True"
+                    )
+                # Exit raw REPL back to normal REPL.
+                self._port.write(_CTRL_B)
+                self._time.sleep(_ENTER_DELAY)
+                # Soft-reboot so code.py starts normally.
+                self._port.write(_CTRL_D)
+                self._time.sleep(0.5)
+            except Exception as restore_error:
+                print(f"WARNING: Failed to restore board state on disconnect: {restore_error}")
             try:
                 self._port.close()
             except Exception as close_error:  # pragma: no cover
-                if not self._reset_pending:
-                    print(f"WARNING: Failed to close serial port on disconnect: {close_error}")
+                print(f"WARNING: Failed to close serial port on disconnect: {close_error}")
             self._port = None
         self._staged_sources = None
-        self._reset_pending = False
+        self._staged = False
 
     @property
     def staged_sources(self) -> list[tuple[str, str]] | None:

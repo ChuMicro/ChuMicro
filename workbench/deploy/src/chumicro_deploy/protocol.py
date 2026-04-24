@@ -21,10 +21,54 @@ constrained to the embedded-runtime subset).
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 from typing import Protocol, runtime_checkable
+
+
+class Runtime(StrEnum):
+    """Supported device runtime identifiers.
+
+    Values round-trip as plain strings so ``Device(transport="circuitpython")``
+    and ``Device(transport=Runtime.CIRCUITPYTHON)`` are interchangeable.
+    CLI argparse choices, config-file loaders, and third-party callers
+    should reference members of this enum rather than string literals
+    to keep the allowed set in one place.
+    """
+
+    CIRCUITPYTHON = "circuitpython"
+    MICROPYTHON = "micropython"
+
+
+class DeployMode(StrEnum):
+    """User-facing deploy-mode preference.
+
+    ``RAM`` keeps edits off the board's flash (inline exec on
+    CircuitPython, ``mount`` on MicroPython).  ``FLASH`` writes files
+    persistently (CIRCUITPY drive copy on CircuitPython, ``copy`` on
+    MicroPython).  The transport-internal mount-label mapping
+    (``ram`` → ``mount``, ``flash`` → ``copy``) is handled in
+    :meth:`~chumicro_deploy.device.Device.create_transport`.
+    """
+
+    RAM = "ram"
+    FLASH = "flash"
+
+
+class ReflashMethod(StrEnum):
+    """Firmware reflash backend selection.
+
+    ``UF2`` drives the UF2 bootloader drive path (Pi Pico family,
+    TinyUF2 boards).  ``ESPTOOL`` shells out to ``esptool`` over
+    serial for ESP32-family boards.  See
+    :func:`~chumicro_deploy.firmware.flash_firmware` for the method
+    selection guide.
+    """
+
+    UF2 = "uf2"
+    ESPTOOL = "esptool"
 
 
 @dataclass(frozen=True)
@@ -96,6 +140,28 @@ PROBE_IMPLEMENTATION_SCRIPT = (
     " + '|' + _probe_machine)\n"
     "print('__CHU_UID__:' + _probe_uid)\n"
 )
+
+
+def validate_entrypoint_in_files(
+    files: Mapping[str, object],
+    entrypoint: str,
+    *,
+    error_cls: type[Exception] = ValueError,
+) -> None:
+    """Raise *error_cls* if *entrypoint* is not a key of *files*.
+
+    The canonical message text (``"entrypoint <name> missing from
+    files ..."``) is pattern-matched by
+    :func:`~chumicro_deploy.recovery.classify_deploy_failure` to route
+    to :attr:`DeployFailureKind.CONFIGURATION_ERROR`, so every deploy
+    layer routes through this helper to keep the classifier contract
+    in one place.
+    """
+    if entrypoint not in files:
+        raise error_cls(
+            f"entrypoint {entrypoint!r} missing from files "
+            f"({sorted(files.keys())!r})"
+        )
 
 
 def parse_probe_output(output: str) -> DeviceImplementation | None:

@@ -20,6 +20,8 @@ import ast
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
+from .protocol import validate_entrypoint_in_files
+
 
 @runtime_checkable
 class FileSource(Protocol):
@@ -70,11 +72,7 @@ class FileMapSource:
         *,
         entrypoint: str,
     ) -> None:
-        if entrypoint not in files:
-            raise ValueError(
-                f"entrypoint {entrypoint!r} is not in files "
-                f"({sorted(files.keys())!r})"
-            )
+        validate_entrypoint_in_files(files, entrypoint)
         self._files: dict[str, bytes] = {
             path: (
                 content.encode("utf-8") if isinstance(content, str) else content
@@ -135,12 +133,7 @@ class DirectorySource:
         self._excluded = (
             excluded_names if excluded_names is not None else self.DEFAULT_EXCLUDED
         )
-        self._files = self._walk()
-        if entrypoint not in self._files:
-            raise ValueError(
-                f"entrypoint {entrypoint!r} not produced by directory walk "
-                f"(keys: {sorted(self._files.keys())!r})"
-            )
+        self._files: dict[str, bytes] | None = None
 
     def _walk(self) -> dict[str, bytes]:
         collected: dict[str, bytes] = {}
@@ -152,6 +145,11 @@ class DirectorySource:
             relative_path = file_path.relative_to(self._root).as_posix()
             device_path = self._join_prefix(self._resource_prefix, relative_path)
             collected[device_path] = file_path.read_bytes()
+        if self._entrypoint not in collected:
+            raise ValueError(
+                f"entrypoint {self._entrypoint!r} not produced by directory walk "
+                f"(keys: {sorted(collected.keys())!r})"
+            )
         return collected
 
     @staticmethod
@@ -162,6 +160,8 @@ class DirectorySource:
         return f"{trimmed}/{relative_path}"
 
     def files(self) -> dict[str, bytes]:
+        if self._files is None:
+            self._files = self._walk()
         return dict(self._files)
 
     def entrypoint(self) -> str:

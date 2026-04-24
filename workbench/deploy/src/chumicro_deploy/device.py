@@ -21,9 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .circuitpython_transport import CircuitpythonTransport
-from .micropython_transport import MicropythonTransport
-from .protocol import TransportProtocol
+from .protocol import DeployMode, Runtime, TransportProtocol
 
 #: Default serial baudrate for CircuitPython raw-REPL sessions.
 DEFAULT_BAUDRATE = 115200
@@ -81,15 +79,17 @@ class Device:
     resource_prefix: str = DEFAULT_RESOURCE_PREFIX
 
     def __post_init__(self) -> None:
-        if self.transport not in ("circuitpython", "micropython"):
+        if self.transport not in Runtime._value2member_map_:
+            allowed = ", ".join(f"{runtime.value!r}" for runtime in Runtime)
             raise ValueError(
                 f"Unsupported transport: {self.transport!r} "
-                f"(expected 'circuitpython' or 'micropython')"
+                f"(expected {allowed})"
             )
-        if self.deploy_mode not in ("ram", "flash"):
+        if self.deploy_mode not in DeployMode._value2member_map_:
+            allowed = ", ".join(f"{mode.value!r}" for mode in DeployMode)
             raise ValueError(
                 f"Unsupported deploy_mode: {self.deploy_mode!r} "
-                f"(expected 'ram' or 'flash')"
+                f"(expected {allowed})"
             )
 
     @property
@@ -223,11 +223,17 @@ class Device:
         depending on :attr:`transport`.  Deploy-mode translation
         (``ram``/``flash`` to the transport's native label) happens here.
         """
-        if self.transport == "micropython":
-            mpremote_mode = "mount" if self.deploy_mode == "ram" else "copy"
+        if self.transport == Runtime.MICROPYTHON:
+            from .micropython_transport import MicropythonTransport
+
+            mpremote_mode = (
+                "mount" if self.deploy_mode == DeployMode.RAM else "copy"
+            )
             return MicropythonTransport(self.address, mode=mpremote_mode)
         # __post_init__ has already rejected anything except the two
         # supported runtimes, so we can assume circuitpython here.
+        from .circuitpython_transport import CircuitpythonTransport
+
         return CircuitpythonTransport(
             self.address,
             baudrate=self.baudrate,

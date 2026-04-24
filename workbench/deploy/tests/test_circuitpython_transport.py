@@ -433,8 +433,9 @@ class TestExecute:
             serial_port_factory=lambda **kw: None,
             time=FakeTime(),
         )
-        # Manually set staged sources to bypass stage check.
-        transport._staged_sources = []
+        # Bypass the stage-called guard so execute() surfaces the
+        # connect-required error instead.
+        transport._staged = True
 
         with pytest.raises(
             CircuitpythonTransportError,
@@ -1544,9 +1545,10 @@ class TestResetIntoBootloader:
         assert "WARNING" not in captured.out
         assert "WARNING" not in captured.err
         assert port.closed
-        # _reset_pending is cleared so the transport can be reused if
-        # the caller reconnects after the board comes back.
-        assert transport._reset_pending is False
+        # reset_into_bootloader nulled the port itself; disconnect
+        # had nothing left to restore or close and the transport is
+        # reusable via a fresh connect() once the board is back.
+        assert transport._port is None
 
 
 class TestDeployFiles:

@@ -29,6 +29,8 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from .protocol import validate_entrypoint_in_files
+
 _TEMPLATE_PATH = Path(__file__).parent / "circuitpython_bootstrap_template.txt"
 
 # CircuitPython raw-REPL execution is more reliable when large inline test
@@ -114,31 +116,7 @@ def build_circuitpython_bootstrap_scripts(
     if max_chunk_size_bytes <= 0:
         raise ValueError("max_chunk_size_bytes must be positive")
 
-    helper_script = _build_helper_script()
-    _validate_script_size(
-        "bootstrap helpers",
-        helper_script,
-        max_chunk_size_bytes,
-    )
-
-    stub_scripts = _chunk_script_blocks(
-        [
-            (module_name, f"_register_stub({module_name!r})")
-            for module_name, _source_text in staged_sources
-        ],
-        max_chunk_size_bytes,
-    )
-
-    population_scripts = _chunk_script_blocks(
-        [
-            (
-                module_name,
-                _build_population_block(module_name, source_text),
-            )
-            for module_name, source_text in staged_sources
-        ],
-        max_chunk_size_bytes,
-    )
+    prelude = _build_shared_prelude(staged_sources, max_chunk_size_bytes)
 
     final_script = _build_test_execution_script(test_file, name_filter=name_filter)
     _validate_script_size(
@@ -147,7 +125,7 @@ def build_circuitpython_bootstrap_scripts(
         max_chunk_size_bytes,
     )
 
-    return [helper_script, *stub_scripts, *population_scripts, final_script]
+    return [*prelude, final_script]
 
 
 def build_circuitpython_deploy_scripts(
@@ -197,11 +175,7 @@ def build_circuitpython_deploy_scripts(
     """
     if max_chunk_size_bytes <= 0:
         raise ValueError("max_chunk_size_bytes must be positive")
-    if entrypoint not in files:
-        raise ValueError(
-            f"entrypoint {entrypoint!r} missing from files "
-            f"({sorted(files.keys())!r})"
-        )
+    validate_entrypoint_in_files(files, entrypoint)
 
     entrypoint_source = _decode_file_content(files[entrypoint])
 
@@ -216,29 +190,7 @@ def build_circuitpython_deploy_scripts(
             (module_name, _decode_file_content(files[device_path])),
         )
 
-    helper_script = _build_helper_script()
-    _validate_script_size(
-        "bootstrap helpers", helper_script, max_chunk_size_bytes,
-    )
-
-    stub_scripts = _chunk_script_blocks(
-        [
-            (module_name, f"_register_stub({module_name!r})")
-            for module_name, _source in staged_sources
-        ],
-        max_chunk_size_bytes,
-    )
-
-    population_scripts = _chunk_script_blocks(
-        [
-            (
-                module_name,
-                _build_population_block(module_name, source_text),
-            )
-            for module_name, source_text in staged_sources
-        ],
-        max_chunk_size_bytes,
-    )
+    prelude = _build_shared_prelude(staged_sources, max_chunk_size_bytes)
 
     final_script = _DEPLOY_EXECUTION_TEMPLATE.replace(
         "$ENTRYPOINT_SOURCE", _escape_source(entrypoint_source),
@@ -249,7 +201,7 @@ def build_circuitpython_deploy_scripts(
         max_chunk_size_bytes,
     )
 
-    return [helper_script, *stub_scripts, *population_scripts, final_script]
+    return [*prelude, final_script]
 
 
 def _decode_file_content(content: bytes | str) -> str:
@@ -304,6 +256,41 @@ def _escape_source(source_text: str) -> str:
     """
     # Use repr() for safe escaping — it handles all special characters.
     return repr(source_text)
+
+
+def _build_shared_prelude(
+    staged_sources: list[tuple[str, str]],
+    max_chunk_size_bytes: int,
+) -> list[str]:
+    """Return the helper + stub + population scripts both builders share.
+
+    Both :func:`build_circuitpython_bootstrap_scripts` (test-harness
+    flavour) and :func:`build_circuitpython_deploy_scripts` (deploy
+    flavour) emit the same prelude — the class-as-module helper
+    definitions, the stub-registration pass, and the population pass
+    — and diverge only on the final exec script.  Extracted here so
+    a touch to the class-as-module machinery updates one builder
+    instead of two.
+    """
+    helper_script = _build_helper_script()
+    _validate_script_size(
+        "bootstrap helpers", helper_script, max_chunk_size_bytes,
+    )
+    stub_scripts = _chunk_script_blocks(
+        [
+            (module_name, f"_register_stub({module_name!r})")
+            for module_name, _source_text in staged_sources
+        ],
+        max_chunk_size_bytes,
+    )
+    population_scripts = _chunk_script_blocks(
+        [
+            (module_name, _build_population_block(module_name, source_text))
+            for module_name, source_text in staged_sources
+        ],
+        max_chunk_size_bytes,
+    )
+    return [helper_script, *stub_scripts, *population_scripts]
 
 
 def _build_helper_script() -> str:

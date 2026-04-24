@@ -21,7 +21,12 @@ from pathlib import Path
 from .device import Device
 from .firmware import flash_firmware, resolve_firmware_url
 from .probe import probe_device
+from .protocol import DeployMode, ReflashMethod, Runtime
 from .sources import DirectorySource, FileMapSource
+
+_RUNTIME_CHOICES = tuple(runtime.value for runtime in Runtime)
+_DEPLOY_MODE_CHOICES = tuple(mode.value for mode in DeployMode)
+_REFLASH_METHOD_CHOICES = tuple(method.value for method in ReflashMethod)
 
 
 def _add_device_args(parser: argparse.ArgumentParser) -> None:
@@ -38,7 +43,7 @@ def _add_device_args(parser: argparse.ArgumentParser) -> None:
     """
     parser.add_argument(
         "--transport",
-        choices=("circuitpython", "micropython"),
+        choices=_RUNTIME_CHOICES,
         help="Runtime target identifier (required without --devices-file).",
     )
     parser.add_argument(
@@ -53,8 +58,8 @@ def _add_device_args(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--deploy-mode",
-        choices=("ram", "flash"),
-        default="ram",
+        choices=_DEPLOY_MODE_CHOICES,
+        default=DeployMode.RAM.value,
         help="Deploy mode: ram (no-flash) or flash (persistent).",
     )
     parser.add_argument(
@@ -274,7 +279,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     flash_parser.add_argument(
         "--method",
-        choices=("uf2", "esptool"),
+        choices=_REFLASH_METHOD_CHOICES,
         required=True,
         help=(
             "Reflash method: uf2 for RP2040 / RP2350 / TinyUF2-flashed "
@@ -330,7 +335,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     firmware_url_parser.add_argument(
         "--runtime",
-        choices=("circuitpython", "micropython"),
+        choices=_RUNTIME_CHOICES,
         required=True,
     )
     firmware_url_parser.add_argument(
