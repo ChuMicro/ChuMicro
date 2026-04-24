@@ -43,6 +43,32 @@ Infrastructure code (`scripts/`) may use `typing` imports since it runs only on 
 
 ([Decision 0021](../../plans/decisions/0021-docstring-type-policy.md))
 
+## Imports
+
+Code that runs on a device — `libraries/*/src/`, `support/test_harness/`, `support/abstractions/` — must use **absolute imports only**. Relative imports break CircuitPython RAM-mode deploys.
+
+```python
+# ✅ Works on all runtimes
+from chumicro_timing.ticks import ticks_ms, ticks_diff
+from chumicro_timing.heartbeat import Heartbeat
+
+# ❌ Breaks CircuitPython RAM-mode
+from .ticks import ticks_ms, ticks_diff
+from .heartbeat import Heartbeat
+```
+
+**Why:** CircuitPython RAM mode assembles library modules as class-as-module stubs and `exec()`'s them inside the raw REPL. The namespace passed to `exec()` has no `__package__` attribute, so Python can't resolve a leading `.` — `from .foo import bar` raises `ImportError`. Flash mode works fine because files land on the device filesystem and get a real `__package__` when imported, but any module whose RAM-mode path is exercised (which includes every published library) has to work in both modes.
+
+We briefly had an `_resolve_relative_imports()` workaround that rewrote relatives inside `exec()`; it was fragile and got deleted once the codebase converted to absolutes.
+
+Host-only code can use either style:
+
+- **`workbench/*/src/`** — relative imports are fine. These packages run on CPython only and are never `exec()`'d through the raw REPL. `chumicro-deploy` uses relative intra-package imports throughout.
+- **`scripts/`** — either style; not device-bound.
+- **Tests** — either style; [Decision 0009](../../plans/decisions/0009-per-library-test-runs.md) lifted the earlier absolute-only restriction.
+
+Cross-package imports between publishable libraries stay absolute regardless of where they live — `from chumicro_timing import ticks` inside `chumicro_runner` is correct and expected.
+
 ## Docstrings
 
 Every public function, method, and class needs a docstring. We use [Google style](https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings): types go on annotations, descriptions go in docstrings. This avoids writing the type twice.
