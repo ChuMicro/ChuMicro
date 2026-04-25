@@ -525,10 +525,16 @@ def test_fake_adapter_records_every_call() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_cp_adapter_stub_raises_not_implemented() -> None:
-    """CP adapter lands in Slice 1 — stub guards the auto-detect path."""
+def test_cp_adapter_default_arg_raises_runtime_error_off_cp() -> None:
+    """CP adapter raises ``RuntimeError`` (with hint) when ``wifi`` is missing.
+
+    Lands as the real adapter in Slice 1; default-arg construction
+    on CPython surfaces the runtime-incompatibility cleanly so
+    callers know to inject a fake or run on real CP.  The full
+    contract under injection is in ``test_cp_adapter.py``.
+    """
     from chumicro_wifi._adapters.cp import CpWifiAdapter
-    with raises(NotImplementedError):
+    with raises(RuntimeError):
         CpWifiAdapter()
 
 

@@ -139,13 +139,19 @@ def _scaffold_library(name: str) -> int:
     # `__package__`, so relative imports break at deploy).  See AGENTS.md
     # non-negotiables.
     #
-    # Loading-shape note:  this scaffold uses eager imports (Tier A per
-    # `plans/workstreams/lazy-loading-research.md` — fine for small-surface
-    # libraries with no per-runtime adapters).  If this library grows past
-    # ~5 public attributes spread across submodules OR adds per-runtime
-    # adapters under `_backends/` / `_adapters/`, switch to the PEP 562
-    # `__getattr__` table pattern (see `plans/patterns.md` "Lazy module-
-    # level imports via PEP 562").
+    # Loading-shape note:  this scaffold uses eager imports.  Eager is
+    # correct for small-surface libraries (Tier A per
+    # `plans/workstreams/lazy-loading-research.md`).  If this library
+    # grows per-runtime adapters under `_backends/` / `_adapters/`, push
+    # the lazy-import into a `_select_<thing>` selector function (the
+    # cross-runtime-safe shape — see `plans/patterns.md`
+    # "Per-function lazy adapter selection").  **Do not** add a
+    # module-level PEP 562 `__getattr__` table here — the deploy
+    # harness's CircuitPython RAM-mode wrapper silently bypasses
+    # PEP 562 (lifted to `plans/learnings.md` 2026-04-25 from the
+    # chumicro-wifi Slice 0 hardware bring-up).  The workbench-only
+    # PEP 562 pattern is fine for `workbench/*/src/` packages
+    # (`chumicro-deploy`, `chumicro-repl`) but unsafe here.
     (library_dir / "src" / import_name / "__init__.py").write_text(
         f'"""Public exports for the chumicro-{name} package."""\n'
         f"\n"

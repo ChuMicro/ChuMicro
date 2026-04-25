@@ -6,9 +6,9 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** Phase 3a Slice 0 shipped — `chumicro-wifi` skeleton + `WifiConfig` + `WifiService` state machine + reconnect supervisor + `FakeWifi` testing helper + `_templates/config.toml` per ADR 0036 §5. Real adapters (CP, MP-ESP32, MP-RP2) stubbed for slices 1–3.
-- **Last shipped:** Phase 3a Slice 0 — 40 host tests at 99.22 % cov, 16 functional tests pass across all 4 boards (Pi Pico W CP/MP, Lolin S2 CP/MP). One real-world finding lifted to learnings: CircuitPython RAM-mode silently bypasses module-level PEP 562 `__getattr__` (firmware supports it; the harness's class-as-module wrapper doesn't). Reverted wifi to Tier A eager package-level imports; per-function lazy adapter selection in `_select_adapter` (which works everywhere) keeps the actual benefit. Patterns + research docs amended.
-- **In flight:** Phase 3a Slice 1 — CP `wifi.radio` adapter, hardware-verified on Lolin S2 CP + Pi Pico W CP.
+- **Phase:** Phase 3a Slice 1 shipped — CP `wifi.radio` adapter live on Lolin S2 CP + Pi Pico W CP. Real MP adapters (ESP32, Pi Pico W CYW43) stubbed for Slices 2–3.
+- **Last shipped:** Phase 3a Slice 1 — `CpWifiAdapter` wraps the CP `wifi.radio` singleton with constructor injection (tests use a `_FakeRadio`, production uses the real one). 53 host tests at 99 % cov; 10 functional tests pass on each CP board (4 lazy-load sanity + 6 adapter contract incl. timeout-against-non-existent-AP). Substrate failure path catches `OSError` (parent of CP's `TimeoutError` / `ConnectionError` — narrower subclasses aren't builtins on MP, and the source has to load on every runtime). Sub-fix: scaffolder's Tier B comment updated to recommend per-function selectors instead of module-level PEP 562 (after the Slice 0 CP RAM-mode finding).
+- **In flight:** Phase 3a Slice 2 — MP `network.WLAN` adapter for ESP32 (Lolin S2 MP) with `wlan.config(reconnects=0)` to disable firmware-level auto-reconnect (Decision 0029 §wifi-ownership-stance).
 - **Blocked on:** —
 - **Last touched:** `libraries/kvstore/**`, `plans/decisions/0034-kvstore-api-and-backends.md`, `plans/{now,history,next-up}.md`. Four boards plugged in: Lolin S2 CP/MP, Pi Pico W CP/MP — exercises every kvstore backend across slices 2–5.
 
