@@ -45,3 +45,8 @@ __all__ = [
     "load_runtime_config",
     "load_section",
 ]
+
+# `chumicro_config.templates` ships separately because `importlib.resources`
+# is CPython-only — workspace tooling on the host imports it, device code
+# never does.  Not re-exported here so a stray `from chumicro_config import
+# templates` on a device fails fast rather than mid-call.

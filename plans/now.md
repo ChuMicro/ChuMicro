@@ -6,9 +6,9 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** Phase 3b closed + config conventions pinned via Decisions 0035 (file structure) + 0036 (`chumicro-config` library). Next: Phase 3a (`chumicro-wifi`) consumes `chumicro-config` for its `WifiConfig.from_dict`.
-- **Last shipped:** `chumicro-config` library + Decision 0036 — standardized `load_section` factory that every consumer library's `from_dict` calls, plus `load_runtime_config` reader for `/runtime_config.msgpack`. 19 host tests at 100 % cov; cross-runtime clean. ADR 0035 §3 amended to point at the new library.
-- **In flight:** Phase 3a Slice 0 — `chumicro-wifi` scaffold + `WifiConfig` using `chumicro_config.load_section`.
+- **Phase:** Phase 3b closed + config conventions pinned (ADR 0035 file structure, ADR 0036 `chumicro-config` library + templating convention). Next: Phase 3a (`chumicro-wifi`) consumes `chumicro-config` end-to-end (typed `from_dict` + ships its own `_templates/config.toml`).
+- **Last shipped:** `chumicro-config` extended with `templates.get_section_template()` + an end-to-end example + 4 on-device functional tests on Pi Pico W MP. ADR 0036 §5 codifies the per-library template-shipping convention so workspace tooling (Phase 4a) can assemble starter `config.toml` files when libraries are added to a thing.
+- **In flight:** Phase 3a Slice 0 — `chumicro-wifi` scaffold + `WifiConfig` + `_templates/config.toml`.
 - **Blocked on:** —
 - **Last touched:** `libraries/kvstore/**`, `plans/decisions/0034-kvstore-api-and-backends.md`, `plans/{now,history,next-up}.md`. Four boards plugged in: Lolin S2 CP/MP, Pi Pico W CP/MP — exercises every kvstore backend across slices 2–5.
 

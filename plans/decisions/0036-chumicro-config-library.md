@@ -151,7 +151,73 @@ Saves the user from importing `msgpack` directly and from typing
 the path.  The `path=` parameter exists so tests + multi-config
 scenarios can point elsewhere.
 
-### 5. Workbench helpers deferred
+### 5. Templating convention: each library ships `_templates/config.toml`
+
+For the workspace template flow to scaffold `things/<name>/config.toml`
+with sections matching the libraries the user has installed, each
+consumer library ships a TOML snippet at::
+
+    libraries/<name>/src/chumicro_<name>/_templates/config.toml
+
+The snippet contains a starter `[<section>]` block with every
+required key (commented values explaining what each field is) and
+optional keys with their defaults inlined as comments.  Example for
+chumicro-wifi::
+
+    # chumicro-wifi configuration.
+    # See https://chumicro.github.io/ChuMicro/wifi/ for the full reference.
+    [wifi]
+    ssid = ""                            # required: AP SSID to connect to
+    password = "!secret wifi_password"   # required: WPA passphrase (use !secret)
+    # hostname = "thing-1"               # optional: hostname advertised on the AP
+    # connect_timeout_ms = 15000         # optional: max wait on the blocking connect
+    # reconnect_backoff_max_ms = 60000   # optional: cap on exponential reconnect backoff
+
+The template ships inside `src/` (not as a sibling of `pyproject.toml`)
+so it lands in the wheel and is discoverable via
+`importlib.resources` once the library is `pip install`ed in the
+workspace's `.venv`.  ~200 bytes per library; the file rides along
+to device and is never read there — trivial flash cost vs. the
+heavier alternatives (PyPI metadata, a separate template registry,
+fetching from GitHub).
+
+`chumicro_config.templates.get_section_template(library_name)`
+reads the snippet:
+
+```python
+def get_section_template(library_name: str) -> str:
+    """Return the TOML snippet a library ships for its config section.
+
+    Args:
+        library_name: Library basename, e.g. ``"wifi"`` or ``"mqtt"``.
+            Maps to package ``chumicro_<library_name>``.
+    """
+    from importlib.resources import files
+    package = f"chumicro_{library_name}"
+    return (files(package) / "_templates" / "config.toml").read_text()
+```
+
+CPython-only — `importlib.resources` doesn't exist on MicroPython
+or CircuitPython, but template-collection is a host-side workspace-
+tooling concern, not a device-runtime one.  The helper lives in
+`chumicro_config.templates` rather than `chumicro_config.host` so
+"templates" stays a clear sub-concept name even after the broader
+host-helpers module lands.
+
+Adoption: every library that consumes runtime config (starting with
+chumicro-wifi in Phase 3a) ships a `_templates/config.toml` and gets
+this scaffolding flow for free.  Libraries that don't consume
+runtime config don't need the template.
+
+Workspace tooling (Phase 4a, `chumicro-workspace-runtime`) will use
+this helper to assemble starter `things/<name>/config.toml` files
+when a user runs `python run.py add-library wifi` (or similar) —
+collect templates from installed consumer libraries, concatenate
+into the thing's config, prompt the user to fill in required
+values.  Out of scope for this commit; the convention + helper
+land here so Phase 4a can build on a stable contract.
+
+### 6. Workbench helpers deferred
 
 A future `chumicro_config.host` module could carry CPython-only
 helpers — TOML / YAML loaders, deep-merge, `!secret` resolution —
@@ -166,11 +232,12 @@ needs it.  When it lands it lives inside the same library so
 is deploy-infrastructure config, not runtime app config; using
 `load_section` for it would conflate two distinct contracts.
 
-### 6. Adoption: every config-consuming library uses it
+### 7. Adoption: every config-consuming library uses it
 
 `chumicro-wifi` (Phase 3a) ships with `chumicro-config` as a runtime
-dependency from day one.  Future libraries (`chumicro-mqtt` Phase 6,
-sensor drivers in Phase 7) follow the same pattern.
+dependency from day one **and** ships a `_templates/config.toml`
+per §5.  Future libraries (`chumicro-mqtt` Phase 6, sensor drivers
+in Phase 7) follow the same pattern.
 
 Existing libraries (`chumicro-timing`, `chumicro-runner`,
 `chumicro-msgpack`, `chumicro-compat`, `chumicro-kvstore`) don't
