@@ -1,24 +1,35 @@
 """Host-side runtime for ChuMicro project workspaces.
 
-Phase 4a Slice 0 surface — the deploy-time config-merge pipeline
-per Decision 0035 (workspace defaults + per-thing config + secrets
-→ ``/runtime_config.msgpack``).  Subsequent slices add command
-dispatch, three-zone YAML writer, onboarding flows, firmware URL
-derivation, import-graph resolver per
-``plans/workstreams/project-workspace.md`` Phase 4a.
+Phase 4a surface so far:
+
+* **Slice 0 — config-merge core** (Decision 0035): workspace defaults
+  + per-thing config + secrets → ``/runtime_config.msgpack``.
+* **Slice 1 — deploy integration**: :class:`WithRuntimeConfig` and
+  :func:`thing_directory_source` compose with ``chumicro-deploy``'s
+  ``FileSource``s so a single ``Deployer.deploy(...)`` call ships
+  both the thing's app code and its merged config in one shot.
+
+Subsequent slices add command dispatch, three-zone YAML writer,
+onboarding flows, firmware URL derivation, and the import-graph
+resolver per ``plans/workstreams/project-workspace.md`` Phase 4a.
 
 Public API::
 
     from chumicro_workspace_runtime import (
-        build_runtime_config,    # end-to-end: read all sources, merge, write msgpack
-        merge_configs,           # deep per-key merge of two or more dicts
-        resolve_secrets,         # walk a value, replace !secret <name> refs
-        read_workspace_yaml,     # parse workspace.yml -> defaults dict
-        read_thing_config,       # parse things/<name>/config.{toml,yml,yaml} -> dict
-        read_secrets_yaml,       # parse secrets.yml -> dict (empty when absent)
-        write_runtime_config,    # write merged dict to msgpack at given path
-        UnresolvedSecretError,   # !secret <name> resolved against missing key
-        WorkspaceConfigError,    # YAML/TOML top-level shape malformed
+        build_runtime_config,        # read all sources, merge, write msgpack
+        merge_configs,               # deep per-key merge of two or more dicts
+        resolve_secrets,             # walk a value, replace !secret <name> refs
+        read_workspace_yaml,         # parse workspace.yml -> defaults dict
+        read_thing_config,           # parse things/<name>/config.{toml,yml,yaml}
+        read_secrets_yaml,           # parse secrets.yml -> dict (empty when absent)
+        write_runtime_config,        # write merged dict to msgpack at given path
+        WithRuntimeConfig,           # FileSource decorator that injects the msgpack
+        thing_directory_source,      # convenience: DirectorySource + WithRuntimeConfig
+        find_thing_config,           # locate config.toml/.yml/.yaml under a thing dir
+        RUNTIME_CONFIG_DEVICE_PATH,  # canonical on-device path (Decision 0035 §8)
+        GENERATED_DIRNAME,           # canonical host-side _generated/ dir name
+        UnresolvedSecretError,       # !secret <name> resolved against missing key
+        WorkspaceConfigError,        # YAML/TOML top-level shape malformed
     )
 
 Workbench-only — runs on CPython only; never lands on a
@@ -27,6 +38,13 @@ microcontroller.  Workbench tools and scripts (the workspace's
 ``chumicro-config`` (Decision 0036).
 """
 
+from chumicro_workspace_runtime.deploy_source import (
+    GENERATED_DIRNAME,
+    RUNTIME_CONFIG_DEVICE_PATH,
+    WithRuntimeConfig,
+    find_thing_config,
+    thing_directory_source,
+)
 from chumicro_workspace_runtime.loaders import (
     WorkspaceConfigError,
     read_secrets_yaml,
@@ -39,13 +57,18 @@ from chumicro_workspace_runtime.secrets import UnresolvedSecretError, resolve_se
 from chumicro_workspace_runtime.writer import write_runtime_config
 
 __all__ = [
+    "GENERATED_DIRNAME",
+    "RUNTIME_CONFIG_DEVICE_PATH",
     "UnresolvedSecretError",
+    "WithRuntimeConfig",
     "WorkspaceConfigError",
     "build_runtime_config",
+    "find_thing_config",
     "merge_configs",
     "read_secrets_yaml",
     "read_thing_config",
     "read_workspace_yaml",
     "resolve_secrets",
+    "thing_directory_source",
     "write_runtime_config",
 ]
