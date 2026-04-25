@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from .framing import Utf8StreamDecoder
     from .highlight import Theme, colorize, strip_ansi_sequences
     from .patterns import PatternKind, PatternMatch, detect_patterns
-    from .session import ReplSession, ReplSessionError
+    from .session import ReplSession, ReplSessionDisconnected, ReplSessionError
     from .tui import interactive
 
 #: Map of public attribute -> submodule.  ``__getattr__`` below walks
@@ -44,6 +44,7 @@ _LAZY_ATTRS: dict[str, str] = {
     "PatternKind": "patterns",
     "PatternMatch": "patterns",
     "ReplSession": "session",
+    "ReplSessionDisconnected": "session",
     "ReplSessionError": "session",
     "Theme": "highlight",
     "Utf8StreamDecoder": "framing",
@@ -62,6 +63,7 @@ __all__ = [
     "PatternKind",
     "PatternMatch",
     "ReplSession",
+    "ReplSessionDisconnected",
     "ReplSessionError",
     "Theme",
     "Utf8StreamDecoder",

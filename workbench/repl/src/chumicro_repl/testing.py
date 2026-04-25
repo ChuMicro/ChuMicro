@@ -59,43 +59,67 @@ class FakeSerialPort:
     fine-grained byte-level delivery should script per-byte chunks.
 
     Args:
-        read_chunks: Bytes to return on each ``read(n)`` call, in
-            order.  When the script is exhausted, subsequent reads
-            return ``b""`` and ``in_waiting`` is ``0``.
+        read_chunks: Items the next ``read(n)`` call returns, in
+            order.  Each item is either ``bytes`` (returned verbatim)
+            or an instance of :class:`BaseException` (raised on the
+            call — used to script ``OSError`` / ``SerialException``
+            disconnects mid-stream).  When the script is exhausted,
+            subsequent reads return ``b""`` and ``in_waiting`` is
+            ``0``.
+        raise_on_write: When set, the next ``write(...)`` call
+            raises this exception instead of recording the data.
+            Used to script disconnects that fail the host's first
+            attempt to send a keystroke.
     """
 
     def __init__(
         self,
         *,
-        read_chunks: Iterable[bytes] | None = None,
+        read_chunks: Iterable[bytes | BaseException] | None = None,
+        raise_on_write: BaseException | None = None,
     ) -> None:
         self.writes: list[bytes] = []
         self.closed = False
-        self._read_chunks: list[bytes] = list(read_chunks or [])
+        self._read_chunks: list[bytes | BaseException] = list(read_chunks or [])
         self._read_index = 0
+        self._raise_on_write = raise_on_write
 
     @property
     def in_waiting(self) -> int:
-        """Length of the next scripted chunk, or ``0`` when exhausted."""
+        """Length of the next scripted chunk, or ``0`` when exhausted.
+
+        Scripted ``BaseException`` entries are reported as having
+        ``in_waiting == 1`` so polling loops actually call
+        :meth:`read` (which then raises) instead of looping past the
+        scripted disconnect.
+        """
         if self._read_index < len(self._read_chunks):
-            return len(self._read_chunks[self._read_index])
+            entry = self._read_chunks[self._read_index]
+            if isinstance(entry, BaseException):
+                return 1
+            return len(entry)
         return 0
 
     def read(self, size: int = 1) -> bytes:
-        """Return the next scripted chunk verbatim, or ``b""`` at EOF.
+        """Return the next scripted chunk verbatim, or raise.
 
         ``size`` is honored insofar as the chunk is no larger than
         what was scripted; tests that depend on partial chunking
         should script the chunks at the granularity they care about.
+        Scripted exceptions are raised instead of returned.
         """
         if self._read_index < len(self._read_chunks):
-            chunk = self._read_chunks[self._read_index]
+            entry = self._read_chunks[self._read_index]
             self._read_index += 1
-            return chunk
+            if isinstance(entry, BaseException):
+                raise entry
+            return entry
         return b""
 
     def write(self, data: bytes, /) -> int:
-        """Record a write."""
+        """Record a write, or raise the configured exception."""
+        if self._raise_on_write is not None:
+            raise self._raise_on_write
         self.writes.append(bytes(data))
         return len(data)
 
@@ -106,11 +130,12 @@ class FakeSerialPort:
     def reset_input_buffer(self) -> None:
         """No-op for the fake — a future test may want to record this call."""
 
-    def feed(self, *chunks: bytes) -> None:
-        """Append more scripted chunks after construction.
+    def feed(self, *chunks: bytes | BaseException) -> None:
+        """Append more scripted chunks (or exceptions) after construction.
 
         Lets a test set up a session, exec one script, and then
-        prepare the next round of bytes without rebuilding the port.
+        prepare the next round of bytes (or a scripted disconnect)
+        without rebuilding the port.
         """
         self._read_chunks.extend(chunks)
 

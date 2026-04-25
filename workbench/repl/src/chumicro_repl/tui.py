@@ -52,6 +52,12 @@ if TYPE_CHECKING:
 #: key echo feeling instantaneous; long enough not to peg a CPU.
 _POLL_INTERVAL = 0.005
 
+#: Process exit code surfaced when the device drops mid-session.
+#: Matches :attr:`chumicro_repl.ExitCode.DISCONNECTED` from the
+#: ``tail()`` path so a wrapping CLI can use one value across both
+#: surfaces.
+DISCONNECTED_EXIT_CODE = 3
+
 
 class KeyInputReader(Protocol):
     """Structural interface for a non-blocking keyboard source.
@@ -77,13 +83,18 @@ def run_loop(
     exit_key: bytes = CTRL_X,
     welcome_banner: str = "",
     initial_send: bytes = b"",
+    reopen: Callable[[], SerialPort] | None = None,
+    reconnect_seconds: float = 0.0,
+    reconnect_interval: float = 0.5,
 ) -> int:
     """Run the interactive I/O loop until *exit_key* is pressed.
 
-    Returns ``0`` on a normal Ctrl-X exit.  Callers driving the loop
-    from tests can inject custom *keyboard* / *output* / *time* to
-    validate the forward-and-highlight behavior without a real
-    serial port.
+    Returns ``0`` on a normal Ctrl-X exit, or
+    :data:`DISCONNECTED_EXIT_CODE` (3) when the device drops and
+    no reconnect callback is supplied (or the reconnect budget is
+    exhausted).  Callers driving the loop from tests can inject
+    custom *keyboard* / *output* / *time* to validate the
+    forward-and-highlight behavior without a real serial port.
 
     Args:
         port: Open :class:`SerialPort` — the TUI writes keystrokes
@@ -105,6 +116,19 @@ def run_loop(
             starts.  Defaults to empty; :func:`interactive` sends a
             single carriage return so the friendly REPL reprints
             its ``>>>`` prompt instead of staring at a blank line.
+        reopen: Callable returning a fresh :class:`SerialPort`,
+            invoked when the current port drops and
+            *reconnect_seconds* allows.  Defaults to ``None`` (no
+            auto-reconnect — the loop returns
+            :data:`DISCONNECTED_EXIT_CODE` on the first disconnect).
+            :func:`interactive` wires this to a closure over the
+            original port factory so a replug picks up
+            automatically.
+        reconnect_seconds: Reconnect budget per disconnect, in
+            seconds.  ``0.0`` (default) means no retry; positive
+            values loop *reopen* until success or budget exhausted.
+            Ctrl-X during reconnect aborts immediately.
+        reconnect_interval: Sleep between reconnect attempts.
     """
     # ``cast`` silences a structural-typing nit on stdlib ``time``;
     # see the matching note in :mod:`chumicro_repl.session`.
@@ -117,8 +141,49 @@ def run_loop(
     if welcome_banner:
         output.write(welcome_banner)
         _flush_quietly(output)
+
+    # Single-element list as a mutable container for the
+    # ``_tui_reconnect`` helper to flag "user pressed exit_key
+    # during reconnect"; cleaner than threading a third return
+    # type through every call site.
+    user_exit_flag: list[bool] = [False]
+
+    def _recover(error: OSError) -> SerialPort | None:
+        """Run the reconnect loop after *error*.
+
+        Returns the new port on success; ``None`` if either the
+        budget ran out or the user pressed *exit_key* during the
+        reconnect.  ``user_exit_flag[0]`` distinguishes the two
+        cases for the caller's return value.
+        """
+        return _tui_reconnect(
+            error=error,
+            output=output,
+            keyboard=keyboard,
+            exit_key=exit_key,
+            reopen=reopen,
+            time=active_time,
+            reconnect_seconds=reconnect_seconds,
+            reconnect_interval=reconnect_interval,
+            old_port=port,
+            user_exit_flag=user_exit_flag,
+        )
     if initial_send:
-        port.write(initial_send)
+        try:
+            port.write(initial_send)
+        except OSError as initial_error:
+            new_port = _recover(initial_error)
+            if user_exit_flag[0]:
+                return 0
+            if new_port is None:
+                return DISCONNECTED_EXIT_CODE
+            port = new_port
+            decoder = Utf8StreamDecoder()
+            detector = StreamingPatternDetector()
+            try:
+                port.write(initial_send)
+            except OSError:  # pragma: no cover — replug-then-replug
+                pass
     while True:
         exit_requested = False
         key_bytes = keyboard.read_available()
@@ -126,36 +191,79 @@ def run_loop(
             if exit_key in key_bytes:
                 prefix = key_bytes.split(exit_key, 1)[0]
                 if prefix:
-                    port.write(prefix)
+                    try:
+                        port.write(prefix)
+                    except OSError:  # pragma: no cover — exiting anyway
+                        pass
                 exit_requested = True
             else:
-                port.write(key_bytes)
-        # Always drain serial output before honoring an exit request,
-        # so the user sees whatever the board printed in response to
+                try:
+                    port.write(key_bytes)
+                except OSError as write_error:
+                    new_port = _recover(write_error)
+                    if user_exit_flag[0]:
+                        return 0
+                    if new_port is None:
+                        return DISCONNECTED_EXIT_CODE
+                    port = new_port
+                    decoder = Utf8StreamDecoder()
+                    detector = StreamingPatternDetector()
+                    if initial_send:
+                        try:
+                            port.write(initial_send)
+                        except OSError:  # pragma: no cover — replug-then-replug
+                            pass
+                    continue
+        # Drain serial output before honoring an exit request, so
+        # the user sees whatever the board printed in response to
         # the last keystroke before the TUI vanishes.  On exit the
-        # drain loops until the port reports no more buffered bytes
-        # so a sequence of small reads doesn't strand a final line.
+        # drain loops until ``in_waiting`` reports zero so a sequence
+        # of small reads doesn't strand a final line.
         had_serial_activity = False
         while True:
-            available = port.in_waiting
-            if not available:
+            try:
+                available = port.in_waiting
+                if not available:
+                    break
+                chunk = port.read(available)
+            except OSError as read_error:
+                new_port = _recover(read_error)
+                if user_exit_flag[0]:
+                    return 0
+                if new_port is None:
+                    return DISCONNECTED_EXIT_CODE
+                port = new_port
+                decoder = Utf8StreamDecoder()
+                detector = StreamingPatternDetector()
+                if initial_send:
+                    try:
+                        port.write(initial_send)
+                    except OSError:  # pragma: no cover — replug-then-replug
+                        pass
                 break
             had_serial_activity = True
-            chunk = port.read(available)
             decoded = decoder.decode(chunk)
             if decoded:
                 matches = detector.feed(decoded)
                 output.write(_render(decoded, matches, detector, active_theme))
                 _flush_quietly(output)
             if not exit_requested:
-                # Return to the keyboard-poll loop after one drain so
-                # interactive typing stays responsive — we only loop
-                # the drain when the user has asked to exit.
+                # Return to the keyboard-poll loop after one drain
+                # so interactive typing stays responsive — we only
+                # loop the drain when the user has asked to exit.
                 break
         if exit_requested:
             return 0
         if not had_serial_activity and not key_bytes:
             active_time.sleep(_POLL_INTERVAL)
+
+
+#: Default reconnect window for the interactive TUI when the
+#: device drops mid-session.  Long enough to cover a fumbled
+#: replug; bounded so a forgotten session eventually exits
+#: instead of holding the terminal hostage.  Press Ctrl-X
+#: during the window to abort early.
+DEFAULT_RECONNECT_SECONDS = 60.0
 
 
 def interactive(
@@ -168,6 +276,8 @@ def interactive(
     time: TimeSource | None = None,
     port_factory: PortFactory | None = None,
     raw_mode_context: Callable[[int], contextlib.AbstractContextManager[None]] | None = None,
+    reconnect_seconds: float = DEFAULT_RECONNECT_SECONDS,
+    reconnect_interval: float = 0.5,
 ) -> int:
     """Open *device* and run the interactive TUI until Ctrl-X.
 
@@ -188,9 +298,19 @@ def interactive(
         raw_mode_context: Callable yielding a terminal raw-mode
             context manager for a given fd.  Defaults to
             :func:`_posix_raw_mode`; tests pass a no-op.
+        reconnect_seconds: How long to keep retrying the port
+            factory after the device drops mid-session.  Default
+            :data:`DEFAULT_RECONNECT_SECONDS` (60 s); pass ``0.0``
+            to disable reconnect (the loop returns
+            :data:`DISCONNECTED_EXIT_CODE` on the first OSError).
+            Press Ctrl-X during the retry window to abort
+            immediately.
+        reconnect_interval: Sleep between reconnect attempts.
 
     Returns:
-        ``0`` on normal Ctrl-X exit.
+        ``0`` on normal Ctrl-X exit (including Ctrl-X during a
+        reconnect window); :data:`DISCONNECTED_EXIT_CODE` (3)
+        when the device drops and the reconnect budget runs out.
     """
     active_input: BinaryIO = (
         input_stream if input_stream is not None else sys.stdin.buffer
@@ -206,6 +326,10 @@ def interactive(
         address=address, baudrate=resolved_baudrate, transport=transport_label,
     )
     port = active_factory(address, resolved_baudrate, _POLL_INTERVAL)
+
+    def reopen() -> SerialPort:
+        return active_factory(address, resolved_baudrate, _POLL_INTERVAL)
+
     try:
         fd = _fileno_or_none(active_input)
         keyboard = _StdinKeyboard(active_input, fd)
@@ -216,6 +340,9 @@ def interactive(
                 time=time, theme=theme,
                 welcome_banner=welcome_banner,
                 initial_send=b"\r",
+                reopen=reopen,
+                reconnect_seconds=reconnect_seconds,
+                reconnect_interval=reconnect_interval,
             )
         with raw_mode(fd):
             return run_loop(
@@ -223,12 +350,12 @@ def interactive(
                 time=time, theme=theme,
                 welcome_banner=welcome_banner,
                 initial_send=b"\r",
+                reopen=reopen,
+                reconnect_seconds=reconnect_seconds,
+                reconnect_interval=reconnect_interval,
             )
     finally:
-        try:
-            port.close()
-        except OSError:  # pragma: no cover — port already closed
-            pass
+        _close_quietly(port)
 
 
 def _format_welcome_banner(
@@ -394,6 +521,92 @@ def _flush_quietly(stream: TextIO) -> None:
     try:
         stream.flush()
     except (OSError, ValueError):  # pragma: no cover — closed stream
+        pass
+
+
+def _write_disconnect_notice(output: TextIO, error: OSError) -> None:
+    """Write a one-line dim notice describing a disconnect to *output*.
+
+    Mirrored in :func:`chumicro_repl._follow._write_disconnect_notice`
+    so the TUI exit and the ``tail()`` exit produce the same banner.
+    Kept short and ANSI-styled so it doesn't blend into device output
+    the user was watching.  ``\\r\\n`` line endings render correctly
+    under terminal raw mode (where the OS no longer auto-translates
+    ``\\n``).
+    """
+    output.write(f"\r\n\x1b[2m*** device disconnected — {error} ***\x1b[0m\r\n")
+    _flush_quietly(output)
+
+
+def _tui_reconnect(
+    *,
+    error: OSError,
+    output: TextIO,
+    keyboard: KeyInputReader,
+    exit_key: bytes,
+    reopen: Callable[[], SerialPort] | None,
+    time: TimeSource,
+    reconnect_seconds: float,
+    reconnect_interval: float,
+    old_port: SerialPort,
+    user_exit_flag: list[bool],
+) -> SerialPort | None:
+    """Run the reconnect loop after a disconnect.
+
+    Returns the freshly-opened :class:`SerialPort` on success.
+    Returns ``None`` when either the reconnect budget was exhausted
+    *or* the user pressed *exit_key* while we were waiting; the
+    caller distinguishes by reading ``user_exit_flag[0]``.
+
+    Writes a "*** device disconnected — ... ***" notice on entry.
+    When *reopen* is supplied and *reconnect_seconds* is positive,
+    follows up with a "*** retrying ***" notice and polls until
+    either the factory succeeds or the user presses *exit_key*; on
+    success a "*** reconnected ***" notice fires.  When *reopen*
+    is ``None`` or the budget is zero, the helper just writes the
+    disconnect notice and returns ``None`` so the caller falls
+    through to its disconnect-exit branch.
+
+    The dead *old_port* is closed quietly before any retries; the
+    OS often raises another OSError on close after a hot-unplug,
+    which would otherwise mask the original error.
+    """
+    _write_disconnect_notice(output, error)
+    _close_quietly(old_port)
+    if reopen is None or reconnect_seconds <= 0:
+        return None
+    output.write(
+        f"\x1b[2m*** retrying for up to {reconnect_seconds:.0f}s — "
+        f"plug the device back in or press the exit key to abort"
+        f" ***\x1b[0m\r\n"
+    )
+    _flush_quietly(output)
+    deadline = time.monotonic() + reconnect_seconds
+    while time.monotonic() < deadline:
+        keystrokes = keyboard.read_available()
+        if keystrokes and exit_key in keystrokes:
+            user_exit_flag[0] = True
+            return None
+        time.sleep(reconnect_interval)
+        try:
+            new_port = reopen()
+        except OSError:
+            continue
+        output.write("\x1b[2m*** reconnected ***\x1b[0m\r\n")
+        _flush_quietly(output)
+        return new_port
+    output.write(
+        f"\x1b[2m*** giving up after {reconnect_seconds:.0f}s ***\x1b[0m\r\n"
+    )
+    _flush_quietly(output)
+    return None
+
+
+def _close_quietly(port: SerialPort) -> None:
+    """Close *port*, swallowing the OSError a dead port often raises."""
+    try:
+        port.close()
+    except OSError:  # pragma: no cover — port already dying
         pass
 
 

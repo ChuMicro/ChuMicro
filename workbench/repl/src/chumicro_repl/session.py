@@ -72,7 +72,7 @@ _POLL_INTERVAL = 0.005
 class ReplSessionError(Exception):
     """Raised when a raw-REPL operation fails.
 
-    Covers three broad classes:
+    Covers four broad classes:
 
     - Timeout — the board did not respond within the per-op timeout.
     - Protocol error — the board emitted bytes that don't match the
@@ -80,6 +80,10 @@ class ReplSessionError(Exception):
       e.g. bootloader mode, a firmware-less chip, wrong baudrate).
     - Execution error — the board executed the code but raised an
       exception.  The exception's stderr is attached as :attr:`stderr`.
+    - **Disconnect** — the device dropped mid-call.  Surfaced as the
+      :class:`ReplSessionDisconnected` subclass so callers can catch
+      "the cable came out" without conflating it with the other
+      three classes.
     """
 
     def __init__(self, message: str, *, stderr: str = "") -> None:
@@ -88,6 +92,25 @@ class ReplSessionError(Exception):
         #: an execution error.  Empty string for timeouts / protocol
         #: errors.
         self.stderr = stderr
+
+
+class ReplSessionDisconnected(ReplSessionError):
+    """Raised when the underlying serial port drops mid-call.
+
+    Subclass of :class:`ReplSessionError` so callers that catch the
+    base class still get the failure, while callers that want to
+    differentiate "device unplugged" from "device returned a
+    traceback" can ``except ReplSessionDisconnected`` directly.
+
+    The original :class:`OSError` (typically a
+    ``serial.SerialException``) is attached as :attr:`cause` for
+    callers that want the underlying errno or message.
+    """
+
+    def __init__(self, cause: OSError) -> None:
+        super().__init__(f"device disconnected: {cause}")
+        #: The underlying OS-level error from pyserial.
+        self.cause = cause
 
 
 class ReplSession:
@@ -214,8 +237,11 @@ class ReplSession:
         """
         port = self._require_port()
         code_bytes = code.encode("utf-8")
-        port.write(code_bytes)
-        port.write(CTRL_D)
+        try:
+            port.write(code_bytes)
+            port.write(CTRL_D)
+        except OSError as disconnect_error:
+            raise ReplSessionDisconnected(disconnect_error) from disconnect_error
         ok_marker = self._read_until_bytes(b"OK", timeout=timeout, port=port)
         if not ok_marker.endswith(b"OK"):
             raise ReplSessionError(
@@ -337,10 +363,13 @@ class ReplSession:
                 consumed_bytes = consumed_text.encode("utf-8")
                 self._read_remainder.extend(accumulated[len(consumed_bytes):])
                 return consumed_text
-            if port.in_waiting:
-                accumulated.extend(port.read(port.in_waiting))
-                continue
-            new_byte = port.read(1)
+            try:
+                if port.in_waiting:
+                    accumulated.extend(port.read(port.in_waiting))
+                    continue
+                new_byte = port.read(1)
+            except OSError as disconnect_error:
+                raise ReplSessionDisconnected(disconnect_error) from disconnect_error
             if new_byte:
                 accumulated.extend(new_byte)
                 continue
@@ -362,12 +391,15 @@ class ReplSession:
         into raw REPL.  Waits for the raw-REPL banner and prompt.
         """
         port = self._require_port()
-        port.reset_input_buffer()
-        port.write(CTRL_C)
-        self._time.sleep(_INTERRUPT_DELAY)
-        port.write(CTRL_C)
-        self._time.sleep(_INTERRUPT_DELAY)
-        port.write(CTRL_A)
+        try:
+            port.reset_input_buffer()
+            port.write(CTRL_C)
+            self._time.sleep(_INTERRUPT_DELAY)
+            port.write(CTRL_C)
+            self._time.sleep(_INTERRUPT_DELAY)
+            port.write(CTRL_A)
+        except OSError as disconnect_error:
+            raise ReplSessionDisconnected(disconnect_error) from disconnect_error
         self._time.sleep(_ENTER_DELAY)
         prompt = self._read_until_bytes(
             RAW_REPL_PROMPT, timeout=self._connect_timeout, port=port,
@@ -407,11 +439,14 @@ class ReplSession:
                 end_index = marker_position + len(marker)
                 self._read_remainder.extend(accumulated[end_index:])
                 return bytes(accumulated[:end_index])
-            available = port.in_waiting
-            if available:
-                accumulated.extend(port.read(available))
-                continue
-            new_byte = port.read(1)
+            try:
+                available = port.in_waiting
+                if available:
+                    accumulated.extend(port.read(available))
+                    continue
+                new_byte = port.read(1)
+            except OSError as disconnect_error:
+                raise ReplSessionDisconnected(disconnect_error) from disconnect_error
             if new_byte:
                 accumulated.extend(new_byte)
                 continue
