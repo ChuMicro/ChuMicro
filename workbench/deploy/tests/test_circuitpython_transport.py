@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 from pathlib import Path
 
 import pytest
@@ -12,6 +13,7 @@ from chumicro_deploy.circuitpython_transport import (
     _RAW_REPL_PROMPT,
     CircuitpythonTransport,
     CircuitpythonTransportError,
+    _format_probe_error,
     find_circuitpy_drive,
 )
 from chumicro_deploy.testing import (
@@ -2414,3 +2416,40 @@ class TestDriveVerification:
         assert find_circuitpy_drive_for_uid("bbbb2222") == str(second)
         assert find_circuitpy_drive_for_uid("") is None
         assert find_circuitpy_drive_for_uid("CCCC3333") is None
+
+
+class TestFormatProbeError:
+    """_format_probe_error translates probe OSErrors into recovery-
+    classifier-friendly messages."""
+
+    def test_enospc_says_drive_is_full(self) -> None:
+        error = OSError(errno.ENOSPC, "No space left on device")
+        message = _format_probe_error(Path("/Volumes/CIRCUITPY"), error)
+        assert "is full" in message
+        assert "No space left on device" in message
+        assert "not found" not in message
+
+    def test_erofs_says_drive_is_read_only(self) -> None:
+        error = OSError(errno.EROFS, "Read-only file system")
+        message = _format_probe_error(Path("/Volumes/CIRCUITPY"), error)
+        assert "is read-only" in message
+        assert "Read-only file system" in message
+        assert "not found" not in message
+
+    def test_eacces_keeps_legacy_not_found_or_not_writable(self) -> None:
+        # Stale Finder-eject mounts surface as EACCES on the probe.
+        # The classifier needs the legacy phrase to route them to
+        # CIRCUITPY_DRIVE_MISSING (not FLASH_COPY_FAILED).
+        error = PermissionError(errno.EACCES, "Permission denied")
+        message = _format_probe_error(Path("/Volumes/CIRCUITPY"), error)
+        assert "not found or not writable" in message
+        assert "Permission denied" in message
+
+    def test_unknown_errno_uses_legacy_wrapper(self) -> None:
+        error = OSError(errno.EIO, "Input/output error")
+        message = _format_probe_error(Path("/Volumes/CIRCUITPY"), error)
+        # EIO is not specifically translated; the underlying text still
+        # carries the signal the classifier needs ("input/output error"
+        # is in _FLASH_DRIVE_STATE_PATTERNS).
+        assert "not found or not writable" in message
+        assert "Input/output error" in message

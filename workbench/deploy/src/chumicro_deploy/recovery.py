@@ -119,6 +119,21 @@ _FLASH_COPY_PATTERNS = (
     "operation not permitted",
 )
 
+#: Subset of FLASH_COPY signals that are unambiguously about the drive's
+#: *state* (full / read-only / I/O error).  These win over the broader
+#: ``CIRCUITPY drive not found or not writable`` wrapper text the
+#: transport emits — the drive is found, it just can't accept the
+#: write — so the classifier checks them before
+#: :data:`_CIRCUITPY_DRIVE_PATTERNS`.  ``rsync`` is included because an
+#: rsync failure originates inside the flash copy path; the drive
+#: itself is necessarily mounted by the time rsync runs.
+_FLASH_DRIVE_STATE_PATTERNS = (
+    "rsync",
+    "no space left on device",
+    "read-only file system",
+    "input/output error",
+)
+
 #: A bootstrap chunk, entrypoint, or mpremote exec step reported an
 #: error on the board.  User code (or a dep) raised.
 _BOOTSTRAP_EXEC_PATTERNS = (
@@ -189,6 +204,17 @@ def classify_deploy_failure(error: Exception) -> DeployFailureKind:
     # flash + MP (which return a DeployResult with a traceback field).
     if _TRACEBACK_IN_MESSAGE_PATTERN in message:
         return DeployFailureKind.TRACEBACK_RETURNED
+    # Drive *state* failures (disk-full, read-only, I/O error, rsync)
+    # win over the generic "CIRCUITPY drive not found or not writable"
+    # wrapper.  The transport's _resolve_circuitpy_drive probes the
+    # mount with a tiny write before staging; if that probe surfaces
+    # an ENOSPC / EROFS / EIO, the drive is found and its problem is
+    # specific.  Routing to FLASH_COPY_FAILED here surfaces the
+    # right coaching ("free up space", "remount writable") instead of
+    # CIRCUITPY_DRIVE_MISSING's "tap RESET to remount".
+    for pattern in _FLASH_DRIVE_STATE_PATTERNS:
+        if pattern in message:
+            return DeployFailureKind.FLASH_COPY_FAILED
     # CIRCUITPY drive checks come BEFORE port-unavailable: the stale
     # mount path in CircuitpythonTransport._resolve_circuitpy_drive
     # raises with a message that starts "CIRCUITPY drive not found

@@ -19,6 +19,7 @@ See Decision 0027 and Decision 0028 for the full transport protocol.
 
 from __future__ import annotations
 
+import errno
 import getpass
 import os
 import shutil
@@ -79,6 +80,46 @@ _BOARD_FILE_VISIBLE_POST_SETTLE = 0.5
 
 #: Volume name CircuitPython uses by default.
 _CIRCUITPY_VOLUME_NAME = "CIRCUITPY"
+
+
+def _format_probe_error(drive_path: Path, error: OSError) -> str:
+    """Translate a probe-write OSError into a recovery-friendly message.
+
+    The transport's ``.chu-probe`` write distinguishes three classes of
+    failure on the drive:
+
+    - ``ENOSPC`` — drive is full.  Includes the exact errno phrasing
+      (``No space left on device``) so the recovery classifier's
+      :data:`~chumicro_deploy.recovery._FLASH_DRIVE_STATE_PATTERNS`
+      check picks it up.
+    - ``EROFS`` — drive remounted read-only (rare on CIRCUITPY but
+      possible after a USB hiccup or a board that booted into
+      protected mode).
+    - Anything else (typically ``EACCES`` from a stale Finder-eject
+      mount) — kept as the original "not found or not writable"
+      wrapper that documents both candidate causes.
+
+    The first two are *drive-found* states, so the message no longer
+    leads with "not found" — that was misleading when, e.g., the user
+    was running a disk-full demo and saw the drive in Finder while
+    chumicro-deploy claimed it wasn't there.
+    """
+    error_name = error.__class__.__name__
+    error_text = str(error) or error_name
+    if error.errno == errno.ENOSPC:
+        return (
+            f"CIRCUITPY drive at {drive_path} is full "
+            f"({error_name}: {error_text})"
+        )
+    if error.errno == errno.EROFS:
+        return (
+            f"CIRCUITPY drive at {drive_path} is read-only "
+            f"({error_name}: {error_text})"
+        )
+    return (
+        f"CIRCUITPY drive not found or not writable: {drive_path} "
+        f"({error_name}: {error_text})"
+    )
 
 
 def _resolve_username() -> str:
@@ -592,6 +633,12 @@ class CircuitpythonTransport:
         ``is_dir()`` returns True but file I/O fails with EACCES).
         The probe writes a tiny marker, so we catch the error up-front
         rather than halfway through the rsync / write-bytes pass.
+
+        The probe-error message distinguishes drive-state failures
+        (full / read-only / I/O error) from "found-but-stale-mount"
+        EACCES so the recovery classifier and the user both see
+        accurate text.  A disk-full drive is *found* — it just can't
+        accept the write.
         """
         drive_path_str = self.circuitpy_drive_path or find_circuitpy_drive()
         if not drive_path_str:
@@ -610,8 +657,7 @@ class CircuitpythonTransport:
             probe.unlink()
         except OSError as error:
             raise CircuitpythonTransportError(
-                f"CIRCUITPY drive not found or not writable: "
-                f"{drive_path} ({error.__class__.__name__}: {error})"
+                _format_probe_error(drive_path, error),
             ) from error
         return drive_path
 
@@ -1020,11 +1066,13 @@ class CircuitpythonTransport:
                     on_file_staged(device_path)
         except OSError as error:
             # A probe-pass doesn't guarantee the drive stays writable —
-            # the user could eject between the probe and the real copy.
-            # Re-raise with the classifier's CIRCUITPY_DRIVE_MISSING hook.
+            # the user could eject between the probe and the real copy,
+            # or fill it up with non-staged data, or remount it RO.
+            # Re-raise with the same accurate wrapper the probe path
+            # uses so the classifier routes disk-full / RO to
+            # FLASH_COPY_FAILED instead of CIRCUITPY_DRIVE_MISSING.
             raise CircuitpythonTransportError(
-                f"CIRCUITPY drive not found or not writable: "
-                f"{drive_path} ({error.__class__.__name__}: {error})"
+                _format_probe_error(drive_path, error),
             ) from error
 
         flash_drive.flush_volume(drive_path, sleep=self._time.sleep)

@@ -99,7 +99,11 @@ def _confirm(prompt_text: str, *, default_yes: bool = True) -> bool:
 
 
 def _pause(message: str = "Press Enter when ready…") -> None:
-    input(f"{_DIM}{message}{_RESET}")
+    # Cyan rather than dim — terminal "dim" (\x1b[2m) renders as nearly
+    # unreadable dark gray on most dark themes, and these prompts are
+    # the user's cue to take a physical action.  Match the cyan accent
+    # the scenario headers and confirmation prompts use.
+    input(f"{_CYAN}{message}{_RESET}")
 
 
 def _board_tag(context: BoardContext) -> str:

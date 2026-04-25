@@ -180,6 +180,75 @@ def test_classify_is_case_insensitive() -> None:
     )
 
 
+def test_classify_disk_full_wins_over_circuitpy_drive_wrap() -> None:
+    # The transport's _resolve_circuitpy_drive used to wrap any probe
+    # OSError as "CIRCUITPY drive not found or not writable" — even
+    # ENOSPC, which means the drive was found and just full.  After
+    # the disk-state-pattern reorder, a message that mentions both
+    # the legacy CIRCUITPY wrapper and "no space left on device"
+    # should classify as FLASH_COPY_FAILED so the user sees the
+    # free-up-space coaching, not the tap-RESET-to-remount coaching.
+    error = CircuitpythonTransportError(
+        "CIRCUITPY drive not found or not writable: /Volumes/CIRCUITPY "
+        "(OSError: [Errno 28] No space left on device)"
+    )
+    assert (
+        classify_deploy_failure(error)
+        is DeployFailureKind.FLASH_COPY_FAILED
+    )
+
+
+def test_classify_read_only_wins_over_circuitpy_drive_wrap() -> None:
+    error = CircuitpythonTransportError(
+        "CIRCUITPY drive not found or not writable: /Volumes/CIRCUITPY "
+        "(OSError: [Errno 30] Read-only file system)"
+    )
+    assert (
+        classify_deploy_failure(error)
+        is DeployFailureKind.FLASH_COPY_FAILED
+    )
+
+
+def test_classify_io_error_wins_over_circuitpy_drive_wrap() -> None:
+    error = CircuitpythonTransportError(
+        "CIRCUITPY drive not found or not writable: /Volumes/CIRCUITPY "
+        "(OSError: [Errno 5] Input/output error)"
+    )
+    assert (
+        classify_deploy_failure(error)
+        is DeployFailureKind.FLASH_COPY_FAILED
+    )
+
+
+def test_classify_pure_circuitpy_missing_still_routes_to_drive_kind() -> None:
+    # A message with no flash-state signal should still classify as
+    # CIRCUITPY_DRIVE_MISSING.  Locks in the "drive-state wins, but
+    # the legacy wrap path is unaffected" contract.
+    error = CircuitpythonTransportError(
+        "CIRCUITPY drive not found: /Volumes/CIRCUITPY"
+    )
+    assert (
+        classify_deploy_failure(error)
+        is DeployFailureKind.CIRCUITPY_DRIVE_MISSING
+    )
+
+
+def test_classify_eacces_stale_mount_still_routes_to_drive_kind() -> None:
+    # EACCES from a Finder-eject stale mount is the original reason
+    # CIRCUITPY_DRIVE_MISSING gets checked before PORT_UNAVAILABLE.
+    # Make sure that path is still intact — disk-state preemption
+    # shouldn't catch "Permission denied" (EACCES is not in
+    # _FLASH_DRIVE_STATE_PATTERNS).
+    error = CircuitpythonTransportError(
+        "CIRCUITPY drive not found or not writable: /Volumes/CIRCUITPY "
+        "(PermissionError: [Errno 13] Permission denied)"
+    )
+    assert (
+        classify_deploy_failure(error)
+        is DeployFailureKind.CIRCUITPY_DRIVE_MISSING
+    )
+
+
 def test_classify_traceback_in_message_routes_to_traceback_returned() -> None:
     # CP RAM mode raises CircuitpythonTransportError with the board's
     # stderr inline — including a Python traceback.  The classifier
