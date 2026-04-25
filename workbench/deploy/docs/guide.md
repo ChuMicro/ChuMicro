@@ -43,6 +43,37 @@ chumicro-deploy deploy \
 
 All subcommands accept `--help` for their full option list. `chumicro-deploy flash` supports `--non-interactive` for automated flows that don't have stdin.
 
+Every CLI command also accepts `--devices-file devices.yml --device <id>` instead of `--transport` + `--address`, so a workspace with one source-of-truth `devices.yml` doesn't repeat the same connection details everywhere:
+
+```bash
+chumicro-deploy probe --devices-file devices.yml --device back-porch
+chumicro-deploy deploy --devices-file devices.yml --device back-porch \
+    --directory ./my_app --entrypoint /code.py
+```
+
+When `defaults:` in the file pins a single runtime, omitting `--device` lets the loader pick that default. The schema is documented in [Decision 0027](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0027-device-testing-infrastructure.md) and lives at [`chumicro_deploy.config.default.load_devices_yml`](api.md#devices-yml-schema-and-loader-registry).
+
+### Programmatic devices.yml
+
+The same loader is exposed as a Python function so scripts and template repos don't have to shell out:
+
+```python
+from chumicro_deploy.config.default import load_devices_yml
+
+# Specific entry by id.
+device = load_devices_yml("devices.yml", device_id="back-porch")
+
+# Workspace's CircuitPython default — useful when devices.yml has both
+# defaults.circuitpython and defaults.micropython set.
+device = load_devices_yml("devices.yml", runtime="circuitpython")
+
+# Single-runtime workspaces — neither flag needed; loader picks the
+# only configured default.
+device = load_devices_yml("devices.yml")
+```
+
+`device_id` and `runtime` are mutually exclusive — pass one or neither, never both.  The same shape ships as a CLI loader (`--devices-format default`), and third parties register their own config formats via the `chumicro_deploy.config_loaders` entry-point group.
+
 ## Configure a target — `Device`
 
 A `Device` bundles the identity and connection details of one board. It is a frozen dataclass — you construct it explicitly and hand it to the deployer.
@@ -340,6 +371,35 @@ result = deployer.deploy(source)
 Use it from the CLI or any interactive tool where a human is present and can unplug, tap RESET, or close a conflicting app; stick with the plain `Deployer` for scripts where retries would just confuse the output.
 
 On macOS, the `CIRCUITPY_DRIVE_MISSING` kind auto-promotes to `MACOS_FSKIT_WEDGED` when `detect_fskit_wedge()` confirms the FSKit / DiskArbitration daemons are stuck — the recovery block then prints the exact `sudo killall … && launchctl kickstart …` command to unstick them.
+
+## Tail the board with chumicro-repl
+
+`Deployer.deploy()` returns once the entrypoint executes; if the entrypoint then enters a long-running loop (a heartbeat, a sensor publisher, a server) the deploy is "done" but the interesting output is just starting.  [`chumicro-repl`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/repl) is the sister workbench tool for this — it streams the friendly REPL with traceback highlighting and exposes a `tail()` follow-mode that fails fast on a crash:
+
+```python
+from chumicro_deploy import Deployer
+from chumicro_repl import tail, ExitCode
+
+result = Deployer(device).deploy(source)
+if not result.success:
+    raise SystemExit(f"deploy failed:\n{result.traceback}")
+
+# Watch for ten seconds, return non-zero if the board crashes.
+follow = tail(device, seconds=10.0, fail_on_traceback=True)
+if follow is ExitCode.TRACEBACK_DETECTED:
+    raise SystemExit("board crashed during follow-up tail")
+```
+
+`chumicro-repl` reuses the same `Device` object, the same `devices.yml` schema, and the same pyserial transport, so a deploy → tail pipeline never repeats connection details.  For interactive use, `chumicro-repl --devices-file devices.yml --device <id>` opens a TUI matching `mpremote repl` keybindings; for headless tests, `ReplSession(device)` exposes `exec(code)` / `call(function_name, *args, **kwargs)` / `read_until(pattern, timeout)` over raw REPL.
+
+## Host platform requirements
+
+`chumicro-deploy` runs on macOS and Linux today.  Two host prerequisites are surfaced as explicit exceptions when missing, so failures land before the serial port opens:
+
+- **`WindowsNotSupportedError`** — raised from `Deployer.__init__` and `probe_device` when `sys.platform == "win32"`.  Windows support is tracked but not implemented; on Windows, run `chumicro-deploy` from WSL2 against a USB-passed-through device.
+- **`RsyncMissingError`** — raised before flash-mode CircuitPython deploy when `rsync` is not on `$PATH`.  CIRCUITPY drive synchronization needs `rsync` for atomic, deterministic file updates; the error message includes a package-manager-specific install hint (`brew install rsync` / `apt install rsync` / `dnf install rsync`) so the fix is one line away.
+
+Both errors live in `chumicro_deploy.host_platform` and are re-exported at the package top level.
 
 ## Runtime notes
 

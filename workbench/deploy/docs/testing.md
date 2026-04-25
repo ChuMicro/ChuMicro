@@ -100,3 +100,7 @@ fake = FakeTime(start=1_000_000.0)
 ## Why these fakes ship with the package
 
 `chumicro-deploy` is a published workbench tool — third parties install it via `pip install chumicro-deploy` and write their own host-side tests against the public API.  Without published fakes, every consumer would either roll their own (~80 lines for `FakeTime`, more for the transport contract) or pull in heavier deps like `freezegun`.  Co-locating the fakes with the production code makes downstream testing the obvious path — the same pattern every library in the ChuMicro workspace follows (`chumicro_timing.testing.FakeTicks`, `chumicro_msgpack.testing`, etc.) per [Decision 0010](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0010-constructor-injection-and-fakes.md).
+
+## Companion fakes in chumicro-repl
+
+If your tests cover the deploy → tail pipeline, [`chumicro-repl`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/repl) ships parallel fakes (`FakeSerialPort`, `FakeKeyboard`, `FakeTime`) under `chumicro_repl.testing`.  The `FakeTime` shape is identical to the one here, so the same fake clock can drive both halves of an integration test — `Deployer(device, time=clock).deploy(source)` followed by `tail(device, seconds=10, time=clock)` — without any cross-package adapter code.

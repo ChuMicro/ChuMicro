@@ -1,6 +1,9 @@
 # API Reference
 
-Auto-generated from docstrings via mkdocstrings.
+Auto-generated from docstrings via mkdocstrings.  All public names are
+re-exported at the package top level via the lazy-attr table in
+`chumicro_deploy/__init__.py`; the per-module sections below mirror
+the internal layout for readers who want to navigate by source file.
 
 ## Device
 
@@ -29,6 +32,27 @@ Auto-generated from docstrings via mkdocstrings.
 ## Interactive recovery
 
 ::: chumicro_deploy.recovery
+
+## macOS FSKit wedge detection
+
+::: chumicro_deploy.macos_fskit
+
+## Host platform compatibility
+
+::: chumicro_deploy.host_platform
+
+## Devices.yml schema and loader registry
+
+The `chumicro_deploy.config` package owns the `devices.yml` schema —
+`load_devices_yml` is the built-in loader (registered under the
+`"default"` entry-point name); third parties register their own
+config formats via the `chumicro_deploy.config_loaders` entry-point
+group, and `discover_config_loaders` collects every registered
+loader keyed by name.
+
+::: chumicro_deploy.config
+
+::: chumicro_deploy.config.default
 
 ## Transport protocol
 

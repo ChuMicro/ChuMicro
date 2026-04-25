@@ -88,22 +88,26 @@ def load_devices_yml(
 ) -> Device:
     """Load one device from a ``devices.yml`` file.
 
+    Resolution precedence:
+
+    1. *device_id* — wins outright.
+    2. *runtime* — picks ``defaults.<runtime>`` when *device_id* is
+       ``None``.  Lets a caller that owns one runtime (e.g.
+       ``chumicro-repl`` opening one session) disambiguate a
+       ``defaults:`` block that has both runtimes set without
+       requiring the user to memorize the device id.
+    3. Single-default fallback — when both *device_id* and *runtime*
+       are ``None``, exactly one runtime default in the file picks
+       itself; otherwise raises.
+
+    *device_id* and *runtime* are mutually exclusive: passing both
+    raises so the caller cannot accidentally override a specific id
+    with a runtime hint.
+
     Args:
         path: Filesystem path to the YAML file.
-        device_id: Which entry to return.  Wins over *runtime* and
-            the single-default fallback when supplied.
-        runtime: When *device_id* is ``None``, pick
-            ``defaults.<runtime>`` — accepts ``"circuitpython"`` or
-            ``"micropython"``.  Lets a caller that owns one runtime
-            (e.g. ``chumicro-repl`` opening one session) disambiguate
-            a ``defaults:`` block that has both runtimes set without
-            requiring the user to memorize the device id.
-        device_id and runtime are mutually exclusive: passing both
-            raises so the caller cannot accidentally override a
-            specific id with a runtime hint.
-        When both *device_id* and *runtime* are ``None``, the
-            single-default fallback applies — exactly one runtime
-            default in the file picks itself; otherwise raises.
+        device_id: Which entry to return.
+        runtime: One of ``"circuitpython"`` or ``"micropython"``.
 
     Returns:
         A :class:`Device` corresponding to the selected entry.
