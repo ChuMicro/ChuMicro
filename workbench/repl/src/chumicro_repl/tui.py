@@ -254,7 +254,7 @@ def _format_welcome_banner(
         identity = f"chumicro-repl · {address} · {baudrate} baud"
     keys = (
         "Keys: Ctrl-X exit · Ctrl-C interrupt · "
-        "Ctrl-D soft-reboot · Ctrl-E paste"
+        "Ctrl-D soft-reboot · Ctrl-E paste mode"
     )
     return f"\x1b[2m{identity}\r\n{keys}\x1b[0m\r\n"
 
