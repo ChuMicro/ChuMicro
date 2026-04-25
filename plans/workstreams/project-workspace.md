@@ -333,6 +333,23 @@ Docs settle most numbers; these need boards:
 - Write latency for a 512 B blob across CP NVM, MP NVS, MP Pico W LittleFS — informs documentation guidance on write-budgets.
 - Pico W MP LittleFS atomic rename survives pull-power mid-rename — confirms safe-update pattern.
 
+### Phase 4 prerequisite: vendor on-device test runner into `chumicro-deploy`
+
+External template-repo consumers (Phase 4b/4c) will want to run on-device tests for the things they author.  Today the only on-device runner is `chumicro_test_harness.runner.run_module` in [`support/test_harness/`](../../support/test_harness/), which is workspace-internal and never published — `pip install chumicro-deploy` doesn't pull it in, and it isn't in the bundle.  Promoting it to a published `libraries/test-harness/` was considered and rejected: it's dev-time scaffolding, not production library code, so listing it alongside `chumicro-timing` / `chumicro-runner` / etc. in the CircuitPython bundle would muddy what users `circup install` for their actual project.
+
+The cleaner shape is to **vendor the on-device runtime parts inside `chumicro-deploy`** — same pattern as the existing [`circuitpython_bootstrap_template.txt`](../../workbench/deploy/src/chumicro_deploy/circuitpython_bootstrap_template.txt) — and re-export the host-side `raises()` helper from `chumicro_deploy.testing`.  Result: `pip install chumicro-deploy` is sufficient for both deploying code and running on-device tests, no separate install or bundle entry needed.
+
+Tasks:
+
+- [ ] Vendor `runner.run_module` (and its minimal deps) as a payload under `workbench/deploy/src/chumicro_deploy/_payloads/test_harness/`.  Stays at the same import path on-device (`from chumicro_test_harness.runner import run_module`) so no bootstrap-template changes are needed.
+- [ ] Re-export `raises` from `chumicro_deploy.testing` so external consumers writing tests against their template-repo libraries can `from chumicro_deploy.testing import raises` without a separate package.
+- [ ] Update `chumicro-deploy`'s on-device staging to copy from the vendored payload by default, while keeping the existing `support/test_harness/`-based path for in-repo use (so this repo's own functional tests don't change).
+- [ ] Document the on-device test workflow in `workbench/deploy/docs/testing.md` (host-side fakes are already there) — when to use it, how to write a test, what gets staged.
+
+Out of scope (left as-is for this repo):
+
+- `support/test_harness/` stays put.  In-repo library tests keep importing `from chumicro_test_harness import raises` via the editable-install path; `run_cross_runtime.py` keeps driving the unix-port unit tests.  The vendoring is purely additive — it doesn't replace the in-repo path.
+
 ### Phase 4a: `chumicro-workspace-runtime`
 
 - [ ] New library: `libraries/workspace-runtime/`.
