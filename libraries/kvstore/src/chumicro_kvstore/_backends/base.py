@@ -21,9 +21,6 @@ line.  Backends also expose a stable ``name`` string used by the
 ``KVStore.backend_name`` property.
 """
 
-from __future__ import annotations
-
-
 class Backend:
     """Concrete backends inherit and override the four members below.
 

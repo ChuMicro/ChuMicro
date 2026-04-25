@@ -13,8 +13,6 @@ Example::
     store.simulate_corrupt()                 # force is_corrupt next load
 """
 
-from __future__ import annotations
-
 from chumicro_kvstore._backends.memory import MemoryBackend
 from chumicro_kvstore.core import KVStore
 

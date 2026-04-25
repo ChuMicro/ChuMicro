@@ -5,8 +5,6 @@ key, msgpack-encoded values — lands in Phase 3b Slice 3 once
 hardware-verified on a plugged-in MP-ESP32 board.
 """
 
-from __future__ import annotations
-
 from chumicro_kvstore._backends.base import Backend
 
 

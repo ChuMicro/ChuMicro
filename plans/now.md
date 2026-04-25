@@ -6,9 +6,9 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** Project-workspace Phase 3b in flight — `chumicro-kvstore` Slice 0 (Decision 0034) + Slice 1 (scaffold + MemoryBackend + FakeKVStore + 43 host tests at 99.6 % cov) landed 2026-04-25. Next: Slices 2–4 (CP NVM, MP NVS, MP LittleFS) on plugged-in hardware.
-- **Last shipped:** Phase 3b Slices 0+1 — Decision 0034 nails down the API + per-backend contracts; `libraries/kvstore/` ships the `KVStore` class, exception hierarchy, MemoryBackend, FakeKVStore, and pyproject wired to depend on `chumicro-msgpack`.
-- **In flight:** Phase 3b Slice 2 (CP NVM backend on Lolin S2 + Pi Pico W CP).
+- **Phase:** Project-workspace Phase 3b in flight — `chumicro-kvstore` Slices 0–2 landed 2026-04-25 (Decision 0034 + scaffold + MemoryBackend + CP NVM with CRC framing, hardware-verified on both CP boards). Next: Slice 3 (MP NVS on Lolin S2 MP).
+- **Last shipped:** Phase 3b Slice 2 — CP NVM backend with full `MAGIC | LEN | CRC32 | MSGPACK` framing, hardware-verified on Pi Pico W (4 KB NVM) and Lolin S2 (8 KB NVM); 64 host tests at 99.7 % cov; 8 functional tests passing on each CP board.
+- **In flight:** Phase 3b Slice 3 (MP NVS backend on Lolin S2 MP, namespace `chu_kv`).
 - **Blocked on:** —
 - **Last touched:** `libraries/kvstore/**`, `plans/decisions/0034-kvstore-api-and-backends.md`, `plans/{now,history,next-up}.md`. Four boards plugged in: Lolin S2 CP/MP, Pi Pico W CP/MP — exercises every kvstore backend across slices 2–5.
 

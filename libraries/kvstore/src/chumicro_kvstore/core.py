@@ -9,8 +9,6 @@ Backend selection is per-runtime via ``backend="auto"``; explicit
 overrides accepted.  See Decision 0034 §1–2.
 """
 
-from __future__ import annotations
-
 import sys
 
 from chumicro_msgpack import packb, unpackb

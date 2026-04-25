@@ -7,6 +7,8 @@ backends have their own functional-test suites under
 ``functional_tests/``.
 """
 
+import sys
+
 from chumicro_kvstore import (
     KVStore,
     KVStoreCorrupt,
@@ -23,7 +25,15 @@ from chumicro_test_harness import raises
 
 
 def test_default_backend_is_memory_on_cpython() -> None:
-    """``backend="auto"`` resolves to MemoryBackend under CPython."""
+    """``backend="auto"`` resolves to MemoryBackend under CPython.
+
+    Runtime-aware: under MP and CP unix-port the auto-detect path
+    routes to the per-runtime backends (which are still stubs in this
+    slice).  Their selection logic is exercised by the functional
+    suites — assert the CPython case here only.
+    """
+    if sys.implementation.name != "cpython":
+        return
     store = KVStore(backend="auto")
     assert store.backend_name == "memory"
 
@@ -48,14 +58,15 @@ def test_concrete_backend_instance_accepted() -> None:
     assert store.capacity == 512
 
 
-def test_explicit_nvm_string_raises_notimplementederror_on_cpython() -> None:
-    """Backend stub for slice 2 — CP NVM only fires under CircuitPython.
+def test_explicit_nvm_string_raises_runtime_error_on_cpython() -> None:
+    """``backend="nvm"`` without ``microcontroller`` raises a clear error.
 
-    Exercising it on CPython confirms the ``"nvm"`` arg routes to
-    ``CpNvmBackend`` (whose Slice 2 placeholder raises) rather than
-    silently falling through to memory.
+    The real CP NVM backend tries ``import microcontroller`` and
+    surfaces a ``RuntimeError`` with an injection hint when the import
+    fails.  Confirms the auto-resolver routes to ``CpNvmBackend``
+    rather than silently falling through to memory.
     """
-    with raises(NotImplementedError):
+    with raises(RuntimeError):
         KVStore(backend="nvm")
 
 

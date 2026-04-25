@@ -8,8 +8,6 @@ Capacity is configurable so downstream tests can simulate small-NVM
 edge cases without owning a SAMD21 (Decision 0034 §8).
 """
 
-from __future__ import annotations
-
 import sys
 
 from chumicro_kvstore._backends.base import Backend

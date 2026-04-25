@@ -5,8 +5,6 @@ tmpfile + rename atomicity — lands in Phase 3b Slice 4 once
 hardware-verified on a plugged-in MP-Pico-W board.
 """
 
-from __future__ import annotations
-
 from chumicro_kvstore._backends.base import Backend
 
 
