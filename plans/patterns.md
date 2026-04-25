@@ -358,3 +358,87 @@ command stays identical.  `MicropythonTransport._run_mpremote`
 implements this pattern; apply it to any future shell-out.  Commit
 `e4f669e`.
 
+## Lazy module-level imports for short-lived entrypoints (PEP 562)
+
+When a published package has slow-to-import dependencies (`pyserial`, `mpremote`, `urllib`) but exposes short-lived CLI subcommands (`--help`, `probe`, `resolve-firmware-url`), use module-level `__getattr__` so importing the top-level package doesn't pull the heavy deps until a name is actually accessed.
+
+```python
+# In src/chumicro_<name>/__init__.py
+def __getattr__(name: str) -> object:
+    if name == "Deployer":
+        from chumicro_deploy.deployer import Deployer
+        return Deployer
+    if name == "Device":
+        from chumicro_deploy.device import Device
+        return Device
+    raise AttributeError(f"module 'chumicro_deploy' has no attribute {name!r}")
+```
+
+Existing names (e.g. `from chumicro_deploy import Deployer`) keep working — Python's attribute lookup falls through to `__getattr__` after the module's own globals are exhausted. The deferred imports run once on first access and the result is cached on the module's globals.
+
+Applied to `chumicro_deploy/__init__.py` (commit `11952f0` review-sweep); `device.py` defers transport imports into `create_transport()` for the same reason. The CLI cold-start dropped meaningfully on `--help` and `probe` paths.
+
+Related: `chumicro-deploy` review-sweep refactor.
+
+## StrEnum as a backwards-compatible shim for stringly-typed args
+
+When a parameter has historically accepted plain strings (`Device(transport="circuitpython")`) and you want to introduce an enum without breaking every call site, use `enum.StrEnum`. StrEnum members compare equal to their string value, so existing string literal call sites keep working unchanged while new code can use the enum for autocomplete + typo prevention.
+
+```python
+from enum import StrEnum
+
+class Runtime(StrEnum):
+    MICROPYTHON = "micropython"
+    CIRCUITPYTHON = "circuitpython"
+
+# Old call site (still works):
+Device(transport="circuitpython")
+
+# New call site (preferred):
+Device(transport=Runtime.CIRCUITPYTHON)
+
+# Both compare equal:
+assert Runtime.CIRCUITPYTHON == "circuitpython"
+```
+
+Applied to `Runtime` / `DeployMode` / `ReflashMethod` in `chumicro_deploy/protocol.py` (commit `11952f0`).
+
+Caveats: `StrEnum` is Python 3.11+ stdlib. For older Pythons or for embedded code, this pattern doesn't apply — `chumicro-deploy` is workbench-only (CPython 3.11+) so it's safe there. Do not use this on `libraries/` code that targets CircuitPython / MicroPython.
+
+## IDE Testing-panel "show-but-deselect" for hardware-gated tests
+
+When you have hardware-gated tests under a path like `functional_tests/` that should be:
+
+- **invisible** in the IDE Testing panel for fresh clones (no devices configured),
+- **visible** in the IDE Testing panel once `devices.yml` exists, so the gutter ▶ button works on individual test functions,
+- **never run** in a default sweep (`pytest` from rootdir, "Run All Tests" in IDE), because they touch real hardware,
+- **fully run** when the user explicitly clicks gutter ▶ on a single test or names a `functional_tests/` path on the command line.
+
+Pattern: a paired `pytest_ignore_collect` + `pytest_collection_modifyitems` in the root `conftest.py`.
+
+```python
+# Allow collection only when (a) devices.yml exists, or (b) the user explicitly
+# named a functional_tests path in argv.
+def pytest_ignore_collect(collection_path: Path, config: pytest.Config) -> bool | None:
+    if "functional_tests" not in collection_path.parts:
+        return None
+    if _devices_yml_exists() or _explicit_functional_target(config):
+        return False  # allow
+    return True       # hide
+
+# Even when collected, deselect functional_tests items unless an explicit
+# functional_tests/ path is in argv.
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    if _explicit_functional_target(config):
+        return
+    deselected = [item for item in items if "functional_tests" in Path(item.fspath).parts]
+    if deselected:
+        for item in deselected:
+            items.remove(item)
+        config.hook.pytest_deselected(items=deselected)
+```
+
+Result: VS Code / PyCharm Testing panels paint the tree with gutter ▶ buttons on every functional test the user can see in `devices.yml`. Bare `pytest` from rootdir does host tests only. Click ▶ on one test → its path lands in argv → deselection skipped → run executes against the device. Commit `73e9270`.
+
+Related: Decision 0027, `scripts/pytest_device.py` plugin (which owns the actual device routing once a functional test is selected).
+
