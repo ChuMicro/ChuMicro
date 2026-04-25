@@ -41,6 +41,28 @@ class MicropythonTransportError(Exception):
     """Raised when an mpremote command fails."""
 
 
+class MicropythonMidDeployDisconnected(MicropythonTransportError):
+    """Raised when the device drops mid-deploy.
+
+    Subclass so callers can ``except`` "the cable came out" without
+    conflating it with other mpremote transport errors (mount
+    failure, copy failure, bootstrap exec failed).  Mirrors
+    :class:`CircuitpythonMidDeployDisconnected` and
+    :class:`chumicro_repl.session.ReplSessionDisconnected`.
+
+    The original :class:`OSError` is attached as :attr:`cause` so
+    callers that need the underlying errno can read it without
+    re-parsing :func:`str` of the wrapper.
+    """
+
+    def __init__(self, cause: OSError, context: str = "") -> None:
+        prefix = f"device disconnected during {context}" if context else (
+            "device disconnected"
+        )
+        super().__init__(f"{prefix}: {cause}")
+        self.cause = cause
+
+
 def _resolve_mpremote_binary() -> str:
     """Return the ``mpremote`` executable path to invoke via subprocess.
 

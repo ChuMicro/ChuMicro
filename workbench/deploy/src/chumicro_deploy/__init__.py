@@ -42,6 +42,7 @@ if TYPE_CHECKING:
         build_circuitpython_deploy_scripts,
     )
     from .circuitpython_transport import (
+        CircuitpythonMidDeployDisconnected,
         CircuitpythonTransport,
         CircuitpythonTransportError,
         SerialPort,
@@ -62,6 +63,7 @@ if TYPE_CHECKING:
         detect_fskit_wedge,
     )
     from .micropython_transport import (
+        MicropythonMidDeployDisconnected,
         MicropythonTransport,
         MicropythonTransportError,
     )
@@ -91,6 +93,7 @@ if TYPE_CHECKING:
 #: ``resolve-firmware-url``) don't pay the full dependency graph.
 _LAZY_ATTRS: dict[str, str] = {
     "CIRCUITPYTHON_FIRMWARE_URL_TEMPLATE": "firmware",
+    "CircuitpythonMidDeployDisconnected": "circuitpython_transport",
     "CircuitpythonTransport": "circuitpython_transport",
     "CircuitpythonTransportError": "circuitpython_transport",
     "DeployError": "result",
@@ -110,6 +113,7 @@ _LAZY_ATTRS: dict[str, str] = {
     "ImportGraphSource": "sources",
     "InteractiveDeployer": "recovery",
     "MACOS_FSKIT_RECOVERY_COMMAND": "macos_fskit",
+    "MicropythonMidDeployDisconnected": "micropython_transport",
     "MicropythonTransport": "micropython_transport",
     "MicropythonTransportError": "micropython_transport",
     "RecoveryPlan": "recovery",
@@ -138,6 +142,7 @@ _LAZY_ATTRS: dict[str, str] = {
 #: the lazy-attr table.  Keep alphabetized.
 __all__ = [
     "CIRCUITPYTHON_FIRMWARE_URL_TEMPLATE",
+    "CircuitpythonMidDeployDisconnected",
     "CircuitpythonTransport",
     "CircuitpythonTransportError",
     "DeployError",
@@ -157,6 +162,7 @@ __all__ = [
     "ImportGraphSource",
     "InteractiveDeployer",
     "MACOS_FSKIT_RECOVERY_COMMAND",
+    "MicropythonMidDeployDisconnected",
     "MicropythonTransport",
     "MicropythonTransportError",
     "RecoveryPlan",

@@ -189,6 +189,21 @@ def classify_deploy_failure(error: Exception) -> DeployFailureKind:
         :class:`InteractiveDeployer` treats that as retryable so
         the user isn't locked out of an unclassified hiccup.
     """
+    # Typed disconnect subclasses skip the string-pattern dance —
+    # they were raised because the device dropped, period.  Routes
+    # to PORT_UNAVAILABLE because the user-facing fix is the same
+    # ("plug it back in").  isinstance check is import-light because
+    # the subclasses live in their owning transport modules and
+    # this module already imports them.
+    from .circuitpython_transport import CircuitpythonMidDeployDisconnected
+    from .micropython_transport import MicropythonMidDeployDisconnected
+
+    if isinstance(
+        error,
+        (CircuitpythonMidDeployDisconnected, MicropythonMidDeployDisconnected),
+    ):
+        return DeployFailureKind.PORT_UNAVAILABLE
+
     message = str(error).lower()
     # Check CONFIGURATION first — these messages often contain
     # substrings that look like other kinds (e.g. "CIRCUITPY drive
@@ -284,8 +299,8 @@ _PLANS: dict[DeployFailureKind, RecoveryPlan] = {
             "If CircuitPython dropped into safe mode, press any key "
             "over a serial terminal to exit safe mode, then retry.",
             "If the board is stuck running user code that ignores "
-            "Ctrl-C, hold RESET for 2 seconds or unplug/replug the "
-            "USB cable.",
+            "Ctrl-C, hold RESET for 2 seconds or unplug + replug "
+            "the USB cable.",
         ),
         retryable=True,
     ),
@@ -295,7 +310,7 @@ _PLANS: dict[DeployFailureKind, RecoveryPlan] = {
             "Tap RESET on the board — this re-exposes the drive "
             "whether it was hidden by flash deploy mode or ejected "
             "manually from Finder.",
-            "If the board has no RESET button, unplug and replug it.",
+            "If the board has no RESET button, unplug + replug it.",
             "If the board isn't running CircuitPython, reflash it "
             "first with `chumicro-deploy flash --method uf2`.",
         ),

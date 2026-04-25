@@ -821,3 +821,111 @@ def test_detector_not_called_for_unrelated_failure_kinds() -> None:
         interactive.deploy(_DUMMY_SOURCE)  # type: ignore[arg-type]
 
     assert detector_calls == 0
+
+
+# ---------------------------------------------------------------------------
+# MidDeployDisconnected typed subclasses
+# ---------------------------------------------------------------------------
+
+
+class TestMidDeployDisconnected:
+    """Typed disconnect subclasses route through the classifier as PORT_UNAVAILABLE."""
+
+    def test_circuitpython_subclass_isinstance_of_base(self):
+        from chumicro_deploy import (
+            CircuitpythonMidDeployDisconnected,
+            CircuitpythonTransportError,
+        )
+
+        exception = CircuitpythonMidDeployDisconnected(OSError("cable popped"))
+        assert isinstance(exception, CircuitpythonTransportError)
+
+    def test_micropython_subclass_isinstance_of_base(self):
+        from chumicro_deploy import (
+            MicropythonMidDeployDisconnected,
+            MicropythonTransportError,
+        )
+
+        exception = MicropythonMidDeployDisconnected(OSError("cable popped"))
+        assert isinstance(exception, MicropythonTransportError)
+
+    def test_classifier_routes_circuitpython_disconnect_to_port_unavailable(self):
+        from chumicro_deploy import CircuitpythonMidDeployDisconnected
+
+        exception = CircuitpythonMidDeployDisconnected(
+            OSError("cable popped"), context="stage",
+        )
+        kind = classify_deploy_failure(exception)
+        assert kind is DeployFailureKind.PORT_UNAVAILABLE
+
+    def test_classifier_routes_micropython_disconnect_to_port_unavailable(self):
+        from chumicro_deploy import MicropythonMidDeployDisconnected
+
+        exception = MicropythonMidDeployDisconnected(
+            OSError("cable popped"), context="exec",
+        )
+        kind = classify_deploy_failure(exception)
+        assert kind is DeployFailureKind.PORT_UNAVAILABLE
+
+    def test_cause_attribute_holds_underlying_oserror(self):
+        from chumicro_deploy import CircuitpythonMidDeployDisconnected
+
+        underlying = OSError(6, "Device not configured")
+        exception = CircuitpythonMidDeployDisconnected(underlying)
+        assert exception.cause is underlying
+
+    def test_message_includes_context_when_supplied(self):
+        from chumicro_deploy import CircuitpythonMidDeployDisconnected
+
+        exception = CircuitpythonMidDeployDisconnected(
+            OSError("eof"), context="bootstrap exec",
+        )
+        assert "during bootstrap exec" in str(exception)
+
+    def test_empty_context_omits_during_clause(self):
+        from chumicro_deploy import MicropythonMidDeployDisconnected
+
+        exception = MicropythonMidDeployDisconnected(OSError("eof"))
+        assert "device disconnected:" in str(exception)
+        assert "during" not in str(exception)
+
+
+# ---------------------------------------------------------------------------
+# FakeSerialPort scripted disconnect support
+# ---------------------------------------------------------------------------
+
+
+class TestFakeSerialPortScriptedDisconnects:
+    """Read-side and write-side scripted disconnects via the testing fake."""
+
+    def test_read_chunks_can_raise_oserror(self):
+        from chumicro_deploy.testing import FakeSerialPort
+
+        port = FakeSerialPort(read_responses=[b"hello", OSError("gone")])
+        assert port.in_waiting == len(b"hello")
+        assert port.read(1) == b"hello"
+        # Next entry is an exception — in_waiting reports 1 so polling
+        # loops actually call read() instead of skipping past the
+        # scripted disconnect.
+        assert port.in_waiting == 1
+        with pytest.raises(OSError, match="gone"):
+            port.read(1)
+
+    def test_write_can_be_scripted_to_raise(self):
+        from chumicro_deploy.testing import FakeSerialPort
+
+        port = FakeSerialPort(raise_on_write=OSError("write failed"))
+        with pytest.raises(OSError, match="write failed"):
+            port.write(b"anything")
+        # When raise_on_write is None (default), writes record normally.
+        port_quiet = FakeSerialPort()
+        port_quiet.write(b"hi")
+        assert port_quiet.writes == [b"hi"]
+
+    def test_exhausted_script_returns_empty_bytes(self):
+        from chumicro_deploy.testing import FakeSerialPort
+
+        port = FakeSerialPort(read_responses=[b"once"])
+        assert port.read(1) == b"once"
+        assert port.in_waiting == 0
+        assert port.read(1) == b""

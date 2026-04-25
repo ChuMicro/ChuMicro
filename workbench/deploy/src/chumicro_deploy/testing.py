@@ -112,37 +112,60 @@ class FakeSerialPort:
     """Simulates a pyserial Serial port for transport testing.
 
     Records all writes and returns canned responses for reads.
+    Each entry in ``read_responses`` is either ``bytes`` (returned
+    verbatim on the matching ``read()`` call) or an instance of
+    ``BaseException`` (raised on that call) — the exception form
+    lets tests script "first read returns bytes, second read drops
+    the cable" scenarios without subclassing the fake.  Mirrors the
+    pattern in :class:`chumicro_repl.testing.FakeSerialPort`.
     """
 
     def __init__(
         self,
         *,
-        read_responses: list[bytes] | None = None,
+        read_responses: list[bytes | BaseException] | None = None,
         open_error: Exception | None = None,
+        raise_on_write: BaseException | None = None,
     ) -> None:
         self.writes: list[bytes] = []
         self.closed = False
-        self._read_responses = list(read_responses or [])
+        self._read_responses: list[bytes | BaseException] = list(
+            read_responses or [],
+        )
         self._read_index = 0
         self._open_error = open_error
+        self._raise_on_write = raise_on_write
 
     @property
     def in_waiting(self) -> int:
-        """Return how many bytes are available to read."""
+        """Return how many bytes are available to read.
+
+        Scripted ``BaseException`` entries are reported as having
+        ``in_waiting == 1`` so polling loops actually call
+        :meth:`read` (which then raises) instead of looping past
+        the scripted disconnect.
+        """
         if self._read_index < len(self._read_responses):
-            return len(self._read_responses[self._read_index])
+            entry = self._read_responses[self._read_index]
+            if isinstance(entry, BaseException):
+                return 1
+            return len(entry)
         return 0
 
     def read(self, size: int = 1) -> bytes:
-        """Return the next canned response."""
+        """Return the next canned response, or raise the scripted exception."""
         if self._read_index < len(self._read_responses):
-            data = self._read_responses[self._read_index]
+            entry = self._read_responses[self._read_index]
             self._read_index += 1
-            return data
+            if isinstance(entry, BaseException):
+                raise entry
+            return entry
         return b""
 
     def write(self, data: bytes) -> int:
-        """Record a write."""
+        """Record a write, or raise the configured exception."""
+        if self._raise_on_write is not None:
+            raise self._raise_on_write
         self.writes.append(data)
         return len(data)
 

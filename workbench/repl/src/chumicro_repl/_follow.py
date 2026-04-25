@@ -270,7 +270,7 @@ def _write_reconnecting_notice(output: TextIO, seconds: float) -> None:
     """
     output.write(
         f"\x1b[2m*** retrying for up to {seconds:.0f}s — "
-        f"plug the device back in or interrupt to abort ***\x1b[0m\r\n"
+        f"plug the device back in, or press Ctrl-C to abort ***\x1b[0m\r\n"
     )
     try:
         output.flush()

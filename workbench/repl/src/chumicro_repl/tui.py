@@ -577,7 +577,7 @@ def _tui_reconnect(
         return None
     output.write(
         f"\x1b[2m*** retrying for up to {reconnect_seconds:.0f}s — "
-        f"plug the device back in or press the exit key to abort"
+        f"plug the device back in, or press Ctrl-X to abort"
         f" ***\x1b[0m\r\n"
     )
     _flush_quietly(output)

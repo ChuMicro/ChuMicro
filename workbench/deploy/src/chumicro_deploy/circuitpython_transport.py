@@ -392,6 +392,28 @@ class CircuitpythonTransportError(Exception):
     """Raised when a CircuitPython serial operation fails."""
 
 
+class CircuitpythonMidDeployDisconnected(CircuitpythonTransportError):
+    """Raised when the device drops mid-deploy.
+
+    Subclass so callers can ``except`` "the cable came out" without
+    conflating it with other transport errors (raw-REPL stuck,
+    bootstrap exec failed, drive missing).  Mirrors
+    :class:`chumicro_repl.session.ReplSessionDisconnected`.
+
+    The original :class:`OSError` (typically
+    :class:`serial.SerialException`) is attached as :attr:`cause`
+    so callers that need the underlying errno or message can read
+    it without re-parsing the wrapper's own ``str(error)``.
+    """
+
+    def __init__(self, cause: OSError, context: str = "") -> None:
+        prefix = f"device disconnected during {context}" if context else (
+            "device disconnected"
+        )
+        super().__init__(f"{prefix}: {cause}")
+        self.cause = cause
+
+
 class CircuitpythonTransport:
     """Transport for CircuitPython boards via pyserial raw REPL.
 
