@@ -1,6 +1,15 @@
+# Root-level pytest config drives IDE Testing-panel discovery (VS Code
+# Pylance/Python extension, PyCharm).  Per-library / per-workbench coverage
+# gates still run through `python scripts/run.py test`, which iterates each
+# package's own pyproject.toml.
+#
+# importlib import-mode is required because test_cli.py / test_recovery.py
+# exist in both workbench/deploy/tests and workbench/repl/tests; classic
+# prepend import-mode collides on the unqualified module name.  importlib
+# mode keys collected files by their full path.
 [tool.pytest.ini_options]
-addopts = "-ra --strict-config --strict-markers"
-testpaths = ["support", "libraries", "scripts/tests"]
+addopts = "-ra --strict-config --strict-markers --import-mode=importlib"
+testpaths = ["support", "libraries", "workbench", "scripts/tests"]
 
 [tool.coverage.run]
 branch = true
