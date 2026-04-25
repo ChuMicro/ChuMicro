@@ -215,6 +215,99 @@ def audit_ruff_clean_passes() -> Result:
 
 
 # ---------------------------------------------------------------------------
+# ruff TID252 — banned-relative-imports in device-code trees
+# ---------------------------------------------------------------------------
+
+
+_TID252_PYPROJECT = (
+    '[tool.ruff.lint]\n'
+    'select = ["TID252"]\n'
+    '\n'
+    '[tool.ruff.lint.flake8-tidy-imports]\n'
+    'ban-relative-imports = "all"\n'
+    '\n'
+    '[tool.ruff.lint.per-file-ignores]\n'
+    '"workbench/**" = ["TID252"]\n'
+    '"scripts/**" = ["TID252"]\n'
+    '"**/tests/**" = ["TID252"]\n'
+    '"**/functional_tests/**" = ["TID252"]\n'
+    '"**/examples/**" = ["TID252"]\n'
+)
+
+
+def audit_ruff_tid252_libraries_src_fails() -> Result:
+    """A relative import in libraries/*/src/ must trip TID252."""
+    with _tmp_dir("tid-lib") as workdir:
+        (workdir / "pyproject.toml").write_text(_TID252_PYPROJECT)
+        bad = workdir / "libraries/timing/src/chumicro_timing/__init__.py"
+        bad.parent.mkdir(parents=True)
+        bad.write_text("from .core import something\n")
+        result = _python("-m", "ruff", "check", str(bad))
+    output = result.stdout + result.stderr
+    fired = result.returncode != 0 and "TID252" in output
+    return _scenario(
+        "ruff TID252 (relative import in libraries/*/src/ → fail)",
+        fired,
+        output.strip(),
+    )
+
+
+def audit_ruff_tid252_test_harness_src_fails() -> Result:
+    """A relative import in support/test_harness/src/ must trip TID252.
+
+    The test harness is the *other* tree that gets exec()'d on device,
+    so the constraint applies identically.
+    """
+    with _tmp_dir("tid-th") as workdir:
+        (workdir / "pyproject.toml").write_text(_TID252_PYPROJECT)
+        bad = workdir / "support/test_harness/src/chumicro_test_harness/__init__.py"
+        bad.parent.mkdir(parents=True)
+        bad.write_text("from .core import something\n")
+        result = _python("-m", "ruff", "check", str(bad))
+    output = result.stdout + result.stderr
+    fired = result.returncode != 0 and "TID252" in output
+    return _scenario(
+        "ruff TID252 (relative import in support/test_harness/src/ → fail)",
+        fired,
+        output.strip(),
+    )
+
+
+def audit_ruff_tid252_workbench_src_passes() -> Result:
+    """workbench/*/src/ is host-only and may keep relative imports."""
+    with _tmp_dir("tid-wb") as workdir:
+        (workdir / "pyproject.toml").write_text(_TID252_PYPROJECT)
+        good = workdir / "workbench/deploy/src/chumicro_deploy/__init__.py"
+        good.parent.mkdir(parents=True)
+        good.write_text("from .core import something\n")
+        result = _python("-m", "ruff", "check", str(good))
+    output = result.stdout + result.stderr
+    fired = result.returncode == 0 and "TID252" not in output
+    return _scenario(
+        "ruff TID252 (relative import in workbench/*/src/ → allowed)",
+        fired,
+        output.strip() or "(no violations)",
+    )
+
+
+def audit_ruff_tid252_libraries_tests_passes() -> Result:
+    """libraries/*/tests/ is host-side and may keep relative imports."""
+    with _tmp_dir("tid-test") as workdir:
+        (workdir / "pyproject.toml").write_text(_TID252_PYPROJECT)
+        good = workdir / "libraries/timing/tests/test_thing.py"
+        good.parent.mkdir(parents=True)
+        good.write_text("from .core import something\n")
+        result = _python("-m", "ruff", "check", str(good))
+    output = result.stdout + result.stderr
+    fired = result.returncode == 0 and "TID252" not in output
+    return _scenario(
+        "ruff TID252 (relative import in libraries/*/tests/ → allowed)",
+        fired,
+        output.strip() or "(no violations)",
+    )
+
+
+# ---------------------------------------------------------------------------
 # verify_examples — broken import
 # ---------------------------------------------------------------------------
 
@@ -439,12 +532,10 @@ def audit_check_api_libraries_breakage_patch_fails() -> Result:
 # ---------------------------------------------------------------------------
 
 
-KNOWN_GAPS: list[str] = [
-    "Absolute-imports rule for libraries/* + support/test_harness/ "
-    "(AGENTS.md non-negotiable) is enforced only at runtime — modules "
-    "fail to import on device.  No static pre-merge gate.  Consider "
-    "ruff TID252 (banned-relative-imports) scoped to those trees.",
-]
+KNOWN_GAPS: list[str] = []
+"""AGENTS.md rules with no static pre-merge gate.  Empty for now —
+ruff TID252 was added to cover the libraries/* + support/test_harness/
+absolute-imports rule (commit 04074c2's follow-up)."""
 
 
 # ---------------------------------------------------------------------------
@@ -459,6 +550,10 @@ SCENARIOS: list = [
     audit_check_whitespace_trailing_space,
     audit_ruff_unused_import,
     audit_ruff_clean_passes,
+    audit_ruff_tid252_libraries_src_fails,
+    audit_ruff_tid252_test_harness_src_fails,
+    audit_ruff_tid252_workbench_src_passes,
+    audit_ruff_tid252_libraries_tests_passes,
     audit_verify_examples_broken_import,
     audit_check_version_workbench_no_bump,
     audit_check_version_workbench_with_bump_passes,

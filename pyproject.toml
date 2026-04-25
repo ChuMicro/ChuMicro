@@ -24,5 +24,23 @@ line-length = 100
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP"]
+# TID252 (flake8-tidy-imports) enforces the AGENTS.md non-negotiable
+# "absolute imports only in code that runs on devices."  Library modules
+# under libraries/*/src/ and support/test_harness/src/ are exec()'d by
+# CircuitPython RAM-mode without a __package__, so a leading `.` has
+# nothing to resolve against and the deploy fails.  per-file-ignores
+# below relax the rule for trees that are host-only (workbench/, scripts/)
+# or run independently of a package context (tests, functional_tests,
+# examples).
+select = ["E", "F", "I", "B", "UP", "TID252"]
 external = ["CHU001", "CHU002", "CHU003", "CHU004", "CHU005"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.per-file-ignores]
+"workbench/**" = ["TID252"]
+"scripts/**" = ["TID252"]
+"**/tests/**" = ["TID252"]
+"**/functional_tests/**" = ["TID252"]
+"**/examples/**" = ["TID252"]

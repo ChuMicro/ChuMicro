@@ -69,6 +69,8 @@ Host-only code can use either style:
 
 Cross-package imports between publishable libraries stay absolute regardless of where they live — `from chumicro_timing import ticks` inside `chumicro_runner` is correct and expected.
 
+**Enforcement.** The rule is wired to ruff TID252 (`flake8-tidy-imports.ban-relative-imports`) in `pyproject.toml`. The `[tool.ruff.lint.per-file-ignores]` table relaxes it for `workbench/**`, `scripts/**`, `**/tests/**`, `**/functional_tests/**`, and `**/examples/**` — those trees run on CPython or stand alone outside any package, so relative imports either work fine or are syntactically impossible. A regression scenario in `scripts/audit_gates.py` confirms the gate fires for `libraries/*/src/` + `support/test_harness/src/` and stays silent in the relaxed trees.
+
 ## Docstrings
 
 Every public function, method, and class needs a docstring. We use [Google style](https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings): types go on annotations, descriptions go in docstrings. This avoids writing the type twice.

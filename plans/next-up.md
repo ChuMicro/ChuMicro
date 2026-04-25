@@ -33,7 +33,6 @@
 
 ## Investigations
 
-- [ ] **Wire a static gate for the libraries/ absolute-imports rule** (AGENTS.md non-negotiable).  Today the rule is only caught at runtime — a relative `from .core import Foo` in `libraries/*/src/` or `support/test_harness/` won't fail preflight; CircuitPython RAM-mode just blows up at deploy time.  Likely shape: ruff TID252 (`flake8-tidy-imports`) scoped to `libraries/*/src` + `support/test_harness/src` via a `[tool.ruff.lint.per-file-ignores]` carve-out for tests + workbench (which can use either style).  Surfaced by `scripts/audit_gates.py` as a known gap.
 - [ ] **Investigate slow MicroPython RAM-mode functional test runs** — observed during 2026-04-19 live PyCharm testing that MicroPython RAM-mode functional tests took noticeably longer than expected. CircuitPython RAM-mode is fast in comparison. Suspects: per-file `mpremote mount` cost, cold-start interpreter overhead, batch-vs-per-test trade-off. Profile against the new batch-execute path and identify whether amortization can be improved.
 
 ## Done (recent)
@@ -43,7 +42,8 @@
 > `plans/workstreams/<workstream>.md` (per-phase acceptance).  Past entries
 > link to those records — don't paste detail back into `next-up.md`.
 
-- [x] **`check-version` + `check-api` cover workbench packages** — both pre-merge gates now walk `workbench/*/` alongside `libraries/*/`, and `release_tags()` matches the canonical `chumicro-<name>-v*` glob emitted by `release.yml` so workbench tags resolve once the first non-zero bump lands (2026-04-25). See [history.md 2026-04-25](history.md).
+- [x] **Static gate for libraries/ absolute-imports rule** — ruff TID252 enabled in `pyproject.toml` with per-file-ignores relaxing it for `workbench/`, `scripts/`, tests, functional_tests, and examples (2026-04-25). See [history.md 2026-04-25](history.md).
+- [x] **`check-version` + `check-api` cover workbench packages** — both pre-merge gates now walk `workbench/*/` alongside `libraries/*/`, and `release_tags()` matches the canonical `chumicro-<name>-v*` glob emitted by `release.yml` so workbench tags resolve once the first non-zero bump lands; griffe absolute-`--search` no-op fix landed alongside; codified as `scripts/audit_gates.py` regression suite (2026-04-25). See [history.md 2026-04-25](history.md).
 - [x] **`release.yml` + `promote.yml` cover workbench packages** (`workbench/*/VERSION` triggers, library-only bundle + validate-mip gating, kind-aware promote-validate; VERSION still 0.0.0 so no release fires yet) (2026-04-25). See [history.md 2026-04-25](history.md).
 - [x] **VS Code Testing-panel on-device validation + workbench-discovery + functional_tests show-but-deselect** (2026-04-25). See [history.md 2026-04-25](history.md).
 - [x] **Project-workspace Phase 2: `chumicro-repl` shipped** (2026-04-25). See [workstream Phase 2](workstreams/project-workspace.md) (acceptance) and [history.md 2026-04-25](history.md) (session log).
