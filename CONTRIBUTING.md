@@ -59,7 +59,7 @@ Each page is self-contained for its topic. You don't need to read all of them �
 | Git | any recent | |
 | IDE (optional) | Any editor with a terminal | PyCharm, VS Code, Neovim, Zed, Emacs, Sublime — all work |
 
-**Windows users:** use native Windows for editing, linting, and tests. Use WSL2 for unix-port cross-runtime checks. See [Development](README.md#development) in the README.
+**Windows users:** use native Windows for editing, linting, and tests. Use WSL2 for unix-port cross-runtime checks. The [development environment](#development-environment) section below points at the per-IDE guides.
 
 ## Development environment
 
@@ -256,21 +256,9 @@ Repeat until the rebase finishes, then push with `--force-with-lease` as above.
 
 All work happens on branches off `main`. PRs target `main`. There is no `develop` branch.
 
-Prefix your branch name with `fix/`, `docs/`, or `feature/` to give reviewers context at a glance, then add a short description of the work:
+Prefix your branch name with `fix/`, `docs/`, or `feature/` to give reviewers context at a glance, then add a short description of the work — for example, `fix/timing-wraparound`, `docs/install-guide`, or `feature/settings-lib`. Use whatever prefix fits; the description matters more than the prefix.
 
-```bash
-git checkout -b fix/timing-wraparound
-git checkout -b docs/install-guide
-git checkout -b feature/settings-lib
-```
-
-Use whatever prefix fits — the description matters more than the prefix.
-
-After [syncing your fork](#keeping-your-fork-in-sync), create a branch:
-
-```bash
-git checkout -b feature/my-change
-```
+[Sync your fork](#keeping-your-fork-in-sync) before creating a branch.
 
 ## Making changes
 
@@ -284,12 +272,12 @@ python scripts/run.py preflight
 
 If it prints `Preflight passed`, you're good — CI will pass too. That's the only command you need to remember. Everything else below is what preflight checks behind the scenes.
 
-> **Coverage note:** The test suite catches real edge cases that lower thresholds miss. If coverage fails on code you didn't change, that's not your fault — note it in the PR description. A maintainer can help fill the gap or mark an exception. Don't let someone else's uncovered code block your contribution.
+> **Coverage note:** If coverage fails on code you didn't change, that's not your fault — note it in the PR description. A maintainer can help fill the gap or mark an exception. Don't let someone else's uncovered code block your contribution.
 
 <details>
 <summary>What preflight checks (expand for details)</summary>
 
-- **Test coverage** per library (85% branch coverage). Run individually: `python scripts/run.py test --libraries <name>`
+- **Test coverage** per library (85% gate, line + branch). Run individually: `python scripts/run.py test --libraries <name>`
 - **Scripts infrastructure tests pass.** Run individually: `python scripts/run.py test-scripts`
 - **No lint errors.** Run individually: `python scripts/run.py lint`
 - **Examples must parse.** Run individually: `python scripts/run.py verify-examples --libraries <name>`
@@ -303,7 +291,7 @@ If it prints `Preflight passed`, you're good — CI will pass too. That's the on
 
 Device testing is **optional**. If your change could behave differently on a real board than in tests, including console output from a device is appreciated but never required to open a PR. If you're not sure, submit the PR without it and note that in the description — a reviewer will tell you if it's needed.
 
-**Most contributions don't need this.** Docs-only, test-only, infrastructure, and trivial fixes are exempt. Libraries with no hardware interaction (like `compat` and `msgpack`) are also exempt. See the [device testing guide](docs/contributing/device-testing.md) for setup and workflow, and the [PR guide's device-testing section](docs/contributing/pull-requests.md#device-testing) for what to include when you do test.
+**Most contributions don't need this.** Docs-only, test-only, infrastructure, and trivial fixes are exempt. Pure-Python libraries that don't drive peripherals (like `compat` and `msgpack`) typically only need their cross-runtime unit tests for confidence — though both still ship a `functional_tests/` suite if you want belt-and-braces hardware coverage. See the [device testing guide](docs/contributing/device-testing.md) for setup and workflow, and the [PR guide's device-testing section](docs/contributing/pull-requests.md#device-testing) for what to include when you do test.
 
 When you do want real-board coverage, the current workflow is:
 
@@ -404,7 +392,7 @@ These aren't arbitrary — each one traces to a design decision with rationale. 
 |---|---|---|
 | `ImportError` when running `pytest` directly | Bare `pytest` doesn't know about the per-library layout | Use `python scripts/run.py test --libraries <name>` instead |
 | A `functional_tests/` play button says no device is configured | `devices.yml` is missing, empty, or points at the wrong board IDs | Run `python scripts/run.py setup`, then update `devices.yml` defaults and device entries. See [Device Testing](docs/contributing/device-testing.md) |
-| `check-version` fails but you only changed tests | CI checks source changes under `src/` | No VERSION bump needed for test-only, docs-only, or infra changes — delete the failing step's output note in your PR |
+| `check-version` fails but you only changed tests | CI checks source changes under `src/` | No VERSION bump needed for test-only, docs-only, or infra changes — explain in the PR description that the failure is expected and a maintainer will mark it accordingly |
 | Coverage fails on code you didn't touch | Pre-existing gap in another file | Note it in the PR description — a maintainer can help fill the gap or mark an exception |
 | `griffe warnings detected` in docs build | Missing type annotation on a function parameter | Add the type to the signature: `def foo(x: int)` — docstrings carry descriptions only |
 | Merge conflicts after pushing | `main` moved while you were working | [Rebase your branch](#what-if-main-moves-while-im-working) onto the latest `main` |
