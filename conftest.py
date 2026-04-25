@@ -30,26 +30,97 @@ ROOT = Path(__file__).resolve().parent
 pytest_plugins = ["pytest_device"]
 
 
-def pytest_ignore_collect(collection_path, config):
-    """Ignore functional_tests/ during normal discovery, allow explicit targeting.
+def _has_explicit_functional_arg(config) -> bool:
+    """Did the pytest invocation explicitly target a functional_tests path?
 
-    Normal test runs (``python scripts/run.py test``) skip
-    ``functional_tests/`` directories since those require a connected
-    device.  When the IDE targets a ``functional_tests`` path directly
-    (play button on a file, function, or directory), collection is
-    allowed and the ``pytest_device`` plugin routes execution to
-    hardware.
+    True for ``pytest .../functional_tests/test_x.py``,
+    ``.../functional_tests/test_x.py::test_y``, or a bare
+    ``functional_tests/`` directory — i.e. the path-target invocations
+    IDE Testing panels emit when the user clicks gutter ▶, right-clicks
+    "Run Tests in folder", or runs a specific test by name.
+
+    False for default discovery / sweeps where the user did not name a
+    functional_tests path themselves.
+    """
+    for arg in config.args:
+        # Strip nodeid suffix (``path::Test::method``) before resolving.
+        path_part = str(arg).split("::", 1)[0]
+        if "functional_tests" in Path(path_part).parts:
+            return True
+    return False
+
+
+def pytest_ignore_collect(collection_path, config):
+    """Make ``functional_tests/`` items visible to IDE discovery without sweeping them.
+
+    IDE Testing panels (VS Code, PyCharm) only render gutter ▶ buttons
+    next to tests pytest actually collected during discovery, so any
+    "hide at collection time" approach kills the gutter-▶ workflow for
+    hardware tests entirely.  This hook therefore only hides
+    ``functional_tests/`` when the workspace has *no*
+    ``devices.yml`` — fresh clones keep a clean Testing tree until the
+    user runs ``python scripts/run.py setup`` and fills in board
+    details.
+
+    Once ``devices.yml`` exists, items are *collected* (so VS Code can
+    paint gutter buttons) but a sibling ``pytest_collection_modifyitems``
+    hook below *deselects* them whenever the invocation didn't
+    explicitly target a ``functional_tests/`` path.  Net effect:
+
+    - VS Code Testing tree: functional tests visible with gutter ▶.
+    - Click gutter ▶ on one test, or right-click "Run Tests in
+      folder" → invocation includes a ``functional_tests`` path arg →
+      runs against hardware via ``pytest_device``.
+    - Bare ``pytest`` from rootdir, or any "run all unit tests"
+      sweep that doesn't name a ``functional_tests`` path → items
+      collected but immediately deselected; only host tests run.
+
+    The plugin ``pytest.skip(...)`` s with a friendly message at runtime
+    when ``devices.yml`` exists but has no defaults configured.
     """
     if "functional_tests" not in collection_path.parts:
         return None  # Not a functional_tests path — use default behavior.
 
-    # Check if any CLI arg explicitly targets a functional_tests path.
-    for arg in config.args:
-        arg_path = Path(arg).resolve()
-        if "functional_tests" in arg_path.parts:
-            return False  # Explicitly targeted — allow collection.
+    # Always allow when path-targeted via CLI args.
+    if _has_explicit_functional_arg(config):
+        return False
 
-    return True  # Normal traversal — ignore functional_tests.
+    # Otherwise gate on devices.yml so fresh clones stay tidy and
+    # configured workspaces get gutter buttons.  The sweep-deselect
+    # hook below keeps configured workspaces from running hardware
+    # tests during default sweeps.
+    if (ROOT / "devices.yml").exists():
+        return False
+
+    return True
+
+
+def pytest_collection_modifyitems(config, items):
+    """Deselect ``functional_tests/`` items during default sweeps.
+
+    Pairs with ``pytest_ignore_collect`` above: items remain
+    *collected* so IDE Testing panels render gutter buttons, but when
+    the invocation didn't explicitly name a ``functional_tests`` path
+    we deselect them so a default ``pytest`` / "Run All Tests" sweep
+    only runs host tests.
+
+    When the user *does* explicitly target a ``functional_tests/``
+    path or nodeid, this hook returns immediately and the items
+    proceed to run against hardware.
+    """
+    if _has_explicit_functional_arg(config):
+        return
+
+    deselected: list = []
+    selected: list = []
+    for item in items:
+        if "functional_tests" in str(item.fspath):
+            deselected.append(item)
+        else:
+            selected.append(item)
+    if deselected:
+        config.hook.pytest_deselected(items=deselected)
+        items[:] = selected
 
 
 def _discover_source_roots() -> list[str]:

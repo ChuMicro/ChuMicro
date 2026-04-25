@@ -103,18 +103,27 @@ class TestThirdPartyPortability:
     def test_public_api_alone_is_sufficient(self, _import_template) -> None:
         """The fixture touches only chumicro_deploy — never mono-repo paths.
 
-        Walks sys.modules after the imports above and asserts nothing
-        from ``chumicro.`` mono-repo namespaces like
-        ``chumicro_timing`` or ``chumicro_test_harness`` got pulled
-        in.  Those would indicate a hidden coupling the public API
-        should not require.
-        """
-        from my_template import CustomLayoutFileSource  # noqa: F401
+        Captures the ``sys.modules`` delta caused by importing the
+        third-party fixture and asserts no mono-repo namespaces like
+        ``chumicro_timing`` or ``chumicro_test_harness`` were pulled
+        in by the fixture's import chain.  Those would indicate a
+        hidden coupling the public API should not require.
 
-        # Drop the fixture package from module namespace inspection —
-        # it only touches chumicro_deploy and stdlib.
+        Per-package ``python scripts/run.py test`` runs each pytest
+        in isolation, so a global ``sys.modules`` scan would suffice
+        there — but root-level pytest (VS Code Testing panel, bare
+        ``pytest`` from rootdir) shares one session across libraries
+        and workbench, so prior library tests would leave their own
+        ``chumicro_timing`` import in ``sys.modules`` and the global
+        scan would false-positive.  The delta scan is correct in both
+        regimes.
+        """
+        baseline_modules = set(sys.modules)
+        from my_template import CustomLayoutFileSource  # noqa: F401
+        added_modules = set(sys.modules) - baseline_modules
+
         leaked = [
-            module_name for module_name in sys.modules
+            module_name for module_name in added_modules
             if module_name.startswith(
                 ("chumicro_timing", "chumicro_runner", "chumicro_test_harness")
             )
