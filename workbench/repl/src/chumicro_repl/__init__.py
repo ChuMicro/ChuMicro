@@ -22,7 +22,19 @@ not the cost of importing pyserial + the full pattern-detector graph.
 from __future__ import annotations
 
 import importlib
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    # Re-imports for static analysis only.  Runtime resolution goes
+    # through the lazy ``__getattr__`` hook below; this block exists
+    # so pyright / mypy can see every name declared in ``__all__``
+    # without eagerly loading every submodule.
+    from ._follow import ExitCode, tail
+    from .framing import Utf8StreamDecoder
+    from .highlight import Theme, colorize, strip_ansi_sequences
+    from .patterns import PatternKind, PatternMatch, detect_patterns
+    from .session import ReplSession, ReplSessionError
+    from .tui import interactive
 
 #: Map of public attribute -> submodule.  ``__getattr__`` below walks
 #: this table to defer each submodule import until the attribute is
@@ -42,7 +54,25 @@ _LAZY_ATTRS: dict[str, str] = {
     "tail": "_follow",
 }
 
-__all__ = sorted(_LAZY_ATTRS.keys())
+#: Public API surface.  Spelled as a literal list so static type
+#: checkers (pyright in particular) can see every exported name.
+#: Keep alphabetized; a sorted assertion below catches drift.
+__all__ = [
+    "ExitCode",
+    "PatternKind",
+    "PatternMatch",
+    "ReplSession",
+    "ReplSessionError",
+    "Theme",
+    "Utf8StreamDecoder",
+    "colorize",
+    "detect_patterns",
+    "interactive",
+    "strip_ansi_sequences",
+    "tail",
+]
+assert sorted(__all__) == __all__, "__all__ must be alphabetized"
+assert set(__all__) == set(_LAZY_ATTRS), "__all__ must match _LAZY_ATTRS"
 
 
 def __getattr__(name: str) -> Any:

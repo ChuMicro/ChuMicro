@@ -234,9 +234,17 @@ class Device:
         # supported runtimes, so we can assume circuitpython here.
         from .circuitpython_transport import CircuitpythonTransport
 
+        # ``Device`` stores the path as ``Path | None`` so consumers
+        # holding the dataclass don't have to round-trip strings;
+        # ``CircuitpythonTransport`` accepts the str form (matches
+        # the historical pyserial / mpremote shape).  Convert here.
+        drive_path_string = (
+            str(self.circuitpy_drive_path)
+            if self.circuitpy_drive_path is not None else None
+        )
         return CircuitpythonTransport(
             self.address,
             baudrate=self.baudrate,
             mode=self.deploy_mode,
-            circuitpy_drive_path=self.circuitpy_drive_path,
+            circuitpy_drive_path=drive_path_string,
         )

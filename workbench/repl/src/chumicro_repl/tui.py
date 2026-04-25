@@ -31,7 +31,7 @@ import contextlib
 import sys
 import time as _time_module
 from collections.abc import Callable, Iterator
-from typing import TYPE_CHECKING, BinaryIO, Protocol, TextIO
+from typing import TYPE_CHECKING, BinaryIO, Protocol, TextIO, cast
 
 from ._serial import (
     CTRL_X,
@@ -64,6 +64,7 @@ class KeyInputReader(Protocol):
 
     def read_available(self) -> bytes:
         """Return every byte currently buffered, or ``b""`` if none."""
+        ...
 
 
 def run_loop(
@@ -105,7 +106,11 @@ def run_loop(
             single carriage return so the friendly REPL reprints
             its ``>>>`` prompt instead of staring at a blank line.
     """
-    active_time: TimeSource = time if time is not None else _time_module
+    # ``cast`` silences a structural-typing nit on stdlib ``time``;
+    # see the matching note in :mod:`chumicro_repl.session`.
+    active_time: TimeSource = (
+        time if time is not None else cast(TimeSource, _time_module)
+    )
     active_theme = theme if theme is not None else DEFAULT_THEME
     decoder = Utf8StreamDecoder()
     detector = StreamingPatternDetector()
@@ -290,14 +295,24 @@ class _StdinKeyboard:
         self._fd = fd
 
     def read_available(self) -> bytes:
+        # ``BinaryIO`` doesn't statically expose ``read1`` (only the
+        # subclass ``BufferedIOBase`` does), so the type checker can't
+        # see the call.  Probe at runtime — every BufferedReader and
+        # BytesIO this adapter is asked to handle has it.  Falls back
+        # to a blocking ``read(n)`` on rare streams without ``read1``.
+        read1: object | None = getattr(self._stream, "read1", None)
         if self._fd is None:
-            return self._stream.read1(256) if hasattr(self._stream, "read1") else b""
+            if callable(read1):
+                return cast(bytes, read1(256))
+            return b""
         import select  # noqa: PLC0415 — stdlib-only, defer to keep imports lean
 
         ready, _, _ = select.select([self._fd], [], [], 0)
         if not ready:
             return b""
-        return self._stream.read1(256) if hasattr(self._stream, "read1") else self._stream.read(256)
+        if callable(read1):
+            return cast(bytes, read1(256))
+        return self._stream.read(256)
 
 
 @contextlib.contextmanager

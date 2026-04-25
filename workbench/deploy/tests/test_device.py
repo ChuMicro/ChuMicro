@@ -247,4 +247,8 @@ class TestCreateTransport:
         transport = device.create_transport()
         assert isinstance(transport, CircuitpythonTransport)
         assert transport.baudrate == 230400
-        assert transport.circuitpy_drive_path == drive
+        # ``Device`` stores the drive as a ``Path`` for typed
+        # downstream consumers; ``CircuitpythonTransport`` keeps the
+        # ``str`` shape it inherited from pyserial / mpremote.
+        # ``Device.create_transport`` does the conversion.
+        assert transport.circuitpy_drive_path == str(drive)

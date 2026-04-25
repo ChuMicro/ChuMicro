@@ -27,7 +27,63 @@ the cost of importing ``pyserial``, ``mpremote``, and
 from __future__ import annotations
 
 import importlib
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    # Re-imports for static analysis only.  Runtime resolution goes
+    # through the lazy ``__getattr__`` hook below; this block exists
+    # so pyright / mypy can see every name declared in ``__all__``
+    # without eagerly loading every submodule (which would defeat
+    # the lazy pattern's whole purpose — short-lived entrypoints
+    # like ``--help`` and ``probe`` don't need the full dep graph).
+    from .circuitpython_bootstrap import (
+        build_circuitpython_bootstrap,
+        build_circuitpython_bootstrap_scripts,
+        build_circuitpython_deploy_scripts,
+    )
+    from .circuitpython_transport import (
+        CircuitpythonTransport,
+        CircuitpythonTransportError,
+        SerialPort,
+        find_circuitpy_drive,
+    )
+    from .deployer import Deployer
+    from .device import Device
+    from .firmware import (
+        CIRCUITPYTHON_FIRMWARE_URL_TEMPLATE,
+        FlashFirmwareError,
+        UnresolvedFirmwareError,
+        flash_firmware,
+        resolve_firmware_url,
+    )
+    from .host_platform import RsyncMissingError, WindowsNotSupportedError
+    from .macos_fskit import (
+        MACOS_FSKIT_RECOVERY_COMMAND,
+        detect_fskit_wedge,
+    )
+    from .micropython_transport import (
+        MicropythonTransport,
+        MicropythonTransportError,
+    )
+    from .probe import DeviceInfo, probe_device
+    from .protocol import (
+        DeployMode,
+        DeviceImplementation,
+        ExtendedTransportProtocol,
+        ReflashMethod,
+        Runtime,
+        TransportProtocol,
+    )
+    from .recovery import (
+        DeployFailureKind,
+        InteractiveDeployer,
+        RecoveryPlan,
+        classify_deploy_failure,
+        recovery_plan_for,
+    )
+    from .result import DeployError, DeployResult
+    from .sources import DirectorySource, FileMapSource, FileSource, ImportGraphSource
+    from .testing import FakeTransport
 
 #: Map of public attribute -> submodule.  ``__getattr__`` below walks
 #: this table to defer each submodule import until the attribute is
@@ -76,7 +132,54 @@ _LAZY_ATTRS: dict[str, str] = {
     "resolve_firmware_url": "firmware",
 }
 
-__all__ = sorted(_LAZY_ATTRS.keys())
+#: Public API surface.  Spelled as a literal list so static type
+#: checkers (pyright in particular) can see every exported name;
+#: the assertion below catches drift between the literal list and
+#: the lazy-attr table.  Keep alphabetized.
+__all__ = [
+    "CIRCUITPYTHON_FIRMWARE_URL_TEMPLATE",
+    "CircuitpythonTransport",
+    "CircuitpythonTransportError",
+    "DeployError",
+    "DeployFailureKind",
+    "DeployMode",
+    "DeployResult",
+    "Deployer",
+    "Device",
+    "DeviceImplementation",
+    "DeviceInfo",
+    "DirectorySource",
+    "ExtendedTransportProtocol",
+    "FakeTransport",
+    "FileMapSource",
+    "FileSource",
+    "FlashFirmwareError",
+    "ImportGraphSource",
+    "InteractiveDeployer",
+    "MACOS_FSKIT_RECOVERY_COMMAND",
+    "MicropythonTransport",
+    "MicropythonTransportError",
+    "RecoveryPlan",
+    "ReflashMethod",
+    "RsyncMissingError",
+    "Runtime",
+    "SerialPort",
+    "TransportProtocol",
+    "UnresolvedFirmwareError",
+    "WindowsNotSupportedError",
+    "build_circuitpython_bootstrap",
+    "build_circuitpython_bootstrap_scripts",
+    "build_circuitpython_deploy_scripts",
+    "classify_deploy_failure",
+    "detect_fskit_wedge",
+    "find_circuitpy_drive",
+    "flash_firmware",
+    "probe_device",
+    "recovery_plan_for",
+    "resolve_firmware_url",
+]
+assert sorted(__all__) == __all__, "__all__ must be alphabetized"
+assert set(__all__) == set(_LAZY_ATTRS), "__all__ must match _LAZY_ATTRS"
 
 
 def __getattr__(name: str) -> Any:

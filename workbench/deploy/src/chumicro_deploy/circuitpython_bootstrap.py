@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
+from typing import cast
 
 from .protocol import validate_entrypoint_in_files
 
@@ -351,23 +352,30 @@ def _build_population_block(module_name: str, source_text: str) -> str:
 
 
 class _InlineDocstringStripper(ast.NodeTransformer):
-    """Remove docstrings before AST unparsing shrinks inline source."""
+    """Remove docstrings before AST unparsing shrinks inline source.
+
+    The visit methods cast ``generic_visit`` back to the specific
+    node type — `ast.NodeTransformer.generic_visit` is typed as
+    returning ``AST`` in typeshed, but per the documented
+    transformer contract a ``visit_<Specific>`` method that mutates
+    in place returns the same node type that was passed in.
+    """
 
     def visit_Module(self, node: ast.Module) -> ast.Module:
         node.body = _strip_docstring_from_body(node.body)
-        return self.generic_visit(node)
+        return cast(ast.Module, self.generic_visit(node))
 
     def visit_ClassDef(self, node: ast.ClassDef) -> ast.ClassDef:
         node.body = _strip_docstring_from_body(node.body, require_nonempty=True)
-        return self.generic_visit(node)
+        return cast(ast.ClassDef, self.generic_visit(node))
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.FunctionDef:
         node.body = _strip_docstring_from_body(node.body, require_nonempty=True)
-        return self.generic_visit(node)
+        return cast(ast.FunctionDef, self.generic_visit(node))
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> ast.AsyncFunctionDef:
         node.body = _strip_docstring_from_body(node.body, require_nonempty=True)
-        return self.generic_visit(node)
+        return cast(ast.AsyncFunctionDef, self.generic_visit(node))
 
 
 def _prepare_inline_source(source_text: str) -> str:

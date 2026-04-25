@@ -28,7 +28,7 @@ import ast
 import re
 import time as _time_module
 from types import TracebackType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from ._serial import (
     CTRL_A,
@@ -134,7 +134,14 @@ class ReplSession:
         address, resolved_baudrate = _resolve_device(device, baudrate)
         self._address = address
         self._baudrate = resolved_baudrate
-        self._time: TimeSource = time if time is not None else _time_module
+        # ``cast`` silences a structural-typing nit: stdlib ``time.sleep``
+        # has its ``seconds`` parameter marked position-only at the C
+        # layer, while ``TimeSource`` declares it as a regular keyword
+        # parameter.  Both call shapes work at runtime; pyright flags
+        # the mismatch.  Same workaround chumicro-deploy uses.
+        self._time: TimeSource = (
+            time if time is not None else cast(TimeSource, _time_module)
+        )
         self._port_factory: PortFactory = (
             port_factory if port_factory is not None else default_port_factory
         )

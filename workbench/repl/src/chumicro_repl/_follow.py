@@ -23,7 +23,7 @@ from __future__ import annotations
 import sys
 import time as _time_module
 from enum import Enum
-from typing import TYPE_CHECKING, TextIO
+from typing import TYPE_CHECKING, TextIO, cast
 
 from ._serial import (
     PortFactory,
@@ -115,7 +115,15 @@ def tail(
     """
     active_output = output if output is not None else sys.stdout
     active_theme = theme if theme is not None else DEFAULT_THEME
-    active_time: TimeSource = time if time is not None else _time_module
+    # ``cast`` silences a structural-typing nit: stdlib ``time.sleep``
+    # has its ``seconds`` parameter marked position-only at the C layer,
+    # while the ``TimeSource`` protocol declares it as a regular keyword
+    # parameter.  At runtime both call shapes work; pyright flags the
+    # mismatch.  Same workaround chumicro-deploy uses for its identical
+    # ``TimeSource`` protocol.
+    active_time: TimeSource = (
+        time if time is not None else cast(TimeSource, _time_module)
+    )
     active_factory: PortFactory = (
         port_factory if port_factory is not None else default_port_factory
     )
