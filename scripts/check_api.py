@@ -116,12 +116,15 @@ def _check(base_reference: str) -> int:
         # Run griffe to compare the current public API against the tagged
         # release.  griffe parses Python source statically and detects
         # removed/renamed symbols, changed signatures, etc.
-        # --search must point at the package's src/ directory so griffe
-        # can find the package for import resolution.  We capture both
-        # stdout and stderr because griffe emits breakage details on
-        # different streams depending on version.  A non-zero exit code
-        # indicates at least one breaking change was detected.
-        src_dir = str(package_root / "src")
+        # --search must be a path *relative to cwd*: griffe 2.x silently
+        # ignores absolute --search paths (resolves nothing, exits 0
+        # with no output), which previously made this gate a no-op.
+        # cwd=ROOT means the relative path resolves correctly for both
+        # libraries/<name>/src and workbench/<name>/src.
+        # stdout and stderr are both captured because griffe emits
+        # breakage details on different streams depending on version.
+        # A non-zero exit code indicates at least one breaking change.
+        src_dir = str((package_root / "src").relative_to(ROOT))
         result = subprocess.run(
             [
                 sys.executable, "-m", "griffe", "check",

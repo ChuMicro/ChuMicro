@@ -7,7 +7,7 @@ This is the front door. Everything else is deeper read.
 ---
 
 - **Phase:** Project-workspace Phase 2 (`chumicro-repl`) shipped 2026-04-25; queue is between phases. Next sequenced phase is 3 (`chumicro-kvstore` + `chumicro-wifi`, can interleave).
-- **Last shipped:** Pre-merge gates extended to workbench packages — `check-version` + `check-api` now walk `workbench/*/` alongside `libraries/*/`, and `release_tags()` matches the canonical `chumicro-<name>-v*` glob so workbench tags resolve once the first non-zero bump lands.
+- **Last shipped:** Pre-merge gates extended to workbench *and* `check_api` finally fires — griffe 2.x had been silently ignoring our absolute `--search` path so the gate was a no-op for every PR; switching to a path relative to ROOT fixed it.
 - **In flight:** —
 - **Blocked on:** —
 - **Last touched:** `scripts/{workspace,check_version,check_api}.py`, `scripts/tests/{test_workspace,test_check_version}.py`, `plans/{now,history,next-up}.md`. The non-zero workbench `VERSION` bump is now safe whenever — gates are exercised end-to-end first.
