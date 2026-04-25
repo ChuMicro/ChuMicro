@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
     inputs:
       experimental_tag:
-        description: "Experimental tag to promote (e.g. chumicro-timing-v0.3.0-experimental)"
+        description: "Experimental tag to promote (e.g. chumicro-timing-v0.3.0-experimental, chumicro-deploy-v0.0.1-experimental)"
         type: string
         required: true
       dry_run:
@@ -42,7 +42,8 @@ jobs:
       library_name: ${{ steps.parse.outputs.library_name }}
       version: ${{ steps.parse.outputs.version }}
       stable_tag: ${{ steps.parse.outputs.stable_tag }}
-      library_dir: ${{ steps.parse.outputs.library_dir }}
+      library_dir: ${{ steps.locate.outputs.library_dir }}
+      package_kind: ${{ steps.locate.outputs.package_kind }}
       source_zip: ${{ steps.parse.outputs.source_zip }}
     steps:
       - name: Parse experimental tag
@@ -58,7 +59,6 @@ jobs:
             echo "library_name=${library_name}" >> "$GITHUB_OUTPUT"
             echo "version=${version}" >> "$GITHUB_OUTPUT"
             echo "stable_tag=chumicro-${library_name}-v${version}" >> "$GITHUB_OUTPUT"
-            echo "library_dir=libraries/${library_name}" >> "$GITHUB_OUTPUT"
             echo "source_zip=chumicro-${library_name}-v${version}-source.zip" >> "$GITHUB_OUTPUT"
             echo "✓ Promoting ${library_name} v${version} from experimental to stable"
           else
@@ -69,6 +69,28 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Locate package directory
+        id: locate
+        # The promote-tag format doesn't encode whether the package is a
+        # library (libraries/<name>/) or a workbench tool (workbench/<name>/),
+        # so probe the filesystem.  Workbench packages (Decision 0032 rule
+        # 3) skip the bundle + validate-mip jobs further down — only the
+        # PyPI publish, tag, GitHub Release, and docs steps run for them.
+        run: |
+          library_name="${{ steps.parse.outputs.library_name }}"
+          if [[ -d "libraries/${library_name}" ]]; then
+            echo "library_dir=libraries/${library_name}" >> "$GITHUB_OUTPUT"
+            echo "package_kind=library" >> "$GITHUB_OUTPUT"
+            echo "✓ Found libraries/${library_name}/ — promoting as library"
+          elif [[ -d "workbench/${library_name}" ]]; then
+            echo "library_dir=workbench/${library_name}" >> "$GITHUB_OUTPUT"
+            echo "package_kind=workbench" >> "$GITHUB_OUTPUT"
+            echo "✓ Found workbench/${library_name}/ — promoting as workbench (PyPI-only, no bundle)"
+          else
+            echo "::error::No package found at libraries/${library_name}/ or workbench/${library_name}/."
+            exit 1
+          fi
 
       - name: Validate preconditions
         env:
@@ -114,7 +136,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          library_name="${{ needs.validate.outputs.library_name }}"
+          library_dir="${{ needs.validate.outputs.library_dir }}"
           source_zip="${{ needs.validate.outputs.source_zip }}"
           tag="${{ inputs.experimental_tag }}"
 
@@ -122,15 +144,17 @@ jobs:
             --pattern "$source_zip" \
             --dir /tmp/source-archive
 
-          # Replace main's library source with the frozen experimental
+          # Replace main's package source with the frozen experimental
           # source.  Only src/, pyproject.toml, VERSION, and README.md are
-          # in the archive — that's everything the build needs.
-          rm -rf "libraries/${library_name}/src"
-          rm -f "libraries/${library_name}/pyproject.toml" \
-                "libraries/${library_name}/VERSION" \
-                "libraries/${library_name}/README.md"
+          # in the archive — that's everything the build needs.  Works
+          # for both libraries/<name>/ and workbench/<name>/ — library_dir
+          # is whichever the validate job found.
+          rm -rf "${library_dir}/src"
+          rm -f "${library_dir}/pyproject.toml" \
+                "${library_dir}/VERSION" \
+                "${library_dir}/README.md"
           unzip -o "/tmp/source-archive/${source_zip}" \
-            -d "libraries/${library_name}/"
+            -d "${library_dir}/"
 
       - uses: actions/setup-python@v6
         with:
@@ -179,7 +203,9 @@ jobs:
   bundle:
     name: Publish to ChuMicro/ChuMicro-Bundle
     needs: [validate, release]
-    if: ${{ !inputs.dry_run }}
+    # Workbench packages (Decision 0032 rule 3) skip the bundle path —
+    # they're CPython-only and have nothing to ship to circup / mip.
+    if: ${{ !inputs.dry_run && needs.validate.outputs.package_kind == 'library' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -192,19 +218,19 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          library_name="${{ needs.validate.outputs.library_name }}"
+          library_dir="${{ needs.validate.outputs.library_dir }}"
           source_zip="${{ needs.validate.outputs.source_zip }}"
           tag="${{ inputs.experimental_tag }}"
 
           gh release download "$tag" \
             --pattern "$source_zip" \
             --dir /tmp/source-archive
-          rm -rf "libraries/${library_name}/src"
-          rm -f "libraries/${library_name}/pyproject.toml" \
-                "libraries/${library_name}/VERSION" \
-                "libraries/${library_name}/README.md"
+          rm -rf "${library_dir}/src"
+          rm -f "${library_dir}/pyproject.toml" \
+                "${library_dir}/VERSION" \
+                "${library_dir}/README.md"
           unzip -o "/tmp/source-archive/${source_zip}" \
-            -d "libraries/${library_name}/"
+            -d "${library_dir}/"
 
       - uses: actions/setup-python@v6
         with:
@@ -321,7 +347,8 @@ jobs:
   validate-mip:
     name: Validate mip install (stable)
     needs: [validate, bundle]
-    if: ${{ !inputs.dry_run }}
+    # Same library-only filter as the bundle job above.
+    if: ${{ !inputs.dry_run && needs.validate.outputs.package_kind == 'library' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

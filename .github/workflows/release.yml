@@ -6,10 +6,11 @@ on:
       - main
     paths:
       - "libraries/*/VERSION"
+      - "workbench/*/VERSION"
   workflow_dispatch:
     inputs:
       libraries:
-        description: "Libraries to release (comma-separated, e.g. 'timing,runner'). Leave empty for all."
+        description: "Packages to release (comma-separated, e.g. 'timing,deploy'). Library and workbench package basenames are accepted. Leave empty for all."
         type: string
         default: ""
       channel:
@@ -39,12 +40,14 @@ defaults:
 
 jobs:
   detect:
-    name: Detect changed libraries
+    name: Detect changed packages
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       matrix: ${{ steps.detect.outputs.matrix }}
+      library_matrix: ${{ steps.detect.outputs.library_matrix }}
       has_releases: ${{ steps.detect.outputs.has_releases }}
+      has_library_releases: ${{ steps.detect.outputs.has_library_releases }}
       is_experimental: ${{ steps.channel.outputs.is_experimental }}
       suffix: ${{ steps.channel.outputs.suffix }}
       bundle_repository: ${{ steps.channel.outputs.bundle_repository }}
@@ -75,21 +78,36 @@ jobs:
           fi
 
       - id: detect
-        name: Find libraries to release
+        name: Find packages to release
         env:
           INPUT_LIBRARIES: ${{ inputs.libraries }}
         run: |
           suffix="${{ steps.channel.outputs.suffix }}"
 
-          # Scan all libraries with VERSION files and build the release
-          # matrix as a JSON array using jq for safe escaping.
+          # Scan both libraries/*/VERSION and workbench/*/VERSION.  Each
+          # entry carries a "kind" field — "library" entries flow through
+          # the full PyPI + bundle path; "workbench" entries publish to
+          # PyPI only and skip bundle staging / .mpy compilation
+          # (Decision 0032 rule 3 — workbench is host-only, never lands
+          # on a microcontroller).
           entries="[]"
-          for version_file in libraries/*/VERSION; do
+          for version_file in libraries/*/VERSION workbench/*/VERSION; do
             [[ -f "$version_file" ]] || continue
             library_dir=$(dirname "$version_file")
             library_name=$(basename "$library_dir")
 
-            # Filter to requested libraries if specified.
+            # Determine kind from the parent directory.  basename of the
+            # parent is "libraries" or "workbench"; default to "library"
+            # for unknown layouts so additions to the matrix are
+            # conservative (still publish to PyPI, still tag).
+            parent_dir=$(basename "$(dirname "$library_dir")")
+            case "$parent_dir" in
+              libraries) kind="library" ;;
+              workbench) kind="workbench" ;;
+              *) kind="library" ;;
+            esac
+
+            # Filter to requested packages if specified.
             if [[ -n "$INPUT_LIBRARIES" ]]; then
               if ! echo ",$INPUT_LIBRARIES," | grep -q ",${library_name},"; then
                 continue
@@ -110,9 +128,19 @@ jobs:
               --arg library_dir "$library_dir" \
               --arg version "$version" \
               --arg tag "$tag" \
-              '. + [{"library_name": $library_name, "library_dir": $library_dir, "version": $version, "tag": $tag}]' \
+              --arg kind "$kind" \
+              '. + [{"library_name": $library_name, "library_dir": $library_dir, "version": $version, "tag": $tag, "kind": $kind}]' \
               <<< "$entries")
           done
+
+          # The full matrix flows into the per-package release job (PyPI
+          # publish + tag + GitHub Release); the library_matrix subset
+          # flows into the bundle + validate-mip jobs which only apply
+          # to library packages.  bundle_manager.py stage-matrix and
+          # validate_mip_install.py both read library_dir / library_name
+          # from the matrix entries, so the subset's entry shape is
+          # unchanged — only library entries are passed through.
+          library_entries=$(jq -c '[.[] | select(.kind == "library")]' <<< "$entries")
 
           if [[ "$entries" == "[]" ]]; then
             echo "has_releases=false" >> "$GITHUB_OUTPUT"
@@ -121,6 +149,15 @@ jobs:
             echo "has_releases=true" >> "$GITHUB_OUTPUT"
             matrix=$(jq -c '{"include": .}' <<< "$entries")
             echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
+          fi
+
+          if [[ "$library_entries" == "[]" ]]; then
+            echo "has_library_releases=false" >> "$GITHUB_OUTPUT"
+            echo 'library_matrix={"include":[]}' >> "$GITHUB_OUTPUT"
+          else
+            echo "has_library_releases=true" >> "$GITHUB_OUTPUT"
+            library_matrix=$(jq -c '{"include": .}' <<< "$library_entries")
+            echo "library_matrix=${library_matrix}" >> "$GITHUB_OUTPUT"
           fi
 
   release:
@@ -218,11 +255,14 @@ jobs:
   bundle:
     name: "Publish to ${{ needs.detect.outputs.bundle_repository }}"
     needs: [detect, release]
-    if: needs.detect.outputs.has_releases == 'true' && inputs.dry_run != true
+    if: needs.detect.outputs.has_library_releases == 'true' && inputs.dry_run != true
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      MATRIX_JSON: ${{ needs.detect.outputs.matrix }}
+      # Filtered to library entries only — workbench packages (Decision
+      # 0032 rule 3) skip bundle staging entirely; they have nothing to
+      # ship to circup / mip.
+      MATRIX_JSON: ${{ needs.detect.outputs.library_matrix }}
     steps:
       - uses: actions/checkout@v6
 
@@ -358,11 +398,12 @@ jobs:
   validate-mip:
     name: Validate mip install
     needs: [detect, bundle]
-    if: needs.detect.outputs.has_releases == 'true' && inputs.dry_run != true
+    if: needs.detect.outputs.has_library_releases == 'true' && inputs.dry_run != true
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      MATRIX_JSON: ${{ needs.detect.outputs.matrix }}
+      # Same library-only filter as the bundle job.
+      MATRIX_JSON: ${{ needs.detect.outputs.library_matrix }}
     steps:
       - uses: actions/checkout@v6
 
