@@ -6,9 +6,9 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** Phase 3a Slice 2 shipped — MP `network.WLAN` adapter live on Lolin S2 MP. Pi Pico W CYW43 adapter stubbed for Slice 3.
-- **Last shipped:** Phase 3a Slice 2 — `MpEsp32WifiAdapter` wraps `network.WLAN(network.STA_IF)` with the supervisor convention (calls `wlan.config(reconnects=0)` once after the first successful connect to disable ESP-IDF's firmware-level auto-reconnect, per Decision 0029 §wifi-ownership-stance). 70 host tests at 99 % cov; 16 functional tests pass on Lolin S2 MP (4 lazy-load + 6 MP-ESP32-adapter + 6 CP no-ops). Tolerates older firmware that may reject `dhcp_hostname` or `reconnects` knobs.
-- **In flight:** Phase 3a Slice 3 — Pi Pico W CYW43 adapter (`MpRp2WifiAdapter`) with `wlan.config(pm=0xa11140)` power-save knob.
+- **Phase:** Phase 3a Slices 0–3 all shipped — every per-runtime adapter implemented and hardware-verified across all four boards.  Next: Slice 4 acceptance against a real AP (live wifi credentials needed).
+- **Last shipped:** Phase 3a Slice 3 — `MpRp2WifiAdapter` (Pi Pico W CYW43) with `wlan.config(pm=0xa11140)` to disable CYW43 idle power-save (eliminates ~30-100 ms tick spikes on chip wake-up). No firmware-level supervisor on CYW43, so no `reconnects=0` call needed. 87 host tests at 99 % cov; 23 functional tests pass on Pi Pico W MP (7 RP2-adapter + 4 lazy-load + 12 no-ops for the other adapters' tests).
+- **In flight:** Phase 3a Slice 4 acceptance — connect to a real AP across all four boards, observe state transitions, exercise reconnect on a deliberate disconnect.
 - **Blocked on:** —
 - **Last touched:** `libraries/kvstore/**`, `plans/decisions/0034-kvstore-api-and-backends.md`, `plans/{now,history,next-up}.md`. Four boards plugged in: Lolin S2 CP/MP, Pi Pico W CP/MP — exercises every kvstore backend across slices 2–5.
 
