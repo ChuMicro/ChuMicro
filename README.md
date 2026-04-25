@@ -21,9 +21,7 @@
 
 ## What's in the box?
 
-Small, focused packages you can install independently. Use what you need.
-
-**Device libraries** — run on your microcontroller (CircuitPython + MicroPython + CPython).
+Small, focused libraries you can install independently. Use what you need.
 
 | Library | What it does |
 |---|---|
@@ -32,14 +30,7 @@ Small, focused packages you can install independently. Use what you need.
 | **[compat](libraries/compat/)** | Standard library features that CircuitPython and MicroPython are missing (like `functools.partial`). |
 | **[msgpack](libraries/msgpack/)** | Compact binary serialization — 30–50% smaller than JSON, great for settings and sensor data. |
 
-**Workbench tools** — run on your laptop to manage connected boards (CPython only; see [Decision 0032](plans/decisions/0032-workbench-host-tools.md)).
-
-| Tool | What it does |
-|---|---|
-| **[deploy](workbench/deploy/)** | Push code onto a CircuitPython or MicroPython board, probe its identity, and flash firmware (UF2 or esptool). Programmatic API + `chumicro-deploy` CLI; recovery layer that classifies failures and walks you through fixes. |
-| **[repl](workbench/repl/)** | Host-side serial REPL with traceback highlighting, an `mpremote`-compatible TUI, a `tail()` follow-mode for deploy orchestration, and a programmatic `ReplSession` for headless test fixtures. `chumicro-repl` CLI. |
-
-Device libraries work on ESP32 (S2, S3, C3, C6), RP2040/RP2350 (Raspberry Pi Pico), STM32, and most boards with at least 256 KB RAM and 4 MB flash. Workbench tools install with plain `pip install` on your laptop. Browse the [documentation site](https://chumicro.github.io/ChuMicro/) for guides and API references, or look through `libraries/` and `workbench/` — each package's README has install commands, a quick example, and an API summary.
+Works on ESP32 (S2, S3, C3, C6), RP2040/RP2350 (Raspberry Pi Pico), STM32, and most boards with at least 256 KB RAM and 4 MB flash. Browse the [documentation site](https://chumicro.github.io/ChuMicro/) for guides and API references, or look through `libraries/` — each library's README has install commands, a quick example, and an API summary.
 
 <details>
 <summary>Which libraries do I need? (dependencies and selection guide)</summary>
@@ -59,8 +50,15 @@ msgpack   (no dependencies)
 - **"I have multiple things happening in my loop"** → [runner](libraries/runner/) (includes timing)
 - **"I need to store settings or send data compactly"** → [msgpack](libraries/msgpack/)
 - **"functools.partial doesn't exist on my board"** → [compat](libraries/compat/)
-- **"I want to deploy code to my board from my laptop"** → [deploy](workbench/deploy/)
-- **"I want a serial REPL with traceback highlighting"** → [repl](workbench/repl/)
+
+### Companion host-side tools
+
+Two workbench packages live alongside the libraries — they run on your laptop and help you manage connected boards. They are optional; you can use the libraries above without them.
+
+| Tool | What it does |
+|---|---|
+| **[deploy](workbench/deploy/)** | Push code onto a CircuitPython or MicroPython board, probe its identity, and flash firmware (UF2 or esptool). Programmatic API + `chumicro-deploy` CLI; recovery layer that classifies failures and walks you through fixes. |
+| **[repl](workbench/repl/)** | Serial REPL with traceback highlighting, an `mpremote`-compatible TUI, a `tail()` follow-mode for deploy orchestration, and a programmatic `ReplSession` for headless test fixtures. `chumicro-repl` CLI. |
 
 </details>
 
