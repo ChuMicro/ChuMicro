@@ -7,10 +7,10 @@ This is the front door. Everything else is deeper read.
 ---
 
 - **Phase:** Project-workspace Phase 2 (`chumicro-repl`) shipped 2026-04-25; queue is between phases. Next sequenced phase is 3 (`chumicro-kvstore` + `chumicro-wifi`, can interleave).
-- **Last shipped:** Planning-ecosystem restructure — compression ritual in `task-checkpoint`, `plans/now.md` front door, `plans/learnings.md`, `history.md` reframed as the synthesized layer (this commit).
+- **Last shipped:** Pre-merge gates extended to workbench packages — `check-version` + `check-api` now walk `workbench/*/` alongside `libraries/*/`, and `release_tags()` matches the canonical `chumicro-<name>-v*` glob so workbench tags resolve once the first non-zero bump lands.
 - **In flight:** —
 - **Blocked on:** —
-- **Last touched:** `plans/{now,learnings,history,patterns,README,next-up}.md`, `.github/skills/task-checkpoint/SKILL.md`. Other agent shipped `fa8628c` covering workbench packages in `release.yml` + `promote.yml` (still 0.0.0, no release fires yet); follow-up in `next-up.md` to extend `check-version` + `check-api` before any non-zero workbench bump.
+- **Last touched:** `scripts/{workspace,check_version,check_api}.py`, `scripts/tests/{test_workspace,test_check_version}.py`, `plans/{now,history,next-up}.md`. The non-zero workbench `VERSION` bump is now safe whenever — gates are exercised end-to-end first.
 
 ---
 

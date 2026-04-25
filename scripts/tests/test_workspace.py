@@ -6,8 +6,9 @@ import pytest
 from workspace import (
     ALL_PLATFORMS,
     GITHUB_ORG,
+    PUBLISHABLE_ROOTS,
     RELEASE_RELEVANT,
-    changed_libraries,
+    changed_publishable_packages,
     coverage_args_for,
     detect_changed_packages,
     discover_doc_dirs,
@@ -281,64 +282,89 @@ class TestReadVersion:
         assert read_version(tmp_path) is None
 
 
-class TestChangedLibraries:
-    """Tests for changed_libraries — file path classification."""
+class TestChangedPublishablePackages:
+    """Tests for changed_publishable_packages — file path classification."""
 
-    def test_src_change_detected(self, monkeypatch):
+    def test_library_src_change_detected(self, monkeypatch):
         """A change under libraries/<name>/src/ is release-relevant."""
         monkeypatch.setattr(
             "workspace.changed_files",
             lambda _base: ["libraries/timing/src/chumicro_timing/core.py"],
         )
-        result = changed_libraries("origin/main")
-        assert result == {"timing"}
+        result = changed_publishable_packages("origin/main")
+        assert result == {("libraries", "timing")}
 
-    def test_pyproject_change_detected(self, monkeypatch):
+    def test_library_pyproject_change_detected(self, monkeypatch):
         """A change to libraries/<name>/pyproject.toml is release-relevant."""
         monkeypatch.setattr(
             "workspace.changed_files",
             lambda _base: ["libraries/runner/pyproject.toml"],
         )
-        result = changed_libraries("origin/main")
-        assert result == {"runner"}
+        result = changed_publishable_packages("origin/main")
+        assert result == {("libraries", "runner")}
 
-    def test_test_change_not_detected(self, monkeypatch):
-        """A change under libraries/<name>/tests/ is NOT release-relevant."""
+    def test_workbench_src_change_detected(self, monkeypatch):
+        """A change under workbench/<name>/src/ is release-relevant."""
         monkeypatch.setattr(
             "workspace.changed_files",
-            lambda _base: ["libraries/timing/tests/test_ticks.py"],
+            lambda _base: ["workbench/deploy/src/chumicro_deploy/core.py"],
         )
-        result = changed_libraries("origin/main")
+        result = changed_publishable_packages("origin/main")
+        assert result == {("workbench", "deploy")}
+
+    def test_workbench_pyproject_change_detected(self, monkeypatch):
+        """A change to workbench/<name>/pyproject.toml is release-relevant."""
+        monkeypatch.setattr(
+            "workspace.changed_files",
+            lambda _base: ["workbench/repl/pyproject.toml"],
+        )
+        result = changed_publishable_packages("origin/main")
+        assert result == {("workbench", "repl")}
+
+    def test_test_change_not_detected(self, monkeypatch):
+        """A change under <root>/<name>/tests/ is NOT release-relevant."""
+        monkeypatch.setattr(
+            "workspace.changed_files",
+            lambda _base: [
+                "libraries/timing/tests/test_ticks.py",
+                "workbench/deploy/tests/test_session.py",
+            ],
+        )
+        result = changed_publishable_packages("origin/main")
         assert result == set()
 
     def test_docs_change_not_detected(self, monkeypatch):
-        """A change under libraries/<name>/docs/ is NOT release-relevant."""
+        """A change under <root>/<name>/docs/ is NOT release-relevant."""
         monkeypatch.setattr(
             "workspace.changed_files",
             lambda _base: ["libraries/timing/docs/guide.md"],
         )
-        result = changed_libraries("origin/main")
+        result = changed_publishable_packages("origin/main")
         assert result == set()
 
-    def test_multiple_libraries(self, monkeypatch):
-        """Changes across multiple libraries are all detected."""
+    def test_mixed_roots(self, monkeypatch):
+        """Changes across libraries/ and workbench/ are both detected."""
         monkeypatch.setattr(
             "workspace.changed_files",
             lambda _base: [
                 "libraries/timing/src/chumicro_timing/core.py",
-                "libraries/runner/src/chumicro_runner/core.py",
+                "workbench/deploy/src/chumicro_deploy/core.py",
             ],
         )
-        result = changed_libraries("origin/main")
-        assert result == {"timing", "runner"}
+        result = changed_publishable_packages("origin/main")
+        assert result == {("libraries", "timing"), ("workbench", "deploy")}
 
-    def test_non_library_paths_ignored(self, monkeypatch):
-        """Paths outside libraries/ are ignored."""
+    def test_support_paths_ignored(self, monkeypatch):
+        """Paths under support/ are not publishable and are ignored."""
         monkeypatch.setattr(
             "workspace.changed_files",
-            lambda _base: ["scripts/run.py", "README.md"],
+            lambda _base: [
+                "support/test_harness/src/test_harness/core.py",
+                "scripts/run.py",
+                "README.md",
+            ],
         )
-        result = changed_libraries("origin/main")
+        result = changed_publishable_packages("origin/main")
         assert result == set()
 
 
@@ -348,6 +374,14 @@ class TestReleaseRelevant:
     def test_expected_entries(self):
         """RELEASE_RELEVANT contains the expected set."""
         assert RELEASE_RELEVANT == {"src", "pyproject.toml"}
+
+
+class TestPublishableRoots:
+    """Verify the PUBLISHABLE_ROOTS constant."""
+
+    def test_expected_entries(self):
+        """PUBLISHABLE_ROOTS covers libraries/ and workbench/."""
+        assert PUBLISHABLE_ROOTS == ("libraries", "workbench")
 
 
 class TestDetectChangedPackages:

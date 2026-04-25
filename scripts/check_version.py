@@ -1,19 +1,26 @@
-"""Check that library VERSION files are updated when release-relevant files change.
+"""Check that package VERSION files are updated when release-relevant files change.
 
-Used in CI to enforce Decision 0002: PRs that change a library's ``src/``
-or ``pyproject.toml`` must also bump the library's ``VERSION`` file.
+Used in CI to enforce Decision 0002: PRs that change a publishable
+package's ``src/`` or ``pyproject.toml`` must also bump the package's
+``VERSION`` file.  Covers both ``libraries/`` (device libraries) and
+``workbench/`` (host-only tools — Decision 0032 §workbench-release-lifecycle).
 
 Usage::
 
     python scripts/check_version.py [--base BASE_REF]
 
-Exits 0 when all changed libraries have a VERSION update (or when only
+Exits 0 when all changed packages have a VERSION update (or when only
 non-release-relevant files changed).  Exits 1 when enforcement fails.
 """
 
 from __future__ import annotations
 
-from workspace import RELEASE_RELEVANT, changed_files, release_tags
+from workspace import (
+    PUBLISHABLE_ROOTS,
+    RELEASE_RELEVANT,
+    changed_files,
+    release_tags,
+)
 
 
 def _check(base_reference: str) -> int:
@@ -35,38 +42,40 @@ def _check(base_reference: str) -> int:
         print("No changed files detected.")
         return 0
 
-    # Group changed files by library.
-    # Libraries live at libraries/<name>/...
-    libraries_needing_bump: set[str] = set()
-    libraries_with_bump: set[str] = set()
+    # Group changed files by package.  Publishable packages live at
+    # libraries/<name>/... and workbench/<name>/... (Decision 0032 — the
+    # workbench tree follows the same release lifecycle as libraries
+    # minus bundle staging, so both roots get the same gate).
+    packages_needing_bump: set[tuple[str, str]] = set()
+    packages_with_bump: set[tuple[str, str]] = set()
 
     for path in changed:
         parts = path.split("/")
-        if len(parts) < 3 or parts[0] != "libraries":
+        if len(parts) < 3 or parts[0] not in PUBLISHABLE_ROOTS:
             continue
 
-        library_name = parts[1]
+        package_id = (parts[0], parts[1])
 
         # Check if VERSION itself was changed.  The len==3 guard ensures
-        # we only match the root-level VERSION file (libraries/<name>/VERSION)
-        # and not a hypothetical nested file like libraries/<name>/src/VERSION.
+        # we only match the root-level VERSION file (<root>/<name>/VERSION)
+        # and not a hypothetical nested file like <root>/<name>/src/VERSION.
         if parts[2] == "VERSION" and len(parts) == 3:
-            libraries_with_bump.add(library_name)
+            packages_with_bump.add(package_id)
             continue
 
         # Check if the changed path is release-relevant.
         # RELEASE_RELEVANT = {"src", "pyproject.toml"}.  For "src",
         # parts[2] matches the directory name so any file under src/
         # qualifies (len(parts) >= 3 already holds).  For "pyproject.toml",
-        # it matches the filename directly at the library root.
+        # it matches the filename directly at the package root.
         if parts[2] in RELEASE_RELEVANT:
-            libraries_needing_bump.add(library_name)
+            packages_needing_bump.add(package_id)
 
-    missing = libraries_needing_bump - libraries_with_bump
+    missing = packages_needing_bump - packages_with_bump
     if missing:
-        for library_name in sorted(missing):
+        for parent_dir, package_name in sorted(missing):
             print(
-                f"FAIL: libraries/{library_name}/ has release-relevant changes "
+                f"FAIL: {parent_dir}/{package_name}/ has release-relevant changes "
                 "but VERSION was not updated."
             )
         print()
@@ -74,22 +83,22 @@ def _check(base_reference: str) -> int:
         print("If only internal changes occurred (no API/behavior change), a patch bump suffices.")
         return 1
 
-    if libraries_needing_bump:
-        for library_name in sorted(libraries_needing_bump):
-            print(f"OK: libraries/{library_name}/ — VERSION updated.")
+    if packages_needing_bump:
+        for parent_dir, package_name in sorted(packages_needing_bump):
+            print(f"OK: {parent_dir}/{package_name}/ — VERSION updated.")
     else:
-        print("No release-relevant library changes detected.")
+        print("No release-relevant package changes detected.")
 
-    # Warn about new libraries that have never been released.
+    # Warn about new packages that have never been released.
     # PyPI projects must be created manually before the first publish.
-    all_changed_libraries = libraries_needing_bump | libraries_with_bump
-    for library_name in sorted(all_changed_libraries):
-        if not release_tags(library_name):
+    all_changed_packages = packages_needing_bump | packages_with_bump
+    for parent_dir, package_name in sorted(all_changed_packages):
+        if not release_tags(package_name):
             print(
-                f"NOTE: libraries/{library_name}/ has no release tags — "
-                "this appears to be a new library.  Before merging, "
+                f"NOTE: {parent_dir}/{package_name}/ has no release tags — "
+                "this appears to be a new package.  Before merging, "
                 "ask @chux.maker to create the PyPI project "
-                f"(chumicro-{library_name}) so the release workflow can publish."
+                f"(chumicro-{package_name}) so the release workflow can publish."
             )
 
     return 0

@@ -596,13 +596,17 @@ def order_libraries_by_dependency(
 
 
 def release_tags(library_name: str) -> list[str]:
-    """Return release tags for a library, sorted newest first.
+    """Return release tags for a publishable package, sorted newest first.
+
+    Tags are emitted by ``release.yml`` as ``chumicro-<name>-v<version>``
+    (with an optional ``-experimental`` suffix); the glob here matches that
+    canonical format for both ``libraries/`` and ``workbench/`` packages.
 
     Args:
-        library_name: Library name (e.g. ``"timing"``).
+        library_name: Package basename (e.g. ``"timing"`` or ``"deploy"``).
     """
     result = run_git(
-        "tag", "--list", f"{library_name}-v*", "--sort=-v:refname",
+        "tag", "--list", f"chumicro-{library_name}-v*", "--sort=-v:refname",
     )
     if result.returncode != 0 or not result.stdout.strip():
         return []
@@ -629,11 +633,16 @@ def pythonpath_environment() -> dict[str, str]:
 # Shared helpers for PR checks (check_version, check_api)
 # ---------------------------------------------------------------------------
 
-#: Paths within a library that require a VERSION bump when changed.
-#: ``"src"`` matches as a directory prefix (any file under ``src/``),
-#: while ``"pyproject.toml"`` matches as an exact filename at the
-#: library root.  See ``plans/decisions/0002-per-library-version-files.md``.
+#: Paths within a publishable package that require a VERSION bump when
+#: changed.  ``"src"`` matches as a directory prefix (any file under
+#: ``src/``), while ``"pyproject.toml"`` matches as an exact filename at
+#: the package root.  See ``plans/decisions/0002-per-library-version-files.md``.
 RELEASE_RELEVANT = {"src", "pyproject.toml"}
+
+#: Workspace directories that hold publishable packages.  Both feed the
+#: same VERSION + check-api gate (Decision 0032 — workbench packages
+#: follow the same release lifecycle as libraries minus bundle staging).
+PUBLISHABLE_ROOTS = ("libraries", "workbench")
 
 
 def changed_files(base_reference: str) -> list[str]:
@@ -651,17 +660,27 @@ def changed_files(base_reference: str) -> list[str]:
     return [line for line in result.stdout.strip().splitlines() if line]
 
 
-def changed_libraries(base_reference: str) -> set[str]:
-    """Return names of libraries with release-relevant changes."""
+def changed_publishable_packages(base_reference: str) -> set[tuple[str, str]]:
+    """Return ``(parent, name)`` pairs for packages with release-relevant changes.
+
+    Covers both ``libraries/`` and ``workbench/`` (Decision 0032 — the
+    pre-merge VERSION + API gates apply uniformly to every publishable
+    package).  Returning the parent directory alongside the name lets
+    callers construct paths and messages without a second lookup.
+
+    parts[2] is checked against :data:`RELEASE_RELEVANT` —
+    ``"src"`` acts as a directory prefix (any file under ``src/``
+    qualifies) while ``"pyproject.toml"`` is an exact match
+    (``len(parts) == 3`` at the package root).
+    """
     changed = changed_files(base_reference)
-    libraries: set[str] = set()
+    packages: set[tuple[str, str]] = set()
     for path in changed:
         parts = path.split("/")
-        # parts[2] is checked against RELEASE_RELEVANT = {"src", "pyproject.toml"}.
-        # "src" acts as a directory prefix (any file under src/ qualifies),
-        # while "pyproject.toml" is an exact match (len(parts)==3 for the
-        # root-level file).  Both work because we only need to know whether
-        # the library was touched — not which specific file changed.
-        if len(parts) >= 3 and parts[0] == "libraries" and parts[2] in RELEASE_RELEVANT:
-            libraries.add(parts[1])
-    return libraries
+        if (
+            len(parts) >= 3
+            and parts[0] in PUBLISHABLE_ROOTS
+            and parts[2] in RELEASE_RELEVANT
+        ):
+            packages.add((parts[0], parts[1]))
+    return packages

@@ -1,14 +1,16 @@
 """Check for API breaking changes and cross-reference with VERSION bumps.
 
 Uses ``griffe check`` to compare the current public API of each changed
-library against its last release tag.  Fails when breakages are detected
-but the VERSION bump level is insufficient (Decision 0020).
+publishable package against its last release tag.  Fails when breakages
+are detected but the VERSION bump level is insufficient (Decision 0020).
+Covers both ``libraries/`` and ``workbench/`` (Decision 0032 — same
+release lifecycle, same pre-merge gate).
 
 Usage::
 
     python scripts/check_api.py [--base BASE_REF]
 
-Exits 0 when all changed libraries pass.  Exits 1 on enforcement failure.
+Exits 0 when all changed packages pass.  Exits 1 on enforcement failure.
 """
 
 from __future__ import annotations
@@ -17,7 +19,13 @@ import re
 import subprocess
 import sys
 
-from workspace import ROOT, changed_libraries, find_package_dir, read_version, release_tags
+from workspace import (
+    ROOT,
+    changed_publishable_packages,
+    find_package_dir,
+    read_version,
+    release_tags,
+)
 
 
 def _parse_version(version: str) -> tuple[int, int, int] | None:
@@ -59,45 +67,48 @@ def _check(base_reference: str) -> int:
     """Run the API breakage check.
 
     Args:
-        base_reference: Git ref to detect changed libraries against.
+        base_reference: Git ref to detect changed packages against.
 
     Returns:
         Exit code (0 for success, 1 for failure).
     """
     try:
-        libraries = changed_libraries(base_reference)
+        packages = changed_publishable_packages(base_reference)
     except RuntimeError as error:
         print(error)
         return 2
 
-    if not libraries:
-        print("No release-relevant library changes detected.")
+    if not packages:
+        print("No release-relevant package changes detected.")
         return 0
 
     overall_ok = True
 
-    for library_name in sorted(libraries):
-        tags = release_tags(library_name)
+    for parent_dir, package_basename in sorted(packages):
+        package_label = f"{parent_dir}/{package_basename}"
+        package_root = ROOT / parent_dir / package_basename
+
+        tags = release_tags(package_basename)
         if not tags:
-            print(f"SKIP: {library_name} — no previous release tag found.")
+            print(f"SKIP: {package_label} — no previous release tag found.")
             continue
         tag = tags[0]
 
-        package_dir = find_package_dir(ROOT / "libraries" / library_name)
+        package_dir = find_package_dir(package_root)
         if package_dir is None:
-            print(f"SKIP: {library_name} — no importable package under src/.")
+            print(f"SKIP: {package_label} — no importable package under src/.")
             continue
         package_name = package_dir.name
 
-        new_version = read_version(ROOT / "libraries" / library_name)
+        new_version = read_version(package_root)
         if new_version is None:
-            print(f"SKIP: {library_name} — no VERSION file.")
+            print(f"SKIP: {package_label} — no VERSION file.")
             continue
 
-        # Extract old version from tag (e.g., timing-v0.1.0 → 0.1.0).
+        # Extract old version from tag (e.g., chumicro-timing-v0.1.0 → 0.1.0).
         old_version = tag.split("-v", 1)[1] if "-v" in tag else None
         if old_version is None:
-            print(f"SKIP: {library_name} — cannot parse version from tag {tag}.")
+            print(f"SKIP: {package_label} — cannot parse version from tag {tag}.")
             continue
 
         bump = _bump_level(old_version, new_version)
@@ -105,12 +116,12 @@ def _check(base_reference: str) -> int:
         # Run griffe to compare the current public API against the tagged
         # release.  griffe parses Python source statically and detects
         # removed/renamed symbols, changed signatures, etc.
-        # --search must point at the library's src/ directory so griffe
+        # --search must point at the package's src/ directory so griffe
         # can find the package for import resolution.  We capture both
         # stdout and stderr because griffe emits breakage details on
         # different streams depending on version.  A non-zero exit code
         # indicates at least one breaking change was detected.
-        src_dir = str(ROOT / "libraries" / library_name / "src")
+        src_dir = str(package_root / "src")
         result = subprocess.run(
             [
                 sys.executable, "-m", "griffe", "check",
@@ -127,7 +138,7 @@ def _check(base_reference: str) -> int:
         has_breakages = result.returncode != 0
 
         if not has_breakages:
-            print(f"OK: {library_name} — no API breakages detected.")
+            print(f"OK: {package_label} — no API breakages detected.")
             continue
 
         # Breakages detected — check whether the VERSION bump level is
@@ -138,14 +149,14 @@ def _check(base_reference: str) -> int:
         is_pre_1 = major_version is not None and major_version[0] == 0
 
         if bump == "major":
-            print(f"OK: {library_name} — breakages detected, major bump acknowledged.")
+            print(f"OK: {package_label} — breakages detected, major bump acknowledged.")
             if griffe_output:
                 print(f"     {griffe_output}")
             continue
 
         if bump == "minor" and is_pre_1:
             print(
-                f"OK: {library_name} — breakages detected, minor bump "
+                f"OK: {package_label} — breakages detected, minor bump "
                 "sufficient for 0.x (SemVer pre-1.0 semantics)."
             )
             if griffe_output:
@@ -155,16 +166,16 @@ def _check(base_reference: str) -> int:
         # Insufficient bump.
         bump_label = bump or "unchanged"
         print(
-            f"FAIL: {library_name} — API breakages detected but VERSION "
+            f"FAIL: {package_label} — API breakages detected but VERSION "
             f"bump is only '{bump_label}'."
         )
         if griffe_output:
             for line in griffe_output.splitlines():
                 print(f"     {line}")
         if is_pre_1:
-            print("     Requires at least a minor bump (0.x library).")
+            print("     Requires at least a minor bump (0.x package).")
         else:
-            print("     Requires a major bump (1.x+ library).")
+            print("     Requires a major bump (1.x+ package).")
         overall_ok = False
 
     return 0 if overall_ok else 1
@@ -184,7 +195,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--base",
         default="origin/main",
-        help="Base ref to detect changed libraries (default: origin/main)",
+        help="Base ref to detect changed packages (default: origin/main)",
     )
     args = parser.parse_args(argv)
     return _check(args.base)

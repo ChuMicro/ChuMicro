@@ -14,14 +14,14 @@ class TestCheck:
         assert "No changed files detected" in capsys.readouterr().out
 
     def test_non_library_changes_only(self, monkeypatch, capsys):
-        """Changes outside libraries/ are not release-relevant."""
+        """Changes outside libraries/ and workbench/ are not release-relevant."""
         monkeypatch.setattr(
             "check_version.changed_files",
             lambda _base: ["scripts/run.py", "README.md"],
         )
         result = _check("origin/main")
         assert result == 0
-        assert "No release-relevant library changes" in capsys.readouterr().out
+        assert "No release-relevant package changes" in capsys.readouterr().out
 
     def test_src_change_with_version_bump(self, monkeypatch, capsys):
         """src/ change with VERSION bump passes."""
@@ -95,6 +95,58 @@ class TestCheck:
         # _check returns 1 immediately after printing FAIL lines —
         # the OK messages for compliant libraries are never reached.
         assert "FAIL: libraries/runner/" in captured
+
+    def test_workbench_src_change_with_version_bump(self, monkeypatch, capsys):
+        """workbench/<name>/src/ change with VERSION bump passes."""
+        monkeypatch.setattr(
+            "check_version.changed_files",
+            lambda _base: [
+                "workbench/deploy/src/chumicro_deploy/core.py",
+                "workbench/deploy/VERSION",
+            ],
+        )
+        monkeypatch.setattr("check_version.release_tags", lambda _name: [])
+        result = _check("origin/main")
+        assert result == 0
+        assert "OK: workbench/deploy/" in capsys.readouterr().out
+
+    def test_workbench_src_change_without_version_bump_fails(self, monkeypatch, capsys):
+        """workbench/<name>/src/ change without VERSION bump fails."""
+        monkeypatch.setattr(
+            "check_version.changed_files",
+            lambda _base: ["workbench/deploy/src/chumicro_deploy/core.py"],
+        )
+        result = _check("origin/main")
+        assert result == 1
+        assert "FAIL: workbench/deploy/" in capsys.readouterr().out
+
+    def test_workbench_pyproject_change_requires_bump(self, monkeypatch, capsys):
+        """workbench/<name>/pyproject.toml change without VERSION bump fails."""
+        monkeypatch.setattr(
+            "check_version.changed_files",
+            lambda _base: ["workbench/repl/pyproject.toml"],
+        )
+        result = _check("origin/main")
+        assert result == 1
+        assert "FAIL: workbench/repl/" in capsys.readouterr().out
+
+    def test_mixed_roots_pass(self, monkeypatch, capsys):
+        """Library + workbench changes both bumped pass cleanly."""
+        monkeypatch.setattr(
+            "check_version.changed_files",
+            lambda _base: [
+                "libraries/timing/src/chumicro_timing/core.py",
+                "libraries/timing/VERSION",
+                "workbench/deploy/src/chumicro_deploy/core.py",
+                "workbench/deploy/VERSION",
+            ],
+        )
+        monkeypatch.setattr("check_version.release_tags", lambda _name: [])
+        result = _check("origin/main")
+        assert result == 0
+        captured = capsys.readouterr().out
+        assert "OK: libraries/timing/" in captured
+        assert "OK: workbench/deploy/" in captured
 
     def test_git_failure_returns_2(self, monkeypatch):
         """Git failure propagates as exit code 2."""
