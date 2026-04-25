@@ -73,6 +73,16 @@ exposes the API.  MP-ESP32 detection is via `import esp32` rather than
 board-name parsing — works for every ESP32 variant ESP-IDF supports
 without an enumeration to maintain.
 
+**Auto-detect is a default, not a constraint.**  The substrate
+choice on MP-ESP32 is genuinely "either NVS or LittleFS works"; the
+auto path picks NVS because it has substrate-level wear leveling
+guarantees and is the obvious match for ESP32 boards, but a caller
+with a reason to prefer file-based storage on the same board can
+pass `backend="littlefs"` and the LittleFS backend will use the
+mounted filesystem regardless of whether `esp32.NVS` is also
+available.  Auto-detect optimises for the common case; the explicit
+strings exist so users aren't locked in.
+
 ### 3. Mapping-shaped API, plus three explicit lifecycle methods
 
 ```python
@@ -211,6 +221,11 @@ on MP — caught by `load()` and reported as a blank substrate
 (`b""`).
 
 ### 7. MP LittleFS encoding: tmpfile + rename, single file per store
+
+(Pickable on **any** MP build with a writable filesystem — not just
+non-NVS boards.  Auto-detect routes ESP32 to NVS by default; users
+can opt back to LittleFS via `backend="littlefs"` for portability
+or to share storage with other on-device files.)
 
 ```python
 PATH = "/_chu_kv.msgpack"

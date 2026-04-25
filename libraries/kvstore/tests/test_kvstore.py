@@ -82,10 +82,17 @@ def test_explicit_nvs_string_raises_runtime_error_on_cpython() -> None:
         KVStore(backend="nvs")
 
 
-def test_explicit_littlefs_string_raises_notimplementederror_on_cpython() -> None:
-    """Backend stub for slice 4 — same shape as the NVM check above."""
-    with raises(NotImplementedError):
-        KVStore(backend="littlefs")
+def test_explicit_littlefs_string_resolves_on_any_filesystem_runtime() -> None:
+    """``backend="littlefs"`` constructs anywhere ``os`` is available.
+
+    The LittleFS backend talks to a generic filesystem shim
+    (``builtins.open`` + ``os.rename`` / ``remove`` / ``sync``); it
+    works on CPython, MicroPython, and (in principle) CircuitPython
+    once a writable filesystem is mounted.  The constructor should
+    succeed on CPython hosts even without a board.
+    """
+    store = KVStore(backend="littlefs")
+    assert store.backend_name == "littlefs"
 
 
 # ---------------------------------------------------------------------------

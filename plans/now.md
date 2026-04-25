@@ -6,9 +6,9 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** Project-workspace Phase 3b in flight — `chumicro-kvstore` Slices 0–3 landed 2026-04-25 (Decision 0034 + scaffold + MemoryBackend + CP NVM with CRC framing + MP NVS single-payload-blob, all hardware-verified). Next: Slice 4 (MP LittleFS on Pi Pico W MP).
-- **Last shipped:** Phase 3b Slice 3 — MP NVS backend (single payload blob under fixed key in `chu_kv` namespace; ADR §6 pivoted from per-dict-key to single-blob since MP's `esp32.NVS` doesn't expose key enumeration). 78 host tests at 99.7 % cov; 6 functional tests passing on Lolin S2 MP.
-- **In flight:** Phase 3b Slice 4 (MP LittleFS backend on Pi Pico W MP — single `/_chu_kv.msgpack` with tmpfile + rename atomicity).
+- **Phase:** Project-workspace Phase 3b in flight — `chumicro-kvstore` Slices 0–4 landed 2026-04-25 (every backend implemented + hardware-verified across all four boards). Next: Slice 5 (auto-select smoke + boot-counter-across-hard-reset acceptance).
+- **Last shipped:** Phase 3b Slice 4 — MP LittleFS backend (single `/_chu_kv.msgpack` with tmpfile + sync + rename atomicity). 92 host tests at 99 % cov; 7 functional tests passing on both Pi Pico W MP (canonical no-NVS target) and Lolin S2 MP (alongside NVS — confirms `backend="littlefs"` is pickable on ESP32 too).
+- **In flight:** Phase 3b Slice 5 (auto-detect smoke across runtimes + boot-counter-across-hard-reset acceptance functional tests).
 - **Blocked on:** —
 - **Last touched:** `libraries/kvstore/**`, `plans/decisions/0034-kvstore-api-and-backends.md`, `plans/{now,history,next-up}.md`. Four boards plugged in: Lolin S2 CP/MP, Pi Pico W CP/MP — exercises every kvstore backend across slices 2–5.
 
