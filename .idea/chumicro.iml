@@ -13,6 +13,9 @@
       <sourceFolder url="file://$MODULE_DIR$/libraries/compat/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/compat/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/compat/functional_tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/kvstore/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/kvstore/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/kvstore/functional_tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/msgpack/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/msgpack/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/msgpack/functional_tests" isTestSource="true" />
