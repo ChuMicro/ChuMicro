@@ -33,6 +33,13 @@ if TYPE_CHECKING:
     from .framing import Utf8StreamDecoder
     from .highlight import Theme, colorize, strip_ansi_sequences
     from .patterns import PatternKind, PatternMatch, detect_patterns
+    from .recovery import (
+        InteractiveReplSession,
+        RecoveryPlan,
+        ReplFailureKind,
+        classify_session_failure,
+        recovery_plan_for,
+    )
     from .session import ReplSession, ReplSessionDisconnected, ReplSessionError
     from .tui import interactive
 
@@ -41,16 +48,21 @@ if TYPE_CHECKING:
 #: first read.
 _LAZY_ATTRS: dict[str, str] = {
     "ExitCode": "_follow",
+    "InteractiveReplSession": "recovery",
     "PatternKind": "patterns",
     "PatternMatch": "patterns",
+    "RecoveryPlan": "recovery",
+    "ReplFailureKind": "recovery",
     "ReplSession": "session",
     "ReplSessionDisconnected": "session",
     "ReplSessionError": "session",
     "Theme": "highlight",
     "Utf8StreamDecoder": "framing",
+    "classify_session_failure": "recovery",
     "colorize": "highlight",
     "detect_patterns": "patterns",
     "interactive": "tui",
+    "recovery_plan_for": "recovery",
     "strip_ansi_sequences": "highlight",
     "tail": "_follow",
 }
@@ -60,16 +72,21 @@ _LAZY_ATTRS: dict[str, str] = {
 #: Keep alphabetized; a sorted assertion below catches drift.
 __all__ = [
     "ExitCode",
+    "InteractiveReplSession",
     "PatternKind",
     "PatternMatch",
+    "RecoveryPlan",
+    "ReplFailureKind",
     "ReplSession",
     "ReplSessionDisconnected",
     "ReplSessionError",
     "Theme",
     "Utf8StreamDecoder",
+    "classify_session_failure",
     "colorize",
     "detect_patterns",
     "interactive",
+    "recovery_plan_for",
     "strip_ansi_sequences",
     "tail",
 ]

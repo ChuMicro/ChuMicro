@@ -108,6 +108,43 @@ with ReplSession("/dev/cu.usbmodem14101") as session:
 
 The session accepts a `chumicro_deploy.Device`, a bare serial-port path, or any object with `.address` and `.baudrate` attributes. Tests inject `time` (a `TimeSource` protocol) and `port_factory` (any callable returning a `SerialPort` protocol) so the whole context is exercised without real hardware.
 
+## Recover from session-start failures — `InteractiveReplSession`
+
+`ReplSession` raises directly on a failed session-start — that's the deterministic surface programmatic callers want.  For interactive use, `InteractiveReplSession` wraps a `ReplSession` with classification + a retry-loop + user-facing coaching, mirroring `chumicro_deploy.InteractiveDeployer`.
+
+```python
+from chumicro_repl import InteractiveReplSession
+
+with InteractiveReplSession(device, max_attempts=3) as session:
+    output = session.exec("print('hello')")
+```
+
+When the underlying session fails to open, the wrapper:
+
+1. Classifies the exception into a `ReplFailureKind` — one of `PORT_NOT_FOUND`, `PORT_BUSY`, `PORT_PERMISSION_DENIED`, `RAW_REPL_UNRESPONSIVE`, or `UNKNOWN`.
+2. Prints the matching `RecoveryPlan` (headline + ordered fix-steps) to *output*.
+3. Prompts the user via *prompt* — bare Enter retries; `q` / `quit` / `abort` / `exit` re-raises the last error.
+4. After `max_attempts` attempts, the last exception re-raises.
+
+`prompt` and `output` are injectable so you can plug the wrapper into a TUI dialog, a logging framework, or a test scripted with a queue of canned responses.
+
+```python
+from chumicro_repl import InteractiveReplSession, classify_session_failure, ReplFailureKind
+
+# Custom orchestrator — classify directly without using the wrapper.
+try:
+    with ReplSession(device) as session:
+        ...
+except (OSError, ReplSessionError) as error:
+    kind = classify_session_failure(error)
+    if kind is ReplFailureKind.PORT_BUSY:
+        ...  # close-the-other-tool flow
+```
+
+Mid-session disconnects (after the handshake completed) do *not* route through this layer — those are handled by the auto-reconnect loop in `tail()` and `run_loop()` (see `reconnect_seconds`).  Subclass `ReplSessionDisconnected` matters for that path; `InteractiveReplSession` matters for "the session never opened".
+
+The interactive demo at `workbench/repl/examples/demo_repl_robustness.py` walks every scenario against a real board — happy path, port-not-found (bogus address), port-busy (open the port elsewhere first), raw-REPL-unresponsive (board stuck in interrupt-disabled code), auto-reconnect during tail (yank + replug the cable), and abort during reconnect.
+
 ## Pattern detection and highlighting
 
 ```python

@@ -29,6 +29,19 @@ shadowing the top-level `tail` attribute.
     options:
       heading_level: 3
 
+## Recovery layer
+
+`InteractiveReplSession` is the wrapper around `ReplSession` that
+classifies session-start failures (port not found, port busy,
+permission denied, raw-REPL unresponsive) and walks the user
+through a recovery plan.  Mid-session disconnects are *not*
+routed through this module — those use the auto-reconnect loop
+in `tail()` and `run_loop()`.
+
+::: chumicro_repl.recovery
+    options:
+      heading_level: 3
+
 ## Pattern detection
 
 ::: chumicro_repl.patterns
