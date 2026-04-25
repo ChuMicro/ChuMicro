@@ -6,9 +6,9 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** Phase 3a Slices 0–3 all shipped — every per-runtime adapter implemented and hardware-verified across all four boards.  Next: Slice 4 acceptance against a real AP (live wifi credentials needed).
-- **Last shipped:** Phase 3a Slice 3 — `MpRp2WifiAdapter` (Pi Pico W CYW43) with `wlan.config(pm=0xa11140)` to disable CYW43 idle power-save (eliminates ~30-100 ms tick spikes on chip wake-up). No firmware-level supervisor on CYW43, so no `reconnects=0` call needed. 87 host tests at 99 % cov; 23 functional tests pass on Pi Pico W MP (7 RP2-adapter + 4 lazy-load + 12 no-ops for the other adapters' tests).
-- **In flight:** Phase 3a Slice 4 acceptance — connect to a real AP across all four boards, observe state transitions, exercise reconnect on a deliberate disconnect.
+- **Phase:** **Phase 3a closed.** All slices (0 skeleton, 1 CP, 2 MP-ESP32, 3 MP-RP2, 4 live-AP acceptance) shipped + hardware-verified across all four boards. `chumicro-wifi` is feature-complete for Phase 3a's scope.
+- **Last shipped:** Phase 3a Slice 4 — live-AP acceptance run against the user's local AP across every board. Each board associated, got a DHCP-assigned IP, was deliberately disconnected, and re-established the connection cleanly. Full state-machine sequence (`disconnected → connecting → connected → reconnecting → connected`) captured per board.  Runner is `.scratch/run_wifi_acceptance.py` (gitignored host-driven script that uses `chumicro-deploy`'s `FileMapSource` to push a one-shot in-memory program with creds inlined; RAM-mode means creds touch the device's heap and are gone on reboot, never landing in flash or git).
+- **In flight:** —  (between phases). Next sequenced phase is 4a (`chumicro-workspace-runtime`).
 - **Blocked on:** —
 - **Last touched:** `libraries/kvstore/**`, `plans/decisions/0034-kvstore-api-and-backends.md`, `plans/{now,history,next-up}.md`. Four boards plugged in: Lolin S2 CP/MP, Pi Pico W CP/MP — exercises every kvstore backend across slices 2–5.
 

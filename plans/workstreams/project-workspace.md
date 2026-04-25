@@ -219,7 +219,11 @@ See `plans/workstreams/repl-playground.md` for the larger "side portal" feature 
 
 `chumicro-deploy`'s `CircuitpythonTransport` carries its own raw-REPL implementation that overlaps with `chumicro_repl.session.ReplSession` (Ctrl-A handshake + `OK<stdout>\x04<stderr>\x04>` framing).  Decision 0032 rule 8 ("scripts consume workbench packages") suggests deploy should eventually depend on repl for the raw-REPL framing and stop maintaining a parallel implementation.  Not undertaken in this phase — deploy's transport is integrated with bootstrap-script chunking, recovery classification, and probe / reset paths that are out of scope for repl's minimum core.  Track as a Phase 4 prerequisite once the workspace-runtime work lands and the natural seam between "session-level RPC" and "deploy-pipeline orchestration" is clearer.
 
-### Phase 3a: `chumicro-wifi`
+### Phase 3a: `chumicro-wifi` ✅ Complete (2026-04-25)
+
+**Library shipped 2026-04-25.**  Five slices closed Phase 3a end-to-end: skeleton + `WifiConfig` + state machine + reconnect supervisor + `FakeWifi` (Slice 0); CP `wifi.radio` adapter (Slice 1, Lolin S2 CP + Pi Pico W CP); MP `network.WLAN` adapter on ESP32 with `wlan.config(reconnects=0)` supervisor-off (Slice 2, Lolin S2 MP); MP CYW43 adapter with `wlan.config(pm=0xa11140)` power-save knob (Slice 3, Pi Pico W MP); live-AP acceptance via the gitignored host-driven runner at `.scratch/run_wifi_acceptance.py` (Slice 4, all four boards).  87 host tests at 99 % coverage, full per-substrate functional verification + live-AP connect-drop-reconnect cycle observed on every board.  `_templates/config.toml` shipped per ADR 0036 §5 — first library to ship a workspace-tooling-collectable template.
+
+
 
 Goal: one unified `WifiService` that owns connection and reconnect across CP, MP-ESP32, and MP-Pico-W.  No runtime or firmware-level supervisor competes with the library.
 

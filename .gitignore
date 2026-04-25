@@ -30,3 +30,7 @@ libraries/*/docs/assets/
 devices.yml
 device-config.yml
 
+# Per-test wifi credentials shim — generated from .scratch/wifi-creds.toml,
+# deployed alongside the wifi acceptance tests to the device, never committed.
+**/_test_creds.py
+

@@ -2,7 +2,7 @@
 
 ## Now
 
-- [ ] **Phase 3a: `chumicro-wifi` per-runtime adapters** — Slice 0 landed (skeleton + `WifiConfig` + state machine + reconnect supervisor + `FakeWifi` + 40 host tests at 99.22 % cov + 16 hardware tests across 4 boards). Remaining slices: 1 (CP `wifi.radio` adapter on Lolin S2 CP + Pi Pico W CP), 2 (MP `network.WLAN` adapter on Lolin S2 MP with `wlan.config(reconnects=0)`), 3 (MP CYW43 adapter on Pi Pico W MP with `pm=0xa11140` power-save knob), 4 (acceptance — connect+drop+reconnect on a real AP across all four boards).
+- [ ] **Phase 4a: `chumicro-workspace-runtime`** — host-side workspace tooling (`run.py upgrade`, `run.py add-library <name>` collecting per-library `_templates/config.toml` snippets per ADR 0036 §5, deploy-time deep-merge of `workspace.yml` + `things/<name>/config.toml` + `secrets.yml` → `/runtime_config.msgpack` per ADR 0035, `!secret` resolution).  See `plans/workstreams/project-workspace.md` Phase 4a.
 
 ## Next
 - [ ] **Rebrand ChuMicro → ChipPy** (see `plans/workstreams/rename-to-chippy.md`). Full org + package + bundle rename, all library `VERSION` files reset to `0.0.0`. Execute when the project is ready for first public opening; sheds accumulated test-churn releases from PyPI since the namespace changes.
@@ -35,6 +35,7 @@
 > `plans/workstreams/<workstream>.md` (per-phase acceptance).  Past entries
 > link to those records — don't paste detail back into `next-up.md`.
 
+- [x] **Phase 3a: `chumicro-wifi` shipped** — 4 adapters (CP `wifi.radio`, MP-ESP32 `network.WLAN`, MP-RP2 CYW43, FakeWifi), state machine + reconnect supervisor, _templates/config.toml. 87 host tests at 99 % cov; per-substrate functional tests + lazy-loading sanity + live-AP acceptance pass on all four boards (Lolin S2 CP/MP, Pi Pico W CP/MP) (2026-04-25). See [history.md 2026-04-25](history.md) and Phase 3a in [workstreams/project-workspace.md](workstreams/project-workspace.md).
 - [x] **Phase 3b: `chumicro-kvstore` shipped** — Decision 0034 + 4 backends (memory / CP NVM with CRC framing / MP NVS / MP LittleFS) + acceptance suite. 92 host tests at 99 % cov; 27 functional tests pass on each of the four plugged-in boards (Lolin S2 CP/MP, Pi Pico W CP/MP) (2026-04-25). See [history.md 2026-04-25](history.md) and Phase 3b in [workstreams/project-workspace.md](workstreams/project-workspace.md).
 - [x] **Static gate for libraries/ absolute-imports rule** — ruff TID252 enabled in `pyproject.toml` with per-file-ignores relaxing it for `workbench/`, `scripts/`, tests, functional_tests, and examples (2026-04-25). See [history.md 2026-04-25](history.md).
 - [x] **`check-version` + `check-api` cover workbench packages** — both pre-merge gates now walk `workbench/*/` alongside `libraries/*/`, and `release_tags()` matches the canonical `chumicro-<name>-v*` glob emitted by `release.yml` so workbench tags resolve once the first non-zero bump lands; griffe absolute-`--search` no-op fix landed alongside; codified as `scripts/audit_gates.py` regression suite (2026-04-25). See [history.md 2026-04-25](history.md).
