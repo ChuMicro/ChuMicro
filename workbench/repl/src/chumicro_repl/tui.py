@@ -74,6 +74,8 @@ def run_loop(
     time: TimeSource | None = None,
     theme: Theme | None = None,
     exit_key: bytes = CTRL_X,
+    welcome_banner: str = "",
+    initial_send: bytes = b"",
 ) -> int:
     """Run the interactive I/O loop until *exit_key* is pressed.
 
@@ -94,11 +96,24 @@ def run_loop(
         theme: Color theme for pattern highlighting.
         exit_key: Byte sequence that ends the loop without being
             forwarded to the device.  Defaults to Ctrl-X.
+        welcome_banner: Local text written to *output* before the
+            loop starts.  Used by :func:`interactive` to introduce
+            the connection (transport, address, keybinding hints);
+            tests pass an empty string to keep output deterministic.
+        initial_send: Bytes written to the port before the loop
+            starts.  Defaults to empty; :func:`interactive` sends a
+            single carriage return so the friendly REPL reprints
+            its ``>>>`` prompt instead of staring at a blank line.
     """
     active_time: TimeSource = time if time is not None else _time_module
     active_theme = theme if theme is not None else DEFAULT_THEME
     decoder = Utf8StreamDecoder()
     detector = StreamingPatternDetector()
+    if welcome_banner:
+        output.write(welcome_banner)
+        _flush_quietly(output)
+    if initial_send:
+        port.write(initial_send)
     while True:
         exit_requested = False
         key_bytes = keyboard.read_available()
@@ -181,6 +196,10 @@ def interactive(
     )
     raw_mode = raw_mode_context if raw_mode_context is not None else _posix_raw_mode
     address, resolved_baudrate = _resolve_address(device, baudrate)
+    transport_label = _transport_label(device)
+    welcome_banner = _format_welcome_banner(
+        address=address, baudrate=resolved_baudrate, transport=transport_label,
+    )
     port = active_factory(address, resolved_baudrate, _POLL_INTERVAL)
     try:
         fd = _fileno_or_none(active_input)
@@ -190,17 +209,68 @@ def interactive(
             return run_loop(
                 port, keyboard, active_output,
                 time=time, theme=theme,
+                welcome_banner=welcome_banner,
+                initial_send=b"\r",
             )
         with raw_mode(fd):
             return run_loop(
                 port, keyboard, active_output,
                 time=time, theme=theme,
+                welcome_banner=welcome_banner,
+                initial_send=b"\r",
             )
     finally:
         try:
             port.close()
         except OSError:  # pragma: no cover — port already closed
             pass
+
+
+def _format_welcome_banner(
+    *,
+    address: str,
+    baudrate: int,
+    transport: str | None,
+) -> str:
+    """Build the dim-styled startup banner shown before the REPL loop.
+
+    Two lines, ANSI-dim, terminated with ``\\r\\n`` so the banner
+    renders correctly under terminal raw mode (where the OS no
+    longer auto-translates ``\\n`` to ``\\r\\n``).  Includes the
+    transport when known so the user sees which runtime they're
+    talking to; falls back to address-only when *device* was
+    constructed from a bare port path.
+
+    The keybinding line documents only the keys the TUI actually
+    cares about — Ctrl-X is the local exit, the rest are forwarded
+    verbatim and listed for discoverability rather than because the
+    TUI special-cases them.
+    """
+    if transport:
+        identity = (
+            f"chumicro-repl · {address} · {transport} · {baudrate} baud"
+        )
+    else:
+        identity = f"chumicro-repl · {address} · {baudrate} baud"
+    keys = (
+        "Keys: Ctrl-X exit · Ctrl-C interrupt · "
+        "Ctrl-D soft-reboot · Ctrl-E paste"
+    )
+    return f"\x1b[2m{identity}\r\n{keys}\x1b[0m\r\n"
+
+
+def _transport_label(device: Device | str) -> str | None:
+    """Return the device's runtime label, or ``None`` for a bare path.
+
+    Duck-typed access mirrors :func:`_resolve_address` — accepts any
+    object with a ``.transport`` attribute (including the
+    :class:`chumicro_deploy.Device` dataclass) without a hard import
+    dependency on chumicro-deploy.
+    """
+    if isinstance(device, str):
+        return None
+    transport = getattr(device, "transport", None)
+    return transport if isinstance(transport, str) else None
 
 
 class _StdinKeyboard:

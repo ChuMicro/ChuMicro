@@ -40,6 +40,8 @@ When `--devices-file` is supplied, `chumicro-repl` resolves the target in this o
 
 The schema and loader are owned by `chumicro_deploy.config.default.load_devices_yml` — no parallel parser, same `defaults:` / `devices:` shape `chumicro-deploy` reads.
 
+When you connect, `chumicro-repl` prints a dim startup banner identifying the connection (`chumicro-repl · /dev/cu.usbmodem11401 · circuitpython · 115200 baud`) and the four keys you might want (`Ctrl-X exit · Ctrl-C interrupt · Ctrl-D soft-reboot · Ctrl-E paste`), then sends a single carriage return to nudge the friendly REPL into reprinting its `>>>` prompt — so you don't sit at a blank screen waiting for output that the device already printed before you connected.
+
 The interactive TUI mirrors `mpremote repl`:
 
 | Key | Effect |

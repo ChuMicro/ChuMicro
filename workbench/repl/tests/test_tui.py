@@ -164,3 +164,94 @@ class TestExitKeyForwarding:
         result = run_loop(port, keyboard, io.StringIO(), time=FakeTime())
         assert result == 0
         assert port.writes == []
+
+
+class TestStartupBannerAndNudge:
+    """Banner is written before the loop; initial_send pokes the device."""
+
+    def test_welcome_banner_written_before_first_serial_chunk(self):
+        port = FakeSerialPort(read_chunks=[b"hello\n"])
+        keyboard = FakeKeyboard([CTRL_X])
+        output = io.StringIO()
+        run_loop(
+            port, keyboard, output,
+            time=FakeTime(),
+            welcome_banner="*** banner ***\r\n",
+        )
+        rendered = output.getvalue()
+        assert rendered.startswith("*** banner ***\r\n")
+        assert rendered.index("hello") > rendered.index("banner")
+
+    def test_initial_send_writes_to_port_before_loop(self):
+        # The nudge byte must be written before any keystroke or
+        # serial-drain happens.
+        port = FakeSerialPort()
+        keyboard = FakeKeyboard([CTRL_X])
+        run_loop(
+            port, keyboard, io.StringIO(),
+            time=FakeTime(),
+            initial_send=b"\r",
+        )
+        assert port.writes[0] == b"\r"
+
+    def test_no_banner_no_send_by_default(self):
+        # Defaults are empty so the existing tests that don't pass
+        # banner/nudge keep their pristine port.writes / output.
+        port = FakeSerialPort()
+        keyboard = FakeKeyboard([CTRL_X])
+        output = io.StringIO()
+        run_loop(port, keyboard, output, time=FakeTime())
+        assert port.writes == []
+        assert output.getvalue() == ""
+
+    def test_interactive_supplies_banner_and_carriage_return(self):
+        port = FakeSerialPort(read_chunks=[])
+        scripted = io.BytesIO(CTRL_X)
+        output = io.StringIO()
+        from chumicro_deploy import Device
+        from chumicro_repl import interactive
+
+        device = Device(transport="circuitpython", address="/dev/cu.dev")
+        result = interactive(
+            device,
+            input_stream=scripted,
+            output=output,
+            time=FakeTime(),
+            port_factory=lambda *_args, **_kwargs: port,
+        )
+        assert result == 0
+        # Banner identifies the connection — transport, address, baudrate.
+        rendered = output.getvalue()
+        assert "chumicro-repl" in rendered
+        assert "circuitpython" in rendered
+        assert "/dev/cu.dev" in rendered
+        assert "115200" in rendered
+        # Keybinding hint shows the four keys the user cares about.
+        assert "Ctrl-X" in rendered
+        assert "Ctrl-C" in rendered
+        assert "Ctrl-D" in rendered
+        assert "Ctrl-E" in rendered
+        # The CR nudge was sent to the port to elicit a fresh prompt.
+        assert b"\r" in port.writes
+
+    def test_interactive_with_bare_path_omits_transport_from_banner(self):
+        # When device is a string (no Device construction), the banner
+        # falls back to address + baudrate — no fabricated transport.
+        port = FakeSerialPort(read_chunks=[])
+        scripted = io.BytesIO(CTRL_X)
+        output = io.StringIO()
+        from chumicro_repl import interactive
+
+        result = interactive(
+            "/dev/cu.bare",
+            input_stream=scripted,
+            output=output,
+            time=FakeTime(),
+            port_factory=lambda *_args, **_kwargs: port,
+        )
+        assert result == 0
+        rendered = output.getvalue()
+        assert "/dev/cu.bare" in rendered
+        # No transport name fabricated.
+        assert "circuitpython" not in rendered
+        assert "micropython" not in rendered
