@@ -9,12 +9,14 @@ Workspace tooling collects these snippets when a user adds a
 library to a thing — assembling a starter ``config.toml`` the user
 fills in.
 
-CPython-only: ``importlib.resources`` doesn't exist on MicroPython
-or CircuitPython, but template-collection is host-side workspace-
-tooling, never device runtime.
+CPython-only behavior: ``importlib.resources`` doesn't exist on
+MicroPython or CircuitPython, so calling :func:`get_section_template`
+on device raises ``RuntimeError``.  The module itself imports
+cleanly on device (the bundle deploy ships every ``.py`` under the
+package, which is why this matters) — the ``importlib.resources``
+import is deferred inside the function so a device that bundles the
+file but never calls the function pays nothing.
 """
-
-from importlib.resources import files
 
 from chumicro_config.section import ConfigError
 
@@ -44,6 +46,17 @@ def get_section_template(library_name: str) -> str:
         MissingTemplateError: Library isn't installed or doesn't ship
             a template.
     """
+    # importlib.resources is CPython-only; defer the import so the
+    # module loads cleanly on devices that ship this file but never
+    # call the function.
+    try:
+        from importlib.resources import files
+    except ImportError as error:  # pragma: no cover - device-only path
+        raise RuntimeError(
+            "get_section_template requires importlib.resources (CPython); "
+            "template collection is workspace-tooling, not device runtime."
+        ) from error
+
     package = f"chumicro_{library_name}"
     try:
         template_resource = files(package) / "_templates" / "config.toml"

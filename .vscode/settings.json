@@ -13,6 +13,7 @@
         "libraries/msgpack/src",
         "libraries/runner/src",
         "libraries/timing/src",
+        "libraries/wifi/src",
         "workbench/deploy/src",
         "workbench/repl/src",
         "scripts"

@@ -2,7 +2,7 @@
 
 ## Now
 
-- [ ] **Phase 3a: `chumicro-wifi`** — unified `WifiService` across CP, MP-ESP32, and MP-Pico-W. Library is sole wifi supervisor (no `CIRCUITPY_WIFI_*` keys, MP `wlan.config(reconnects=0)`). State machine: DISCONNECTED → CONNECTING → CONNECTED → RECONNECTING → FAILED. See `plans/workstreams/project-workspace.md` Phase 3a for the full task list + open device-verification questions.
+- [ ] **Phase 3a: `chumicro-wifi` per-runtime adapters** — Slice 0 landed (skeleton + `WifiConfig` + state machine + reconnect supervisor + `FakeWifi` + 40 host tests at 99.22 % cov + 16 hardware tests across 4 boards). Remaining slices: 1 (CP `wifi.radio` adapter on Lolin S2 CP + Pi Pico W CP), 2 (MP `network.WLAN` adapter on Lolin S2 MP with `wlan.config(reconnects=0)`), 3 (MP CYW43 adapter on Pi Pico W MP with `pm=0xa11140` power-save knob), 4 (acceptance — connect+drop+reconnect on a real AP across all four boards).
 
 ## Next
 - [ ] **Rebrand ChuMicro → ChipPy** (see `plans/workstreams/rename-to-chippy.md`). Full org + package + bundle rename, all library `VERSION` files reset to `0.0.0`. Execute when the project is ready for first public opening; sheds accumulated test-churn releases from PyPI since the namespace changes.

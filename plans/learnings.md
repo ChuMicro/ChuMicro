@@ -121,6 +121,16 @@ Once root pytest started collecting `workbench/deploy/tests/` + `workbench/repl/
 
 `libraries/` packages flow through `circup` / `mip` / `pip` and need bytecode + bundle staging. `workbench/` packages flow through `pip` only and skip both — but they keep `VERSION` files, `check-version`, `check-api`, and the experimental→stable promotion lifecycle. Decision 0032 codifies this. Both pre-merge gates were extended to walk `workbench/*/` in commit `104e129` (2026-04-25); release-workflow side covered by `fa8628c`.
 
+### CircuitPython RAM-mode silently bypasses module-level `__getattr__`
+
+PEP 562 module-level `__getattr__` is implemented at the firmware level on both MP and CP (verified against pinned source — `MICROPY_MODULE_GETATTR` default-on at `CORE_FEATURES` ROM level), but the **deploy harness's CircuitPython RAM-mode path wraps the package in a class-as-module stub (`_Mod`) that doesn't honour PEP 562**.  Lookups against the wrapper hit the stub's `__dict__` directly without consulting `__getattr__`, so the lazy attr table just silently doesn't fire.
+
+The unit-test hint that masks this: looking up an unknown attr raises `AttributeError` even when the hook is bypassed, so a test like `with raises(AttributeError): module.NotARealSymbol` passes regardless of whether `__getattr__` is being invoked.  To detect bypass, you need a **positive** lazy-resolution test (`module.RealSymbol` returning the resolved value) — that's the one that fails on CP RAM-mode and reveals the harness behavior.
+
+Practical consequence: **package-level PEP 562 `__getattr__` is unsafe for cross-runtime device libraries that need to work via RAM-mode deploy.**  Per-function lazy imports (named `from X import Y` inside a function — what `chumicro_kvstore._select_backend` does) work everywhere because the runtime's import machinery handles them, not the harness's wrapper.
+
+Surfaced when chumicro-wifi Slice 0 added a PEP 562 table at the top of `__init__.py` mirroring `chumicro-deploy`; passed every host-side test, the MP unix-port functional test, and the on-device MP test, but failed exactly the positive-resolution scenarios on real CP boards.  Reverted wifi to eager package-level imports (Tier A — only 3 attrs, well below the threshold the research recommended PEP 562 for); kept lazy adapter selection inside `_select_adapter`.  Updated lazy-loading-research.md + patterns.md PEP 562 entry with the harness caveat.
+
 ### MicroPython rejects multiple inheritance from differing-layout `Exception` subclasses
 
 A class like `class MissingConfigKey(ConfigError, KeyError): ...` parses fine on CPython but raises `TypeError: multiple bases have instance lay-out conflict` at module import on MicroPython 1.26 (and CircuitPython by extension).  Built-in exception types each carry their own C-level memory layout; MP's class machinery refuses to combine two of them in a single subclass.

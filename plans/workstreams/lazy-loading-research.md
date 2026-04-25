@@ -119,11 +119,12 @@ table + the `__getattr__` hook + the `__dir__` shadow) is justified
 when the alternative would import 5+ submodules at boot for a user
 who reaches for one.  Below that threshold, eager is fine.
 
-## Cross-runtime support: PEP 562 verified
+## Cross-runtime support: firmware vs. deploy harness
 
-CircuitPython 10.1.4 and MicroPython 1.26.0 both compile with
-`MICROPY_MODULE_GETATTR` enabled (default-on at the `CORE_FEATURES`
-ROM level — every production board we target).  Source references:
+**Firmware level — works.**  CircuitPython 10.1.4 and
+MicroPython 1.26.0 both compile with `MICROPY_MODULE_GETATTR`
+enabled (default-on at the `CORE_FEATURES` ROM level — every
+production board we target).  Source references:
 
 * `.tools/micropython-v1.26.0/py/objmodule.c:73` — checks the flag at
   module attribute lookup time.
@@ -131,9 +132,32 @@ ROM level — every production board we target).  Source references:
 * `.tools/circuitpython-10.1.4/py/mpconfig.h` — flag default-on at
   `MICROPY_CONFIG_ROM_LEVEL_AT_LEAST_CORE_FEATURES`.
 
-The pattern Just Works on every board in `devices.yml`.  Hardware
-verification will land alongside the first device library to adopt
-it (chumicro-wifi, Phase 3a).
+**Deploy harness level — RAM-mode bypasses it on CircuitPython.**
+Verified during chumicro-wifi Slice 0 hardware bring-up: the deploy
+harness wraps the package as a class-as-module stub (the `_Mod`
+type seen in tracebacks) on CircuitPython RAM-mode, and that
+wrapper does not honor PEP 562.  Module lookups go straight to the
+stub's `__dict__` and never call `__getattr__`.  MP and the
+unix-ports both honor PEP 562 correctly; only CP RAM-mode is
+affected.
+
+**Practical consequence:** **package-level PEP 562 `__getattr__` is
+unsafe for cross-runtime device libraries that need to work via
+RAM-mode deploy.**  Per-function lazy imports (named
+`from X import Y` inside a function — what
+`chumicro_kvstore._select_backend` and `chumicro_msgpack`'s
+try-import do) work everywhere because the runtime's import
+machinery handles them, not the harness's wrapper.
+
+**Updated recommendation:** treat package-level PEP 562 as a
+workbench-only pattern (where `chumicro-deploy` and `chumicro-repl`
+use it correctly — they're CPython-only).  For device libraries,
+push lazy-loading into the per-function selectors.  The Tier B
+classification still applies, but the *implementation shape* is
+the function-scoped form, not the module `__getattr__` form.
+
+Lifted to `plans/learnings.md` so the next library author doesn't
+re-discover this mid-bring-up.
 
 ## Specific opportunities for current libraries
 

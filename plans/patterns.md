@@ -358,14 +358,30 @@ command stays identical.  `MicropythonTransport._run_mpremote`
 implements this pattern; apply it to any future shell-out.  Commit
 `e4f669e`.
 
-## Lazy module-level imports via PEP 562 `__getattr__` (cross-runtime)
+## Lazy module-level imports via PEP 562 `__getattr__` (workbench)
 
-**Cross-runtime by design.**  PEP 562's `module __getattr__` is
-supported on CPython, MicroPython (`MICROPY_MODULE_GETATTR` default-on
-at the `CORE_FEATURES` ROM level), and CircuitPython (same flag,
-same default).  Originally framed as a workbench-CLI optimization;
-generalised to device libraries after the 2026-04-25 lazy-loading
-investigation (`plans/workstreams/lazy-loading-research.md`).
+**Workbench-only in practice.**  PEP 562's `module __getattr__` is
+implemented at the firmware level on both MP and CP (verified in
+the pinned source — `MICROPY_MODULE_GETATTR` default-on at the
+`CORE_FEATURES` ROM level), but the **deploy harness's
+CircuitPython RAM-mode path wraps the package in a class-as-module
+stub that silently bypasses PEP 562**.  Lookups hit the stub's
+`__dict__` directly without calling `__getattr__`, so the lazy attr
+table just doesn't fire.  MP + the unix-ports both honor PEP 562
+correctly; only CP RAM-mode is affected — but that's the
+canonical deploy path for chumicro libraries.
+
+The pattern is **safe for workbench packages** (`chumicro-deploy`,
+`chumicro-repl`) because they're CPython-only.  For device
+libraries (anything under `libraries/*/src/`), use per-function
+lazy imports instead — see "Per-function lazy adapter selection"
+below, which works everywhere.
+
+History: surfaced 2026-04-25 during chumicro-wifi Slice 0
+hardware bring-up; lifted to `plans/learnings.md` and the
+lazy-loading research doc.  The earlier "cross-runtime by design"
+framing was correct at the firmware level but missed the harness
+wrapper.
 
 When a package has multiple submodules where users typically reach
 for a subset, defer submodule imports until first attribute access:
@@ -448,6 +464,63 @@ selection.
 Related: lazy-loading-research workstream, Decision 0010
 (constructor injection — same "defer the cost" philosophy at the
 class-instance scope).
+
+## Per-function lazy adapter selection (cross-runtime safe)
+
+Use this for **device libraries with per-runtime adapters** —
+the cross-runtime-safe alternative to module-level PEP 562 (which
+the CP RAM-mode harness silently bypasses, see the section above).
+Goes inside a selector function the user reaches via construction:
+
+```python
+# In src/chumicro_<name>/service.py (or wherever the selector lives)
+import sys
+
+from chumicro_<name>._adapters.fake import FakeAdapter   # eager; the host fallback
+from chumicro_<name>._adapters.base import BaseAdapter   # eager; the protocol
+
+
+def _select_adapter():
+    """Pick the runtime-appropriate adapter at construction time."""
+    runtime_name = sys.implementation.name
+    if runtime_name == "circuitpython":  # pragma: no cover - CP runtime path
+        from chumicro_<name>._adapters.cp import CpAdapter
+        return CpAdapter()
+    if runtime_name == "micropython":  # pragma: no cover - MP runtime path
+        try:
+            import esp32  # noqa: F401
+        except ImportError:
+            from chumicro_<name>._adapters.mp_rp2 import MpRp2Adapter
+            return MpRp2Adapter()
+        from chumicro_<name>._adapters.mp_esp32 import MpEsp32Adapter
+        return MpEsp32Adapter()
+    return FakeAdapter()
+```
+
+**Why this works on every runtime where module ``__getattr__``
+doesn't:** the named ``from X import Y`` statement inside the
+function body is compiled into the runtime's standard import
+machinery — invoked once when the function runs, resolved via the
+package loader the harness already understands.  The class-as-
+module wrapper that breaks PEP 562 doesn't sit between the user
+and an explicit submodule import.
+
+**`# pragma: no cover` for the CP / MP branches:** they can't be
+exercised from CPython tests; coverage is instead provided by the
+per-runtime functional suites that exist for each adapter.  Test
+the *selection* logic with a `monkeypatch.setattr(sys, ...)` test
+or by injecting a concrete adapter via the public constructor's
+`adapter=` kwarg.
+
+**Adopted by:** `chumicro_kvstore._select_backend` (4 backends),
+`chumicro_wifi.service._select_adapter` (4 adapters,
+hardware-verified Phase 3a Slice 0).  Future libraries with
+adapter sets (sockets, mqtt, sensor drivers) follow the same
+shape.
+
+Related: lazy-loading-research workstream §"Cross-runtime support",
+Decision 0010 (constructor injection lets tests bypass the
+selector entirely via injected fakes).
 
 ## StrEnum as a backwards-compatible shim for stringly-typed args
 
