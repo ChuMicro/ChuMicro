@@ -16,6 +16,11 @@ dependencies = [
     "chumicro-deploy",
     "chumicro-msgpack",
     "PyYAML>=6.0",
+    # ruamel.yaml preserves comments + key order on round-trip — required
+    # for the three-zone devices.yml writer (Decision 0029 §9).  PyYAML
+    # destroys both, which would clobber every user comment on the first
+    # `add-device`.  Pinned to the modern (>=0.18) API.
+    "ruamel.yaml>=0.18",
 ]
 keywords = [
     "circuitpython", "micropython", "microcontroller", "embedded",

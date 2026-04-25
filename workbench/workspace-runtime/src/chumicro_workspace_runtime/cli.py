@@ -38,6 +38,17 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from chumicro_workspace_runtime.deploy_source import thing_directory_source
+from chumicro_workspace_runtime.devices_yaml import (
+    DeviceAlreadyExistsError,
+    DeviceNotFoundError,
+    HardwareOverwriteError,
+    add_device,
+    dump_devices,
+    load_devices,
+    rename_device,
+    update_device_address,
+    update_device_hardware,
+)
 from chumicro_workspace_runtime.workspace import (
     WorkspaceLayout,
     WorkspaceNotFoundError,
@@ -323,14 +334,109 @@ def _stub(slice_or_phase: str) -> int:
     return 2
 
 
-def _cmd_add_device(_args: argparse.Namespace) -> int:
-    """Probe + register a board into devices.yml.  Awaits the YAML writer."""
-    return _stub("Phase 4a Slice 3 (three-zone YAML writer)")
+def _cmd_add_device(args: argparse.Namespace) -> int:
+    """Probe a board + register it in devices.yml.
+
+    Builds a fresh entry by probing the supplied address: ``runtime``
+    + ``hardware.uid`` + ``hardware.machine`` come from
+    :func:`chumicro_deploy.probe_device`; ``address`` rides through
+    as-is.  Re-running with the same id triggers a re-probe and is
+    blocked unless ``--force`` is passed (the typical second invocation
+    is "I swapped boards on this id" — make the user confirm).
+    """
+    workspace = _resolve_workspace(args)
+    from chumicro_deploy import Device, probe_device  # noqa: PLC0415
+
+    probe_device_obj = Device(transport=args.runtime, address=args.address)
+    info = probe_device(probe_device_obj)
+    if info.implementation is None:
+        print("add-device: probe did not return implementation marker", file=sys.stderr)
+        return 1
+
+    data = load_devices(workspace.devices_yaml)
+    hardware: dict[str, str] = {}
+    if info.uid:
+        hardware["uid"] = info.uid
+    if info.implementation.machine:
+        hardware["machine"] = info.implementation.machine
+    if info.board_id:
+        hardware["board_id"] = info.board_id
+
+    try:
+        add_device(
+            data,
+            device_id=args.id,
+            runtime=info.implementation.name,
+            address=args.address,
+            hardware=hardware or None,
+            description=args.description,
+        )
+    except DeviceAlreadyExistsError:
+        if not args.force:
+            print(
+                f"add-device: {args.id!r} already exists; pass --force "
+                "to re-probe and update the entry",
+                file=sys.stderr,
+            )
+            return 1
+        # Re-probe path: keep the existing entry's user-owned fields,
+        # refresh the address silently, and update hardware-once leaves
+        # under --force semantics so a board swap is reflected.
+        update_device_address(data, args.id, args.address)
+        try:
+            update_device_hardware(data, args.id, hardware, force=True)
+        except HardwareOverwriteError as exception:
+            print(f"add-device: {exception}", file=sys.stderr)
+            return 1
+
+    dump_devices(data, workspace.devices_yaml)
+    print(f"add-device: registered {args.id} ({info.implementation.name})")
+    return 0
 
 
-def _cmd_rename(_args: argparse.Namespace) -> int:
-    """Rename a thing or device.  Awaits the YAML writer."""
-    return _stub("Phase 4a Slice 3 (three-zone YAML writer)")
+def _cmd_rename(args: argparse.Namespace) -> int:
+    """Rename a thing directory or a device id.
+
+    Two modes (mutually exclusive): ``--thing OLD NEW`` does a
+    ``mv things/OLD things/NEW``; ``--device OLD NEW`` rewrites the
+    devices.yml entry id + every reference to it under ``defaults:``.
+    """
+    workspace = _resolve_workspace(args)
+
+    if (args.thing is None) == (args.device is None):
+        print(
+            "rename: pass exactly one of --thing OLD NEW or --device OLD NEW",
+            file=sys.stderr,
+        )
+        return 2
+
+    if args.thing is not None:
+        old_name, new_name = args.thing
+        old_path = workspace.thing_dir(old_name)
+        new_path = workspace.thing_dir(new_name)
+        if not old_path.is_dir():
+            print(f"rename: thing {old_path} not found", file=sys.stderr)
+            return 1
+        if new_path.exists():
+            print(f"rename: {new_path} already exists", file=sys.stderr)
+            return 1
+        old_path.rename(new_path)
+        print(f"rename: {old_name} → {new_name}")
+        return 0
+
+    old_id, new_id = args.device
+    data = load_devices(workspace.devices_yaml)
+    try:
+        rename_device(data, old_id, new_id)
+    except DeviceNotFoundError:
+        print(f"rename: device {old_id!r} not found in devices.yml", file=sys.stderr)
+        return 1
+    except DeviceAlreadyExistsError as exception:
+        print(f"rename: {exception}", file=sys.stderr)
+        return 1
+    dump_devices(data, workspace.devices_yaml)
+    print(f"rename: device {old_id} → {new_id}")
+    return 0
 
 
 def _cmd_sim(_args: argparse.Namespace) -> int:
@@ -398,9 +504,37 @@ def build_parser() -> argparse.ArgumentParser:
     # ----- add-device ----------------------------------------------------
     add_device_parser = subparsers.add_parser(
         "add-device",
-        help="Probe a board and register it in devices.yml (Slice 3).",
+        help="Probe a board and register it in devices.yml.",
     )
     _add_workspace_arg(add_device_parser)
+    add_device_parser.add_argument(
+        "id",
+        help="User-friendly device id (e.g. 'back-porch-mp').",
+    )
+    add_device_parser.add_argument(
+        "--address",
+        required=True,
+        help="Serial port path of the connected board.",
+    )
+    add_device_parser.add_argument(
+        "--runtime",
+        choices=("circuitpython", "micropython"),
+        required=True,
+        help="Runtime to probe — picks the right Device facade for probe_device.",
+    )
+    add_device_parser.add_argument(
+        "--description",
+        default=None,
+        help="Free-form note recorded under 'description:' (user-owned zone).",
+    )
+    add_device_parser.add_argument(
+        "--force",
+        action="store_true",
+        help=(
+            "Overwrite an existing entry with this id — refreshes the "
+            "address and hardware-once fields from the live probe."
+        ),
+    )
     add_device_parser.set_defaults(func=_cmd_add_device)
 
     # ----- probe ---------------------------------------------------------
@@ -511,9 +645,24 @@ def build_parser() -> argparse.ArgumentParser:
     # ----- rename --------------------------------------------------------
     rename_parser = subparsers.add_parser(
         "rename",
-        help="Rename a thing or device (Slice 3 — needs YAML writer).",
+        help="Rename a thing directory or a device id.",
     )
     _add_workspace_arg(rename_parser)
+    rename_target = rename_parser.add_mutually_exclusive_group(required=True)
+    rename_target.add_argument(
+        "--thing",
+        nargs=2,
+        metavar=("OLD", "NEW"),
+        default=None,
+        help="Rename things/OLD/ to things/NEW/.",
+    )
+    rename_target.add_argument(
+        "--device",
+        nargs=2,
+        metavar=("OLD", "NEW"),
+        default=None,
+        help="Rename a devices.yml entry id (also rewrites defaults: references).",
+    )
     rename_parser.set_defaults(func=_cmd_rename)
 
     # ----- install-firmware ----------------------------------------------

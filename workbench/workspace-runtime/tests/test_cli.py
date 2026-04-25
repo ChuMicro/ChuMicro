@@ -533,8 +533,6 @@ class TestWorkspaceResolution:
 @pytest.mark.parametrize(
     ("command", "slice_marker"),
     [
-        ("add-device", "Slice 3"),
-        ("rename", "Slice 3"),
         ("sim", "sim runner"),
         ("env", "environments"),
         ("use", "environments"),
@@ -555,3 +553,287 @@ def test_stub_commands_exit_two_with_message(
     captured_stderr = capsys.readouterr().err
     assert "not implemented yet" in captured_stderr
     assert slice_marker in captured_stderr
+
+
+# ---------------------------------------------------------------------------
+# add-device  (Slice 3 — three-zone YAML writer wired in)
+# ---------------------------------------------------------------------------
+
+
+def _fake_probe_info(
+    runtime: str = "micropython",
+    machine: str = "Lolin S2",
+    uid: str = "ABCD1234",
+    board_id: str = "lolin_s2",
+):
+    """Return an object that mimics chumicro_deploy.probe_device's return."""
+    from chumicro_deploy import DeviceImplementation
+
+    class _Info:
+        implementation = DeviceImplementation(
+            name=runtime, version="1.26.0", machine=machine, uid=uid,
+        )
+
+    info = _Info()
+    info.board_id = board_id
+    info.uid = uid
+    return info
+
+
+class TestAddDevice:
+    def test_writes_new_entry_to_devices_yml(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        # Start with no devices.yml — typical fresh-workspace case.
+        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        import chumicro_deploy
+        monkeypatch.setattr(
+            chumicro_deploy, "probe_device", lambda _device: _fake_probe_info(),
+        )
+        exit_code = cli.main([
+            "add-device", "--workspace-dir", str(tmp_path),
+            "--address", "/dev/cu.fake", "--runtime", "micropython",
+            "--description", "Test board", "lolin-s2",
+        ])
+        assert exit_code == 0
+        out = capsys.readouterr().out
+        assert "registered lolin-s2" in out
+        body = (tmp_path / "devices.yml").read_text()
+        assert "lolin-s2" in body
+        assert "/dev/cu.fake" in body
+        assert "ABCD1234" in body  # hardware-once UID landed
+        assert "Test board" in body  # user-owned description
+
+    def test_re_register_without_force_fails(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        import chumicro_deploy
+        monkeypatch.setattr(
+            chumicro_deploy, "probe_device", lambda _device: _fake_probe_info(),
+        )
+
+        first = cli.main([
+            "add-device", "--workspace-dir", str(tmp_path),
+            "--address", "/dev/cu.fake", "--runtime", "micropython", "lolin-s2",
+        ])
+        assert first == 0
+        capsys.readouterr()
+
+        second = cli.main([
+            "add-device", "--workspace-dir", str(tmp_path),
+            "--address", "/dev/cu.fake", "--runtime", "micropython", "lolin-s2",
+        ])
+        assert second == 1
+        assert "already exists" in capsys.readouterr().err
+
+    def test_re_register_with_force_refreshes_address(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        import chumicro_deploy
+        monkeypatch.setattr(
+            chumicro_deploy, "probe_device", lambda _device: _fake_probe_info(),
+        )
+        cli.main([
+            "add-device", "--workspace-dir", str(tmp_path),
+            "--address", "/dev/cu.old", "--runtime", "micropython", "lolin-s2",
+        ])
+        # Re-probe with --force at a different port.
+        result = cli.main([
+            "add-device", "--workspace-dir", str(tmp_path),
+            "--address", "/dev/cu.new", "--runtime", "micropython",
+            "--force", "lolin-s2",
+        ])
+        assert result == 0
+        body = (tmp_path / "devices.yml").read_text()
+        assert "/dev/cu.new" in body
+        assert "/dev/cu.old" not in body
+
+    def test_force_swap_with_changed_uid_succeeds(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """--force allows hardware.uid to change ('I swapped boards')."""
+        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        import chumicro_deploy
+
+        first_info = _fake_probe_info(uid="ORIGINAL")
+        monkeypatch.setattr(chumicro_deploy, "probe_device", lambda _d: first_info)
+        cli.main([
+            "add-device", "--workspace-dir", str(tmp_path),
+            "--address", "/dev/cu.x", "--runtime", "micropython", "lolin",
+        ])
+
+        second_info = _fake_probe_info(uid="DIFFERENT")
+        monkeypatch.setattr(chumicro_deploy, "probe_device", lambda _d: second_info)
+        result = cli.main([
+            "add-device", "--workspace-dir", str(tmp_path),
+            "--address", "/dev/cu.x", "--runtime", "micropython",
+            "--force", "lolin",
+        ])
+        assert result == 0
+        assert "DIFFERENT" in (tmp_path / "devices.yml").read_text()
+
+    def test_probe_no_marker_returns_one(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+
+        class _NoMarker:
+            implementation = None
+            board_id = ""
+            uid = ""
+
+        import chumicro_deploy
+        monkeypatch.setattr(chumicro_deploy, "probe_device", lambda _d: _NoMarker())
+        exit_code = cli.main([
+            "add-device", "--workspace-dir", str(tmp_path),
+            "--address", "/dev/cu.x", "--runtime", "micropython", "lolin",
+        ])
+        assert exit_code == 1
+        assert "did not return implementation" in capsys.readouterr().err
+
+    def test_user_comments_in_devices_yml_survive_add(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The headline value of the round-trip writer."""
+        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "devices.yml").write_text(
+            "# House sensors — keep this file checked in.\n"
+            "defaults:\n"
+            "  micropython: existing  # default for deploy commands\n"
+            "devices:\n"
+            "  - id: existing\n"
+            "    runtime: micropython\n"
+            "    address: /dev/cu.preset\n"
+        )
+
+        import chumicro_deploy
+        monkeypatch.setattr(
+            chumicro_deploy, "probe_device", lambda _d: _fake_probe_info(),
+        )
+        cli.main([
+            "add-device", "--workspace-dir", str(tmp_path),
+            "--address", "/dev/cu.fake", "--runtime", "micropython", "lolin-s2",
+        ])
+        body = (tmp_path / "devices.yml").read_text()
+        assert "# House sensors" in body
+        assert "# default for deploy commands" in body
+        assert "lolin-s2" in body  # new entry made it in
+
+
+# ---------------------------------------------------------------------------
+# rename  (Slice 3 — wired to thing dirs + devices.yml)
+# ---------------------------------------------------------------------------
+
+
+class TestRename:
+    def test_thing_renames_directory(self, tmp_path: Path) -> None:
+        root = _seed_workspace(tmp_path)
+        _seed_thing(root, "old-name")
+        exit_code = cli.main([
+            "rename", "--workspace-dir", str(root),
+            "--thing", "old-name", "new-name",
+        ])
+        assert exit_code == 0
+        assert not (root / "things" / "old-name").exists()
+        assert (root / "things" / "new-name" / "code.py").exists()
+
+    def test_thing_missing_returns_one(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        exit_code = cli.main([
+            "rename", "--workspace-dir", str(root),
+            "--thing", "ghost", "spook",
+        ])
+        assert exit_code == 1
+        assert "not found" in capsys.readouterr().err
+
+    def test_thing_target_exists_returns_one(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        _seed_thing(root, "alpha")
+        _seed_thing(root, "beta")
+        exit_code = cli.main([
+            "rename", "--workspace-dir", str(root),
+            "--thing", "alpha", "beta",
+        ])
+        assert exit_code == 1
+        assert "already exists" in capsys.readouterr().err
+
+    def test_device_rename_rewrites_id_and_default(self, tmp_path: Path) -> None:
+        root = _seed_workspace(tmp_path)
+        # Seed devices.yml has 'lolin-s2' as default.
+        exit_code = cli.main([
+            "rename", "--workspace-dir", str(root),
+            "--device", "lolin-s2", "back-porch",
+        ])
+        assert exit_code == 0
+        body = (root / "devices.yml").read_text()
+        assert "lolin-s2" not in body
+        assert "back-porch" in body
+
+    def test_device_missing_returns_one(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        exit_code = cli.main([
+            "rename", "--workspace-dir", str(root),
+            "--device", "ghost", "spook",
+        ])
+        assert exit_code == 1
+        assert "not found" in capsys.readouterr().err
+
+    def test_device_target_exists_returns_one(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "devices.yml").write_text(
+            "devices:\n"
+            "  - id: alpha\n"
+            "    runtime: micropython\n"
+            "    address: /a\n"
+            "  - id: beta\n"
+            "    runtime: circuitpython\n"
+            "    address: /b\n"
+        )
+        exit_code = cli.main([
+            "rename", "--workspace-dir", str(tmp_path),
+            "--device", "alpha", "beta",
+        ])
+        assert exit_code == 1
+        assert "already exists" in capsys.readouterr().err
+
+    def test_neither_thing_nor_device_specified_argparse_errors(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        """Argparse's mutually-exclusive group raises SystemExit on missing input."""
+        root = _seed_workspace(tmp_path)
+        with pytest.raises(SystemExit):
+            cli.main(["rename", "--workspace-dir", str(root)])
