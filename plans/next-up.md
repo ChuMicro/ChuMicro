@@ -2,7 +2,7 @@
 
 ## Now
 
-- [ ] **Phase 3b: `chumicro-kvstore` per-runtime backends** — Slices 0+1 landed (Decision 0034 + scaffold + MemoryBackend + FakeKVStore + 43 host tests at 99.6 % cov). Remaining slices: 2 (CP NVM with CRC framing, hardware-verified on Lolin S2 + Pi Pico W CP), 3 (MP NVS on Lolin S2 MP), 4 (MP LittleFS on Pi Pico W MP), 5 (auto-select smoke + boot-counter-across-hard-reset functional tests on at least one CP + one MP board).
+- [ ] **Phase 3a: `chumicro-wifi`** — unified `WifiService` across CP, MP-ESP32, and MP-Pico-W. Library is sole wifi supervisor (no `CIRCUITPY_WIFI_*` keys, MP `wlan.config(reconnects=0)`). State machine: DISCONNECTED → CONNECTING → CONNECTED → RECONNECTING → FAILED. See `plans/workstreams/project-workspace.md` Phase 3a for the full task list + open device-verification questions.
 
 ## Next
 - [ ] **Rebrand ChuMicro → ChipPy** (see `plans/workstreams/rename-to-chippy.md`). Full org + package + bundle rename, all library `VERSION` files reset to `0.0.0`. Execute when the project is ready for first public opening; sheds accumulated test-churn releases from PyPI since the namespace changes.
@@ -11,13 +11,6 @@
 - [ ] Expand the device test matrix beyond ESP32-S2 now that transport tooling is proven on both MicroPython and CircuitPython.
 - [ ] **ChuMicro project-workspace workstream (Phase 3+)** — Phase 1 (`chumicro-deploy` extraction) shipped 2026-04-22, hardware-verified on four boards.  Phase 2 (`chumicro-repl`) shipped 2026-04-25 — minimum-viable core + auto-reconnect + recovery layer (`InteractiveReplSession`, classifier, plans, demo) + 9 hardware-gated functional tests passing on CP and MP, 175 host-side tests at 94 % coverage.  See `plans/workstreams/project-workspace.md`.  Remaining phases: `chumicro-kvstore` + `chumicro-wifi` (Phase 3 — independent, can interleave), Phase 4 split into `chumicro-workspace-runtime` (4a, workbench), `chumicro-workspace-template` scaffolder package (4b, workbench — Copier-style init/update; consumes `chumicro_deploy.config.default` for the `devices.yml` schema), and the `chumicro-workspace-template` companion repo (4c, separate repo hosting the canonical template files), `chumicro-sockets` per Decision 0031 (Phase 5), `chumicro-mqtt` refactor (Phase 6), first sensor thing template (Phase 7), OTA deferred (Phase 8).
 - [ ] Enable GitHub Copilot code review as a PR quality gate (low priority — defer until community contributions begin).
-- [ ] Implement `chumicro-kvstore` — tiny mutable key-value store for persisted runtime state. Replaces the previously-scoped `chumicro-settings` (see Decision 0030).
-  - Not a config system. Documented contract: small per-backend capacities (256 B on SAMD21 up to ~24 KB on MP ESP32 NVS), wear mitigation via `commit_if_changed`, CRC-wrapped payload on CP NVM for power-loss-corruption detection.
-  - Per-runtime backends: `microcontroller.nvm` (CP, all boards), `esp32.NVS` namespace with per-key msgpack blobs (MP ESP32), single LittleFS file with tmpfile+rename atomic update (MP Pi Pico W / other non-NVS MP boards), in-memory dict (CPython / tests).
-  - Values round-trip via `chumicro-msgpack` — strings, ints, bytes, lists, dicts.
-  - `KVStore(backend="auto")`, `commit()`, `commit_if_changed()`, `capacity`, `bytes_used`, `is_corrupt`. `KVStoreFull` / `KVStoreCorrupt` exceptions.
-  - `testing.py` with `FakeKVStore` (wraps MemoryBackend + call recording).
-  - App **config** (wifi creds, MQTT broker, pin map, feature flags) is NOT stored here. Config ships as `things/<name>/config.toml`, transformed to `/runtime_config.msgpack` at deploy time by `chumicro-workspace-runtime`, read once at boot. See Decision 0030.
 - [ ] Add digital I/O as the second library seam (alongside CI/release work, not sequentially).
 - [ ] Explore test ergonomics: reduce repeated boilerplate across test files.
 - [ ] Design a performance and resource benchmarking infrastructure. Goals:
@@ -42,6 +35,7 @@
 > `plans/workstreams/<workstream>.md` (per-phase acceptance).  Past entries
 > link to those records — don't paste detail back into `next-up.md`.
 
+- [x] **Phase 3b: `chumicro-kvstore` shipped** — Decision 0034 + 4 backends (memory / CP NVM with CRC framing / MP NVS / MP LittleFS) + acceptance suite. 92 host tests at 99 % cov; 27 functional tests pass on each of the four plugged-in boards (Lolin S2 CP/MP, Pi Pico W CP/MP) (2026-04-25). See [history.md 2026-04-25](history.md) and Phase 3b in [workstreams/project-workspace.md](workstreams/project-workspace.md).
 - [x] **Static gate for libraries/ absolute-imports rule** — ruff TID252 enabled in `pyproject.toml` with per-file-ignores relaxing it for `workbench/`, `scripts/`, tests, functional_tests, and examples (2026-04-25). See [history.md 2026-04-25](history.md).
 - [x] **`check-version` + `check-api` cover workbench packages** — both pre-merge gates now walk `workbench/*/` alongside `libraries/*/`, and `release_tags()` matches the canonical `chumicro-<name>-v*` glob emitted by `release.yml` so workbench tags resolve once the first non-zero bump lands; griffe absolute-`--search` no-op fix landed alongside; codified as `scripts/audit_gates.py` regression suite (2026-04-25). See [history.md 2026-04-25](history.md).
 - [x] **`release.yml` + `promote.yml` cover workbench packages** (`workbench/*/VERSION` triggers, library-only bundle + validate-mip gating, kind-aware promote-validate; VERSION still 0.0.0 so no release fires yet) (2026-04-25). See [history.md 2026-04-25](history.md).

@@ -6,9 +6,9 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** Project-workspace Phase 3b in flight — `chumicro-kvstore` Slices 0–4 landed 2026-04-25 (every backend implemented + hardware-verified across all four boards). Next: Slice 5 (auto-select smoke + boot-counter-across-hard-reset acceptance).
-- **Last shipped:** Phase 3b Slice 4 — MP LittleFS backend (single `/_chu_kv.msgpack` with tmpfile + sync + rename atomicity). 92 host tests at 99 % cov; 7 functional tests passing on both Pi Pico W MP (canonical no-NVS target) and Lolin S2 MP (alongside NVS — confirms `backend="littlefs"` is pickable on ESP32 too).
-- **In flight:** Phase 3b Slice 5 (auto-detect smoke across runtimes + boot-counter-across-hard-reset acceptance functional tests).
+- **Phase:** Project-workspace Phase 3b **closed 2026-04-25** — `chumicro-kvstore` shipped end-to-end: Decision 0034 + scaffold + 4 backends (memory / CP NVM / MP NVS / MP LittleFS) + acceptance suite. Next: Phase 3a (`chumicro-wifi`).
+- **Last shipped:** Phase 3b Slice 5 — acceptance functional tests on all four boards (Lolin S2 CP/MP, Pi Pico W CP/MP). Auto-detect picks the substrate-native backend; full msgpack value-type round-trip; explicit `backend="littlefs"` pickable on ESP32 MP alongside NVS; corrupt-substrate paths surface via `is_corrupt` without preventing boot.
+- **In flight:** Phase 3a (`chumicro-wifi`) — kicking off the home-testbed wifi supervisor.
 - **Blocked on:** —
 - **Last touched:** `libraries/kvstore/**`, `plans/decisions/0034-kvstore-api-and-backends.md`, `plans/{now,history,next-up}.md`. Four boards plugged in: Lolin S2 CP/MP, Pi Pico W CP/MP — exercises every kvstore backend across slices 2–5.
 

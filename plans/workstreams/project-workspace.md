@@ -296,7 +296,13 @@ Docs do not settle these; run on plugged-in boards:
 - Does `wlan.config(reconnects=0)` on MP ESP32 take effect mid-session (after initial connect), or must it be set pre-connect?  Source suggests either works (it's just a config variable read at event time) but confirm on hardware.
 - Pico W MP with `pm=0xa11140`: how much does responsiveness improve in practice?  Expected yes per community reports.
 
-### Phase 3b: `chumicro-kvstore` + config pipeline (supersedes `chumicro-settings`)
+### Phase 3b: `chumicro-kvstore` + config pipeline (supersedes `chumicro-settings`) ✅ Complete (2026-04-25)
+
+**Library shipped 2026-04-25.**  Decision 0034 nails down the API + per-backend contracts.  `libraries/kvstore/` ships `KVStore` with mapping-shaped public API + three lifecycle methods (`commit`, `commit_if_changed`, `reload`), four exceptions (`KVStoreError` / `KVStoreFull` / `KVStoreCorrupt` / `KVStoreReadOnly`), four runtime-aware backends (memory, CP NVM with `MAGIC | LEN | CRC32 | MSGPACK` framing, MP NVS single-payload-blob in `chu_kv` namespace, MP LittleFS single `/_chu_kv.msgpack` with tmp+sync+rename atomicity), and `chumicro_kvstore.testing.FakeKVStore` for downstream library tests.  92 host tests at 99 % coverage; 27 functional tests pass on each of the four plugged-in boards (Lolin S2 CP/MP, Pi Pico W CP/MP).
+
+The config-pipeline bullets below remain owned by `chumicro-workspace-runtime` (Phase 4a) and don't land a library, so they're tracked here as scope but not as Phase 3b deliverables.
+
+
 
 Decision 0030 splits the old `chumicro-settings` scope into two unrelated concerns: read-only app **config** (shipped with the thing, TOML on host → msgpack on device, transformed at deploy) and mutable **persisted state** (a new, narrower library `chumicro-kvstore`).
 
