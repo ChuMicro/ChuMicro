@@ -171,6 +171,37 @@ def _sync_vscode_settings() -> None:
     print("  Updated .vscode/settings.json")
 
 
+def _sync_vscode_extensions() -> None:
+    """Regenerate ``.vscode/extensions.json`` recommending the
+    extensions a contributor needs on first workspace open.
+
+    VS Code reads this file when a folder is opened and surfaces a
+    "Do you want to install the recommended extensions?" prompt.
+    Without it, the Python extension only activates the first time
+    the user opens a ``.py`` file — which makes the test runner,
+    interpreter picker, and Pylance all silently absent on first
+    open.
+    """
+    vscode_dir = ROOT / ".vscode"
+    vscode_dir.mkdir(parents=True, exist_ok=True)
+
+    content = {
+        "//": (
+            "Managed by scripts/ide_sync.py — regenerated on every "
+            "`python scripts/run.py setup` and `new-library` run.  "
+            "Edits to this file will be lost."
+        ),
+        "recommendations": [
+            "ms-python.python",
+            "ms-python.vscode-pylance",
+            "ryanluker.vscode-coverage-gutters",
+        ],
+    }
+    extensions_file = vscode_dir / "extensions.json"
+    extensions_file.write_text(json.dumps(content, indent=4) + "\n")
+    print("  Updated .vscode/extensions.json")
+
+
 def _sync_pycharm_iml() -> None:
     """Regenerate .idea/chumicro.iml source roots from the workspace structure.
 
@@ -284,4 +315,5 @@ def sync_ide() -> int:
     _sync_pyrightconfig()
     _sync_vscode_tasks()
     _sync_vscode_settings()
+    _sync_vscode_extensions()
     return 0

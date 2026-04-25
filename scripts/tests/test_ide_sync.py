@@ -54,6 +54,17 @@ class TestSyncIde:
         assert tasks["version"] == "2.0.0"
         assert len(tasks["tasks"]) > 0
 
+    def test_creates_vscode_extensions(self):
+        """VS Code extensions.json exists after sync with the recommended set."""
+        from workspace import ROOT
+
+        sync_ide()
+        extensions_file = ROOT / ".vscode" / "extensions.json"
+        assert extensions_file.exists()
+        extensions = json.loads(extensions_file.read_text())
+        assert "ms-python.python" in extensions["recommendations"]
+        assert "ms-python.vscode-pylance" in extensions["recommendations"]
+
     def test_creates_pycharm_configs(self):
         """PyCharm run configurations are created."""
         from workspace import ROOT

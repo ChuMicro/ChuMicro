@@ -1,0 +1,8 @@
+{
+    "//": "Managed by scripts/ide_sync.py \u2014 regenerated on every `python scripts/run.py setup` and `new-library` run.  Edits to this file will be lost.",
+    "recommendations": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ryanluker.vscode-coverage-gutters"
+    ]
+}
