@@ -113,40 +113,60 @@ The library doesn't care that the section name isn't the canonical
 one — it takes whatever dict the caller passes.  The convention is
 about the *default*, not a constraint.
 
-### 3. Library access pattern: dataclass + `from_dict` classmethod
+### 3. Library access pattern: dataclass + `from_dict` classmethod backed by `chumicro-config`
+
+> **Amended 2026-04-25 by Decision 0036.**  The `from_dict`
+> *implementation* now lives in a shared library
+> (`chumicro-config`) so every consumer library calls the same
+> standardized factory and the convention can't drift.  The shape
+> below is unchanged — only the implementation moved.
 
 Every library that consumes runtime config ships a `<Name>Config`
-dataclass plus a `from_dict(d: dict) -> <Name>Config` classmethod
-that does the dict → typed-config conversion:
+dataclass plus a `from_dict(d: dict) -> <Name>Config` classmethod.
+The classmethod calls `chumicro_config.load_section`, which
+implements the canonical missing-required / missing-optional /
+unknown-key / non-dict-input semantics:
 
 ```python
 # In chumicro_wifi:
+from chumicro_config import load_section
+
+
 class WifiConfig:
-    ssid: str
-    password: str
-    hostname: str | None = None
-    connect_timeout_ms: int = 15_000
-    # ...
+    def __init__(
+        self,
+        ssid: str,
+        password: str,
+        hostname: str | None = None,
+        connect_timeout_ms: int = 15_000,
+    ) -> None:
+        self.ssid = ssid
+        self.password = password
+        self.hostname = hostname
+        self.connect_timeout_ms = connect_timeout_ms
 
     @classmethod
     def from_dict(cls, data: dict) -> "WifiConfig":
-        return cls(
-            ssid=data["ssid"],                       # required → KeyError on missing
-            password=data["password"],
-            hostname=data.get("hostname"),           # optional → default
-            connect_timeout_ms=data.get("connect_timeout_ms", 15_000),
+        return load_section(
+            cls,
+            data,
+            required=("ssid", "password"),
+            optional={"hostname": None, "connect_timeout_ms": 15_000},
         )
 ```
 
 User code in `app.py` is:
 
 ```python
-import msgpack
+from chumicro_config import load_runtime_config
 from chumicro_wifi import WifiService, WifiConfig
 
-config = msgpack.unpackb(open("/runtime_config.msgpack", "rb").read())
+config = load_runtime_config()
 wifi = WifiService(WifiConfig.from_dict(config["wifi"]))
 ```
+
+(`load_runtime_config` is the on-device reader for
+`/runtime_config.msgpack`, also part of `chumicro-config`.)
 
 No magic.  The user explicitly wires sections to libraries — code
 remains greppable, debuggable, and refactor-safe.  Tests construct
@@ -155,7 +175,9 @@ through the dict path.
 
 **Rejected:** a generic `chumicro-config-runtime` library that loads
 the file + dispatches to libraries.  Adds a published package for a
-3-line user code path; doesn't earn its keep.
+3-line user code path; doesn't earn its keep.  `chumicro-config`
+(per Decision 0036) is helpers, not a dispatcher — the user still
+explicitly wires `config["wifi"]` to `WifiConfig.from_dict`.
 
 **Rejected:** each library shipping a `from_config_file()` helper
 that reads `/runtime_config.msgpack` itself.  Forces every consumer

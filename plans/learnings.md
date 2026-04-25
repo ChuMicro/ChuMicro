@@ -121,6 +121,14 @@ Once root pytest started collecting `workbench/deploy/tests/` + `workbench/repl/
 
 `libraries/` packages flow through `circup` / `mip` / `pip` and need bytecode + bundle staging. `workbench/` packages flow through `pip` only and skip both — but they keep `VERSION` files, `check-version`, `check-api`, and the experimental→stable promotion lifecycle. Decision 0032 codifies this. Both pre-merge gates were extended to walk `workbench/*/` in commit `104e129` (2026-04-25); release-workflow side covered by `fa8628c`.
 
+### MicroPython rejects multiple inheritance from differing-layout `Exception` subclasses
+
+A class like `class MissingConfigKey(ConfigError, KeyError): ...` parses fine on CPython but raises `TypeError: multiple bases have instance lay-out conflict` at module import on MicroPython 1.26 (and CircuitPython by extension).  Built-in exception types each carry their own C-level memory layout; MP's class machinery refuses to combine two of them in a single subclass.
+
+The "ergonomic dual-catch" pattern (`except ConfigError` *or* `except KeyError` both work) is a CPython-only luxury for library code that has to load on device.  Pick **one** parent — usually the library's domain-specific base — and document it.  Callers catch via the single parent.
+
+Surfaced in `chumicro-config` Slice 0 when `MissingConfigKey(ConfigError, KeyError)` and `InvalidConfigType(ConfigError, TypeError)` failed import on the MP unix-port even though host-side CPython tests passed.  Fix: drop the stdlib parents, document the workaround in Decision 0036 §2.
+
 ### `griffe check --search` silently ignores absolute paths in 2.x
 
 Pass `--search` as a path *relative to the subprocess cwd*, not absolute. With griffe 2.0.2, an absolute `--search /abs/path/to/src` resolves nothing — griffe exits 0 with empty stdout/stderr regardless of breakages, making any check_api-style gate a silent no-op. The relative form (`--search workbench/deploy/src` from the repo root) works. This bug had been live in `scripts/check_api.py` since the gate was added: every PR was passing it without any actual API comparison. Caught during 2026-04-25 manual end-to-end validation while extending the gates to workbench. Fix: `str((package_root / "src").relative_to(ROOT))`. Always run a real-fixture pass when wiring tools that fail-soft like this — unit tests with mocked subprocesses can't see this class of regression.

@@ -6,9 +6,9 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** Phase 3b closed 2026-04-25 + Decision 0035 (runtime config structure) drafted as Phase 3a prereq. Next: Phase 3a (`chumicro-wifi`) — first library that consumes a config section per the new convention.
-- **Last shipped:** Decision 0035 — runtime config layout: section-namespaced dict at `/runtime_config.msgpack`, section key = library basename without `chumicro-` prefix, library ships `<Name>Config.from_dict()` classmethod, no schema registry (each library validates its own slice at runtime), deep per-key merge across `workspace.yml` + `things/<name>/config.toml` + `secrets.yml`.
-- **In flight:** Phase 3a Slice 0 — `chumicro-wifi` skeleton + `WifiConfig` + `WifiConfig.from_dict` per ADR 0035.
+- **Phase:** Phase 3b closed + config conventions pinned via Decisions 0035 (file structure) + 0036 (`chumicro-config` library). Next: Phase 3a (`chumicro-wifi`) consumes `chumicro-config` for its `WifiConfig.from_dict`.
+- **Last shipped:** `chumicro-config` library + Decision 0036 — standardized `load_section` factory that every consumer library's `from_dict` calls, plus `load_runtime_config` reader for `/runtime_config.msgpack`. 19 host tests at 100 % cov; cross-runtime clean. ADR 0035 §3 amended to point at the new library.
+- **In flight:** Phase 3a Slice 0 — `chumicro-wifi` scaffold + `WifiConfig` using `chumicro_config.load_section`.
 - **Blocked on:** —
 - **Last touched:** `libraries/kvstore/**`, `plans/decisions/0034-kvstore-api-and-backends.md`, `plans/{now,history,next-up}.md`. Four boards plugged in: Lolin S2 CP/MP, Pi Pico W CP/MP — exercises every kvstore backend across slices 2–5.
 

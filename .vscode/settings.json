@@ -8,6 +8,7 @@
     "python.analysis.extraPaths": [
         "support/test_harness/src",
         "libraries/compat/src",
+        "libraries/config/src",
         "libraries/kvstore/src",
         "libraries/msgpack/src",
         "libraries/runner/src",
