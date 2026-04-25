@@ -127,7 +127,14 @@ def _sync_vscode_tasks() -> None:
         tasks.append({
             "label": name,
             "type": "shell",
-            "command": "python",
+            # The Python extension resolves this variable to whichever
+            # interpreter is selected via "Python: Select Interpreter"
+            # (typically the workspace .venv).  Using a bare ``python``
+            # here breaks on macOS/Linux installs that only ship
+            # ``python3`` on PATH.  The variable also gives us the
+            # right Windows path (``.venv\Scripts\python.exe``) for
+            # free.
+            "command": "${command:python.interpreterPath}",
             "args": args,
             "group": task_group,
             "presentation": {"reveal": "always", "panel": "shared"},

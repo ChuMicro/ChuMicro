@@ -5,7 +5,7 @@
         {
             "label": "Build",
             "type": "shell",
-            "command": "python",
+            "command": "${command:python.interpreterPath}",
             "args": [
                 "scripts/run.py",
                 "build"
@@ -19,7 +19,7 @@
         {
             "label": "Check API",
             "type": "shell",
-            "command": "python",
+            "command": "${command:python.interpreterPath}",
             "args": [
                 "scripts/run.py",
                 "check-api"
@@ -33,7 +33,7 @@
         {
             "label": "Check Version",
             "type": "shell",
-            "command": "python",
+            "command": "${command:python.interpreterPath}",
             "args": [
                 "scripts/run.py",
                 "check-version"
@@ -47,7 +47,7 @@
         {
             "label": "Docs",
             "type": "shell",
-            "command": "python",
+            "command": "${command:python.interpreterPath}",
             "args": [
                 "scripts/run.py",
                 "docs",
@@ -62,7 +62,7 @@
         {
             "label": "Docs Preview",
             "type": "shell",
-            "command": "python",
+            "command": "${command:python.interpreterPath}",
             "args": [
                 "scripts/run.py",
                 "docs-preview",
@@ -77,7 +77,7 @@
         {
             "label": "Lint",
             "type": "shell",
-            "command": "python",
+            "command": "${command:python.interpreterPath}",
             "args": [
                 "scripts/run.py",
                 "lint"
@@ -91,7 +91,7 @@
         {
             "label": "Preflight",
             "type": "shell",
-            "command": "python",
+            "command": "${command:python.interpreterPath}",
             "args": [
                 "scripts/run.py",
                 "preflight"
@@ -108,7 +108,7 @@
         {
             "label": "Prepare Workspace",
             "type": "shell",
-            "command": "python",
+            "command": "${command:python.interpreterPath}",
             "args": [
                 "scripts/prepare_workspace.py"
             ],
@@ -121,7 +121,7 @@
         {
             "label": "Setup",
             "type": "shell",
-            "command": "python",
+            "command": "${command:python.interpreterPath}",
             "args": [
                 "scripts/run.py",
                 "setup"
@@ -135,7 +135,7 @@
         {
             "label": "Sync IDE",
             "type": "shell",
-            "command": "python",
+            "command": "${command:python.interpreterPath}",
             "args": [
                 "scripts/run.py",
                 "sync-ide"
@@ -149,7 +149,7 @@
         {
             "label": "Test",
             "type": "shell",
-            "command": "python",
+            "command": "${command:python.interpreterPath}",
             "args": [
                 "scripts/run.py",
                 "test",
@@ -164,7 +164,7 @@
         {
             "label": "Test All Runtimes",
             "type": "shell",
-            "command": "python",
+            "command": "${command:python.interpreterPath}",
             "args": [
                 "scripts/run.py",
                 "test-all-runtimes"
@@ -178,7 +178,7 @@
         {
             "label": "Test CircuitPython",
             "type": "shell",
-            "command": "python",
+            "command": "${command:python.interpreterPath}",
             "args": [
                 "scripts/run.py",
                 "test-circuitpython"
@@ -192,7 +192,7 @@
         {
             "label": "Test Functional",
             "type": "shell",
-            "command": "python",
+            "command": "${command:python.interpreterPath}",
             "args": [
                 "scripts/run.py",
                 "test-functional"
@@ -206,7 +206,7 @@
         {
             "label": "Test Libraries Functional",
             "type": "shell",
-            "command": "python",
+            "command": "${command:python.interpreterPath}",
             "args": [
                 "scripts/run.py",
                 "test-libraries-functional"
@@ -220,7 +220,7 @@
         {
             "label": "Test MicroPython",
             "type": "shell",
-            "command": "python",
+            "command": "${command:python.interpreterPath}",
             "args": [
                 "scripts/run.py",
                 "test-micropython"
@@ -234,7 +234,7 @@
         {
             "label": "Test Scripts",
             "type": "shell",
-            "command": "python",
+            "command": "${command:python.interpreterPath}",
             "args": [
                 "scripts/run.py",
                 "test-scripts"
@@ -248,7 +248,7 @@
         {
             "label": "Test Workbench Functional",
             "type": "shell",
-            "command": "python",
+            "command": "${command:python.interpreterPath}",
             "args": [
                 "scripts/run.py",
                 "test-workbench-functional"
@@ -262,7 +262,7 @@
         {
             "label": "Verify Examples",
             "type": "shell",
-            "command": "python",
+            "command": "${command:python.interpreterPath}",
             "args": [
                 "scripts/run.py",
                 "verify-examples",

@@ -54,6 +54,24 @@ class TestSyncIde:
         assert tasks["version"] == "2.0.0"
         assert len(tasks["tasks"]) > 0
 
+    def test_tasks_use_python_extension_interpreter_variable(self):
+        """Tasks must invoke the Python extension's selected interpreter
+        rather than a bare ``python`` — many systems only ship ``python3``
+        on PATH (and Windows venvs live under Scripts/), so a literal
+        ``python`` fails to launch."""
+        from workspace import ROOT
+
+        sync_ide()
+        tasks = json.loads(
+            (ROOT / ".vscode" / "tasks.json").read_text(),
+        )["tasks"]
+        for task in tasks:
+            assert task["command"] == "${command:python.interpreterPath}", (
+                f"Task {task['label']!r} uses {task['command']!r} — must "
+                "use ${command:python.interpreterPath} for cross-platform "
+                "compatibility."
+            )
+
     def test_creates_vscode_extensions(self):
         """VS Code extensions.json exists after sync with the recommended set."""
         from workspace import ROOT
