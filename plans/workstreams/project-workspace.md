@@ -199,17 +199,21 @@ Folder layout was revised during implementation — packages ship from `workbenc
 
 This phase delivers only what `run.py deploy` and basic interactive use need.  Richer interactive and scripting features live in a sibling workstream (`plans/workstreams/repl-playground.md`) and can evolve independently once this minimum lands.
 
-- [ ] New library: `libraries/repl/`.
-- [ ] Core: pyserial wrapper with UTF-8 safe framing, key bindings matching `mpremote` (Ctrl-C/D/X/E).
-- [ ] Pattern detectors for CP `Traceback`, `Safe mode`, `Hard fault`; MP `Traceback`, `MPY: soft reboot`.  Color highlighting.
-- [ ] Programmatic `tail(device_entry, seconds, fail_on_traceback) -> ExitCode`.
-- [ ] Programmatic `ReplSession` context manager exposing `exec(code)`, `call(func, *args, **kwargs)`, `read_until(pattern, timeout)` — used by deploy orchestration, by `run.py repl`, and by test fixtures.
-- [ ] Host-side tests: fake serial byte-stream fixtures + pattern assertions.
-- [ ] Functional test: open REPL to at least one CP and one MP board, exchange Ctrl-C / Ctrl-D, verify clean exit.
+- [x] New workbench package: `workbench/repl/` (Decision 0032 places host-only tools under `workbench/`; the earlier `libraries/repl/` line was an early sketch and is superseded by the library sequencing table at the top of this workstream).
+- [x] Core: pyserial wrapper with UTF-8 safe framing (`Utf8StreamDecoder` in `framing.py`), key bindings matching `mpremote` (Ctrl-C/D/E forwarded; Ctrl-X is local exit) in `tui.py`.
+- [x] Pattern detectors for CP `Traceback`, `safe mode`, `Hard fault`; MP `Traceback`, `MPY: soft reboot`; ANSI highlighting via `colorize()` and a tunable `Theme` in `highlight.py`.
+- [x] Programmatic `tail(device, seconds, fail_on_traceback) -> ExitCode` in `_follow.py`, exposed at the top level as `chumicro_repl.tail`.
+- [x] Programmatic `ReplSession` context manager exposing `exec(code)`, `call(function_name, *args, **kwargs)`, `read_until(pattern, timeout)` — driven by raw REPL over pyserial; same code path for CP and MP.
+- [x] Host-side tests: 119 tests against `FakeSerialPort` / `FakeKeyboard` / `FakeTime` fakes covering framing, patterns, highlight, ReplSession (handshake / exec / call / read_until / error paths), tail (exit codes, UTF-8 boundary, port lifecycle, device resolution), TUI loop (forwarding, exit-key drain, Unicode), CLI (parser, dispatch, devices.yml routing).  Coverage 95.2 % (above the 94 % agent gate).
+- [ ] Functional test: open REPL to at least one CP and one MP board, exchange Ctrl-C / Ctrl-D, verify clean exit.  Pending hardware time.
 
-Acceptance: `python -m chumicro_repl --device <id>` opens an interactive session indistinguishable from `mpremote` for basic workflows, with traceback highlighting as the visible differentiator, and the `ReplSession` API is good enough for downstream phases to build on.
+Acceptance: `python -m chumicro_repl --address /dev/cu.usbmodem...` opens an interactive session indistinguishable from `mpremote` for basic workflows, with traceback highlighting as the visible differentiator, and the `ReplSession` API is good enough for downstream phases to build on.
 
 See `plans/workstreams/repl-playground.md` for the larger "side portal" feature set (history, editor handoff, snippets, device introspection commands, multi-device pane, recording) — not blocking this phase.
+
+#### Open follow-up
+
+`chumicro-deploy`'s `CircuitpythonTransport` carries its own raw-REPL implementation that overlaps with `chumicro_repl.session.ReplSession` (Ctrl-A handshake + `OK<stdout>\x04<stderr>\x04>` framing).  Decision 0032 rule 8 ("scripts consume workbench packages") suggests deploy should eventually depend on repl for the raw-REPL framing and stop maintaining a parallel implementation.  Not undertaken in this phase — deploy's transport is integrated with bootstrap-script chunking, recovery classification, and probe / reset paths that are out of scope for repl's minimum core.  Track as a Phase 4 prerequisite once the workspace-runtime work lands and the natural seam between "session-level RPC" and "deploy-pipeline orchestration" is clearer.
 
 ### Phase 3a: `chumicro-wifi`
 

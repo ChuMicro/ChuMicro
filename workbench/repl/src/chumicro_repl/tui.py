@@ -1,0 +1,328 @@
+"""Interactive REPL TUI — forwards stdin ↔ serial with highlighting.
+
+The TUI is deliberately thin: stdin bytes are passed through to the
+board unchanged, serial bytes are UTF-8 decoded and ANSI-highlighted
+before being written to stdout.  The board does its own line
+editing — arrow keys, backspace, paste-mode (Ctrl-E) all reach the
+device verbatim.
+
+Keybindings mirror ``mpremote repl``:
+
+- **Ctrl-C** — forwarded to the board.  Raises
+  :class:`KeyboardInterrupt` on-device, which cancels whatever is
+  running and returns to the friendly REPL.
+- **Ctrl-D** — forwarded to the board.  Soft-reboots the runtime
+  (MicroPython prints ``MPY: soft reboot``, CircuitPython is
+  silent but rewinds).
+- **Ctrl-E** — forwarded to the board.  Enters MicroPython paste
+  mode; CircuitPython ignores it.
+- **Ctrl-X** — intercepted locally.  Exits the TUI without
+  rebooting or interrupting the board.
+
+The loop is structured so tests can drive it without real terminal
+machinery: :func:`run_loop` takes injectable input / output / port /
+time dependencies; :func:`interactive` is the thin wrapper that
+opens a real pyserial port and puts stdin into raw mode.
+"""
+
+from __future__ import annotations
+
+import contextlib
+import sys
+import time as _time_module
+from collections.abc import Callable, Iterator
+from typing import TYPE_CHECKING, BinaryIO, Protocol, TextIO
+
+from ._serial import (
+    CTRL_X,
+    PortFactory,
+    SerialPort,
+    TimeSource,
+    default_port_factory,
+)
+from .framing import Utf8StreamDecoder
+from .highlight import DEFAULT_THEME, Theme, colorize
+from .patterns import PatternMatch, StreamingPatternDetector
+
+if TYPE_CHECKING:
+    from chumicro_deploy import Device
+
+
+#: Poll interval inside the interactive loop.  Short enough to keep
+#: key echo feeling instantaneous; long enough not to peg a CPU.
+_POLL_INTERVAL = 0.005
+
+
+class KeyInputReader(Protocol):
+    """Structural interface for a non-blocking keyboard source.
+
+    The POSIX adapter reads from a termios raw-mode fd; the test
+    fake replays scripted byte sequences.  Both must expose a
+    non-blocking ``read_available`` so the interactive loop never
+    stalls waiting for input.
+    """
+
+    def read_available(self) -> bytes:
+        """Return every byte currently buffered, or ``b""`` if none."""
+
+
+def run_loop(
+    port: SerialPort,
+    keyboard: KeyInputReader,
+    output: TextIO,
+    *,
+    time: TimeSource | None = None,
+    theme: Theme | None = None,
+    exit_key: bytes = CTRL_X,
+) -> int:
+    """Run the interactive I/O loop until *exit_key* is pressed.
+
+    Returns ``0`` on a normal Ctrl-X exit.  Callers driving the loop
+    from tests can inject custom *keyboard* / *output* / *time* to
+    validate the forward-and-highlight behavior without a real
+    serial port.
+
+    Args:
+        port: Open :class:`SerialPort` — the TUI writes keystrokes
+            and reads device output through this port.  Closing the
+            port remains the caller's responsibility.
+        keyboard: Non-blocking keystroke source.
+        output: Destination for serial output.  ANSI escapes are
+            written whether or not the stream is a TTY — the caller
+            owns the decision to strip them downstream.
+        time: Injectable time source.
+        theme: Color theme for pattern highlighting.
+        exit_key: Byte sequence that ends the loop without being
+            forwarded to the device.  Defaults to Ctrl-X.
+    """
+    active_time: TimeSource = time if time is not None else _time_module
+    active_theme = theme if theme is not None else DEFAULT_THEME
+    decoder = Utf8StreamDecoder()
+    detector = StreamingPatternDetector()
+    while True:
+        exit_requested = False
+        key_bytes = keyboard.read_available()
+        if key_bytes:
+            if exit_key in key_bytes:
+                prefix = key_bytes.split(exit_key, 1)[0]
+                if prefix:
+                    port.write(prefix)
+                exit_requested = True
+            else:
+                port.write(key_bytes)
+        # Always drain serial output before honoring an exit request,
+        # so the user sees whatever the board printed in response to
+        # the last keystroke before the TUI vanishes.  On exit the
+        # drain loops until the port reports no more buffered bytes
+        # so a sequence of small reads doesn't strand a final line.
+        had_serial_activity = False
+        while True:
+            available = port.in_waiting
+            if not available:
+                break
+            had_serial_activity = True
+            chunk = port.read(available)
+            decoded = decoder.decode(chunk)
+            if decoded:
+                matches = detector.feed(decoded)
+                output.write(_render(decoded, matches, detector, active_theme))
+                _flush_quietly(output)
+            if not exit_requested:
+                # Return to the keyboard-poll loop after one drain so
+                # interactive typing stays responsive — we only loop
+                # the drain when the user has asked to exit.
+                break
+        if exit_requested:
+            return 0
+        if not had_serial_activity and not key_bytes:
+            active_time.sleep(_POLL_INTERVAL)
+
+
+def interactive(
+    device: Device | str,
+    *,
+    baudrate: int = 115200,
+    input_stream: BinaryIO | None = None,
+    output: TextIO | None = None,
+    theme: Theme | None = None,
+    time: TimeSource | None = None,
+    port_factory: PortFactory | None = None,
+    raw_mode_context: Callable[[int], contextlib.AbstractContextManager[None]] | None = None,
+) -> int:
+    """Open *device* and run the interactive TUI until Ctrl-X.
+
+    Thin wrapper over :func:`run_loop` — pulls in the POSIX
+    terminal raw-mode setup, the real pyserial port factory, and
+    the default stdin/stdout streams.  Tests that want to drive the
+    loop deterministically should call :func:`run_loop` directly
+    with a fake :class:`KeyInputReader` and :class:`SerialPort`.
+
+    Args:
+        device: :class:`chumicro_deploy.Device` or a serial path.
+        baudrate: Consulted when *device* is a string.
+        input_stream: Binary stdin.  Defaults to ``sys.stdin.buffer``.
+        output: Text output.  Defaults to ``sys.stdout``.
+        theme: Color theme.
+        time: Injectable time source.
+        port_factory: Injectable port factory.
+        raw_mode_context: Callable yielding a terminal raw-mode
+            context manager for a given fd.  Defaults to
+            :func:`_posix_raw_mode`; tests pass a no-op.
+
+    Returns:
+        ``0`` on normal Ctrl-X exit.
+    """
+    active_input: BinaryIO = (
+        input_stream if input_stream is not None else sys.stdin.buffer
+    )
+    active_output = output if output is not None else sys.stdout
+    active_factory: PortFactory = (
+        port_factory if port_factory is not None else default_port_factory
+    )
+    raw_mode = raw_mode_context if raw_mode_context is not None else _posix_raw_mode
+    address, resolved_baudrate = _resolve_address(device, baudrate)
+    port = active_factory(address, resolved_baudrate, _POLL_INTERVAL)
+    try:
+        fd = _fileno_or_none(active_input)
+        keyboard = _StdinKeyboard(active_input, fd)
+        if fd is None:
+            # Non-TTY input (test harness, piped script): skip raw-mode setup.
+            return run_loop(
+                port, keyboard, active_output,
+                time=time, theme=theme,
+            )
+        with raw_mode(fd):
+            return run_loop(
+                port, keyboard, active_output,
+                time=time, theme=theme,
+            )
+    finally:
+        try:
+            port.close()
+        except OSError:  # pragma: no cover — port already closed
+            pass
+
+
+class _StdinKeyboard:
+    """Adapter — wraps a binary input stream for :class:`KeyInputReader`.
+
+    POSIX: in terminal raw mode, ``sys.stdin.buffer.read1(n)`` reads
+    whatever is currently buffered (never blocks) once we have put
+    the tty into cbreak + no-echo.  On non-TTY streams (tests /
+    pipelines) we fall back to :func:`os.read` on the underlying
+    file descriptor when available.
+    """
+
+    __slots__ = ("_stream", "_fd")
+
+    def __init__(self, stream: BinaryIO, fd: int | None) -> None:
+        self._stream = stream
+        self._fd = fd
+
+    def read_available(self) -> bytes:
+        if self._fd is None:
+            return self._stream.read1(256) if hasattr(self._stream, "read1") else b""
+        import select  # noqa: PLC0415 — stdlib-only, defer to keep imports lean
+
+        ready, _, _ = select.select([self._fd], [], [], 0)
+        if not ready:
+            return b""
+        return self._stream.read1(256) if hasattr(self._stream, "read1") else self._stream.read(256)
+
+
+@contextlib.contextmanager
+def _posix_raw_mode(fd: int) -> Iterator[None]:
+    """Put terminal *fd* into raw mode, restore settings on exit.
+
+    Uses :mod:`termios` / :mod:`tty` — standard library only, no
+    extra deps.  On platforms without :mod:`termios` (Windows) the
+    call falls through as a no-op; the TUI still works but key
+    repeats and Ctrl-char interception depend on the terminal
+    emulator's own behaviour.
+    """
+    try:
+        import termios  # noqa: PLC0415 — POSIX-only, deferred
+        import tty  # noqa: PLC0415 — POSIX-only, deferred
+    except ImportError:  # pragma: no cover — Windows path
+        yield
+        return
+    original = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        yield
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, original)
+
+
+def _fileno_or_none(stream: BinaryIO) -> int | None:
+    """Return ``stream.fileno()`` when the stream is a real fd, else ``None``.
+
+    Tests that pass an ``io.BytesIO`` get ``None`` so the caller
+    skips terminal raw-mode setup.
+    """
+    fileno_method = getattr(stream, "fileno", None)
+    if fileno_method is None:
+        return None
+    try:
+        return fileno_method()
+    except (OSError, ValueError):
+        return None
+
+
+def _render(
+    text: str,
+    matches: list[PatternMatch],
+    detector: StreamingPatternDetector,
+    theme: Theme,
+) -> str:
+    """Highlight *text* using *matches* translated into local indices.
+
+    Mirrors the offset math in
+    :func:`chumicro_repl._follow._highlight_chunk`.  Factored here so
+    the tail and TUI paths keep their streaming highlighters
+    independently testable.
+    """
+    if not matches:
+        return text
+    stream_start = detector.total_fed - len(text)
+    local_matches: list[PatternMatch] = []
+    for pattern_match in matches:
+        local_start = pattern_match.start - stream_start
+        local_end = pattern_match.end - stream_start
+        if local_end <= 0 or local_start >= len(text):
+            continue
+        local_start = max(0, local_start)
+        local_end = min(len(text), local_end)
+        local_matches.append(
+            PatternMatch(
+                kind=pattern_match.kind,
+                start=local_start,
+                end=local_end,
+                text=text[local_start:local_end],
+            )
+        )
+    return colorize(text, theme=theme, matches=local_matches)
+
+
+def _flush_quietly(stream: TextIO) -> None:
+    """Flush *stream*, swallowing closed-stream errors from tests."""
+    try:
+        stream.flush()
+    except (OSError, ValueError):  # pragma: no cover — closed stream
+        pass
+
+
+def _resolve_address(
+    device: Device | str,
+    fallback_baudrate: int,
+) -> tuple[str, int]:
+    if isinstance(device, str):
+        return device, fallback_baudrate
+    address = getattr(device, "address", None)
+    if not isinstance(address, str):
+        raise TypeError(
+            f"interactive() expected a str port path or an object with "
+            f".address, got {type(device).__name__}"
+        )
+    baudrate = getattr(device, "baudrate", fallback_baudrate)
+    return address, int(baudrate)

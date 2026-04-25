@@ -1,0 +1,49 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "chumicro-repl"
+dynamic = ["version"]
+description = "Host-side serial REPL for CircuitPython and MicroPython boards with traceback highlighting."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [
+    { name = "ChuMicro" },
+]
+keywords = [
+    "circuitpython", "micropython", "microcontroller", "embedded",
+    "repl", "serial", "traceback",
+]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Software Development :: Embedded Systems",
+    "Topic :: Terminals :: Serial",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "pyserial>=3.5",
+]
+
+[project.urls]
+Homepage = "https://github.com/ChuMicro/ChuMicro"
+Source = "https://github.com/ChuMicro/ChuMicro/tree/main/workbench/repl"
+Issues = "https://github.com/ChuMicro/ChuMicro/issues"
+
+[project.scripts]
+chumicro-repl = "chumicro_repl.cli:main"
+
+[tool.hatch.version]
+path = "VERSION"
+pattern = "(?P<version>\\S+)"
+
+[tool.hatch.build.targets.sdist]
+include = ["src/", "VERSION", "README.md"]
+exclude = [".gitignore"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/chumicro_repl"]

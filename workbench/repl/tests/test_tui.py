@@ -1,0 +1,166 @@
+"""Tests for the interactive TUI loop."""
+
+from __future__ import annotations
+
+import contextlib
+import io
+
+import pytest
+from chumicro_repl import interactive
+from chumicro_repl.highlight import strip_ansi_sequences
+from chumicro_repl.testing import FakeKeyboard, FakeSerialPort, FakeTime
+from chumicro_repl.tui import run_loop
+
+CTRL_C = b"\x03"
+CTRL_D = b"\x04"
+CTRL_X = b"\x18"
+
+
+class TestRunLoopForwarding:
+    """run_loop forwards keystrokes to the port and prints serial output."""
+
+    def test_keystrokes_are_written_to_the_port(self):
+        port = FakeSerialPort(read_chunks=[b">>> "])
+        keyboard = FakeKeyboard([b"hi\r\n", CTRL_X])
+        output = io.StringIO()
+        result = run_loop(
+            port, keyboard, output,
+            time=FakeTime(),
+        )
+        assert result == 0
+        # The first keystroke chunk was forwarded; the Ctrl-X chunk was not.
+        assert b"hi\r\n" in port.writes
+        assert CTRL_X not in b"".join(port.writes)
+
+    def test_ctrl_c_is_forwarded_to_the_board(self):
+        port = FakeSerialPort()
+        keyboard = FakeKeyboard([CTRL_C, CTRL_X])
+        output = io.StringIO()
+        run_loop(port, keyboard, output, time=FakeTime())
+        assert CTRL_C in b"".join(port.writes)
+
+    def test_ctrl_d_is_forwarded_to_the_board(self):
+        port = FakeSerialPort()
+        keyboard = FakeKeyboard([CTRL_D, CTRL_X])
+        output = io.StringIO()
+        run_loop(port, keyboard, output, time=FakeTime())
+        assert CTRL_D in b"".join(port.writes)
+
+    def test_serial_output_appears_in_stdout(self):
+        port = FakeSerialPort(read_chunks=[b"hello\n", b"world\n"])
+        keyboard = FakeKeyboard([CTRL_X])
+        output = io.StringIO()
+        run_loop(port, keyboard, output, time=FakeTime())
+        assert "hello" in output.getvalue()
+        assert "world" in output.getvalue()
+
+    def test_traceback_is_highlighted(self):
+        traceback_bytes = (
+            b"Traceback (most recent call last):\n"
+            b'  File "code.py", line 1, in <module>\n'
+            b"ValueError: oops\n"
+        )
+        port = FakeSerialPort(read_chunks=[traceback_bytes])
+        keyboard = FakeKeyboard([CTRL_X])
+        output = io.StringIO()
+        run_loop(port, keyboard, output, time=FakeTime())
+        assert "\x1b[" in output.getvalue()
+        assert "Traceback" in strip_ansi_sequences(output.getvalue())
+
+    def test_keystroke_prefix_before_exit_key_is_forwarded(self):
+        # When a single read_available batch contains "abc<CTRL-X>" the
+        # prefix "abc" should still be sent to the board before the
+        # loop exits.
+        port = FakeSerialPort()
+        keyboard = FakeKeyboard([b"abc" + CTRL_X])
+        output = io.StringIO()
+        result = run_loop(port, keyboard, output, time=FakeTime())
+        assert result == 0
+        assert b"abc" in b"".join(port.writes)
+        assert CTRL_X not in b"".join(port.writes)
+
+
+class TestUtf8SerialDecode:
+    """run_loop decodes serial bytes UTF-8 safely across chunk boundaries."""
+
+    def test_emoji_split_across_chunks(self):
+        # 🙂 split across two reads; the second batch contains Ctrl-X to exit.
+        port = FakeSerialPort(read_chunks=[b"\xf0\x9f", b"\x99\x82\n"])
+        keyboard = FakeKeyboard([CTRL_X])
+        output = io.StringIO()
+        run_loop(port, keyboard, output, time=FakeTime())
+        assert "\U0001f642" in output.getvalue()
+
+
+class TestInteractiveWrapper:
+    """:func:`interactive` wires up the run_loop with injected dependencies."""
+
+    def test_runs_with_injected_port_and_keyboard(self):
+        port = FakeSerialPort(read_chunks=[b"banner\n"])
+        captured: dict[str, object] = {}
+
+        def factory(address: str, baudrate: int, timeout: float) -> FakeSerialPort:
+            captured["address"] = address
+            return port
+
+        # input_stream is a BytesIO without fileno() — interactive() should
+        # detect the absence of a real fd and skip raw-mode setup.
+        input_stream = io.BytesIO()
+        output = io.StringIO()
+
+        # The default _StdinKeyboard reads from input_stream.read1(); BytesIO
+        # supports read1, so feed scripted bytes and then EOF naturally
+        # exits via the Ctrl-X path below.
+        input_stream.write(CTRL_X)
+        input_stream.seek(0)
+
+        result = interactive(
+            "/dev/cu.dev",
+            input_stream=input_stream,
+            output=output,
+            time=FakeTime(),
+            port_factory=factory,
+        )
+        assert result == 0
+        assert port.closed
+        assert captured["address"] == "/dev/cu.dev"
+
+    def test_raw_mode_callable_runs_when_fd_is_real(self, tmp_path):
+        # A real fd backs a temp file; the raw-mode hook should be called.
+        port = FakeSerialPort(read_chunks=[])
+        scripted_input = tmp_path / "stdin"
+        scripted_input.write_bytes(CTRL_X)
+        opened = scripted_input.open("rb")
+        called: list[int] = []
+
+        @contextlib.contextmanager
+        def fake_raw_mode(fd: int):
+            called.append(fd)
+            yield
+
+        result = interactive(
+            "/dev/cu.dev",
+            input_stream=opened,
+            output=io.StringIO(),
+            time=FakeTime(),
+            port_factory=lambda *_args, **_kwargs: port,
+            raw_mode_context=fake_raw_mode,
+        )
+        opened.close()
+        assert result == 0
+        assert len(called) == 1
+
+    def test_invalid_device_raises(self):
+        with pytest.raises(TypeError):
+            interactive(object(), output=io.StringIO())  # type: ignore[arg-type]
+
+
+class TestExitKeyForwarding:
+    """Ctrl-X exits without being forwarded to the device."""
+
+    def test_only_exit_key_in_chunk(self):
+        port = FakeSerialPort()
+        keyboard = FakeKeyboard([CTRL_X])
+        result = run_loop(port, keyboard, io.StringIO(), time=FakeTime())
+        assert result == 0
+        assert port.writes == []

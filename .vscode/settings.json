@@ -12,6 +12,7 @@
         "libraries/runner/src",
         "libraries/timing/src",
         "workbench/deploy/src",
+        "workbench/repl/src",
         "scripts"
     ]
 }

@@ -1,0 +1,460 @@
+"""Programmatic REPL session — raw REPL over pyserial.
+
+:class:`ReplSession` is a context manager that opens a serial
+connection to a CircuitPython or MicroPython board, drives the raw
+REPL (Ctrl-A entry, Ctrl-D exec, ``OK<stdout>\\x04<stderr>\\x04>``
+framing), and exposes three primitives:
+
+- :meth:`~ReplSession.exec` — run a block of code, return stdout.
+- :meth:`~ReplSession.call` — call a named function with literal
+  arguments, return the parsed ``repr`` of the result.
+- :meth:`~ReplSession.read_until` — read raw bytes until a pattern
+  matches, for callers that bypass raw REPL entirely (tailing the
+  friendly REPL, for instance).
+
+The raw-REPL framing is identical between CircuitPython and
+MicroPython — neither runtime adds a runtime-specific header to
+either the prompt or the response — so a single code path handles
+both.  The only divergence is what a soft-reboot (Ctrl-D in the
+*friendly* REPL) prints: MicroPython emits ``MPY: soft reboot``,
+CircuitPython is silent.  :meth:`ReplSession.exec` never exits raw
+REPL, so that divergence never surfaces here; it is a concern for
+the :func:`~chumicro_repl.tail.tail` path and the interactive TUI.
+"""
+
+from __future__ import annotations
+
+import ast
+import re
+import time as _time_module
+from types import TracebackType
+from typing import TYPE_CHECKING
+
+from ._serial import (
+    CTRL_A,
+    CTRL_B,
+    CTRL_C,
+    CTRL_D,
+    RAW_REPL_EOT,
+    RAW_REPL_PROMPT,
+    PortFactory,
+    SerialPort,
+    TimeSource,
+    default_port_factory,
+)
+
+if TYPE_CHECKING:
+    from chumicro_deploy import Device
+
+
+#: Default per-exec timeout.  Matches
+#: :data:`chumicro_deploy.circuitpython_transport.DEFAULT_TIMEOUT` so
+#: users moving between the two packages don't have to re-learn one
+#: number.
+DEFAULT_TIMEOUT = 10.0
+
+#: Grace period after Ctrl-C interrupts before the board is expected
+#: to accept a Ctrl-A.  Matches the CircuitPython transport's
+#: ``_INTERRUPT_DELAY`` so the two packages agree on timing.
+_INTERRUPT_DELAY = 0.1
+
+#: Settling pause after Ctrl-A so the raw-REPL banner is fully emitted
+#: before we read the prompt.  Matches
+#: :data:`chumicro_deploy.circuitpython_transport._ENTER_DELAY`.
+_ENTER_DELAY = 0.1
+
+#: Poll interval inside :meth:`ReplSession.read_until` /
+#: :meth:`_read_until_bytes`.  Kept short enough that short-timeout
+#: probes feel responsive without pegging a CPU core.
+_POLL_INTERVAL = 0.005
+
+
+class ReplSessionError(Exception):
+    """Raised when a raw-REPL operation fails.
+
+    Covers three broad classes:
+
+    - Timeout — the board did not respond within the per-op timeout.
+    - Protocol error — the board emitted bytes that don't match the
+      raw-REPL framing (typically because it was not in raw REPL;
+      e.g. bootloader mode, a firmware-less chip, wrong baudrate).
+    - Execution error — the board executed the code but raised an
+      exception.  The exception's stderr is attached as :attr:`stderr`.
+    """
+
+    def __init__(self, message: str, *, stderr: str = "") -> None:
+        super().__init__(message)
+        #: The raw-REPL stderr block, populated when the failure was
+        #: an execution error.  Empty string for timeouts / protocol
+        #: errors.
+        self.stderr = stderr
+
+
+class ReplSession:
+    """Raw-REPL session over pyserial.
+
+    Use as a context manager::
+
+        with ReplSession(device) as session:
+            output = session.exec("print(1 + 2)")
+            value = session.call("os.uname")
+
+    The constructor opens the serial port, interrupts whatever was
+    running, and enters raw REPL.  The ``__exit__`` path sends Ctrl-B
+    (exit raw REPL) and closes the port — the board is left in the
+    friendly REPL, ready for an interactive user or another session.
+
+    Args:
+        device: Either a :class:`chumicro_deploy.Device` or a bare
+            serial-port path string.  A bare string is treated as
+            the ``address``; baudrate / time / port-factory come
+            from the other keyword arguments.
+        baudrate: Only consulted when *device* is a string.  Ignored
+            for :class:`~chumicro_deploy.Device` — the device's own
+            ``baudrate`` wins.
+        time: Injectable time source (for tests).  Defaults to the
+            stdlib ``time`` module.
+        port_factory: Injectable port factory (for tests).  Defaults
+            to :func:`chumicro_repl._serial.default_port_factory`,
+            which constructs a real pyserial ``Serial``.
+        connect_timeout: Upper bound in seconds for the initial
+            raw-REPL handshake.  Covers the Ctrl-C + Ctrl-A +
+            prompt-read sequence, not the per-exec timeout.
+    """
+
+    def __init__(
+        self,
+        device: Device | str,
+        *,
+        baudrate: int = 115200,
+        time: TimeSource | None = None,
+        port_factory: PortFactory | None = None,
+        connect_timeout: float = DEFAULT_TIMEOUT,
+    ) -> None:
+        address, resolved_baudrate = _resolve_device(device, baudrate)
+        self._address = address
+        self._baudrate = resolved_baudrate
+        self._time: TimeSource = time if time is not None else _time_module
+        self._port_factory: PortFactory = (
+            port_factory if port_factory is not None else default_port_factory
+        )
+        self._connect_timeout = connect_timeout
+        self._port: SerialPort | None = None
+        self._in_raw_repl = False
+        #: Bytes the port emitted past a previous marker.  Reused on
+        #: the next ``_read_until_bytes`` so multi-step framing
+        #: (``OK`` -> ``\x04`` -> ``\x04`` -> ``>``) doesn't drop the
+        #: bytes that arrived in the same chunk as the previous
+        #: marker.
+        self._read_remainder = bytearray()
+
+    def __enter__(self) -> ReplSession:
+        self._port = self._port_factory(
+            self._address, self._baudrate, _POLL_INTERVAL,
+        )
+        try:
+            self._enter_raw_repl()
+        except BaseException:
+            # Any failure during handshake closes the port so the
+            # caller doesn't leak a file descriptor.
+            self._close_port()
+            raise
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        port = self._port
+        if port is None:
+            return
+        if self._in_raw_repl:
+            try:
+                port.write(CTRL_B)
+            except OSError:  # pragma: no cover — closed port during exit
+                pass
+        self._in_raw_repl = False
+        self._close_port()
+
+    # ------------------------------------------------------------------
+    # Public raw-REPL primitives
+    # ------------------------------------------------------------------
+
+    def exec(  # noqa: A003, CHU001 — matches the upstream mpremote / upyr / pyboard API
+        self,
+        code: str,
+        *,
+        timeout: float = DEFAULT_TIMEOUT,
+    ) -> str:
+        """Execute *code* on the board and return stdout.
+
+        Sends *code* terminated by Ctrl-D, then reads the response
+        until the second ``\\x04`` marker.  The response format is::
+
+            OK<stdout>\\x04<stderr>\\x04>
+
+        Returns *stdout* as a UTF-8 string.  If *stderr* is non-empty
+        the call raises :class:`ReplSessionError` with ``stderr``
+        attached — raw REPL never raises an exception object on the
+        host side, only on the board, so surfacing it as a stderr
+        blob is the closest host-side analogue.
+
+        Args:
+            code: Python source to execute.  May contain newlines.
+            timeout: Per-exec deadline in seconds.
+        """
+        port = self._require_port()
+        code_bytes = code.encode("utf-8")
+        port.write(code_bytes)
+        port.write(CTRL_D)
+        ok_marker = self._read_until_bytes(b"OK", timeout=timeout, port=port)
+        if not ok_marker.endswith(b"OK"):
+            raise ReplSessionError(
+                f"raw REPL did not acknowledge exec "
+                f"(got {ok_marker!r} before timeout)"
+            )
+        first_eot = self._read_until_bytes(
+            RAW_REPL_EOT, timeout=timeout, port=port,
+        )
+        stdout_bytes = first_eot[:-1]
+        second_eot = self._read_until_bytes(
+            RAW_REPL_EOT, timeout=timeout, port=port,
+        )
+        stderr_bytes = second_eot[:-1]
+        # The trailing ``>`` signals the board is ready for the next
+        # input.  We read-and-discard it so the next exec starts from
+        # a clean buffer.
+        self._read_until_bytes(b">", timeout=timeout, port=port)
+        stdout = stdout_bytes.decode("utf-8", errors="replace")
+        stderr = stderr_bytes.decode("utf-8", errors="replace")
+        if stderr:
+            raise ReplSessionError(
+                f"raw REPL exec returned stderr: {stderr.rstrip()}",
+                stderr=stderr,
+            )
+        return stdout
+
+    def call(
+        self,
+        function_name: str,
+        *args: object,
+        timeout: float = DEFAULT_TIMEOUT,
+        **kwargs: object,
+    ) -> object:
+        """Call *function_name* on the board with literal arguments.
+
+        Builds a one-line ``print(repr(<function_name>(*args, **kwargs)))``
+        and execs it, then parses the stdout via
+        :func:`ast.literal_eval`.  Round-trips anything
+        :func:`literal_eval` handles — numbers, strings, bytes,
+        tuples, lists, dicts, sets, booleans, ``None``.  Anything
+        else raises :class:`ReplSessionError` because the repr is
+        not a literal.
+
+        Args:
+            function_name: Fully-qualified dotted name.  The board
+                must already have the name bound — import whatever
+                the caller needs in a prior :meth:`exec`.
+            *args: Positional arguments.  Rendered via :func:`repr`.
+            timeout: Per-call deadline in seconds.
+            **kwargs: Keyword arguments.  Rendered via :func:`repr`.
+
+        Returns:
+            The parsed return value.  ``None`` round-trips as
+            ``None``.
+        """
+        rendered_args = [repr(arg) for arg in args]
+        rendered_kwargs = [
+            f"{key}={value!r}" for key, value in kwargs.items()
+        ]
+        combined_arguments = ", ".join([*rendered_args, *rendered_kwargs])
+        source = (
+            f"print(repr({function_name}({combined_arguments})))"
+        )
+        stdout = self.exec(source, timeout=timeout)
+        rendered = stdout.rstrip("\r\n")
+        try:
+            return ast.literal_eval(rendered)
+        except (ValueError, SyntaxError) as error:
+            raise ReplSessionError(
+                f"ReplSession.call({function_name!r}) return value is not a "
+                f"literal: {rendered!r}"
+            ) from error
+
+    def read_until(
+        self,
+        pattern: str | re.Pattern[str],
+        *,
+        timeout: float,
+    ) -> str:
+        """Read bytes until *pattern* matches the accumulated string.
+
+        Unlike :meth:`exec` + :meth:`call`, this primitive operates
+        on raw bytes from the port — it does not send anything, and
+        it accepts output produced by either the friendly or the raw
+        REPL.  Callers that want to stream output from a board that
+        is not under raw-REPL control (for instance, tailing a deploy)
+        use this.
+
+        Args:
+            pattern: Regex (compiled or string).  The returned text
+                includes the match.
+            timeout: Deadline in seconds.
+
+        Returns:
+            The accumulated text up to and including the match.
+
+        Raises:
+            ReplSessionError: Timeout elapsed before the pattern matched.
+        """
+        port = self._require_port()
+        compiled = (
+            pattern if isinstance(pattern, re.Pattern)
+            else re.compile(pattern)
+        )
+        deadline = self._time.monotonic() + timeout
+        accumulated = bytearray(self._read_remainder)
+        self._read_remainder.clear()
+        while True:
+            decoded = accumulated.decode("utf-8", errors="replace")
+            match = compiled.search(decoded)
+            if match is not None:
+                # Save bytes past the match for the next read.  The
+                # decoded slice is in characters, not bytes — but
+                # since we always decode the *entire* accumulated
+                # bytearray, the encode round-trip recovers the
+                # right byte boundary.
+                consumed_text = decoded[:match.end()]
+                consumed_bytes = consumed_text.encode("utf-8")
+                self._read_remainder.extend(accumulated[len(consumed_bytes):])
+                return consumed_text
+            if port.in_waiting:
+                accumulated.extend(port.read(port.in_waiting))
+                continue
+            new_byte = port.read(1)
+            if new_byte:
+                accumulated.extend(new_byte)
+                continue
+            if self._time.monotonic() >= deadline:
+                raise ReplSessionError(
+                    f"read_until({pattern!r}) timed out after "
+                    f"{timeout:.3f}s; captured {decoded!r}"
+                )
+            self._time.sleep(_POLL_INTERVAL)
+
+    # ------------------------------------------------------------------
+    # Internals
+    # ------------------------------------------------------------------
+
+    def _enter_raw_repl(self) -> None:
+        """Interrupt the board and enter raw REPL.
+
+        Two Ctrl-Cs to cancel anything running, then Ctrl-A to drop
+        into raw REPL.  Waits for the raw-REPL banner and prompt.
+        """
+        port = self._require_port()
+        port.reset_input_buffer()
+        port.write(CTRL_C)
+        self._time.sleep(_INTERRUPT_DELAY)
+        port.write(CTRL_C)
+        self._time.sleep(_INTERRUPT_DELAY)
+        port.write(CTRL_A)
+        self._time.sleep(_ENTER_DELAY)
+        prompt = self._read_until_bytes(
+            RAW_REPL_PROMPT, timeout=self._connect_timeout, port=port,
+        )
+        if not prompt.endswith(RAW_REPL_PROMPT):
+            raise ReplSessionError(
+                f"raw REPL did not announce itself; got {prompt!r}"
+            )
+        self._in_raw_repl = True
+
+    def _read_until_bytes(
+        self,
+        marker: bytes,
+        *,
+        timeout: float,
+        port: SerialPort,
+    ) -> bytes:
+        """Read bytes from *port* until *marker* appears.
+
+        Returns the accumulated bytes up to and including *marker*.
+        Bytes that arrived past the marker are saved to
+        :attr:`_read_remainder` and prepended to the next call so
+        the framed multi-step protocol (``OK`` ``\\x04`` ``\\x04``
+        ``>``) does not drop bytes when two markers land in the
+        same serial-port read.
+
+        Raises :class:`ReplSessionError` on timeout — the
+        accumulated bytes are included in the message so callers
+        debugging a stuck board can see what the device sent.
+        """
+        deadline = self._time.monotonic() + timeout
+        accumulated = bytearray(self._read_remainder)
+        self._read_remainder.clear()
+        while True:
+            if marker in accumulated:
+                marker_position = accumulated.index(marker)
+                end_index = marker_position + len(marker)
+                self._read_remainder.extend(accumulated[end_index:])
+                return bytes(accumulated[:end_index])
+            available = port.in_waiting
+            if available:
+                accumulated.extend(port.read(available))
+                continue
+            new_byte = port.read(1)
+            if new_byte:
+                accumulated.extend(new_byte)
+                continue
+            if self._time.monotonic() >= deadline:
+                raise ReplSessionError(
+                    f"read timed out waiting for {marker!r} after "
+                    f"{timeout:.3f}s; got {bytes(accumulated)!r}"
+                )
+            self._time.sleep(_POLL_INTERVAL)
+
+    def _require_port(self) -> SerialPort:
+        if self._port is None:
+            raise ReplSessionError(
+                "ReplSession used outside of 'with' block — "
+                "enter the context manager before calling exec/call/read_until"
+            )
+        return self._port
+
+    def _close_port(self) -> None:
+        port = self._port
+        self._port = None
+        if port is None:
+            return
+        try:
+            port.close()
+        except OSError:  # pragma: no cover — port already closed
+            pass
+
+
+def _resolve_device(
+    device: Device | str,
+    fallback_baudrate: int,
+) -> tuple[str, int]:
+    """Return ``(address, baudrate)`` for either a Device or a path string.
+
+    Kept out of :meth:`ReplSession.__init__` so the construction site
+    reads as straight-line attribute assignment, and so tests can
+    exercise the resolution logic without running the full
+    constructor.
+    """
+    if isinstance(device, str):
+        return device, fallback_baudrate
+    # Duck-typed — accepts any object with ``address`` + ``baudrate``
+    # attrs.  Avoids a hard import dependency on chumicro_deploy
+    # for callers that only use ReplSession with a bare port path.
+    address = getattr(device, "address", None)
+    if not isinstance(address, str):
+        raise TypeError(
+            f"ReplSession expected a str port path or an object with "
+            f".address, got {type(device).__name__}"
+        )
+    baudrate = getattr(device, "baudrate", fallback_baudrate)
+    return address, int(baudrate)
