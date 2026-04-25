@@ -6,9 +6,9 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** Phase 3a Slice 1 shipped — CP `wifi.radio` adapter live on Lolin S2 CP + Pi Pico W CP. Real MP adapters (ESP32, Pi Pico W CYW43) stubbed for Slices 2–3.
-- **Last shipped:** Phase 3a Slice 1 — `CpWifiAdapter` wraps the CP `wifi.radio` singleton with constructor injection (tests use a `_FakeRadio`, production uses the real one). 53 host tests at 99 % cov; 10 functional tests pass on each CP board (4 lazy-load sanity + 6 adapter contract incl. timeout-against-non-existent-AP). Substrate failure path catches `OSError` (parent of CP's `TimeoutError` / `ConnectionError` — narrower subclasses aren't builtins on MP, and the source has to load on every runtime). Sub-fix: scaffolder's Tier B comment updated to recommend per-function selectors instead of module-level PEP 562 (after the Slice 0 CP RAM-mode finding).
-- **In flight:** Phase 3a Slice 2 — MP `network.WLAN` adapter for ESP32 (Lolin S2 MP) with `wlan.config(reconnects=0)` to disable firmware-level auto-reconnect (Decision 0029 §wifi-ownership-stance).
+- **Phase:** Phase 3a Slice 2 shipped — MP `network.WLAN` adapter live on Lolin S2 MP. Pi Pico W CYW43 adapter stubbed for Slice 3.
+- **Last shipped:** Phase 3a Slice 2 — `MpEsp32WifiAdapter` wraps `network.WLAN(network.STA_IF)` with the supervisor convention (calls `wlan.config(reconnects=0)` once after the first successful connect to disable ESP-IDF's firmware-level auto-reconnect, per Decision 0029 §wifi-ownership-stance). 70 host tests at 99 % cov; 16 functional tests pass on Lolin S2 MP (4 lazy-load + 6 MP-ESP32-adapter + 6 CP no-ops). Tolerates older firmware that may reject `dhcp_hostname` or `reconnects` knobs.
+- **In flight:** Phase 3a Slice 3 — Pi Pico W CYW43 adapter (`MpRp2WifiAdapter`) with `wlan.config(pm=0xa11140)` power-save knob.
 - **Blocked on:** —
 - **Last touched:** `libraries/kvstore/**`, `plans/decisions/0034-kvstore-api-and-backends.md`, `plans/{now,history,next-up}.md`. Four boards plugged in: Lolin S2 CP/MP, Pi Pico W CP/MP — exercises every kvstore backend across slices 2–5.
 

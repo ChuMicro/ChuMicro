@@ -538,10 +538,16 @@ def test_cp_adapter_default_arg_raises_runtime_error_off_cp() -> None:
         CpWifiAdapter()
 
 
-def test_mp_esp32_adapter_stub_raises_not_implemented() -> None:
-    """MP-ESP32 adapter lands in Slice 2 — stub guards the auto-detect path."""
+def test_mp_esp32_adapter_default_arg_raises_runtime_error_off_mp() -> None:
+    """MP-ESP32 adapter raises ``RuntimeError`` (with hint) when ``network`` is missing.
+
+    Lands as the real adapter in Slice 2; default-arg construction
+    on CPython surfaces the runtime-incompatibility cleanly so
+    callers know to inject a fake or run on real MP.  The full
+    contract under injection is in ``test_mp_esp32_adapter.py``.
+    """
     from chumicro_wifi._adapters.mp_esp32 import MpEsp32WifiAdapter
-    with raises(NotImplementedError):
+    with raises(RuntimeError):
         MpEsp32WifiAdapter()
 
 
