@@ -6,9 +6,9 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** Project-workspace Phase 3b **closed 2026-04-25** — `chumicro-kvstore` shipped end-to-end: Decision 0034 + scaffold + 4 backends (memory / CP NVM / MP NVS / MP LittleFS) + acceptance suite. Next: Phase 3a (`chumicro-wifi`).
-- **Last shipped:** Phase 3b Slice 5 — acceptance functional tests on all four boards (Lolin S2 CP/MP, Pi Pico W CP/MP). Auto-detect picks the substrate-native backend; full msgpack value-type round-trip; explicit `backend="littlefs"` pickable on ESP32 MP alongside NVS; corrupt-substrate paths surface via `is_corrupt` without preventing boot.
-- **In flight:** Phase 3a (`chumicro-wifi`) — kicking off the home-testbed wifi supervisor.
+- **Phase:** Phase 3b closed 2026-04-25 + Decision 0035 (runtime config structure) drafted as Phase 3a prereq. Next: Phase 3a (`chumicro-wifi`) — first library that consumes a config section per the new convention.
+- **Last shipped:** Decision 0035 — runtime config layout: section-namespaced dict at `/runtime_config.msgpack`, section key = library basename without `chumicro-` prefix, library ships `<Name>Config.from_dict()` classmethod, no schema registry (each library validates its own slice at runtime), deep per-key merge across `workspace.yml` + `things/<name>/config.toml` + `secrets.yml`.
+- **In flight:** Phase 3a Slice 0 — `chumicro-wifi` skeleton + `WifiConfig` + `WifiConfig.from_dict` per ADR 0035.
 - **Blocked on:** —
 - **Last touched:** `libraries/kvstore/**`, `plans/decisions/0034-kvstore-api-and-backends.md`, `plans/{now,history,next-up}.md`. Four boards plugged in: Lolin S2 CP/MP, Pi Pico W CP/MP — exercises every kvstore backend across slices 2–5.
 
