@@ -1433,6 +1433,67 @@ class TestFindCircuitpyDrive:
         result = find_circuitpy_drive()
         assert result == "/media/testuser/CIRCUITPY"
 
+    def test_falls_back_to_getpass_when_user_env_unset(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """USER env unset should still produce a populated /media path
+        via getpass.getuser, not /media//CIRCUITPY."""
+        monkeypatch.delenv("USER", raising=False)
+        monkeypatch.setattr(
+            "chumicro_deploy.circuitpython_transport.getpass.getuser",
+            lambda: "fallback_user",
+        )
+
+        original_is_dir = Path.is_dir
+        observed_candidates: list[str] = []
+
+        def patched_is_dir(self_path: Path) -> bool:
+            path_str = str(self_path)
+            if path_str == "/Volumes/CIRCUITPY":
+                observed_candidates.append(path_str)
+                return False
+            if path_str == "/media/fallback_user/CIRCUITPY":
+                observed_candidates.append(path_str)
+                return True
+            return original_is_dir(self_path)
+
+        monkeypatch.setattr(Path, "is_dir", patched_is_dir)
+        result = find_circuitpy_drive()
+        assert result == "/media/fallback_user/CIRCUITPY"
+        # Ensure we never tried a malformed `/media//CIRCUITPY` path.
+        assert "/media//CIRCUITPY" not in observed_candidates
+
+    def test_skips_linux_paths_when_username_unresolvable(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """No USER and no passwd entry should fall through to /Volumes
+        only — never produce /media//CIRCUITPY."""
+        monkeypatch.delenv("USER", raising=False)
+
+        def boom() -> str:
+            raise KeyError("no passwd entry")
+
+        monkeypatch.setattr(
+            "chumicro_deploy.circuitpython_transport.getpass.getuser",
+            boom,
+        )
+
+        original_is_dir = Path.is_dir
+        observed_candidates: list[str] = []
+
+        def patched_is_dir(self_path: Path) -> bool:
+            path_str = str(self_path)
+            if "CIRCUITPY" in path_str:
+                observed_candidates.append(path_str)
+                return False
+            return original_is_dir(self_path)
+
+        monkeypatch.setattr(Path, "is_dir", patched_is_dir)
+        result = find_circuitpy_drive()
+        assert result is None
+        # Only /Volumes/CIRCUITPY should have been probed; no /media/.
+        assert observed_candidates == ["/Volumes/CIRCUITPY"]
+
     def test_flash_stage_auto_detects_drive(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:

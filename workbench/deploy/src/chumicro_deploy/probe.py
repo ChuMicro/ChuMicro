@@ -18,6 +18,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from .host_platform import check_supported_platform
 from .protocol import DeviceImplementation
 
 if TYPE_CHECKING:  # pragma: no cover — type-only
@@ -67,6 +68,7 @@ def probe_device(device: Device) -> DeviceInfo:
         ``board_id`` stays empty until the board-ID probe ships in a
         later slice.
     """
+    check_supported_platform()
     transport = device.create_transport()
     transport.connect()
     try:

@@ -19,6 +19,8 @@ import re
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
+from .host_platform import check_rsync_available, check_supported_platform
+from .protocol import DeployMode, Runtime
 from .result import DeployResult
 
 if TYPE_CHECKING:  # pragma: no cover — type-only
@@ -53,6 +55,7 @@ class Deployer:
     """
 
     def __init__(self, device: Device) -> None:
+        check_supported_platform()
         self._device = device
 
     @property
@@ -99,6 +102,12 @@ class Deployer:
         def _report(fraction: float, message: str) -> None:
             if on_progress is not None:
                 on_progress(fraction, message)
+
+        if (
+            self._device.transport == Runtime.CIRCUITPYTHON
+            and self._device.deploy_mode == DeployMode.FLASH
+        ):
+            check_rsync_available()
 
         transport = self._device.create_transport()
         _report(0.0, "connecting")

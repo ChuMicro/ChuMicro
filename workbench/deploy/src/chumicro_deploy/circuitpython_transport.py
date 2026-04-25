@@ -19,6 +19,7 @@ See Decision 0027 and Decision 0028 for the full transport protocol.
 
 from __future__ import annotations
 
+import getpass
 import os
 import shutil
 import tempfile
@@ -79,6 +80,29 @@ _BOARD_FILE_VISIBLE_POST_SETTLE = 0.5
 #: Volume name CircuitPython uses by default.
 _CIRCUITPY_VOLUME_NAME = "CIRCUITPY"
 
+
+def _resolve_username() -> str:
+    """Return the host user name, with a fallback for environments
+    that do not export ``$USER``.
+
+    Reads ``$USER`` first (the value Linux desktops use for
+    ``/media/<user>/`` mount paths); falls back to
+    :func:`getpass.getuser` (which consults ``LOGNAME`` / ``LNAME`` /
+    ``USERNAME`` and finally ``pwd.getpwuid(os.getuid())``) when
+    ``$USER`` is unset, e.g. inside slim containers.  Returns the
+    empty string when even the password database is unavailable so
+    the caller can skip building malformed ``/media//CIRCUITPY``
+    paths and try the macOS ``/Volumes/`` candidate instead.
+    """
+    user = os.environ.get("USER", "")
+    if user:
+        return user
+    try:
+        return getpass.getuser()
+    except (KeyError, OSError):
+        return ""
+
+
 # RAM-mode inline scripts are chunked based on live free-heap measurements.
 _MIN_INLINE_SCRIPT_BUDGET_BYTES = 8 * 1024
 _MAX_INLINE_SCRIPT_BUDGET_BYTES = 48 * 1024
@@ -97,12 +121,11 @@ def find_circuitpy_drive() -> str | None:
     - Linux: ``/media/<user>/CIRCUITPY``
     - Linux (systemd): ``/run/media/<user>/CIRCUITPY``
     """
-    username = os.environ.get("USER", "")
-    candidates = [
-        Path("/Volumes") / _CIRCUITPY_VOLUME_NAME,
-        Path("/media") / username / _CIRCUITPY_VOLUME_NAME,
-        Path("/run/media") / username / _CIRCUITPY_VOLUME_NAME,
-    ]
+    username = _resolve_username()
+    candidates = [Path("/Volumes") / _CIRCUITPY_VOLUME_NAME]
+    if username:
+        candidates.append(Path("/media") / username / _CIRCUITPY_VOLUME_NAME)
+        candidates.append(Path("/run/media") / username / _CIRCUITPY_VOLUME_NAME)
     for candidate in candidates:
         if candidate.is_dir():
             return str(candidate)
@@ -118,12 +141,11 @@ def _circuitpy_volume_candidates() -> list[Path]:
     path can search across every mounted device to find the one whose
     ``boot_out.txt`` matches the connected board.
     """
-    username = os.environ.get("USER", "")
-    bases = [
-        Path("/Volumes"),
-        Path("/media") / username,
-        Path("/run/media") / username,
-    ]
+    username = _resolve_username()
+    bases = [Path("/Volumes")]
+    if username:
+        bases.append(Path("/media") / username)
+        bases.append(Path("/run/media") / username)
     found: list[Path] = []
     for base in bases:
         if not base.is_dir():

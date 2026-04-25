@@ -11,6 +11,9 @@ from chumicro_deploy import (
     Device,
     FakeTransport,
     FileMapSource,
+    RsyncMissingError,
+    WindowsNotSupportedError,
+    host_platform,
 )
 
 
@@ -136,6 +139,97 @@ class TestDeployerCallbacks:
         deployer, _ = _make_deployer_with_fake(execute_output="hi\n")
         source = FileMapSource({"/code.py": "pass"}, entrypoint="/code.py")
         # No callbacks — should run without raising.
+        result = deployer.deploy(source)
+        assert result.success is True
+
+
+class TestWindowsGuard:
+    """Deployer.__init__ refuses to run on native Windows."""
+
+    def test_init_raises_on_windows(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(host_platform.sys, "platform", "win32")
+        with pytest.raises(WindowsNotSupportedError, match="WSL2"):
+            Deployer(Device(transport="micropython", address="/dev/fake"))
+
+    def test_init_passes_on_linux(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(host_platform.sys, "platform", "linux")
+        deployer = Deployer(Device(transport="micropython", address="/dev/fake"))
+        assert isinstance(deployer, Deployer)
+
+
+class TestFlashModeRsyncGuard:
+    """Deployer.deploy() pre-checks rsync for CP flash deploys."""
+
+    def test_flash_mode_circuitpython_raises_when_rsync_missing(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        fake = FakeTransport()
+
+        class CpFlashDevice(Device):
+            def create_transport(self):  # type: ignore[override]
+                return fake
+
+        device = CpFlashDevice(
+            transport="circuitpython",
+            address="/dev/fake",
+            deploy_mode="flash",
+        )
+        deployer = Deployer(device)
+        # Block rsync globally for this test.
+        monkeypatch.setattr(host_platform.shutil, "which", lambda _name: None)
+        source = FileMapSource({"/code.py": "pass"}, entrypoint="/code.py")
+
+        with pytest.raises(RsyncMissingError):
+            deployer.deploy(source)
+        # Transport must not have been opened — no connect/disconnect dance
+        # before the rsync gate fires.
+        assert fake.calls == []
+
+    def test_ram_mode_circuitpython_skips_rsync_check(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        fake = FakeTransport(execute_output="ok\n")
+
+        class CpRamDevice(Device):
+            def create_transport(self):  # type: ignore[override]
+                return fake
+
+        device = CpRamDevice(
+            transport="circuitpython",
+            address="/dev/fake",
+            deploy_mode="ram",
+        )
+        deployer = Deployer(device)
+        monkeypatch.setattr(host_platform.shutil, "which", lambda _name: None)
+        source = FileMapSource({"/code.py": "pass"}, entrypoint="/code.py")
+
+        # Must complete normally — RAM mode never touches rsync.
+        result = deployer.deploy(source)
+        assert result.success is True
+
+    def test_micropython_flash_skips_rsync_check(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        fake = FakeTransport(execute_output="ok\n")
+
+        class MpFlashDevice(Device):
+            def create_transport(self):  # type: ignore[override]
+                return fake
+
+        device = MpFlashDevice(
+            transport="micropython",
+            address="/dev/fake",
+            deploy_mode="flash",
+        )
+        deployer = Deployer(device)
+        monkeypatch.setattr(host_platform.shutil, "which", lambda _name: None)
+        source = FileMapSource({"/main.py": "pass"}, entrypoint="/main.py")
+
+        # mpremote handles flash on MP — no rsync needed, no gate.
         result = deployer.deploy(source)
         assert result.success is True
 

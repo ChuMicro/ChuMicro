@@ -8,6 +8,8 @@ from chumicro_deploy import (
     DeviceImplementation,
     DeviceInfo,
     FakeTransport,
+    WindowsNotSupportedError,
+    host_platform,
     probe_device,
 )
 
@@ -68,6 +70,25 @@ class TestProbeDevice:
         with pytest.raises(RuntimeError, match="boom"):
             probe_device(device)
         assert ("disconnect", ()) in fake.calls
+
+
+class TestProbeWindowsGuard:
+    """probe_device refuses to run on native Windows."""
+
+    def test_raises_on_windows_before_touching_transport(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        fake = FakeTransport(
+            probe_result=DeviceImplementation(
+                name="micropython", version="1.26", machine="x",
+            ),
+        )
+        device = _device_returning(fake)
+        monkeypatch.setattr(host_platform.sys, "platform", "win32")
+        with pytest.raises(WindowsNotSupportedError, match="WSL2"):
+            probe_device(device)
+        # Transport must not have been opened.
+        assert fake.calls == []
 
 
 class TestDeviceInfo:

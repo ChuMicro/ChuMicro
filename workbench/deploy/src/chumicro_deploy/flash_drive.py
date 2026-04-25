@@ -36,6 +36,8 @@ import sys as _sys_module
 from collections.abc import Callable
 from pathlib import Path
 
+from .host_platform import install_hint_for_rsync
+
 
 class FlashDriveError(Exception):
     """Raised when a flash-drive staging operation fails."""
@@ -119,7 +121,7 @@ def rsync(source: Path, destination: Path) -> None:
     except FileNotFoundError as not_found_error:
         raise FlashDriveError(
             "rsync is required for flash deploy mode but was not found.  "
-            "Install rsync and ensure it is on your PATH."
+            f"{install_hint_for_rsync()}"
         ) from not_found_error
     except subprocess.CalledProcessError as rsync_error:
         raise FlashDriveError(
