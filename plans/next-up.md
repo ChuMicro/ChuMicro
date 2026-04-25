@@ -2,7 +2,7 @@
 
 ## Now
 
-(empty — pick from Next)
+- [ ] **Phase 3b: `chumicro-kvstore` per-runtime backends** — Slices 0+1 landed (Decision 0034 + scaffold + MemoryBackend + FakeKVStore + 43 host tests at 99.6 % cov). Remaining slices: 2 (CP NVM with CRC framing, hardware-verified on Lolin S2 + Pi Pico W CP), 3 (MP NVS on Lolin S2 MP), 4 (MP LittleFS on Pi Pico W MP), 5 (auto-select smoke + boot-counter-across-hard-reset functional tests on at least one CP + one MP board).
 
 ## Next
 - [ ] **Rebrand ChuMicro → ChipPy** (see `plans/workstreams/rename-to-chippy.md`). Full org + package + bundle rename, all library `VERSION` files reset to `0.0.0`. Execute when the project is ready for first public opening; sheds accumulated test-churn releases from PyPI since the namespace changes.

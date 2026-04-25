@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** Project-workspace Phase 2 (`chumicro-repl`) shipped 2026-04-25; queue is between phases. Next sequenced phase is 3 (`chumicro-kvstore` + `chumicro-wifi`, can interleave).
-- **Last shipped:** Pre-merge gates extended to workbench, `check_api` finally fires (griffe absolute-`--search` no-op fix), regression coverage codified in `scripts/audit_gates.py` (16 scenarios, ~1.7 s), and ruff TID252 now statically enforces the libraries/ absolute-imports rule via per-file-ignores (workbench keeps its existing relatives — host-only, style only).
-- **In flight:** —
+- **Phase:** Project-workspace Phase 3b in flight — `chumicro-kvstore` Slice 0 (Decision 0034) + Slice 1 (scaffold + MemoryBackend + FakeKVStore + 43 host tests at 99.6 % cov) landed 2026-04-25. Next: Slices 2–4 (CP NVM, MP NVS, MP LittleFS) on plugged-in hardware.
+- **Last shipped:** Phase 3b Slices 0+1 — Decision 0034 nails down the API + per-backend contracts; `libraries/kvstore/` ships the `KVStore` class, exception hierarchy, MemoryBackend, FakeKVStore, and pyproject wired to depend on `chumicro-msgpack`.
+- **In flight:** Phase 3b Slice 2 (CP NVM backend on Lolin S2 + Pi Pico W CP).
 - **Blocked on:** —
-- **Last touched:** `scripts/{workspace,check_version,check_api}.py`, `scripts/tests/{test_workspace,test_check_version}.py`, `plans/{now,history,next-up}.md`. The non-zero workbench `VERSION` bump is now safe whenever — gates are exercised end-to-end first.
+- **Last touched:** `libraries/kvstore/**`, `plans/decisions/0034-kvstore-api-and-backends.md`, `plans/{now,history,next-up}.md`. Four boards plugged in: Lolin S2 CP/MP, Pi Pico W CP/MP — exercises every kvstore backend across slices 2–5.
 
 ---
 
