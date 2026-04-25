@@ -698,13 +698,85 @@ class TestAddDevice:
             uid = ""
 
         import chumicro_deploy
+        from chumicro_workspace_runtime import onboarding
+
         monkeypatch.setattr(chumicro_deploy, "probe_device", lambda _d: _NoMarker())
+        # Force "no UF2 drive on the dev box" so the diagnosis lands on
+        # NO_PROBE_RESPONSE (the esptool branch) rather than UF2_BOOTLOADER.
+        monkeypatch.setattr(onboarding, "_UF2_MOUNT_SEARCH_PATHS", {})
         exit_code = cli.main([
             "add-device", "--workspace-dir", str(tmp_path),
             "--address", "/dev/cu.x", "--runtime", "micropython", "lolin",
         ])
         assert exit_code == 1
-        assert "did not return implementation" in capsys.readouterr().err
+        captured_stderr = capsys.readouterr().err
+        assert "did not return implementation" in captured_stderr
+        # Slice 4 onboarding diagnosis follows on subsequent lines.
+        assert "esptool" in captured_stderr.lower()
+
+    def test_probe_raises_emits_onboarding_diagnosis(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """A probe exception falls through to detect_board_state for help."""
+        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+
+        def raising_probe(_device):
+            raise OSError("could not open port /dev/cu.absent")
+
+        import chumicro_deploy
+        from chumicro_workspace_runtime import onboarding
+
+        monkeypatch.setattr(chumicro_deploy, "probe_device", raising_probe)
+        monkeypatch.setattr(onboarding, "_UF2_MOUNT_SEARCH_PATHS", {})
+        exit_code = cli.main([
+            "add-device", "--workspace-dir", str(tmp_path),
+            "--address", "/dev/cu.absent", "--runtime", "micropython", "lolin",
+        ])
+        assert exit_code == 1
+        captured_stderr = capsys.readouterr().err
+        assert "probe failed" in captured_stderr
+        assert "discover" in captured_stderr  # SERIAL_UNREACHABLE recommendation
+
+    def test_uf2_bootloader_message_when_drive_present(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """A board in UF2 bootloader gets the install-firmware --method uf2 hint."""
+        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        # Stage a fake UF2 mount under tmp_path.
+        uf2_mount_root = tmp_path / "Volumes"
+        uf2_mount_root.mkdir()
+        drive = uf2_mount_root / "RPI-RP2"
+        drive.mkdir()
+        (drive / "INFO_UF2.TXT").write_text("UF2 Bootloader\n")
+
+        class _NoMarker:
+            implementation = None
+            board_id = ""
+            uid = ""
+
+        import chumicro_deploy
+        from chumicro_workspace_runtime import onboarding
+
+        monkeypatch.setattr(chumicro_deploy, "probe_device", lambda _d: _NoMarker())
+        monkeypatch.setattr(
+            onboarding,
+            "_UF2_MOUNT_SEARCH_PATHS",
+            {"darwin": [uf2_mount_root], "linux": [uf2_mount_root], "win32": [uf2_mount_root]},
+        )
+        exit_code = cli.main([
+            "add-device", "--workspace-dir", str(tmp_path),
+            "--address", "/dev/cu.x", "--runtime", "micropython", "lolin",
+        ])
+        assert exit_code == 1
+        captured_stderr = capsys.readouterr().err
+        assert "UF2 bootloader" in captured_stderr
+        assert "install-firmware" in captured_stderr
 
     def test_user_comments_in_devices_yml_survive_add(
         self,

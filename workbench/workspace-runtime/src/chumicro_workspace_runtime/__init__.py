@@ -67,6 +67,12 @@ from chumicro_workspace_runtime.loaders import (
     read_workspace_yaml,
 )
 from chumicro_workspace_runtime.merge import merge_configs
+from chumicro_workspace_runtime.onboarding import (
+    BoardState,
+    OnboardingDiagnosis,
+    detect_board_state,
+    find_uf2_drive,
+)
 from chumicro_workspace_runtime.pipeline import build_runtime_config
 from chumicro_workspace_runtime.secrets import UnresolvedSecretError, resolve_secrets
 from chumicro_workspace_runtime.writer import write_runtime_config
@@ -74,18 +80,22 @@ from chumicro_workspace_runtime.writer import write_runtime_config
 __all__ = [
     "GENERATED_DIRNAME",
     "RUNTIME_CONFIG_DEVICE_PATH",
+    "BoardState",
     "DeviceAlreadyExistsError",
     "DeviceNotFoundError",
     "DevicesYamlError",
     "HardwareOverwriteError",
+    "OnboardingDiagnosis",
     "UnresolvedSecretError",
     "WithRuntimeConfig",
     "WorkspaceConfigError",
     "add_device",
     "build_runtime_config",
+    "detect_board_state",
     "dump_devices",
     "find_device",
     "find_thing_config",
+    "find_uf2_drive",
     "list_device_ids",
     "load_devices",
     "merge_configs",

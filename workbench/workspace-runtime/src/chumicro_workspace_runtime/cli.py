@@ -49,6 +49,10 @@ from chumicro_workspace_runtime.devices_yaml import (
     update_device_address,
     update_device_hardware,
 )
+from chumicro_workspace_runtime.onboarding import (
+    BoardState,
+    detect_board_state,
+)
 from chumicro_workspace_runtime.workspace import (
     WorkspaceLayout,
     WorkspaceNotFoundError,
@@ -348,9 +352,29 @@ def _cmd_add_device(args: argparse.Namespace) -> int:
     from chumicro_deploy import Device, probe_device  # noqa: PLC0415
 
     probe_device_obj = Device(transport=args.runtime, address=args.address)
-    info = probe_device(probe_device_obj)
+    try:
+        info = probe_device(probe_device_obj)
+    except Exception as exception:  # noqa: BLE001 — onboarding diagnoses every failure
+        diagnosis = detect_board_state(probe_device_obj)
+        print(
+            f"add-device: probe failed ({type(exception).__name__}: {exception}).",
+            file=sys.stderr,
+        )
+        for line in diagnosis.next_steps:
+            print(f"  {line}", file=sys.stderr)
+        return 1
     if info.implementation is None:
-        print("add-device: probe did not return implementation marker", file=sys.stderr)
+        diagnosis = detect_board_state(probe_device_obj)
+        if diagnosis.state is BoardState.UF2_BOOTLOADER:
+            print(
+                "add-device: board is in UF2 bootloader, not REPL — "
+                "install firmware first.",
+                file=sys.stderr,
+            )
+        else:
+            print("add-device: probe did not return implementation marker", file=sys.stderr)
+        for line in diagnosis.next_steps:
+            print(f"  {line}", file=sys.stderr)
         return 1
 
     data = load_devices(workspace.devices_yaml)
