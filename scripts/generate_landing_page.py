@@ -7,7 +7,11 @@ used across the site.
 
 Libraries (device-side, cross-runtime) and workbench tools (host-only)
 render as separate sections so readers can tell at a glance which
-packages run on a device versus which run on the host.
+packages run on a device versus which run on the host.  Install
+instructions and the bundle / release-channels block are scoped to
+their relevant section — circup / mip and the CircuitPython bundle
+only appear next to the library cards, since workbench packages ship
+to PyPI only and are never bundled.
 
 Usage (from repository root)::
 
@@ -18,7 +22,6 @@ The docs-deploy workflow calls this to regenerate the page on every push.
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from string import Template
 
@@ -72,10 +75,6 @@ def _library_card(library: dict) -> str:
     Links are ordered: Guide → API → Testing (if present) → Experimental → Source.
     The testing link is only shown for packages whose ``mkdocs.yml``
     references a ``testing.md`` page.
-
-    Args:
-        library: Metadata dict with ``name``, ``package``, ``description``,
-            ``has_testing``, and ``source_subdir`` keys.
     """
     name = library["name"]
     package = library["package"]
@@ -107,12 +106,7 @@ def _library_card(library: dict) -> str:
 
 
 def _render_section(heading: str, description: str, cards: list[dict]) -> str:
-    """Return a full ``<section>`` block, or the empty string when empty.
-
-    Callers render one section per category; an empty card list
-    produces no markup so the category vanishes from the page when
-    nothing has been published yet.
-    """
+    """Return a full ``<section>`` block, or the empty string when empty."""
     if not cards:
         return ""
     cards_html = "\n\n".join(_library_card(card) for card in cards)
@@ -125,43 +119,128 @@ def _render_section(heading: str, description: str, cards: list[dict]) -> str:
     </section>"""
 
 
+def _render_library_install(first_library: dict) -> str:
+    """Return the library-scoped Install block.
+
+    Libraries are the only packages distributed via the CircuitPython
+    bundle (circup) and mip — workbench packages ship to PyPI only —
+    so this block only appears under the Libraries section.
+    """
+    package = first_library["package"]
+    import_name = package.replace("-", "_")
+    description = (
+        "Library packages run on devices and ship through three channels:"
+    )
+    return f"""    <div class="install">
+      <h2>Install &mdash; libraries</h2>
+      <p class="section-description">{description}</p>
+      <div class="install-block">
+        <h3>pip (CPython, host-side use)</h3>
+        <pre>pip install {package}</pre>
+      </div>
+      <div class="install-block">
+        <h3>circup (CircuitPython)</h3>
+        <pre>circup bundle-add ChuMicro/ChuMicro-Bundle
+circup install {package}</pre>
+      </div>
+      <div class="install-block">
+        <h3>mip (MicroPython)</h3>
+        <pre>mpremote mip install github:ChuMicro/ChuMicro-Bundle/{import_name}</pre>
+      </div>
+    </div>"""
+
+
+def _render_release_channels() -> str:
+    """Return the Release Channels block.
+
+    The bundle is the CircuitPython distribution path for library code;
+    workbench packages are not bundled (they ship to PyPI only).  This
+    block is library-scoped and renders adjacent to the library install
+    block.
+    """
+    scope_note = (
+        "The CircuitPython bundle is the distribution path for library "
+        "code.  Workbench packages ship to PyPI only and don't appear in "
+        "the bundle."
+    )
+    selector_note = (
+        "Each library has a version selector in its docs header. Use it "
+        "to switch between stable, experimental, and pinned versions."
+    )
+    return f"""    <div class="channels">
+      <h2>Release channels &mdash; libraries</h2>
+      <p class="section-description">{scope_note}</p>
+      <table>
+        <thead>
+          <tr><th>Channel</th><th>Bundle</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Stable</strong></td>
+            <td><a href="https://github.com/ChuMicro/ChuMicro-Bundle">ChuMicro-Bundle</a></td>
+            <td>Released, tested versions &mdash; recommended for production</td>
+          </tr>
+          <tr>
+            <td><strong>Experimental</strong></td>
+            <td><a href="https://github.com/ChuMicro/ChuMicro-Bundle-Experimental">ChuMicro-Bundle-Experimental</a></td>
+            <td>Pre-release &mdash; latest features, may contain breaking changes</td>
+          </tr>
+        </tbody>
+      </table>
+      <p style="margin-top:.75rem;font-size:.85rem;color:var(--muted);">
+        {selector_note}
+      </p>
+    </div>"""
+
+
+def _render_workbench_install(first_workbench: dict) -> str:
+    """Return the workbench-scoped Install block.
+
+    Workbench packages are host-only CPython tools — pip is the only
+    install path; bundle / circup / mip do not apply.
+    """
+    package = first_workbench["package"]
+    description = (
+        "Workbench tools run on your laptop, not on a device.  "
+        "CPython only:"
+    )
+    return f"""    <div class="install">
+      <h2>Install &mdash; workbench</h2>
+      <p class="section-description">{description}</p>
+      <div class="install-block">
+        <h3>pip (CPython)</h3>
+        <pre>pip install {package}</pre>
+      </div>
+    </div>"""
+
+
 def generate() -> str:
     """Return the full landing page HTML."""
     libraries, workbench = _discover_packages()
 
-    library_section = _render_section(
-        "Libraries",
-        "Cross-runtime Python libraries for CircuitPython, MicroPython, "
-        "and CPython.",
-        libraries,
-    )
-    workbench_section = _render_section(
-        "Workbench",
-        "Host-only CPython tools for deploying, probing, and flashing "
-        "devices.",
-        workbench,
-    )
-    sections = "\n\n".join(
-        block for block in (library_section, workbench_section) if block
-    )
+    blocks: list[str] = []
+    if libraries:
+        blocks.append(_render_section(
+            "Libraries",
+            "Cross-runtime Python libraries for CircuitPython, MicroPython, "
+            "and CPython.",
+            libraries,
+        ))
+        blocks.append(_render_library_install(libraries[0]))
+        blocks.append(_render_release_channels())
+    if workbench:
+        blocks.append(_render_section(
+            "Workbench",
+            "Host-only CPython tools for deploying, probing, and flashing "
+            "devices.",
+            workbench,
+        ))
+        blocks.append(_render_workbench_install(workbench[0]))
 
-    # Use the first library's package for install examples (libraries
-    # are the circup / mip path; workbench is pip-only).  Fall back to
-    # a workbench package if the repo somehow has no libraries, then to
-    # the historical default so the template never renders an empty
-    # placeholder.
-    example_source = libraries or workbench
-    first_package = (
-        example_source[0]["package"] if example_source else "chumicro-timing"
-    )
-    first_import = re.sub(r"-", "_", first_package)
+    content = "\n\n".join(blocks)
 
     template_text = (TEMPLATES_DIR / "landing_page.html.template").read_text()
-    return Template(template_text).substitute(
-        sections=sections,
-        first_package=first_package,
-        first_import=first_import,
-    )
+    return Template(template_text).substitute(content=content)
 
 
 if __name__ == "__main__":

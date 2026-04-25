@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from chumicro_abstractions import FakeTime
 from chumicro_deploy.circuitpython_transport import (
     _CTRL_A,
     _CTRL_C,
@@ -17,6 +16,7 @@ from chumicro_deploy.circuitpython_transport import (
 )
 from chumicro_deploy.testing import (
     FakeSerialPort,
+    FakeTime,
 )
 
 #: Shorthand for the standard autoreload REPL acknowledgement.

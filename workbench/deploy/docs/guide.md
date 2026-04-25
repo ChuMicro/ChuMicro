@@ -254,7 +254,7 @@ Detection is non-darwin-safe (returns `False` immediately on Linux / Windows) an
 
 ### Try it against real boards
 
-[`workbench/deploy/functional_tests/demo_recovery_hand_holding.py`](https://github.com/ChuMicro/ChuMicro/blob/main/workbench/deploy/functional_tests/demo_recovery_hand_holding.py) walks every configured `devices.yml` board through each failure scenario and prints the coaching output live.  Scenarios today: happy-path baseline, traceback-on-board, physical unplug (`PORT_UNAVAILABLE`), drive-ejected (`CIRCUITPY_DRIVE_MISSING`, with `MACOS_FSKIT_WEDGED` promotion when the wedge is live), oversized-payload (`FLASH_COPY_FAILED`), and silent bootloader-reset verification.  Run it when you want to see what the CLI actually says to the user on a real cable-out / drive-ejected / board-rebooted failure.
+[`workbench/deploy/examples/demo_recovery_hand_holding.py`](https://github.com/ChuMicro/ChuMicro/blob/main/workbench/deploy/examples/demo_recovery_hand_holding.py) walks every configured `devices.yml` board through each failure scenario and prints the coaching output live.  Scenarios today: happy-path baseline, traceback-on-board, physical unplug (`PORT_UNAVAILABLE`), drive-ejected (`CIRCUITPY_DRIVE_MISSING`, with `MACOS_FSKIT_WEDGED` promotion when the wedge is live), oversized-payload (`FLASH_COPY_FAILED`), and silent bootloader-reset verification.  Run it when you want to see what the CLI actually says to the user on a real cable-out / drive-ejected / board-rebooted failure.
 
 ## Probe a board — `probe_device`
 

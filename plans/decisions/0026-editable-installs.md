@@ -37,7 +37,7 @@ No copies, no build artifacts, no version ambiguity.
 4. **Root `conftest.py`** still adds `sys.path` entries as a fallback for CI environments or fresh clones before `setup` has run.
 5. **`run.py test`** sets `PYTHONPATH` independently, so tests do not depend on editable installs being present.
 
-Support-package editable installs use `find_support_packages()` in `workspace.py` alongside `find_publishable_packages()`; `install_editable()` walks both.  This keeps support modules (`chumicro_abstractions`, `chumicro_test_harness`) importable from REPLs, debuggers, and ad-hoc scripts on the same footing as libraries, rather than relying only on pytest-driven `sys.path` manipulation.
+Support-package editable installs use `find_support_packages()` in `workspace.py` alongside `find_publishable_packages()`; `install_editable()` walks both.  This keeps support modules (`chumicro_test_harness`) importable from REPLs, debuggers, and ad-hoc scripts on the same footing as libraries, rather than relying only on pytest-driven `sys.path` manipulation.
 
 ### Alternatives considered
 

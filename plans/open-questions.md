@@ -203,6 +203,35 @@ Currently scripts use `print()` for warnings and status.  A unified
 filtering — but only makes sense if applied across all scripts, not
 piecemeal.  Parked for a rainy day.
 
+### Shared `FakeTime` / fake-clock home for workbench packages
+
+`chumicro_deploy.testing` ships `FakeTime` (seconds-domain, host-side,
+satisfies the `TimeSource` protocol the transport accepts via
+constructor injection).  The 2026-04-24 audit moved it from the
+internal-only `chumicro_abstractions` package — co-locating fakes with
+the package they test, per Decision 0010 — and as a one-consumer fake
+this is the right shape.
+
+But the planned `chumicro-repl` workbench package (and likely future
+ones) will probably need the same seconds-domain time fake to test
+their own retry / polling loops.  At that point we have three options:
+
+1. **Duplicate the ~80 lines** of `FakeTime` into each new workbench
+   package's `testing.py` (the Decision 0010 default).  Cheap for one
+   or two consumers; starts feeling silly past three.
+2. **Have `chumicro-repl` depend on `chumicro-deploy`** just to import
+   `FakeTime`.  Wrong direction — repl shouldn't need deploy.  Reject.
+3. **Hoist into a shared workbench-fakes package** — e.g. a published
+   `chumicro-workbench-fakes` (or similar name) that every workbench
+   package depends on for shared host-side test fakes.  Adds a new
+   PyPI surface and a release lifecycle, but solves the recurrence
+   cleanly.
+
+Resolution criterion: when the **second** workbench package needs
+`FakeTime`, duplicate.  When the **third** does, do option 3.  Until
+then, the per-package pattern wins — duplication of 80 lines is
+cheaper than the abstraction tax of an extra published package.
+
 ---
 
 ## Resolved

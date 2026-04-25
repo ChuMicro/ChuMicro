@@ -317,8 +317,8 @@ class TimeSource(Protocol):
     """Structural interface for an injectable time source.
 
     Matches the subset of Python's ``time`` module used by the transport.
-    ``FakeTime`` from ``chumicro_abstractions`` satisfies this protocol
-    so tests can eliminate wall-clock waits.
+    ``FakeTime`` from :mod:`chumicro_deploy.testing` satisfies this
+    protocol so tests can eliminate wall-clock waits.
     """
 
     def monotonic(self) -> float: ...

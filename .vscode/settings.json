@@ -6,7 +6,6 @@
         "--strict-markers"
     ],
     "python.analysis.extraPaths": [
-        "support/abstractions/src",
         "support/test_harness/src",
         "libraries/compat/src",
         "libraries/msgpack/src",

@@ -111,48 +111,7 @@
       </div>
     </header>
 
-$sections
-
-    <div class="install">
-      <h2>Install</h2>
-      <div class="install-block">
-        <h3>pip (CPython)</h3>
-        <pre>pip install $first_package</pre>
-      </div>
-      <div class="install-block">
-        <h3>circup (CircuitPython)</h3>
-        <pre>circup bundle-add ChuMicro/ChuMicro-Bundle
-circup install $first_package</pre>
-      </div>
-      <div class="install-block">
-        <h3>mip (MicroPython)</h3>
-        <pre>mpremote mip install github:ChuMicro/ChuMicro-Bundle/$first_import</pre>
-      </div>
-    </div>
-
-    <div class="channels">
-      <h2>Release channels</h2>
-      <table>
-        <thead>
-          <tr><th>Channel</th><th>Bundle</th><th>Description</th></tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td><strong>Stable</strong></td>
-            <td><a href="https://github.com/ChuMicro/ChuMicro-Bundle">ChuMicro-Bundle</a></td>
-            <td>Released, tested versions &mdash; recommended for production</td>
-          </tr>
-          <tr>
-            <td><strong>Experimental</strong></td>
-            <td><a href="https://github.com/ChuMicro/ChuMicro-Bundle-Experimental">ChuMicro-Bundle-Experimental</a></td>
-            <td>Pre-release &mdash; latest features, may contain breaking changes</td>
-          </tr>
-        </tbody>
-      </table>
-      <p style="margin-top:.75rem;font-size:.85rem;color:var(--muted);">
-        Each library has a version selector in its docs header. Use it to switch between stable, experimental, and pinned versions.
-      </p>
-    </div>
+$content
 
     <footer>
       <a href="https://github.com/ChuMicro/ChuMicro">Source on GitHub</a>

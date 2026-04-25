@@ -9,7 +9,7 @@ the recovery-layer CLI prints in each case.
 
 Run::
 
-    .venv/bin/python workbench/deploy/functional_tests/demo_recovery_hand_holding.py
+    .venv/bin/python workbench/deploy/examples/demo_recovery_hand_holding.py
 
 The script reads ``devices.yml``, lists every configured board, and
 walks you through a scenario menu per board.  Every scenario maps

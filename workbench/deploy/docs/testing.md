@@ -1,0 +1,102 @@
+# Testing Helpers
+
+`chumicro_deploy.testing` ships three deterministic fakes for host-side unit tests of code that drives `chumicro-deploy`.  All three drop into the constructor-injection slots the production code already exposes, so tests can exercise full deploy / probe / flash flows without touching real hardware.
+
+| Fake | Replaces | Use it when |
+|------|----------|-------------|
+| `FakeTransport` | `MicropythonTransport` / `CircuitpythonTransport` | You're testing `Deployer` / `InteractiveDeployer` orchestration and don't care which physical transport runs underneath. |
+| `FakeSerialPort` | `serial.Serial` | You're testing `CircuitpythonTransport` internals (the raw-REPL state machine, chunked execution, drive-flash timing) and want to script port behavior byte-for-byte. |
+| `FakeTime` | Python's `time` module | The transport accepts a `TimeSource` via its `time=` parameter; pass `FakeTime()` so timeout-driven retry loops execute instantly instead of waiting on the real clock. |
+
+## `FakeTransport`
+
+Records every call (`connect`, `stage`, `execute`, `disconnect`, …) into a list and returns canned output for `execute()`.  Implements both the basic `TransportProtocol` and `ExtendedTransportProtocol` (chunked execution + free-memory probing), so tests for either path can use the same fake.
+
+```python
+from chumicro_deploy import Deployer, FileMapSource
+from chumicro_deploy.testing import FakeTransport
+
+def test_deploy_records_stage_then_execute() -> None:
+    """Deployer.deploy() should stage files, then call execute()."""
+    transport = FakeTransport(execute_output="hello from device\n")
+    source = FileMapSource(
+        {"/main.py": "print('hello from device')"}, entrypoint="/main.py",
+    )
+
+    result = Deployer(transport).deploy(source)
+
+    assert result.execute_output == "hello from device\n"
+    method_names = [name for name, _args in transport.calls]
+    assert method_names.index("connect") < method_names.index("stage")
+    assert method_names.index("stage") < method_names.index("execute")
+```
+
+Knobs you'll reach for most often:
+
+- `execute_output` — string returned by `execute()`.
+- `mode` — deploy-mode label (`"ram"`, `"flash"`, `"mount"`, `"copy"`).
+- `free_memory_bytes` — value returned by `probe_free_memory()` (drives the chunked-RAM heuristic).
+- `probe_result` — `DeviceImplementation` returned by `probe_implementation()`, or `None` to simulate a probe that couldn't complete.
+- `bootloader_reset_result` — return value of `reset_into_bootloader()`; set to `False` to exercise the `flash_firmware` interactive-fallback branch.
+- `calls` — the recorded call list (`[(method_name, args_tuple), ...]`) for assertions.
+
+## `FakeSerialPort`
+
+Simulates the subset of `serial.Serial` that `CircuitpythonTransport` uses: `read()`, `write()`, `close()`, `reset_input_buffer()`, and the `in_waiting` property.  Reads return canned responses you supply on construction; writes are recorded into a list.
+
+```python
+from chumicro_deploy.circuitpython_transport import CircuitpythonTransport
+from chumicro_deploy.testing import FakeSerialPort, FakeTime
+
+def test_circuitpython_transport_enters_raw_repl() -> None:
+    """connect() should send Ctrl-C then Ctrl-A and wait for the raw prompt."""
+    port = FakeSerialPort(read_responses=[b"\r\nraw REPL; CTRL-B to exit\r\n>"])
+    transport = CircuitpythonTransport(
+        address="/dev/cu.fake",
+        port_factory=lambda *_args, **_kwargs: port,
+        time=FakeTime(),
+    )
+
+    transport.connect()
+
+    # First write is Ctrl-C (interrupt anything running), second is Ctrl-A
+    # (enter raw REPL).
+    assert port.writes[0] == b"\x03"
+    assert port.writes[1] == b"\x01"
+```
+
+Pass `open_error=...` to simulate a serial-port open failure (e.g. `PermissionError`), so the transport's classifier turns it into a `PORT_UNAVAILABLE` recovery hint.
+
+## `FakeTime`
+
+Deterministic seconds-domain time source that satisfies the `TimeSource` protocol `CircuitpythonTransport` accepts via its `time=` parameter.  The clock is **stable** — `monotonic()` returns the same value until you advance it — and `sleep()` does **not** actually wait, so a test that exercises a 30-second timeout completes in microseconds.
+
+```python
+from chumicro_deploy.testing import FakeTime
+
+def test_clock_is_stable_until_advanced() -> None:
+    """Repeated monotonic() calls return the same value with no advance."""
+    fake = FakeTime()
+    assert fake.monotonic() == fake.monotonic()  # stable
+
+    fake.sleep(1.5)            # advances the clock without waiting
+    assert fake.monotonic() == 1.5
+
+    fake.advance(0.5)          # explicit advance for non-sleep timing tests
+    assert fake.monotonic() == 2.0
+```
+
+Two ways to move the clock forward:
+
+- `sleep(duration)` — the production code's `time.sleep()` analogue.  Accepts the same float seconds and advances the fake clock in lockstep, so production code that genuinely calls `sleep` before checking a deadline behaves correctly under the fake.
+- `advance(seconds)` — explicit clock movement when production does **not** sleep but the test needs to push past a deadline (e.g. simulating elapsed time between `connect()` and the next read).
+
+Pass `start=` to begin at a non-zero timestamp.  Useful when production reads `monotonic()` once at startup and you want to verify it computes deltas correctly:
+
+```python
+fake = FakeTime(start=1_000_000.0)
+```
+
+## Why these fakes ship with the package
+
+`chumicro-deploy` is a published workbench tool — third parties install it via `pip install chumicro-deploy` and write their own host-side tests against the public API.  Without published fakes, every consumer would either roll their own (~80 lines for `FakeTime`, more for the transport contract) or pull in heavier deps like `freezegun`.  Co-locating the fakes with the production code makes downstream testing the obvious path — the same pattern every library in the ChuMicro workspace follows (`chumicro_timing.testing.FakeTicks`, `chumicro_msgpack.testing`, etc.) per [Decision 0010](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0010-constructor-injection-and-fakes.md).

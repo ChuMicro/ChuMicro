@@ -40,7 +40,6 @@ Block the cutover until every item here is a confirmed "yes":
 - [ ] **PyPI namespace is free** for every planned package: `chippy-timing`, `chippy-runner`, `chippy-compat`, `chippy-msgpack` (and any support packages we choose to publish)
 - [ ] **Verify `chippy` is not squatted** as a meta-package on PyPI (check even though we don't plan to publish a top-level `chippy`)
 - [ ] **Decide final naming for support and workbench packages.** Current:
-  - `support/abstractions/` (`chumicro_abstractions`) — internal, never published
   - `workbench/deploy/` (`chumicro_deploy`) — publishable host tool, per Decision 0032; will become `chippy-deploy`
   - `support/test_harness/` (`chumicro_test_harness`) — internal
   - Decision: keep `chippy_<name>` import namespace for all of them even if never published, for consistency
@@ -90,7 +89,6 @@ libraries/runner/src/chumicro_runner/        → libraries/runner/src/chippy_run
 libraries/compat/src/chumicro_compat/        → libraries/compat/src/chippy_compat/
 libraries/msgpack/src/chumicro_msgpack/      → libraries/msgpack/src/chippy_msgpack/
 workbench/deploy/src/chumicro_deploy/        → workbench/deploy/src/chippy_deploy/
-support/abstractions/src/chumicro_abstractions/      → support/abstractions/src/chippy_abstractions/
 support/test_harness/src/chumicro_test_harness/      → support/test_harness/src/chippy_test_harness/
 ```
 
@@ -110,7 +108,6 @@ Affected files (confirmed via grep):
 - `libraries/runner/pyproject.toml`
 - `libraries/timing/pyproject.toml`
 - `workbench/deploy/pyproject.toml`
-- `support/abstractions/pyproject.toml`
 - `support/test_harness/pyproject.toml`
 - Root `pyproject.toml`
 

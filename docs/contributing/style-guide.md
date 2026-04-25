@@ -45,7 +45,7 @@ Infrastructure code (`scripts/`) may use `typing` imports since it runs only on 
 
 ## Imports
 
-Code that runs on a device — `libraries/*/src/`, `support/test_harness/`, `support/abstractions/` — must use **absolute imports only**. Relative imports break CircuitPython RAM-mode deploys.
+Code that runs on a device — `libraries/*/src/`, `support/test_harness/` — must use **absolute imports only**. Relative imports break CircuitPython RAM-mode deploys.
 
 ```python
 # ✅ Works on all runtimes
@@ -129,7 +129,7 @@ except Exception:
     pass
 ```
 
-Library code (`libraries/*/src/`, `support/test_harness/`, `support/abstractions/`) is held to the same bar, with an added constraint: `print()` costs RAM and I/O time on devices, so prefer raising a specific exception type the caller can react to, or (where the library exposes a logging seam) emit through that.  Still never `except: pass`.
+Library code (`libraries/*/src/`, `support/test_harness/`) is held to the same bar, with an added constraint: `print()` costs RAM and I/O time on devices, so prefer raising a specific exception type the caller can react to, or (where the library exposes a logging seam) emit through that.  Still never `except: pass`.
 
 Catching an exception and re-raising a different one is fine — the chained `__cause__` preserves the origin.  Catching to translate errno strings into classifier-friendly message shapes (e.g. the transport's `CIRCUITPY drive not found or not writable` re-raise) is the pattern, not the exception.
 

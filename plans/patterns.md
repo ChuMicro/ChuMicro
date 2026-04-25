@@ -155,23 +155,26 @@ from chumicro_mylib.testing import FakeBackend
 If the library has nothing worth faking, delete `testing.py` and its
 references (see `new-library` skill § 4).
 
-**Workspace-level abstractions:** The `support/abstractions/` package
-(`chumicro_abstractions`) provides shared test fakes used across support
-packages and scripts tests — e.g., `FakeTime` for seconds-domain time
-injection.  Production code defaults to Python's `time` module directly;
-tests inject `FakeTime` to eliminate wall-clock waits:
+**Per-package fakes, not a shared abstractions package:** Each package
+owns its own test fakes in its `testing.py` submodule.  Cross-package
+sharing would require either a published support package (extra release
+overhead) or duplicating ~80 lines per consumer — and since the only
+fakes that recur are tiny, duplication beats the abstraction tax.
 
-```python
-import time
-from chumicro_abstractions import FakeTime
+Concrete examples in the workspace today:
 
-class MyService:
-    def __init__(self, *, time_source=None):
-        self._time = time_source or time
+- `chumicro_timing.testing.FakeTicks` — millisecond-tick fake used by
+  the timing library and re-imported by `chumicro_runner` tests.
+- `chumicro_deploy.testing.FakeTime` — seconds-domain time fake for
+  `CircuitpythonTransport`'s injectable time source; lives next to
+  `FakeTransport` and `FakeSerialPort` so a downstream `pip install
+  chumicro-deploy` user gets a complete test-fakes set.
 
-# In tests:
-service = MyService(time_source=FakeTime())
-```
+These are different fakes for different domains (ms-tick on device vs
+seconds-monotonic on host), not two implementations of one thing.  If
+a future package needs seconds-domain on device, it copies the ~80
+lines into its own `testing.py` rather than introducing a shared
+abstractions package.
 
 Related: Decision 0010, `new-library` skill.
 

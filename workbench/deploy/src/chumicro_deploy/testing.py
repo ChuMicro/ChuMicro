@@ -1,14 +1,24 @@
 """Test fakes for the device transport layer.
 
-Provides ``FakeTransport`` — a transport implementation that records
-all calls and returns configurable output.  Use it in host-side tests
-that need to verify orchestration logic without touching real hardware.
+Provides three fakes for host-side tests of ``chumicro-deploy``:
 
-Also provides ``FakeSerialPort`` for testing ``CircuitpythonTransport``
-internals without real hardware::
+- :class:`FakeTransport` — a transport implementation that records
+  all calls and returns configurable output.  Drop-in replacement for
+  ``MicropythonTransport`` / ``CircuitpythonTransport`` in unit tests.
+- :class:`FakeSerialPort` — simulates a ``serial.Serial`` instance
+  without real hardware, for testing ``CircuitpythonTransport``
+  internals.
+- :class:`FakeTime` — deterministic seconds-domain time source that
+  satisfies the ``TimeSource`` protocol the transport accepts via
+  constructor injection, so tests never touch wall-clock time::
 
-    from chumicro_deploy.testing import FakeSerialPort
-    from chumicro_abstractions import FakeTime
+    from chumicro_deploy.testing import FakeSerialPort, FakeTime
+
+    transport = CircuitpythonTransport(
+        address="/dev/cu.fake",
+        port_factory=lambda *_args, **_kwargs: FakeSerialPort(...),
+        time=FakeTime(),
+    )
 """
 
 from __future__ import annotations
@@ -19,7 +29,83 @@ from pathlib import Path
 
 from .protocol import DeviceImplementation
 
-__all__ = ["FakeSerialPort", "FakeTransport"]
+__all__ = ["FakeSerialPort", "FakeTime", "FakeTransport"]
+
+
+class FakeTime:
+    """Deterministic seconds-domain time source for host-side tests.
+
+    Bundles ``monotonic()`` and ``sleep()`` into a single injectable
+    object that satisfies the ``TimeSource`` protocol used by
+    :class:`~chumicro_deploy.CircuitpythonTransport`.  The clock is
+    stable — ``monotonic()`` returns the same value until ``advance()``
+    or ``sleep()`` is called — and ``sleep()`` does not actually wait,
+    so tests run instantly regardless of production timeouts.
+
+    Design decisions:
+
+    - ``monotonic()`` is **stable**: repeated calls return the same
+      value until the clock is explicitly advanced.
+    - ``sleep(duration)`` auto-advances the clock by *duration*, so
+      production code that sleeps moves the fake clock forward without
+      any real wait.
+    - ``advance(seconds)`` moves the clock forward explicitly, for
+      scenarios where production does not sleep but the test needs to
+      simulate elapsed time (e.g., timeout expiry).
+
+    This mirrors the semantics of Kotlin's ``TestCoroutineScheduler``:
+    time only moves when the test (or a sleep call) says it does.
+
+    Example::
+
+        fake = FakeTime()
+        assert fake.monotonic() == 0.0
+
+        fake.sleep(1.5)
+        assert fake.monotonic() == 1.5
+
+        fake.advance(0.5)
+        assert fake.monotonic() == 2.0
+    """
+
+    __slots__ = ("_current",)
+
+    def __init__(self, start: float = 0.0) -> None:
+        """Create a fake time source starting at *start* seconds.
+
+        Args:
+            start: Initial monotonic value in seconds.
+        """
+        self._current = start
+
+    def monotonic(self) -> float:
+        """Return the current fake time in seconds.
+
+        The value is stable — calling ``monotonic()`` repeatedly
+        returns the same value until ``advance()`` or ``sleep()``
+        is called.
+        """
+        return self._current
+
+    def sleep(self, duration: float) -> None:
+        """Advance the clock by *duration* seconds (no wall-clock wait).
+
+        Args:
+            duration: Seconds to advance.
+        """
+        self._current += duration
+
+    def advance(self, seconds: float) -> None:
+        """Move the clock forward by *seconds*.
+
+        Use this when production does not sleep but the test needs to
+        simulate elapsed time — for example, pushing past a timeout
+        deadline.
+
+        Args:
+            seconds: Seconds to advance.
+        """
+        self._current += seconds
 
 
 class FakeSerialPort:
