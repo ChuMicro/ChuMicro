@@ -121,6 +121,20 @@ Once root pytest started collecting `workbench/deploy/tests/` + `workbench/repl/
 
 `libraries/` packages flow through `circup` / `mip` / `pip` and need bytecode + bundle staging. `workbench/` packages flow through `pip` only and skip both — but they keep `VERSION` files, `check-version`, `check-api`, and the experimental→stable promotion lifecycle. Decision 0032 codifies this. Both pre-merge gates were extended to walk `workbench/*/` in commit `104e129` (2026-04-25); release-workflow side covered by `fa8628c`.
 
+### Wifi-substrate failure modes differ across the three runtimes (and all three are honest)
+
+Three substrate variants exist for `chumicro_wifi`'s adapters and each surfaces an unreachable AP through a different code path:
+
+| Substrate | When AP is unreachable |
+|---|---|
+| CircuitPython `wifi.radio` | Blocks inside `connect()` until its `timeout=` parameter expires, then raises `TimeoutError` / `ConnectionError` (both subclasses of `OSError`) |
+| MicroPython ESP32 `network.WLAN` | Returns immediately from `connect()` (non-blocking), then raises `OSError("Wifi Internal State Error")` on the next interaction with the radio |
+| MicroPython CYW43 (Pi Pico W) `network.WLAN` | Returns immediately, `isconnected()` silently stays `False`, no exception ever raised |
+
+Adapter implication: each adapter has to handle its substrate's error idiom.  CP catches `OSError` (covers both `TimeoutError` + `ConnectionError`); MP-ESP32 + MP-RP2 just check `isconnected()` post-call.  All three preserve the same outward contract: `connect()` returns `True` on success, `False` on a clean refusal; programmer-error exceptions propagate to `WifiService.last_error`.
+
+Substrate-honesty implication: every variant correctly refuses to claim `connected` or assign an IP when the AP is unreachable.  Surfaced 2026-04-25 during real-router-power-cycle acceptance on all four boards (Pi Pico W CP, Lolin S2 CP, Lolin S2 MP, Pi Pico W MP).  The MP-ESP32 exception is the only one that populates `WifiService.last_error` — the other two substrates silently fail, which is fine because the state machine's `RECONNECTING` / backoff logic doesn't depend on `last_error` being set.
+
 ### CircuitPython RAM-mode silently bypasses module-level `__getattr__`
 
 PEP 562 module-level `__getattr__` is implemented at the firmware level on both MP and CP (verified against pinned source — `MICROPY_MODULE_GETATTR` default-on at `CORE_FEATURES` ROM level), but the **deploy harness's CircuitPython RAM-mode path wraps the package in a class-as-module stub (`_Mod`) that doesn't honour PEP 562**.  Lookups against the wrapper hit the stub's `__dict__` directly without consulting `__getattr__`, so the lazy attr table just silently doesn't fire.
