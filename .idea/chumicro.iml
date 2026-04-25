@@ -37,6 +37,9 @@
       <sourceFolder url="file://$MODULE_DIR$/workbench/repl/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/workbench/repl/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/workbench/repl/functional_tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/workbench/workspace-runtime/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/workbench/workspace-runtime/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/workbench/workspace-runtime/functional_tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/scripts" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/scripts/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/.venv" />

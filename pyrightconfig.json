@@ -10,6 +10,7 @@
     "libraries/wifi/src",
     "workbench/deploy/src",
     "workbench/repl/src",
+    "workbench/workspace-runtime/src",
     "scripts"
   ]
 }

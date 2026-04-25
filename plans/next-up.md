@@ -2,7 +2,7 @@
 
 ## Now
 
-- [ ] **Phase 4a: `chumicro-workspace-runtime`** — host-side workspace tooling (`run.py upgrade`, `run.py add-library <name>` collecting per-library `_templates/config.toml` snippets per ADR 0036 §5, deploy-time deep-merge of `workspace.yml` + `things/<name>/config.toml` + `secrets.yml` → `/runtime_config.msgpack` per ADR 0035, `!secret` resolution).  See `plans/workstreams/project-workspace.md` Phase 4a.
+- [ ] **Phase 4a: `chumicro-workspace-runtime` remaining slices** — Slice 0 landed (skeleton + deploy-time config-merge core: `merge_configs`, `resolve_secrets`, file loaders, msgpack writer, `build_runtime_config` pipeline; 46 host tests at 100 % cov).  Remaining: Slice 1 (wire `chumicro-deploy` to call `build_runtime_config` so deploys auto-generate the runtime-config msgpack), Slice 2 (`run.py` shim + 15 commands per the workstream), Slice 3 (three-zone YAML writer with user-comment preservation), Slice 4 (onboarding flows for REPL / UF2 / blank-chip-esptool board states), Slice 5 (firmware URL derivation), Slice 6 (import-graph resolver via AST walk from thing entrypoint), Slice 7 (device-side `workspace_runtime` boot module).
 
 ## Next
 - [ ] **Rebrand ChuMicro → ChipPy** (see `plans/workstreams/rename-to-chippy.md`). Full org + package + bundle rename, all library `VERSION` files reset to `0.0.0`. Execute when the project is ready for first public opening; sheds accumulated test-churn releases from PyPI since the namespace changes.

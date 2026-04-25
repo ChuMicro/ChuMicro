@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **Phase 3a closed.** All slices (0 skeleton, 1 CP, 2 MP-ESP32, 3 MP-RP2, 4 live-AP acceptance) shipped + hardware-verified across all four boards. `chumicro-wifi` is feature-complete for Phase 3a's scope.
-- **Last shipped:** Phase 3a Slice 4 — live-AP acceptance + real-router-power-cycle recovery run against the user's local AP across every board.  Each board associated, got a DHCP-assigned IP, was deliberately disconnected (via `adapter.disconnect()`), and re-established the connection cleanly.  Real-router-power-cycle then exercised the substrate's actual AP-loss detection on all three substrate variants: CP `wifi.radio` (blocks in `connect()`), MP-ESP32 `network.WLAN` (raises `Wifi Internal State Error`), MP-RP2 CYW43 (silent, `isconnected()` stays False).  All three honest — no false-positive `connected`, no IP claimed when AP unreachable, clean recovery once AP returns.  Lifted to learnings: the per-substrate failure-mode delta.  Runners in `.scratch/` (gitignored).
-- **In flight:** —  (between phases). Next sequenced phase is 4a (`chumicro-workspace-runtime`).
+- **Phase:** Phase 4a Slice 0 shipped — `chumicro-workspace-runtime` skeleton + deploy-time config-merge core (workspace defaults + per-thing config + secrets → `/runtime_config.msgpack` per ADR 0035). Subsequent slices add command dispatch, three-zone YAML writer, onboarding flows, firmware URL derivation, import-graph resolver.
+- **Last shipped:** Phase 4a Slice 0 — `workbench/workspace-runtime/` package with `merge_configs` (deep per-key merge), `resolve_secrets` (`!secret <name>` reference resolution), file loaders for `workspace.yml` + `things/<name>/config.{toml,yml,yaml}` + `secrets.yml`, msgpack writer, and the `build_runtime_config` end-to-end pipeline. 46 host tests at 100 % coverage.
+- **In flight:** Phase 4a Slice 1 — wire `chumicro-deploy`'s deploy flow to call `build_runtime_config` so deploys auto-generate the runtime-config msgpack from each thing's source files.
 - **Blocked on:** —
-- **Last touched:** `libraries/kvstore/**`, `plans/decisions/0034-kvstore-api-and-backends.md`, `plans/{now,history,next-up}.md`. Four boards plugged in: Lolin S2 CP/MP, Pi Pico W CP/MP — exercises every kvstore backend across slices 2–5.
+- **Last touched:** `workbench/workspace-runtime/**`, IDE config sync. Phase 3a + 3b both feature-complete; Phase 4a is the integration phase wiring the deploy + on-device sides together.
 
 ---
 
