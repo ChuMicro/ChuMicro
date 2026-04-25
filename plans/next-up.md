@@ -33,6 +33,7 @@
 
 ## Investigations
 
+- [ ] **Wire a static gate for the libraries/ absolute-imports rule** (AGENTS.md non-negotiable).  Today the rule is only caught at runtime — a relative `from .core import Foo` in `libraries/*/src/` or `support/test_harness/` won't fail preflight; CircuitPython RAM-mode just blows up at deploy time.  Likely shape: ruff TID252 (`flake8-tidy-imports`) scoped to `libraries/*/src` + `support/test_harness/src` via a `[tool.ruff.lint.per-file-ignores]` carve-out for tests + workbench (which can use either style).  Surfaced by `scripts/audit_gates.py` as a known gap.
 - [ ] **Investigate slow MicroPython RAM-mode functional test runs** — observed during 2026-04-19 live PyCharm testing that MicroPython RAM-mode functional tests took noticeably longer than expected. CircuitPython RAM-mode is fast in comparison. Suspects: per-file `mpremote mount` cost, cold-start interpreter overhead, batch-vs-per-test trade-off. Profile against the new batch-execute path and identify whether amortization can be improved.
 
 ## Done (recent)
