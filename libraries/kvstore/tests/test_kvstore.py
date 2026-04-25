@@ -70,9 +70,15 @@ def test_explicit_nvm_string_raises_runtime_error_on_cpython() -> None:
         KVStore(backend="nvm")
 
 
-def test_explicit_nvs_string_raises_notimplementederror_on_cpython() -> None:
-    """Backend stub for slice 3 — same shape as the NVM check above."""
-    with raises(NotImplementedError):
+def test_explicit_nvs_string_raises_runtime_error_on_cpython() -> None:
+    """``backend="nvs"`` without ``esp32`` raises a clear error.
+
+    Same pattern as the CP NVM check above: the resolver routes to
+    ``MpNvsBackend`` whose default-arg path tries ``import esp32``
+    and surfaces a ``RuntimeError`` with an injection hint when the
+    import fails (CPython, MP unix-port without the esp32 stub).
+    """
+    with raises(RuntimeError):
         KVStore(backend="nvs")
 
 

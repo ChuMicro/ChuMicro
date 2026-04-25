@@ -175,27 +175,40 @@ Why uint16 LEN: largest CP NVM is 8 KB, well under 65536.  Saves 2
 bytes vs uint32.  The library raises at construction if a future
 backend exposes >64 KB of NVM (no current platform does).
 
-### 6. MP NVS encoding: one `set_blob` per key, value is msgpack
+### 6. MP NVS encoding: single payload blob under a fixed key
 
 ```python
 import esp32
 nvs = esp32.NVS("chu_kv")
-for key, value in dict_.items():
-    nvs.set_blob(key, msgpack.packb(value))
+nvs.set_blob("payload", msgpack.packb(dict_))
 nvs.commit()
 ```
 
 `esp32.NVS` is already wear-leveled and atomic-on-commit, so the
-library does not add CRC framing.  Keys are the dict keys directly;
-values are msgpack-encoded blobs.  Read path reverses the loop with
-`nvs.get_blob`.
+library does not add CRC framing.  The whole encoded dict ships as
+one msgpack blob under the fixed NVS key `"payload"`.
 
 NVS namespace is fixed at `"chu_kv"`.  Co-existing apps using their
 own NVS namespaces are unaffected.
 
-Constraint inherited from the substrate: NVS keys must be ≤15 ASCII
-characters.  The library raises `ValueError` on construction with a
-clear message rather than silently truncating.
+**Why single-blob-not-per-key:** an earlier sketch had one
+`set_blob` per dict key, mirroring NVS's per-key wear leveling.
+That design needed key enumeration to rebuild the dict on load —
+and the MicroPython `esp32.NVS` wrapper does not expose ESP-IDF's
+`nvs_entry_find` iterator.  Maintaining a manifest blob that
+listed the live dict keys would have layered another small read +
+write cycle onto every commit for marginal wear-leveling gain
+(NVS already wear-levels at the partition level regardless of how
+many keys the namespace holds, and our expected write cadence is
+"a handful per boot").  The single-payload shape mirrors CP NVM,
+keeps the Backend abstraction clean, and lets `KVStore` own the
+msgpack codec uniformly.
+
+`get_blob` requires a pre-allocated buffer ≥ the stored value's
+size.  The library allocates `bytearray(self.capacity)` once at
+load time.  Looking up a missing key raises `OSError(2)` (ENOENT)
+on MP — caught by `load()` and reported as a blank substrate
+(`b""`).
 
 ### 7. MP LittleFS encoding: tmpfile + rename, single file per store
 
