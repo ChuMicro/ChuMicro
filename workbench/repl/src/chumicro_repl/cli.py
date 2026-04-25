@@ -28,6 +28,18 @@ def _device_from_args(args: argparse.Namespace) -> Device | str:
     explicitly.  The bare-string path is supported for the trivial
     case where the user has neither chumicro-deploy installed nor a
     devices.yml: ``chumicro-repl --address /dev/cu.usbmodem...``.
+
+    devices.yml resolution precedence (when ``--devices-file`` is
+    supplied):
+
+    1. ``--device <id>`` wins outright.
+    2. ``--runtime <circuitpython|micropython>`` picks
+       ``defaults.<runtime>`` from the file.  Only honored by the
+       built-in ``default`` loader; third-party loaders that don't
+       accept a ``runtime`` kwarg are called without it.
+    3. Neither flag — the loader's single-runtime fallback applies
+       (one runtime default in the file picks itself; both set
+       raises so the caller picks).
     """
     if args.devices_file is not None:
         from chumicro_deploy.config import discover_config_loaders  # noqa: PLC0415
@@ -39,9 +51,24 @@ def _device_from_args(args: argparse.Namespace) -> Device | str:
                 f"error: unknown --devices-format: {loader_name!r}.  "
                 f"Registered: {sorted(loaders.keys())!r}"
             )
-        return loaders[loader_name](
-            args.devices_file, device_id=args.device_id,
-        )
+        if args.device_id is not None and args.runtime is not None:
+            raise SystemExit(
+                "error: --device and --runtime are mutually exclusive"
+            )
+        loader = loaders[loader_name]
+        loader_kwargs: dict[str, object] = {"device_id": args.device_id}
+        if args.runtime is not None:
+            # Only the built-in 'default' loader accepts ``runtime``.
+            # Third-party loaders that don't accept the kwarg would
+            # raise TypeError on the call — so we gate the kwarg on
+            # the registered name.
+            if loader_name != "default":
+                raise SystemExit(
+                    f"error: --runtime only works with --devices-format "
+                    f"default; got {loader_name!r}"
+                )
+            loader_kwargs["runtime"] = args.runtime
+        return loader(args.devices_file, **loader_kwargs)
 
     if args.address is None:
         raise SystemExit(
@@ -93,7 +120,8 @@ def _add_device_args(parser: argparse.ArgumentParser) -> None:
         help=(
             "Path to a devices.yml.  When set, --transport / "
             "--address / --baudrate are filled from the entry "
-            "selected by --device (or the single runtime default)."
+            "selected by --device, --runtime, or the single "
+            "runtime default."
         ),
     )
     parser.add_argument(
@@ -101,6 +129,17 @@ def _add_device_args(parser: argparse.ArgumentParser) -> None:
         dest="device_id",
         default=None,
         help="Device id within --devices-file.",
+    )
+    parser.add_argument(
+        "--runtime",
+        choices=("circuitpython", "micropython"),
+        default=None,
+        help=(
+            "When --devices-file is set and --device is not, pick "
+            "defaults.<runtime> from the file.  Lets a workspace "
+            "with both runtime defaults configured open the REPL "
+            "without naming the device id."
+        ),
     )
     parser.add_argument(
         "--devices-format",

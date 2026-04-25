@@ -84,26 +84,43 @@ def load_devices_yml(
     path: Path | str,
     *,
     device_id: str | None = None,
+    runtime: str | None = None,
 ) -> Device:
     """Load one device from a ``devices.yml`` file.
 
     Args:
         path: Filesystem path to the YAML file.
-        device_id: Which entry to return.  When ``None``, uses the
-            ``defaults.micropython`` or ``defaults.circuitpython``
-            pick — if exactly one runtime has a default configured,
-            that one wins; otherwise raises so the caller picks
-            explicitly.
+        device_id: Which entry to return.  Wins over *runtime* and
+            the single-default fallback when supplied.
+        runtime: When *device_id* is ``None``, pick
+            ``defaults.<runtime>`` — accepts ``"circuitpython"`` or
+            ``"micropython"``.  Lets a caller that owns one runtime
+            (e.g. ``chumicro-repl`` opening one session) disambiguate
+            a ``defaults:`` block that has both runtimes set without
+            requiring the user to memorize the device id.
+        device_id and runtime are mutually exclusive: passing both
+            raises so the caller cannot accidentally override a
+            specific id with a runtime hint.
+        When both *device_id* and *runtime* are ``None``, the
+            single-default fallback applies — exactly one runtime
+            default in the file picks itself; otherwise raises.
 
     Returns:
         A :class:`Device` corresponding to the selected entry.
 
     Raises:
         FileNotFoundError: The YAML file does not exist.
-        ValueError: The file has no matching device, or the
-            ``device_id`` is not among the entries.
+        ValueError: The file has no matching device, the
+            ``device_id`` is not among the entries, or
+            ``runtime`` is not one of the supported names.
     """
     import yaml
+
+    if device_id is not None and runtime is not None:
+        raise ValueError(
+            "load_devices_yml: device_id and runtime are mutually "
+            "exclusive — pass one or neither, not both."
+        )
 
     yaml_path = Path(path)
     if not yaml_path.is_file():
@@ -133,6 +150,24 @@ def load_devices_yml(
                 f"Available: {available!r}"
             )
         chosen = entries_by_id[device_id]
+    elif runtime is not None:
+        if runtime not in ("circuitpython", "micropython"):
+            raise ValueError(
+                f"Unsupported runtime {runtime!r} — expected "
+                f"'circuitpython' or 'micropython'."
+            )
+        runtime_default = defaults.get(runtime)
+        if not runtime_default:
+            raise ValueError(
+                f"No defaults.{runtime} entry in {yaml_path!s}.  "
+                f"Pass device_id explicitly or set defaults.{runtime}."
+            )
+        if runtime_default not in entries_by_id:
+            raise ValueError(
+                f"defaults.{runtime}={runtime_default!r} not in devices "
+                f"list of {yaml_path!s}."
+            )
+        chosen = entries_by_id[runtime_default]
     else:
         candidates = [
             defaults.get("micropython"),
@@ -144,7 +179,7 @@ def load_devices_yml(
                 f"Multiple or no default devices in {yaml_path!s} "
                 f"(micropython={defaults.get('micropython')!r}, "
                 f"circuitpython={defaults.get('circuitpython')!r}).  "
-                f"Pass device_id explicitly."
+                f"Pass device_id or runtime explicitly."
             )
         fallback_id = picks[0]
         if fallback_id not in entries_by_id:

@@ -19,12 +19,26 @@ chumicro-repl --address /dev/cu.usbmodem14101
 # Interactive TUI by devices.yml entry (chumicro-deploy installed).
 chumicro-repl --devices-file devices.yml --device back-porch
 
+# Pick the workspace's circuitpython default without naming the id.
+chumicro-repl --devices-file devices.yml --runtime circuitpython
+
+# Single-runtime devices.yml — no flags needed beyond --devices-file.
+chumicro-repl --devices-file devices.yml
+
 # One-shot tail for 5 seconds, fail on traceback (default).
 chumicro-repl --address /dev/cu.usbmodem14101 --tail 5
 
 # Tail without failing on traceback (useful for diagnosing crash loops).
 chumicro-repl --address /dev/cu.usbmodem14101 --tail 30 --no-fail-on-traceback
 ```
+
+When `--devices-file` is supplied, `chumicro-repl` resolves the target in this order:
+
+1. **`--device <id>`** — wins outright.  Same semantics as `chumicro-deploy --device <id>`.
+2. **`--runtime <circuitpython|micropython>`** — picks `defaults.<runtime>` from the file.  Use this when your workspace has both runtime defaults configured and you want one of them without memorizing the id.
+3. **Neither flag** — the loader's single-runtime fallback applies.  When exactly one runtime default is set in the file, that wins; when both are set the loader raises and the CLI surfaces the error.
+
+The schema and loader are owned by `chumicro_deploy.config.default.load_devices_yml` — no parallel parser, same `defaults:` / `devices:` shape `chumicro-deploy` reads.
 
 The interactive TUI mirrors `mpremote repl`:
 

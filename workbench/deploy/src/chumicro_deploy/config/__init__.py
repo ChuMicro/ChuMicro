@@ -44,13 +44,25 @@ BUILTIN_LOADER_NAME = "default"
 ConfigLoader = Callable[..., "Device"]
 
 
-def _default_loader(path: Path | str, *, device_id: str | None = None) -> Device:
-    """Adapter wrapping the built-in ``devices.yml`` loader."""
+def _default_loader(
+    path: Path | str,
+    *,
+    device_id: str | None = None,
+    runtime: str | None = None,
+) -> Device:
+    """Adapter wrapping the built-in ``devices.yml`` loader.
+
+    Forwards both ``device_id`` and ``runtime`` to
+    :func:`chumicro_deploy.config.default.load_devices_yml`.  Third-
+    party loaders that don't accept ``runtime`` will continue to work
+    because callers gate the ``runtime`` kwarg on the registered
+    loader name (see ``chumicro_repl.cli._device_from_args``).
+    """
     # Late import so importing :mod:`chumicro_deploy.config` alone
     # does not pull in PyYAML.
     from .default import load_devices_yml
 
-    return load_devices_yml(path, device_id=device_id)
+    return load_devices_yml(path, device_id=device_id, runtime=runtime)
 
 
 def discover_config_loaders() -> dict[str, ConfigLoader]:

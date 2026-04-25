@@ -114,6 +114,54 @@ devices:
         device = load_devices_yml(yaml_path)
         assert device.deploy_mode == "flash"
 
+    def test_runtime_picks_circuitpython_default(self, tmp_path: Path) -> None:
+        """`runtime="circuitpython"` resolves to defaults.circuitpython."""
+        yaml_path = _write(tmp_path, _BOTH_DEFAULTS_YAML)
+        device = load_devices_yml(yaml_path, runtime="circuitpython")
+        assert device.transport == "circuitpython"
+        assert device.address == "/dev/b"
+
+    def test_runtime_picks_micropython_default(self, tmp_path: Path) -> None:
+        yaml_path = _write(tmp_path, _BOTH_DEFAULTS_YAML)
+        device = load_devices_yml(yaml_path, runtime="micropython")
+        assert device.transport == "micropython"
+        assert device.address == "/dev/a"
+
+    def test_runtime_with_unknown_name_raises(self, tmp_path: Path) -> None:
+        yaml_path = _write(tmp_path, _BOTH_DEFAULTS_YAML)
+        with pytest.raises(ValueError, match="Unsupported runtime"):
+            load_devices_yml(yaml_path, runtime="cpython")
+
+    def test_runtime_default_missing_in_file_raises(
+        self, tmp_path: Path,
+    ) -> None:
+        # _MP_ONLY_YAML has no defaults.circuitpython.
+        yaml_path = _write(tmp_path, _MP_ONLY_YAML)
+        with pytest.raises(ValueError, match="No defaults.circuitpython"):
+            load_devices_yml(yaml_path, runtime="circuitpython")
+
+    def test_runtime_default_points_at_missing_id_raises(
+        self, tmp_path: Path,
+    ) -> None:
+        content = """\
+defaults:
+  circuitpython: dangling-id
+devices:
+  - id: present
+    runtime: circuitpython
+    address: /dev/x
+"""
+        yaml_path = _write(tmp_path, content)
+        with pytest.raises(ValueError, match="not in devices list"):
+            load_devices_yml(yaml_path, runtime="circuitpython")
+
+    def test_runtime_and_device_id_together_raise(self, tmp_path: Path) -> None:
+        yaml_path = _write(tmp_path, _BOTH_DEFAULTS_YAML)
+        with pytest.raises(ValueError, match="mutually exclusive"):
+            load_devices_yml(
+                yaml_path, device_id="mp-one", runtime="circuitpython",
+            )
+
     def test_tolerates_extra_entry_keys(self, tmp_path: Path) -> None:
         content = """\
 defaults:
