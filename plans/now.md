@@ -6,9 +6,9 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** Phase 3b closed + config conventions pinned (ADR 0035 file structure, ADR 0036 `chumicro-config` library + templating convention). Next: Phase 3a (`chumicro-wifi`) consumes `chumicro-config` end-to-end (typed `from_dict` + ships its own `_templates/config.toml`).
-- **Last shipped:** `chumicro-config` extended with `templates.get_section_template()` + an end-to-end example + 4 on-device functional tests on Pi Pico W MP. ADR 0036 §5 codifies the per-library template-shipping convention so workspace tooling (Phase 4a) can assemble starter `config.toml` files when libraries are added to a thing.
-- **In flight:** Phase 3a Slice 0 — `chumicro-wifi` scaffold + `WifiConfig` + `_templates/config.toml`.
+- **Phase:** Phase 3b closed + config conventions pinned (ADR 0035 + 0036) + lazy-loading research published. Next: Phase 3a (`chumicro-wifi`) — first library that consumes both conventions (chumicro-config `from_dict` + Tier B PEP 562 lazy adapter pattern from the new investigation).
+- **Last shipped:** Lazy-loading investigation — surveyed every library's import shape, verified PEP 562 `module __getattr__` is supported on both MP + CP via `MICROPY_MODULE_GETATTR`, generalised the workbench-only PEP 562 pattern in `plans/patterns.md` to apply to device libraries with per-runtime adapters or non-trivial submodule graphs (Tier B). New-library scaffolder updated to use absolute imports + emits a Tier A / Tier B comment. Open question: boot-cost benchmark when wifi gives us a 4-adapter library to compare eager vs lazy on.
+- **In flight:** Phase 3a Slice 0 — `chumicro-wifi` scaffold + `WifiConfig` + `_templates/config.toml` + Tier B lazy-adapter pattern from day one.
 - **Blocked on:** —
 - **Last touched:** `libraries/kvstore/**`, `plans/decisions/0034-kvstore-api-and-backends.md`, `plans/{now,history,next-up}.md`. Four boards plugged in: Lolin S2 CP/MP, Pi Pico W CP/MP — exercises every kvstore backend across slices 2–5.
 

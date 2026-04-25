@@ -62,7 +62,9 @@ class TestScaffoldLibrary:
             tmp_path / "libraries" / "my-thing" / "src" / "chumicro_my_thing" / "__init__.py"
         ).read_text()
         assert "MyThing" in init_content
-        assert "from .core import MyThing" in init_content
+        # Absolute import — TID252 in scope of libraries/*/src per
+        # AGENTS.md non-negotiable.
+        assert "from chumicro_my_thing.core import MyThing" in init_content
 
     def test_existing_directory_fails(self, tmp_path: Path, monkeypatch, capsys):
         """Scaffolding fails if the library directory already exists."""

@@ -12,6 +12,20 @@ Questions that lead to structural tradeoffs should become decisions in
 
 ## Active
 
+### Boot-cost measurement benchmark for libraries
+
+The 2026-04-25 lazy-loading investigation
+(`plans/workstreams/lazy-loading-research.md`) recommends a Tier A /
+Tier B classification but lacks quantitative numbers — we have one
+data point (`chumicro-msgpack` pure-Python fallback ≈ 700 B heap on
+CP per its docstring) and no systematic measurement.  A small
+benchmark harness that imports each library on a target board and
+reports heap delta + wall-clock time per import would let us back
+the tiering with real numbers and catch regressions when a library
+inadvertently bloats boot.  Filed as an investigation rather than a
+hard task because it's not blocking — revisit when the wifi work
+(Phase 3a) gives us a 4-adapter library to compare eager vs lazy on.
+
 ### Remaining sub-questions from the workspace workstream
 
 Decision 0029 scopes the `chumicro-deploy` extraction plus a full project

@@ -358,12 +358,20 @@ command stays identical.  `MicropythonTransport._run_mpremote`
 implements this pattern; apply it to any future shell-out.  Commit
 `e4f669e`.
 
-## Lazy module-level imports for short-lived entrypoints (PEP 562)
+## Lazy module-level imports via PEP 562 `__getattr__` (cross-runtime)
 
-When a published package has slow-to-import dependencies (`pyserial`, `mpremote`, `urllib`) but exposes short-lived CLI subcommands (`--help`, `probe`, `resolve-firmware-url`), use module-level `__getattr__` so importing the top-level package doesn't pull the heavy deps until a name is actually accessed.
+**Cross-runtime by design.**  PEP 562's `module __getattr__` is
+supported on CPython, MicroPython (`MICROPY_MODULE_GETATTR` default-on
+at the `CORE_FEATURES` ROM level), and CircuitPython (same flag,
+same default).  Originally framed as a workbench-CLI optimization;
+generalised to device libraries after the 2026-04-25 lazy-loading
+investigation (`plans/workstreams/lazy-loading-research.md`).
+
+When a package has multiple submodules where users typically reach
+for a subset, defer submodule imports until first attribute access:
 
 ```python
-# In src/chumicro_<name>/__init__.py
+# In src/chumicro_<name>/__init__.py — minimum shape.
 def __getattr__(name: str) -> object:
     if name == "Deployer":
         from chumicro_deploy.deployer import Deployer
@@ -374,11 +382,72 @@ def __getattr__(name: str) -> object:
     raise AttributeError(f"module 'chumicro_deploy' has no attribute {name!r}")
 ```
 
-Existing names (e.g. `from chumicro_deploy import Deployer`) keep working — Python's attribute lookup falls through to `__getattr__` after the module's own globals are exhausted. The deferred imports run once on first access and the result is cached on the module's globals.
+For libraries with more than ~5 lazy attributes, prefer the
+**`_LAZY_ATTRS` dict + `__getattr__` table** shape used in
+`chumicro_deploy/__init__.py:94`:
 
-Applied to `chumicro_deploy/__init__.py` (commit `11952f0` review-sweep); `device.py` defers transport imports into `create_transport()` for the same reason. The CLI cold-start dropped meaningfully on `--help` and `probe` paths.
+```python
+_LAZY_ATTRS: dict[str, str] = {
+    "Deployer": "deployer",      # public name -> submodule name
+    "Device":   "device",
+    # ...
+}
 
-Related: `chumicro-deploy` review-sweep refactor.
+__all__ = [...]   # literal list so static type checkers see it
+assert sorted(__all__) == __all__, "__all__ must be alphabetized"
+assert set(__all__) == set(_LAZY_ATTRS), "__all__ must match _LAZY_ATTRS"
+
+
+def __getattr__(name: str) -> object:
+    module_name = _LAZY_ATTRS.get(name)
+    if module_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    module = importlib.import_module(f".{module_name}", __name__)
+    value = getattr(module, name)
+    globals()[name] = value     # cache so subsequent accesses are O(1)
+    return value
+
+
+def __dir__() -> list[str]:
+    return [*globals().keys(), *_LAZY_ATTRS.keys()]
+```
+
+A `TYPE_CHECKING`-guarded import block above the table preserves
+static-analysis support (pyright sees every name; runtime resolution
+still goes through the lazy hook).  The `__dir__` shadow keeps
+introspection tools (`dir()`, REPL completion) working.
+
+**When to use this pattern (Tier B libraries):**
+
+- Per-runtime adapters under `_adapters/` or `_backends/` (the kvstore
+  template) — adopt for any library that ships >1 adapter and selects
+  one at construction.
+- Optional features the user may never reach for.
+- ~5+ public attributes spread across submodules.
+
+**When eager imports are correct:** small-surface libraries (≤2
+modules, no per-runtime adapters), tightly-coupled submodules
+(`chumicro-timing` always uses both `heartbeat` and `ticks`), and
+hot-path code where lazy first-use overhead would show up as a tick
+spike.  See `plans/workstreams/lazy-loading-research.md` for the
+full Tier A vs Tier B classification.
+
+Existing names (e.g. `from chumicro_deploy import Deployer`) keep
+working — Python's attribute lookup falls through to `__getattr__`
+after the module's own globals are exhausted.  The deferred imports
+run once on first access; subsequent accesses are O(1) via the
+`globals()[name] = value` cache.
+
+Applied to `chumicro_deploy/__init__.py` and
+`chumicro_repl/__init__.py` (commits `11952f0` workbench review-
+sweep).  `chumicro-deploy`'s `device.py` defers transport imports
+into `create_transport()` for the same reason; `chumicro-kvstore`'s
+`_select_backend` does the equivalent for runtime adapter
+selection.
+
+Related: lazy-loading-research workstream, Decision 0010
+(constructor injection — same "defer the cost" philosophy at the
+class-instance scope).
 
 ## StrEnum as a backwards-compatible shim for stringly-typed args
 

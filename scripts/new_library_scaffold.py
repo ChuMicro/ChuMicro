@@ -131,11 +131,25 @@ def _scaffold_library(name: str) -> int:
         )
     )
 
-    # Package __init__.py — exports the starter class
+    # Package __init__.py — exports the starter class.
+    #
+    # Uses an absolute import (`from chumicro_<name>.core import ...`)
+    # because libraries/*/src/ is in scope of ruff TID252 (Decision 0035 / 0036
+    # context — CircuitPython RAM-mode `exec()`s library modules without a
+    # `__package__`, so relative imports break at deploy).  See AGENTS.md
+    # non-negotiables.
+    #
+    # Loading-shape note:  this scaffold uses eager imports (Tier A per
+    # `plans/workstreams/lazy-loading-research.md` — fine for small-surface
+    # libraries with no per-runtime adapters).  If this library grows past
+    # ~5 public attributes spread across submodules OR adds per-runtime
+    # adapters under `_backends/` / `_adapters/`, switch to the PEP 562
+    # `__getattr__` table pattern (see `plans/patterns.md` "Lazy module-
+    # level imports via PEP 562").
     (library_dir / "src" / import_name / "__init__.py").write_text(
         f'"""Public exports for the chumicro-{name} package."""\n'
         f"\n"
-        f"from .core import {class_name}\n"
+        f"from {import_name}.core import {class_name}\n"
         f"\n"
         f'__all__ = ["{class_name}"]\n'
     )
