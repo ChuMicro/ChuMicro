@@ -195,9 +195,13 @@ Folder layout was revised during implementation — packages ship from `workbenc
 - [x] Every CLI action has a documented programmatic equivalent (see `workbench/deploy/docs/api.md`).
 - [x] Zero references to `workspace.yml`, `things/`, or `library_sources:` in the deploy package source.
 
-### Phase 2: `chumicro-repl` (minimum-viable core)
+### Phase 2: `chumicro-repl` ✅ Complete (2026-04-25)
 
 This phase delivers only what `run.py deploy` and basic interactive use need.  Richer interactive and scripting features live in a sibling workstream (`plans/workstreams/repl-playground.md`) and can evolve independently once this minimum lands.
+
+**Closing summary:** Shipped `workbench/repl/` v0.0.0 across eight commits over two days (2026-04-24 minimum-viable core → 2026-04-25 close-out).  Beyond the minimum spec, the package also ships an auto-reconnect loop in `tail()` / `run_loop()` for transient device drops, a recovery / hand-holding layer (`InteractiveReplSession`, `ReplFailureKind`, `RecoveryPlan`, `classify_session_failure`, `recovery_plan_for`) mirroring the `chumicro-deploy` pattern, a typed `ReplSessionDisconnected(ReplSessionError).cause` for mid-session drops, and the matching `examples/demo_repl_robustness.py` interactive walkthrough.  Repl-side learnings (BaseException-scriptable `FakeSerialPort`, typed mid-deploy disconnect subclasses) ported back to `chumicro-deploy`.  175 host-side tests at 94 % coverage; 9 hardware-gated functional tests passing on Pi Pico W (CP) + Pi Pico W (MP); preflight green.  See [`plans/history.md` 2026-04-25](../history.md) for the full session log.
+
+**Open Phase-4-prerequisite follow-up:** `chumicro-deploy`'s `CircuitpythonTransport` carries its own raw-REPL framing parallel to `chumicro_repl.session.ReplSession`.  Consolidation deferred until `chumicro-workspace-runtime` lands and the session-vs-pipeline seam is concrete.  Tracked in this file's "Open follow-up" subsection below.
 
 - [x] New workbench package: `workbench/repl/` (Decision 0032 places host-only tools under `workbench/`; the earlier `libraries/repl/` line was an early sketch and is superseded by the library sequencing table at the top of this workstream).
 - [x] Core: pyserial wrapper with UTF-8 safe framing (`Utf8StreamDecoder` in `framing.py`), key bindings matching `mpremote` (Ctrl-C/D/E forwarded; Ctrl-X is local exit) in `tui.py`.
