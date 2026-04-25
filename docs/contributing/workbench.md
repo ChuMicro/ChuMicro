@@ -35,12 +35,19 @@ Full rationale in [Decision 0032](../../plans/decisions/0032-workbench-host-tool
 You install it the normal Python way:
 
 ```bash
-pip install chumicro-deploy
+pip install chumicro-deploy chumicro-repl
 ```
 
 No bundle registration, no `circup`, no `mpremote mip install`.  Workbench tools run on your laptop, not on your board.
 
 Each workbench tool ships a CLI entry point (`python -m chumicro_deploy …` or a console script) and a matching Python API — anything you can do from the CLI you can also do programmatically, which is what lets third-party project templates build on top.
+
+The shipped tools today:
+
+- **`chumicro-deploy`** ([`workbench/deploy/`](../../workbench/deploy/)) — push code onto a board, probe a connected device, flash firmware (UF2 or esptool), classify failures and walk the user through fixes.
+- **`chumicro-repl`** ([`workbench/repl/`](../../workbench/repl/)) — interactive serial REPL with traceback highlighting, an `mpremote`-compatible TUI, a `tail()` follow-mode for deploy orchestration, and a programmatic `ReplSession` for headless test fixtures.
+
+Both consume the same `devices.yml` schema (owned by `chumicro_deploy.config.default.load_devices_yml`) so a single workspace file points both tools at the same boards.
 
 ## If you're adding a workbench tool
 

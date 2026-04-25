@@ -356,13 +356,18 @@ When your PR merges to `main` with a VERSION bump, the library is **automaticall
 2. A maintainer verifies and runs the promotion workflow
 3. The library is published to the stable PyPI package, stable bundle repo, and stable docs
 
-## Adding a new library
+## Adding a new package
+
+ChuMicro publishes two kinds of package, in two folders:
+
+- **Device libraries** under `libraries/` — code that ends up on a microcontroller.  Must work on CircuitPython, MicroPython, and CPython unless platform-restricted via `pyproject.toml`.  Cross-runtime tests run on every PR.
+- **Workbench tools** under `workbench/` — host-only CPython tools (deploy, repl, future workspace runtime).  Ship to PyPI but never to the CircuitPython bundle, no cross-runtime tests.  See [`docs/contributing/workbench.md`](docs/contributing/workbench.md) and [Decision 0032](plans/decisions/0032-workbench-host-tools.md) for the boundary.
 
 > **Full guide:** See [Adding a New Library](docs/contributing/new-library.md) for the complete lifecycle from idea to published package.
 
 **Before you scaffold:** read [new-library.md § Before you start](docs/contributing/new-library.md#before-you-start) — a 2-minute scope check (issues, discussions, `plans/roadmap.md`, `plans/decisions/`) saves rewrites if your idea overlaps with planned work or settled design choices.
 
-The short version:
+The short version for a device library:
 
 ```bash
 python scripts/run.py new-library my-thing   # scaffolds everything
@@ -372,7 +377,7 @@ python scripts/run.py preflight              # must pass
 # Experimental release happens automatically on merge
 ```
 
-Libraries must work on all three runtimes (CircuitPython, MicroPython, CPython) unless platform-restricted via `pyproject.toml`. The tooling checks this automatically.
+Workbench tools have no scaffolder yet — copy the layout from an existing entry in `workbench/` (or follow [`docs/contributing/workbench.md`](docs/contributing/workbench.md)) and the same preflight + release lifecycle applies.
 
 ## Project rules (quick reference)
 

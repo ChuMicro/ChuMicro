@@ -14,9 +14,9 @@ The larger "side-portal" feature set (history, editor handoff, snippets, device 
 
 - `tail(device, seconds, fail_on_traceback=True)` — stream serial output for a window, highlight tracebacks as they arrive, return an `ExitCode`.  Used by deploy orchestration to follow a board after `deploy()` runs the entrypoint.
 - `ReplSession(device)` — context manager wrapping the raw REPL.  `exec(code)`, `call(function_name, *args, **kwargs)`, and `read_until(pattern, timeout)` for test fixtures and headless automation.
-- `interactive(device)` — the interactive TUI loop.  Forwards keystrokes to the board; Ctrl-X quits without rebooting the device.
+- `interactive(device)` — the interactive TUI loop.  Prints a connection banner with keybinding hints, sends a carriage return on connect so the friendly REPL reprints its `>>>` prompt, and forwards keystrokes to the board; Ctrl-X quits without rebooting the device.
 - `detect_patterns(text)` / `colorize(text)` — streaming pattern detector + ANSI renderer for CP `Traceback`, `safe mode`, `Hard fault`, MP `Traceback`, and MP `MPY: soft reboot` banners.
-- `chumicro-repl` CLI — `chumicro-repl --device <id> --devices-file devices.yml` for an interactive session; `--tail SECONDS` for one-shot follow-mode.
+- `chumicro-repl` CLI — `chumicro-repl --address /dev/cu.usbmodem...` for the bare path, or `chumicro-repl --devices-file devices.yml [--device <id> | --runtime <circuitpython|micropython>]` to read the same `devices.yml` schema `chumicro-deploy` owns.  `--tail SECONDS` toggles one-shot follow-mode.
 
 ## Install
 
