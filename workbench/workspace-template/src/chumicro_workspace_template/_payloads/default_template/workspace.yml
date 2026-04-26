@@ -1,0 +1,23 @@
+# workspace.yml — root configuration for this ChuMicro project.
+#
+# Three top-level blocks (all optional):
+#
+#   defaults:        Workspace-wide defaults that every thing inherits.
+#                    Per-thing config under things/<name>/config.toml
+#                    deep-merges over this; see Decision 0035 §5.
+#
+#   library_sources: Local paths or pinned overrides for shared libs.
+#                    Empty by default — fall through to libs/ + packages/.
+#                    See Decision 0029 §7.
+#
+#   environments:    Reserved for the env / use commands (planned).
+
+defaults:
+  # Project-scoped wifi defaults.  Per-thing config can override every
+  # field; password should be kept in secrets.yml and referenced as
+  # `password = "!secret <name>"` from each thing's config.toml.
+  wifi:
+    hostname_prefix: chu-
+
+# library_sources:
+#   chumicro-deploy: ../chumicro-deploy   # example: editable local clone

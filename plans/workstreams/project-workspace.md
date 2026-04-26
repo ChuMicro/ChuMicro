@@ -381,14 +381,16 @@ Out of scope (left as-is for this repo):
 - [x] Live-board functional tests — `workbench/workspace-runtime/functional_tests/test_boot_shim_hardware.py` exercises the full `code.py` → `workspace_runtime.boot()` → `things.<name>.app.run()` chain on Pi Pico W CP/MP (4/6 pass on RAM mode; switch tests skip on RAM and need flash mode to see persisted prior payloads).
 - [x] Docs / README pass — README + `docs/guide.md` rewritten to match the feature-complete API (CLI table, boot-shim layout, multi-thing flows, switch, programmatic API, config merge, firmware, devices.yml round-trip).
 
-### Phase 4b: `chumicro-workspace-template` package
+### Phase 4b: `chumicro-workspace-template` package ✅ (minimum-viable)
 
-- [ ] New workbench package: `workbench/workspace-template/`.
-- [ ] Scaffold command — `chumicro-workspace-template init <dir> [--from <repo-or-path>]`.  Applies the template files (default: the companion repo `chumicro-workspace-template` at a pinned version; custom templates supported via `--from`) into an empty or existing directory.
-- [ ] Update command — `chumicro-workspace-template update [<dir>]`.  Re-applies the newer template over an existing workspace, preserving user-owned files and merging conflicts in the same Copier-style three-zone model `devices.yml` uses (user-owned, hardware-once, tool-owned).
-- [ ] Schema consumption — import the `devices.yml` schema definition from `chumicro_deploy.config.default` and write the seed `devices.yml` against that schema; do NOT reimplement the shape (Decision 0032 rule 8).
-- [ ] Template discovery — support local paths, Git URLs, and a pinned-by-version default pointing at the companion repo.  Version pin is updatable via the same `update` command.
-- [ ] Tests — fixture-based: apply a frozen template snapshot into a `tmp_path`, assert the expanded tree matches; apply an updated snapshot over the first output, assert the merge preserves user-owned zones.
+- [x] New workbench package: `workbench/workspace-template/`.
+- [x] Scaffold command — `chumicro-workspace-template init <dir> [--from <local-path>] [--force]`.  Applies the template files (default: the built-in template shipped under `_payloads/default_template/`; custom templates supported via `--from <path>`) into an empty or existing directory.  Skips conflicts and reports them so re-running is idempotent unless `--force` is passed.
+- [x] Update command — `chumicro-workspace-template update [<dir>] [--from <local-path>]`.  Re-applies the **tool-owned** slice (`run.py`, `AGENTS.md`, `pyproject.toml`, `things/_template/`) over an existing workspace; **user-owned** (`workspace.yml`, `devices.yml`, `secrets.yml`, `libs/`, `packages/`, `things/<real>/`) and **init-only** (`.gitignore`, `secrets.yml.example`, `README.md`) files are skipped.  Three-zone model from Decision 0029 §9 generalized across the whole workspace tree.
+- [x] Built-in default template — ships inside the package's `_payloads/default_template/` (workspace.yml + devices.yml three-zone skeleton + secrets.yml.example + run.py shim + pyproject.toml pinning workspace-runtime + AGENTS.md + things/_template/{config.toml,app.py} + libs/.gitkeep + packages/.gitignore).  Phase 4c (companion repo) is deferred; the built-in template stands in until that lands.
+- [x] Tests — 49 host tests at the apply-and-assert level (manifest classification, dot-prefix renames, init-creates-target, init-skips-existing-without-force, init-force-overwrites, init-from-custom-source, update-refreshes-tool-owned-only, update-skips-user-owned, update-unchanged-when-in-sync, init→update full-cycle idempotent) + CLI smoke tests.
+- [x] End-to-end smoke verified: `chumicro-workspace-template init`, then `python run.py new my-thing`, then `python run.py things` lists the new thing, then `chumicro-workspace-template update` reports user files skipped + tool files unchanged.
+- [ ] Schema consumption from `chumicro_deploy.config.default` — deferred.  The default template ships a hand-written devices.yml skeleton; promoting that to programmatic generation against `chumicro_deploy.config.default.load_devices_yml`'s schema is a follow-on once the schema is exposed as a separate constant.
+- [ ] Git URL `--from <git-url>` — deferred.  Only local paths supported in the minimum-viable.
 
 Acceptance: `pip install chumicro-workspace-template && chumicro-workspace-template init my-house` produces a working workspace that `python run.py setup` + `python run.py deploy` can drive end-to-end.  Later, `chumicro-workspace-template update my-house` pulls template evolutions without clobbering user code.
 

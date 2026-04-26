@@ -1,0 +1,7 @@
+# Per-thing config — deep-merged over workspace.yml's `defaults:` block
+# (Decision 0035 §5).  Reference credentials from secrets.yml as
+# `password = "!secret <name>"` — they get resolved at deploy time.
+
+# [wifi]
+# ssid = "MyNetwork"
+# password = "!secret wifi_password"

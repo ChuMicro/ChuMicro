@@ -17,6 +17,7 @@
         "workbench/deploy/src",
         "workbench/repl/src",
         "workbench/workspace-runtime/src",
+        "workbench/workspace-template/src",
         "scripts"
     ]
 }

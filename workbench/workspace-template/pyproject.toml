@@ -1,0 +1,54 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "chumicro-workspace-template"
+dynamic = ["version"]
+description = "Scaffold + update ChuMicro project workspaces (Copier-style three-zone update model)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [
+    { name = "ChuMicro" },
+]
+dependencies = [
+    # The seed devices.yml schema lives in chumicro-deploy
+    # (Decision 0029 §8 + Decision 0032 rule 8 — single source of truth).
+    "chumicro-deploy",
+    # Pinned along with the runtime so a freshly-scaffolded workspace
+    # has a working, version-matched dispatcher out of the box.
+    "chumicro-workspace-runtime",
+]
+keywords = [
+    "circuitpython", "micropython", "microcontroller", "embedded",
+    "workspace", "template", "scaffolder",
+]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Software Development :: Embedded Systems",
+    "Topic :: System :: Hardware",
+    "Operating System :: OS Independent",
+]
+
+[project.scripts]
+chumicro-workspace-template = "chumicro_workspace_template.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/ChuMicro/ChuMicro"
+Source = "https://github.com/ChuMicro/ChuMicro/tree/main/workbench/workspace-template"
+Issues = "https://github.com/ChuMicro/ChuMicro/issues"
+
+[tool.hatch.version]
+path = "VERSION"
+pattern = "(?P<version>\\S+)"
+
+[tool.hatch.build.targets.sdist]
+include = ["src/", "VERSION", "README.md"]
+exclude = [".gitignore"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/chumicro_workspace_template"]
