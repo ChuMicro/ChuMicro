@@ -28,29 +28,41 @@ hard task because it's not blocking — revisit when the wifi work
 
 ### Remaining sub-questions from the workspace workstream
 
-Decision 0029 scopes the `chumicro-deploy` extraction plus a full project
+Decision 0029 scoped the `chumicro-deploy` extraction plus a full project
 workspace (template repo, UID-based identity, onboarding, import-graph
-deploy, REPL TUI).  Its top-level shape answers most of the originally
-open sub-questions — CLI is `run.py` in the template (no global install),
-there is a Python API surface exposed by `chumicro-workspace`,
-dependency resolution is import-graph-driven rather than bundle-manifest,
-a companion `chumicro-workspace-template` repo is a first-class deliverable,
-and `.mpy` compilation remains opt-in where `mpy-cross` is available.
+deploy, REPL TUI).  Decision 0038 (2026-04-26) revised the bootstrap
+shape: the workspace template ships as a Git repo (`ChuMicro/ChuMicro-Workspace-Template`)
+that users clone, with `init` / `update` folded into the renamed
+`chumicro-workspace` package — *not* a pip-installed scaffolder.  Most
+of the originally open sub-questions are answered: CLI is `run.py` in
+the template (no global install), there is a Python API surface
+exposed by `chumicro-workspace`, dependency resolution is import-graph-
+driven rather than bundle-manifest, and `.mpy` compilation remains
+opt-in where `mpy-cross` is available.
 
-Sub-questions that remain open and worth revisiting as the workstream
-executes:
+Sub-questions resolved during Phase 6 / 7 execution (2026-04-25 / 26):
 
-- Sequencing across the five libraries — does `chumicro-mqtt` refactor
-  need to land before the first full end-to-end "sensor" template, or
-  can an MQTT-less headless thing be the first proving ground?
-- Conditional-import edge cases for import-graph deploy on heavily
-  platform-gated modules — is AST parsing sufficient or is runtime
-  trace-collection on CPython sim worth adding?
+- ~~Sequencing across the five libraries — does `chumicro-mqtt` refactor
+  need to land before the first full end-to-end "sensor" template?~~
+  **Answered:** yes; `chumicro-mqtt` shipped as Phase 6 (commit
+  `409f8bf`), then Phase 7's sensor thing depends on it.
+- ~~Conditional-import edge cases for import-graph deploy on heavily
+  platform-gated modules — is AST parsing sufficient?~~  **Mostly
+  answered:** AST parsing IS sufficient for the static `from foo import
+  bar` shape once `_imports_from_file` probes the alias as a candidate
+  submodule (commit `157a865`).  Truly-dynamic dispatch
+  (`importlib.import_module(<runtime-string>)`) is still AST-invisible,
+  but no current chumicro library uses that shape; defer until one does.
+
+Sub-questions still open:
+
 - `devices.yml` round-trip contract on unusual user edits (anchors,
   merge keys, multi-doc) — what does the write-safety contract promise
   versus what the underlying YAML library actually preserves?
 
-Related: Decision 0028, Decision 0029, `plans/workstreams/project-workspace.md`.
+Related: Decision 0028, Decision 0029, Decision 0038,
+`plans/workstreams/project-workspace.md`,
+`plans/workstreams/phase-7-integration.md`.
 
 
 ### Is ESP32 NVS worth a dedicated backend?
