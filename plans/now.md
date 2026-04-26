@@ -6,34 +6,25 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** Phase 7 end-to-end on Pi Pico W MP — Layer-1 / Layer-2 / **Layer-3 all green** + **TLS+MQTT with `CERT_REQUIRED` verified.**  Plain TCP and TLS both work end-to-end against a local broker; 3 QoS-1 PUBLISHes with PUBACKs across a TLS-encrypted MQTT round-trip with real CA verification (not blind trust).
-- **Last shipped:** `chumicro-sockets` 0.1.3 — `ssl_context_with_ca` now converts PEM input to DER before `load_verify_locations`.  Pi Pico W RP2's mbedTLS is built without `MBEDTLS_PEM_PARSE_C` so PEM is rejected; DER is the lowest-common-denominator that works everywhere.  Adapter signature unified across CP / CPython / MP to accept PEM as `str` or `bytes`.
+- **Phase:** **idle — Phase 7 closed end-to-end** on Pi Pico W RP2 (Layer-1/2/3 green; TLS+MQTT with `CERT_REQUIRED` round-trip verified live).  Pick the next workstream phase or queued item from `plans/next-up.md`.  Phase 8 (application-level OTA via `chumicro-update`) is the next workstream phase but parked until Phase 7 has soak time in the field.
+- **Last shipped:** `plans/workstreams/phase-7-integration.md` reorg + `plans/next-up.md` Phase 7 done-entry — accumulated Resolved-but-still-Open log entries moved to a clean Resolved section, Forward-looking entries broken out separately, and the workstream rolled into the Done list.  No code change.
 - **In flight:** —
 - **Blocked on:** —
-- **Last touched (this session, post-compact):** `libraries/sockets/src/chumicro_sockets/_adapters/mp.py` (`_pem_to_der` helper + PEM→DER in `ssl_context_with_ca`), `libraries/sockets/src/chumicro_sockets/_adapters/{cp,cpython}.py` (accept PEM `str` or `bytes` uniformly), `libraries/sockets/tests/test_mp_adapter.py` (3 new `TestSslContextWithCa` cases), `libraries/sockets/VERSION` (0.1.3), `plans/workstreams/phase-7-integration.md` (CA-verification resolved entry), `plans/learnings.md` (MP rp2 mbedTLS PEM-parse-disabled finding with cross-board table).
+- **Last touched:** `plans/workstreams/phase-7-integration.md` (full restructure: Open / Forward-looking / Resolved / Deferred sections, all five resolved-this-week entries lifted to Resolved with commit refs), `plans/next-up.md` (Phase 7 → Done; Phase 8 the only remaining project-workspace phase; "Now" line refreshed).
 
 ---
 
-## Workstream summaries (this session)
+## Phase 7 closeout (this session)
 
-### Phase 7 — first end-to-end sensor thing
+The first end-to-end sensor thing — wifi → sockets → mqtt → kvstore → workspace — is shipping on a Pi Pico W RP2 with TLS-encrypted MQTT against a verified CA.  Five integration concerns surfaced and resolved during the workstream:
 
-* Layer-1 (`test_sensor_thing_imports_resolve_on_cpython`) and Layer-2 (`test_sensor_thing_reaches_boot_phase_marker_on_{micropython,circuitpython}`) green.
-* `chumicro-mqtt` 0.1.2 grew a socket-factory + self-heal hook (`_attempt_self_heal`) so a thing's app can keep the MQTT client across wifi drops without rebuilding the protocol state machine itself.
-* Layer-3 (`test_sensor_thing_publishes_to_live_broker`) deploys cleanly — verified the per-runtime adapter files (`chumicro_sockets/_adapters/{cp,mp}.py`, `chumicro_wifi/_adapters/*`, `chumicro_kvstore/_backends/*`) reach the device after adding `extra_modules=_lazy_runtime_adapter_modules()` at the Layer-3 call site.  Broker round-trip itself doesn't yet observe published messages — likely host route/firewall.
-* Gap captured in [`plans/workstreams/phase-7-integration.md`](workstreams/phase-7-integration.md): chumicro-deploy's import-graph walker should honor `__chumicro_runtimes__` markers (Decision 0037) and auto-include matching files for the target runtime; that would replace the ad-hoc `extra_modules` workaround.
+* **Thing-name validation** — `chumicro-workspace new <name>` refuses non-identifier / leading-underscore / keyword names up-front (commit `4841190`).
+* **Import-graph submodule probing** — `ImportGraphSource` now probes `{module}.{alias_name}` for every `from foo import bar` so runtime-gated `from chumicro_sockets._adapters import mp` ships the named adapter (commit `157a865`).
+* **Wifi-drop self-heal** — `MQTTClient` gains a `socket_factory` constructor arg + `_attempt_self_heal` so the client rebuilds its socket after a wifi drop without per-thing recovery boilerplate (commit `3f60ef4`, used by the example sensor thing).
+* **MP socket default-blocking enforcement** — `MQTTClient` calls `setblocking(False)` on every socket it acquires; closes the Layer-3 hang on Pi Pico W (commit `1239378`).
+* **TLS-with-CA-verification on MP rp2** — `_MpSocketWrapper.recv_into` handles the TLS-recv-returns-None contract (commit `67fb4e8`); `ssl_context_with_ca` converts PEM input to DER so `load_verify_locations` works on rp2 builds without `MBEDTLS_PEM_PARSE_C` (commit `94561f7`).
 
-### Workspace UX — `new` thing-name validation
-
-* `_validate_thing_name` rejects empty / non-identifier / keyword / leading-underscore names with a clear message before any filesystem mutation.  Closes the "I created `things/foo-bar/`, deploys fail with `ImportError`" footgun reported during Phase 7 Layer-3 debugging.
-
-### chumicro-deploy import-graph walker — submodule probing
-
-* `ImportGraphSource._imports_from_file` now also probes `{module}.{alias_name}` for every `from foo.bar import baz`.  Closes the gap where `from chumicro_sockets._adapters import mp` shipped only `_adapters/__init__.py`.  `_lazy_runtime_adapter_modules()` workaround retired from Phase 7 functional tests; `__chumicro_runtimes__`-marker scan idea parked until a library actually does dynamic `importlib` dispatch.
-
-### Doc audit — drop internal phasing jargon
-
-* Single sweep of `Slice X` / `Phase 4b/4c` / `future workspace-template` references that leaked from session notes into public docstrings + CLI help + a couple of READMEs.  Now describes what's actually shipped instead of historical slice numbers.
+Two open follow-ons, two forward-looking items, two deferred items captured in [`plans/workstreams/phase-7-integration.md`](workstreams/phase-7-integration.md).  Cross-board lessons (MP rp2 mbedTLS PEM-parse-disabled, TLS recv-returns-None contract, setblocking-on-MP defaults) lifted to [`plans/learnings.md`](learnings.md) so the next library author doesn't re-walk the investigations.
 
 ---
 
