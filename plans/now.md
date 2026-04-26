@@ -7,10 +7,10 @@ This is the front door. Everything else is deeper read.
 ---
 
 - **Phase:** Phase 7 (first end-to-end sensor thing) mostly green: Layer-1 import resolution + Layer-2 fail-fast wifi gates land cleanly on Pi Pico W MP/CP.  Layer-3 broker round-trip blocks on a network-topology issue (device → host LAN IP) that needs physical debugging.
-- **Last shipped:** `ImportGraphSource` now resolves named-from-import submodules (`from chumicro_sockets._adapters import mp` ships `mp.py`); the `_lazy_runtime_adapter_modules()` workaround retired from the Phase 7 functional tests.
+- **Last shipped:** Doc audit — single sweep dropping stale "Slice X" / "Phase 4b/4c" / "future workspace-template" jargon from chumicro-workspace + chumicro-deploy docstrings, CLI help, and one-liner library README claims.  No behavior change.
 - **In flight:** —
 - **Blocked on:** Phase 7 Layer-3 broker round-trip — deploy succeeds, files reach device (verified via `mpremote fs ls`), but `mosquitto_sub` sees zero messages.  Suspect host LAN-route / firewall.  Needs physical access to dig in.
-- **Last touched:** `workbench/deploy/src/chumicro_deploy/sources.py` (`_imports_from_file` probes `{module}.{alias_name}` candidates from `ImportFrom` nodes), `workbench/deploy/tests/test_sources.py` (3 new submodule-probing cases), `workbench/workspace/functional_tests/test_sensor_thing_hardware.py` (drop the workaround), `plans/workstreams/phase-7-integration.md` (mark gap resolved).
+- **Last touched (this session, post-compact):** `workbench/workspace/src/chumicro_workspace/cli.py` (thing-name validation + Slice/Phase doc cleanup), `workbench/deploy/src/chumicro_deploy/sources.py` (named-from-import submodule resolution), `workbench/workspace/functional_tests/test_sensor_thing_hardware.py` (workaround removed), and a clutch of docstring rewrites in `__init__.py` / `boot_shim.py` / `workspace.py` / `result.py` / `firmware.py` / `recovery.py` / two READMEs.
 
 ---
 
@@ -26,6 +26,14 @@ This is the front door. Everything else is deeper read.
 ### Workspace UX — `new` thing-name validation
 
 * `_validate_thing_name` rejects empty / non-identifier / keyword / leading-underscore names with a clear message before any filesystem mutation.  Closes the "I created `things/foo-bar/`, deploys fail with `ImportError`" footgun reported during Phase 7 Layer-3 debugging.
+
+### chumicro-deploy import-graph walker — submodule probing
+
+* `ImportGraphSource._imports_from_file` now also probes `{module}.{alias_name}` for every `from foo.bar import baz`.  Closes the gap where `from chumicro_sockets._adapters import mp` shipped only `_adapters/__init__.py`.  `_lazy_runtime_adapter_modules()` workaround retired from Phase 7 functional tests; `__chumicro_runtimes__`-marker scan idea parked until a library actually does dynamic `importlib` dispatch.
+
+### Doc audit — drop internal phasing jargon
+
+* Single sweep of `Slice X` / `Phase 4b/4c` / `future workspace-template` references that leaked from session notes into public docstrings + CLI help + a couple of READMEs.  Now describes what's actually shipped instead of historical slice numbers.
 
 ---
 
