@@ -583,6 +583,110 @@ def _seed_two_things(workspace_root: Path) -> tuple[Path, Path]:
     return weather, heater
 
 
+class TestDeploySingleThingDefault:
+    """`deploy` with no positional defaults to the lone thing.
+
+    Step 2 of the beginner-onramp workstream — covers the "I only
+    have one app" beginner case so single-board users don't have to
+    type the thing name.  Multiple-thing workspaces still require
+    an explicit positional.
+    """
+
+    def test_zero_things_errors_with_help_text(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        # things/ doesn't exist yet — list_things() returns empty.
+        exit_code = cli.main(["deploy", "--workspace-dir", str(root)])
+        assert exit_code == 2
+        captured = capsys.readouterr()
+        assert "no things to deploy" in captured.err
+        assert "new <name>" in captured.err
+
+    def test_single_thing_deploys_implicitly(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        _seed_thing(root)
+
+        transport = FakeTransport(execute_output="")
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+
+        exit_code = cli.main(["deploy", "--workspace-dir", str(root)])
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "defaulting to back-porch" in captured.out
+
+        # Same shipping behaviour as the explicit positional path.
+        deploy_calls = [
+            call for call in transport.calls if call[0] == "deploy_files"
+        ]
+        assert len(deploy_calls) == 1
+
+    def test_multiple_things_requires_explicit_positional(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        _seed_two_things(root)
+        exit_code = cli.main(["deploy", "--workspace-dir", str(root)])
+        assert exit_code == 2
+        captured = capsys.readouterr()
+        assert "multiple things" in captured.err
+        # Both thing names should appear in the help text.
+        assert "weather" in captured.err
+        assert "heater" in captured.err
+
+    def test_template_directory_does_not_count_as_a_thing(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """A workspace with only ``things/_template/`` deploys nothing.
+
+        ``list_things()`` filters underscore-prefixed names so the
+        starter template's ``_template/`` doesn't accidentally satisfy
+        "exactly one thing".
+        """
+        root = _seed_workspace(tmp_path)
+        template_dir = root / "things" / "_template"
+        template_dir.mkdir(parents=True)
+        (template_dir / "app.py").write_text("def run(): pass\n")
+
+        exit_code = cli.main(["deploy", "--workspace-dir", str(root)])
+        assert exit_code == 2
+        captured = capsys.readouterr()
+        assert "no things to deploy" in captured.err
+
+    def test_explicit_positional_still_works_alongside_default(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Default kicks in only when names is empty — explicit always wins."""
+        root = _seed_workspace(tmp_path)
+        _seed_thing(root)
+
+        transport = FakeTransport(execute_output="")
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root), "back-porch",
+        ])
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        # Explicit positional → no "defaulting to ..." line.
+        assert "defaulting to" not in captured.out
+
+
 class TestDeployMultiThing:
     def test_two_things_with_boot_shim_ships_both(
         self,

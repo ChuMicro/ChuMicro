@@ -145,6 +145,7 @@ Reasonable to do steps 1+2 immediately as a small, self-contained slice.  Step 3
 ## Status log
 
 - **2026-04-26** Step 1 shipped — Decision 0039 (firmware floor + warn-not-block policy), `chumicro_workspace.firmware_support` module (constants, `FirmwareSupportStatus` enum, `check_firmware_supported`, `explain`), `_cmd_add_device` wiring, `firmware_version` now persisted to `devices.yml` (probed-always slot was registered but unused before).  Workspace coverage 96 %.
+- **2026-04-26** Step 2 shipped — `_cmd_deploy` defaults to the lone thing in the workspace when no positional is given.  Zero things → exit 2 with "create one with `new <name>` first".  Multiple things → exit 2 with the list.  Underscore-prefixed dirs (e.g. `things/_template/`) are filtered out by `WorkspaceLayout.list_things()`, so a fresh template-only workspace correctly reports zero things.  `nargs="+"` → `nargs="*"`.  Five new tests under `TestDeploySingleThingDefault`.  Workspace coverage 96 %.
 
 ## Cross-references
 

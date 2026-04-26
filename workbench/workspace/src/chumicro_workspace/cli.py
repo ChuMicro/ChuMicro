@@ -420,9 +420,32 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
     ``--boot-shim`` ships under ``/lib/things/<name>/``; with multiple
     positional names + ``--boot-shim`` the things land side-by-side
     and ``switch`` can re-point ``/active.py`` without re-flashing.
+
+    When invoked with no positional names and the workspace contains
+    exactly one thing, that thing is deployed by default — covers the
+    "I only have one app" beginner case (Decision 0029).  Zero things
+    or multiple things both require an explicit positional.
     """
     workspace = _resolve_workspace(args)
     names: list[str] = list(args.names)
+    if not names:
+        candidates = workspace.list_things()
+        if not candidates:
+            print(
+                "deploy: no things to deploy.  Create one with "
+                "`new <name>` first.",
+                file=sys.stderr,
+            )
+            return 2
+        if len(candidates) > 1:
+            print(
+                "deploy: multiple things in workspace; specify which "
+                f"to deploy ({', '.join(candidates)}).",
+                file=sys.stderr,
+            )
+            return 2
+        names = [candidates[0]]
+        print(f"deploy: defaulting to {names[0]} (only thing in workspace).")
     if args.import_graph and args.boot_shim:
         print(
             "deploy: --import-graph and --boot-shim are mutually exclusive.",
@@ -978,12 +1001,13 @@ def build_parser() -> argparse.ArgumentParser:
     _add_device_selector(deploy_parser)
     deploy_parser.add_argument(
         "names",
-        nargs="+",
+        nargs="*",
         metavar="name",
         help=(
-            "Name(s) of things under things/ to deploy.  Multiple names "
-            "require --boot-shim (the layout that puts each thing under "
-            "/lib/things/<name>/)."
+            "Name(s) of things under things/ to deploy.  Optional when "
+            "the workspace contains exactly one thing — that thing is "
+            "deployed by default.  Multiple names require --boot-shim "
+            "(the layout that puts each thing under /lib/things/<name>/)."
         ),
     )
     deploy_parser.add_argument(

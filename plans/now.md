@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **beginner-onramp Step 1** complete — Decision 0039 firmware-version floor codified + wired into `add-device` warn-not-block.  Step 2 (single-thing deploy default) is the next small slice; remaining steps are the `bootstrap` wizard, `demo` command, and the new `chumicro-requests` / `chumicro-http-server` libraries.  See `plans/workstreams/beginner-onramp.md`.
-- **Last shipped:** Decision 0039 + `chumicro_workspace.firmware_support` + `_cmd_add_device` wiring.  Floors: MP ≥ 1.27.0, CP ≥ 10.1.0.  Warn-not-block per the decision.  `firmware_version` now persisted to `devices.yml` (the probed-always slot was registered in `PROBED_ALWAYS_FIELDS` but never written before).
-- **In flight:** beginner-onramp workstream Step 2+ — sequence in `plans/workstreams/beginner-onramp.md`.
+- **Phase:** **beginner-onramp** Steps 1 + 2 shipped 2026-04-26.  Remaining: Step 3 (`add-device --from-port` / `discover --register`), Step 4 (`bootstrap` wizard), Step 5 (`demo` command), Steps 6-7 (`chumicro-requests` + `chumicro-http-server` libraries), Step 8 (examples folder organization).  See `plans/workstreams/beginner-onramp.md`.
+- **Last shipped:** Step 2 — `_cmd_deploy` defaults to the lone thing when no positional is given (covers the "I only have one app" beginner case).  Zero things and multi-thing workspaces both still require an explicit name, with a useful error.  `nargs="+"` → `nargs="*"`; underscore-prefixed dirs (`things/_template/`) correctly excluded.
+- **In flight:** beginner-onramp workstream Step 3+ — sequence in `plans/workstreams/beginner-onramp.md`.
 - **Blocked on:** —
-- **Last touched:** `plans/decisions/0039-firmware-version-floor.md`, `plans/workstreams/beginner-onramp.md`, `plans/next-up.md`, `workbench/workspace/src/chumicro_workspace/{firmware_support.py,devices_yaml.py,cli.py}`, `workbench/workspace/tests/{test_firmware_support.py,test_devices_yaml.py,test_cli.py}`.
+- **Last touched:** `workbench/workspace/src/chumicro_workspace/cli.py` (`_cmd_deploy` default-to-lone-thing path; deploy parser nargs change), `workbench/workspace/tests/test_cli.py` (new `TestDeploySingleThingDefault` class — 5 cases), `plans/workstreams/beginner-onramp.md` Step 2 status log entry, `plans/next-up.md`.
 
 ---
 
