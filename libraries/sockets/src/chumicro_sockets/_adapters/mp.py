@@ -32,13 +32,15 @@ def _no_fileno():
 
 
 def _no_op(*_args, **_kwargs):
-    """Stand-in for missing ``setblocking`` / ``settimeout`` on SSLSocket.
+    """Stand-in for ``setblocking`` / ``settimeout`` / ``fileno`` on
+    sockets that don't expose them.
 
-    Some MP TLS implementations (live-board: Lolin S2 ESP32) wrap
-    the underlying socket and drop these methods.  The TLS layer's
-    own blocking mode is what's actually consulted on send/recv, so
-    the absence is benign — caller's setblocking(False) / settimeout
-    request is a no-op rather than a hard error.
+    Verified live on MP 1.28.0 (Pi Pico W RP2 + Lolin S2 ESP32-S2):
+    both plain ``socket`` and mbedTLS ``SSLSocket`` *do* expose
+    ``setblocking`` so the no-op fallback is mostly defensive for
+    older firmwares / non-mbedTLS ports.  ``settimeout`` is genuinely
+    absent on SSLSocket on those boards (the call surface stops at
+    ``setblocking``); ``fileno`` is absent on RP2's plain socket.
     """
     return None
 
@@ -62,14 +64,12 @@ class _MpSocketWrapper:
         # socket-shaped object exposes them.
         self.send = sock.send
         self.close = sock.close
-        # Soft-forward setblocking / settimeout / fileno: MP's
-        # SSLSocket wrapper drops some of them on certain ports
-        # (live-board run on Lolin S2 ESP32 saw
-        # ``AttributeError("'SSLSocket' object has no attribute 'settimeout'")``;
-        # Pi Pico W RP2 has no ``fileno``).  Fall back to no-op /
-        # ``-1`` stubs so downstream code doesn't trip at
-        # construction time — would-block semantics still hold via
-        # the underlying TLS layer's internal blocking mode.
+        # Soft-forward setblocking / settimeout / fileno.  Live-board
+        # findings on MP 1.28.0 (Pi Pico W RP2, Lolin S2 ESP32-S2):
+        # SSLSocket exposes ``setblocking`` but not ``settimeout``;
+        # plain socket on RP2 has no ``fileno``.  Fall back to no-op
+        # / ``-1`` stubs so downstream code doesn't trip at
+        # construction time on the cases where a method is absent.
         self.setblocking = getattr(sock, "setblocking", _no_op)
         self.settimeout = getattr(sock, "settimeout", _no_op)
         forwarded_fileno = getattr(sock, "fileno", None)
@@ -81,9 +81,26 @@ class _MpSocketWrapper:
         ``recv(nbytes)`` returns up to *nbytes* bytes; we copy the
         result into *buffer* and return the count.  Empty-bytes
         return on a clean peer close — same contract as stdlib.
+
+        MP-specific contract divergence (verified live on Pi Pico W
+        RP2 + Lolin S2 ESP32-S2 with MP 1.28.0):
+
+        * Plain TCP non-blocking ``recv`` with no data → raises
+          ``OSError(11)`` (EAGAIN).
+        * mbedTLS ``SSLSocket`` non-blocking ``recv`` with no data
+          → returns ``None`` (mbedTLS ``WANT_READ`` /``WANT_WRITE``
+          maps to ``MP_EWOULDBLOCK`` internally, but the Python-level
+          surface for SSLSocket returns ``None`` rather than raising).
+
+        Treat ``None`` as 0 bytes — same effect as "no data this
+        tick" for callers that expect ``recv_into`` to return a
+        count.  The chumicro-mqtt RX path already breaks on
+        ``got == 0``, so this maps cleanly into its tick model.
         """
         size = nbytes if nbytes > 0 else len(buffer)
         data = self._sock.recv(size)
+        if data is None:
+            return 0  # MP TLS non-blocking "no data this tick".
         copied = len(data)
         if copied:
             buffer[:copied] = data
@@ -118,14 +135,14 @@ def connect_tls(host, port, *, context=None):  # pragma: no cover - device only
     function so it works on both shapes.
 
     Non-blocking note: callers that need a non-blocking TLS socket
-    (e.g. ``chumicro-mqtt``) typically call ``setblocking(False)``
-    on the returned wrapper.  Some MP SSLSocket implementations
-    (live-board: Lolin S2 ESP32) drop the method post-wrap and the
-    request silently no-ops — those configurations stay blocking.
-    Setting non-blocking on the underlying socket *before*
-    ``wrap_socket`` would break the handshake on most ports, so we
-    don't do it here.  Phase 7 sensor uses plain TCP; the live-board
-    TLS-non-blocking gap is documented in the Phase 7 integration log.
+    (e.g. ``chumicro-mqtt``) call ``setblocking(False)`` on the
+    returned wrapper *after* the synchronous handshake completes
+    inside ``wrap_socket``.  Verified live on MP 1.28.0: both the
+    Pi Pico W RP2 and Lolin S2 ESP32-S2 mbedTLS SSLSocket honor
+    ``setblocking``.  The wrapper's ``recv_into`` polyfill handles
+    the MP-TLS-specific contract divergence where non-blocking
+    ``recv`` returns ``None`` (rather than raising EAGAIN like
+    plain TCP); see :class:`_MpSocketWrapper.recv_into`.
     """
     import socket  # noqa: PLC0415 — MP-only import; staged-but-not-imported on CP
     import ssl  # noqa: PLC0415 — MP-only import

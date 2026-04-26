@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** Phase 7 end-to-end on Pi Pico W MP — Layer-1 / Layer-2 / **Layer-3 all green.**  Layer-3 broker round-trip resolved 2026-04-26: root cause was MP stdlib sockets defaulting to *blocking* mode.  Verified live on a Pi Pico W MP: 4+ heartbeat publishes in 8 s, `{"boot": 21, "celsius": 21.30, "n": 0}` etc.
-- **Last shipped:** `chumicro-mqtt` 0.1.3 — `MQTTClient` now enforces `setblocking(False)` on every socket it acquires (constructor + factory paths).  Phase 7 Layer-3 unblocked.
+- **Phase:** Phase 7 end-to-end on Pi Pico W MP — Layer-1 / Layer-2 / **Layer-3 all green** + **TLS+MQTT verified.**  Plain TCP and TLS both work end-to-end against a local broker; 3 QoS-1 PUBLISHes with PUBACKs across a TLS-encrypted MQTT round-trip.
+- **Last shipped:** `chumicro-sockets` 0.1.2 — `_MpSocketWrapper.recv_into` polyfill now treats MP TLS recv-returns-None as "no data this tick" (returns 0).  Closes the contract divergence between plain TCP (raises `OSError(11)`) and mbedTLS `SSLSocket` (returns `None`) on no-data in non-blocking mode.
 - **In flight:** —
 - **Blocked on:** —
-- **Last touched (this session, post-compact):** `libraries/mqtt/src/chumicro_mqtt/client.py` (`_force_non_blocking` helper, called from `__init__` + `_attempt_self_heal`), `libraries/mqtt/tests/test_client.py` (2 new `TestSocketBlockingMode` cases), `libraries/mqtt/VERSION` (0.1.2 → 0.1.3), `libraries/sockets/src/chumicro_sockets/_adapters/mp.py` (clarifying docstring on the TLS-non-blocking gap), `plans/workstreams/phase-7-integration.md` (new resolved entry), `plans/learnings.md` (MP-socket-blocking-by-default + TLS-non-blocking gap).
+- **Last touched (this session, post-compact):** `libraries/mqtt/src/chumicro_mqtt/client.py` (`_force_non_blocking` enforcement), `libraries/mqtt/tests/test_client.py` (`TestSocketBlockingMode`), `libraries/mqtt/VERSION` (0.1.3), `libraries/sockets/src/chumicro_sockets/_adapters/mp.py` (`recv_into` None-handling + accurate docstring after live verification), `libraries/sockets/VERSION` (0.1.2), `plans/workstreams/phase-7-integration.md` (TLS-on-MP resolved entry), `plans/learnings.md` (MP-socket blocking + TLS-recv-None contract).
 
 ---
 

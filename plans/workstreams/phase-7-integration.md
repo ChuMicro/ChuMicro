@@ -154,7 +154,15 @@ When an integration issue is resolved by changing a library API, the resolution 
 
 **Fix (commit landing this entry):** make `MQTTClient` enforce ``setblocking(False)`` on every socket it acquires — both the constructor's `socket=` arg and the `socket_factory()` return value (used during self-heal).  Phase 7 Layer-3 went from 0 messages in 60 s to 4+ messages in 8 s on a Pi Pico W MP, identical sensor template, no other changes.
 
-**Forward-looking:** TLS sockets on some MP ports (Lolin S2 ESP32 at minimum) wrap the underlying TCP socket and *drop* `setblocking` post-wrap; calling `setblocking(False)` on the wrapper silently no-ops, leaving the TLS layer in blocking mode.  Setting non-blocking on the *underlying* TCP socket before `wrap_socket` would propagate, but breaks the handshake on most ports (the synchronous TLS handshake needs blocking I/O to complete in one call).  Phase 7 sensor uses plain TCP so the gap is not blocking — but a future TLS-using thing on Lolin S2 will need a deeper fix (probably async/iterative handshake state machine in chumicro-sockets, or a TLS shim that pumps the handshake in the runner's tick rather than during construction).
+**TLS over MQTT on MP — also resolved (live-tested 2026-04-26):** the prior comment in `libraries/sockets/src/chumicro_sockets/_adapters/mp.py` claiming "Lolin S2 ESP32 SSLSocket drops setblocking" was stale.  Verified live on MP 1.28.0 against Pi Pico W RP2 *and* Lolin S2 ESP32-S2: both boards' mbedTLS `SSLSocket` expose `setblocking` (the `modtls_mbedtls.c` source confirms it's in the method table), and `setblocking(False)` is honored.  Source (`.tools/micropython-v1.26.0/extmod/modtls_mbedtls.c:903`):
+```
+{ MP_ROM_QSTR(MP_QSTR_setblocking), MP_ROM_PTR(&socket_setblocking_obj) },
+```
+The `axTLS` variant exposes it too (`extmod/modtls_axtls.c:420`).
+
+There IS a contract divergence between plain TCP and TLS recv on MP though: plain TCP raises `OSError(11)` (EAGAIN) on no-data in non-blocking mode, but TLS `recv` returns `None` (no exception).  `chumicro_sockets._adapters.mp._MpSocketWrapper.recv_into` previously called `len(data)` unconditionally and crashed on the TLS-None return.  Fixed by treating `None` as 0 bytes — same effect as "no data this tick" — which feeds cleanly into `chumicro-mqtt`'s tick model (the existing `if got == 0: break` path).
+
+End-to-end TLS+MQTT verified live: 3 PUBLISH messages with QoS-1 PUBACKs against a local self-signed broker on a Pi Pico W RP2 (commit landing this paragraph).  No new MQTT client needed; no separate blocking-mode variant; the chumicro-sockets MP adapter just needed the `None` handling path.
 
 ## Deferred
 
