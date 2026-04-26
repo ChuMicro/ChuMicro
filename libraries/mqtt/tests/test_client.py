@@ -47,6 +47,53 @@ def _drive(client: MQTTClient, ticks: FakeTicks, count: int = 1) -> None:
 # ---------------------------------------------------------------------------
 
 
+class TestSocketBlockingMode:
+    def test_init_forces_socket_non_blocking(self) -> None:
+        """The MQTT client owns its socket's blocking mode.
+
+        Phase 7 Layer-3 caught a Pi Pico W MP hang where the MP socket
+        adapter constructed sockets in blocking mode (stdlib default)
+        and the MQTT client's first tick called recv on a blocking
+        socket — never returned, never saw CONNACK, ack-timeout fired
+        after 5s, infinite reconnect loop.  Make MQTTClient enforce
+        non-blocking on construction so the contract belongs to the
+        client, not every consumer.
+        """
+        sock = FakeSocket()
+        sock.setblocking(True)  # default-blocking before MQTTClient sees it
+        ticks = FakeTicks()
+        _new_client(sock, ticks)
+        assert sock.blocking is False
+
+    def test_self_heal_forces_replacement_socket_non_blocking(self) -> None:
+        """The factory may hand back a blocking socket — heal still wins."""
+        first_sock = FakeSocket()
+        replacement = FakeSocket()
+        replacement.setblocking(True)  # arrive blocking
+        factory_calls: list[FakeSocket] = []
+
+        def factory() -> FakeSocket:
+            factory_calls.append(replacement)
+            return replacement
+
+        ticks = FakeTicks()
+        client = MQTTClient(
+            first_sock,
+            socket_factory=factory,
+            client_id="test-client",
+            ack_timeout_seconds=5.0,
+            ticks_ms_func=ticks.ticks_ms,
+            ticks_add_func=ticks.ticks_add,
+            ticks_diff_func=ticks.ticks_diff,
+        )
+        client.connect()  # marks user-wants-connected
+        # Force the client into FAILED so handle() takes the self-heal path.
+        client._state = ProtocolState.FAILED  # noqa: SLF001 — test wants the gate
+        client.handle(ticks.ticks_ms())
+        assert factory_calls == [replacement]
+        assert replacement.blocking is False
+
+
 class TestConnect:
     def test_handshake_transitions_to_connected(self) -> None:
         sock = FakeSocket()

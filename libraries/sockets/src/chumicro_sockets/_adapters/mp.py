@@ -116,6 +116,16 @@ def connect_tls(host, port, *, context=None):  # pragma: no cover - device only
     Older MP builds expose ``ssl.wrap_socket`` as a free function
     rather than a context method — this adapter calls the free
     function so it works on both shapes.
+
+    Non-blocking note: callers that need a non-blocking TLS socket
+    (e.g. ``chumicro-mqtt``) typically call ``setblocking(False)``
+    on the returned wrapper.  Some MP SSLSocket implementations
+    (live-board: Lolin S2 ESP32) drop the method post-wrap and the
+    request silently no-ops — those configurations stay blocking.
+    Setting non-blocking on the underlying socket *before*
+    ``wrap_socket`` would break the handshake on most ports, so we
+    don't do it here.  Phase 7 sensor uses plain TCP; the live-board
+    TLS-non-blocking gap is documented in the Phase 7 integration log.
     """
     import socket  # noqa: PLC0415 — MP-only import; staged-but-not-imported on CP
     import ssl  # noqa: PLC0415 — MP-only import

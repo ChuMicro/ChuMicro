@@ -186,6 +186,30 @@ def _no_callback(*_args, **_kwargs):
     return None
 
 
+def _force_non_blocking(socket):
+    """Best-effort ``setblocking(False)`` on a chumicro-sockets socket.
+
+    The MQTT client's tick-based RX path expects ``recv_into`` to
+    raise EAGAIN (or return 0) when no data is available, never to
+    block.  MicroPython's stdlib socket starts in blocking mode and
+    chumicro_sockets' MP adapter doesn't override that — without this
+    enforcement, the device's first ``recv`` after sending CONNECT
+    blocks, the CONNACK never gets parsed, and the ack-timeout fires
+    after 5 s.  Phase 7 Layer-3 caught this on a Pi Pico W.
+
+    Some adapters (MP TLS via SSLSocket) drop ``setblocking`` and
+    fall back to a no-op stub; calling it there is harmless but
+    might raise AttributeError in older builds, so we wrap.
+    """
+    setblocking = getattr(socket, "setblocking", None)
+    if setblocking is None:
+        return
+    try:
+        setblocking(False)
+    except (OSError, AttributeError):  # pragma: no cover — defensive
+        pass
+
+
 # ---------------------------------------------------------------------------
 # MQTTClient
 # ---------------------------------------------------------------------------
@@ -272,6 +296,14 @@ class MQTTClient:
             socket = socket_factory()
         self._socket = socket
         self._socket_factory = socket_factory
+        # The tick-based read path expects EAGAIN on no-data rather than
+        # a blocking recv that stalls the loop.  MicroPython's stdlib
+        # socket constructs in *blocking* mode by default, so consumers
+        # that just pass `tcp_client_socket(...)` to us would otherwise
+        # hang on the first recv with no data and never see CONNACK.
+        # Enforce non-blocking here so the contract belongs to the
+        # client, not every caller.
+        _force_non_blocking(self._socket)
         self._user_wants_connected = False
         self._client_id = client_id
         self._keep_alive_seconds = keep_alive_seconds
@@ -594,6 +626,7 @@ class MQTTClient:
             )
             return False
         self._socket = new_socket
+        _force_non_blocking(self._socket)
         # Reset transient state for the fresh connection.  Keep the
         # in-flight QoS 1 table intact when clean_session=False so a
         # broker that supports session resumption can pick up where we

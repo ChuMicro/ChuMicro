@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** Phase 7 (first end-to-end sensor thing) mostly green: Layer-1 import resolution + Layer-2 fail-fast wifi gates land cleanly on Pi Pico W MP/CP.  Layer-3 broker round-trip blocks on a network-topology issue (device → host LAN IP) that needs physical debugging.
-- **Last shipped:** Doc audit — single sweep dropping stale "Slice X" / "Phase 4b/4c" / "future workspace-template" jargon from chumicro-workspace + chumicro-deploy docstrings, CLI help, and one-liner library README claims.  No behavior change.
+- **Phase:** Phase 7 end-to-end on Pi Pico W MP — Layer-1 / Layer-2 / **Layer-3 all green.**  Layer-3 broker round-trip resolved 2026-04-26: root cause was MP stdlib sockets defaulting to *blocking* mode.  Verified live on a Pi Pico W MP: 4+ heartbeat publishes in 8 s, `{"boot": 21, "celsius": 21.30, "n": 0}` etc.
+- **Last shipped:** `chumicro-mqtt` 0.1.3 — `MQTTClient` now enforces `setblocking(False)` on every socket it acquires (constructor + factory paths).  Phase 7 Layer-3 unblocked.
 - **In flight:** —
-- **Blocked on:** Phase 7 Layer-3 broker round-trip — deploy succeeds, files reach device (verified via `mpremote fs ls`), but `mosquitto_sub` sees zero messages.  Suspect host LAN-route / firewall.  Needs physical access to dig in.
-- **Last touched (this session, post-compact):** `workbench/workspace/src/chumicro_workspace/cli.py` (thing-name validation + Slice/Phase doc cleanup), `workbench/deploy/src/chumicro_deploy/sources.py` (named-from-import submodule resolution), `workbench/workspace/functional_tests/test_sensor_thing_hardware.py` (workaround removed), and a clutch of docstring rewrites in `__init__.py` / `boot_shim.py` / `workspace.py` / `result.py` / `firmware.py` / `recovery.py` / two READMEs.
+- **Blocked on:** —
+- **Last touched (this session, post-compact):** `libraries/mqtt/src/chumicro_mqtt/client.py` (`_force_non_blocking` helper, called from `__init__` + `_attempt_self_heal`), `libraries/mqtt/tests/test_client.py` (2 new `TestSocketBlockingMode` cases), `libraries/mqtt/VERSION` (0.1.2 → 0.1.3), `libraries/sockets/src/chumicro_sockets/_adapters/mp.py` (clarifying docstring on the TLS-non-blocking gap), `plans/workstreams/phase-7-integration.md` (new resolved entry), `plans/learnings.md` (MP-socket-blocking-by-default + TLS-non-blocking gap).
 
 ---
 

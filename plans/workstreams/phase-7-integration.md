@@ -141,6 +141,21 @@ When an integration issue is resolved by changing a library API, the resolution 
 * Tight tick loop is correct for networked things — see entry above.
 * `while True` -> `while not _SHUTDOWN_REQUESTED` + `KeyboardInterrupt` exit path — see entry above.
 
+### Pi Pico W MP Layer-3 broker round-trip — MP socket default-blocking mode (resolved 2026-04-26)
+
+**Symptom:** the Layer-3 deploy succeeded, the device joined wifi (verified `sensor: wifi connected at 172.16.1.2`), reached the broker (Mosquitto's log: `New client connected from 172.16.1.2:55035 as chumicro-layer3-sensor`, `Sending CONNACK to chumicro-layer3-sensor`), and then... nothing.  The device closed the connection after exactly 5 s — `chumicro-mqtt`'s default `ack_timeout_seconds`.  Reconnect, CONNACK, 5 s, close.  Forever.  No publishes ever reached the broker.
+
+**Root cause:** the chumicro-sockets MP adapter's `connect_tcp` returns a stdlib socket left in *blocking* mode — MP defaults match CPython.  The chumicro-mqtt client's tick-based RX path expects EAGAIN on no-data, never a blocking recv.  So:
+* Tick 1 — drain TX queue, send CONNECT.  Call ``recv_into`` — blocks (no data yet).
+* CONNACK arrives, ``recv_into`` returns with the bytes.  Decoder runs, transitions to CONNECTED.
+* Tick 2 — drain TX (empty), call ``recv_into`` again.  No data on the wire → blocks indefinitely.
+* The blocking call holds the runner's tick.  The publisher's ``handle()`` never fires.
+* MP's stdlib socket has a hidden long-poll-or-give-up after a few seconds (board / port dependent).  When that pops, the deadline check (`_check_deadlines`) sees the still-pending PUBLISH-or-PINGRESP marker, faults to `FAILED`, self-heal kicks in, reconnect.  Cycle.
+
+**Fix (commit landing this entry):** make `MQTTClient` enforce ``setblocking(False)`` on every socket it acquires — both the constructor's `socket=` arg and the `socket_factory()` return value (used during self-heal).  Phase 7 Layer-3 went from 0 messages in 60 s to 4+ messages in 8 s on a Pi Pico W MP, identical sensor template, no other changes.
+
+**Forward-looking:** TLS sockets on some MP ports (Lolin S2 ESP32 at minimum) wrap the underlying TCP socket and *drop* `setblocking` post-wrap; calling `setblocking(False)` on the wrapper silently no-ops, leaving the TLS layer in blocking mode.  Setting non-blocking on the *underlying* TCP socket before `wrap_socket` would propagate, but breaks the handshake on most ports (the synchronous TLS handshake needs blocking I/O to complete in one call).  Phase 7 sensor uses plain TCP so the gap is not blocking — but a future TLS-using thing on Lolin S2 will need a deeper fix (probably async/iterative handshake state machine in chumicro-sockets, or a TLS shim that pumps the handshake in the runner's tick rather than during construction).
+
 ## Deferred
 
 ### Multi-thing sequencing

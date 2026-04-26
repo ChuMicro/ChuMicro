@@ -77,6 +77,14 @@ Fix knobs that *don't* work: eager-importing at package top level was tried (com
 
 Observed during 2026-04-19 live PyCharm testing. Suspect: per-file `mpremote mount` cost + cold-start interpreter overhead. Profile against the batched-execute path before optimizing — there's an open investigation in `next-up.md`. Not yet root-caused.
 
+### MP stdlib socket constructs in *blocking* mode by default
+
+Same default as CPython.  If a library's tick / poll loop expects EAGAIN-on-no-data semantics, every consumer must call `setblocking(False)` after `socket.socket(...)` + `connect(...)` — there is no implicit non-blocking mode.  A blocking `recv` on a Pi Pico W RP2 will *eventually* return (lwIP has a long internal poll-or-give-up around 5–30 s depending on port + traffic), so the resulting hang doesn't look like a deadlock — it looks like a slow connection or a timeout.
+
+Phase 7 Layer-3 tripped on this: `chumicro-mqtt`'s tick-shaped client called `recv_into` on a default-blocking MP socket, the recv blocked, the broker's CONNACK was already on the wire but the device's tick loop couldn't drain it within the 5 s `ack_timeout_seconds`, the deadline expired, the client transitioned to `FAILED`, self-heal rebuilt the socket — same blocking mode — and the cycle repeated forever.  Fix shape: `MQTTClient` enforces `setblocking(False)` on every socket it acquires; consumers don't have to remember.  See `libraries/mqtt/src/chumicro_mqtt/client.py` `_force_non_blocking` (commit landing this learning) and Phase 7 integration log §"Layer-3 broker round-trip — MP socket default-blocking mode".
+
+TLS variant: some MP `SSLSocket` wrappers (Lolin S2 ESP32 at minimum) **drop `setblocking` post-wrap** — the call silently no-ops via `getattr(sock, "setblocking", _no_op)` in chumicro-sockets' `_MpSocketWrapper`.  Setting non-blocking on the *underlying* TCP socket *before* `wrap_socket` would propagate, but breaks the synchronous TLS handshake on most ports.  No clean fix yet for non-blocking TLS on MP; the right answer is probably an iterative-handshake state machine pumped by the runner, not a single `wrap_socket` call.
+
 ---
 
 ## Tooling and process
