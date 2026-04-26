@@ -63,8 +63,9 @@ class TestParser:
 
     EXPECTED_COMMANDS = (
         "setup", "new", "add-device", "probe", "discover", "devices",
-        "deploy", "sim", "test", "repl", "env", "use", "rename",
-        "install-firmware", "upgrade-firmware", "sync", "upgrade",
+        "deploy", "switch", "things", "sim", "test", "repl", "env",
+        "use", "rename", "install-firmware", "upgrade-firmware",
+        "sync", "upgrade",
     )
 
     def test_all_commands_register(self) -> None:
@@ -420,6 +421,210 @@ class TestDeploy:
         # unimported one.
         assert "/lib/imported_module.py" in files
         assert "/lib/unimported_module.py" not in files
+
+
+def _seed_two_things(workspace_root: Path) -> tuple[Path, Path]:
+    """Seed two boot-shim-ready things and return their dirs."""
+    weather = workspace_root / "things" / "weather"
+    weather.mkdir(parents=True)
+    (weather / "config.toml").write_text(
+        "[wifi]\nssid = 'WeatherNet'\npassword = '!secret wifi_password'\n",
+    )
+    (weather / "app.py").write_text("def run(): print('weather')\n")
+
+    heater = workspace_root / "things" / "heater"
+    heater.mkdir(parents=True)
+    (heater / "config.toml").write_text("[heater]\ntoken = 'hot'\n")
+    (heater / "app.py").write_text("def run(): print('heater')\n")
+    return weather, heater
+
+
+class TestDeployMultiThing:
+    def test_two_things_with_boot_shim_ships_both(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        _seed_two_things(root)
+
+        transport = FakeTransport(execute_output="")
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root),
+            "--boot-shim", "weather", "heater",
+        ])
+        assert exit_code == 0
+        deploy_calls = [call for call in transport.calls if call[0] == "deploy_files"]
+        files, _entrypoint = deploy_calls[0][1]
+        assert "/lib/things/weather/app.py" in files
+        assert "/lib/things/heater/app.py" in files
+        assert "/lib/things/weather/runtime_config.msgpack" in files
+        assert "/lib/things/heater/runtime_config.msgpack" in files
+        # First positional name is the default active.
+        assert b'"weather"' in files["/active.py"]
+
+    def test_active_flag_picks_non_first(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        _seed_two_things(root)
+
+        transport = FakeTransport(execute_output="")
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root),
+            "--boot-shim", "--active", "heater",
+            "weather", "heater",
+        ])
+        assert exit_code == 0
+        deploy_calls = [call for call in transport.calls if call[0] == "deploy_files"]
+        files, _entrypoint = deploy_calls[0][1]
+        assert b'"heater"' in files["/active.py"]
+
+    def test_multi_thing_without_boot_shim_exits_two(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Multi-thing deploy requires --boot-shim — flat layout would collide."""
+        root = _seed_workspace(tmp_path)
+        _seed_two_things(root)
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root),
+            "weather", "heater",
+        ])
+        assert exit_code == 2
+        assert "requires --boot-shim" in capsys.readouterr().err
+
+    def test_active_without_boot_shim_exits_two(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        _seed_thing(root)
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root),
+            "--active", "back-porch", "back-porch",
+        ])
+        assert exit_code == 2
+        assert "--active only applies with --boot-shim" in capsys.readouterr().err
+
+    def test_active_not_in_names_exits_two(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        _seed_two_things(root)
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root),
+            "--boot-shim", "--active", "ghost",
+            "weather", "heater",
+        ])
+        assert exit_code == 2
+        assert "ghost" in capsys.readouterr().err
+
+
+class TestSwitch:
+    def test_ships_three_files(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        _seed_two_things(root)
+
+        transport = FakeTransport(execute_output="")
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+
+        exit_code = cli.main([
+            "switch", "--workspace-dir", str(root), "heater",
+        ])
+        assert exit_code == 0
+        deploy_calls = [call for call in transport.calls if call[0] == "deploy_files"]
+        files, entrypoint = deploy_calls[0][1]
+        # Switch is just /code.py (or /main.py) + /active.py + msgpack.
+        assert set(files) == {"/main.py", "/active.py", "/runtime_config.msgpack"}
+        assert entrypoint == "/main.py"
+        assert b'"heater"' in files["/active.py"]
+        decoded = unpackb(files["/runtime_config.msgpack"])
+        assert decoded["heater"]["token"] == "hot"
+
+    def test_missing_thing_raises(self, tmp_path: Path) -> None:
+        root = _seed_workspace(tmp_path)
+        with pytest.raises(SystemExit) as caught:
+            cli.main(["switch", "--workspace-dir", str(root), "ghost"])
+        assert "ghost" in str(caught.value)
+
+    def test_traceback_returns_exit_one(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        _seed_two_things(root)
+        transport = FakeTransport(
+            execute_output=(
+                "Traceback (most recent call last):\n"
+                "  File \"/code.py\", line 1\n"
+                "RuntimeError: switched-to-broken-thing\n"
+            ),
+        )
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+        exit_code = cli.main([
+            "switch", "--workspace-dir", str(root), "heater",
+        ])
+        assert exit_code == 1
+        assert "switched-to-broken-thing" in capsys.readouterr().err
+
+
+class TestThings:
+    def test_lists_workspace_things(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        _seed_two_things(root)
+        exit_code = cli.main(["things", "--workspace-dir", str(root)])
+        assert exit_code == 0
+        out = capsys.readouterr().out.splitlines()
+        assert sorted(out) == ["heater", "weather"]
+
+    def test_empty_workspace_prints_marker(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        # things/ exists if any thing was seeded; without seeding it doesn't.
+        # Either way list_things() returns [].
+        exit_code = cli.main(["things", "--workspace-dir", str(root)])
+        assert exit_code == 0
+        assert "no things" in capsys.readouterr().out
+
+    def test_skips_underscore_dirs(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """_template / leading-underscore dirs aren't shown as things."""
+        root = _seed_workspace(tmp_path)
+        _seed_thing(root, name="back-porch")
+        (root / "things" / "_template").mkdir()
+        (root / "things" / "_template" / "config.toml").write_text("\n")
+        exit_code = cli.main(["things", "--workspace-dir", str(root)])
+        assert exit_code == 0
+        out = capsys.readouterr().out.splitlines()
+        assert "_template" not in out
+        assert "back-porch" in out
 
 
 # ---------------------------------------------------------------------------

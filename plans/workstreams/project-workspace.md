@@ -368,15 +368,18 @@ Out of scope (left as-is for this repo):
 
 - `support/test_harness/` stays put.  In-repo library tests keep importing `from chumicro_test_harness import raises` via the editable-install path; `run_cross_runtime.py` keeps driving the unix-port unit tests.  The vendoring is purely additive — it doesn't replace the in-repo path.
 
-### Phase 4a: `chumicro-workspace-runtime`
+### Phase 4a: `chumicro-workspace-runtime` ✅
 
-- [ ] New library: `libraries/workspace-runtime/`.
-- [ ] Host side: command dispatch (`setup`, `new`, `add-device`, `probe`, `discover`, `devices`, `deploy`, `sim`, `test`, `repl`, `env`, `use`, `rename`, `install-firmware`, `upgrade-firmware`, `sync`, `upgrade`).
-- [ ] `devices.yml` three-zone writer with user-comment and key-order preservation on round-trip.
-- [ ] Onboarding flows for the three board states (REPL, UF2 bootloader, blank-chip-esptool).
-- [ ] Firmware URL derivation (CP S3 listing; MP scrape-and-cache).
-- [ ] Import-graph resolver (AST walk starting from thing entrypoint, `library_sources:` override support).
-- [ ] Device-side `workspace_runtime` module: `boot()` reads `active.py`, imports thing, calls `run()`.
+- [x] New workbench package: `workbench/workspace-runtime/`.
+- [x] Host side: command dispatch (`setup`, `new`, `add-device`, `probe`, `discover`, `devices`, `things`, `deploy`, `switch`, `sim`, `test`, `repl`, `env`, `use`, `rename`, `install-firmware`, `upgrade-firmware`, `sync`, `upgrade`).
+- [x] `devices.yml` three-zone writer with user-comment and key-order preservation on round-trip (Slice 3 — `ruamel.yaml`-backed).
+- [x] Onboarding flows for the three board states (REPL, UF2 bootloader, blank-chip-esptool) — Slice 4.
+- [x] Firmware URL derivation: CP S3 listing (Slice 5) + MP `micropython.org/download/<BOARD>/` live scrape (post-Slice-7 follow-on).
+- [x] Import-graph resolver (AST walk starting from thing entrypoint, `library_sources:` override support) — Slice 6.
+- [x] Device-side `workspace_runtime` module: `boot()` reads `active.py`, imports thing, calls `run()` — Slice 7.
+- [x] Multi-thing-on-one-device deploys + `switch <name>` CLI — `multi_thing_boot_source` ships N things side-by-side under `/lib/things/<each>/` with per-thing runtime config msgpacks; `switch_source` re-points `/active.py` + canonical msgpack with three small files (no payload re-flash).
+- [x] Live-board functional tests — `workbench/workspace-runtime/functional_tests/test_boot_shim_hardware.py` exercises the full `code.py` → `workspace_runtime.boot()` → `things.<name>.app.run()` chain on Pi Pico W CP/MP (4/6 pass on RAM mode; switch tests skip on RAM and need flash mode to see persisted prior payloads).
+- [x] Docs / README pass — README + `docs/guide.md` rewritten to match the feature-complete API (CLI table, boot-shim layout, multi-thing flows, switch, programmatic API, config merge, firmware, devices.yml round-trip).
 
 ### Phase 4b: `chumicro-workspace-template` package
 

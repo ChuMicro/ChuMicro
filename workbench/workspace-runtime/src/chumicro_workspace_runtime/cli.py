@@ -37,7 +37,11 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from chumicro_workspace_runtime.boot_shim import thing_boot_source
+from chumicro_workspace_runtime.boot_shim import (
+    multi_thing_boot_source,
+    switch_source,
+    thing_boot_source,
+)
 from chumicro_workspace_runtime.deploy_source import thing_directory_source
 from chumicro_workspace_runtime.devices_yaml import (
     DeviceAlreadyExistsError,
@@ -287,44 +291,79 @@ def _cmd_devices(args: argparse.Namespace) -> int:
 
 
 def _cmd_deploy(args: argparse.Namespace) -> int:
-    """Deploy a thing — Slice 1's :func:`thing_directory_source` + Deployer.
+    """Deploy one or more things to a device.
 
-    With ``--import-graph`` (Slice 6), switches to
-    :func:`thing_import_graph_source`: AST-walks the entrypoint and
-    ships only transitively-imported modules instead of the full
-    thing directory.  Reads ``library_sources:`` from
-    ``workspace.yml`` for path overrides.
+    Single-thing default uses :func:`thing_directory_source` (Slice 1's
+    flat layout).  ``--import-graph`` (Slice 6) ships only transitively-
+    imported modules.  ``--boot-shim`` (Slice 7) ships under
+    ``/lib/things/<name>/``; with multiple positional names + ``--boot-shim``
+    multiple things land side-by-side and ``switch`` can re-point
+    ``/active.py`` without re-flashing.
     """
     workspace = _resolve_workspace(args)
-    thing_dir = workspace.thing_dir(args.name)
-    if not thing_dir.is_dir():
-        raise SystemExit(f"error: thing {thing_dir} not found")
-    device = _resolve_device(workspace, args)
-    from chumicro_deploy import Deployer  # noqa: PLC0415
-
+    names: list[str] = list(args.names)
     if args.import_graph and args.boot_shim:
         print(
             "deploy: --import-graph and --boot-shim are mutually exclusive.",
             file=sys.stderr,
         )
         return 2
-    if args.boot_shim:
-        source = thing_boot_source(
-            thing_dir,
-            workspace=workspace,
-            entrypoint_filename=device.effective_entrypoint,
+    if len(names) > 1 and not args.boot_shim:
+        print(
+            "deploy: deploying multiple things at once requires --boot-shim "
+            "(the boot-shim layout puts each thing under /lib/things/<name>/ "
+            "where they don't collide).",
+            file=sys.stderr,
         )
+        return 2
+    if args.active is not None and not args.boot_shim:
+        print(
+            "deploy: --active only applies with --boot-shim.",
+            file=sys.stderr,
+        )
+        return 2
+    thing_dirs: list[Path] = []
+    for name in names:
+        thing_dir = workspace.thing_dir(name)
+        if not thing_dir.is_dir():
+            raise SystemExit(f"error: thing {thing_dir} not found")
+        thing_dirs.append(thing_dir)
+    device = _resolve_device(workspace, args)
+    from chumicro_deploy import Deployer  # noqa: PLC0415
+
+    if args.boot_shim:
+        if len(thing_dirs) == 1:
+            source = thing_boot_source(
+                thing_dirs[0],
+                workspace=workspace,
+                entrypoint_filename=device.effective_entrypoint,
+            )
+        else:
+            active = args.active if args.active is not None else names[0]
+            if active not in names:
+                print(
+                    f"deploy: --active {active!r} is not one of the deployed "
+                    f"things ({names}).",
+                    file=sys.stderr,
+                )
+                return 2
+            source = multi_thing_boot_source(
+                thing_dirs,
+                workspace=workspace,
+                active_thing_name=active,
+                entrypoint_filename=device.effective_entrypoint,
+            )
     elif args.import_graph:
         device_entrypoint = args.entrypoint or f"/{device.effective_entrypoint}"
         source = thing_import_graph_source(
-            thing_dir,
+            thing_dirs[0],
             workspace=workspace,
             entrypoint_filename=device.effective_entrypoint,
             device_entrypoint=device_entrypoint,
         )
     else:
         source = thing_directory_source(
-            thing_dir,
+            thing_dirs[0],
             workspace_yaml=workspace.workspace_yaml,
             secrets_yaml=workspace.secrets_yaml,
             entrypoint=args.entrypoint or f"/{device.effective_entrypoint}",
@@ -336,6 +375,61 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
         if result.traceback:
             print(f"\n--- traceback ---\n{result.traceback}", file=sys.stderr)
         return 1
+    return 0
+
+
+def _cmd_switch(args: argparse.Namespace) -> int:
+    """Switch which thing is active without re-shipping payloads.
+
+    Builds the merged runtime config msgpack for the named thing on
+    the host, then ships only ``/code.py`` (or ``/main.py``) +
+    ``/active.py`` + ``/runtime_config.msgpack``.  The thing payloads
+    under ``/lib/things/<name>/`` stay on flash from the prior
+    multi-thing :func:`_cmd_deploy`.
+
+    Fast: three small files instead of the whole stack.  Requires
+    that the named thing was included in a prior multi-thing deploy —
+    if not, the device boots into a thing whose payload doesn't exist
+    and ``workspace_runtime.boot()`` raises ``WorkspaceBootError``.
+    """
+    workspace = _resolve_workspace(args)
+    thing_dir = workspace.thing_dir(args.name)
+    if not thing_dir.is_dir():
+        raise SystemExit(f"error: thing {thing_dir} not found")
+    device = _resolve_device(workspace, args)
+    from chumicro_deploy import Deployer  # noqa: PLC0415
+
+    source = switch_source(
+        thing_dir,
+        workspace=workspace,
+        entrypoint_filename=device.effective_entrypoint,
+    )
+    result = Deployer(device).deploy(source)
+    if result.execute_output:
+        print(result.execute_output, end="")
+    if not result.success:
+        if result.traceback:
+            print(f"\n--- traceback ---\n{result.traceback}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def _cmd_things(args: argparse.Namespace) -> int:
+    """List the things defined in the workspace under ``things/``.
+
+    Local-only: lists ``things/<name>/`` directories filtered by
+    :meth:`WorkspaceLayout.list_things` (skips ``_template`` and
+    leading ``.`` / ``_`` names).  An on-device variant that probes
+    ``/lib/things/`` for installed payloads is a follow-on once the
+    REPL one-shot pattern lands as a public helper.
+    """
+    workspace = _resolve_workspace(args)
+    names = workspace.list_things()
+    if not names:
+        print("(no things in this workspace)")
+        return 0
+    for name in names:
+        print(name)
     return 0
 
 
@@ -690,13 +784,28 @@ def build_parser() -> argparse.ArgumentParser:
     # ----- deploy --------------------------------------------------------
     deploy_parser = subparsers.add_parser(
         "deploy",
-        help="Deploy a thing — app code + merged runtime config msgpack.",
+        help="Deploy one or more things — app code + merged runtime config msgpack.",
     )
     _add_workspace_arg(deploy_parser)
     _add_device_selector(deploy_parser)
     deploy_parser.add_argument(
-        "name",
-        help="Name of the thing under things/ to deploy.",
+        "names",
+        nargs="+",
+        metavar="name",
+        help=(
+            "Name(s) of things under things/ to deploy.  Multiple names "
+            "require --boot-shim (the layout that puts each thing under "
+            "/lib/things/<name>/)."
+        ),
+    )
+    deploy_parser.add_argument(
+        "--active",
+        default=None,
+        help=(
+            "Multi-thing only: which deployed thing /active.py points "
+            "at (defaults to the first positional name).  Use `switch` "
+            "later to re-point without re-flashing."
+        ),
     )
     deploy_parser.add_argument(
         "--entrypoint",
@@ -721,10 +830,36 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Ship the thing under /lib/things/<name>/ + write a "
             "fixed code.py shim + active.py + workspace_runtime "
-            "payload (Decision 0029 §3).  app.py must export run()."
+            "payload (Decision 0029 §3).  app.py must export run().  "
+            "Multiple positional names land side-by-side; use `switch` "
+            "to re-point /active.py later without re-flashing."
         ),
     )
     deploy_parser.set_defaults(func=_cmd_deploy)
+
+    # ----- switch --------------------------------------------------------
+    switch_parser = subparsers.add_parser(
+        "switch",
+        help=(
+            "Re-point /active.py at a different thing already deployed "
+            "via `deploy --boot-shim a b c` (no payload re-flash)."
+        ),
+    )
+    _add_workspace_arg(switch_parser)
+    _add_device_selector(switch_parser)
+    switch_parser.add_argument(
+        "name",
+        help="Name of the installed thing to make active.",
+    )
+    switch_parser.set_defaults(func=_cmd_switch)
+
+    # ----- things --------------------------------------------------------
+    things_parser = subparsers.add_parser(
+        "things",
+        help="List the things defined under the workspace's things/ tree.",
+    )
+    _add_workspace_arg(things_parser)
+    things_parser.set_defaults(func=_cmd_things)
 
     # ----- sim -----------------------------------------------------------
     sim_parser = subparsers.add_parser(
