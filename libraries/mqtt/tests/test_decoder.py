@@ -1,0 +1,227 @@
+"""Tests for the streaming inbound packet decoder."""
+
+import pytest
+from chumicro_mqtt import (
+    PACKET_CONNACK,
+    PACKET_PINGRESP,
+    PACKET_PUBACK,
+    PACKET_SUBACK,
+    PACKET_UNSUBACK,
+    MQTTProtocolError,
+)
+from chumicro_mqtt._decoder import (
+    PacketDecoder,
+    ParsedAck,
+    ParsedPublish,
+    _OversizedMessage,
+)
+from chumicro_mqtt.testing import (
+    canned_connack_bytes,
+    canned_pingresp_bytes,
+    canned_puback_bytes,
+    canned_publish_bytes,
+    canned_suback_bytes,
+    canned_unsuback_bytes,
+)
+
+
+def _feed(decoder: PacketDecoder, payload: bytes) -> None:
+    """Stuff *payload* into the decoder via fill_buffer/advance."""
+    while payload:
+        room = decoder.fill_capacity()
+        chunk = payload[:room]
+        decoder.fill_buffer()[:len(chunk)] = chunk
+        decoder.advance(len(chunk))
+        payload = payload[room:]
+        if not payload:
+            break
+
+
+class TestParseAcks:
+    def test_connack_success(self) -> None:
+        decoder = PacketDecoder()
+        _feed(decoder, canned_connack_bytes(return_code=0))
+        packet = decoder.read_next()
+        assert isinstance(packet, ParsedAck)
+        assert packet.packet_type == PACKET_CONNACK
+        assert packet.return_code == 0
+
+    def test_connack_with_rejection(self) -> None:
+        decoder = PacketDecoder()
+        _feed(decoder, canned_connack_bytes(return_code=5))
+        packet = decoder.read_next()
+        assert packet.return_code == 5
+
+    def test_puback(self) -> None:
+        decoder = PacketDecoder()
+        _feed(decoder, canned_puback_bytes(packet_id=4242))
+        packet = decoder.read_next()
+        assert packet.packet_type == PACKET_PUBACK
+        assert packet.packet_id == 4242
+
+    def test_suback(self) -> None:
+        decoder = PacketDecoder()
+        _feed(decoder, canned_suback_bytes(packet_id=99, granted_qos=1))
+        packet = decoder.read_next()
+        assert packet.packet_type == PACKET_SUBACK
+        assert packet.packet_id == 99
+        assert packet.granted_qos == [1]
+
+    def test_unsuback(self) -> None:
+        decoder = PacketDecoder()
+        _feed(decoder, canned_unsuback_bytes(packet_id=88))
+        packet = decoder.read_next()
+        assert packet.packet_type == PACKET_UNSUBACK
+        assert packet.packet_id == 88
+
+    def test_pingresp(self) -> None:
+        decoder = PacketDecoder()
+        _feed(decoder, canned_pingresp_bytes())
+        packet = decoder.read_next()
+        assert packet.packet_type == PACKET_PINGRESP
+
+
+class TestParsePublish:
+    def test_qos_zero(self) -> None:
+        decoder = PacketDecoder()
+        _feed(decoder, canned_publish_bytes("temp", b"42", qos=0))
+        packet = decoder.read_next()
+        assert isinstance(packet, ParsedPublish)
+        assert packet.topic == "temp"
+        assert packet.payload == b"42"
+        assert packet.qos == 0
+        assert packet.retain is False
+        assert packet.packet_id is None
+
+    def test_qos_one_includes_packet_id(self) -> None:
+        decoder = PacketDecoder()
+        _feed(
+            decoder,
+            canned_publish_bytes("temp", b"99", qos=1, packet_id=1234),
+        )
+        packet = decoder.read_next()
+        assert packet.qos == 1
+        assert packet.packet_id == 1234
+        assert packet.payload == b"99"
+
+    def test_retain_flag(self) -> None:
+        decoder = PacketDecoder()
+        _feed(decoder, canned_publish_bytes("status", b"on", qos=0, retain=True))
+        packet = decoder.read_next()
+        assert packet.retain is True
+
+    def test_unicode_topic(self) -> None:
+        decoder = PacketDecoder()
+        _feed(decoder, canned_publish_bytes("café/temperature", b"21", qos=0))
+        packet = decoder.read_next()
+        assert packet.topic == "café/temperature"
+
+    def test_empty_payload(self) -> None:
+        decoder = PacketDecoder()
+        _feed(decoder, canned_publish_bytes("status", b"", qos=0))
+        packet = decoder.read_next()
+        assert packet.payload == b""
+
+
+class TestStreaming:
+    def test_partial_then_complete(self) -> None:
+        """Half a packet first; second feed completes it."""
+        decoder = PacketDecoder()
+        whole = canned_connack_bytes(return_code=0)
+        _feed(decoder, whole[:2])
+        assert decoder.read_next() is None
+        _feed(decoder, whole[2:])
+        packet = decoder.read_next()
+        assert packet.packet_type == PACKET_CONNACK
+
+    def test_two_packets_back_to_back(self) -> None:
+        """One feed delivers two packets."""
+        decoder = PacketDecoder()
+        connack = canned_connack_bytes(return_code=0)
+        publish = canned_publish_bytes("t", b"x", qos=0)
+        _feed(decoder, connack + publish)
+        first = decoder.read_next()
+        second = decoder.read_next()
+        third = decoder.read_next()
+        assert first.packet_type == PACKET_CONNACK
+        assert isinstance(second, ParsedPublish)
+        assert third is None
+
+    def test_one_byte_at_a_time(self) -> None:
+        """Trickled bytes still parse cleanly — every byte is individually fed."""
+        decoder = PacketDecoder()
+        whole = canned_publish_bytes("hello", b"world", qos=0)
+        for byte_value in whole:
+            decoder.fill_buffer()[:1] = bytes([byte_value])
+            decoder.advance(1)
+        packet = decoder.read_next()
+        assert packet.topic == "hello"
+        assert packet.payload == b"world"
+
+
+class TestProtocolErrors:
+    def test_unknown_packet_type(self) -> None:
+        decoder = PacketDecoder()
+        # 0xF0 is the reserved high-nibble for AUTH (MQTT 5 only).
+        _feed(decoder, b"\xf0\x00")
+        with pytest.raises(MQTTProtocolError):
+            decoder.read_next()
+
+    def test_oversized_simple_ack_raises(self) -> None:
+        """SUBACK with body longer than buffer is a protocol error,
+        not an oversize-message event."""
+        decoder = PacketDecoder(rx_buffer_size=8)
+        # Synthesize a SUBACK with body length > buffer.
+        body_length = 100
+        packet = bytes((0x90, body_length)) + b"\x00" * body_length
+        # Feed enough to trip the size check.
+        decoder.fill_buffer()[:2] = packet[:2]
+        decoder.advance(2)
+        with pytest.raises(MQTTProtocolError):
+            decoder.read_next()
+
+
+class TestOversizedMessage:
+    def test_publish_larger_than_buffer_routes_through_degraded_path(self) -> None:
+        """Oversize PUBLISH emits an _OversizedMessage event after draining."""
+        decoder = PacketDecoder(
+            rx_buffer_size=64,  # tight cap so the publish overflows
+            max_message_size=8192,
+        )
+        big_payload = b"x" * 200
+        packet = canned_publish_bytes("log", big_payload, qos=0)
+        # Feed in chunks small enough that we exercise the degraded
+        # buffer path properly.
+        chunk_size = 32
+        offset = 0
+        events: list = []
+        while offset < len(packet):
+            chunk = packet[offset:offset + chunk_size]
+            offset += chunk_size
+            room = decoder.fill_capacity()
+            if room == 0:
+                event = decoder.read_next()
+                if event is not None:
+                    events.append(event)
+                continue
+            write = chunk[:room]
+            decoder.fill_buffer()[:len(write)] = write
+            decoder.advance(len(write))
+            event = decoder.read_next()
+            if event is not None:
+                events.append(event)
+        # Drain any remaining state.
+        while True:
+            event = decoder.read_next()
+            if event is None:
+                break
+            events.append(event)
+        # Should have produced exactly one oversize event.
+        oversized = [event for event in events if isinstance(event, _OversizedMessage)]
+        assert len(oversized) == 1
+        assert oversized[0].topic == "log"
+        # reported_length is the count of payload bytes routed through
+        # the degraded buffer (the payload that didn't fit in steady-
+        # state); not the total wire size.  Just assert it's nonzero
+        # — the exact number depends on chunking.
+        assert oversized[0].reported_length > 0

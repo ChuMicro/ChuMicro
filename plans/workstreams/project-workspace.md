@@ -470,7 +470,15 @@ Two sibling factories (`tcp_client_socket`, `tls_client_socket`) so TLS config s
 - `FakeSocket` drives MQTT unit tests to 94 % coverage without hitting a real network.
 - A minimal TCP echo-client example runs identically on all three runtimes.
 
-### Phase 6: `chumicro-mqtt` refactor
+### Phase 6: `chumicro-mqtt` refactor ✅
+
+**Shipped 2026-04-26.**  `libraries/mqtt/` — non-blocking MQTT 3.1.1 client (QoS 0+1) built on `chumicro-sockets` + `chumicro-timing`.  Decision 0029 Phase 6's full rewrite scope is in: per-packet-id `InFlightTable` for QoS 1, explicit `ProtocolState` ladder + per-`PendingResponse` tracking (no broad `_waiting_state` lock), `WhenOversized` policy enum, `MQTTClient.check`/`handle` runner contract, no `adafruit_connection_manager` dep.  139 host tests at 94 % cov + 6 live Mosquitto integration tests + 6 host-side `tracemalloc` memory-pressure tests.  On-board perf: `.scratch/run_mqtt_perf.py` deploys a long-running publish/subscribe loop; verified live on all four boards (Lolin S2 CP/MP, Pi Pico W CP/MP) with **0 bytes net heap drift over 30 s**, and a 5-minute soak on Pi Pico W MP at 1 Hz publish (299 publishes / 299 received) also held at 0 bytes drift.
+
+Preserved from the pythonProject3 client: the wire-format primitives (`encode_varlen`, `decode_varlen`, `encode_string`, `topic_matches`), the pre-allocated 256 B steady-state RX buffer with degraded-buffer overflow path, the callback-registration shape (`on_message`, `on_connect`, `on_publish`, etc.) and pattern-routed handlers, will + retain, half-keepalive PINGREQ.
+
+Mosquitto 2.0 macOS quirk encountered + worked around: brew Mosquitto fails with `Error: Out of memory` at startup unless its `setrlimit(RLIMIT_NOFILE)` is dropped via `preexec_fn`.  Same shape works in both the pytest fixture and the perf runner.
+
+### Phase 6 (original): `chumicro-mqtt` refactor
 
 Port and redesign the ~1043-line MQTT client at `/Users/chuxor/circuitpython/pythonProject3/basefilesystem/lib/basefs/mqtt_client.py` into a new library.  Keep the solid parts; rewrite the parts that got weird.  Land on top of `chumicro-sockets` (Phase 5) and `chumicro-timing` + `chumicro-runner`.  QoS 0 and QoS 1 supported; internal shape permits QoS 2 but it is not implemented.
 
