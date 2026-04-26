@@ -202,8 +202,9 @@ class MQTTClient:
 
     def __init__(
         self,
-        socket,
+        socket=None,
         *,
+        socket_factory=None,
         client_id,
         keep_alive_seconds=60,
         ack_timeout_seconds=5.0,
@@ -228,7 +229,19 @@ class MQTTClient:
             socket: An already-connected :class:`TCPClientSocket`
                 (typically from ``chumicro_sockets.tcp_client_socket``
                 or ``tls_client_socket``).  The client takes ownership;
-                :meth:`disconnect` closes it.
+                :meth:`disconnect` closes it.  May be ``None`` when
+                *socket_factory* is provided — in that case the factory
+                is invoked once at construction time to build the
+                initial socket and again on self-heal.
+            socket_factory: Optional ``callable() -> TCPClientSocket``
+                that builds a fresh connected socket on demand.  When
+                set, the client self-heals after a wifi-drop /
+                socket-death: the next ``handle()`` after entering
+                ``FAILED`` rebuilds the socket and re-issues
+                ``connect()`` automatically (Phase 7 integration log
+                — wifi-drop survivability).  Without a factory the
+                client stays ``FAILED`` until the caller manually
+                tears down + reconstructs.
             client_id: MQTT client identifier — must be unique per broker.
             keep_alive_seconds: Broker idle timeout.  PINGREQ runs at
                 half this interval client-side.
@@ -249,7 +262,17 @@ class MQTTClient:
             ticks_ms_func / ticks_add_func / ticks_diff_func: Inject
                 fakes for testing.  Default to ``chumicro_timing``.
         """
+        if socket is None and socket_factory is None:
+            raise ValueError(
+                "MQTTClient requires either a connected socket or a "
+                "socket_factory (or both — factory is used for self-heal "
+                "after wifi-drop)."
+            )
+        if socket is None:
+            socket = socket_factory()
         self._socket = socket
+        self._socket_factory = socket_factory
+        self._user_wants_connected = False
         self._client_id = client_id
         self._keep_alive_seconds = keep_alive_seconds
         self._ack_timeout_ms = int(ack_timeout_seconds * 1000)
@@ -272,6 +295,7 @@ class MQTTClient:
             decoder_kwargs["rx_buffer_size"] = rx_buffer_size
         if max_message_size is not None:
             decoder_kwargs["max_message_size"] = max_message_size
+        self._decoder_kwargs = decoder_kwargs
         self._decoder = PacketDecoder(**decoder_kwargs)
 
         self._state = ProtocolState.DISCONNECTED
@@ -341,6 +365,7 @@ class MQTTClient:
             ),
         )
         self._state = ProtocolState.CONNECTING
+        self._user_wants_connected = True
 
     def disconnect(self):
         """Queue a DISCONNECT packet, close the socket, mark DISCONNECTED.
@@ -357,6 +382,7 @@ class MQTTClient:
         except Exception:  # noqa: BLE001 — disconnect is best-effort  # pragma: no cover - defensive
             pass
         self._state = ProtocolState.DISCONNECTED
+        self._user_wants_connected = False
         self.on_disconnect()
 
     # ------------------------------------------------------------------
@@ -511,8 +537,23 @@ class MQTTClient:
         deadlines + keepalive timer.  Drains TX again at the end —
         deadline-retry PUBLISHes and PINGREQs queued by the deadline
         + keepalive checks would otherwise wait an extra tick.
+
+        When the client is in ``FAILED`` and a ``socket_factory`` is
+        configured + the user originally called ``connect()``, this
+        tick attempts a self-heal: rebuild the socket via the factory,
+        reset internal queues, transition back to ``DISCONNECTED``,
+        and re-issue ``connect()``.  The factory failing (typically
+        because wifi is still down) leaves the client in ``FAILED``
+        and the next tick retries — naturally rate-limited by the
+        runner's tick cadence.
         """
-        if self._state in (ProtocolState.DISCONNECTED, ProtocolState.FAILED):
+        if self._state == ProtocolState.FAILED:
+            if self._socket_factory is None or not self._user_wants_connected:
+                return
+            if not self._attempt_self_heal():
+                return
+            # Self-heal succeeded — fall through and tick the new connection.
+        if self._state == ProtocolState.DISCONNECTED:
             return
         try:
             self._drain_tx_queue()
@@ -526,6 +567,51 @@ class MQTTClient:
         except OSError as error:
             self._last_error = MQTTError(f"socket error: {error}")
             self._state = ProtocolState.FAILED
+
+    def _attempt_self_heal(self):
+        """Rebuild the socket via ``socket_factory`` and re-issue connect.
+
+        Best-effort — if the factory raises (typically because wifi is
+        still down) the client stays in ``FAILED`` and the next handle
+        tick retries.
+
+        Returns ``True`` when self-heal succeeded and the client is
+        ready to tick (in ``CONNECTING``); ``False`` when the factory
+        failed and the client is still ``FAILED``.
+        """
+        # Close the dead socket best-effort so we don't leak file descriptors
+        # on long-running boards.
+        try:
+            if self._socket is not None:
+                self._socket.close()
+        except OSError:  # pragma: no cover - defensive
+            pass
+        try:
+            new_socket = self._socket_factory()
+        except OSError as factory_error:
+            self._last_error = MQTTError(
+                f"socket factory failed: {factory_error}",
+            )
+            return False
+        self._socket = new_socket
+        # Reset transient state for the fresh connection.  Keep the
+        # in-flight QoS 1 table intact when clean_session=False so a
+        # broker that supports session resumption can pick up where we
+        # left off; clear it on clean_session=True (the safer default).
+        self._tx_queue.clear()
+        self._partial_send = None
+        self._pending_responses.clear()
+        # Fresh decoder — discards any partial inbound packet from the
+        # dead socket and resets the degraded-buffer state.
+        self._decoder = PacketDecoder(**self._decoder_kwargs)
+        if self._clean_session:
+            self._in_flight = InFlightTable()
+        self._state = ProtocolState.DISCONNECTED
+        self._last_error = None
+        # Re-issue connect — this transitions to CONNECTING and queues
+        # the CONNECT packet that the upcoming _drain_tx_queue() flushes.
+        self.connect()
+        return True
 
     # ------------------------------------------------------------------
     # Internal — TX path

@@ -554,3 +554,168 @@ class TestDecoderEdgeCases:
         _drive(client, ticks, count=10)
         assert captured == []
         assert client.state == ProtocolState.CONNECTED  # silent drop, still connected
+
+
+# ---------------------------------------------------------------------------
+# Wifi-drop survivability: socket factory + self-heal
+# ---------------------------------------------------------------------------
+
+
+class TestSocketFactorySelfHeal:
+    """The Phase 7 wifi-drop story.
+
+    When ``MQTTClient`` is constructed with a ``socket_factory``, a tick
+    in ``FAILED`` state rebuilds the socket via the factory and re-issues
+    ``connect()`` automatically — the thing's run loop sees mqtt come
+    back without writing any recovery code.
+    """
+
+    def test_neither_socket_nor_factory_raises(self) -> None:
+        with pytest.raises(ValueError, match="socket or a socket_factory"):
+            MQTTClient(client_id="x")
+
+    def test_factory_only_constructor_builds_initial_socket(self) -> None:
+        ticks = FakeTicks()
+        sock = FakeSocket()
+        sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        builds: list[FakeSocket] = []
+
+        def factory() -> FakeSocket:
+            builds.append(sock)
+            return sock
+
+        client = MQTTClient(
+            socket_factory=factory,
+            client_id="x",
+            ticks_ms_func=ticks.ticks_ms,
+            ticks_add_func=ticks.ticks_add,
+            ticks_diff_func=ticks.ticks_diff,
+        )
+        # Factory was invoked once at __init__ to build the initial socket.
+        assert len(builds) == 1
+        client.connect()
+        _drive(client, ticks, count=2)
+        assert client.state == ProtocolState.CONNECTED
+        # Factory not called a second time — the socket is healthy.
+        assert len(builds) == 1
+
+    def test_failed_state_with_factory_self_heals_and_reconnects(self) -> None:
+        """Factory is called on FAILED + handle(); a new socket comes up."""
+        ticks = FakeTicks()
+        sock_one = FakeSocket()
+        sock_two = FakeSocket()
+        sock_one.enqueue_recv(canned_connack_bytes(return_code=0))
+        sock_two.enqueue_recv(canned_connack_bytes(return_code=0))
+        sockets = iter([sock_one, sock_two])
+
+        def factory() -> FakeSocket:
+            return next(sockets)
+
+        client = MQTTClient(
+            socket_factory=factory,
+            client_id="heal-test",
+            ticks_ms_func=ticks.ticks_ms,
+            ticks_add_func=ticks.ticks_add,
+            ticks_diff_func=ticks.ticks_diff,
+        )
+        client.connect()
+        _drive(client, ticks, count=2)
+        assert client.state == ProtocolState.CONNECTED
+
+        # Force FAILED — simulate a wifi-drop that killed the socket.
+        client._state = ProtocolState.FAILED  # noqa: SLF001 — test seam
+        _drive(client, ticks, count=2)
+
+        # Self-heal ran: factory built a new socket, connect re-issued,
+        # CONNACK arrived, back to CONNECTED on a different socket.
+        assert client.state == ProtocolState.CONNECTED
+        # The send on sock_two contains a CONNECT (post-self-heal handshake).
+        assert b"\x10" in bytes(sock_two.sent)  # CONNECT first byte = 0x10
+
+    def test_failed_state_without_factory_stays_failed(self) -> None:
+        sock = FakeSocket()
+        sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        ticks = FakeTicks()
+        client = _new_client(sock, ticks)  # no socket_factory
+
+        client.connect()
+        _drive(client, ticks, count=2)
+        assert client.state == ProtocolState.CONNECTED
+
+        client._state = ProtocolState.FAILED  # noqa: SLF001 — test seam
+        _drive(client, ticks, count=5)
+        # No factory → no self-heal, stays FAILED.
+        assert client.state == ProtocolState.FAILED
+
+    def test_factory_raise_keeps_client_failed(self) -> None:
+        """Wifi still down → factory raises → client stays FAILED, retries next tick."""
+        ticks = FakeTicks()
+        initial_sock = FakeSocket()
+        initial_sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        recovery_sock = FakeSocket()
+        recovery_sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        attempts: list[bool] = []
+
+        def factory() -> FakeSocket:
+            if not attempts:
+                attempts.append(True)  # initial __init__ build
+                return initial_sock
+            if len(attempts) < 4:
+                attempts.append(False)
+                raise OSError("wifi still down")
+            attempts.append(True)
+            return recovery_sock
+
+        client = MQTTClient(
+            socket_factory=factory,
+            client_id="retry-test",
+            ticks_ms_func=ticks.ticks_ms,
+            ticks_add_func=ticks.ticks_add,
+            ticks_diff_func=ticks.ticks_diff,
+        )
+        client.connect()
+        _drive(client, ticks, count=2)
+        assert client.state == ProtocolState.CONNECTED
+
+        client._state = ProtocolState.FAILED  # noqa: SLF001 — test seam
+        # Factory raises on the next 3 attempts; client stays FAILED.
+        _drive(client, ticks, count=3)
+        assert client.state == ProtocolState.FAILED
+        assert "wifi still down" in str(client.last_error)
+
+        # 4th attempt: factory returns the recovery socket, self-heal succeeds.
+        _drive(client, ticks, count=2)
+        assert client.state == ProtocolState.CONNECTED
+
+    def test_explicit_disconnect_disables_self_heal(self) -> None:
+        """User-driven disconnect() must not auto-reconnect via the factory."""
+        ticks = FakeTicks()
+        sock = FakeSocket()
+        sock.enqueue_recv(canned_connack_bytes(return_code=0))
+        builds: list[None] = []
+
+        def factory() -> FakeSocket:
+            builds.append(None)
+            return sock
+
+        client = MQTTClient(
+            socket_factory=factory,
+            client_id="disconnect-test",
+            ticks_ms_func=ticks.ticks_ms,
+            ticks_add_func=ticks.ticks_add,
+            ticks_diff_func=ticks.ticks_diff,
+        )
+        client.connect()
+        _drive(client, ticks, count=2)
+        assert client.state == ProtocolState.CONNECTED
+        initial_build_count = len(builds)
+
+        client.disconnect()
+        assert client.state == ProtocolState.DISCONNECTED
+
+        # Force FAILED — even with the factory present, the user-driven
+        # disconnect should keep self-heal off.
+        client._state = ProtocolState.FAILED  # noqa: SLF001 — test seam
+        _drive(client, ticks, count=5)
+        assert client.state == ProtocolState.FAILED
+        assert len(builds) == initial_build_count  # factory not called again
