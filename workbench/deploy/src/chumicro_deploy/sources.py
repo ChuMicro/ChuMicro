@@ -259,6 +259,18 @@ class ImportGraphSource:
                 discovered.extend(alias.name for alias in node.names)
             elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
                 discovered.append(node.module)
+                # ``from foo.bar import baz`` could be importing a
+                # ``foo/bar/baz.py`` submodule or a name defined in
+                # ``foo/bar/__init__.py``.  AST can't tell — probe both.
+                # ``_resolve_module`` skips names that don't resolve to
+                # a real file, so probing harmless function/class names
+                # is a no-op.  Closes the gap where a runtime-gated
+                # ``from chumicro_sockets._adapters import mp`` inside
+                # a function body shipped only ``_adapters/__init__.py``,
+                # not the named adapter file.
+                for alias in node.names:
+                    if alias.name != "*":
+                        discovered.append(f"{node.module}.{alias.name}")
         return discovered
 
     def _resolve_module(self, module_name: str) -> Path | None:

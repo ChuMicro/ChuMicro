@@ -171,33 +171,6 @@ def _chumicro_mono_repo_root() -> Path:
     return Path(__file__).resolve().parents[3]
 
 
-def _lazy_runtime_adapter_modules() -> list[str]:
-    """Per-runtime adapter / backend modules the AST walker can't see.
-
-    Several chumicro libraries pick a per-runtime adapter at runtime
-    via ``try: import esp32`` ladders (see
-    ``chumicro_wifi.service._select_adapter`` and friends).  The AST
-    walker doesn't follow those branches, so the adapter modules
-    don't ship by default; force-include every one we know about,
-    and let chumicro-deploy's future Decision 0037 marker filter
-    drop the wrong-runtime ones at bundle time.
-
-    Forward-looking: when the import-graph deploy honors
-    ``__chumicro_runtimes__`` markers natively, this list goes away.
-    """
-    return [
-        "chumicro_wifi._adapters.cp",
-        "chumicro_wifi._adapters.mp_esp32",
-        "chumicro_wifi._adapters.mp_rp2",
-        "chumicro_kvstore._backends.cp_nvm",
-        "chumicro_kvstore._backends.mp_nvs",
-        "chumicro_kvstore._backends.mp_littlefs",
-        "chumicro_kvstore._backends.memory",
-        "chumicro_sockets._adapters.cp",
-        "chumicro_sockets._adapters.mp",
-    ]
-
-
 def _chumicro_library_search_paths() -> list[Path]:
     """Every `<root>/libraries/<name>/src` directory.
 
@@ -294,7 +267,6 @@ def test_sensor_thing_reaches_boot_phase_marker_on_micropython(
         entrypoint_filename="main.py",
         device_entrypoint="/main.py",
         extra_search_paths=_chumicro_library_search_paths(),
-        extra_modules=_lazy_runtime_adapter_modules(),
     )
     result = Deployer(device).deploy(source)
     _assert_layer2_phase_markers(result.execute_output)
@@ -342,7 +314,6 @@ def test_sensor_thing_boot_counter_persists_across_deploys_on_micropython(
         entrypoint_filename="main.py",
         device_entrypoint="/main.py",
         extra_search_paths=_chumicro_library_search_paths(),
-        extra_modules=_lazy_runtime_adapter_modules(),
     )
     deployer = Deployer(device)
 
@@ -583,7 +554,6 @@ def test_sensor_thing_publishes_to_live_broker(
             entrypoint_filename="main.py",
             device_entrypoint="/main.py",
             extra_search_paths=_chumicro_library_search_paths(),
-            extra_modules=_lazy_runtime_adapter_modules(),
         )
         # Read messages while the deploy is still pumping.  The deploy
         # blocks until the on-device script terminates (which it won't —

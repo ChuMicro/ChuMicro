@@ -257,6 +257,83 @@ class TestImportGraphSource:
         assert "/lib/broken.py" in files
         assert "/lib/ok.py" in files
 
+    def test_from_import_resolves_named_submodule(self, tmp_path: Path):
+        """``from foo._adapters import mp`` ships ``foo/_adapters/mp.py``.
+
+        Phase 7 Layer-3 caught this: the walker captured the package
+        (``foo._adapters``) but ignored the named alias (``mp``),
+        leaving the runtime-gated adapter off the device.  Probing
+        ``foo._adapters.mp`` as a candidate submodule plus skipping
+        unresolvable names quietly is the smallest fix.
+        """
+        libs = tmp_path / "libs"
+        libs.mkdir()
+        pkg = libs / "foo"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("")
+        adapters = pkg / "_adapters"
+        adapters.mkdir()
+        (adapters / "__init__.py").write_text("")
+        (adapters / "cp.py").write_text("def connect(): ...\n")
+        (adapters / "mp.py").write_text("def connect(): ...\n")
+
+        entrypoint = tmp_path / "app.py"
+        entrypoint.write_text(
+            "def use_mp():\n"
+            "    from foo._adapters import mp\n"
+            "    return mp.connect()\n"
+        )
+
+        source = ImportGraphSource(entrypoint, search_paths=[libs])
+        files = source.files()
+        # The submodule named in the from-import lands on device.
+        assert "/lib/foo/_adapters/mp.py" in files
+        # The package itself rides along.
+        assert "/lib/foo/_adapters/__init__.py" in files
+        # Siblings that the user code did not name are NOT auto-included.
+        assert "/lib/foo/_adapters/cp.py" not in files
+
+    def test_from_import_alias_that_is_not_a_submodule_is_skipped(
+        self, tmp_path: Path
+    ):
+        """``from foo import not_a_module`` doesn't error or over-include.
+
+        ``not_a_module`` is a function/class defined inside
+        ``foo/__init__.py``.  The walker probes ``foo.not_a_module``,
+        gets a None from ``_resolve_module``, and silently skips —
+        the same path stdlib imports take.
+        """
+        libs = tmp_path / "libs"
+        libs.mkdir()
+        pkg = libs / "foo"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text(
+            "def not_a_module():\n"
+            "    return 'hi'\n"
+        )
+        entrypoint = tmp_path / "app.py"
+        entrypoint.write_text("from foo import not_a_module\n")
+
+        source = ImportGraphSource(entrypoint, search_paths=[libs])
+        files = source.files()
+        assert "/lib/foo/__init__.py" in files
+        # No bogus ``foo/not_a_module.py`` keys leaked into the file map.
+        assert not any("not_a_module" in path for path in files)
+
+    def test_from_import_wildcard_does_not_probe(self, tmp_path: Path):
+        """``from foo import *`` shouldn't probe ``foo.*`` as a name."""
+        libs = tmp_path / "libs"
+        libs.mkdir()
+        pkg = libs / "foo"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("X = 1\n")
+        entrypoint = tmp_path / "app.py"
+        entrypoint.write_text("from foo import *\n")
+
+        # Just confirms construction doesn't raise on the literal "*".
+        source = ImportGraphSource(entrypoint, search_paths=[libs])
+        assert "/lib/foo/__init__.py" in source.files()
+
     def test_handles_relative_imports_silently(self, tmp_path: Path):
         libs = tmp_path / "libs"
         libs.mkdir()

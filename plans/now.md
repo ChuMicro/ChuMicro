@@ -7,10 +7,10 @@ This is the front door. Everything else is deeper read.
 ---
 
 - **Phase:** Phase 7 (first end-to-end sensor thing) mostly green: Layer-1 import resolution + Layer-2 fail-fast wifi gates land cleanly on Pi Pico W MP/CP.  Layer-3 broker round-trip blocks on a network-topology issue (device → host LAN IP) that needs physical debugging.
-- **Last shipped:** `chumicro-workspace new <name>` now rejects hyphenated / dotted / keyword / leading-underscore thing names up-front instead of failing at deploy time when the name turns out not to be a valid Python module.
+- **Last shipped:** `ImportGraphSource` now resolves named-from-import submodules (`from chumicro_sockets._adapters import mp` ships `mp.py`); the `_lazy_runtime_adapter_modules()` workaround retired from the Phase 7 functional tests.
 - **In flight:** —
 - **Blocked on:** Phase 7 Layer-3 broker round-trip — deploy succeeds, files reach device (verified via `mpremote fs ls`), but `mosquitto_sub` sees zero messages.  Suspect host LAN-route / firewall.  Needs physical access to dig in.
-- **Last touched:** `workbench/workspace/src/chumicro_workspace/cli.py` (`_validate_thing_name` helper + early call from `_cmd_new`), `workbench/workspace/tests/test_cli.py` (parametrized rejection cases; existing `kitchen-sensor` fixture → `kitchen_sensor`), `workbench/workspace/functional_tests/test_sensor_thing_hardware.py` (one-line CHU001 cleanup leftover from Phase 7 Layer-3 commit).
+- **Last touched:** `workbench/deploy/src/chumicro_deploy/sources.py` (`_imports_from_file` probes `{module}.{alias_name}` candidates from `ImportFrom` nodes), `workbench/deploy/tests/test_sources.py` (3 new submodule-probing cases), `workbench/workspace/functional_tests/test_sensor_thing_hardware.py` (drop the workaround), `plans/workstreams/phase-7-integration.md` (mark gap resolved).
 
 ---
 
