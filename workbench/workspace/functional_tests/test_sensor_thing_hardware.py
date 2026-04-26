@@ -36,6 +36,8 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -333,3 +335,273 @@ def test_sensor_thing_boot_counter_persists_across_deploys_on_micropython(
     assert second_count == first_count + 1, (
         f"boot counter did not advance: first={first_count} second={second_count}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Layer 3: live broker round-trip (heavily gated — needs wifi creds + LAN broker)
+# ---------------------------------------------------------------------------
+
+
+_LAYER3_TOPIC = "chumicro/layer3/temperature"
+_LAYER3_REQUIRED_MESSAGES = 2
+_LAYER3_DEPLOY_TIMEOUT_SECONDS = 60.0
+
+
+def _detect_host_lan_ip() -> str:
+    """Return the host's LAN IP that devices on the same wifi can reach.
+
+    Connects a UDP socket to a public IP — doesn't actually send; just
+    asks the kernel which local interface would be used for that route,
+    which on a wifi-attached laptop is the LAN address (192.168.x.y).
+    Loopback (127.0.0.1) doesn't work because devices see a different
+    network namespace.
+    """
+    import socket as _socket
+
+    probe = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM)
+    try:
+        probe.connect(("8.8.8.8", 80))
+        return probe.getsockname()[0]
+    finally:
+        probe.close()
+
+
+def _layer3_required_environment() -> dict[str, str]:
+    """Return the env vars Layer-3 needs, or skip with a list of missing ones.
+
+    * ``CHUMICRO_TEST_WIFI_SSID`` — the AP the device should join.
+    * ``CHUMICRO_TEST_WIFI_PASSWORD`` — its passphrase.
+    * ``CHUMICRO_TEST_BROKER_HOST`` (optional) — host the device dials.
+      Defaults to the host's auto-detected LAN IP; override when running
+      Mosquitto somewhere other than the test host.
+    """
+    required = (
+        "CHUMICRO_TEST_WIFI_SSID",
+        "CHUMICRO_TEST_WIFI_PASSWORD",
+    )
+    missing = [name for name in required if not os.environ.get(name)]
+    if missing:
+        pytest.skip(
+            f"Layer-3 needs {', '.join(missing)} in the environment.  "
+            "Set them when you have a test wifi network the device can "
+            "reach.",
+        )
+    return {
+        "ssid": os.environ["CHUMICRO_TEST_WIFI_SSID"],
+        "password": os.environ["CHUMICRO_TEST_WIFI_PASSWORD"],
+        "broker_host": os.environ.get(
+            "CHUMICRO_TEST_BROKER_HOST", _detect_host_lan_ip(),
+        ),
+    }
+
+
+def _spawn_lan_mosquitto(workdir: Path) -> tuple[subprocess.Popen, int]:
+    """Spawn a Mosquitto broker bound to all interfaces.
+
+    Returns (process, port).  Caller must terminate the process.
+    Skips when ``mosquitto`` isn't on PATH.
+    """
+    import socket as _socket
+
+    if shutil.which("mosquitto") is None:
+        pytest.skip("mosquitto not on PATH (install with `brew install mosquitto`)")
+
+    # Pick a free port on 0.0.0.0.
+    bind_probe = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+    bind_probe.bind(("0.0.0.0", 0))  # noqa: S104 — broker must accept LAN clients
+    port = bind_probe.getsockname()[1]
+    bind_probe.close()
+
+    config_path = workdir / "broker.conf"
+    config_path.write_text(
+        f"listener {port} 0.0.0.0\n"
+        "allow_anonymous true\n"
+        "persistence false\n"
+        f"log_dest file {workdir}/broker.log\n",
+    )
+    # Mosquitto 2.0 on macOS: setrlimit(RLIMIT_NOFILE) above default soft
+    # cap fails with "Out of memory" — drop the cap in the child.
+    def _reduce_fd_limit() -> None:  # pragma: no cover — runs in spawned child
+        import resource  # noqa: PLC0415
+
+        resource.setrlimit(resource.RLIMIT_NOFILE, (256, 256))
+
+    process = subprocess.Popen(  # noqa: S603 — args fully controlled
+        ["mosquitto", "-c", str(config_path)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        preexec_fn=_reduce_fd_limit,  # noqa: PLW1509 — macOS rlimit quirk
+    )
+
+    # Wait until the broker accepts connections.
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline:
+        try:
+            ready_probe = _socket.create_connection(("127.0.0.1", port), timeout=0.5)
+        except OSError:
+            time.sleep(0.05)
+            continue
+        ready_probe.close()
+        return process, port
+    process.terminate()
+    process.wait(timeout=2)
+    pytest.skip(f"mosquitto failed to start on port {port}")
+    raise AssertionError("unreachable")  # pragma: no cover — pytest.skip exits
+
+
+def _spawn_subscriber(broker_port: int, topic: str) -> subprocess.Popen:
+    """Spawn ``mosquitto_sub`` in line-buffered mode capturing payloads."""
+    return subprocess.Popen(  # noqa: S603 — args fully controlled
+        [
+            "mosquitto_sub",
+            "-h", "127.0.0.1",
+            "-p", str(broker_port),
+            "-t", topic,
+            "-q", "1",
+            "-V", "mqttv311",
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        bufsize=1,
+    )
+
+
+def _read_n_lines(
+    process: subprocess.Popen,
+    count: int,
+    *,
+    timeout_seconds: float,
+) -> list[str]:
+    """Read at most *count* stdout lines from *process* within timeout."""
+    import selectors
+
+    selector = selectors.DefaultSelector()
+    selector.register(process.stdout, selectors.EVENT_READ)
+    deadline = time.monotonic() + timeout_seconds
+    lines: list[str] = []
+    while len(lines) < count and time.monotonic() < deadline:
+        remaining = max(0.05, deadline - time.monotonic())
+        if not selector.select(timeout=remaining):
+            continue
+        line = process.stdout.readline()
+        if not line:
+            break  # subscriber closed
+        lines.append(line.rstrip("\r\n"))
+    return lines
+
+
+def _live_broker_config_toml(environment: dict[str, str], port: int) -> str:
+    return (
+        "[wifi]\n"
+        f'ssid = "{environment["ssid"]}"\n'
+        'password = "!secret wifi_password"\n'
+        "connect_timeout_ms = 15000\n"
+        "\n"
+        "[mqtt]\n"
+        f'broker = "{environment["broker_host"]}"\n'
+        f"port = {port}\n"
+        'client_id = "chumicro-layer3-sensor"\n'
+        "\n"
+        "[sensor]\n"
+        f'topic = "{_LAYER3_TOPIC}"\n'
+        "publish_period_ms = 2000\n"
+    )
+
+
+def test_sensor_thing_publishes_to_live_broker(
+    micropython_device: DeviceEntry,
+    template_repo: Path,
+    tmp_path: Path,
+) -> None:
+    """End-to-end smoke: deploy → wifi up → mqtt connect → N messages
+    arrive on the host's mosquitto_sub within the configured window.
+
+    Skips unless flash mode + wifi env vars + mosquitto are all available.
+    """
+    _skip_unless_flash_mode(micropython_device)
+    environment = _layer3_required_environment()
+
+    broker_workdir = tmp_path / "mosquitto"
+    broker_workdir.mkdir()
+    broker_process, broker_port = _spawn_lan_mosquitto(broker_workdir)
+    subscriber_process = _spawn_subscriber(broker_port, _LAYER3_TOPIC)
+
+    try:
+        # Stage workspace: real wifi creds in secrets, sensor pointing at
+        # the host's LAN-bound Mosquitto.
+        workspace, sensor_dir = _stage_layer2_workspace(tmp_path, template_repo)
+        (sensor_dir / "config.toml").write_text(
+            _live_broker_config_toml(environment, broker_port),
+        )
+        (tmp_path / "secrets.yml").write_text(
+            f'wifi_password: "{environment["password"]}"\n',
+        )
+
+        # Deploy + boot.  The deploy returns once the entrypoint exits;
+        # since this thing's run() is `while not _SHUTDOWN_REQUESTED`,
+        # it'll keep running until the deploy times out.  We don't need
+        # to wait for the deploy to return — we just need it to start.
+        # Run the deploy in the foreground for now and accept that the
+        # test takes ~the deploy timeout.
+        device = _build_device(micropython_device)
+        source = thing_import_graph_source(
+            sensor_dir,
+            workspace=workspace,
+            entrypoint_filename="main.py",
+            device_entrypoint="/main.py",
+            extra_search_paths=_chumicro_library_search_paths(),
+        )
+        # Read messages while the deploy is still pumping.  The deploy
+        # blocks until the on-device script terminates (which it won't —
+        # the sensor publishes forever).  So we drive deploy + read in
+        # parallel via threads.  Simplest split: deploy runs in a
+        # background thread, the main thread reads N messages.
+        import threading
+
+        deploy_result_box: list[object] = []
+        deploy_error_box: list[BaseException] = []
+
+        def _run_deploy() -> None:
+            try:
+                deploy_result_box.append(Deployer(device).deploy(source))
+            except BaseException as deploy_error:  # noqa: BLE001 — stash + re-raise
+                deploy_error_box.append(deploy_error)
+
+        deploy_thread = threading.Thread(
+            target=_run_deploy,
+            name="layer3-deploy",
+            daemon=True,
+        )
+        deploy_thread.start()
+
+        lines = _read_n_lines(
+            subscriber_process,
+            count=_LAYER3_REQUIRED_MESSAGES,
+            timeout_seconds=_LAYER3_DEPLOY_TIMEOUT_SECONDS,
+        )
+
+        assert len(lines) >= _LAYER3_REQUIRED_MESSAGES, (
+            f"expected ≥{_LAYER3_REQUIRED_MESSAGES} heartbeat messages, "
+            f"got {len(lines)}; deploy state: "
+            f"{'running' if deploy_thread.is_alive() else 'returned'}; "
+            f"subscriber lines: {lines}"
+        )
+        # Each line is a JSON-ish payload: {"boot": N, "celsius": T, "n": K}
+        for line in lines:
+            assert "boot" in line and "celsius" in line, (
+                f"unexpected payload shape: {line!r}"
+            )
+    finally:
+        subscriber_process.terminate()
+        try:
+            subscriber_process.wait(timeout=3)
+        except subprocess.TimeoutExpired:  # pragma: no cover — defensive
+            subscriber_process.kill()
+            subscriber_process.wait()
+        broker_process.terminate()
+        try:
+            broker_process.wait(timeout=3)
+        except subprocess.TimeoutExpired:  # pragma: no cover — defensive
+            broker_process.kill()
+            broker_process.wait()
