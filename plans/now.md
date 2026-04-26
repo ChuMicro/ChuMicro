@@ -6,23 +6,30 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** workspace-bootstrap pivot (Decision 0038) landing.  `chumicro-workspace-runtime` renamed to `chumicro-workspace`; `chumicro-workspace-template` package deleted; `init` / `update` folded into the renamed package; canonical workspace template moved to a separate private repo at [`ChuMicro/ChuMicro-Workspace-Template`](https://github.com/ChuMicro/ChuMicro-Workspace-Template); `setup` now materializes `_templates/secrets.yml` → `secrets.yml` so users never `cp` an `.example` file.  `check-version` waives the bump gate while VERSION reads `0.0.0`.
-- **Last shipped:** Pi Pico W flash-footprint workstream (Decision 0037 + macOS-FAT hygiene; ~80 KB recovered, all 9 libs fit on Pi Pico W CP).
-- **In flight:** Decision 0038 pivot — staged template content lives in `.scratch/template-repo/` ready to push to the new private repo once the in-mono-repo commit lands.
+- **Phase:** idle — Decision 0038 workspace-bootstrap pivot landed (2026-04-26); chumicro-dev mode wired into the template repo; `scripts/device_config.py` migrated to consume `chumicro_deploy.config.default.load_raw_entries`.  Pick the next item from `plans/next-up.md` (Phase 7 sensor thing template, scripts→workbench backlog, multi-thing flash re-eval, or rebrand-to-ChipPy are top of the queue).
+- **Last shipped:** `scripts/device_config.py` consumes `chumicro_deploy.config.default.load_raw_entries` (Decision 0032 rule 8 cleanup; one place defines the devices.yml schema, mono-repo + chumicro-deploy tests stay in sync).
+- **In flight:** —
 - **Blocked on:** —
-- **Last touched:** `plans/decisions/0038-workspace-bootstrap-via-clone.md`, `workbench/workspace/` (renamed from `workspace-runtime/`), new `chumicro_workspace.template_zones` + `chumicro_workspace.template_apply` modules with `init`/`update`/`materialize_templates`, deleted `workbench/workspace-template/`, `scripts/check_version.py` (0.0.0 floor), `.scratch/template-repo/` (12 files staged for the new repo), root README.md / AGENTS.md / docs/contributing/workbench.md package roster.
+- **Last touched:** `workbench/deploy/src/chumicro_deploy/config/default.py` (new `load_raw_entries` primitive + `load_devices_yml` rewired through it), `workbench/deploy/tests/test_config_default.py` (9 new `TestLoadRawEntries` cases), `scripts/device_config.py` (`load_device_registry` now wraps `load_raw_entries`).
 
 ---
 
-## Workstream summary (workspace bootstrap pivot, this session)
+## Workstream summaries (this session)
 
-* **Decision 0038** documents the shift: the workspace template is a Git repo users clone, not a `_payloads/` blob shipped inside a workbench package.  Restores Decision 0029 §1's "the workspace is a git repo" promise.
-* **Package consolidation:** `chumicro-workspace-template` deleted; its `init` / `update` / three-zone manifest folded into `chumicro-workspace` (renamed from `chumicro-workspace-runtime`).  One CLI, one folder, one VERSION.
-* **Self-bootstrapping `run.py`:** the new template repo's `run.py` creates `.venv` + installs `chumicro-workspace` on first `python3 run.py setup` and re-execs into the venv for every subsequent command.  No prerequisite pip install of any ChuMicro package needed.
-* **Templated config files (Decision 0038 §5):** `secrets.yml.example` retired.  Template sources live under `_templates/` and `setup` materializes them into the workspace root (idempotent, never overwrites user edits).
-* **`check-version` 0.0.0 carve-out (Decision 0038 §6):** packages at the pre-release floor are exempt from the bump gate; gate kicks in once VERSION crosses to non-zero.
+### Decision 0038 pivot
 
-Side cleanup: stale `topic_ai/great-bell-304fe5` branch deleted from origin; PR #1 (stale 0.1.12 bump) flagged for manual close from the GitHub UI; `.idea/chumicro.iml` PyCharm drift reverted via `sync-ide`.
+* Renamed `chumicro-workspace-runtime` → `chumicro-workspace`; folded `init` / `update` / three-zone manifest in.
+* Created [`ChuMicro/ChuMicro-Workspace-Template`](https://github.com/ChuMicro/ChuMicro-Workspace-Template) as the canonical Git template repo (private, GitHub template-flagged).
+* Self-bootstrapping `run.py` + `_templates/` materialization (Decision 0038 §5).
+* `check-version` waives the bump gate at 0.0.0 (Decision 0038 §6).
+* chumicro-dev mode: `chumicro-dev.toml` points at a local chumicro mono-repo path; `run.py setup` walks `libraries/` + `workbench/` and pip-installs each as editable.  Smoke-tested end-to-end.
+* Side cleanup: gitconfig includeIf at `~/circuitpython/.gitconfig` so any repo under `~/circuitpython/` auto-uses `ChuxMaker / chuxmaker@users.noreply.github.com` (was committing under the wrong identity twice before this got wired up).
+
+### `scripts/device_config.py` migration
+
+* New `load_raw_entries(path) -> (entries, defaults)` primitive in `chumicro_deploy.config.default` — pure YAML parse, no Device construction.
+* `load_devices_yml` rewired through the primitive.
+* `scripts/device_config.py` `load_device_registry` wraps it; script-only surface (DeviceEntry / DeviceDefaults / `_validate_device` / `filter_devices` / `resolve_ide_devices`) preserved verbatim so `device_testing`, `pytest_device`, `pr_summary`, and `workbench/deploy/functional_tests/conftest.py` don't change.
 
 ---
 

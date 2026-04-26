@@ -47,6 +47,70 @@ from typing import Any
 from ..device import Device
 
 
+def load_raw_entries(
+    path: Path | str,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Parse a ``devices.yml`` into raw entries + defaults dict.
+
+    The schema-shape primitive that ``chumicro-deploy`` owns: read
+    the YAML, return the ``devices:`` list and the ``defaults:``
+    mapping verbatim — no field validation, no Device construction,
+    no normalisation.  Consumers with richer schemas (the chumicro
+    mono-repo's IDE-test orchestration, future project-workspace
+    template loaders) call this and layer their own validation on
+    top, so the YAML shape lives in one place.
+
+    Args:
+        path: Filesystem path to the YAML file.
+
+    Returns:
+        Tuple of ``(entries, defaults)``.  *entries* is the
+        ``devices:`` list verbatim (empty list when the key is
+        missing).  *defaults* is the ``defaults:`` mapping verbatim
+        (empty dict when missing).
+
+    Raises:
+        FileNotFoundError: The YAML file does not exist.
+        ValueError: The YAML root is not a mapping, or
+            ``defaults:`` / ``devices:`` are present but the wrong
+            type.
+    """
+    import yaml
+
+    yaml_path = Path(path)
+    if not yaml_path.is_file():
+        raise FileNotFoundError(f"devices.yml not found: {yaml_path!s}")
+
+    with yaml_path.open("r", encoding="utf-8") as handle:
+        document = yaml.safe_load(handle) or {}
+
+    if not isinstance(document, dict):
+        raise ValueError(
+            f"Expected a YAML mapping in {yaml_path!s}, "
+            f"got {type(document).__name__}"
+        )
+
+    raw_defaults = document.get("defaults") or {}
+    if not isinstance(raw_defaults, dict):
+        raise ValueError(
+            f"defaults: section in {yaml_path!s} must be a mapping, "
+            f"got {type(raw_defaults).__name__}"
+        )
+
+    raw_devices = document.get("devices")
+    if raw_devices is None:
+        entries: list[dict[str, Any]] = []
+    elif isinstance(raw_devices, list):
+        entries = raw_devices
+    else:
+        raise ValueError(
+            f"devices: section in {yaml_path!s} must be a list, "
+            f"got {type(raw_devices).__name__}"
+        )
+
+    return entries, raw_defaults
+
+
 def _normalise_device_entry(
     entry: dict[str, Any],
     *,
@@ -118,8 +182,6 @@ def load_devices_yml(
             ``device_id`` is not among the entries, or
             ``runtime`` is not one of the supported names.
     """
-    import yaml
-
     if device_id is not None and runtime is not None:
         raise ValueError(
             "load_devices_yml: device_id and runtime are mutually "
@@ -127,15 +189,8 @@ def load_devices_yml(
         )
 
     yaml_path = Path(path)
-    if not yaml_path.is_file():
-        raise FileNotFoundError(f"devices.yml not found: {yaml_path!s}")
-
-    with yaml_path.open("r", encoding="utf-8") as handle:
-        document = yaml.safe_load(handle) or {}
-
-    defaults = document.get("defaults") or {}
+    entries, defaults = load_raw_entries(yaml_path)
     default_deploy_mode = defaults.get("deploy_mode")
-    entries = document.get("devices") or []
     if not entries:
         raise ValueError(f"No devices configured in {yaml_path!s}")
 

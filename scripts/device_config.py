@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
+from chumicro_deploy.config.default import load_raw_entries
 
 #: Default filename for the device registry — looked up relative to the
 #: workspace root passed in by the caller (or ``Path.cwd()`` when no
@@ -240,20 +241,24 @@ def load_device_registry(
     resolved = path or _resolve_path(
         "CHUMICRO_DEVICES", DEFAULT_DEVICES_FILENAME, workspace_root,
     )
-    data = _load_yaml(resolved)
-
-    defaults = _parse_defaults(data.get("defaults") or {})
-
-    devices_list = data.get("devices")
-    if not isinstance(devices_list, list):
+    try:
+        entries, raw_defaults = load_raw_entries(resolved)
+    except FileNotFoundError as error:
         raise DeviceConfigError(
-            f"Expected a 'devices' list in {resolved}"
-        )
+            f"Config file not found: {resolved}\n"
+            "Run 'python scripts/run.py setup' to generate it."
+        ) from error
+    except (yaml.YAMLError, ValueError) as error:
+        raise DeviceConfigError(str(error)) from error
 
+    if not entries:
+        raise DeviceConfigError(f"Expected a 'devices' list in {resolved}")
+
+    defaults = _parse_defaults(raw_defaults)
     return (
         [
             _validate_device(entry, index, global_deploy_mode=defaults.deploy_mode)
-            for index, entry in enumerate(devices_list)
+            for index, entry in enumerate(entries)
         ],
         defaults,
     )
