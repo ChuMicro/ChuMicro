@@ -196,3 +196,18 @@ Surfaced 2026-04-26 during the post-Phase-6 audit cycle.  Two prior runs broke b
 ### `griffe check --search` silently ignores absolute paths in 2.x
 
 Pass `--search` as a path *relative to the subprocess cwd*, not absolute. With griffe 2.0.2, an absolute `--search /abs/path/to/src` resolves nothing — griffe exits 0 with empty stdout/stderr regardless of breakages, making any check_api-style gate a silent no-op. The relative form (`--search workbench/deploy/src` from the repo root) works. This bug had been live in `scripts/check_api.py` since the gate was added: every PR was passing it without any actual API comparison. Caught during 2026-04-25 manual end-to-end validation while extending the gates to workbench. Fix: `str((package_root / "src").relative_to(ROOT))`. Always run a real-fixture pass when wiring tools that fail-soft like this — unit tests with mocked subprocesses can't see this class of regression.
+
+### macOS doubles the on-device file count on FAT mounts via AppleDouble (`._foo`) sidecars
+
+CircuitPython firmware does **not** auto-generate `.mpy` cache files at import time (`MICROPY_PERSISTENT_CODE_SAVE_FILE = 0` in `py/mpconfig.h`).  When the on-device file count looks ~2× higher than the `.py` source set predicts, the cause is **macOS AppleDouble sidecars** — the kernel's FAT driver writes a `._foo` companion alongside every `foo` whenever the source file has any extended attribute (which Finder, Spotlight, or even routine `pathlib.Path.write_bytes` can attach).  The board's `os.listdir` sees the sidecars as real files and they consume FAT clusters like any other.
+
+`flash_drive.clean_dot_files` (`dot_clean -m`) cleans them up post-write, but only if the deploy path actually *calls* it.  `chumicro_deploy.circuitpython_transport.deploy_test_files` (rsync path) was already calling it; `deploy_files` (the `FileMapSource` per-file `write_bytes` path used by `Deployer.deploy()` and the on-board RAM audit) was **not**.  Fix landed in commit `<TODO>`: wire `disable_spotlight_indexing` + the new `neuter_macos_metadata` helper before writes and `clean_dot_files` after, in both flash-mode paths.
+
+`neuter_macos_metadata` is the new persistent-prevention helper.  It plants two sentinels macOS honours across remounts (`.metadata_never_index` for Spotlight, `.fseventsd/no_log` for FSEvents) and removes already-accumulated noise directories (`.Spotlight-V100`, `.Trashes`, `.TemporaryItems`, `.DocumentRevisions-V100`).  The sentinels persist on the FAT volume so a board that's been deployed to once carries the suppression forward — the equivalent of `mdutil -i off` (which resets every remount) but durable.
+
+Pi Pico W CP audit before/after on `chumicro_wifi`:
+
+* **Before fix:** `lib_files=15`, `lib_bytes=52 878`, `flash_free=476 160` — 8 phantom `._foo` sidecars per package, ~33 KB sidecar bytes for the wifi tree alone.
+* **After fix:** `lib_files=7`, `lib_bytes=20 110`, `flash_free=492 544` — exactly matches the `bundle_manager` Decision 0037 prediction (CP-mpy bundle = 7 files).
+
+Lesson: when you're auditing on-device file counts on macOS, always cross-check against the bundle audit's prediction.  A 2× discrepancy is almost certainly AppleDouble noise, not a real deploy bug.

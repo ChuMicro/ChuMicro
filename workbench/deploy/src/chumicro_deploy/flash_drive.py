@@ -206,6 +206,73 @@ def disable_spotlight_indexing(drive_path: Path) -> None:
         print("WARNING: mdutil not found — skipping Spotlight indexing disable")
 
 
+#: Sentinel files / directories macOS recognises to skip a volume.  Planted
+#: at the drive root so subsequent remounts inherit the suppression — the
+#: equivalent of ``mdutil -i off`` (which resets on remount) but persistent.
+_MACOS_SKIP_SENTINELS = (
+    ".metadata_never_index",  # Spotlight: skip indexing this volume.
+    ".fseventsd/no_log",      # FSEvents daemon: skip logging this volume.
+)
+
+#: Metadata directories macOS auto-creates on FAT volumes.  Removed defensively
+#: at deploy time — they re-appear if macOS still wants them, but the sentinel
+#: files above usually persuade it not to.
+_MACOS_NOISE_DIRS = (
+    ".Spotlight-V100",
+    ".Trashes",
+    ".TemporaryItems",
+    ".DocumentRevisions-V100",
+)
+
+
+def neuter_macos_metadata(drive_path: Path) -> None:
+    """Suppress macOS auto-created metadata files / dirs on a FAT volume.
+
+    Belt-and-suspenders prevention paired with :func:`disable_spotlight_indexing`
+    and :func:`clean_dot_files`.  Plants two sentinel files macOS honours
+    persistently across remounts, then removes any noise directories that
+    have already accumulated:
+
+    * ``.metadata_never_index`` — Spotlight skips this volume entirely.
+    * ``.fseventsd/no_log`` — FSEvents daemon skips logging.
+    * removes ``.Spotlight-V100`` / ``.Trashes`` / ``.TemporaryItems`` /
+      ``.DocumentRevisions-V100`` if present.
+
+    Sentinels survive remount (unlike ``mdutil -i off``), so a
+    once-deployed CIRCUITPY drive carries the suppression forward
+    even if the host changes Spotlight policy mid-session.  Cluster
+    cost on FAT12 (Pi Pico W: ~870 KB / 4 KB clusters): two clusters
+    for the sentinels, dwarfed by the .Spotlight-V100 directory it
+    prevents (often hundreds of KB on a busy host).
+
+    No-op on non-macOS platforms.
+
+    Args:
+        drive_path: Mount point of the FAT volume.
+    """
+    if _sys_module.platform != "darwin":
+        return  # pragma: no cover — tests run on macOS
+
+    # Plant sentinels first; cheap and idempotent.
+    for relative in _MACOS_SKIP_SENTINELS:
+        target = drive_path / relative
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if not target.exists():
+                target.touch()
+        except OSError:
+            # Drive may be RO this tick (USB-MSC handoff race) — the
+            # caller's normal write path will surface a clearer error
+            # than this best-effort sentinel write.
+            return
+
+    # Remove already-accumulated noise directories.  shutil.rmtree
+    # ignores missing paths; ignore_errors keeps us going if macOS is
+    # holding a handle open mid-cleanup.
+    for noise_relative in _MACOS_NOISE_DIRS:
+        shutil.rmtree(drive_path / noise_relative, ignore_errors=True)
+
+
 def flush_volume(
     drive_path: Path,
     *,

@@ -776,9 +776,10 @@ class CircuitpythonTransport:
         drive_path = self._resolve_circuitpy_drive()
         drive_path = self._verify_drive_for_board(drive_path)
 
-        # Prevent macOS Spotlight from indexing the drive — it creates
-        # hidden metadata files and slows down FAT32 writes.
+        # macOS hygiene: disable Spotlight + plant persistent skip
+        # sentinels + remove noise directories, before the rsync runs.
         flash_drive.disable_spotlight_indexing(drive_path)
+        flash_drive.neuter_macos_metadata(drive_path)
 
         # Disable autoreload to prevent restarts during file copy.
         self._send_repl_command(
@@ -1074,6 +1075,13 @@ class CircuitpythonTransport:
 
         self._enter_raw_repl()
         drive_path = self._verify_drive_for_board(drive_path)
+        # macOS hygiene before the writes: disable Spotlight, plant
+        # persistent skip sentinels, remove noise directories.  Without
+        # this, macOS creates ._foo AppleDouble resource forks for every
+        # file written through a FAT mount — the board's os.listdir
+        # sees ~2x the file count, doubling apparent on-disk footprint.
+        flash_drive.disable_spotlight_indexing(drive_path)
+        flash_drive.neuter_macos_metadata(drive_path)
         self._send_repl_command(
             "import supervisor; supervisor.runtime.autoreload = False"
         )
@@ -1097,6 +1105,8 @@ class CircuitpythonTransport:
                 _format_probe_error(drive_path, error),
             ) from error
 
+        # Strip macOS AppleDouble (._foo) companions before flushing.
+        flash_drive.clean_dot_files(drive_path)
         flash_drive.flush_volume(drive_path, sleep=self._time.sleep)
 
         # Wait for the board to see the new entrypoint before soft-

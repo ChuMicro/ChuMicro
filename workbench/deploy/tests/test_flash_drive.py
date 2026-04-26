@@ -270,6 +270,83 @@ class TestMacOSHelpers:
             flash_drive.disable_spotlight_indexing(tmp_path)  # must not raise
 
 
+class TestNeuterMacosMetadata:
+    """Tests for flash_drive.neuter_macos_metadata."""
+
+    def test_no_op_off_darwin(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Linux / Windows runs are a no-op."""
+        monkeypatch.setattr(
+            "chumicro_deploy.flash_drive._sys_module.platform",
+            "linux",
+        )
+        flash_drive.neuter_macos_metadata(tmp_path)
+        # Nothing planted, nothing removed.
+        assert list(tmp_path.iterdir()) == []
+
+    def test_plants_skip_sentinels_on_darwin(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Spotlight + FSEvents skip sentinels are planted at the drive root."""
+        monkeypatch.setattr(
+            "chumicro_deploy.flash_drive._sys_module.platform",
+            "darwin",
+        )
+        flash_drive.neuter_macos_metadata(tmp_path)
+
+        assert (tmp_path / ".metadata_never_index").is_file()
+        assert (tmp_path / ".fseventsd" / "no_log").is_file()
+
+    def test_idempotent(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Running twice does not re-create or error on existing sentinels."""
+        monkeypatch.setattr(
+            "chumicro_deploy.flash_drive._sys_module.platform",
+            "darwin",
+        )
+        flash_drive.neuter_macos_metadata(tmp_path)
+        # Mutate the sentinel to confirm a re-run doesn't clobber.
+        (tmp_path / ".metadata_never_index").write_text("intact\n")
+        flash_drive.neuter_macos_metadata(tmp_path)
+        assert (tmp_path / ".metadata_never_index").read_text() == "intact\n"
+
+    def test_removes_existing_noise_directories(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """``.Spotlight-V100`` / ``.Trashes`` / ``.TemporaryItems`` get removed."""
+        monkeypatch.setattr(
+            "chumicro_deploy.flash_drive._sys_module.platform",
+            "darwin",
+        )
+        for noise_relative in (
+            ".Spotlight-V100", ".Trashes", ".TemporaryItems",
+            ".DocumentRevisions-V100",
+        ):
+            noise_dir = tmp_path / noise_relative
+            noise_dir.mkdir()
+            (noise_dir / "data").write_bytes(b"junk")
+
+        flash_drive.neuter_macos_metadata(tmp_path)
+
+        assert not (tmp_path / ".Spotlight-V100").exists()
+        assert not (tmp_path / ".Trashes").exists()
+        assert not (tmp_path / ".TemporaryItems").exists()
+        assert not (tmp_path / ".DocumentRevisions-V100").exists()
+
+    def test_silent_on_readonly_drive(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Sentinel write failure (RO drive) is swallowed — caller surfaces it."""
+        monkeypatch.setattr(
+            "chumicro_deploy.flash_drive._sys_module.platform",
+            "darwin",
+        )
+        with patch.object(Path, "touch", side_effect=OSError("read-only fs")):
+            flash_drive.neuter_macos_metadata(tmp_path)  # must not raise
+
+
 class TestFlushVolume:
     """Tests for flash_drive.flush_volume."""
 
