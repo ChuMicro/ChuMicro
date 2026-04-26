@@ -75,7 +75,9 @@ from chumicro_workspace_runtime.firmware_url import (
     derive_firmware_url,
     latest_circuitpython_url,
     latest_circuitpython_version,
+    latest_micropython_url,
     list_circuitpython_versions,
+    list_micropython_builds,
     micropython_board_for_machine,
 )
 from chumicro_workspace_runtime.import_graph import (
@@ -130,8 +132,10 @@ __all__ = [
     "find_uf2_drive",
     "latest_circuitpython_url",
     "latest_circuitpython_version",
+    "latest_micropython_url",
     "list_circuitpython_versions",
     "list_device_ids",
+    "list_micropython_builds",
     "load_devices",
     "load_workspace_runtime_payload",
     "merge_configs",

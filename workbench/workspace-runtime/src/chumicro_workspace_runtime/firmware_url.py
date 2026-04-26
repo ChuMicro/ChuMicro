@@ -6,14 +6,13 @@ Two runtimes, two strategies:
   ``?prefix=bin/<board_id>/<language>/``, parse the XML, pick the
   highest stable version.  Zero catalog maintained on the project
   side; Adafruit's release upload is the source of truth.
-* **MicroPython** — micropython.org publishes per-build dated
-  filenames that can't be derived from a version label, and the
-  ``machine`` string a board reports doesn't always map cleanly to
-  the published BOARD name.  Strategy: ship a hand-curated
-  ``machine`` → BOARD map (extended from periodic
-  ``micropython.org/download/`` scrapes); on cache miss, the CLI
-  prompts for an explicit URL and caches it on the device entry as
-  ``hardware.firmware_source``.
+* **MicroPython** — scrape ``micropython.org/download/<BOARD>/``,
+  parse the HTML for ``<BOARD>-<DATE>-<VERSION>.uf2`` (or ``.bin`` /
+  ``.hex``) anchors, and pick the most recent build of the latest
+  stable version.  The ``machine`` string a board reports maps to
+  the published BOARD name via the hand-curated
+  :data:`MICROPYTHON_BOARD_BY_MACHINE` table — the table extends
+  as new boards land but the scrape itself doesn't depend on it.
 
 Custom forks: any device entry whose ``hardware.firmware_source``
 field is set short-circuits the lookup — the value is returned
@@ -21,9 +20,10 @@ verbatim.  Vendor builds, locally-compiled firmware, mirrored
 URLs all pass through.
 
 Network access is via an injectable ``url_opener`` callable so tests
-exercise the XML-parsing + version-picking logic without hitting
-the real bucket.  Production code calls :func:`derive_firmware_url`
-without injection; the default opener is :func:`urllib.request.urlopen`.
+exercise the parsing + version-picking logic without hitting the
+real bucket / download page.  Production code calls
+:func:`derive_firmware_url` without injection; the default opener
+is :func:`urllib.request.urlopen`.
 """
 
 from __future__ import annotations
@@ -113,8 +113,14 @@ class UnresolvableFirmwareError(RuntimeError):
     - ``cause="no_versions_listed"`` — the S3 bucket returned no
       uf2 keys for the prefix.  Wrong board id, or the language
       isn't published for that board.
-    - ``cause="no_stable_versions"`` — the bucket has only
-      pre-release versions; pass ``allow_prerelease=True``.
+    - ``cause="no_stable_versions"`` — the listing has only
+      pre-release / unstable versions; pass ``allow_prerelease=True``.
+    - ``cause="no_mp_builds_listed"`` — the
+      ``micropython.org/download/<BOARD>/`` page returned no parsable
+      firmware anchors.  Likely a wrong BOARD name or a board that
+      moved upstream.
+    - ``cause="unsupported_runtime"`` — runtime isn't ``circuitpython``
+      or ``micropython``.
     """
 
     def __init__(self, message: str, *, cause: str) -> None:
@@ -247,6 +253,162 @@ def micropython_board_for_machine(machine_string: str) -> str | None:
 
 
 # ---------------------------------------------------------------------------
+# MicroPython — micropython.org listing scrape
+# ---------------------------------------------------------------------------
+
+#: micropython.org's per-board download landing page URL.  Stable
+#: shape; the page lists every published build for the board with
+#: anchors pointing at firmware files under ``/resources/firmware/``.
+MICROPYTHON_DOWNLOAD_URL_TEMPLATE = "https://micropython.org/download/{board}/"
+
+#: Resolves relative anchors (``/resources/firmware/...``) into
+#: absolute download URLs.  micropython.org serves the firmware
+#: blobs from the same origin as the listing.
+MICROPYTHON_FIRMWARE_BASE_URL = "https://micropython.org"
+
+#: Pattern that pulls the date + version out of an MP firmware
+#: filename.  MP's filename grammar::
+#:
+#:     <BOARD>-<DATE>-<VERSION>.<ext>
+#:     <BOARD>-<DATE>-unstable-<VERSION>-<COMMIT>.<ext>
+#:
+#: where:
+#:   - ``<BOARD>`` is upper-snake-case (``RPI_PICO_W``).
+#:   - ``<DATE>`` is YYYYMMDD (e.g. ``20240222``).
+#:   - ``<VERSION>`` is ``v1.22.2`` for stable; unstable builds
+#:     prepend ``unstable-`` and append a commit suffix
+#:     (e.g. ``unstable-v1.23.0-preview-32-g1a2b3c4d5``).
+#:   - ``<ext>`` is one of ``uf2`` / ``bin`` / ``hex`` / ``elf``
+#:     / ``dfu``.
+#:
+#: Capture groups: ``date`` (8 digits), ``unstable`` ("unstable-" or
+#: empty), ``version`` (the ``v1.x.y`` portion), ``ext`` (filename
+#: extension).
+_MICROPYTHON_FILENAME_PATTERN = re.compile(
+    r"(?P<date>\d{8})-"
+    r"(?P<unstable>unstable-)?"
+    r"(?P<version>v\d+\.\d+(?:\.\d+)?)"
+    r"(?:-[A-Za-z0-9.-]+)?"
+    r"\.(?P<ext>uf2|bin|hex|elf|dfu)",
+)
+
+#: Pattern that picks <a href="..."> values out of a typical MP
+#: download listing.  Browsers tolerate single-quoted, unquoted, and
+#: attribute-order-shuffled HTML; for our purposes the canonical
+#: page is well-formed enough that a forgiving regex is plenty
+#: (and we don't want a full HTML parser dep just for this).  Uses
+#: case-insensitive matching for the ``HREF=`` form.
+_HTML_HREF_PATTERN = re.compile(
+    r"""<a\b[^>]*\bhref\s*=\s*(?P<quote>["'])(?P<url>[^"']+)(?P=quote)""",
+    re.IGNORECASE,
+)
+
+#: Pattern for stable MP versions: ``v<major>.<minor>(.<patch>)?``
+#: with no pre-release suffix.  ``v1.22.2`` matches; ``v1.23.0-preview``
+#: doesn't.  The optional patch handles the historical ``v1.20`` /
+#: ``v1.21`` releases that omit the patch field.
+_MP_STABLE_VERSION_PATTERN = re.compile(r"^v\d+\.\d+(?:\.\d+)?$")
+
+
+def list_micropython_builds(
+    board: str,
+    *,
+    url_opener: UrlOpener | None = None,
+    file_extension: str = "uf2",
+) -> list[tuple[str, str, str, str]]:
+    """Scrape ``micropython.org/download/<board>/`` for firmware builds.
+
+    Returns ``(date, version, unstable_marker, absolute_url)``
+    tuples — every published build whose filename matches
+    :data:`_MICROPYTHON_FILENAME_PATTERN` and ends in the requested
+    *file_extension*.  ``date`` is YYYYMMDD; ``version`` is the
+    raw ``v1.x.y`` (or ``v1.x``) portion; ``unstable_marker`` is
+    ``"unstable-"`` for unstable builds, empty for stable.
+
+    Order follows the order anchors appear in the page (newest
+    first, by convention) — :func:`latest_micropython_url` does
+    its own sort so callers don't have to trust the listing.
+
+    Args:
+        board: Upper-snake-case BOARD name (``"RPI_PICO_W"``).
+            See :data:`MICROPYTHON_BOARD_BY_MACHINE` for the
+            machine-string ↔ BOARD mapping.
+        file_extension: Filter to firmware files with this
+            extension.  Defaults to ``"uf2"``; pass ``"bin"`` for
+            ESP32 / ESP32-Sx, ``"hex"`` for older MicroPython
+            ports, etc.  Strip the leading dot.
+        url_opener: Inject a fake for tests.  Production callers
+            leave it ``None``.
+
+    Raises:
+        UnresolvableFirmwareError: ``board`` is empty, or the page
+            returned no parsable firmware anchors for the chosen
+            file extension.
+    """
+    if not board:
+        raise UnresolvableFirmwareError(
+            "BOARD is required for MicroPython firmware lookup",
+            cause="no_machine",
+        )
+    opener = url_opener if url_opener is not None else urllib.request.urlopen
+    listing_url = MICROPYTHON_DOWNLOAD_URL_TEMPLATE.format(board=board)
+    body = _read_url(opener, listing_url)
+    builds = _parse_micropython_builds(
+        body, board=board, file_extension=file_extension,
+    )
+    if not builds:
+        raise UnresolvableFirmwareError(
+            f"micropython.org/download/{board}/ returned no .{file_extension} "
+            f"build anchors (wrong BOARD name, board moved upstream, or this "
+            f"port doesn't publish .{file_extension} firmware — try another "
+            f"file_extension).",
+            cause="no_mp_builds_listed",
+        )
+    return builds
+
+
+def latest_micropython_url(
+    board: str,
+    *,
+    allow_prerelease: bool = False,
+    file_extension: str = "uf2",
+    url_opener: UrlOpener | None = None,
+) -> str:
+    """Pick the most recent MP build for *board* and return its URL.
+
+    Stable-only by default — unstable / preview builds are filtered
+    out unless *allow_prerelease* is ``True``.  Sort is by
+    ``(version, date)`` with the newest pair winning, so an old-
+    date build of a newer version doesn't lose to a recent build
+    of an older version (rare but observed during preview windows).
+
+    Raises:
+        UnresolvableFirmwareError: No matching builds after the
+            stable filter (``cause="no_stable_versions"``) or no
+            anchors at all (``cause="no_mp_builds_listed"``).
+    """
+    builds = list_micropython_builds(
+        board, url_opener=url_opener, file_extension=file_extension,
+    )
+    if allow_prerelease:
+        candidates = builds
+    else:
+        candidates = [
+            build for build in builds
+            if not build[2]
+            and _MP_STABLE_VERSION_PATTERN.match(build[1]) is not None
+        ]
+    if not candidates:
+        raise UnresolvableFirmwareError(
+            f"No stable MicroPython builds found for {board!r} "
+            "(pass allow_prerelease=True to include unstable / preview).",
+            cause="no_stable_versions",
+        )
+    candidates.sort(key=_micropython_build_sort_key)
+    return candidates[-1][3]
+
+
+# ---------------------------------------------------------------------------
 # Top-level resolver
 # ---------------------------------------------------------------------------
 
@@ -317,17 +479,18 @@ def derive_firmware_url(
                 "explicit firmware URL (or path) and re-run.",
                 cause="machine_not_in_map",
             )
-        # We know the BOARD name but not the per-build dated URL.
-        # MP's micropython.org listing is the authoritative source;
-        # we surface the BOARD name + a hint pointing the user at
-        # the listing page so they can paste a URL.
-        raise UnresolvableFirmwareError(
-            f"MicroPython BOARD={board} resolved from machine "
-            f"{machine_string!r}, but micropython.org/download/{board}/ "
-            "publishes per-build dated filenames that aren't picked "
-            "automatically — paste the .uf2 / .bin URL via "
-            "`hardware.firmware_source` to cache it on this entry.",
-            cause="no_micropython_dated_url",
+        # `hardware.firmware_extension` overrides the default `.uf2`
+        # for boards whose port doesn't publish UF2 (ESP32 family →
+        # `.bin`, micro:bit → `.hex`).  Falls back to "uf2" when
+        # absent, which covers RP2040 / RP2350 / SAMD51 / nRF52840
+        # / TinyUF2 — the majority of the boards the workspace
+        # template targets.
+        file_extension = hardware.get("firmware_extension") or "uf2"
+        return latest_micropython_url(
+            board,
+            allow_prerelease=allow_prerelease,
+            file_extension=file_extension,
+            url_opener=url_opener,
         )
     raise UnresolvableFirmwareError(
         f"unsupported runtime {runtime!r} (expected 'circuitpython' "
@@ -410,3 +573,87 @@ def _safe_int(text: str) -> int:
         return int(text)
     except ValueError:
         return 0
+
+
+def _parse_micropython_builds(
+    body: bytes,
+    *,
+    board: str,
+    file_extension: str,
+) -> list[tuple[str, str, str, str]]:
+    """Walk the HTML body, yield ``(date, version, unstable, url)`` tuples.
+
+    Two-pass: pull every ``<a href=...>`` value with
+    :data:`_HTML_HREF_PATTERN`, then filter to the ones whose
+    URL filename matches :data:`_MICROPYTHON_FILENAME_PATTERN`
+    against the requested *file_extension* and is namespaced by
+    *board* (the URL must contain ``/<BOARD>-``).
+
+    Anchors that don't decode as UTF-8 are skipped — micropython.org
+    serves UTF-8, so failure here means the response was something
+    other than an HTML page (a redirect-loop body, a 404 placeholder
+    served as 200 etc.).
+
+    De-duplicates while preserving first-seen order — listing pages
+    sometimes repeat the same build under multiple sections.
+    """
+    try:
+        text = body.decode("utf-8")
+    except UnicodeDecodeError:
+        return []
+
+    seen_urls: set[str] = set()
+    builds: list[tuple[str, str, str, str]] = []
+    expected_filename_prefix = "/" + board + "-"
+    for href_match in _HTML_HREF_PATTERN.finditer(text):
+        url = href_match.group("url")
+        if expected_filename_prefix not in url:
+            continue
+        if not url.endswith("." + file_extension):
+            continue
+        absolute = (
+            url
+            if url.startswith(("http://", "https://"))
+            else MICROPYTHON_FIRMWARE_BASE_URL + url
+        )
+        if absolute in seen_urls:
+            continue
+        filename_match = _MICROPYTHON_FILENAME_PATTERN.search(url)
+        if filename_match is None:
+            continue
+        if filename_match.group("ext") != file_extension:
+            continue
+        seen_urls.add(absolute)
+        builds.append((
+            filename_match.group("date"),
+            filename_match.group("version"),
+            filename_match.group("unstable") or "",
+            absolute,
+        ))
+    return builds
+
+
+def _micropython_build_sort_key(
+    build: tuple[str, str, str, str],
+) -> tuple[int, int, int, int, int]:
+    """Sort key: ``(version_major, version_minor, version_patch, date, stable_rank)``.
+
+    Stable wins over unstable at the same version+date — stable_rank
+    is ``1`` for stable, ``0`` for unstable, so the last-element-wins
+    comparison picks the stable build.
+
+    Unparseable version components fall back to ``0`` so a
+    malformed entry sorts below well-formed ones rather than
+    raising.
+    """
+    date_string, version_string, unstable_marker, _url = build
+    raw_version = version_string.lstrip("v")
+    parts = raw_version.split(".")
+    while len(parts) < 3:
+        parts.append("0")
+    major = _safe_int(parts[0])
+    minor = _safe_int(parts[1])
+    patch = _safe_int(parts[2])
+    date_int = _safe_int(date_string)
+    stable_rank = 0 if unstable_marker else 1
+    return (major, minor, patch, date_int, stable_rank)
