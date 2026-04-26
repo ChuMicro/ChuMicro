@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **idle — Phase 7 closed end-to-end** on Pi Pico W RP2 (Layer-1/2/3 green; TLS+MQTT with `CERT_REQUIRED` round-trip verified live).  Pick the next workstream phase or queued item from `plans/next-up.md`.  Phase 8 (application-level OTA via `chumicro-update`) is the next workstream phase but parked until Phase 7 has soak time in the field.
-- **Last shipped:** `plans/workstreams/phase-7-integration.md` reorg + `plans/next-up.md` Phase 7 done-entry — accumulated Resolved-but-still-Open log entries moved to a clean Resolved section, Forward-looking entries broken out separately, and the workstream rolled into the Done list.  No code change.
+- **Phase:** **idle** — Phase 7 closed end-to-end; workspace template repo grew CONTRIBUTING.md / expanded AGENTS.md / three agent skills.  Pick the next workstream phase or queued item from `plans/next-up.md`.  Phase 8 (application-level OTA via `chumicro-update`) is the next workstream phase but parked until Phase 7 has soak time in the field.
+- **Last shipped:** Workspace template repo (`ChuMicro/ChuMicro-Workspace-Template`) gained `CONTRIBUTING.md` (workspace-user contribution guide), an expanded `AGENTS.md` (skills index + file ownership table + project rules + common pitfalls), and three new agent skills under `.github/skills/`: `add-new-thing`, `register-board`, `deploy-and-debug`.  Mono-repo companion commit `1024ac5` classifies `CONTRIBUTING.md` + `.github/skills/` as tool-owned so `chumicro-workspace update` refreshes them in existing user workspaces.
 - **In flight:** —
 - **Blocked on:** —
-- **Last touched:** `plans/workstreams/phase-7-integration.md` (full restructure: Open / Forward-looking / Resolved / Deferred sections, all five resolved-this-week entries lifted to Resolved with commit refs), `plans/next-up.md` (Phase 7 → Done; Phase 8 the only remaining project-workspace phase; "Now" line refreshed).
+- **Last touched:** `workbench/workspace/src/chumicro_workspace/template_zones.py` (CONTRIBUTING.md + `.github/skills/` added to TOOL_OWNED_PATHS / PREFIXES), `workbench/workspace/tests/test_template_zones.py` (4 new parametrized cases), and on the template-repo side: `CONTRIBUTING.md`, `AGENTS.md`, `.github/skills/{add-new-thing,register-board,deploy-and-debug}/SKILL.md`.
 
 ---
 
