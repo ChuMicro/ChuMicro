@@ -63,9 +63,9 @@ class TestParser:
 
     EXPECTED_COMMANDS = (
         "setup", "init", "update", "new", "add-device", "probe",
-        "discover", "devices", "deploy", "switch", "things", "sim",
-        "test", "repl", "env", "use", "rename", "install-firmware",
-        "upgrade-firmware", "sync", "upgrade",
+        "discover", "devices", "deploy", "switch", "things", "demo",
+        "sim", "test", "repl", "env", "use", "rename",
+        "install-firmware", "upgrade-firmware", "sync", "upgrade",
     )
 
     def test_all_commands_register(self) -> None:
@@ -873,6 +873,99 @@ class TestThings:
         out = capsys.readouterr().out.splitlines()
         assert "_template" not in out
         assert "back-porch" in out
+
+
+# ---------------------------------------------------------------------------
+# demo  (Step 5 of beginner-onramp — built-in payload)
+# ---------------------------------------------------------------------------
+
+
+class TestDemo:
+    """Built-in `chumicro-workspace demo` payload deploy."""
+
+    def test_ships_demo_payload_through_fake_transport(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+
+        transport = FakeTransport(execute_output="Hello from ChuMicro!\n")
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+
+        exit_code = cli.main(["demo", "--workspace-dir", str(root)])
+        assert exit_code == 0
+
+        deploy_calls = [
+            call for call in transport.calls if call[0] == "deploy_files"
+        ]
+        assert len(deploy_calls) == 1
+        files, entrypoint = deploy_calls[0][1]
+        # MP runtime in the seed → /main.py.
+        assert entrypoint == "/main.py"
+        assert "/main.py" in files
+        body = files["/main.py"].decode("utf-8")
+        assert "Hello from ChuMicro" in body
+        assert "demo complete" in body
+
+    def test_prints_execute_output_to_user(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """The captured execute output reaches stdout so the user
+        sees the demo's prints."""
+        root = _seed_workspace(tmp_path)
+
+        transport = FakeTransport(
+            execute_output="Hello from ChuMicro!\ndemo complete!\n",
+        )
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+
+        exit_code = cli.main(["demo", "--workspace-dir", str(root)])
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "Hello from ChuMicro" in captured.out
+        assert "demo complete" in captured.out
+
+    def test_traceback_returns_exit_one(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Same failure-surfacing shape as `deploy`."""
+        root = _seed_workspace(tmp_path)
+
+        transport = FakeTransport(
+            execute_output=(
+                "Traceback (most recent call last):\n"
+                "  File \"/main.py\", line 1\n"
+                "RuntimeError: boom\n"
+            ),
+        )
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+
+        exit_code = cli.main(["demo", "--workspace-dir", str(root)])
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert "RuntimeError: boom" in captured.err
+
+    def test_demo_payload_is_runtime_agnostic(self) -> None:
+        """The baked-in payload uses no `board` / `machine` imports.
+
+        Guards against a future regression where someone adds a
+        hardware-touching line and the demo silently breaks on
+        boards that don't expose the imported module.
+        """
+        from chumicro_workspace.cli import DEMO_PAYLOAD
+
+        assert "import board" not in DEMO_PAYLOAD
+        assert "import machine" not in DEMO_PAYLOAD
+        assert "import digitalio" not in DEMO_PAYLOAD
+        # Only stdlib imports allowed in the demo.
+        assert "import time" in DEMO_PAYLOAD
 
 
 # ---------------------------------------------------------------------------

@@ -578,6 +578,63 @@ def _cmd_things(args: argparse.Namespace) -> int:
     return 0
 
 
+#: Built-in demo payload — Step 5 of the beginner-onramp workstream.
+#:
+#: Cross-runtime safe (CircuitPython + MicroPython): only ``time.sleep``
+#: + ``print``.  No hardware access — every supported board reaches the
+#: print path identically, so the demo "just works" out-of-the-box on
+#: any registered device without runtime-config or pin pickers.  Runs
+#: for ~5 seconds and exits cleanly so the deploy command's
+#: synchronous-execute path doesn't appear to hang.
+DEMO_PAYLOAD: str = (
+    "import time\n"
+    "print('Hello from ChuMicro!')\n"
+    "print('Your board is alive.')\n"
+    "for index in range(5):\n"
+    "    time.sleep(1)\n"
+    "    print('  tick ' + str(index + 1) + '/5')\n"
+    "print('demo complete!')\n"
+)
+
+
+def _cmd_demo(args: argparse.Namespace) -> int:
+    """Deploy a baked-in LED-blink-shaped "hello world" to the active device.
+
+    Step 5 of the beginner-onramp workstream — gives a user with a
+    freshly-registered board something to ship on day one without
+    having to write code, configure wifi, or pick a thing.  Runs
+    synchronously: deploys the payload, captures execute output,
+    prints it.  Total wall-clock ~5 seconds.
+
+    The payload is a runtime-agnostic print loop (no ``board`` /
+    ``machine`` imports) so the demo works on any supported runtime
+    + board.  An LED-blink variant is a future enhancement once the
+    LED-pin abstraction lands; see Decision 0029 for the workspace
+    LED contract sketch.
+    """
+    workspace = _resolve_workspace(args)
+    device = _resolve_device(workspace, args)
+    from chumicro_deploy import Deployer, FileMapSource  # noqa: PLC0415
+
+    entrypoint_path = f"/{device.effective_entrypoint}"
+    source = FileMapSource(
+        files={entrypoint_path: DEMO_PAYLOAD},
+        entrypoint=entrypoint_path,
+    )
+    print(
+        f"demo: deploying built-in payload to "
+        f"{device.transport} @ {device.address} ...",
+    )
+    result = Deployer(device).deploy(source)
+    if result.execute_output:
+        print(result.execute_output, end="")
+    if not result.success:
+        if result.traceback:
+            print(f"\n--- traceback ---\n{result.traceback}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def _cmd_test(args: argparse.Namespace) -> int:
     """Run the workspace's pytest suite.
 
@@ -1117,6 +1174,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_workspace_arg(things_parser)
     things_parser.set_defaults(func=_cmd_things)
+
+    # ----- demo ----------------------------------------------------------
+    demo_parser = subparsers.add_parser(
+        "demo",
+        help=(
+            "Deploy a built-in 'hello world' payload to the active "
+            "device.  Cross-runtime safe; ~5 seconds to run."
+        ),
+    )
+    _add_workspace_arg(demo_parser)
+    _add_device_selector(demo_parser)
+    demo_parser.set_defaults(func=_cmd_demo)
 
     # ----- sim -----------------------------------------------------------
     sim_parser = subparsers.add_parser(
