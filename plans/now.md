@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** Phase 7 end-to-end on Pi Pico W MP — Layer-1 / Layer-2 / **Layer-3 all green** + **TLS+MQTT verified.**  Plain TCP and TLS both work end-to-end against a local broker; 3 QoS-1 PUBLISHes with PUBACKs across a TLS-encrypted MQTT round-trip.
-- **Last shipped:** `chumicro-sockets` 0.1.2 — `_MpSocketWrapper.recv_into` polyfill now treats MP TLS recv-returns-None as "no data this tick" (returns 0).  Closes the contract divergence between plain TCP (raises `OSError(11)`) and mbedTLS `SSLSocket` (returns `None`) on no-data in non-blocking mode.
+- **Phase:** Phase 7 end-to-end on Pi Pico W MP — Layer-1 / Layer-2 / **Layer-3 all green** + **TLS+MQTT with `CERT_REQUIRED` verified.**  Plain TCP and TLS both work end-to-end against a local broker; 3 QoS-1 PUBLISHes with PUBACKs across a TLS-encrypted MQTT round-trip with real CA verification (not blind trust).
+- **Last shipped:** `chumicro-sockets` 0.1.3 — `ssl_context_with_ca` now converts PEM input to DER before `load_verify_locations`.  Pi Pico W RP2's mbedTLS is built without `MBEDTLS_PEM_PARSE_C` so PEM is rejected; DER is the lowest-common-denominator that works everywhere.  Adapter signature unified across CP / CPython / MP to accept PEM as `str` or `bytes`.
 - **In flight:** —
 - **Blocked on:** —
-- **Last touched (this session, post-compact):** `libraries/mqtt/src/chumicro_mqtt/client.py` (`_force_non_blocking` enforcement), `libraries/mqtt/tests/test_client.py` (`TestSocketBlockingMode`), `libraries/mqtt/VERSION` (0.1.3), `libraries/sockets/src/chumicro_sockets/_adapters/mp.py` (`recv_into` None-handling + accurate docstring after live verification), `libraries/sockets/VERSION` (0.1.2), `plans/workstreams/phase-7-integration.md` (TLS-on-MP resolved entry), `plans/learnings.md` (MP-socket blocking + TLS-recv-None contract).
+- **Last touched (this session, post-compact):** `libraries/sockets/src/chumicro_sockets/_adapters/mp.py` (`_pem_to_der` helper + PEM→DER in `ssl_context_with_ca`), `libraries/sockets/src/chumicro_sockets/_adapters/{cp,cpython}.py` (accept PEM `str` or `bytes` uniformly), `libraries/sockets/tests/test_mp_adapter.py` (3 new `TestSslContextWithCa` cases), `libraries/sockets/VERSION` (0.1.3), `plans/workstreams/phase-7-integration.md` (CA-verification resolved entry), `plans/learnings.md` (MP rp2 mbedTLS PEM-parse-disabled finding with cross-board table).
 
 ---
 

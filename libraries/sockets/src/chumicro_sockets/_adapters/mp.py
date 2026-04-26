@@ -160,13 +160,53 @@ def connect_tls(host, port, *, context=None):  # pragma: no cover - device only
 def ssl_context_with_ca(ca_pem):  # pragma: no cover - device only
     """Build an MP ``ssl.SSLContext`` that trusts only *ca_pem*.
 
-    MP's ``ssl.SSLContext`` accepts ``load_verify_locations`` with
-    ``cadata`` (string).  Modern MP builds (1.24+) implement the
-    same call shape as CPython, so the helper is a near-clone of
-    the CPython one.
+    Accepts a **PEM** input (the standard ``-----BEGIN CERTIFICATE-----``
+    block that ``openssl`` produces by default).  Converts to DER
+    internally before passing to ``load_verify_locations`` so it
+    works on every MP port — including the rp2 (Pi Pico W) build
+    that ships mbedTLS *without* ``MBEDTLS_PEM_PARSE_C`` to save flash.
+
+    Why the conversion: live-tested on MP 1.28.0 (2026-04-26) by
+    feeding ``load_verify_locations`` the same self-signed CA five
+    different ways:
+
+    * Pi Pico W RP2 — every PEM variant raises ``ValueError('invalid
+      cert')``; only DER (binary, no PEM markers) loads.
+    * Lolin S2 ESP32-S2 — PEM (string or bytes, with or without
+      trailing newline, LF or CRLF) loads.  DER also loads.
+
+    The split is build-config: ESP-IDF's mbedTLS is built with
+    ``MBEDTLS_PEM_PARSE_C``; rp2's port-bundled mbedTLS is not
+    (the symbol isn't defined in
+    ``ports/rp2/mbedtls/mbedtls_config_port.h`` or the common
+    config it pulls in).  DER is the lowest-common-denominator
+    that works everywhere.
+
+    Args:
+        ca_pem: PEM-encoded CA bundle as bytes (or str).  ASCII /
+            UTF-8 decodable.  Single cert; multi-cert bundles need
+            extra unrolling that no current consumer needs.
     """
     import ssl  # noqa: PLC0415 — MP-only import
 
+    if isinstance(ca_pem, str):
+        ca_pem = ca_pem.encode("ascii")
+    der = _pem_to_der(ca_pem)
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-    context.load_verify_locations(cadata=ca_pem.decode("ascii"))
+    context.load_verify_locations(cadata=der)
     return context
+
+
+def _pem_to_der(ca_pem):  # pragma: no cover - device only
+    """Strip the PEM header / footer and base64-decode to raw DER."""
+    import binascii  # noqa: PLC0415 — MP-only import
+
+    base64_lines = []
+    for line in ca_pem.split(b"\n"):
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith(b"-----"):
+            continue
+        base64_lines.append(line)
+    return binascii.a2b_base64(b"".join(base64_lines))

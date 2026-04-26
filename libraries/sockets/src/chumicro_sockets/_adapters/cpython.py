@@ -54,12 +54,15 @@ def ssl_context_with_ca(ca_pem):
     """Build an SSLContext that trusts only the CA(s) in *ca_pem*.
 
     Uses :meth:`ssl.SSLContext.load_verify_locations` with the PEM
-    bytes — stdlib accepts a string or bytes via ``cadata``.  The
-    context still enforces hostname verification and modern cipher
-    defaults; only the trust anchor is replaced.
+    bytes — stdlib accepts a string or bytes via ``cadata``, so we
+    pass either form through unchanged.  The context still enforces
+    hostname verification and modern cipher defaults; only the trust
+    anchor is replaced.
     """
     import ssl  # noqa: PLC0415 — runtime-gated
 
     context = ssl.create_default_context()
-    context.load_verify_locations(cadata=ca_pem.decode("ascii"))
+    if isinstance(ca_pem, (bytes, bytearray)):
+        ca_pem = bytes(ca_pem).decode("ascii")
+    context.load_verify_locations(cadata=ca_pem)
     return context

@@ -75,10 +75,13 @@ def ssl_context_with_ca(ca_pem):  # pragma: no cover - device only
 
     Identical shape to the CPython and MP helpers — supported CP
     boards ship the on-board ``ssl`` module so the call site is
-    uniform across runtimes.
+    uniform across runtimes.  Accepts PEM as ``str`` or ``bytes``;
+    CP's ``load_verify_locations`` expects a ``str`` so we coerce.
     """
     import ssl  # noqa: PLC0415 — CP-only import
 
+    if isinstance(ca_pem, (bytes, bytearray)):
+        ca_pem = bytes(ca_pem).decode("ascii")
     context = ssl.create_default_context()
-    context.load_verify_locations(cadata=ca_pem.decode("ascii"))
+    context.load_verify_locations(cadata=ca_pem)
     return context

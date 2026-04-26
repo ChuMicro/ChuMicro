@@ -77,6 +77,32 @@ Fix knobs that *don't* work: eager-importing at package top level was tried (com
 
 Observed during 2026-04-19 live PyCharm testing. Suspect: per-file `mpremote mount` cost + cold-start interpreter overhead. Profile against the batched-execute path before optimizing — there's an open investigation in `next-up.md`. Not yet root-caused.
 
+### MP rp2 firmware ships mbedTLS *without* `MBEDTLS_PEM_PARSE_C` — pass DER, not PEM, to `load_verify_locations`
+
+`load_verify_locations(cadata=...)` accepts PEM on the ESP32 family but rejects it with `ValueError('invalid cert')` on the Pi Pico W RP2.  The split is build-config:
+
+* The C-level `asn1_get_data` adds a NUL terminator to the buffer length when the input starts with `-----BEGIN ` *only* when `MBEDTLS_PEM_PARSE_C` is defined.  Without it, mbedTLS itself doesn't know how to parse PEM, returns `MBEDTLS_ERR_X509_BAD_INPUT_DATA`, and the Python layer surfaces "invalid cert".
+* `MICROPY_INCLUDED_MBEDTLS_CONFIG_H` in `ports/rp2/mbedtls/mbedtls_config_port.h` does NOT define `MBEDTLS_PEM_PARSE_C` (and the common config it pulls in doesn't either).  ESP-IDF's mbedTLS does — that's the asymmetry.
+* DER (raw binary, no PEM markers) parses on every port — `mbedtls_x509_crt_parse` walks the DER tag bytes directly without a preprocessing step.
+
+Verified live on MP 1.28.0 against five `cadata` shapes on each board:
+
+| input shape                                        | Pi Pico W RP2 | Lolin S2 ESP32-S2 |
+|----------------------------------------------------|---------------|-------------------|
+| PEM, bytes, multi-line LF, trailing newline        | invalid cert  | OK                |
+| PEM, str (ASCII-decoded), same shape               | invalid cert  | OK                |
+| PEM, bytes, no trailing newline                    | invalid cert  | OK                |
+| PEM, bytes, CRLF line endings                      | invalid cert  | OK                |
+| PEM body concatenated on one line (no markers)     | invalid cert  | invalid cert      |
+| **DER (binary, ~752 bytes for an RSA-2048 cert)**  | **OK**        | **OK**            |
+
+Lowest-common-denominator path for `chumicro_sockets._adapters.mp.ssl_context_with_ca`: accept PEM at the API surface (it's what `openssl req -x509 ...` produces by default), strip the header / footer / blank lines, base64-decode the body, pass raw DER to `load_verify_locations`.  See `libraries/sockets/src/chumicro_sockets/_adapters/mp.py` `_pem_to_der` helper.
+
+End-to-end verification (Pi Pico W RP2, Mosquitto on 172.16.1.15:18883 with a self-signed cert): PEM → DER conversion → `verify_mode = CERT_REQUIRED` → mbedTLS validates against our embedded CA → TLS handshake completes → 3 QoS-1 PUBLISHes round-trip with PUBACKs.  No "blind trust" — the verification is real.  Two operational gotchas to flag for downstream consumers:
+
+* **Device RTC matters.**  TLS validity-period checks fail with `ValueError('The certificate validity starts in the future')` if the device clock is unset (default ~2021 epoch on bare Pi Pico W).  Either NTP-sync after wifi-up or backdate cert `notBefore` for development.
+* **mbedTLS error surface is conservative.**  "invalid cert" from `load_verify_locations` could mean "bad PEM" OR "bad base64 inside PEM" OR "DER doesn't parse" — there's no further detail.  When debugging, generate the DER form first (`openssl x509 -in ca.pem -outform DER -out ca.der`) and try that path before suspecting the cert itself.
+
 ### MP stdlib socket constructs in *blocking* mode by default
 
 Same default as CPython.  If a library's tick / poll loop expects EAGAIN-on-no-data semantics, every consumer must call `setblocking(False)` after `socket.socket(...)` + `connect(...)` — there is no implicit non-blocking mode.  A blocking `recv` on a Pi Pico W RP2 will *eventually* return (lwIP has a long internal poll-or-give-up around 5–30 s depending on port + traffic), so the resulting hang doesn't look like a deadlock — it looks like a slow connection or a timeout.

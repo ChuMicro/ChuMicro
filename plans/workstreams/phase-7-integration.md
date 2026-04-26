@@ -154,6 +154,8 @@ When an integration issue is resolved by changing a library API, the resolution 
 
 **Fix (commit landing this entry):** make `MQTTClient` enforce ``setblocking(False)`` on every socket it acquires — both the constructor's `socket=` arg and the `socket_factory()` return value (used during self-heal).  Phase 7 Layer-3 went from 0 messages in 60 s to 4+ messages in 8 s on a Pi Pico W MP, identical sensor template, no other changes.
 
+**TLS-with-CA-verification on MP — also resolved (live-tested 2026-04-26 with `verify_mode = CERT_REQUIRED`):** `chumicro_sockets._adapters.mp.ssl_context_with_ca` now converts PEM input to DER before `load_verify_locations` so it works on rp2 (Pi Pico W) builds where mbedTLS is built without `MBEDTLS_PEM_PARSE_C`.  See `plans/learnings.md` § "MP rp2 firmware ships mbedTLS without MBEDTLS_PEM_PARSE_C" for the empirical table (5 PEM shapes × 2 boards = pi-pico-w rejects every PEM, esp32-s2 accepts every PEM, both accept DER).  End-to-end TLS+MQTT with `CERT_REQUIRED` verified live on Pi Pico W against a local self-signed Mosquitto: 3 QoS-1 PUBLISHes round-tripped with PUBACKs.
+
 **TLS over MQTT on MP — also resolved (live-tested 2026-04-26):** the prior comment in `libraries/sockets/src/chumicro_sockets/_adapters/mp.py` claiming "Lolin S2 ESP32 SSLSocket drops setblocking" was stale.  Verified live on MP 1.28.0 against Pi Pico W RP2 *and* Lolin S2 ESP32-S2: both boards' mbedTLS `SSLSocket` expose `setblocking` (the `modtls_mbedtls.c` source confirms it's in the method table), and `setblocking(False)` is honored.  Source (`.tools/micropython-v1.26.0/extmod/modtls_mbedtls.c:903`):
 ```
 { MP_ROM_QSTR(MP_QSTR_setblocking), MP_ROM_PTR(&socket_setblocking_obj) },

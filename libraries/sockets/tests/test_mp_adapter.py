@@ -87,7 +87,7 @@ def mp_adapter() -> Iterator[types.ModuleType]:
 
     class _StubContext:
         def __init__(self) -> None:
-            self.cadata: str | None = None
+            self.cadata: bytes | str | None = None
             self.wrapped: list[tuple[object, str]] = []
 
         def wrap_socket(
@@ -99,7 +99,7 @@ def mp_adapter() -> Iterator[types.ModuleType]:
             self.wrapped.append((sock, server_hostname))
             return sock
 
-        def load_verify_locations(self, *, cadata: str) -> None:
+        def load_verify_locations(self, *, cadata: bytes | str) -> None:
             self.cadata = cadata
 
     def _stub_wrap_socket(sock: object, *, server_hostname: str) -> object:
@@ -269,7 +269,53 @@ class TestConnectTls:
 
 
 class TestSslContextWithCa:
-    def test_loads_cadata_into_context(self, mp_adapter: types.ModuleType) -> None:
-        ca_pem = b"-----BEGIN CERTIFICATE-----\nfake-ca\n-----END CERTIFICATE-----\n"
+    def test_pem_input_converted_to_der_before_load(
+        self, mp_adapter: types.ModuleType,
+    ) -> None:
+        """``ssl_context_with_ca`` accepts a PEM and passes DER bytes
+        to ``load_verify_locations``.
+
+        Empirical finding (Phase 7 TLS investigation, 2026-04-26):
+        the rp2 MP build ships mbedTLS *without* ``MBEDTLS_PEM_PARSE_C``,
+        so PEM input raises ``ValueError('invalid cert')`` on the
+        Pi Pico W.  Converting to DER before passing is the
+        lowest-common-denominator path that works on every MP port.
+        Test pins the wrapper to the conversion behavior.
+        """
+        # Real-shape PEM: header / body / footer with valid base64 body.
+        # ``b"\xde\xad\xbe\xef"`` → ``b"3q2+7w=="`` after base64.
+        ca_pem = (
+            b"-----BEGIN CERTIFICATE-----\n"
+            b"3q2+7w==\n"
+            b"-----END CERTIFICATE-----\n"
+        )
         context = mp_adapter.ssl_context_with_ca(ca_pem)
-        assert "fake-ca" in context.cadata
+        # The stub records whatever was passed to load_verify_locations;
+        # PEM was decoded to raw DER bytes before the call.
+        assert context.cadata == b"\xde\xad\xbe\xef"
+
+    def test_str_pem_input_also_accepted(
+        self, mp_adapter: types.ModuleType,
+    ) -> None:
+        """Public signature is ``str | bytes``; both shapes work."""
+        ca_pem_str = (
+            "-----BEGIN CERTIFICATE-----\n"
+            "3q2+7w==\n"
+            "-----END CERTIFICATE-----\n"
+        )
+        context = mp_adapter.ssl_context_with_ca(ca_pem_str)
+        assert context.cadata == b"\xde\xad\xbe\xef"
+
+    def test_pem_with_extra_whitespace_and_crlf(
+        self, mp_adapter: types.ModuleType,
+    ) -> None:
+        """Tolerates CRLF, leading/trailing whitespace, and blank lines."""
+        ca_pem = (
+            b"  \r\n"
+            b"-----BEGIN CERTIFICATE-----\r\n"
+            b"  3q2+7w==  \r\n"
+            b"\r\n"
+            b"-----END CERTIFICATE-----\r\n"
+        )
+        context = mp_adapter.ssl_context_with_ca(ca_pem)
+        assert context.cadata == b"\xde\xad\xbe\xef"
