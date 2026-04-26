@@ -2,9 +2,10 @@
 
 ## Now
 
-(no active item — Phase 7 closed end-to-end with TLS+MQTT verification on Pi Pico W RP2; pick the next workstream phase or queued item from `## Next` below.)
+(no active item — Phase 7 closed end-to-end with TLS+MQTT verification on Pi Pico W RP2; pick the next workstream phase or queued item from `## Next` below.  The post-Phase-7 audit (2026-04-26) surfaced the beginner on-ramp gap captured at the top of `## Next` — that is the natural successor.)
 
 ## Next
+- [ ] **Beginner on-ramp UX + new HTTP libraries** (see `plans/workstreams/beginner-onramp.md`).  Post-Phase-7 audit (2026-04-26) confirmed the "plug board in → clone repo → one command → see something work" flow doesn't exist yet.  Eight-step sequence captured in the workstream doc; first slice (firmware-version floor + single-thing deploy default) is small and self-contained.  Adds two new libraries — `chumicro-requests` and `chumicro-http-server` — modelled on `chumicro-mqtt`'s non-blocking check/handle shape.  Folds the deferred `discover --register` / `add-device --from-port` work below into Step 3.  Firmware floor stated by user: MicroPython ≥ 1.27, CircuitPython ≥ 10.1.0.
 - [ ] **Rebrand ChuMicro → ChipPy** (see `plans/workstreams/rename-to-chippy.md`). Full org + package + bundle rename, all library `VERSION` files reset to `0.0.0`. Execute when the project is ready for first public opening; sheds accumulated test-churn releases from PyPI since the namespace changes.
 - [ ] **Scripts → workbench migration backlog** (Decision 0032 rule 8).  General sweep of `scripts/` for other candidates that should live in a workbench package.  Initial candidates to audit:
     - Transport / deploy logic still in `scripts/device_testing.py` beyond what `Deployer` + `InteractiveDeployer` already own.
