@@ -19,32 +19,21 @@ Public API::
         if client.check(now_ms()):
             client.handle(now_ms())
 
-QoS 0 + QoS 1 are implemented; QoS 2 raises
-:class:`UnsupportedQoSError` (Decision 0029 Phase 6 — the wire-level
-constants are reserved for forward-compat but the handlers aren't
-wired).
+QoS 0 + QoS 1 are implemented; QoS 2 raises :class:`UnsupportedQoSError`.
 
-Decision 0029 Phase 6 catalogues the rewrite of the pythonProject3
-client this library replaces: per-packet-id in-flight tracking,
-explicit state machine, no broad ``_waiting_state`` lock, structured
-oversized-message policy, no ``adafruit_connection_manager``
-dependency.
+Source layout (per Decision 0029 Phase 6 — see git history for the
+pre-consolidation per-concern split):
+
+* :mod:`chumicro_mqtt._wire` — wire-format primitives, packet
+  encoders/decoder, and protocol exceptions.
+* :mod:`chumicro_mqtt.client` — :class:`MQTTClient` plus connection-
+  lifecycle classes (:class:`ProtocolState`, :class:`InFlightTable`,
+  etc.) — they're tightly coupled to the orchestration.
+* :mod:`chumicro_mqtt.testing` — host-only fakes (excluded from device
+  bundle).
 """
 
-from chumicro_mqtt._encoder import (
-    encode_connect,
-    encode_puback,
-    encode_publish,
-    encode_subscribe,
-    encode_unsubscribe,
-)
-from chumicro_mqtt._errors import (
-    MQTTConnectError,
-    MQTTError,
-    MQTTProtocolError,
-    UnsupportedQoSError,
-)
-from chumicro_mqtt._packets import (
+from chumicro_mqtt._wire import (
     PACKET_CONNACK,
     PACKET_CONNECT,
     PACKET_PINGREQ,
@@ -55,19 +44,29 @@ from chumicro_mqtt._packets import (
     PACKET_SUBSCRIBE,
     PACKET_UNSUBACK,
     PACKET_UNSUBSCRIBE,
+    MQTTConnectError,
+    MQTTError,
+    MQTTProtocolError,
+    UnsupportedQoSError,
     decode_varlen,
+    encode_connect,
+    encode_puback,
+    encode_publish,
     encode_string,
+    encode_subscribe,
+    encode_unsubscribe,
     encode_varlen,
     topic_matches,
 )
-from chumicro_mqtt._state import (
+from chumicro_mqtt.client import (
     Awaiting,
     InFlightPublish,
     InFlightTable,
+    MQTTClient,
     PendingResponse,
     ProtocolState,
+    WhenOversized,
 )
-from chumicro_mqtt.client import MQTTClient, WhenOversized
 
 __all__ = [
     "Awaiting",

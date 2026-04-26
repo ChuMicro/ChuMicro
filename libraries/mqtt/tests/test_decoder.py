@@ -9,7 +9,7 @@ from chumicro_mqtt import (
     PACKET_UNSUBACK,
     MQTTProtocolError,
 )
-from chumicro_mqtt._decoder import (
+from chumicro_mqtt._wire import (
     PacketDecoder,
     ParsedAck,
     ParsedPublish,

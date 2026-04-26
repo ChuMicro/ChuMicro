@@ -68,6 +68,11 @@ from workspace import (
     strip_pip_dependency_version,
 )
 
+#: Module basenames excluded from the deployable bundle.  ``testing.py``
+#: is a CPython-only test fake used by host pytest — shipping it to a
+#: device wastes a FAT cluster (≥4 KB) per library that has one.
+_HOST_ONLY_MODULES = frozenset({"testing.py"})
+
 
 def _find_bundle_modules(library_dir: Path) -> tuple[str, Path, list[Path]]:
     """Discover the package name, package dir, and deployable .py files.
@@ -77,7 +82,8 @@ def _find_bundle_modules(library_dir: Path) -> tuple[str, Path, list[Path]]:
 
     Returns:
         ``(package_name, package_dir, python_files)`` where *python_files* are all
-        ``.py`` modules to include in the bundle.
+        ``.py`` modules to include in the bundle.  ``__pycache__`` and
+        host-only modules (``testing.py``) are excluded.
     """
     package_dir = find_package_dir(library_dir)
     if package_dir is None:
@@ -87,6 +93,7 @@ def _find_bundle_modules(library_dir: Path) -> tuple[str, Path, list[Path]]:
         py_file
         for py_file in sorted(package_dir.rglob("*.py"))
         if "__pycache__" not in py_file.relative_to(package_dir).parts
+        and py_file.name not in _HOST_ONLY_MODULES
     ]
     return package_dir.name, package_dir, python_files
 

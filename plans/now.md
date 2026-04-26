@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** Phase 4a Slice 0 shipped — `chumicro-workspace-runtime` skeleton + deploy-time config-merge core (workspace defaults + per-thing config + secrets → `/runtime_config.msgpack` per ADR 0035). Subsequent slices add command dispatch, three-zone YAML writer, onboarding flows, firmware URL derivation, import-graph resolver.
-- **Last shipped:** Phase 4a Slice 0 — `workbench/workspace-runtime/` package with `merge_configs` (deep per-key merge), `resolve_secrets` (`!secret <name>` reference resolution), file loaders for `workspace.yml` + `things/<name>/config.{toml,yml,yaml}` + `secrets.yml`, msgpack writer, and the `build_runtime_config` end-to-end pipeline. 46 host tests at 100 % coverage.
-- **In flight:** Phase 4a Slice 1 — wire `chumicro-deploy`'s deploy flow to call `build_runtime_config` so deploys auto-generate the runtime-config msgpack from each thing's source files.
+- **Phase:** Pi Pico W flash-footprint cleanup pass — 800 KB CIRCUITPY drive + FAT12 4 KB clusters means every file costs ≥ 4 KB regardless of content; reducing file count is the dominant lever.
+- **Last shipped:** Bundle pipeline strips `testing.py` from device deploys (saves ~24 KB across 6 libraries) + chumicro-mqtt consolidated 8 → 4 source files (3 deploy after testing.py exclusion); 139 mqtt tests pass at 94.37 % cov.
+- **In flight:** Triaging pre-existing preflight failures from prior crashed agent session — griffe annotation warnings in `libraries/sockets` + `libraries/wifi` (docs gate) and 3 `workbench/workspace-template` tests expecting a `devices.yml` that Phase 4b intentionally removed from the template.
 - **Blocked on:** —
-- **Last touched:** `workbench/workspace-runtime/**`, IDE config sync. Phase 3a + 3b both feature-complete; Phase 4a is the integration phase wiring the deploy + on-device sides together.
+- **Last touched:** `libraries/mqtt/src/chumicro_mqtt/{_wire,client,__init__}.py` (consolidation), `scripts/bundle_manager.py` + `scripts/tests/test_bundle_manager.py` (testing.py exclusion), `plans/learnings.md` (file-count vs FAT12 finding).
 
 ---
 

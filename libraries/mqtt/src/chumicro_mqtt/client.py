@@ -1,89 +1,175 @@
 """MQTT 3.1.1 client built on chumicro-sockets + chumicro-timing.
 
-Entry point :class:`MQTTClient` exposes the runner-shaped contract
-from Decision 0014 — :meth:`check(now_ms) -> bool` reports whether
-work is pending; :meth:`handle(now_ms)` performs one tick's worth
-of progress.  No threads, no async — cooperative dispatch in the
-caller's tick loop.
+:class:`MQTTClient` is the entry point.  Runner-shaped per Decision
+0014 — :meth:`check(now_ms) -> bool` reports whether work is pending;
+:meth:`handle(now_ms)` performs one tick of progress.  No threads,
+no async — cooperative dispatch in the caller's tick loop.
 
-What this rewrites from the pythonProject3 client (Decision 0029
-Phase 6):
-
-* QoS 1 in-flight tracking → :class:`InFlightTable` keyed by
-  packet_id.  Multiple concurrent QoS 1 publishes work correctly.
-* State machine → explicit :class:`ProtocolState` ladder + per-
-  pending-response :class:`PendingResponse` entries.  No more
-  blanket ``_waiting_state`` lock that prevented unrelated work.
-* Callback dispatch → callbacks live on the in-flight entries
-  themselves.  PUBACK matching looks up by packet_id rather than
-  popping from a deque.
-* Socket layer → injected :class:`TCPClientSocket` (typically built
-  via ``chumicro_sockets.tcp_client_socket`` /
-  ``tls_client_socket``).  No ``adafruit_connection_manager``
-  dependency; downstream tests inject ``FakeSocket``.
-* Timer layer → :func:`chumicro_timing.ticks_ms` /
-  :func:`ticks_diff` / :func:`ticks_add`, swapping out
-  ``adafruit_ticks``.
-
-What's preserved from the original:
-
-* Wire-format primitives (encode_varlen / decode_varlen /
-  encode_string / topic_matches) — these were solid; pulled into
-  :mod:`chumicro_mqtt._packets` mostly verbatim.
-* Pre-allocated 256 B steady-state RX buffer with a degraded
-  oversize-message path.
-* Callback registration shape (on_message / on_connect / on_publish
-  / etc.); pattern-routed message handlers list.
-* Will + retain.
-* PINGREQ at half the keepalive interval.
+The connection model lives here too (:class:`ProtocolState`,
+:class:`Awaiting`, :class:`InFlightTable`, :class:`PendingResponse`,
+:class:`InFlightPublish`) so the device-side bundle is two files
+(plus ``__init__``) instead of seven; the wire-format primitives
+sit in :mod:`chumicro_mqtt._wire`.
 """
 
 from chumicro_timing import ticks_add, ticks_diff, ticks_ms
 
-from chumicro_mqtt._decoder import (
-    PacketDecoder,
-    ParsedAck,
-    ParsedPublish,
-    _OversizedMessage,
-)
-from chumicro_mqtt._encoder import (
-    encode_connect,
-    encode_puback,
-    encode_publish,
-    encode_subscribe,
-    encode_unsubscribe,
-)
-from chumicro_mqtt._errors import (
-    MQTTConnectError,
-    MQTTError,
-    MQTTProtocolError,
-)
-from chumicro_mqtt._packets import (
+from chumicro_mqtt._wire import (
     PACKET_CONNACK,
     PACKET_PINGREQ,
     PACKET_PINGRESP,
     PACKET_PUBACK,
     PACKET_SUBACK,
     PACKET_UNSUBACK,
+    MQTTConnectError,
+    MQTTError,
+    MQTTProtocolError,
+    PacketDecoder,
+    ParsedAck,
+    ParsedPublish,
+    UnsupportedQoSError,
+    _OversizedMessage,
+    encode_connect,
+    encode_puback,
+    encode_publish,
+    encode_subscribe,
+    encode_unsubscribe,
     topic_matches,
-)
-from chumicro_mqtt._state import (
-    Awaiting,
-    InFlightPublish,
-    InFlightTable,
-    PendingResponse,
-    ProtocolState,
 )
 
 # ---------------------------------------------------------------------------
-# WhenOversized policy — Decision 0029 Phase 6 §"Oversized-message policy"
+# Connection state + pending-work tracking
+# ---------------------------------------------------------------------------
+
+
+class ProtocolState:
+    """Connection lifecycle states.
+
+    Transitions monotonically forward except after a fault::
+
+      DISCONNECTED -> CONNECTING -> CONNECTED -> DISCONNECTING -> DISCONNECTED
+                                              \\-> FAILED        -> DISCONNECTED
+    """
+
+    DISCONNECTED = "disconnected"
+    CONNECTING = "connecting"
+    CONNECTED = "connected"
+    DISCONNECTING = "disconnecting"
+    FAILED = "failed"
+
+
+class Awaiting:
+    """Tags identifying which broker response a pending work-item expects."""
+
+    CONNACK = "connack"
+    PINGRESP = "pingresp"
+    PUBACK = "puback"
+    SUBACK = "suback"
+    UNSUBACK = "unsuback"
+
+
+class InFlightPublish:
+    """One outstanding QoS 1 PUBLISH awaiting a PUBACK.
+
+    Carries the bytes ready to re-send (so we don't re-encode on
+    retry), a retry counter, a deadline (ticks), and an optional
+    callback that fires once on PUBACK.
+    """
+
+    __slots__ = (
+        "callback",
+        "deadline_ticks",
+        "packet_bytes",
+        "packet_id",
+        "retry_count",
+    )
+
+    def __init__(self, packet_id, packet_bytes, deadline_ticks, callback=None):
+        self.packet_id = packet_id
+        self.packet_bytes = packet_bytes
+        self.retry_count = 0
+        self.deadline_ticks = deadline_ticks
+        self.callback = callback
+
+
+class InFlightTable:
+    """Indexed collection of :class:`InFlightPublish`, keyed by packet_id.
+
+    Centralises packet-id allocation: callers ask for the next free
+    id, the table picks the next 1-65535 wraparound that isn't already
+    in flight.  Packet-id 0 is reserved by the spec.  An exhausted
+    id-space (every 65535 ids in flight) raises :class:`OverflowError`
+    rather than silently reusing.
+    """
+
+    def __init__(self):
+        self._entries = {}
+        self._next_id = 1
+
+    def __len__(self):
+        return len(self._entries)
+
+    def __contains__(self, packet_id):
+        return packet_id in self._entries
+
+    def __iter__(self):
+        return iter(self._entries.values())
+
+    def allocate_id(self):
+        """Return the next free packet-id (1-65535)."""
+        for _attempt in range(65535):
+            candidate = self._next_id
+            self._next_id += 1
+            if self._next_id > 65535:
+                self._next_id = 1
+            if candidate not in self._entries:
+                return candidate
+        raise OverflowError(
+            "MQTT in-flight table is full (65535 packet-ids in use)",
+        )
+
+    def add(self, entry):
+        """Insert *entry*; raises :class:`KeyError` on packet_id collision."""
+        if entry.packet_id in self._entries:
+            raise KeyError(f"packet_id {entry.packet_id} already in flight")
+        self._entries[entry.packet_id] = entry
+
+    def get(self, packet_id):
+        """Return the in-flight entry for *packet_id* or ``None``."""
+        return self._entries.get(packet_id)
+
+    def discard(self, packet_id):
+        """Remove and return the in-flight entry for *packet_id*, or ``None``."""
+        return self._entries.pop(packet_id, None)
+
+
+class PendingResponse:
+    """A non-publish response (CONNACK / SUBACK / UNSUBACK / PINGRESP) we're waiting for.
+
+    Each carries an :class:`Awaiting` tag, a deadline, an optional
+    packet_id, and an optional callback that fires once on receipt.
+    Multiple pending responses can coexist — tracking is per-entry
+    rather than via a single broad waiting-state lock.
+    """
+
+    __slots__ = ("awaiting", "callback", "deadline_ticks", "packet_id")
+
+    def __init__(self, awaiting, deadline_ticks, packet_id=None, callback=None):
+        self.awaiting = awaiting
+        self.deadline_ticks = deadline_ticks
+        self.packet_id = packet_id
+        self.callback = callback
+
+
+# ---------------------------------------------------------------------------
+# WhenOversized policy
 # ---------------------------------------------------------------------------
 
 
 class WhenOversized:
     """Policy for inbound PUBLISH whose payload exceeds ``max_message_size``."""
 
-    #: Drop silently; PUBACK the broker.  Original behaviour.
+    #: Drop silently; PUBACK the broker.
     DROP_SILENT = "drop_silent"
 
     #: Default.  Drop the payload, fire ``on_oversized(topic, reported_length)``,
@@ -96,8 +182,7 @@ class WhenOversized:
 
 
 def _no_callback(*_args, **_kwargs):
-    """Default callback that does nothing.  Lets handlers be stored
-    unconditionally — the dispatch loop never branches on None."""
+    """Default no-op callback so handlers can be stored unconditionally."""
     return None
 
 
@@ -144,8 +229,7 @@ class MQTTClient:
                 (typically from ``chumicro_sockets.tcp_client_socket``
                 or ``tls_client_socket``).  The client takes ownership;
                 :meth:`disconnect` closes it.
-            client_id: MQTT client identifier — must be unique per
-                broker.
+            client_id: MQTT client identifier — must be unique per broker.
             keep_alive_seconds: Broker idle timeout.  PINGREQ runs at
                 half this interval client-side.
             ack_timeout_seconds: Per-PUBACK / SUBACK / etc. deadline.
@@ -153,17 +237,15 @@ class MQTTClient:
             publish_retry_max: Max QoS 1 PUBLISH retries before giving
                 up + transitioning to FAILED.
             username / password: Optional auth.
-            clean_session: ``True`` (default) drops persistent session
-                state on connect; ``False`` resumes for QoS 1+
-                retransmit-across-reconnects.
-            will_topic / will_message / will_qos / will_retain: "Last
-                will" — broker publishes on uncleaning disconnect.
-            rx_buffer_size: Steady-state RX buffer size.  Defaults
-                to 256 (matches the original client).
-            max_message_size: Cap on a single inbound PUBLISH payload.
-                Defaults to 256 KB.
-            when_oversized: Policy for messages above the cap.
-                See :class:`WhenOversized`.
+            clean_session: ``False`` resumes persistent broker session
+                state for QoS 1+ retransmit-across-reconnects.
+            will_topic / will_message / will_qos / will_retain: Last
+                will — broker publishes on uncleanly-dropped connection.
+            rx_buffer_size: Steady-state RX buffer size (default 256).
+            max_message_size: Cap on a single inbound PUBLISH payload
+                (default 256 KB).
+            when_oversized: Policy for messages above the cap.  See
+                :class:`WhenOversized`.
             ticks_ms_func / ticks_add_func / ticks_diff_func: Inject
                 fakes for testing.  Default to ``chumicro_timing``.
         """
@@ -192,18 +274,16 @@ class MQTTClient:
             decoder_kwargs["max_message_size"] = max_message_size
         self._decoder = PacketDecoder(**decoder_kwargs)
 
-        # State.
         self._state = ProtocolState.DISCONNECTED
         self._in_flight = InFlightTable()
         self._pending_responses = []
         self._tx_queue = []  # Backpressure-safe outbound queue.
         self._partial_send = None  # (bytes, offset) when last send was short.
 
-        # Keepalive bookkeeping.
         self._next_ping_due_ticks = 0
         self._ping_interval_ms = max(1000, keep_alive_seconds * 1000 // 2)
 
-        # Callbacks (default no-ops so handlers can call without branching).
+        # Callbacks default to no-ops so handlers can call without branching.
         self.on_message = _no_callback
         self.on_connect = _no_callback
         self.on_disconnect = _no_callback
@@ -231,13 +311,12 @@ class MQTTClient:
     def connect(self):
         """Queue a CONNECT packet and transition to CONNECTING.
 
-        The actual handshake completes on subsequent :meth:`handle`
-        ticks — :meth:`connect` is non-blocking.  Callers either
-        loop ``while client.state in {DISCONNECTED, CONNECTING}: handle()``
-        or run under a Runner that does.
+        Non-blocking: the actual handshake completes on subsequent
+        :meth:`handle` ticks.  Callers loop ``while client.state in
+        {DISCONNECTED, CONNECTING}: handle()`` or run under a Runner.
 
         Raises:
-            MQTTError: When called in a non-DISCONNECTED state.
+            MQTTError: Called in a non-DISCONNECTED state.
         """
         if self._state != ProtocolState.DISCONNECTED:
             raise MQTTError(
@@ -266,14 +345,9 @@ class MQTTClient:
     def disconnect(self):
         """Queue a DISCONNECT packet, close the socket, mark DISCONNECTED.
 
-        Best-effort: tries to send DISCONNECT and close cleanly, but
-        any exception during send/close is swallowed — the goal is
-        to leave the client in a known-good DISCONNECTED state on
-        return.
+        Best-effort: any exception during send/close is swallowed so
+        the client always returns in a known DISCONNECTED state.
         """
-        # Send DISCONNECT directly (skip the queue — we're tearing
-        # down).  Errors are swallowed: the broker will time us out
-        # if the socket is already broken.
         try:
             self._send_raw(b"\xe0\x00")
         except Exception:  # noqa: BLE001 — disconnect is best-effort  # pragma: no cover - defensive
@@ -292,24 +366,20 @@ class MQTTClient:
     def publish(self, topic, payload, *, qos=0, retain=False, on_publish=None):
         """Queue a PUBLISH packet.
 
-        For QoS 0, the packet is queued and considered "delivered"
-        as soon as it reaches the wire (the optional *on_publish*
-        callback fires from the next :meth:`handle` once the bytes
-        are sent).
+        QoS 0: queued and considered delivered once it reaches the wire
+        (the optional *on_publish* fires from the next :meth:`handle`).
 
-        For QoS 1, an in-flight entry is opened with the packet's
-        bytes + the callback; PUBACK matches on packet_id and fires
-        the callback exactly once.  Retries up to *publish_retry_max*
-        on ack timeout.
+        QoS 1: in-flight entry is opened with the packet bytes + the
+        callback; PUBACK matches on packet_id and fires the callback
+        exactly once.  Retries up to *publish_retry_max* on ack timeout.
 
         Args:
             topic: Publish topic.
             payload: ``bytes`` / ``str``.  ``str`` is auto-encoded as UTF-8.
             qos: 0 or 1.  QoS 2 raises :class:`UnsupportedQoSError`.
             retain: True for retained messages.
-            on_publish: Optional callback fired on successful delivery
-                (after PUBACK for QoS 1, after wire-write for QoS 0).
-                Signature: ``on_publish(topic, payload_bytes)``.
+            on_publish: Callback ``(topic, payload_bytes)`` fired on
+                successful delivery.
 
         Raises:
             MQTTError: Client not in CONNECTED state.
@@ -319,8 +389,6 @@ class MQTTClient:
                 f"publish() requires CONNECTED state, was {self._state}",
             )
         if qos > 1:
-            from chumicro_mqtt._errors import UnsupportedQoSError  # noqa: PLC0415
-
             raise UnsupportedQoSError(
                 "qos must be 0 or 1; QoS 2 is reserved-not-implemented",
             )
@@ -339,7 +407,6 @@ class MQTTClient:
                 self._tx_queue.append(("__qos0_callback__", on_publish, topic, payload_bytes))
             return
 
-        # QoS 1: allocate packet_id, encode, queue, register in-flight.
         packet_id = self._in_flight.allocate_id()
         packet = encode_publish(
             topic=topic,
@@ -369,8 +436,7 @@ class MQTTClient:
         Args:
             topic: Topic filter (may include ``+`` / ``#`` wildcards).
             qos: 0 or 1.
-            on_subscribe: Optional callback fired on SUBACK.
-                Signature: ``on_subscribe(topic, granted_qos)``.
+            on_subscribe: Callback ``(topic, granted_qos)`` fired on SUBACK.
 
         Raises:
             MQTTError: Client not in CONNECTED state.
@@ -424,12 +490,7 @@ class MQTTClient:
         )
 
     def add_pattern_handler(self, pattern, handler):
-        """Register *handler* for inbound messages matching *pattern*.
-
-        The handler signature is ``handler(topic, payload_bytes)``.
-        Multiple patterns can be registered; matching is via
-        :func:`chumicro_mqtt._packets.topic_matches`.
-        """
+        """Register *handler* ``(topic, payload_bytes)`` for inbound messages matching *pattern*."""
         self._pattern_handlers.append((pattern, handler))
 
     # ------------------------------------------------------------------
@@ -445,10 +506,11 @@ class MQTTClient:
     def handle(self, now_ms):
         """One tick of progress.
 
-        Drains the TX queue first (sends as many packets as the
-        socket accepts), then pulls inbound bytes into the decoder
-        and processes any complete packets, then checks ack
-        deadlines + keepalive timer.
+        Drains the TX queue first, then pulls inbound bytes into the
+        decoder and processes any complete packets, then checks ack
+        deadlines + keepalive timer.  Drains TX again at the end —
+        deadline-retry PUBLISHes and PINGREQs queued by the deadline
+        + keepalive checks would otherwise wait an extra tick.
         """
         if self._state in (ProtocolState.DISCONNECTED, ProtocolState.FAILED):
             return
@@ -457,10 +519,6 @@ class MQTTClient:
             self._read_inbound()
             self._check_deadlines(now_ms)
             self._check_keepalive(now_ms)
-            # Drain again — _check_deadlines may have enqueued
-            # PUBLISH retries and _check_keepalive may have enqueued
-            # PINGREQ.  Without this, those packets sit in the queue
-            # for an extra tick before reaching the wire.
             self._drain_tx_queue()
         except MQTTError as error:
             self._last_error = error
@@ -476,7 +534,7 @@ class MQTTClient:
     def _drain_tx_queue(self):
         """Send queued packets until the socket would block.
 
-        Each item in the queue is either ``bytes`` (a packet) or a
+        Each item is either ``bytes`` (a packet) or a
         ``("__qos0_callback__", callback, topic, payload)`` tuple
         (a deferred QoS 0 on_publish hook).
         """
@@ -502,8 +560,7 @@ class MQTTClient:
             packet = head
             sent = self._send_raw(packet)
             if sent <= 0:  # pragma: no cover - non-blocking-EAGAIN backpressure path
-                # Socket would block — wait for next tick.
-                return
+                return  # Socket would block — wait for next tick.
             if sent < len(packet):  # pragma: no cover - rare partial-send path
                 self._partial_send = (packet, sent)
                 self._tx_queue.pop(0)
@@ -525,34 +582,26 @@ class MQTTClient:
     # ------------------------------------------------------------------
 
     def _socket_readable(self):
-        """Heuristic: is there inbound work?  Always optimistic — the
-        actual recv may still raise EAGAIN, which we handle.
+        """Always optimistic — the recv may raise EAGAIN, which we handle.
 
-        Returns ``True`` so :meth:`handle` always tries to read.  A
-        smarter implementation would use the socket's poll fd, but
-        the cooperative tick model already guarantees we revisit
-        every tick — calling recv every tick is cheap when there's
+        The cooperative tick model already guarantees we revisit every
+        tick, so calling recv unconditionally is cheap when there's
         nothing to read.
         """
         return True
 
     def _read_inbound(self):
-        """Pull bytes off the socket into the decoder; process complete packets.
+        """Pull bytes off the socket; process complete packets.
 
-        The loop pulls bytes until ``recv_into`` reports zero (EAGAIN
-        on non-blocking sockets / clean peer close) — never short-
-        circuits on "got < capacity" because TCP can fragment a
-        single broker burst across multiple recv calls.  The pull-
-        loop is still bounded: the decoder's capacity caps how many
-        bytes one tick consumes (default 256 B steady-state buffer),
-        and the surrounding tick-runner ensures handle() returns
-        promptly.
+        Doesn't short-circuit on "got < capacity" — TCP can fragment
+        a single broker burst across multiple recv calls.  The pull
+        loop is bounded by the decoder's buffer capacity (default
+        256 B), so handle() returns promptly.
         """
         while True:
             buffer_view = self._decoder.fill_buffer()
             capacity = self._decoder.fill_capacity()
             if capacity <= 0:
-                # Buffer full — process what we have, then refill.
                 break  # pragma: no cover - oversized-message path
             try:
                 got = self._socket.recv_into(buffer_view, capacity)
@@ -565,7 +614,6 @@ class MQTTClient:
                 break  # Peer closed or no data this tick.
             self._decoder.advance(got)
 
-        # Now process complete packets.
         while True:
             packet = self._decoder.read_next()
             if packet is None:
@@ -586,8 +634,7 @@ class MQTTClient:
 
     def _handle_inbound_publish(self, packet):
         """Fire callbacks + (for QoS 1) send PUBACK."""
-        # Pattern handlers fire FIRST so user code can branch on
-        # specific topics; the global on_message fires after.
+        # Pattern handlers fire before the global on_message.
         for pattern, handler in self._pattern_handlers:
             if topic_matches(packet.topic, pattern):
                 handler(packet.topic, packet.payload)
@@ -676,7 +723,6 @@ class MQTTClient:
 
     def _check_deadlines(self, now_ms):
         """Retry / fault on expired in-flight + pending entries."""
-        # In-flight (QoS 1 PUBLISH).
         for entry in list(self._in_flight):
             if self._ticks_diff(entry.deadline_ticks, now_ms) > 0:
                 continue
@@ -690,13 +736,11 @@ class MQTTClient:
                 return
             entry.retry_count += 1
             entry.deadline_ticks = self._deadline(self._ack_timeout_ms)
-            # Re-queue the original bytes — set the DUP flag (bit 3 of
-            # byte 0) per MQTT 3.1.1 4.3.2.
+            # Set the DUP flag (bit 3 of byte 0) per MQTT 3.1.1 §4.3.2.
             retry_packet = bytearray(entry.packet_bytes)
             retry_packet[0] |= 0x08
             self._tx_queue.append(bytes(retry_packet))
 
-        # Pending (CONNACK / SUBACK / UNSUBACK / PINGRESP).
         for pending in list(self._pending_responses):
             if self._ticks_diff(pending.deadline_ticks, now_ms) > 0:
                 continue

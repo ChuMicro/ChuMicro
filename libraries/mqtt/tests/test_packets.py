@@ -1,12 +1,7 @@
-"""Tests for the wire-format primitives.
-
-These primitives are pulled mostly verbatim from the pythonProject3
-client; the tests are new — the original had no unit tests for the
-primitives themselves.
-"""
+"""Tests for the wire-format primitives."""
 
 import pytest
-from chumicro_mqtt._packets import (
+from chumicro_mqtt._wire import (
     decode_varlen,
     encode_string,
     encode_varlen,

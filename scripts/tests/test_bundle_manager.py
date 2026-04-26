@@ -42,7 +42,7 @@ class TestFindBundleModules:
     """Tests for _find_bundle_modules."""
 
     def test_finds_python_files(self, tmp_path: Path):
-        """Discovers .py files under the package directory."""
+        """Discovers deployable .py files; host-only testing.py is excluded."""
         package_dir = tmp_path / "src" / "chumicro_example"
         package_dir.mkdir(parents=True)
         (package_dir / "__init__.py").write_text("")
@@ -52,9 +52,8 @@ class TestFindBundleModules:
         name, found_dir, files = _find_bundle_modules(tmp_path)
         assert name == "chumicro_example"
         assert found_dir == package_dir
-        assert len(files) == 3
         filenames = {file.name for file in files}
-        assert filenames == {"__init__.py", "core.py", "testing.py"}
+        assert filenames == {"__init__.py", "core.py"}
 
     def test_skips_pycache(self, tmp_path: Path):
         """__pycache__ files are excluded."""
@@ -67,6 +66,18 @@ class TestFindBundleModules:
 
         _, _, files = _find_bundle_modules(tmp_path)
         assert len(files) == 1  # only __init__.py
+
+    def test_skips_host_only_testing_module(self, tmp_path: Path):
+        """testing.py is a CPython-only host fake; it must not ship to devices."""
+        package_dir = tmp_path / "src" / "chumicro_example"
+        package_dir.mkdir(parents=True)
+        (package_dir / "__init__.py").write_text("")
+        (package_dir / "testing.py").write_text("# host fake")
+
+        _, _, files = _find_bundle_modules(tmp_path)
+        filenames = {file.name for file in files}
+        assert "testing.py" not in filenames
+        assert filenames == {"__init__.py"}
 
 
 class TestReadChuMicroDependencies:
