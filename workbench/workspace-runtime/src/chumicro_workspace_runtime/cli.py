@@ -33,9 +33,9 @@ import argparse
 import shutil
 import subprocess
 import sys
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from chumicro_workspace_runtime.deploy_source import thing_directory_source
 from chumicro_workspace_runtime.devices_yaml import (
@@ -44,10 +44,15 @@ from chumicro_workspace_runtime.devices_yaml import (
     HardwareOverwriteError,
     add_device,
     dump_devices,
+    find_device,
     load_devices,
     rename_device,
     update_device_address,
     update_device_hardware,
+)
+from chumicro_workspace_runtime.firmware_url import (
+    UnresolvableFirmwareError,
+    derive_firmware_url,
 )
 from chumicro_workspace_runtime.onboarding import (
     BoardState,
@@ -119,6 +124,44 @@ def _resolve_workspace(args: argparse.Namespace) -> WorkspaceLayout:
         return WorkspaceLayout.from_dir(args.workspace_dir)
     except WorkspaceNotFoundError as exception:
         raise SystemExit(f"error: {exception}") from exception
+
+
+def _find_devices_yml_entry_for_args(
+    workspace: WorkspaceLayout,
+    args: argparse.Namespace,
+) -> Mapping[str, Any] | None:
+    """Locate the raw ``devices.yml`` entry matching *args*' selectors.
+
+    Mirrors :func:`chumicro_deploy.config.default.load_devices_yml`'s
+    resolution order — explicit ``--device id`` wins outright, then
+    ``--runtime`` picks ``defaults.<runtime>``, finally a single
+    runtime default in the file picks itself.  Returns the matching
+    raw dict (with comments + key order intact since it comes from
+    :func:`load_devices`) or ``None`` when nothing matches.
+
+    Distinct from :func:`_resolve_device` because the
+    ``firmware_source`` / ``hardware`` fields aren't on the
+    :class:`Device` dataclass — they live in the raw entry.
+    """
+    if not workspace.devices_yaml.is_file():
+        return None
+    data = load_devices(workspace.devices_yaml)
+    if args.device_id is not None:
+        return find_device(data, args.device_id)
+    defaults = data.get("defaults") or {}
+    runtime = getattr(args, "runtime", None)
+    if runtime is not None:
+        default_id = defaults.get(runtime)
+        if default_id is not None:
+            return find_device(data, default_id)
+    candidates = [
+        defaults.get("micropython"),
+        defaults.get("circuitpython"),
+    ]
+    picks = [candidate for candidate in candidates if candidate]
+    if len(picks) == 1:
+        return find_device(data, picks[0])
+    return None
 
 
 def _resolve_device(workspace: WorkspaceLayout, args: argparse.Namespace) -> Device:
@@ -306,13 +349,42 @@ def _cmd_install_firmware(args: argparse.Namespace) -> int:
     ``upgrade-firmware`` is registered as an alias of this command —
     flashing the same URL onto a board that already has firmware *is*
     an upgrade, so the implementation does not branch.
+
+    ``--url`` is optional as of Slice 5: when omitted, the URL is
+    derived via :func:`chumicro_workspace_runtime.derive_firmware_url`
+    from the device entry's ``hardware.firmware_source`` (custom),
+    ``hardware.board_id`` (CP S3 listing → latest stable), or
+    ``hardware.machine`` (MP curated map).  Unresolvable cases
+    surface a precise message + exit 2 so the user can paste an
+    explicit URL into ``--url`` (or the entry's
+    ``hardware.firmware_source``).
     """
     workspace = _resolve_workspace(args)
     device = _resolve_device(workspace, args)
+
+    if args.url is not None:
+        firmware_url = args.url
+    else:
+        entry = _find_devices_yml_entry_for_args(workspace, args)
+        if entry is None:
+            print(
+                "install-firmware: --url omitted and no device entry "
+                "to derive from.  Pass --url explicitly or register "
+                "the device with `add-device` first.",
+                file=sys.stderr,
+            )
+            return 2
+        try:
+            firmware_url = derive_firmware_url(entry, allow_prerelease=args.allow_prerelease)
+        except UnresolvableFirmwareError as exception:
+            print(f"install-firmware: {exception}", file=sys.stderr)
+            return 2
+        print(f"install-firmware: resolved {firmware_url}")
+
     from chumicro_deploy import flash_firmware  # noqa: PLC0415
 
     flash_firmware(
-        args.url,
+        firmware_url,
         device,
         reflash_method=args.method,
         bootloader_drive_path=args.bootloader_drive_path,
@@ -732,8 +804,21 @@ def _add_firmware_args(parser: argparse.ArgumentParser) -> None:
     """Attach the shared firmware-flash flags."""
     parser.add_argument(
         "--url",
-        required=True,
-        help="Firmware download URL.",
+        default=None,
+        help=(
+            "Firmware download URL.  When omitted, the URL is "
+            "derived from the device entry's hardware fields (CP: "
+            "S3-bucket lookup; MP: curated machine→BOARD map; or "
+            "hardware.firmware_source override)."
+        ),
+    )
+    parser.add_argument(
+        "--allow-prerelease",
+        action="store_true",
+        help=(
+            "CP-only: include pre-release versions (-rc.0, -beta.1) "
+            "when deriving the latest URL.  Stable-only by default."
+        ),
     )
     parser.add_argument(
         "--method",

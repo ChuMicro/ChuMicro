@@ -482,6 +482,77 @@ class TestInstallFirmware:
         assert exit_code == 0
         assert called == ["https://example.com/fw.bin"]
 
+    def test_url_omitted_derives_from_device_entry(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Slice 5: --url optional, derived from hardware.firmware_source."""
+        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "devices.yml").write_text(
+            "defaults:\n"
+            "  micropython: pico\n"
+            "devices:\n"
+            "  - id: pico\n"
+            "    runtime: micropython\n"
+            "    address: /dev/cu.fake\n"
+            "    hardware:\n"
+            "      firmware_source: https://my-mirror/firmware.bin\n"
+        )
+
+        captured: list[str] = []
+
+        def fake_flash(url: str, _device: Device, **_kwargs: Any) -> None:
+            captured.append(url)
+
+        import chumicro_deploy
+        monkeypatch.setattr(chumicro_deploy, "flash_firmware", fake_flash)
+        exit_code = cli.main([
+            "install-firmware", "--workspace-dir", str(tmp_path),
+            "--method", "esptool",
+        ])
+        assert exit_code == 0
+        assert captured == ["https://my-mirror/firmware.bin"]
+        assert "resolved https://my-mirror/firmware.bin" in capsys.readouterr().out
+
+    def test_url_omitted_unknown_device_returns_two(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """No --url + no --device id → can't derive, exit 2."""
+        root = _seed_workspace(tmp_path)
+        # Default-resolution lands on lolin-s2, which has no
+        # hardware block → derive raises UnresolvableFirmwareError.
+        exit_code = cli.main([
+            "install-firmware", "--workspace-dir", str(root),
+            "--method", "uf2",
+        ])
+        assert exit_code == 2
+        captured_stderr = capsys.readouterr().err
+        assert "install-firmware" in captured_stderr
+
+    def test_url_omitted_unresolvable_returns_two(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """A device with no resolvable hardware fields → exit 2 with a hint."""
+        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "devices.yml").write_text(
+            "devices:\n"
+            "  - id: orphan\n"
+            "    runtime: micropython\n"
+            "    address: /dev/cu.fake\n"
+        )
+        exit_code = cli.main([
+            "install-firmware", "--workspace-dir", str(tmp_path),
+            "--device", "orphan", "--method", "esptool",
+        ])
+        assert exit_code == 2
+        assert "hardware.machine" in capsys.readouterr().err
+
 
 # ---------------------------------------------------------------------------
 # test
