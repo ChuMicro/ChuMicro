@@ -155,29 +155,41 @@ Surfaced in `chumicro-config` Slice 0 when `MissingConfigKey(ConfigError, KeyErr
 
 ### Library import RAM cost: chumicro-mqtt is ~5x heavier than its peers
 
-Measured per-library import cost on real boards via `.scratch/run_ram_audit.py` — deploys an audit program that imports each chumicro library in isolation, samples `gc.mem_free()` before/after, and prints structured stats.  Rankings are stable across MP runtimes (Lolin S2 ESP32 vs Pi Pico W RP2; CP measurement is less clean because `del sys.modules[name]` doesn't fully unload CP's interned modules).
+Per-library import cost measured on all four supported boards via `.scratch/run_ram_audit.py` (flash-mode, per-library, with cleanup before / after).  Each row is the heap free delta from `gc.mem_free()` immediately before and after `__import__(module)`.  Numbers accumulate — each library imports on top of the previous one, simulating realistic stack-up.
 
-Per-library cost on Pi Pico W MP (the smallest supported board, MP 1.26):
+| library  | Lolin S2 CP | Pi Pico W CP | Lolin S2 MP | Pi Pico W MP |
+|----------|------------:|-------------:|------------:|-------------:|
+| compat   |        n/a* |         256  |        320  |        256   |
+| timing   |     -5376** |        2768  |       2624  |       2656   |
+| msgpack  |       480   |         480  |       4624  |       3920   |
+| config   |      2864   |        2800  |       5760  |       5584   |
+| runner   |     15360   |        6944  |       6320  |       6080   |
+| kvstore  |     14848   |        6544  |       9088  |       8864   |
+| sockets  |      2720   |        2720  |       3120  |       2960   |
+| mqtt     |     33712   |       21216  |      23936  |      22928   |
+| wifi     |     19168   |         n/a† |      13776  |      12976   |
 
-| library  | bytes (free Δ) |
-|---|---|
-| compat   | 160 |
-| timing   | 2 128 |
-| msgpack  | 3 616 |
-| config   | 2 672 |
-| runner   | 3 072 |
-| kvstore  | 5 392 |
-| sockets  | 2 512 |
-| **mqtt** | **20 960** |
-| wifi     | 5 536 |
+\* USB-reattach race on a slow remount after `storage.erase_filesystem()`; longer post-cleanup wait fixes.
+\** Allocator artifact — GC reaped more than the import allocated.
+† Pi Pico W CP ran out of CIRCUITPY space before staging wifi (FAT-cluster-waste finding below).
 
-Loading every library: 46 KB on MP, ~17 KB on CP.  Pi Pico W MP has 191 KB free at idle; after loading the full stack, 145 KB free remains — plenty of headroom for app code, so **no urgent optimization needed**.
+**Three substrate-level facts the data surfaces:**
 
-Where the readability tradeoff would be worth it on a future tighter board: lazy-import `chumicro_mqtt._encoder` / `_decoder` until first publish (≈ 10 KB savings if the user only subscribes), and lazy-import `chumicro_kvstore`'s unused backends (≈ 2-3 KB savings).  Module bytecode (`.mpy` from the bundle staging path) further cuts these costs by 30-40 %.
+1. **`chumicro-mqtt` is the consistent heavyweight** — 21-34 KB across runtimes.  Roughly 4-5x the next-heaviest (kvstore, runner).  Worth the readability sacrifice if a future board is tight: lazy-import `_encoder` / `_decoder` until first publish saves ~10 KB if the user only subscribes.
 
-Not worth it: inlining modules into single files, stripping `const()` declarations, removing docstrings (already stripped at `.mpy` compile).
+2. **`chumicro-msgpack` cost differs by ~10x between CP and MP** — 480 bytes on CP, 4-5 KB on MP — because CP ships a native C `msgpack` module our package delegates to, while MP runs the pure-Python encoder.  Same library, very different on-device cost.
 
-Surfaced 2026-04-26 during the post-Phase-6 audit; no commit landed since the conclusion was "no urgent fix".  Audit runner stays in `.scratch/` (gitignored — uses live wifi creds).
+3. **CP numbers are noticeably lower than MP** for the larger libraries — CP's frozen-bytecode + `.mpy` cache reduce .py parse cost.  Real cold-start cost is closer to the MP numbers; CP's deploy mechanism gets a free amortization.
+
+**Pi Pico W CIRCUITPY ran out before wifi** — not because heap was tight, but because FAT12's 4 KB cluster size means every .py file (most are < 1 KB of source) consumes at least 4 KB of disk.  8 libraries × ~10 files avg = ~80 files × 4 KB = ~320 KB, plus a cluster per subdirectory.  Pi Pico W's ~870 KB CIRCUITPY drive maxed out before the 9th library landed.  Real users dodge this entirely by shipping `.mpy` bytecode (smaller and fewer files) via the bundle staging pipeline.
+
+**Verdict: no urgent RAM optimization needed.** Pi Pico W MP starts at 195 KB free; after loading all 9 libraries it still has ~140 KB.  The `MemoryBackend` lazy-import in `chumicro_kvstore` (commit `c8917f5`) shipped as a small cleanup; further per-library RAM tightening waits for a real constraint to surface.
+
+**Worth it if a future board makes it necessary:** lazy `chumicro_mqtt._encoder`/`_decoder` (~10 KB), lazy `chumicro_kvstore`'s unused backends (~2-3 KB).  **Not worth it:** inlining modules into single files (kills traceback clarity), stripping `const()` declarations (negligible), removing docstrings (`.mpy` already strips them).
+
+Audit runner: `.scratch/run_ram_audit.py` (gitignored — uses live wifi creds + spawns Mosquitto for MQTT-touching variants).  Cleanup helper: `.scratch/clean_circuitpy_board.py` — `storage.erase_filesystem()` for CP, `os.remove`/`os.rmdir` walk for MP.  Both auto-invoked before + after audits to keep boards in a known state.
+
+Surfaced 2026-04-26 during the post-Phase-6 audit cycle.  Two prior runs broke board state (FSKit wedge from a single 9-library rsync burst on CP; RAM-mode bootstrap OOM on Pi Pico W CP).  Settled on flash-mode + per-library + 12 s post-cleanup wait + cleanup automation as the safe shape.
 
 ### `griffe check --search` silently ignores absolute paths in 2.x
 
