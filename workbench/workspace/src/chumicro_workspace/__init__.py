@@ -1,17 +1,22 @@
 """Host-side runtime for ChuMicro project workspaces.
 
-Phase 4a surface so far:
+Combines:
 
-* **Slice 0 — config-merge core** (Decision 0035): workspace defaults
-  + per-thing config + secrets → ``/runtime_config.msgpack``.
-* **Slice 1 — deploy integration**: :class:`WithRuntimeConfig` and
-  :func:`thing_directory_source` compose with ``chumicro-deploy``'s
-  ``FileSource``s so a single ``Deployer.deploy(...)`` call ships
-  both the thing's app code and its merged config in one shot.
-
-Subsequent slices add command dispatch, three-zone YAML writer,
-onboarding flows, firmware URL derivation, and the import-graph
-resolver per ``plans/workstreams/project-workspace.md`` Phase 4a.
+* **Config merge** (Decision 0035) — workspace defaults + per-thing
+  config + secrets → ``/runtime_config.msgpack``.
+* **Deploy integration** — :class:`WithRuntimeConfig` plus
+  :func:`thing_directory_source` / :func:`thing_import_graph_source`
+  / :func:`thing_boot_source` / :func:`multi_thing_boot_source` /
+  :func:`switch_source` compose with ``chumicro-deploy``'s
+  ``FileSource``\\ s so a single ``Deployer.deploy(...)`` call ships
+  app code + the merged config + (optional) boot shim in one shot.
+* **``devices.yml`` round-trip** — three-zone writer (Decision 0029 §9).
+* **Onboarding** — board-state detection, firmware URL derivation
+  (CP S3 listing + MP curated machine→BOARD map).
+* **Init / update** (Decision 0038) — clone the canonical workspace
+  template repo and re-flow tool-owned files.
+* **CLI dispatch** — :func:`chumicro_workspace.cli.main` powers the
+  ``chumicro-workspace`` entry-point and the workspace ``run.py`` shim.
 
 Public API::
 

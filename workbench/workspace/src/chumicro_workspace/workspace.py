@@ -7,8 +7,9 @@ until it finds a ``workspace.yml`` so users can invoke commands from
 anywhere inside the workspace tree (typical Git / monorepo
 ergonomics).
 
-The layout itself is fixed by ``plans/workstreams/project-workspace.md``
-Phase 4c::
+The layout is documented in ``plans/workstreams/project-workspace.md``
+and reified by the canonical template at
+``ChuMicro/ChuMicro-Workspace-Template`` (Decision 0038)::
 
     <root>/
         workspace.yml          # workspace defaults (Decision 0035)

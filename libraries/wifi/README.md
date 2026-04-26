@@ -96,7 +96,7 @@ wifi.on_state_change(lambda old, new: print(f"{old} -> {new}"))
 
 ## Platform support
 
-Works on CPython, MicroPython, and CircuitPython.  Per-runtime adapters land in slices 1–3 of Phase 3a (CP `wifi.radio`, MP-ESP32 `network.WLAN`, MP-Pico-W CYW43); Slice 0 ships only the `FakeWifiAdapter` so the host-side tests + scaffolding flow can be exercised today.
+Works on CPython, MicroPython, and CircuitPython.  Ships four adapters: CircuitPython `wifi.radio` (`_adapters/cp.py`), MicroPython ESP32 `network.WLAN` (`_adapters/mp_esp32.py`), MicroPython RP2 CYW43 (`_adapters/mp_rp2.py`), and a `FakeWifiAdapter` for host-side tests.  The right adapter is selected at runtime via `sys.implementation.name` plus an `import esp32` probe.
 
 ## Examples
 

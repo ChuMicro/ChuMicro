@@ -338,8 +338,9 @@ def _cmd_new(args: argparse.Namespace) -> int:
     target = workspace.thing_dir(args.name)
     if not template.is_dir():
         raise SystemExit(
-            f"error: template {template} not found — workspace template "
-            "package is shipped in Phase 4b/4c.",
+            f"error: template {template} not found — run "
+            "`chumicro-workspace init` to clone the canonical template, "
+            "or create `things/_template/` by hand.",
         )
     if target.exists():
         raise SystemExit(f"error: {target} already exists")
@@ -405,12 +406,12 @@ def _cmd_devices(args: argparse.Namespace) -> int:
 def _cmd_deploy(args: argparse.Namespace) -> int:
     """Deploy one or more things to a device.
 
-    Single-thing default uses :func:`thing_directory_source` (Slice 1's
-    flat layout).  ``--import-graph`` (Slice 6) ships only transitively-
-    imported modules.  ``--boot-shim`` (Slice 7) ships under
-    ``/lib/things/<name>/``; with multiple positional names + ``--boot-shim``
-    multiple things land side-by-side and ``switch`` can re-point
-    ``/active.py`` without re-flashing.
+    Single-thing default uses :func:`thing_directory_source` — the
+    flat layout where the thing's files land at the device root.
+    ``--import-graph`` ships only transitively-imported modules.
+    ``--boot-shim`` ships under ``/lib/things/<name>/``; with multiple
+    positional names + ``--boot-shim`` the things land side-by-side
+    and ``switch`` can re-point ``/active.py`` without re-flashing.
     """
     workspace = _resolve_workspace(args)
     names: list[str] = list(args.names)
@@ -586,14 +587,13 @@ def _cmd_install_firmware(args: argparse.Namespace) -> int:
     flashing the same URL onto a board that already has firmware *is*
     an upgrade, so the implementation does not branch.
 
-    ``--url`` is optional as of Slice 5: when omitted, the URL is
-    derived via :func:`chumicro_workspace.derive_firmware_url`
-    from the device entry's ``hardware.firmware_source`` (custom),
-    ``hardware.board_id`` (CP S3 listing → latest stable), or
-    ``hardware.machine`` (MP curated map).  Unresolvable cases
-    surface a precise message + exit 2 so the user can paste an
-    explicit URL into ``--url`` (or the entry's
-    ``hardware.firmware_source``).
+    ``--url`` is optional: when omitted, the URL is derived via
+    :func:`chumicro_workspace.derive_firmware_url` from the device
+    entry's ``hardware.firmware_source`` (custom), ``hardware.board_id``
+    (CP S3 listing → latest stable), or ``hardware.machine`` (MP
+    curated map).  Unresolvable cases surface a precise message + exit
+    2 so the user can paste an explicit URL into ``--url`` (or the
+    entry's ``hardware.firmware_source``).
     """
     workspace = _resolve_workspace(args)
     device = _resolve_device(workspace, args)
@@ -783,7 +783,7 @@ def _cmd_env(_args: argparse.Namespace) -> int:  # noqa: CHU001 — workstream-s
 
 def _cmd_use(_args: argparse.Namespace) -> int:
     """Switch the active workspace environment."""
-    return _stub("Phase 4a (environments — slice TBD after Slices 3-7)")
+    return _stub("environments — not implemented yet")
 
 
 def _cmd_sync(_args: argparse.Namespace) -> int:
@@ -1133,7 +1133,7 @@ def build_parser() -> argparse.ArgumentParser:
     # ----- sync ----------------------------------------------------------
     sync_parser = subparsers.add_parser(
         "sync",
-        help="Re-apply the workspace template (Phase 4b).",
+        help="Deprecated — superseded by `update`.",
     )
     _add_workspace_arg(sync_parser)
     sync_parser.set_defaults(func=_cmd_sync)
@@ -1141,7 +1141,7 @@ def build_parser() -> argparse.ArgumentParser:
     # ----- upgrade -------------------------------------------------------
     upgrade_parser = subparsers.add_parser(
         "upgrade",
-        help="Pin to a newer workspace template version (Phase 4b).",
+        help="Deprecated — superseded by `update --ref <ref>`.",
     )
     _add_workspace_arg(upgrade_parser)
     upgrade_parser.set_defaults(func=_cmd_upgrade)

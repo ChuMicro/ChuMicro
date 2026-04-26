@@ -30,7 +30,7 @@ Two pieces:
   config msgpack.
 
 The CLI ``deploy --boot-shim`` flag opts into this pattern;
-default deploys still use Slice 1's flat
+default deploys still use the flat
 :func:`thing_directory_source` layout.  Opt-in because the boot
 shim is workspace-runtime convention — workspaces / templates
 that don't follow it (third-party templates per Decision 0032)

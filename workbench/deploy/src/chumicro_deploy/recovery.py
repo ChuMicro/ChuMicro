@@ -21,8 +21,8 @@ This module provides:
 Keeping this as a sibling instead of baking it into
 :class:`Deployer` preserves the deterministic programmatic API
 that scripts like ``device_testing.py`` depend on.  Interactive
-use (the CLI, a future workspace-template ``run.py deploy``,
-direct human invocation) opts in by instantiating
+use (the ``chumicro-deploy`` CLI, the workspace ``run.py deploy``
+shim, direct human invocation) opts in by instantiating
 :class:`InteractiveDeployer` instead.
 """
 

@@ -30,7 +30,8 @@ The package ships `python -m chumicro_workspace` (also exposed as the `chumicro-
 | `upgrade-firmware` | Alias of `install-firmware`. |
 | `rename --thing OLD NEW \| --device OLD NEW` | Rename a thing dir or a `devices.yml` entry id. |
 | `test [-- ...]` | Run pytest at the workspace root; extra args pass through after `--`. |
-| `sim`, `env`, `use`, `sync`, `upgrade` | Stubbed for later slices / Phase 4b — emit a "registered, not yet implemented" message. |
+| `sim`, `env`, `use` | Stubbed — emit a "registered, not yet implemented" message. |
+| `sync`, `upgrade` | Deprecated aliases for `update` — emit a "superseded by `update`" message. |
 
 ### Boot-shim layout
 

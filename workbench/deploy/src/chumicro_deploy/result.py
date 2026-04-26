@@ -1,9 +1,7 @@
 """DeployResult and DeployError — outcome types returned by the deployer.
 
-The :class:`~chumicro_deploy.deployer.Deployer` that returns these
-lands in Slice 1c together with the :class:`FileSource` protocol.
-Defining the result shape here first lets callers write against a
-stable return type before the orchestration API is finalised.
+Defined in their own module so callers can annotate against a stable
+return type without pulling in the orchestration code.
 """
 
 from __future__ import annotations

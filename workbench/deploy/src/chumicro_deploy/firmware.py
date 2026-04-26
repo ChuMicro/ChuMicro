@@ -54,7 +54,10 @@ class UnresolvedFirmwareError(Exception):
 
     - Runtime is ``"micropython"``.  MP firmware URLs embed a
       per-build date that can't be inferred from the version alone;
-      scraping the listing page is on the Slice 1e.2 / 1f roadmap.
+      this primitive doesn't scrape — use
+      :func:`chumicro_workspace.derive_firmware_url` for the
+      higher-level lookup that walks the curated machine→BOARD map
+      against micropython.org's listing page.
     - Runtime is unrecognised (not ``circuitpython`` / ``micropython``).
     - A required field (board_id, version) is empty.
     """
@@ -98,9 +101,9 @@ def resolve_firmware_url(
     if runtime == Runtime.MICROPYTHON:
         raise UnresolvedFirmwareError(
             "MicroPython firmware URLs embed a per-build date that "
-            "cannot be inferred from the version alone.  Live listing "
-            "lookup is not yet implemented; supply the URL directly "
-            "until Slice 1e.2 adds scraping."
+            "cannot be inferred from the version alone.  Use "
+            "chumicro_workspace.derive_firmware_url for the listing-"
+            "page lookup, or supply the URL directly."
         )
     allowed = ", ".join(f"{member.value!r}" for member in Runtime)
     raise UnresolvedFirmwareError(
