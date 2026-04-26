@@ -72,6 +72,7 @@ from chumicro_workspace.import_graph import thing_import_graph_source
 from chumicro_workspace.onboarding import (
     BoardState,
     detect_board_state,
+    probe_with_runtime_inference,
 )
 from chumicro_workspace.workspace import (
     WorkspaceLayout,
@@ -683,38 +684,77 @@ def _cmd_add_device(args: argparse.Namespace) -> int:
     Builds a fresh entry by probing the supplied address: ``runtime``
     + ``hardware.uid`` + ``hardware.machine`` come from
     :func:`chumicro_deploy.probe_device`; ``address`` rides through
-    as-is.  Re-running with the same id triggers a re-probe and is
-    blocked unless ``--force`` is passed (the typical second invocation
-    is "I swapped boards on this id" — make the user confirm).
+    as-is.  When ``--runtime`` is omitted, the runtime is inferred
+    by trying every candidate transport in turn (Decision 0039 +
+    Step 3 of the beginner-onramp workstream) — the user can plug a
+    fresh board in and register it without knowing what firmware it
+    runs.  Re-running with the same id triggers a re-probe and is
+    blocked unless ``--force`` is passed (the typical second
+    invocation is "I swapped boards on this id" — make the user
+    confirm).
     """
     workspace = _resolve_workspace(args)
     from chumicro_deploy import Device, probe_device  # noqa: PLC0415
 
-    probe_device_obj = Device(transport=args.runtime, address=args.address)
-    try:
-        info = probe_device(probe_device_obj)
-    except Exception as exception:  # noqa: BLE001 — onboarding diagnoses every failure
-        diagnosis = detect_board_state(probe_device_obj)
+    if args.runtime is None:
+        inference = probe_with_runtime_inference(args.address)
+        if inference.runtime is None or inference.info is None:
+            # Fall through to the existing diagnose-and-print-error
+            # path with whichever transport candidate was last tried.
+            probe_device_obj = Device(
+                transport="micropython", address=args.address,
+            )
+            diagnosis = detect_board_state(probe_device_obj)
+            if inference.last_exception is not None:
+                exception = inference.last_exception
+                print(
+                    f"add-device: auto-detect failed "
+                    f"({type(exception).__name__}: {exception}).",
+                    file=sys.stderr,
+                )
+            else:
+                print(
+                    "add-device: auto-detect failed — "
+                    "no runtime returned a probe marker.",
+                    file=sys.stderr,
+                )
+            for line in diagnosis.next_steps:
+                print(f"  {line}", file=sys.stderr)
+            return 1
+        info = inference.info
         print(
-            f"add-device: probe failed ({type(exception).__name__}: {exception}).",
-            file=sys.stderr,
+            f"add-device: auto-detected runtime = {inference.runtime}",
         )
-        for line in diagnosis.next_steps:
-            print(f"  {line}", file=sys.stderr)
-        return 1
-    if info.implementation is None:
-        diagnosis = detect_board_state(probe_device_obj)
-        if diagnosis.state is BoardState.UF2_BOOTLOADER:
+    else:
+        probe_device_obj = Device(transport=args.runtime, address=args.address)
+        try:
+            info = probe_device(probe_device_obj)
+        except Exception as exception:  # noqa: BLE001 — onboarding diagnoses every failure
+            diagnosis = detect_board_state(probe_device_obj)
             print(
-                "add-device: board is in UF2 bootloader, not REPL — "
-                "install firmware first.",
+                f"add-device: probe failed "
+                f"({type(exception).__name__}: {exception}).",
                 file=sys.stderr,
             )
-        else:
-            print("add-device: probe did not return implementation marker", file=sys.stderr)
-        for line in diagnosis.next_steps:
-            print(f"  {line}", file=sys.stderr)
-        return 1
+            for line in diagnosis.next_steps:
+                print(f"  {line}", file=sys.stderr)
+            return 1
+        if info.implementation is None:
+            diagnosis = detect_board_state(probe_device_obj)
+            if diagnosis.state is BoardState.UF2_BOOTLOADER:
+                print(
+                    "add-device: board is in UF2 bootloader, not REPL — "
+                    "install firmware first.",
+                    file=sys.stderr,
+                )
+            else:
+                print(
+                    "add-device: probe did not return implementation marker",
+                    file=sys.stderr,
+                )
+            for line in diagnosis.next_steps:
+                print(f"  {line}", file=sys.stderr)
+            return 1
 
     firmware_version = info.implementation.version
     support = check_firmware_supported(info.implementation)
@@ -950,8 +990,13 @@ def build_parser() -> argparse.ArgumentParser:
     add_device_parser.add_argument(
         "--runtime",
         choices=("circuitpython", "micropython"),
-        required=True,
-        help="Runtime to probe — picks the right Device facade for probe_device.",
+        default=None,
+        help=(
+            "Runtime to probe — picks the right Device facade for "
+            "probe_device.  Optional: when omitted, the runtime is "
+            "auto-detected by trying both transports against the "
+            "given address (Step 3 of the beginner-onramp)."
+        ),
     )
     add_device_parser.add_argument(
         "--description",

@@ -1567,6 +1567,184 @@ class TestAddDeviceFirmwareFloor:
 
 
 # ---------------------------------------------------------------------------
+# add-device — runtime auto-inference (Step 3 of beginner-onramp)
+# ---------------------------------------------------------------------------
+
+
+class TestAddDeviceRuntimeInference:
+    """`--runtime` is optional; when omitted, runtime is probed."""
+
+    def _seed(self, tmp_path: Path) -> None:
+        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+
+    def test_omitted_runtime_is_inferred(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        self._seed(tmp_path)
+        from chumicro_workspace import onboarding
+
+        # Fake the inference helper to return a CP probe.
+        def fake_inference(address: str, **_kw):
+            return onboarding.RuntimeInferenceResult(
+                info=_fake_probe_info(
+                    runtime="circuitpython", version="10.1.4",
+                ),
+                runtime="circuitpython",
+                transport_used="circuitpython",
+            )
+
+        monkeypatch.setattr(
+            onboarding, "probe_with_runtime_inference", fake_inference,
+        )
+        # Also rebind the name imported into cli.py.
+        monkeypatch.setattr(cli, "probe_with_runtime_inference", fake_inference)
+
+        exit_code = cli.main([
+            "add-device", "--workspace-dir", str(tmp_path),
+            "--address", "/dev/cu.x", "feather",
+        ])
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "auto-detected runtime = circuitpython" in captured.out
+        body = (tmp_path / "devices.yml").read_text()
+        assert "runtime: circuitpython" in body
+        assert "firmware_version: 10.1.4" in body
+
+    def test_explicit_runtime_skips_inference(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Passing --runtime takes the existing path; inference is bypassed."""
+        self._seed(tmp_path)
+        called = {"inference": False, "probe": False}
+
+        from chumicro_workspace import onboarding
+
+        def fake_inference(*_args, **_kw):
+            called["inference"] = True
+            raise AssertionError("inference should not run when --runtime set")
+
+        monkeypatch.setattr(
+            onboarding, "probe_with_runtime_inference", fake_inference,
+        )
+        monkeypatch.setattr(cli, "probe_with_runtime_inference", fake_inference)
+
+        import chumicro_deploy
+
+        def fake_probe(_device):
+            called["probe"] = True
+            return _fake_probe_info(version="1.27.0")
+
+        monkeypatch.setattr(chumicro_deploy, "probe_device", fake_probe)
+
+        exit_code = cli.main([
+            "add-device", "--workspace-dir", str(tmp_path),
+            "--address", "/dev/cu.x", "--runtime", "micropython", "pico",
+        ])
+        assert exit_code == 0
+        assert called["probe"] is True
+        assert called["inference"] is False
+
+    def test_inference_failure_falls_through_to_diagnosis(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """No transport produced a marker → exit 1 with a helpful diagnosis."""
+        self._seed(tmp_path)
+        from chumicro_workspace import onboarding
+
+        def fake_inference(address: str, **_kw):
+            return onboarding.RuntimeInferenceResult(
+                info=None,
+                runtime=None,
+                transport_used=None,
+                last_exception=OSError("could not open port /dev/cu.x"),
+            )
+
+        monkeypatch.setattr(
+            onboarding, "probe_with_runtime_inference", fake_inference,
+        )
+        monkeypatch.setattr(cli, "probe_with_runtime_inference", fake_inference)
+        # Force the diagnosis branch onto SERIAL_UNREACHABLE — no UF2 drive.
+        monkeypatch.setattr(onboarding, "_UF2_MOUNT_SEARCH_PATHS", {})
+
+        # detect_board_state will run its own probe — stub it so we don't
+        # actually try to open the port.
+        import chumicro_deploy
+        monkeypatch.setattr(
+            chumicro_deploy,
+            "probe_device",
+            lambda _d: (_ for _ in ()).throw(
+                OSError("could not open port /dev/cu.x"),
+            ),
+        )
+
+        exit_code = cli.main([
+            "add-device", "--workspace-dir", str(tmp_path),
+            "--address", "/dev/cu.x", "feather",
+        ])
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert "auto-detect failed" in captured.err
+        # Diagnosis next-steps suggest discover/replug for SERIAL_UNREACHABLE.
+        assert "discover" in captured.err
+
+    def test_inference_completes_but_returns_no_marker(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Probe ran cleanly on every transport but no implementation marker.
+
+        last_exception stays None so the message reads "no runtime
+        returned a probe marker" instead of pointing at an exception.
+        """
+        self._seed(tmp_path)
+        from chumicro_workspace import onboarding
+
+        def fake_inference(address: str, **_kw):
+            return onboarding.RuntimeInferenceResult(
+                info=None,
+                runtime=None,
+                transport_used=None,
+                last_exception=None,
+            )
+
+        monkeypatch.setattr(
+            onboarding, "probe_with_runtime_inference", fake_inference,
+        )
+        monkeypatch.setattr(cli, "probe_with_runtime_inference", fake_inference)
+        monkeypatch.setattr(onboarding, "_UF2_MOUNT_SEARCH_PATHS", {})
+
+        import chumicro_deploy
+
+        class _NoMarker:
+            implementation = None
+            board_id = ""
+            uid = ""
+
+        monkeypatch.setattr(
+            chumicro_deploy, "probe_device", lambda _d: _NoMarker(),
+        )
+
+        exit_code = cli.main([
+            "add-device", "--workspace-dir", str(tmp_path),
+            "--address", "/dev/cu.x", "feather",
+        ])
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert "no runtime returned a probe marker" in captured.err
+
+
+# ---------------------------------------------------------------------------
 # rename  (Slice 3 — wired to thing dirs + devices.yml)
 # ---------------------------------------------------------------------------
 

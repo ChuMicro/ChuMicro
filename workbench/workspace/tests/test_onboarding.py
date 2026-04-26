@@ -10,6 +10,7 @@ from chumicro_workspace.onboarding import (
     OnboardingDiagnosis,
     detect_board_state,
     find_uf2_drive,
+    probe_with_runtime_inference,
 )
 
 # ---------------------------------------------------------------------------
@@ -307,3 +308,163 @@ class TestOnboardingDiagnosis:
         assert diagnosis.probe_implementation_name is None
         assert diagnosis.probe_error == ""
         assert diagnosis.next_steps == []
+
+
+# ---------------------------------------------------------------------------
+# probe_with_runtime_inference — Step 3 of beginner-onramp
+# ---------------------------------------------------------------------------
+
+
+class _FakeDevice:
+    """Minimal stand-in for chumicro_deploy.Device for the inference tests."""
+
+    def __init__(self, transport: str, address: str) -> None:
+        self.transport = transport
+        self.address = address
+
+
+def _device_factory(transport: str, address: str) -> Any:
+    return _FakeDevice(transport, address)
+
+
+class TestProbeWithRuntimeInference:
+    def test_first_candidate_succeeds(self) -> None:
+        """MP transport works → MP runtime → no need to fall through to CP."""
+        attempts: list[str] = []
+
+        def fake_probe(device: _FakeDevice) -> Any:
+            attempts.append(device.transport)
+            return _info_with_implementation(name="micropython")
+
+        result = probe_with_runtime_inference(
+            "/dev/cu.x",
+            probe_function=fake_probe,
+            device_factory=_device_factory,
+        )
+        assert result.runtime == "micropython"
+        assert result.transport_used == "micropython"
+        assert result.info is not None
+        assert attempts == ["micropython"]
+
+    def test_falls_through_to_circuitpython(self) -> None:
+        """First candidate raises → second candidate's success wins."""
+        attempts: list[str] = []
+
+        def fake_probe(device: _FakeDevice) -> Any:
+            attempts.append(device.transport)
+            if device.transport == "micropython":
+                raise RuntimeError("MP transport said no")
+            return _info_with_implementation(name="circuitpython")
+
+        result = probe_with_runtime_inference(
+            "/dev/cu.x",
+            probe_function=fake_probe,
+            device_factory=_device_factory,
+        )
+        assert result.runtime == "circuitpython"
+        assert result.transport_used == "circuitpython"
+        assert attempts == ["micropython", "circuitpython"]
+
+    def test_implementation_name_takes_precedence_over_transport(self) -> None:
+        """MP transport on a CP board → still register as CP.
+
+        The probe script reads ``sys.implementation`` regardless of
+        which transport delivered the bytes.  Our public answer is
+        whatever the board reports, not the transport we used to
+        reach it.
+        """
+
+        def fake_probe(device: _FakeDevice) -> Any:
+            return _info_with_implementation(name="circuitpython")
+
+        result = probe_with_runtime_inference(
+            "/dev/cu.x",
+            probe_function=fake_probe,
+            device_factory=_device_factory,
+        )
+        assert result.runtime == "circuitpython"
+        assert result.transport_used == "micropython"  # first candidate
+
+    def test_all_candidates_fail_returns_empty_result(self) -> None:
+        attempts: list[str] = []
+
+        def fake_probe(device: _FakeDevice) -> Any:
+            attempts.append(device.transport)
+            raise RuntimeError("nothing's listening")
+
+        result = probe_with_runtime_inference(
+            "/dev/cu.x",
+            probe_function=fake_probe,
+            device_factory=_device_factory,
+        )
+        assert result.runtime is None
+        assert result.transport_used is None
+        assert result.info is None
+        assert isinstance(result.last_exception, RuntimeError)
+        assert attempts == ["micropython", "circuitpython"]
+
+    def test_no_marker_falls_through(self) -> None:
+        """Probe completes but returns no implementation marker → keep trying."""
+        attempts: list[str] = []
+
+        def fake_probe(device: _FakeDevice) -> Any:
+            attempts.append(device.transport)
+            return _info_without_implementation()
+
+        result = probe_with_runtime_inference(
+            "/dev/cu.x",
+            probe_function=fake_probe,
+            device_factory=_device_factory,
+        )
+        assert result.runtime is None
+        # Both candidates were tried; neither raised, so last_exception
+        # stays None — the caller can distinguish "transport refused"
+        # from "transport opened but board didn't speak Python".
+        assert result.last_exception is None
+        assert attempts == ["micropython", "circuitpython"]
+
+    def test_custom_candidate_order(self) -> None:
+        """Caller can override the default order or skip a runtime."""
+        attempts: list[str] = []
+
+        def fake_probe(device: _FakeDevice) -> Any:
+            attempts.append(device.transport)
+            return _info_with_implementation(name="circuitpython")
+
+        result = probe_with_runtime_inference(
+            "/dev/cu.x",
+            candidates=("circuitpython",),
+            probe_function=fake_probe,
+            device_factory=_device_factory,
+        )
+        assert result.runtime == "circuitpython"
+        assert attempts == ["circuitpython"]
+
+    def test_defaults_use_chumicro_deploy(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Without injection, the helper imports probe_device + Device.
+
+        Exercises the default-factory branches so coverage doesn't
+        rely on hardware-only paths to reach them.
+        """
+        import chumicro_deploy
+
+        attempts: list[str] = []
+
+        class _RecordingDevice:
+            def __init__(self, transport: str, address: str) -> None:
+                self.transport = transport
+                self.address = address
+
+        def fake_probe(device: _RecordingDevice) -> Any:
+            attempts.append(device.transport)
+            return _info_with_implementation(name="micropython")
+
+        monkeypatch.setattr(chumicro_deploy, "probe_device", fake_probe)
+        monkeypatch.setattr(chumicro_deploy, "Device", _RecordingDevice)
+
+        result = probe_with_runtime_inference("/dev/cu.x")
+        assert result.runtime == "micropython"
+        assert attempts == ["micropython"]

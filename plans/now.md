@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **beginner-onramp** Steps 1 + 2 shipped 2026-04-26.  Remaining: Step 3 (`add-device --from-port` / `discover --register`), Step 4 (`bootstrap` wizard), Step 5 (`demo` command), Steps 6-7 (`chumicro-requests` + `chumicro-http-server` libraries), Step 8 (examples folder organization).  See `plans/workstreams/beginner-onramp.md`.
-- **Last shipped:** Step 2 — `_cmd_deploy` defaults to the lone thing when no positional is given (covers the "I only have one app" beginner case).  Zero things and multi-thing workspaces both still require an explicit name, with a useful error.  `nargs="+"` → `nargs="*"`; underscore-prefixed dirs (`things/_template/`) correctly excluded.
-- **In flight:** beginner-onramp workstream Step 3+ — sequence in `plans/workstreams/beginner-onramp.md`.
+- **Phase:** **beginner-onramp** Steps 1, 2, 3 shipped 2026-04-26.  Remaining: Step 4 (`bootstrap` wizard), Step 5 (`demo` command), Steps 6-7 (`chumicro-requests` + `chumicro-http-server` libraries), Step 8 (examples folder organization).  See `plans/workstreams/beginner-onramp.md`.
+- **Last shipped:** Step 3 — `add-device --runtime` is now optional.  `chumicro_workspace.onboarding.probe_with_runtime_inference` tries each candidate transport (default order MP → CP) and uses the first probe whose marker came back; the truthful runtime comes from `info.implementation.name`.  An MP transport probing a CP board still registers as CP correctly.
+- **In flight:** beginner-onramp workstream Step 4+ — sequence in `plans/workstreams/beginner-onramp.md`.
 - **Blocked on:** —
-- **Last touched:** `workbench/workspace/src/chumicro_workspace/cli.py` (`_cmd_deploy` default-to-lone-thing path; deploy parser nargs change), `workbench/workspace/tests/test_cli.py` (new `TestDeploySingleThingDefault` class — 5 cases), `plans/workstreams/beginner-onramp.md` Step 2 status log entry, `plans/next-up.md`.
+- **Last touched:** `workbench/workspace/src/chumicro_workspace/onboarding.py` (`RuntimeInferenceResult`, `probe_with_runtime_inference`, `DEFAULT_RUNTIME_INFERENCE_ORDER`), `workbench/workspace/src/chumicro_workspace/cli.py` (`_cmd_add_device` inference branch + parser tweak), `workbench/workspace/tests/{test_onboarding.py,test_cli.py}`, `plans/workstreams/beginner-onramp.md` Step 3 status log entry, `plans/next-up.md` (folded the deferred `discover --register` entry).
 
 ---
 

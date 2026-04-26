@@ -34,7 +34,7 @@ never flashes a board the user didn't explicitly ask to flash.
 from __future__ import annotations
 
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
@@ -42,6 +42,17 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover — type-only
     from chumicro_deploy import Device, DeviceInfo
+
+
+#: Default order for runtime inference probes.  MicroPython's raw
+#: REPL is the most universal serial control sequence — CircuitPython
+#: also speaks raw REPL (Ctrl-A) so an MP transport on a CP board
+#: typically still completes the probe.  Ordering exists in case
+#: timing differs on edge-case ports; both candidates are tried.
+DEFAULT_RUNTIME_INFERENCE_ORDER: tuple[str, ...] = (
+    "micropython",
+    "circuitpython",
+)
 
 
 class BoardState(StrEnum):
@@ -246,6 +257,110 @@ def detect_board_state(
         state=state,
         probe_error=probe_error_text,
         next_steps=_next_steps_for(state),
+    )
+
+
+@dataclass(frozen=True)
+class RuntimeInferenceResult:
+    """Outcome of :func:`probe_with_runtime_inference`.
+
+    Attributes:
+        info: :class:`chumicro_deploy.DeviceInfo` from the first
+            probe whose ``implementation`` field came back populated,
+            or ``None`` when every candidate transport failed.
+        runtime: The runtime name reported by the probe — i.e.
+            ``info.implementation.name``.  ``None`` when no probe
+            returned a marker.  This is the *truthful* runtime name
+            from ``sys.implementation``, not necessarily the same
+            as the candidate transport that succeeded (an MP
+            transport on a CP board still returns
+            ``implementation.name == "circuitpython"``).
+        transport_used: The candidate transport that opened cleanly
+            and delivered the probe — useful for follow-on calls
+            that want a working :class:`Device`.  ``None`` on
+            complete failure.
+        last_exception: The last exception encountered during the
+            search, when no candidate succeeded.  ``None`` on
+            success or when no exceptions were raised (every
+            candidate returned cleanly with no marker).
+    """
+
+    info: DeviceInfo | None
+    runtime: str | None
+    transport_used: str | None
+    last_exception: BaseException | None = None
+
+
+def probe_with_runtime_inference(
+    address: str,
+    *,
+    candidates: Sequence[str] = DEFAULT_RUNTIME_INFERENCE_ORDER,
+    probe_function: Callable[[Device], DeviceInfo] | None = None,
+    device_factory: Callable[[str, str], Device] | None = None,
+) -> RuntimeInferenceResult:
+    """Probe *address* without knowing the runtime up-front.
+
+    Tries each candidate transport in :data:`DEFAULT_RUNTIME_INFERENCE_ORDER`
+    until one returns an implementation marker.  Returns the
+    :class:`RuntimeInferenceResult` so the caller can register the
+    probed runtime + version without having forced the user to type
+    ``--runtime`` (Step 3 of the beginner-onramp workstream).
+
+    Both runtimes speak the same probe script — it reads
+    ``sys.implementation`` — so the implementation name in the
+    probe output is the truthful answer regardless of which
+    transport delivered it.  In practice the MP raw-REPL transport
+    works on CP boards too (CP supports Ctrl-A raw mode), but
+    both candidates are tried in case timing differs on a slow
+    USB hub or port.
+
+    Args:
+        address: Serial port path of the board.
+        candidates: Runtime names to try, in order.  Override for
+            tests or to skip a runtime entirely.  Defaults to
+            ``DEFAULT_RUNTIME_INFERENCE_ORDER``.
+        probe_function: Inject a :func:`chumicro_deploy.probe_device`
+            replacement.  Tests pass a fake to avoid hardware.
+        device_factory: Inject a constructor for
+            :class:`chumicro_deploy.Device` — receives ``(transport,
+            address)`` and returns a Device.  Tests pass a fake.
+
+    Returns:
+        :class:`RuntimeInferenceResult` with ``info``, ``runtime``,
+        and ``transport_used`` populated on success; on failure
+        every field is ``None`` except ``last_exception``, which
+        carries the most recent exception (or ``None`` when every
+        candidate completed cleanly without a marker).
+    """
+    if probe_function is None:
+        from chumicro_deploy import probe_device  # noqa: PLC0415
+
+        probe_function = probe_device
+    if device_factory is None:
+        from chumicro_deploy import Device as _DefaultDevice  # noqa: PLC0415
+
+        def device_factory(transport: str, address_: str) -> Device:
+            return _DefaultDevice(transport=transport, address=address_)
+
+    last_exception: BaseException | None = None
+    for candidate in candidates:
+        device = device_factory(candidate, address)
+        try:
+            info = probe_function(device)
+        except Exception as exception:  # noqa: BLE001 — fall through to next candidate
+            last_exception = exception
+            continue
+        if info.implementation is not None:
+            return RuntimeInferenceResult(
+                info=info,
+                runtime=info.implementation.name,
+                transport_used=candidate,
+            )
+    return RuntimeInferenceResult(
+        info=None,
+        runtime=None,
+        transport_used=None,
+        last_exception=last_exception,
     )
 
 
