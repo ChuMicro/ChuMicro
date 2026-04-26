@@ -79,6 +79,127 @@ class TestFindBundleModules:
         assert "testing.py" not in filenames
         assert filenames == {"__init__.py"}
 
+    def test_filters_by_runtime_marker_for_circuitpython(self, tmp_path: Path):
+        """Decision 0037: __chumicro_runtimes__ filters per-runtime bundles."""
+        package_dir = tmp_path / "src" / "chumicro_example"
+        package_dir.mkdir(parents=True)
+        (package_dir / "__init__.py").write_text("")
+        adapters = package_dir / "_adapters"
+        adapters.mkdir()
+        (adapters / "__init__.py").write_text("")
+        (adapters / "base.py").write_text("# universal")
+        (adapters / "cp.py").write_text(
+            '__chumicro_runtimes__ = ("circuitpython",)\n',
+        )
+        (adapters / "mp.py").write_text(
+            '__chumicro_runtimes__ = ("micropython",)\n',
+        )
+        (adapters / "cpython.py").write_text(
+            '__chumicro_runtimes__ = ("cpython",)\n',
+        )
+
+        _, _, files = _find_bundle_modules(tmp_path, target_runtime="circuitpython")
+        filenames = {file.relative_to(package_dir).as_posix() for file in files}
+        # CP-only and universal files ship; MP and CPython markers are filtered out.
+        assert filenames == {
+            "__init__.py",
+            "_adapters/__init__.py",
+            "_adapters/base.py",
+            "_adapters/cp.py",
+        }
+
+    def test_filters_by_runtime_marker_for_micropython(self, tmp_path: Path):
+        """Decision 0037: MP bundle excludes CP and CPython files."""
+        package_dir = tmp_path / "src" / "chumicro_example"
+        package_dir.mkdir(parents=True)
+        (package_dir / "__init__.py").write_text("")
+        adapters = package_dir / "_adapters"
+        adapters.mkdir()
+        (adapters / "cp.py").write_text(
+            '__chumicro_runtimes__ = ("circuitpython",)\n',
+        )
+        (adapters / "mp.py").write_text(
+            '__chumicro_runtimes__ = ("micropython",)\n',
+        )
+
+        _, _, files = _find_bundle_modules(tmp_path, target_runtime="micropython")
+        filenames = {file.relative_to(package_dir).as_posix() for file in files}
+        assert filenames == {"__init__.py", "_adapters/mp.py"}
+
+    def test_no_marker_means_universal(self, tmp_path: Path):
+        """A file without __chumicro_runtimes__ ships to every bundle."""
+        package_dir = tmp_path / "src" / "chumicro_example"
+        package_dir.mkdir(parents=True)
+        (package_dir / "__init__.py").write_text("# no marker — universal")
+        (package_dir / "core.py").write_text("# no marker — universal")
+
+        for runtime in ("circuitpython", "micropython", None):
+            _, _, files = _find_bundle_modules(tmp_path, target_runtime=runtime)
+            filenames = {file.name for file in files}
+            assert filenames == {"__init__.py", "core.py"}, (
+                f"unmarked files should ship to bundle target_runtime={runtime!r}"
+            )
+
+    def test_source_bundle_ignores_runtime_markers(self, tmp_path: Path):
+        """target_runtime=None ships every non-host-only file regardless of marker."""
+        package_dir = tmp_path / "src" / "chumicro_example"
+        package_dir.mkdir(parents=True)
+        (package_dir / "__init__.py").write_text("")
+        (package_dir / "cp_only.py").write_text(
+            '__chumicro_runtimes__ = ("circuitpython",)\n',
+        )
+        (package_dir / "mp_only.py").write_text(
+            '__chumicro_runtimes__ = ("micropython",)\n',
+        )
+
+        _, _, files = _find_bundle_modules(tmp_path, target_runtime=None)
+        filenames = {file.name for file in files}
+        # Source bundle is universal — all marked files come along.
+        assert filenames == {"__init__.py", "cp_only.py", "mp_only.py"}
+
+    def test_micropython_submarker_folds_into_micropython(self, tmp_path: Path):
+        """Sub-runtime markers (micropython_esp32, micropython_rp2) match 'micropython'."""
+        package_dir = tmp_path / "src" / "chumicro_example"
+        package_dir.mkdir(parents=True)
+        (package_dir / "__init__.py").write_text("")
+        (package_dir / "esp32.py").write_text(
+            '__chumicro_runtimes__ = ("micropython_esp32",)\n',
+        )
+        (package_dir / "rp2.py").write_text(
+            '__chumicro_runtimes__ = ("micropython_rp2",)\n',
+        )
+
+        _, _, files = _find_bundle_modules(tmp_path, target_runtime="micropython")
+        filenames = {file.name for file in files}
+        assert filenames == {"__init__.py", "esp32.py", "rp2.py"}
+
+        # And CP bundle excludes both.
+        _, _, cp_files = _find_bundle_modules(tmp_path, target_runtime="circuitpython")
+        cp_filenames = {file.name for file in cp_files}
+        assert cp_filenames == {"__init__.py"}
+
+    def test_marker_does_not_require_module_execution(self, tmp_path: Path):
+        """Decision 0037: marker is read via AST, not exec — runtime imports may fail."""
+        # The cp.py adapter does ``import wifi`` at top level, which fails on
+        # CPython.  Verify the bundle pipeline can still classify it.
+        package_dir = tmp_path / "src" / "chumicro_example"
+        package_dir.mkdir(parents=True)
+        (package_dir / "__init__.py").write_text("")
+        (package_dir / "cp.py").write_text(
+            '"""CP adapter."""\n'
+            '__chumicro_runtimes__ = ("circuitpython",)\n'
+            "import this_module_does_not_exist_anywhere\n",
+        )
+
+        _, _, files = _find_bundle_modules(tmp_path, target_runtime="circuitpython")
+        filenames = {file.name for file in files}
+        assert "cp.py" in filenames
+
+        # And confirm the same file is excluded from MP bundle.
+        _, _, mp_files = _find_bundle_modules(tmp_path, target_runtime="micropython")
+        mp_filenames = {file.name for file in mp_files}
+        assert "cp.py" not in mp_filenames
+
 
 class TestReadChuMicroDependencies:
     """Tests for _read_chumicro_dependencies."""

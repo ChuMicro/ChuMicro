@@ -20,6 +20,9 @@ a ``bytearray`` of any size that fits the target board's NVM
 capacity.
 """
 
+#: Bundle pipeline marker — Decision 0037.  CP-mpy + source bundle only.
+__chumicro_runtimes__ = ("circuitpython",)
+
 import binascii
 
 from chumicro_kvstore._backends.base import Backend

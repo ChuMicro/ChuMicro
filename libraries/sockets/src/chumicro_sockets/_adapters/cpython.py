@@ -19,7 +19,14 @@ Imports happen INSIDE the functions: CP RAM-mode bootstrap stages
 every adapter file and tries to import it; a top-level
 ``import socket`` would fail on CP because CP has no ``socket``
 module.  Lazy imports keep this adapter staged-but-quiet on CP.
+
+Bundle pipeline marker — Decision 0037.  Source bundle only;
+excluded from CP-mpy and MP-mpy device bundles.
 """
+
+#: Bundle pipeline marker — Decision 0037.  Source bundle only;
+#: never lands on a device.
+__chumicro_runtimes__ = ("cpython",)
 
 
 def connect_tcp(host, port):

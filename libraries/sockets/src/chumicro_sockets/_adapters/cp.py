@@ -8,6 +8,8 @@ as MP-mbedTLS and CPython: build (or accept) an
 :class:`ssl.SSLContext`, call ``context.wrap_socket(socket,
 server_hostname=host)``, then ``connect``.
 
+Bundle pipeline marker — Decision 0037.  CP-mpy + source bundle only.
+
 Legacy radios that lack the on-board ``ssl`` module (AirLift,
 WIZNET5K-pre-mbedTLS, Fona) used a ``TLS_MODE``-flag fake-context
 shim — out of scope here.  Users on those boards should pin to the
@@ -27,6 +29,9 @@ route to):
 so a fresh pool isn't built on every connect (CP creates one pool
 per radio; the cache size is exactly one in steady state).
 """
+
+#: Bundle pipeline marker — Decision 0037.
+__chumicro_runtimes__ = ("circuitpython",)
 
 
 #: Memoization cache: ``radio_id -> SocketPool``.  ``id(radio)`` keys

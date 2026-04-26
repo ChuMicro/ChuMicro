@@ -7,6 +7,8 @@ RP2 ports, so the socket+ssl story is unified.  Two split adapters
 (mp_esp32 + mp_rp2) would be substring-clones of each other; this
 file is the consolidation.
 
+Bundle pipeline marker — Decision 0037.  MP-mpy + source bundle only.
+
 Imports of ``socket`` / ``ssl`` happen INSIDE the functions, not at
 module top level — CircuitPython's RAM-mode bootstrap stages every
 deploy file and imports it; a top-level ``import socket`` would fail
@@ -26,6 +28,9 @@ or no hostname (TLS-without-SNI).  We always pass *host* as
 the host the user named", and SNI-less verification breaks against
 modern brokers.
 """
+
+#: Bundle pipeline marker — Decision 0037.
+__chumicro_runtimes__ = ("micropython",)
 
 
 def _no_fileno():

@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** Pi Pico W flash-footprint cleanup pass — 800 KB CIRCUITPY drive + FAT12 4 KB clusters means every file costs ≥ 4 KB regardless of content; reducing file count is the dominant lever.
-- **Last shipped:** Bundle pipeline strips `testing.py` from device deploys (saves ~24 KB across 6 libraries) + chumicro-mqtt consolidated 8 → 4 source files (3 deploy after testing.py exclusion); 139 mqtt tests pass at 94.37 % cov.
-- **In flight:** Triaging pre-existing preflight failures from prior crashed agent session — griffe annotation warnings in `libraries/sockets` + `libraries/wifi` (docs gate) and 3 `workbench/workspace-template` tests expecting a `devices.yml` that Phase 4b intentionally removed from the template.
+- **Phase:** Pi Pico W flash-footprint cleanup pass — Decision 0037 codified the per-runtime file-marking convention so the bundle pipeline can ship dedicated CP-mpy / MP-mpy bundles with non-applicable adapters + `testing.py` filtered out.
+- **Last shipped:** Phase C — `__chumicro_runtimes__` markers on 9 runtime-specific files (wifi adapters, kvstore backends, sockets adapters), `bundle_manager._find_bundle_modules` filters by AST-read marker per `target_runtime`, `chumicro_wifi._adapters/fake.py` folded into `testing.py`, 6 new bundle tests + AGENTS.md non-negotiable updated.  Preflight green at 94 % cov.
+- **In flight:** —
 - **Blocked on:** —
-- **Last touched:** `libraries/mqtt/src/chumicro_mqtt/{_wire,client,__init__}.py` (consolidation), `scripts/bundle_manager.py` + `scripts/tests/test_bundle_manager.py` (testing.py exclusion), `plans/learnings.md` (file-count vs FAT12 finding).
+- **Last touched:** `plans/decisions/0037-runtime-file-marking.md` (new ADR), `scripts/bundle_manager.py` + `scripts/tests/test_bundle_manager.py` (filter + tests), `libraries/wifi/src/chumicro_wifi/{testing,service}.py` (fake fold + lazy import), `libraries/{wifi,kvstore,sockets}/src/.../*` (markers), `AGENTS.md` (non-negotiable + Decision 0037 link).
 
 ---
 

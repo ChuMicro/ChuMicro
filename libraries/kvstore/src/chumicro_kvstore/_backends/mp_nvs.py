@@ -17,6 +17,9 @@ object that implements ``set_blob(key, value)``, ``get_blob(key,
 buffer) -> length``, ``erase_key(key)``, and ``commit()``.
 """
 
+#: Bundle pipeline marker — Decision 0037.  MP-mpy + source bundle only.
+__chumicro_runtimes__ = ("micropython",)
+
 from chumicro_kvstore._backends.base import Backend
 
 

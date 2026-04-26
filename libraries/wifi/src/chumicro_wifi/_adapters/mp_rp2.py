@@ -34,6 +34,10 @@ Following the per-runtime-adapter convention from the lazy-loading
 research keeps each substrate's quirks in one file.
 """
 
+#: Bundle pipeline marker — Decision 0037.  This file ships to the
+#: MP-mpy bundle and the source bundle; excluded from CP-mpy.
+__chumicro_runtimes__ = ("micropython",)
+
 from chumicro_wifi._adapters.base import WifiAdapter
 
 #: Magic value disabling CYW43 idle power-save mode.  From CYW43

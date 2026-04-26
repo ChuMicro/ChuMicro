@@ -24,18 +24,19 @@ reconnect attempt, link-down detection).
 
 import sys
 
-from chumicro_wifi._adapters.fake import FakeWifiAdapter
 from chumicro_wifi.config import WifiConfig
 from chumicro_wifi.state import WifiState
 
 
 def _select_adapter():
-    """Pick the runtime-appropriate adapter (Tier B per the lazy-loading research).
+    """Pick the runtime-appropriate adapter.
 
     The CP / MP branches lazy-import the substrate-specific module
     so a board only parses the adapter it actually targets.  CPython
-    (or any runtime not in the recognised set) gets the fake
-    adapter so unit tests + host-side scripts work without hardware.
+    (or any runtime not in the recognised set) lazy-imports the fake
+    from :mod:`chumicro_wifi.testing` — testing.py is excluded from
+    device bundles per Decision 0037, but on the CPython host it's
+    always available, which is the only place the fallback fires.
     """
     runtime_name = sys.implementation.name
     if runtime_name == "circuitpython":  # pragma: no cover - CP runtime path
@@ -49,6 +50,8 @@ def _select_adapter():
             return MpRp2WifiAdapter()
         from chumicro_wifi._adapters.mp_esp32 import MpEsp32WifiAdapter
         return MpEsp32WifiAdapter()
+    # CPython host fallback — testing.py is the home of the fake (Decision 0037).
+    from chumicro_wifi.testing import FakeWifiAdapter
     return FakeWifiAdapter()
 
 

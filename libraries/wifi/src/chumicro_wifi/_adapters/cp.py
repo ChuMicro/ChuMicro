@@ -13,6 +13,9 @@ live ``wifi.radio`` on CircuitPython but accepts an injected fake
 on hosts so the adapter contract can be tested without hardware.
 """
 
+#: Bundle pipeline marker — Decision 0037.  CP-mpy + source bundle only.
+__chumicro_runtimes__ = ("circuitpython",)
+
 from chumicro_wifi._adapters.base import WifiAdapter
 
 

@@ -39,6 +39,7 @@ Examples:
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import shutil
 import subprocess
@@ -73,17 +74,95 @@ from workspace import (
 #: device wastes a FAT cluster (≥4 KB) per library that has one.
 _HOST_ONLY_MODULES = frozenset({"testing.py"})
 
+#: Canonical runtime names recognised in ``__chumicro_runtimes__``
+#: markers (Decision 0037).  Sub-runtime names like ``micropython_esp32``
+#: are accepted at parse time but currently fold into ``micropython`` for
+#: bundle filtering — both MP variants ship the same ``mpy6/`` bundle.
+_KNOWN_RUNTIMES = frozenset({
+    "circuitpython", "micropython",
+    "micropython_esp32", "micropython_rp2",
+    "cpython",
+})
 
-def _find_bundle_modules(library_dir: Path) -> tuple[str, Path, list[Path]]:
+
+def _read_runtime_marker(python_file: Path) -> frozenset[str] | None:
+    """Return the ``__chumicro_runtimes__`` set declared in *python_file*.
+
+    Decision 0037 — the marker is a top-level tuple/list assignment of
+    runtime names.  Returns ``None`` when no marker is declared (file is
+    universal — ships to every bundle).  Returns an empty frozenset only
+    if the marker is explicitly empty (which is unusual but legal).
+
+    Read via :func:`ast.parse` (no execution) — runtime-specific files
+    typically import device-only modules at top level (``import wifi``,
+    ``import esp32``) that fail on the host.
+    """
+    try:
+        tree = ast.parse(python_file.read_text(), filename=str(python_file))
+    except SyntaxError:
+        return None  # Treat unparseable files as universal — fail-safe.
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        targets = [target.id for target in node.targets if isinstance(target, ast.Name)]
+        if "__chumicro_runtimes__" not in targets:
+            continue
+        if not isinstance(node.value, (ast.Tuple, ast.List)):
+            continue
+        names: list[str] = []
+        for element in node.value.elts:
+            if isinstance(element, ast.Constant) and isinstance(element.value, str):
+                names.append(element.value)
+        return frozenset(names)
+    return None
+
+
+def _file_targets_runtime(
+    python_file: Path,
+    *,
+    target_runtime: str | None,
+) -> bool:
+    """Return ``True`` when *python_file* belongs in the *target_runtime* bundle.
+
+    Decision 0037 filtering.  ``target_runtime=None`` is the universal
+    source bundle — every file (except host-only) ships.
+
+    For per-runtime bundles, a file with no marker ships everywhere
+    (default-safe).  A file with a marker ships only when *target_runtime*
+    is in the marker.  Sub-runtime markers (``micropython_esp32`` etc.)
+    fold into ``micropython`` since both MP variants share the ``mpy6/``
+    bundle today.
+    """
+    if target_runtime is None:
+        return True
+    marker = _read_runtime_marker(python_file)
+    if marker is None:
+        return True  # Default-safe: universal files ship to every bundle.
+    # Fold sub-runtimes into their parent runtime for matching.
+    folded = {name.split("_", 1)[0] if name.startswith("micropython_") else name
+              for name in marker}
+    return target_runtime in folded
+
+
+def _find_bundle_modules(
+    library_dir: Path,
+    *,
+    target_runtime: str | None = None,
+) -> tuple[str, Path, list[Path]]:
     """Discover the package name, package dir, and deployable .py files.
 
     Args:
         library_dir: Root directory of the library.
+        target_runtime: ``None`` for the universal source bundle (every
+            file except host-only).  ``"circuitpython"`` / ``"micropython"``
+            for per-runtime mpy bundles — files with a
+            ``__chumicro_runtimes__`` marker are filtered to the target
+            runtime; files without a marker ship everywhere (Decision 0037).
 
     Returns:
-        ``(package_name, package_dir, python_files)`` where *python_files* are all
-        ``.py`` modules to include in the bundle.  ``__pycache__`` and
-        host-only modules (``testing.py``) are excluded.
+        ``(package_name, package_dir, python_files)`` where *python_files*
+        are the ``.py`` modules destined for the requested bundle.
+        ``__pycache__`` and ``testing.py`` are always excluded.
     """
     package_dir = find_package_dir(library_dir)
     if package_dir is None:
@@ -94,6 +173,7 @@ def _find_bundle_modules(library_dir: Path) -> tuple[str, Path, list[Path]]:
         for py_file in sorted(package_dir.rglob("*.py"))
         if "__pycache__" not in py_file.relative_to(package_dir).parts
         and py_file.name not in _HOST_ONLY_MODULES
+        and _file_targets_runtime(py_file, target_runtime=target_runtime)
     ]
     return package_dir.name, package_dir, python_files
 
@@ -247,11 +327,18 @@ def build_bundle(
     # convention where "10.x" is the CircuitPython version range.  circup
     # consumes these via zip bundles named with the same pattern.
     # No package.json needed — circup uses zip naming, not mip manifests.
+    #
+    # Decision 0037: filter out files marked for other runtimes
+    # (e.g. mp_esp32.py, cpython.py) so the CP bundle only ships what
+    # CircuitPython devices actually use.
     if cp_mpy_cross is not None:
+        _, _, cp_python_files = _find_bundle_modules(
+            library_dir, target_runtime="circuitpython",
+        )
         cp_mpy_dir = staging_dir / CP_MPY_FOLDER / package_name
         cp_mpy_dir.mkdir(parents=True, exist_ok=True)
 
-        for source_file in python_files:
+        for source_file in cp_python_files:
             relative_path = source_file.relative_to(package_dir)
             mpy_dest_file = cp_mpy_dir / relative_path.with_suffix(".mpy")
             mpy_dest_file.parent.mkdir(parents=True, exist_ok=True)
@@ -266,12 +353,19 @@ def build_bundle(
     # convention.  A package.json manifest lets MicroPython users opt in
     # to .mpy bytecode via mip:
     #   mpremote mip install github:ChuMicro/ChuMicro-Bundle/mpy6/chumicro_timing
+    #
+    # Decision 0037: filter out files marked for other runtimes (e.g.
+    # cp.py, cpython.py) so the MP bundle only ships what MicroPython
+    # devices actually use.
     if mp_mpy_cross is not None:
+        _, _, mp_python_files = _find_bundle_modules(
+            library_dir, target_runtime="micropython",
+        )
         mpy_manifest_dir = staging_dir / MPY_FORMAT_FOLDER / package_name
         mpy_manifest_dir.mkdir(parents=True, exist_ok=True)
 
         mpy_urls = []
-        for source_file in python_files:
+        for source_file in mp_python_files:
             relative_path = source_file.relative_to(package_dir)
             mpy_relative_path = relative_path.with_suffix(".mpy").as_posix()
             mpy_dest_file = mpy_manifest_dir / relative_path.with_suffix(".mpy")

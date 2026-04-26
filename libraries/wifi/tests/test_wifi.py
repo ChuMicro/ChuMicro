@@ -21,8 +21,7 @@ from chumicro_config import MissingConfigKey
 from chumicro_test_harness import raises
 from chumicro_timing.testing import FakeTicks
 from chumicro_wifi import WifiConfig, WifiService, WifiState
-from chumicro_wifi._adapters.fake import FakeWifiAdapter
-from chumicro_wifi.testing import FakeWifi
+from chumicro_wifi.testing import FakeWifi, FakeWifiAdapter
 
 _IS_CPYTHON = sys.implementation.name == "cpython"
 

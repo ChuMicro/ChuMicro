@@ -19,6 +19,9 @@ Pico W board — pass any object exposing ``open``, ``rename``,
 ``remove``, and ``sync`` matching the shapes the runtime exposes.
 """
 
+#: Bundle pipeline marker — Decision 0037.  MP-mpy + source bundle only.
+__chumicro_runtimes__ = ("micropython",)
+
 from chumicro_kvstore._backends.base import Backend
 
 

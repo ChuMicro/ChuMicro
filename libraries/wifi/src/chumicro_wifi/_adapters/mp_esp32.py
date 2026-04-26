@@ -17,6 +17,9 @@ an injected fake on hosts so the adapter contract can be tested
 without hardware.
 """
 
+#: Bundle pipeline marker — Decision 0037.  MP-mpy + source bundle only.
+__chumicro_runtimes__ = ("micropython",)
+
 from chumicro_wifi._adapters.base import WifiAdapter
 
 
