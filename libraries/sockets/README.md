@@ -102,6 +102,8 @@ Works on CPython, MicroPython, and CircuitPython.
 | Example | What it shows |
 |---|---|
 | [`quickstart.py`](examples/quickstart.py) | FakeSocket round-trip — send/recv/close exercising the protocol against in-memory bytearrays. Identical on every runtime. |
+| [`tcp_roundtrip.py`](examples/tcp_roundtrip.py) | Real TCP connect → send → recv → close.  Same shape on CP/MP/CPython; CP needs `radio=wifi.radio`, MP/CPython ignore. |
+| [`tls_with_custom_ca.py`](examples/tls_with_custom_ca.py) | Custom-CA TLS via `ssl_context_with_ca`.  Documents the substrate quirks observed on Pi Pico W mbedTLS in the docstring. |
 
 ## Developing this library
 

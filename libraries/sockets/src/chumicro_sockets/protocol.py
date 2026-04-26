@@ -1,10 +1,12 @@
 """``TCPClientSocket`` protocol — the surface every adapter implements.
 
 Decision 0031 §2 names the minimum surface downstream libs touch.
-Duck-typed (not an ABC) so adapters don't pay a base-class constructor
-walk on creation.  Use ``isinstance(sock, TCPClientSocket)`` only
-where a runtime check is genuinely needed; type-checker conformance
-falls out of structural typing.
+Duck-typed: the protocol is enforced by convention (every adapter
+implements the same six methods) rather than by an ABC walk.  On
+CPython, :class:`TCPClientSocket` resolves to ``typing.Protocol``
+so type-checker conformance falls out of structural typing.  On MP
+and CP — where ``typing`` may not be available — it falls back to
+a plain class so the import doesn't trip.
 
 The five operations:
 
@@ -22,9 +24,19 @@ The five operations:
   who need polling check for ``-1`` and fall back to ``settimeout``.
 """
 
-from __future__ import annotations
+# ``typing.Protocol`` only exists on CPython (and CP/MP builds that
+# include the optional ``typing`` stub).  Guard the import so the
+# library loads on every runtime; downstream code that does
+# ``isinstance(sock, TCPClientSocket)`` only runs on CPython.
+try:
+    from typing import Protocol, runtime_checkable  # type: ignore[import]
+except ImportError:  # pragma: no cover — MP / CP without typing stub
+    class Protocol:  # type: ignore[no-redef]
+        """Minimal ``typing.Protocol`` stand-in for runtimes without ``typing``."""
 
-from typing import Protocol, runtime_checkable
+    def runtime_checkable(cls):  # type: ignore[no-redef]
+        """No-op decorator stand-in for runtimes without ``typing.runtime_checkable``."""
+        return cls
 
 
 @runtime_checkable
@@ -73,7 +85,7 @@ class TCPClientSocket(Protocol):
         and ``settimeout(0.0)`` for ``False``.
         """
 
-    def settimeout(self, seconds: float | None) -> None:
+    def settimeout(self, seconds) -> None:
         """Set a timeout for blocking calls.
 
         ``None`` means block indefinitely; ``0.0`` is non-blocking;

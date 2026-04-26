@@ -14,34 +14,27 @@ and raises :class:`OSError` on connect failure, which downstream
 libs already handle.  TLS uses stdlib ``ssl.SSLContext.wrap_socket``;
 ``context=None`` means "default-CA stdlib context" via
 ``ssl.create_default_context()``.
+
+Imports happen INSIDE the functions: CP RAM-mode bootstrap stages
+every adapter file and tries to import it; a top-level
+``import socket`` would fail on CP because CP has no ``socket``
+module.  Lazy imports keep this adapter staged-but-quiet on CP.
 """
 
-from __future__ import annotations
 
-import socket
-import ssl as _ssl
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:  # pragma: no cover — type-only
-    from chumicro_sockets.protocol import TCPClientSocket
-
-
-def connect_tcp(host: str, port: int) -> TCPClientSocket:
+def connect_tcp(host, port):
     """Open a plain TCP connection.
 
     Returns a real :class:`socket.socket` — already satisfies
     :class:`TCPClientSocket` structurally (stdlib's surface is a
     superset of our protocol).
     """
-    return socket.create_connection((host, port))  # type: ignore[return-value]
+    import socket  # noqa: PLC0415 — runtime-gated; lazy so CP can stage this file
+
+    return socket.create_connection((host, port))
 
 
-def connect_tls(
-    host: str,
-    port: int,
-    *,
-    context: _ssl.SSLContext | None = None,
-) -> TCPClientSocket:
+def connect_tls(host, port, *, context=None):
     """Open a TLS connection.
 
     *context=None* uses :func:`ssl.create_default_context` — system
@@ -49,16 +42,17 @@ def connect_tls(
     Pass a pre-configured context for custom CAs / mTLS / pinned
     cipher suites.
     """
+    import socket  # noqa: PLC0415 — runtime-gated
+    import ssl  # noqa: PLC0415 — runtime-gated
+
     raw = socket.create_connection((host, port))
     resolved_context = (
-        context if context is not None else _ssl.create_default_context()
+        context if context is not None else ssl.create_default_context()
     )
-    return resolved_context.wrap_socket(  # type: ignore[return-value]
-        raw, server_hostname=host,
-    )
+    return resolved_context.wrap_socket(raw, server_hostname=host)
 
 
-def ssl_context_with_ca(ca_pem: bytes) -> _ssl.SSLContext:
+def ssl_context_with_ca(ca_pem):
     """Build an SSLContext that trusts only the CA(s) in *ca_pem*.
 
     Uses :meth:`ssl.SSLContext.load_verify_locations` with the PEM
@@ -66,6 +60,8 @@ def ssl_context_with_ca(ca_pem: bytes) -> _ssl.SSLContext:
     context still enforces hostname verification and modern cipher
     defaults; only the trust anchor is replaced.
     """
-    context = _ssl.create_default_context()
+    import ssl  # noqa: PLC0415 — runtime-gated
+
+    context = ssl.create_default_context()
     context.load_verify_locations(cadata=ca_pem.decode("ascii"))
     return context

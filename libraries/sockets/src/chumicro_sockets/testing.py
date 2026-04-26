@@ -28,7 +28,6 @@ flips a flag so subsequent operations raise the same ``OSError`` a
 real closed socket would.
 """
 
-from __future__ import annotations
 
 from collections import deque
 

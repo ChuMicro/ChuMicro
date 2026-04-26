@@ -29,17 +29,10 @@ all ship the on-board ``ssl`` module on current LTS firmware):
 ``None`` for the runtime default) on every runtime.
 """
 
-from __future__ import annotations
-
 import sys
-from typing import TYPE_CHECKING, Any
 
 from chumicro_sockets.errors import UnsupportedSSLConfigError
 from chumicro_sockets.protocol import TCPClientSocket
-
-if TYPE_CHECKING:  # pragma: no cover — type-only
-    import ssl
-
 
 __all__ = [
     "TCPClientSocket",
@@ -56,12 +49,7 @@ def _runtime_name() -> str:
     return sys.implementation.name
 
 
-def tcp_client_socket(
-    host: str,
-    port: int,
-    *,
-    radio: Any = None,
-) -> TCPClientSocket:
+def tcp_client_socket(host, port, *, radio=None):
     """Open a plain TCP client connection.
 
     Routes to the runtime-appropriate adapter:
@@ -101,13 +89,7 @@ def tcp_client_socket(
     return cpython.connect_tcp(host, port)
 
 
-def tls_client_socket(
-    host: str,
-    port: int,
-    *,
-    context: ssl.SSLContext | None = None,
-    radio: Any = None,
-) -> TCPClientSocket:
+def tls_client_socket(host, port, *, context=None, radio=None):
     """Open a TLS client connection.
 
     Routes to the runtime-appropriate adapter; *context* is honored
@@ -153,7 +135,7 @@ def tls_client_socket(
     return cpython.connect_tls(host, port, context=context)
 
 
-def ssl_context_with_ca(ca_pem: bytes) -> ssl.SSLContext:
+def ssl_context_with_ca(ca_pem):
     """Build an SSLContext that trusts the CA(s) in *ca_pem*.
 
     The common "default everything except the trust anchor" recipe.
@@ -170,11 +152,11 @@ def ssl_context_with_ca(ca_pem: bytes) -> ssl.SSLContext:
     if runtime == "circuitpython":
         from chumicro_sockets._adapters import cp  # noqa: PLC0415 — runtime-gated import
 
-        return cp.ssl_context_with_ca(ca_pem)  # type: ignore[no-any-return]
+        return cp.ssl_context_with_ca(ca_pem)
     if runtime == "micropython":
         from chumicro_sockets._adapters import mp  # noqa: PLC0415 — runtime-gated import
 
-        return mp.ssl_context_with_ca(ca_pem)  # type: ignore[no-any-return]
+        return mp.ssl_context_with_ca(ca_pem)
     from chumicro_sockets._adapters import cpython  # noqa: PLC0415 — runtime-gated import
 
     return cpython.ssl_context_with_ca(ca_pem)

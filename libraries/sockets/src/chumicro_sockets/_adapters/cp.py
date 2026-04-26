@@ -28,24 +28,15 @@ so a fresh pool isn't built on every connect (CP creates one pool
 per radio; the cache size is exactly one in steady state).
 """
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:  # pragma: no cover — type-only
-    import ssl
-
-    from chumicro_sockets.protocol import TCPClientSocket
-
 
 #: Memoization cache: ``radio_id -> SocketPool``.  ``id(radio)`` keys
 #: are stable for the lifetime of the radio object; CP boards have one
 #: ``wifi.radio`` singleton per board, so the cache size is exactly
 #: one in steady state.
-_POOLS: dict[int, Any] = {}
+_POOLS: dict = {}
 
 
-def _pool_for(radio: Any) -> Any:  # pragma: no cover - device only
+def _pool_for(radio):  # pragma: no cover - device only
     """Return (or memoize) a ``socketpool.SocketPool`` for *radio*."""
     if radio is None:
         raise TypeError(
@@ -55,32 +46,21 @@ def _pool_for(radio: Any) -> Any:  # pragma: no cover - device only
     cached = _POOLS.get(id(radio))
     if cached is not None:
         return cached
-    import socketpool  # type: ignore[import]  # noqa: PLC0415 — CP-only import
+    import socketpool  # noqa: PLC0415 — CP-only import
     pool = socketpool.SocketPool(radio)
     _POOLS[id(radio)] = pool
     return pool
 
 
-def connect_tcp(
-    host: str,
-    port: int,
-    *,
-    radio: Any,
-) -> TCPClientSocket:  # pragma: no cover - device only
+def connect_tcp(host, port, *, radio):  # pragma: no cover - device only
     """Open a plain TCP connection via the CP socketpool."""
     pool = _pool_for(radio)
     sock = pool.socket(pool.AF_INET, pool.SOCK_STREAM)
     sock.connect((host, port))
-    return sock  # type: ignore[return-value]
+    return sock
 
 
-def connect_tls(
-    host: str,
-    port: int,
-    *,
-    context: ssl.SSLContext | None = None,
-    radio: Any,
-) -> TCPClientSocket:  # pragma: no cover - device only
+def connect_tls(host, port, *, context=None, radio):  # pragma: no cover - device only
     """Open a TLS connection on a CP radio.
 
     *context=None* uses :func:`ssl.create_default_context` — picks up
@@ -88,24 +68,24 @@ def connect_tls(
     Any pre-built :class:`ssl.SSLContext` (e.g. from
     :func:`ssl_context_with_ca` for a custom CA) is accepted.
     """
-    import ssl  # type: ignore[import]  # noqa: PLC0415 — CP-only import
+    import ssl  # noqa: PLC0415 — CP-only import
 
     pool = _pool_for(radio)
     resolved_context = context if context is not None else ssl.create_default_context()
     raw = pool.socket(pool.AF_INET, pool.SOCK_STREAM)
     wrapped = resolved_context.wrap_socket(raw, server_hostname=host)
     wrapped.connect((host, port))
-    return wrapped  # type: ignore[return-value]
+    return wrapped
 
 
-def ssl_context_with_ca(ca_pem: bytes) -> ssl.SSLContext:  # pragma: no cover - device only
+def ssl_context_with_ca(ca_pem):  # pragma: no cover - device only
     """Build an SSL context that trusts *ca_pem* on a CP radio.
 
     Identical shape to the CPython and MP helpers — supported CP
     boards ship the on-board ``ssl`` module so the call site is
     uniform across runtimes.
     """
-    import ssl  # type: ignore[import]  # noqa: PLC0415 — CP-only import
+    import ssl  # noqa: PLC0415 — CP-only import
 
     context = ssl.create_default_context()
     context.load_verify_locations(cadata=ca_pem.decode("ascii"))

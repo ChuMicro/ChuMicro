@@ -12,6 +12,7 @@ CPython without spinning up the unix-port interpreters.
 from __future__ import annotations
 
 import socket
+import ssl
 
 import pytest
 from chumicro_sockets import (
@@ -82,13 +83,18 @@ class TestCPythonTLSWithLocalContext:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        """Routing test for tls_client_socket(context=None) on CPython.
+
+        After the lazy-import refactor (CP RAM-mode bootstrap was
+        tripping on top-level socket/ssl imports in adapters), the
+        cpython adapter's ``socket`` and ``ssl`` symbols only resolve
+        inside function bodies.  Patch via ``socket.create_connection``
+        + ``ssl.create_default_context`` directly, which the adapter
+        looks up at call time via ``import``.
+        """
         captured: dict[str, object] = {}
 
-        from chumicro_sockets._adapters import cpython as cpython_adapter
-
         class _FakeRawSocket:
-            """Stand-in for the socket returned by `socket.create_connection`."""
-
             def close(self) -> None:
                 captured["raw_closed"] = True
 
@@ -99,7 +105,7 @@ class TestCPythonTLSWithLocalContext:
             return _FakeRawSocket()
 
         monkeypatch.setattr(
-            cpython_adapter.socket, "create_connection",
+            socket, "create_connection",
             _fake_create_connection,
         )
 
@@ -118,11 +124,7 @@ class TestCPythonTLSWithLocalContext:
             captured["used_default_context"] = True
             return _FakeContext()
 
-        monkeypatch.setattr(
-            cpython_adapter._ssl,  # type: ignore[attr-defined]
-            "create_default_context",
-            _fake_default_context,
-        )
+        monkeypatch.setattr(ssl, "create_default_context", _fake_default_context)
 
         result = tls_client_socket("example.com", 443)
         assert captured.get("used_default_context") is True
@@ -150,13 +152,10 @@ class TestSslContextWithCa:
             def load_verify_locations(self, *, cadata: str) -> None:
                 captured["cadata"] = cadata
 
-        from chumicro_sockets._adapters import cpython as cpython_adapter
-
-        monkeypatch.setattr(
-            cpython_adapter._ssl,  # type: ignore[attr-defined]
-            "create_default_context",
-            lambda: _RecordingContext(),
-        )
+        # Adapter does `import ssl` at call time; patching the
+        # global ssl module is sufficient — the lazy import resolves
+        # against sys.modules['ssl'] like every other import.
+        monkeypatch.setattr(ssl, "create_default_context", lambda: _RecordingContext())
         monkeypatch.setattr(
             "chumicro_sockets._runtime_name", lambda: "cpython",
         )

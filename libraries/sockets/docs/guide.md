@@ -106,6 +106,20 @@ CircuitPython requires a `radio=` kwarg pointing at the board's wifi radio (typi
 
 The TLS surface is uniform across runtimes because the supported board class ([Decision 0015](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0015-supported-boards.md): 256 KB MCU RAM / 4 MB flash, current-LTS firmware) all ships the on-board `ssl` module — Pi Pico W, ESP32-S2, ESP32-S3, ESP32-S3 Feather native wifi.  Legacy radios without `ssl` (AirLift, WIZNET5K-pre-mbedTLS) aren't supported by this library.
 
+### Substrate quirks observed on real hardware
+
+Live-AP acceptance runs against the supported boards surfaced two
+substrate-level limitations that aren't bugs in this library — they
+constrain how you build certs and shape your TLS handshakes:
+
+| Substrate | Quirk | Workaround |
+|---|---|---|
+| MicroPython on RP2 (Pi Pico W) | mbedTLS build rejects self-signed certs entirely (`ValueError('invalid cert')`) | Use a CA-signed cert.  For dev, skip TLS testing on this combo or use a real CA chain. |
+| MicroPython SSLSocket on some ports | Wrapped TLS socket lacks `settimeout` / `setblocking` / `fileno` | Wrapper falls back to no-op + `fileno() = -1`; non-blocking semantics still hold via the TLS layer. |
+| Stricter mbedTLS builds | Reject IP-only SAN certs | Generate certs with at least one DNS SAN.  On a LAN, `<hostname>.local` works via mDNS; set `server_hostname=` to that DNS name. |
+
+Run `.scratch/run_sockets_acceptance.py --tls` to verify TLS end-to-end on your boards.  Plain TCP works on every supported board (verified live on Lolin S2 CP/MP and Pi Pico W CP/MP).
+
 ## Examples
 
 | Example | What it shows |
