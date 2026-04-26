@@ -632,7 +632,9 @@ def test_sensor_thing_publishes_to_live_broker(
             deploy_traceback = getattr(deploy_result_box[0], "traceback", "") or ""
         deploy_error = deploy_error_box[0] if deploy_error_box else None
 
-        adapter_files = sorted(p for p in staged_files if "_adapter" in p or "_backend" in p)
+        adapter_files = sorted(
+            name for name in staged_files if "_adapter" in name or "_backend" in name
+        )
         assert len(lines) >= _LAYER3_REQUIRED_MESSAGES, (
             f"expected ≥{_LAYER3_REQUIRED_MESSAGES} heartbeat messages, "
             f"got {len(lines)}; deploy state: {deploy_state}; "
