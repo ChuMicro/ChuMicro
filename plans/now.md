@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **idle** — Phase 7 closed end-to-end; workspace template repo grew CONTRIBUTING.md / expanded AGENTS.md / three agent skills.  Pick the next workstream phase or queued item from `plans/next-up.md`.  Phase 8 (application-level OTA via `chumicro-update`) is the next workstream phase but parked until Phase 7 has soak time in the field.
-- **Last shipped:** Workspace template repo (`ChuMicro/ChuMicro-Workspace-Template`) gained `CONTRIBUTING.md` (workspace-user contribution guide), an expanded `AGENTS.md` (skills index + file ownership table + project rules + common pitfalls), and three new agent skills under `.github/skills/`: `add-new-thing`, `register-board`, `deploy-and-debug`.  Mono-repo companion commit `1024ac5` classifies `CONTRIBUTING.md` + `.github/skills/` as tool-owned so `chumicro-workspace update` refreshes them in existing user workspaces.
+- **Phase:** **idle** — Phase 7 closed end-to-end; chumicro-mqtt + chumicro-sockets just landed a production-readiness sweep against patterns from the older `pythonProject3` MQTT impl.  Pick the next workstream phase or queued item from `plans/next-up.md`.  Phase 8 (application-level OTA via `chumicro-update`) is the next workstream phase but parked until Phase 7 has soak time in the field.
+- **Last shipped:** `chumicro-mqtt` 0.1.4 — bounded recv-per-tick (1 KB default) so fat kernel TCP buffers can't starve LED / LCD / control-loop tasks; bounded tx queue (100 default) with `MQTTBackpressureError` on overflow; protocol-internal traffic (PUBACK, retransmits, PINGREQ) bypasses the cap; failed QoS-1 publish rolls back packet_id allocation.  `chumicro-sockets` 0.1.4 — `ssl_context_with_ca` defaults to `verify_mode = CERT_REQUIRED` (no more accidental blind trust) and supports multi-cert PEM bundles (multiple `BEGIN CERTIFICATE` blocks → concatenated DER).
 - **In flight:** —
 - **Blocked on:** —
-- **Last touched:** `workbench/workspace/src/chumicro_workspace/template_zones.py` (CONTRIBUTING.md + `.github/skills/` added to TOOL_OWNED_PATHS / PREFIXES), `workbench/workspace/tests/test_template_zones.py` (4 new parametrized cases), and on the template-repo side: `CONTRIBUTING.md`, `AGENTS.md`, `.github/skills/{add-new-thing,register-board,deploy-and-debug}/SKILL.md`.
+- **Last touched:** `libraries/mqtt/src/chumicro_mqtt/{client,_wire,__init__}.py` (`recv_budget_per_tick`, `max_tx_queue_size`, `MQTTBackpressureError`, `_enqueue_user_tx` helper), `libraries/mqtt/tests/test_client.py` (8 new `TestBoundedRecvPerTick` + `TestTxQueueBackpressure` cases), `libraries/sockets/src/chumicro_sockets/_adapters/{mp,cp,cpython}.py` (CERT_REQUIRED default + multi-cert PEM handling in `_pem_to_der`), `libraries/sockets/tests/test_mp_adapter.py` (2 new cases), VERSION bumps to 0.1.4 each, `plans/learnings.md` (recv-loop starvation pattern), `plans/next-up.md` Done entry.
 
 ---
 

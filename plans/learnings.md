@@ -77,6 +77,14 @@ Fix knobs that *don't* work: eager-importing at package top level was tried (com
 
 Observed during 2026-04-19 live PyCharm testing. Suspect: per-file `mpremote mount` cost + cold-start interpreter overhead. Profile against the batched-execute path before optimizing — there's an open investigation in `next-up.md`. Not yet root-caused.
 
+### A naive `recv_into` loop can starve cooperative tasks when the kernel TCP buffer is fat
+
+`while True: recv_into(...); break-on-EAGAIN` is the obvious shape for a tick-based protocol parser, but on a Pi Pico W RP2 (lwIP TCP) the kernel can hold ~16-32 KB of inbound bytes, and our `rx_buffer_size`-bounded reads (256 B / call) mean a single `handle()` tick will iterate 60-128 times before EAGAIN drains the buffer.  At 50-200 µs per syscall + memmove on rp2, that's 6-25 ms inside a *single tick* — enough to visibly stutter a 10 ms LED blink rhythm or break a sub-second control loop.
+
+The old basefs MQTT impl (`/Users/chuxor/circuitpython/pythonProject3/basefilesystem/lib/basefs/mqtt_client.py`) avoided this implicitly: `_read_socket` does **one** `recv_into` per loop call (no inner loop), so each loop call is bounded by `RX_BUFFER_SIZE` regardless of how much data is in the kernel buffer.  A 100 KB blob takes 400+ loop calls to ingest, but every call is short.
+
+`chumicro-mqtt` 0.1.4 adopts a hybrid: a `recv_budget_per_tick` knob (default 1024 B) caps the per-tick byte budget while still letting a tick do multiple recv calls when bytes are available.  Default 1024 = 4× the steady RX buffer (256 B) = drains a typical PUBLISH in one tick AND keeps tick latency well under 10 ms even on rp2.  Configurable upward for things that want fast big-blob ingestion at the cost of LED smoothness.  The lesson is general: any tick-shaped reader on a fat kernel buffer needs an explicit per-tick byte budget OR an explicit per-tick iteration count — implicit "drain until EAGAIN" is a foot-gun.
+
 ### MP rp2 firmware ships mbedTLS *without* `MBEDTLS_PEM_PARSE_C` — pass DER, not PEM, to `load_verify_locations`
 
 `load_verify_locations(cadata=...)` accepts PEM on the ESP32 family but rejects it with `ValueError('invalid cert')` on the Pi Pico W RP2.  The split is build-config:

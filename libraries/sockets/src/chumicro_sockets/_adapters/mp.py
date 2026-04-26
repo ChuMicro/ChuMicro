@@ -166,6 +166,12 @@ def ssl_context_with_ca(ca_pem):  # pragma: no cover - device only
     works on every MP port — including the rp2 (Pi Pico W) build
     that ships mbedTLS *without* ``MBEDTLS_PEM_PARSE_C`` to save flash.
 
+    Multi-cert PEM bundles (multiple ``-----BEGIN CERTIFICATE-----``
+    blocks back-to-back) are supported: each block is converted to
+    DER independently and the DERs are concatenated.  mbedTLS's
+    ``mbedtls_x509_crt_parse`` walks a buffer of sequential DER
+    certs natively.
+
     Why the conversion: live-tested on MP 1.28.0 (2026-04-26) by
     feeding ``load_verify_locations`` the same self-signed CA five
     different ways:
@@ -182,10 +188,14 @@ def ssl_context_with_ca(ca_pem):  # pragma: no cover - device only
     config it pulls in).  DER is the lowest-common-denominator
     that works everywhere.
 
+    The returned context defaults to ``verify_mode = CERT_REQUIRED``
+    — loading a CA only makes sense when you intend to verify
+    against it.  Override on the returned context if you need a
+    different mode for a specific test.
+
     Args:
-        ca_pem: PEM-encoded CA bundle as bytes (or str).  ASCII /
-            UTF-8 decodable.  Single cert; multi-cert bundles need
-            extra unrolling that no current consumer needs.
+        ca_pem: PEM-encoded CA bundle as bytes or str.  ASCII /
+            UTF-8 decodable.  Single cert or multi-cert bundle.
     """
     import ssl  # noqa: PLC0415 — MP-only import
 
@@ -194,19 +204,36 @@ def ssl_context_with_ca(ca_pem):  # pragma: no cover - device only
     der = _pem_to_der(ca_pem)
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     context.load_verify_locations(cadata=der)
+    context.verify_mode = ssl.CERT_REQUIRED
     return context
 
 
 def _pem_to_der(ca_pem):  # pragma: no cover - device only
-    """Strip the PEM header / footer and base64-decode to raw DER."""
+    """Convert a PEM bundle (one or more certs) to concatenated DER bytes.
+
+    Walks line-by-line, accumulating base64 between matched
+    ``-----BEGIN CERTIFICATE-----`` / ``-----END CERTIFICATE-----``
+    pairs.  Each pair's body is base64-decoded independently; the
+    resulting DER blocks are concatenated.  Tolerates LF or CRLF
+    line endings, blank lines, leading / trailing whitespace.
+    """
     import binascii  # noqa: PLC0415 — MP-only import
 
+    der_parts = []
     base64_lines = []
-    for line in ca_pem.split(b"\n"):
-        line = line.strip()
-        if not line:
+    in_cert = False
+    for raw_line in ca_pem.split(b"\n"):
+        line = raw_line.strip()
+        if line == b"-----BEGIN CERTIFICATE-----":
+            in_cert = True
+            base64_lines = []
             continue
-        if line.startswith(b"-----"):
+        if line == b"-----END CERTIFICATE-----":
+            if in_cert and base64_lines:
+                der_parts.append(binascii.a2b_base64(b"".join(base64_lines)))
+            in_cert = False
+            base64_lines = []
             continue
-        base64_lines.append(line)
-    return binascii.a2b_base64(b"".join(base64_lines))
+        if in_cert and line:
+            base64_lines.append(line)
+    return b"".join(der_parts)

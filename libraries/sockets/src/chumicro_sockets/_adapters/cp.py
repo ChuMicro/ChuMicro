@@ -77,6 +77,12 @@ def ssl_context_with_ca(ca_pem):  # pragma: no cover - device only
     boards ship the on-board ``ssl`` module so the call site is
     uniform across runtimes.  Accepts PEM as ``str`` or ``bytes``;
     CP's ``load_verify_locations`` expects a ``str`` so we coerce.
+
+    The returned context inherits ``ssl.create_default_context``'s
+    ``CERT_REQUIRED`` + ``check_hostname=True`` defaults — loading
+    a custom CA only makes sense when you intend to verify against
+    it.  Override on the returned context if a test or
+    development scenario needs different behavior.
     """
     import ssl  # noqa: PLC0415 — CP-only import
 

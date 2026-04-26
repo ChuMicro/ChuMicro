@@ -44,6 +44,16 @@ class MQTTConnectError(MQTTError):
         self.return_code = return_code
 
 
+class MQTTBackpressureError(MQTTError):
+    """The outbound queue is full; caller must back off.
+
+    Raised by :meth:`MQTTClient.publish` (and friends) when appending
+    another packet would exceed ``max_tx_queue_size``.  The client
+    is otherwise unaffected — drain by calling :meth:`MQTTClient.handle`
+    once and retry the publish.
+    """
+
+
 class UnsupportedQoSError(MQTTError):
     """User requested QoS 2.  Constants are reserved; handlers aren't wired."""
 

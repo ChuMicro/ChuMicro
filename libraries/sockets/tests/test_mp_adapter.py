@@ -89,6 +89,7 @@ def mp_adapter() -> Iterator[types.ModuleType]:
         def __init__(self) -> None:
             self.cadata: bytes | str | None = None
             self.wrapped: list[tuple[object, str]] = []
+            self.verify_mode: int | None = None
 
         def wrap_socket(
             self,
@@ -109,6 +110,8 @@ def mp_adapter() -> Iterator[types.ModuleType]:
 
     fake_ssl.SSLContext = lambda _proto: _StubContext()  # type: ignore[attr-defined]
     fake_ssl.PROTOCOL_TLS_CLIENT = 1  # type: ignore[attr-defined]
+    fake_ssl.CERT_REQUIRED = 2  # type: ignore[attr-defined]
+    fake_ssl.CERT_NONE = 0  # type: ignore[attr-defined]
     fake_ssl.wrap_socket = _stub_wrap_socket  # type: ignore[attr-defined]
     fake_ssl._free_wrap_calls = []  # type: ignore[attr-defined]
     fake_ssl._StubContext = _StubContext  # type: ignore[attr-defined]
@@ -319,3 +322,40 @@ class TestSslContextWithCa:
         )
         context = mp_adapter.ssl_context_with_ca(ca_pem)
         assert context.cadata == b"\xde\xad\xbe\xef"
+
+    def test_multi_cert_pem_bundle_concatenates_to_combined_der(
+        self, mp_adapter: types.ModuleType,
+    ) -> None:
+        """Two BEGIN/END pairs back-to-back ship as concatenated DER.
+
+        mbedTLS's ``mbedtls_x509_crt_parse`` walks a buffer of
+        sequential DER certs natively, so emitting one big DER blob
+        from two PEM blocks works on every MP port.
+        """
+        # First cert body decodes to b"\xde\xad\xbe\xef";
+        # second cert body decodes to b"\xca\xfe\xba\xbe".
+        ca_pem = (
+            b"-----BEGIN CERTIFICATE-----\n"
+            b"3q2+7w==\n"
+            b"-----END CERTIFICATE-----\n"
+            b"-----BEGIN CERTIFICATE-----\n"
+            b"yv66vg==\n"
+            b"-----END CERTIFICATE-----\n"
+        )
+        context = mp_adapter.ssl_context_with_ca(ca_pem)
+        assert context.cadata == b"\xde\xad\xbe\xef\xca\xfe\xba\xbe"
+
+    def test_default_verify_mode_is_cert_required(
+        self, mp_adapter: types.ModuleType,
+    ) -> None:
+        """Loading a custom CA only makes sense if you intend to
+        verify against it; default ``verify_mode`` is ``CERT_REQUIRED``
+        so callers don't accidentally end up with blind trust."""
+        import ssl as fake_ssl_module
+        ca_pem = (
+            b"-----BEGIN CERTIFICATE-----\n"
+            b"3q2+7w==\n"
+            b"-----END CERTIFICATE-----\n"
+        )
+        context = mp_adapter.ssl_context_with_ca(ca_pem)
+        assert context.verify_mode == fake_ssl_module.CERT_REQUIRED

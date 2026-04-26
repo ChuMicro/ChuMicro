@@ -21,6 +21,7 @@ from chumicro_mqtt._wire import (
     PACKET_PUBACK,
     PACKET_SUBACK,
     PACKET_UNSUBACK,
+    MQTTBackpressureError,
     MQTTConnectError,
     MQTTError,
     MQTTProtocolError,
@@ -243,6 +244,8 @@ class MQTTClient:
         rx_buffer_size=None,
         max_message_size=None,
         when_oversized=WhenOversized.DROP_WITH_EVENT,
+        recv_budget_per_tick=1024,
+        max_tx_queue_size=100,
         ticks_ms_func=ticks_ms,
         ticks_add_func=ticks_add,
         ticks_diff_func=ticks_diff,
@@ -283,6 +286,20 @@ class MQTTClient:
                 (default 256 KB).
             when_oversized: Policy for messages above the cap.  See
                 :class:`WhenOversized`.
+            recv_budget_per_tick: Soft cap on bytes drained from the
+                socket in a single :meth:`handle` call.  Default 1024.
+                Bounds tick latency so concurrent runner tasks (LED,
+                LCD update, control loop) keep getting CPU time when a
+                large inbound PUBLISH is mid-flight; without this, a
+                100 KB blob in the kernel TCP buffer would monopolize
+                the tick until the buffer drains.  Configurable for
+                things that genuinely want fast big-blob ingestion.
+            max_tx_queue_size: Maximum number of pending outbound
+                packets.  Default 100.  Appending past the cap raises
+                :class:`MQTTBackpressureError` — the caller's signal
+                to drain via :meth:`handle` and retry, rather than
+                silently growing memory.  Set higher for bursty
+                publishers; the limit is per-client.
             ticks_ms_func / ticks_add_func / ticks_diff_func: Inject
                 fakes for testing.  Default to ``chumicro_timing``.
         """
@@ -317,6 +334,8 @@ class MQTTClient:
         self._will_qos = will_qos
         self._will_retain = will_retain
         self._when_oversized = when_oversized
+        self._recv_budget_per_tick = recv_budget_per_tick
+        self._max_tx_queue_size = max_tx_queue_size
 
         self._ticks_ms = ticks_ms_func
         self._ticks_add = ticks_add_func
@@ -389,7 +408,7 @@ class MQTTClient:
             will_qos=self._will_qos,
             will_retain=self._will_retain,
         )
-        self._tx_queue.append(packet)
+        self._enqueue_user_tx(packet)
         self._pending_responses.append(
             PendingResponse(
                 awaiting=Awaiting.CONNACK,
@@ -459,10 +478,12 @@ class MQTTClient:
             packet = encode_publish(
                 topic=topic, payload=payload_bytes, qos=0, retain=retain,
             )
-            self._tx_queue.append(packet)
+            self._enqueue_user_tx(packet)
             # QoS 0 has no ack — fire the callback once the bytes hit the wire.
             if on_publish is not None:
-                self._tx_queue.append(("__qos0_callback__", on_publish, topic, payload_bytes))
+                self._enqueue_user_tx(
+                    ("__qos0_callback__", on_publish, topic, payload_bytes),
+                )
             return
 
         packet_id = self._in_flight.allocate_id()
@@ -486,7 +507,13 @@ class MQTTClient:
             callback=_wrapped_callback,
         )
         self._in_flight.add(entry)
-        self._tx_queue.append(packet)
+        try:
+            self._enqueue_user_tx(packet)
+        except MQTTBackpressureError:
+            # Roll back the in-flight allocation so the caller can retry
+            # cleanly without leaking a packet_id.
+            self._in_flight.discard(packet_id)
+            raise
 
     def subscribe(self, topic, qos=0, *, on_subscribe=None):
         """Queue a SUBSCRIBE for *topic*.
@@ -507,7 +534,7 @@ class MQTTClient:
         packet = encode_subscribe(
             packet_id=packet_id, subscriptions=[(topic, qos)],
         )
-        self._tx_queue.append(packet)
+        self._enqueue_user_tx(packet)
 
         def _wrapped(granted_qos):
             if on_subscribe is not None:
@@ -531,7 +558,7 @@ class MQTTClient:
             )
         packet_id = self._in_flight.allocate_id()
         packet = encode_unsubscribe(packet_id=packet_id, topics=[topic])
-        self._tx_queue.append(packet)
+        self._enqueue_user_tx(packet)
 
         def _wrapped():
             if on_unsubscribe is not None:
@@ -696,6 +723,24 @@ class MQTTClient:
                 return 0
             raise
 
+    def _enqueue_user_tx(self, item):
+        """Append a user-initiated packet/marker to the TX queue, honoring the cap.
+
+        Raises :class:`MQTTBackpressureError` when the queue is full
+        — the caller's signal to drain via :meth:`handle` and retry.
+        Internal protocol packets (PUBACK responses, deadline-triggered
+        retransmits, PINGREQ) bypass this cap because failing to enqueue
+        them would break QoS-1 / keepalive guarantees; the cap exists
+        to catch a runaway publisher, not to block protocol bookkeeping.
+        """
+        if len(self._tx_queue) >= self._max_tx_queue_size:
+            raise MQTTBackpressureError(
+                f"tx queue full ({len(self._tx_queue)} >= "
+                f"{self._max_tx_queue_size}); call handle() to drain "
+                "and retry",
+            )
+        self._tx_queue.append(item)
+
     # ------------------------------------------------------------------
     # Internal — RX path
     # ------------------------------------------------------------------
@@ -713,15 +758,29 @@ class MQTTClient:
         """Pull bytes off the socket; process complete packets.
 
         Doesn't short-circuit on "got < capacity" — TCP can fragment
-        a single broker burst across multiple recv calls.  The pull
-        loop is bounded by the decoder's buffer capacity (default
-        256 B), so handle() returns promptly.
+        a single broker burst across multiple recv calls.  But the
+        pull loop *is* bounded per tick by ``recv_budget_per_tick``
+        (default 1024 B): a 100 KB inbound PUBLISH would otherwise
+        monopolize the tick while the kernel TCP buffer drains, and
+        side tasks like LED blink / LCD update would stutter.  With
+        the cap, a big blob takes more ticks to ingest but every
+        tick stays short.
+
+        The cap applies whether we're in the steady-state RX path or
+        the degraded-buffer (oversized) path — both feed through
+        the same ``recv_into`` calls.
         """
-        while True:
+        consumed = 0
+        budget = self._recv_budget_per_tick
+        while consumed < budget:
             buffer_view = self._decoder.fill_buffer()
             capacity = self._decoder.fill_capacity()
             if capacity <= 0:
-                break  # pragma: no cover - oversized-message path
+                break  # pragma: no cover - decoder full; let the parser drain.
+            # Don't read past the per-tick budget.
+            if capacity > budget - consumed:
+                capacity = budget - consumed
+                buffer_view = buffer_view[:capacity]
             try:
                 got = self._socket.recv_into(buffer_view, capacity)
             except OSError as error:
@@ -732,6 +791,7 @@ class MQTTClient:
             if got == 0:
                 break  # Peer closed or no data this tick.
             self._decoder.advance(got)
+            consumed += got
 
         while True:
             packet = self._decoder.read_next()

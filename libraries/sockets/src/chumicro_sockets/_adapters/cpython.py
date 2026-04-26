@@ -55,9 +55,10 @@ def ssl_context_with_ca(ca_pem):
 
     Uses :meth:`ssl.SSLContext.load_verify_locations` with the PEM
     bytes — stdlib accepts a string or bytes via ``cadata``, so we
-    pass either form through unchanged.  The context still enforces
-    hostname verification and modern cipher defaults; only the trust
-    anchor is replaced.
+    pass either form through unchanged.  The context inherits
+    ``ssl.create_default_context``'s ``CERT_REQUIRED`` +
+    ``check_hostname=True`` defaults; only the trust anchor is
+    replaced.  Override on the returned context if needed.
     """
     import ssl  # noqa: PLC0415 — runtime-gated
 
