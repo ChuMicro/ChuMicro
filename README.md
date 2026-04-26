@@ -33,6 +33,7 @@ Small, focused libraries you can install independently. Use what you need.
 | **[kvstore](libraries/kvstore/)** | Tiny persistent key-value store — counters, timestamps, tokens. Picks the right backend (NVM / NVS / LittleFS) for your board. |
 | **[wifi](libraries/wifi/)** | One WiFi service across CP, MP-ESP32, and MP-Pico-W — state machine, reconnect supervisor, no firmware-level surprises. |
 | **[sockets](libraries/sockets/)** | Cross-runtime TCP + TLS client — one protocol over CP `socketpool`, MP `socket`/`ssl`, and CPython stdlib. Substrate for chumicro-mqtt and friends. |
+| **[mqtt](libraries/mqtt/)** | Non-blocking MQTT 3.1.1 client (QoS 0 + 1) — runner-shaped, no threads or async. Concurrent QoS 1 publishes, configurable oversized-message policy, last-will + retain. |
 
 Works on ESP32 (S2, S3, C3, C6), RP2040/RP2350 (Raspberry Pi Pico), STM32, and most boards with at least 256 KB RAM and 4 MB flash. Browse the [documentation site](https://chumicro.github.io/ChuMicro/) for guides and API references, or look through `libraries/` — each library's README has install commands, a quick example, and an API summary.
 
@@ -44,6 +45,7 @@ Works on ESP32 (S2, S3, C3, C6), RP2040/RP2350 (Raspberry Pi Pico), STM32, and m
 ```
 runner   → timing
 wifi     → config, timing
+mqtt     → sockets, timing
 config   → msgpack
 kvstore  → msgpack
 timing   (no dependencies)
@@ -61,6 +63,7 @@ sockets  (no dependencies — pure platform shim)
 - **"I need to persist a counter across reboots"** → [kvstore](libraries/kvstore/)
 - **"I need WiFi that auto-reconnects without surprises"** → [wifi](libraries/wifi/)
 - **"I need a TCP / TLS socket that works on CP and MP"** → [sockets](libraries/sockets/)
+- **"I need an MQTT client that doesn't freeze my loop"** → [mqtt](libraries/mqtt/)
 - **"functools.partial doesn't exist on my board"** → [compat](libraries/compat/)
 
 ### Companion host-side tools

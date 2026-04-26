@@ -100,6 +100,7 @@ Libraries must be compatible across all three runtimes. If a third-party library
 | [kvstore](libraries/kvstore/) | Mapping-shaped persistent key-value store with `auto` / `nvm` / `nvs` / `littlefs` / `memory` backends; CRC-framed CP NVM; atomic LittleFS commits ([Decision 0034](plans/decisions/0034-kvstore-api-and-backends.md)) |
 | [wifi](libraries/wifi/) | Sole-supervisor WiFi service with state machine + reconnect supervisor; per-runtime adapters for CP, MP-ESP32, MP-RP2 (CYW43), and CPython fake |
 | [sockets](libraries/sockets/) | Cross-runtime TCP + TLS client sockets — one protocol over CP `socketpool`, MP `socket`+`ssl`, and CPython stdlib ([Decision 0031](plans/decisions/0031-chumicro-sockets.md)) |
+| [mqtt](libraries/mqtt/) | Non-blocking MQTT 3.1.1 client (QoS 0 + 1) on top of `chumicro-sockets` + `chumicro-timing`; runner-shaped `check`/`handle`; per-`packet_id` in-flight QoS 1 tracking; `WhenOversized` policy enum |
 
 ## Workbench (host-only, run on a laptop)
 

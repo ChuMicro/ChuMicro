@@ -76,7 +76,7 @@ Current answer:
 
 ## Milestone 4 — project workspace
 
-Status: `mostly-done` — phases 1, 2, 3a, 3b, 4a, 4b, 5 shipped 2026-04-22 → 2026-04-25; phases 4c, 6, 7 remain; phase 8 deferred.
+Status: `mostly-done` — phases 1, 2, 3a, 3b, 4a, 4b, 5, 6 shipped 2026-04-22 → 2026-04-26; phases 4c, 7 remain; phase 8 deferred.
 
 Goal: ship a template-repo project workspace that unifies CircuitPython, MicroPython, and CPython at project scope — onboard a board, write app code, deploy to one or many targets, watch the REPL — and the libraries downstream things rely on.
 
@@ -91,11 +91,11 @@ Shipped in this milestone:
 - ✅ **Phase 4a** — `workbench/workspace-runtime/` (`chumicro-workspace-runtime`) — host CLI (17+ commands), three-zone `devices.yml` round-trip, multi-thing-on-one-device deploys + `switch`, firmware URL derivation (CP S3 listing + MP curated map), import-graph resolver, on-device boot module shipped as payload.
 - ✅ **Phase 4b** — `workbench/workspace-template/` (`chumicro-workspace-template`) — scaffolder + updater with built-in default template; three-zone update model (tool-owned / user-owned / init-only).
 - ✅ **Phase 5** — `libraries/sockets/` (`chumicro-sockets`) — TCP + TLS factories, three adapters (CP `socketpool`, unified MP `socket`+`ssl`, CPython stdlib), `FakeSocket` test fake.
+- ✅ **Phase 6** — `libraries/mqtt/` (`chumicro-mqtt`) — non-blocking MQTT 3.1.1 client (QoS 0+1) on top of `chumicro-sockets` + `chumicro-timing`; per-`packet_id` `InFlightTable`, explicit `ProtocolState` ladder, `WhenOversized` policy. 139 host tests at 94% cov + 6 live Mosquitto + 6 `tracemalloc` memory-pressure tests; 0-byte heap drift verified on all 4 supported boards.
 
 Remaining:
 
 - [ ] **Phase 4c** — companion `chumicro-workspace-template` repo (built-in default stands in until forking demand appears).
-- [ ] **Phase 6** — `libraries/mqtt/` (`chumicro-mqtt`) refactor on top of `chumicro-sockets` + `chumicro-runner` + `chumicro-timing` (per-`packet_id` in-flight QoS 1 tracking).
 - [ ] **Phase 7** — first end-to-end sensor thing template exercising wifi + sockets + mqtt + kvstore + workspace-runtime.
 - [ ] **Phase 8** — application-level OTA (`chumicro-update`); deferred until Phase 7 has been in the field long enough to be a felt need.
 
