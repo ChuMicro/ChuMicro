@@ -69,6 +69,11 @@ from chumicro_workspace_runtime.firmware_url import (
     list_circuitpython_versions,
     micropython_board_for_machine,
 )
+from chumicro_workspace_runtime.import_graph import (
+    build_search_paths,
+    read_library_sources,
+    thing_import_graph_source,
+)
 from chumicro_workspace_runtime.loaders import (
     WorkspaceConfigError,
     read_secrets_yaml,
@@ -102,6 +107,7 @@ __all__ = [
     "WorkspaceConfigError",
     "add_device",
     "build_runtime_config",
+    "build_search_paths",
     "derive_firmware_url",
     "detect_board_state",
     "dump_devices",
@@ -116,12 +122,14 @@ __all__ = [
     "merge_configs",
     "micropython_board_for_machine",
     "read_secrets_yaml",
+    "read_library_sources",
     "read_thing_config",
     "read_workspace_yaml",
     "rename_device",
     "resolve_secrets",
     "set_runtime_default",
     "thing_directory_source",
+    "thing_import_graph_source",
     "update_device_address",
     "update_device_hardware",
     "write_runtime_config",

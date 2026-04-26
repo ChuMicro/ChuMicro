@@ -54,6 +54,7 @@ from chumicro_workspace_runtime.firmware_url import (
     UnresolvableFirmwareError,
     derive_firmware_url,
 )
+from chumicro_workspace_runtime.import_graph import thing_import_graph_source
 from chumicro_workspace_runtime.onboarding import (
     BoardState,
     detect_board_state,
@@ -285,7 +286,14 @@ def _cmd_devices(args: argparse.Namespace) -> int:
 
 
 def _cmd_deploy(args: argparse.Namespace) -> int:
-    """Deploy a thing — Slice 1's :func:`thing_directory_source` + Deployer."""
+    """Deploy a thing — Slice 1's :func:`thing_directory_source` + Deployer.
+
+    With ``--import-graph`` (Slice 6), switches to
+    :func:`thing_import_graph_source`: AST-walks the entrypoint and
+    ships only transitively-imported modules instead of the full
+    thing directory.  Reads ``library_sources:`` from
+    ``workspace.yml`` for path overrides.
+    """
     workspace = _resolve_workspace(args)
     thing_dir = workspace.thing_dir(args.name)
     if not thing_dir.is_dir():
@@ -293,12 +301,21 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
     device = _resolve_device(workspace, args)
     from chumicro_deploy import Deployer  # noqa: PLC0415
 
-    source = thing_directory_source(
-        thing_dir,
-        workspace_yaml=workspace.workspace_yaml,
-        secrets_yaml=workspace.secrets_yaml,
-        entrypoint=args.entrypoint or f"/{device.effective_entrypoint}",
-    )
+    if args.import_graph:
+        device_entrypoint = args.entrypoint or f"/{device.effective_entrypoint}"
+        source = thing_import_graph_source(
+            thing_dir,
+            workspace=workspace,
+            entrypoint_filename=device.effective_entrypoint,
+            device_entrypoint=device_entrypoint,
+        )
+    else:
+        source = thing_directory_source(
+            thing_dir,
+            workspace_yaml=workspace.workspace_yaml,
+            secrets_yaml=workspace.secrets_yaml,
+            entrypoint=args.entrypoint or f"/{device.effective_entrypoint}",
+        )
     result = Deployer(device).deploy(source)
     if result.execute_output:
         print(result.execute_output, end="")
@@ -674,6 +691,15 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Override the on-device entrypoint path.  Defaults to "
             "/code.py on CircuitPython and /main.py on MicroPython."
+        ),
+    )
+    deploy_parser.add_argument(
+        "--import-graph",
+        action="store_true",
+        help=(
+            "AST-walk the entrypoint and ship only transitively-"
+            "imported modules instead of the full thing directory.  "
+            "Reads workspace.yml's library_sources: for overrides."
         ),
     )
     deploy_parser.set_defaults(func=_cmd_deploy)

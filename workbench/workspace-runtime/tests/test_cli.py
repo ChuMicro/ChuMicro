@@ -331,6 +331,44 @@ class TestDeploy:
         deploy_calls = [call for call in transport.calls if call[0] == "deploy_files"]
         assert deploy_calls[0][1][1] == "/boot.py"
 
+    def test_import_graph_flag_uses_ast_walker(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Slice 6: --import-graph routes through thing_import_graph_source."""
+        root = _seed_workspace(tmp_path)
+        # Stage a libs/ module alongside the thing's main.py.
+        libs = root / "libs"
+        libs.mkdir()
+        (libs / "imported_module.py").write_text("def helper(): pass\n")
+        (libs / "unimported_module.py").write_text("# never reached\n")
+
+        thing_dir = root / "things" / "back-porch"
+        thing_dir.mkdir(parents=True)
+        (thing_dir / "config.toml").write_text(
+            "[wifi]\nssid = 'HomeNet'\npassword = '!secret wifi_password'\n"
+        )
+        # MP runtime in seed → effective_entrypoint == 'main.py'.
+        (thing_dir / "main.py").write_text(
+            "import imported_module\nprint('hi')\n"
+        )
+
+        transport = FakeTransport(execute_output="")
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root),
+            "--import-graph", "back-porch",
+        ])
+        assert exit_code == 0
+        deploy_calls = [call for call in transport.calls if call[0] == "deploy_files"]
+        files, _entrypoint = deploy_calls[0][1]
+        # AST walker shipped main.py + the imported helper, NOT the
+        # unimported one.
+        assert "/lib/imported_module.py" in files
+        assert "/lib/unimported_module.py" not in files
+
 
 # ---------------------------------------------------------------------------
 # probe
