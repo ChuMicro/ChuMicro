@@ -1,6 +1,6 @@
 # Workstream: Phase 7 — first sensor thing integration log
 
-Status: `in-progress` — sensor thing scaffolded 2026-04-26 in `things/example-sensor/` of the canonical workspace template.
+Status: `in-progress` — sensor thing scaffolded 2026-04-26 in `things/example_sensor/` of the canonical workspace template.
 
 ## Purpose
 
@@ -17,6 +17,32 @@ This document tracks integration issues *as they're discovered*.  Each entry is 
 When an integration issue is resolved by changing a library API, the resolution flows back into the affected library's docs / tests so the next consumer doesn't rediscover it.
 
 ## Open
+
+### Thing directory names must follow Python identifier rules (no hyphens)
+
+**Symptom:** the sensor thing was originally placed at `things/example-sensor/`.  Deploy failed with `ImportError: Unresolved module dependencies: things.example-sensor.app` — Python's import system can't resolve a module path containing hyphens.
+
+**Resolved:** renamed to `things/example_sensor/` everywhere — directory, README walkthroughs, fixture references in the chumicro mono-repo's tests.  Convention is now: thing directory names must be valid Python identifiers (letters, digits, underscores; not starting with a digit).
+
+**Forward-looking:** `chumicro-workspace`'s `python run.py new <name>` should validate the name and reject hyphens at creation time with a clear error pointing the user at underscores.  Today it doesn't — it'd happily create `things/back-porch/` and surface the failure at deploy time.  Cheap to add; do alongside the next `new` change.
+
+### Boot-shim deploys don't compose with import-graph resolution
+
+**Symptom:** for the Layer-2 functional test I tried to use `thing_boot_source` (which generates the `code.py`/`main.py` + `active.py` + `workspace_runtime` shim layout) AND ship the chumicro libraries the sensor thing imports.  `thing_boot_source` doesn't take an `extra_search_paths` parameter and doesn't walk imports — it ships only the thing's own dir contents.  `thing_import_graph_source` walks imports but expects a real entrypoint file (no synthetic main.py).
+
+**Workaround in the Layer-2 test:** the fixture writes a tiny `main.py` / `code.py` wrapper into `things/example_sensor/` whose only contents are `from app import run; run()`.  The import-graph walker starts there, finds `app`, finds the chumicro libs `app` imports, and ships everything.  The boot-shim path is bypassed entirely.
+
+**Recommendation:** `thing_boot_source` should grow `extra_search_paths` (and probably `extra_modules`) so the boot-shim path can also walk imports for the libraries the user's `app.py` pulls in.  This unifies the two shapes — boot-shim gives you the `active.py` / `workspace_runtime` layer; import-graph just controls which files come along for the ride.  Today's CLI workaround is `python run.py deploy --import-graph <thing>`, but that gives up the boot-shim layer.
+
+### RAM mode is scoped to single-library tests, not multi-stack things
+
+**Symptom (chronological):** the Layer-2 functional test originally tried to run on a RAM-mode device and immediately crashed with `OSError: [Errno 2] ENOENT` on `/runtime_config.msgpack`.  Diagnosis: in MP RAM mode, `mpremote mount` maps the host tmp dir to `/remote/` on the device — files at `/runtime_config.msgpack` on the host are reachable from the device only at `/remote/runtime_config.msgpack`, not the canonical absolute path `chumicro_config.load_runtime_config()` reads.  CP RAM mode has the same shape (inline-exec doesn't persist files to flash either).
+
+**Resolved (policy, not code):** RAM mode is deliberately scoped to *single-library unit tests* and *non-risky single-purpose functional tests*.  Things that compose multiple libraries, read the merged runtime config, talk to wifi / mqtt / a broker — anything that depends on real on-device filesystem state — must run in flash mode.  Don't add `/remote/` fallback paths in `chumicro_config` or anywhere else; that would let RAM mode silently work for cases it's not designed for, hiding the real fact that RAM mode is a wrong fit.
+
+**Workaround in Layer-2:** `_skip_unless_flash_mode(...)` at the top of every Layer-2 test.  Skipped tests print the policy in their reason so a contributor running on a RAM-default device sees what to change.
+
+**Forward-looking:** the same guard belongs in any future test that exercises the runtime-config msgpack, kvstore persistence, or anything else that depends on the on-device filesystem persisting across operations.  Cheap pattern; replicate it.
 
 ### `wifi`-drop while `mqtt` is connected
 
@@ -52,19 +78,58 @@ When an integration issue is resolved by changing a library API, the resolution 
 
 **Recommendation:** prefer polling for *gating* work (publisher decides whether to publish *now*); prefer callbacks for *side effects* (a thing logs to disk on every disconnect, regardless of where in the loop the disconnect happened).  Document this in `chumicro-runner`'s guide.
 
-### `runner.tick()` on a tight loop — CPU + battery
+### Tight tick loop is correct for networked things
 
-**Symptom:** the sensor thing's main loop is `while True: runner.tick()` with no sleep.  Each tick polls every service's `check`, returning quickly when no work is pending.  On a battery-powered board, this burns the CPU at 100 %.
+**Earlier draft of this entry recommended adding a `time.sleep_ms()` between ticks for battery-powered boards.  Pulled — wrong call for this stack.**  Networked services (mqtt, future requests / http-server / websocket consumers) need to drain inbound bytes promptly: a 100 ms sleep is enough to lose PINGRESP timing, drop reconnect-attempt deadlines, or stall a half-buffered packet recv.  Decision 0014's runner pattern explicitly avoids interrupts; a tight `while not shutdown_requested: runner.tick()` loop is the contract, not a bug to optimize away.
 
-**Open question:** does `chumicro-runner` provide a sleep-until-next-deadline primitive, or does the thing add `time.sleep_ms(...)` itself?  How does it interact with interrupt-driven wakeups (e.g. a button GPIO)?
+**Battery-powered boards are a different shape entirely** — they wake periodically, do one bounded unit of work (one publish, one read, one OTA poll), then deep-sleep until the next wake.  That's a separate runner-shape ("scheduled-wake runner" rather than "tight-tick runner"), not a tweak to the loop.  Out of Phase 7's scope; revisit when a battery-powered thing actually surfaces as a use case.
 
-**Sensor thing's current shape:** tight `while True: runner.tick()`.  Documented as a known issue; users on battery should add a sleep.
+**Resolved:** the tight loop stays.  The sensor thing's `run()` wraps it in `try / except KeyboardInterrupt` so REPL-Ctrl-C and the test harness can break the loop cleanly; the loop body itself remains busy-poll.
 
-**Recommendation:** `chumicro-runner` should expose a `runner.next_deadline()` (lowest `next_at` across all periodic / scheduled tasks) so the thing can `time.sleep_ms(min(next_deadline_ms, 100))` between ticks.  Decision 0014's runner pattern explicitly avoids interrupts, so a 100 ms ceiling on the sleep keeps the responsiveness bound.
+### Graceful exit from `while True` for tests + Ctrl-C
+
+**Symptom:** Phase 7's first sensor thing has `while True: runner.tick()` as the main loop.  No exit path — the test harness can't stop the loop without killing the python process; a REPL-driven debug session can't break out without disconnecting the port.
+
+**Resolved:** `run()` wraps the tick loop in `try / except KeyboardInterrupt`, plus the loop reads a module-level `_SHUTDOWN_REQUESTED` flag.  Ctrl-C from the REPL raises `KeyboardInterrupt` (CP + MP both), and a test environment can set `_SHUTDOWN_REQUESTED = True` on the imported module to ask the loop to stop after the next tick.  The flag is the more general path; Ctrl-C is the convenient path for interactive use.  `runner` itself doesn't need a shutdown concept — services keep their state when the loop exits, and an outer harness can re-enter the loop later if it wants to.
+
+**Forward-looking:** the shutdown flag pattern probably belongs in `chumicro-runner` itself once a second thing wants it (e.g. `runner.request_stop()` + `runner.tick()` returning `True` while running, `False` once stopped).  Don't extract until a second consumer materializes.
+
+### Multi-network-service composition (forward-looking)
+
+**Open question (no impl yet):** the sensor thing has one networking dependency (mqtt).  Real things will compose more — mqtt + a `requests`-style HTTP fetch + an inbound HTTP server + a websocket consumer + an OTA puller.  How do these share the radio cleanly?
+
+**Concerns to think through before the second-network-service thing surfaces:**
+
+* **One-radio constraint.**  CircuitPython has a single `wifi.radio` per board; MicroPython has one `WLAN` per interface.  Every networking library must funnel through the same `chumicro-wifi` ownership stance — none of them open the radio directly.  The library shape we have today (factories take an injected radio / use `tcp_client_socket`) covers this; a new networking library should follow the same pattern.
+
+* **Socket budget.**  CP's `socketpool` has a per-radio socket cap (`SocketPool.maxsockets`); MP has its own ulimit.  A thing with `MQTTClient` + `requests-style client` + `inbound_http_server` may approach the limit.  Need a workspace-level discoverable: how many concurrent sockets does this thing need?  Probably surfaces as a `chumicro-sockets` constant + a deploy-time pre-flight when total demand > runtime cap.
+
+* **Tick-time fairness.**  The current registration-order tick contract means a slow service (a big inbound PUBLISH) blocks the runner for that one tick.  Compose three networking services and one slow handler can starve the others.  Possible answer: bounded-budget `handle(now_ms, budget_ms)` contracts that yield mid-work when the budget runs out — non-trivial, defer until measured.
+
+* **Shared error handling.**  Every networking library wants to react to wifi-drop the same way (drop their socket, wait for `wifi.connected`, rebuild).  Today each library does its own pattern — the wifi-drop entry above proposes a socket factory on MQTTClient; the same shape should generalize so a future `requests` lib can plug in.
+
+**Capture for now**, no implementation.  Revisit when a second networking-heavy thing exists (heartbeat publisher + an OTA poll + an HTTP status endpoint, e.g.).
+
+### LED / UX hooks for service state (forward-looking)
+
+**Open question (no impl yet):** users will want visual feedback for service state — an onboard LED toggling color when wifi is connecting / mqtt is reconnecting / kvstore commit failed.  Today every service exposes its own state introspection (`wifi.state`, `mqtt.state`) and callback shape (`on_state_change`, `on_connect`); there's no unified subscription point that the user's app code can hook into without writing per-library glue.
+
+**The HAL question:** color-LED control crosses runtimes — `neopixel.NeoPixel` on CP, the `ws2812` PIO program on MP-RP2, `machine.Pin` on MP-ESP32 with discrete LEDs, no LED at all on CPython sim.  None of the chumicro libraries today own a "thing's status indicator" abstraction; users have to write the per-board code in each thing.
+
+**Possible shapes:**
+
+* **A pubsub layer in `chumicro-runner`** — every service emits state-change events on a shared bus; the thing subscribes once and routes events to its UX layer (LED / LCD / log).  Cleanest separation; adds a new abstraction that all libraries must learn.
+
+* **A `StatusIndicator` HAL in `chumicro-compat`** — pluggable backends per board (neopixel, RGB pin, no-op) with a tiny color-by-state vocab (`indicator.set("connecting")`).  Things wire it manually to library callbacks (`mqtt.on_state_change(indicator.handle_mqtt_state)`).  No new bus; just a normalized output abstraction.
+
+* **A "diagnostics console" service** — register every chumicro library with a single `Diagnostics` instance; that service drives both LED + log + REPL output uniformly.  Slightly heavier than option 2; better than option 1 for small things.
+
+**Capture for now**, no implementation.  The sensor thing doesn't need it yet.  Revisit when a thing genuinely wants visible-from-across-the-room feedback (or when "why isn't this thing publishing?" becomes a recurring debugging question).
 
 ## Resolved
 
-(none yet)
+* Tight tick loop is correct for networked things — see entry above.
+* `while True` -> `while not _SHUTDOWN_REQUESTED` + `KeyboardInterrupt` exit path — see entry above.
 
 ## Deferred
 

@@ -530,7 +530,7 @@ End-to-end proving ground for the full stack (deploy + repl + wifi + kvstore + s
 
 Integration concerns surfaced as the libraries first run together (service lifecycle, runner tick ordering, reconnect ownership, idle-tick CPU cost, etc.) live in [`plans/workstreams/phase-7-integration.md`](phase-7-integration.md).  Each entry there is open / resolved / deferred; resolutions flow back into the affected library's docs so the next consumer doesn't rediscover them.
 
-- [x] Add `things/example-sensor/` to the `ChuMicro-Workspace-Template` repo: reads a temperature (real on-board thermistor when available, synthetic triangle wave otherwise), publishes via mqtt on a heartbeat, persists a boot-counter via kvstore.
+- [x] Add `things/example_sensor/` to the `ChuMicro-Workspace-Template` repo: reads a temperature (real on-board thermistor when available, synthetic triangle wave otherwise), publishes via mqtt on a heartbeat, persists a boot-counter via kvstore.
 - [x] `config.toml` for broker / topic / heartbeat period; deploy-time merge with workspace defaults + secrets.
 - [x] Layer-1 functional test (`workbench/workspace/functional_tests/test_sensor_thing_hardware.py::test_sensor_thing_imports_resolve_on_cpython`): proves `app.py` imports cleanly through the chumicro-workspace dep stack on CPython.  Runs without hardware; catches API drift between sensor thing + libraries.
 - [ ] Layer-2 functional test: deploy → tail REPL → assert phase markers (`sensor: boot #N`, `sensor: connecting to wifi…`) within window.  Skipped scaffold present; needs a `chumicro-repl.tail()`-driven observe pattern that handles `while True: runner.tick()` (the existing `Deployer.deploy` execute_output assertion model assumes terminating scripts).
@@ -539,7 +539,7 @@ Integration concerns surfaced as the libraries first run together (service lifec
 
 #### Acceptance
 
-A user clones the template, runs `python run.py setup`, plugs in a board, runs `python run.py add-device`, edits one line of `things/example-sensor/config.toml` with their broker URL, runs `python run.py deploy`, and sees heartbeat messages arriving at their broker while the board's REPL streams to the terminal.  Under ten minutes from clone to first message.
+A user clones the template, runs `python run.py setup`, plugs in a board, runs `python run.py add-device`, edits one line of `things/example_sensor/config.toml` with their broker URL, runs `python run.py deploy`, and sees heartbeat messages arriving at their broker while the board's REPL streams to the terminal.  Under ten minutes from clone to first message.
 
 Layer-1 + sensor thing + README walkthrough shipped 2026-04-26.  Layer-2 + Layer-3 functional tests are open follow-ons; the integration log captures what's needed to enable each.
 
