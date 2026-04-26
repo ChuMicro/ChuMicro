@@ -233,6 +233,7 @@ def add_device(
     deploy_mode: str | None = None,
     circuitpy_drive_path: str | None = None,
     serial_baudrate: int | None = None,
+    firmware_version: str | None = None,
     set_default: bool = True,
 ) -> CommentedMap:
     """Append a new device entry.
@@ -257,6 +258,10 @@ def add_device(
         deploy_mode: ``"ram"`` or ``"flash"`` preference.
         circuitpy_drive_path: Explicit CIRCUITPY mount.
         serial_baudrate: CP-only baud override.
+        firmware_version: Probed-always.  Dotted version string
+            from ``sys.implementation.version``.  Captured at
+            registration so future commands can read floor
+            compliance without re-probing (Decision 0039).
         set_default: When ``True`` (default) and ``defaults.<runtime>``
             is unset, also writes ``defaults.<runtime>: <device_id>``
             so the first registered board for a runtime becomes the
@@ -285,6 +290,8 @@ def add_device(
     if circuitpy_drive_path is not None:
         entry["circuitpy_drive_path"] = circuitpy_drive_path
     entry["address"] = address
+    if firmware_version is not None:
+        entry["firmware_version"] = firmware_version
     entry["runtime"] = runtime
     if hardware:
         hardware_block: CommentedMap = CommentedMap()
@@ -323,6 +330,28 @@ def update_device_address(
     if entry is None:
         raise DeviceNotFoundError(device_id)
     entry["address"] = new_address
+
+
+def update_device_firmware_version(
+    data: CommentedMap,
+    device_id: str,
+    new_version: str,
+) -> None:
+    """Silently refresh a device's cached ``firmware_version`` (probed-always).
+
+    Mirrors :func:`update_device_address` — the firmware on a board
+    can be upgraded out of band (the user runs `install-firmware`,
+    or flashes via a vendor tool), so a fresh probe just overwrites
+    the cached value with no prompt.  Used by the ``add-device
+    --force`` re-probe path (Decision 0039).
+
+    Raises:
+        DeviceNotFoundError: No entry with that id.
+    """
+    entry = find_device(data, device_id)
+    if entry is None:
+        raise DeviceNotFoundError(device_id)
+    entry["firmware_version"] = new_version
 
 
 def update_device_hardware(

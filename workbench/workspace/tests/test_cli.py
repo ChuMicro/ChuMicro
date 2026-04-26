@@ -1075,13 +1075,20 @@ def _fake_probe_info(
     machine: str = "Lolin S2",
     uid: str = "ABCD1234",
     board_id: str = "lolin_s2",
+    version: str = "1.27.0",
 ):
-    """Return an object that mimics chumicro_deploy.probe_device's return."""
+    """Return an object that mimics chumicro_deploy.probe_device's return.
+
+    Default version is at the supported floor for ``micropython`` so
+    tests that don't care about firmware support don't trip the
+    Decision 0039 warning path.  Tests that exercise the floor pass
+    a lower or runtime-specific *version*.
+    """
     from chumicro_deploy import DeviceImplementation
 
     class _Info:
         implementation = DeviceImplementation(
-            name=runtime, version="1.26.0", machine=machine, uid=uid,
+            name=runtime, version=version, machine=machine, uid=uid,
         )
 
     info = _Info()
@@ -1317,6 +1324,142 @@ class TestAddDevice:
         assert "# House sensors" in body
         assert "# default for deploy commands" in body
         assert "lolin-s2" in body  # new entry made it in
+
+
+# ---------------------------------------------------------------------------
+# add-device — firmware-version floor (Decision 0039)
+# ---------------------------------------------------------------------------
+
+
+class TestAddDeviceFirmwareFloor:
+    def _seed(self, tmp_path: Path) -> None:
+        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+
+    def test_supported_firmware_emits_no_warning(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        self._seed(tmp_path)
+        import chumicro_deploy
+
+        monkeypatch.setattr(
+            chumicro_deploy,
+            "probe_device",
+            lambda _d: _fake_probe_info(version="1.27.0"),
+        )
+        exit_code = cli.main([
+            "add-device", "--workspace-dir", str(tmp_path),
+            "--address", "/dev/cu.x", "--runtime", "micropython", "pico",
+        ])
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "warning" not in captured.err.lower()
+
+    def test_old_firmware_warns_but_succeeds(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Below-floor firmware: warn-not-block per Decision 0039."""
+        self._seed(tmp_path)
+        import chumicro_deploy
+
+        monkeypatch.setattr(
+            chumicro_deploy,
+            "probe_device",
+            lambda _d: _fake_probe_info(version="1.26.0"),
+        )
+        exit_code = cli.main([
+            "add-device", "--workspace-dir", str(tmp_path),
+            "--address", "/dev/cu.x", "--runtime", "micropython", "pico",
+        ])
+        assert exit_code == 0  # warn, do not block
+        captured = capsys.readouterr()
+        assert "1.26.0" in captured.err
+        assert "1.27.0" in captured.err
+        assert "install-firmware" in captured.err
+
+    def test_unknown_runtime_warns(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        self._seed(tmp_path)
+        import chumicro_deploy
+
+        monkeypatch.setattr(
+            chumicro_deploy,
+            "probe_device",
+            lambda _d: _fake_probe_info(runtime="cpython", version="3.13.0"),
+        )
+        exit_code = cli.main([
+            "add-device", "--workspace-dir", str(tmp_path),
+            "--address", "/dev/cu.x", "--runtime", "micropython", "host",
+        ])
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "tested matrix" in captured.err
+
+    def test_firmware_version_persisted_to_devices_yml(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The probed-always firmware_version field should land on disk."""
+        self._seed(tmp_path)
+        import chumicro_deploy
+
+        monkeypatch.setattr(
+            chumicro_deploy,
+            "probe_device",
+            lambda _d: _fake_probe_info(version="1.27.0"),
+        )
+        cli.main([
+            "add-device", "--workspace-dir", str(tmp_path),
+            "--address", "/dev/cu.x", "--runtime", "micropython", "pico",
+        ])
+        body = (tmp_path / "devices.yml").read_text()
+        assert "firmware_version: 1.27.0" in body
+
+    def test_force_reprobe_refreshes_firmware_version(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """An upgrade out of band → re-probe with --force should overwrite."""
+        self._seed(tmp_path)
+        import chumicro_deploy
+
+        monkeypatch.setattr(
+            chumicro_deploy,
+            "probe_device",
+            lambda _d: _fake_probe_info(version="1.26.0"),
+        )
+        cli.main([
+            "add-device", "--workspace-dir", str(tmp_path),
+            "--address", "/dev/cu.x", "--runtime", "micropython", "pico",
+        ])
+        body_before = (tmp_path / "devices.yml").read_text()
+        assert "firmware_version: 1.26.0" in body_before
+
+        monkeypatch.setattr(
+            chumicro_deploy,
+            "probe_device",
+            lambda _d: _fake_probe_info(version="1.27.0"),
+        )
+        result = cli.main([
+            "add-device", "--workspace-dir", str(tmp_path),
+            "--address", "/dev/cu.x", "--runtime", "micropython",
+            "--force", "pico",
+        ])
+        assert result == 0
+        body_after = (tmp_path / "devices.yml").read_text()
+        assert "firmware_version: 1.27.0" in body_after
+        assert "firmware_version: 1.26.0" not in body_after
 
 
 # ---------------------------------------------------------------------------

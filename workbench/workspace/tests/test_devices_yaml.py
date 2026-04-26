@@ -16,6 +16,7 @@ from chumicro_workspace.devices_yaml import (
     rename_device,
     set_runtime_default,
     update_device_address,
+    update_device_firmware_version,
     update_device_hardware,
 )
 
@@ -285,6 +286,55 @@ class TestUpdateAddress:
         data = load_devices(tmp_path / "x.yml")
         with pytest.raises(DeviceNotFoundError):
             update_device_address(data, "ghost", "/x")
+
+
+# ---------------------------------------------------------------------------
+# update_device_firmware_version — probed-always (silent)
+# ---------------------------------------------------------------------------
+
+
+class TestUpdateFirmwareVersion:
+    def test_overwrites_silently(self, tmp_path: Path) -> None:
+        data = load_devices(tmp_path / "x.yml")
+        add_device(
+            data,
+            device_id="pico",
+            runtime="micropython",
+            address="/a",
+            firmware_version="1.26.0",
+        )
+        update_device_firmware_version(data, "pico", "1.27.0")
+        assert find_device(data, "pico")["firmware_version"] == "1.27.0"
+
+    def test_writes_when_missing(self, tmp_path: Path) -> None:
+        """A device added before Decision 0039 has no firmware_version yet."""
+        data = load_devices(tmp_path / "x.yml")
+        add_device(data, device_id="pico", runtime="micropython", address="/a")
+        update_device_firmware_version(data, "pico", "1.27.0")
+        assert find_device(data, "pico")["firmware_version"] == "1.27.0"
+
+    def test_missing_device_raises(self, tmp_path: Path) -> None:
+        data = load_devices(tmp_path / "x.yml")
+        with pytest.raises(DeviceNotFoundError):
+            update_device_firmware_version(data, "ghost", "1.27.0")
+
+
+class TestAddDeviceFirmwareVersion:
+    def test_firmware_version_lands_in_entry(self, tmp_path: Path) -> None:
+        data = load_devices(tmp_path / "x.yml")
+        add_device(
+            data,
+            device_id="pico",
+            runtime="micropython",
+            address="/a",
+            firmware_version="1.27.0",
+        )
+        assert find_device(data, "pico")["firmware_version"] == "1.27.0"
+
+    def test_omitted_firmware_version_is_absent(self, tmp_path: Path) -> None:
+        data = load_devices(tmp_path / "x.yml")
+        add_device(data, device_id="pico", runtime="micropython", address="/a")
+        assert "firmware_version" not in find_device(data, "pico")
 
 
 # ---------------------------------------------------------------------------

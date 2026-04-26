@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **idle** — Phase 7 closed end-to-end; chumicro-mqtt + chumicro-sockets just landed a production-readiness sweep against patterns from the older `pythonProject3` MQTT impl.  Pick the next workstream phase or queued item from `plans/next-up.md`.  Phase 8 (application-level OTA via `chumicro-update`) is the next workstream phase but parked until Phase 7 has soak time in the field.
-- **Last shipped:** `chumicro-mqtt` 0.1.4 — bounded recv-per-tick (1 KB default) so fat kernel TCP buffers can't starve LED / LCD / control-loop tasks; bounded tx queue (100 default) with `MQTTBackpressureError` on overflow; protocol-internal traffic (PUBACK, retransmits, PINGREQ) bypasses the cap; failed QoS-1 publish rolls back packet_id allocation.  `chumicro-sockets` 0.1.4 — `ssl_context_with_ca` defaults to `verify_mode = CERT_REQUIRED` (no more accidental blind trust) and supports multi-cert PEM bundles (multiple `BEGIN CERTIFICATE` blocks → concatenated DER).
-- **In flight:** —
+- **Phase:** **beginner-onramp Step 1** complete — Decision 0039 firmware-version floor codified + wired into `add-device` warn-not-block.  Step 2 (single-thing deploy default) is the next small slice; remaining steps are the `bootstrap` wizard, `demo` command, and the new `chumicro-requests` / `chumicro-http-server` libraries.  See `plans/workstreams/beginner-onramp.md`.
+- **Last shipped:** Decision 0039 + `chumicro_workspace.firmware_support` + `_cmd_add_device` wiring.  Floors: MP ≥ 1.27.0, CP ≥ 10.1.0.  Warn-not-block per the decision.  `firmware_version` now persisted to `devices.yml` (the probed-always slot was registered in `PROBED_ALWAYS_FIELDS` but never written before).
+- **In flight:** beginner-onramp workstream Step 2+ — sequence in `plans/workstreams/beginner-onramp.md`.
 - **Blocked on:** —
-- **Last touched:** `libraries/mqtt/src/chumicro_mqtt/{client,_wire,__init__}.py` (`recv_budget_per_tick`, `max_tx_queue_size`, `MQTTBackpressureError`, `_enqueue_user_tx` helper), `libraries/mqtt/tests/test_client.py` (8 new `TestBoundedRecvPerTick` + `TestTxQueueBackpressure` cases), `libraries/sockets/src/chumicro_sockets/_adapters/{mp,cp,cpython}.py` (CERT_REQUIRED default + multi-cert PEM handling in `_pem_to_der`), `libraries/sockets/tests/test_mp_adapter.py` (2 new cases), VERSION bumps to 0.1.4 each, `plans/learnings.md` (recv-loop starvation pattern), `plans/next-up.md` Done entry.
+- **Last touched:** `plans/decisions/0039-firmware-version-floor.md`, `plans/workstreams/beginner-onramp.md`, `plans/next-up.md`, `workbench/workspace/src/chumicro_workspace/{firmware_support.py,devices_yaml.py,cli.py}`, `workbench/workspace/tests/{test_firmware_support.py,test_devices_yaml.py,test_cli.py}`.
 
 ---
 

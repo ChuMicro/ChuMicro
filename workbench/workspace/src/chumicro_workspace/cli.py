@@ -54,7 +54,15 @@ from chumicro_workspace.devices_yaml import (
     load_devices,
     rename_device,
     update_device_address,
+    update_device_firmware_version,
     update_device_hardware,
+)
+from chumicro_workspace.firmware_support import (
+    FirmwareSupportStatus,
+    check_firmware_supported,
+)
+from chumicro_workspace.firmware_support import (
+    explain as explain_firmware_support,
 )
 from chumicro_workspace.firmware_url import (
     UnresolvableFirmwareError,
@@ -685,6 +693,9 @@ def _cmd_add_device(args: argparse.Namespace) -> int:
             print(f"  {line}", file=sys.stderr)
         return 1
 
+    firmware_version = info.implementation.version
+    support = check_firmware_supported(info.implementation)
+
     data = load_devices(workspace.devices_yaml)
     hardware: dict[str, str] = {}
     if info.uid:
@@ -702,6 +713,7 @@ def _cmd_add_device(args: argparse.Namespace) -> int:
             address=args.address,
             hardware=hardware or None,
             description=args.description,
+            firmware_version=firmware_version or None,
         )
     except DeviceAlreadyExistsError:
         if not args.force:
@@ -715,6 +727,8 @@ def _cmd_add_device(args: argparse.Namespace) -> int:
         # refresh the address silently, and update hardware-once leaves
         # under --force semantics so a board swap is reflected.
         update_device_address(data, args.id, args.address)
+        if firmware_version:
+            update_device_firmware_version(data, args.id, firmware_version)
         try:
             update_device_hardware(data, args.id, hardware, force=True)
         except HardwareOverwriteError as exception:
@@ -723,6 +737,14 @@ def _cmd_add_device(args: argparse.Namespace) -> int:
 
     dump_devices(data, workspace.devices_yaml)
     print(f"add-device: registered {args.id} ({info.implementation.name})")
+    if support.status is not FirmwareSupportStatus.SUPPORTED:
+        print(
+            f"add-device: warning — {info.implementation.name} "
+            f"firmware compatibility:",
+            file=sys.stderr,
+        )
+        for line in explain_firmware_support(support):
+            print(f"  {line}", file=sys.stderr)
     return 0
 
 

@@ -138,9 +138,13 @@ Reasonable to do steps 1+2 immediately as a small, self-contained slice.  Step 3
 
 - Bootstrap command name: `bootstrap`?  `onboard`?  `setup` (already taken — does `pip install -e .`)?  `start`?  `init` is taken.
 - Demo thing: ship inside `chumicro-workspace` as data, or as a thing in the template repo that `bootstrap` deploys?  Lean: inside the tool, so it works pre-template-customization.
-- Firmware-version-floor enforcement strictness: hard error and abort, or warn-and-let-them-try?  Lean: warn for "old but maybe works", hard error for "wrong runtime entirely".
+- ~~Firmware-version-floor enforcement strictness~~ — resolved by [Decision 0039](../decisions/0039-firmware-version-floor.md): warn-not-block at registration, no hard error today.
 - Two-thing demo with no second board: build a host-side server in `workbench/`, or assume the user has two boards?  Lean: host-side server — lower friction.
 - Should `chumicro-requests` and `chumicro-http-server` get their own decision docs, or share one?  Lean: separate, since they have different design constraints (client buffering vs server lifecycle).
+
+## Status log
+
+- **2026-04-26** Step 1 shipped — Decision 0039 (firmware floor + warn-not-block policy), `chumicro_workspace.firmware_support` module (constants, `FirmwareSupportStatus` enum, `check_firmware_supported`, `explain`), `_cmd_add_device` wiring, `firmware_version` now persisted to `devices.yml` (probed-always slot was registered but unused before).  Workspace coverage 96 %.
 
 ## Cross-references
 
