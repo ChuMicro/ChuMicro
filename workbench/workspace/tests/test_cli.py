@@ -252,11 +252,11 @@ class TestNew:
         (template / "config.toml").write_text("[app]\n")
 
         exit_code = cli.main(
-            ["new", "--workspace-dir", str(root), "kitchen-sensor"],
+            ["new", "--workspace-dir", str(root), "kitchen_sensor"],
         )
         assert exit_code == 0
 
-        target = root / "things" / "kitchen-sensor"
+        target = root / "things" / "kitchen_sensor"
         assert (target / "code.py").read_text() == "# template\n"
         assert (target / "config.toml").read_text() == "[app]\n"
 
@@ -275,6 +275,40 @@ class TestNew:
         with pytest.raises(SystemExit) as caught:
             cli.main(["new", "--workspace-dir", str(root), "exists"])
         assert "already exists" in str(caught.value)
+
+    @pytest.mark.parametrize(
+        ("bad_name", "match"),
+        [
+            ("kitchen-sensor", "valid Python identifier"),
+            ("1sensor", "valid Python identifier"),
+            ("kitchen.sensor", "valid Python identifier"),
+            ("kitchen sensor", "valid Python identifier"),
+            ("_template", "leading"),
+            ("_private", "leading"),
+            ("class", "keyword"),
+            ("import", "keyword"),
+        ],
+    )
+    def test_rejects_invalid_thing_names(
+        self,
+        tmp_path: Path,
+        bad_name: str,
+        match: str,
+    ) -> None:
+        # Validation runs before the template lookup, so we deliberately
+        # don't pre-create things/_template — that lets us verify the
+        # filesystem is untouched on rejection.
+        root = _seed_workspace(tmp_path)
+        with pytest.raises(SystemExit) as caught:
+            cli.main(["new", "--workspace-dir", str(root), bad_name])
+        assert match in str(caught.value)
+        assert not (root / "things").exists()
+
+    def test_rejects_empty_thing_name(self, tmp_path: Path) -> None:
+        root = _seed_workspace(tmp_path)
+        with pytest.raises(SystemExit) as caught:
+            cli.main(["new", "--workspace-dir", str(root), ""])
+        assert "empty" in str(caught.value)
 
 
 # ---------------------------------------------------------------------------

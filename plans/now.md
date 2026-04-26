@@ -6,30 +6,26 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** idle — Decision 0038 workspace-bootstrap pivot landed (2026-04-26); chumicro-dev mode wired into the template repo; `scripts/device_config.py` migrated to consume `chumicro_deploy.config.default.load_raw_entries`.  Pick the next item from `plans/next-up.md` (Phase 7 sensor thing template, scripts→workbench backlog, multi-thing flash re-eval, or rebrand-to-ChipPy are top of the queue).
-- **Last shipped:** `scripts/device_config.py` consumes `chumicro_deploy.config.default.load_raw_entries` (Decision 0032 rule 8 cleanup; one place defines the devices.yml schema, mono-repo + chumicro-deploy tests stay in sync).
+- **Phase:** Phase 7 (first end-to-end sensor thing) mostly green: Layer-1 import resolution + Layer-2 fail-fast wifi gates land cleanly on Pi Pico W MP/CP.  Layer-3 broker round-trip blocks on a network-topology issue (device → host LAN IP) that needs physical debugging.
+- **Last shipped:** `chumicro-workspace new <name>` now rejects hyphenated / dotted / keyword / leading-underscore thing names up-front instead of failing at deploy time when the name turns out not to be a valid Python module.
 - **In flight:** —
-- **Blocked on:** —
-- **Last touched:** `workbench/deploy/src/chumicro_deploy/config/default.py` (new `load_raw_entries` primitive + `load_devices_yml` rewired through it), `workbench/deploy/tests/test_config_default.py` (9 new `TestLoadRawEntries` cases), `scripts/device_config.py` (`load_device_registry` now wraps `load_raw_entries`).
+- **Blocked on:** Phase 7 Layer-3 broker round-trip — deploy succeeds, files reach device (verified via `mpremote fs ls`), but `mosquitto_sub` sees zero messages.  Suspect host LAN-route / firewall.  Needs physical access to dig in.
+- **Last touched:** `workbench/workspace/src/chumicro_workspace/cli.py` (`_validate_thing_name` helper + early call from `_cmd_new`), `workbench/workspace/tests/test_cli.py` (parametrized rejection cases; existing `kitchen-sensor` fixture → `kitchen_sensor`), `workbench/workspace/functional_tests/test_sensor_thing_hardware.py` (one-line CHU001 cleanup leftover from Phase 7 Layer-3 commit).
 
 ---
 
 ## Workstream summaries (this session)
 
-### Decision 0038 pivot
+### Phase 7 — first end-to-end sensor thing
 
-* Renamed `chumicro-workspace-runtime` → `chumicro-workspace`; folded `init` / `update` / three-zone manifest in.
-* Created [`ChuMicro/ChuMicro-Workspace-Template`](https://github.com/ChuMicro/ChuMicro-Workspace-Template) as the canonical Git template repo (private, GitHub template-flagged).
-* Self-bootstrapping `run.py` + `_templates/` materialization (Decision 0038 §5).
-* `check-version` waives the bump gate at 0.0.0 (Decision 0038 §6).
-* chumicro-dev mode: `chumicro-dev.toml` points at a local chumicro mono-repo path; `run.py setup` walks `libraries/` + `workbench/` and pip-installs each as editable.  Smoke-tested end-to-end.
-* Side cleanup: gitconfig includeIf at `~/circuitpython/.gitconfig` so any repo under `~/circuitpython/` auto-uses `ChuxMaker / chuxmaker@users.noreply.github.com` (was committing under the wrong identity twice before this got wired up).
+* Layer-1 (`test_sensor_thing_imports_resolve_on_cpython`) and Layer-2 (`test_sensor_thing_reaches_boot_phase_marker_on_{micropython,circuitpython}`) green.
+* `chumicro-mqtt` 0.1.2 grew a socket-factory + self-heal hook (`_attempt_self_heal`) so a thing's app can keep the MQTT client across wifi drops without rebuilding the protocol state machine itself.
+* Layer-3 (`test_sensor_thing_publishes_to_live_broker`) deploys cleanly — verified the per-runtime adapter files (`chumicro_sockets/_adapters/{cp,mp}.py`, `chumicro_wifi/_adapters/*`, `chumicro_kvstore/_backends/*`) reach the device after adding `extra_modules=_lazy_runtime_adapter_modules()` at the Layer-3 call site.  Broker round-trip itself doesn't yet observe published messages — likely host route/firewall.
+* Gap captured in [`plans/workstreams/phase-7-integration.md`](workstreams/phase-7-integration.md): chumicro-deploy's import-graph walker should honor `__chumicro_runtimes__` markers (Decision 0037) and auto-include matching files for the target runtime; that would replace the ad-hoc `extra_modules` workaround.
 
-### `scripts/device_config.py` migration
+### Workspace UX — `new` thing-name validation
 
-* New `load_raw_entries(path) -> (entries, defaults)` primitive in `chumicro_deploy.config.default` — pure YAML parse, no Device construction.
-* `load_devices_yml` rewired through the primitive.
-* `scripts/device_config.py` `load_device_registry` wraps it; script-only surface (DeviceEntry / DeviceDefaults / `_validate_device` / `filter_devices` / `resolve_ide_devices`) preserved verbatim so `device_testing`, `pytest_device`, `pr_summary`, and `workbench/deploy/functional_tests/conftest.py` don't change.
+* `_validate_thing_name` rejects empty / non-identifier / keyword / leading-underscore names with a clear message before any filesystem mutation.  Closes the "I created `things/foo-bar/`, deploys fail with `ImportError`" footgun reported during Phase 7 Layer-3 debugging.
 
 ---
 

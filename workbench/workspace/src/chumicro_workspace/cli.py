@@ -30,6 +30,7 @@ visible.
 from __future__ import annotations
 
 import argparse
+import keyword
 import shutil
 import subprocess
 import sys
@@ -293,6 +294,37 @@ def _cmd_update(args: argparse.Namespace) -> int:
     return 0
 
 
+def _validate_thing_name(name: str) -> None:
+    """Reject thing names that won't survive ``import things.<name>.app``.
+
+    Thing directories are imported as Python modules at deploy time
+    (and inside the on-device boot shim), so the name has to be a
+    valid identifier — no hyphens, no dots, no leading digits.
+    Leading underscore is reserved for workspace-internal directories
+    such as ``_template``; ``list_things`` filters those out, so a
+    user-created ``_foo`` would be invisible to ``things``/``deploy``.
+    """
+    if not name:
+        raise SystemExit("error: thing name must not be empty")
+    if not name.isidentifier():
+        raise SystemExit(
+            f"error: thing name {name!r} is not a valid Python identifier "
+            "— thing directories are imported as modules, so use "
+            "snake_case (letters, digits, underscores; no hyphens, "
+            "dots, or spaces; no leading digit).",
+        )
+    if name.startswith("_"):
+        raise SystemExit(
+            f"error: thing name {name!r} starts with '_' — leading "
+            "underscore is reserved for workspace-internal directories "
+            "(e.g. _template).",
+        )
+    if keyword.iskeyword(name):
+        raise SystemExit(
+            f"error: thing name {name!r} is a Python keyword.",
+        )
+
+
 def _cmd_new(args: argparse.Namespace) -> int:
     """Create ``things/<name>/`` by copying the ``things/_template/`` tree.
 
@@ -300,6 +332,7 @@ def _cmd_new(args: argparse.Namespace) -> int:
     questions"): ``new`` is a ``cp -r`` convenience, not a code
     generator — no template variables, no post-copy edits.
     """
+    _validate_thing_name(args.name)
     workspace = _resolve_workspace(args)
     template = workspace.things_dir / "_template"
     target = workspace.thing_dir(args.name)
