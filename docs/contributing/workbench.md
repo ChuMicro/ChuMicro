@@ -46,8 +46,10 @@ The shipped tools today:
 
 - **`chumicro-deploy`** ([`workbench/deploy/`](../../workbench/deploy/)) — push code onto a board, probe a connected device, flash firmware (UF2 or esptool), classify failures and walk the user through fixes.
 - **`chumicro-repl`** ([`workbench/repl/`](../../workbench/repl/)) — interactive serial REPL with traceback highlighting, an `mpremote`-compatible TUI, a `tail()` follow-mode for deploy orchestration, and a programmatic `ReplSession` for headless test fixtures.
+- **`chumicro-workspace-runtime`** ([`workbench/workspace-runtime/`](../../workbench/workspace-runtime/)) — host CLI + Python API for ChuMicro project workspaces.  Owns `devices.yml` three-zone round-trip editing, multi-thing-on-one-device deploys (`--boot-shim`), `switch <name>` (re-points `/active.py` without re-shipping payloads), firmware URL derivation, import-graph deploys, and the deploy-time config-merge pipeline that produces `/runtime_config.msgpack` (Decision 0035).
+- **`chumicro-workspace-template`** ([`workbench/workspace-template/`](../../workbench/workspace-template/)) — Copier-style scaffolder + updater.  `init` lays down a fresh workspace from the built-in default template (or `--from <path>`); `update` refreshes the *tool-owned* slice (run.py shim, AGENTS.md, things/_template/, pyproject.toml) without touching the user-owned slice (your things/, devices.yml, secrets.yml, libs/).
 
-Both consume the same `devices.yml` schema (owned by `chumicro_deploy.config.default.load_devices_yml`) so a single workspace file points both tools at the same boards.
+All four consume the same `devices.yml` schema (owned by `chumicro_deploy.config.default.load_devices_yml`) so a single workspace file points every tool at the same boards.
 
 ## If you're adding a workbench tool
 

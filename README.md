@@ -29,6 +29,10 @@ Small, focused libraries you can install independently. Use what you need.
 | **[runner](libraries/runner/)** | A simple task scheduler — register your services, call `runner.tick()` in your loop. No async needed. |
 | **[compat](libraries/compat/)** | Standard library features that CircuitPython and MicroPython are missing (like `functools.partial`). |
 | **[msgpack](libraries/msgpack/)** | Compact binary serialization — 30–50% smaller than JSON, great for settings and sensor data. |
+| **[config](libraries/config/)** | Standardized runtime-config helpers — one file per thing, section-namespaced, with `<Name>Config.from_dict()` for each consumer library. |
+| **[kvstore](libraries/kvstore/)** | Tiny persistent key-value store — counters, timestamps, tokens. Picks the right backend (NVM / NVS / LittleFS) for your board. |
+| **[wifi](libraries/wifi/)** | One WiFi service across CP, MP-ESP32, and MP-Pico-W — state machine, reconnect supervisor, no firmware-level surprises. |
+| **[sockets](libraries/sockets/)** | Cross-runtime TCP + TLS client — one protocol over CP `socketpool`, MP `socket`/`ssl`, and CPython stdlib. Substrate for chumicro-mqtt and friends. |
 
 Works on ESP32 (S2, S3, C3, C6), RP2040/RP2350 (Raspberry Pi Pico), STM32, and most boards with at least 256 KB RAM and 4 MB flash. Browse the [documentation site](https://chumicro.github.io/ChuMicro/) for guides and API references, or look through `libraries/` — each library's README has install commands, a quick example, and an API summary.
 
@@ -38,10 +42,14 @@ Works on ESP32 (S2, S3, C3, C6), RP2040/RP2350 (Raspberry Pi Pico), STM32, and m
 ### Dependencies
 
 ```
-runner → timing
-timing    (no dependencies)
-compat    (no dependencies)
-msgpack   (no dependencies)
+runner   → timing
+wifi     → config, timing
+config   → msgpack
+kvstore  → msgpack
+timing   (no dependencies)
+compat   (no dependencies)
+msgpack  (no dependencies)
+sockets  (no dependencies — pure platform shim)
 ```
 
 ### Start with the problem you're solving
@@ -49,16 +57,22 @@ msgpack   (no dependencies)
 - **"I need timers that don't freeze my loop"** → [timing](libraries/timing/)
 - **"I have multiple things happening in my loop"** → [runner](libraries/runner/) (includes timing)
 - **"I need to store settings or send data compactly"** → [msgpack](libraries/msgpack/)
+- **"I need to read deploy-time config on the device"** → [config](libraries/config/) (with [msgpack](libraries/msgpack/))
+- **"I need to persist a counter across reboots"** → [kvstore](libraries/kvstore/)
+- **"I need WiFi that auto-reconnects without surprises"** → [wifi](libraries/wifi/)
+- **"I need a TCP / TLS socket that works on CP and MP"** → [sockets](libraries/sockets/)
 - **"functools.partial doesn't exist on my board"** → [compat](libraries/compat/)
 
 ### Companion host-side tools
 
-Two workbench packages live alongside the libraries — they run on your laptop and help you manage connected boards. They are optional; you can use the libraries above without them.
+Workbench packages live alongside the libraries — they run on your laptop and help you manage connected boards. They are optional; you can use the libraries above without them.
 
 | Tool | What it does |
 |---|---|
 | **[deploy](workbench/deploy/)** | Push code onto a CircuitPython or MicroPython board, probe its identity, and flash firmware (UF2 or esptool). Programmatic API + `chumicro-deploy` CLI; recovery layer that classifies failures and walks you through fixes. |
 | **[repl](workbench/repl/)** | Serial REPL with traceback highlighting, an `mpremote`-compatible TUI, a `tail()` follow-mode for deploy orchestration, and a programmatic `ReplSession` for headless test fixtures. `chumicro-repl` CLI. |
+| **[workspace-runtime](workbench/workspace-runtime/)** | Host CLI + Python API for ChuMicro project workspaces — `devices.yml` three-zone round-trip, multi-thing deploys, `switch`, firmware URL derivation, boot-shim layout. `chumicro-workspace-runtime` CLI. |
+| **[workspace-template](workbench/workspace-template/)** | Copier-style scaffolder + updater for new ChuMicro project workspaces; three-zone update model preserves user code while refreshing tool-owned files. `chumicro-workspace-template init / update`. |
 
 </details>
 

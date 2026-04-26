@@ -88,7 +88,7 @@ ChuMicro is a family of open-source Python libraries targeting three runtimes:
 
 Libraries must be compatible across all three runtimes. If a third-party library does not support CircuitPython or MicroPython, prefer a compatible pure-Python implementation rather than adding a runtime-specific dependency.
 
-## Libraries
+## Libraries (cross-runtime, run on a microcontroller)
 
 | Library | Description |
 |---------|-------------|
@@ -96,6 +96,19 @@ Libraries must be compatible across all three runtimes. If a third-party library
 | [runner](libraries/runner/) | Tick-based task runner: check/handle gates, periodic tasks, shared timestamps |
 | [compat](libraries/compat/) | Cross-runtime compatibility polyfills |
 | [msgpack](libraries/msgpack/) | Compact MessagePack serialization with native CircuitPython C module delegation |
+| [config](libraries/config/) | Standardized `from_dict` + on-device `runtime_config.msgpack` reader; section-namespaced runtime-config convention (Decisions [0035](plans/decisions/0035-runtime-config-structure.md) / [0036](plans/decisions/0036-chumicro-config-library.md)) |
+| [kvstore](libraries/kvstore/) | Mapping-shaped persistent key-value store with `auto` / `nvm` / `nvs` / `littlefs` / `memory` backends; CRC-framed CP NVM; atomic LittleFS commits ([Decision 0034](plans/decisions/0034-kvstore-api-and-backends.md)) |
+| [wifi](libraries/wifi/) | Sole-supervisor WiFi service with state machine + reconnect supervisor; per-runtime adapters for CP, MP-ESP32, MP-RP2 (CYW43), and CPython fake |
+| [sockets](libraries/sockets/) | Cross-runtime TCP + TLS client sockets — one protocol over CP `socketpool`, MP `socket`+`ssl`, and CPython stdlib ([Decision 0031](plans/decisions/0031-chumicro-sockets.md)) |
+
+## Workbench (host-only, run on a laptop)
+
+| Package | Description |
+|---------|-------------|
+| [deploy](workbench/deploy/) | Push code to a board, probe identity, flash firmware (UF2 + esptool); recovery layer that classifies failures and walks the user through fixes |
+| [repl](workbench/repl/) | Serial REPL with traceback highlighting, an `mpremote`-compatible TUI, `tail()` follow-mode for deploy orchestration, programmatic `ReplSession` |
+| [workspace-runtime](workbench/workspace-runtime/) | Host CLI + Python API for ChuMicro project workspaces — devices.yml three-zone round-trip, multi-thing deploys, `switch`, firmware URL derivation, boot-shim layout |
+| [workspace-template](workbench/workspace-template/) | Copier-style scaffolder + updater for new ChuMicro project workspaces; three-zone update model (tool-owned / user-owned / init-only) |
 
 ## Tech stack
 

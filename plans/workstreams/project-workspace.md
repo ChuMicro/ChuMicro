@@ -1,6 +1,6 @@
 # Workstream: Project Workspace
 
-Status: `in-progress` — Phase 1 shipped 2026-04-22; Phases 2–7 pending, Phase 8 deferred.
+Status: `in-progress` — Phases 1, 2, 3a, 3b, 4a, 4b, 5 shipped 2026-04-22 → 2026-04-25.  Remaining: Phase 4c (companion template repo, can be skipped while built-in default stands in), Phase 6 (`chumicro-mqtt` refactor), Phase 7 (first sensor thing template).  Phase 8 (OTA) deferred.
 
 ## Purpose
 
