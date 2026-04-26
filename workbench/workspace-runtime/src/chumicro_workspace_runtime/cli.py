@@ -37,6 +37,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from chumicro_workspace_runtime.boot_shim import thing_boot_source
 from chumicro_workspace_runtime.deploy_source import thing_directory_source
 from chumicro_workspace_runtime.devices_yaml import (
     DeviceAlreadyExistsError,
@@ -301,7 +302,19 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
     device = _resolve_device(workspace, args)
     from chumicro_deploy import Deployer  # noqa: PLC0415
 
-    if args.import_graph:
+    if args.import_graph and args.boot_shim:
+        print(
+            "deploy: --import-graph and --boot-shim are mutually exclusive.",
+            file=sys.stderr,
+        )
+        return 2
+    if args.boot_shim:
+        source = thing_boot_source(
+            thing_dir,
+            workspace=workspace,
+            entrypoint_filename=device.effective_entrypoint,
+        )
+    elif args.import_graph:
         device_entrypoint = args.entrypoint or f"/{device.effective_entrypoint}"
         source = thing_import_graph_source(
             thing_dir,
@@ -700,6 +713,15 @@ def build_parser() -> argparse.ArgumentParser:
             "AST-walk the entrypoint and ship only transitively-"
             "imported modules instead of the full thing directory.  "
             "Reads workspace.yml's library_sources: for overrides."
+        ),
+    )
+    deploy_parser.add_argument(
+        "--boot-shim",
+        action="store_true",
+        help=(
+            "Ship the thing under /lib/things/<name>/ + write a "
+            "fixed code.py shim + active.py + workspace_runtime "
+            "payload (Decision 0029 §3).  app.py must export run()."
         ),
     )
     deploy_parser.set_defaults(func=_cmd_deploy)

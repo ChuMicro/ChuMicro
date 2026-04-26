@@ -38,6 +38,15 @@ microcontroller.  Workbench tools and scripts (the workspace's
 ``chumicro-config`` (Decision 0036).
 """
 
+from chumicro_workspace_runtime.boot_shim import (
+    BOOT_MODULE_DEVICE_PATH,
+    SHIM_ENTRYPOINT_SOURCE,
+    THINGS_PACKAGE_INIT_DEVICE_PATH,
+    boot_shim_files,
+    build_active_py,
+    load_workspace_runtime_payload,
+    thing_boot_source,
+)
 from chumicro_workspace_runtime.deploy_source import (
     GENERATED_DIRNAME,
     RUNTIME_CONFIG_DEVICE_PATH,
@@ -92,9 +101,12 @@ from chumicro_workspace_runtime.secrets import UnresolvedSecretError, resolve_se
 from chumicro_workspace_runtime.writer import write_runtime_config
 
 __all__ = [
+    "BOOT_MODULE_DEVICE_PATH",
     "GENERATED_DIRNAME",
     "MICROPYTHON_BOARD_BY_MACHINE",
     "RUNTIME_CONFIG_DEVICE_PATH",
+    "SHIM_ENTRYPOINT_SOURCE",
+    "THINGS_PACKAGE_INIT_DEVICE_PATH",
     "BoardState",
     "DeviceAlreadyExistsError",
     "DeviceNotFoundError",
@@ -106,6 +118,8 @@ __all__ = [
     "WithRuntimeConfig",
     "WorkspaceConfigError",
     "add_device",
+    "boot_shim_files",
+    "build_active_py",
     "build_runtime_config",
     "build_search_paths",
     "derive_firmware_url",
@@ -119,6 +133,7 @@ __all__ = [
     "list_circuitpython_versions",
     "list_device_ids",
     "load_devices",
+    "load_workspace_runtime_payload",
     "merge_configs",
     "micropython_board_for_machine",
     "read_secrets_yaml",
@@ -128,6 +143,7 @@ __all__ = [
     "rename_device",
     "resolve_secrets",
     "set_runtime_default",
+    "thing_boot_source",
     "thing_directory_source",
     "thing_import_graph_source",
     "update_device_address",

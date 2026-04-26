@@ -331,6 +331,58 @@ class TestDeploy:
         deploy_calls = [call for call in transport.calls if call[0] == "deploy_files"]
         assert deploy_calls[0][1][1] == "/boot.py"
 
+    def test_boot_shim_flag_uses_boot_pattern(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Slice 7: --boot-shim routes through thing_boot_source."""
+        root = _seed_workspace(tmp_path)
+        thing_dir = root / "things" / "back-porch"
+        thing_dir.mkdir(parents=True)
+        (thing_dir / "config.toml").write_text(
+            "[wifi]\nssid = 'HomeNet'\npassword = '!secret wifi_password'\n"
+        )
+        (thing_dir / "app.py").write_text("def run(): print('hi')\n")
+
+        transport = FakeTransport(execute_output="")
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root),
+            "--boot-shim", "back-porch",
+        ])
+        assert exit_code == 0
+        deploy_calls = [call for call in transport.calls if call[0] == "deploy_files"]
+        files, entrypoint = deploy_calls[0][1]
+        # Boot-shim layout: shim entrypoint at root, thing under /lib/things/.
+        assert entrypoint == "/main.py"  # MP runtime in seed
+        assert "/main.py" in files
+        assert "/active.py" in files
+        assert "/lib/workspace_runtime/__init__.py" in files
+        assert "/lib/things/back-porch/app.py" in files
+        assert b'"back-porch"' in files["/active.py"]
+
+    def test_boot_shim_and_import_graph_mutually_exclusive(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """The two layouts can't combine — they ship different on-device shapes."""
+        root = _seed_workspace(tmp_path)
+        thing_dir = root / "things" / "back-porch"
+        thing_dir.mkdir(parents=True)
+        (thing_dir / "config.toml").write_text("[wifi]\nssid = 'x'\n")
+        (thing_dir / "app.py").write_text("def run(): pass\n")
+        (thing_dir / "main.py").write_text("import x\n")
+
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root),
+            "--boot-shim", "--import-graph", "back-porch",
+        ])
+        assert exit_code == 2
+        assert "mutually exclusive" in capsys.readouterr().err
+
     def test_import_graph_flag_uses_ast_walker(
         self,
         tmp_path: Path,
