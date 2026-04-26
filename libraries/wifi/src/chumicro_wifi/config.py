@@ -40,15 +40,15 @@ class WifiConfig:
 
     def __init__(
         self,
-        ssid,
-        password,
-        hostname=None,
-        connect_timeout_ms=15_000,
-        reconnect_backoff_start_ms=1_000,
-        reconnect_backoff_max_ms=60_000,
-        reconnect_max=None,
-        power_save=False,
-    ):
+        ssid: str,
+        password: str,
+        hostname: str | None = None,
+        connect_timeout_ms: int = 15_000,
+        reconnect_backoff_start_ms: int = 1_000,
+        reconnect_backoff_max_ms: int = 60_000,
+        reconnect_max: int | None = None,
+        power_save: bool = False,
+    ) -> None:
         self.ssid = ssid
         self.password = password
         self.hostname = hostname
@@ -59,7 +59,7 @@ class WifiConfig:
         self.power_save = power_save
 
     @classmethod
-    def from_dict(cls, data):
+    def from_dict(cls, data: dict) -> "WifiConfig":
         """Build a ``WifiConfig`` from a section dict.
 
         The standard ``chumicro-config`` shape (Decision 0036 §3) —

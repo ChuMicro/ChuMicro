@@ -47,12 +47,14 @@ class TestDefaultTemplateRoot:
     def test_canonical_files_present(self) -> None:
         root = default_template_root()
         assert (root / "workspace.yml").is_file()
-        assert (root / "devices.yml").is_file()
         assert (root / "AGENTS.md").is_file()
         assert (root / "run.py").is_file()
         assert (root / "pyproject.toml").is_file()
         assert (root / "things" / "_template" / "config.toml").is_file()
         assert (root / "things" / "_template" / "app.py").is_file()
+        # devices.yml is intentionally NOT shipped — users create it via
+        # `chumicro-workspace-runtime add-device` (Phase 4b decision).
+        assert not (root / "devices.yml").exists()
 
     def test_dot_files_use_dot_prefix(self) -> None:
         """Hatchling-quirk-avoidance: every dotfile is a dot_-prefixed
@@ -75,13 +77,15 @@ class TestInitBuiltIn:
         assert target.is_dir()
         # Top-level files written.
         assert (target / "workspace.yml").is_file()
-        assert (target / "devices.yml").is_file()
         assert (target / "run.py").is_file()
         assert (target / "AGENTS.md").is_file()
         assert (target / "pyproject.toml").is_file()
         # Things template carried over.
         assert (target / "things" / "_template" / "config.toml").is_file()
         assert (target / "things" / "_template" / "app.py").is_file()
+        # devices.yml is NOT created by init — users add it via
+        # `chumicro-workspace-runtime add-device`.
+        assert not (target / "devices.yml").exists()
 
     def test_dot_prefix_renamed_to_real_dotfile(self, tmp_path: Path) -> None:
         target = tmp_path / "fresh"
@@ -175,6 +179,9 @@ class TestUpdate:
         )
         # User-owned file edits.
         (target / "workspace.yml").write_text("defaults:\n  user_pinned: 1\n")
+        # User added a devices.yml after init (the post-init
+        # `chumicro-workspace-runtime add-device` flow); update must
+        # never touch it even though it's not in the template payload.
         (target / "devices.yml").write_text("# user-edited devices file\n")
         # Tool-owned files: simulate a drift by editing them, then
         # `update` must re-refresh.
@@ -182,14 +189,16 @@ class TestUpdate:
 
         report = update(target)
 
-        # User-owned + init-only: skipped.
+        # User-owned + init-only files in the template: skipped.
         skipped = {path for path, action in report if action == ApplyAction.SKIPPED}
         assert "workspace.yml" in skipped
-        assert "devices.yml" in skipped
         assert ".gitignore" in skipped
         assert "README.md" in skipped
         # User-edited file content survived.
         assert "user_pinned: 1" in (target / "workspace.yml").read_text()
+        # devices.yml isn't in the template, so update doesn't enumerate
+        # it; the file on disk is untouched because update only walks
+        # template-shaped paths.
         assert "user-edited" in (target / "devices.yml").read_text()
         # Tool-owned: refreshed.
         refreshed = {

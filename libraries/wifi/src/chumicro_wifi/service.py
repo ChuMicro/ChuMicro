@@ -25,6 +25,7 @@ reconnect attempt, link-down detection).
 import sys
 
 from chumicro_wifi._adapters.fake import FakeWifiAdapter
+from chumicro_wifi.config import WifiConfig
 from chumicro_wifi.state import WifiState
 
 
@@ -68,7 +69,13 @@ class WifiService:
             real ``chumicro_timing.ticks`` helpers are used.
     """
 
-    def __init__(self, config, *, adapter=None, ticks=None):
+    def __init__(
+        self,
+        config: WifiConfig,
+        *,
+        adapter: object | None = None,
+        ticks: object | None = None,
+    ) -> None:
         self._config = config
         self._adapter = adapter if adapter is not None else _select_adapter()
         if ticks is not None:
@@ -119,7 +126,7 @@ class WifiService:
         """Stable identifier for the active adapter."""
         return self._adapter.name
 
-    def on_state_change(self, callback):
+    def on_state_change(self, callback: object) -> None:
         """Register a callback invoked on every state transition.
 
         Args:

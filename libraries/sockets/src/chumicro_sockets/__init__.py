@@ -49,7 +49,7 @@ def _runtime_name() -> str:
     return sys.implementation.name
 
 
-def tcp_client_socket(host, port, *, radio=None):
+def tcp_client_socket(host: str, port: int, *, radio: object | None = None) -> TCPClientSocket:
     """Open a plain TCP client connection.
 
     Routes to the runtime-appropriate adapter:
@@ -89,7 +89,13 @@ def tcp_client_socket(host, port, *, radio=None):
     return cpython.connect_tcp(host, port)
 
 
-def tls_client_socket(host, port, *, context=None, radio=None):
+def tls_client_socket(
+    host: str,
+    port: int,
+    *,
+    context: object | None = None,
+    radio: object | None = None,
+) -> TCPClientSocket:
     """Open a TLS client connection.
 
     Routes to the runtime-appropriate adapter; *context* is honored
@@ -135,12 +141,14 @@ def tls_client_socket(host, port, *, context=None, radio=None):
     return cpython.connect_tls(host, port, context=context)
 
 
-def ssl_context_with_ca(ca_pem):
+def ssl_context_with_ca(ca_pem: str | bytes) -> object:
     """Build an SSLContext that trusts the CA(s) in *ca_pem*.
 
     The common "default everything except the trust anchor" recipe.
     Identical shape on every runtime (Decision 0015 supported boards
-    all ship the on-board ``ssl`` module).
+    all ship the on-board ``ssl`` module).  Returned as ``object``
+    rather than ``ssl.SSLContext`` so we don't force ``import ssl``
+    at module-load time on plain-TCP-only consumers.
 
     Args:
         ca_pem: PEM-encoded CA bundle.  ASCII / UTF-8 decodable.

@@ -38,7 +38,7 @@ class FakeWifi(WifiService):
             password="password", short backoffs so tests run fast).
     """
 
-    def __init__(self, ticks, *, config=None):
+    def __init__(self, ticks: object, *, config: WifiConfig | None = None) -> None:
         if config is None:
             config = WifiConfig(
                 ssid="testnet",
