@@ -153,6 +153,32 @@ The "ergonomic dual-catch" pattern (`except ConfigError` *or* `except KeyError` 
 
 Surfaced in `chumicro-config` Slice 0 when `MissingConfigKey(ConfigError, KeyError)` and `InvalidConfigType(ConfigError, TypeError)` failed import on the MP unix-port even though host-side CPython tests passed.  Fix: drop the stdlib parents, document the workaround in Decision 0036 §2.
 
+### Library import RAM cost: chumicro-mqtt is ~5x heavier than its peers
+
+Measured per-library import cost on real boards via `.scratch/run_ram_audit.py` — deploys an audit program that imports each chumicro library in isolation, samples `gc.mem_free()` before/after, and prints structured stats.  Rankings are stable across MP runtimes (Lolin S2 ESP32 vs Pi Pico W RP2; CP measurement is less clean because `del sys.modules[name]` doesn't fully unload CP's interned modules).
+
+Per-library cost on Pi Pico W MP (the smallest supported board, MP 1.26):
+
+| library  | bytes (free Δ) |
+|---|---|
+| compat   | 160 |
+| timing   | 2 128 |
+| msgpack  | 3 616 |
+| config   | 2 672 |
+| runner   | 3 072 |
+| kvstore  | 5 392 |
+| sockets  | 2 512 |
+| **mqtt** | **20 960** |
+| wifi     | 5 536 |
+
+Loading every library: 46 KB on MP, ~17 KB on CP.  Pi Pico W MP has 191 KB free at idle; after loading the full stack, 145 KB free remains — plenty of headroom for app code, so **no urgent optimization needed**.
+
+Where the readability tradeoff would be worth it on a future tighter board: lazy-import `chumicro_mqtt._encoder` / `_decoder` until first publish (≈ 10 KB savings if the user only subscribes), and lazy-import `chumicro_kvstore`'s unused backends (≈ 2-3 KB savings).  Module bytecode (`.mpy` from the bundle staging path) further cuts these costs by 30-40 %.
+
+Not worth it: inlining modules into single files, stripping `const()` declarations, removing docstrings (already stripped at `.mpy` compile).
+
+Surfaced 2026-04-26 during the post-Phase-6 audit; no commit landed since the conclusion was "no urgent fix".  Audit runner stays in `.scratch/` (gitignored — uses live wifi creds).
+
 ### `griffe check --search` silently ignores absolute paths in 2.x
 
 Pass `--search` as a path *relative to the subprocess cwd*, not absolute. With griffe 2.0.2, an absolute `--search /abs/path/to/src` resolves nothing — griffe exits 0 with empty stdout/stderr regardless of breakages, making any check_api-style gate a silent no-op. The relative form (`--search workbench/deploy/src` from the repo root) works. This bug had been live in `scripts/check_api.py` since the gate was added: every PR was passing it without any actual API comparison. Caught during 2026-04-25 manual end-to-end validation while extending the gates to workbench. Fix: `str((package_root / "src").relative_to(ROOT))`. Always run a real-fixture pass when wiring tools that fail-soft like this — unit tests with mocked subprocesses can't see this class of regression.

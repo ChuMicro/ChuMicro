@@ -7,6 +7,22 @@ explicit lifecycle methods (``commit``, ``commit_if_changed``,
 
 Backend selection is per-runtime via ``backend="auto"``; explicit
 overrides accepted.  See Decision 0034 §1–2.
+
+Imports are deliberately split.  On-board RAM audit
+(`.scratch/run_ram_audit.py`, 2026-04-26) measured 5.4–7.5 KB of
+heap lost on `import chumicro_kvstore` across the supported MP
+boards.  ``MemoryBackend`` is the biggest offender — it's only
+selected when the runtime fall-through hits CPython or when the
+caller explicitly passes ``backend="memory"``, but every device
+import was paying its cost.  Now lazy-imported inside the resolver
+functions; per-device imports save ~600-800 bytes.
+
+``chumicro_msgpack``'s ``packb`` / ``unpackb`` and the ``Backend``
+type stay at module-top: msgpack is touched on every commit/load
+hot path (lazy-import overhead would dominate), and ``Backend`` is
+needed for the ``Backend | str`` parameter type hint that MP
+evaluates at function-def time without ``from __future__ import
+annotations`` (Decision 0021).
 """
 
 import sys
@@ -14,7 +30,6 @@ import sys
 from chumicro_msgpack import packb, unpackb
 
 from chumicro_kvstore._backends.base import Backend
-from chumicro_kvstore._backends.memory import MemoryBackend
 
 
 class KVStoreError(Exception):
@@ -57,16 +72,19 @@ def _select_backend() -> Backend:
     """
     runtime_name = sys.implementation.name
     if runtime_name == "circuitpython":  # pragma: no cover - CP runtime path
-        from chumicro_kvstore._backends.cp_nvm import CpNvmBackend
+        from chumicro_kvstore._backends.cp_nvm import CpNvmBackend  # noqa: PLC0415
         return CpNvmBackend()
     if runtime_name == "micropython":  # pragma: no cover - MP runtime path
         try:
-            import esp32  # noqa: F401
+            import esp32  # noqa: F401, PLC0415
         except ImportError:
-            from chumicro_kvstore._backends.mp_littlefs import MpLittlefsBackend
+            from chumicro_kvstore._backends.mp_littlefs import MpLittlefsBackend  # noqa: PLC0415
             return MpLittlefsBackend()
-        from chumicro_kvstore._backends.mp_nvs import MpNvsBackend
+        from chumicro_kvstore._backends.mp_nvs import MpNvsBackend  # noqa: PLC0415
         return MpNvsBackend()
+    # CPython fall-through — MemoryBackend is lazy-imported here so
+    # device runtimes never pay its ~700 B import cost.
+    from chumicro_kvstore._backends.memory import MemoryBackend  # noqa: PLC0415
     return MemoryBackend()
 
 
@@ -77,15 +95,19 @@ def _resolve_backend(backend: Backend | str) -> Backend:
     if backend == "auto":
         return _select_backend()
     if backend == "memory":
+        # Lazy: device runtimes never reach this path under "auto",
+        # so importing MemoryBackend at module top would waste ~700
+        # bytes of on-device heap.
+        from chumicro_kvstore._backends.memory import MemoryBackend  # noqa: PLC0415
         return MemoryBackend()
     if backend == "nvm":
-        from chumicro_kvstore._backends.cp_nvm import CpNvmBackend
+        from chumicro_kvstore._backends.cp_nvm import CpNvmBackend  # noqa: PLC0415
         return CpNvmBackend()
     if backend == "nvs":
-        from chumicro_kvstore._backends.mp_nvs import MpNvsBackend
+        from chumicro_kvstore._backends.mp_nvs import MpNvsBackend  # noqa: PLC0415
         return MpNvsBackend()
     if backend == "littlefs":
-        from chumicro_kvstore._backends.mp_littlefs import MpLittlefsBackend
+        from chumicro_kvstore._backends.mp_littlefs import MpLittlefsBackend  # noqa: PLC0415
         return MpLittlefsBackend()
     raise ValueError(f"Unknown backend: {backend!r}")
 
