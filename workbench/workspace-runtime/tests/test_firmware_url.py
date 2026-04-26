@@ -306,8 +306,11 @@ def _mp_download_html(
 ) -> bytes:
     """Synthesize a minimal micropython.org/download/<board>/ HTML body.
 
-    Each *builds* entry is ``(date, version, unstable, ext)``.
-    Filenames are constructed in the canonical
+    Each *builds* entry is ``(date, version, unstable, ext)``.  The
+    *version* string is appended verbatim, so callers exercising the
+    new-shape preview format can pass version =
+    ``"v1.29.0-preview.69.gSHA"`` and the helper builds the right
+    filename (no `unstable-` prefix).  Filenames take the canonical
     ``<BOARD>-<DATE>-[unstable-]<VERSION>[-<commit>]?.<ext>`` shape.
     Extra anchors get included verbatim — useful for testing that
     unrelated links don't pollute the parse.
@@ -343,11 +346,12 @@ class TestListMicropythonBuilds:
         )
         builds = list_micropython_builds("RPI_PICO_W", url_opener=opener)
         assert len(builds) == 2
-        # (date, version, unstable_marker, absolute_url)
+        # (date, version, unstable_marker, prerelease_suffix, absolute_url)
         assert builds[0][0] == "20240222"
         assert builds[0][1] == "v1.22.2"
-        assert builds[0][2] == ""  # stable
-        assert builds[0][3].startswith(MICROPYTHON_FIRMWARE_BASE_URL)
+        assert builds[0][2] == ""  # stable: no `unstable-` prefix
+        assert builds[0][3] == ""  # stable: no `-preview.X.gSHA` suffix
+        assert builds[0][4].startswith(MICROPYTHON_FIRMWARE_BASE_URL)
         assert builds[1][2] == "unstable-"
 
     def test_passes_correct_url_to_opener(self) -> None:
@@ -374,7 +378,7 @@ class TestListMicropythonBuilds:
             ),
         )
         builds = list_micropython_builds("RPI_PICO_W", url_opener=opener)
-        assert all(build[3].endswith(".uf2") for build in builds)
+        assert all(build[4].endswith(".uf2") for build in builds)
         assert len(builds) == 1
 
     def test_explicit_extension_override(self) -> None:
@@ -390,7 +394,7 @@ class TestListMicropythonBuilds:
         builds = list_micropython_builds(
             "ESP32_GENERIC", url_opener=opener, file_extension="bin",
         )
-        assert all(build[3].endswith(".bin") for build in builds)
+        assert all(build[4].endswith(".bin") for build in builds)
 
     def test_skips_unrelated_anchors(self) -> None:
         """Other-page links + non-firmware anchors get filtered out."""
@@ -408,7 +412,7 @@ class TestListMicropythonBuilds:
         )
         builds = list_micropython_builds("RPI_PICO_W", url_opener=opener)
         assert len(builds) == 1
-        assert "RPI_PICO_W" in builds[0][3]
+        assert "RPI_PICO_W" in builds[0][4]
 
     def test_de_duplicates(self) -> None:
         """Listing pages sometimes repeat the same build under multiple sections."""
@@ -447,7 +451,7 @@ class TestListMicropythonBuilds:
         )
         opener = _make_opener(body)
         builds = list_micropython_builds("RPI_PICO_W", url_opener=opener)
-        assert builds[0][3] == (
+        assert builds[0][4] == (
             "https://cdn.example/firmware/RPI_PICO_W-20240301-v1.22.2.uf2"
         )
 
@@ -549,6 +553,65 @@ class TestLatestMicropythonUrl:
         )
         url = latest_micropython_url("OLDER_BOARD", url_opener=opener)
         assert "v1.20" in url
+
+    def test_new_shape_preview_filtered_by_default(self) -> None:
+        """Regression: new-shape ``v1.29.0-preview.69.gSHA`` must NOT win as stable.
+
+        Pre-fix, the parser captured ``version=v1.29.0`` and silently
+        dropped the ``-preview...`` suffix, so the build looked stable
+        (no ``unstable-`` prefix, version matched the bare-vN.M.P
+        regex) and outranked an older stable release like v1.28.0.
+        Post-fix the parser captures the suffix into a separate group;
+        stable filter rejects builds whose suffix is non-empty.
+        """
+        opener = _make_opener(
+            _mp_download_html(
+                board="RPI_PICO_W",
+                builds=[
+                    # Older stable
+                    ("20260406", "v1.28.0", False, "uf2"),
+                    # Newer-date "stable-looking" preview — must NOT win
+                    ("20260420", "v1.29.0-preview.69.g8a56be6660", False, "uf2"),
+                ],
+            ),
+        )
+        url = latest_micropython_url("RPI_PICO_W", url_opener=opener)
+        assert "v1.28.0" in url
+        assert "preview" not in url
+
+    def test_new_shape_preview_included_with_allow_prerelease(self) -> None:
+        """allow_prerelease=True picks the preview when newer."""
+        opener = _make_opener(
+            _mp_download_html(
+                board="RPI_PICO_W",
+                builds=[
+                    ("20260406", "v1.28.0", False, "uf2"),
+                    ("20260420", "v1.29.0-preview.69.g8a56be6660", False, "uf2"),
+                ],
+            ),
+        )
+        url = latest_micropython_url(
+            "RPI_PICO_W", url_opener=opener, allow_prerelease=True,
+        )
+        assert "preview" in url
+        assert "v1.29.0" in url
+
+    def test_stable_beats_new_shape_preview_at_same_version(self) -> None:
+        """At v1.29.0 + same date, stable beats new-shape preview."""
+        opener = _make_opener(
+            _mp_download_html(
+                board="RPI_PICO_W",
+                builds=[
+                    ("20260420", "v1.29.0-preview.69.g8a56be6660", False, "uf2"),
+                    ("20260420", "v1.29.0", False, "uf2"),
+                ],
+            ),
+        )
+        url = latest_micropython_url(
+            "RPI_PICO_W", url_opener=opener, allow_prerelease=True,
+        )
+        assert "preview" not in url
+        assert url.endswith("RPI_PICO_W-20260420-v1.29.0.uf2")
 
 
 # ---------------------------------------------------------------------------

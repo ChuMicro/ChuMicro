@@ -83,6 +83,13 @@ _STABLE_VERSION_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
 #: ship periodic refreshes pulled from ``micropython.org/download/``.
 #: Boards not in this table fall through to the prompt-and-cache
 #: path.
+#:
+#: Vendor-published Adafruit boards (Feather ESP32-S2 / S3 etc.)
+#: deliberately *aren't* in the map: Adafruit ships their own
+#: MicroPython builds outside ``micropython.org/download/``, so a
+#: scrape against the upstream URL 404s.  Set
+#: ``hardware.firmware_source`` on those entries to point at the
+#: vendor build.
 MICROPYTHON_BOARD_BY_MACHINE: dict[str, str] = {
     "Raspberry Pi Pico W with rp2040": "RPI_PICO_W",
     "Raspberry Pi Pico with rp2040": "RPI_PICO",
@@ -91,8 +98,6 @@ MICROPYTHON_BOARD_BY_MACHINE: dict[str, str] = {
     "ESP32-S2 module with ESP32S2": "ESP32_GENERIC_S2",
     "ESP32-S3 module with ESP32S3": "ESP32_GENERIC_S3",
     "ESP32 module with ESP32": "ESP32_GENERIC",
-    "Adafruit Feather ESP32-S2 with ESP32S2": "ADAFRUIT_FEATHER_ESP32S2",
-    "Adafruit Feather ESP32-S3 with ESP32S3": "ADAFRUIT_FEATHER_ESP32S3",
 }
 
 #: Concrete callable shape the network layer expects.  Same as
@@ -269,26 +274,32 @@ MICROPYTHON_FIRMWARE_BASE_URL = "https://micropython.org"
 #: Pattern that pulls the date + version out of an MP firmware
 #: filename.  MP's filename grammar::
 #:
-#:     <BOARD>-<DATE>-<VERSION>.<ext>
-#:     <BOARD>-<DATE>-unstable-<VERSION>-<COMMIT>.<ext>
+#:     <BOARD>-<DATE>-<VERSION>.<ext>                       # stable
+#:     <BOARD>-<DATE>-<VERSION>-<PRERELEASE>.<ext>          # newer preview shape
+#:     <BOARD>-<DATE>-unstable-<VERSION>-<COMMIT>.<ext>     # legacy unstable shape
 #:
 #: where:
-#:   - ``<BOARD>`` is upper-snake-case (``RPI_PICO_W``).
+#:   - ``<BOARD>`` is upper-snake-case (``RPI_PICO_W``); on ESP32
+#:     family ports it can carry feature suffixes like
+#:     ``ESP32_GENERIC_S3-SPIRAM_OCT``.
 #:   - ``<DATE>`` is YYYYMMDD (e.g. ``20240222``).
-#:   - ``<VERSION>`` is ``v1.22.2`` for stable; unstable builds
-#:     prepend ``unstable-`` and append a commit suffix
+#:   - ``<VERSION>`` is ``v1.22.2`` for stable;
+#:     ``v1.29.0-preview.69.g8a56be6660`` for a preview build (newer
+#:     shape — no leading ``unstable-``); legacy builds prepend
+#:     ``unstable-`` and append a commit suffix
 #:     (e.g. ``unstable-v1.23.0-preview-32-g1a2b3c4d5``).
 #:   - ``<ext>`` is one of ``uf2`` / ``bin`` / ``hex`` / ``elf``
 #:     / ``dfu``.
 #:
 #: Capture groups: ``date`` (8 digits), ``unstable`` ("unstable-" or
-#: empty), ``version`` (the ``v1.x.y`` portion), ``ext`` (filename
-#: extension).
+#: empty — legacy marker), ``version`` (the ``v1.x.y`` portion),
+#: ``prerelease`` (the post-version ``-preview.69.gSHA``-shaped
+#: suffix; empty for stable builds), ``ext`` (filename extension).
 _MICROPYTHON_FILENAME_PATTERN = re.compile(
     r"(?P<date>\d{8})-"
     r"(?P<unstable>unstable-)?"
     r"(?P<version>v\d+\.\d+(?:\.\d+)?)"
-    r"(?:-[A-Za-z0-9.-]+)?"
+    r"(?P<prerelease>-[A-Za-z0-9.-]+)?"
     r"\.(?P<ext>uf2|bin|hex|elf|dfu)",
 )
 
@@ -315,15 +326,18 @@ def list_micropython_builds(
     *,
     url_opener: UrlOpener | None = None,
     file_extension: str = "uf2",
-) -> list[tuple[str, str, str, str]]:
+) -> list[tuple[str, str, str, str, str]]:
     """Scrape ``micropython.org/download/<board>/`` for firmware builds.
 
-    Returns ``(date, version, unstable_marker, absolute_url)``
-    tuples — every published build whose filename matches
-    :data:`_MICROPYTHON_FILENAME_PATTERN` and ends in the requested
-    *file_extension*.  ``date`` is YYYYMMDD; ``version`` is the
-    raw ``v1.x.y`` (or ``v1.x``) portion; ``unstable_marker`` is
-    ``"unstable-"`` for unstable builds, empty for stable.
+    Returns ``(date, version, unstable_marker, prerelease_suffix,
+    absolute_url)`` tuples — every published build whose filename
+    matches :data:`_MICROPYTHON_FILENAME_PATTERN` and ends in the
+    requested *file_extension*.  ``date`` is YYYYMMDD; ``version`` is
+    the raw ``v1.x.y`` (or ``v1.x``) portion; ``unstable_marker`` is
+    ``"unstable-"`` for legacy unstable builds (empty for stable +
+    new-shape preview); ``prerelease_suffix`` is ``"-preview.69.gSHA"``
+    or similar for new-shape preview builds (empty for stable).
+    A build is "stable" iff both markers are empty.
 
     Order follows the order anchors appear in the page (newest
     first, by convention) — :func:`latest_micropython_url` does
@@ -393,9 +407,13 @@ def latest_micropython_url(
     if allow_prerelease:
         candidates = builds
     else:
+        # Stable iff: no `unstable-` legacy prefix (build[2]),
+        # no `-preview.X.gSHA` new-shape suffix (build[3]), and the
+        # version itself is the bare `vN.M(.P)?` shape.
         candidates = [
             build for build in builds
             if not build[2]
+            and not build[3]
             and _MP_STABLE_VERSION_PATTERN.match(build[1]) is not None
         ]
     if not candidates:
@@ -405,7 +423,7 @@ def latest_micropython_url(
             cause="no_stable_versions",
         )
     candidates.sort(key=_micropython_build_sort_key)
-    return candidates[-1][3]
+    return candidates[-1][4]
 
 
 # ---------------------------------------------------------------------------
@@ -580,8 +598,10 @@ def _parse_micropython_builds(
     *,
     board: str,
     file_extension: str,
-) -> list[tuple[str, str, str, str]]:
-    """Walk the HTML body, yield ``(date, version, unstable, url)`` tuples.
+) -> list[tuple[str, str, str, str, str]]:
+    """Walk the HTML body, yield 5-tuples for every parseable build.
+
+    Tuple shape: ``(date, version, unstable_marker, prerelease_suffix, url)``.
 
     Two-pass: pull every ``<a href=...>`` value with
     :data:`_HTML_HREF_PATTERN`, then filter to the ones whose
@@ -603,7 +623,7 @@ def _parse_micropython_builds(
         return []
 
     seen_urls: set[str] = set()
-    builds: list[tuple[str, str, str, str]] = []
+    builds: list[tuple[str, str, str, str, str]] = []
     expected_filename_prefix = "/" + board + "-"
     for href_match in _HTML_HREF_PATTERN.finditer(text):
         url = href_match.group("url")
@@ -628,13 +648,14 @@ def _parse_micropython_builds(
             filename_match.group("date"),
             filename_match.group("version"),
             filename_match.group("unstable") or "",
+            filename_match.group("prerelease") or "",
             absolute,
         ))
     return builds
 
 
 def _micropython_build_sort_key(
-    build: tuple[str, str, str, str],
+    build: tuple[str, str, str, str, str],
 ) -> tuple[int, int, int, int, int]:
     """Sort key: ``(version_major, version_minor, version_patch, date, stable_rank)``.
 
@@ -646,7 +667,7 @@ def _micropython_build_sort_key(
     malformed entry sorts below well-formed ones rather than
     raising.
     """
-    date_string, version_string, unstable_marker, _url = build
+    date_string, version_string, unstable_marker, prerelease_suffix, _url = build
     raw_version = version_string.lstrip("v")
     parts = raw_version.split(".")
     while len(parts) < 3:
@@ -655,5 +676,8 @@ def _micropython_build_sort_key(
     minor = _safe_int(parts[1])
     patch = _safe_int(parts[2])
     date_int = _safe_int(date_string)
-    stable_rank = 0 if unstable_marker else 1
+    # Stable iff neither the legacy `unstable-` prefix nor the new-
+    # shape `-preview.X.gSHA` suffix is present.  Stable wins over
+    # preview at the same version + date.
+    stable_rank = 0 if (unstable_marker or prerelease_suffix) else 1
     return (major, minor, patch, date_int, stable_rank)
