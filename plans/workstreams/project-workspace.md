@@ -1,6 +1,6 @@
 # Workstream: Project Workspace
 
-Status: `in-progress` — Phases 1, 2, 3a, 3b, 4a, 4b, 5, 6 shipped 2026-04-22 → 2026-04-26.  Remaining: Phase 4c (companion template repo, can be skipped while built-in default stands in), Phase 7 (first sensor thing template).  Phase 8 (OTA) deferred.
+Status: `in-progress` — Phases 1, 2, 3a, 3b, 4a, 4b, 5, 6 shipped 2026-04-22 → 2026-04-26.  Phase 4b's pip-install-scaffolder shape was retired in Decision 0038 (2026-04-26) and replaced by a clone-the-repo bootstrap with `init` / `update` folded into `chumicro-workspace` (renamed from `chumicro-workspace-runtime`); canonical starter at [`ChuMicro/ChuMicro-Workspace-Template`](https://github.com/ChuMicro/ChuMicro-Workspace-Template).  Phase 4c is dissolved into Decision 0038 — the template *is* the repo.  Remaining: Phase 7 (first sensor thing template).  Phase 8 (OTA) deferred.
 
 ## Purpose
 
@@ -10,8 +10,8 @@ Give users a template-repo project workspace that unifies CircuitPython, MicroPy
 
 ## Scope
 
-- A `chumicro-workspace-template` repo: checked-in `run.py`, `workspace.yml`, `devices.yml`, `things/_template/`, `packages/` (gitignored), `libs/`, `.venv/` (gitignored), baseline `AGENTS.md`, lint + coverage knobs, `.pre-commit-config.yaml`.
-- Six new chumicro libraries: `chumicro-deploy`, `chumicro-repl`, `chumicro-wifi`, `chumicro-sockets`, `chumicro-mqtt`, `chumicro-workspace-runtime`.  The already-planned `chumicro-kvstore` (formerly `chumicro-settings`, see Decision 0030) is an assumed-necessity but is owned by its own next-up entry, not this workstream.
+- A `ChuMicro-Workspace-Template` repo (separate, public-on-public-day): checked-in `run.py` (self-bootstrapping), `workspace.yml`, `devices.yml`, `things/_template/`, `packages/` (gitignored), `libs/`, `_templates/secrets.yml` (materialized to `secrets.yml` at setup per Decision 0038 §5), `.venv/` (gitignored), baseline `AGENTS.md`, `pyproject.toml` pinning `chumicro-workspace`.
+- Six new chumicro libraries (post-Decision-0038 consolidation): `chumicro-deploy`, `chumicro-repl`, `chumicro-wifi`, `chumicro-sockets`, `chumicro-mqtt`, `chumicro-workspace`.  The already-planned `chumicro-kvstore` (formerly `chumicro-settings`, see Decision 0030) is an assumed-necessity but is owned by its own next-up entry, not this workstream.
 - Onboarding UX: `run.py add-device` handles responsive boards, boards in UF2 bootloader, and blank chips detectable by esptool.
 - Firmware install + upgrade: `run.py install-firmware`, `run.py upgrade-firmware`, `--prerelease`, `--approve-board-storage-reset`, programmatic bootloader-entry where supported.
 - Local library dogfooding: `library_sources:` maps a package name or mono-repo root to a local clone; reuses the Decision 0026 editable-install pattern.
@@ -37,7 +37,7 @@ Remaining prerequisites for downstream phases that already exist:
 
 Seven libraries (six new + `chumicro-kvstore`) land in a deliberate order so each phase has working dependencies.
 
-Per Decision 0032, each package lives in `libraries/` (installer puts code on a microcontroller) or `workbench/` (installer puts code on a laptop).  `chumicro-workspace-runtime` lives in `workbench/`: the host CLI is what third parties `pip install`, and its on-device boot module ships as a data file that the CLI deploys onto the board — payload, not an installable package.
+Per Decision 0032, each package lives in `libraries/` (installer puts code on a microcontroller) or `workbench/` (installer puts code on a laptop).  `chumicro-workspace` lives in `workbench/`: the host CLI is what third parties `pip install`, and its on-device boot module ships as a data file that the CLI deploys onto the board — payload, not an installable package.
 
 | Phase | Package | Folder | Role | Depends on |
 |-------|---------|--------|------|------------|
@@ -45,12 +45,11 @@ Per Decision 0032, each package lives in `libraries/` (installer puts code on a 
 | 2 | `chumicro-repl` | `workbench/` | CP/MP-aware serial TUI. UTF-8 + emoji safe. Traceback highlighting. `tail()` API for deploy. | pyserial |
 | 3 | `chumicro-kvstore` | `libraries/` | Already planned, lands here in this sequencing. Tiny mutable KV for persisted runtime state. | msgpack |
 | 3 | `chumicro-wifi` | `libraries/` | Non-blocking connection manager. CP + MP + CPython-stub. | runner, kvstore |
-| 4 | `chumicro-workspace-runtime` | `workbench/` | Host CLI that manages things/devices/deploys. Ships the on-device `workspace_runtime` boot module as a data payload that the CLI writes onto the board at deploy time. | deploy, repl, kvstore, wifi |
-| 4 | `chumicro-workspace-template` | `workbench/` | Scaffolder + updater.  Applies the template files into a new workspace, and later updates an existing workspace when the template evolves (Copier-style).  Imports `devices.yml` schema from `chumicro_deploy.config.default` — single source of truth for that shape. | deploy, workspace-runtime |
-| 4 | `chumicro-workspace-template` repo | *separate repo* | The canonical template source: checked-in `run.py`, `workspace.yml`, `things/_template/`, scaffolding files that the `chumicro-workspace-template` package copies / updates from.  Versioned and forkable independently — third parties can host their own template repos that the same package applies. | — (data, not code) |
+| 4 | `chumicro-workspace` | `workbench/` | One-stop host CLI: `init` (clone a template repo), `setup` (venv + materialize `_templates/`), `update` (re-flow tool-owned files from upstream), `add-device`, `deploy`, `switch`, `repl`, etc.  Ships the on-device `workspace_runtime` boot module as a data payload that the CLI writes onto the board at deploy time.  Decision 0038 consolidated the previously-separate `chumicro-workspace-template` package's `init` / `update` / three-zone manifest into this one. | deploy, repl, kvstore, wifi |
+| 4 | `ChuMicro-Workspace-Template` repo | *separate repo* | The canonical template source: checked-in `run.py`, `workspace.yml`, `things/_template/`, `_templates/secrets.yml`.  Versioned and forkable independently — third parties can host their own template repos that the same `chumicro-workspace init --from <url>` applies. | — (data, not code) |
 | 5 | `chumicro-sockets` | `libraries/` | Thin TCP client + TLS abstraction over CP `socketpool` / MP `socket` / CPython `socket`. Prereq for MQTT and future requests lib. See Decision 0031. | none (pure platform shim) |
 | 6 | `chumicro-mqtt` | `libraries/` | Refactor pythonProject3's 1043-line hand-rolled client into a runner-shaped service on top of chumicro-sockets. QoS 0 + 1; internal shape allows QoS 2 later. | runner, wifi, sockets |
-| 7 | `chumicro-workspace-template` first-sensor thing | *template repo* | End-to-end proving ground: a temperature sensor that connects via wifi, publishes via mqtt, persists a counter via kvstore. | all prior |
+| 7 | `ChuMicro-Workspace-Template` first-sensor thing | *template repo* | End-to-end proving ground: a temperature sensor that connects via wifi, publishes via mqtt, persists a counter via kvstore. | all prior |
 
 Rationale: Phase 1 unblocks everything.  Phase 2 is used by Phase 4's deploy-then-tail UX.  Phase 3 is two libraries in parallel (independent).  Phase 4 is the integration phase — the CLI plus the template.  Phase 5 (`chumicro-sockets`) is a small but strict prereq for MQTT that also sets up the future HTTP client.  Phase 6 (`chumicro-mqtt`) refactors the pythonProject3 client against the new sockets base.  Phase 7 lands the first non-trivial thing-template and proves the whole stack end-to-end.
 
@@ -160,7 +159,7 @@ The CLI (`python -m chumicro_deploy deploy --device <id> --config devices.yml ..
 
 #### What is NOT in `chumicro-deploy`
 
-Stays out of scope (belongs to `chumicro-workspace-runtime`):
+Stays out of scope (belongs to `chumicro-workspace`):
 
 - `workspace.yml`, `things/`, `library_sources:`, `active.py`, `packages/` vs `libs/` distinction.
 - Import-graph analysis specialized for chumicro library conventions.
@@ -191,7 +190,7 @@ Folder layout was revised during implementation — packages ship from `workbenc
 #### Acceptance
 
 - [x] chumicro's `test-libraries-functional` orchestration uses `chumicro-deploy` via its Python API with no behavior change (`scripts/device_testing.py` + `scripts/pytest_device.py`).
-- [x] The `workbench/deploy/tests/fixtures/third_party_template/` fixture deploys successfully through the fake transport without importing any `chumicro_workspace_runtime` symbol and without touching any chumicro-specific file convention.
+- [x] The `workbench/deploy/tests/fixtures/third_party_template/` fixture deploys successfully through the fake transport without importing any `chumicro_workspace` symbol and without touching any chumicro-specific file convention.
 - [x] Every CLI action has a documented programmatic equivalent (see `workbench/deploy/docs/api.md`).
 - [x] Zero references to `workspace.yml`, `things/`, or `library_sources:` in the deploy package source.
 
@@ -201,7 +200,7 @@ This phase delivers only what `run.py deploy` and basic interactive use need.  R
 
 **Closing summary:** Shipped `workbench/repl/` v0.0.0 across eight commits over two days (2026-04-24 minimum-viable core → 2026-04-25 close-out).  Beyond the minimum spec, the package also ships an auto-reconnect loop in `tail()` / `run_loop()` for transient device drops, a recovery / hand-holding layer (`InteractiveReplSession`, `ReplFailureKind`, `RecoveryPlan`, `classify_session_failure`, `recovery_plan_for`) mirroring the `chumicro-deploy` pattern, a typed `ReplSessionDisconnected(ReplSessionError).cause` for mid-session drops, and the matching `examples/demo_repl_robustness.py` interactive walkthrough.  Repl-side learnings (BaseException-scriptable `FakeSerialPort`, typed mid-deploy disconnect subclasses) ported back to `chumicro-deploy`.  175 host-side tests at 94 % coverage; 9 hardware-gated functional tests passing on Pi Pico W (CP) + Pi Pico W (MP); preflight green.  See [`plans/history.md` 2026-04-25](../history.md) for the full session log.
 
-**Open Phase-4-prerequisite follow-up:** `chumicro-deploy`'s `CircuitpythonTransport` carries its own raw-REPL framing parallel to `chumicro_repl.session.ReplSession`.  Consolidation deferred until `chumicro-workspace-runtime` lands and the session-vs-pipeline seam is concrete.  Tracked in this file's "Open follow-up" subsection below.
+**Open Phase-4-prerequisite follow-up:** `chumicro-deploy`'s `CircuitpythonTransport` carries its own raw-REPL framing parallel to `chumicro_repl.session.ReplSession`.  Consolidation deferred until `chumicro-workspace` lands and the session-vs-pipeline seam is concrete.  Tracked in this file's "Open follow-up" subsection below.
 
 - [x] New workbench package: `workbench/repl/` (Decision 0032 places host-only tools under `workbench/`; the earlier `libraries/repl/` line was an early sketch and is superseded by the library sequencing table at the top of this workstream).
 - [x] Core: pyserial wrapper with UTF-8 safe framing (`Utf8StreamDecoder` in `framing.py`), key bindings matching `mpremote` (Ctrl-C/D/E forwarded; Ctrl-X is local exit) in `tui.py`.
@@ -304,7 +303,7 @@ Docs do not settle these; run on plugged-in boards:
 
 **Library shipped 2026-04-25.**  Decision 0034 nails down the API + per-backend contracts.  `libraries/kvstore/` ships `KVStore` with mapping-shaped public API + three lifecycle methods (`commit`, `commit_if_changed`, `reload`), four exceptions (`KVStoreError` / `KVStoreFull` / `KVStoreCorrupt` / `KVStoreReadOnly`), four runtime-aware backends (memory, CP NVM with `MAGIC | LEN | CRC32 | MSGPACK` framing, MP NVS single-payload-blob in `chu_kv` namespace, MP LittleFS single `/_chu_kv.msgpack` with tmp+sync+rename atomicity), and `chumicro_kvstore.testing.FakeKVStore` for downstream library tests.  92 host tests at 99 % coverage; 27 functional tests pass on each of the four plugged-in boards (Lolin S2 CP/MP, Pi Pico W CP/MP).
 
-The config-pipeline bullets below remain owned by `chumicro-workspace-runtime` (Phase 4a) and don't land a library, so they're tracked here as scope but not as Phase 3b deliverables.
+The config-pipeline bullets below remain owned by `chumicro-workspace` (Phase 4a) and don't land a library, so they're tracked here as scope but not as Phase 3b deliverables.
 
 
 
@@ -312,7 +311,7 @@ Decision 0030 splits the old `chumicro-settings` scope into two unrelated concer
 
 The previously-sketched `chumicro-wifi` credential consumption reads from the config pipeline, not from `chumicro-kvstore`.  Credentials never land in any KV backend.
 
-#### Config pipeline tasks (owned by `chumicro-workspace-runtime`, not a new library)
+#### Config pipeline tasks (owned by `chumicro-workspace`, not a new library)
 
 - [ ] Deployer merges `workspace.yml` environment defaults + `secrets.yml` entries + `things/<name>/config.toml` into a single dict.
 - [ ] Deployer writes merged dict as `/runtime_config.msgpack` onto the device at deploy time.
@@ -368,7 +367,7 @@ Out of scope (left as-is for this repo):
 
 - `support/test_harness/` stays put.  In-repo library tests keep importing `from chumicro_test_harness import raises` via the editable-install path; `run_cross_runtime.py` keeps driving the unix-port unit tests.  The vendoring is purely additive — it doesn't replace the in-repo path.
 
-### Phase 4a: `chumicro-workspace-runtime` ✅
+### Phase 4a: `chumicro-workspace` ✅
 
 - [x] New workbench package: `workbench/workspace-runtime/`.
 - [x] Host side: command dispatch (`setup`, `new`, `add-device`, `probe`, `discover`, `devices`, `things`, `deploy`, `switch`, `sim`, `test`, `repl`, `env`, `use`, `rename`, `install-firmware`, `upgrade-firmware`, `sync`, `upgrade`).
@@ -381,28 +380,20 @@ Out of scope (left as-is for this repo):
 - [x] Live-board functional tests — `workbench/workspace-runtime/functional_tests/test_boot_shim_hardware.py` exercises the full `code.py` → `workspace_runtime.boot()` → `things.<name>.app.run()` chain on Pi Pico W CP/MP (4/6 pass on RAM mode; switch tests skip on RAM and need flash mode to see persisted prior payloads).
 - [x] Docs / README pass — README + `docs/guide.md` rewritten to match the feature-complete API (CLI table, boot-shim layout, multi-thing flows, switch, programmatic API, config merge, firmware, devices.yml round-trip).
 
-### Phase 4b: `chumicro-workspace-template` package ✅ (minimum-viable)
+### Phase 4b: `chumicro-workspace-template` package ⚠️ superseded by Decision 0038
 
-- [x] New workbench package: `workbench/workspace-template/`.
-- [x] Scaffold command — `chumicro-workspace-template init <dir> [--from <local-path>] [--force]`.  Applies the template files (default: the built-in template shipped under `_payloads/default_template/`; custom templates supported via `--from <path>`) into an empty or existing directory.  Skips conflicts and reports them so re-running is idempotent unless `--force` is passed.
-- [x] Update command — `chumicro-workspace-template update [<dir>] [--from <local-path>]`.  Re-applies the **tool-owned** slice (`run.py`, `AGENTS.md`, `pyproject.toml`, `things/_template/`) over an existing workspace; **user-owned** (`workspace.yml`, `devices.yml`, `secrets.yml`, `libs/`, `packages/`, `things/<real>/`) and **init-only** (`.gitignore`, `secrets.yml.example`, `README.md`) files are skipped.  Three-zone model from Decision 0029 §9 generalized across the whole workspace tree.
-- [x] Built-in default template — ships inside the package's `_payloads/default_template/` (workspace.yml + devices.yml three-zone skeleton + secrets.yml.example + run.py shim + pyproject.toml pinning workspace-runtime + AGENTS.md + things/_template/{config.toml,app.py} + libs/.gitkeep + packages/.gitignore).  Phase 4c (companion repo) is deferred; the built-in template stands in until that lands.
-- [x] Tests — 49 host tests at the apply-and-assert level (manifest classification, dot-prefix renames, init-creates-target, init-skips-existing-without-force, init-force-overwrites, init-from-custom-source, update-refreshes-tool-owned-only, update-skips-user-owned, update-unchanged-when-in-sync, init→update full-cycle idempotent) + CLI smoke tests.
-- [x] End-to-end smoke verified: `chumicro-workspace-template init`, then `python run.py new my-thing`, then `python run.py things` lists the new thing, then `chumicro-workspace-template update` reports user files skipped + tool files unchanged.
-- [ ] Schema consumption from `chumicro_deploy.config.default` — deferred.  The default template ships a hand-written devices.yml skeleton; promoting that to programmatic generation against `chumicro_deploy.config.default.load_devices_yml`'s schema is a follow-on once the schema is exposed as a separate constant.
-- [ ] Git URL `--from <git-url>` — deferred.  Only local paths supported in the minimum-viable.
+> **Superseded 2026-04-26.**  The pip-installable scaffolder shape was retired in Decision 0038 ("Workspace bootstrap via clone, not pip-installed scaffolder").  `init` / `update` / the three-zone manifest moved into `chumicro-workspace`; the `_payloads/default_template/` tree migrated to a separate Git repo at [`ChuMicro/ChuMicro-Workspace-Template`](https://github.com/ChuMicro/ChuMicro-Workspace-Template); `workbench/workspace-template/` was deleted from the mono-repo.  The historical record below is preserved as evidence of what shipped before the pivot.
 
-Acceptance: `pip install chumicro-workspace-template && chumicro-workspace-template init my-house` produces a working workspace that `python run.py setup` + `python run.py deploy` can drive end-to-end.  Later, `chumicro-workspace-template update my-house` pulls template evolutions without clobbering user code.
+- [x] (HISTORICAL) New workbench package: `workbench/workspace-template/`.  Now deleted.
+- [x] (HISTORICAL) `init`/`update` commands shipped against a `_payloads/default_template/` tree.  Logic moved into `chumicro-workspace` per Decision 0038 §3.
+- [x] (HISTORICAL) Three-zone model from Decision 0029 §9 generalized across the workspace tree.  Carried over verbatim to `chumicro_workspace.template_zones`, plus `_templates/` added as a fourth tool-owned prefix per Decision 0038 §5.
+- [x] (HISTORICAL) End-to-end smoke verified: pip-install → init → setup → new thing → update flow.  Replaced by `git clone` → `python3 run.py setup` → `chumicro-workspace new` → `chumicro-workspace update` flow under Decision 0038.
 
-### Phase 4c: `chumicro-workspace-template` repo
+### Phase 4c: dissolved into Decision 0038
 
-- [ ] Initialize companion repo.
-- [ ] Ship: `run.py` shim, `workspace.yml`, `devices.yml` skeleton with three-zone comments, `secrets.yml.example`, `AGENTS.md`, `pyproject.toml` with pinned workspace-runtime + quality knobs, `.pre-commit-config.yaml`, `.gitignore`, `things/_template/`, `libs/` with `.gitkeep`, `packages/.gitignore`.
-- [ ] One worked example thing under `things/example-hello/` that runs on all three runtimes via sim + on a real board.
-- [ ] Template-side CI: lint + CPython tests + sim run + (optional, user-configured) device test.
-- [ ] Release discipline — each repo tag corresponds to a template version that the `chumicro-workspace-template` package can pin to; breaking changes to the template shape bump a major tag so `update` can signal the user before applying.
+> **Dissolved 2026-04-26.**  Phase 4c was originally "create a separate companion repo for the template files."  Decision 0038 makes the canonical template repo the *primary* bootstrap path (not an optional sibling to a built-in default), so there is no separate phase: the repo IS the bootstrap, the staging happened alongside the package consolidation, and there's no remaining "Phase 4c" deliverable to track.
 
-Acceptance: a user runs `chumicro-workspace-template init`, the repo's checked-in files land in their workspace, `python run.py setup` + `add-device` + `deploy` work without additional setup.
+The new repo is `ChuMicro/ChuMicro-Workspace-Template`, private, flagged as a GitHub template repo.  Initial content carved out from the deleted `_payloads/default_template/` tree with the dotfile rename pre-applied, a self-bootstrapping `run.py`, an `_templates/secrets.yml` source (no more `secrets.yml.example`), and a `pyproject.toml` pinning `chumicro-workspace`.
 
 ### Phase 5: `chumicro-sockets` ✅
 
@@ -537,7 +528,7 @@ Port and redesign the ~1043-line MQTT client at `/Users/chuxor/circuitpython/pyt
 
 End-to-end proving ground for the full stack (deploy + repl + wifi + kvstore + sockets + mqtt + workspace-runtime).
 
-- [ ] Add `things/example-sensor/` to `chumicro-workspace-template`: reads a temperature (fake if no sensor wired), publishes via mqtt on a heartbeat, persists a boot-counter via kvstore.
+- [ ] Add `things/example-sensor/` to the `ChuMicro-Workspace-Template` repo: reads a temperature (fake if no sensor wired), publishes via mqtt on a heartbeat, persists a boot-counter via kvstore.
 - [ ] `config.toml` for broker + topic + heartbeat period; merged with workspace env/secrets at deploy time per Decision 0030.
 - [ ] Template-side functional test: deploy → connect → publish → verify broker received N messages → tail REPL output → teardown.
 - [ ] Example README walking a new user from clone to first heartbeat on a plugged-in board.

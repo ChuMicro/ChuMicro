@@ -1,0 +1,105 @@
+"""Three-zone classification for workspace files.
+
+Generalizes Decision 0029 §9's `devices.yml` ownership model to the
+whole workspace tree.  Every file falls into one of three zones:
+
+* **Tool-owned** — `run.py`, `AGENTS.md`, `pyproject.toml`,
+  `things/_template/`, `_templates/` (template-source files used to
+  materialize user-edited config like `secrets.yml` per Decision
+  0038 §5).  `init` writes them; `update` rewrites them so newer
+  template releases flow in.
+
+* **User-owned** — `things/<each-real-thing>/`, `secrets.yml`,
+  `devices.yml`, `libs/`, `packages/`, `workspace.yml`.  `init`
+  writes the starter version (only if absent); `update` never
+  touches them.
+
+* **Init-only** — `.gitignore`, `README.md`.  `init` writes if
+  absent; `update` skips so user edits survive.
+
+The classification is computed against the *target* path (the path
+relative to the workspace root after the dotfile rename, when one
+applies — the new template repo carries `.gitignore` directly so the
+rename is mostly historical), not the template-payload path.
+"""
+
+from __future__ import annotations
+
+from enum import Enum
+from pathlib import PurePosixPath
+
+
+class Zone(Enum):
+    """Three ownership zones; see module docstring."""
+
+    TOOL_OWNED = "tool-owned"
+    USER_OWNED = "user-owned"
+    INIT_ONLY = "init-only"
+
+
+#: Files / paths that are tool-owned.  ``update`` rewrites them.
+TOOL_OWNED_PATHS: frozenset[str] = frozenset({
+    "run.py",
+    "AGENTS.md",
+    "pyproject.toml",
+})
+
+#: Directory prefixes whose contents are tool-owned.  Anything below
+#: a listed prefix is rewritten on ``update``.
+TOOL_OWNED_PREFIXES: tuple[str, ...] = (
+    "things/_template/",
+    "_templates/",
+)
+
+#: Files / paths that are user-owned.  ``update`` never touches them.
+USER_OWNED_PATHS: frozenset[str] = frozenset({
+    "workspace.yml",
+    "devices.yml",
+    "secrets.yml",
+})
+
+#: Directory prefixes whose contents are user-owned.  Anything below
+#: is left alone on ``update``.
+USER_OWNED_PREFIXES: tuple[str, ...] = (
+    "libs/",
+    "packages/",
+)
+
+#: Files / paths that are init-only.  ``init`` writes if absent;
+#: ``update`` skips so user edits survive.
+INIT_ONLY_PATHS: frozenset[str] = frozenset({
+    ".gitignore",
+    "README.md",
+})
+
+
+def classify(target_path: str) -> Zone:
+    """Return the zone *target_path* falls into.
+
+    *target_path* is the path relative to the workspace root.
+    Forward slashes only.
+
+    Lookup order: exact-match user-owned (so the starter
+    ``workspace.yml`` is never clobbered by ``update``), user-owned
+    prefixes (``libs/`` / ``packages/``), exact-match init-only,
+    exact-match tool-owned, tool-owned prefixes (``things/_template/``
+    / ``_templates/``).  Anything that falls through — typically
+    ``things/<a-real-thing>/...`` files the user created post-init —
+    counts as user-owned.
+    """
+    posix = PurePosixPath(target_path).as_posix()
+    if posix in USER_OWNED_PATHS:
+        return Zone.USER_OWNED
+    if any(posix.startswith(prefix) for prefix in USER_OWNED_PREFIXES):
+        return Zone.USER_OWNED
+    if posix in INIT_ONLY_PATHS:
+        return Zone.INIT_ONLY
+    if posix in TOOL_OWNED_PATHS:
+        return Zone.TOOL_OWNED
+    if any(posix.startswith(prefix) for prefix in TOOL_OWNED_PREFIXES):
+        return Zone.TOOL_OWNED
+    # Default for unrecognized paths is user-owned — `things/<my-thing>/...`
+    # post-init falls through here, and any custom files the user
+    # adds at the workspace root.  We err on the side of "don't
+    # touch" for `update`.
+    return Zone.USER_OWNED

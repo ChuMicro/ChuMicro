@@ -8,7 +8,7 @@ Related: Decision 0030 (config vs persisted state), Decision 0010 (constructor i
 
 Decision 0030 split the old `chumicro-settings` scope into read-only app
 **config** (deploy-time TOML→msgpack pipeline, owned by
-`chumicro-workspace-runtime` in Phase 4a) and mutable **persisted
+`chumicro-workspace` in Phase 4a) and mutable **persisted
 state** (a new library `chumicro-kvstore`, Phase 3b).  That ADR
 sketched the API and the per-runtime backend table but explicitly
 deferred the detail: *"Detailed API, backend contracts, and corruption

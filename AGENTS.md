@@ -109,8 +109,7 @@ Libraries must be compatible across all three runtimes. If a third-party library
 |---------|-------------|
 | [deploy](workbench/deploy/) | Push code to a board, probe identity, flash firmware (UF2 + esptool); recovery layer that classifies failures and walks the user through fixes |
 | [repl](workbench/repl/) | Serial REPL with traceback highlighting, an `mpremote`-compatible TUI, `tail()` follow-mode for deploy orchestration, programmatic `ReplSession` |
-| [workspace-runtime](workbench/workspace-runtime/) | Host CLI + Python API for ChuMicro project workspaces — devices.yml three-zone round-trip, multi-thing deploys, `switch`, firmware URL derivation, boot-shim layout |
-| [workspace-template](workbench/workspace-template/) | Copier-style scaffolder + updater for new ChuMicro project workspaces; three-zone update model (tool-owned / user-owned / init-only) |
+| [workspace](workbench/workspace/) | One-stop host CLI + Python API for ChuMicro project workspaces — `init` clones a starter, `setup` creates the venv + materializes `_templates/`, plus `add-device`, `deploy`, `switch`, `repl`, `install-firmware`, `update` (re-flow tool-owned files from upstream).  Canonical starter lives at the [ChuMicro-Workspace-Template](https://github.com/ChuMicro/ChuMicro-Workspace-Template) repo (Decision 0038) |
 
 ## Tech stack
 
@@ -131,7 +130,7 @@ This is a mono-workspace.
 
 Conventions:
 
-- **The installer's destination decides the folder.** Files a workbench package ships as *payload* — data a host CLI writes onto a device at deploy time — do not shift the folder. Payload is not an installable package. See Decision 0032 §Rules 1–2 for the worked example (`chumicro-workspace-runtime`).
+- **The installer's destination decides the folder.** Files a workbench package ships as *payload* — data a host CLI writes onto a device at deploy time — do not shift the folder. Payload is not an installable package. See Decision 0032 §Rules 1–2 for the worked example (`chumicro-workspace`).
 - Workbench packages follow the **same release lifecycle** as libraries: `VERSION` (SemVer), `check-version` / `check-api` gates, experimental (`chumicro-deploy-experimental`) → stable (`chumicro-deploy`) promotion on PyPI. The only delta vs libraries is the absence of bundle staging and `.mpy` compilation — CP/MP-consumer concerns that don't apply to host-only packages.
 - Publishable libraries use `libraries/<name>/` with `pyproject.toml` and `VERSION`. Use `[tool.chumicro].platforms` to declare runtime support (not to mark file-level host/device ownership).
 - Publishable host-only tools use `workbench/<name>/` with `pyproject.toml` and `VERSION`. Same slots as libraries (`src/`, `tests/`, `docs/`, optional `functional_tests/` for hardware-touching host-side tests, optional `examples/` for runnable demos that aren't pytest-shaped) **minus** cross-runtime test coverage and the bundle / `.mpy` path — workbench is CPython-only. CPython-only third-party deps (`pyserial`, `pyyaml`, `rich`) are fine — `libraries/` avoids them only because a CPython-only dep can't be imported on a device, and workbench doesn't target devices.

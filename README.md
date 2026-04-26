@@ -74,8 +74,7 @@ Workbench packages live alongside the libraries — they run on your laptop and 
 |---|---|
 | **[deploy](workbench/deploy/)** | Push code onto a CircuitPython or MicroPython board, probe its identity, and flash firmware (UF2 or esptool). Programmatic API + `chumicro-deploy` CLI; recovery layer that classifies failures and walks you through fixes. |
 | **[repl](workbench/repl/)** | Serial REPL with traceback highlighting, an `mpremote`-compatible TUI, a `tail()` follow-mode for deploy orchestration, and a programmatic `ReplSession` for headless test fixtures. `chumicro-repl` CLI. |
-| **[workspace-runtime](workbench/workspace-runtime/)** | Host CLI + Python API for ChuMicro project workspaces — `devices.yml` three-zone round-trip, multi-thing deploys, `switch`, firmware URL derivation, boot-shim layout. `chumicro-workspace-runtime` CLI. |
-| **[workspace-template](workbench/workspace-template/)** | Copier-style scaffolder + updater for new ChuMicro project workspaces; three-zone update model preserves user code while refreshing tool-owned files. `chumicro-workspace-template init / update`. |
+| **[workspace](workbench/workspace/)** | One-stop host CLI + Python API for ChuMicro project workspaces — `init` (clone a starter), `setup` (bootstrap a venv), `add-device`, `deploy`, `switch`, `repl`, `install-firmware`, `update` (re-flow tool-owned template files), and the deploy-time config-merge pipeline.  Canonical starter lives at [`ChuMicro-Workspace-Template`](https://github.com/ChuMicro/ChuMicro-Workspace-Template). |
 
 </details>
 

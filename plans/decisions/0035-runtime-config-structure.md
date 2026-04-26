@@ -306,7 +306,7 @@ for internal keys — won't collide with user sections).
 - Future libraries (`chumicro-mqtt` Phase 6, sensor drivers) follow
   the same pattern — section name = library basename, `from_dict`
   pairs with the typed config dataclass.
-- `chumicro-workspace-runtime` (Phase 4a) implements the deep-merge
+- `chumicro-workspace` (Phase 4a) implements the deep-merge
   + secrets resolution + msgpack write.  This ADR fixes the input
   shape (TOML / YAML sections) and the output shape (section-keyed
   dict on device).

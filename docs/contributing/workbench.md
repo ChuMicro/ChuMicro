@@ -46,10 +46,9 @@ The shipped tools today:
 
 - **`chumicro-deploy`** ([`workbench/deploy/`](../../workbench/deploy/)) — push code onto a board, probe a connected device, flash firmware (UF2 or esptool), classify failures and walk the user through fixes.
 - **`chumicro-repl`** ([`workbench/repl/`](../../workbench/repl/)) — interactive serial REPL with traceback highlighting, an `mpremote`-compatible TUI, a `tail()` follow-mode for deploy orchestration, and a programmatic `ReplSession` for headless test fixtures.
-- **`chumicro-workspace-runtime`** ([`workbench/workspace-runtime/`](../../workbench/workspace-runtime/)) — host CLI + Python API for ChuMicro project workspaces.  Owns `devices.yml` three-zone round-trip editing, multi-thing-on-one-device deploys (`--boot-shim`), `switch <name>` (re-points `/active.py` without re-shipping payloads), firmware URL derivation, import-graph deploys, and the deploy-time config-merge pipeline that produces `/runtime_config.msgpack` (Decision 0035).
-- **`chumicro-workspace-template`** ([`workbench/workspace-template/`](../../workbench/workspace-template/)) — Copier-style scaffolder + updater.  `init` lays down a fresh workspace from the built-in default template (or `--from <path>`); `update` refreshes the *tool-owned* slice (run.py shim, AGENTS.md, things/_template/, pyproject.toml) without touching the user-owned slice (your things/, devices.yml, secrets.yml, libs/).
+- **`chumicro-workspace`** ([`workbench/workspace/`](../../workbench/workspace/)) — one-stop host CLI + Python API for ChuMicro project workspaces.  `init` clones a starter (defaults to [`ChuMicro-Workspace-Template`](https://github.com/ChuMicro/ChuMicro-Workspace-Template), Decision 0038), `setup` creates the venv and materializes any `_templates/` files (Decision 0038 §5), and the rest of the surface owns `devices.yml` three-zone round-trip editing, multi-thing-on-one-device deploys (`--boot-shim`), `switch <name>` (re-points `/active.py` without re-shipping payloads), firmware URL derivation, import-graph deploys, and the deploy-time config-merge pipeline that produces `/runtime_config.msgpack` (Decision 0035).  `update` re-flows tool-owned files from the canonical upstream so template evolutions reach existing workspaces without clobbering user code.
 
-All four consume the same `devices.yml` schema (owned by `chumicro_deploy.config.default.load_devices_yml`) so a single workspace file points every tool at the same boards.
+All three consume the same `devices.yml` schema (owned by `chumicro_deploy.config.default.load_devices_yml`) so a single workspace file points every tool at the same boards.
 
 ## If you're adding a workbench tool
 
@@ -87,11 +86,11 @@ Workbench packages ship the same `mkdocs.yml` + `docs/` layout as device librari
 
 Ship the device shim as a **data file** inside your workbench package and have the host CLI deploy it.  The shim is payload, not an installable package — nobody `pip install`s or `circup install`s it on its own.  So the workbench folder is still the right home.
 
-Example: `chumicro-workspace-runtime` ships a host CLI plus a small on-device `workspace_runtime` boot module.  The boot module lives inside the workbench package as a data file; `workspace-runtime deploy` writes it onto the board at deploy time.  One PyPI package, one VERSION, no bundle entry — and no file-level "platforms" marker trying to do work it wasn't designed for.
+Example: `chumicro-workspace` ships a host CLI plus a small on-device `workspace_runtime` boot module.  The boot module lives inside the workbench package as a data file; `chumicro-workspace deploy` writes it onto the board at deploy time.  One PyPI package, one VERSION, no bundle entry — and no file-level "platforms" marker trying to do work it wasn't designed for.
 
 Only split into a separate `libraries/` entry if a real third-party demand appears for installing the on-device piece independently of the host CLI.  That demand is speculative for every case we know of today.
 
-See the workspace-runtime sequencing in [`plans/workstreams/project-workspace.md`](../../plans/workstreams/project-workspace.md) for the worked example.
+See the workspace package sequencing in [`plans/workstreams/project-workspace.md`](../../plans/workstreams/project-workspace.md) for the worked example.
 
 ## See also
 

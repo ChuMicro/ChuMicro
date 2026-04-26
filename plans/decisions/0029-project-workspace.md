@@ -14,7 +14,7 @@ This decision records the non-obvious tradeoffs that shape the workstream.  The 
 
 ### 1. Template repo with a local `run.py`, not an installed global CLI
 
-The workspace is a git repo (or zip) containing `run.py`, configuration files, and an empty `things/` directory.  `run.py setup` prepares a local `.venv` with pinned tooling; every workflow command is `python run.py <cmd>`.  `run.py` is a thin shim over a published library (`chumicro-workspace-runtime`) so updates reach existing workspaces via `run.py upgrade`.
+The workspace is a git repo (or zip) containing `run.py`, configuration files, and an empty `things/` directory.  `run.py setup` prepares a local `.venv` with pinned tooling; every workflow command is `python run.py <cmd>`.  `run.py` is a thin shim over a published library (`chumicro-workspace`) so updates reach existing workspaces via `run.py upgrade`.
 
 A `python run.py new <thing>` scaffolding helper is allowed — it is a `cp -r things/_template` convenience, not a code generator.
 
@@ -52,7 +52,7 @@ Boot reads a tiny `active.py` written at deploy time and imports the matching `t
 - **MicroPython:** scrape `micropython.org/download/` monthly, cache a small machine-string → BOARD map.  Prompt the user for a URL on cache miss and cache it in `devices.yml`.
 - **Vendor forks / custom:** `hardware.firmware_source` accepts any URL or local path.
 
-A small per-chip-family reflash table (`esp32* → esptool`, `rp2040/rp2350/nrf52840/samd51 → uf2`, `stm32 → dfu`) ships with `chumicro-workspace-runtime`.
+A small per-chip-family reflash table (`esp32* → esptool`, `rp2040/rp2350/nrf52840/samd51 → uf2`, `stm32 → dfu`) ships with `chumicro-workspace`.
 
 **Rejected:** a per-board firmware catalog hosted by the project.  Unbounded maintenance burden.
 
@@ -74,13 +74,13 @@ The deploy package must be usable three ways: by the chumicro mono repo's existi
 
 Consequences for the API shape:
 
-- Nothing from `workspace.yml`, `things/`, `library_sources:`, `packages/`, or `libs/` leaks into the deploy package.  Those concepts live in `chumicro-workspace-runtime`.
+- Nothing from `workspace.yml`, `things/`, `library_sources:`, `packages/`, or `libs/` leaks into the deploy package.  Those concepts live in `chumicro-workspace`.
 - Transports, file sources, and config loaders are pluggable protocols, not hard-coded to chumicro file layouts.
 - The built-in `devices.yml` schema is owned by `chumicro-deploy` and read by the built-in loader at `chumicro_deploy.config.default`, registered in the loader registry under the reserved name `"default"`.  The loader is behind an opt-in import — importing it pulls in PyYAML, so consumers who only want the top-level `Device` / `Deployer` API never pay that cost.  The schema is shared across the `chumicro` mono repo, the eventual project-workspace template repo, and any third-party consumer.
 - Third parties register custom config loaders via Python entry points (`chumicro_deploy.config_loaders`), not by subclassing workspace internals.  The mono repo consumes the loader via the editable-install of `workbench/deploy` so the YAML schema has a single source of truth; see the corresponding scripts-consumption principle in Decision 0032.
 - The CLI (`python -m chumicro_deploy`) is a thin wrapper over the Python API — every CLI action has a supported programmatic equivalent.
 
-**Rejected:** tight coupling to `chumicro-workspace-runtime`.  Deploy is a reusable primitive; the workspace is one consumer among several.
+**Rejected:** tight coupling to `chumicro-workspace`.  Deploy is a reusable primitive; the workspace is one consumer among several.
 
 ### 9. `devices.yml` zones
 
@@ -90,12 +90,10 @@ Three commented zones: user-owned (never overwritten without `--force` or prompt
 
 ## Consequences
 
-- Seven new publishable packages land across `libraries/` and `workbench/` (folder split per Decision 0032): `chumicro-deploy` (✅ shipped 2026-04-22 in `workbench/`), `chumicro-repl` (`workbench/`), `chumicro-wifi` (`libraries/`), `chumicro-sockets` (`libraries/`; see Decision 0031), `chumicro-mqtt` (`libraries/`), `chumicro-workspace-runtime` (`workbench/`), `chumicro-workspace-template` (`workbench/`).  `chumicro-kvstore` (already planned; formerly `chumicro-settings`, see Decision 0030) is the eighth assumed-necessity.
-- `chumicro-workspace-template` is both:
-  - A **workbench package** — the scaffolder + updater.  Installed on the user's laptop; applies the template files into a new directory, and later updates an existing workspace when the template evolves (Copier-style).  Imports the `devices.yml` schema from `chumicro_deploy.config.default` so there is a single source of truth for that shape.  Scope is template *management*; deploy behaviour is delegated to `chumicro-deploy` and runtime orchestration to `chumicro-workspace-runtime`.
-  - A **companion repo** — the canonical source of the template files (`run.py` shim, `workspace.yml`, `things/_template/`, etc.) that the workbench package copies / updates from.  Versioned and forkable independently; third parties can maintain their own template repos that the same workbench package applies.
+- Six new publishable packages land across `libraries/` and `workbench/` (folder split per Decision 0032; reduced from seven after Decision 0038 collapsed `chumicro-workspace-template` into `chumicro-workspace`): `chumicro-deploy` (✅ shipped 2026-04-22 in `workbench/`), `chumicro-repl` (`workbench/`), `chumicro-wifi` (`libraries/`), `chumicro-sockets` (`libraries/`; see Decision 0031), `chumicro-mqtt` (`libraries/`), `chumicro-workspace` (`workbench/`).  `chumicro-kvstore` (already planned; formerly `chumicro-settings`, see Decision 0030) is the seventh assumed-necessity.
+- The canonical workspace template ships as a **separate Git repo** (`ChuMicro/ChuMicro-Workspace-Template`, Decision 0038), not as a `_payloads/` blob inside a workbench package.  Users `git clone` it (or click "Use this template" on GitHub) and run `python3 run.py setup`; the self-bootstrapping `run.py` creates a venv and installs `chumicro-workspace`, which then owns ongoing `init` / `update` / `deploy` / `repl` / etc. commands.  Third parties fork the repo to customize.
 - `devices.yml` gains three-zone structure; existing chumicro use (device testing) remains compatible — new fields are additive.
-- A monthly scrape-and-cache job is needed for MicroPython BOARD names; the reflash family table is shipped and versioned with `chumicro-workspace-runtime`.
+- A monthly scrape-and-cache job is needed for MicroPython BOARD names; the reflash family table is shipped and versioned with `chumicro-workspace`.
 - Decision 0028's "project template repo" is promoted from parenthetical future work to a top-line deliverable governed by this decision and its workstream.
 - No code lands from this ADR.  Hard rules in `AGENTS.md` land alongside the libraries as they are built.
 - Execution plan, phases, library sequencing, acceptance criteria: `plans/workstreams/project-workspace.md`.

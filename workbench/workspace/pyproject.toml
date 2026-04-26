@@ -1,0 +1,53 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "chumicro-workspace"
+dynamic = ["version"]
+description = "Host-side runtime for ChuMicro project workspaces — config merge, secrets resolution, deploy orchestration, command dispatch."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [
+    { name = "ChuMicro" },
+]
+dependencies = [
+    "chumicro-deploy",
+    "chumicro-msgpack",
+    "PyYAML>=6.0",
+    # ruamel.yaml preserves comments + key order on round-trip — required
+    # for the three-zone devices.yml writer (Decision 0029 §9).  PyYAML
+    # destroys both, which would clobber every user comment on the first
+    # `add-device`.  Pinned to the modern (>=0.18) API.
+    "ruamel.yaml>=0.18",
+]
+keywords = [
+    "circuitpython", "micropython", "microcontroller", "embedded",
+    "workspace", "config", "deploy",
+]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Software Development :: Embedded Systems",
+    "Topic :: System :: Hardware",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/ChuMicro/ChuMicro"
+Source = "https://github.com/ChuMicro/ChuMicro/tree/main/workbench/workspace"
+Issues = "https://github.com/ChuMicro/ChuMicro/issues"
+
+[tool.hatch.version]
+path = "VERSION"
+pattern = "(?P<version>\\S+)"
+
+[tool.hatch.build.targets.sdist]
+include = ["src/", "VERSION", "README.md"]
+exclude = [".gitignore"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/chumicro_workspace"]

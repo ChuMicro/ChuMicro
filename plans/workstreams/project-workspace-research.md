@@ -20,7 +20,7 @@ Companion to `plans/workstreams/project-workspace.md` (execution plan) and the t
 | 2 | `chumicro-repl` | pyserial |
 | 3 | `chumicro-kvstore` | msgpack |
 | 3 | `chumicro-wifi` | runner, kvstore |
-| 4 | `chumicro-workspace-runtime` + `chumicro-workspace-template` repo | deploy, repl, kvstore, wifi |
+| 4 | `chumicro-workspace` + `chumicro-workspace-template` repo | deploy, repl, kvstore, wifi |
 | 5 | `chumicro-sockets` | none (pure platform shim) |
 | 6 | `chumicro-mqtt` | runner, wifi, sockets |
 | 7 | sensor thing template | all prior |
@@ -200,7 +200,7 @@ mqtt.publish("status", b"online", qos=1, retain=True)
 def handle(topic, payload): ...
 ```
 
-### Config pipeline (not a library — owned by chumicro-workspace-runtime)
+### Config pipeline (not a library — owned by chumicro-workspace)
 
 - User edits `things/<name>/config.toml` (or `.yml` opt-in)
 - Deployer merges with `workspace.yml` env defaults + `secrets.yml` at deploy

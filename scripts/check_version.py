@@ -5,12 +5,19 @@ package's ``src/`` or ``pyproject.toml`` must also bump the package's
 ``VERSION`` file.  Covers both ``libraries/`` (device libraries) and
 ``workbench/`` (host-only tools — Decision 0032 §workbench-release-lifecycle).
 
+Decision 0038 §6 carves out ``0.0.0`` as a pre-release floor: while
+a package's ``VERSION`` reads ``0.0.0``, this gate stays quiet — the
+intent is to let pre-release packages absorb churn without nuisance
+"bump VERSION" failures.  The gate kicks in the moment VERSION crosses
+to anything non-zero.
+
 Usage::
 
     python scripts/check_version.py [--base BASE_REF]
 
 Exits 0 when all changed packages have a VERSION update (or when only
-non-release-relevant files changed).  Exits 1 when enforcement fails.
+non-release-relevant files changed, or when the package is at the
+``0.0.0`` pre-release floor).  Exits 1 when enforcement fails.
 """
 
 from __future__ import annotations
@@ -18,9 +25,13 @@ from __future__ import annotations
 from workspace import (
     PUBLISHABLE_ROOTS,
     RELEASE_RELEVANT,
+    ROOT,
     changed_files,
+    read_version,
     release_tags,
 )
+
+PRE_RELEASE_FLOOR = "0.0.0"
 
 
 def _check(base_reference: str) -> int:
@@ -71,7 +82,16 @@ def _check(base_reference: str) -> int:
         if parts[2] in RELEASE_RELEVANT:
             packages_needing_bump.add(package_id)
 
-    missing = packages_needing_bump - packages_with_bump
+    # Decision 0038 §6: while a package's VERSION reads 0.0.0, the
+    # gate stays quiet — pre-release packages absorb churn without
+    # nuisance "bump VERSION" failures.
+    pre_release_packages: set[tuple[str, str]] = set()
+    for parent_dir, package_name in packages_needing_bump:
+        package_dir = ROOT / parent_dir / package_name
+        if read_version(package_dir) == PRE_RELEASE_FLOOR:
+            pre_release_packages.add((parent_dir, package_name))
+
+    missing = packages_needing_bump - packages_with_bump - pre_release_packages
     if missing:
         for parent_dir, package_name in sorted(missing):
             print(
@@ -82,6 +102,14 @@ def _check(base_reference: str) -> int:
         print("Update the VERSION file with a semantic version bump (Decision 0002).")
         print("If only internal changes occurred (no API/behavior change), a patch bump suffices.")
         return 1
+
+    if pre_release_packages:
+        for parent_dir, package_name in sorted(pre_release_packages):
+            print(
+                f"PRE-RELEASE: {parent_dir}/{package_name}/ at "
+                f"{PRE_RELEASE_FLOOR} — VERSION bump not required "
+                "(Decision 0038 §6)."
+            )
 
     if packages_needing_bump:
         for parent_dir, package_name in sorted(packages_needing_bump):

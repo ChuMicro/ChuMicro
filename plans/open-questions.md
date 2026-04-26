@@ -32,7 +32,7 @@ Decision 0029 scopes the `chumicro-deploy` extraction plus a full project
 workspace (template repo, UID-based identity, onboarding, import-graph
 deploy, REPL TUI).  Its top-level shape answers most of the originally
 open sub-questions — CLI is `run.py` in the template (no global install),
-there is a Python API surface exposed by `chumicro-workspace-runtime`,
+there is a Python API surface exposed by `chumicro-workspace`,
 dependency resolution is import-graph-driven rather than bundle-manifest,
 a companion `chumicro-workspace-template` repo is a first-class deliverable,
 and `.mpy` compilation remains opt-in where `mpy-cross` is available.

@@ -19,7 +19,7 @@ laptop and will never run on a microcontroller:
 
 - `chumicro-deploy` — pushes code to devices (pyserial, pyyaml)
 - `chumicro-repl` — interactive TUI for device REPL (pyserial)
-- `chumicro-workspace-runtime` — host CLI + a companion *device-side*
+- `chumicro-workspace` — host CLI + a companion *device-side*
   boot module (hybrid)
 
 These packages don't fit either existing bucket.  They are publishable,
@@ -30,7 +30,7 @@ fold host-tool maintenance into the device-library release pipeline
 and mislead readers who open `libraries/` expecting "runs on your
 board."
 
-`chumicro-workspace-runtime` illustrates a subtlety.  It ships a small
+`chumicro-workspace` illustrates a subtlety.  It ships a small
 on-device boot module alongside the host CLI.  An early draft placed
 hybrids in `libraries/` and used `[tool.chumicro].platforms` to mark
 the host-only parts — but `platforms` describes runtime support for
@@ -62,7 +62,7 @@ CPython packages.  The three folders now have clean, independent axes:
    writes onto a device at deploy time, for instance — do not shift
    the package's folder.  Payload is not an installable package.
 2. When a workbench package needs to deliver code onto a device as
-   part of its operation (e.g. `chumicro-workspace-runtime`'s on-device
+   part of its operation (e.g. `chumicro-workspace`'s on-device
    boot module), that code ships as a data file inside the workbench
    package and the host CLI deploys it.  Only split into a separate
    `libraries/` entry if a real third-party demand emerges for
@@ -118,7 +118,7 @@ CPython packages.  The three folders now have clean, independent axes:
    mono-repo-only surface area (test-orchestration hints, IDE-specific
    defaults) into a thin wrapper on top of the workbench package rather
    than a reimplementation of it.  As more workbench packages land
-   (`chumicro-workspace-runtime`, others), the `scripts/` shrinks and
+   (`chumicro-workspace`, others), the `scripts/` shrinks and
    the workbench shelf carries progressively more of the developer
    surface area.  Any `scripts/` file that could live in a workbench
    package instead belongs on the migration backlog in

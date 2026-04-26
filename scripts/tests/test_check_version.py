@@ -124,11 +124,45 @@ class TestCheck:
         """workbench/<name>/pyproject.toml change without VERSION bump fails."""
         monkeypatch.setattr(
             "check_version.changed_files",
-            lambda _base: ["workbench/repl/pyproject.toml"],
+            lambda _base: ["workbench/deploy/pyproject.toml"],
         )
         result = _check("origin/main")
         assert result == 1
-        assert "FAIL: workbench/repl/" in capsys.readouterr().out
+        assert "FAIL: workbench/deploy/" in capsys.readouterr().out
+
+    def test_pre_release_floor_skips_bump_requirement(
+        self, monkeypatch, capsys,
+    ):
+        """Decision 0038 §6: a package at 0.0.0 is exempt from the
+        bump gate.  workbench/repl/ sits at 0.0.0 (pre-release floor),
+        so a src/ change without a VERSION bump should pass quietly."""
+        monkeypatch.setattr(
+            "check_version.changed_files",
+            lambda _base: ["workbench/repl/src/chumicro_repl/cli.py"],
+        )
+        monkeypatch.setattr("check_version.release_tags", lambda _name: [])
+        result = _check("origin/main")
+        assert result == 0
+        captured = capsys.readouterr().out
+        assert "PRE-RELEASE: workbench/repl/" in captured
+        assert "FAIL:" not in captured
+
+    def test_pre_release_floor_does_not_mask_non_zero_packages(
+        self, monkeypatch, capsys,
+    ):
+        """A package above 0.0.0 still requires VERSION bumps even if a
+        sibling 0.0.0 package is also being changed."""
+        monkeypatch.setattr(
+            "check_version.changed_files",
+            lambda _base: [
+                "workbench/repl/src/chumicro_repl/cli.py",     # 0.0.0
+                "libraries/timing/src/chumicro_timing/core.py", # >0.0.0
+            ],
+        )
+        result = _check("origin/main")
+        assert result == 1
+        captured = capsys.readouterr().out
+        assert "FAIL: libraries/timing/" in captured
 
     def test_mixed_roots_pass(self, monkeypatch, capsys):
         """Library + workbench changes both bumped pass cleanly."""

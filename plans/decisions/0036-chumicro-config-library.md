@@ -209,7 +209,7 @@ chumicro-wifi in Phase 3a) ships a `_templates/config.toml` and gets
 this scaffolding flow for free.  Libraries that don't consume
 runtime config don't need the template.
 
-Workspace tooling (Phase 4a, `chumicro-workspace-runtime`) will use
+Workspace tooling (Phase 4a, `chumicro-workspace`) will use
 this helper to assemble starter `things/<name>/config.toml` files
 when a user runs `python run.py add-library wifi` (or similar) —
 collect templates from installed consumer libraries, concatenate
