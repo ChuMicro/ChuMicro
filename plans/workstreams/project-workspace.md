@@ -404,9 +404,15 @@ Acceptance: `pip install chumicro-workspace-template && chumicro-workspace-templ
 
 Acceptance: a user runs `chumicro-workspace-template init`, the repo's checked-in files land in their workspace, `python run.py setup` + `add-device` + `deploy` work without additional setup.
 
-### Phase 5: `chumicro-sockets`
+### Phase 5: `chumicro-sockets` ✅
 
 Thin TCP client + TLS abstraction over the three runtimes' divergent socket stories.  Prerequisite for `chumicro-mqtt` and a future `chumicro-requests`.  Architecture recorded in Decision 0031.
+
+**Shipped 2026-04-25.**  `libraries/sockets/` — `tcp_client_socket` / `tls_client_socket` factories + `TCPClientSocket` protocol + 3 adapters (CP `socketpool`, MP stdlib `socket`+`ssl`, CPython stdlib) + `FakeSocket` testing fake.  40 host tests at 95 % cov.
+
+Deviation from the original Decision 0031 §2 sketch: the four-adapter shape (CP / MP-ESP32 / MP-RP2 / CPython) collapses to three.  Decision 0031 §1 already noted current MP ships `MICROPY_SSL_MBEDTLS=1` on both ESP32 and RP2 ports (1.26+), so the socket+ssl story is unified — one MP adapter covers both ports.  The wifi library's two-MP-adapter split persists because the per-substrate hardware knobs differ (ESP32 needs `reconnects`, CYW43 needs `pm`); the sockets library has no such per-substrate divergence.
+
+CP TLS path uses the on-board `ssl` module directly — Decision 0015's minimum supported board class (Pi Pico W, ESP32-S2/S3, ESP32-S3 Feather native wifi) all ship `ssl` on current LTS firmware, so `tls_client_socket(context=...)` works the same on every supported runtime.  Legacy radios that lack `ssl` (AirLift / WIZNET5K-pre-mbedTLS) aren't in scope; users on those boards stay on the `adafruit_connection_manager` ecosystem.
 
 #### Why this phase exists
 

@@ -1,0 +1,130 @@
+# User Guide
+
+## Overview
+
+`chumicro-sockets` provides a single TCP + TLS client API that works the same way on CircuitPython, MicroPython, and CPython.  The runtimes diverge in irreducible ways — CP has no `socket` module, only `socketpool(radio)`; MP has stdlib socket + mbedTLS-backed ssl on current builds; CPython has the full stdlib stack — so the library exposes one [`TCPClientSocket`](api.md#chumicro_sockets.protocol.TCPClientSocket) protocol and routes [`tcp_client_socket`](api.md#chumicro_sockets.tcp_client_socket) / [`tls_client_socket`](api.md#chumicro_sockets.tls_client_socket) to a runtime-appropriate adapter.
+
+Decision 0031 captures the architecture rationale (why not depend on `adafruit_connection_manager`, why TLS is a sibling factory rather than an `ssl=True|context` flag, why `recv()` is omitted in favor of `recv_into()`).
+
+This library is the substrate for `chumicro-mqtt` and a future `chumicro-requests`; neither imports `socketpool`, `socket`, or `ssl` directly.
+
+## Getting started
+
+### Plain TCP
+
+```python
+from chumicro_sockets import tcp_client_socket
+
+# CircuitPython requires `radio=wifi.radio`; MP / CPython ignore it.
+sock = tcp_client_socket("broker.example.com", 1883, radio=None)
+try:
+    sock.send(b"PING\r\n")
+    buffer = bytearray(128)
+    nbytes = sock.recv_into(buffer, 128)
+    print(bytes(buffer[:nbytes]))
+finally:
+    sock.close()
+```
+
+### TLS, runtime default trust store
+
+```python
+from chumicro_sockets import tls_client_socket
+
+sock = tls_client_socket("api.example.com", 443, radio=None)
+sock.send(b"GET / HTTP/1.0\r\n\r\n")
+```
+
+`context=None` uses each runtime's default CA bundle.  CPython routes through `ssl.create_default_context()`; MP uses the system trust store via `ssl.wrap_socket(server_hostname=host)`; CP uses the radio's built-in trust store.
+
+### TLS with a custom CA
+
+```python
+from chumicro_sockets import tls_client_socket, ssl_context_with_ca
+
+with open("ca.pem", "rb") as ca_file:
+    ca_pem = ca_file.read()
+
+context = ssl_context_with_ca(ca_pem)
+sock = tls_client_socket("api.example.com", 443, context=context, radio=None)
+```
+
+`ssl_context_with_ca` works on every supported runtime — the boards in [Decision 0015](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0015-supported-boards.md)'s minimum class (Pi Pico W, ESP32-S2, ESP32-S3, ESP32-S3 Feather, plus any current-LTS MP/CPython host) all ship the on-board `ssl` module on current firmware, so the call shape is uniform.  Older legacy radios that lack the `ssl` module (AirLift, WIZNET5K-pre-mbedTLS) aren't in scope for this library; users on those boards should pin to the existing `adafruit_connection_manager` ecosystem instead.
+
+### Non-blocking I/O
+
+```python
+import select
+
+sock = tcp_client_socket("host", 1883, radio=None)
+sock.setblocking(False)
+poller = select.poll()
+poller.register(sock.fileno(), select.POLLIN)
+
+while True:
+    for fd, event in poller.poll(timeout=100):
+        if event & select.POLLIN:
+            buffer = bytearray(256)
+            try:
+                nbytes = sock.recv_into(buffer, 256)
+            except OSError as error:
+                if error.args[0] == 11:  # EAGAIN
+                    continue
+                raise
+            handle(bytes(buffer[:nbytes]))
+```
+
+`OSError(errno=11)` (`EAGAIN`) is the cross-runtime "would block" signal.  `fileno()` returns `-1` on adapters whose socket has no real fd (CP-radio fakes); callers that need polling should fall back to `settimeout`-based polling when `fileno() == -1`.
+
+## Runner pattern
+
+`chumicro-sockets` is a passive transport — it doesn't need its own `check()` / `handle()` lifecycle.  The downstream library that owns the connection (e.g. `chumicro-mqtt`) implements the runner contract and uses the socket as a non-blocking byte pipe inside `check()` and `handle()`.
+
+## Memory notes
+
+The socket itself doesn't allocate — the protocol surface is `recv_into(buffer, nbytes)` and `send(bytes_or_memoryview)` so callers control buffer lifetimes.  Pre-allocate one `bytearray` per connection and reuse it:
+
+```python
+RX_BUFFER = bytearray(256)
+
+def read(sock):
+    nbytes = sock.recv_into(RX_BUFFER, 256)
+    return memoryview(RX_BUFFER)[:nbytes]
+```
+
+`FakeSocket` does keep an internal `bytearray(sent)` log — useful for tests, but don't hold the fake across long-running scenarios; replace it for each test.
+
+## Platform notes
+
+| Runtime | TCP | TLS context | Custom CA | `fileno()` |
+|---|---|---|---|---|
+| CPython | ✅ stdlib `socket` | ✅ `ssl.SSLContext` | ✅ via `ssl_context_with_ca` | ✅ real fd |
+| MicroPython | ✅ stdlib `socket` | ✅ MP `ssl.SSLContext` (mbedTLS) | ✅ via `ssl_context_with_ca` | ✅ real fd |
+| CircuitPython | ✅ `socketpool` + `radio` | ✅ on-board `ssl.SSLContext` | ✅ via `ssl_context_with_ca` | ⚠️ may return `-1` |
+
+CircuitPython requires a `radio=` kwarg pointing at the board's wifi radio (typically `wifi.radio`).  MicroPython and CPython ignore the kwarg.
+
+The TLS surface is uniform across runtimes because the supported board class ([Decision 0015](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0015-supported-boards.md): 256 KB MCU RAM / 4 MB flash, current-LTS firmware) all ships the on-board `ssl` module — Pi Pico W, ESP32-S2, ESP32-S3, ESP32-S3 Feather native wifi.  Legacy radios without `ssl` (AirLift, WIZNET5K-pre-mbedTLS) aren't supported by this library.
+
+## Examples
+
+| Example | What it shows |
+|---|---|
+| [`quickstart.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets/examples/quickstart.py) | FakeSocket round-trip — runs identically on every runtime, no network needed. |
+
+## What's new
+
+*No releases yet — this section will be updated with each version bump.*
+
+---
+
+<div class="chumicro-footer" markdown>
+
+[← Home](index.md)
+
+[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets) · \
+[PyPI](https://pypi.org/project/chumicro-sockets/) · \
+[Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · \
+[Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
+
+</div>
