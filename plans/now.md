@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **beginner-onramp** Steps 1, 2, 3, 5 shipped 2026-04-26.  Remaining: Step 4 (`bootstrap` wizard — natural successor now that `demo` exists for it to call), Steps 6-7 (`chumicro-requests` + `chumicro-http-server` libraries), Step 8 (examples folder organization).  See `plans/workstreams/beginner-onramp.md`.
-- **Last shipped:** Step 5 — `chumicro-workspace demo` deploys a baked-in cross-runtime print-loop payload (`DEMO_PAYLOAD` constant) to the active device and synchronously surfaces its output.  Runtime-agnostic — only `import time`, so it works on any registered MP / CP board out-of-the-box without picking an LED pin.  ~5 seconds wall-clock; same failure-surfacing shape as `deploy`.
-- **In flight:** beginner-onramp workstream Step 4+ — sequence in `plans/workstreams/beginner-onramp.md`.
+- **Phase:** **beginner-onramp** Steps 1, 2, 3, 4, 5 all shipped 2026-04-26 — the full UX backbone is complete.  A fresh user can run `chumicro-workspace bootstrap --with-demo` and see code execute on their hardware in one command.  Remaining: Step 6 (`chumicro-requests` library), Step 7 (`chumicro-http-server` library), Step 8 (examples organization + two-thing demo).  See `plans/workstreams/beginner-onramp.md`.
+- **Last shipped:** Step 4 — `chumicro-workspace bootstrap` end-to-end onboarding wizard.  Pick port → probe with auto-runtime-inference → display detected runtime + version + machine → firmware-floor warn → pick device id (suggestion derived from probed machine string) → register → optional `--with-demo`.  Three flags (`--port`, `--device-id`, `--with-demo`) skip prompts; passing all three runs end-to-end non-interactively.  Single port detected → silent auto-pick; multiple ports → numbered list + prompt.  Reuses Steps 1-3+5 helpers, no second probe, no policy duplication.
+- **In flight:** beginner-onramp workstream Step 6+ — `chumicro-requests` is the next major slice (new device library, modeled on `chumicro-mqtt`'s non-blocking shape on top of `chumicro-sockets`).  See `plans/workstreams/beginner-onramp.md` library design notes.
 - **Blocked on:** —
-- **Last touched:** `workbench/workspace/src/chumicro_workspace/cli.py` (`DEMO_PAYLOAD` + `_cmd_demo` + parser registration), `workbench/workspace/tests/test_cli.py` (new `TestDemo` class — 4 cases; EXPECTED_COMMANDS list updated), `plans/workstreams/beginner-onramp.md` Step 5 status log entry, `plans/next-up.md`.
+- **Last touched:** `workbench/workspace/src/chumicro_workspace/cli.py` (added `_cmd_bootstrap`, `_resolve_bootstrap_port`, `_resolve_bootstrap_device_id`, `_suggest_device_id`, `_stdin_prompt`, parser registration), `workbench/workspace/tests/test_cli.py` (16 new tests across `TestBootstrapHelpers` + `TestBootstrapWizard`), `plans/workstreams/beginner-onramp.md` Step 4 status log entry, `plans/next-up.md`.
 
 ---
 

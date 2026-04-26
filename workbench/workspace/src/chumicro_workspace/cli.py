@@ -31,10 +31,11 @@ from __future__ import annotations
 
 import argparse
 import keyword
+import re
 import shutil
 import subprocess
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -80,7 +81,7 @@ from chumicro_workspace.workspace import (
 )
 
 if TYPE_CHECKING:  # pragma: no cover — type-only
-    from chumicro_deploy import Device
+    from chumicro_deploy import Device, DeviceImplementation
 
 
 # ---------------------------------------------------------------------------
@@ -635,6 +636,262 @@ def _cmd_demo(args: argparse.Namespace) -> int:
     return 0
 
 
+def _stdin_prompt(prompt_text: str) -> str:
+    """Real-stdin prompt — tests inject a deterministic substitute.
+
+    Sole indirection point for ``_cmd_bootstrap`` so the wizard's
+    branching logic stays unit-testable without TTY plumbing.
+    """
+    return input(prompt_text)
+
+
+def _suggest_device_id(implementation: DeviceImplementation) -> str:
+    """Suggest a device id from the probed machine string.
+
+    Strips non-identifier characters and lowercases — a Pi Pico W
+    probing as ``"Raspberry Pi Pico W with rp2040"`` becomes
+    ``"raspberry-pi-pico-w"``.  Falls back to the runtime name
+    when ``machine`` is empty (older firmware) or sanitises to
+    nothing.
+    """
+    machine = implementation.machine or ""
+    # Trim the trailing " with rp2040" / " with esp32s2" tail
+    # — common in CP machine strings, never present in the user's
+    # natural mental id for the board.
+    cleaned = re.sub(r"\s+with\s+\w+$", "", machine, flags=re.IGNORECASE)
+    # Replace non-identifier runs with single hyphens, lowercase.
+    slug = re.sub(r"[^a-zA-Z0-9]+", "-", cleaned).strip("-").lower()
+    return slug or implementation.name or "board"
+
+
+def _resolve_bootstrap_port(
+    explicit_port: str | None,
+    *,
+    prompt_func: Callable[[str], str] = _stdin_prompt,
+) -> str | None:
+    """Pick the port to onboard against.
+
+    * ``explicit_port`` set → use it verbatim.
+    * No ports detected → print a hint, return ``None`` (caller exits 1).
+    * Exactly one port → use it without prompting.
+    * Multiple ports → list them, prompt for a number.
+
+    Args:
+        explicit_port: ``--port`` flag value, or ``None`` to discover
+            interactively.
+        prompt_func: Indirection point for tests.  Defaults to
+            ``_stdin_prompt``.
+
+    Returns:
+        The chosen port path, or ``None`` on no-discovery / invalid
+        input.
+    """
+    if explicit_port:
+        return explicit_port
+    from serial.tools import list_ports as _list_ports  # noqa: PLC0415
+
+    ports = sorted(_list_ports.comports(), key=lambda port: port.device)
+    if not ports:
+        print(
+            "bootstrap: no serial ports detected.  "
+            "Plug in a board and try again.",
+            file=sys.stderr,
+        )
+        return None
+    if len(ports) == 1:
+        only_port = ports[0]
+        print(f"bootstrap: only one port found — using {only_port.device}.")
+        return only_port.device
+    print("bootstrap: pick a board:")
+    for index, port in enumerate(ports, start=1):
+        description = port.description or "(no description)"
+        print(f"  [{index}] {port.device}  {description}")
+    raw_choice = prompt_func(f"  Pick [1-{len(ports)}]: ")
+    try:
+        chosen_index = int(raw_choice.strip())
+    except ValueError:
+        print(
+            f"bootstrap: invalid choice {raw_choice!r}", file=sys.stderr,
+        )
+        return None
+    if chosen_index < 1 or chosen_index > len(ports):
+        print(
+            f"bootstrap: choice {chosen_index} out of range",
+            file=sys.stderr,
+        )
+        return None
+    return ports[chosen_index - 1].device
+
+
+def _resolve_bootstrap_device_id(
+    explicit_id: str | None,
+    suggested_id: str,
+    *,
+    prompt_func: Callable[[str], str] = _stdin_prompt,
+) -> str:
+    """Either the ``--device-id`` flag's value or an interactive prompt.
+
+    The prompt shows the suggestion in brackets and accepts a blank
+    line to mean "use the suggestion".
+    """
+    if explicit_id:
+        return explicit_id
+    raw = prompt_func(f"  Device id [{suggested_id}]: ")
+    return raw.strip() or suggested_id
+
+
+def _cmd_bootstrap(  # noqa: C901, PLR0912 — wizard branches stay flat for readability
+    args: argparse.Namespace,
+    *,
+    prompt_func: Callable[[str], str] = _stdin_prompt,
+) -> int:
+    """Onboard a board end-to-end: pick → probe → register → demo.
+
+    Step 4 of the beginner-onramp workstream — the integration
+    command that ties Steps 1-3 + 5 into a single user-visible
+    flow.  A user with a freshly-plugged board runs
+    ``chumicro-workspace bootstrap`` and walks through:
+
+    1. Pick a port.  When exactly one is detected, it's used
+       silently; otherwise the wizard prints a numbered list and
+       prompts.  ``--port <path>`` skips the pick.
+    2. Probe with runtime auto-inference (Step 3 of the
+       workstream).  Failure prints the same diagnosis hints
+       ``add-device`` does and exits 1.
+    3. Display detected runtime + version + machine.  Firmware-
+       support floor (Decision 0039) is checked; OLD / UNKNOWN /
+       UNPARSEABLE statuses print a warning but don't abort.
+    4. Pick a device id.  ``--device-id <id>`` skips the prompt.
+       The default suggestion is derived from the probed machine
+       string (e.g. ``"raspberry-pi-pico-w"``).
+    5. Register the device in ``devices.yml`` — same write as
+       ``add-device`` but no second probe.
+    6. Optional ``--with-demo`` deploys the built-in demo
+       payload (Step 5 of the workstream) so the user sees their
+       board run code immediately.
+    7. Print next-steps for the user (``new`` / ``deploy`` /
+       ``repl``).
+
+    Args:
+        args: Parsed CLI args.  ``port``, ``device_id``, and
+            ``with_demo`` are the wizard's three optional knobs.
+        prompt_func: Indirection point for tests.  Defaults to
+            ``_stdin_prompt``.
+    """
+    workspace = _resolve_workspace(args)
+
+    # 1. Port pick.
+    port = _resolve_bootstrap_port(args.port, prompt_func=prompt_func)
+    if port is None:
+        return 1
+
+    # 2. Probe.
+    print(f"bootstrap: probing {port} ...")
+    inference = probe_with_runtime_inference(port)
+    if inference.runtime is None or inference.info is None:
+        from chumicro_deploy import Device  # noqa: PLC0415
+
+        diagnosis = detect_board_state(
+            Device(transport="micropython", address=port),
+        )
+        if inference.last_exception is not None:
+            exception = inference.last_exception
+            print(
+                f"bootstrap: auto-detect failed "
+                f"({type(exception).__name__}: {exception}).",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                "bootstrap: auto-detect failed — "
+                "no runtime returned a probe marker.",
+                file=sys.stderr,
+            )
+        for line in diagnosis.next_steps:
+            print(f"  {line}", file=sys.stderr)
+        return 1
+
+    info = inference.info
+    implementation = info.implementation
+    print(f"  runtime: {implementation.name} {implementation.version}")
+    if implementation.machine:
+        print(f"  machine: {implementation.machine}")
+
+    # 3. Firmware-support check.
+    support = check_firmware_supported(implementation)
+    if support.status is not FirmwareSupportStatus.SUPPORTED:
+        print(
+            f"  note: {implementation.name} firmware compatibility:",
+            file=sys.stderr,
+        )
+        for line in explain_firmware_support(support):
+            print(f"  {line}", file=sys.stderr)
+
+    # 4. Device id pick.
+    suggested_id = _suggest_device_id(implementation)
+    device_id = _resolve_bootstrap_device_id(
+        args.device_id, suggested_id, prompt_func=prompt_func,
+    )
+
+    # 5. Register.
+    data = load_devices(workspace.devices_yaml)
+    hardware: dict[str, str] = {}
+    if info.uid:
+        hardware["uid"] = info.uid
+    if implementation.machine:
+        hardware["machine"] = implementation.machine
+    if info.board_id:
+        hardware["board_id"] = info.board_id
+    try:
+        add_device(
+            data,
+            device_id=device_id,
+            runtime=implementation.name,
+            address=port,
+            hardware=hardware or None,
+            firmware_version=implementation.version or None,
+        )
+    except DeviceAlreadyExistsError:
+        print(
+            f"bootstrap: device id {device_id!r} already exists "
+            f"in {workspace.devices_yaml}.  Pick a different id "
+            "or run `add-device --force` to refresh the existing "
+            "entry.",
+            file=sys.stderr,
+        )
+        return 1
+    dump_devices(data, workspace.devices_yaml)
+    print(f"  registered {device_id} at {port}.")
+
+    # 6. Optional demo.
+    if args.with_demo:
+        demo_args = argparse.Namespace(
+            workspace_dir=args.workspace_dir,
+            device_id=device_id,
+            runtime=None,
+        )
+        demo_exit = _cmd_demo(demo_args)
+        if demo_exit != 0:
+            return demo_exit
+
+    # 7. Summary.
+    print()
+    print("bootstrap: ready.  Next steps:")
+    print(
+        "  python run.py new <thing-name>      "
+        "# create a new thing under things/",
+    )
+    print(
+        "  python run.py deploy                "
+        "# deploy your only thing (no name needed)",
+    )
+    print(
+        "  python run.py repl                  "
+        "# open the REPL on your board",
+    )
+    return 0
+
+
 def _cmd_test(args: argparse.Namespace) -> int:
     """Run the workspace's pytest suite.
 
@@ -1186,6 +1443,45 @@ def build_parser() -> argparse.ArgumentParser:
     _add_workspace_arg(demo_parser)
     _add_device_selector(demo_parser)
     demo_parser.set_defaults(func=_cmd_demo)
+
+    # ----- bootstrap -----------------------------------------------------
+    bootstrap_parser = subparsers.add_parser(
+        "bootstrap",
+        help=(
+            "End-to-end onboarding wizard: pick a port, auto-probe "
+            "the runtime, register the device, optionally deploy "
+            "the demo payload.  All prompts are skippable via "
+            "flags for non-interactive runs."
+        ),
+    )
+    _add_workspace_arg(bootstrap_parser)
+    bootstrap_parser.add_argument(
+        "--port",
+        default=None,
+        help=(
+            "Skip the interactive port pick — use this serial port "
+            "path verbatim (e.g. '/dev/cu.usbmodem1101')."
+        ),
+    )
+    bootstrap_parser.add_argument(
+        "--device-id",
+        dest="device_id",
+        default=None,
+        help=(
+            "Skip the interactive device-id prompt — register the "
+            "board under this id."
+        ),
+    )
+    bootstrap_parser.add_argument(
+        "--with-demo",
+        dest="with_demo",
+        action="store_true",
+        help=(
+            "After registration, deploy the built-in demo payload "
+            "(equivalent to running `demo` afterward)."
+        ),
+    )
+    bootstrap_parser.set_defaults(func=_cmd_bootstrap)
 
     # ----- sim -----------------------------------------------------------
     sim_parser = subparsers.add_parser(

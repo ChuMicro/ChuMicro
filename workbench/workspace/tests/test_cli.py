@@ -64,7 +64,7 @@ class TestParser:
     EXPECTED_COMMANDS = (
         "setup", "init", "update", "new", "add-device", "probe",
         "discover", "devices", "deploy", "switch", "things", "demo",
-        "sim", "test", "repl", "env", "use", "rename",
+        "bootstrap", "sim", "test", "repl", "env", "use", "rename",
         "install-firmware", "upgrade-firmware", "sync", "upgrade",
     )
 
@@ -966,6 +966,378 @@ class TestDemo:
         assert "import digitalio" not in DEMO_PAYLOAD
         # Only stdlib imports allowed in the demo.
         assert "import time" in DEMO_PAYLOAD
+
+
+# ---------------------------------------------------------------------------
+# bootstrap  (Step 4 of beginner-onramp — end-to-end wizard)
+# ---------------------------------------------------------------------------
+
+
+class TestBootstrapHelpers:
+    """Unit-level tests for the bootstrap helper functions."""
+
+    def test_suggest_device_id_strips_with_chip_tail(self) -> None:
+        from chumicro_deploy import DeviceImplementation
+        from chumicro_workspace.cli import _suggest_device_id
+
+        result = _suggest_device_id(DeviceImplementation(
+            name="circuitpython",
+            version="10.1.4",
+            machine="Raspberry Pi Pico W with rp2040",
+            uid="ABCD",
+        ))
+        assert result == "raspberry-pi-pico-w"
+
+    def test_suggest_device_id_handles_blank_machine(self) -> None:
+        from chumicro_deploy import DeviceImplementation
+        from chumicro_workspace.cli import _suggest_device_id
+
+        result = _suggest_device_id(DeviceImplementation(
+            name="micropython", version="1.27.0", machine="", uid="",
+        ))
+        # Blank machine + non-empty runtime → use runtime name.
+        assert result == "micropython"
+
+    def test_suggest_device_id_falls_back_to_board(self) -> None:
+        from chumicro_deploy import DeviceImplementation
+        from chumicro_workspace.cli import _suggest_device_id
+
+        result = _suggest_device_id(DeviceImplementation(
+            name="", version="0.0.0", machine="!@#$%", uid="",
+        ))
+        assert result == "board"
+
+    def test_resolve_bootstrap_port_explicit_wins(self) -> None:
+        from chumicro_workspace.cli import _resolve_bootstrap_port
+
+        result = _resolve_bootstrap_port("/dev/cu.fake")
+        assert result == "/dev/cu.fake"
+
+    def test_resolve_bootstrap_port_no_ports_returns_none(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from chumicro_workspace.cli import _resolve_bootstrap_port
+        from serial.tools import list_ports
+
+        monkeypatch.setattr(list_ports, "comports", lambda: [])
+        result = _resolve_bootstrap_port(None)
+        assert result is None
+
+    def test_resolve_bootstrap_port_single_port_auto_picks(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from chumicro_workspace.cli import _resolve_bootstrap_port
+        from serial.tools import list_ports
+
+        class _FakePort:
+            device = "/dev/cu.only"
+            description = "Pi Pico W"
+
+        monkeypatch.setattr(list_ports, "comports", lambda: [_FakePort()])
+        result = _resolve_bootstrap_port(None)
+        assert result == "/dev/cu.only"
+
+    def test_resolve_bootstrap_port_multiple_ports_prompts(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from chumicro_workspace.cli import _resolve_bootstrap_port
+        from serial.tools import list_ports
+
+        class _Port:
+            def __init__(self, device: str) -> None:
+                self.device = device
+                self.description = ""
+
+        monkeypatch.setattr(
+            list_ports,
+            "comports",
+            lambda: [_Port("/dev/cu.a"), _Port("/dev/cu.b")],
+        )
+        result = _resolve_bootstrap_port(None, prompt_func=lambda _: "2")
+        assert result == "/dev/cu.b"
+
+    def test_resolve_bootstrap_port_invalid_choice_returns_none(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from chumicro_workspace.cli import _resolve_bootstrap_port
+        from serial.tools import list_ports
+
+        class _Port:
+            def __init__(self, device: str) -> None:
+                self.device = device
+                self.description = ""
+
+        monkeypatch.setattr(
+            list_ports,
+            "comports",
+            lambda: [_Port("/dev/cu.a"), _Port("/dev/cu.b")],
+        )
+        # Out-of-range numeric choice.
+        result = _resolve_bootstrap_port(
+            None, prompt_func=lambda _: "99",
+        )
+        assert result is None
+        # Non-numeric choice.
+        result = _resolve_bootstrap_port(
+            None, prompt_func=lambda _: "garbage",
+        )
+        assert result is None
+
+    def test_resolve_bootstrap_device_id_explicit_wins(self) -> None:
+        from chumicro_workspace.cli import _resolve_bootstrap_device_id
+
+        result = _resolve_bootstrap_device_id(
+            "explicit", "suggested", prompt_func=lambda _: "ignored",
+        )
+        assert result == "explicit"
+
+    def test_resolve_bootstrap_device_id_blank_uses_default(self) -> None:
+        from chumicro_workspace.cli import _resolve_bootstrap_device_id
+
+        result = _resolve_bootstrap_device_id(
+            None, "suggested", prompt_func=lambda _: "  ",
+        )
+        assert result == "suggested"
+
+    def test_resolve_bootstrap_device_id_uses_typed_value(self) -> None:
+        from chumicro_workspace.cli import _resolve_bootstrap_device_id
+
+        result = _resolve_bootstrap_device_id(
+            None, "suggested", prompt_func=lambda _: "  porch  ",
+        )
+        assert result == "porch"
+
+
+class TestBootstrapWizard:
+    """End-to-end CLI tests for `chumicro-workspace bootstrap`."""
+
+    def _seed(self, tmp_path: Path) -> Path:
+        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        return tmp_path
+
+    def test_full_flow_with_explicit_flags(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """All flags set → no prompts, full registration, summary printed."""
+        root = self._seed(tmp_path)
+
+        from chumicro_workspace import cli as workspace_cli
+        from chumicro_workspace import onboarding
+
+        def fake_inference(address: str, **_kw):
+            return onboarding.RuntimeInferenceResult(
+                info=_fake_probe_info(
+                    runtime="micropython",
+                    machine="Raspberry Pi Pico W with rp2040",
+                    version="1.27.0",
+                ),
+                runtime="micropython",
+                transport_used="micropython",
+            )
+
+        monkeypatch.setattr(
+            workspace_cli, "probe_with_runtime_inference", fake_inference,
+        )
+        monkeypatch.setattr(
+            onboarding, "probe_with_runtime_inference", fake_inference,
+        )
+
+        exit_code = cli.main([
+            "bootstrap", "--workspace-dir", str(root),
+            "--port", "/dev/cu.fake",
+            "--device-id", "pico",
+        ])
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "probing /dev/cu.fake" in captured.out
+        assert "runtime: micropython 1.27.0" in captured.out
+        assert "registered pico at /dev/cu.fake" in captured.out
+        # Next-steps summary shows all three pointers.
+        assert "new <thing-name>" in captured.out
+        assert "deploy" in captured.out
+        assert "repl" in captured.out
+
+        body = (root / "devices.yml").read_text()
+        assert "pico" in body
+        assert "/dev/cu.fake" in body
+        assert "firmware_version: 1.27.0" in body
+
+    def test_inference_failure_prints_diagnosis(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = self._seed(tmp_path)
+
+        from chumicro_workspace import cli as workspace_cli
+        from chumicro_workspace import onboarding
+
+        def fake_inference(address: str, **_kw):
+            return onboarding.RuntimeInferenceResult(
+                info=None, runtime=None, transport_used=None,
+                last_exception=OSError("could not open port /dev/cu.x"),
+            )
+
+        monkeypatch.setattr(
+            workspace_cli, "probe_with_runtime_inference", fake_inference,
+        )
+        monkeypatch.setattr(
+            onboarding, "probe_with_runtime_inference", fake_inference,
+        )
+        monkeypatch.setattr(onboarding, "_UF2_MOUNT_SEARCH_PATHS", {})
+
+        # detect_board_state runs its own probe — stub it.
+        import chumicro_deploy
+        monkeypatch.setattr(
+            chumicro_deploy,
+            "probe_device",
+            lambda _d: (_ for _ in ()).throw(
+                OSError("could not open port /dev/cu.x"),
+            ),
+        )
+
+        exit_code = cli.main([
+            "bootstrap", "--workspace-dir", str(root),
+            "--port", "/dev/cu.x",
+            "--device-id", "pico",
+        ])
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert "auto-detect failed" in captured.err
+        # Diagnosis next-steps suggest discover/replug for SERIAL_UNREACHABLE.
+        assert "discover" in captured.err
+
+    def test_old_firmware_warning_does_not_block(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = self._seed(tmp_path)
+
+        from chumicro_workspace import cli as workspace_cli
+        from chumicro_workspace import onboarding
+
+        def fake_inference(address: str, **_kw):
+            return onboarding.RuntimeInferenceResult(
+                info=_fake_probe_info(
+                    runtime="micropython", version="1.26.0",
+                ),
+                runtime="micropython",
+                transport_used="micropython",
+            )
+
+        monkeypatch.setattr(
+            workspace_cli, "probe_with_runtime_inference", fake_inference,
+        )
+        monkeypatch.setattr(
+            onboarding, "probe_with_runtime_inference", fake_inference,
+        )
+
+        exit_code = cli.main([
+            "bootstrap", "--workspace-dir", str(root),
+            "--port", "/dev/cu.x",
+            "--device-id", "pico",
+        ])
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        # Warning emitted to stderr but registration proceeded.
+        assert "1.26.0" in captured.err
+        assert "1.27.0" in captured.err  # the floor
+        body = (root / "devices.yml").read_text()
+        assert "pico" in body
+
+    def test_duplicate_device_id_returns_one(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Bootstrapping a second board onto an existing id should fail
+        cleanly, not silently overwrite."""
+        root = self._seed(tmp_path)
+        # Pre-seed devices.yml with the conflicting id.
+        (root / "devices.yml").write_text(
+            "defaults: {}\n"
+            "devices:\n"
+            "  - id: pico\n"
+            "    runtime: micropython\n"
+            "    address: /dev/cu.old\n",
+        )
+
+        from chumicro_workspace import cli as workspace_cli
+        from chumicro_workspace import onboarding
+
+        def fake_inference(address: str, **_kw):
+            return onboarding.RuntimeInferenceResult(
+                info=_fake_probe_info(version="1.27.0"),
+                runtime="micropython",
+                transport_used="micropython",
+            )
+
+        monkeypatch.setattr(
+            workspace_cli, "probe_with_runtime_inference", fake_inference,
+        )
+        monkeypatch.setattr(
+            onboarding, "probe_with_runtime_inference", fake_inference,
+        )
+
+        exit_code = cli.main([
+            "bootstrap", "--workspace-dir", str(root),
+            "--port", "/dev/cu.new",
+            "--device-id", "pico",
+        ])
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert "already exists" in captured.err
+
+    def test_with_demo_chains_into_deploy(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = self._seed(tmp_path)
+
+        from chumicro_workspace import cli as workspace_cli
+        from chumicro_workspace import onboarding
+
+        def fake_inference(address: str, **_kw):
+            return onboarding.RuntimeInferenceResult(
+                info=_fake_probe_info(version="1.27.0"),
+                runtime="micropython",
+                transport_used="micropython",
+            )
+
+        monkeypatch.setattr(
+            workspace_cli, "probe_with_runtime_inference", fake_inference,
+        )
+        monkeypatch.setattr(
+            onboarding, "probe_with_runtime_inference", fake_inference,
+        )
+
+        # Stub the deploy transport so the demo step doesn't need
+        # real hardware.
+        transport = FakeTransport(
+            execute_output="Hello from ChuMicro!\ndemo complete!\n",
+        )
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+
+        exit_code = cli.main([
+            "bootstrap", "--workspace-dir", str(root),
+            "--port", "/dev/cu.fake",
+            "--device-id", "pico",
+            "--with-demo",
+        ])
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "registered pico" in captured.out
+        # The demo's execute output reaches stdout.
+        assert "Hello from ChuMicro" in captured.out
 
 
 # ---------------------------------------------------------------------------
