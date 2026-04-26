@@ -12,11 +12,15 @@ class TestClassify:
         [
             "run.py",
             "AGENTS.md",
+            "CONTRIBUTING.md",
             "pyproject.toml",
             "things/_template/config.toml",
             "things/_template/app.py",
             "_templates/secrets.yml",
             "_templates/nested/file.txt",
+            ".github/skills/deploy-and-debug/SKILL.md",
+            ".github/skills/add-new-thing/SKILL.md",
+            ".github/skills/register-board/SKILL.md",
         ],
     )
     def test_tool_owned_paths(self, path: str) -> None:

@@ -3,11 +3,12 @@
 Generalizes Decision 0029 §9's `devices.yml` ownership model to the
 whole workspace tree.  Every file falls into one of three zones:
 
-* **Tool-owned** — `run.py`, `AGENTS.md`, `pyproject.toml`,
-  `things/_template/`, `_templates/` (template-source files used to
-  materialize user-edited config like `secrets.yml` per Decision
-  0038 §5).  `init` writes them; `update` rewrites them so newer
-  template releases flow in.
+* **Tool-owned** — `run.py`, `AGENTS.md`, `CONTRIBUTING.md`,
+  `pyproject.toml`, `things/_template/`, `_templates/`
+  (template-source files used to materialize user-edited config
+  like `secrets.yml` per Decision 0038 §5), and the agent-skill
+  documents under `.github/skills/`.  `init` writes them; `update`
+  rewrites them so newer template releases flow in.
 
 * **User-owned** — `things/<each-real-thing>/`, `secrets.yml`,
   `devices.yml`, `libs/`, `packages/`, `workspace.yml`.  `init`
@@ -41,6 +42,7 @@ class Zone(Enum):
 TOOL_OWNED_PATHS: frozenset[str] = frozenset({
     "run.py",
     "AGENTS.md",
+    "CONTRIBUTING.md",
     "pyproject.toml",
 })
 
@@ -49,6 +51,7 @@ TOOL_OWNED_PATHS: frozenset[str] = frozenset({
 TOOL_OWNED_PREFIXES: tuple[str, ...] = (
     "things/_template/",
     "_templates/",
+    ".github/skills/",
 )
 
 #: Files / paths that are user-owned.  ``update`` never touches them.
