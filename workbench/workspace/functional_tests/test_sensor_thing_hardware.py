@@ -153,6 +153,7 @@ def _build_device(entry: DeviceEntry) -> Device:
         transport=entry.runtime,
         address=entry.address,
         baudrate=entry.serial_baudrate,
+        deploy_mode=entry.deploy_mode,
         circuitpy_drive_path=(
             Path(entry.circuitpy_drive_path)
             if entry.circuitpy_drive_path
@@ -168,6 +169,33 @@ def _chumicro_mono_repo_root() -> Path:
     so the root is three parents up.
     """
     return Path(__file__).resolve().parents[3]
+
+
+def _lazy_runtime_adapter_modules() -> list[str]:
+    """Per-runtime adapter / backend modules the AST walker can't see.
+
+    Several chumicro libraries pick a per-runtime adapter at runtime
+    via ``try: import esp32`` ladders (see
+    ``chumicro_wifi.service._select_adapter`` and friends).  The AST
+    walker doesn't follow those branches, so the adapter modules
+    don't ship by default; force-include every one we know about,
+    and let chumicro-deploy's future Decision 0037 marker filter
+    drop the wrong-runtime ones at bundle time.
+
+    Forward-looking: when the import-graph deploy honors
+    ``__chumicro_runtimes__`` markers natively, this list goes away.
+    """
+    return [
+        "chumicro_wifi._adapters.cp",
+        "chumicro_wifi._adapters.mp_esp32",
+        "chumicro_wifi._adapters.mp_rp2",
+        "chumicro_kvstore._backends.cp_nvm",
+        "chumicro_kvstore._backends.mp_nvs",
+        "chumicro_kvstore._backends.mp_littlefs",
+        "chumicro_kvstore._backends.memory",
+        "chumicro_sockets._adapters.cp",
+        "chumicro_sockets._adapters.mp",
+    ]
 
 
 def _chumicro_library_search_paths() -> list[Path]:
@@ -266,6 +294,7 @@ def test_sensor_thing_reaches_boot_phase_marker_on_micropython(
         entrypoint_filename="main.py",
         device_entrypoint="/main.py",
         extra_search_paths=_chumicro_library_search_paths(),
+        extra_modules=_lazy_runtime_adapter_modules(),
     )
     result = Deployer(device).deploy(source)
     _assert_layer2_phase_markers(result.execute_output)
@@ -313,6 +342,7 @@ def test_sensor_thing_boot_counter_persists_across_deploys_on_micropython(
         entrypoint_filename="main.py",
         device_entrypoint="/main.py",
         extra_search_paths=_chumicro_library_search_paths(),
+        extra_modules=_lazy_runtime_adapter_modules(),
     )
     deployer = Deployer(device)
 
@@ -522,20 +552,22 @@ def test_sensor_thing_publishes_to_live_broker(
     _skip_unless_flash_mode(micropython_device)
     environment = _layer3_required_environment()
 
+    # Stage workspace BEFORE Mosquitto spawn: real wifi creds in secrets,
+    # sensor pointing at a placeholder broker that we'll overwrite with
+    # the real port after Mosquitto comes up.
+    workspace, sensor_dir = _stage_layer2_workspace(tmp_path, template_repo)
+    (tmp_path / "secrets.yml").write_text(
+        f'wifi_password: "{environment["password"]}"\n',
+    )
+
     broker_workdir = tmp_path / "mosquitto"
     broker_workdir.mkdir()
     broker_process, broker_port = _spawn_lan_mosquitto(broker_workdir)
     subscriber_process = _spawn_subscriber(broker_port, _LAYER3_TOPIC)
 
     try:
-        # Stage workspace: real wifi creds in secrets, sensor pointing at
-        # the host's LAN-bound Mosquitto.
-        workspace, sensor_dir = _stage_layer2_workspace(tmp_path, template_repo)
         (sensor_dir / "config.toml").write_text(
             _live_broker_config_toml(environment, broker_port),
-        )
-        (tmp_path / "secrets.yml").write_text(
-            f'wifi_password: "{environment["password"]}"\n',
         )
 
         # Deploy + boot.  The deploy returns once the entrypoint exits;
@@ -551,6 +583,7 @@ def test_sensor_thing_publishes_to_live_broker(
             entrypoint_filename="main.py",
             device_entrypoint="/main.py",
             extra_search_paths=_chumicro_library_search_paths(),
+            extra_modules=_lazy_runtime_adapter_modules(),
         )
         # Read messages while the deploy is still pumping.  The deploy
         # blocks until the on-device script terminates (which it won't —
@@ -562,9 +595,16 @@ def test_sensor_thing_publishes_to_live_broker(
         deploy_result_box: list[object] = []
         deploy_error_box: list[BaseException] = []
 
+        staged_files: list[str] = []
+
         def _run_deploy() -> None:
             try:
-                deploy_result_box.append(Deployer(device).deploy(source))
+                deploy_result_box.append(
+                    Deployer(device).deploy(
+                        source,
+                        on_file_staged=lambda path: staged_files.append(path),
+                    ),
+                )
             except BaseException as deploy_error:  # noqa: BLE001 — stash + re-raise
                 deploy_error_box.append(deploy_error)
 
@@ -581,11 +621,27 @@ def test_sensor_thing_publishes_to_live_broker(
             timeout_seconds=_LAYER3_DEPLOY_TIMEOUT_SECONDS,
         )
 
+        # Wait briefly for the deploy thread to settle so we can include
+        # its output in any assertion failure message.
+        deploy_thread.join(timeout=5.0)
+        deploy_state = "running" if deploy_thread.is_alive() else "returned"
+        deploy_output = ""
+        deploy_traceback = ""
+        if deploy_result_box:
+            deploy_output = getattr(deploy_result_box[0], "execute_output", "") or ""
+            deploy_traceback = getattr(deploy_result_box[0], "traceback", "") or ""
+        deploy_error = deploy_error_box[0] if deploy_error_box else None
+
+        adapter_files = sorted(p for p in staged_files if "_adapter" in p or "_backend" in p)
         assert len(lines) >= _LAYER3_REQUIRED_MESSAGES, (
             f"expected ≥{_LAYER3_REQUIRED_MESSAGES} heartbeat messages, "
-            f"got {len(lines)}; deploy state: "
-            f"{'running' if deploy_thread.is_alive() else 'returned'}; "
-            f"subscriber lines: {lines}"
+            f"got {len(lines)}; deploy state: {deploy_state}; "
+            f"subscriber lines: {lines}\n"
+            f"adapter / backend files staged ({len(adapter_files)}):\n  "
+            + "\n  ".join(adapter_files) + "\n"
+            f"deploy.execute_output:\n{deploy_output}\n"
+            f"deploy.traceback:\n{deploy_traceback}\n"
+            f"deploy_error: {deploy_error!r}"
         )
         # Each line is a JSON-ish payload: {"boot": N, "celsius": T, "n": K}
         for line in lines:

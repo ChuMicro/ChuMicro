@@ -26,6 +26,16 @@ When an integration issue is resolved by changing a library API, the resolution 
 
 **Forward-looking:** `chumicro-workspace`'s `python run.py new <name>` should validate the name and reject hyphens at creation time with a clear error pointing the user at underscores.  Today it doesn't — it'd happily create `things/back-porch/` and surface the failure at deploy time.  Cheap to add; do alongside the next `new` change.
 
+### `chumicro-deploy` import-graph misses lazy-imported per-runtime adapters
+
+**Symptom:** observed 2026-04-26 while wiring up Phase 7 Layer-3 against a real Pi Pico W MP board.  The sensor thing's `from chumicro_sockets import tcp_client_socket` triggers `from chumicro_sockets._adapters import mp` *inside* the function body — Python's AST walker captures the package name (`chumicro_sockets._adapters`) but not the submodule (`mp`).  So the deploy ships `_adapters/__init__.py` but not `_adapters/mp.py`, and the device errors out with `ImportError: no module named 'chumicro_sockets._adapters.mp'`.
+
+The same shape exists in `chumicro_kvstore._backends`, `chumicro_wifi._adapters`, and any future per-runtime-adapter library.  `chumicro_wifi` happens to also have a top-level `from chumicro_wifi._adapters.cp import CpWifiAdapter` (line-attribute import) that the AST walker DOES pick up — that's why wifi adapters ship without help, but sockets adapters don't.
+
+**Workaround in Layer-2 / Layer-3 tests:** pass `extra_modules=` to `thing_import_graph_source` listing every per-runtime adapter that could possibly be needed.  See `_lazy_runtime_adapter_modules()` in `test_sensor_thing_hardware.py`.
+
+**Forward-looking:** Decision 0037's `__chumicro_runtimes__` markers give every adapter / backend file an explicit declaration of which runtime(s) it belongs to.  `chumicro-deploy`'s import-graph walker today doesn't read those markers; it should.  When walking imports against a known target runtime (`Device.transport`), the walker should auto-include every file in the search paths whose `__chumicro_runtimes__` includes that runtime, so consumers don't have to enumerate adapters by hand.  Tractable enhancement; high enough leverage that it should land before Phase 7 actually claims to be complete.
+
 ### Boot-shim deploys don't compose with import-graph resolution
 
 **Symptom:** for the Layer-2 functional test I tried to use `thing_boot_source` (which generates the `code.py`/`main.py` + `active.py` + `workspace_runtime` shim layout) AND ship the chumicro libraries the sensor thing imports.  `thing_boot_source` doesn't take an `extra_search_paths` parameter and doesn't walk imports — it ships only the thing's own dir contents.  `thing_import_graph_source` walks imports but expects a real entrypoint file (no synthetic main.py).
