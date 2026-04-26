@@ -1,21 +1,17 @@
 """Discover the TOML config-section templates each library ships.
 
-Per Decision 0036 §5, every consumer library ships a starter TOML
-snippet at::
+Every consumer library ships a starter TOML snippet at::
 
     chumicro_<name>/_templates/config.toml
 
-Workspace tooling collects these snippets when a user adds a
-library to a thing — assembling a starter ``config.toml`` the user
-fills in.
+Workspace tooling collects these snippets when a user adds a library
+to a thing — assembling a starter ``config.toml``.
 
-CPython-only behavior: ``importlib.resources`` doesn't exist on
-MicroPython or CircuitPython, so calling :func:`get_section_template`
-on device raises ``RuntimeError``.  The module itself imports
-cleanly on device (the bundle deploy ships every ``.py`` under the
-package, which is why this matters) — the ``importlib.resources``
-import is deferred inside the function so a device that bundles the
-file but never calls the function pays nothing.
+CPython-only: ``importlib.resources`` is absent on MP / CP, so
+calling :func:`get_section_template` on device raises
+``RuntimeError``.  The import is deferred inside the function so the
+module itself loads cleanly on every runtime — devices that ship the
+file but never call the function pay nothing.
 """
 
 from chumicro_config.section import ConfigError

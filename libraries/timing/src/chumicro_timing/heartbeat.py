@@ -30,8 +30,7 @@ class Heartbeat:
             period_ms: Interval between beats.
             ticks: Optional tick source (must have ``ticks_ms`` and
                 ``ticks_diff`` methods).  Defaults to the real clock.
-                Constructor injection per Decision 0010; pass
-                ``FakeTicks`` from ``chumicro_timing.testing`` in tests.
+                Tests pass ``FakeTicks`` from ``chumicro_timing.testing``.
         """
         if period_ms <= 0:
             raise ValueError("period_ms must be greater than zero")

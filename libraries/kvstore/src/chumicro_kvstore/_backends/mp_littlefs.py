@@ -1,25 +1,18 @@
 """MicroPython LittleFS backend.
 
-Persists the encoded msgpack payload as a single file on the
-LittleFS root: ``/_chu_kv.msgpack``.  The leading underscore keeps
-the file out of the way of listing-sorted file managers so it
-doesn't surface as the user's first file.
+Persists the msgpack payload as ``/_chu_kv.msgpack`` (leading
+underscore keeps it out of file-manager listings).
 
-Atomicity comes from LittleFS's atomic-rename guarantee — writes
-land in a temp file (``/_chu_kv.msgpack.tmp``) which is renamed
-over the canonical path only after ``os.sync()``.  A power loss
-mid-write either leaves the old file intact (rename never
-happened) or commits the new file (rename completed); the file
-system never exposes a partial-write state.  No CRC framing —
-LittleFS itself wear-levels and verifies block integrity.
+Atomicity comes from LittleFS's atomic-rename: writes land in
+``/_chu_kv.msgpack.tmp`` and rename over the canonical path only
+after ``os.sync()``.  Power loss mid-write either leaves the old
+file intact or commits the new one — never a partial state.  No
+CRC framing — LittleFS wear-levels and verifies block integrity.
 
-The backend accepts an injected filesystem substrate so host-side
-tests can exercise the write / read / rename loop without a Pi
-Pico W board — pass any object exposing ``open``, ``rename``,
-``remove``, and ``sync`` matching the shapes the runtime exposes.
+Tests inject a filesystem substrate exposing ``open``, ``rename``,
+``remove``, and ``sync``.
 """
 
-#: Bundle pipeline marker — Decision 0037.  MP-mpy + source bundle only.
 __chumicro_runtimes__ = ("micropython",)
 
 from chumicro_kvstore._backends.base import Backend
@@ -30,8 +23,8 @@ class MpLittlefsBackend(Backend):
 
     Args:
         path: Path to the canonical payload file.  Default is
-            ``/_chu_kv.msgpack`` (Decision 0034 §7).  Override for
-            tests or boards with mounted-elsewhere filesystems.
+            ``/_chu_kv.msgpack``.  Override for tests or boards with
+            mounted-elsewhere filesystems.
         filesystem: Optional filesystem-shaped substrate (must
             expose ``open``, ``rename(src, dst)``, ``remove(path)``,
             and ``sync()``).  When ``None`` (default), uses the

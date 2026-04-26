@@ -1,14 +1,11 @@
 """``TCPClientSocket`` protocol — the surface every adapter implements.
 
-Decision 0031 §2 names the minimum surface downstream libs touch.
-Duck-typed: the protocol is enforced by convention (every adapter
-implements the same six methods) rather than by an ABC walk.  On
-CPython, :class:`TCPClientSocket` resolves to ``typing.Protocol``
-so type-checker conformance falls out of structural typing.  On MP
-and CP — where ``typing`` may not be available — it falls back to
-a plain class so the import doesn't trip.
+Duck-typed: enforced by convention, not an ABC walk.  Resolves to
+``typing.Protocol`` on CPython for static-type-checker conformance;
+falls back to a plain class on MP / CP when ``typing`` is absent so
+the import doesn't trip.
 
-The five operations:
+The six operations:
 
 * ``send`` — write bytes; returns the number sent (may be < len for
   non-blocking sockets that hit a partial send).
@@ -41,13 +38,11 @@ except ImportError:  # pragma: no cover — MP / CP without typing stub
 
 @runtime_checkable
 class TCPClientSocket(Protocol):
-    """Minimum surface every TCP adapter implements (Decision 0031 §2).
+    """Minimum surface every TCP adapter implements.
 
-    All four adapters (CP socketpool, MP stdlib socket, CPython stdlib
-    socket, and the FakeSocket from :mod:`chumicro_sockets.testing`)
-    satisfy this protocol.  Downstream libs (``chumicro-mqtt``,
-    a future ``chumicro-requests``) annotate against this type
-    instead of any concrete adapter.
+    Satisfied by CP socketpool, MP stdlib socket, CPython stdlib
+    socket, and ``FakeSocket`` (:mod:`chumicro_sockets.testing`).
+    Downstream libs annotate against this type, not concrete adapters.
     """
 
     def send(self, data: bytes) -> int:

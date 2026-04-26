@@ -4,28 +4,19 @@ Used:
 
 * on CPython directly (host-side tests, sim runs, downstream libs
   imported on a laptop without a board);
-* as the test substrate for :class:`chumicro_sockets.testing.FakeSocket`
-  conformance — every protocol method routes to a real CPython
-  socket call here, so a passing test against this adapter establishes
-  the contract every other adapter implements.
+* as the test substrate for ``FakeSocket`` conformance — passing
+  tests here prove the contract every other adapter implements.
 
-stdlib ``socket.create_connection`` does the dial-and-connect dance
-and raises :class:`OSError` on connect failure, which downstream
-libs already handle.  TLS uses stdlib ``ssl.SSLContext.wrap_socket``;
-``context=None`` means "default-CA stdlib context" via
-``ssl.create_default_context()``.
+``socket.create_connection`` does the dial-and-connect and raises
+:class:`OSError` on failure.  TLS uses ``ssl.SSLContext.wrap_socket``;
+``context=None`` means ``ssl.create_default_context()``.
 
 Imports happen INSIDE the functions: CP RAM-mode bootstrap stages
-every adapter file and tries to import it; a top-level
-``import socket`` would fail on CP because CP has no ``socket``
-module.  Lazy imports keep this adapter staged-but-quiet on CP.
-
-Bundle pipeline marker — Decision 0037.  Source bundle only;
-excluded from CP-mpy and MP-mpy device bundles.
+every adapter file and a top-level ``import socket`` would fail on
+CP.  Lazy imports keep this adapter staged-but-quiet on CP.
 """
 
-#: Bundle pipeline marker — Decision 0037.  Source bundle only;
-#: never lands on a device.
+#: Source bundle only; never lands on a device.
 __chumicro_runtimes__ = ("cpython",)
 
 

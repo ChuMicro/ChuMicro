@@ -1,7 +1,6 @@
 """Unified wifi supervisor across CircuitPython, MicroPython, and CPython.
 
-Library is the sole wifi supervisor on every runtime
-(Decision 0029 §wifi-ownership-stance) — no
+Library is the sole wifi supervisor on every runtime — no
 ``CIRCUITPY_WIFI_*`` keys, no firmware-level auto-reconnect.
 
 Public API::
@@ -25,17 +24,11 @@ For tests + downstream library tests::
 
     from chumicro_wifi.testing import FakeWifi
 
-**Loading shape (Tier A per the lazy-loading research).**  The
-package-level surface is small (3 attrs) so eager imports are
-correct here — the early prototype tried PEP 562 module
-``__getattr__`` for parity with ``chumicro-deploy``, but real
-CircuitPython RAM-mode deploys class-as-module stubs that don't
-honor PEP 562 (the ``_Mod`` wrapper bypasses module ``__getattr__``
-silently).  The lazy benefit lives where it actually pays: the
-per-runtime adapter selection inside
-:func:`chumicro_wifi.service._select_adapter`, which uses the
-named ``from X import Y`` form that *does* work on every deploy
-path (same shape as ``chumicro_kvstore._select_backend``).
+The package-level surface is eager (3 imports); per-runtime adapter
+selection happens lazily inside :func:`service._select_adapter` via
+named ``from X import Y`` — the only form that works under
+CircuitPython's RAM-mode class-as-module stub (PEP 562 module-level
+``__getattr__`` is silently bypassed by that stub).
 """
 
 from chumicro_wifi.config import WifiConfig

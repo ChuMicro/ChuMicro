@@ -1,14 +1,9 @@
 """``WifiConfig`` — typed connection settings + ``from_dict`` factory.
 
-The ``from_dict`` classmethod calls ``chumicro_config.load_section``
-per the convention codified in Decision 0036 — same shape every
-config-consuming library uses.
-
-The required / optional vocabulary is duplicated in ``__init__``'s
-parameter defaults and ``from_dict``'s call.  On purpose: both
-construction paths (direct kwargs in tests, dict-based in production)
-must agree, and writing them twice locally is more readable than a
-metaclass that derives one from the other.
+The required / optional vocabulary is duplicated between ``__init__``
+parameter defaults and ``from_dict``'s call: both construction paths
+(direct kwargs in tests, dict-based in production) must agree, and
+writing them twice is clearer than deriving one from the other.
 """
 
 from chumicro_config import load_section
@@ -62,10 +57,8 @@ class WifiConfig:
     def from_dict(cls, data: dict) -> "WifiConfig":
         """Build a ``WifiConfig`` from a section dict.
 
-        The standard ``chumicro-config`` shape (Decision 0036 §3) —
-        delegates to ``load_section`` so the missing-required /
-        missing-optional / non-dict semantics are uniform across
-        every config-consuming library.
+        Delegates to ``chumicro_config.load_section`` for uniform
+        missing-required / missing-optional / non-dict semantics.
 
         Args:
             data: The ``"wifi"`` section dict, typically

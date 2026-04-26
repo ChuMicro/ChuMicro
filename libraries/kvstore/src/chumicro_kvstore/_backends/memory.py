@@ -1,11 +1,10 @@
 """In-memory backend — CPython default + ``FakeKVStore`` substrate.
 
-Stores the encoded payload in process memory.  No persistence across
-process boundary by default.  The optional *initial* argument lets
-test setups seed a known starting state.
+Stores the encoded payload in process memory; no persistence across
+process boundary by default.  *initial* seeds a known starting state.
 
-Capacity is configurable so downstream tests can simulate small-NVM
-edge cases without owning a SAMD21 (Decision 0034 §8).
+*capacity* is configurable so tests can simulate small-NVM edge
+cases without owning a real low-memory board.
 """
 
 import sys

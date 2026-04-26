@@ -1,7 +1,7 @@
 """Test helpers for libraries that depend on ``chumicro-kvstore``.
 
-Ships with the library per Decision 0010.  Downstream consumers
-import ``FakeKVStore`` rather than inventing ad-hoc mocks.
+Downstream consumers import ``FakeKVStore`` rather than inventing
+ad-hoc mocks.
 
 Example::
 

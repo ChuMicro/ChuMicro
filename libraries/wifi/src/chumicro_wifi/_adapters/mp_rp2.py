@@ -1,41 +1,20 @@
 """MicroPython Pi Pico W (CYW43 / RP2040) ``network.WLAN`` adapter.
 
-Wraps the MP ``network.WLAN(network.STA_IF)`` station-mode handle
-on the CYW43 wifi chip that the Pi Pico W (and other CYW43-based
-MP boards) ships with.
+Wraps ``network.WLAN(network.STA_IF)`` on the CYW43 chip.  CYW43 has
+no firmware-level supervisor (unlike ESP32), so no
+``wlan.config(reconnects=0)`` call is needed.  The adapter does add
+the **power-save knob**: ``wlan.config(pm=0xa11140)`` disables CYW43
+idle power-save (eliminates ~30-100 ms tick spikes on chip wake-up).
+Applied when ``WifiConfig.power_save`` is ``False`` (default).
 
-**No firmware-level supervisor exists** on the CYW43 — the library
-is the sole owner of reconnect by default (Decision 0029
-§wifi-ownership-stance), so this adapter is simpler than the ESP32
-sibling: no `wlan.config(reconnects=0)` call needed.  What it
-*does* add is the **power-save knob**: `wlan.config(pm=0xa11140)`
-disables CYW43's idle power-save mode, eliminating the responsiveness
-hit community reports describe (~30-100 ms tick spikes on chip
-wake-up).  Applied when ``WifiConfig.power_save`` is ``False``
-(default); skipped when the user explicitly opts in to power-save.
+``wlan`` defaults to a fresh ``network.WLAN(network.STA_IF)``; tests
+inject a fake to exercise the adapter contract without hardware.
 
-Constructor injection (Decision 0010): ``wlan`` defaults to a
-fresh ``network.WLAN(network.STA_IF)`` on MicroPython but accepts
-an injected fake on hosts.
-
-Shares most of its surface with :class:`MpEsp32WifiAdapter` (the
-non-blocking ``connect``, ``isconnected``-driven link state, the
-``ifconfig()[0]`` IP read with ``"0.0.0.0"`` post-association-
-pre-DHCP sentinel handling).  Two adapters rather than one shared
-class because:
-
-* ESP32 needs the firmware-supervisor-off knob; CYW43 doesn't.
-* CYW43 needs the power-save knob; ESP32 doesn't expose one at
-  the same layer.
-* Decisions about what ``OSError``-tolerance to extend to which
-  knob are substrate-specific.
-
-Following the per-runtime-adapter convention from the lazy-loading
-research keeps each substrate's quirks in one file.
+Kept separate from :class:`MpEsp32WifiAdapter` because the substrate
+quirks (firmware-supervisor toggle on ESP32, power-save knob on
+CYW43, OSError tolerance per knob) are each substrate-specific.
 """
 
-#: Bundle pipeline marker — Decision 0037.  This file ships to the
-#: MP-mpy bundle and the source bundle; excluded from CP-mpy.
 __chumicro_runtimes__ = ("micropython",)
 
 from chumicro_wifi._adapters.base import WifiAdapter

@@ -12,12 +12,12 @@ from chumicro_config.section import InvalidConfigType
 DEFAULT_RUNTIME_CONFIG_PATH = "/runtime_config.msgpack"
 """Canonical on-device location of the deployed runtime config.
 
-Fixed by Decision 0030 §1 / Decision 0035 §8.  Changing it would be
-an ABI break for every library + every workspace template.
+Changing this is an ABI break for every library + every workspace
+template — don't.
 """
 
 
-def load_runtime_config(path=None):
+def load_runtime_config(path: str | None = None) -> dict:
     """Read + decode the deployed runtime config.
 
     Args:
@@ -27,7 +27,7 @@ def load_runtime_config(path=None):
             constant without losing the default-arg ergonomics.
 
     Returns:
-        The section-namespaced dict per Decision 0035 §1.
+        The section-namespaced dict.
 
     Raises:
         OSError: File missing — device was deployed without a

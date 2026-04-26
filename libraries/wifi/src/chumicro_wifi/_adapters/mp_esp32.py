@@ -1,23 +1,16 @@
 """MicroPython ESP32 ``network.WLAN`` adapter.
 
-Wraps the MP ``network.WLAN(network.STA_IF)`` station-mode handle
-with the supervisor convention codified in Decision 0029
-§wifi-ownership-stance: **library is the sole supervisor**.  After
-the first successful connect, the adapter calls
-``wlan.config(reconnects=0)`` to disable ESP-IDF's firmware-level
-auto-reconnect supervisor (per ``ports/esp32/network_wlan.c:594-600``
-— ``reconnects=-1`` unlimited (default), ``reconnects=0`` one
-attempt then stop, ``reconnects=N`` N retries).  ``0`` is
-effectively "off"; the library drives retries itself with uniform
-backoff via ``WifiService``'s reconnect path.
+Wraps ``network.WLAN(network.STA_IF)``.  The library is the sole
+reconnect supervisor: after the first successful connect, the
+adapter calls ``wlan.config(reconnects=0)`` to disable ESP-IDF's
+firmware-level auto-reconnect (``reconnects=0`` = one attempt then
+stop; the library drives retries itself with uniform backoff via
+``WifiService``).
 
-Constructor injection (Decision 0010): ``wlan`` defaults to a
-fresh ``network.WLAN(network.STA_IF)`` on MicroPython but accepts
-an injected fake on hosts so the adapter contract can be tested
-without hardware.
+``wlan`` defaults to a fresh ``network.WLAN(network.STA_IF)``; tests
+inject a fake to exercise the adapter contract without hardware.
 """
 
-#: Bundle pipeline marker — Decision 0037.  MP-mpy + source bundle only.
 __chumicro_runtimes__ = ("micropython",)
 
 from chumicro_wifi._adapters.base import WifiAdapter
@@ -92,7 +85,7 @@ class MpEsp32WifiAdapter(WifiAdapter):
 
         After the first link-up, drops the firmware-level
         auto-reconnect supervisor so the library is the sole driver
-        of retry behavior (Decision 0029 §wifi-ownership-stance).
+        of retry behavior.
         """
         self._wlan.connect(config.ssid, config.password)
         if not self._wlan.isconnected():

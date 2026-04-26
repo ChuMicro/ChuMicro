@@ -1,8 +1,7 @@
 """CircuitPython ``microcontroller.nvm`` backend with CRC framing.
 
 Persists a single msgpack payload into the NVM byte slab, prefixed
-with a magic header and CRC32 for power-loss-corruption detection.
-See Decision 0034 §5 for the framing layout::
+with magic header + CRC32 for power-loss-corruption detection::
 
     offset 0:  4 bytes — MAGIC b"CKVS"
     offset 4:  2 bytes — LEN (little-endian uint16)
@@ -11,16 +10,12 @@ See Decision 0034 §5 for the framing layout::
 
 A blank slab (all ``0xFF`` from raw flash erase, or all ``0x00`` on
 some chips) is treated as "no state yet" and reports ``is_corrupt =
-False, bytes_used = 0``.  Anything else with a bad magic raises
-``KVStoreCorrupt`` so the caller can log the event.
+False, bytes_used = 0``.  Bad magic raises ``KVStoreCorrupt``.
 
-The backend accepts an injected ``nvm`` substrate so host-side tests
-can exercise the full framing without a CircuitPython runtime — pass
-a ``bytearray`` of any size that fits the target board's NVM
-capacity.
+Tests inject a ``bytearray`` ``nvm`` substrate to exercise the full
+framing without a CircuitPython runtime.
 """
 
-#: Bundle pipeline marker — Decision 0037.  CP-mpy + source bundle only.
 __chumicro_runtimes__ = ("circuitpython",)
 
 import binascii

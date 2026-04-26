@@ -1,7 +1,6 @@
 """``WifiService`` — state machine + reconnect supervisor.
 
-The library is the sole wifi supervisor on every runtime
-(Decision 0029 §wifi-ownership-stance) — no
+Library is the sole supervisor on every runtime — no
 ``CIRCUITPY_WIFI_*`` keys, no firmware-level auto-reconnect.  This
 class drives the substrate adapter and tracks state in the runner's
 tick loop.
@@ -16,10 +15,9 @@ State machine (`state.py` constants)::
                         v            v
                      FAILED <--- backoff exhausted (only when reconnect_max set)
 
-``check`` / ``handle`` integrate with `chumicro_runner.Runner`
-(Decision 0014).  ``handle`` does the substrate work; ``check``
-returns ``True`` when the next event is due (initial connect,
-reconnect attempt, link-down detection).
+Runner contract: ``check(now_ms)`` returns ``True`` when the next
+event is due (initial connect, reconnect attempt, link-down
+detection); ``handle(now_ms)`` does one tick of substrate work.
 """
 
 import sys
@@ -31,12 +29,11 @@ from chumicro_wifi.state import WifiState
 def _select_adapter():
     """Pick the runtime-appropriate adapter.
 
-    The CP / MP branches lazy-import the substrate-specific module
-    so a board only parses the adapter it actually targets.  CPython
-    (or any runtime not in the recognised set) lazy-imports the fake
-    from :mod:`chumicro_wifi.testing` — testing.py is excluded from
-    device bundles per Decision 0037, but on the CPython host it's
-    always available, which is the only place the fallback fires.
+    CP / MP branches lazy-import the substrate-specific module so the
+    board only parses the adapter it actually uses.  CPython falls
+    back to ``FakeWifiAdapter`` from :mod:`chumicro_wifi.testing` —
+    testing.py is host-only, but the CPython branch is the only place
+    the fallback fires.
     """
     runtime_name = sys.implementation.name
     if runtime_name == "circuitpython":  # pragma: no cover - CP runtime path
@@ -50,7 +47,7 @@ def _select_adapter():
             return MpRp2WifiAdapter()
         from chumicro_wifi._adapters.mp_esp32 import MpEsp32WifiAdapter
         return MpEsp32WifiAdapter()
-    # CPython host fallback — testing.py is the home of the fake (Decision 0037).
+    # CPython host fallback — testing.py owns the fake.
     from chumicro_wifi.testing import FakeWifiAdapter
     return FakeWifiAdapter()
 

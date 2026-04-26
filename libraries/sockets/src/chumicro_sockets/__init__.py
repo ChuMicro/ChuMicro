@@ -12,21 +12,16 @@ Public API::
 
     from chumicro_sockets.testing import FakeSocket
 
-Decision 0031 specifies the architecture: per-runtime adapters under
-``_adapters/``, two sibling factories (``tcp_client_socket`` and
-``tls_client_socket``), and TLS as a proper injected dependency
-rather than a flag.  The factories pick the right adapter via
-``sys.implementation.name`` so user code never sees a runtime check.
+Per-runtime adapters live under ``_adapters/``; two sibling factories
+(``tcp_client_socket`` / ``tls_client_socket``) pick the right adapter
+via ``sys.implementation.name`` so user code never sees a runtime
+check.  TLS is an injected ``ssl.SSLContext`` (not a flag); the path
+is identical across runtimes — every supported board ships on-board
+``ssl``.
 
-This package is the substrate for ``chumicro-mqtt`` and a future
-``chumicro-requests`` — neither imports ``socketpool``, ``socket``,
-or ``ssl`` directly.
-
-The TLS path looks identical across runtimes (Decision 0015 minimum
-supported board class — Pi Pico W, ESP32-S2/S3, ESP32-S3 Feather —
-all ship the on-board ``ssl`` module on current LTS firmware):
-``tls_client_socket`` accepts an :class:`ssl.SSLContext` (or
-``None`` for the runtime default) on every runtime.
+Substrate for ``chumicro-mqtt``; downstream libs annotate against
+``TCPClientSocket`` instead of importing ``socketpool`` / ``socket``
+/ ``ssl`` directly.
 """
 
 import sys
@@ -99,8 +94,7 @@ def tls_client_socket(
     """Open a TLS client connection.
 
     Routes to the runtime-appropriate adapter; *context* is honored
-    on every runtime (Decision 0015 supported boards all ship the
-    on-board ``ssl`` module):
+    on every runtime (every supported board ships on-board ``ssl``):
 
     * **CircuitPython** — ``context.wrap_socket(socketpool_sock,
       server_hostname=host)`` then ``connect``.  *radio* required.
@@ -145,8 +139,8 @@ def ssl_context_with_ca(ca_pem: str | bytes) -> object:
     """Build an SSLContext that trusts the CA(s) in *ca_pem*.
 
     The common "default everything except the trust anchor" recipe.
-    Identical shape on every runtime (Decision 0015 supported boards
-    all ship the on-board ``ssl`` module).  Returned as ``object``
+    Identical shape on every runtime (every supported board ships
+    on-board ``ssl``).  Returned as ``object``
     rather than ``ssl.SSLContext`` so we don't force ``import ssl``
     at module-load time on plain-TCP-only consumers.
 

@@ -1,36 +1,23 @@
 """CircuitPython adapter — ``socketpool`` + native ``ssl``.
 
-Decision 0015 caps the supported board class at 256 KB MCU RAM /
-4 MB flash and current-LTS firmware.  Every CP board in that class
-with native wifi (Pi Pico W, ESP32-S2, ESP32-S3, ESP32-S3 Feather,
-etc.) ships the ``ssl`` module — so the TLS path is the same shape
-as MP-mbedTLS and CPython: build (or accept) an
+Every supported CP board ships the ``ssl`` module, so the TLS path
+mirrors MP-mbedTLS and CPython: build (or accept) an
 :class:`ssl.SSLContext`, call ``context.wrap_socket(socket,
-server_hostname=host)``, then ``connect``.
+server_hostname=host)``, then ``connect``.  Legacy radios without
+on-board ``ssl`` (AirLift, pre-mbedTLS WIZNET5K, Fona) are out of
+scope — those users stay on ``adafruit_connection_manager``.
 
-Bundle pipeline marker — Decision 0037.  CP-mpy + source bundle only.
-
-Legacy radios that lack the on-board ``ssl`` module (AirLift,
-WIZNET5K-pre-mbedTLS, Fona) used a ``TLS_MODE``-flag fake-context
-shim — out of scope here.  Users on those boards should pin to the
-existing ``adafruit_connection_manager`` ecosystem rather than
-chumicro-sockets.
-
-Public surface from this module (everything the package's factories
-route to):
+Public surface (factory routes to these):
 
 * ``connect_tcp(host, port, *, radio)`` — plain TCP.
 * ``connect_tls(host, port, *, context, radio)`` — TLS, honoring the
   caller's context or building the default when ``context=None``.
-* ``ssl_context_with_ca(ca_pem)`` — real :class:`ssl.SSLContext`
-  with custom CA.
+* ``ssl_context_with_ca(ca_pem)`` — :class:`ssl.SSLContext` with custom CA.
 
 ``_pool_for(radio)`` memoizes the per-radio ``socketpool.SocketPool``
-so a fresh pool isn't built on every connect (CP creates one pool
-per radio; the cache size is exactly one in steady state).
+(steady-state cache size is one).
 """
 
-#: Bundle pipeline marker — Decision 0037.
 __chumicro_runtimes__ = ("circuitpython",)
 
 

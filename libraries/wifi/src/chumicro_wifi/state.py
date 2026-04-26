@@ -1,7 +1,6 @@
 """``WifiState`` — five-value state machine for ``WifiService``.
 
-State transitions (Decision 0029 §wifi-ownership-stance,
-``plans/workstreams/project-workspace.md`` Phase 3a)::
+State transitions::
 
     DISCONNECTED -> CONNECTING -> CONNECTED
                         |            |
@@ -11,9 +10,8 @@ State transitions (Decision 0029 §wifi-ownership-stance,
                         v            v
                      FAILED <--- backoff exhausted (if reconnect_max set)
 
-Plain-string sentinel values (no `enum` import — unavailable on
-some MicroPython boards) so the contract is portable across CP, MP,
-and CPython.  Compare via ``state == WifiState.CONNECTED`` etc.
+Plain-string sentinels (no ``enum`` import — unavailable on some
+MicroPython boards).  Compare via ``state == WifiState.CONNECTED``.
 """
 
 

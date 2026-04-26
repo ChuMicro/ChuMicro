@@ -10,18 +10,12 @@ Provides two ways to register work with a ``Runner``:
    every *period_ms* milliseconds with no check.
 
 All classes are cross-runtime compatible (CPython, MicroPython, CircuitPython).
-
-See ``plans/decisions/0014-runner-pattern.md`` for the design rationale.
 """
 
-# Default tick source is imported eagerly at module load (rather than lazily
-# inside ``Runner.__init__``) so that MicroPython mount-mode runs don't pay
-# the mpremote RPC cost for two extra file reads the *first* time a
-# ``Runner()`` is constructed inside a test.  That lazy import used to add
-# ~1 s to the first test on the Lolin S2 mini because
-# ``chumicro_timing/__init__.py`` and ``ticks.py`` were fetched over the
-# serial mount at test-execution time.  Eager import pushes the cost to
-# module-import time, which happens before the harness starts its timer.
+# Default tick source imported eagerly at module load.  Lazy import inside
+# ``Runner.__init__`` would add ~1 s to the first test on MP mount-mode
+# (each fresh import becomes an mpremote RPC); eager import pushes the
+# cost to module-import time, before the harness starts its timer.
 from chumicro_timing import ticks as _DEFAULT_TICKS
 
 
@@ -195,8 +189,7 @@ class Runner:
             ticks: Optional tick source (must have ``ticks_ms``,
                 ``ticks_diff``, and ``ticks_add`` methods).
                 Defaults to the ``chumicro_timing.ticks`` module.
-                Constructor injection per Decision 0010; pass
-                ``FakeTicks`` from ``chumicro_timing.testing`` in tests.
+                Tests pass ``FakeTicks`` from ``chumicro_timing.testing``.
         """
         self._entries = []
         self._pending = []

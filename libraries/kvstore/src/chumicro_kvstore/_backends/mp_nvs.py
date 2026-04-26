@@ -1,23 +1,17 @@
 """MicroPython ``esp32.NVS`` backend.
 
-Persists the encoded msgpack payload as a single blob under a fixed
-NVS key (``"payload"``) inside the ``"chu_kv"`` namespace.  See
-Decision 0034 §6 for why this is single-blob rather than per-dict-key
-(short version: MP's ``esp32.NVS`` wrapper does not expose key
-enumeration, so per-key storage would require a manifest blob — extra
-complexity for marginal wear-leveling gain over the per-namespace
-wear leveling NVS already provides).
+Persists the msgpack payload as a single blob under key ``"payload"``
+in the ``"chu_kv"`` namespace.  Single-blob (rather than per-dict-key)
+because MP's ``esp32.NVS`` wrapper doesn't expose key enumeration;
+per-key storage would require a manifest blob for marginal wear gain.
 
 NVS is wear-leveled and atomic-on-commit at the substrate level, so
-the backend skips the CRC framing the CP NVM path needs.
+no CRC framing here (unlike CP's NVM path).
 
-The backend accepts an injected ``nvs`` substrate so host-side tests
-can exercise the load / save loop without an ESP32 board — pass any
-object that implements ``set_blob(key, value)``, ``get_blob(key,
-buffer) -> length``, ``erase_key(key)``, and ``commit()``.
+Tests inject an ``nvs`` substrate exposing ``set_blob(key, value)``,
+``get_blob(key, buffer) -> length``, ``erase_key(key)``, ``commit()``.
 """
 
-#: Bundle pipeline marker — Decision 0037.  MP-mpy + source bundle only.
 __chumicro_runtimes__ = ("micropython",)
 
 from chumicro_kvstore._backends.base import Backend

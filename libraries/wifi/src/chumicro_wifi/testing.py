@@ -1,7 +1,7 @@
 """Test helpers for libraries that depend on ``chumicro-wifi``.
 
-Ships with the library per Decision 0010.  Downstream consumers
-import ``FakeWifi`` rather than inventing ad-hoc mocks.
+Downstream consumers import ``FakeWifi`` rather than inventing
+ad-hoc mocks.
 
 Example::
 
@@ -15,11 +15,11 @@ Example::
     fake_wifi.tick()
     assert fake_wifi.state == "connected"
 
-This module hosts both the test fakes (``FakeWifi``, ``FakeWifiAdapter``)
-and the CPython-default adapter the production ``WifiService`` falls
-back to when no real runtime adapter applies.  Bundle pipeline
-excludes ``testing.py`` from device deploys (Decision 0037), so the
-adapter is host-only — exactly where it's needed.
+This module hosts both the test fakes (``FakeWifi``,
+``FakeWifiAdapter``) and the CPython-default adapter the production
+``WifiService`` falls back to when no real runtime adapter applies.
+The bundle pipeline excludes ``testing.py`` from device deploys, so
+the adapter is host-only — exactly where it's needed.
 """
 
 from chumicro_wifi._adapters.base import WifiAdapter

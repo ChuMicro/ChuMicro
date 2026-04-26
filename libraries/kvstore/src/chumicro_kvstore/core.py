@@ -1,28 +1,18 @@
 """Core ``KVStore`` class + exception hierarchy.
 
-The class is mapping-shaped (``store[key]`` / ``store["k"] = v`` / ``del
-store["k"]`` / ``"k" in store`` / ``for key in store``) with three
-explicit lifecycle methods (``commit``, ``commit_if_changed``,
-``reload``).
+Mapping-shaped (``store[key]`` / ``store["k"] = v`` / ``del
+store["k"]`` / ``"k" in store`` / iter) plus three explicit lifecycle
+methods (``commit``, ``commit_if_changed``, ``reload``).
 
-Backend selection is per-runtime via ``backend="auto"``; explicit
-overrides accepted.  See Decision 0034 §1–2.
+Backend selection is per-runtime via ``backend="auto"`` with explicit
+overrides accepted.
 
-Imports are deliberately split.  On-board RAM audit
-(`.scratch/run_ram_audit.py`, 2026-04-26) measured 5.4–7.5 KB of
-heap lost on `import chumicro_kvstore` across the supported MP
-boards.  ``MemoryBackend`` is the biggest offender — it's only
-selected when the runtime fall-through hits CPython or when the
-caller explicitly passes ``backend="memory"``, but every device
-import was paying its cost.  Now lazy-imported inside the resolver
-functions; per-device imports save ~600-800 bytes.
-
-``chumicro_msgpack``'s ``packb`` / ``unpackb`` and the ``Backend``
-type stay at module-top: msgpack is touched on every commit/load
-hot path (lazy-import overhead would dominate), and ``Backend`` is
-needed for the ``Backend | str`` parameter type hint that MP
-evaluates at function-def time without ``from __future__ import
-annotations`` (Decision 0021).
+``MemoryBackend`` is lazy-imported (only the CPython fall-through and
+``backend="memory"`` paths touch it) — saves ~600-800 B of heap on
+device imports.  ``msgpack`` and ``Backend`` stay at module top:
+msgpack runs on every commit/load (lazy overhead would dominate);
+``Backend`` is needed for the parameter type hint MP evaluates at
+function-def time.
 """
 
 import sys
@@ -64,11 +54,10 @@ class KVStoreReadOnly(KVStoreError):
 
 
 def _select_backend() -> Backend:
-    """Pick the best backend for this runtime (Decision 0034 §2).
+    """Pick the best backend for this runtime.
 
-    The CP and MP branches can't be reached from CPython tests; they
-    are exercised by the per-runtime functional suites under
-    ``functional_tests/`` (Phase 3b Slices 2–4).
+    CP / MP branches are exercised by per-runtime functional suites
+    under ``functional_tests/``; CPython tests can't reach them.
     """
     runtime_name = sys.implementation.name
     if runtime_name == "circuitpython":  # pragma: no cover - CP runtime path

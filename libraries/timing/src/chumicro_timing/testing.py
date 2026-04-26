@@ -1,10 +1,7 @@
 """Test helpers for libraries that depend on chumicro-timing.
 
-Provides deterministic fakes that replace the real tick functions,
-allowing host-side tests to control time without wall-clock waits.
-
-Ships with the library per Decision 0010 so downstream consumers
-import ready-made fakes rather than inventing ad-hoc mocks.
+Deterministic fakes that replace the real tick functions, letting
+host-side tests control time without wall-clock waits.
 
 Example — tick-domain tests:
     ```python

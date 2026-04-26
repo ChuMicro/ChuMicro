@@ -1,19 +1,14 @@
 """CircuitPython ``wifi.radio`` adapter.
 
-Wraps the native ``wifi.radio`` singleton CP exposes as the wifi
-substrate.  The library is the sole supervisor on every runtime
-(Decision 0029 §wifi-ownership-stance) — the workspace template
-ships ``settings.toml`` *without* ``CIRCUITPY_WIFI_SSID`` /
-``CIRCUITPY_WIFI_PASSWORD`` keys so CP's supervisor auto-connect
-path in ``web_workflow.c`` never fires; this adapter does the
-connect itself.
+Wraps the native ``wifi.radio`` singleton.  The library is the sole
+supervisor — the workspace template's ``settings.toml`` omits
+``CIRCUITPY_WIFI_*`` keys so CP's firmware auto-connect path never
+fires; this adapter drives the connect itself.
 
-Constructor injection (Decision 0010): ``radio`` defaults to the
-live ``wifi.radio`` on CircuitPython but accepts an injected fake
-on hosts so the adapter contract can be tested without hardware.
+``radio`` defaults to the live ``wifi.radio`` singleton; tests inject
+a fake to exercise the adapter contract without hardware.
 """
 
-#: Bundle pipeline marker — Decision 0037.  CP-mpy + source bundle only.
 __chumicro_runtimes__ = ("circuitpython",)
 
 from chumicro_wifi._adapters.base import WifiAdapter

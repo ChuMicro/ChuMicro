@@ -1,35 +1,23 @@
 """MicroPython adapter — stdlib ``socket`` + ``ssl`` (mbedTLS-backed).
 
-One MP adapter covers every supported port.  Decision 0031 §1
-flagged "no TLS on Pico W" as folklore from the pre-mbedTLS era;
-current MP (1.26+) ships ``MICROPY_SSL_MBEDTLS=1`` on both ESP32 and
-RP2 ports, so the socket+ssl story is unified.  Two split adapters
-(mp_esp32 + mp_rp2) would be substring-clones of each other; this
-file is the consolidation.
+One MP adapter covers every supported port (MP 1.26+ ships
+``MICROPY_SSL_MBEDTLS=1`` on both ESP32 and RP2; the "no TLS on Pico
+W" folklore is pre-mbedTLS).
 
-Bundle pipeline marker — Decision 0037.  MP-mpy + source bundle only.
+Imports of ``socket`` / ``ssl`` happen INSIDE the functions: CP's
+RAM-mode bootstrap stages every deploy file and imports it, and a
+top-level ``import socket`` would fail on CP (no ``socket`` module).
+Lazy imports keep this adapter staged-but-quiet on CP.
 
-Imports of ``socket`` / ``ssl`` happen INSIDE the functions, not at
-module top level — CircuitPython's RAM-mode bootstrap stages every
-deploy file and imports it; a top-level ``import socket`` would fail
-on CP because CP has no ``socket`` module.  Lazy imports keep this
-adapter staged-but-quiet on CP, only firing when the factory routes
-the call here on MP.
+``recv_into`` polyfill: MP's stream-backed socket exposes ``recv()``
+but not ``recv_into()``; :class:`_MpSocketWrapper` adapts via
+``recv() + memoryview-copy`` so downstream code sees the unified
+protocol.
 
-``recv_into`` polyfill: MP's ``stream``-backed socket on ESP32 / RP2
-exposes ``recv()`` but not ``recv_into()`` (verified live on MP 1.26
-across both ports).  :class:`_MpSocketWrapper` adapts the call back
-to ``recv() + memoryview-copy`` so downstream code can rely on the
-unified protocol.
-
-TLS quirk: MP's ``ssl.wrap_socket`` accepts either ``server_hostname``
-or no hostname (TLS-without-SNI).  We always pass *host* as
-``server_hostname`` — the TLS contract is "verify the cert matches
-the host the user named", and SNI-less verification breaks against
-modern brokers.
+TLS: always pass *host* as ``server_hostname`` (SNI-less verification
+breaks against modern brokers).
 """
 
-#: Bundle pipeline marker — Decision 0037.
 __chumicro_runtimes__ = ("micropython",)
 
 

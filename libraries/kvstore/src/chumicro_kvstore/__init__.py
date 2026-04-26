@@ -1,8 +1,8 @@
 """Persisted runtime state for CircuitPython, MicroPython, and CPython.
 
 A tiny mutable key-value store for state that must survive reboot —
-counters, timestamps, tokens, retry budgets.  Not a config system
-(see Decision 0030); not a database.
+counters, timestamps, tokens, retry budgets.  Not a config system,
+not a database.
 
 Public API::
 
@@ -18,8 +18,6 @@ Per-runtime backends ship with the library:
 * ``"nvs"`` — MP ESP32 ``esp32.NVS`` namespaced K-V.
 * ``"littlefs"`` — MP non-NVS boards; single ``/_chu_kv.msgpack`` file.
 * ``"memory"`` — CPython default + ``FakeKVStore`` substrate.
-
-See Decision 0034 for the full API + per-backend contract.
 """
 
 from chumicro_kvstore.core import (

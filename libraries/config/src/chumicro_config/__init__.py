@@ -1,9 +1,5 @@
 """Standardized runtime-config helpers for ChuMicro libraries.
 
-Implements the convention from Decision 0035 (runtime config file
-structure) — see Decision 0036 for why this lives in its own
-library.
-
 Public API::
 
     from chumicro_config import (
