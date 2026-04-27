@@ -1,6 +1,20 @@
 # Workstream: Nested things + examples folder
 
-Status: `planned` — drafted 2026-04-27.  Phase 1 of the umbrella `workspace-ecosystem.md` workstream.
+Status: `closed` — shipped 2026-04-27.  Phase 1 of the umbrella `workspace-ecosystem.md` workstream.
+
+## Slice progress
+
+| Slice | Status | Commit |
+|---|---|---|
+| 1 — Recursive thing detection | shipped | `98fa8d0` |
+| 2 — Deploy + boot-shim handle nesting | shipped | `6e8731b` |
+| 3 — `new` accepts paths + `--from` | shipped | `6b360bc` |
+| 4 — `things` tree renderer + path-aware `rename` | shipped | `ba4f6e4` |
+| 5 — `examples/` folder shipped | partly shipped (2 of 5 examples) | `004a968` (mono-repo zone), `4523c89` (template repo content) |
+| 7 — Drop the `switch` command | shipped | `8477bbd` (mono-repo), `98b6377` (template repo) |
+| 6 — Tests, docs, polish | shipped | this commit |
+
+Slice 5 deferred 3 of the planned 5 examples (`periodic_get/`, `telemetry_publisher/`, `two_things/{server,sensor}/`) — the structural piece (zone classification + `examples/` folder + index README) shipped, the heavier network examples land in follow-on commits without further mono-repo changes.
 
 ## Why
 

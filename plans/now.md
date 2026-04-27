@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **Workspace ecosystem completion — Phase 1 nearly complete.**  Phase 1 (`plans/workstreams/nested-things-and-examples.md`) Slices 1-5 + 7 shipped.  Slice 7: dropped `_cmd_switch`, `switch` subparser, `--active` flag; deleted `multi_thing_boot_source` / `multi_thing_boot_files` / `_MultiThingBootSource` / `switch_source` / `build_switch_files`; multi-thing positional deploy now exits 2 with an explicit "use one positional per call" message.  Functional test pared to single-thing only; docs (`docs/guide.md`, `README.md`) replace the multi-thing/switch sections with a retirement notice + nested-name walkthrough; template repo `AGENTS.md` drops `switch` + multi-thing rows.  Slice 6 next (and last): docs polish + planning-doc cleanup.
-- **Last shipped:** Slice 7 — drop `switch` command + multi-thing-staging machinery.
-- **In flight:** Phase 1 Slice 6 — final docs polish + planning-doc updates.
+- **Phase:** **Workspace ecosystem completion — Phase 1 closed (2026-04-27).**  All 7 slices shipped across 7 mono-repo commits (`98fa8d0..8477bbd`) + 3 template-repo commits (`4523c89..98b6377`).  3 of 5 examples deferred (`periodic_get/`, `telemetry_publisher/`, `two_things/`) — landing in follow-on commits without further mono-repo changes.  Phase 2 next: ergonomics quick wins (`status`, `doctor`, `deploy --dry-run`, app-level error hints, `repl --tail <thing>`, multi-device deploys); each independent.
+- **Last shipped:** Phase 1 Slice 6 — closing docs + planning-doc cleanup.
+- **In flight:** —
 - **Blocked on:** —
-- **Last touched:** `workbench/workspace/src/chumicro_workspace/{boot_shim,cli,__init__}.py`, `workbench/workspace/tests/{test_boot_shim,test_cli}.py`, `workbench/workspace/{README.md,docs/guide.md,functional_tests/test_boot_shim_hardware.py}`, `ChuMicro-Workspace-Template/AGENTS.md`, `plans/now.md`.
+- **Last touched:** `plans/workstreams/{nested-things-and-examples,workspace-ecosystem}.md`, `plans/next-up.md`, `plans/now.md`.
 
 ---
 
@@ -33,17 +33,17 @@ This is the front door. Everything else is deeper read.
 | **6** | Documentation audit pass | umbrella §Phase 6 | Half session, no new code |
 | **7** | Richer REPL Phases 1a/b/c (parallel track) | `repl-playground.md` §Phase 1 | ~600 LOC across 3 sub-phases |
 
-## Phase 1 slice progress
+## Phase 1 slice progress (closed 2026-04-27)
 
 | Slice | Status |
 |---|---|
-| 1 — Recursive thing detection | **shipped** |
-| 2 — Deploy + boot-shim nesting | **shipped** |
-| 3 — `new` accepts paths + `--from` | **shipped** |
-| 4 — `things` tree renderer + path-aware `rename` | **shipped** |
-| 5 — `examples/` folder shipped | **shipped (2 of 5 examples; 3 deferred)** |
-| 7 — Drop `switch` command | **shipped** |
-| 6 — Tests, docs, polish | next up (last) |
+| 1 — Recursive thing detection | shipped |
+| 2 — Deploy + boot-shim nesting | shipped |
+| 3 — `new` accepts paths + `--from` | shipped |
+| 4 — `things` tree renderer + path-aware `rename` | shipped |
+| 5 — `examples/` folder shipped | shipped (2 of 5 examples; 3 deferred) |
+| 7 — Drop `switch` command | shipped |
+| 6 — Tests, docs, polish | shipped |
 
 ## What the user explicitly deferred this round
 
