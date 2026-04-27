@@ -65,6 +65,11 @@ from chumicro_workspace.firmware_url import (
     UnresolvableFirmwareError,
     derive_firmware_url,
 )
+from chumicro_workspace.health import (
+    HealthFinding,
+    HealthLevel,
+    collect_health_findings,
+)
 from chumicro_workspace.import_graph import thing_import_graph_source
 from chumicro_workspace.onboarding import (
     BoardState,
@@ -749,6 +754,56 @@ def _cmd_things(args: argparse.Namespace) -> int:
         return 0
     print(_render_things_tree(workspace))
     return 0
+
+
+#: Glyphs for ``status`` line prefixes.  Plain Unicode dingbats so
+#: every reasonable terminal renders them; downstream consumers
+#: that want strict ASCII can pipe through ``sed`` to remap.
+_HEALTH_LEVEL_PREFIX: dict[HealthLevel, str] = {
+    HealthLevel.OK: "✓",
+    HealthLevel.WARN: "⚠",
+    HealthLevel.ERROR: "✗",
+}
+
+#: Width of the label column in ``status`` output.  Picked so the
+#: longest current label (``WORKSPACE.YML``) plus a 2-space gutter
+#: lines up the prefix glyph at the same column for every row.
+_STATUS_LABEL_WIDTH: int = 16
+
+
+def _format_health_finding(finding: HealthFinding) -> str:
+    """Return the one-line representation of *finding* for ``status``."""
+    prefix = _HEALTH_LEVEL_PREFIX[finding.level]
+    label = finding.label.ljust(_STATUS_LABEL_WIDTH)
+    return f"{label}{prefix} {finding.message}"
+
+
+def _cmd_status(args: argparse.Namespace) -> int:
+    """Print a one-line-per-check workspace health snapshot.
+
+    Each finding from :func:`collect_health_findings` renders as
+    ``LABEL <glyph> message``; warning / error findings carry an
+    optional hint that prints on the next line indented under the
+    label column.  The exit code is non-zero only when at least one
+    finding is at :attr:`HealthLevel.ERROR` — warnings (placeholder
+    secrets, empty things tree) leave it at zero so ``status``
+    composes cleanly with shell-pipe checks.
+
+    Phase 2a of the workspace-ecosystem workstream.  ``doctor``
+    (Phase 2b) is the stricter sibling that runs every check
+    plus device-side probes and treats warnings as failures.
+    """
+    workspace = _resolve_workspace(args)
+    print(f"WORKSPACE       {workspace.root}")
+    findings = collect_health_findings(workspace)
+    has_error = False
+    for finding in findings:
+        print(_format_health_finding(finding))
+        if finding.hint and finding.level is not HealthLevel.OK:
+            print(f"{' ' * _STATUS_LABEL_WIDTH}  hint: {finding.hint}")
+        if finding.level is HealthLevel.ERROR:
+            has_error = True
+    return 1 if has_error else 0
 
 
 #: Built-in demo payload — Step 5 of the beginner-onramp workstream.
@@ -1717,6 +1772,18 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     things_parser.set_defaults(func=_cmd_things)
+
+    # ----- status --------------------------------------------------------
+    status_parser = subparsers.add_parser(
+        "status",
+        help=(
+            "Print a one-line-per-check workspace health snapshot "
+            "(workspace.yml validity, devices.yml count, secrets.yml "
+            "placeholders, things tree summary)."
+        ),
+    )
+    _add_workspace_arg(status_parser)
+    status_parser.set_defaults(func=_cmd_status)
 
     # ----- demo ----------------------------------------------------------
     demo_parser = subparsers.add_parser(

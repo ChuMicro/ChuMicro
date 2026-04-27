@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **Workspace ecosystem completion — Phase 2 in flight.**  Phase 1 closed 2026-04-27.  Phase 2e shipped: `repl <thing>` deploys via `thing_boot_source` then tails for 30s default (`--tail SECONDS` overrides), dropping the prior `deploy <thing> && repl --tail` two-command idiom.  Failed deploys short-circuit before tailing.  Next sub-items in any order: 2a (`status`), 2b (`doctor`), 2c (`deploy --dry-run`), 2d (app-level error recovery hints), 2f (multi-device deploys — assess scope first).
-- **Last shipped:** Phase 2e — `repl <thing>` auto-deploys before tailing.
+- **Phase:** **Workspace ecosystem completion — Phase 2 in flight.**  Phase 1 closed 2026-04-27.  Phase 2e + 2a shipped.  Phase 2a (just landed): new `chumicro_workspace.health` module with four lightweight checks (workspace.yml validity, devices.yml count, secrets.yml placeholder detection against the canonical `replace-me` sentinel, things-tree summary) consumed by a new `_cmd_status`.  Each check returns a `HealthFinding` (label / level / message / optional hint); status renders one line per finding with a Unicode glyph (`✓` / `⚠` / `✗`) and exits 1 only on ERROR (warnings stay silent).  Module is reused by Phase 2b's `doctor` (planned).  Next sub-items in any order: 2b (`doctor`), 2c (`deploy --dry-run`), 2d (app-level error recovery hints), 2f (multi-device — assess first).
+- **Last shipped:** Phase 2a — `status` workspace health snapshot.
 - **In flight:** Phase 2 — pick next sub-item.
 - **Blocked on:** —
-- **Last touched:** `workbench/workspace/src/chumicro_workspace/cli.py`, `workbench/workspace/tests/test_cli.py`, `plans/now.md`.
+- **Last touched:** `workbench/workspace/src/chumicro_workspace/{cli,health}.py`, `workbench/workspace/tests/{test_cli,test_health}.py`, `plans/now.md`.
 
 ---
 

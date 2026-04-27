@@ -66,7 +66,7 @@ class TestParser:
 
     EXPECTED_COMMANDS = (
         "setup", "init", "update", "new", "add-device", "probe",
-        "discover", "devices", "deploy", "things", "demo",
+        "discover", "devices", "deploy", "things", "status", "demo",
         "bootstrap", "sim", "test", "repl", "env", "use", "rename",
         "install-firmware", "upgrade-firmware", "sync", "upgrade",
     )
@@ -828,6 +828,62 @@ class TestThings:
         out = capsys.readouterr().out.splitlines()
         assert "_template" not in out
         assert "back-porch" in out
+
+
+class TestStatus:
+    """Phase 2a — `status` workspace health snapshot."""
+
+    def test_prints_workspace_path_first(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        exit_code = cli.main(["status", "--workspace-dir", str(root)])
+        assert exit_code == 0
+        out = capsys.readouterr().out
+        assert out.startswith("WORKSPACE")
+        assert str(root) in out
+
+    def test_ok_findings_render_with_check_glyph(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        _seed_thing(root, name="back-porch")
+        exit_code = cli.main(["status", "--workspace-dir", str(root)])
+        assert exit_code == 0
+        out = capsys.readouterr().out
+        # All four labels appear; OK findings get the check glyph.
+        for label in ("WORKSPACE.YML", "DEVICES.YML", "SECRETS.YML", "THINGS"):
+            assert label in out
+        assert "✓" in out
+
+    def test_warn_finding_prints_hint_below(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """A placeholder-secrets warning carries a remediation hint."""
+        root = _seed_workspace(tmp_path)
+        # Overwrite the seeded secrets.yml with a placeholder value.
+        (root / "secrets.yml").write_text("wifi_password: replace-me\n")
+        exit_code = cli.main(["status", "--workspace-dir", str(root)])
+        # A warning alone keeps exit 0 — only ERROR flips it.
+        assert exit_code == 0
+        out = capsys.readouterr().out
+        assert "⚠" in out
+        assert "wifi_password" in out
+        assert "hint:" in out
+        assert "replace-me" in out
+
+    def test_error_finding_returns_exit_one(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """A malformed workspace.yml is an error → exit 1."""
+        # Seed a workspace.yml that parses but isn't a top-level mapping —
+        # the loaders.WorkspaceConfigError path the check exercises.
+        (tmp_path / "workspace.yml").write_text("[a, list]\n")
+        exit_code = cli.main(["status", "--workspace-dir", str(tmp_path)])
+        assert exit_code == 1
+        out = capsys.readouterr().out
+        assert "✗" in out
+        assert "WORKSPACE.YML" in out
 
 
 class TestThingsTreeView:
