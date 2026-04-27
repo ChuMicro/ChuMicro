@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **Workspace ecosystem completion — Phase 1 in flight.**  Phase 1 (`plans/workstreams/nested-things-and-examples.md`) Slices 1-4 shipped.  Slice 4: `_cmd_things` defaults to a Unicode-tree view of the namespace tree (`--flat` keeps the slash-form list); `_cmd_rename --thing` accepts slash / dotted paths on both sides with bare-name disambiguation on the source, auto-creates intermediate namespace dirs with empty `__init__.py` markers (shared `_ensure_namespace_parents` helper now used by `new` + `rename`).  Slice 5 next: examples folder shipped to the template repo.
-- **Last shipped:** Slice 4 — `things` tree renderer + path-aware `rename`.
-- **In flight:** Phase 1 Slice 5 — examples folder shipped (template-repo + mono-repo `_payloads/`).
+- **Phase:** **Workspace ecosystem completion — Phase 1 in flight.**  Phase 1 (`plans/workstreams/nested-things-and-examples.md`) Slices 1-5 shipped.  Slice 5: `examples/` classified as tool-owned in `template_zones.TOOL_OWNED_PREFIXES` (so `update` re-flows the canonical content); template repo gains `examples/` with `hello_world/` (no-network print loop) and `wifi_only/` (heartbeat status print) plus an index README; template repo's README + AGENTS.md mention the new folder + the new `--from` workflow.  Three larger network examples (`periodic_get/`, `telemetry_publisher/`, `two_things/{server,sensor}/`) are explicitly deferred to a follow-on commit.  Slice 6 next: end-to-end nested-thing functional test + docs polish.
+- **Last shipped:** Slice 5 — examples folder structure + first two examples.
+- **In flight:** Phase 1 Slice 6 — tests, docs, polish.
 - **Blocked on:** —
-- **Last touched:** `workbench/workspace/src/chumicro_workspace/cli.py`, `workbench/workspace/tests/test_cli.py`, `plans/now.md`.
+- **Last touched:** `workbench/workspace/src/chumicro_workspace/template_zones.py`, `workbench/workspace/tests/test_template_zones.py`, `ChuMicro-Workspace-Template/{AGENTS.md,README.md,examples/}`, `plans/now.md`.
 
 ---
 
@@ -41,8 +41,8 @@ This is the front door. Everything else is deeper read.
 | 2 — Deploy + boot-shim nesting | **shipped** |
 | 3 — `new` accepts paths + `--from` | **shipped** |
 | 4 — `things` tree renderer + path-aware `rename` | **shipped** |
-| 5 — `examples/` folder shipped | next up |
-| 6 — Tests, docs, polish | pending |
+| 5 — `examples/` folder shipped | **shipped (2 of 5 examples; 3 deferred)** |
+| 6 — Tests, docs, polish | next up |
 | 7 — Drop `switch` command | pending (can ship standalone) |
 
 ## What the user explicitly deferred this round

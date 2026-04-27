@@ -6,9 +6,10 @@ whole workspace tree.  Every file falls into one of three zones:
 * **Tool-owned** — `run.py`, `AGENTS.md`, `CONTRIBUTING.md`,
   `pyproject.toml`, `things/_template/`, `_templates/`
   (template-source files used to materialize user-edited config
-  like `secrets.yml` per Decision 0038 §5), and the agent-skill
-  documents under `.github/skills/`.  `init` writes them; `update`
-  rewrites them so newer template releases flow in.
+  like `secrets.yml` per Decision 0038 §5), `examples/` (Slice 5
+  reading-material demos shipped from the canonical template), and
+  the agent-skill documents under `.github/skills/`.  `init` writes
+  them; `update` rewrites them so newer template releases flow in.
 
 * **User-owned** — `things/<each-real-thing>/`, `secrets.yml`,
   `devices.yml`, `libs/`, `packages/`, `workspace.yml`.  `init`
@@ -52,6 +53,7 @@ TOOL_OWNED_PREFIXES: tuple[str, ...] = (
     "things/_template/",
     "_templates/",
     ".github/skills/",
+    "examples/",
 )
 
 #: Files / paths that are user-owned.  ``update`` never touches them.

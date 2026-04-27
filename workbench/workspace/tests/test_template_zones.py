@@ -21,6 +21,12 @@ class TestClassify:
             ".github/skills/deploy-and-debug/SKILL.md",
             ".github/skills/add-new-thing/SKILL.md",
             ".github/skills/register-board/SKILL.md",
+            # Slice 5 — `examples/` is reading material; `update`
+            # re-flows the canonical content from upstream.
+            "examples/README.md",
+            "examples/hello_world/app.py",
+            "examples/wifi_only/config.toml",
+            "examples/two_things/server/app.py",
         ],
     )
     def test_tool_owned_paths(self, path: str) -> None:
