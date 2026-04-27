@@ -113,6 +113,17 @@ Live-verified on Lolin S2 ESP32-S2 / CP 10.2.0-rc.0: 6 KB SSLContext + 35 KB han
 
 `chumicro_sockets.ssl_context_with_cert_and_key_paths(cert_path, key_path)` is the cross-runtime API that handles all three runtimes (CP needs paths; MP + CPython convert paths to bytes internally and use the in-memory helper).
 
+### ESP32-S2 has hardware-accelerated crypto for TLS handshake — 25× heap reduction vs rp2
+
+Slice 7t / 7d live measurements on Pi Pico W MP (rp2 port) vs Lolin S2 MP (ESP32-S2 port), both running CHUmicro's TLS server with the same RSA-2048 cert + DER encoding:
+
+* **Pi Pico W MP (rp2):** TLS handshake heap cost = **~25 KB**.
+* **Lolin S2 MP (ESP32-S2):** TLS handshake heap cost = **~1 KB** (944 bytes).
+
+The difference is the ESP32-S2's mbedTLS hardware acceleration (`MBEDTLS_HW_*` peripherals — AES, SHA, RSA exponentiation) — handshake state lives partly in dedicated hardware buffers rather than the Python heap.  rp2's mbedTLS is fully software, allocating the same state on the heap.
+
+Practical implication for sizing Pi Pico W vs ESP32-S2 deployments: a Pi Pico W can support a single-in-flight TLS server but feels tight; a Lolin S2 can comfortably support multi-in-flight TLS without breaking sweat.  ESP32-S3 has the same hardware crypto + more SRAM still.
+
 ### CircuitPython rp2 (Pi Pico W) currently fails server-side TLS post-handshake
 
 Same chumicro-sockets code path that succeeded on Lolin S2 ESP32-S2 (CP 10.2.0-rc.0) reaches the listener-open + first accept, but `accept()` raises `OSError(32)` (EPIPE) immediately after the TLS handshake bytes traverse.  Heap was ~115 KB free at the time, so not a memory issue.  Likely an rp2-port mbedTLS feature-flag difference vs ESP-IDF's mbedTLS (the same kind of asymmetry that surfaced for `MBEDTLS_PEM_PARSE_C` on the CA-load path).  Filed as a follow-up — for HTTPS-server use cases on CircuitPython today, recommend ESP32-family boards (S2 / S3) over Pi Pico W.
