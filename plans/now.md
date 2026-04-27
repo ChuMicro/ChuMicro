@@ -6,31 +6,51 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **Workspace-template testing-infrastructure audit COMPLETE 2026-04-27**.  Audited the `ChuMicro-Workspace-Template` repo, found big gaps vs the chumicro mono-repo's CI surface (no `tests/` starter, no lint config, no coverage gate, no `.github/workflows/`, no `chumicro-pytest-device` adoption), and shipped Phase A to the template repo + Phase B to chumicro to close them.  Pick the next workstream from `plans/next-up.md`'s `## Next` queue.
+- **Phase:** **Backlog cleanup + plan-validation pass.**  Knocked off three small items, validated project-workspace status, and drafted a concrete Phase 1 implementation plan for the richer-REPL workstream.  Next step is the user's go/no-go on starting REPL Phase 1a.
 - **Last shipped:**
-  * **Template repo `579274a`** — Phase A: `[tool.ruff]` config + `[tool.coverage.report] fail_under = 85` + `[project.optional-dependencies] dev` (pulls `chumicro-pytest-device`, `pytest`, `pytest-cov`, `ruff`).  New `tests/test_workspace.py` (parametrized "every thing exposes `run()`" smoke test + `workspace.yml` parses).  New `things/_template/tests/test_app.py` so `python run.py new <name>` scaffolds a starter test.  New `.github/workflows/test.yml` running setup + lint + test on push/PR across Python 3.11/3.12/3.13.  `AGENTS.md` "Tests + lint" section + commands-table refresh.  3 tests, all pass; ruff config clean.
-  * **chumicro `f47acba`** — Phase B: `chumicro-workspace lint` command shells out to `ruff check .` from the workspace root, with `--`-passthrough for `--fix` etc.  Skips with a discoverable hint when ruff isn't installed.  3 new `TestLintCommand` tests.
+  * `4019e24` — sockets functional tests (`test_real_tcp.py` + `test_real_tls.py` + `conftest.py`) + `scripts/tests/test_generate_config_files.py` schema-validation gate.  4/4 generate-config tests pass.  Sockets tests skip cleanly without `_test_creds`; will run live once `pytest_device` deploys the shim.
 - **In flight:** —
 - **Blocked on:** —
-- **Last touched:** Mono-repo: `workbench/workspace/src/chumicro_workspace/cli.py` (`_cmd_lint` + parser registration), `workbench/workspace/tests/test_cli.py` (`TestLintCommand`).  Template repo (separate git): `pyproject.toml`, `tests/test_workspace.py` (new), `things/_template/tests/test_app.py` (new), `.github/workflows/test.yml` (new), `AGENTS.md`, `things/example_sensor/app.py` (single-blank-line ruff-fix).
+- **Last touched:** `libraries/sockets/functional_tests/{conftest.py,test_real_tcp.py,test_real_tls.py}` (new), `scripts/tests/test_generate_config_files.py` (new), `plans/workstreams/project-workspace.md` (Phase 7 Layer-2 marked done — was already shipped, doc was stale), `plans/workstreams/repl-playground.md` (concrete Phase 1 implementation plan added).
 
 ---
 
-## What this round closed (audit findings → shipped)
+## Project-workspace status — VALIDATED 2026-04-27
 
-| Audit gap | Status |
+User asked to confirm whether the project-workspace plans are done.  **They are, modulo the explicitly-deferred Phase 8.**
+
+| Phase | Status |
 |---|---|
-| No `tests/` starter | ✅ `tests/test_workspace.py` (parametrized over things) |
-| No `python run.py lint` | ✅ `chumicro-workspace lint` command (mono-repo Phase B) |
-| No `[tool.ruff]` config in template | ✅ Mirrors mono-repo's tone (line-length 100, py311, `select = E F I B UP TID252`) |
-| No coverage gate | ✅ `[tool.coverage.report] fail_under = 85` (soft default) |
-| No GitHub Actions CI | ✅ `.github/workflows/test.yml` (setup + lint + test, 3.11/3.12/3.13 matrix) |
-| `chumicro-pytest-device` not a dep | ✅ Declared in `[project.optional-dependencies] dev` — auto-registers via `pytest11` entry point on install |
-| `things/_template/` lacks test scaffolding | ✅ `things/_template/tests/test_app.py` ships with the starter scaffold |
+| 1 — `chumicro-deploy` extraction | ✅ Complete (2026-04-22) |
+| 2 — `chumicro-repl` minimum-viable | ✅ Complete (2026-04-25) |
+| 3a — `chumicro-wifi` | ✅ Complete (2026-04-25) |
+| 3b — `chumicro-kvstore` + config pipeline | ✅ Complete (2026-04-25) |
+| 4a — `chumicro-workspace` | ✅ Complete (2026-04-25) |
+| 4b — workspace template | ✅ Superseded by Decision 0038 (clone-the-repo bootstrap; `init` / `update` folded into `chumicro-workspace`) |
+| 4c — template companion repo | ✅ Dissolved into Decision 0038 (the template *is* the repo) |
+| 5 — `chumicro-sockets` | ✅ Complete (2026-04-25) |
+| 6 — `chumicro-mqtt` | ✅ Complete (2026-04-26) |
+| 7 — first sensor thing template | ✅ **Closed 2026-04-27** — Layer-1 (CPython import resolves), Layer-2 (deploy + phase-marker assert via fail-fast wifi config), Layer-3 (live broker round-trip), sensor thing source, README walkthrough — all shipped.  Doc previously listed Layer-2 as open; was already in `test_sensor_thing_reaches_boot_phase_marker_on_*`.  Doc refreshed in this session. |
+| 8 — application-level OTA | ⏸️ **Explicitly deferred.**  Trigger: a thing on a wall for 30+ days that needs an update without physical access.  Design notes preserved in `plans/workstreams/project-workspace-research.md` §OTA. |
 
-## What's pending (one open follow-up)
+Project-workspace.md status updated to `complete-pending-phase-8`.
 
-`chumicro-pytest-device` 0.1.0 hasn't been published to PyPI yet (it just landed in the mono-repo).  Once published, external workspaces' `python run.py setup` will pull it via the `dev` extra automatically.  Until then, `chumicro-dev` mode picks it up via the editable install.
+## Richer REPL — concrete Phase 1 plan filed
+
+`plans/workstreams/repl-playground.md` — added a 70-line "Phase 1 implementation plan" subsection.  Three input modes (passthrough / line / edit), hot-toggleable; `prompt_toolkit` joins as a workbench-only dep; per-device persistent history under `~/.chumicro-repl/history/<uid>/`.  Three sub-phases:
+
+* **Phase 1a** — line mode + persistent history.  ~250 LOC.  Smallest viable.  Outcome: every session has cursor edit, up-arrow history, `Ctrl-R` reverse search, per-device isolation.  No new `:` commands yet — foundation in place.
+* **Phase 1b** — `:edit` command (open `$EDITOR`, ship buffer).  Plus `:save` / `:load` / `:snippets`.  ~150 LOC.  Outcome: writing a 30-line function in the REPL stops being painful.
+* **Phase 1c** — tab completion via on-device `dir()` query, with per-session cache + reset-detection invalidation.  ~200 LOC.  Outcome: REPL feels modern.
+
+Total Phase 1 budget: ~600 LOC + tests.  Beats `mpremote` on every dimension that matters for interactive work.
+
+## What's pending — pick one
+
+* **Start REPL Phase 1a** (line mode + persistent history).  Self-contained, ships immediately useful UX.  Most concretely scoped on the queue.
+* **Start REPL Phase 1b/c** (after 1a).  Builds on the same architecture.
+* **`new_library_scaffold.py` → `chumicro-workspace new --library`** fold.  Smaller scope (~200 LOC migration).  Lower urgency since this only fires when adding a library to chumicro itself.
+* **Whatever's not yet on next-up.md** — open call.
 
 ## How this file works
 

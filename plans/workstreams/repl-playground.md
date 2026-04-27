@@ -1,6 +1,9 @@
 # Workstream: REPL Playground
 
-Status: `proposed`
+Status: `phase-1-planned` — backlog drafted 2026-04-21; concrete Phase 1
+implementation plan added 2026-04-27 below.  Triggered now that
+project-workspace closed (Phase 7) and the immediate workspace-template
+testing-infrastructure audit shipped.
 
 ## Purpose
 
@@ -109,6 +112,59 @@ No strict order.  Start with whichever cluster unblocks the most user pain:
 4. **Snippets + scratch + watch** — layers on top of editor handoff.
 5. **Multi-device + recording + fun features** — nice-to-haves, ship as capacity allows.
 6. **Extended programmatic API** — driven by downstream test-fixture demand.
+
+## Phase 1 — concrete implementation plan (drafted 2026-04-27)
+
+The current TUI (`workbench/repl/src/chumicro_repl/tui.py`) is a tight passthrough loop: keystrokes go straight to the port, output is decoded + highlighted + written to stdout.  No host-side input buffer, no command parser.  Adding rich features means introducing an *input mode* abstraction.
+
+### Architecture
+
+Three input modes, hot-toggleable mid-session:
+
+| Mode | Behaviour | Use |
+|---|---|---|
+| **Passthrough** | Every byte goes straight to the device.  Today's behaviour. | Raw REPL, paste-mode, anything that wants exact byte forwarding. |
+| **Line** | Host buffers input via `prompt_toolkit`; user gets cursor edit, history, history-search (Ctrl-R), bracket matching.  On Enter, the full line ships to the device.  Lines starting with `:` are parsed as REPL commands (intercepted, not forwarded). | The default mode for typing code at the `>>>` prompt.  Where 95 % of interactive use happens. |
+| **Edit** | Host opens `$EDITOR` with a scratch buffer.  On save+exit, ships the buffer to the device line-by-line. | Multi-line code authoring.  Triggered by `:edit`. |
+
+**Toggle:** `Ctrl-T` cycles passthrough ↔ line.  Edit is one-shot (auto-returns to the previous mode after the editor closes).
+
+**Auto-detection:** the TUI starts in **line** mode by default.  When the device output indicates raw-REPL entry (`raw REPL; CTRL-B to exit\r\n>` marker), the TUI auto-switches to passthrough.  When the device output shows the friendly REPL prompt (`>>>`), the TUI switches back to line.  Override via `--mode {line,passthrough}` CLI flag.
+
+**Storage:** `~/.chumicro-repl/history/<device-uid>/history.txt` (per-device persistent history).  `<device-uid>` falls back to a stable hash of the address when probe fails.  Command snippets live at `~/.chumicro-repl/snippets/<name>.py`.
+
+**Dep:** `prompt_toolkit` joins `chumicro-repl`'s pyproject as a runtime dep.  CPython-only (Decision 0032 §6 explicitly allows this for workbench packages).  ~500 KB on disk; the value-per-byte ratio is excellent for what it solves (multi-line edit, history search, completion infrastructure all in one library).
+
+### Phase 1a — line mode + persistent history (smallest viable shippable)
+
+* Add `prompt_toolkit` dep to `workbench/repl/pyproject.toml`.
+* New module `chumicro_repl.line_mode` — wraps `prompt_toolkit.PromptSession` with a per-device `FileHistory` rooted at `~/.chumicro-repl/history/<uid>/history.txt`.
+* New `Mode` enum + mode-state in `run_loop`.  Enter = ship line + record; `:` prefix = command parser stub (initially only handles `:help`).
+* `Ctrl-T` cycles line ↔ passthrough.
+* CLI: `--mode {line,passthrough}` defaulting to `line`.
+
+**Outcome:** every `chumicro-repl` session immediately has cursor edit, persistent up-arrow history, `Ctrl-R` reverse search, and per-device isolation between sessions.  No new commands yet; the foundation is in place.  ~250 LOC of new code + tests.
+
+### Phase 1b — `:edit` command
+
+* New `chumicro_repl.commands` module: registry of `:command-name → handler` callables.
+* `:edit` handler: write current scratch (initial empty + last-N-lines context) to `tempfile.NamedTemporaryFile`, open `$EDITOR` (default `vi`), on save read back and ship to device.  Match IPython's `%edit` semantics.
+* `:save <name>` / `:load <name>` / `:snippets` for snippet store.
+* `:help` dumps the registered commands + brief.
+
+**Outcome:** writing a 30-line function in the REPL stops being painful.  ~150 LOC.
+
+### Phase 1c — tab completion
+
+* On `<Tab>`, query the device for `dir()` on the current namespace + `dir(x)` for partial attribute access (`object.attr<Tab>`).
+* Cache per-session; invalidate on device reset (heuristic: detect `>>>\r\n>>>` two-prompts-in-a-row).
+* Pluggable: `Completer` protocol so future device-side completers (e.g. for `board.*` symbols) can layer in.
+
+**Outcome:** REPL feels modern.  ~200 LOC + the cache invalidation finesse.
+
+### Phase 1 success criteria
+
+A user `pip install chumicro-repl && chumicro-repl --device /dev/cu.usbmodem1101` lands in line mode by default, gets up-arrow history that persists across sessions, can hit `:edit` to compose a function in `vim`, and can tab-complete attributes on imported modules.  Beats `mpremote` on every dimension that matters for interactive work.
 
 ## Success criteria
 

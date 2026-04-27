@@ -1,6 +1,6 @@
 # Workstream: Project Workspace
 
-Status: `in-progress` — Phases 1, 2, 3a, 3b, 4a, 4b, 5, 6 shipped 2026-04-22 → 2026-04-26.  Phase 4b's pip-install-scaffolder shape was retired in Decision 0038 (2026-04-26) and replaced by a clone-the-repo bootstrap with `init` / `update` folded into `chumicro-workspace` (renamed from `chumicro-workspace-runtime`); canonical starter at [`ChuMicro/ChuMicro-Workspace-Template`](https://github.com/ChuMicro/ChuMicro-Workspace-Template).  Phase 4c is dissolved into Decision 0038 — the template *is* the repo.  Remaining: Phase 7 (first sensor thing template).  Phase 8 (OTA) deferred.
+Status: `complete-pending-phase-8` — every phase except OTA shipped.  Phases 1, 2, 3a, 3b, 4a, 4b, 5, 6 shipped 2026-04-22 → 2026-04-26.  Phase 4b's pip-install-scaffolder shape was retired in Decision 0038 (2026-04-26) and replaced by a clone-the-repo bootstrap with `init` / `update` folded into `chumicro-workspace`; canonical starter at [`ChuMicro/ChuMicro-Workspace-Template`](https://github.com/ChuMicro/ChuMicro-Workspace-Template).  Phase 4c is dissolved into Decision 0038 — the template *is* the repo.  Phase 7 (first sensor thing template) closed 2026-04-27 — Layer-1, Layer-2, Layer-3, sensor thing, README walkthrough all shipped.  Phase 8 (application-level OTA) explicitly deferred per the workstream's "revisit when a thing has been on a wall for 30+ days and an update is needed without physical access" trigger.
 
 ## Purpose
 
@@ -533,7 +533,7 @@ Integration concerns surfaced as the libraries first run together (service lifec
 - [x] Add `things/example_sensor/` to the `ChuMicro-Workspace-Template` repo: reads a temperature (real on-board thermistor when available, synthetic triangle wave otherwise), publishes via mqtt on a heartbeat, persists a boot-counter via kvstore.
 - [x] `config.toml` for broker / topic / heartbeat period; deploy-time merge with workspace defaults + secrets.
 - [x] Layer-1 functional test (`workbench/workspace/functional_tests/test_sensor_thing_hardware.py::test_sensor_thing_imports_resolve_on_cpython`): proves `app.py` imports cleanly through the chumicro-workspace dep stack on CPython.  Runs without hardware; catches API drift between sensor thing + libraries.
-- [ ] Layer-2 functional test: deploy → tail REPL → assert phase markers (`sensor: boot #N`, `sensor: connecting to wifi…`) within window.  Skipped scaffold present; needs a `chumicro-repl.tail()`-driven observe pattern that handles `while True: runner.tick()` (the existing `Deployer.deploy` execute_output assertion model assumes terminating scripts).
+- [x] Layer-2 functional test: deploy → assert phase markers (`sensor: boot #N`, `sensor: connecting to wifi…`).  Shipped as `test_sensor_thing_reaches_boot_phase_marker_on_{micropython,circuitpython}` — uses a fail-fast wifi config (bogus SSID + zero reconnect budget) so `run()` raises `SystemExit` cleanly, letting `Deployer.deploy()` capture execute_output for assertions.  Sidesteps the originally-feared "while True: runner.tick() never terminates" problem entirely — no `chumicro-repl.tail()` observe pattern required for this test.  A streaming `tail()`-with-pattern-matching shape is still on the `repl-playground.md` wishlist for non-terminating scenarios where fail-fast can't be configured, but Layer-2 itself is done.  Companion `test_sensor_thing_boot_counter_persists_across_deploys_on_micropython` proves kvstore lifecycle across two consecutive deploys.
 - [x] Layer-3 functional test: live broker round-trip — `workbench/workspace/functional_tests/test_sensor_thing_hardware.py::test_sensor_thing_publishes_to_live_broker` spawns a LAN-bound Mosquitto fixture, auto-detects the host's LAN IP, runs `mosquitto_sub` as the subscriber, and asserts ≥ 2 heartbeat messages arrive on the configured topic within 60 s.  Skips cleanly when wifi env vars (`CHUMICRO_TEST_WIFI_SSID` / `CHUMICRO_TEST_WIFI_PASSWORD`) are missing or the device isn't in flash mode.  To run on the chumicro-developer's hardware: set the env vars, ensure a flash-mode board is in `devices.yml`, then `pytest -k publishes_to_live_broker`.
 - [x] README walkthrough: clone → setup → add-device → edit two files → deploy → see heartbeats.
 
@@ -541,7 +541,7 @@ Integration concerns surfaced as the libraries first run together (service lifec
 
 A user clones the template, runs `python run.py setup`, plugs in a board, runs `python run.py add-device`, edits one line of `things/example_sensor/config.toml` with their broker URL, runs `python run.py deploy`, and sees heartbeat messages arriving at their broker while the board's REPL streams to the terminal.  Under ten minutes from clone to first message.
 
-Layer-1 + sensor thing + README walkthrough shipped 2026-04-26.  Layer-2 + Layer-3 functional tests are open follow-ons; the integration log captures what's needed to enable each.
+**Phase 7 closed 2026-04-27** — Layer-1, Layer-2, Layer-3, sensor thing, README walkthrough all shipped.
 
 ### Phase 8: application-level OTA (deferred — explore after Phase 7)
 
