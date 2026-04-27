@@ -66,9 +66,9 @@ class TestParser:
 
     EXPECTED_COMMANDS = (
         "setup", "init", "update", "new", "add-device", "probe",
-        "discover", "devices", "deploy", "things", "status", "demo",
-        "bootstrap", "sim", "test", "repl", "env", "use", "rename",
-        "install-firmware", "upgrade-firmware", "sync", "upgrade",
+        "discover", "devices", "deploy", "things", "status", "doctor",
+        "demo", "bootstrap", "sim", "test", "repl", "env", "use",
+        "rename", "install-firmware", "upgrade-firmware", "sync", "upgrade",
     )
 
     def test_all_commands_register(self) -> None:
@@ -1056,6 +1056,59 @@ class TestStatus:
         out = capsys.readouterr().out
         assert "✗" in out
         assert "WORKSPACE.YML" in out
+
+
+class TestDoctor:
+    """Phase 2b — `doctor` runs status's checks plus AST + config-merge."""
+
+    def test_includes_python_and_thing_run_labels(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        thing_dir = _seed_thing(root, name="back-porch")
+        (thing_dir / "app.py").write_text("def run(): pass\n")
+        exit_code = cli.main(["doctor", "--workspace-dir", str(root)])
+        assert exit_code == 0
+        out = capsys.readouterr().out
+        for label in (
+            "PYTHON",
+            "WORKSPACE.YML",
+            "DEVICES.YML",
+            "SECRETS.YML",
+            "THINGS",
+            "THING run() defs",
+            "SECRET refs",
+        ):
+            assert label in out
+
+    def test_missing_run_function_flips_exit_to_one(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        thing_dir = _seed_thing(root, name="back-porch")
+        (thing_dir / "app.py").write_text(
+            "def something_else(): pass\n",
+        )
+        exit_code = cli.main(["doctor", "--workspace-dir", str(root)])
+        assert exit_code == 1
+        out = capsys.readouterr().out
+        assert "✗" in out
+        assert "back-porch" in out
+
+    def test_unresolved_secret_flips_exit_to_one(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        thing_dir = _seed_thing(root, name="back-porch")
+        (thing_dir / "app.py").write_text("def run(): pass\n")
+        # _seed_thing's config.toml references !secret wifi_password
+        # which the seeded secrets.yml fulfills.  Wipe secrets.yml so
+        # the reference becomes unresolved.
+        (root / "secrets.yml").write_text("")
+        exit_code = cli.main(["doctor", "--workspace-dir", str(root)])
+        assert exit_code == 1
+        out = capsys.readouterr().out
+        assert "SECRET refs" in out
 
 
 class TestThingsTreeView:

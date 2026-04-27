@@ -68,6 +68,7 @@ from chumicro_workspace.firmware_url import (
 from chumicro_workspace.health import (
     HealthFinding,
     HealthLevel,
+    collect_doctor_findings,
     collect_health_findings,
 )
 from chumicro_workspace.import_graph import thing_import_graph_source
@@ -896,24 +897,19 @@ def _format_health_finding(finding: HealthFinding) -> str:
     return f"{label}{prefix} {finding.message}"
 
 
-def _cmd_status(args: argparse.Namespace) -> int:
-    """Print a one-line-per-check workspace health snapshot.
+def _print_health_findings(
+    workspace: WorkspaceLayout,
+    findings: list[HealthFinding],
+) -> int:
+    """Print *findings* with the status/doctor renderer; return exit code.
 
-    Each finding from :func:`collect_health_findings` renders as
+    Header line carries the workspace root.  Each finding renders as
     ``LABEL <glyph> message``; warning / error findings carry an
-    optional hint that prints on the next line indented under the
-    label column.  The exit code is non-zero only when at least one
-    finding is at :attr:`HealthLevel.ERROR` — warnings (placeholder
-    secrets, empty things tree) leave it at zero so ``status``
-    composes cleanly with shell-pipe checks.
-
-    Phase 2a of the workspace-ecosystem workstream.  ``doctor``
-    (Phase 2b) is the stricter sibling that runs every check
-    plus device-side probes and treats warnings as failures.
+    optional hint indented under the label column.  Exit code flips
+    to 1 only on at least one ERROR — warnings stay at 0 so the
+    output composes cleanly with shell-pipe checks.
     """
-    workspace = _resolve_workspace(args)
     print(f"WORKSPACE       {workspace.root}")
-    findings = collect_health_findings(workspace)
     has_error = False
     for finding in findings:
         print(_format_health_finding(finding))
@@ -922,6 +918,48 @@ def _cmd_status(args: argparse.Namespace) -> int:
         if finding.level is HealthLevel.ERROR:
             has_error = True
     return 1 if has_error else 0
+
+
+def _cmd_status(args: argparse.Namespace) -> int:
+    """Print a one-line-per-check workspace health snapshot.
+
+    Phase 2a of the workspace-ecosystem workstream.  Runs the four
+    fast static checks (workspace.yml validity, devices.yml count,
+    secrets.yml placeholder detection, things tree summary).
+    ``doctor`` (Phase 2b) is the stricter sibling that adds Python
+    version, per-thing AST scans for ``run()``, and a config-merge
+    dry-run that catches unresolved ``!secret`` references.
+    """
+    workspace = _resolve_workspace(args)
+    return _print_health_findings(workspace, collect_health_findings(workspace))
+
+
+def _cmd_doctor(args: argparse.Namespace) -> int:
+    """Strict sibling of ``status`` — adds AST + config-merge checks.
+
+    On top of ``status``'s four checks, ``doctor`` runs:
+
+    * ``check_python_version`` — is the host Python on a supported
+      version (3.11+).
+    * ``check_thing_run_functions`` — AST-walks each thing's
+      ``app.py`` and verifies a top-level ``run()`` definition
+      exists (the workspace_runtime boot contract).
+    * ``check_secret_references`` — performs a config-merge
+      dry-run for every thing and catches ``!secret`` references
+      that don't resolve against ``secrets.yml``.
+
+    Same renderer + exit-code rules as ``status``: errors flip exit
+    to 1, warnings stay at 0.  Per-thing failures list the failing
+    thing names in the hint so the user can navigate straight to
+    the broken file.
+
+    Phase 2b of the workspace-ecosystem workstream.  Per-device
+    reachability probes (``check the board responds on its
+    address``) are deferred until we have a hardware-cheap probe
+    primitive that can run without blocking the static checks.
+    """
+    workspace = _resolve_workspace(args)
+    return _print_health_findings(workspace, collect_doctor_findings(workspace))
 
 
 #: Built-in demo payload — Step 5 of the beginner-onramp workstream.
@@ -1906,6 +1944,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_workspace_arg(status_parser)
     status_parser.set_defaults(func=_cmd_status)
+
+    # ----- doctor --------------------------------------------------------
+    doctor_parser = subparsers.add_parser(
+        "doctor",
+        help=(
+            "Strict sibling of `status` — adds Python version check, "
+            "per-thing AST scan for `run()`, and a config-merge "
+            "dry-run that catches unresolved !secret references."
+        ),
+    )
+    _add_workspace_arg(doctor_parser)
+    doctor_parser.set_defaults(func=_cmd_doctor)
 
     # ----- demo ----------------------------------------------------------
     demo_parser = subparsers.add_parser(

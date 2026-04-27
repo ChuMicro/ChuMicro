@@ -8,8 +8,12 @@ from chumicro_workspace.health import (
     SECRET_PLACEHOLDER,
     HealthLevel,
     check_devices_yaml,
+    check_python_version,
+    check_secret_references,
     check_secrets_yaml,
+    check_thing_run_functions,
     check_workspace_yaml,
+    collect_doctor_findings,
     collect_health_findings,
     count_things,
 )
@@ -223,4 +227,152 @@ class TestCollectHealthFindings:
             "DEVICES.YML",
             "SECRETS.YML",
             "THINGS",
+        ]
+
+
+# ---------------------------------------------------------------------------
+# Phase 2b doctor checks
+# ---------------------------------------------------------------------------
+
+
+class TestCheckPythonVersion:
+    def test_current_python_passes(self) -> None:
+        """Tests run on Python 3.11+ — the check should always pass here."""
+        finding = check_python_version()
+        assert finding.level is HealthLevel.OK
+        assert finding.label == "PYTHON"
+
+
+def _seed_thing_with_app(
+    workspace: WorkspaceLayout, name: str, app_body: str,
+) -> Path:
+    """Create things/<name>/app.py with *app_body* + an empty config.toml."""
+    thing_dir = workspace.thing_dir(name)
+    thing_dir.mkdir(parents=True)
+    (thing_dir / "config.toml").write_text("")
+    (thing_dir / "app.py").write_text(app_body)
+    return thing_dir
+
+
+class TestCheckThingRunFunctions:
+    def test_no_things_returns_ok(self, tmp_path: Path) -> None:
+        workspace = _layout(tmp_path)
+        finding = check_thing_run_functions(workspace)
+        assert finding.level is HealthLevel.OK
+        assert "no things" in finding.message
+
+    def test_all_things_define_run(self, tmp_path: Path) -> None:
+        workspace = _layout(tmp_path)
+        _seed_thing_with_app(workspace, "alpha", "def run(): pass\n")
+        _seed_thing_with_app(workspace, "beta", "def run(): pass\n")
+        finding = check_thing_run_functions(workspace)
+        assert finding.level is HealthLevel.OK
+        assert "all 2 app.py files" in finding.message
+
+    def test_async_run_def_accepted(self, tmp_path: Path) -> None:
+        workspace = _layout(tmp_path)
+        _seed_thing_with_app(workspace, "asyncthing", "async def run(): pass\n")
+        finding = check_thing_run_functions(workspace)
+        assert finding.level is HealthLevel.OK
+
+    def test_missing_run_flags_thing(self, tmp_path: Path) -> None:
+        workspace = _layout(tmp_path)
+        _seed_thing_with_app(workspace, "alpha", "def run(): pass\n")
+        _seed_thing_with_app(
+            workspace, "broken_thing", "def something_else(): pass\n",
+        )
+        finding = check_thing_run_functions(workspace)
+        assert finding.level is HealthLevel.ERROR
+        assert "broken_thing" in finding.message
+        assert finding.hint is not None
+
+    def test_syntax_error_counts_as_missing(self, tmp_path: Path) -> None:
+        workspace = _layout(tmp_path)
+        _seed_thing_with_app(workspace, "broken", "def run(:\n")
+        finding = check_thing_run_functions(workspace)
+        assert finding.level is HealthLevel.ERROR
+        assert "broken" in finding.message
+
+    def test_legacy_things_without_app_py_skipped(self, tmp_path: Path) -> None:
+        """Things whose entry-point is code.py / main.py aren't checked.
+
+        The run() contract binds only the boot-shim flow.  Flat things
+        with code.py at the root never get imported as
+        things.<name>.app, so they don't need a top-level run().
+        """
+        workspace = _layout(tmp_path)
+        thing_dir = workspace.thing_dir("legacy")
+        thing_dir.mkdir(parents=True)
+        (thing_dir / "code.py").write_text(
+            "print('flat layout, no app.py')\n",
+        )
+        finding = check_thing_run_functions(workspace)
+        assert finding.level is HealthLevel.OK
+        assert "no app.py" in finding.message
+
+
+def _write_secrets(workspace: WorkspaceLayout, body: str) -> None:
+    workspace.secrets_yaml.write_text(body)
+
+
+class TestCheckSecretReferences:
+    def test_no_things_returns_ok(self, tmp_path: Path) -> None:
+        workspace = _layout(tmp_path)
+        finding = check_secret_references(workspace)
+        assert finding.level is HealthLevel.OK
+        assert "no things" in finding.message
+
+    def test_all_resolve(self, tmp_path: Path) -> None:
+        workspace = _layout(tmp_path)
+        _write_secrets(workspace, "wifi_password: real-pw\n")
+        thing_dir = workspace.thing_dir("alpha")
+        thing_dir.mkdir(parents=True)
+        (thing_dir / "config.toml").write_text(
+            "[wifi]\nssid = 'home'\npassword = '!secret wifi_password'\n",
+        )
+        (thing_dir / "app.py").write_text("def run(): pass\n")
+        finding = check_secret_references(workspace)
+        assert finding.level is HealthLevel.OK
+
+    def test_unresolved_secret_flagged(self, tmp_path: Path) -> None:
+        workspace = _layout(tmp_path)
+        _write_secrets(workspace, "wifi_password: real-pw\n")
+        thing_dir = workspace.thing_dir("alpha")
+        thing_dir.mkdir(parents=True)
+        (thing_dir / "config.toml").write_text(
+            "[mqtt]\ntoken = '!secret mqtt_token'\n",
+        )
+        (thing_dir / "app.py").write_text("def run(): pass\n")
+        finding = check_secret_references(workspace)
+        assert finding.level is HealthLevel.ERROR
+        assert "1 thing(s)" in finding.message
+        assert finding.hint is not None
+        assert "alpha" in finding.hint
+        assert "mqtt_token" in finding.hint
+
+    def test_thing_without_config_skipped(self, tmp_path: Path) -> None:
+        """A thing dir with only app.py (no config) has no secrets to check."""
+        workspace = _layout(tmp_path)
+        thing_dir = workspace.thing_dir("alpha")
+        thing_dir.mkdir(parents=True)
+        (thing_dir / "app.py").write_text("def run(): pass\n")
+        finding = check_secret_references(workspace)
+        assert finding.level is HealthLevel.OK
+
+
+class TestCollectDoctorFindings:
+    def test_runs_all_seven_checks_in_order(self, tmp_path: Path) -> None:
+        workspace = _layout(tmp_path)
+        findings = collect_doctor_findings(workspace)
+        labels = [finding.label for finding in findings]
+        # status's four checks are bracketed by python (front) +
+        # thing-run + secret-refs (back).
+        assert labels == [
+            "PYTHON",
+            "WORKSPACE.YML",
+            "DEVICES.YML",
+            "SECRETS.YML",
+            "THINGS",
+            "THING run() defs",
+            "SECRET refs",
         ]

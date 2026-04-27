@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **Workspace ecosystem completion — Phase 2 in flight.**  Phase 1 closed 2026-04-27.  Phase 2e, 2a, 2c, 2d shipped.  Phase 2d (just landed): new `chumicro_workspace.recovery` module pattern-matches deploy-failure tracebacks against five known shapes (`NameError` → "did you forget to import", `ValueError` mentioning `!secret` → secrets.yml miss, `KeyError` → missing config section, `OSError` on `runtime_config.msgpack` → RAM-mode hint, `ImportError` for `chumicro_*` → setup hint) and emits an indented `--- hints ---` block under the traceback.  All three CLI traceback sites (`_cmd_deploy`, `_cmd_demo`, `_cmd_repl`-with-thing) route through one `_emit_failure_hints` helper so the output stays consistent.  Empty hints → no section header.  Next sub-items: 2b (`doctor`), 2f (multi-device — assess first).
-- **Last shipped:** Phase 2d — app-level deploy-failure hints.
-- **In flight:** Phase 2 — pick next sub-item.
+- **Phase:** **Workspace ecosystem completion — Phase 2 nearly closed.**  Phase 1 closed 2026-04-27.  Phase 2 sub-items 2e + 2a + 2c + 2d + 2b shipped.  Phase 2b (just landed): `doctor` command runs status's four checks plus three new ones (Python ≥3.11 version, per-thing AST scan for top-level `def run`, and a config-merge dry-run that catches unresolved `!secret` references).  Shared `_print_health_findings` renderer means status + doctor produce visually identical output (label / glyph / hint).  Doctor returns 1 only on ERROR-level findings; warnings stay at exit 0 like status.  Per-device probes deferred until a hardware-cheap probe primitive lands.  Only 2f (multi-device deploys — assess scope first) remains in Phase 2.
+- **Last shipped:** Phase 2b — `doctor` strict health check.
+- **In flight:** Phase 2 — 2f (multi-device — assess first) is the only remaining sub-item.
 - **Blocked on:** —
-- **Last touched:** `workbench/workspace/src/chumicro_workspace/{cli,recovery}.py`, `workbench/workspace/tests/{test_cli,test_recovery}.py`, `plans/now.md`.
+- **Last touched:** `workbench/workspace/src/chumicro_workspace/{cli,health}.py`, `workbench/workspace/tests/{test_cli,test_health}.py`, `plans/now.md`.
 
 ---
 

@@ -15,18 +15,26 @@ stay consistent.
 
 from __future__ import annotations
 
+import ast
+import sys
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING
 
+from chumicro_workspace.deploy_source import find_thing_config
 from chumicro_workspace.devices_yaml import load_devices
 from chumicro_workspace.loaders import (
     WorkspaceConfigError,
     read_secrets_yaml,
+    read_thing_config,
     read_workspace_yaml,
 )
+from chumicro_workspace.merge import merge_configs
+from chumicro_workspace.secrets import UnresolvedSecretError, resolve_secrets
 
 if TYPE_CHECKING:  # pragma: no cover — type-only
+    from pathlib import Path
+
     from chumicro_workspace.workspace import WorkspaceLayout
 
 #: Sentinel string the canonical workspace template ships in
@@ -224,10 +232,198 @@ def count_things(workspace: WorkspaceLayout) -> HealthFinding:
 def collect_health_findings(
     workspace: WorkspaceLayout,
 ) -> list[HealthFinding]:
-    """Run every check and return the findings in display order."""
+    """Run every status check and return the findings in display order."""
     return [
         check_workspace_yaml(workspace),
         check_devices_yaml(workspace),
         check_secrets_yaml(workspace),
         count_things(workspace),
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Doctor checks (Phase 2b) — stricter than status, AST + config-merge
+# ---------------------------------------------------------------------------
+
+
+#: Minimum Python version the workspace's pyproject.toml + deps
+#: target.  Older versions surface as deps-import failures during
+#: ``setup``; doctor catches it earlier.
+_MIN_PYTHON_VERSION: tuple[int, int] = (3, 11)
+
+
+def check_python_version() -> HealthFinding:
+    """Verify the host Python is recent enough for the workspace deps."""
+    major, minor = sys.version_info[:2]
+    short = f"{major}.{minor}"
+    full = ".".join(str(part) for part in sys.version_info[:3])
+    if (major, minor) < _MIN_PYTHON_VERSION:
+        required = ".".join(str(part) for part in _MIN_PYTHON_VERSION)
+        return HealthFinding(
+            label="PYTHON",
+            level=HealthLevel.ERROR,
+            message=f"got {short}, need {required}+",
+            hint=(
+                f"upgrade Python — the workspace's deps target "
+                f"{required}+.  Your current interpreter: {sys.executable}"
+            ),
+        )
+    return HealthFinding(
+        label="PYTHON",
+        level=HealthLevel.OK,
+        message=full,
+    )
+
+
+def _thing_app_path(workspace: WorkspaceLayout, thing_name: str) -> Path | None:
+    """Return the thing's ``app.py`` path when present, else ``None``.
+
+    Things using the legacy ``code.py`` / ``main.py`` entry-point
+    convention skip the ``run()`` check — they're not boot-shim shaped.
+    """
+    app_path = workspace.thing_dir(thing_name) / "app.py"
+    return app_path if app_path.is_file() else None
+
+
+def _ast_defines_top_level_run(source: str) -> bool:
+    """Return True when *source* defines a top-level callable named ``run``.
+
+    Accepts function defs (``def run(): ...``) and async function defs;
+    rejects nested defs, class methods, and non-callable assignments.
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return False
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+            if node.name == "run":
+                return True
+    return False
+
+
+def check_thing_run_functions(workspace: WorkspaceLayout) -> HealthFinding:
+    """Verify each boot-shim-shaped thing's ``app.py`` defines ``run()``.
+
+    Things without an ``app.py`` (legacy ``code.py`` / ``main.py``
+    layouts) are skipped — the run() contract only binds the
+    workspace-runtime boot shim.  Things with a syntax error are
+    counted as missing run() so the user sees the failure here
+    rather than at deploy-time.
+    """
+    things = workspace.list_things()
+    if not things:
+        return HealthFinding(
+            label="THING run() defs",
+            level=HealthLevel.OK,
+            message="no things to check",
+        )
+    missing: list[str] = []
+    checked = 0
+    for thing_name in things:
+        app_path = _thing_app_path(workspace, thing_name)
+        if app_path is None:
+            continue
+        checked += 1
+        if not _ast_defines_top_level_run(app_path.read_text()):
+            missing.append(thing_name)
+    if checked == 0:
+        return HealthFinding(
+            label="THING run() defs",
+            level=HealthLevel.OK,
+            message="no app.py files to check (flat-layout things only)",
+        )
+    if missing:
+        listed = ", ".join(missing)
+        return HealthFinding(
+            label="THING run() defs",
+            level=HealthLevel.ERROR,
+            message=f"{len(missing)} of {checked} things missing run(): {listed}",
+            hint=(
+                "define `def run():` in app.py — the workspace_runtime "
+                "boot shim imports `things.<name>.app` and calls run()."
+            ),
+        )
+    return HealthFinding(
+        label="THING run() defs",
+        level=HealthLevel.OK,
+        message=f"all {checked} app.py files define run()",
+    )
+
+
+def check_secret_references(workspace: WorkspaceLayout) -> HealthFinding:
+    """Try to resolve ``!secret`` references in each thing's merged config.
+
+    Runs the same merge pipeline the deployer uses (workspace.yml +
+    thing config + secrets.yml) but skips writing the msgpack — pure
+    static check.  Catches the canonical "user forgot to fill in
+    secrets.yml" case before deploy time.
+    """
+    things = workspace.list_things()
+    if not things:
+        return HealthFinding(
+            label="SECRET refs",
+            level=HealthLevel.OK,
+            message="no things to check",
+        )
+    try:
+        workspace_defaults = read_workspace_yaml(workspace.workspace_yaml)
+    except (FileNotFoundError, WorkspaceConfigError):
+        # The workspace.yml check already flagged this.  Skip silently.
+        return HealthFinding(
+            label="SECRET refs",
+            level=HealthLevel.WARN,
+            message="skipped — workspace.yml check failed first",
+        )
+    secrets: dict = {}
+    if workspace.secrets_yaml.is_file():
+        try:
+            secrets = read_secrets_yaml(workspace.secrets_yaml)
+        except WorkspaceConfigError:
+            return HealthFinding(
+                label="SECRET refs",
+                level=HealthLevel.WARN,
+                message="skipped — secrets.yml check failed first",
+            )
+    failing: list[tuple[str, str]] = []
+    for thing_name in things:
+        try:
+            thing_config_path = find_thing_config(workspace.thing_dir(thing_name))
+        except FileNotFoundError:
+            # No config file → no !secret references possible.  Skip.
+            continue
+        try:
+            thing_data = read_thing_config(thing_config_path)
+            merged = merge_configs(workspace_defaults, thing_data)
+            resolve_secrets(merged, secrets)
+        except UnresolvedSecretError as exception:
+            failing.append((thing_name, str(exception).strip("'")))
+        except WorkspaceConfigError as exception:
+            failing.append((thing_name, f"malformed config: {exception}"))
+    if failing:
+        listed = "; ".join(f"{name} ({reason})" for name, reason in failing)
+        return HealthFinding(
+            label="SECRET refs",
+            level=HealthLevel.ERROR,
+            message=f"{len(failing)} thing(s) have unresolved secrets",
+            hint=(
+                f"add the missing key(s) to secrets.yml.  Failures: {listed}"
+            ),
+        )
+    return HealthFinding(
+        label="SECRET refs",
+        level=HealthLevel.OK,
+        message="all references resolve",
+    )
+
+
+def collect_doctor_findings(
+    workspace: WorkspaceLayout,
+) -> list[HealthFinding]:
+    """Run the strict (status + AST + config-merge) check set."""
+    return [
+        check_python_version(),
+        *collect_health_findings(workspace),
+        check_thing_run_functions(workspace),
+        check_secret_references(workspace),
     ]
