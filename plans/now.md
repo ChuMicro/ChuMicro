@@ -6,36 +6,31 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **Workspace-template testing-infrastructure audit** (just promoted from `## Next` 2026-04-27).  Just-completed two-phase scripts→workbench migration sets up the natural follow-on: the user-facing `ChuMicro-Workspace-Template` starter repo can now adopt `chumicro-pytest-device` 0.1.0 as a real dep instead of copying the plugin.  Goal of the audit: figure out what test/lint/coverage scaffolding the template ships today and what's missing vs the mono-repo's `preflight` surface.  Then ship whatever's missing — preferred location is in the template itself; fallback is having `chumicro-workspace setup` materialise it.
+- **Phase:** **Workspace-template testing-infrastructure audit COMPLETE 2026-04-27**.  Audited the `ChuMicro-Workspace-Template` repo, found big gaps vs the chumicro mono-repo's CI surface (no `tests/` starter, no lint config, no coverage gate, no `.github/workflows/`, no `chumicro-pytest-device` adoption), and shipped Phase A to the template repo + Phase B to chumicro to close them.  Pick the next workstream from `plans/next-up.md`'s `## Next` queue.
 - **Last shipped:**
-  * `e76b9f9` — Phase 1: device-registry schema (DeviceEntry / DeviceDefaults / validators / loaders / filters / `resolve_ide_devices`) migrates from `scripts/device_config.py` to `chumicro_deploy.config.default`.  17 consumers updated, dead `device-config.yml` flow dropped.  `chumicro-deploy` 0.0.1 → 0.1.0.
-  * `3e01cbf` — Phase 2: extract `chumicro-pytest-device` 0.1.0 workbench package.  Plugin (1242 lines) + 3 helpers (~775 lines) move out of `scripts/`.  Auto-registers via `pytest11` entry point — drops the explicit `pytest_plugins = ["pytest_device"]` from root conftest.  ROOT constant lifted via `pytest.Config.rootpath` so the plugin works inside any workspace, not just chumicro mono-repo.  Bonus: fixes a subtle pytest-cov instrumentation gap caused by entry-point auto-load running before pytest-cov starts.
-- **In flight:** Promote the audit to `## Now` (done in this same session).  Refresh `plans/next-up.md` (done).  Start the audit itself — investigate the `ChuMicro-Workspace-Template` repo and identify gaps.
+  * **Template repo `579274a`** — Phase A: `[tool.ruff]` config + `[tool.coverage.report] fail_under = 85` + `[project.optional-dependencies] dev` (pulls `chumicro-pytest-device`, `pytest`, `pytest-cov`, `ruff`).  New `tests/test_workspace.py` (parametrized "every thing exposes `run()`" smoke test + `workspace.yml` parses).  New `things/_template/tests/test_app.py` so `python run.py new <name>` scaffolds a starter test.  New `.github/workflows/test.yml` running setup + lint + test on push/PR across Python 3.11/3.12/3.13.  `AGENTS.md` "Tests + lint" section + commands-table refresh.  3 tests, all pass; ruff config clean.
+  * **chumicro `f47acba`** — Phase B: `chumicro-workspace lint` command shells out to `ruff check .` from the workspace root, with `--`-passthrough for `--fix` etc.  Skips with a discoverable hint when ruff isn't installed.  3 new `TestLintCommand` tests.
+- **In flight:** —
 - **Blocked on:** —
-- **Last touched:** `workbench/deploy/src/chumicro_deploy/{__init__.py,config/default.py}` (Phase 1 schema migration), `workbench/pytest-device/{VERSION,pyproject.toml,README.md,src/chumicro_pytest_device/{plugin,_test_runner,pr_summary,result_parser}.py,tests/}` (Phase 2 new package), `scripts/run.py` (`-p no:chumicro_pytest_device` injection for unit-test runs), `scripts/{pytest_device,pr_summary,result_parser,device_testing,device_config}.py` deleted, `conftest.py` (drop `pytest_plugins` line).
+- **Last touched:** Mono-repo: `workbench/workspace/src/chumicro_workspace/cli.py` (`_cmd_lint` + parser registration), `workbench/workspace/tests/test_cli.py` (`TestLintCommand`).  Template repo (separate git): `pyproject.toml`, `tests/test_workspace.py` (new), `things/_template/tests/test_app.py` (new), `.github/workflows/test.yml` (new), `AGENTS.md`, `things/example_sensor/app.py` (single-blank-line ruff-fix).
 
 ---
 
-## Architectural state after Phase 1+2
+## What this round closed (audit findings → shipped)
 
-* `chumicro-deploy` 0.1.0 — owns `Device`, `Deployer`, `InteractiveDeployer`, `DeviceEntry` registry schema, transport protocol.  Public deploy primitives + the YAML schema everything reads.
-* `chumicro-pytest-device` 0.1.0 — owns the pytest plugin that runs library functional tests on connected boards.  `pip install` registers it via `pytest11` entry point.
-* `chumicro-workspace`, `chumicro-repl` — unchanged.
-* `chumicro-workspace-template` workbench package — minimal payload (just `devices.yml`); the canonical starter content lives at the [external `ChuMicro-Workspace-Template` Git repo](https://github.com/ChuMicro/ChuMicro-Workspace-Template) per Decision 0038.
-* `scripts/` — shrunk from ~9.9K lines to ~7.6K.  What remains is genuine mono-repo CI plumbing (release pipeline, bundle staging, runtime preparation, IDE config, gates).  Backlog reviewed 2026-04-27 and confirmed: nothing else has a clear workbench-package home without a real consumer driver.
+| Audit gap | Status |
+|---|---|
+| No `tests/` starter | ✅ `tests/test_workspace.py` (parametrized over things) |
+| No `python run.py lint` | ✅ `chumicro-workspace lint` command (mono-repo Phase B) |
+| No `[tool.ruff]` config in template | ✅ Mirrors mono-repo's tone (line-length 100, py311, `select = E F I B UP TID252`) |
+| No coverage gate | ✅ `[tool.coverage.report] fail_under = 85` (soft default) |
+| No GitHub Actions CI | ✅ `.github/workflows/test.yml` (setup + lint + test, 3.11/3.12/3.13 matrix) |
+| `chumicro-pytest-device` not a dep | ✅ Declared in `[project.optional-dependencies] dev` — auto-registers via `pytest11` entry point on install |
+| `things/_template/` lacks test scaffolding | ✅ `things/_template/tests/test_app.py` ships with the starter scaffold |
 
-## Workspace-template audit — what to look for
+## What's pending (one open follow-up)
 
-The template ships a `run.py` shim (per Decision 0038's clone-the-repo bootstrap).  Open questions for the audit:
-
-1. **Unit tests:** does the template have a `tests/` dir + `run.py test` command for the user's own test code?  If not, what's the minimum-viable starter?
-2. **Functional tests:** does the template support `things/<name>/functional_tests/`?  Does it adopt `chumicro-pytest-device` as a dep, or copy/reimplement the plugin?
-3. **Lint:** does the template ship a `ruff` config that matches the mono-repo's tone?
-4. **Coverage gate:** does the template enforce a coverage threshold on user code?  85 % default (matching the mono-repo's human floor) or none?
-5. **CI:** does the template ship a GitHub Actions workflow (or analogue) so the user's `things/` get tested on every push without manual `run.py` invocation?
-6. **`chumicro-pytest-device` adoption:** brand-new dep candidate.  When the template adopts it, the auto-register entry point Just Works — no extra wiring in the template's `conftest.py`.
-
-Action ordering: read the template repo (WebFetch), survey what's there, propose concrete additions, ship them either inside the template or via `chumicro-workspace setup` materialisation.
+`chumicro-pytest-device` 0.1.0 hasn't been published to PyPI yet (it just landed in the mono-repo).  Once published, external workspaces' `python run.py setup` will pull it via the `dev` extra automatically.  Until then, `chumicro-dev` mode picks it up via the editable install.
 
 ## How this file works
 
