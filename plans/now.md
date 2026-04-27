@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **Workspace ecosystem completion — main thread closed.**  Phases 1, 2, 4, 5, 6 shipped end-to-end this session.  Phase 6 (just landed) is the cross-repo doc audit: mono-repo `workbench/workspace/{README.md,docs/guide.md}` refreshed (Status block updated, commands table extended with `init` / `update` / `bootstrap` / `status` / `doctor` / `deploy --dry-run` / `deploy --all-devices` / `repl <thing>` / `new --library`, public API block extended with health/recovery/scaffold/quality modules, new sections for health checks + dry-run + multi-board deploys + failure hints + REPL + quality knobs); template repo `AGENTS.md` + `CONTRIBUTING.md` got the same command-table additions, naming-rule update for nested paths, scaffolding-from-example workflow, sanity-check-ladder leading with `status`/`doctor`; `docs/contributing/new-library.md` notes the Phase 4 migration to the workbench scaffolder.  Phase 3 (per-env deploys) deferred at user request; Phase 7 (richer REPL — parallel track) is the only remaining piece of the umbrella.
-- **Last shipped:** Phase 6 — cross-repo doc audit.
-- **In flight:** —
+- **Phase:** **Workspace ecosystem completion — Phase 7 in flight.**  Phases 1, 2, 4, 5, 6 shipped earlier in this session.  Phase 7 Slice 1a just landed: new `chumicro_workspace.line_mode` module wraps `prompt_toolkit.PromptSession` with persistent per-device history (under `~/.chumicro-repl/history/<sanitized-address>/`) + a `:command` registry stub (`:help` / `:quit` for now); CLI gains `--mode {line,passthrough}` (defaults to `passthrough` until raw-REPL auto-detect lands); new `interactive_line()` entry point on `chumicro_repl.tui` mirrors the existing `interactive()` shape but routes through the line-mode loop.  `prompt_toolkit>=3.0` added as a runtime dep (CPython-only, fine per Decision 0032 §6).  Slice 1b (`:edit` / `:save` / `:load` / `:snippets`) and 1c (tab completion) are the remaining sub-slices.
+- **Last shipped:** Phase 7 Slice 1a — line mode + persistent history.
+- **In flight:** Phase 7 Slice 1b next — editor handoff + snippet store.
 - **Blocked on:** —
-- **Last touched:** `workbench/workspace/{README.md,docs/guide.md}`, `docs/contributing/new-library.md`, `ChuMicro-Workspace-Template/{AGENTS.md,CONTRIBUTING.md}`, `plans/now.md`.
+- **Last touched:** `workbench/repl/src/chumicro_repl/{__init__,cli,line_mode,tui}.py`, `workbench/repl/tests/{test_line_mode,test_tui}.py`, `workbench/repl/pyproject.toml`, `plans/now.md`.
 
 ---
 

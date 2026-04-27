@@ -27,6 +27,12 @@ classifiers = [
 ]
 dependencies = [
     "pyserial>=3.5",
+    # prompt_toolkit drives the line-mode REPL (Phase 7 of the
+    # workspace-ecosystem workstream — cursor edit, history search,
+    # persistent per-device history).  CPython-only is fine here:
+    # `chumicro-repl` is a workbench tool that runs on the user's
+    # laptop, never on a microcontroller (Decision 0032 §6).
+    "prompt_toolkit>=3.0",
 ]
 
 [project.urls]

@@ -32,6 +32,14 @@ if TYPE_CHECKING:
     from ._follow import ExitCode, tail
     from .framing import Utf8StreamDecoder
     from .highlight import Theme, colorize, strip_ansi_sequences
+    from .line_mode import (
+        BUILTIN_COMMANDS,
+        DEFAULT_HISTORY_ROOT,
+        CommandHandler,
+        history_path_for,
+        run_line_mode,
+        sanitize_address,
+    )
     from .patterns import PatternKind, PatternMatch, detect_patterns
     from .recovery import (
         InteractiveReplSession,
@@ -41,12 +49,15 @@ if TYPE_CHECKING:
         recovery_plan_for,
     )
     from .session import ReplSession, ReplSessionDisconnected, ReplSessionError
-    from .tui import interactive
+    from .tui import interactive, interactive_line
 
 #: Map of public attribute -> submodule.  ``__getattr__`` below walks
 #: this table to defer each submodule import until the attribute is
 #: first read.
 _LAZY_ATTRS: dict[str, str] = {
+    "BUILTIN_COMMANDS": "line_mode",
+    "CommandHandler": "line_mode",
+    "DEFAULT_HISTORY_ROOT": "line_mode",
     "ExitCode": "_follow",
     "InteractiveReplSession": "recovery",
     "PatternKind": "patterns",
@@ -61,8 +72,12 @@ _LAZY_ATTRS: dict[str, str] = {
     "classify_session_failure": "recovery",
     "colorize": "highlight",
     "detect_patterns": "patterns",
+    "history_path_for": "line_mode",
     "interactive": "tui",
+    "interactive_line": "tui",
     "recovery_plan_for": "recovery",
+    "run_line_mode": "line_mode",
+    "sanitize_address": "line_mode",
     "strip_ansi_sequences": "highlight",
     "tail": "_follow",
 }
@@ -71,6 +86,9 @@ _LAZY_ATTRS: dict[str, str] = {
 #: checkers (pyright in particular) can see every exported name.
 #: Keep alphabetized; a sorted assertion below catches drift.
 __all__ = [
+    "BUILTIN_COMMANDS",
+    "CommandHandler",
+    "DEFAULT_HISTORY_ROOT",
     "ExitCode",
     "InteractiveReplSession",
     "PatternKind",
@@ -85,8 +103,12 @@ __all__ = [
     "classify_session_failure",
     "colorize",
     "detect_patterns",
+    "history_path_for",
     "interactive",
+    "interactive_line",
     "recovery_plan_for",
+    "run_line_mode",
+    "sanitize_address",
     "strip_ansi_sequences",
     "tail",
 ]

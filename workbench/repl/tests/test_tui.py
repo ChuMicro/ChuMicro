@@ -255,3 +255,58 @@ class TestStartupBannerAndNudge:
         # No transport name fabricated.
         assert "circuitpython" not in rendered
         assert "micropython" not in rendered
+
+
+class TestInteractiveLineWrapper:
+    """``interactive_line`` wires the line-mode loop to a real port factory."""
+
+    def test_runs_through_factory_and_closes_port(self, tmp_path) -> None:
+        from chumicro_repl import interactive_line
+
+        port = FakeSerialPort(read_chunks=[])
+        captured: dict[str, object] = {}
+
+        def factory(address: str, baudrate: int, timeout: float) -> FakeSerialPort:
+            captured["address"] = address
+            captured["baudrate"] = baudrate
+            return port
+
+        # Stub the line-mode loop so we don't need a real prompt_toolkit
+        # session — the wrapper's job is the port plumbing + history root
+        # plumbing, which the stub-driven assertions below exercise.
+        from chumicro_repl import line_mode as line_mode_module
+
+        def fake_run(
+            real_port,
+            *,
+            output,
+            address,
+            history_root,
+            welcome_banner,
+            theme,
+            time,
+        ):
+            captured["port_id"] = id(real_port)
+            captured["history_root"] = history_root
+            captured["banner"] = welcome_banner
+            return 0
+
+        old_runner = line_mode_module.run_line_mode
+        line_mode_module.run_line_mode = fake_run  # type: ignore[assignment]
+        try:
+            result = interactive_line(
+                "/dev/cu.dev",
+                output=io.StringIO(),
+                port_factory=factory,
+                history_root=tmp_path,
+                time=FakeTime(),
+            )
+        finally:
+            line_mode_module.run_line_mode = old_runner  # type: ignore[assignment]
+        assert result == 0
+        assert port.closed
+        assert captured["address"] == "/dev/cu.dev"
+        assert captured["history_root"] == tmp_path
+        # Welcome banner contains the address — the wrapper built it via
+        # ``format_line_mode_banner``.
+        assert "/dev/cu.dev" in str(captured["banner"])

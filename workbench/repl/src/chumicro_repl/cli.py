@@ -183,6 +183,20 @@ def build_parser() -> argparse.ArgumentParser:
             "traceback or safe-mode banner is detected."
         ),
     )
+    parser.add_argument(
+        "--mode",
+        choices=("line", "passthrough"),
+        default="passthrough",
+        help=(
+            "Interactive input mode.  `passthrough` (default — today's "
+            "TUI) forwards every keystroke to the device; `line` "
+            "interposes a host-side line editor with persistent "
+            "per-device history, cursor edit, and Ctrl-R reverse "
+            "search.  Phase 7 of the workspace-ecosystem workstream — "
+            "the default flips to `line` once raw-REPL auto-detection "
+            "lands."
+        ),
+    )
     return parser
 
 
@@ -203,6 +217,10 @@ def main(argv: list[str] | None = None) -> int:
             fail_on_traceback=args.fail_on_traceback,
             output=sys.stdout,
         ))
+    if args.mode == "line":
+        from .tui import interactive_line  # noqa: PLC0415
+
+        return interactive_line(device)
     from .tui import interactive  # noqa: PLC0415
 
     return interactive(device)

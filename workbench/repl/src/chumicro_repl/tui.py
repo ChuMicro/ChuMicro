@@ -45,6 +45,8 @@ from .highlight import DEFAULT_THEME, Theme, colorize
 from .patterns import PatternMatch, StreamingPatternDetector
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from chumicro_deploy import Device
 
 
@@ -354,6 +356,68 @@ def interactive(
                 reconnect_seconds=reconnect_seconds,
                 reconnect_interval=reconnect_interval,
             )
+    finally:
+        _close_quietly(port)
+
+
+def interactive_line(
+    device: Device | str,
+    *,
+    baudrate: int = 115200,
+    output: TextIO | None = None,
+    theme: Theme | None = None,
+    time: TimeSource | None = None,
+    port_factory: PortFactory | None = None,
+    history_root: object | None = None,
+) -> int:
+    """Open *device* and run the line-mode REPL.
+
+    Phase 7 sibling of :func:`interactive` — instead of forwarding
+    keystrokes byte-by-byte to the device, runs a host-side
+    `prompt_toolkit` line editor with persistent per-device history.
+    Each completed line ships to the device; serial output streams
+    back through the same pattern-detector + traceback highlighter
+    the passthrough TUI uses.
+
+    Falls through to the same port factory / device-resolution shape
+    as :func:`interactive`; the only delta is the input loop.
+
+    Args:
+        device: :class:`chumicro_deploy.Device` or a serial path.
+        baudrate: Consulted when *device* is a string.
+        output: Text output.  Defaults to ``sys.stdout``.
+        theme: Color theme.
+        time: Injectable time source (for the per-line drain).
+        port_factory: Injectable port factory.
+        history_root: Override the persistent-history root
+            directory.  ``None`` (default) uses
+            :data:`chumicro_repl.line_mode.DEFAULT_HISTORY_ROOT`.
+
+    Returns:
+        ``0`` on a clean exit (``:quit`` / Ctrl-D / Ctrl-C at the
+        empty prompt).
+    """
+    from .line_mode import (  # noqa: PLC0415
+        format_line_mode_banner,
+        run_line_mode,
+    )
+
+    active_output = output if output is not None else sys.stdout
+    active_factory: PortFactory = (
+        port_factory if port_factory is not None else default_port_factory
+    )
+    address, resolved_baudrate = _resolve_address(device, baudrate)
+    port = active_factory(address, resolved_baudrate, _POLL_INTERVAL)
+    try:
+        return run_line_mode(
+            port,
+            output=active_output,
+            address=address,
+            history_root=cast("Path | None", history_root),
+            welcome_banner=format_line_mode_banner(address=address),
+            theme=theme,
+            time=time,
+        )
     finally:
         _close_quietly(port)
 
