@@ -2272,6 +2272,118 @@ class TestLintCommand:
         assert "pip install -e .[dev]" in captured.out
 
 
+class TestQualityKnobsLint:
+    """Phase 5 — workspace.yml `quality.lint` flows through _cmd_lint."""
+
+    def test_disabled_skips_ruff(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        # Append a quality block disabling lint.
+        (root / "workspace.yml").write_text(
+            (root / "workspace.yml").read_text()
+            + "quality:\n  lint:\n    enabled: false\n",
+        )
+
+        called = [False]
+
+        def fake_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+            called[0] = True
+            return subprocess.CompletedProcess(args, 0)
+
+        monkeypatch.setattr(cli.subprocess, "run", fake_run)
+        exit_code = cli.main(["lint", "--workspace-dir", str(root)])
+        assert exit_code == 0
+        assert called[0] is False
+        assert "disabled" in capsys.readouterr().out
+
+    def test_select_prepended_before_user_args(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        (root / "workspace.yml").write_text(
+            (root / "workspace.yml").read_text()
+            + 'quality:\n  lint:\n    select: ["E", "F", "I"]\n',
+        )
+
+        recorded: dict[str, Any] = {}
+
+        def fake_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+            recorded["args"] = args
+            return subprocess.CompletedProcess(args, 0)
+
+        monkeypatch.setattr(cli.subprocess, "run", fake_run)
+        exit_code = cli.main([
+            "lint", "--workspace-dir", str(root), "--", "--fix",
+        ])
+        assert exit_code == 0
+        # Workspace --select goes BEFORE user passthrough so the user's
+        # later --select (if any) wins.
+        recorded_args = recorded["args"]
+        select_index = recorded_args.index("--select")
+        fix_index = recorded_args.index("--fix")
+        assert select_index < fix_index
+        assert recorded_args[select_index + 1] == "E,F,I"
+
+
+class TestQualityKnobsTest:
+    """Phase 5 — workspace.yml `quality.coverage_threshold` flows through _cmd_test."""
+
+    def test_threshold_prepended_to_pytest(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        (root / "workspace.yml").write_text(
+            (root / "workspace.yml").read_text()
+            + "quality:\n  coverage_threshold: 90\n",
+        )
+
+        recorded: dict[str, Any] = {}
+
+        def fake_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+            recorded["args"] = args
+            return subprocess.CompletedProcess(args, 0)
+
+        monkeypatch.setattr(cli.subprocess, "run", fake_run)
+        exit_code = cli.main([
+            "test", "--workspace-dir", str(root), "--", "-x",
+        ])
+        assert exit_code == 0
+        assert "--cov-fail-under=90" in recorded["args"]
+        # Workspace flag comes before user passthrough; pytest's
+        # last-occurrence-wins lets the user override.
+        gate_index = recorded["args"].index("--cov-fail-under=90")
+        x_index = recorded["args"].index("-x")
+        assert gate_index < x_index
+
+    def test_no_threshold_no_extra_flags(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+
+        recorded: dict[str, Any] = {}
+
+        def fake_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+            recorded["args"] = args
+            return subprocess.CompletedProcess(args, 0)
+
+        monkeypatch.setattr(cli.subprocess, "run", fake_run)
+        exit_code = cli.main(["test", "--workspace-dir", str(root)])
+        assert exit_code == 0
+        assert not any(
+            arg.startswith("--cov-fail-under") for arg in recorded["args"]
+        )
+
+
 # ---------------------------------------------------------------------------
 # Workspace-not-found
 # ---------------------------------------------------------------------------

@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **Workspace ecosystem completion — Phases 1, 2, 4 closed.**  Phase 1 closed 2026-04-27 (commits `98fa8d0..c8a05fe` mono + `4523c89..98b6377` template); Phase 2 closed 2026-04-27 (six sub-items, commits `333d900..139b0ee`); Phase 1 Slice 5 carry-over closed via template-repo `5ce73d4`.  **Phase 4** just shipped: library scaffolder migrated from `scripts/new_library_scaffold.py` into `chumicro_workspace.scaffold` with the 11 templates moved to `_payloads/library_template/`; new `python run.py new --library <name>` CLI mode + optional `--into <path>` override; `scripts/new_library_scaffold.py` is now a thin wrapper that calls the workbench scaffolder + composes the mono-repo-only follow-ups (editable install + IDE sync).  Phase 3 (per-env deploys) still deferred at user request.  Phase 5 (`workspace.yml` quality knobs) is the natural next focus, or Phase 6 (doc audit) / Phase 7 (richer REPL) on a parallel track.
-- **Last shipped:** Phase 4 — library scaffolder migration.
+- **Phase:** **Workspace ecosystem completion — Phases 1, 2, 4, 5 closed.**  Phase 1 closed 2026-04-27 (commits `98fa8d0..c8a05fe` mono + `4523c89..5ce73d4` template); Phase 2 closed 2026-04-27 (six sub-items, commits `333d900..139b0ee`); Phase 4 closed 2026-04-27 (`7766ff6`).  **Phase 5** just shipped: new `chumicro_workspace.quality` module reads the `quality:` block from `workspace.yml`, returns a typed `QualityConfig` with `LintConfig` (`enabled`, `select`), `coverage_threshold`, and `agent_strictness` (`"relaxed"` | `"strict"` — accepted but not yet enforced).  `_cmd_lint` consults it: `lint.enabled = false` skips ruff with a hint; `lint.select` prepends `--select <list>` so user `--` passthrough still wins.  `_cmd_test` prepends `--cov-fail-under=<n>` when `coverage_threshold` is set.  Template repo's `workspace.yml` gains a commented-out example block.  Phase 3 (per-env deploys) deferred at user request.  Phase 6 (doc audit) and Phase 7 (richer REPL — parallel track) are the remaining items.
+- **Last shipped:** Phase 5 — `workspace.yml` quality knobs wired through.
 - **In flight:** —
 - **Blocked on:** —
-- **Last touched:** `workbench/workspace/src/chumicro_workspace/{cli,scaffold}.py`, `workbench/workspace/src/chumicro_workspace/_payloads/library_template/`, `workbench/workspace/tests/{test_cli,test_scaffold}.py`, `scripts/new_library_scaffold.py`, `plans/now.md`.
+- **Last touched:** `workbench/workspace/src/chumicro_workspace/{cli,quality}.py`, `workbench/workspace/tests/{test_cli,test_quality}.py`, `ChuMicro-Workspace-Template/workspace.yml`, `plans/now.md`.
 
 ---
 

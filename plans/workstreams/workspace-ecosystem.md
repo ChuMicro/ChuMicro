@@ -1,6 +1,6 @@
 # Workstream: Workspace ecosystem completion
 
-Status: **Phases 1, 2, 4 shipped** (2026-04-27).  Phase 3 deferred at user direction during Phase 4.  Phases 5-7 still planned.  Drafted 2026-04-27, revised same day with user triage, executed Phases 1-2-4 immediately after.
+Status: **Phases 1, 2, 4, 5 shipped** (2026-04-27).  Phase 3 deferred at user direction during Phase 4.  Phases 6-7 still planned.  Drafted 2026-04-27, revised same day with user triage, executed Phases 1-2-4-5 immediately after.
 
 ## Phase progress
 
@@ -10,7 +10,7 @@ Status: **Phases 1, 2, 4 shipped** (2026-04-27).  Phase 3 deferred at user direc
 | 2 — Ergonomics quick wins | **shipped** | Six sub-items: 2e (`repl <thing>` `333d900`), 2a (`status` `7697deb`), 2c (`deploy --dry-run` `f2a055d`), 2d (deploy-failure hints `93b7c7a`), 2b (`doctor` `045f819`), 2f (`deploy --all-devices` `139b0ee`).  Per-thing → per-device mapping config deferred from 2f. |
 | 3 — Per-environment deploys | deferred | Per user direction during Phase 4; pick up when needed. |
 | 4 — Library scaffolder migration | **shipped** | `scripts/new_library_scaffold.py` → `chumicro_workspace.scaffold` + `python run.py new --library <name>` CLI mode.  Templates moved to `_payloads/library_template/`. |
-| 5 — Wire `workspace.yml` quality knobs | planned | Lint / coverage / agent-strictness.  Natural next focus. |
+| 5 — Wire `workspace.yml` quality knobs | **shipped** | New `chumicro_workspace.quality` module + CLI wiring; `agent_strictness` accepted but enforcement deferred (no AST-level checks yet — own design pass). |
 | 6 — Documentation audit | planned | Cross-repo doc-freshness sweep, runs last. |
 | 7 — Richer REPL (parallel track) | planned | See [`repl-playground.md`](repl-playground.md). |
 

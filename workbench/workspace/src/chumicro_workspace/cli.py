@@ -77,6 +77,7 @@ from chumicro_workspace.onboarding import (
     detect_board_state,
     probe_with_runtime_inference,
 )
+from chumicro_workspace.quality import load_quality_config
 from chumicro_workspace.recovery import detect_hints, format_hints
 from chumicro_workspace.workspace import (
     ThingClassification,
@@ -1354,10 +1355,20 @@ def _cmd_test(args: argparse.Namespace) -> int:
     Shells out to ``pytest`` so users get the standard pytest UX
     (``-k``, ``-x``, ``-v``, etc.) without re-implementing argument
     forwarding.  Extra args after ``--`` are passed through verbatim.
+
+    Phase 5 wiring: when ``workspace.yml``'s
+    ``quality.coverage_threshold`` is set, prepend
+    ``--cov-fail-under=<n>`` so the workspace-level gate kicks in.
+    User passthrough args (after ``--``) win over the workspace
+    default — pytest takes the last occurrence.
     """
     workspace = _resolve_workspace(args)
+    quality = load_quality_config(workspace.workspace_yaml)
+    quality_flags: list[str] = []
+    if quality.coverage_threshold is not None:
+        quality_flags.append(f"--cov-fail-under={quality.coverage_threshold}")
     completed = subprocess.run(  # noqa: S603 — args fully controlled
-        [sys.executable, "-m", "pytest", *args.pytest_args],
+        [sys.executable, "-m", "pytest", *quality_flags, *args.pytest_args],
         cwd=workspace.root,
         check=False,
     )
@@ -1376,8 +1387,20 @@ def _cmd_lint(args: argparse.Namespace) -> int:
     No-op (exit 0 with a hint) when ``ruff`` isn't installed —
     keeps the command discoverable in workspaces that haven't
     pulled the ``[dev]`` extra yet.
+
+    Phase 5 wiring: ``workspace.yml``'s ``quality.lint.enabled``
+    and ``quality.lint.select`` knobs flow through.  ``enabled =
+    false`` skips the run entirely; ``select`` prepends a
+    ``--select <comma list>`` flag (so user passthrough still
+    overrides — ruff picks up the last ``--select``).
     """
     workspace = _resolve_workspace(args)
+    quality = load_quality_config(workspace.workspace_yaml)
+    if not quality.lint.enabled:
+        print(
+            "lint: disabled in workspace.yml ([quality.lint] enabled = false).",
+        )
+        return 0
     try:
         import ruff  # noqa: F401, PLC0415  — availability probe
     except ImportError:
@@ -1388,8 +1411,14 @@ def _cmd_lint(args: argparse.Namespace) -> int:
             "or add ruff to your workspace's pyproject.toml deps.",
         )
         return 0
+    quality_flags: list[str] = []
+    if quality.lint.select:
+        quality_flags.extend(["--select", ",".join(quality.lint.select)])
     completed = subprocess.run(  # noqa: S603 — args fully controlled
-        [sys.executable, "-m", "ruff", "check", *args.ruff_args, "."],
+        [
+            sys.executable, "-m", "ruff", "check",
+            *quality_flags, *args.ruff_args, ".",
+        ],
         cwd=workspace.root,
         check=False,
     )
