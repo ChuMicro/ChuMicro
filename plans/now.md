@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **Workspace ecosystem completion — Phase 2 in flight.**  Phase 1 closed 2026-04-27.  Phase 2e + 2a shipped.  Phase 2a (just landed): new `chumicro_workspace.health` module with four lightweight checks (workspace.yml validity, devices.yml count, secrets.yml placeholder detection against the canonical `replace-me` sentinel, things-tree summary) consumed by a new `_cmd_status`.  Each check returns a `HealthFinding` (label / level / message / optional hint); status renders one line per finding with a Unicode glyph (`✓` / `⚠` / `✗`) and exits 1 only on ERROR (warnings stay silent).  Module is reused by Phase 2b's `doctor` (planned).  Next sub-items in any order: 2b (`doctor`), 2c (`deploy --dry-run`), 2d (app-level error recovery hints), 2f (multi-device — assess first).
-- **Last shipped:** Phase 2a — `status` workspace health snapshot.
+- **Phase:** **Workspace ecosystem completion — Phase 2 in flight.**  Phase 1 closed 2026-04-27.  Phase 2e, 2a, 2c shipped.  Phase 2c (just landed): `deploy --dry-run` builds the source like normal then prints the file map (path / size / one-word category — `shim` / `namespace` / `thing` / `config` / `library` / `file`) instead of calling `Deployer.deploy()`.  Helper functions `_format_size`, `_classify_dry_run_path`, `_render_dry_run_summary` keep the rendering pure-string so it's also the canonical "what does deploy do" reference for docs.  Next sub-items: 2b (`doctor`), 2d (app-level error recovery hints), 2f (multi-device — assess first).
+- **Last shipped:** Phase 2c — `deploy --dry-run`.
 - **In flight:** Phase 2 — pick next sub-item.
 - **Blocked on:** —
-- **Last touched:** `workbench/workspace/src/chumicro_workspace/{cli,health}.py`, `workbench/workspace/tests/{test_cli,test_health}.py`, `plans/now.md`.
+- **Last touched:** `workbench/workspace/src/chumicro_workspace/cli.py`, `workbench/workspace/tests/test_cli.py`, `plans/now.md`.
 
 ---
 

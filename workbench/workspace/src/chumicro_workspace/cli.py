@@ -526,6 +526,85 @@ def _cmd_devices(args: argparse.Namespace) -> int:
     return 0
 
 
+def _format_size(num_bytes: int) -> str:
+    """Render *num_bytes* as a short human-readable string.
+
+    ``B`` for under 1 KiB, ``KiB`` (one decimal) for under 1 MiB,
+    ``MiB`` past that.  Used in ``deploy --dry-run`` columns where
+    fixed-width "look at a glance" output beats raw byte counts.
+    """
+    kib = 1024
+    mib = 1024 * 1024
+    if num_bytes < kib:
+        return f"{num_bytes} B"
+    if num_bytes < mib:
+        return f"{num_bytes / kib:.1f} KiB"
+    return f"{num_bytes / mib:.1f} MiB"
+
+
+def _classify_dry_run_path(path: str, content: bytes) -> str:
+    """Return a one-word category for *path* in the deploy file map.
+
+    Drives the right-column annotation of ``deploy --dry-run`` so
+    the reader can scan "what's shim infrastructure vs my code"
+    without parsing paths by eye.
+    """
+    if path in ("/code.py", "/main.py"):
+        return "shim"
+    if path == "/active.py":
+        return "shim"
+    if path == "/lib/workspace_runtime/__init__.py":
+        return "shim"
+    if path == "/runtime_config.msgpack":
+        return "config"
+    if path.startswith("/lib/things/"):
+        if path.endswith("/__init__.py") and content == b"":
+            return "namespace"
+        return "thing"
+    if path.startswith("/lib/"):
+        return "library"
+    return "file"
+
+
+def _render_dry_run_summary(
+    *,
+    thing_name: str,
+    device: Device,
+    layout: str,
+    files: dict[str, bytes],
+    entrypoint: str,
+) -> str:
+    """Format the ``deploy --dry-run`` output.
+
+    Two sections: a one-line header naming the thing / device /
+    layout, and a sorted file list with size + classification.
+    The output doubles as user-facing documentation for
+    "what does deploy actually do" — link from docs/guide.md +
+    workspace template README.
+    """
+    total_bytes = sum(len(content) for content in files.values())
+    lines = [
+        f"would deploy {thing_name} to {device.transport}@{device.address} "
+        f"using {layout} layout",
+        f"entrypoint: {entrypoint}",
+        f"device files ({len(files)} total, {_format_size(total_bytes)}):",
+    ]
+    if not files:
+        lines.append("  (file map is empty)")
+        return "\n".join(lines)
+    sorted_paths = sorted(files)
+    path_width = max(len(path) for path in sorted_paths)
+    size_width = max(
+        len(_format_size(len(files[path]))) for path in sorted_paths
+    )
+    for path in sorted_paths:
+        content = files[path]
+        size = _format_size(len(content)).rjust(size_width)
+        category = _classify_dry_run_path(path, content)
+        lines.append(f"  {path.ljust(path_width)}  {size}  {category}")
+    return "\n".join(lines)
+
+
 def _resolve_thing_name(workspace: WorkspaceLayout, name: str) -> str:
     """Resolve a user-typed thing name to a canonical slash-form path.
 
@@ -633,6 +712,7 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
     from chumicro_deploy import Deployer  # noqa: PLC0415
 
     if args.boot_shim:
+        layout = "boot-shim"
         source = thing_boot_source(
             thing_dirs[0],
             workspace=workspace,
@@ -640,6 +720,7 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
             entrypoint_filename=device.effective_entrypoint,
         )
     elif args.import_graph:
+        layout = "import-graph"
         device_entrypoint = args.entrypoint or f"/{device.effective_entrypoint}"
         source = thing_import_graph_source(
             thing_dirs[0],
@@ -648,12 +729,22 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
             device_entrypoint=device_entrypoint,
         )
     else:
+        layout = "flat"
         source = thing_directory_source(
             thing_dirs[0],
             workspace_yaml=workspace.workspace_yaml,
             secrets_yaml=workspace.secrets_yaml,
             entrypoint=args.entrypoint or f"/{device.effective_entrypoint}",
         )
+    if args.dry_run:
+        print(_render_dry_run_summary(
+            thing_name=names[0],
+            device=device,
+            layout=layout,
+            files=source.files(),
+            entrypoint=source.entrypoint(),
+        ))
+        return 0
     result = Deployer(device).deploy(source)
     if result.execute_output:
         print(result.execute_output, end="")
@@ -1753,6 +1844,15 @@ def build_parser() -> argparse.ArgumentParser:
             "Ship the thing under /lib/things/<...>/<name>/ + write a "
             "fixed code.py shim + active.py + workspace_runtime "
             "payload (Decision 0029 §3).  app.py must export run()."
+        ),
+    )
+    deploy_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help=(
+            "Print the file map deploy would ship without writing to "
+            "the device.  Doubles as documentation: the output is the "
+            "canonical reference for 'what does deploy actually do'."
         ),
     )
     deploy_parser.set_defaults(func=_cmd_deploy)

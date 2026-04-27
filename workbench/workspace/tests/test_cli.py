@@ -830,6 +830,88 @@ class TestThings:
         assert "back-porch" in out
 
 
+class TestDeployDryRun:
+    """Phase 2c — `deploy --dry-run` shows the file map without writing."""
+
+    def test_does_not_call_transport(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        _seed_thing(root, name="back-porch")
+
+        transport = FakeTransport(execute_output="")
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root),
+            "back-porch", "--dry-run",
+        ])
+        assert exit_code == 0
+        # Transport must NOT see deploy_files in dry-run mode.
+        assert not any(call[0] == "deploy_files" for call in transport.calls)
+        # Header + file table appear in stdout.
+        out = capsys.readouterr().out
+        assert "would deploy back-porch" in out
+        assert "device files" in out
+
+    def test_boot_shim_layout_classifies_paths(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        thing_dir = _seed_thing(root, name="garage/sensors/door_open")
+        (thing_dir / "app.py").write_text("def run(): pass\n")
+
+        transport = FakeTransport(execute_output="")
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root),
+            "--boot-shim", "garage/sensors/door_open", "--dry-run",
+        ])
+        assert exit_code == 0
+        out = capsys.readouterr().out
+        # Layout label flagged.
+        assert "boot-shim layout" in out
+        # Each per-level namespace init is present + classified.
+        assert "/lib/things/garage/__init__.py" in out
+        assert "/lib/things/garage/sensors/__init__.py" in out
+        assert "/lib/things/garage/sensors/door_open/app.py" in out
+        # Categories appear at least once each.
+        assert "shim" in out
+        assert "namespace" in out
+        assert "thing" in out
+        assert "config" in out
+
+    def test_flat_layout_skips_namespace_inits(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Flat layout (no --boot-shim) ships at the device root."""
+        root = _seed_workspace(tmp_path)
+        _seed_thing(root, name="back-porch")
+
+        transport = FakeTransport(execute_output="")
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root),
+            "back-porch", "--dry-run",
+        ])
+        assert exit_code == 0
+        out = capsys.readouterr().out
+        assert "flat layout" in out
+        # Flat layout puts code.py + main.py at the device root.
+        assert "/code.py" in out or "/main.py" in out
+
+
 class TestStatus:
     """Phase 2a — `status` workspace health snapshot."""
 
