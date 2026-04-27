@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **Workspace ecosystem completion — Phase 2 closed.**  Phase 1 closed 2026-04-27.  Phase 2 (six sub-items) closed in this same session: 2e (`repl <thing>`), 2a (`status`), 2c (`deploy --dry-run`), 2d (app-level error hints), 2b (`doctor`), 2f (`deploy --all-devices`).  Phase 2f (just landed): minimum-scope multi-device — `deploy --all-devices` loops over every entry in `devices.yml`, mutually exclusive with `--device` / `--runtime`, doesn't abort on per-device failure (exit code reflects whether any failed).  Per-device deploys rebuild the source per-device since entrypoint differs by runtime.  Per-thing → per-device mapping config (the planning doc's "extra knobs" sketch) deferred — `--all-devices` covers the common "ship the same thing everywhere" case.  Phase 3 (per-environment deploys) is the next-session entry point.
-- **Last shipped:** Phase 2f — `deploy --all-devices`.  Phase 2 closed.
-- **In flight:** —
+- **Phase:** **Workspace ecosystem completion — Phases 1 + 2 closed; deferred-examples carry-over closed.**  Phase 1 closed 2026-04-27 (commits `98fa8d0..c8a05fe` mono + `4523c89..98b6377` template); Phase 2 closed 2026-04-27 (six sub-items in commits `333d900..139b0ee`).  Three deferred examples (`periodic_get/`, `telemetry_publisher/`, `two_things/{server,sensor}/`) just shipped to the template repo (`5ce73d4`), closing the Phase 1 Slice 5 carry-over.  Phase 3 (per-env deploys) deferred at user request; **Phase 4** (library scaffolder migration: `scripts/new_library_scaffold.py` → `chumicro-workspace new --library`) is the next focus.
+- **Last shipped:** template repo `5ce73d4` — three deferred examples (`periodic_get`, `telemetry_publisher`, `two_things`).
+- **In flight:** Phase 4 — library scaffolder migration.
 - **Blocked on:** —
-- **Last touched:** `workbench/workspace/src/chumicro_workspace/cli.py`, `workbench/workspace/tests/test_cli.py`, `plans/now.md`.
+- **Last touched:** `ChuMicro-Workspace-Template/examples/`, `plans/{now,next-up}.md`.
 
 ---
 
