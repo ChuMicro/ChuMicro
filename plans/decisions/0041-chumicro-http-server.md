@@ -174,18 +174,43 @@ Mutually exclusive: pass at most one of `body` / `json` / `text` /
 + sets `application/json`.  `body` is raw bytes pass-through.
 Caller `headers=` overrides the defaults.
 
-### 8. v1 non-goals
+### 8. TLS server — supported on MicroPython, blocked on CircuitPython
 
-* **TLS server.**  Pi Pico W's heap can't host a TLS handshake AND
-  serve a meaningful response payload.  Decision 0040's slice 3c work
-  on the *client* side proved this — the handshake alone wants
-  150 KB+ of headroom; TLS server adds an even bigger session
-  bookkeeping cost.  The honest stance: tell users to put a
-  TLS-terminating proxy (Caddy / nginx / Cloudflare Tunnel) in front
-  of their board, or wait until the Pi Pico 2 W class (520 KB SRAM)
-  becomes the floor.  Adafruit's HTTPServer pretends it works
-  (`https=True` exists, README says "limited to ESP32-S3"); we just
-  don't ship the option.
+Slice 7t investigation (2026-04-26) actually verified TLS server
+on a Pi Pico W class board.  Adafruit's "limited support for
+HTTPS (only on selected microcontrollers with enough memory e.g.
+ESP32-S3)" framing turned out to be too pessimistic — the heap
+budget on Pi Pico W MicroPython is fine.  CircuitPython is the
+real blocker, for a different reason.
+
+**Live measurements on Pi Pico W MicroPython 1.28.0 (rp2 port):**
+* SSLContext build cost (RSA-2048 cert + key, DER-encoded):
+  ~8 KB heap.
+* Per-connection handshake cost: ~25 KB heap.
+* Free heap remaining post-handshake: ~130 KB.
+* Result: full HTTPS GET round-trip succeeded, response delivered.
+  See ``.scratch/run_tls_server_probe.py``.
+
+**CircuitPython 10.2.0-rc.0 — server-side TLS not possible.**
+``ssl.PROTOCOL_TLS_SERVER`` does not exist on CP; ``dir(ssl)``
+exposes no ``PROTOCOL_*`` constants whatsoever.  CP's
+``ssl.SSLContext()`` is hard-wired to client-side use.  This is a
+CP-platform decision, not a heap constraint — the heap had ~157 KB
+free at the time of the failure.  Adafruit's ``httpserver`` runs
+into the same wall.
+
+**Shipping policy:**
+* `chumicro_sockets.tls_listening_socket(...)` works on MicroPython
+  + CPython; raises `UnsupportedSSLConfigError` with a clear message
+  on CircuitPython.
+* `chumicro_sockets.ssl_context_with_cert_and_key(cert_pem, key_pem)`
+  works on MP + CPython; raises `UnsupportedSSLConfigError` on CP.
+* For HTTPS on CircuitPython boards, the workaround is unchanged
+  from the surveyed prior art: terminate TLS in front of the board
+  with a proxy (Caddy / nginx / Cloudflare Tunnel) and let the
+  board speak plain HTTP on the LAN behind it.
+
+**Other v1 non-goals (unchanged):**
 * **WebSockets / SSE.**  Connection-upgrade dance + long-lived
   framing are big enough to deserve their own library.
 * **Sessions / cookies / auth helpers.**  Caller sets a `Set-Cookie`

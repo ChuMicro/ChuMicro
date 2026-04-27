@@ -33,9 +33,11 @@ __all__ = [
     "TCPClientSocket",
     "UnsupportedSSLConfigError",
     "ssl_context_with_ca",
+    "ssl_context_with_cert_and_key",
     "tcp_client_socket",
     "tcp_listening_socket",
     "tls_client_socket",
+    "tls_listening_socket",
 ]
 
 
@@ -191,6 +193,89 @@ def tcp_listening_socket(
     from chumicro_sockets._adapters import cpython  # noqa: PLC0415 — runtime-gated
 
     return cpython.listen_tcp(host, port, backlog=backlog)
+
+
+def tls_listening_socket(
+    host: str,
+    port: int,
+    *,
+    context: object,
+    backlog: int = 4,
+    radio: object | None = None,
+) -> object:
+    """Open a non-blocking TLS listening socket.
+
+    Same shape as :func:`tcp_listening_socket` but accepts a server-
+    side ``ssl.SSLContext`` and wraps each accepted client in TLS
+    before returning it from ``accept()``.  Build the context via
+    :func:`ssl_context_with_cert_and_key`.
+
+    The TLS handshake happens **synchronously** inside ``accept()`` —
+    on Pi Pico W class boards this can take 100-500 ms per
+    connection and visibly stall the runner during that window.
+    Decision 0041 §8 + slice 7t document the design tradeoff.
+    Acceptable when ``max_connections=1`` and the handshake budget
+    is bounded; if the LED-blink invariant matters for your use
+    case more than TLS, terminate TLS in front of the board with a
+    proxy (Caddy / nginx / Cloudflare Tunnel) and let the board
+    speak plain HTTP on the LAN behind it.
+
+    Args:
+        host: Address to bind to.
+        port: TCP port to bind.
+        context: Server-side ``ssl.SSLContext`` from
+            :func:`ssl_context_with_cert_and_key`.
+        backlog: SYN-queue depth.
+        radio: CP-only radio object.
+
+    Returns:
+        A listening socket wrapper whose ``accept()`` returns
+        ``(tls_wrapped_socket, address)``.
+    """
+    runtime = _runtime_name()
+    if runtime == "circuitpython":
+        from chumicro_sockets._adapters import cp  # noqa: PLC0415 — runtime-gated
+
+        return cp.listen_tls(host, port, context=context, backlog=backlog, radio=radio)
+    if runtime == "micropython":
+        from chumicro_sockets._adapters import mp  # noqa: PLC0415 — runtime-gated
+
+        return mp.listen_tls(host, port, context=context, backlog=backlog)
+    from chumicro_sockets._adapters import cpython  # noqa: PLC0415 — runtime-gated
+
+    return cpython.listen_tls(host, port, context=context, backlog=backlog)
+
+
+def ssl_context_with_cert_and_key(
+    cert_pem: str | bytes,
+    key_pem: str | bytes,
+) -> object:
+    """Build a server-side SSLContext that presents *cert_pem* signed by *key_pem*.
+
+    Counterpart to :func:`ssl_context_with_ca` — the client side
+    trusts a CA to verify someone *else's* cert, while the server
+    side presents its own cert + private key to clients.  Returned
+    context targets ``PROTOCOL_TLS_SERVER``.
+
+    Args:
+        cert_pem: PEM-encoded server certificate (or chain).
+        key_pem: PEM-encoded private key matching the cert.
+
+    Returns:
+        Configured :class:`ssl.SSLContext`.
+    """
+    runtime = _runtime_name()
+    if runtime == "circuitpython":
+        from chumicro_sockets._adapters import cp  # noqa: PLC0415 — runtime-gated
+
+        return cp.ssl_context_with_cert_and_key(cert_pem, key_pem)
+    if runtime == "micropython":
+        from chumicro_sockets._adapters import mp  # noqa: PLC0415 — runtime-gated
+
+        return mp.ssl_context_with_cert_and_key(cert_pem, key_pem)
+    from chumicro_sockets._adapters import cpython  # noqa: PLC0415 — runtime-gated
+
+    return cpython.ssl_context_with_cert_and_key(cert_pem, key_pem)
 
 
 def ssl_context_with_ca(ca_pem: str | bytes) -> object:

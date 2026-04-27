@@ -93,6 +93,30 @@ The old basefs MQTT impl (`/Users/chuxor/circuitpython/pythonProject3/basefilesy
 
 `chumicro-mqtt` 0.1.4 adopts a hybrid: a `recv_budget_per_tick` knob (default 1024 B) caps the per-tick byte budget while still letting a tick do multiple recv calls when bytes are available.  Default 1024 = 4× the steady RX buffer (256 B) = drains a typical PUBLISH in one tick AND keeps tick latency well under 10 ms even on rp2.  Configurable upward for things that want fast big-blob ingestion at the cost of LED smoothness.  The lesson is general: any tick-shaped reader on a fat kernel buffer needs an explicit per-tick byte budget OR an explicit per-tick iteration count — implicit "drain until EAGAIN" is a foot-gun.
 
+### CircuitPython's `ssl` module deliberately omits server-side TLS
+
+Verified live 2026-04-26 on Pi Pico W CircuitPython 10.2.0-rc.0 during chumicro-http-server slice 7t investigation:
+
+* `ssl.PROTOCOL_TLS_SERVER` doesn't exist; `dir(ssl)` exposes no `PROTOCOL_*` constants whatsoever.
+* `ssl.SSLContext()` is hard-wired to the client side; there's no parameter to flip it server-side.
+* `AttributeError("'module' object has no attribute 'PROTOCOL_TLS_SERVER'")` when you try.
+
+This is a CircuitPython platform decision, not a heap constraint — the device had ~157 KB free heap at the time of the failure.  Adafruit's `httpserver` runs into the same wall and quietly degrades on CP.  The recommended workaround is to terminate TLS in front of the board with a proxy (Caddy / nginx / Cloudflare Tunnel) and let the board speak plain HTTP on the LAN behind it.  Lifted to `chumicro_sockets.ssl_context_with_cert_and_key`'s CP adapter, which now raises `UnsupportedSSLConfigError` with a clear explanation rather than the bare `AttributeError`.
+
+### MicroPython TLS server *does* fit on Pi Pico W (Adafruit's "limited" framing was too pessimistic)
+
+Slice 7t live verification on Pi Pico W MicroPython 1.28.0 (rp2 port) — the assumption that "TLS server only fits on ESP32-S3 class boards" (per the `adafruit_httpserver` README) was wrong.  The handshake fits fine on a Pi Pico W with the right key shape:
+
+* RSA-2048 cert + key in DER encoding (PEM is rejected by rp2's mbedTLS for keys, same `MBEDTLS_PEM_PARSE_C`-disabled story as the CA-load path).
+* SSLContext build cost: ~8 KB heap.
+* Per-connection handshake cost: ~25 KB heap.
+* Free heap remaining post-handshake: ~130 KB.
+* End-to-end: HTTPS GET round-trip from a host CPython client to the device's `chumicro-http-server` succeeded.
+
+ECC keys (SECP256R1) failed at context build with `ValueError("invalid key")` — RSA was the only key type that worked end-to-end.  The MP build's mbedTLS server-side code path may not include ECC private-key parsing, or the PKCS#8 wrapping isn't recognized.  Documented in `chumicro_sockets._adapters.mp.ssl_context_with_cert_and_key`.
+
+Honesty about LED-blink: TLS handshake on the server side is synchronous inside `wrap_socket(..., server_side=True)` — same blocking-during-handshake tradeoff as the client side has during `tls_client_socket()`.  The runner pattern still applies for the HTTP exchange after the handshake; just budget for ~100-500 ms of listener stall during accept.
+
 ### MP TLS `SSLSocket.recv()` returns `None` for WANT_READ (not raises EAGAIN like plain TCP)
 
 MP plain TCP non-blocking `recv` raises `OSError(11)` (EAGAIN) when no data is available.  MP TLS `SSLSocket.recv` instead returns the literal `None` — mbedTLS's `MBEDTLS_ERR_SSL_WANT_READ` / `WANT_WRITE` maps to `MP_EWOULDBLOCK` internally but the Python-level surface for `SSLSocket` returns `None` rather than raising.

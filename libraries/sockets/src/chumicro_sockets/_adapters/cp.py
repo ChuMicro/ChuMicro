@@ -20,6 +20,7 @@ Public surface (factory routes to these):
 
 __chumicro_runtimes__ = ("circuitpython",)
 
+from chumicro_sockets.errors import UnsupportedSSLConfigError
 
 #: Memoization cache: ``radio_id -> SocketPool``.  ``id(radio)`` keys
 #: are stable for the lifetime of the radio object; CP boards have one
@@ -89,6 +90,88 @@ def listen_tcp(host, port, *, backlog=4, radio):  # pragma: no cover - device on
     listener.listen(backlog)
     listener.setblocking(False)
     return listener
+
+
+def ssl_context_with_cert_and_key(cert_pem, key_pem):  # pragma: no cover - device only
+    """Server-side TLS on CircuitPython is not supported.
+
+    CircuitPython's `ssl` module deliberately omits
+    `PROTOCOL_TLS_SERVER` (verified live on CP 10.2.0-rc.0 against
+    Pi Pico W: ``dir(ssl)`` exposes no ``PROTOCOL_*`` constants).
+    The `ssl.SSLContext()` exposed by CP is hard-wired to the
+    client side.  This is a CP-platform limitation, not a heap
+    constraint — adafruit_httpserver's ``https=True`` flag is
+    similarly inert on CP for the same reason.
+
+    Slice 7t verified TLS server **does** fit on Pi Pico W
+    MicroPython (8 KB context + 25 KB handshake, 130 KB free
+    heap remaining).  CP users who want HTTPS on a Pi Pico W
+    must terminate TLS in front of the board (Caddy / nginx /
+    Cloudflare Tunnel) and let the board speak plain HTTP on
+    the LAN behind it.
+    """
+    raise UnsupportedSSLConfigError(
+        "CircuitPython's ssl module does not expose PROTOCOL_TLS_SERVER; "
+        "server-side TLS is not supported on CP.  Use chumicro-http-server "
+        "behind a TLS-terminating proxy instead, or run on MicroPython "
+        "(slice 7t verified TLS server on Pi Pico W MP).",
+    )
+
+
+def listen_tls(host, port, *, context, backlog=4, radio):  # pragma: no cover - device only
+    """Server-side TLS on CircuitPython is not supported.
+
+    See :func:`ssl_context_with_cert_and_key` for the platform-
+    limitation explanation.  This stub raises immediately so callers
+    get a clear error rather than silently constructing a half-built
+    listener.
+    """
+    raise UnsupportedSSLConfigError(
+        "CircuitPython does not support server-side TLS — "
+        "tls_listening_socket is not available on CP.  See "
+        "chumicro_sockets._adapters.cp.ssl_context_with_cert_and_key "
+        "for the recommended workaround (TLS-terminating proxy in "
+        "front of the board).",
+    )
+
+
+class _CPTLSListenerWrapper:  # pragma: no cover - device only
+    """Wraps a CP listening socket so accept() yields TLS-wrapped sockets."""
+
+    def __init__(self, raw_listener, context):
+        self._raw = raw_listener
+        self._context = context
+
+    def accept(self):
+        client_raw, address = self._raw.accept()
+        # CP's `wrap_socket(server_side=True)` performs the TLS
+        # handshake synchronously.  Make the raw socket blocking
+        # for the handshake (CP's mbedTLS doesn't support
+        # async server handshake), then back to non-blocking.
+        client_raw.setblocking(True)
+        try:
+            wrapped = self._context.wrap_socket(
+                client_raw, server_side=True,
+            )
+        except Exception:
+            client_raw.close()
+            raise
+        # Some CP builds reject `setblocking(False)` on SSLSocket;
+        # try and swallow.
+        try:
+            wrapped.setblocking(False)
+        except (AttributeError, OSError):
+            pass
+        return wrapped, address
+
+    def close(self):
+        self._raw.close()
+
+    def setblocking(self, flag):
+        self._raw.setblocking(flag)
+
+    def fileno(self):
+        return self._raw.fileno() if hasattr(self._raw, "fileno") else -1
 
 
 def ssl_context_with_ca(ca_pem):  # pragma: no cover - device only

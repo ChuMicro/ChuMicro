@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import socket
 import ssl
+from datetime import UTC
 
 import pytest
 from chumicro_sockets import (
@@ -21,6 +22,7 @@ from chumicro_sockets import (
     tcp_client_socket,
     tcp_listening_socket,
     tls_client_socket,
+    tls_listening_socket,
 )
 
 # ---------------------------------------------------------------------------
@@ -128,6 +130,82 @@ class TestCPythonListener:
             rebound.close()
 
 
+class TestSslContextWithCertAndKey:
+    """``ssl_context_with_cert_and_key`` builds a server-side context."""
+
+    def test_routes_through_cpython_adapter(self) -> None:
+        from datetime import datetime, timedelta  # noqa: PLC0415
+
+        from chumicro_sockets import ssl_context_with_cert_and_key
+
+        # Generate a tiny self-signed cert via the cryptography library
+        # (already a dev dep for our other server-side tests).
+        from cryptography import x509  # noqa: PLC0415
+        from cryptography.hazmat.primitives import hashes, serialization  # noqa: PLC0415
+        from cryptography.hazmat.primitives.asymmetric import ec  # noqa: PLC0415
+        from cryptography.x509.oid import NameOID  # noqa: PLC0415
+
+        private_key = ec.generate_private_key(ec.SECP256R1())
+        subject = x509.Name([
+            x509.NameAttribute(NameOID.COMMON_NAME, "test.local"),
+        ])
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(subject)
+            .issuer_name(subject)
+            .public_key(private_key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(datetime.now(UTC) - timedelta(minutes=5))
+            .not_valid_after(datetime.now(UTC) + timedelta(hours=1))
+            .add_extension(
+                x509.SubjectAlternativeName([x509.DNSName("test.local")]),
+                critical=False,
+            )
+            .sign(private_key, hashes.SHA256())
+        )
+        cert_pem = cert.public_bytes(serialization.Encoding.PEM)
+        key_pem = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+        context = ssl_context_with_cert_and_key(cert_pem, key_pem)
+        assert context.get_ciphers() is not None  # built successfully
+
+    def test_str_input_accepted(self) -> None:
+        from datetime import datetime, timedelta  # noqa: PLC0415
+
+        from chumicro_sockets import ssl_context_with_cert_and_key
+
+        # Build via bytes first (so we have valid PEM), then re-feed
+        # as str to verify the str-input path.
+        from cryptography import x509  # noqa: PLC0415
+        from cryptography.hazmat.primitives import hashes, serialization  # noqa: PLC0415
+        from cryptography.hazmat.primitives.asymmetric import ec  # noqa: PLC0415
+        from cryptography.x509.oid import NameOID  # noqa: PLC0415
+
+        private_key = ec.generate_private_key(ec.SECP256R1())
+        subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "x")])
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(subject)
+            .issuer_name(subject)
+            .public_key(private_key.public_key())
+            .serial_number(1)
+            .not_valid_before(datetime.now(UTC) - timedelta(minutes=5))
+            .not_valid_after(datetime.now(UTC) + timedelta(hours=1))
+            .sign(private_key, hashes.SHA256())
+        )
+        cert_str = cert.public_bytes(serialization.Encoding.PEM).decode("ascii")
+        key_str = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        ).decode("ascii")
+        context = ssl_context_with_cert_and_key(cert_str, key_str)
+        assert context.get_ciphers() is not None
+
+
 class TestListenerRouting:
     """``tcp_listening_socket`` dispatches to the runtime-appropriate adapter."""
 
@@ -178,6 +256,206 @@ class TestListenerRouting:
         result = tcp_listening_socket("0.0.0.0", 8080, backlog=8)
         assert result == "mp-listener"
         assert captured["called"] == ("0.0.0.0", 8080, 8)
+
+
+class TestTLSListenerRouting:
+    """``tls_listening_socket`` dispatches to the runtime-appropriate adapter."""
+
+    def test_cpython_runtime_routes_to_cpython_adapter(
+        self, monkeypatch,
+    ) -> None:
+        captured: dict = {}
+
+        def fake_listen_tls(host, port, *, context, backlog):
+            captured["called"] = (host, port, context, backlog)
+            return "cpython-tls-listener"
+
+        from chumicro_sockets._adapters import cpython as cpython_adapter
+        monkeypatch.setattr(cpython_adapter, "listen_tls", fake_listen_tls)
+        monkeypatch.setattr("chumicro_sockets._runtime_name", lambda: "cpython")
+
+        result = tls_listening_socket("0.0.0.0", 8443, context="fake-ctx")
+        assert result == "cpython-tls-listener"
+        assert captured["called"] == ("0.0.0.0", 8443, "fake-ctx", 4)
+
+    def test_circuitpython_runtime_routes_to_cp_adapter(
+        self, monkeypatch,
+    ) -> None:
+        captured: dict = {}
+
+        def fake_listen_tls(host, port, *, context, backlog, radio):
+            captured["called"] = (host, port, context, backlog, radio)
+            return "cp-tls-listener"
+
+        from chumicro_sockets._adapters import cp as cp_adapter
+        monkeypatch.setattr(cp_adapter, "listen_tls", fake_listen_tls)
+        monkeypatch.setattr("chumicro_sockets._runtime_name", lambda: "circuitpython")
+
+        result = tls_listening_socket(
+            "0.0.0.0", 8443, context="ctx", radio="radio",
+        )
+        assert result == "cp-tls-listener"
+        assert captured["called"] == ("0.0.0.0", 8443, "ctx", 4, "radio")
+
+    def test_micropython_runtime_routes_to_mp_adapter(
+        self, monkeypatch,
+    ) -> None:
+        captured: dict = {}
+
+        import sys as _sys
+        import types as _types
+
+        fake_mp = _types.ModuleType("chumicro_sockets._adapters.mp")
+
+        def fake_listen_tls(host, port, *, context, backlog):
+            captured["called"] = (host, port, context, backlog)
+            return "mp-tls-listener"
+
+        fake_mp.listen_tls = fake_listen_tls
+        monkeypatch.setitem(_sys.modules, "chumicro_sockets._adapters.mp", fake_mp)
+        monkeypatch.setattr("chumicro_sockets._runtime_name", lambda: "micropython")
+
+        result = tls_listening_socket("0.0.0.0", 8443, context="ctx", backlog=8)
+        assert result == "mp-tls-listener"
+        assert captured["called"] == ("0.0.0.0", 8443, "ctx", 8)
+
+
+class TestSslContextWithCertAndKeyRouting:
+    """``ssl_context_with_cert_and_key`` dispatches to per-runtime adapter."""
+
+    def test_circuitpython_routes_to_cp_adapter(self, monkeypatch) -> None:
+        from chumicro_sockets import ssl_context_with_cert_and_key
+        from chumicro_sockets._adapters import cp as cp_adapter
+
+        captured: dict = {}
+
+        def fake_helper(cert_pem, key_pem):
+            captured["called"] = (cert_pem, key_pem)
+            return "cp-server-ctx"
+
+        monkeypatch.setattr(cp_adapter, "ssl_context_with_cert_and_key", fake_helper)
+        monkeypatch.setattr("chumicro_sockets._runtime_name", lambda: "circuitpython")
+
+        result = ssl_context_with_cert_and_key(b"cert", b"key")
+        assert result == "cp-server-ctx"
+        assert captured["called"] == (b"cert", b"key")
+
+    def test_micropython_routes_to_mp_adapter(self, monkeypatch) -> None:
+        import sys as _sys
+        import types as _types
+
+        from chumicro_sockets import ssl_context_with_cert_and_key
+
+        fake_mp = _types.ModuleType("chumicro_sockets._adapters.mp")
+        captured: dict = {}
+
+        def fake_helper(cert_pem, key_pem):
+            captured["called"] = (cert_pem, key_pem)
+            return "mp-server-ctx"
+
+        fake_mp.ssl_context_with_cert_and_key = fake_helper
+        monkeypatch.setitem(_sys.modules, "chumicro_sockets._adapters.mp", fake_mp)
+        monkeypatch.setattr("chumicro_sockets._runtime_name", lambda: "micropython")
+
+        result = ssl_context_with_cert_and_key(b"cert", b"key")
+        assert result == "mp-server-ctx"
+        assert captured["called"] == (b"cert", b"key")
+
+
+class TestCPythonTLSListener:
+    """Real loopback TLS handshake — exercises the listen_tls path."""
+
+    def test_handshake_round_trip(self) -> None:
+        """Open a TLS listener, connect with stdlib, complete handshake."""
+        import threading
+        from datetime import datetime, timedelta  # noqa: PLC0415
+
+        from chumicro_sockets import ssl_context_with_cert_and_key
+
+        # Generate a cert.
+        from cryptography import x509  # noqa: PLC0415
+        from cryptography.hazmat.primitives import hashes, serialization  # noqa: PLC0415
+        from cryptography.hazmat.primitives.asymmetric import ec  # noqa: PLC0415
+        from cryptography.x509.oid import NameOID  # noqa: PLC0415
+
+        private_key = ec.generate_private_key(ec.SECP256R1())
+        subject = x509.Name([
+            x509.NameAttribute(NameOID.COMMON_NAME, "test.local"),
+        ])
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(subject)
+            .issuer_name(subject)
+            .public_key(private_key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(datetime.now(UTC) - timedelta(minutes=5))
+            .not_valid_after(datetime.now(UTC) + timedelta(hours=1))
+            .add_extension(
+                x509.SubjectAlternativeName([
+                    x509.DNSName("test.local"),
+                ]),
+                critical=False,
+            )
+            .sign(private_key, hashes.SHA256())
+        )
+        cert_pem = cert.public_bytes(serialization.Encoding.PEM)
+        key_pem = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+
+        server_context = ssl_context_with_cert_and_key(cert_pem, key_pem)
+        listener = tls_listening_socket("127.0.0.1", 0, context=server_context)
+        host, port = listener._raw.getsockname()  # noqa: SLF001
+
+        # Listener is non-blocking; drive the accept in a background thread.
+        accepted_holder: list = []
+
+        def background_accept():
+            import time as time_module  # noqa: PLC0415
+            for _ in range(100):
+                try:
+                    sock, _peer_address = listener.accept()
+                    accepted_holder.append(sock)
+                    return
+                except (BlockingIOError, OSError) as accept_error:
+                    if accept_error.args and accept_error.args[0] not in (11, 35):
+                        raise
+                    time_module.sleep(0.01)
+
+        accept_thread = threading.Thread(target=background_accept, daemon=True)
+        accept_thread.start()
+
+        # Build a client context that trusts our self-signed cert.
+        import ssl as stdlib_ssl  # noqa: PLC0415
+        client_context = stdlib_ssl.create_default_context()
+        client_context.load_verify_locations(cadata=cert_pem.decode("ascii"))
+        # Server's hostname must match the cert SAN.
+        client_context.check_hostname = True
+
+        client_raw = socket.create_connection((host, port))
+        try:
+            client_tls = client_context.wrap_socket(
+                client_raw, server_hostname="test.local",
+            )
+            try:
+                accept_thread.join(timeout=2.0)
+                assert len(accepted_holder) == 1
+                accepted = accepted_holder[0]
+                # Round-trip a byte to confirm the handshake established.
+                accepted.send(b"H")
+                received = client_tls.recv(1)
+                assert received == b"H"
+                accepted.close()
+            finally:
+                client_tls.close()
+        finally:
+            try:
+                client_raw.close()
+            except OSError:
+                pass
+            listener.close()
 
 
 # ---------------------------------------------------------------------------

@@ -72,6 +72,99 @@ def listen_tcp(host, port, *, backlog=4):
     return listener
 
 
+def ssl_context_with_cert_and_key(cert_pem, key_pem):
+    """Build a server-side SSLContext that presents *cert_pem* signed by *key_pem*.
+
+    Used by `tls_listening_socket` on the server side.  Mirrors the
+    client-side `ssl_context_with_ca` shape but loads a *cert chain*
+    + *private key* via `SSLContext.load_cert_chain` (rather than a
+    *trust store*).  The context is suitable for `wrap_socket(...,
+    server_side=True)` calls.
+
+    *cert_pem* and *key_pem* are PEM-encoded bytes / str.  CPython's
+    `load_cert_chain` accepts file paths only (not in-memory bytes),
+    so we write them to a temporary file and load from there.
+    """
+    import ssl  # noqa: PLC0415 — runtime-gated
+    import tempfile  # noqa: PLC0415 — runtime-gated
+
+    if isinstance(cert_pem, (bytes, bytearray)):
+        cert_pem_text = bytes(cert_pem).decode("ascii")
+    else:
+        cert_pem_text = cert_pem
+    if isinstance(key_pem, (bytes, bytearray)):
+        key_pem_text = bytes(key_pem).decode("ascii")
+    else:
+        key_pem_text = key_pem
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".cert.pem", delete=False,
+    ) as cert_handle:
+        cert_handle.write(cert_pem_text)
+        cert_path = cert_handle.name
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".key.pem", delete=False,
+    ) as key_handle:
+        key_handle.write(key_pem_text)
+        key_path = key_handle.name
+    context.load_cert_chain(certfile=cert_path, keyfile=key_path)
+    return context
+
+
+def listen_tls(host, port, *, context, backlog=4):
+    """Open a non-blocking TLS listening socket on CPython.
+
+    Returns a wrapper whose `accept()` returns a `(tls_wrapped_client,
+    address)` tuple — the TLS handshake happens synchronously inside
+    `accept()`.  Per-runtime contract documented in the public
+    `tls_listening_socket` factory.
+    """
+    raw_listener = listen_tcp(host, port, backlog=backlog)
+    return _CPythonTLSListenerWrapper(raw_listener, context)
+
+
+class _CPythonTLSListenerWrapper:
+    """Wraps a raw CPython listener so accept() yields TLS sockets.
+
+    The TLS handshake runs inside `accept()` after the TCP `accept()`
+    returns the new client.  On a non-blocking listener the underlying
+    `accept()` raises `BlockingIOError` when no client is queued; we
+    propagate that as `OSError(EAGAIN)`.
+    """
+
+    def __init__(self, raw_listener, context):
+        self._raw = raw_listener
+        self._context = context
+
+    def accept(self):  # pragma: no cover - exercised by slice 7t live test
+        client_raw, address = self._raw.accept()
+        # `wrap_socket(..., server_side=True)` performs the TLS
+        # handshake synchronously.  Set the underlying socket to
+        # blocking for the handshake (mbedTLS doesn't support
+        # async handshake on the server side cleanly), then back
+        # to non-blocking for the application traffic.
+        client_raw.setblocking(True)
+        try:
+            wrapped = self._context.wrap_socket(client_raw, server_side=True)
+        except Exception:
+            client_raw.close()
+            raise
+        wrapped.setblocking(False)
+        return wrapped, address
+
+    def close(self):
+        self._raw.close()
+
+    def setblocking(self, flag):  # pragma: no cover - listener already non-blocking
+        self._raw.setblocking(flag)
+
+    def fileno(self):  # pragma: no cover - poll integration optional
+        return self._raw.fileno()
+
+    def getsockname(self):  # pragma: no cover - inspection-only
+        return self._raw.getsockname()
+
+
 def ssl_context_with_ca(ca_pem):
     """Build an SSLContext that trusts only the CA(s) in *ca_pem*.
 

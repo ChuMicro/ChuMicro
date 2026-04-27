@@ -211,6 +211,75 @@ class _MpListeningSocketWrapper:  # pragma: no cover - device only
         self._sock.setblocking(flag)
 
 
+def ssl_context_with_cert_and_key(cert_pem, key_pem):  # pragma: no cover - device only
+    """Build an MP server-side SSLContext from in-memory cert + key.
+
+    MP's `ssl.SSLContext.load_cert_chain` accepts cert + key as
+    bytes (rp2 / esp32 builds since MP 1.24+).  We pass the PEM text
+    through directly — unlike `load_verify_locations` which on rp2
+    needs DER (no MBEDTLS_PEM_PARSE_C), `load_cert_chain` parses PEM
+    on every supported MP build because the server-side path enables
+    the PEM parser.
+
+    Returned context targets `PROTOCOL_TLS_SERVER`.
+    """
+    import ssl  # noqa: PLC0415 — runtime-gated
+
+    if isinstance(cert_pem, str):
+        cert_pem = cert_pem.encode("ascii")
+    if isinstance(key_pem, str):
+        key_pem = key_pem.encode("ascii")
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain(cert_pem, key_pem)
+    return context
+
+
+def listen_tls(host, port, *, context, backlog=4):  # pragma: no cover - device only
+    """Open an MP TLS listening socket.
+
+    The TLS handshake happens synchronously inside `accept()` —
+    MP's `wrap_socket(server_side=True)` blocks until the handshake
+    completes.  HttpServer accepts that as the per-tick latency
+    cost (Decision 0041 §8 / slice 7t investigation).
+    """
+    raw_listener = listen_tcp(host, port, backlog=backlog)
+    return _MpTLSListenerWrapper(raw_listener, context)
+
+
+class _MpTLSListenerWrapper:  # pragma: no cover - device only
+    """Wraps an MP listener so accept() yields TLS-wrapped sockets."""
+
+    def __init__(self, raw_listener, context):
+        self._raw = raw_listener
+        self._context = context
+
+    def accept(self):
+        new_wrapper, address = self._raw.accept()
+        # Pull the underlying MP socket out of the wrapper so we
+        # can wrap it directly with TLS — the handshake needs the
+        # raw socket, not our `_MpSocketWrapper` polyfill.
+        underlying = new_wrapper._sock
+        underlying.setblocking(True)
+        try:
+            tls_sock = self._context.wrap_socket(underlying, server_side=True)
+        except Exception:
+            underlying.close()
+            raise
+        # SSLSocket on MP supports setblocking on rp2 + esp32 (verified
+        # MP 1.28.0); falls back to no-op on older ports via the
+        # existing _MpSocketWrapper.
+        return _MpSocketWrapper(tls_sock), address
+
+    def close(self):
+        self._raw.close()
+
+    def setblocking(self, flag):
+        self._raw.setblocking(flag)
+
+    def fileno(self):
+        return self._raw.fileno() if hasattr(self._raw, "fileno") else _no_fileno()
+
+
 def ssl_context_with_ca(ca_pem):  # pragma: no cover - device only
     """Build an MP ``ssl.SSLContext`` that trusts only *ca_pem*.
 
