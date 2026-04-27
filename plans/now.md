@@ -6,25 +6,36 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **HTTP-stack hardening pass** (post-beginner-onramp).  Four gaps closed after the user flagged them: (1) `chumicro-http-server` was dragging all of `chumicro-requests` for ~125 lines of shared HTTP/1.1 primitives — decoupled, server-only deploy now ~half the size; (2) `chumicro-{requests,http_server,mqtt}` had empty `functional_tests/` directories — populated with real-network acceptance tests; (3) the two-thing examples hard-coded `WIFI_SSID`/`WIFI_PASSWORD` constants instead of using the standard `chumicro-config` pipeline — refactored to `runtime_config.msgpack`-first with constants as a fallback; (4) wifi creds for tests lived in `.scratch/wifi-creds.toml` (throwaway by definition) — moved to a proper top-level `chumicro-dev-config.toml` materialised by `python scripts/run.py setup` from `scripts/templates/chumicro-dev-config.toml.template`, with a one-shot migration that copies legacy `.scratch/wifi-creds.toml` content forward.
-- **Last shipped:** `1a69987` — functional tests + standard-config examples; `chumicro-http-server` 0.1.1.  Dev-config landing in this session as a follow-up commit.
-- **In flight:** Dev-config TOML + library-README docs (in-repo + external-user paths) for wifi/broker config.  Preflight + commit are the next step.
+- **Phase:** **Workspace-template testing-infrastructure audit** (just promoted from `## Next` 2026-04-27).  Just-completed two-phase scripts→workbench migration sets up the natural follow-on: the user-facing `ChuMicro-Workspace-Template` starter repo can now adopt `chumicro-pytest-device` 0.1.0 as a real dep instead of copying the plugin.  Goal of the audit: figure out what test/lint/coverage scaffolding the template ships today and what's missing vs the mono-repo's `preflight` surface.  Then ship whatever's missing — preferred location is in the template itself; fallback is having `chumicro-workspace setup` materialise it.
+- **Last shipped:**
+  * `e76b9f9` — Phase 1: device-registry schema (DeviceEntry / DeviceDefaults / validators / loaders / filters / `resolve_ide_devices`) migrates from `scripts/device_config.py` to `chumicro_deploy.config.default`.  17 consumers updated, dead `device-config.yml` flow dropped.  `chumicro-deploy` 0.0.1 → 0.1.0.
+  * `3e01cbf` — Phase 2: extract `chumicro-pytest-device` 0.1.0 workbench package.  Plugin (1242 lines) + 3 helpers (~775 lines) move out of `scripts/`.  Auto-registers via `pytest11` entry point — drops the explicit `pytest_plugins = ["pytest_device"]` from root conftest.  ROOT constant lifted via `pytest.Config.rootpath` so the plugin works inside any workspace, not just chumicro mono-repo.  Bonus: fixes a subtle pytest-cov instrumentation gap caused by entry-point auto-load running before pytest-cov starts.
+- **In flight:** Promote the audit to `## Now` (done in this same session).  Refresh `plans/next-up.md` (done).  Start the audit itself — investigate the `ChuMicro-Workspace-Template` repo and identify gaps.
 - **Blocked on:** —
-- **Last touched:** `scripts/templates/chumicro-dev-config.toml.template` (new), `scripts/generate_config_files.py` (adds the new file + legacy migration), `.gitignore` (gitignore the dev config), `libraries/{wifi,requests,http_server,mqtt}/functional_tests/conftest.py` (read from the new path with `.scratch` fallback), `libraries/{wifi,requests,http_server,mqtt}/README.md` (Configuring wifi sections — in-repo + external-user paths), `libraries/{wifi,requests,http_server,mqtt}/functional_tests/test_*.py` docstrings.
+- **Last touched:** `workbench/deploy/src/chumicro_deploy/{__init__.py,config/default.py}` (Phase 1 schema migration), `workbench/pytest-device/{VERSION,pyproject.toml,README.md,src/chumicro_pytest_device/{plugin,_test_runner,pr_summary,result_parser}.py,tests/}` (Phase 2 new package), `scripts/run.py` (`-p no:chumicro_pytest_device` injection for unit-test runs), `scripts/{pytest_device,pr_summary,result_parser,device_testing,device_config}.py` deleted, `conftest.py` (drop `pytest_plugins` line).
 
 ---
 
-## Architecture clarification (2026-04-27)
+## Architectural state after Phase 1+2
 
-Question raised: should the transport libraries (`chumicro-{requests,http_server,mqtt}`) depend on `chumicro-config` so wifi creds are a "natural part of the test stack via chumicro-deploy"?
+* `chumicro-deploy` 0.1.0 — owns `Device`, `Deployer`, `InteractiveDeployer`, `DeviceEntry` registry schema, transport protocol.  Public deploy primitives + the YAML schema everything reads.
+* `chumicro-pytest-device` 0.1.0 — owns the pytest plugin that runs library functional tests on connected boards.  `pip install` registers it via `pytest11` entry point.
+* `chumicro-workspace`, `chumicro-repl` — unchanged.
+* `chumicro-workspace-template` workbench package — minimal payload (just `devices.yml`); the canonical starter content lives at the [external `ChuMicro-Workspace-Template` Git repo](https://github.com/ChuMicro/ChuMicro-Workspace-Template) per Decision 0038.
+* `scripts/` — shrunk from ~9.9K lines to ~7.6K.  What remains is genuine mono-repo CI plumbing (release pipeline, bundle staging, runtime preparation, IDE config, gates).  Backlog reviewed 2026-04-27 and confirmed: nothing else has a clear workbench-package home without a real consumer driver.
 
-Answer: **no** — that would force them to also drag `chumicro-wifi`, breaking the layer purity (each transport library should work over any factory-supplied socket, including non-wifi transports).  Tests + examples that need creds use the standard application-layer wiring: `chumicro-config` + `chumicro-wifi` + `chumicro-{requests,http_server,mqtt}` together at the app boundary.  The libraries themselves stay transport-clean.
+## Workspace-template audit — what to look for
 
-## What's actually committed-runnable now
+The template ships a `run.py` shim (per Decision 0038's clone-the-repo bootstrap).  Open questions for the audit:
 
-* **Functional tests:** `libraries/{wifi,requests,http_server,mqtt}/functional_tests/test_real_*.py`.  Real network round-trips (HTTP GET against `example.com`, server bind + self-loopback, MQTT publish/subscribe round-trip against `test.mosquitto.org`).  Each test brings wifi up, drives a real socket, and verifies an LED-blink counter ticks during the in-flight operation (Decision 0014's runner-shape promise).  Skip silently when `_test_creds` is absent.  Conftest in each `functional_tests/` materialises `_test_creds.py` from `chumicro-dev-config.toml` host-side; tests will run live once the deploy machinery picks the shim up alongside the test (open infra gap — see `plans/next-up.md`).
-* **Examples that match the standard config pattern:** all four hardware-prefixed examples (`http_server/{two_thing_server,two_thing_sensor}`, `requests/periodic_get`, `mqtt/telemetry`) load wifi via `chumicro_config.load_runtime_config()` first, fall back to in-file constants for raw single-file deploys.  The natural workspace flow is `chumicro-workspace deploy --thing <name>` with secrets in `secrets.yml`; the constants path is the "I just want to copy this single file to /code.py" shortcut.
-* **Dev config:** `chumicro-dev-config.toml` at repo root (gitignored).  Generated by `python scripts/run.py setup` from `scripts/templates/chumicro-dev-config.toml.template`.  Holds wifi creds + optional broker overrides for the functional-test stack.  Documented in each library's README with both the in-repo and external-user paths (workspace-managed `secrets.yml` vs raw single-file constants).
+1. **Unit tests:** does the template have a `tests/` dir + `run.py test` command for the user's own test code?  If not, what's the minimum-viable starter?
+2. **Functional tests:** does the template support `things/<name>/functional_tests/`?  Does it adopt `chumicro-pytest-device` as a dep, or copy/reimplement the plugin?
+3. **Lint:** does the template ship a `ruff` config that matches the mono-repo's tone?
+4. **Coverage gate:** does the template enforce a coverage threshold on user code?  85 % default (matching the mono-repo's human floor) or none?
+5. **CI:** does the template ship a GitHub Actions workflow (or analogue) so the user's `things/` get tested on every push without manual `run.py` invocation?
+6. **`chumicro-pytest-device` adoption:** brand-new dep candidate.  When the template adopts it, the auto-register entry point Just Works — no extra wiring in the template's `conftest.py`.
+
+Action ordering: read the template repo (WebFetch), survey what's there, propose concrete additions, ship them either inside the template or via `chumicro-workspace setup` materialisation.
 
 ## How this file works
 
