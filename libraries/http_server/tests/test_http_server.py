@@ -95,6 +95,25 @@ def _drive_until_idle(server, ticks, *, max_ticks=200):
     raise AssertionError(f"server still busy after {max_ticks} ticks")
 
 
+def _drive_until_all_responded(server, ticks, sockets, *, max_ticks=400):
+    """Drive until every socket in *sockets* has been closed by the server.
+
+    Necessary for multi-connection tests because the server accepts
+    one new connection per tick — single-connection ``_drive_until_idle``
+    exits the moment the first connection finishes, leaving any
+    queued-but-not-yet-accepted sockets behind.
+    """
+    for _ in range(max_ticks):
+        server.handle(ticks.ticks_ms())
+        if all(sock.closed for sock in sockets):
+            return
+        ticks.advance(1)
+    raise AssertionError(
+        f"not all sockets responded after {max_ticks} ticks; "
+        f"closed = {[sock.closed for sock in sockets]}",
+    )
+
+
 # ---------------------------------------------------------------------------
 # Request-target helpers
 # ---------------------------------------------------------------------------
@@ -627,6 +646,205 @@ class TestRequestObject:
         text = repr(response)
         assert "200" in text
         assert "5 bytes" in text
+
+
+class TestHttpServerRouting:
+    """``@server.route`` decorator + two-dict router (slice 7b)."""
+
+    def _route_server(self, sockets, **kwargs):
+        ticks = FakeTicks()
+        server = HttpServer(
+            listener_factory=lambda: _FakeListener(sockets),
+            ticks_ms_func=ticks.ticks_ms,
+            ticks_add_func=ticks.ticks_add,
+            ticks_diff_func=ticks.ticks_diff,
+            **kwargs,
+        )
+        return server, ticks
+
+    def test_route_decorator_registers_handler(self):
+        sock, peer = _connection(_request_bytes(method="GET", path="/api"))
+        server, ticks = self._route_server([(sock, peer)])
+
+        @server.route("/api")
+        def index(request):
+            return build_response(200, text=f"hello-{request.method}")
+
+        _drive_until_idle(server, ticks)
+        assert sock.sent.startswith(b"HTTP/1.1 200 OK\r\n")
+        assert sock.sent.endswith(b"\r\n\r\nhello-GET")
+
+    def test_route_default_method_is_get(self):
+        sock_get, peer_get = _connection(_request_bytes(method="GET", path="/x"))
+        sock_post, peer_post = _connection(_request_bytes(method="POST", path="/x"))
+        server, ticks = self._route_server([
+            (sock_get, peer_get), (sock_post, peer_post),
+        ])
+
+        @server.route("/x")  # default methods=("GET",)
+        def handler_x(request):
+            return build_response(200, text="ok")
+
+        _drive_until_all_responded(server, ticks, [sock_get, sock_post])
+        # GET succeeds.
+        assert sock_get.sent.startswith(b"HTTP/1.1 200 OK\r\n")
+        # POST hits 405 with Allow header.
+        assert sock_post.sent.startswith(b"HTTP/1.1 405 Method Not Allowed\r\n")
+        assert b"Allow: GET\r\n" in sock_post.sent
+
+    def test_route_multi_method(self):
+        sock_get, peer_get = _connection(_request_bytes(method="GET", path="/api"))
+        sock_post, peer_post = _connection(_request_bytes(method="POST", path="/api"))
+        server, ticks = self._route_server([
+            (sock_get, peer_get), (sock_post, peer_post),
+        ])
+
+        @server.route("/api", methods=["GET", "POST"])
+        def api(request):
+            return build_response(200, text=request.method)
+
+        _drive_until_all_responded(server, ticks, [sock_get, sock_post])
+        assert sock_get.sent.endswith(b"\r\n\r\nGET")
+        assert sock_post.sent.endswith(b"\r\n\r\nPOST")
+
+    def test_path_param_extraction(self):
+        sock, peer = _connection(_request_bytes(method="GET", path="/widgets/42"))
+        server, ticks = self._route_server([(sock, peer)])
+
+        @server.route("/widgets/<id>")
+        def widget(request):
+            return build_response(200, text=f"id={request.path_params['id']}")
+
+        _drive_until_idle(server, ticks)
+        assert sock.sent.endswith(b"\r\n\r\nid=42")
+
+    def test_path_param_with_query_string(self):
+        sock, peer = _connection(
+            _request_bytes(method="GET", path="/widgets/abc?fields=name"),
+        )
+        server, ticks = self._route_server([(sock, peer)])
+
+        @server.route("/widgets/<id>")
+        def widget(request):
+            assert request.query["fields"] == "name"
+            return build_response(200, text=request.path_params["id"])
+
+        _drive_until_idle(server, ticks)
+        assert sock.sent.endswith(b"\r\n\r\nabc")
+
+    def test_unrouted_path_returns_404(self):
+        sock, peer = _connection(_request_bytes(method="GET", path="/nope"))
+        server, ticks = self._route_server([(sock, peer)])
+
+        @server.route("/api")
+        def api(_request):
+            return build_response(200)
+
+        _drive_until_idle(server, ticks)
+        assert sock.sent.startswith(b"HTTP/1.1 404 Not Found\r\n")
+
+    def test_method_not_allowed_returns_405_with_allow_header(self):
+        sock, peer = _connection(_request_bytes(method="DELETE", path="/api"))
+        server, ticks = self._route_server([(sock, peer)])
+
+        @server.route("/api", methods=["GET", "POST"])
+        def api(_request):
+            return build_response(200)
+
+        _drive_until_idle(server, ticks)
+        assert sock.sent.startswith(b"HTTP/1.1 405 Method Not Allowed\r\n")
+        # Allow header lists both registered methods (sorted).
+        assert b"Allow: GET, POST\r\n" in sock.sent
+
+    def test_method_not_allowed_for_pattern_route(self):
+        sock, peer = _connection(_request_bytes(method="DELETE", path="/widgets/42"))
+        server, ticks = self._route_server([(sock, peer)])
+
+        @server.route("/widgets/<id>", methods=["GET"])
+        def widget(_request):
+            return build_response(200)
+
+        _drive_until_idle(server, ticks)
+        assert sock.sent.startswith(b"HTTP/1.1 405 Method Not Allowed\r\n")
+        assert b"Allow: GET\r\n" in sock.sent
+
+    def test_fallback_handler_used_when_no_route_matches(self):
+        sock, peer = _connection(_request_bytes(method="GET", path="/anywhere"))
+        server, ticks = self._route_server(
+            [(sock, peer)],
+            handler=lambda request: build_response(
+                200, text=f"fallback-{request.path}",
+            ),
+        )
+
+        @server.route("/api")
+        def api(_request):
+            return build_response(200, text="api")
+
+        _drive_until_idle(server, ticks)
+        assert sock.sent.endswith(b"\r\n\r\nfallback-/anywhere")
+
+    def test_explicit_route_takes_precedence_over_fallback(self):
+        sock, peer = _connection(_request_bytes(method="GET", path="/api"))
+        server, ticks = self._route_server(
+            [(sock, peer)],
+            handler=lambda _r: build_response(200, text="fallback"),
+        )
+
+        @server.route("/api")
+        def api(_request):
+            return build_response(200, text="explicit")
+
+        _drive_until_idle(server, ticks)
+        assert sock.sent.endswith(b"\r\n\r\nexplicit")
+
+    def test_no_handler_no_routes_returns_404(self):
+        sock, peer = _connection(_request_bytes())
+        server, ticks = self._route_server([(sock, peer)])
+        # No @route, no fallback handler.
+        _drive_until_idle(server, ticks)
+        assert sock.sent.startswith(b"HTTP/1.1 404 Not Found\r\n")
+
+    def test_re_register_overrides_previous_handler(self):
+        sock, peer = _connection(_request_bytes(method="GET", path="/x"))
+        server, ticks = self._route_server([(sock, peer)])
+
+        @server.route("/x")
+        def first(_request):
+            return build_response(200, text="first")  # pragma: no cover
+
+        @server.route("/x")
+        def second(_request):
+            return build_response(200, text="second")
+
+        _drive_until_idle(server, ticks)
+        assert sock.sent.endswith(b"\r\n\r\nsecond")
+
+    def test_re_register_pattern_route_overrides(self):
+        sock, peer = _connection(_request_bytes(method="GET", path="/items/x"))
+        server, ticks = self._route_server([(sock, peer)])
+
+        @server.route("/items/<id>")
+        def first(_request):
+            return build_response(200, text="first")  # pragma: no cover
+
+        @server.route("/items/<id>")
+        def second(_request):
+            return build_response(200, text="second")
+
+        _drive_until_idle(server, ticks)
+        assert sock.sent.endswith(b"\r\n\r\nsecond")
+
+    def test_method_uppercase_normalized(self):
+        sock, peer = _connection(_request_bytes(method="POST", path="/api"))
+        server, ticks = self._route_server([(sock, peer)])
+
+        @server.route("/api", methods=["post"])  # lowercase
+        def api(_request):
+            return build_response(201, text="ok")
+
+        _drive_until_idle(server, ticks)
+        assert sock.sent.startswith(b"HTTP/1.1 201 Created\r\n")
 
 
 class TestHttpServerRespondMethod:

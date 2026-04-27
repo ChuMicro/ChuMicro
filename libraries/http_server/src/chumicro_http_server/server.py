@@ -111,6 +111,7 @@ class Request:
         "http_version",
         "method",
         "path",
+        "path_params",
         "peer",
         "query",
         "target",
@@ -125,6 +126,7 @@ class Request:
         headers: object,
         body: bytes,
         peer: tuple,
+        path_params: dict | None = None,
     ) -> None:
         self.method = method
         self.target = target
@@ -134,6 +136,7 @@ class Request:
         self.peer = peer
         self.path, raw_query = split_target(target)
         self.query = parse_query(raw_query)
+        self.path_params = path_params if path_params is not None else {}
 
     def text(self) -> str:
         """Return :attr:`body` decoded as ``str`` using utf-8."""
@@ -413,9 +416,10 @@ def encode_response(response: Response) -> bytes:
 def _build_error_response(status_code: int, message: str) -> Response:
     """Build a minimal text/plain error response.
 
-    Used for handler exceptions + handler-returned-non-Response — both
-    surface through the same 500 path.  Kept module-level so callers
-    + tests can mint canonical errors without going through HttpServer.
+    Used for handler exceptions + handler-returned-non-Response + 404
+    fallthrough — all surface through the same path.  Kept module-level
+    so callers + tests can mint canonical errors without going through
+    HttpServer.
     """
     body = message.encode("utf-8")
     headers = CaseInsensitiveDict()
@@ -423,6 +427,24 @@ def _build_error_response(status_code: int, message: str) -> Response:
     return Response(
         status_code=status_code,
         reason=_REASONS.get(status_code, "Error"),
+        headers=headers,
+        body=body,
+    )
+
+
+def _build_method_not_allowed_response(allowed_methods) -> Response:
+    """Build a 405 with the ``Allow`` header per RFC 7231 §6.5.5.
+
+    The Allow header is mandatory on 405 — clients use it to decide
+    which method to retry with.
+    """
+    body = b"method not allowed"
+    headers = CaseInsensitiveDict()
+    headers["Content-Type"] = "text/plain; charset=utf-8"
+    headers["Allow"] = ", ".join(allowed_methods)
+    return Response(
+        status_code=405,
+        reason=_REASONS[405],
         headers=headers,
         body=body,
     )
@@ -436,21 +458,23 @@ def _build_error_response(status_code: int, message: str) -> Response:
 class HttpServer:
     """Non-blocking HTTP/1.1 server.
 
-    Construct with a *listener_factory* + a *handler*.  Drive via
-    :meth:`check` / :meth:`handle` from a runner tick or hand-rolled
-    loop.  The listener is opened lazily on the first :meth:`handle`
-    call so construction is side-effect-free and testable.
+    Construct with a *listener_factory*, then either:
 
-    Slice 7a (this implementation): single connection at a time,
-    single user-provided handler.  Routing + bounded multi-connection
-    + per-tick budgets land in 7b / 7c.
+    * Register handlers via the :meth:`route` decorator
+      (``@server.route("/path", methods=["GET", "POST"])``), or
+    * Pass a single bare *handler* callable for non-routed servers.
+
+    Drive via :meth:`check` / :meth:`handle` from a runner tick or
+    hand-rolled loop.  The listener is opened lazily on the first
+    :meth:`handle` call so construction is side-effect-free and
+    testable.
     """
 
     def __init__(
         self,
         *,
         listener_factory: object,
-        handler: object,
+        handler: object | None = None,
         max_connections: int = DEFAULT_MAX_CONNECTIONS,
         request_timeout_ms: int = DEFAULT_REQUEST_TIMEOUT_MS,
         recv_budget_per_tick: int = DEFAULT_RECV_BUDGET_PER_TICK,
@@ -468,15 +492,15 @@ class HttpServer:
                 ``lambda: tcp_listening_socket(host, port,
                 radio=wifi.radio)``).  Invoked once on the first
                 :meth:`handle` call.
-            handler: Callable ``(Request) -> Response`` invoked once
-                per accepted connection after the request headers + body
-                are fully parsed.  Slice 7b adds a ``@server.route``
-                decorator that wraps this with a router; slice 7a
-                takes the bare handler.
+            handler: Optional fallback callable
+                ``(Request) -> Response`` for paths that don't match
+                any route registered via :meth:`route`.  If ``None``
+                (the default), unrouted paths return 404.  Useful
+                for non-routed servers (slice-7a-style single-handler
+                shape) and for catch-alls.
             max_connections: Cap on simultaneous in-flight connections.
-                Default 4 — sized for Pi Pico W heap.  Slice 7a
-                serialises to one in flight; the cap is enforced
-                from 7c onward.
+                Default 4 — sized for Pi Pico W heap.  Cap enforced
+                from slice 7c.
             request_timeout_ms: Per-connection deadline.  A connection
                 that hasn't reached ``DONE`` is dropped + the socket
                 is closed.
@@ -494,7 +518,7 @@ class HttpServer:
             ticks_diff_func: Inject a fake ``ticks_diff`` for testing.
         """
         self._listener_factory = listener_factory
-        self._handler = handler
+        self._fallback_handler = handler
         self._max_connections = max_connections
         self._request_timeout_ms = request_timeout_ms
         self._recv_budget_per_tick = recv_budget_per_tick
@@ -508,8 +532,170 @@ class HttpServer:
         self._listener = None
         self._connections = []
 
+        # Routing tables (Decision 0041 §3 — two-dict router lifted
+        # from tinyweb's pattern).
+        # _explicit_routes: (method, path) -> handler.  No path
+        # parameters.  O(1) lookup.
+        # _pattern_routes: list of (method, prefix, param_name, handler)
+        # for paths shaped ``"/users/<id>"`` — prefix matches up to
+        # the last ``/``, the trailing segment becomes the parameter
+        # value bound to ``request.path_params[param_name]``.
+        self._explicit_routes = {}
+        self._pattern_routes = []
+
         # Optional event hook.
         self.on_error = _no_callback
+
+    # ------------------------------------------------------------------
+    # Public route registration
+    # ------------------------------------------------------------------
+
+    def route(
+        self,
+        path: str,
+        *,
+        methods: object = ("GET",),
+    ) -> object:
+        """Decorator that registers *handler* for *path* + *methods*.
+
+        Path syntax:
+
+        * ``"/api/widgets"`` — exact match.
+        * ``"/users/<id>"`` — single trailing parameter.  The matched
+          segment populates ``request.path_params["id"]``.
+
+        Multi-parameter routes (``"/users/<uid>/posts/<pid>"``) are a
+        v2 ask — file an issue if you hit the limit.
+
+        Args:
+            path: Route path, optionally containing a single ``<name>``
+                segment as the last path component.
+            methods: Iterable of HTTP method strings (default
+                ``("GET",)``).  Each method gets registered
+                independently; methods that hit the path but aren't
+                registered get ``405 Method Not Allowed``.
+
+        Returns:
+            The decorator that registers and returns the handler
+            unchanged.
+        """
+        def decorator(handler_func):
+            for method in methods:
+                self._register(method.upper(), path, handler_func)
+            return handler_func
+        return decorator
+
+    def _register(self, method: str, path: str, handler_func: object) -> None:
+        """Insert *handler_func* into the routing table.
+
+        Detects ``<name>``-style trailing parameters and routes to the
+        pattern dict; everything else lands in the explicit dict.
+        Re-registering the same (method, path) overrides — last-wins,
+        same as Flask / FastAPI.
+        """
+        last_slash = path.rfind("/")
+        last_segment = path[last_slash + 1:] if last_slash != -1 else path
+        if (
+            len(last_segment) >= 2
+            and last_segment[0] == "<"
+            and last_segment[-1] == ">"
+        ):
+            param_name = last_segment[1:-1]
+            prefix = path[:last_slash + 1] if last_slash != -1 else ""
+            # Replace any prior pattern entry with the same prefix +
+            # method (last-wins).
+            for existing_index, existing in enumerate(self._pattern_routes):
+                existing_method, existing_prefix, _, _ = existing
+                if existing_method == method and existing_prefix == prefix:
+                    self._pattern_routes[existing_index] = (
+                        method, prefix, param_name, handler_func,
+                    )
+                    return
+            self._pattern_routes.append(
+                (method, prefix, param_name, handler_func),
+            )
+            return
+        self._explicit_routes[(method, path)] = handler_func
+
+    # ------------------------------------------------------------------
+    # Internal — request dispatch
+    # ------------------------------------------------------------------
+
+    def _dispatch_request(self, request: "Request") -> "Response":
+        """Look up *request* in the routing tables; return a Response.
+
+        Order:
+        1. Exact (method, path) hit → call handler.
+        2. Pattern hit on (method, prefix) → bind path_param + call
+           handler.
+        3. Path matches an explicit / pattern route on a *different*
+           method → 405 Method Not Allowed.
+        4. Fallback handler (if construction-time *handler=* was set)
+           → call it.
+        5. 404 Not Found.
+        """
+        method = request.method
+        path = request.path
+
+        # 1. Exact match.
+        explicit_handler = self._explicit_routes.get((method, path))
+        if explicit_handler is not None:
+            return explicit_handler(request)
+
+        # 2. Pattern match.  prefix is the path up to + including the
+        # last ``/``; the trailing segment is the parameter value.
+        last_slash = path.rfind("/")
+        if last_slash != -1:
+            prefix = path[:last_slash + 1]
+            param_value = path[last_slash + 1:]
+            for entry_method, entry_prefix, param_name, handler_func in (
+                self._pattern_routes
+            ):
+                if entry_method == method and entry_prefix == prefix and param_value:
+                    request.path_params[param_name] = param_value
+                    return handler_func(request)
+
+        # 3. 405: path matches but method doesn't.
+        if self._path_matches_any_method(path):
+            allowed = sorted(self._allowed_methods_for(path))
+            return _build_method_not_allowed_response(allowed)
+
+        # 4. Fallback handler.
+        if self._fallback_handler is not None:
+            return self._fallback_handler(request)
+
+        # 5. 404.
+        return _build_error_response(404, "not found")
+
+    def _path_matches_any_method(self, path: str) -> bool:
+        if any(route_path == path for _, route_path in self._explicit_routes):
+            return True
+        last_slash = path.rfind("/")
+        if last_slash == -1:
+            return False
+        prefix = path[:last_slash + 1]
+        param_value = path[last_slash + 1:]
+        if not param_value:
+            return False
+        return any(
+            entry_prefix == prefix
+            for _, entry_prefix, _, _ in self._pattern_routes
+        )
+
+    def _allowed_methods_for(self, path: str) -> set:
+        allowed = set()
+        for entry_method, entry_path in self._explicit_routes:
+            if entry_path == path:
+                allowed.add(entry_method)
+        last_slash = path.rfind("/")
+        if last_slash != -1:
+            prefix = path[:last_slash + 1]
+            param_value = path[last_slash + 1:]
+            if param_value:
+                for entry_method, entry_prefix, _, _ in self._pattern_routes:
+                    if entry_prefix == prefix:
+                        allowed.add(entry_method)
+        return allowed
 
     # ------------------------------------------------------------------
     # Public observation
@@ -582,7 +768,7 @@ class HttpServer:
         connection = _Connection(
             client_socket,
             peer,
-            handler=self._handler,
+            handler=self._dispatch_request,
             deadline_ticks=deadline,
             recv_budget=self._recv_budget_per_tick,
             send_budget=self._send_budget_per_tick,
