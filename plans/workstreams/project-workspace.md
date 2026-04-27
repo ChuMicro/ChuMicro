@@ -1,6 +1,6 @@
 # Workstream: Project Workspace
 
-Status: `complete-pending-phase-8` — every phase except OTA shipped.  Phases 1, 2, 3a, 3b, 4a, 4b, 5, 6 shipped 2026-04-22 → 2026-04-26.  Phase 4b's pip-install-scaffolder shape was retired in Decision 0038 (2026-04-26) and replaced by a clone-the-repo bootstrap with `init` / `update` folded into `chumicro-workspace`; canonical starter at [`ChuMicro/ChuMicro-Workspace-Template`](https://github.com/ChuMicro/ChuMicro-Workspace-Template).  Phase 4c is dissolved into Decision 0038 — the template *is* the repo.  Phase 7 (first sensor thing template) closed 2026-04-27 — Layer-1, Layer-2, Layer-3, sensor thing, README walkthrough all shipped.  Phase 8 (application-level OTA) explicitly deferred per the workstream's "revisit when a thing has been on a wall for 30+ days and an update is needed without physical access" trigger.
+Status: `complete` — every phase shipped.  Phases 1, 2, 3a, 3b, 4a, 4b, 5, 6 shipped 2026-04-22 → 2026-04-26.  Phase 4b's pip-install-scaffolder shape was retired in Decision 0038 (2026-04-26) and replaced by a clone-the-repo bootstrap with `init` / `update` folded into `chumicro-workspace`; canonical starter at [`ChuMicro/ChuMicro-Workspace-Template`](https://github.com/ChuMicro/ChuMicro-Workspace-Template).  Phase 4c is dissolved into Decision 0038 — the template *is* the repo.  Phase 7 (first sensor thing template) closed 2026-04-27 — Layer-1, Layer-2, Layer-3, sensor thing, README walkthrough all shipped.  Application-level OTA carved out into its own potential workstream at `plans/workstreams/ota.md` (unscoped) on 2026-04-27 so this workstream could close cleanly.
 
 ## Purpose
 
@@ -543,16 +543,7 @@ A user clones the template, runs `python run.py setup`, plugs in a board, runs `
 
 **Phase 7 closed 2026-04-27** — Layer-1, Layer-2, Layer-3, sensor thing, README walkthrough all shipped.
 
-### Phase 8: application-level OTA (deferred — explore after Phase 7)
-
-Not in scope until after Phase 7 ships and a real sensor has been in the field long enough for "deploy without crawling behind the couch" to be a felt need.  Design notes captured in `plans/workstreams/project-workspace-research.md` §OTA so a future session picks up where exploration left off:
-
-- Application-file OTA (code + libs), not firmware OTA.
-- Proposed name: `chumicro-update`.  Runner-shaped service on top of `chumicro-mqtt` (primary) or HTTP (later).
-- CP constraint: CIRCUITPY drive vs filesystem-writable-from-code is mutually exclusive.  Default boot.py auto-detects `supervisor.runtime.usb_connected` — plugged in → dev mode, untethered → OTA mode.  No config flag required.
-- Security Tier 1 (baked in from v1): TLS + pinned CA, HMAC-SHA256 over payload, monotonic version counter, per-file SHA256, per-device broker ACL.
-- Explicitly out of scope: CP firmware self-update (no exposed API), MP ESP32 A/B firmware OTA via `esp32.Partition` (possible but separate spike), Zephyr / MCUboot / secure-boot fuses (different ecosystem).
-- Revisit trigger: user has a thing on a wall for >30 days and needs an update pushed to it without physical access.
+**Application-level OTA carved out** to `plans/workstreams/ota.md` on 2026-04-27 — the idea is preserved as a discrete potential workstream without scope.  Design notes from prior exploration remain in `plans/workstreams/project-workspace-research.md` §OTA.
 
 ## Success criteria
 
