@@ -1592,6 +1592,81 @@ class TestTestCommand:
         assert recorded["cwd"] == root
 
 
+class TestLintCommand:
+    def test_shells_out_to_ruff(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        recorded: dict[str, Any] = {}
+
+        def fake_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+            recorded["args"] = args
+            recorded["cwd"] = kwargs.get("cwd")
+            return subprocess.CompletedProcess(args, 0)
+
+        monkeypatch.setattr(cli.subprocess, "run", fake_run)
+        exit_code = cli.main([
+            "lint", "--workspace-dir", str(root),
+        ])
+        assert exit_code == 0
+        assert recorded["args"] == [
+            sys.executable, "-m", "ruff", "check", ".",
+        ]
+        assert recorded["cwd"] == root
+
+    def test_forwards_extra_args_to_ruff(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        recorded: dict[str, Any] = {}
+
+        def fake_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+            recorded["args"] = args
+            return subprocess.CompletedProcess(args, 0)
+
+        monkeypatch.setattr(cli.subprocess, "run", fake_run)
+        exit_code = cli.main([
+            "lint", "--workspace-dir", str(root), "--", "--fix",
+        ])
+        assert exit_code == 0
+        assert "--fix" in recorded["args"]
+        # The trailing "." anchors ruff to the workspace root regardless
+        # of any extra args the user passed.
+        assert recorded["args"][-1] == "."
+
+    def test_skips_with_hint_when_ruff_missing(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """When ruff isn't installed, exit 0 with a discoverable hint."""
+        root = _seed_workspace(tmp_path)
+
+        # Force the import probe inside _cmd_lint to fail.
+        import builtins
+
+        original_import = builtins.__import__
+
+        def fake_import(name: str, *args: Any, **kwargs: Any):
+            if name == "ruff":
+                raise ImportError("ruff not installed")
+            return original_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", fake_import)
+        exit_code = cli.main([
+            "lint", "--workspace-dir", str(root),
+        ])
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "ruff is not installed" in captured.out
+        assert "pip install -e .[dev]" in captured.out
+
+
 # ---------------------------------------------------------------------------
 # Workspace-not-found
 # ---------------------------------------------------------------------------

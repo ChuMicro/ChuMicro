@@ -908,6 +908,38 @@ def _cmd_test(args: argparse.Namespace) -> int:
     return completed.returncode
 
 
+def _cmd_lint(args: argparse.Namespace) -> int:
+    """Run ``ruff check`` across the workspace.
+
+    Picks up the workspace's ``[tool.ruff]`` config from
+    ``pyproject.toml`` automatically — the canonical workspace
+    template ships a ruff config matching the chumicro mono-repo's
+    tone.  Extra args after ``--`` forward to ruff (e.g.
+    ``--fix``, ``--select`` overrides).
+
+    No-op (exit 0 with a hint) when ``ruff`` isn't installed —
+    keeps the command discoverable in workspaces that haven't
+    pulled the ``[dev]`` extra yet.
+    """
+    workspace = _resolve_workspace(args)
+    try:
+        import ruff  # noqa: F401, PLC0415  — availability probe
+    except ImportError:
+        print(
+            "ruff is not installed in this venv.  Install the dev "
+            "extras with:\n"
+            "    .venv/bin/pip install -e .[dev]\n"
+            "or add ruff to your workspace's pyproject.toml deps.",
+        )
+        return 0
+    completed = subprocess.run(  # noqa: S603 — args fully controlled
+        [sys.executable, "-m", "ruff", "check", *args.ruff_args, "."],
+        cwd=workspace.root,
+        check=False,
+    )
+    return completed.returncode
+
+
 def _cmd_repl(args: argparse.Namespace) -> int:
     """Open an interactive REPL on the selected board."""
     workspace = _resolve_workspace(args)
@@ -1503,6 +1535,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Args forwarded verbatim to pytest (place after `--`).",
     )
     test_parser.set_defaults(func=_cmd_test)
+
+    # ----- lint ----------------------------------------------------------
+    lint_parser = subparsers.add_parser(
+        "lint",
+        help="Run `ruff check` across the workspace.  Extra args pass through.",
+    )
+    _add_workspace_arg(lint_parser)
+    lint_parser.add_argument(
+        "ruff_args",
+        nargs=argparse.REMAINDER,
+        help="Args forwarded verbatim to ruff (place after `--`).",
+    )
+    lint_parser.set_defaults(func=_cmd_lint)
 
     # ----- repl ----------------------------------------------------------
     repl_parser = subparsers.add_parser(
