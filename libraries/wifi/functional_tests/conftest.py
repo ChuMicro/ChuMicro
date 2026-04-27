@@ -1,8 +1,10 @@
 """Host-side fixture: materialise ``_test_creds.py`` from ``chumicro-dev-config.toml``.
 
 See ``libraries/requests/functional_tests/conftest.py`` for the
-shared rationale.  Each library owns its own copy because the
-generated shim must sit alongside the tests that import it.
+shared rationale.  Pre-2026-04-27 the wifi acceptance test
+documented its ``_test_creds`` import as "the host-side runner
+generates it" — that runner now lives here as a per-functional-
+tests pytest hook.
 """
 
 from __future__ import annotations

@@ -170,7 +170,7 @@ class CaseInsensitiveDict:
 # ---------------------------------------------------------------------------
 
 
-def parse_charset(content_type):
+def parse_charset(content_type: str | None) -> str:
     """Extract the ``charset=...`` parameter from a Content-Type header.
 
     Per RFC 7231 §3.1.1.5 the Content-Type value may carry a

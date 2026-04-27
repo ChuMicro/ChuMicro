@@ -109,6 +109,36 @@ Works on CPython, MicroPython, and CircuitPython.
 | [`quickstart.py`](examples/quickstart.py) | FakeSocket-driven CONNECT → SUBSCRIBE → PUBLISH → inbound-message round trip.  Identical on every runtime; no network needed. |
 | [`circuitpython_telemetry.py`](examples/circuitpython_telemetry.py) | Periodic QoS-1 publish on a real CP/MP board.  Brings wifi up, connects to a broker, subscribes to a command topic, publishes a synthetic reading every N seconds while an LED-blink counter verifies the publish never blocks waiting for PUBACK.  Reads wifi + broker config from `runtime_config.msgpack` (chumicro-workspace) with constants fallback.  Default broker: `test.mosquitto.org:1883`. |
 
+## Configuring wifi + broker for examples and functional tests
+
+Real-network functional tests in `functional_tests/test_real_*.py` and the hardware-prefixed examples in `examples/circuitpython_*.py` need wifi credentials (and optionally a broker override).  How you supply them depends on whether you're inside the chumicro mono-repo or using this library in your own project.
+
+### Inside the chumicro mono-repo
+
+`python scripts/run.py setup` generates `chumicro-dev-config.toml` at the repo root (gitignored).  Uncomment and fill in:
+
+```toml
+[wifi]
+ssid = "your-wifi-ssid"
+password = "your-wifi-password"
+
+# Optional — defaults to test.mosquitto.org:1883 when omitted.
+[mqtt.broker]
+host = "test.mosquitto.org"
+port = 1883
+```
+
+The library's `functional_tests/conftest.py` reads this file and materialises a `_test_creds.py` shim alongside the test.  Without it, the real-network tests skip silently.
+
+### Using `chumicro-mqtt` outside the mono-repo
+
+Two paths, depending on whether you're using a `chumicro-workspace`:
+
+* **With a workspace (recommended).**  Put wifi + broker config in your workspace's `secrets.yml` and per-thing `config.toml`, run `chumicro-workspace deploy --thing <name>`, and the example reads them via `chumicro_config.load_runtime_config()`.  The telemetry example reads `[wifi]` for credentials and `[telemetry]` for the broker host/port/topic — see the example file for keys.
+* **Raw single-file deploy** (no workspace).  Edit the `WIFI_SSID` / `WIFI_PASSWORD` / `BROKER_HOST` / `BROKER_PORT` / `TOPIC` constants near the top of the example file before copying it to `/code.py` (CP) or `/main.py` (MP).  The constants are the fallback when no `runtime_config.msgpack` is present.
+
+The library itself never reads either source — it takes a `chumicro-sockets` socket and goes.  The config wiring is application-layer.
+
 ## Memory + leak testing
 
 The host-side suite under `tests/test_memory_pressure.py` uses `tracemalloc` to verify the client doesn't leak across hot paths (QoS 0 / QoS 1 publish, inbound recv, subscribe/unsubscribe cycles).

@@ -102,12 +102,38 @@ locally — no `chumicro-requests` dependency on the device.
 | `circuitpython_two_thing_server.py` | Display half of a two-thing demo: HTTP server with `GET /`, `GET /api/latest`, `POST /api/sensor` routes; in-memory latest-reading state.  Runs on CP / MP boards (filename prefix marks it hardware-only). |
 | `circuitpython_two_thing_sensor.py` | Sensor half of the two-thing demo: posts a synthetic reading to the server every 5 s using `chumicro-requests`. |
 
+## Configuring wifi for examples and functional tests
+
+Real-network functional tests in `functional_tests/test_real_*.py` and the hardware-prefixed examples in `examples/circuitpython_*.py` need wifi credentials.  How you supply them depends on whether you're inside the chumicro mono-repo or using this library in your own project.
+
+### Inside the chumicro mono-repo
+
+`python scripts/run.py setup` generates `chumicro-dev-config.toml` at the repo root (gitignored).  Uncomment and fill in the `[wifi]` block:
+
+```toml
+[wifi]
+ssid = "your-wifi-ssid"
+password = "your-wifi-password"
+```
+
+The library's `functional_tests/conftest.py` reads this file and materialises a `_test_creds.py` shim alongside the test.  Without the file (or section), the real-network tests skip silently.
+
+### Using `chumicro-http-server` outside the mono-repo
+
+Two paths, depending on whether you're using a `chumicro-workspace`:
+
+* **With a workspace (recommended).**  Put wifi creds in your workspace's `secrets.yml`, run `chumicro-workspace deploy --thing <name>`, and the example reads them via `chumicro_config.load_runtime_config()`.  The two-thing demo's `runtime_config` schema also accepts `[two_thing_sensor]` for the sensor's target server overrides — see the example file for keys.
+* **Raw single-file deploy** (no workspace).  Edit the `WIFI_SSID` / `WIFI_PASSWORD` constants (and `SERVER_HOST` on the sensor side) near the top of the example file before copying it to `/code.py` (CP) or `/main.py` (MP).  The constants are the fallback when no `runtime_config.msgpack` is present.
+
+The library itself never reads either source — it takes a `listener_factory` and goes.  The config wiring is application-layer.
+
 ## Developing this library
 
 Host-side tests live in `tests/`; real-board functional tests belong in `functional_tests/`.
 
 ```bash
 python scripts/run.py test --libraries http_server
+python scripts/run.py test-libraries-functional --library http_server
 ```
 
 See the [contributing guide](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md).

@@ -104,6 +104,28 @@ Works on CPython, MicroPython, and CircuitPython.  Ships four adapters: CircuitP
 |---|---|
 | [`quickstart.py`](examples/quickstart.py) | Build a `WifiService`, register a state-change callback, drive one tick, observe the state transitions. Uses `FakeWifi` so it runs anywhere. |
 
+## Configuring wifi for examples and functional tests
+
+The acceptance test in `functional_tests/test_acceptance.py` connects to a real AP and skips silently when no credentials are configured.
+
+### Inside the chumicro mono-repo
+
+`python scripts/run.py setup` generates `chumicro-dev-config.toml` at the repo root (gitignored).  Uncomment and fill in:
+
+```toml
+[wifi]
+ssid = "your-wifi-ssid"
+password = "your-wifi-password"
+```
+
+`functional_tests/conftest.py` reads this file and materialises a `_test_creds.py` shim alongside the test.
+
+### Using `chumicro-wifi` outside the mono-repo
+
+Production apps load wifi config via `chumicro_config.load_runtime_config()` — see `chumicro-config` and Decision 0030.  Put your creds in your workspace's `secrets.yml`, run `chumicro-workspace deploy`, and the bake-and-deploy pipeline lands them on the device as `runtime_config.msgpack`.
+
+The library itself never reads any TOML — it takes a `WifiConfig` and goes.  `WifiConfig.from_dict()` is the dict-construction path used by the standard pipeline.
+
 ## Developing this library
 
 Host-side tests live in `tests/`; real-board functional tests belong in `functional_tests/`.

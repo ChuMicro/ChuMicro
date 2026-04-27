@@ -7,7 +7,7 @@ device required), verify the request/response round-trip.
 
 Skips silently when no credentials are configured (see
 ``conftest.py`` for the ``_test_creds`` shim materialised from
-``.scratch/wifi-creds.toml``).
+the top-level ``chumicro-dev-config.toml``).
 
 Verifies the canonical promise (Decision 0041): an LED-style
 counter keeps incrementing on the same loop while the server is
