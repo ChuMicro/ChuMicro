@@ -99,10 +99,19 @@ HTTPS specifically.
 ### TLS context — bring your own CA
 
 `chumicro_sockets_factory(ssl_context=...)` accepts an SSL context built
-via `chumicro_sockets.ssl_context_with_ca(pem)`. Default `ssl.create_default_context()`
-on these boards loads ~100-200 KB of bundled trust store and OOMs on a
-Pi Pico W. Pin a single CA (or small chain bundle) — the Phase 7 TLS-MQTT
-work proved this pattern works.
+via `chumicro_sockets.ssl_context_with_ca(pem)`. CA-pinning is required
+on both supported embedded runtimes — but for different reasons:
+
+- **MicroPython** doesn't have `ssl.create_default_context()` at all;
+  every TLS context must be built explicitly.
+- **CircuitPython** has `ssl.create_default_context()` (and it builds
+  cheaply — ~80 bytes of heap on a Pi Pico W), but the returned context
+  carries no CAs and has `check_hostname=False` — handshake against any
+  real cert would fail.
+
+So on both runtimes, pass a context with a CA loaded. The CPython "default
+context loads a 100-200 KB system trust store" intuition doesn't apply —
+neither MP nor CP bundles a trust store, by design.
 
 ### Device RTC must be set before TLS
 

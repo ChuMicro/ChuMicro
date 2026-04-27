@@ -139,10 +139,29 @@ here because slice 3c is when they bite.
   Lolin S2 CP/MP) was verified live with `--deploy-mode flash`.
   ESP32-S3 with > 200 KB free heap after wifi can run HTTPS in
   RAM-mode; document and let the user choose.
-* **TLS context must be CA-pinned.**  `ssl.create_default_context()`
-  loads a 100-200 KB trust store that doesn't fit on a Pi Pico W.
-  Use `chumicro_sockets.ssl_context_with_ca(pem)` with a single CA
-  or small chain bundle.  Same pattern Phase 7 TLS-MQTT proved.
+* **TLS context must be CA-pinned — but for different reasons per
+  runtime.**  Probed live on Pi Pico W in flash mode:
+    - **MicroPython 1.28.0 / rp2:** `ssl.create_default_context()`
+      *doesn't exist* — `AttributeError("'module' object has no
+      attribute 'create_default_context'")`.  You must build a
+      context yourself via `ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)`
+      or use `chumicro_sockets.ssl_context_with_ca(pem)`.
+    - **CircuitPython 10.2.0-rc.0:** `ssl.create_default_context()`
+      *does* exist and constructs cheaply (~80 bytes of heap), but
+      the returned context has `check_hostname=False` and no CAs
+      loaded — handshake against any real cert would fail.  The
+      "100-200 KB trust store doesn't fit" intuition from CPython
+      doesn't apply: CP simply doesn't bundle a trust store at all.
+    - The earlier RAM-mode `MemoryError`/`OSError(12)` symptoms were
+      the **mbedTLS handshake itself** OOMing, not the context
+      construction.  Flash mode gives the handshake the headroom
+      it needs; the context-must-be-CA-pinned rule remains
+      independent of deploy mode because both runtimes need
+      caller-supplied CAs to verify against.
+
+  Use `chumicro_sockets.ssl_context_with_ca(pem)` on both runtimes —
+  it returns a `CERT_REQUIRED` context with the supplied CA
+  loaded.  Same pattern Phase 7 TLS-MQTT proved.
 * **Device RTC must be set before TLS.**  mbedTLS `CERT_REQUIRED`
   rejects every cert with "validity starts in the future" if the
   RTC is at boot default (2021-01-01 on rp2, epoch elsewhere).

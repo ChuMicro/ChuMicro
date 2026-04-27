@@ -101,6 +101,15 @@ MP plain TCP non-blocking `recv` raises `OSError(11)` (EAGAIN) when no data is a
 
 Fix: the wrapper now raises `OSError(11)` on `None`, restoring the standard contract uniformly across plain TCP and TLS.  See `chumicro-sockets` 0.1.5 + slice 3c.
 
+### Embedded `ssl.create_default_context()` is not the CPython equivalent
+
+Probed live 2026-04-26 on Pi Pico W (MP 1.28.0 / rp2 + CP 10.2.0-rc.0) in flash mode:
+
+* **MicroPython:** `ssl.create_default_context()` **doesn't exist** — `AttributeError("'module' object has no attribute 'create_default_context'")`.  You build a context yourself: `ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)` (no CAs loaded) or via `chumicro_sockets.ssl_context_with_ca(pem)`.
+* **CircuitPython:** `ssl.create_default_context()` **exists and builds cheaply** (~80 bytes of heap), but the returned context has `check_hostname=False` and no CAs loaded.  Effectively useless for verifying a real-world cert without further setup.
+
+The CPython intuition that `create_default_context()` loads a multi-hundred-KB system trust store doesn't apply — neither embedded runtime bundles a trust store at all.  Memory pressure during TLS handshake comes from the **mbedTLS handshake itself** (cipher suites, intermediate cert validation buffers), not from context construction.  CA-pinning via `chumicro_sockets.ssl_context_with_ca(pem)` is the canonical embedded pattern on both runtimes.
+
 ### MicroPython rp2 mbedTLS handshake doesn't fit into CIRCUITPY/MP RAM-mode bootstraps
 
 A wifi → sockets → TLS → requests stack with the CA-pinned context only fits on the Pi Pico W class (256 KB RAM, ~150 KB heap free post-wifi) when deployed in **flash mode**.  RAM-mode keeps the full library bootstrap on the heap for the duration of the test, leaving < 50 KB for mbedTLS handshake — `ssl_context.wrap_socket(...)` fails with `OSError(12)` (ENOMEM) before any cert validation runs.
