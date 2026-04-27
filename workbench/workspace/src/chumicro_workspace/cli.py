@@ -429,15 +429,60 @@ def _cmd_devices(args: argparse.Namespace) -> int:
     return 0
 
 
+def _resolve_thing_name(workspace: WorkspaceLayout, name: str) -> str:
+    """Resolve a user-typed thing name to a canonical slash-form path.
+
+    Accepts three shapes:
+
+    * **Bare** (``"door_open"``) — looked up across the whole
+      ``things/`` tree.  Unique match → that thing.  Multiple matches →
+      ``SystemExit`` listing the candidates.  No match → caller's
+      existence check surfaces the ``FileNotFoundError``-shaped
+      message.
+    * **Slash** (``"garage/sensors/door_open"``) — direct path.
+    * **Dotted** (``"garage.sensors.door_open"``) — same as slash;
+      normalised before return because ``/`` is the canonical form
+      used by :meth:`WorkspaceLayout.list_things`.
+
+    Slice 2 of the nested-things-and-examples plan; replaces the
+    flat-only ``names = list(args.names)`` lookup that preceded it.
+    """
+    normalised = name.replace(".", "/")
+    if "/" in normalised:
+        return normalised
+    candidates = [
+        path for path in workspace.list_things()
+        if path == name or path.endswith("/" + name)
+    ]
+    if len(candidates) == 1:
+        return candidates[0]
+    if len(candidates) > 1:
+        candidate_list = "\n".join(f"  {path}" for path in candidates)
+        raise SystemExit(
+            f"deploy: {name!r} is ambiguous — multiple things match:\n"
+            f"{candidate_list}\n"
+            f"specify the path: `python run.py deploy {candidates[0]}`",
+        )
+    # No match — let the caller's existence check produce the standard
+    # "thing not found" message after constructing the dir path.
+    return name
+
+
 def _cmd_deploy(args: argparse.Namespace) -> int:
     """Deploy one or more things to a device.
 
     Single-thing default uses :func:`thing_directory_source` — the
     flat layout where the thing's files land at the device root.
     ``--import-graph`` ships only transitively-imported modules.
-    ``--boot-shim`` ships under ``/lib/things/<name>/``; with multiple
-    positional names + ``--boot-shim`` the things land side-by-side
-    and ``switch`` can re-point ``/active.py`` without re-flashing.
+    ``--boot-shim`` ships under ``/lib/things/<...>/<name>/``; with
+    multiple positional names + ``--boot-shim`` the things land
+    side-by-side and ``switch`` can re-point ``/active.py`` without
+    re-flashing.
+
+    Positional names accept bare (``"door_open"``), slash
+    (``"garage/sensors/door_open"``), or dotted forms; bare names that
+    match more than one thing in the tree exit 2 with a list of
+    candidates.
 
     When invoked with no positional names and the workspace contains
     exactly one thing, that thing is deployed by default — covers the
@@ -445,8 +490,7 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
     or multiple things both require an explicit positional.
     """
     workspace = _resolve_workspace(args)
-    names: list[str] = list(args.names)
-    if not names:
+    if not args.names:
         candidates = workspace.list_things()
         if not candidates:
             print(
@@ -464,6 +508,8 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
             return 2
         names = [candidates[0]]
         print(f"deploy: defaulting to {names[0]} (only thing in workspace).")
+    else:
+        names = [_resolve_thing_name(workspace, name) for name in args.names]
     if args.import_graph and args.boot_shim:
         print(
             "deploy: --import-graph and --boot-shim are mutually exclusive.",
@@ -498,6 +544,7 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
             source = thing_boot_source(
                 thing_dirs[0],
                 workspace=workspace,
+                thing_name=names[0],
                 entrypoint_filename=device.effective_entrypoint,
             )
         else:
@@ -512,6 +559,7 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
             source = multi_thing_boot_source(
                 thing_dirs,
                 workspace=workspace,
+                thing_names=names,
                 active_thing_name=active,
                 entrypoint_filename=device.effective_entrypoint,
             )
@@ -555,7 +603,8 @@ def _cmd_switch(args: argparse.Namespace) -> int:
     and ``workspace_runtime.boot()`` raises ``WorkspaceBootError``.
     """
     workspace = _resolve_workspace(args)
-    thing_dir = workspace.thing_dir(args.name)
+    resolved_name = _resolve_thing_name(workspace, args.name)
+    thing_dir = workspace.thing_dir(resolved_name)
     if not thing_dir.is_dir():
         raise SystemExit(f"error: thing {thing_dir} not found")
     device = _resolve_device(workspace, args)
@@ -564,6 +613,7 @@ def _cmd_switch(args: argparse.Namespace) -> int:
     source = switch_source(
         thing_dir,
         workspace=workspace,
+        thing_name=resolved_name,
         entrypoint_filename=device.effective_entrypoint,
     )
     result = Deployer(device).deploy(source)

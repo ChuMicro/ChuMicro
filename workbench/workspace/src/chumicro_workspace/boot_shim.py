@@ -6,15 +6,19 @@ device alongside the thing's app code:
 * ``/code.py`` (CP) or ``/main.py`` (MP) — two-line bootstrapper
   that imports :mod:`workspace_runtime` and calls ``boot()``.
 * ``/active.py`` — names the active thing
-  (``THING_NAME = "<name>"``).
+  (``THING_NAME = "<dotted-name>"``).  Nested things use the
+  dotted form (``"upstairs.bedroom_sensor"``) so
+  ``things.<THING_NAME>.app`` resolves directly via Python's
+  import machinery.
 * ``/lib/workspace_runtime/__init__.py`` — the on-device boot
   module shipped as a payload from this package.
-* ``/lib/things/__init__.py`` + ``/lib/things/<name>/__init__.py``
-  — package markers that let ``things.<name>.app`` resolve.
+* ``/lib/things/__init__.py`` + one ``__init__.py`` per
+  namespace level under the thing — package markers that let
+  ``things.<seg1>.<seg2>...<thing>.app`` resolve.
 
 The thing's own files land at
-``/lib/things/<name>/`` (rather than the top-of-filesystem layout
-the simpler :func:`thing_directory_source` produces).  This keeps
+``/lib/things/<seg1>/<seg2>/.../<thing>/`` (rather than the top-of-filesystem
+layout the simpler :func:`thing_directory_source` produces).  This keeps
 multi-thing-on-one-device paths open: future slices can deploy
 several thing payloads and switch between them by rewriting
 ``active.py`` instead of re-flashing the whole stack.
@@ -97,6 +101,69 @@ _DEFAULT_EXCLUDED_DIRS: frozenset[str] = frozenset(
 )
 
 
+# ---------------------------------------------------------------------------
+# Nested-name helpers
+# ---------------------------------------------------------------------------
+
+
+def _dotted_thing_name(thing_name: str) -> str:
+    """Return *thing_name* in dotted form.
+
+    Accepts dotted (``"upstairs.bedroom_sensor"``) or slash
+    (``"upstairs/bedroom_sensor"``) input.  The dotted form is
+    written into ``/active.py`` because ``workspace_runtime.boot``
+    constructs ``things.<THING_NAME>.app`` via string concatenation.
+    """
+    return thing_name.replace("/", ".")
+
+
+def _thing_segments(thing_name: str) -> tuple[str, ...]:
+    """Split *thing_name* on ``.`` / ``/`` into per-namespace segments."""
+    return tuple(_dotted_thing_name(thing_name).split("."))
+
+
+def _device_thing_dir(thing_name: str) -> str:
+    """Return the on-device dir prefix for *thing_name*'s payload files.
+
+    Single-segment ``"weather"`` → ``"/lib/things/weather"``;
+    nested ``"garage/sensors/door_open"`` →
+    ``"/lib/things/garage/sensors/door_open"``.
+    """
+    return "/lib/things/" + "/".join(_thing_segments(thing_name))
+
+
+def _namespace_init_paths(thing_name: str) -> list[str]:
+    """Return ``__init__.py`` device paths for every level above the thing.
+
+    Includes the thing's own ``/lib/things/<...>/<thing>/__init__.py``
+    leaf; excludes ``/lib/things/__init__.py`` (caller adds it via
+    :data:`THINGS_PACKAGE_INIT_DEVICE_PATH`).  Single-segment names
+    return one path; an N-segment dotted name returns N paths.
+    """
+    segments = _thing_segments(thing_name)
+    return [
+        "/lib/things/" + "/".join(segments[:depth]) + "/__init__.py"
+        for depth in range(1, len(segments) + 1)
+    ]
+
+
+def _per_thing_runtime_config_device_path(thing_name: str) -> str:
+    """On-device path of *thing_name*'s per-thing runtime-config msgpack.
+
+    Multi-thing deploys ship one msgpack per installed thing under
+    ``/lib/things/<...>/<thing>/runtime_config.msgpack`` so future
+    switch flows can copy the right one to
+    :data:`RUNTIME_CONFIG_DEVICE_PATH` without re-reading host config
+    files.
+    """
+    return _device_thing_dir(thing_name) + "/runtime_config.msgpack"
+
+
+# ---------------------------------------------------------------------------
+# Static file helpers
+# ---------------------------------------------------------------------------
+
+
 def load_workspace_runtime_payload() -> bytes:
     """Return the bytes of the on-device ``workspace_runtime`` module.
 
@@ -126,10 +193,17 @@ def build_active_py(thing_name: str) -> str:
     ``THING_NAME`` from it.  Header comment guards the file
     against well-meaning user edits — the host overwrites
     ``active.py`` on every deploy.
+
+    *thing_name* is normalised to dotted form before being written
+    so nested-thing names (passed in either dotted or slash form)
+    end up as the import-shaped ``"upstairs.bedroom_sensor"`` that
+    :func:`workspace_runtime.boot` concatenates into
+    ``things.<THING_NAME>.app``.
     """
+    dotted = _dotted_thing_name(thing_name)
     return (
         "# Shipped by chumicro-workspace; rewritten on each deploy.\n"
-        f"THING_NAME = \"{thing_name}\"\n"
+        f"THING_NAME = \"{dotted}\"\n"
     )
 
 
@@ -142,28 +216,30 @@ def boot_shim_files(
 
     Includes the entrypoint shim (``code.py`` / ``main.py``),
     ``active.py``, the on-device ``workspace_runtime`` module,
-    the ``things/`` package init, and an empty
-    ``things/<thing_name>/__init__.py``.  The thing's own files
-    are NOT included here — :func:`thing_boot_source` adds them.
+    the ``things/`` package init, and one empty ``__init__.py`` for
+    every namespace level beneath ``things/`` down to and including
+    the thing's own directory.  The thing's own files are NOT
+    included here — :func:`thing_boot_source` adds them.
 
     Args:
-        thing_name: Active thing name; written into ``active.py``
-            and used to construct the ``things.<name>`` package
-            init path.
+        thing_name: Active thing name (bare, slash, or dotted form).
+            Written into ``active.py`` and used to construct the
+            namespace ``__init__.py`` paths.
         entrypoint_filename: ``"code.py"`` for CircuitPython,
             ``"main.py"`` for MicroPython.
 
     Returns:
         Path → bytes map ready to merge into a deploy file map.
     """
-    thing_init_path = f"/lib/things/{thing_name}/__init__.py"
-    return {
+    files: dict[str, bytes] = {
         f"/{entrypoint_filename}": SHIM_ENTRYPOINT_SOURCE.encode("utf-8"),
         "/active.py": build_active_py(thing_name).encode("utf-8"),
         BOOT_MODULE_DEVICE_PATH: load_workspace_runtime_payload(),
         THINGS_PACKAGE_INIT_DEVICE_PATH: b"",
-        thing_init_path: b"",
     }
+    for init_path in _namespace_init_paths(thing_name):
+        files[init_path] = b""
+    return files
 
 
 def _walk_thing_files(
@@ -172,13 +248,16 @@ def _walk_thing_files(
     thing_name: str,
     extra_excluded: Iterable[str] = (),
 ) -> dict[str, bytes]:
-    """Walk *thing_dir* and return ``/lib/things/<name>/...`` → bytes.
+    """Walk *thing_dir* and return ``/lib/things/<...>/<name>/...`` → bytes.
 
     Skips ``config.{toml,yml,yaml}`` (host-only), ``_generated/``
     (deploy artifacts), and the usual cache / dotfile noise.
-    *extra_excluded* augments the skip set.
+    *extra_excluded* augments the skip set.  *thing_name* drives the
+    on-device prefix via :func:`_device_thing_dir` so nested thing
+    names produce nested paths.
     """
     excluded = _DEFAULT_EXCLUDED_DIRS | set(extra_excluded)
+    device_prefix = _device_thing_dir(thing_name)
     collected: dict[str, bytes] = {}
     for source_path in sorted(thing_dir.rglob("*")):
         if not source_path.is_file():
@@ -190,7 +269,7 @@ def _walk_thing_files(
         if relative.name in _THING_HOST_ONLY_NAMES:
             continue
         device_relative = "/".join(parts)
-        device_path = f"/lib/things/{thing_name}/{device_relative}"
+        device_path = f"{device_prefix}/{device_relative}"
         collected[device_path] = source_path.read_bytes()
     return collected
 
@@ -250,18 +329,22 @@ def thing_boot_source(
     """Build a deploy-ready ``FileSource`` using the boot-shim layout.
 
     Bundles the static shim layer (entrypoint + ``active.py`` +
-    ``workspace_runtime`` payload + ``things/`` package markers)
+    ``workspace_runtime`` payload + namespace ``__init__.py`` markers)
     with the thing's own files (under
-    ``/lib/things/<name>/``) and the merged runtime-config
+    ``/lib/things/<...>/<thing>/``) and the merged runtime-config
     msgpack (via :class:`WithRuntimeConfig`).
 
     Args:
-        thing_dir: ``things/<name>/`` directory.
+        thing_dir: Filesystem path to the thing directory.  May be
+            nested (``things/garage/sensors/door_open/``); the
+            on-device layout follows the same nesting.
         workspace: Resolved :class:`WorkspaceLayout`.  Used to
             locate ``workspace.yml`` / ``secrets.yml`` defaults
             when those args are ``None``.
-        thing_name: Override the directory name as the active
-            thing name.  Defaults to ``thing_dir.name``.
+        thing_name: Bare, slash, or dotted name for the active thing.
+            Required for nested layouts (the directory's basename
+            alone loses the namespace prefix).  Defaults to
+            ``thing_dir.name`` for flat layouts.
         entrypoint_filename: ``"code.py"`` for CP, ``"main.py"``
             for MP.  Decides the host-side filename for the shim
             stub written at the device root.
@@ -300,17 +383,6 @@ def thing_boot_source(
 # ---------------------------------------------------------------------------
 
 
-def _per_thing_runtime_config_device_path(thing_name: str) -> str:
-    """On-device path of *thing_name*'s per-thing runtime-config msgpack.
-
-    Multi-thing deploys ship one msgpack per installed thing under
-    ``/lib/things/<name>/runtime_config.msgpack`` so :func:`switch_source`
-    can copy the right one to :data:`RUNTIME_CONFIG_DEVICE_PATH` without
-    re-reading host config files.
-    """
-    return f"/lib/things/{thing_name}/runtime_config.msgpack"
-
-
 def multi_thing_boot_files(
     *,
     active_thing_name: str,
@@ -319,16 +391,19 @@ def multi_thing_boot_files(
 ) -> dict[str, bytes]:
     """Static shim layer for a multi-thing layout.
 
-    Same shape as :func:`boot_shim_files` but registers a package
-    marker (``/lib/things/<each>/__init__.py``) for every name in
-    *thing_names* — not just the active one — so all installed
-    things are importable.  ``/active.py`` still names a single
-    active thing via :func:`build_active_py`.
+    Same shape as :func:`boot_shim_files` but registers a
+    ``__init__.py`` chain for every name in *thing_names* — not just
+    the active one — so all installed things are importable.
+    Namespace inits are deduped across things (two siblings under the
+    same namespace share one ``/lib/things/<ns>/__init__.py``).
+    ``/active.py`` still names a single active thing via
+    :func:`build_active_py`.
 
     Args:
-        active_thing_name: Which thing ``/active.py`` points at.  Must
-            appear in *thing_names* (raises ``ValueError`` otherwise).
-        thing_names: Every thing to register a package marker for.
+        active_thing_name: Which thing ``/active.py`` points at (bare,
+            slash, or dotted).  Must appear in *thing_names* (raises
+            ``ValueError`` otherwise).
+        thing_names: Every thing to register a namespace chain for.
             Order is irrelevant; duplicates collapse silently.
         entrypoint_filename: ``"code.py"`` for CP, ``"main.py"`` for MP.
 
@@ -354,7 +429,8 @@ def multi_thing_boot_files(
         THINGS_PACKAGE_INIT_DEVICE_PATH: b"",
     }
     for thing_name in distinct_names:
-        files[f"/lib/things/{thing_name}/__init__.py"] = b""
+        for init_path in _namespace_init_paths(thing_name):
+            files.setdefault(init_path, b"")
     return files
 
 
@@ -377,6 +453,7 @@ class _MultiThingBootSource:
         self,
         *,
         thing_dirs: Sequence[Path],
+        thing_names: Sequence[str],
         active_thing_name: str,
         entrypoint_filename: str,
         workspace_yaml: Path,
@@ -384,6 +461,7 @@ class _MultiThingBootSource:
         extra_excluded: Iterable[str] = (),
     ) -> None:
         self._thing_dirs = list(thing_dirs)
+        self._thing_names = list(thing_names)
         self._active_thing_name = active_thing_name
         self._entrypoint_filename = entrypoint_filename
         self._workspace_yaml = workspace_yaml
@@ -392,15 +470,15 @@ class _MultiThingBootSource:
 
     def files(self) -> dict[str, bytes]:
         """Combine shim layer + every thing's files + per-thing msgpacks."""
-        thing_names = [thing_dir.name for thing_dir in self._thing_dirs]
         files = multi_thing_boot_files(
             active_thing_name=self._active_thing_name,
-            thing_names=thing_names,
+            thing_names=self._thing_names,
             entrypoint_filename=self._entrypoint_filename,
         )
         active_msgpack: bytes | None = None
-        for thing_dir in self._thing_dirs:
-            thing_name = thing_dir.name
+        for thing_dir, thing_name in zip(
+            self._thing_dirs, self._thing_names, strict=True,
+        ):
             files.update(
                 _walk_thing_files(
                     thing_dir,
@@ -436,6 +514,7 @@ def multi_thing_boot_source(
     thing_dirs: Sequence[Path],
     *,
     workspace: WorkspaceLayout,
+    thing_names: Sequence[str] | None = None,
     active_thing_name: str | None = None,
     entrypoint_filename: str = "code.py",
     workspace_yaml: Path | None = None,
@@ -444,21 +523,22 @@ def multi_thing_boot_source(
 ) -> _MultiThingBootSource:
     """Build a deploy-ready ``FileSource`` shipping multiple things.
 
-    Each thing's files land at ``/lib/things/<name>/...``; each thing's
-    runtime config lands at ``/lib/things/<name>/runtime_config.msgpack``.
+    Each thing's files land at ``/lib/things/<...>/<name>/...``; each thing's
+    runtime config lands at ``/lib/things/<...>/<name>/runtime_config.msgpack``.
     The active thing's runtime config also appears at the canonical
     :data:`RUNTIME_CONFIG_DEVICE_PATH` so existing app code keeps
     reading it from the workspace-wide path.
 
-    Use :func:`switch_source` to swap which thing is active without
-    re-shipping payloads.
-
     Args:
-        thing_dirs: ``things/<name>/`` directories to ship.  Names
-            (basename of each path) must be unique within the call.
+        thing_dirs: ``things/<...>/<name>/`` directories to ship.
         workspace: Resolved :class:`WorkspaceLayout`.
+        thing_names: Bare / slash / dotted names matching *thing_dirs*
+            position-by-position.  Required for nested layouts where
+            the directory basename alone loses the namespace prefix.
+            Defaults to ``[thing_dir.name for thing_dir in thing_dirs]``
+            for flat layouts.
         active_thing_name: Which thing ``/active.py`` names.  Defaults
-            to the first ``thing_dirs`` entry's basename.
+            to the first *thing_names* entry.
         entrypoint_filename: ``"code.py"`` for CP, ``"main.py"`` for MP.
         workspace_yaml: Override the workspace's ``workspace.yml`` path.
         secrets_yaml: Override the workspace's ``secrets.yml`` path.
@@ -467,24 +547,37 @@ def multi_thing_boot_source(
 
     Raises:
         ValueError: When *thing_dirs* is empty, contains duplicate
-            basenames, or *active_thing_name* doesn't match one of the
-            entries.
+            names, *thing_names* doesn't match *thing_dirs* in length,
+            or *active_thing_name* doesn't match one of the entries.
         FileNotFoundError: When any of the listed thing directories has
             no recognized config file.
     """
     if not thing_dirs:
         raise ValueError("multi_thing_boot_source requires at least one thing")
-    thing_names = [thing_dir.name for thing_dir in thing_dirs]
-    if len(set(thing_names)) != len(thing_names):
-        duplicates = sorted({name for name in thing_names if thing_names.count(name) > 1})
+    if thing_names is None:
+        resolved_names = [thing_dir.name for thing_dir in thing_dirs]
+    else:
+        if len(thing_names) != len(thing_dirs):
+            raise ValueError(
+                "multi_thing_boot_source: thing_names length "
+                f"({len(thing_names)}) does not match thing_dirs "
+                f"length ({len(thing_dirs)})",
+            )
+        resolved_names = list(thing_names)
+    if len(set(resolved_names)) != len(resolved_names):
+        duplicates = sorted(
+            {name for name in resolved_names if resolved_names.count(name) > 1},
+        )
         raise ValueError(
             f"multi_thing_boot_source: duplicate thing names {duplicates}",
         )
-    resolved_active = active_thing_name if active_thing_name is not None else thing_names[0]
-    if resolved_active not in thing_names:
+    resolved_active = (
+        active_thing_name if active_thing_name is not None else resolved_names[0]
+    )
+    if resolved_active not in resolved_names:
         raise ValueError(
             f"active_thing_name={resolved_active!r} not in thing_dirs "
-            f"({thing_names})",
+            f"({resolved_names})",
         )
     # Surface a missing-config error eagerly rather than waiting for the
     # first files() call so the CLI can report it before transport setup.
@@ -492,6 +585,7 @@ def multi_thing_boot_source(
         find_thing_config(thing_dir)
     return _MultiThingBootSource(
         thing_dirs=thing_dirs,
+        thing_names=resolved_names,
         active_thing_name=resolved_active,
         entrypoint_filename=entrypoint_filename,
         workspace_yaml=workspace_yaml if workspace_yaml is not None else workspace.workspace_yaml,
@@ -519,12 +613,15 @@ def build_switch_files(
     the new ``/active.py`` naming the new thing, and the new
     ``/runtime_config.msgpack`` carrying the new thing's merged config.
 
-    The thing payloads under ``/lib/things/<name>/`` are NOT touched —
-    they stay on flash from the prior :func:`multi_thing_boot_source`
-    deploy, which is what makes switch fast.
+    The thing payloads under ``/lib/things/<...>/<name>/`` are NOT
+    touched — they stay on flash from the prior
+    :func:`multi_thing_boot_source` deploy, which is what makes switch
+    fast.
 
     Args:
-        thing_name: Name of the thing to make active.
+        thing_name: Name of the thing to make active (bare, slash, or
+            dotted form).  Normalised to dotted before being written
+            into ``/active.py``.
         runtime_config_msgpack: Pre-built msgpack bytes for that thing's
             merged config.  Caller produces this via
             :func:`build_runtime_config` (or reads it from a
@@ -556,13 +653,14 @@ def switch_source(
     device boots into the new thing on the next reset.
 
     Args:
-        thing_dir: ``things/<name>/`` directory of the thing to switch
-            to.  Must already have been included in a prior
+        thing_dir: ``things/<...>/<name>/`` directory of the thing to
+            switch to.  Must already have been included in a prior
             :func:`multi_thing_boot_source` deploy or this switch will
             boot a thing whose payload isn't on the device.
         workspace: Resolved :class:`WorkspaceLayout`.
         thing_name: Override the directory's basename as the active
-            thing name (rare — usually ``thing_dir.name`` is correct).
+            thing name.  Required for nested layouts; otherwise
+            defaults to ``thing_dir.name``.
         entrypoint_filename: ``"code.py"`` for CP, ``"main.py"`` for MP.
         workspace_yaml: Override the workspace's ``workspace.yml`` path.
         secrets_yaml: Override the workspace's ``secrets.yml`` path.

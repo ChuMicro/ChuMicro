@@ -42,6 +42,9 @@ def _seed_thing(workspace_root: Path, name: str = "back-porch") -> Path:
     (MicroPython convention) so the deploy command's runtime-derived
     entrypoint resolves cleanly regardless of the test fixture's chosen
     transport.
+
+    *name* may be slash-form (``"upstairs/bedroom_sensor"``) — the
+    intermediate parent directories are created automatically.
     """
     thing_dir = workspace_root / "things" / name
     thing_dir.mkdir(parents=True)
@@ -810,6 +813,127 @@ class TestDeployMultiThing:
         ])
         assert exit_code == 2
         assert "ghost" in capsys.readouterr().err
+
+
+class TestDeployNested:
+    """Slice 2 — slash/dotted positionals + bare-name disambiguation."""
+
+    def test_default_with_single_nested_thing(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """No-arg deploy on a workspace with one nested thing picks it."""
+        root = _seed_workspace(tmp_path)
+        _seed_thing(root, name="upstairs/bedroom_sensor")
+
+        transport = FakeTransport(execute_output="")
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+
+        exit_code = cli.main(["deploy", "--workspace-dir", str(root)])
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "defaulting to upstairs/bedroom_sensor" in captured.out
+
+    def test_explicit_slash_path_deploys(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        _seed_thing(root, name="garage/sensors/door_open")
+        _seed_thing(root, name="thermostat")
+
+        transport = FakeTransport(execute_output="")
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root),
+            "garage/sensors/door_open",
+        ])
+        assert exit_code == 0
+
+    def test_dotted_form_deploys(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        _seed_thing(root, name="garage/sensors/door_open")
+        _seed_thing(root, name="thermostat")
+
+        transport = FakeTransport(execute_output="")
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root),
+            "garage.sensors.door_open",
+        ])
+        assert exit_code == 0
+
+    def test_bare_name_unique_match_resolves(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A bare thing-name unique in the tree resolves to its full path."""
+        root = _seed_workspace(tmp_path)
+        _seed_thing(root, name="garage/sensors/door_open")
+        _seed_thing(root, name="thermostat")
+
+        transport = FakeTransport(execute_output="")
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root), "door_open",
+        ])
+        assert exit_code == 0
+
+    def test_bare_name_ambiguous_lists_candidates(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        """Multiple matches → SystemExit with every candidate path."""
+        root = _seed_workspace(tmp_path)
+        _seed_thing(root, name="upstairs/sensor")
+        _seed_thing(root, name="garage/sensor")
+
+        with pytest.raises(SystemExit) as caught:
+            cli.main(["deploy", "--workspace-dir", str(root), "sensor"])
+        message = str(caught.value)
+        assert "ambiguous" in message
+        assert "upstairs/sensor" in message
+        assert "garage/sensor" in message
+
+    def test_boot_shim_deploys_files_under_nested_path(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        thing_dir = _seed_thing(root, name="garage/sensors/door_open")
+        # _seed_thing writes code.py + main.py + config.toml; for boot-shim
+        # the runner imports app.py via workspace_runtime, so add it.
+        (thing_dir / "app.py").write_text("def run(): print('door_open')\n")
+
+        transport = FakeTransport(execute_output="")
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root), "--boot-shim",
+            "garage/sensors/door_open",
+        ])
+        assert exit_code == 0
+        deploy_calls = [
+            call for call in transport.calls if call[0] == "deploy_files"
+        ]
+        files, _entrypoint = deploy_calls[0][1]
+        assert "/lib/things/garage/sensors/door_open/app.py" in files
+        assert "/lib/things/garage/__init__.py" in files
+        assert "/lib/things/garage/sensors/__init__.py" in files
+        assert "/lib/things/garage/sensors/door_open/__init__.py" in files
+        assert b'"garage.sensors.door_open"' in files["/active.py"]
 
 
 class TestSwitch:

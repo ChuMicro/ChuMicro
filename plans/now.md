@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **Workspace ecosystem completion — Phase 1 in flight.**  Phase 1 (`plans/workstreams/nested-things-and-examples.md`) Slice 1 just shipped: recursive thing classifier (`ThingClassification` + `_walk_classified`), `WorkspaceLayout.list_things` returns slash-form paths, new `iter_things_with_classification` helper, `_validate_thing_name` per-segment for slash/dotted paths.  Slice 2 next: deploy + boot-shim handle nesting (dotted `THING_NAME`, namespace `__init__.py` emission per level).
-- **Last shipped:** Slice 1 — recursive thing classifier on `WorkspaceLayout` + per-segment `_validate_thing_name`.
-- **In flight:** Phase 1 Slice 2 — deploy + boot-shim nesting.
+- **Phase:** **Workspace ecosystem completion — Phase 1 in flight.**  Phase 1 (`plans/workstreams/nested-things-and-examples.md`) Slices 1-2 shipped.  Slice 2: dotted `THING_NAME` in `/active.py`, per-namespace `__init__.py` emission across `boot_shim_files` + `multi_thing_boot_files`, `_walk_thing_files` lays files at the nested device prefix.  `_cmd_deploy` resolves bare names with disambiguation, accepts slash/dotted positionals, plumbs explicit `thing_name=` into the boot-shim source.  Slice 3 next: `_cmd_new` accepts paths + `--from <example-path>` flag.
+- **Last shipped:** Slice 2 — deploy + boot-shim handle nested thing names.
+- **In flight:** Phase 1 Slice 3 — `new` accepts paths + `--from`.
 - **Blocked on:** —
-- **Last touched:** `workbench/workspace/src/chumicro_workspace/workspace.py`, `workbench/workspace/src/chumicro_workspace/cli.py`, `workbench/workspace/tests/test_workspace.py`, `workbench/workspace/tests/test_cli.py`, `plans/now.md`.
+- **Last touched:** `workbench/workspace/src/chumicro_workspace/{boot_shim,cli,workspace}.py`, `workbench/workspace/tests/{test_boot_shim,test_cli,test_workspace}.py`, `plans/now.md`.
 
 ---
 
@@ -38,8 +38,8 @@ This is the front door. Everything else is deeper read.
 | Slice | Status |
 |---|---|
 | 1 — Recursive thing detection | **shipped** |
-| 2 — Deploy + boot-shim nesting | next up |
-| 3 — `new` accepts paths + `--from` | pending |
+| 2 — Deploy + boot-shim nesting | **shipped** |
+| 3 — `new` accepts paths + `--from` | next up |
 | 4 — `things` tree renderer + path-aware `rename` | pending |
 | 5 — `examples/` folder shipped | pending |
 | 6 — Tests, docs, polish | pending |
