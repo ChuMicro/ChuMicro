@@ -98,6 +98,8 @@ only on `chumicro-sockets`, `chumicro-timing`, and `chumicro-requests`
 | Example | What it shows |
 |---|---|
 | `quickstart.py` | One-shot HTTP request/response over an in-memory `FakeSocket` — runs on any host without a network. |
+| `circuitpython_two_thing_server.py` | Display half of a two-thing demo: HTTP server with `GET /`, `GET /api/latest`, `POST /api/sensor` routes; in-memory latest-reading state.  Runs on CP / MP boards (filename prefix marks it hardware-only). |
+| `circuitpython_two_thing_sensor.py` | Sensor half of the two-thing demo: posts a synthetic reading to the server every 5 s using `chumicro-requests`. |
 
 ## Developing this library
 
