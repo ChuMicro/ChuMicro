@@ -102,8 +102,9 @@ print(response.json())            # parsed JSON when Content-Type is application
 
 v1 scope (Decision 0040): plain HTTP GET (3a), body decode + `.text` /
 `.json()` / charset sniff (3b), HTTPS via TLS (3c, live-verified on
-Pi Pico W), POST + PUT + PATCH + DELETE + JSON helper (3d).
-Redirects (3e) and chunked transfer-encoding decode (3f) round out v1.
+Pi Pico W), POST + PUT + PATCH + DELETE + JSON helper (3d), 301 / 302
+/ 303 / 307 / 308 redirects with per-request budget (3e).  Chunked
+transfer-encoding decode (3f) closes out v1.
 
 ## Platform support
 

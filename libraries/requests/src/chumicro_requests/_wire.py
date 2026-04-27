@@ -90,6 +90,20 @@ DEFAULT_RECV_BUDGET_PER_TICK = const(1024)
 #: Default per-request timeout in ms — Decision 0040 §3.
 DEFAULT_TIMEOUT_MS = const(10000)
 
+#: Default per-request redirect budget — Decision 0040 §3.
+DEFAULT_MAX_REDIRECTS = const(5)
+
+#: Status codes that the client follows when a ``Location`` header is
+#: present and the per-request redirect budget allows.  301/302/303
+#: switch the next request's method to ``GET`` (per RFC 7231 §6.4 +
+#: long-standing browser behaviour); 307/308 preserve the original
+#: method and body.
+REDIRECT_STATUS_CODES = frozenset({301, 302, 303, 307, 308})
+
+#: Subset of :data:`REDIRECT_STATUS_CODES` that preserve the original
+#: HTTP method on the next hop (RFC 7231 §6.4.7 + §6.4.8 + RFC 7538).
+METHOD_PRESERVING_REDIRECT_STATUS_CODES = frozenset({307, 308})
+
 #: HTTP/1.1 line terminator.
 CRLF = b"\r\n"
 
@@ -213,6 +227,63 @@ def parse_url(url: str) -> tuple[str, str, int, str]:
                 f"url port {port} out of range 1-65535: {url!r}",
             )
     return scheme, host, port, path
+
+
+# ---------------------------------------------------------------------------
+# Redirect URL resolution
+# ---------------------------------------------------------------------------
+
+
+def resolve_redirect_url(current_url: str, location: str) -> str:
+    """Resolve a ``Location`` header value against the current request URL.
+
+    Handles the three RFC 7231 §7.1.2 reference shapes:
+
+    * **Absolute** — ``http://...`` / ``https://...``: returned verbatim.
+    * **Absolute-path** — starts with ``/``: keeps current scheme + host
+      + port, replaces path + query.
+    * **Relative-path** — anything else: keeps current scheme + host +
+      port, replaces the last path segment.
+
+    Args:
+        current_url: The URL of the request being redirected.
+        location: The raw ``Location`` header value from the response.
+
+    Returns:
+        Absolute URL the redirected request should target.
+
+    Raises:
+        HttpURLError: *current_url* doesn't parse, or *location* is empty.
+    """
+    if not location:
+        raise HttpURLError("redirect Location header is empty")
+    if location.startswith("http://") or location.startswith("https://"):
+        return location
+    # Reject other absolute-URL schemes (`ftp://...`, `mailto:...`,
+    # etc.) before they get misclassified as relative paths.  An
+    # absolute URL has a scheme delimiter (``:``) before the first
+    # path slash; relative paths never do.
+    first_slash = location.find("/")
+    scheme_zone = location if first_slash == -1 else location[:first_slash]
+    if ":" in scheme_zone:
+        raise HttpURLError(
+            f"redirect Location has unsupported scheme: {location!r}",
+        )
+    scheme, host, port, current_path = parse_url(current_url)
+    default_port = 443 if scheme == "https" else 80
+    host_part = host if port == default_port else f"{host}:{port}"
+    if location.startswith("/"):
+        return f"{scheme}://{host_part}{location}"
+    # Relative path — strip query from current path, then drop the
+    # last segment, then join with the relative location.
+    query_index = current_path.find("?")
+    base_path = current_path[:query_index] if query_index != -1 else current_path
+    last_slash = base_path.rfind("/")
+    if last_slash == -1:
+        base_path = "/"
+    else:
+        base_path = base_path[:last_slash + 1]
+    return f"{scheme}://{host_part}{base_path}{location}"
 
 
 # ---------------------------------------------------------------------------

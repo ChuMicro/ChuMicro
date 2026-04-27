@@ -29,6 +29,7 @@ from chumicro_requests import (
     encode_request,
     parse_charset,
     parse_url,
+    resolve_redirect_url,
 )
 from chumicro_sockets.testing import FakeSocket
 from chumicro_timing.testing import FakeTicks
@@ -63,6 +64,16 @@ def canned_response(*, status=200, reason="OK", body=b"", extra_headers=()):
     lines.append(b"\r\n")
     lines.append(body)
     return b"".join(lines)
+
+
+def canned_redirect(*, status=301, location="/", reason="Moved"):
+    """Build an HTTP/1.1 3xx redirect response byte-string."""
+    return (
+        f"HTTP/1.1 {status} {reason}\r\n"
+        f"Location: {location}\r\n"
+        "Content-Length: 0\r\n"
+        "\r\n"
+    ).encode("ascii")
 
 
 def drive_until_done(client, handle, ticks, *, max_ticks=200, advance_ms=1):
@@ -896,6 +907,62 @@ class TestHttpClientErrors:
 
 
 # ---------------------------------------------------------------------------
+# Redirect URL resolution
+# ---------------------------------------------------------------------------
+
+
+class TestResolveRedirectURL:
+    """``resolve_redirect_url`` covers all three RFC 7231 §7.1.2 shapes."""
+
+    def test_absolute_url_returned_verbatim(self):
+        result = resolve_redirect_url(
+            "http://example.com/start",
+            "https://other.com/dest",
+        )
+        assert result == "https://other.com/dest"
+
+    def test_absolute_path_keeps_scheme_host_port(self):
+        result = resolve_redirect_url(
+            "https://example.com:8443/api/v1",
+            "/api/v2",
+        )
+        assert result == "https://example.com:8443/api/v2"
+
+    def test_absolute_path_default_port_omitted(self):
+        result = resolve_redirect_url(
+            "http://example.com/start",
+            "/dest",
+        )
+        assert result == "http://example.com/dest"
+
+    def test_relative_path_replaces_last_segment(self):
+        result = resolve_redirect_url(
+            "http://example.com/api/v1/widgets",
+            "trinkets",
+        )
+        assert result == "http://example.com/api/v1/trinkets"
+
+    def test_relative_path_at_root(self):
+        result = resolve_redirect_url(
+            "http://example.com/",
+            "dest",
+        )
+        assert result == "http://example.com/dest"
+
+    def test_relative_path_strips_query(self):
+        """Query string on the original URL is dropped before joining."""
+        result = resolve_redirect_url(
+            "http://example.com/api/list?page=2",
+            "items",
+        )
+        assert result == "http://example.com/api/items"
+
+    def test_empty_location_raises(self):
+        with pytest.raises(HttpURLError, match="empty"):
+            resolve_redirect_url("http://example.com/", "")
+
+
+# ---------------------------------------------------------------------------
 # HttpClient POST / PUT / PATCH / DELETE — slice 3d
 # ---------------------------------------------------------------------------
 
@@ -1251,6 +1318,254 @@ class TestChumicroSocketsFactory:
         result = factory("example.test", 443, True)
         assert result == "tls-socket"
         assert calls == [("tls", "example.test", 443, "ctx", None)]
+
+
+# ---------------------------------------------------------------------------
+# HttpClient redirects — slice 3e
+# ---------------------------------------------------------------------------
+
+
+def _factory_for_socket_sequence(sockets):
+    """Return a connection_factory that hands out *sockets* FIFO."""
+    cursor = {"index": 0}
+
+    def factory(host, port, use_tls):  # noqa: ARG001
+        socket = sockets[cursor["index"]]
+        cursor["index"] += 1
+        return socket
+
+    return factory
+
+
+class TestHttpClientRedirects:
+    """3xx + Location handling with the per-request budget."""
+
+    def _make_redirect_chain(self, urls_and_destinations, *, final_body=b"final"):
+        """Build a list of FakeSockets that respond with redirects then a 200.
+
+        *urls_and_destinations* is a list of ``(status, location)`` tuples,
+        one per redirect hop.  The final socket returns 200 with *final_body*.
+        """
+        sockets = []
+        for status, location in urls_and_destinations:
+            socket = FakeSocket()
+            socket.enqueue_recv(canned_redirect(status=status, location=location))
+            sockets.append(socket)
+        terminal = FakeSocket()
+        terminal.enqueue_recv(canned_response(body=final_body))
+        sockets.append(terminal)
+        return sockets
+
+    def test_301_followed_to_absolute_url(self):
+        sockets = self._make_redirect_chain([
+            (301, "http://example.test/v2/widgets"),
+        ], final_body=b"widget-list")
+        ticks = FakeTicks()
+        client = HttpClient(
+            connection_factory=_factory_for_socket_sequence(sockets),
+            ticks_ms_func=ticks.ticks_ms,
+            ticks_add_func=ticks.ticks_add,
+            ticks_diff_func=ticks.ticks_diff,
+        )
+        handle = client.get("http://example.test/v1/widgets")
+        drive_until_done(client, handle, ticks)
+        response = handle.result
+        assert response.status_code == 200
+        assert response.body == b"widget-list"
+        # Final URL reflects the destination, not the original.
+        assert response.url == "http://example.test/v2/widgets"
+
+    def test_302_absolute_path_redirect(self):
+        sockets = self._make_redirect_chain([(302, "/relocated")])
+        ticks = FakeTicks()
+        client = HttpClient(
+            connection_factory=_factory_for_socket_sequence(sockets),
+            ticks_ms_func=ticks.ticks_ms,
+            ticks_add_func=ticks.ticks_add,
+            ticks_diff_func=ticks.ticks_diff,
+        )
+        handle = client.get("http://example.test/orig")
+        drive_until_done(client, handle, ticks)
+        response = handle.result
+        assert response.status_code == 200
+        # Second request hits /relocated on the same host.
+        assert b"GET /relocated HTTP/1.1\r\n" in sockets[1].sent
+
+    def test_303_post_becomes_get(self):
+        """RFC 7231 §6.4.4: 303 always switches the next hop to GET."""
+        sockets = self._make_redirect_chain([(303, "/result")])
+        ticks = FakeTicks()
+        client = HttpClient(
+            connection_factory=_factory_for_socket_sequence(sockets),
+            ticks_ms_func=ticks.ticks_ms,
+            ticks_add_func=ticks.ticks_add,
+            ticks_diff_func=ticks.ticks_diff,
+        )
+        handle = client.post("http://example.test/submit", body=b"payload")
+        drive_until_done(client, handle, ticks)
+        # First hop is POST with body; second hop must be GET, no body.
+        assert sockets[0].sent.startswith(b"POST /submit HTTP/1.1\r\n")
+        assert b"\r\n\r\npayload" in sockets[0].sent
+        assert sockets[1].sent.startswith(b"GET /result HTTP/1.1\r\n")
+        assert sockets[1].sent.endswith(b"\r\n\r\n")
+        assert b"Content-Length:" not in sockets[1].sent
+
+    def test_307_preserves_method_and_body(self):
+        """RFC 7231 §6.4.7: 307 must replay the original method + body."""
+        sockets = self._make_redirect_chain([(307, "/replay")])
+        ticks = FakeTicks()
+        client = HttpClient(
+            connection_factory=_factory_for_socket_sequence(sockets),
+            ticks_ms_func=ticks.ticks_ms,
+            ticks_add_func=ticks.ticks_add,
+            ticks_diff_func=ticks.ticks_diff,
+        )
+        handle = client.post("http://example.test/orig", body=b"replay-me")
+        drive_until_done(client, handle, ticks)
+        # Both hops are POST with the same body.
+        assert sockets[0].sent.startswith(b"POST /orig HTTP/1.1\r\n")
+        assert sockets[0].sent.endswith(b"\r\n\r\nreplay-me")
+        assert sockets[1].sent.startswith(b"POST /replay HTTP/1.1\r\n")
+        assert sockets[1].sent.endswith(b"\r\n\r\nreplay-me")
+
+    def test_308_preserves_method_and_json_body(self):
+        sockets = self._make_redirect_chain([(308, "/permanent")])
+        ticks = FakeTicks()
+        client = HttpClient(
+            connection_factory=_factory_for_socket_sequence(sockets),
+            ticks_ms_func=ticks.ticks_ms,
+            ticks_add_func=ticks.ticks_add,
+            ticks_diff_func=ticks.ticks_diff,
+        )
+        handle = client.post(
+            "http://example.test/orig", json={"key": "value"},
+        )
+        drive_until_done(client, handle, ticks)
+        # Both hops POST with the same JSON body + content-type default.
+        assert sockets[0].sent.startswith(b"POST /orig HTTP/1.1\r\n")
+        assert b"Content-Type: application/json\r\n" in sockets[0].sent
+        assert sockets[1].sent.startswith(b"POST /permanent HTTP/1.1\r\n")
+        assert b"Content-Type: application/json\r\n" in sockets[1].sent
+
+    def test_max_redirects_zero_returns_3xx_as_is(self):
+        socket = FakeSocket()
+        socket.enqueue_recv(canned_redirect(status=301, location="/elsewhere"))
+        client, ticks, _ = make_client(socket_or_factory=socket)
+        handle = client.get("http://example.test/orig", max_redirects=0)
+        drive_until_done(client, handle, ticks)
+        response = handle.result
+        assert response.status_code == 301
+        assert response.headers["location"] == "/elsewhere"
+        assert response.url == "http://example.test/orig"
+
+    def test_redirect_chain_within_budget(self):
+        """5 hops with default budget 5 — exactly at the limit."""
+        sockets = self._make_redirect_chain([
+            (302, "/hop2"), (302, "/hop3"),
+            (302, "/hop4"), (302, "/hop5"),
+            (302, "/final"),
+        ], final_body=b"reached")
+        ticks = FakeTicks()
+        client = HttpClient(
+            connection_factory=_factory_for_socket_sequence(sockets),
+            ticks_ms_func=ticks.ticks_ms,
+            ticks_add_func=ticks.ticks_add,
+            ticks_diff_func=ticks.ticks_diff,
+        )
+        handle = client.get("http://example.test/orig")  # default budget = 5
+        drive_until_done(client, handle, ticks, max_ticks=400)
+        response = handle.result
+        assert response.body == b"reached"
+
+    def test_redirect_chain_exceeds_budget(self):
+        """6 hops with budget 5 — final 302 returned as-is when budget hits 0."""
+        sockets = self._make_redirect_chain([
+            (302, "/hop2"), (302, "/hop3"),
+            (302, "/hop4"), (302, "/hop5"),
+            (302, "/hop6"), (302, "/final"),
+        ])
+        ticks = FakeTicks()
+        client = HttpClient(
+            connection_factory=_factory_for_socket_sequence(sockets),
+            ticks_ms_func=ticks.ticks_ms,
+            ticks_add_func=ticks.ticks_add,
+            ticks_diff_func=ticks.ticks_diff,
+        )
+        handle = client.get("http://example.test/orig", max_redirects=5)
+        drive_until_done(client, handle, ticks, max_ticks=400)
+        # After 5 hops the budget is exhausted; the 6th 302 is returned
+        # to the caller as-is rather than followed.
+        response = handle.result
+        assert response.status_code == 302
+        assert response.headers["location"] == "/final"
+
+    def test_3xx_without_location_returned_as_is(self):
+        """Treats a 3xx with no Location as a terminal response."""
+        socket = FakeSocket()
+        socket.enqueue_recv(
+            b"HTTP/1.1 301 Moved\r\nContent-Length: 0\r\n\r\n",
+        )
+        client, ticks, _ = make_client(socket_or_factory=socket)
+        handle = client.get("http://example.test/orig")
+        drive_until_done(client, handle, ticks)
+        response = handle.result
+        assert response.status_code == 301
+
+    def test_redirect_with_invalid_location_fails(self):
+        socket = FakeSocket()
+        socket.enqueue_recv(canned_redirect(
+            status=301, location="ftp://wrong-scheme/dest",
+        ))
+        client, ticks, _ = make_client(socket_or_factory=socket)
+        handle = client.get("http://example.test/orig")
+        drive_until_done(client, handle, ticks)
+        assert isinstance(handle.error, HttpURLError)
+
+    def test_per_request_max_redirects_overrides_default(self):
+        sockets = self._make_redirect_chain([
+            (302, "/hop2"), (302, "/hop3"),
+        ], final_body=b"got-here")
+        ticks = FakeTicks()
+        client = HttpClient(
+            connection_factory=_factory_for_socket_sequence(sockets),
+            ticks_ms_func=ticks.ticks_ms,
+            ticks_add_func=ticks.ticks_add,
+            ticks_diff_func=ticks.ticks_diff,
+            default_max_redirects=1,  # default would block the chain
+        )
+        handle = client.get(
+            "http://example.test/orig", max_redirects=10,  # caller raises ceiling
+        )
+        drive_until_done(client, handle, ticks, max_ticks=200)
+        assert handle.result.body == b"got-here"
+
+    def test_redirect_factory_failure_propagates(self):
+        """If the connection_factory raises during a redirect hop the
+        request fails cleanly with the wrapped error."""
+        sockets = [FakeSocket()]
+        sockets[0].enqueue_recv(canned_redirect(
+            status=301, location="/dest",
+        ))
+        cursor = {"index": 0}
+
+        def factory(host, port, use_tls):  # noqa: ARG001
+            if cursor["index"] >= len(sockets):
+                raise OSError(99, "factory boom on redirect")
+            socket = sockets[cursor["index"]]
+            cursor["index"] += 1
+            return socket
+
+        ticks = FakeTicks()
+        client = HttpClient(
+            connection_factory=factory,
+            ticks_ms_func=ticks.ticks_ms,
+            ticks_add_func=ticks.ticks_add,
+            ticks_diff_func=ticks.ticks_diff,
+        )
+        handle = client.get("http://example.test/orig")
+        drive_until_done(client, handle, ticks)
+        assert isinstance(handle.error, HttpError)
+        assert "factory failed" in str(handle.error)
 
 
 # ---------------------------------------------------------------------------

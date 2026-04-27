@@ -29,8 +29,11 @@ from chumicro_timing import ticks_add, ticks_diff, ticks_ms
 
 from chumicro_requests._wire import (
     DEFAULT_MAX_BODY_BYTES,
+    DEFAULT_MAX_REDIRECTS,
     DEFAULT_RECV_BUDGET_PER_TICK,
     DEFAULT_TIMEOUT_MS,
+    METHOD_PRESERVING_REDIRECT_STATUS_CODES,
+    REDIRECT_STATUS_CODES,
     CaseInsensitiveDict,
     HttpBusyError,
     HttpError,
@@ -41,6 +44,7 @@ from chumicro_requests._wire import (
     encode_request,
     parse_charset,
     parse_url,
+    resolve_redirect_url,
 )
 
 # ---------------------------------------------------------------------------
@@ -75,6 +79,27 @@ class WhenOversized:
 def _no_callback(*_args, **_kwargs):
     """Default no-op callback so handlers can be stored unconditionally."""
     return None
+
+
+def _encode_body(body, json_body):
+    """Convert *body* / *json_body* into ``bytes`` (or ``None``).
+
+    Mirrors `HttpClient._start_request`'s contract: at most one of
+    *body* / *json_body* is non-None (caller already validated).
+    Pulled out so the redirect-replay path can re-encode without
+    repeating the type-check ladder.
+    """
+    if json_body is not None:
+        return json.dumps(json_body).encode("utf-8")
+    if body is None:
+        return None
+    if isinstance(body, str):
+        return body.encode("utf-8")
+    if isinstance(body, (bytes, bytearray)):
+        return bytes(body)
+    raise TypeError(
+        f"body must be bytes / bytearray / str, got {type(body).__name__}",
+    )
 
 
 def _merge_default_header(user_headers, name, value):
@@ -337,6 +362,7 @@ class HttpClient:
         max_body_bytes: int = DEFAULT_MAX_BODY_BYTES,
         when_oversized: str = WhenOversized.DROP_WITH_EVENT,
         default_timeout_ms: int = DEFAULT_TIMEOUT_MS,
+        default_max_redirects: int = DEFAULT_MAX_REDIRECTS,
         user_agent: str | None = None,
         ticks_ms_func: object = ticks_ms,
         ticks_add_func: object = ticks_add,
@@ -362,6 +388,11 @@ class HttpClient:
             default_timeout_ms: Default per-request timeout in ms.
                 Overridable per-call via ``timeout_ms=...``.  Default
                 10 000 ms.
+            default_max_redirects: Default cap on 3xx hops the client
+                follows before failing with :class:`HttpError`.
+                Overridable per-call via ``max_redirects=...``.
+                ``0`` returns the 3xx response as-is without
+                following.  Default 5.
             user_agent: Override the default ``User-Agent`` header.
             ticks_ms_func: Inject a fake ``ticks_ms`` for testing;
                 defaults to :func:`chumicro_timing.ticks_ms`.
@@ -381,14 +412,25 @@ class HttpClient:
         self._ticks_add = ticks_add_func
         self._ticks_diff = ticks_diff_func
 
+        self._default_max_redirects = default_max_redirects
+
         self._state = _RequestState.IDLE
         self._socket = None
         self._handle = None  # current RequestHandle
         self._url = None
+        self._original_url = None  # URL the user called get/post with
         self._tx_buffer = b""  # request bytes pending send
         self._tx_offset = 0
         self._parser = None
         self._deadline_ticks = None
+        # Per-request redirect bookkeeping — captured at _start_request
+        # so each follow-redirect hop sees the same budget + the
+        # original method/body for 307/308 replay.
+        self._redirects_remaining = 0
+        self._original_method = None
+        self._original_headers = None
+        self._original_body = None
+        self._original_json_body = None
 
         # Optional event hooks.
         self.on_oversized = _no_callback
@@ -412,6 +454,7 @@ class HttpClient:
         *,
         headers: object | None = None,
         timeout_ms: int | None = None,
+        max_redirects: int | None = None,
     ) -> "RequestHandle":
         """Issue a GET request; return a :class:`RequestHandle`.
 
@@ -426,12 +469,18 @@ class HttpClient:
                 ``Accept-Encoding``, ``Connection``).
             timeout_ms: Per-request timeout override.  Falls back to
                 the client's ``default_timeout_ms``.
+            max_redirects: Per-request redirect budget override.
+                ``0`` returns the 3xx response as-is; ``None`` falls
+                back to the client's ``default_max_redirects``.
 
         Raises:
             HttpBusyError: A request is already in flight.
             HttpURLError: *url* didn't parse as a valid HTTP URL.
         """
-        return self._start_request("GET", url, headers=headers, timeout_ms=timeout_ms)
+        return self._start_request(
+            "GET", url, headers=headers, timeout_ms=timeout_ms,
+            max_redirects=max_redirects,
+        )
 
     def post(
         self,
@@ -441,6 +490,7 @@ class HttpClient:
         json: object | None = None,
         headers: object | None = None,
         timeout_ms: int | None = None,
+        max_redirects: int | None = None,
     ) -> "RequestHandle":
         """Issue a POST request; return a :class:`RequestHandle`.
 
@@ -468,6 +518,7 @@ class HttpClient:
             "POST", url,
             body=body, json_body=json,
             headers=headers, timeout_ms=timeout_ms,
+            max_redirects=max_redirects,
         )
 
     def put(
@@ -478,12 +529,14 @@ class HttpClient:
         json: object | None = None,
         headers: object | None = None,
         timeout_ms: int | None = None,
+        max_redirects: int | None = None,
     ) -> "RequestHandle":
         """Issue a PUT request.  Same body / json semantics as :meth:`post`."""
         return self._start_request(
             "PUT", url,
             body=body, json_body=json,
             headers=headers, timeout_ms=timeout_ms,
+            max_redirects=max_redirects,
         )
 
     def patch(
@@ -494,12 +547,14 @@ class HttpClient:
         json: object | None = None,
         headers: object | None = None,
         timeout_ms: int | None = None,
+        max_redirects: int | None = None,
     ) -> "RequestHandle":
         """Issue a PATCH request.  Same body / json semantics as :meth:`post`."""
         return self._start_request(
             "PATCH", url,
             body=body, json_body=json,
             headers=headers, timeout_ms=timeout_ms,
+            max_redirects=max_redirects,
         )
 
     def delete(
@@ -508,10 +563,12 @@ class HttpClient:
         *,
         headers: object | None = None,
         timeout_ms: int | None = None,
+        max_redirects: int | None = None,
     ) -> "RequestHandle":
         """Issue a DELETE request.  No body — the verb is intransitive in v1."""
         return self._start_request(
             "DELETE", url, headers=headers, timeout_ms=timeout_ms,
+            max_redirects=max_redirects,
         )
 
     # ------------------------------------------------------------------
@@ -560,7 +617,7 @@ class HttpClient:
 
     def _start_request(
         self, method, url, *, headers, timeout_ms,
-        body=None, json_body=None,
+        body=None, json_body=None, max_redirects=None,
     ):
         """Common path for GET / POST / PUT / PATCH / DELETE."""
         if self._state != _RequestState.IDLE:
@@ -571,28 +628,41 @@ class HttpClient:
             raise ValueError(
                 "pass body= or json= but not both",
             )
-        merged_headers = headers
-        encoded_body: bytes | None = None
-        if json_body is not None:
-            encoded_body = json.dumps(json_body).encode("utf-8")
-            # Auto-add Content-Type unless the caller already set one.
-            merged_headers = _merge_default_header(
-                headers, "Content-Type", "application/json",
-            )
-        elif body is not None:
-            if isinstance(body, str):
-                encoded_body = body.encode("utf-8")
-            elif isinstance(body, (bytes, bytearray)):
-                encoded_body = bytes(body)
-            else:
-                raise TypeError(
-                    f"body must be bytes / bytearray / str, got {type(body).__name__}",
-                )
+        encoded_body = _encode_body(body, json_body)
+        # Capture the user's request shape for 307/308 redirect replay
+        # — we need method + body + headers + the json-default-content-
+        # type flag to rebuild the on-the-wire bytes for the next hop.
+        self._original_url = url
+        self._original_method = method
+        self._original_headers = headers
+        self._original_body = encoded_body
+        self._original_json_body = json_body
+        self._redirects_remaining = (
+            max_redirects if max_redirects is not None else self._default_max_redirects
+        )
+        timeout = timeout_ms if timeout_ms is not None else self._default_timeout_ms
+        self._deadline_ticks = self._ticks_add(self._ticks_ms(), timeout)
+        self._handle = RequestHandle(url=url)
+        self._start_hop(url, method, encoded_body, headers, json_body is not None)
+        return self._handle
 
+    def _start_hop(
+        self, url, method, encoded_body, user_headers, json_default_content_type,
+    ):
+        """Open a socket and queue the request bytes for *url*.
+
+        Reused by both first-issue and redirect-follow paths.  The
+        per-request handle, deadline, and redirect budget are *not*
+        reset here — they belong to the request as a whole, not to
+        any one hop.
+        """
+        merged_headers = user_headers
+        if json_default_content_type:
+            merged_headers = _merge_default_header(
+                user_headers, "Content-Type", "application/json",
+            )
         scheme, host, port, path = parse_url(url)
         use_tls = scheme == "https"
-        # Build the Host header — include the port unless it's the
-        # scheme default (per RFC 7230 §5.4).
         default_port = 443 if use_tls else 80
         host_header = host if port == default_port else f"{host}:{port}"
         request_bytes = encode_request(
@@ -603,17 +673,13 @@ class HttpClient:
             body=encoded_body,
             user_agent=self._user_agent,
         )
-        timeout = timeout_ms if timeout_ms is not None else self._default_timeout_ms
         self._socket = self._connection_factory(host, port, use_tls)
         _force_non_blocking(self._socket)
-        self._handle = RequestHandle(url=url)
         self._url = url
         self._tx_buffer = request_bytes
         self._tx_offset = 0
         self._parser = ResponseParser(max_body_bytes=self._max_body_bytes)
-        self._deadline_ticks = self._ticks_add(self._ticks_ms(), timeout)
         self._state = _RequestState.SENDING
-        return self._handle
 
     def _drive_send(self):
         """Push queued request bytes onto the socket; transition on completion."""
@@ -665,7 +731,7 @@ class HttpClient:
             self._complete()
 
     def _complete(self):
-        """Build the :class:`Response`, attach to handle, reset to IDLE."""
+        """Build the :class:`Response`; either follow a redirect or attach to handle."""
         body = self._parser.body
         oversized_dropped = False
         # The DROP_SILENT / DROP_WITH_EVENT branches don't use
@@ -681,8 +747,63 @@ class HttpClient:
             url=self._url,
             oversized_dropped=oversized_dropped,
         )
+        if self._should_follow_redirect(response):
+            self._follow_redirect(response)
+            return
         self._handle._set_response(response)  # noqa: SLF001 — internal handoff
         self._reset_socket()
+
+    def _should_follow_redirect(self, response):
+        """Return True iff the response is a 3xx with a Location header
+        and the per-request redirect budget is non-zero."""
+        if self._redirects_remaining <= 0:
+            return False
+        if response.status_code not in REDIRECT_STATUS_CODES:
+            return False
+        return response.headers.get("Location") is not None
+
+    def _follow_redirect(self, response):
+        """Resolve the next URL, swap state, and re-issue the request.
+
+        For 301 / 302 / 303 the next hop is always GET with no body —
+        matches long-standing browser + RFC 7231 §6.4 guidance.  For
+        307 / 308 the original method + body are preserved.
+        """
+        try:
+            new_url = resolve_redirect_url(
+                self._url, response.headers["Location"],
+            )
+        except HttpError as redirect_error:
+            self._handle._set_error(redirect_error)  # noqa: SLF001
+            self._reset_socket()
+            return
+        if response.status_code in METHOD_PRESERVING_REDIRECT_STATUS_CODES:
+            next_method = self._original_method
+            next_body = self._original_body
+            next_json_default_content_type = self._original_json_body is not None
+        else:
+            # 301 / 302 / 303 — drop body, switch to GET.
+            next_method = "GET"
+            next_body = None
+            next_json_default_content_type = False
+        # Tear down the current socket but keep the handle + deadline +
+        # original-request capture in place — the request as a whole
+        # is still in flight.
+        self._close_socket_only()
+        self._redirects_remaining -= 1
+        try:
+            self._start_hop(
+                new_url, next_method, next_body,
+                self._original_headers, next_json_default_content_type,
+            )
+        except OSError as factory_error:
+            self._handle._set_error(  # noqa: SLF001
+                HttpError(f"socket factory failed during redirect: {factory_error}"),
+            )
+            self._reset_socket()
+        except HttpError as redirect_error:
+            self._handle._set_error(redirect_error)  # noqa: SLF001
+            self._reset_socket()
 
     def _fail(self, error):
         """Attach *error* to the in-flight handle, close the socket, reset."""
@@ -715,21 +836,33 @@ class HttpClient:
         self._handle._set_response(response)  # noqa: SLF001 — internal handoff
         self._reset_socket()
 
-    def _reset_socket(self):
-        """Close the socket best-effort and return to IDLE."""
+    def _close_socket_only(self):
+        """Close the socket but leave the handle + deadline + redirect
+        bookkeeping intact.  Used between redirect hops where the
+        request as a whole is still in flight."""
         if self._socket is not None:
             try:
                 self._socket.close()
             except OSError:  # pragma: no cover — defensive
                 pass
         self._socket = None
-        self._handle = None
-        self._url = None
         self._tx_buffer = b""
         self._tx_offset = 0
         self._parser = None
+        self._state = _RequestState.IDLE  # Brief — _start_hop flips back.
+
+    def _reset_socket(self):
+        """Close the socket best-effort and clear all per-request state."""
+        self._close_socket_only()
+        self._handle = None
+        self._url = None
+        self._original_url = None
+        self._original_method = None
+        self._original_headers = None
+        self._original_body = None
+        self._original_json_body = None
         self._deadline_ticks = None
-        self._state = _RequestState.IDLE
+        self._redirects_remaining = 0
 
 
 # ---------------------------------------------------------------------------

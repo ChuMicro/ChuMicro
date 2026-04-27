@@ -55,6 +55,37 @@ Caller-supplied `headers={"Content-Type": "..."}` always wins over the
 JSON-helper default. Pass exactly one of `body=` or `json=`; passing
 both raises `ValueError`.
 
+## Redirects
+
+`HttpClient` follows `301` / `302` / `303` / `307` / `308` redirects
+automatically up to a budget. Default cap is 5 (Decision 0040). Override
+per-call or per-client:
+
+```python
+# Per-call: don't follow at all (return the 3xx response as-is)
+handle = client.get(url, max_redirects=0)
+
+# Per-call: raise the cap
+handle = client.get(url, max_redirects=20)
+
+# Per-client default
+client = HttpClient(connection_factory=..., default_max_redirects=10)
+```
+
+Method handling follows long-standing browser + RFC 7231 §6.4 rules:
+
+- `301` / `302` / `303` switch the next hop to **GET with no body**
+- `307` / `308` **preserve** the original method and body
+
+`response.url` reflects the URL of the FINAL hop, not the original
+request. If the budget is exhausted before reaching a non-3xx response,
+the last 3xx is returned to the caller (matching CPython `requests`'
+default behaviour without the `raise_for_status()` step).
+
+The `Location` header may be absolute (`https://other.com/dest`),
+absolute-path (`/api/v2`), or path-relative (`trinkets`). All three
+shapes are resolved against the current URL.
+
 ## Body decoding
 
 `Response.body` is always raw `bytes`.  `Response.text` decodes those
