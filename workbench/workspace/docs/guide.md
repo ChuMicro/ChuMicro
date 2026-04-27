@@ -30,13 +30,28 @@ The two requirements are `workspace.yml` (`WorkspaceLayout` walks up from cwd to
 
 ## Day-zero: bring up a board
 
+The fastest path is the `bootstrap` wizard — pick a port, probe the runtime, register the device, and (optionally) deploy the built-in demo payload in one shot:
+
+```bash
+python run.py bootstrap --with-demo
+```
+
+For non-interactive runs (CI, scripted setup), pass `--port` and `--device-id` explicitly:
+
+```bash
+python run.py bootstrap --port /dev/cu.usbmodem1101 --device-id back-porch
+```
+
+The slower-but-explicit path is what `bootstrap` composes:
+
 ```bash
 # Plug a board in, see what serial ports the host exposes.
 python run.py discover
 
 # Probe the board over serial — fails with a structured diagnosis if
 # the board is in UF2 bootloader mode, the serial port is busy, or
-# the runtime doesn't respond.
+# the runtime doesn't respond.  Runtime auto-detected when --runtime
+# is omitted (probes both transports).
 python run.py add-device back-porch --address /dev/cu.usbmodem1101 --runtime micropython
 
 # `add-device` writes a three-zone entry under devices.yml's `devices:`
@@ -49,11 +64,48 @@ python run.py add-device back-porch --address /dev/cu.usbmodem1101 --runtime mic
 
 [`detect_board_state`](api.md) drives onboarding when the probe fails — the four states are `REPL_REACHABLE` (fine), `UF2_BOOTLOADER` (visible mount with `INFO_UF2.TXT`; suggests `install-firmware --method uf2`), `NO_PROBE_RESPONSE` (board on serial but no Python prompt; suggests an esptool reflash), and `SERIAL_UNREACHABLE` (port doesn't open; suggests checking the cable / driver).
 
+## Workspace health
+
+`status` is the one-screen "is anything obviously broken" check.  Run it before the first deploy to catch un-edited `secrets.yml` placeholders, missing `devices.yml`, or a malformed `workspace.yml`:
+
+```bash
+python run.py status
+# WORKSPACE       /Users/you/projects/my-house
+# WORKSPACE.YML   ✓ valid
+# DEVICES.YML     ✓ 2 devices registered
+# SECRETS.YML     ⚠ placeholder values: wifi_password
+#                   hint: edit secrets.yml — replace `replace-me` …
+# THINGS          ✓ 4 things: garage/sensors/door_open, …
+```
+
+`doctor` is the strict sibling — runs every status check plus a Python-version probe, an AST scan for `def run` in each thing's `app.py`, and a config-merge dry-run that catches `!secret` references with no matching key:
+
+```bash
+python run.py doctor
+# Adds rows for PYTHON, THING run() defs, SECRET refs.
+# Exit code is 1 only on ERROR-level findings; warnings stay 0 so
+# the command composes cleanly with shell-pipe checks.
+```
+
 ## Building a thing
 
 ```bash
-# Copy the template; edit things/back-porch/{config.toml,app.py}.
+# Copy things/_template/ into things/back-porch/.
 python run.py new back-porch
+
+# Nested layouts are first-class — intermediate namespace dirs are
+# auto-created with empty __init__.py markers so host-side imports
+# (`from things.garage.sensors.door_open.app import run`) work.
+python run.py new garage/sensors/door_open
+python run.py new garage.sensors.door_open      # dotted form, same effect
+
+# Scaffold from a worked example instead of the blank template.
+python run.py new garage/heater --from examples/wifi_only
+
+# Scaffold a chumicro-style library (full src/tests/docs/examples
+# tree).  Lands at <workspace>/libraries/<name>/ by default;
+# --into <dir> overrides.
+python run.py new gpio --library
 ```
 
 `config.toml` carries the per-thing knobs.  Use `!secret <name>` to reference values from `secrets.yml`:
@@ -137,9 +189,43 @@ Slash- or dotted-form thing names produce a parallel namespace tree under `/lib/
 
 `/active.py` carries the dotted form (`THING_NAME = "garage.sensors.door_open"`); `workspace_runtime.boot()` concatenates `"things." + THING_NAME + ".app"` and Python's import machinery walks the namespace inits to the leaf.
 
+### Inspect what would land — `--dry-run`
+
+```bash
+python run.py deploy garage/sensors/door_open --boot-shim --dry-run
+```
+
+Builds the source like a real deploy, but prints the file map (path / size / one-word category) instead of calling the transport.  Useful when:
+
+* The `!secret` merge produced something unexpected — the runtime config msgpack appears in the listing with its real size.
+* You're sanity-checking a nested layout — every per-level `__init__.py` shows up classified as `namespace`, so a missing one is obvious.
+* You want to read what deploy actually does — the output's stable shape doubles as documentation.
+
+Categories: `shim` (workspace-runtime infrastructure), `namespace` (empty `__init__.py` markers), `thing` (the thing's own files), `config` (the runtime-config msgpack), `library` (anything else under `/lib/` — typically import-graph-resolved deps), `file` (anything at the device root — typically flat-layout deploys).
+
 ### One thing per `deploy` call
 
 Multi-thing-on-one-device deploys (`deploy <a> <b> <c> --boot-shim`) and the matching `switch <name>` re-pointer were retired in Slice 7 of the nested-things-and-examples workstream — multi-thing-staging blew the flash budget on Decision 0015 minimum boards.  Pass one positional per `deploy` invocation; re-deploy when you want to change which thing is active.  See [`plans/next-up.md`'s "Replace multi-thing staging with scoped diff-deploy" entry](https://github.com/ChuMicro/ChuMicro/blob/main/plans/next-up.md) for the workstream that replaces it.
+
+### Multi-board deploys — `--all-devices`
+
+```bash
+python run.py deploy garage/door_open --all-devices
+```
+
+Loops over every entry in `devices.yml` and ships the thing to each in declaration order.  Per-device failures don't abort the loop; the exit code is 1 if any device's deploy failed, 0 otherwise.  Mutually exclusive with `--device` / `--runtime` (caught at runtime with a precise message).
+
+### Failure hints
+
+When the deploy traceback matches a known workspace-shaped pattern, an indented `--- hints ---` block prints below it pointing at the fix:
+
+* `NameError: name '<sym>' is not defined` → "did you forget to import…"
+* `ValueError ... !secret <name>` → "secrets.yml has no entry for `<name>`…"
+* `OSError ... runtime_config.msgpack` → "RAM-mode deploys don't persist the config msgpack — switch to flash mode."
+* `ImportError`/`ModuleNotFoundError ... chumicro_*` → "library not installed in this venv — run `python run.py setup`."
+* `KeyError: '<key>'` → "missing config key — check `things/<thing>/config.toml` or `workspace.yml`'s `[defaults]` block."
+
+Driven by [`detect_hints`](api.md) over the captured traceback + execute output.  Empty hints → no section header (so unmatched failures don't carry an empty heading).
 
 ### Programmatic deploy
 
@@ -162,6 +248,45 @@ source = thing_boot_source(
 result = Deployer(device).deploy(source)
 assert result.success
 ```
+
+## REPL
+
+```bash
+# Interactive REPL on the default device.
+python run.py repl
+
+# Tail-only — stream output for a window, then exit.  Useful for
+# CI / scripted "watch the next 30 seconds" checks.
+python run.py repl --tail 30
+
+# Deploy then tail in one command (Phase 2e).  Replaces the
+# `deploy <thing> && repl --tail` two-command idiom.  Default tail
+# window is 30s; --tail SECONDS overrides.
+python run.py repl garage/sensors/door_open
+python run.py repl garage/sensors/door_open --tail 60
+```
+
+The deploy half of `repl <thing>` uses [`thing_boot_source`](api.md) — for flat-layout deploys, run `deploy` and `repl --tail` separately.
+
+## Quality knobs
+
+`workspace.yml`'s `quality:` block carries four pass-through knobs the workspace CLI consults:
+
+```yaml
+quality:
+  lint:
+    enabled: true
+    select: ["E", "F", "I"]
+  coverage_threshold: 85
+  agent_strictness: relaxed   # or "strict"
+```
+
+* `lint.enabled = false` → `python run.py lint` becomes a no-op + hint (still discoverable; just doesn't run ruff).
+* `lint.select` → forwarded to ruff as `--select <comma list>` before any user `--` passthrough so user overrides win.
+* `coverage_threshold` → forwarded to pytest as `--cov-fail-under=<n>`.  Lets workspace.yml gate without editing pyproject.toml's `[tool.coverage.report]`.
+* `agent_strictness` — accepted today, AST-level enforcement (no naked `except:`, no global state in things) deferred to a later workstream.
+
+Loader: [`load_quality_config`](api.md).  Missing block → permissive defaults (lint enabled, no coverage gate, agent relaxed) — wiring is purely opt-in.  Shape violations raise `WorkspaceConfigError` with a precise field-named message.
 
 ## Config merge
 

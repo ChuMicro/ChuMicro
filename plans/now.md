@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **Workspace ecosystem completion — Phases 1, 2, 4, 5 closed.**  Phase 1 closed 2026-04-27 (commits `98fa8d0..c8a05fe` mono + `4523c89..5ce73d4` template); Phase 2 closed 2026-04-27 (six sub-items, commits `333d900..139b0ee`); Phase 4 closed 2026-04-27 (`7766ff6`).  **Phase 5** just shipped: new `chumicro_workspace.quality` module reads the `quality:` block from `workspace.yml`, returns a typed `QualityConfig` with `LintConfig` (`enabled`, `select`), `coverage_threshold`, and `agent_strictness` (`"relaxed"` | `"strict"` — accepted but not yet enforced).  `_cmd_lint` consults it: `lint.enabled = false` skips ruff with a hint; `lint.select` prepends `--select <list>` so user `--` passthrough still wins.  `_cmd_test` prepends `--cov-fail-under=<n>` when `coverage_threshold` is set.  Template repo's `workspace.yml` gains a commented-out example block.  Phase 3 (per-env deploys) deferred at user request.  Phase 6 (doc audit) and Phase 7 (richer REPL — parallel track) are the remaining items.
-- **Last shipped:** Phase 5 — `workspace.yml` quality knobs wired through.
+- **Phase:** **Workspace ecosystem completion — main thread closed.**  Phases 1, 2, 4, 5, 6 shipped end-to-end this session.  Phase 6 (just landed) is the cross-repo doc audit: mono-repo `workbench/workspace/{README.md,docs/guide.md}` refreshed (Status block updated, commands table extended with `init` / `update` / `bootstrap` / `status` / `doctor` / `deploy --dry-run` / `deploy --all-devices` / `repl <thing>` / `new --library`, public API block extended with health/recovery/scaffold/quality modules, new sections for health checks + dry-run + multi-board deploys + failure hints + REPL + quality knobs); template repo `AGENTS.md` + `CONTRIBUTING.md` got the same command-table additions, naming-rule update for nested paths, scaffolding-from-example workflow, sanity-check-ladder leading with `status`/`doctor`; `docs/contributing/new-library.md` notes the Phase 4 migration to the workbench scaffolder.  Phase 3 (per-env deploys) deferred at user request; Phase 7 (richer REPL — parallel track) is the only remaining piece of the umbrella.
+- **Last shipped:** Phase 6 — cross-repo doc audit.
 - **In flight:** —
 - **Blocked on:** —
-- **Last touched:** `workbench/workspace/src/chumicro_workspace/{cli,quality}.py`, `workbench/workspace/tests/{test_cli,test_quality}.py`, `ChuMicro-Workspace-Template/workspace.yml`, `plans/now.md`.
+- **Last touched:** `workbench/workspace/{README.md,docs/guide.md}`, `docs/contributing/new-library.md`, `ChuMicro-Workspace-Template/{AGENTS.md,CONTRIBUTING.md}`, `plans/now.md`.
 
 ---
 

@@ -6,7 +6,7 @@ Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) workspace.  Workben
 
 ## Status
 
-Phase 4a feature-complete plus the Decision 0038 consolidation.  Seven Phase 4a slices closed end-to-end (config-merge core, deploy integration, CLI dispatch + 19+ commands, three-zone `devices.yml` writer, board-state onboarding, firmware URL derivation, import-graph resolver, boot-shim layout) plus the multi-thing-on-one-device follow-on.  The previously-separate `chumicro-workspace-template` package was retired in Decision 0038 (2026-04-26); its `init` / `update` / three-zone manifest now live in this package, and the canonical workspace template ships as a separate Git repo at [`ChuMicro/ChuMicro-Workspace-Template`](https://github.com/ChuMicro/ChuMicro-Workspace-Template).
+Project-workspace Phase 4a feature-complete + workspace-ecosystem Phases 1, 2, 4, 5 shipped (2026-04-27).  The package consolidates everything Decision 0029 / 0035 / 0038 specified plus the user-friendliness pass that followed: nested thing namespaces, an `examples/` folder for read-and-scaffold demos, `status` / `doctor` health snapshots, `deploy --dry-run`, `deploy --all-devices`, `repl <thing>` one-shot deploy + tail, app-level deploy-failure recovery hints, `new --library` for chumicro-style libraries, and `workspace.yml` `quality:` knob wiring (`lint.enabled` / `lint.select` / `coverage_threshold` / `agent_strictness`).  The `switch` command + multi-thing staging path retired in 2026-04-27 — single-thing deploys via `thing_boot_source` are the canonical shape.  The canonical workspace template ships as a separate Git repo at [`ChuMicro/ChuMicro-Workspace-Template`](https://github.com/ChuMicro/ChuMicro-Workspace-Template); `init` / `update` orchestrate cloning + tool-owned re-flow.
 
 ## What's here today
 
@@ -16,19 +16,27 @@ The package ships `python -m chumicro_workspace` (also exposed as the `chumicro-
 
 | Command | Purpose |
 |---|---|
-| `setup` | `pip install -e .` the workspace's pyproject (one-time per clone). |
-| `new <name>` | `cp -r things/_template things/<name>` to start a new thing. |
-| `add-device <id> --address <port> --runtime <cp\|mp>` | Probe a board and write the entry into `devices.yml`. |
+| `init <target> [--from <url>] [--ref <branch>]` | Clone the canonical workspace template into *target*.  `setup` is the natural follow-up. |
+| `setup` | `pip install -e .` the workspace's pyproject + materialize `_templates/` files (one-time per clone; idempotent). |
+| `update [--ref <branch>]` | Pull tool-owned file refreshes from the template upstream — re-flows `_templates/`, `examples/`, `things/_template/`, `.github/skills/`, `run.py`, `AGENTS.md`, `CONTRIBUTING.md`, `pyproject.toml`.  User-owned files (your `things/`, `secrets.yml`, `devices.yml`, `workspace.yml`, `libs/`, `packages/`) untouched. |
+| `bootstrap [--port <p>] [--device-id <id>] [--with-demo]` | End-to-end onboarding wizard: pick a port → probe runtime → register the device → optionally deploy the demo payload. |
+| `new <path> [--from <example>]` | Scaffold a new thing under `things/<path>/`.  *path* accepts bare / slash / dotted forms; intermediate namespace dirs auto-created.  `--from <example>` copies an `examples/<x>/` tree instead of `things/_template/`. |
+| `new <name> --library [--into <dir>]` | Scaffold a chumicro-style library tree (`src/chumicro_<name>/`, tests, docs, examples).  Defaults to `<workspace>/libraries/<name>/`. |
+| `add-device <id> --address <port> [--runtime <cp\|mp>] [--description <text>] [--force]` | Probe a board and write the entry into `devices.yml`.  Runtime auto-detected when omitted. |
 | `probe` | Print the runtime identity reported by the selected board. |
 | `discover` | List the serial ports the host currently sees. |
 | `devices` | Print every entry in `devices.yml`. |
-| `things [--flat]` | Print every thing under `things/` (skips `_template` and `_`-prefixed dirs).  Default tree view; `--flat` for one-line-per-thing. |
-| `deploy <name> [--boot-shim] [--import-graph]` | Ship a thing to a board.  *name* may be nested (`upstairs/bedroom_sensor`) or dotted. |
-| `repl [--tail SECONDS]` | Open an interactive REPL or stream output for a window. |
+| `things [--flat]` | Default Unicode tree view; `--flat` for one-line-per-thing slash-form output. |
+| `status` | One-line-per-check workspace health snapshot — `workspace.yml` validity, `devices.yml` count, `secrets.yml` placeholder detection, things-tree summary. |
+| `doctor` | Strict sibling of `status` — adds Python ≥3.11 check, per-thing AST scan for `def run`, and a config-merge dry-run that catches unresolved `!secret` references. |
+| `deploy <name> [--boot-shim] [--import-graph] [--dry-run] [--all-devices]` | Ship a thing.  *name* accepts bare / slash / dotted (with bare-name disambiguation against the live tree).  `--dry-run` prints the file map without writing.  `--all-devices` loops over every entry in `devices.yml`. |
+| `demo` | Deploy a built-in print-loop payload to the active device (no wifi, ~5s).  Useful as the first-deploy sanity check. |
+| `repl [--tail SECONDS] [<thing>]` | Interactive REPL by default.  `--tail SECONDS` captures output for a window.  Optional positional thing deploys then tails (default 30s window). |
 | `install-firmware [--url URL] --method <uf2\|esptool>` | Download + flash firmware (URL auto-derived from `hardware.firmware_source` / `hardware.board_id` / `hardware.machine` when omitted). |
 | `upgrade-firmware` | Alias of `install-firmware`. |
-| `rename --thing OLD NEW \| --device OLD NEW` | Rename a thing dir or a `devices.yml` entry id. |
-| `test [-- ...]` | Run pytest at the workspace root; extra args pass through after `--`. |
+| `rename --thing OLD NEW \| --device OLD NEW` | Rename a thing dir (slash/dotted on both sides; intermediate namespaces auto-created) or a `devices.yml` entry id. |
+| `test [-- ...]` | Run pytest at the workspace root.  Workspace.yml `quality.coverage_threshold` (when set) prepends `--cov-fail-under=N`. |
+| `lint [-- ...]` | Run `ruff check`.  Workspace.yml `quality.lint.enabled = false` skips with a hint; `quality.lint.select` prepends `--select <list>`. |
 | `sim`, `env`, `use` | Stubbed — emit a "registered, not yet implemented" message. |
 | `sync`, `upgrade` | Deprecated aliases for `update` — emit a "superseded by `update`" message. |
 
@@ -116,6 +124,33 @@ from chumicro_workspace import (
     BOOT_MODULE_DEVICE_PATH,
     THINGS_PACKAGE_INIT_DEVICE_PATH,
     SHIM_ENTRYPOINT_SOURCE,
+)
+
+# Workspace-ecosystem add-ons (Phases 1–5)
+from chumicro_workspace.workspace import (
+    ThingClassification,         # THING / NAMESPACE / SUPPORTING
+    WorkspaceLayout,             # gains list_things() recursive walk + iter_things_with_classification()
+)
+from chumicro_workspace.health import (
+    HealthFinding,               # one row in status / doctor
+    HealthLevel,                 # OK / WARN / ERROR
+    SECRET_PLACEHOLDER,          # the canonical "replace-me" sentinel
+    collect_health_findings,     # status's four checks
+    collect_doctor_findings,     # doctor's seven checks
+)
+from chumicro_workspace.recovery import (
+    AppErrorHint,                # one matched-pattern hint
+    detect_hints,                # traceback → list[AppErrorHint]
+    format_hints,                # render the --- hints --- block
+)
+from chumicro_workspace.scaffold import (
+    LibraryAlreadyExistsError,
+    scaffold_library,            # create a chumicro-style library tree
+)
+from chumicro_workspace.quality import (
+    LintConfig,                  # lint sub-config (enabled, select)
+    QualityConfig,               # workspace.yml quality: block, typed
+    load_quality_config,         # parse + validate the block
 )
 ```
 
