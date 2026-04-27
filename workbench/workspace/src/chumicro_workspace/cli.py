@@ -1112,10 +1112,72 @@ def _cmd_lint(args: argparse.Namespace) -> int:
     return completed.returncode
 
 
+#: Default tail-window duration (seconds) when ``repl <thing>`` is
+#: invoked without an explicit ``--tail SECONDS`` value.  Picked to
+#: cover the common "deploy a heartbeat thing, watch a few cycles
+#: print, exit clean" inner-loop pattern; users with long boot
+#: sequences can override.
+_DEFAULT_REPL_TAIL_SECONDS: float = 30.0
+
+
 def _cmd_repl(args: argparse.Namespace) -> int:
-    """Open an interactive REPL on the selected board."""
+    """Open an interactive REPL, tail output, or deploy-then-tail.
+
+    Three modes:
+
+    * ``repl`` — interactive REPL on the selected board.
+    * ``repl --tail SECONDS`` — capture the next *SECONDS* of REPL
+      output, exit cleanly.
+    * ``repl <thing> [--tail SECONDS]`` — deploy *thing* to the
+      board first, then tail.  Combines what used to be
+      ``deploy <thing> && repl --tail`` into one command.  When
+      ``--tail`` is omitted with a positional, defaults to
+      :data:`_DEFAULT_REPL_TAIL_SECONDS`.
+
+    *thing* accepts bare / slash / dotted forms — same shape as
+    ``deploy``.  The deploy uses the workspace-runtime boot-shim
+    layout (``thing_boot_source``); for flat-layout deploys, run
+    ``deploy`` and ``repl --tail`` separately.
+    """
     workspace = _resolve_workspace(args)
     device = _resolve_device(workspace, args)
+
+    if args.thing is not None:
+        resolved_name = _resolve_thing_name(workspace, args.thing)
+        thing_dir = workspace.thing_dir(resolved_name)
+        if not thing_dir.is_dir():
+            raise SystemExit(f"error: thing {thing_dir} not found")
+        from chumicro_deploy import Deployer  # noqa: PLC0415
+
+        source = thing_boot_source(
+            thing_dir,
+            workspace=workspace,
+            thing_name=resolved_name,
+            entrypoint_filename=device.effective_entrypoint,
+        )
+        print(f"repl: deploying {resolved_name} ...")
+        deploy_result = Deployer(device).deploy(source)
+        if deploy_result.execute_output:
+            print(deploy_result.execute_output, end="")
+        if not deploy_result.success:
+            if deploy_result.traceback:
+                print(
+                    f"\n--- traceback ---\n{deploy_result.traceback}",
+                    file=sys.stderr,
+                )
+            return 1
+        tail_seconds = (
+            args.tail if args.tail is not None else _DEFAULT_REPL_TAIL_SECONDS
+        )
+        from chumicro_repl import tail  # noqa: PLC0415
+
+        return int(tail(
+            device,
+            tail_seconds,
+            fail_on_traceback=args.fail_on_traceback,
+            output=sys.stdout,
+        ))
+
     if args.tail is not None:
         from chumicro_repl import tail  # noqa: PLC0415
 
@@ -1744,16 +1806,32 @@ def build_parser() -> argparse.ArgumentParser:
     # ----- repl ----------------------------------------------------------
     repl_parser = subparsers.add_parser(
         "repl",
-        help="Open an interactive REPL on the selected board.",
+        help=(
+            "Interactive REPL on the selected board, or deploy a thing "
+            "and tail its output in one command."
+        ),
     )
     _add_workspace_arg(repl_parser)
     _add_device_selector(repl_parser)
+    repl_parser.add_argument(
+        "thing",
+        nargs="?",
+        default=None,
+        help=(
+            "Optional thing name (bare / slash / dotted).  When given, "
+            "deploys the thing first then enters tail mode for "
+            "--tail SECONDS (default 30)."
+        ),
+    )
     repl_parser.add_argument(
         "--tail",
         type=float,
         default=None,
         metavar="SECONDS",
-        help="Run in tail mode for SECONDS instead of the interactive TUI.",
+        help=(
+            "Run in tail mode for SECONDS instead of the interactive "
+            "TUI.  When a positional thing is given, defaults to 30s."
+        ),
     )
     repl_parser.add_argument(
         "--no-fail-on-traceback",

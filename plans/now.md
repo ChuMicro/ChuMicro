@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **Workspace ecosystem completion — Phase 1 closed (2026-04-27).**  All 7 slices shipped across 7 mono-repo commits (`98fa8d0..8477bbd`) + 3 template-repo commits (`4523c89..98b6377`).  3 of 5 examples deferred (`periodic_get/`, `telemetry_publisher/`, `two_things/`) — landing in follow-on commits without further mono-repo changes.  Phase 2 next: ergonomics quick wins (`status`, `doctor`, `deploy --dry-run`, app-level error hints, `repl --tail <thing>`, multi-device deploys); each independent.
-- **Last shipped:** Phase 1 Slice 6 — closing docs + planning-doc cleanup.
-- **In flight:** —
+- **Phase:** **Workspace ecosystem completion — Phase 2 in flight.**  Phase 1 closed 2026-04-27.  Phase 2e shipped: `repl <thing>` deploys via `thing_boot_source` then tails for 30s default (`--tail SECONDS` overrides), dropping the prior `deploy <thing> && repl --tail` two-command idiom.  Failed deploys short-circuit before tailing.  Next sub-items in any order: 2a (`status`), 2b (`doctor`), 2c (`deploy --dry-run`), 2d (app-level error recovery hints), 2f (multi-device deploys — assess scope first).
+- **Last shipped:** Phase 2e — `repl <thing>` auto-deploys before tailing.
+- **In flight:** Phase 2 — pick next sub-item.
 - **Blocked on:** —
-- **Last touched:** `plans/workstreams/{nested-things-and-examples,workspace-ecosystem}.md`, `plans/next-up.md`, `plans/now.md`.
+- **Last touched:** `workbench/workspace/src/chumicro_workspace/cli.py`, `workbench/workspace/tests/test_cli.py`, `plans/now.md`.
 
 ---
 

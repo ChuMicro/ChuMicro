@@ -1408,6 +1408,146 @@ class TestProbe:
 # ---------------------------------------------------------------------------
 
 
+class TestReplWithThing:
+    """Phase 2e — `repl <thing>` deploys then tails in one command."""
+
+    def test_deploys_then_tails(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        thing_dir = _seed_thing(root, name="back-porch")
+        (thing_dir / "app.py").write_text("def run(): print('back-porch')\n")
+
+        transport = FakeTransport(execute_output="back-porch\n")
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+        captured: dict[str, Any] = {}
+
+        def fake_tail(device: Device, seconds: float, **kwargs: Any) -> int:
+            captured["seconds"] = seconds
+            return 0
+
+        import chumicro_repl
+        monkeypatch.setattr(chumicro_repl, "tail", fake_tail)
+
+        exit_code = cli.main([
+            "repl", "--workspace-dir", str(root), "back-porch",
+        ])
+        assert exit_code == 0
+        # Default tail window applied since --tail wasn't given.
+        assert captured["seconds"] == 30.0
+        # Deploy ran via the boot-shim source: shim files in transport calls.
+        deploy_calls = [
+            call for call in transport.calls if call[0] == "deploy_files"
+        ]
+        assert len(deploy_calls) == 1
+        files, _entrypoint = deploy_calls[0][1]
+        assert "/lib/things/back-porch/app.py" in files
+        assert b'"back-porch"' in files["/active.py"]
+
+    def test_explicit_tail_seconds(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """`--tail SECONDS <thing>` overrides the 30s default."""
+        root = _seed_workspace(tmp_path)
+        thing_dir = _seed_thing(root, name="back-porch")
+        (thing_dir / "app.py").write_text("def run(): print('back-porch')\n")
+
+        transport = FakeTransport(execute_output="")
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+        captured: dict[str, Any] = {}
+
+        def fake_tail(device: Device, seconds: float, **kwargs: Any) -> int:
+            captured["seconds"] = seconds
+            return 0
+
+        import chumicro_repl
+        monkeypatch.setattr(chumicro_repl, "tail", fake_tail)
+
+        exit_code = cli.main([
+            "repl", "--workspace-dir", str(root),
+            "--tail", "5", "back-porch",
+        ])
+        assert exit_code == 0
+        assert captured["seconds"] == 5.0
+
+    def test_nested_thing_name_resolves(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        thing_dir = _seed_thing(root, name="garage/sensors/door_open")
+        (thing_dir / "app.py").write_text("def run(): print('door_open')\n")
+
+        transport = FakeTransport(execute_output="")
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+
+        import chumicro_repl
+        monkeypatch.setattr(
+            chumicro_repl, "tail", lambda *args, **kwargs: 0,
+        )
+
+        exit_code = cli.main([
+            "repl", "--workspace-dir", str(root),
+            "garage/sensors/door_open",
+        ])
+        assert exit_code == 0
+        deploy_calls = [
+            call for call in transport.calls if call[0] == "deploy_files"
+        ]
+        files, _entrypoint = deploy_calls[0][1]
+        assert "/lib/things/garage/sensors/door_open/app.py" in files
+        assert b'"garage.sensors.door_open"' in files["/active.py"]
+
+    def test_failed_deploy_returns_one(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Tail is skipped when the deploy traceback marks failure."""
+        root = _seed_workspace(tmp_path)
+        thing_dir = _seed_thing(root, name="back-porch")
+        (thing_dir / "app.py").write_text("def run(): pass\n")
+
+        transport = FakeTransport(
+            execute_output=(
+                "Traceback (most recent call last):\n"
+                "  File \"/code.py\", line 1\n"
+                "RuntimeError: deploy-failed\n"
+            ),
+        )
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+
+        tail_called = [False]
+
+        def fake_tail(*args: Any, **kwargs: Any) -> int:
+            tail_called[0] = True
+            return 0
+
+        import chumicro_repl
+        monkeypatch.setattr(chumicro_repl, "tail", fake_tail)
+
+        exit_code = cli.main([
+            "repl", "--workspace-dir", str(root), "back-porch",
+        ])
+        assert exit_code == 1
+        assert tail_called[0] is False
+        assert "deploy-failed" in capsys.readouterr().err
+
+    def test_missing_thing_raises(self, tmp_path: Path) -> None:
+        root = _seed_workspace(tmp_path)
+        with pytest.raises(SystemExit) as caught:
+            cli.main([
+                "repl", "--workspace-dir", str(root), "ghost",
+            ])
+        assert "ghost" in str(caught.value)
+
+
 class TestRepl:
     def test_interactive_path(
         self,
