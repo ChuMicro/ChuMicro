@@ -406,8 +406,6 @@ class HttpClient:
         Raises:
             HttpBusyError: A request is already in flight.
             HttpURLError: *url* didn't parse as a valid HTTP URL.
-            NotImplementedError: *url* is HTTPS — slice 3c will
-                lift this.
         """
         return self._start_request("GET", url, headers=headers, timeout_ms=timeout_ms)
 
@@ -462,14 +460,11 @@ class HttpClient:
                 f"client busy on {self._url!r}; await handle.done before issuing another",
             )
         scheme, host, port, path = parse_url(url)
-        if scheme == "https":
-            raise NotImplementedError(
-                "HTTPS support lands in slice 3c (Decision 0040). "
-                "Use an http:// URL for now.",
-            )
+        use_tls = scheme == "https"
         # Build the Host header — include the port unless it's the
         # scheme default (per RFC 7230 §5.4).
-        host_header = host if port == 80 else f"{host}:{port}"
+        default_port = 443 if use_tls else 80
+        host_header = host if port == default_port else f"{host}:{port}"
         request_bytes = encode_request(
             method,
             host_header,
@@ -478,7 +473,7 @@ class HttpClient:
             user_agent=self._user_agent,
         )
         timeout = timeout_ms if timeout_ms is not None else self._default_timeout_ms
-        self._socket = self._connection_factory(host, port, False)
+        self._socket = self._connection_factory(host, port, use_tls)
         _force_non_blocking(self._socket)
         self._handle = RequestHandle(url=url)
         self._url = url

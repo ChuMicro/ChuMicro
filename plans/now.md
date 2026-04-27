@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **beginner-onramp** Step 6 — `chumicro-requests` library.  Slices 3a (plain HTTP GET) + 3b (body decode → `.text` / `.json()` / charset sniff) shipped 2026-04-26.  Slice 3c (HTTPS, live-board verification on the four-board matrix) is next.  Then 3d (POST + JSON helpers) → 3e (redirects) → 3f (chunked transfer-encoding decode) → Step 7 (`chumicro-http-server`) → Step 8 (examples org + two-thing demo).  See `plans/workstreams/beginner-onramp.md`.
-- **Last shipped:** Step 6 slice 3b — body decode.  `Response.encoding` (sniffed from Content-Type charset, default utf-8, settable for server-lies cases), `Response.text` (UnicodeDecodeError-on-mismatch), `Response.json()` (ValueError-on-malformed); `parse_charset()` helper in `_wire.py` exposed publicly.  115 tests at 97 % combined coverage; preflight green at the 94 % gate.
+- **Phase:** **beginner-onramp** Step 6 — `chumicro-requests` library.  Slices 3a (plain HTTP GET) + 3b (body decode) + 3c (HTTPS, live-board-verified) all shipped 2026-04-26.  Three remaining: 3d (POST + JSON helpers) → 3e (redirects) → 3f (chunked transfer-encoding) → Step 7 (`chumicro-http-server`) → Step 8 (examples org + two-thing demo).  See `plans/workstreams/beginner-onramp.md`.
+- **Last shipped:** Step 6 slice 3c — HTTPS verified live on Pi Pico W CP + MP against `https://example.com/` (status 200, 540 body bytes, `CERT_REQUIRED` with CA-pinned context).  Three live-only bugs fixed: CP `del bytearray[:n]` → reassign-via-slice; MP `bytearray.clear()` → reassign-fresh; MP TLS `recv → None` conflated with peer close → wrapper now raises EAGAIN (`chumicro-sockets` 0.1.5).  Three live-board limitations documented (flash-mode required, CA-pinned context required, RTC-synced required).  117 host tests at 96 % combined coverage; preflight green at the 94 % gate.
 - **In flight:** —
 - **Blocked on:** —
-- **Last touched:** `libraries/requests/src/chumicro_requests/_wire.py` (parse_charset), `libraries/requests/src/chumicro_requests/client.py` (Response.encoding/text/json + json import), `libraries/requests/tests/test_requests.py` (TestParseCharset + TestResponseDecode), README + docs/guide.md + docs/index.md, `plans/workstreams/beginner-onramp.md` Step 6 status log, `plans/next-up.md`.
+- **Last touched:** `libraries/requests/src/chumicro_requests/_wire.py` (CP-safe slice replacement + MP-safe `clear()`), `libraries/sockets/src/chumicro_sockets/_adapters/mp.py` (raise EAGAIN on `None`), `libraries/sockets/VERSION` (0.1.4 → 0.1.5), `libraries/sockets/tests/test_mp_adapter.py` (new test for None-raises-EAGAIN), `libraries/requests/docs/guide.md` (Platform notes), `plans/decisions/0040-chumicro-requests.md` (Live-board limitations section), `plans/learnings.md` (3 entries), `plans/workstreams/beginner-onramp.md` Step 6 status log, `plans/next-up.md`.
 
 ---
 

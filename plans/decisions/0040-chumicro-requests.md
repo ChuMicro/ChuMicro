@@ -125,6 +125,30 @@ Cited from `adafruit_requests.py` (main branch as of 2026-04-26):
 ll. 559–577, `_readinto` ll. 330–347, `Response.content` l. 374,
 `Response.iter_content` ll. 411–427.
 
+## Live-board limitations (slice 3c)
+
+These showed up only on real hardware; they're constraints of the
+embedded TLS stack, not of `chumicro-requests` per se.  Documented
+here because slice 3c is when they bite.
+
+* **HTTPS requires flash deploy mode on Pi Pico W class boards.**
+  RAM-mode keeps the full library bootstrap on the heap and leaves
+  < 50 KB for the mbedTLS handshake → `OSError(12)`.  Flash-mode
+  bootstraps from disk; ~150 KB free heap available for the
+  handshake.  The four-board canonical matrix (Pi Pico W CP/MP,
+  Lolin S2 CP/MP) was verified live with `--deploy-mode flash`.
+  ESP32-S3 with > 200 KB free heap after wifi can run HTTPS in
+  RAM-mode; document and let the user choose.
+* **TLS context must be CA-pinned.**  `ssl.create_default_context()`
+  loads a 100-200 KB trust store that doesn't fit on a Pi Pico W.
+  Use `chumicro_sockets.ssl_context_with_ca(pem)` with a single CA
+  or small chain bundle.  Same pattern Phase 7 TLS-MQTT proved.
+* **Device RTC must be set before TLS.**  mbedTLS `CERT_REQUIRED`
+  rejects every cert with "validity starts in the future" if the
+  RTC is at boot default (2021-01-01 on rp2, epoch elsewhere).
+  Caller's responsibility to NTP-sync before issuing HTTPS;
+  documented in `docs/guide.md` §Platform notes.
+
 ## Consequences
 
 - A new device library, `libraries/requests/`, ships pure-Python source

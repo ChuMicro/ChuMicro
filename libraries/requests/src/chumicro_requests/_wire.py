@@ -535,7 +535,13 @@ class ResponseParser:
         if crlf_index == -1:
             return False
         line = bytes(self._buffer[:crlf_index])
-        del self._buffer[:crlf_index + 2]
+        # CircuitPython 10.x's bytearray rejects ``del buffer[:n]``
+        # (TypeError: "'bytearray' object doesn't support item
+        # deletion") even though MicroPython and CPython both accept
+        # it.  Reassign via slice for cross-runtime safety.  The buffer
+        # stays tiny (status line < ~50 B, headers < ~1 KB), so the
+        # extra copy is negligible.
+        self._buffer = bytearray(self._buffer[crlf_index + 2:])
         # Status-Line per RFC 7230 §3.1.2: HTTP-version SP status-code SP reason-phrase
         try:
             text = line.decode("ascii")
@@ -573,12 +579,13 @@ class ResponseParser:
         if crlf_index == -1:
             return False
         if crlf_index == 0:
-            # Empty line — end of headers.
-            del self._buffer[:2]
+            # Empty line — end of headers.  Reassign via slice for
+            # CircuitPython compatibility (see _try_parse_status_line).
+            self._buffer = bytearray(self._buffer[2:])
             self._enter_body_state()
             return True
         line = bytes(self._buffer[:crlf_index])
-        del self._buffer[:crlf_index + 2]
+        self._buffer = bytearray(self._buffer[crlf_index + 2:])
         try:
             text = line.decode("ascii")
         except UnicodeDecodeError as decode_error:
@@ -631,9 +638,11 @@ class ResponseParser:
             self._state = ParseState.BODY
             # Any bytes left in the buffer after the header CRLF are
             # the start of the body — flush into the body absorber.
+            # MicroPython's bytearray lacks ``.clear()``; reassign to
+            # a fresh empty bytearray instead (cross-runtime safe).
             if self._buffer:
                 tail = bytes(self._buffer)
-                self._buffer.clear()
+                self._buffer = bytearray()
                 self._absorb_body_bytes(tail)
             return
         # Length-unknown — read until peer closes.
@@ -641,7 +650,7 @@ class ResponseParser:
         self._state = ParseState.BODY
         if self._buffer:
             tail = bytes(self._buffer)
-            self._buffer.clear()
+            self._buffer = bytearray()
             self._absorb_body_bytes(tail)
 
     def _absorb_body_bytes(self, chunk):

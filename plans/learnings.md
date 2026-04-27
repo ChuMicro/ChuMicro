@@ -45,6 +45,14 @@ Validated on Lolin S2 Mini during Decision 0027 PoC. Use Ctrl-A raw REPL mode in
 
 Means: no module-injection helpers that rely on `types.ModuleType()`, no SHA-256 staging hashes in CP RAM-mode bootstraps. Class-as-module injection (assigning a class instance into `sys.modules`) is the workaround for the missing `ModuleType`. See the bootstrap builders in `workbench/deploy/src/chumicro_deploy/`.
 
+### CircuitPython 10.x's `bytearray` rejects `del buffer[:n]`
+
+`del bytearray_instance[:n]` raises `TypeError("'bytearray' object doesn't support item deletion")` on CP 10.2.0-rc.0 (Pi Pico W).  CPython and MicroPython both accept it.  Cross-runtime safe alternative: `self._buffer = bytearray(self._buffer[n:])` — one extra allocation but trivially cheap on the small buffers parsers usually carry (status line ~50 B, header lines ~few hundred B).  Surfaced live during chumicro-requests slice 3c HTTPS verification.  Commits in slice 3c.
+
+### MicroPython's `bytearray` lacks `.clear()`
+
+`bytearray.clear()` raises `AttributeError("'bytearray' object has no attribute 'clear'")` on MP 1.28.0 (Pi Pico W rp2).  Both CPython and CircuitPython 10.x accept it.  Cross-runtime safe alternative: `self._buffer = bytearray()` — same one-allocation cost as the `del`-incompatibility workaround.  Surfaced live during chumicro-requests slice 3c HTTPS verification on the same code path that exposed the CP `del`-incompatibility.  Commits in slice 3c.
+
 ### CIRCUITPY drive must be re-probed after eject; EACCES is not a permission error
 
 When `/Volumes/CIRCUITPY` lingers as a placeholder after Finder eject (or during an FSKit wedge), writing to it raises `OSError: [Errno 13] Permission denied`. The classifier must check drive-not-found patterns *before* port-unavailable patterns — the nested `permission denied` substring will otherwise misroute to `PORT_UNAVAILABLE` and skip the FSKit wedge detector. Transport-level guard: write a `.chu-probe` marker file before any rsync; catch `OSError` and re-raise with the drive-not-found message. Commit `38fb039`.
@@ -84,6 +92,20 @@ Observed during 2026-04-19 live PyCharm testing. Suspect: per-file `mpremote mou
 The old basefs MQTT impl (`/Users/chuxor/circuitpython/pythonProject3/basefilesystem/lib/basefs/mqtt_client.py`) avoided this implicitly: `_read_socket` does **one** `recv_into` per loop call (no inner loop), so each loop call is bounded by `RX_BUFFER_SIZE` regardless of how much data is in the kernel buffer.  A 100 KB blob takes 400+ loop calls to ingest, but every call is short.
 
 `chumicro-mqtt` 0.1.4 adopts a hybrid: a `recv_budget_per_tick` knob (default 1024 B) caps the per-tick byte budget while still letting a tick do multiple recv calls when bytes are available.  Default 1024 = 4× the steady RX buffer (256 B) = drains a typical PUBLISH in one tick AND keeps tick latency well under 10 ms even on rp2.  Configurable upward for things that want fast big-blob ingestion at the cost of LED smoothness.  The lesson is general: any tick-shaped reader on a fat kernel buffer needs an explicit per-tick byte budget OR an explicit per-tick iteration count — implicit "drain until EAGAIN" is a foot-gun.
+
+### MP TLS `SSLSocket.recv()` returns `None` for WANT_READ (not raises EAGAIN like plain TCP)
+
+MP plain TCP non-blocking `recv` raises `OSError(11)` (EAGAIN) when no data is available.  MP TLS `SSLSocket.recv` instead returns the literal `None` — mbedTLS's `MBEDTLS_ERR_SSL_WANT_READ` / `WANT_WRITE` maps to `MP_EWOULDBLOCK` internally but the Python-level surface for `SSLSocket` returns `None` rather than raising.
+
+`chumicro_sockets._adapters.mp._MpSocketWrapper.recv_into` originally polyfilled `None → 0` to "treat as no data this tick".  This works for `chumicro-mqtt` because its RX loop already breaks on both EAGAIN and 0, but it **silently breaks any caller that distinguishes 0 (clean peer close) from EAGAIN (no data this tick)** — the `chumicro-requests` HTTP parser uses 0-return as the end-of-body signal for length-unknown responses, so on MP TLS every Content-Length-framed response failed with `HttpProtocolError("peer closed before response completed")` the moment a recv raced ahead of the peer's send.
+
+Fix: the wrapper now raises `OSError(11)` on `None`, restoring the standard contract uniformly across plain TCP and TLS.  See `chumicro-sockets` 0.1.5 + slice 3c.
+
+### MicroPython rp2 mbedTLS handshake doesn't fit into CIRCUITPY/MP RAM-mode bootstraps
+
+A wifi → sockets → TLS → requests stack with the CA-pinned context only fits on the Pi Pico W class (256 KB RAM, ~150 KB heap free post-wifi) when deployed in **flash mode**.  RAM-mode keeps the full library bootstrap on the heap for the duration of the test, leaving < 50 KB for mbedTLS handshake — `ssl_context.wrap_socket(...)` fails with `OSError(12)` (ENOMEM) before any cert validation runs.
+
+Document the constraint at every entry point: any acceptance runner / functional test that exercises HTTPS on these boards must default to `--deploy-mode flash`.  RAM-mode is fine for single-library tests; the multi-stack TLS chain isn't a single-library test.  Verified live during chumicro-requests slice 3c on Pi Pico W CP + MP (2026-04-26).
 
 ### MP rp2 firmware ships mbedTLS *without* `MBEDTLS_PEM_PARSE_C` — pass DER, not PEM, to `load_verify_locations`
 

@@ -671,10 +671,52 @@ class TestHttpClientGet:
 
         assert b"User-Agent: custom-agent/9\r\n" in socket.sent
 
-    def test_https_url_not_yet_supported(self):
-        client, _ticks, _socket = make_client()
-        with pytest.raises(NotImplementedError, match="slice 3c"):
-            client.get("https://example.test/")
+    def test_https_url_dispatches_with_use_tls_true(self):
+        """Slice 3c: ``https://`` URLs route to the connection_factory
+        with ``use_tls=True`` and skip the port in the Host header
+        when it equals 443 (the scheme default)."""
+        socket = FakeSocket()
+        socket.enqueue_recv(canned_response(body=b"secured"))
+        captured = []
+
+        def factory(host, port, use_tls):
+            captured.append((host, port, use_tls))
+            return socket
+
+        ticks = FakeTicks()
+        client = HttpClient(
+            connection_factory=factory,
+            ticks_ms_func=ticks.ticks_ms,
+            ticks_add_func=ticks.ticks_add,
+            ticks_diff_func=ticks.ticks_diff,
+        )
+        handle = client.get("https://example.test/secret")
+        drive_until_done(client, handle, ticks)
+        assert handle.result.body == b"secured"
+        assert captured == [("example.test", 443, True)]
+        # Host header omits the default 443 port.
+        assert b"Host: example.test\r\n" in socket.sent
+
+    def test_https_explicit_port_kept_in_host_header(self):
+        socket = FakeSocket()
+        socket.enqueue_recv(canned_response(body=b""))
+        captured = []
+
+        def factory(host, port, use_tls):
+            captured.append((host, port, use_tls))
+            return socket
+
+        ticks = FakeTicks()
+        client = HttpClient(
+            connection_factory=factory,
+            ticks_ms_func=ticks.ticks_ms,
+            ticks_add_func=ticks.ticks_add,
+            ticks_diff_func=ticks.ticks_diff,
+        )
+        handle = client.get("https://example.test:8443/")
+        drive_until_done(client, handle, ticks)
+        assert captured == [("example.test", 8443, True)]
+        assert b"Host: example.test:8443\r\n" in socket.sent
 
     def test_socket_closed_after_completion(self):
         socket = FakeSocket()

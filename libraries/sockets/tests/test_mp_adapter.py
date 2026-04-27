@@ -185,6 +185,28 @@ class TestConnectTcp:
         nbytes_read = wrapper.recv_into(buffer, 8)
         assert nbytes_read == 0
 
+    def test_recv_into_raises_eagain_when_recv_returns_none(
+        self, mp_adapter: types.ModuleType,
+    ) -> None:
+        """MP TLS ``SSLSocket.recv()`` returns ``None`` for WANT_READ.
+
+        The wrapper raises ``OSError(11)`` (EAGAIN) so callers see
+        the same "no data this tick" contract as plain TCP.  Without
+        this, downstream protocols (chumicro-requests, chumicro-mqtt)
+        can't distinguish "no data yet" from "peer closed mid-response"
+        on MP TLS — surfaced live during chumicro-requests slice 3c
+        verification on Pi Pico W RP2.
+        """
+        import pytest  # noqa: PLC0415
+
+        wrapper = mp_adapter.connect_tcp("broker.example.com", 1883)
+        underlying = wrapper._sock  # type: ignore[attr-defined]
+        underlying.recv = lambda _size: None  # MP TLS WANT_READ shape
+        buffer = bytearray(8)
+        with pytest.raises(OSError) as captured:
+            wrapper.recv_into(buffer, 8)
+        assert captured.value.args[0] == 11
+
     def test_send_close_setblocking_settimeout_fileno_forward(
         self, mp_adapter: types.ModuleType,
     ) -> None:

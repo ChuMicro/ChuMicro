@@ -80,7 +80,8 @@ class _MpSocketWrapper:
 
         ``recv(nbytes)`` returns up to *nbytes* bytes; we copy the
         result into *buffer* and return the count.  Empty-bytes
-        return on a clean peer close — same contract as stdlib.
+        return (``b""``) on a clean peer close → returns 0, same
+        contract as stdlib.
 
         MP-specific contract divergence (verified live on Pi Pico W
         RP2 + Lolin S2 ESP32-S2 with MP 1.28.0):
@@ -92,15 +93,22 @@ class _MpSocketWrapper:
           maps to ``MP_EWOULDBLOCK`` internally, but the Python-level
           surface for SSLSocket returns ``None`` rather than raising).
 
-        Treat ``None`` as 0 bytes — same effect as "no data this
-        tick" for callers that expect ``recv_into`` to return a
-        count.  The chumicro-mqtt RX path already breaks on
-        ``got == 0``, so this maps cleanly into its tick model.
+        We **raise** ``OSError(11)`` on ``None`` so the protocol
+        contract — "EAGAIN on no data, 0 on clean peer close" —
+        holds across plain TCP and TLS uniformly.  Callers like
+        ``chumicro-requests`` that need to distinguish "no data
+        this tick" from "peer closed mid-response" depend on this:
+        without it the HTTP parser fails length-known responses
+        on MP TLS the moment a recv races ahead of the peer's
+        send.  See `chumicro-requests` slice 3c for the surfacing
+        bug.  ``chumicro-mqtt``'s RX loop already handled both
+        EAGAIN and 0 with a ``break``, so it sees no behavior
+        change here.
         """
         size = nbytes if nbytes > 0 else len(buffer)
         data = self._sock.recv(size)
         if data is None:
-            return 0  # MP TLS non-blocking "no data this tick".
+            raise OSError(11, "would block")  # MP TLS WANT_READ.
         copied = len(data)
         if copied:
             buffer[:copied] = data
