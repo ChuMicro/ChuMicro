@@ -1,14 +1,14 @@
 # Workstream: Workspace ecosystem completion
 
-Status: **Phase 1 shipped** (2026-04-27).  Phases 2-7 still planned.  Drafted 2026-04-27, revised same day with user triage, executed Phase 1 immediately after.
+Status: **Phases 1 + 2 shipped** (2026-04-27).  Phases 3-7 still planned.  Drafted 2026-04-27, revised same day with user triage, executed Phases 1-2 immediately after.
 
 ## Phase progress
 
 | Phase | Status | Notes |
 |---|---|---|
-| 1 — Nested things + examples + drop `switch` | **shipped** | Detail in [`nested-things-and-examples.md`](nested-things-and-examples.md); commits `98fa8d0..8477bbd` mono-repo, `4523c89..98b6377` template repo. |
-| 2 — Ergonomics quick wins (status, doctor, dry-run, error hints, repl-tail-thing, multi-device) | planned | Six independent sub-items, ship in any order. |
-| 3 — Per-environment deploys | planned | Bumped up — implement before the deploy pipeline matures. |
+| 1 — Nested things + examples + drop `switch` | **shipped** | Detail in [`nested-things-and-examples.md`](nested-things-and-examples.md); commits `98fa8d0..c8a05fe` mono-repo, `4523c89..98b6377` template repo. |
+| 2 — Ergonomics quick wins | **shipped** | Six sub-items: 2e (`repl <thing>` `333d900`), 2a (`status` `7697deb`), 2c (`deploy --dry-run` `f2a055d`), 2d (deploy-failure hints `93b7c7a`), 2b (`doctor` `045f819`), 2f (`deploy --all-devices` `139b0ee`).  Per-thing → per-device mapping config deferred from 2f. |
+| 3 — Per-environment deploys | planned | Bumped up — implement before the deploy pipeline matures.  Next-session entry point. |
 | 4 — Library scaffolder migration | planned | `scripts/new_library_scaffold.py` → `chumicro-workspace new --library`. |
 | 5 — Wire `workspace.yml` quality knobs | planned | Lint / coverage / agent-strictness. |
 | 6 — Documentation audit | planned | Cross-repo doc-freshness sweep, runs last. |
