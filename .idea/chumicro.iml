@@ -25,6 +25,9 @@
       <sourceFolder url="file://$MODULE_DIR$/libraries/msgpack/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/msgpack/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/msgpack/functional_tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/requests/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/requests/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/requests/functional_tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/runner/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/runner/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/runner/functional_tests" isTestSource="true" />

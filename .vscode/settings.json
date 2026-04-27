@@ -12,6 +12,7 @@
         "libraries/kvstore/src",
         "libraries/mqtt/src",
         "libraries/msgpack/src",
+        "libraries/requests/src",
         "libraries/runner/src",
         "libraries/sockets/src",
         "libraries/timing/src",
