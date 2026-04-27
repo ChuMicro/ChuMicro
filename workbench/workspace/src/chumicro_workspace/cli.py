@@ -351,26 +351,101 @@ def _validate_thing_name(name: str) -> None:
             )
 
 
-def _cmd_new(args: argparse.Namespace) -> int:
-    """Create ``things/<name>/`` by copying the ``things/_template/`` tree.
+_THING_ENTRY_POINT_FILENAMES: tuple[str, ...] = ("app.py", "code.py", "main.py")
 
-    The workstream design note is explicit (Phase 4a §"Open
-    questions"): ``new`` is a ``cp -r`` convenience, not a code
-    generator — no template variables, no post-copy edits.
+
+def _resolve_new_source(
+    workspace: WorkspaceLayout, from_path: str | None,
+) -> Path:
+    """Pick the directory ``new`` will copy into the target.
+
+    Without ``--from``, returns ``things/_template/`` (same default as
+    before Slice 3 added the flag).  With ``--from <path>``, resolves
+    *path* relative to the workspace root and validates that the
+    resulting directory exists and looks like a thing — i.e. has at
+    least one of :data:`_THING_ENTRY_POINT_FILENAMES`.  An entry-point
+    is the only way to confirm the source is a thing (vs. a
+    namespace dir or a docs folder).
+    """
+    if from_path is None:
+        template = workspace.things_dir / "_template"
+        if not template.is_dir():
+            raise SystemExit(
+                f"error: template {template} not found — run "
+                "`chumicro-workspace init` to clone the canonical "
+                "template, or create `things/_template/` by hand.",
+            )
+        return template
+    candidate = (workspace.root / from_path).resolve()
+    # Defence against `--from ../../etc/passwd` shenanigans — keep the
+    # source under the workspace root.
+    try:
+        candidate.relative_to(workspace.root.resolve())
+    except ValueError as exception:
+        raise SystemExit(
+            f"error: --from path {from_path!r} resolves outside the "
+            f"workspace root {workspace.root}.",
+        ) from exception
+    if not candidate.is_dir():
+        raise SystemExit(
+            f"error: --from source {candidate} is not a directory.",
+        )
+    has_entry_point = any(
+        (candidate / filename).is_file()
+        for filename in _THING_ENTRY_POINT_FILENAMES
+    )
+    if not has_entry_point:
+        raise SystemExit(
+            f"error: --from source {candidate} has no entry-point "
+            "file (app.py / code.py / main.py) — pick a thing "
+            "directory, not a namespace.",
+        )
+    return candidate
+
+
+def _cmd_new(args: argparse.Namespace) -> int:
+    """Create ``things/<path>/`` by copying a template or example tree.
+
+    *path* may be bare (``"bedroom_sensor"``), slash-form
+    (``"upstairs/bedroom_sensor"``), or dotted
+    (``"upstairs.bedroom_sensor"``).  Intermediate namespace
+    directories are auto-created with empty ``__init__.py`` markers
+    so host-side tooling can ``import things.upstairs.bedroom_sensor.app``
+    without surprises (the on-device boot shim emits its own
+    namespace inits separately — Slice 2 boot_shim work).
+
+    Each path segment is validated against the Python identifier
+    grammar (Slice 1's ``_validate_thing_name``).
+
+    With ``--from <path>`` the source tree is *path* (resolved
+    relative to the workspace root and validated as a thing) instead
+    of ``things/_template/``.  The workstream design note is explicit
+    (Phase 4a §"Open questions"): ``new`` is a ``cp -r`` convenience,
+    not a code generator — no template variables, no post-copy edits.
     """
     _validate_thing_name(args.name)
     workspace = _resolve_workspace(args)
-    template = workspace.things_dir / "_template"
+    source = _resolve_new_source(workspace, args.from_path)
     target = workspace.thing_dir(args.name)
-    if not template.is_dir():
-        raise SystemExit(
-            f"error: template {template} not found — run "
-            "`chumicro-workspace init` to clone the canonical template, "
-            "or create `things/_template/` by hand.",
-        )
     if target.exists():
         raise SystemExit(f"error: {target} already exists")
-    shutil.copytree(template, target)
+    # Auto-create intermediate namespace directories with empty
+    # __init__.py markers so host-side imports work cleanly.
+    workspace.things_dir.mkdir(parents=True, exist_ok=True)
+    parent = target.parent
+    if parent != workspace.things_dir:
+        relative_parent = parent.relative_to(workspace.things_dir)
+        for segment_count in range(1, len(relative_parent.parts) + 1):
+            namespace_dir = workspace.things_dir.joinpath(
+                *relative_parent.parts[:segment_count],
+            )
+            init_path = namespace_dir / "__init__.py"
+            if not namespace_dir.exists():
+                namespace_dir.mkdir(parents=True)
+                print(f"new: creating namespace {namespace_dir.relative_to(workspace.root)}/")
+            if not init_path.exists():
+                init_path.write_text("")
+    shutil.copytree(source, target)
     print(f"new: created {target}")
     return 0
 
@@ -1375,12 +1450,31 @@ def build_parser() -> argparse.ArgumentParser:
     # ----- new -----------------------------------------------------------
     new_parser = subparsers.add_parser(
         "new",
-        help="Create things/<name>/ by copying the _template tree.",
+        help=(
+            "Create things/<path>/ by copying a template or example tree.  "
+            "Path may be nested (slash- or dotted-form)."
+        ),
     )
     _add_workspace_arg(new_parser)
     new_parser.add_argument(
         "name",
-        help="Name of the new thing (becomes things/<name>/).",
+        help=(
+            "Name of the new thing (becomes things/<path>/).  Accepts "
+            "bare ('bedroom_sensor'), slash ('upstairs/bedroom_sensor'), "
+            "or dotted ('upstairs.bedroom_sensor') forms.  Intermediate "
+            "namespace directories are auto-created."
+        ),
+    )
+    new_parser.add_argument(
+        "--from",
+        dest="from_path",
+        default=None,
+        help=(
+            "Copy from this directory (relative to the workspace root) "
+            "instead of things/_template/.  Source must contain an "
+            "app.py / code.py / main.py entry-point.  Useful for "
+            "`new garage/heater --from examples/two_things/server`."
+        ),
     )
     new_parser.set_defaults(func=_cmd_new)
 

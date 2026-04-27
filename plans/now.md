@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **Workspace ecosystem completion — Phase 1 in flight.**  Phase 1 (`plans/workstreams/nested-things-and-examples.md`) Slices 1-2 shipped.  Slice 2: dotted `THING_NAME` in `/active.py`, per-namespace `__init__.py` emission across `boot_shim_files` + `multi_thing_boot_files`, `_walk_thing_files` lays files at the nested device prefix.  `_cmd_deploy` resolves bare names with disambiguation, accepts slash/dotted positionals, plumbs explicit `thing_name=` into the boot-shim source.  Slice 3 next: `_cmd_new` accepts paths + `--from <example-path>` flag.
-- **Last shipped:** Slice 2 — deploy + boot-shim handle nested thing names.
-- **In flight:** Phase 1 Slice 3 — `new` accepts paths + `--from`.
+- **Phase:** **Workspace ecosystem completion — Phase 1 in flight.**  Phase 1 (`plans/workstreams/nested-things-and-examples.md`) Slices 1-3 shipped.  Slice 3: `_cmd_new` accepts slash/dotted paths, auto-creates intermediate namespace dirs (with empty `__init__.py` markers + a trace line) so host-side `from things.<a>.<b>.<c>.app import run` works.  New `--from <example-path>` flag copies from any thing-shaped directory under the workspace root, validated against the entry-point grammar.  Slice 4 next: `things` tree renderer + path-aware `rename`.
+- **Last shipped:** Slice 3 — `new` accepts paths + `--from <example-path>`.
+- **In flight:** Phase 1 Slice 4 — `things` tree renderer + path-aware `rename`.
 - **Blocked on:** —
-- **Last touched:** `workbench/workspace/src/chumicro_workspace/{boot_shim,cli,workspace}.py`, `workbench/workspace/tests/{test_boot_shim,test_cli,test_workspace}.py`, `plans/now.md`.
+- **Last touched:** `workbench/workspace/src/chumicro_workspace/cli.py`, `workbench/workspace/tests/test_cli.py`, `plans/now.md`.
 
 ---
 
@@ -39,8 +39,8 @@ This is the front door. Everything else is deeper read.
 |---|---|
 | 1 — Recursive thing detection | **shipped** |
 | 2 — Deploy + boot-shim nesting | **shipped** |
-| 3 — `new` accepts paths + `--from` | next up |
-| 4 — `things` tree renderer + path-aware `rename` | pending |
+| 3 — `new` accepts paths + `--from` | **shipped** |
+| 4 — `things` tree renderer + path-aware `rename` | next up |
 | 5 — `examples/` folder shipped | pending |
 | 6 — Tests, docs, polish | pending |
 | 7 — Drop `switch` command | pending (can ship standalone) |

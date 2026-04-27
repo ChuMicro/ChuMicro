@@ -347,6 +347,184 @@ class TestNew:
         assert "empty" in str(caught.value)
 
 
+class TestNewNested:
+    """Slice 3 — `new` accepts nested paths and auto-creates namespaces."""
+
+    def _seed_template(self, root: Path) -> Path:
+        template = root / "things" / "_template"
+        template.mkdir(parents=True)
+        (template / "code.py").write_text("# template\n")
+        (template / "config.toml").write_text("[app]\n")
+        return template
+
+    def test_creates_nested_thing_with_intermediate_dirs(
+        self, tmp_path: Path,
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        self._seed_template(root)
+
+        exit_code = cli.main([
+            "new", "--workspace-dir", str(root),
+            "garage/sensors/door_open",
+        ])
+        assert exit_code == 0
+
+        target = root / "things" / "garage" / "sensors" / "door_open"
+        assert (target / "code.py").read_text() == "# template\n"
+        assert (target / "config.toml").read_text() == "[app]\n"
+
+    def test_emits_namespace_inits_at_each_level(
+        self, tmp_path: Path,
+    ) -> None:
+        """Auto-created namespace dirs get empty ``__init__.py`` markers.
+
+        Lets host-side tests do ``from things.garage.sensors.door_open.app
+        import run`` without PEP 420 namespace-package surprises.
+        """
+        root = _seed_workspace(tmp_path)
+        self._seed_template(root)
+
+        exit_code = cli.main([
+            "new", "--workspace-dir", str(root),
+            "garage/sensors/door_open",
+        ])
+        assert exit_code == 0
+
+        assert (root / "things" / "garage" / "__init__.py").is_file()
+        assert (
+            root / "things" / "garage" / "sensors" / "__init__.py"
+        ).is_file()
+        # The leaf is the thing dir itself; no synthetic __init__.py
+        # written inside the thing — that's the template's territory.
+
+    def test_dotted_form_creates_same_layout_as_slash_form(
+        self, tmp_path: Path,
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        self._seed_template(root)
+
+        exit_code = cli.main([
+            "new", "--workspace-dir", str(root),
+            "garage.sensors.door_open",
+        ])
+        assert exit_code == 0
+        # Dotted form normalises to the slash-form filesystem layout.
+        assert (
+            root / "things" / "garage" / "sensors" / "door_open" / "code.py"
+        ).is_file()
+
+    def test_existing_intermediate_namespace_reused(
+        self, tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """A pre-existing ``things/garage/`` is left in place."""
+        root = _seed_workspace(tmp_path)
+        self._seed_template(root)
+        # Pre-create the namespace (e.g. user previously created
+        # garage/heater) — the second `new garage/door_open` reuses it.
+        (root / "things" / "garage").mkdir(parents=True)
+        (root / "things" / "garage" / "__init__.py").write_text("")
+        (root / "things" / "garage" / "marker.txt").write_text("preserved\n")
+
+        exit_code = cli.main([
+            "new", "--workspace-dir", str(root), "garage/door_open",
+        ])
+        assert exit_code == 0
+        # Old namespace marker survives; new thing exists alongside.
+        assert (root / "things" / "garage" / "marker.txt").read_text() == (
+            "preserved\n"
+        )
+        assert (
+            root / "things" / "garage" / "door_open" / "code.py"
+        ).is_file()
+        out = capsys.readouterr().out
+        # Existing namespace dir didn't trigger a creation trace.
+        assert "creating namespace things/garage/" not in out
+
+    def test_creating_new_namespace_traces(
+        self, tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        self._seed_template(root)
+
+        cli.main([
+            "new", "--workspace-dir", str(root),
+            "upstairs/bedroom_sensor",
+        ])
+        out = capsys.readouterr().out
+        assert "creating namespace things/upstairs/" in out
+
+
+class TestNewFromFlag:
+    """Slice 3 — `new --from <example-path>` copies an alternate source."""
+
+    def _seed_workspace_with_example(self, tmp_path: Path) -> Path:
+        root = _seed_workspace(tmp_path)
+        # Seed a fake examples/ tree.
+        example_root = root / "examples" / "two_things" / "server"
+        example_root.mkdir(parents=True)
+        (example_root / "app.py").write_text(
+            "def run():\n    print('server')\n",
+        )
+        (example_root / "config.toml").write_text("[server]\n")
+        (example_root / "README.md").write_text("# example server\n")
+        return root
+
+    def test_copies_example_into_target(self, tmp_path: Path) -> None:
+        root = self._seed_workspace_with_example(tmp_path)
+
+        exit_code = cli.main([
+            "new", "--workspace-dir", str(root),
+            "garage/heater",
+            "--from", "examples/two_things/server",
+        ])
+        assert exit_code == 0
+
+        target = root / "things" / "garage" / "heater"
+        assert (target / "app.py").read_text().startswith("def run")
+        assert (target / "config.toml").read_text() == "[server]\n"
+        assert (target / "README.md").read_text() == "# example server\n"
+
+    def test_rejects_source_without_entry_point(
+        self, tmp_path: Path,
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        # Make a directory that's not a thing — README only.
+        notes_dir = root / "examples" / "design_notes"
+        notes_dir.mkdir(parents=True)
+        (notes_dir / "wiring.md").write_text("\n")
+
+        with pytest.raises(SystemExit) as caught:
+            cli.main([
+                "new", "--workspace-dir", str(root),
+                "kitchen", "--from", "examples/design_notes",
+            ])
+        assert "no entry-point file" in str(caught.value)
+        assert not (root / "things" / "kitchen").exists()
+
+    def test_rejects_missing_source_dir(self, tmp_path: Path) -> None:
+        root = _seed_workspace(tmp_path)
+        with pytest.raises(SystemExit) as caught:
+            cli.main([
+                "new", "--workspace-dir", str(root),
+                "kitchen", "--from", "nonexistent/source",
+            ])
+        assert "is not a directory" in str(caught.value)
+
+    def test_rejects_source_outside_workspace(
+        self, tmp_path: Path,
+    ) -> None:
+        """Defence against ``--from ../../etc/passwd``-style escapes."""
+        root = _seed_workspace(tmp_path)
+        with pytest.raises(SystemExit) as caught:
+            cli.main([
+                "new", "--workspace-dir", str(root),
+                "kitchen", "--from", "../outside",
+            ])
+        assert "outside" in str(caught.value)
+
+
 # ---------------------------------------------------------------------------
 # discover
 # ---------------------------------------------------------------------------
