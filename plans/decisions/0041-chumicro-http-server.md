@@ -194,10 +194,13 @@ real blocker, for a different reason.
 **CircuitPython 10.2.0-rc.0 — server-side TLS not possible.**
 ``ssl.PROTOCOL_TLS_SERVER`` does not exist on CP; ``dir(ssl)``
 exposes no ``PROTOCOL_*`` constants whatsoever.  CP's
-``ssl.SSLContext()`` is hard-wired to client-side use.  This is a
-CP-platform decision, not a heap constraint — the heap had ~157 KB
-free at the time of the failure.  Adafruit's ``httpserver`` runs
-into the same wall.
+``ssl.SSLContext()`` is hard-wired to client-side use.  Verified
+on **both** Pi Pico W (rp2 port, ~157 KB free heap) **and**
+Lolin S2 (ESP32-S2 port, ~2.04 MB free heap) — the result is
+identical, confirming this is a CircuitPython platform decision
+in the shared-bindings layer, not a per-port or heap-class issue.
+Adafruit's ``httpserver`` runs into the same wall on every CP
+board for the same reason.
 
 **Shipping policy:**
 * `chumicro_sockets.tls_listening_socket(...)` works on MicroPython

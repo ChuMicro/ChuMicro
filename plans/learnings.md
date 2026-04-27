@@ -93,15 +93,16 @@ The old basefs MQTT impl (`/Users/chuxor/circuitpython/pythonProject3/basefilesy
 
 `chumicro-mqtt` 0.1.4 adopts a hybrid: a `recv_budget_per_tick` knob (default 1024 B) caps the per-tick byte budget while still letting a tick do multiple recv calls when bytes are available.  Default 1024 = 4× the steady RX buffer (256 B) = drains a typical PUBLISH in one tick AND keeps tick latency well under 10 ms even on rp2.  Configurable upward for things that want fast big-blob ingestion at the cost of LED smoothness.  The lesson is general: any tick-shaped reader on a fat kernel buffer needs an explicit per-tick byte budget OR an explicit per-tick iteration count — implicit "drain until EAGAIN" is a foot-gun.
 
-### CircuitPython's `ssl` module deliberately omits server-side TLS
+### CircuitPython's `ssl` module deliberately omits server-side TLS — on every supported board
 
-Verified live 2026-04-26 on Pi Pico W CircuitPython 10.2.0-rc.0 during chumicro-http-server slice 7t investigation:
+Verified live 2026-04-27 on **two different CP boards** during chumicro-http-server slice 7t investigation:
 
-* `ssl.PROTOCOL_TLS_SERVER` doesn't exist; `dir(ssl)` exposes no `PROTOCOL_*` constants whatsoever.
-* `ssl.SSLContext()` is hard-wired to the client side; there's no parameter to flip it server-side.
-* `AttributeError("'module' object has no attribute 'PROTOCOL_TLS_SERVER'")` when you try.
+* **Pi Pico W (rp2)** — CP 10.2.0-rc.0, ~157 KB free heap.  `SSL_AVAILABLE_PROTOCOLS []`, `AttributeError("'module' object has no attribute 'PROTOCOL_TLS_SERVER'")`.
+* **Lolin S2 (ESP32-S2)** — CP 10.2.0-rc.0, **~2.04 MB free heap** (13× the Pi Pico W).  Same `SSL_AVAILABLE_PROTOCOLS []`, same outcome.
 
-This is a CircuitPython platform decision, not a heap constraint — the device had ~157 KB free heap at the time of the failure.  Adafruit's `httpserver` runs into the same wall and quietly degrades on CP.  The recommended workaround is to terminate TLS in front of the board with a proxy (Caddy / nginx / Cloudflare Tunnel) and let the board speak plain HTTP on the LAN behind it.  Lifted to `chumicro_sockets.ssl_context_with_cert_and_key`'s CP adapter, which now raises `UnsupportedSSLConfigError` with a clear explanation rather than the bare `AttributeError`.
+Memory class doesn't matter; the limitation is in CircuitPython's `shared-bindings/ssl/` — `dir(ssl)` exposes no `PROTOCOL_*` constants on any tested board, and `ssl.SSLContext()` is hard-wired client-side with no server-side flag.  Adafruit's `httpserver` runs into the same wall and quietly degrades on every CP board (despite the `https=True` flag implying otherwise).
+
+Workaround for HTTPS on CircuitPython: terminate TLS in front of the board with a proxy (Caddy / nginx / Cloudflare Tunnel) and let the board speak plain HTTP on the LAN behind it.  Lifted to `chumicro_sockets.ssl_context_with_cert_and_key`'s CP adapter, which raises `UnsupportedSSLConfigError` with a clear explanation rather than the bare `AttributeError`.
 
 ### MicroPython TLS server *does* fit on Pi Pico W (Adafruit's "limited" framing was too pessimistic)
 
