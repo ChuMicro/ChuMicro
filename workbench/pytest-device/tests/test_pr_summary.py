@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import pr_summary
 from chumicro_deploy import DeviceEntry
+from chumicro_pytest_device import pr_summary
 
 
 def _make_device_result(
@@ -214,7 +214,7 @@ class TestFormatPrSummaryBlock:
 
     def test_single_file_run_renders_per_test_table(self) -> None:
         """One file → per-test detail table with status + duration per method."""
-        from result_parser import TestResult
+        from chumicro_pytest_device.result_parser import TestResult
 
         files = [pr_summary.FileRunResult(
             library="timing",

@@ -1,7 +1,7 @@
-"""Tests for pytest_device — the pytest plugin for device functional tests.
+"""Tests for the chumicro-pytest-device plugin.
 
-Tests AST-based test discovery, DeviceTestItem behavior with faked
-transports, device config loading, and collection hook behavior.
+Tests AST-based test discovery, DeviceTestItem behaviour with faked
+transports, device config loading, and collection hook behaviour.
 """
 
 from __future__ import annotations
@@ -11,9 +11,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-import pytest_device
 from chumicro_deploy import DeviceEntry
-from result_parser import TestResult as ParsedTestResult
+from chumicro_pytest_device import plugin as pytest_device
+from chumicro_pytest_device.result_parser import TestResult as ParsedTestResult
 
 
 class TestParseTestFunctions:
@@ -412,7 +412,7 @@ class TestLoadFallbackDevice:
         """Should skip with setup instructions when devices.yml is missing."""
         monkeypatch.setenv("CHUMICRO_DEVICES", str(tmp_path / "nope.yml"))
         with pytest.raises(pytest.skip.Exception, match="No devices.yml found"):
-            pytest_device._load_fallback_device()
+            pytest_device._load_fallback_device(_FakeSession(pytest_device._TransportCache()))
 
     def test_skips_when_no_devices_configured(self, monkeypatch, tmp_path) -> None:
         """Should skip when no devices match the ide_runtime."""
@@ -427,7 +427,7 @@ class TestLoadFallbackDevice:
         )
         monkeypatch.setenv("CHUMICRO_DEVICES", str(devices_file))
         with pytest.raises(pytest.skip.Exception, match="No devices configured"):
-            pytest_device._load_fallback_device()
+            pytest_device._load_fallback_device(_FakeSession(pytest_device._TransportCache()))
 
     def test_returns_target_device(self, monkeypatch, tmp_path) -> None:
         """Should return the device matching ide_runtime defaults."""
@@ -445,7 +445,7 @@ class TestLoadFallbackDevice:
             "    address: /dev/ttyUSB1\n"
         )
         monkeypatch.setenv("CHUMICRO_DEVICES", str(devices_file))
-        device = pytest_device._load_fallback_device()
+        device = pytest_device._load_fallback_device(_FakeSession(pytest_device._TransportCache()))
         assert device.identifier == "board2"
 
 
@@ -674,6 +674,13 @@ class _HotPathTransport:
 class _FakeConfig:
     """Minimal pytest.Config stand-in that returns None for every option."""
 
+    def __init__(self, rootpath: Path | None = None) -> None:
+        # ``pytest.Config.rootpath`` is what the plugin uses to derive
+        # ``support/test_harness/src`` and ``libraries/`` paths;
+        # default to the chumicro mono-repo root when running in-tree
+        # so harness-shaped tests still resolve real paths.
+        self.rootpath = rootpath or Path(__file__).resolve().parents[3]
+
     def getoption(self, name: str, default=None):  # noqa: D401, ANN001
         return default
 
@@ -808,7 +815,7 @@ class TestEnsurePrepared:
 
         monkeypatch.setattr(
             pytest_device, "resolve_library_source_dirs",
-            lambda library_dir, test_files=None: [library_dir / "src"],
+            lambda library_dir, *, libraries_root=None, test_files=None: [library_dir / "src"],
         )
 
         test_file_a = _make_functional_test_file(tmp_path, "alpha")
@@ -864,7 +871,7 @@ class TestEnsureBatchResult:
 
         monkeypatch.setattr(
             pytest_device, "resolve_library_source_dirs",
-            lambda library_dir, test_files=None: [library_dir / "src"],
+            lambda library_dir, *, libraries_root=None, test_files=None: [library_dir / "src"],
         )
 
         test_file = _make_functional_test_file(tmp_path, "alpha")
@@ -892,7 +899,7 @@ class TestEnsureBatchResult:
 
         monkeypatch.setattr(
             pytest_device, "resolve_library_source_dirs",
-            lambda library_dir, test_files=None: [library_dir / "src"],
+            lambda library_dir, *, libraries_root=None, test_files=None: [library_dir / "src"],
         )
 
         test_file = _make_functional_test_file(tmp_path, "alpha")
@@ -922,7 +929,7 @@ class TestEnsureBatchResult:
 
         monkeypatch.setattr(
             pytest_device, "resolve_library_source_dirs",
-            lambda library_dir, test_files=None: [library_dir / "src"],
+            lambda library_dir, *, libraries_root=None, test_files=None: [library_dir / "src"],
         )
 
         test_file = _make_functional_test_file(tmp_path, "alpha")
@@ -960,7 +967,7 @@ class TestEnsureBatchResult:
 
         monkeypatch.setattr(
             pytest_device, "resolve_library_source_dirs",
-            lambda library_dir, test_files=None: [library_dir / "src"],
+            lambda library_dir, *, libraries_root=None, test_files=None: [library_dir / "src"],
         )
 
         test_file = _make_functional_test_file(tmp_path, "alpha")
@@ -1011,7 +1018,7 @@ class TestDeviceRunFileItemRuntest:
         _prime_cache_with_transport(hot_path_cache, device, transport)
         monkeypatch.setattr(
             pytest_device, "resolve_library_source_dirs",
-            lambda library_dir, test_files=None: [library_dir / "src"],
+            lambda library_dir, *, libraries_root=None, test_files=None: [library_dir / "src"],
         )
 
         test_file = _make_functional_test_file(tmp_path, "alpha")
@@ -1049,7 +1056,7 @@ class TestDeviceTestItemRuntest:
         _prime_cache_with_transport(hot_path_cache, device, transport)
         monkeypatch.setattr(
             pytest_device, "resolve_library_source_dirs",
-            lambda library_dir, test_files=None: [library_dir / "src"],
+            lambda library_dir, *, libraries_root=None, test_files=None: [library_dir / "src"],
         )
 
         test_file = _make_functional_test_file(tmp_path, "alpha")
@@ -1068,7 +1075,7 @@ class TestDeviceTestItemRuntest:
         _prime_cache_with_transport(hot_path_cache, device, transport)
         monkeypatch.setattr(
             pytest_device, "resolve_library_source_dirs",
-            lambda library_dir, test_files=None: [library_dir / "src"],
+            lambda library_dir, *, libraries_root=None, test_files=None: [library_dir / "src"],
         )
 
         test_file = _make_functional_test_file(tmp_path, "alpha")
@@ -1087,7 +1094,7 @@ class TestDeviceTestItemRuntest:
         _prime_cache_with_transport(hot_path_cache, device, transport)
         monkeypatch.setattr(
             pytest_device, "resolve_library_source_dirs",
-            lambda library_dir, test_files=None: [library_dir / "src"],
+            lambda library_dir, *, libraries_root=None, test_files=None: [library_dir / "src"],
         )
 
         test_file = _make_functional_test_file(tmp_path, "alpha")
@@ -1110,7 +1117,7 @@ class TestDeviceTestItemRuntest:
         _prime_cache_with_transport(hot_path_cache, device, transport)
         monkeypatch.setattr(
             pytest_device, "resolve_library_source_dirs",
-            lambda library_dir, test_files=None: [library_dir / "src"],
+            lambda library_dir, *, libraries_root=None, test_files=None: [library_dir / "src"],
         )
 
         test_file = _make_functional_test_file(tmp_path, "alpha")

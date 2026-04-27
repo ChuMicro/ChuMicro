@@ -48,20 +48,49 @@ from chumicro_deploy import (
     load_device_registry,
     resolve_ide_devices,
 )
-from device_testing import (
+
+from ._test_runner import (
     build_device_bootstrap,
     create_transport,
     execute_device_bootstrap,
     resolve_effective_deploy_mode,
     resolve_library_source_dirs,
 )
-from pr_summary import (
+from .pr_summary import (
     DeviceRunResult,
     FileRunResult,
     format_pr_summary_block,
 )
-from result_parser import RunResult, TestResult, parse_output
-from workspace import ROOT
+from .result_parser import RunResult, TestResult, parse_output
+
+
+def _workspace_root(session: pytest.Session) -> Path:
+    """Return the root of the workspace pytest was invoked against.
+
+    Replaces the pre-extraction ``scripts/workspace.ROOT`` constant —
+    derived from ``pytest.Config.rootpath`` so the plugin works
+    inside any workspace, not just the chumicro mono-repo.
+    """
+    return Path(session.config.rootpath)
+
+
+def _harness_source_dir(session: pytest.Session) -> Path:
+    """Return ``support/test_harness/src`` for the on-device test harness.
+
+    chumicro's mono-repo ships a lightweight test harness at this
+    path; the plugin stages it alongside library sources so
+    ``import chumicro_test_harness`` resolves on the device.
+
+    Workspaces without this directory won't run harness-shaped
+    functional tests — that's a documented mono-repo convention,
+    not a plugin contract.
+    """
+    return _workspace_root(session) / "support" / "test_harness" / "src"
+
+
+def _libraries_root(session: pytest.Session) -> Path:
+    """Return ``libraries/`` for dependency-resolution staging."""
+    return _workspace_root(session) / "libraries"
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -310,8 +339,10 @@ class _PRSummaryCollector:
         """Total wall-clock span of the session, in seconds."""
         return max(self._session_end - self._session_start, 0.0)
 
-#: Path to the test harness source directory.
-HARNESS_SOURCE = ROOT / "support" / "test_harness" / "src"
+# Note: ``HARNESS_SOURCE`` and ``LIBRARIES_ROOT`` were module-level
+# constants pre-extraction; both are now session-scoped via
+# :func:`_harness_source_dir` and :func:`_libraries_root` so the
+# plugin works inside any workspace.
 
 
 def _parse_test_functions(filepath: Path) -> list[str]:
@@ -728,7 +759,7 @@ class DeviceRuntimeItem(pytest.Item):
         """Return the resolved target device for this item."""
         device_entry = self.target_device
         if device_entry is None:
-            device_entry = _load_fallback_device()
+            device_entry = _load_fallback_device(self.session)
             self.target_device = device_entry
         return device_entry
 
@@ -775,10 +806,14 @@ class DeviceRuntimeItem(pytest.Item):
                     except Exception as error:
                         pytest.fail(f"Device reset failed between test files: {error}")
                 source_dirs = resolve_library_source_dirs(
-                    self.library_dir, test_files=[self.test_file],
+                    self.library_dir,
+                    libraries_root=_libraries_root(self.session),
+                    test_files=[self.test_file],
                 )
                 transport.stage(
-                    source_dirs, [self.test_file], HARNESS_SOURCE,
+                    source_dirs,
+                    [self.test_file],
+                    _harness_source_dir(self.session),
                 )
                 cache.mark_staged(staging_key)
 
@@ -924,7 +959,7 @@ class DeviceTestItem(DeviceRuntimeItem):
         )
 
 
-def _load_fallback_device() -> DeviceEntry:
+def _load_fallback_device(session: pytest.Session) -> DeviceEntry:
     """Fallback device loading for items created without a target.
 
     Called when ``devices.yml`` was unavailable at collection time
@@ -938,7 +973,9 @@ def _load_fallback_device() -> DeviceEntry:
         pytest.fail: If devices.yml is malformed.
     """
     try:
-        devices, defaults = load_device_registry(workspace_root=ROOT)
+        devices, defaults = load_device_registry(
+            workspace_root=_workspace_root(session),
+        )
     except DeviceConfigError as error:
         error_message = str(error)
         if "not found" in error_message:
@@ -1049,7 +1086,9 @@ def _bulk_stage_for_device(
 
         # Collect source dirs for this item's library.
         for source_dir in resolve_library_source_dirs(
-            item.library_dir, test_files=[item.test_file],
+            item.library_dir,
+            libraries_root=_libraries_root(session),
+            test_files=[item.test_file],
         ):
             if source_dir not in seen_source_dirs:
                 seen_source_dirs.append(source_dir)
@@ -1060,7 +1099,9 @@ def _bulk_stage_for_device(
             seen_test_file_ids.add(test_file_key)
             seen_test_files.append(item.test_file)
 
-    transport.stage(seen_source_dirs, seen_test_files, HARNESS_SOURCE)
+    transport.stage(
+        seen_source_dirs, seen_test_files, _harness_source_dir(session),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1162,7 +1203,9 @@ def pytest_sessionstart(session: pytest.Session) -> None:
     # Eagerly resolve target devices so collection can parametrize
     # by runtime when ide_runtime is "both".
     try:
-        devices, defaults = load_device_registry(workspace_root=ROOT)
+        devices, defaults = load_device_registry(
+            workspace_root=_workspace_root(session),
+        )
     except DeviceConfigError:
         session._device_targets = None  # type: ignore[attr-defined]
     else:

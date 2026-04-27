@@ -46,6 +46,8 @@
       <sourceFolder url="file://$MODULE_DIR$/workbench/deploy/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/workbench/deploy/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/workbench/deploy/functional_tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/workbench/pytest-device/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/workbench/pytest-device/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/workbench/repl/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/workbench/repl/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/workbench/repl/functional_tests" isTestSource="true" />

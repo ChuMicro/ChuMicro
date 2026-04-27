@@ -1,18 +1,25 @@
-"""Device-test helpers shared by the pytest plugin and anything else.
+"""Plugin-internal device-test helpers.
 
 Owns the primitives that actually touch device hardware — bootstrap
-generation, transport construction, and the intra-workspace source
+generation, transport construction, and the workspace-source
 discovery that staging depends on.  Orchestration (test selection,
-per-device loops, PR-summary rendering) lives in
-:mod:`pytest_device` now; ``run.py test-libraries-functional`` is a thin wrapper
-that invokes pytest with the plugin's ``--chumicro-*`` options.
+per-device loops, PR-summary rendering) lives in :mod:`plugin`.
 
-See Decision 0027 for the transport protocol and config schema.
+Migrated from ``scripts/device_testing.py`` (Decision 0032 §Rule 8)
+when the pytest plugin moved out of the chumicro mono-repo's
+``scripts/`` and into a publishable workbench package.
+
+The mono-repo-only ``ROOT`` constant was replaced with a
+``libraries_root`` parameter on :func:`resolve_library_source_dirs`
+so any pytest invocation can supply its own workspace layout via
+``pytest.Config.rootpath``.
 """
 
 from __future__ import annotations
 
 import ast
+import re
+import tomllib
 from pathlib import Path
 from typing import Any, cast
 
@@ -22,19 +29,36 @@ from chumicro_deploy import (
     ExtendedTransportProtocol,
     TransportProtocol,
 )
-from workspace import (
-    ROOT,
-    library_name_from_module,
-    library_name_from_pip_dependency,
-    load_tomllib,
-)
+
+#: PEP 508 version specifiers, environment markers, and extras.
+_DEPENDENCY_VERSION_SPLITTER = re.compile(r"[><=!;~\[]")
+
+
+def _strip_pip_dependency_version(dependency: str) -> str:
+    """``"chumicro-timing>=0.1"`` -> ``"chumicro-timing"``."""
+    return _DEPENDENCY_VERSION_SPLITTER.split(dependency, maxsplit=1)[0].strip()
+
+
+def _library_name_from_pip_dependency(dependency: str) -> str | None:
+    """Map a ``chumicro-*`` pip dep to its workspace library directory name."""
+    name = _strip_pip_dependency_version(dependency)
+    if not name.startswith("chumicro-"):
+        return None
+    return name[len("chumicro-"):]
+
+
+def _library_name_from_module(module_name: str) -> str | None:
+    """Map a ``chumicro_*`` Python module to its workspace library name."""
+    if not module_name.startswith("chumicro_"):
+        return None
+    return module_name.removeprefix("chumicro_").split(".", 1)[0]
 
 
 def build_bootstrap(
     test_filename: str,
     name_filter: str | None = None,
 ) -> str:
-    """Generate a bootstrap script for the test harness.
+    """Generate a bootstrap script for the on-device test harness.
 
     The bootstrap imports the test file via the harness discovery
     module and runs it through ``run_module``.
@@ -57,14 +81,7 @@ def build_bootstrap(
 
 
 def _resolve_test_imported_library_names(test_files: list[Path]) -> list[str]:
-    """Return workspace library names imported by functional test files.
-
-    Args:
-        test_files: Functional test files to inspect.
-
-    Returns:
-        Sorted unique library names referenced through ``chumicro_*`` imports.
-    """
+    """Return workspace library names imported by functional test files."""
     imported_library_names: set[str] = set()
 
     for test_file in test_files:
@@ -74,13 +91,13 @@ def _resolve_test_imported_library_names(test_files: list[Path]) -> list[str]:
         for node in ast.walk(syntax_tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    library_name = library_name_from_module(alias.name)
+                    library_name = _library_name_from_module(alias.name)
                     if library_name is not None:
                         imported_library_names.add(library_name)
             elif isinstance(node, ast.ImportFrom):
                 if node.module is None:
                     continue
-                library_name = library_name_from_module(node.module)
+                library_name = _library_name_from_module(node.module)
                 if library_name is not None:
                     imported_library_names.add(library_name)
 
@@ -90,35 +107,35 @@ def _resolve_test_imported_library_names(test_files: list[Path]) -> list[str]:
 def resolve_library_source_dirs(
     library_dir: Path,
     *,
+    libraries_root: Path,
     test_files: list[Path] | None = None,
     visited_library_names: set[str] | None = None,
 ) -> list[Path]:
     """Return source dirs for a library and its intra-workspace dependencies.
 
     Reads ``project.dependencies`` from the library's ``pyproject.toml``
-    and resolves any ``chumicro-*`` entries to their ``src/`` directories.
-    This provides the minimal set of source directories needed to run
-    the library's tests — critical for RAM mode where all source code
-    is sent inline through the serial REPL.
+    and resolves any ``chumicro-*`` entries to their ``src/``
+    directories.  Critical for RAM-mode deploys where every source
+    file is sent inline through the serial REPL.
 
-    Functional tests may also import additional ChuMicro libraries directly
-    without making them install-time dependencies of the library under test.
-    When ``test_files`` is provided, those imports are resolved and staged too.
+    Functional tests may also import additional ChuMicro libraries
+    directly without making them install-time dependencies; when
+    *test_files* is provided, those imports are resolved and staged
+    too.
 
     Args:
         library_dir: Root directory of the library (e.g.
             ``libraries/runner``).
-        test_files: Optional functional test files whose ChuMicro imports
-            should also be staged.
-        visited_library_names: Internal cycle guard for recursive resolution.
+        libraries_root: The workspace's libraries directory — typically
+            ``pytest.Config.rootpath / "libraries"`` inside the chumicro
+            mono-repo, or any equivalent layout.
+        test_files: Optional functional test files whose ChuMicro
+            imports should also be staged.
+        visited_library_names: Internal cycle guard.
 
     Returns:
-        List of ``src/`` directories: the library's own plus
-        any intra-workspace dependencies, in dependency-first order.
+        Dependency-first ordered list of ``src/`` directories.
     """
-    libraries_root = ROOT / "libraries"
-    tomllib = load_tomllib()
-
     if not library_dir.is_dir():
         return []
 
@@ -129,7 +146,6 @@ def resolve_library_source_dirs(
         return []
     visited_library_names.add(library_name)
 
-    # Read the library's own dependencies.
     pyproject_file = library_dir / "pyproject.toml"
     dependency_dirs: list[Path] = []
     dependency_library_names: list[str] = []
@@ -138,7 +154,7 @@ def resolve_library_source_dirs(
             data: dict[str, Any] = tomllib.load(toml_file)
         dependencies: list[str] = data.get("project", {}).get("dependencies", [])
         for dependency in dependencies:
-            dep_library = library_name_from_pip_dependency(dependency)
+            dep_library = _library_name_from_pip_dependency(dependency)
             if dep_library is not None:
                 dependency_library_names.append(dep_library)
 
@@ -153,13 +169,12 @@ def resolve_library_source_dirs(
         dependency_library_dir = libraries_root / dependency_library_name
         for transitive_dir in resolve_library_source_dirs(
             dependency_library_dir,
+            libraries_root=libraries_root,
             visited_library_names=visited_library_names,
         ):
             if transitive_dir not in dependency_dirs:
                 dependency_dirs.append(transitive_dir)
 
-    # The library's own src/ comes last so dependencies are registered
-    # first during staging.
     own_source = library_dir / "src"
     if own_source.is_dir() and own_source not in dependency_dirs:
         dependency_dirs.append(own_source)
@@ -171,27 +186,14 @@ def resolve_effective_deploy_mode(
     device_entry: DeviceEntry,
     deploy_mode_override: str | None,
 ) -> str:
-    """Return the user-facing deploy mode that will actually run for a device.
+    """Return the effective deploy mode for a device.
 
     Resolution order:
 
     1. CLI ``--chumicro-deploy-mode`` override (highest precedence).
     2. Per-device ``deploy_mode`` from ``devices.yml``.
-    3. Global ``defaults.deploy_mode`` from ``devices.yml`` (already
-       folded into ``device_entry.deploy_mode`` at load time).
+    3. Global ``defaults.deploy_mode`` (folded into the entry by the loader).
     4. ``"ram"`` as a last-resort default.
-
-    Callers use the return value both to construct the transport and
-    to label per-device bullets in the PR summary — reviewers ask
-    "what mode ran on this board" and the CLI reconstruction alone
-    cannot answer that when the user invoked bare ``test-libraries-functional``.
-
-    Args:
-        device_entry: A DeviceEntry from the config loader.
-        deploy_mode_override: ``--chumicro-deploy-mode`` value, or ``None``.
-
-    Returns:
-        ``"ram"`` or ``"flash"``.
     """
     return deploy_mode_override or device_entry.deploy_mode or "ram"
 
@@ -200,22 +202,11 @@ def create_transport(
     device_entry: DeviceEntry,
     deploy_mode: str | None = None,
 ) -> TransportProtocol:
-    """Create the appropriate transport for a device entry.
+    """Build a transport instance for a device entry.
 
     Thin wrapper around :meth:`chumicro_deploy.Device.create_transport`
-    — builds a ``Device`` from the chumicro-shaped ``DeviceEntry`` and
-    delegates runtime-branching to the package.
-
-    Args:
-        device_entry: A DeviceEntry from the config loader.
-        deploy_mode: ``"ram"`` or ``"flash"``.  When ``None``, uses the
-            device entry's ``deploy_mode`` field (default ``"ram"``).
-
-    Returns:
-        A transport instance for the device's runtime.
-
-    Raises:
-        ValueError: If the runtime is not supported.
+    — translates the registry-shaped ``DeviceEntry`` into a
+    ``Device`` and delegates runtime branching.
     """
     effective_mode = resolve_effective_deploy_mode(device_entry, deploy_mode)
     device = Device(
@@ -234,30 +225,17 @@ def build_device_bootstrap(
     test_file: Path,
     function_filter: str | None,
 ) -> str | list[str]:
-    """Build the bootstrap script for the given device and test file.
+    """Build the bootstrap script(s) for the given device + test file.
 
     MicroPython uses the standard import-based bootstrap.
     CircuitPython in RAM mode uses an inline bootstrap with module
-    injection.  CircuitPython in flash mode uses the standard
-    import-based bootstrap since files are on the device.
-
-    Args:
-        device_entry: A DeviceEntry from the config loader.
-        transport: The transport instance (needed for staged sources
-            on CircuitPython RAM mode).
-        test_file: Path to the test file.
-        function_filter: Optional substring filter for the on-device
-            ``run_module`` ``name_filter``.
-
-    Returns:
-        Python source code string, or a list of chunked raw-REPL scripts for
-        CircuitPython RAM mode.
+    injection (returns a list of chunked raw-REPL scripts).
+    CircuitPython in flash mode uses the standard import-based path
+    since files are on the device.
     """
     if device_entry.runtime == "circuitpython" and transport.mode == "ram":
         from chumicro_deploy import build_circuitpython_bootstrap_scripts
 
-        # The CircuitPython RAM transport always exposes the chunking
-        # helpers via ExtendedTransportProtocol — no need to guard.
         cp_transport = cast(ExtendedTransportProtocol, transport)
         staged_sources = cp_transport.staged_sources
         assert staged_sources is not None, (
@@ -281,14 +259,15 @@ def execute_device_bootstrap(
     transport: TransportProtocol,
     bootstrap: str | list[str],
 ) -> str:
-    """Execute either a single bootstrap script or a chunked script sequence.
+    """Execute either a single bootstrap script or a chunked sequence.
 
     A list bootstrap is only produced for the CircuitPython RAM path,
-    where the transport implements ExtendedTransportProtocol and
-    therefore exposes ``execute_scripts``.  Calling ``execute_scripts``
-    directly (instead of guarding with ``hasattr``) surfaces a clear
-    AttributeError if a future code path passes a list bootstrap to a
-    transport that does not support chunking.
+    where the transport implements
+    :class:`chumicro_deploy.ExtendedTransportProtocol` and exposes
+    ``execute_scripts``.  Calling it directly (instead of guarding
+    with ``hasattr``) surfaces a clear ``AttributeError`` if a future
+    code path passes a list bootstrap to a transport that doesn't
+    support chunking.
     """
     if isinstance(bootstrap, list):
         return cast(ExtendedTransportProtocol, transport).execute_scripts(bootstrap)

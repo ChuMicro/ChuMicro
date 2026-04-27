@@ -19,6 +19,7 @@
         "libraries/timing/src",
         "libraries/wifi/src",
         "workbench/deploy/src",
+        "workbench/pytest-device/src",
         "workbench/repl/src",
         "workbench/workspace/src",
         "scripts"

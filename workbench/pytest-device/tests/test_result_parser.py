@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import result_parser
-from result_parser import parse_output
+from chumicro_pytest_device import result_parser
+from chumicro_pytest_device.result_parser import parse_output
 
 
 class TestParsePassFail:

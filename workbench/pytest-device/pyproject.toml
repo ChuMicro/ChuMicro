@@ -1,0 +1,51 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "chumicro-pytest-device"
+dynamic = ["version"]
+description = "Pytest plugin that runs library functional tests on connected CircuitPython and MicroPython boards."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [
+    { name = "ChuMicro" },
+]
+keywords = [
+    "circuitpython", "micropython", "microcontroller", "embedded",
+    "pytest", "plugin", "device", "hardware-testing",
+]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Framework :: Pytest",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Software Development :: Embedded Systems",
+    "Topic :: Software Development :: Testing",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "pytest>=8.0",
+    "chumicro-deploy>=0.1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/ChuMicro/ChuMicro"
+Source = "https://github.com/ChuMicro/ChuMicro/tree/main/workbench/pytest-device"
+Issues = "https://github.com/ChuMicro/ChuMicro/issues"
+
+[project.entry-points.pytest11]
+chumicro_pytest_device = "chumicro_pytest_device.plugin"
+
+[tool.hatch.version]
+path = "VERSION"
+pattern = "(?P<version>\\S+)"
+
+[tool.hatch.build.targets.sdist]
+include = ["src/", "VERSION", "README.md"]
+exclude = [".gitignore"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/chumicro_pytest_device"]

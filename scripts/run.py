@@ -382,6 +382,20 @@ def test_cpython(
 
             cov_args = [] if no_cov else coverage_args_for([package_dir])
 
+            # Disable the auto-registered chumicro-pytest-device plugin
+            # for unit-test runs.  The plugin only intercepts paths
+            # under ``functional_tests/``, so it adds nothing for the
+            # ``tests/`` sweep here.  But its ``pytest11`` entry point
+            # would otherwise import the plugin's modules (which pull
+            # in ``chumicro_deploy``) at session start — *before*
+            # pytest-cov begins instrumenting, missing import-time
+            # coverage (dataclass definitions, regex compiles) on
+            # both the plugin's tree and ``chumicro_deploy.config.default``.
+            # Functional-test runs (``test-libraries-functional``) load
+            # the plugin via the same entry point and aren't affected
+            # because they don't measure coverage of those modules.
+            disable_plugin_args = ["-p", "no:chumicro_pytest_device"]
+
             # Unique coverage file per run keeps data attributable.
             coverage_name = f".coverage.{package_dir.name}.{run_counter}"
             run_environment = {**environment, "COVERAGE_FILE": str(ROOT / coverage_name)}
@@ -394,6 +408,7 @@ def test_cpython(
                     *cov_args,
                     "--cov-report=",
                     *cov_gate_args,
+                    *disable_plugin_args,
                     test_target,
                     *extra_args,
                 ],
@@ -938,11 +953,11 @@ def test_libraries_functional(
     """Run functional tests on connected devices.
 
     Thin wrapper that invokes ``pytest libraries/<name>/functional_tests/``
-    with the ``--chumicro-*`` flags the :mod:`pytest_device` plugin
-    exposes.  The plugin owns collection, routing, transport caching,
-    and the PR-summary block — the IDE play-button path uses exactly
-    the same hooks, so CLI and IDE runs are now byte-for-byte
-    equivalent in behavior (device selection, mode overrides,
+    with the ``--chumicro-*`` flags the ``chumicro-pytest-device``
+    plugin exposes.  The plugin owns collection, routing, transport
+    caching, and the PR-summary block — the IDE play-button path
+    uses exactly the same hooks, so CLI and IDE runs are byte-for-byte
+    equivalent in behaviour (device selection, mode overrides,
     reporting).
 
     Args:

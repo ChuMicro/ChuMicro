@@ -7,9 +7,11 @@ Auto-discovers library and support package source roots so that
 Functional tests (``functional_tests/``) are excluded from normal
 host-side collection.  When an IDE targets one directly — whether
 a single file, a single function, or the whole directory — the
-``pytest_device`` plugin intercepts it and routes execution to a
-connected board.  No environment variable setup needed; the plugin
-reads ``devices.yml`` to find the target device.
+``chumicro-pytest-device`` plugin intercepts it and routes
+execution to a connected board.  The plugin auto-registers via
+its ``pytest11`` entry point on ``pip install``; no
+``pytest_plugins = [...]`` line is needed here.  The plugin reads
+``devices.yml`` to find the target device.
 
 See ``plans/decisions/0009-per-library-test-runs.md`` for the
 per-library test isolation strategy.
@@ -24,10 +26,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 
-# Always register the device plugin.  It only activates for files
-# inside functional_tests/ directories — normal test runs are
-# unaffected.
-pytest_plugins = ["pytest_device"]
+# The chumicro-pytest-device plugin auto-registers via its
+# pytest11 entry point — no explicit pytest_plugins line needed.
+# It only activates for files inside ``functional_tests/`` directories;
+# normal test runs are unaffected.
 
 
 def _has_explicit_functional_arg(config) -> bool:
