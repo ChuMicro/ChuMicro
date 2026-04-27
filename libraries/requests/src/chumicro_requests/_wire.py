@@ -103,6 +103,46 @@ NO_BODY_STATUS_CODES = frozenset({204, 304})
 
 
 # ---------------------------------------------------------------------------
+# Content-Type charset parsing
+# ---------------------------------------------------------------------------
+
+
+def parse_charset(content_type: str | None) -> str:
+    """Extract the ``charset=...`` parameter from a Content-Type header.
+
+    Per RFC 7231 §3.1.1.5 the Content-Type value may carry a
+    ``charset`` parameter — for example ``text/html; charset=utf-8``
+    or ``application/json; charset="ISO-8859-1"``.  We tokenize on
+    semicolons, look for a ``charset=`` token (case-insensitive),
+    strip optional surrounding quotes per RFC 7231 §3.1.1.1, and
+    fall back to ``"utf-8"`` when no charset is present or the
+    header itself is missing.
+
+    Defaulting to UTF-8 matches RFC 8259 §8.1 for ``application/json``
+    and aligns with current web practice for ``text/*`` even though
+    historical RFC 2616 defaulted text to ISO-8859-1.
+
+    Args:
+        content_type: Raw ``Content-Type`` header value, or ``None``.
+
+    Returns:
+        The detected charset name, or ``"utf-8"`` as the safe default.
+    """
+    if not content_type:
+        return "utf-8"
+    parts = content_type.split(";")
+    for part in parts[1:]:
+        token = part.strip()
+        if token[:8].lower() != "charset=":
+            continue
+        value = token[8:].strip()
+        if value.startswith('"') and value.endswith('"'):
+            value = value[1:-1]
+        return value or "utf-8"
+    return "utf-8"
+
+
+# ---------------------------------------------------------------------------
 # URL parsing
 # ---------------------------------------------------------------------------
 

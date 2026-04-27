@@ -23,6 +23,8 @@ bytes via ``Content-Length`` or read-until-close.  TLS, POST, JSON,
 redirects, and chunked encoding ship in subsequent slices.
 """
 
+import json
+
 from chumicro_timing import ticks_add, ticks_diff, ticks_ms
 
 from chumicro_requests._wire import (
@@ -36,6 +38,7 @@ from chumicro_requests._wire import (
     ParseState,
     ResponseParser,
     encode_request,
+    parse_charset,
     parse_url,
 )
 
@@ -107,14 +110,22 @@ class Response:
         reason: Reason phrase from the status line (e.g. ``"OK"``).
         http_version: Protocol version string (e.g. ``"HTTP/1.1"``).
         headers: :class:`CaseInsensitiveDict` of response headers.
-        body: Raw response body as ``bytes``.  Slice 3b adds
-            ``.text`` (decoded) and ``.json()``.
+        body: Raw response body as ``bytes``.
         url: The URL that was requested.
         oversized_dropped: ``True`` when the body was dropped per
             ``when_oversized`` policy (``False`` for normal responses).
+
+    Body decoding (slice 3b):
+
+    * :attr:`encoding` — charset sniffed from ``Content-Type``,
+      defaulting to ``"utf-8"``.  Settable so callers can override
+      a wrong / missing server hint.
+    * :attr:`text` — body decoded as a ``str`` using :attr:`encoding`.
+    * :meth:`json` — body parsed as JSON into Python objects.
     """
 
     __slots__ = (
+        "_encoding_override",
         "body",
         "headers",
         "http_version",
@@ -127,14 +138,15 @@ class Response:
     def __init__(
         self,
         *,
-        status_code,
-        reason,
-        http_version,
-        headers,
-        body,
-        url,
-        oversized_dropped=False,
-    ):
+        status_code: int,
+        reason: str,
+        http_version: str,
+        headers: object,
+        body: bytes,
+        url: str,
+        oversized_dropped: bool = False,
+        encoding: str | None = None,
+    ) -> None:
         self.status_code = status_code
         self.reason = reason
         self.http_version = http_version
@@ -142,13 +154,52 @@ class Response:
         self.body = body
         self.url = url
         self.oversized_dropped = oversized_dropped
+        self._encoding_override = encoding
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return (
             f"Response(status_code={self.status_code}, "
             f"reason={self.reason!r}, url={self.url!r}, "
             f"body={len(self.body)} bytes)"
         )
+
+    @property
+    def encoding(self) -> str:
+        """Charset used to decode :attr:`body` into :attr:`text`.
+
+        Sniffed from the ``Content-Type`` response header on first
+        access (default ``"utf-8"`` when absent or charset-less).
+        Set the property to override — useful when a server's
+        Content-Type lies or omits the charset.
+        """
+        if self._encoding_override is not None:
+            return self._encoding_override
+        return parse_charset(self.headers.get("Content-Type"))
+
+    @encoding.setter
+    def encoding(self, value: str) -> None:
+        self._encoding_override = value
+
+    @property
+    def text(self) -> str:
+        """:attr:`body` decoded using :attr:`encoding`.
+
+        Raises ``UnicodeDecodeError`` if the body bytes don't match
+        the encoding.  Override :attr:`encoding` first if you know
+        the server's Content-Type is wrong.
+        """
+        return self.body.decode(self.encoding)
+
+    def json(self) -> object:
+        """Parse :attr:`body` as JSON and return the decoded object.
+
+        Decodes via :attr:`text` first so the JSON parser sees a
+        properly-decoded string (matching CPython ``requests``
+        semantics).  Raises ``ValueError`` (specifically
+        ``json.JSONDecodeError`` on CPython) when the body isn't
+        valid JSON.
+        """
+        return json.loads(self.text)
 
 
 class RequestHandle:

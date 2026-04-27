@@ -26,7 +26,25 @@ while not handle.done:
 
 response = handle.result
 print(response.status_code, response.body)
+print(response.text)               # decoded str
+print(response.json())             # parsed JSON
 ```
+
+## Body decoding
+
+`Response.body` is always raw `bytes`.  `Response.text` decodes those
+bytes using `Response.encoding`, which is sniffed from the
+`Content-Type` header's `charset=` parameter (default `utf-8`).
+Override the encoding when a server's Content-Type lies:
+
+```python
+response = handle.result
+response.encoding = "latin-1"
+print(response.text)
+```
+
+`Response.json()` decodes via `text` first, then runs `json.loads`,
+so charset overrides apply to JSON responses too.
 
 The `connection_factory` argument is a callable
 `(host, port, use_tls) -> TCPClientSocket`. The bundled

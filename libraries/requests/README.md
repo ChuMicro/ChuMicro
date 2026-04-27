@@ -79,6 +79,8 @@ response = handle.result          # raises HttpError on failure
 print(response.status_code)       # 200
 print(response.headers["content-type"])
 print(response.body)              # raw response bytes
+print(response.text)              # decoded str (charset sniffed from Content-Type)
+print(response.json())            # parsed JSON when Content-Type is application/json
 ```
 
 ## What's included
@@ -87,17 +89,19 @@ print(response.body)              # raw response bytes
 |---|---|
 | `HttpClient` | Runner-shaped HTTP/1.1 client; `check(now_ms)` / `handle(now_ms)`. |
 | `RequestHandle` | Per-request handle: `.done`, `.result`, `.error`. |
-| `Response` | Status code, reason, headers, raw body, URL. |
+| `Response` | Status code, reason, headers, raw body, URL; `.text`, `.json()`, `.encoding`. |
 | `CaseInsensitiveDict` | Header dict with case-insensitive lookups. |
 | `WhenOversized` | Policy enum for responses past `max_body_bytes`. |
 | `chumicro_sockets_factory(...)` | Convenience connection-factory wired to chumicro-sockets. |
 | `parse_url(url)` | URL → `(scheme, host, port, path)`. |
+| `parse_charset(content_type)` | Extract charset from a Content-Type header value. |
 | `encode_request(...)` | Build raw HTTP request bytes. |
 | `ResponseParser` | Streaming response state machine. |
 | `HttpError` + subclasses | `HttpBusyError`, `HttpTimeoutError`, `HttpProtocolError`, `HttpURLError`, `HttpOversizedError`. |
 | `chumicro_requests.testing.FakeHttpClient` | Host-only fake for downstream test suites. |
 
-v1 scope (Decision 0040): plain HTTP GET — slice 3a. HTTPS, POST, JSON,
+v1 scope (Decision 0040): plain HTTP GET (slice 3a) + body decode
+(`.text` / `.json()` / charset sniff — slice 3b). HTTPS, POST,
 redirects, and chunked transfer-encoding land in subsequent slices.
 
 ## Platform support

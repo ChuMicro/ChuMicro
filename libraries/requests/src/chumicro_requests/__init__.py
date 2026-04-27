@@ -53,6 +53,7 @@ from chumicro_requests._wire import (
     ParseState,
     ResponseParser,
     encode_request,
+    parse_charset,
     parse_url,
 )
 from chumicro_requests.client import (
@@ -82,5 +83,6 @@ __all__ = [
     "WhenOversized",
     "chumicro_sockets_factory",
     "encode_request",
+    "parse_charset",
     "parse_url",
 ]

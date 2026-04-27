@@ -27,6 +27,7 @@ from chumicro_requests import (
     WhenOversized,
     chumicro_sockets_factory,
     encode_request,
+    parse_charset,
     parse_url,
 )
 from chumicro_sockets.testing import FakeSocket
@@ -145,6 +146,40 @@ class TestParseURL:
     def test_url_must_be_string(self):
         with pytest.raises(HttpURLError, match="must be str"):
             parse_url(b"http://example.com/")
+
+
+# ---------------------------------------------------------------------------
+# Content-Type charset parsing
+# ---------------------------------------------------------------------------
+
+
+class TestParseCharset:
+    """``parse_charset`` extracts ``charset=`` from Content-Type values."""
+
+    def test_no_header_defaults_utf8(self):
+        assert parse_charset(None) == "utf-8"
+
+    def test_empty_header_defaults_utf8(self):
+        assert parse_charset("") == "utf-8"
+
+    def test_charset_explicit(self):
+        assert parse_charset("text/html; charset=utf-8") == "utf-8"
+
+    def test_charset_quoted(self):
+        assert parse_charset('text/html; charset="ISO-8859-1"') == "ISO-8859-1"
+
+    def test_charset_uppercase_token(self):
+        assert parse_charset("text/html; CHARSET=latin-1") == "latin-1"
+
+    def test_no_charset_param_defaults_utf8(self):
+        assert parse_charset("application/json") == "utf-8"
+
+    def test_charset_after_other_params(self):
+        result = parse_charset("text/html; boundary=x; charset=cp1252")
+        assert result == "cp1252"
+
+    def test_blank_charset_value_defaults_utf8(self):
+        assert parse_charset("text/plain; charset=") == "utf-8"
 
 
 # ---------------------------------------------------------------------------
@@ -491,6 +526,76 @@ class TestResponseParserErrors:
         parser.feed(b"")  # no-op
         parser.feed(b"junk")  # ignored
         assert parser.state == ParseState.DONE
+
+
+# ---------------------------------------------------------------------------
+# Response body decode (slice 3b)
+# ---------------------------------------------------------------------------
+
+
+class TestResponseDecode:
+    """``.encoding`` / ``.text`` / ``.json()`` cover decode + JSON parse."""
+
+    def _make(self, *, body, content_type=None, encoding=None):
+        headers = CaseInsensitiveDict()
+        if content_type is not None:
+            headers["Content-Type"] = content_type
+        return Response(
+            status_code=200,
+            reason="OK",
+            http_version="HTTP/1.1",
+            headers=headers,
+            body=body,
+            url="http://example.test/",
+            encoding=encoding,
+        )
+
+    def test_text_default_utf8(self):
+        response = self._make(body="café".encode())
+        assert response.encoding == "utf-8"
+        assert response.text == "café"
+
+    def test_text_uses_content_type_charset(self):
+        response = self._make(
+            body="café".encode("latin-1"),
+            content_type="text/plain; charset=latin-1",
+        )
+        assert response.encoding == "latin-1"
+        assert response.text == "café"
+
+    def test_encoding_override_via_constructor(self):
+        response = self._make(
+            body="café".encode("latin-1"),
+            content_type="text/plain; charset=utf-8",  # server lies
+            encoding="latin-1",
+        )
+        assert response.encoding == "latin-1"
+        assert response.text == "café"
+
+    def test_encoding_setter_overrides(self):
+        response = self._make(body="café".encode("latin-1"))
+        response.encoding = "latin-1"
+        assert response.encoding == "latin-1"
+        assert response.text == "café"
+
+    def test_json_decode(self):
+        response = self._make(
+            body=b'{"temp_f": 72, "ok": true}',
+            content_type="application/json",
+        )
+        result = response.json()
+        assert result == {"temp_f": 72, "ok": True}
+
+    def test_json_invalid_raises(self):
+        response = self._make(body=b"not-json", content_type="application/json")
+        with pytest.raises(ValueError):
+            response.json()
+
+    def test_text_decode_error_propagates(self):
+        # Latin-1-only byte that's invalid UTF-8.
+        response = self._make(body=b"\xff", content_type="text/plain; charset=utf-8")
+        with pytest.raises(UnicodeDecodeError):
+            _ = response.text
 
 
 # ---------------------------------------------------------------------------

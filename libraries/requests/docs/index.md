@@ -20,7 +20,9 @@ while not handle.done:
         client.handle(ticks_ms())
 
 response = handle.result   # raises HttpError on failure
-print(response.status_code, response.headers["content-type"], response.body)
+print(response.status_code, response.headers["content-type"])
+print(response.text)       # decoded str (charset sniffed from Content-Type)
+print(response.json())     # parsed JSON when Content-Type is application/json
 ```
 
 ## Documentation

@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **beginner-onramp** Step 6 — `chumicro-requests` library.  Slice 3a shipped 2026-04-26: plain HTTP GET runner-shaped (Decision 0040).  Slices 3b–3f sequenced for follow-on sessions.  Steps 1-5 (UX backbone) all shipped earlier 2026-04-26.  Remaining after Step 6: Step 7 (`chumicro-http-server`), Step 8 (examples organization + two-thing demo).  See `plans/workstreams/beginner-onramp.md`.
-- **Last shipped:** Step 6 slice 3a — `chumicro-requests` plain HTTP GET against fake transport.  `HttpClient` + `RequestHandle` + `Response` + streaming `ResponseParser` + `CaseInsensitiveDict` + `WhenOversized` policy enum + `chumicro_sockets_factory()` convenience helper + `FakeHttpClient` host-only test fake.  Decision 0040 codifies the runner-shape + LED-blink invariant + adafruit_requests divergence.  100 tests at 96% combined coverage; 3 device-shipped files / 46 KB source (~70 % of mqtt's size).  Preflight green at 94 % gate.
+- **Phase:** **beginner-onramp** Step 6 — `chumicro-requests` library.  Slices 3a (plain HTTP GET) + 3b (body decode → `.text` / `.json()` / charset sniff) shipped 2026-04-26.  Slice 3c (HTTPS, live-board verification on the four-board matrix) is next.  Then 3d (POST + JSON helpers) → 3e (redirects) → 3f (chunked transfer-encoding decode) → Step 7 (`chumicro-http-server`) → Step 8 (examples org + two-thing demo).  See `plans/workstreams/beginner-onramp.md`.
+- **Last shipped:** Step 6 slice 3b — body decode.  `Response.encoding` (sniffed from Content-Type charset, default utf-8, settable for server-lies cases), `Response.text` (UnicodeDecodeError-on-mismatch), `Response.json()` (ValueError-on-malformed); `parse_charset()` helper in `_wire.py` exposed publicly.  115 tests at 97 % combined coverage; preflight green at the 94 % gate.
 - **In flight:** —
 - **Blocked on:** —
-- **Last touched:** `plans/decisions/0040-chumicro-requests.md` (new), `libraries/requests/` (new — full library scaffold + impl + tests + docs), `plans/workstreams/beginner-onramp.md` Step 6 status log, `plans/next-up.md`.
+- **Last touched:** `libraries/requests/src/chumicro_requests/_wire.py` (parse_charset), `libraries/requests/src/chumicro_requests/client.py` (Response.encoding/text/json + json import), `libraries/requests/tests/test_requests.py` (TestParseCharset + TestResponseDecode), README + docs/guide.md + docs/index.md, `plans/workstreams/beginner-onramp.md` Step 6 status log, `plans/next-up.md`.
 
 ---
 
