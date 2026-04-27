@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **Workspace ecosystem completion — Phases 1 + 2 closed; deferred-examples carry-over closed.**  Phase 1 closed 2026-04-27 (commits `98fa8d0..c8a05fe` mono + `4523c89..98b6377` template); Phase 2 closed 2026-04-27 (six sub-items in commits `333d900..139b0ee`).  Three deferred examples (`periodic_get/`, `telemetry_publisher/`, `two_things/{server,sensor}/`) just shipped to the template repo (`5ce73d4`), closing the Phase 1 Slice 5 carry-over.  Phase 3 (per-env deploys) deferred at user request; **Phase 4** (library scaffolder migration: `scripts/new_library_scaffold.py` → `chumicro-workspace new --library`) is the next focus.
-- **Last shipped:** template repo `5ce73d4` — three deferred examples (`periodic_get`, `telemetry_publisher`, `two_things`).
-- **In flight:** Phase 4 — library scaffolder migration.
+- **Phase:** **Workspace ecosystem completion — Phases 1, 2, 4 closed.**  Phase 1 closed 2026-04-27 (commits `98fa8d0..c8a05fe` mono + `4523c89..98b6377` template); Phase 2 closed 2026-04-27 (six sub-items, commits `333d900..139b0ee`); Phase 1 Slice 5 carry-over closed via template-repo `5ce73d4`.  **Phase 4** just shipped: library scaffolder migrated from `scripts/new_library_scaffold.py` into `chumicro_workspace.scaffold` with the 11 templates moved to `_payloads/library_template/`; new `python run.py new --library <name>` CLI mode + optional `--into <path>` override; `scripts/new_library_scaffold.py` is now a thin wrapper that calls the workbench scaffolder + composes the mono-repo-only follow-ups (editable install + IDE sync).  Phase 3 (per-env deploys) still deferred at user request.  Phase 5 (`workspace.yml` quality knobs) is the natural next focus, or Phase 6 (doc audit) / Phase 7 (richer REPL) on a parallel track.
+- **Last shipped:** Phase 4 — library scaffolder migration.
+- **In flight:** —
 - **Blocked on:** —
-- **Last touched:** `ChuMicro-Workspace-Template/examples/`, `plans/{now,next-up}.md`.
+- **Last touched:** `workbench/workspace/src/chumicro_workspace/{cli,scaffold}.py`, `workbench/workspace/src/chumicro_workspace/_payloads/library_template/`, `workbench/workspace/tests/{test_cli,test_scaffold}.py`, `scripts/new_library_scaffold.py`, `plans/now.md`.
 
 ---
 

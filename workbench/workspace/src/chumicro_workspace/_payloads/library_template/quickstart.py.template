@@ -1,0 +1,23 @@
+"""{display_name} quickstart.
+
+Shows basic usage of the {display_name} class.
+
+Runs on CPython, MicroPython, and CircuitPython.
+
+Example output::
+
+    Created {display_name} with value=42
+    Current value: 42
+    Value after update: 100
+"""
+
+from {import_name} import {class_name}
+
+thing = {class_name}(value=42)
+print(f"Created {display_name} with value={{thing.value}}")
+
+print(f"Current value: {{thing.value}}")
+
+thing.update(100)
+print(f"Value after update: {{thing.value}}")
+

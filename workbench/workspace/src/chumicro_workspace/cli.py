@@ -466,27 +466,55 @@ def _resolve_new_source(
 
 
 def _cmd_new(args: argparse.Namespace) -> int:
-    """Create ``things/<path>/`` by copying a template or example tree.
+    """Create a thing or library scaffold under the workspace.
 
-    *path* may be bare (``"bedroom_sensor"``), slash-form
-    (``"upstairs/bedroom_sensor"``), or dotted
-    (``"upstairs.bedroom_sensor"``).  Intermediate namespace
+    Default mode (no ``--library``): creates ``things/<path>/`` by
+    copying a template or example tree.  *path* may be bare
+    (``"bedroom_sensor"``), slash-form (``"upstairs/bedroom_sensor"``),
+    or dotted (``"upstairs.bedroom_sensor"``).  Intermediate namespace
     directories are auto-created with empty ``__init__.py`` markers
-    so host-side tooling can ``import things.upstairs.bedroom_sensor.app``
-    without surprises (the on-device boot shim emits its own
-    namespace inits separately — Slice 2 boot_shim work).
-
-    Each path segment is validated against the Python identifier
-    grammar (Slice 1's ``_validate_thing_name``).
-
+    so host-side tooling can
+    ``import things.upstairs.bedroom_sensor.app`` without surprises.
     With ``--from <path>`` the source tree is *path* (resolved
     relative to the workspace root and validated as a thing) instead
-    of ``things/_template/``.  The workstream design note is explicit
-    (Phase 4a §"Open questions"): ``new`` is a ``cp -r`` convenience,
-    not a code generator — no template variables, no post-copy edits.
+    of ``things/_template/``.
+
+    Library mode (``--library``): creates a chumicro-style library
+    tree under ``libraries/<name>/`` (Phase 4 of the workspace-
+    ecosystem workstream — same scaffolder the chumicro mono-repo
+    uses, lifted into the workbench package).  ``--into <path>``
+    overrides the parent directory.
+
+    Each path segment is validated against the Python identifier
+    grammar (``_validate_thing_name``).
     """
     _validate_thing_name(args.name)
     workspace = _resolve_workspace(args)
+
+    if args.library:
+        if args.from_path is not None:
+            print(
+                "new: --from / --library are mutually exclusive — "
+                "library scaffolding uses the built-in template.",
+                file=sys.stderr,
+            )
+            return 2
+        from chumicro_workspace.scaffold import (  # noqa: PLC0415
+            LibraryAlreadyExistsError,
+            scaffold_library,
+        )
+        target_dir = (
+            Path(args.into).resolve()
+            if args.into is not None
+            else workspace.root / "libraries"
+        )
+        try:
+            created = scaffold_library(target_dir, args.name)
+        except LibraryAlreadyExistsError as exception:
+            raise SystemExit(f"error: {exception} already exists") from exception
+        print(f"new: created library {created}")
+        return 0
+
     source = _resolve_new_source(workspace, args.from_path)
     target = workspace.thing_dir(args.name)
     if target.exists():
@@ -1839,6 +1867,24 @@ def build_parser() -> argparse.ArgumentParser:
             "instead of things/_template/.  Source must contain an "
             "app.py / code.py / main.py entry-point.  Useful for "
             "`new garage/heater --from examples/two_things/server`."
+        ),
+    )
+    new_parser.add_argument(
+        "--library",
+        action="store_true",
+        help=(
+            "Scaffold a chumicro-style library under "
+            "<workspace>/libraries/<name>/ (Phase 4).  Mutually "
+            "exclusive with --from; uses the built-in scaffolder."
+        ),
+    )
+    new_parser.add_argument(
+        "--into",
+        type=Path,
+        default=None,
+        help=(
+            "Library scaffolder only: override the parent directory "
+            "for the new library tree (default <workspace>/libraries/)."
         ),
     )
     new_parser.set_defaults(func=_cmd_new)

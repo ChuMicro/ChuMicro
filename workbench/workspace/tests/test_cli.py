@@ -456,6 +456,67 @@ class TestNewNested:
         assert "creating namespace things/upstairs/" in out
 
 
+class TestNewLibrary:
+    """Phase 4 — `new --library <name>` scaffolds a chumicro-style library."""
+
+    def test_default_target_is_workspace_libraries_dir(
+        self, tmp_path: Path,
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        exit_code = cli.main([
+            "new", "--workspace-dir", str(root),
+            "--library", "gpio",
+        ])
+        assert exit_code == 0
+        library_dir = root / "libraries" / "gpio"
+        assert library_dir.is_dir()
+        assert (library_dir / "src" / "chumicro_gpio" / "__init__.py").is_file()
+        assert (library_dir / "VERSION").read_text() == "0.1.0\n"
+
+    def test_into_overrides_target(
+        self, tmp_path: Path,
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        custom_target = tmp_path / "elsewhere"
+        exit_code = cli.main([
+            "new", "--workspace-dir", str(root),
+            "--library", "gpio", "--into", str(custom_target),
+        ])
+        assert exit_code == 0
+        assert (custom_target / "gpio" / "VERSION").is_file()
+        assert not (root / "libraries").exists()
+
+    def test_existing_target_returns_systemexit(
+        self, tmp_path: Path,
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        # First call succeeds.
+        cli.main([
+            "new", "--workspace-dir", str(root),
+            "--library", "gpio",
+        ])
+        # Second call collides.
+        with pytest.raises(SystemExit) as caught:
+            cli.main([
+                "new", "--workspace-dir", str(root),
+                "--library", "gpio",
+            ])
+        assert "gpio" in str(caught.value)
+
+    def test_library_with_from_is_mutually_exclusive(
+        self, tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        exit_code = cli.main([
+            "new", "--workspace-dir", str(root),
+            "--library", "gpio", "--from", "examples/wifi_only",
+        ])
+        assert exit_code == 2
+        captured_stderr = capsys.readouterr().err
+        assert "mutually exclusive" in captured_stderr
+
+
 class TestNewFromFlag:
     """Slice 3 — `new --from <example-path>` copies an alternate source."""
 
