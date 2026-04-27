@@ -448,15 +448,23 @@ def encode_request(
 class ParseState:
     """Streaming response parser states.
 
-    Forward-only::
+    Forward-only.  Two body framings::
 
-      STATUS -> HEADERS -> BODY -> DONE
-                              \\-> ERROR
+      STATUS -> HEADERS -> BODY            -> DONE   (Content-Length / read-until-close)
+      STATUS -> HEADERS -> CHUNK_SIZE
+                            -> CHUNK_DATA
+                            -> CHUNK_SIZE  (loop)
+                            -> CHUNK_TRAILER
+                            -> DONE                  (Transfer-Encoding: chunked)
+                                              \\-> ERROR (any state)
     """
 
     STATUS = "status"
     HEADERS = "headers"
     BODY = "body"
+    CHUNK_SIZE = "chunk_size"
+    CHUNK_DATA = "chunk_data"
+    CHUNK_TRAILER = "chunk_trailer"
     DONE = "done"
     ERROR = "error"
 
@@ -469,13 +477,14 @@ class ResponseParser:
     whether to keep feeding (anything other than ``DONE``/``ERROR``)
     or stop (``DONE``).
 
-    Body framing supported in slice 3a:
+    Body framing:
 
     * ``Content-Length: N`` — read exactly N bytes.
-    * No ``Content-Length`` — read until the peer closes (signaled by
+    * ``Transfer-Encoding: chunked`` — RFC 7230 §4.1 chunked decode
+      (slice 3f); chunk-extensions and trailers are accepted +
+      discarded.
+    * Neither header — read until the peer closes (signaled by
       :meth:`feed_eof`).
-
-    Chunked transfer-encoding lands in slice 3f.
 
     The ``max_body_bytes`` cap is enforced incrementally — once total
     body bytes pass the cap the parser raises (or drops, depending on
@@ -494,6 +503,8 @@ class ResponseParser:
         # -1 = unknown (read until close).  Set to a non-negative
         # value when Content-Length parses successfully.
         self._body_remaining = -1
+        # Bytes left in the current chunk (chunked decode only).
+        self._chunk_remaining = 0
         self._error = None
 
     # ------------------------------------------------------------------
@@ -549,7 +560,9 @@ class ResponseParser:
             return
         if chunk:
             if self._state == ParseState.BODY:
-                # Skip the staging buffer for body bytes — straight in.
+                # Skip the staging buffer for length-known/-unknown body
+                # bytes — straight in.  Chunked decode flows through the
+                # state machine via _buffer because each chunk is framed.
                 self._absorb_body_bytes(chunk)
             else:
                 self._buffer.extend(chunk)
@@ -561,7 +574,8 @@ class ResponseParser:
         For a ``Content-Length``-framed response this is a protocol
         error if the body was short.  For a length-unknown response
         (no ``Content-Length``, no ``Transfer-Encoding``) this is the
-        normal end-of-body signal.
+        normal end-of-body signal.  Mid-chunk it's always an error —
+        chunked encoding is self-terminating.
         """
         if self._state == ParseState.DONE:
             return
@@ -575,6 +589,13 @@ class ResponseParser:
             self._fail(HttpProtocolError(
                 f"peer closed mid-body; {self._body_remaining} bytes "
                 "still expected per Content-Length",
+            ))
+            return
+        if self._state in (
+            ParseState.CHUNK_SIZE, ParseState.CHUNK_DATA, ParseState.CHUNK_TRAILER,
+        ):
+            self._fail(HttpProtocolError(
+                f"peer closed mid-chunked-body (state={self._state})",
             ))
             return
         # Mid-headers or mid-status — peer hung up before responding.
@@ -594,8 +615,19 @@ class ResponseParser:
                     return
                 continue
             if self._state == ParseState.HEADERS:
-                progressed = self._try_parse_headers()
-                if not progressed:
+                if not self._try_parse_headers():
+                    return
+                continue
+            if self._state == ParseState.CHUNK_SIZE:
+                if not self._try_parse_chunk_size():
+                    return
+                continue
+            if self._state == ParseState.CHUNK_DATA:
+                if not self._try_consume_chunk_data():
+                    return
+                continue
+            if self._state == ParseState.CHUNK_TRAILER:
+                if not self._try_parse_chunk_trailer():
                     return
                 continue
             return  # BODY (handled in feed) / DONE / ERROR
@@ -682,6 +714,24 @@ class ResponseParser:
         ):
             self._state = ParseState.DONE
             return
+        # Transfer-Encoding takes precedence over Content-Length per
+        # RFC 7230 §3.3.3 — when both are present, the framing is
+        # chunked and Content-Length is informational only.
+        transfer_encoding = self._headers.get("Transfer-Encoding")
+        if transfer_encoding is not None:
+            # We accept "chunked" as the final (or only) coding.  Other
+            # transfer codings (gzip, deflate, identity stacked with
+            # chunked) aren't supported in v1 — reject as protocol error
+            # so the caller doesn't silently get garbled bytes.
+            normalized = transfer_encoding.replace(" ", "").lower()
+            if normalized != "chunked":
+                self._fail(HttpProtocolError(
+                    f"unsupported Transfer-Encoding: {transfer_encoding!r} "
+                    "(only 'chunked' is supported in v1)",
+                ))
+                return
+            self._state = ParseState.CHUNK_SIZE
+            return
         content_length_str = self._headers.get("Content-Length")
         if content_length_str is not None:
             try:
@@ -723,6 +773,113 @@ class ResponseParser:
             tail = bytes(self._buffer)
             self._buffer = bytearray()
             self._absorb_body_bytes(tail)
+
+    def _try_parse_chunk_size(self):
+        """Consume one chunk-size line; return True if state advanced.
+
+        Format per RFC 7230 §4.1.1::
+
+            chunk-size [ ";" chunk-ext ] CRLF
+
+        chunk-extensions are accepted and ignored.  A size of 0 marks
+        the last-chunk and transitions to CHUNK_TRAILER.
+        """
+        crlf_index = self._buffer.find(CRLF)
+        if crlf_index == -1:
+            return False
+        line = bytes(self._buffer[:crlf_index])
+        self._buffer = bytearray(self._buffer[crlf_index + 2:])
+        try:
+            text = line.decode("ascii")
+        except UnicodeDecodeError as decode_error:
+            self._fail(HttpProtocolError(
+                f"non-ASCII chunk-size line: {line!r}",
+            ))
+            raise self._error from decode_error
+        # Strip chunk-extensions (everything after the first ';').
+        semicolon_index = text.find(";")
+        size_text = text[:semicolon_index] if semicolon_index != -1 else text
+        size_text = size_text.strip()
+        if not size_text:
+            self._fail(HttpProtocolError(
+                f"empty chunk-size line: {line!r}",
+            ))
+            return True
+        try:
+            chunk_size = int(size_text, 16)
+        except ValueError:
+            self._fail(HttpProtocolError(
+                f"non-hex chunk-size: {size_text!r}",
+            ))
+            return True
+        if chunk_size < 0:
+            self._fail(HttpProtocolError(
+                f"negative chunk-size: {chunk_size}",
+            ))
+            return True
+        # Enforce the max-body cap as the chunk sizes accumulate so a
+        # malicious server can't trickle in 64K + 1B before we notice.
+        if len(self._body) + chunk_size > self._max_body_bytes:
+            self._fail(HttpOversizedError(
+                f"chunked body would exceed cap {self._max_body_bytes}",
+            ))
+            return True
+        if chunk_size == 0:
+            self._state = ParseState.CHUNK_TRAILER
+            return True
+        self._chunk_remaining = chunk_size
+        self._state = ParseState.CHUNK_DATA
+        return True
+
+    def _try_consume_chunk_data(self):
+        """Consume up to ``_chunk_remaining`` bytes + the trailing CRLF.
+
+        Returns True when state advances (data fully consumed +
+        terminating CRLF parsed) so :meth:`_advance` keeps walking.
+        Returns False when there's not enough buffered to make
+        progress — caller waits for the next :meth:`feed`.
+        """
+        if self._chunk_remaining > 0:
+            available = min(self._chunk_remaining, len(self._buffer))
+            if available == 0:
+                return False
+            self._body.extend(self._buffer[:available])
+            self._buffer = bytearray(self._buffer[available:])
+            self._chunk_remaining -= available
+            if self._chunk_remaining > 0:
+                return False
+        # Chunk data exhausted; expect a terminating CRLF before the
+        # next chunk-size line.
+        if len(self._buffer) < 2:
+            return False
+        if bytes(self._buffer[:2]) != CRLF:
+            self._fail(HttpProtocolError(
+                f"missing CRLF after chunk data: {bytes(self._buffer[:2])!r}",
+            ))
+            return True
+        self._buffer = bytearray(self._buffer[2:])
+        self._state = ParseState.CHUNK_SIZE
+        return True
+
+    def _try_parse_chunk_trailer(self):
+        """Consume optional trailer header lines until the empty CRLF.
+
+        v1 ignores trailer values — they're rare and most consumers
+        don't care.  When the empty line arrives the body is complete
+        and we transition to DONE.
+        """
+        crlf_index = self._buffer.find(CRLF)
+        if crlf_index == -1:
+            return False
+        if crlf_index == 0:
+            # Empty trailer line — end of chunked body.
+            self._buffer = bytearray(self._buffer[2:])
+            self._state = ParseState.DONE
+            return True
+        # Non-empty trailer line — discard (RFC 7230 §4.1.2 lets us
+        # ignore trailers we don't recognise).
+        self._buffer = bytearray(self._buffer[crlf_index + 2:])
+        return True
 
     def _absorb_body_bytes(self, chunk):
         """Append body bytes; honor the length cap and oversize policy."""

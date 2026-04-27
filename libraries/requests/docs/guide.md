@@ -86,6 +86,25 @@ The `Location` header may be absolute (`https://other.com/dest`),
 absolute-path (`/api/v2`), or path-relative (`trinkets`). All three
 shapes are resolved against the current URL.
 
+## Body framing
+
+`HttpClient` accepts three RFC 7230 body framings transparently:
+
+- **`Content-Length: N`** — read exactly N bytes (most common case).
+- **`Transfer-Encoding: chunked`** — RFC 7230 §4.1 chunked decode.
+  Chunk-extensions and trailer headers are accepted and discarded.
+  `Content-Length` is ignored when chunked is present per §3.3.3.
+- **Neither header** — read until the peer closes the connection
+  (HTTP/1.0-style framing).
+
+In all cases `response.body` returns the decoded bytes (chunks
+concatenated for chunked responses).  `response.text` and
+`response.json()` work the same way regardless of framing.
+
+Other `Transfer-Encoding` values (`gzip`, `deflate`, `identity`
+stacked with chunked, etc.) are rejected with `HttpProtocolError`
+in v1 — the caller would otherwise silently get garbled bytes.
+
 ## Body decoding
 
 `Response.body` is always raw `bytes`.  `Response.text` decodes those
