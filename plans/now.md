@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **Workspace ecosystem completion — Phase 1 in flight.**  Phase 1 (`plans/workstreams/nested-things-and-examples.md`) Slices 1-5 shipped.  Slice 5: `examples/` classified as tool-owned in `template_zones.TOOL_OWNED_PREFIXES` (so `update` re-flows the canonical content); template repo gains `examples/` with `hello_world/` (no-network print loop) and `wifi_only/` (heartbeat status print) plus an index README; template repo's README + AGENTS.md mention the new folder + the new `--from` workflow.  Three larger network examples (`periodic_get/`, `telemetry_publisher/`, `two_things/{server,sensor}/`) are explicitly deferred to a follow-on commit.  Slice 6 next: end-to-end nested-thing functional test + docs polish.
-- **Last shipped:** Slice 5 — examples folder structure + first two examples.
-- **In flight:** Phase 1 Slice 6 — tests, docs, polish.
+- **Phase:** **Workspace ecosystem completion — Phase 1 nearly complete.**  Phase 1 (`plans/workstreams/nested-things-and-examples.md`) Slices 1-5 + 7 shipped.  Slice 7: dropped `_cmd_switch`, `switch` subparser, `--active` flag; deleted `multi_thing_boot_source` / `multi_thing_boot_files` / `_MultiThingBootSource` / `switch_source` / `build_switch_files`; multi-thing positional deploy now exits 2 with an explicit "use one positional per call" message.  Functional test pared to single-thing only; docs (`docs/guide.md`, `README.md`) replace the multi-thing/switch sections with a retirement notice + nested-name walkthrough; template repo `AGENTS.md` drops `switch` + multi-thing rows.  Slice 6 next (and last): docs polish + planning-doc cleanup.
+- **Last shipped:** Slice 7 — drop `switch` command + multi-thing-staging machinery.
+- **In flight:** Phase 1 Slice 6 — final docs polish + planning-doc updates.
 - **Blocked on:** —
-- **Last touched:** `workbench/workspace/src/chumicro_workspace/template_zones.py`, `workbench/workspace/tests/test_template_zones.py`, `ChuMicro-Workspace-Template/{AGENTS.md,README.md,examples/}`, `plans/now.md`.
+- **Last touched:** `workbench/workspace/src/chumicro_workspace/{boot_shim,cli,__init__}.py`, `workbench/workspace/tests/{test_boot_shim,test_cli}.py`, `workbench/workspace/{README.md,docs/guide.md,functional_tests/test_boot_shim_hardware.py}`, `ChuMicro-Workspace-Template/AGENTS.md`, `plans/now.md`.
 
 ---
 
@@ -42,8 +42,8 @@ This is the front door. Everything else is deeper read.
 | 3 — `new` accepts paths + `--from` | **shipped** |
 | 4 — `things` tree renderer + path-aware `rename` | **shipped** |
 | 5 — `examples/` folder shipped | **shipped (2 of 5 examples; 3 deferred)** |
-| 6 — Tests, docs, polish | next up |
-| 7 — Drop `switch` command | pending (can ship standalone) |
+| 7 — Drop `switch` command | **shipped** |
+| 6 — Tests, docs, polish | next up (last) |
 
 ## What the user explicitly deferred this round
 

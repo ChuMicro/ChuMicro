@@ -39,11 +39,7 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from chumicro_workspace.boot_shim import (
-    multi_thing_boot_source,
-    switch_source,
-    thing_boot_source,
-)
+from chumicro_workspace.boot_shim import thing_boot_source
 from chumicro_workspace.deploy_source import thing_directory_source
 from chumicro_workspace.devices_yaml import (
     DeviceAlreadyExistsError,
@@ -565,25 +561,28 @@ def _resolve_thing_name(workspace: WorkspaceLayout, name: str) -> str:
 
 
 def _cmd_deploy(args: argparse.Namespace) -> int:
-    """Deploy one or more things to a device.
+    """Deploy a thing to a device.
 
     Single-thing default uses :func:`thing_directory_source` — the
     flat layout where the thing's files land at the device root.
     ``--import-graph`` ships only transitively-imported modules.
-    ``--boot-shim`` ships under ``/lib/things/<...>/<name>/``; with
-    multiple positional names + ``--boot-shim`` the things land
-    side-by-side and ``switch`` can re-point ``/active.py`` without
-    re-flashing.
+    ``--boot-shim`` ships under ``/lib/things/<...>/<name>/``; combine
+    with the workspace-runtime convention (``app.py`` exporting
+    ``def run()``).
 
-    Positional names accept bare (``"door_open"``), slash
+    Positional name accepts bare (``"door_open"``), slash
     (``"garage/sensors/door_open"``), or dotted forms; bare names that
     match more than one thing in the tree exit 2 with a list of
     candidates.
 
-    When invoked with no positional names and the workspace contains
+    When invoked with no positional name and the workspace contains
     exactly one thing, that thing is deployed by default — covers the
     "I only have one app" beginner case (Decision 0029).  Zero things
     or multiple things both require an explicit positional.
+
+    Multi-thing deploys (``deploy <a> <b> <c>``) are not supported —
+    Slice 7 of the nested-things-and-examples workstream retired the
+    multi-thing-staging path; pass one positional per ``deploy`` call.
     """
     workspace = _resolve_workspace(args)
     if not args.names:
@@ -605,24 +604,17 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
         names = [candidates[0]]
         print(f"deploy: defaulting to {names[0]} (only thing in workspace).")
     else:
-        names = [_resolve_thing_name(workspace, name) for name in args.names]
+        if len(args.names) > 1:
+            print(
+                "deploy: multi-thing deploys are no longer supported — "
+                "pass one positional name per `deploy` call.",
+                file=sys.stderr,
+            )
+            return 2
+        names = [_resolve_thing_name(workspace, args.names[0])]
     if args.import_graph and args.boot_shim:
         print(
             "deploy: --import-graph and --boot-shim are mutually exclusive.",
-            file=sys.stderr,
-        )
-        return 2
-    if len(names) > 1 and not args.boot_shim:
-        print(
-            "deploy: deploying multiple things at once requires --boot-shim "
-            "(the boot-shim layout puts each thing under /lib/things/<name>/ "
-            "where they don't collide).",
-            file=sys.stderr,
-        )
-        return 2
-    if args.active is not None and not args.boot_shim:
-        print(
-            "deploy: --active only applies with --boot-shim.",
             file=sys.stderr,
         )
         return 2
@@ -636,29 +628,12 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
     from chumicro_deploy import Deployer  # noqa: PLC0415
 
     if args.boot_shim:
-        if len(thing_dirs) == 1:
-            source = thing_boot_source(
-                thing_dirs[0],
-                workspace=workspace,
-                thing_name=names[0],
-                entrypoint_filename=device.effective_entrypoint,
-            )
-        else:
-            active = args.active if args.active is not None else names[0]
-            if active not in names:
-                print(
-                    f"deploy: --active {active!r} is not one of the deployed "
-                    f"things ({names}).",
-                    file=sys.stderr,
-                )
-                return 2
-            source = multi_thing_boot_source(
-                thing_dirs,
-                workspace=workspace,
-                thing_names=names,
-                active_thing_name=active,
-                entrypoint_filename=device.effective_entrypoint,
-            )
+        source = thing_boot_source(
+            thing_dirs[0],
+            workspace=workspace,
+            thing_name=names[0],
+            entrypoint_filename=device.effective_entrypoint,
+        )
     elif args.import_graph:
         device_entrypoint = args.entrypoint or f"/{device.effective_entrypoint}"
         source = thing_import_graph_source(
@@ -674,44 +649,6 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
             secrets_yaml=workspace.secrets_yaml,
             entrypoint=args.entrypoint or f"/{device.effective_entrypoint}",
         )
-    result = Deployer(device).deploy(source)
-    if result.execute_output:
-        print(result.execute_output, end="")
-    if not result.success:
-        if result.traceback:
-            print(f"\n--- traceback ---\n{result.traceback}", file=sys.stderr)
-        return 1
-    return 0
-
-
-def _cmd_switch(args: argparse.Namespace) -> int:
-    """Switch which thing is active without re-shipping payloads.
-
-    Builds the merged runtime config msgpack for the named thing on
-    the host, then ships only ``/code.py`` (or ``/main.py``) +
-    ``/active.py`` + ``/runtime_config.msgpack``.  The thing payloads
-    under ``/lib/things/<name>/`` stay on flash from the prior
-    multi-thing :func:`_cmd_deploy`.
-
-    Fast: three small files instead of the whole stack.  Requires
-    that the named thing was included in a prior multi-thing deploy —
-    if not, the device boots into a thing whose payload doesn't exist
-    and ``workspace_runtime.boot()`` raises ``WorkspaceBootError``.
-    """
-    workspace = _resolve_workspace(args)
-    resolved_name = _resolve_thing_name(workspace, args.name)
-    thing_dir = workspace.thing_dir(resolved_name)
-    if not thing_dir.is_dir():
-        raise SystemExit(f"error: thing {thing_dir} not found")
-    device = _resolve_device(workspace, args)
-    from chumicro_deploy import Deployer  # noqa: PLC0415
-
-    source = switch_source(
-        thing_dir,
-        workspace=workspace,
-        thing_name=resolved_name,
-        entrypoint_filename=device.effective_entrypoint,
-    )
     result = Deployer(device).deploy(source)
     if result.execute_output:
         print(result.execute_output, end="")
@@ -1669,19 +1606,10 @@ def build_parser() -> argparse.ArgumentParser:
         nargs="*",
         metavar="name",
         help=(
-            "Name(s) of things under things/ to deploy.  Optional when "
+            "Name of the thing under things/ to deploy.  Optional when "
             "the workspace contains exactly one thing — that thing is "
-            "deployed by default.  Multiple names require --boot-shim "
-            "(the layout that puts each thing under /lib/things/<name>/)."
-        ),
-    )
-    deploy_parser.add_argument(
-        "--active",
-        default=None,
-        help=(
-            "Multi-thing only: which deployed thing /active.py points "
-            "at (defaults to the first positional name).  Use `switch` "
-            "later to re-point without re-flashing."
+            "deployed by default.  One positional per `deploy` call; "
+            "multi-thing deploys are no longer supported."
         ),
     )
     deploy_parser.add_argument(
@@ -1705,30 +1633,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--boot-shim",
         action="store_true",
         help=(
-            "Ship the thing under /lib/things/<name>/ + write a "
+            "Ship the thing under /lib/things/<...>/<name>/ + write a "
             "fixed code.py shim + active.py + workspace_runtime "
-            "payload (Decision 0029 §3).  app.py must export run().  "
-            "Multiple positional names land side-by-side; use `switch` "
-            "to re-point /active.py later without re-flashing."
+            "payload (Decision 0029 §3).  app.py must export run()."
         ),
     )
     deploy_parser.set_defaults(func=_cmd_deploy)
-
-    # ----- switch --------------------------------------------------------
-    switch_parser = subparsers.add_parser(
-        "switch",
-        help=(
-            "Re-point /active.py at a different thing already deployed "
-            "via `deploy --boot-shim a b c` (no payload re-flash)."
-        ),
-    )
-    _add_workspace_arg(switch_parser)
-    _add_device_selector(switch_parser)
-    switch_parser.add_argument(
-        "name",
-        help="Name of the installed thing to make active.",
-    )
-    switch_parser.set_defaults(func=_cmd_switch)
 
     # ----- things --------------------------------------------------------
     things_parser = subparsers.add_parser(

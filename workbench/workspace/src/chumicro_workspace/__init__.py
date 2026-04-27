@@ -6,8 +6,7 @@ Combines:
   config + secrets → ``/runtime_config.msgpack``.
 * **Deploy integration** — :class:`WithRuntimeConfig` plus
   :func:`thing_directory_source` / :func:`thing_import_graph_source`
-  / :func:`thing_boot_source` / :func:`multi_thing_boot_source` /
-  :func:`switch_source` compose with ``chumicro-deploy``'s
+  / :func:`thing_boot_source` compose with ``chumicro-deploy``'s
   ``FileSource``\\ s so a single ``Deployer.deploy(...)`` call ships
   app code + the merged config + (optional) boot shim in one shot.
 * **``devices.yml`` round-trip** — three-zone writer (Decision 0029 §9).
@@ -49,11 +48,7 @@ from chumicro_workspace.boot_shim import (
     THINGS_PACKAGE_INIT_DEVICE_PATH,
     boot_shim_files,
     build_active_py,
-    build_switch_files,
     load_workspace_runtime_payload,
-    multi_thing_boot_files,
-    multi_thing_boot_source,
-    switch_source,
     thing_boot_source,
 )
 from chumicro_workspace.deploy_source import (
@@ -133,7 +128,6 @@ __all__ = [
     "build_active_py",
     "build_runtime_config",
     "build_search_paths",
-    "build_switch_files",
     "derive_firmware_url",
     "detect_board_state",
     "dump_devices",
@@ -150,8 +144,6 @@ __all__ = [
     "load_workspace_runtime_payload",
     "merge_configs",
     "micropython_board_for_machine",
-    "multi_thing_boot_files",
-    "multi_thing_boot_source",
     "read_secrets_yaml",
     "read_library_sources",
     "read_thing_config",
@@ -159,7 +151,6 @@ __all__ = [
     "rename_device",
     "resolve_secrets",
     "set_runtime_default",
-    "switch_source",
     "thing_boot_source",
     "thing_directory_source",
     "thing_import_graph_source",

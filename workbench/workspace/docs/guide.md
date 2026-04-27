@@ -122,62 +122,45 @@ Stages the [Decision 0029 §3](https://github.com/ChuMicro/ChuMicro/blob/main/pl
 
 `workspace_runtime.boot()` reads `THING_NAME` from `/active.py`, imports `things.back-porch.app`, and calls `app.run()`.
 
-### Multiple things on one device
+### Nested thing names
 
-```bash
-python run.py deploy weather heater diagnostic --boot-shim --active weather
+Slash- or dotted-form thing names produce a parallel namespace tree under `/lib/things/`.  `python run.py deploy garage/sensors/door_open --boot-shim` lays down:
+
+```
+/lib/things/__init__.py
+/lib/things/garage/__init__.py
+/lib/things/garage/sensors/__init__.py
+/lib/things/garage/sensors/door_open/
+    __init__.py
+    app.py
 ```
 
-Ships every named thing side-by-side at `/lib/things/<each>/`, each with its own per-thing runtime config msgpack.  `/active.py` names `weather` so its `run()` fires on boot.
+`/active.py` carries the dotted form (`THING_NAME = "garage.sensors.door_open"`); `workspace_runtime.boot()` concatenates `"things." + THING_NAME + ".app"` and Python's import machinery walks the namespace inits to the leaf.
 
-`--active` defaults to the first positional name when omitted.  Multi-thing deploys require `--boot-shim` (the flat layout would collide).
+### One thing per `deploy` call
 
-### Switching the active thing
-
-Once multiple things are installed, swap which one runs without re-flashing the payloads:
-
-```bash
-python run.py switch heater
-```
-
-[`switch_source`](api.md) ships only three small files: `/code.py` (re-staged byte-identical, satisfies the transport's "execute entrypoint" contract), the new `/active.py`, and the new `/runtime_config.msgpack` (the heater thing's merged config).  The thing payloads under `/lib/things/<name>/` stay on flash from the prior multi-thing deploy.
-
-If the named thing's payload isn't on the device, `workspace_runtime.boot()` raises `WorkspaceBootError` on the next boot pointing at "deploy may not have run".  In that case, re-run `deploy --boot-shim ... <name>` to install the payload first.
+Multi-thing-on-one-device deploys (`deploy <a> <b> <c> --boot-shim`) and the matching `switch <name>` re-pointer were retired in Slice 7 of the nested-things-and-examples workstream — multi-thing-staging blew the flash budget on Decision 0015 minimum boards.  Pass one positional per `deploy` invocation; re-deploy when you want to change which thing is active.  See [`plans/next-up.md`'s "Replace multi-thing staging with scoped diff-deploy" entry](https://github.com/ChuMicro/ChuMicro/blob/main/plans/next-up.md) for the workstream that replaces it.
 
 ### Programmatic deploy
 
 The CLI is a thin wrapper over the public Python API.  Build a source explicitly when you need finer control:
 
 ```python
-from pathlib import Path
-
 from chumicro_deploy import Device, Deployer
-from chumicro_workspace import (
-    multi_thing_boot_source,
-    switch_source,
-)
+from chumicro_workspace import thing_boot_source
 from chumicro_workspace.workspace import WorkspaceLayout
 
 workspace = WorkspaceLayout.from_dir()
 device = Device(transport="micropython", address="/dev/cu.usbmodem1101")
 
-# Multi-thing initial deploy.
-source = multi_thing_boot_source(
-    [workspace.thing_dir("weather"), workspace.thing_dir("heater")],
+source = thing_boot_source(
+    workspace.thing_dir("garage/sensors/door_open"),
     workspace=workspace,
-    active_thing_name="weather",
+    thing_name="garage/sensors/door_open",
     entrypoint_filename="main.py",
 )
 result = Deployer(device).deploy(source)
 assert result.success
-
-# Later: swap to heater.
-switch = switch_source(
-    workspace.thing_dir("heater"),
-    workspace=workspace,
-    entrypoint_filename="main.py",
-)
-Deployer(device).deploy(switch)
 ```
 
 ## Config merge

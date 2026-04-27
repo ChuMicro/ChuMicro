@@ -1,6 +1,6 @@
 # chumicro-workspace
 
-Host-side runtime for ChuMicro project workspaces.  Wraps `chumicro-deploy` and `chumicro-repl` with the workspace-shaped conventions a `things/`-and-`devices.yml` repo expects: deploy-time config merge, a CLI that reads `workspace.yml`, three-zone `devices.yml` round-trip, board-state onboarding, firmware URL derivation, an import-graph deploy mode, and the boot-shim layout that lets one board host multiple things.
+Host-side runtime for ChuMicro project workspaces.  Wraps `chumicro-deploy` and `chumicro-repl` with the workspace-shaped conventions a `things/`-and-`devices.yml` repo expects: deploy-time config merge, a CLI that reads `workspace.yml`, three-zone `devices.yml` round-trip, board-state onboarding, firmware URL derivation, an import-graph deploy mode, and the boot-shim layout that boots a single thing through the `workspace_runtime` indirection.
 
 Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) workspace.  Workbench tool — runs on your laptop to drive connected boards.  See [Decision 0032](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0032-workbench-host-tools.md) for the workbench pattern, [Decision 0029](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0029-project-workspace.md) for the workspace contract, and [Decision 0035](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0035-runtime-config-structure.md) for the config-merge story.
 
@@ -22,9 +22,8 @@ The package ships `python -m chumicro_workspace` (also exposed as the `chumicro-
 | `probe` | Print the runtime identity reported by the selected board. |
 | `discover` | List the serial ports the host currently sees. |
 | `devices` | Print every entry in `devices.yml`. |
-| `things` | Print every thing under `things/` (skips `_template` and `_`-prefixed dirs). |
-| `deploy <name> [<more> ...] [--boot-shim] [--import-graph] [--active <name>]` | Ship one or more things to a board. |
-| `switch <name>` | Re-point `/active.py` at a different thing already on the device — fast (3 files), no payload re-flash. |
+| `things [--flat]` | Print every thing under `things/` (skips `_template` and `_`-prefixed dirs).  Default tree view; `--flat` for one-line-per-thing. |
+| `deploy <name> [--boot-shim] [--import-graph]` | Ship a thing to a board.  *name* may be nested (`upstairs/bedroom_sensor`) or dotted. |
 | `repl [--tail SECONDS]` | Open an interactive REPL or stream output for a window. |
 | `install-firmware [--url URL] --method <uf2\|esptool>` | Download + flash firmware (URL auto-derived from `hardware.firmware_source` / `hardware.board_id` / `hardware.machine` when omitted). |
 | `upgrade-firmware` | Alias of `install-firmware`. |
@@ -35,25 +34,32 @@ The package ships `python -m chumicro_workspace` (also exposed as the `chumicro-
 
 ### Boot-shim layout
 
-`deploy --boot-shim <name>` ships the [Decision 0029 §3](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0029-project-workspace.md) on-device shape:
+`deploy --boot-shim <name>` ships the [Decision 0029 §3](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0029-project-workspace.md) on-device shape.  Nested thing names produce a parallel namespace tree under `/lib/things/`:
 
 ```
 /code.py                              # two-line shim: import workspace_runtime; boot()
-/active.py                            # THING_NAME = "<name>"
-/runtime_config.msgpack               # merged config (active thing's view)
-/lib/workspace_runtime/__init__.py    # boot module — imports things.<name>.app and calls run()
+/active.py                            # THING_NAME = "garage.sensors.door_open"
+/runtime_config.msgpack               # merged config
+/lib/workspace_runtime/__init__.py    # boot module — imports things.<dotted>.app and calls run()
 /lib/things/__init__.py               # package marker
-/lib/things/<name>/                   # the thing's files (app.py, helpers, etc.)
+/lib/things/garage/__init__.py        # namespace marker (one per level)
+/lib/things/garage/sensors/__init__.py
+/lib/things/garage/sensors/door_open/ # the thing's files
     __init__.py
     app.py
-    runtime_config.msgpack            # per-thing copy (multi-thing flows read this)
 ```
 
-### Multi-thing on one device
+For a flat single-segment thing the layout collapses to the
+single-level shape (`/lib/things/<name>/`).
 
-`deploy --boot-shim foo bar baz --active foo` ships every named thing side-by-side under `/lib/things/<each>/` with per-thing runtime config msgpacks.  The active thing's msgpack is also written at the canonical `/runtime_config.msgpack` so existing app code that reads from there keeps working.
-
-`switch <name>` then re-points `/active.py` (and the canonical msgpack) without re-shipping payloads — three small files instead of the whole stack.  Use cases: dev/diagnostic vs production thing on one board, A/B testing two firmware variants, a shop-demo device that cycles through several apps.
+The original Phase 4a multi-thing-on-one-device path
+(`deploy --boot-shim foo bar baz --active foo` + a `switch <name>`
+command for re-pointing `/active.py`) was retired in Slice 7 of
+the nested-things-and-examples workstream — it blew the flash
+budget on Decision 0015 minimum boards and the "instant switch"
+pitch wasn't worth the cost.  See [`plans/next-up.md`'s "Replace
+multi-thing staging with scoped diff-deploy" entry](https://github.com/ChuMicro/ChuMicro/blob/main/plans/next-up.md)
+for the workstream that replaces it.
 
 ### Public Python API
 
@@ -73,14 +79,8 @@ from chumicro_workspace import (
     # Deploy sources
     WithRuntimeConfig,           # FileSource decorator that injects the msgpack
     thing_directory_source,      # flat layout: thing dir at device root
-    thing_boot_source,           # boot-shim layout: thing under /lib/things/<name>/
+    thing_boot_source,           # boot-shim layout: thing under /lib/things/<...>/<name>/
     thing_import_graph_source,   # AST-walked layout: only reachable modules
-
-    # Multi-thing + switch (boot-shim layout only)
-    multi_thing_boot_source,     # ship N things side-by-side
-    multi_thing_boot_files,      # static shim layer for a multi-thing layout
-    switch_source,               # FileMapSource that re-points /active.py
-    build_switch_files,          # the three-file switch payload, callable directly
 
     # devices.yml three-zone round-trip (Decision 0029 §9)
     add_device,                  # add a probed entry, prompting on hardware-once changes
