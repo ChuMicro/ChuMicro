@@ -830,6 +830,118 @@ class TestThings:
         assert "back-porch" in out
 
 
+class TestDeployAllDevices:
+    """Phase 2f — `deploy --all-devices` loops over devices.yml entries."""
+
+    def _seed_two_device_workspace(self, tmp_path: Path) -> Path:
+        """Seed a workspace with two registered devices."""
+        (tmp_path / "workspace.yml").write_text(
+            "defaults:\n  wifi:\n    hostname_prefix: chu-\n",
+        )
+        (tmp_path / "secrets.yml").write_text("wifi_password: shh\n")
+        (tmp_path / "devices.yml").write_text(
+            "defaults:\n"
+            "  micropython: lolin-s2\n"
+            "devices:\n"
+            "  - id: lolin-s2\n"
+            "    runtime: micropython\n"
+            "    address: /dev/cu.fake-mp\n"
+            "  - id: pico-w\n"
+            "    runtime: circuitpython\n"
+            "    address: /dev/cu.fake-cp\n",
+        )
+        return tmp_path
+
+    def test_loops_over_each_device(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = self._seed_two_device_workspace(tmp_path)
+        _seed_thing(root, name="back-porch")
+
+        addresses_seen: list[str] = []
+
+        def factory(device: Any) -> FakeTransport:
+            addresses_seen.append(device.address)
+            return FakeTransport(execute_output="")
+
+        monkeypatch.setattr(Device, "create_transport", factory)
+
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root),
+            "back-porch", "--all-devices",
+        ])
+        assert exit_code == 0
+        # Each device was reached via its own create_transport call,
+        # in devices.yml declaration order.
+        assert addresses_seen == ["/dev/cu.fake-mp", "/dev/cu.fake-cp"]
+        # Per-device header lines appear in stdout.
+        out = capsys.readouterr().out
+        assert "/dev/cu.fake-mp" in out
+        assert "/dev/cu.fake-cp" in out
+
+    def test_failure_continues_to_next_device(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """One bad device doesn't short-circuit the loop; exit code is 1."""
+        root = self._seed_two_device_workspace(tmp_path)
+        _seed_thing(root, name="back-porch")
+
+        addresses_seen: list[str] = []
+
+        def factory(self: Any) -> FakeTransport:
+            addresses_seen.append(self.address)
+            if self.address == "/dev/cu.fake-mp":
+                return FakeTransport(
+                    execute_output=(
+                        "Traceback (most recent call last):\n"
+                        "RuntimeError: bad-device\n"
+                    ),
+                )
+            return FakeTransport(execute_output="")
+
+        monkeypatch.setattr(Device, "create_transport", factory)
+
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root),
+            "back-porch", "--all-devices",
+        ])
+        assert exit_code == 1
+        # Both devices were tried.
+        assert addresses_seen == ["/dev/cu.fake-mp", "/dev/cu.fake-cp"]
+
+    def test_mutually_exclusive_with_device_id(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = self._seed_two_device_workspace(tmp_path)
+        _seed_thing(root, name="back-porch")
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root),
+            "back-porch", "--all-devices", "--device", "lolin-s2",
+        ])
+        assert exit_code == 2
+        assert "mutually exclusive" in capsys.readouterr().err
+
+    def test_no_devices_registered_errors(self, tmp_path: Path) -> None:
+        root = _seed_workspace(tmp_path)
+        # Overwrite the seeded devices.yml with an empty list.
+        (root / "devices.yml").write_text("devices: []\n")
+        _seed_thing(root, name="back-porch")
+        with pytest.raises(SystemExit) as caught:
+            cli.main([
+                "deploy", "--workspace-dir", str(root),
+                "back-porch", "--all-devices",
+            ])
+        assert "no devices" in str(caught.value)
+
+
 class TestDeployFailureHints:
     """Phase 2d — failed deploys carry app-level recovery hints to stderr."""
 

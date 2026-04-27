@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **Workspace ecosystem completion — Phase 2 nearly closed.**  Phase 1 closed 2026-04-27.  Phase 2 sub-items 2e + 2a + 2c + 2d + 2b shipped.  Phase 2b (just landed): `doctor` command runs status's four checks plus three new ones (Python ≥3.11 version, per-thing AST scan for top-level `def run`, and a config-merge dry-run that catches unresolved `!secret` references).  Shared `_print_health_findings` renderer means status + doctor produce visually identical output (label / glyph / hint).  Doctor returns 1 only on ERROR-level findings; warnings stay at exit 0 like status.  Per-device probes deferred until a hardware-cheap probe primitive lands.  Only 2f (multi-device deploys — assess scope first) remains in Phase 2.
-- **Last shipped:** Phase 2b — `doctor` strict health check.
-- **In flight:** Phase 2 — 2f (multi-device — assess first) is the only remaining sub-item.
+- **Phase:** **Workspace ecosystem completion — Phase 2 closed.**  Phase 1 closed 2026-04-27.  Phase 2 (six sub-items) closed in this same session: 2e (`repl <thing>`), 2a (`status`), 2c (`deploy --dry-run`), 2d (app-level error hints), 2b (`doctor`), 2f (`deploy --all-devices`).  Phase 2f (just landed): minimum-scope multi-device — `deploy --all-devices` loops over every entry in `devices.yml`, mutually exclusive with `--device` / `--runtime`, doesn't abort on per-device failure (exit code reflects whether any failed).  Per-device deploys rebuild the source per-device since entrypoint differs by runtime.  Per-thing → per-device mapping config (the planning doc's "extra knobs" sketch) deferred — `--all-devices` covers the common "ship the same thing everywhere" case.  Phase 3 (per-environment deploys) is the next-session entry point.
+- **Last shipped:** Phase 2f — `deploy --all-devices`.  Phase 2 closed.
+- **In flight:** —
 - **Blocked on:** —
-- **Last touched:** `workbench/workspace/src/chumicro_workspace/{cli,health}.py`, `workbench/workspace/tests/{test_cli,test_health}.py`, `plans/now.md`.
+- **Last touched:** `workbench/workspace/src/chumicro_workspace/cli.py`, `workbench/workspace/tests/test_cli.py`, `plans/now.md`.
 
 ---
 

@@ -201,6 +201,34 @@ def _resolve_device(workspace: WorkspaceLayout, args: argparse.Namespace) -> Dev
     )
 
 
+def _resolve_all_devices(workspace: WorkspaceLayout) -> list[Device]:
+    """Return a :class:`Device` for every entry in devices.yml.
+
+    Used by ``deploy --all-devices`` (Phase 2f).  Loads each entry
+    via :func:`load_devices_yml` so the per-entry validation +
+    runtime-default resolution stays consistent with single-device
+    deploys.  Order matches the YAML file order so deploys reach
+    boards in a predictable sequence.
+    """
+    if not workspace.devices_yaml.is_file():
+        raise SystemExit(
+            f"error: {workspace.devices_yaml} not found — run "
+            "'add-device' to register a board first.",
+        )
+    from chumicro_deploy.config.default import load_devices_yml  # noqa: PLC0415
+
+    raw = load_devices(workspace.devices_yaml)
+    entries = raw.get("devices", []) or []
+    if not entries:
+        raise SystemExit(
+            f"error: {workspace.devices_yaml} has no devices to deploy to.",
+        )
+    return [
+        load_devices_yml(workspace.devices_yaml, device_id=entry["id"])
+        for entry in entries
+    ]
+
+
 # ---------------------------------------------------------------------------
 # Implemented commands
 # ---------------------------------------------------------------------------
@@ -737,50 +765,68 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
         if not thing_dir.is_dir():
             raise SystemExit(f"error: thing {thing_dir} not found")
         thing_dirs.append(thing_dir)
-    device = _resolve_device(workspace, args)
+    if args.all_devices:
+        if args.device_id is not None or args.runtime is not None:
+            print(
+                "deploy: --all-devices is mutually exclusive with "
+                "--device / --runtime.",
+                file=sys.stderr,
+            )
+            return 2
+        devices = _resolve_all_devices(workspace)
+    else:
+        devices = [_resolve_device(workspace, args)]
     from chumicro_deploy import Deployer  # noqa: PLC0415
 
-    if args.boot_shim:
-        layout = "boot-shim"
-        source = thing_boot_source(
-            thing_dirs[0],
-            workspace=workspace,
-            thing_name=names[0],
-            entrypoint_filename=device.effective_entrypoint,
-        )
-    elif args.import_graph:
-        layout = "import-graph"
-        device_entrypoint = args.entrypoint or f"/{device.effective_entrypoint}"
-        source = thing_import_graph_source(
-            thing_dirs[0],
-            workspace=workspace,
-            entrypoint_filename=device.effective_entrypoint,
-            device_entrypoint=device_entrypoint,
-        )
-    else:
-        layout = "flat"
-        source = thing_directory_source(
-            thing_dirs[0],
-            workspace_yaml=workspace.workspace_yaml,
-            secrets_yaml=workspace.secrets_yaml,
-            entrypoint=args.entrypoint or f"/{device.effective_entrypoint}",
-        )
-    if args.dry_run:
-        print(_render_dry_run_summary(
-            thing_name=names[0],
-            device=device,
-            layout=layout,
-            files=source.files(),
-            entrypoint=source.entrypoint(),
-        ))
-        return 0
-    result = Deployer(device).deploy(source)
-    if result.execute_output:
-        print(result.execute_output, end="")
-    if not result.success:
-        _emit_failure_hints(result)
-        return 1
-    return 0
+    exit_code = 0
+    for device in devices:
+        if len(devices) > 1:
+            print(
+                f"\ndeploy: --- {device.transport}@{device.address} ---",
+            )
+        if args.boot_shim:
+            layout = "boot-shim"
+            source = thing_boot_source(
+                thing_dirs[0],
+                workspace=workspace,
+                thing_name=names[0],
+                entrypoint_filename=device.effective_entrypoint,
+            )
+        elif args.import_graph:
+            layout = "import-graph"
+            device_entrypoint = (
+                args.entrypoint or f"/{device.effective_entrypoint}"
+            )
+            source = thing_import_graph_source(
+                thing_dirs[0],
+                workspace=workspace,
+                entrypoint_filename=device.effective_entrypoint,
+                device_entrypoint=device_entrypoint,
+            )
+        else:
+            layout = "flat"
+            source = thing_directory_source(
+                thing_dirs[0],
+                workspace_yaml=workspace.workspace_yaml,
+                secrets_yaml=workspace.secrets_yaml,
+                entrypoint=args.entrypoint or f"/{device.effective_entrypoint}",
+            )
+        if args.dry_run:
+            print(_render_dry_run_summary(
+                thing_name=names[0],
+                device=device,
+                layout=layout,
+                files=source.files(),
+                entrypoint=source.entrypoint(),
+            ))
+            continue
+        result = Deployer(device).deploy(source)
+        if result.execute_output:
+            print(result.execute_output, end="")
+        if not result.success:
+            _emit_failure_hints(result)
+            exit_code = 1
+    return exit_code
 
 
 def _render_things_tree(
@@ -1913,6 +1959,16 @@ def build_parser() -> argparse.ArgumentParser:
             "Print the file map deploy would ship without writing to "
             "the device.  Doubles as documentation: the output is the "
             "canonical reference for 'what does deploy actually do'."
+        ),
+    )
+    deploy_parser.add_argument(
+        "--all-devices",
+        action="store_true",
+        help=(
+            "Deploy to every device in devices.yml in sequence.  "
+            "Mutually exclusive with --device / --runtime.  "
+            "Per-device failures don't abort the loop — every device "
+            "gets a chance, exit code reflects whether any failed."
         ),
     )
     deploy_parser.set_defaults(func=_cmd_deploy)
