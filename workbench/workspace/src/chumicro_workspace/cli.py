@@ -76,6 +76,7 @@ from chumicro_workspace.onboarding import (
     detect_board_state,
     probe_with_runtime_inference,
 )
+from chumicro_workspace.recovery import detect_hints, format_hints
 from chumicro_workspace.workspace import (
     ThingClassification,
     WorkspaceLayout,
@@ -526,6 +527,33 @@ def _cmd_devices(args: argparse.Namespace) -> int:
     return 0
 
 
+def _emit_failure_hints(deploy_result: Any) -> None:
+    """Print the traceback + matching app-level recovery hints to stderr.
+
+    The deploy result's ``traceback`` and ``execute_output`` are
+    both scanned for known patterns (Phase 2d's hint table); any
+    matching hints append below the traceback under a "--- hints ---"
+    section so users who hit a common failure (missing `!secret`,
+    un-merged config key, library not installed) get the workspace-
+    shaped pointer instead of just the raw stdlib error.
+
+    Skip the hints section silently when no pattern matches —
+    showing an empty block reads worse than showing nothing.
+    """
+    traceback_text = getattr(deploy_result, "traceback", "") or ""
+    execute_output = getattr(deploy_result, "execute_output", "") or ""
+    if traceback_text:
+        print(
+            f"\n--- traceback ---\n{traceback_text}",
+            file=sys.stderr,
+        )
+    haystack = traceback_text + "\n" + execute_output
+    hints = detect_hints(haystack)
+    block = format_hints(hints)
+    if block:
+        print(f"\n{block}", file=sys.stderr)
+
+
 def _format_size(num_bytes: int) -> str:
     """Render *num_bytes* as a short human-readable string.
 
@@ -749,8 +777,7 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
     if result.execute_output:
         print(result.execute_output, end="")
     if not result.success:
-        if result.traceback:
-            print(f"\n--- traceback ---\n{result.traceback}", file=sys.stderr)
+        _emit_failure_hints(result)
         return 1
     return 0
 
@@ -948,8 +975,7 @@ def _cmd_demo(args: argparse.Namespace) -> int:
     if result.execute_output:
         print(result.execute_output, end="")
     if not result.success:
-        if result.traceback:
-            print(f"\n--- traceback ---\n{result.traceback}", file=sys.stderr)
+        _emit_failure_hints(result)
         return 1
     return 0
 
@@ -1306,11 +1332,7 @@ def _cmd_repl(args: argparse.Namespace) -> int:
         if deploy_result.execute_output:
             print(deploy_result.execute_output, end="")
         if not deploy_result.success:
-            if deploy_result.traceback:
-                print(
-                    f"\n--- traceback ---\n{deploy_result.traceback}",
-                    file=sys.stderr,
-                )
+            _emit_failure_hints(deploy_result)
             return 1
         tail_seconds = (
             args.tail if args.tail is not None else _DEFAULT_REPL_TAIL_SECONDS

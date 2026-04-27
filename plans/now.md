@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **Workspace ecosystem completion — Phase 2 in flight.**  Phase 1 closed 2026-04-27.  Phase 2e, 2a, 2c shipped.  Phase 2c (just landed): `deploy --dry-run` builds the source like normal then prints the file map (path / size / one-word category — `shim` / `namespace` / `thing` / `config` / `library` / `file`) instead of calling `Deployer.deploy()`.  Helper functions `_format_size`, `_classify_dry_run_path`, `_render_dry_run_summary` keep the rendering pure-string so it's also the canonical "what does deploy do" reference for docs.  Next sub-items: 2b (`doctor`), 2d (app-level error recovery hints), 2f (multi-device — assess first).
-- **Last shipped:** Phase 2c — `deploy --dry-run`.
+- **Phase:** **Workspace ecosystem completion — Phase 2 in flight.**  Phase 1 closed 2026-04-27.  Phase 2e, 2a, 2c, 2d shipped.  Phase 2d (just landed): new `chumicro_workspace.recovery` module pattern-matches deploy-failure tracebacks against five known shapes (`NameError` → "did you forget to import", `ValueError` mentioning `!secret` → secrets.yml miss, `KeyError` → missing config section, `OSError` on `runtime_config.msgpack` → RAM-mode hint, `ImportError` for `chumicro_*` → setup hint) and emits an indented `--- hints ---` block under the traceback.  All three CLI traceback sites (`_cmd_deploy`, `_cmd_demo`, `_cmd_repl`-with-thing) route through one `_emit_failure_hints` helper so the output stays consistent.  Empty hints → no section header.  Next sub-items: 2b (`doctor`), 2f (multi-device — assess first).
+- **Last shipped:** Phase 2d — app-level deploy-failure hints.
 - **In flight:** Phase 2 — pick next sub-item.
 - **Blocked on:** —
-- **Last touched:** `workbench/workspace/src/chumicro_workspace/cli.py`, `workbench/workspace/tests/test_cli.py`, `plans/now.md`.
+- **Last touched:** `workbench/workspace/src/chumicro_workspace/{cli,recovery}.py`, `workbench/workspace/tests/{test_cli,test_recovery}.py`, `plans/now.md`.
 
 ---
 

@@ -830,6 +830,96 @@ class TestThings:
         assert "back-porch" in out
 
 
+class TestDeployFailureHints:
+    """Phase 2d — failed deploys carry app-level recovery hints to stderr."""
+
+    def test_unresolved_secret_traceback_prints_hint(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        _seed_thing(root)
+        transport = FakeTransport(
+            execute_output=(
+                "Traceback (most recent call last):\n"
+                "  File \"/code.py\", ...\n"
+                "ValueError: unresolved secret reference !secret wifi_password\n"
+            ),
+        )
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root), "back-porch",
+        ])
+        assert exit_code == 1
+        captured_stderr = capsys.readouterr().err
+        assert "--- hints ---" in captured_stderr
+        assert "wifi_password" in captured_stderr
+        assert "secrets.yml" in captured_stderr
+
+    def test_no_hints_section_when_no_pattern_matches(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Generic ZeroDivisionError carries no hint — no empty section."""
+        root = _seed_workspace(tmp_path)
+        _seed_thing(root)
+        transport = FakeTransport(
+            execute_output=(
+                "Traceback (most recent call last):\n"
+                "  File \"/code.py\", line 1\n"
+                "ZeroDivisionError: division by zero\n"
+            ),
+        )
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root), "back-porch",
+        ])
+        assert exit_code == 1
+        captured_stderr = capsys.readouterr().err
+        assert "--- hints ---" not in captured_stderr
+
+    def test_repl_with_thing_failure_prints_hint(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """`repl <thing>` deploy failures route through the same hint pass."""
+        root = _seed_workspace(tmp_path)
+        thing_dir = _seed_thing(root, name="back-porch")
+        (thing_dir / "app.py").write_text("def run(): pass\n")
+        transport = FakeTransport(
+            execute_output=(
+                "Traceback (most recent call last):\n"
+                "  ...\n"
+                "ImportError: no module named 'chumicro_wifi'\n"
+            ),
+        )
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+
+        # Tail must NOT be reached; stub it to ensure no call.
+        import chumicro_repl
+        monkeypatch.setattr(
+            chumicro_repl,
+            "tail",
+            lambda *args, **kwargs: pytest.fail("tail called on failed deploy"),
+        )
+
+        exit_code = cli.main([
+            "repl", "--workspace-dir", str(root), "back-porch",
+        ])
+        assert exit_code == 1
+        captured_stderr = capsys.readouterr().err
+        assert "--- hints ---" in captured_stderr
+        assert "chumicro_wifi" in captured_stderr
+
+
 class TestDeployDryRun:
     """Phase 2c — `deploy --dry-run` shows the file map without writing."""
 
