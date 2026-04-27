@@ -34,6 +34,7 @@ __all__ = [
     "UnsupportedSSLConfigError",
     "ssl_context_with_ca",
     "ssl_context_with_cert_and_key",
+    "ssl_context_with_cert_and_key_paths",
     "tcp_client_socket",
     "tcp_listening_socket",
     "tls_client_socket",
@@ -250,12 +251,20 @@ def ssl_context_with_cert_and_key(
     cert_pem: str | bytes,
     key_pem: str | bytes,
 ) -> object:
-    """Build a server-side SSLContext that presents *cert_pem* signed by *key_pem*.
+    """Build a server-side SSLContext from in-memory cert + key bytes.
 
     Counterpart to :func:`ssl_context_with_ca` — the client side
     trusts a CA to verify someone *else's* cert, while the server
-    side presents its own cert + private key to clients.  Returned
-    context targets ``PROTOCOL_TLS_SERVER``.
+    side presents its own cert + private key to clients.
+
+    **Runtime support:**
+
+    * **MicroPython** — works directly with PEM (or DER on rp2)
+      bytes via MP's ``ssl.SSLContext.load_cert_chain``.
+    * **CPython** — works (writes to a temp file under the hood).
+    * **CircuitPython** — *not supported* (CP's
+      ``load_cert_chain`` requires filesystem paths, not bytes).
+      Use :func:`ssl_context_with_cert_and_key_paths` instead.
 
     Args:
         cert_pem: PEM-encoded server certificate (or chain).
@@ -276,6 +285,55 @@ def ssl_context_with_cert_and_key(
     from chumicro_sockets._adapters import cpython  # noqa: PLC0415 — runtime-gated
 
     return cpython.ssl_context_with_cert_and_key(cert_pem, key_pem)
+
+
+def ssl_context_with_cert_and_key_paths(
+    cert_path: str,
+    key_path: str,
+) -> object:
+    """Build a server-side SSLContext from cert + key files on flash.
+
+    Cross-runtime alternative to :func:`ssl_context_with_cert_and_key`
+    that works on every supported runtime — CircuitPython's
+    ``ssl.SSLContext.load_cert_chain`` only accepts filesystem paths,
+    so this is the recommended API for CP-targeted code.
+
+    On MicroPython + CPython this reads the bytes from the paths
+    and routes through :func:`ssl_context_with_cert_and_key`.  On
+    CircuitPython it loads via the path directly.
+
+    Live-verified on Lolin S2 ESP32-S2 (CP 10.2.0-rc.0): 6 KB
+    context + 35 KB handshake heap cost, ~2 MB free heap
+    remaining; HTTPS GET round-trip from a host CPython client
+    succeeded.  Pi Pico W (rp2) currently fails post-handshake
+    with ``OSError(32)`` (EPIPE) — under investigation, likely
+    an rp2-port mbedTLS feature-flag issue.
+
+    Args:
+        cert_path: On-device filesystem path to the cert PEM file.
+        key_path: On-device filesystem path to the private-key PEM
+            file.
+
+    Returns:
+        Configured :class:`ssl.SSLContext`.
+    """
+    runtime = _runtime_name()
+    if runtime == "circuitpython":
+        from chumicro_sockets._adapters import cp  # noqa: PLC0415 — runtime-gated
+
+        return cp.ssl_context_with_cert_and_key_paths(cert_path, key_path)
+    # MP + CPython: load the bytes and use the in-memory helper.
+    with open(cert_path, "rb") as cert_handle:
+        cert_bytes = cert_handle.read()
+    with open(key_path, "rb") as key_handle:
+        key_bytes = key_handle.read()
+    if runtime == "micropython":
+        from chumicro_sockets._adapters import mp  # noqa: PLC0415 — runtime-gated
+
+        return mp.ssl_context_with_cert_and_key(cert_bytes, key_bytes)
+    from chumicro_sockets._adapters import cpython  # noqa: PLC0415 — runtime-gated
+
+    return cpython.ssl_context_with_cert_and_key(cert_bytes, key_bytes)
 
 
 def ssl_context_with_ca(ca_pem: str | bytes) -> object:

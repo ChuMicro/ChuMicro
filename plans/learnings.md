@@ -93,16 +93,29 @@ The old basefs MQTT impl (`/Users/chuxor/circuitpython/pythonProject3/basefilesy
 
 `chumicro-mqtt` 0.1.4 adopts a hybrid: a `recv_budget_per_tick` knob (default 1024 B) caps the per-tick byte budget while still letting a tick do multiple recv calls when bytes are available.  Default 1024 = 4× the steady RX buffer (256 B) = drains a typical PUBLISH in one tick AND keeps tick latency well under 10 ms even on rp2.  Configurable upward for things that want fast big-blob ingestion at the cost of LED smoothness.  The lesson is general: any tick-shaped reader on a fat kernel buffer needs an explicit per-tick byte budget OR an explicit per-tick iteration count — implicit "drain until EAGAIN" is a foot-gun.
 
-### CircuitPython's `ssl` module deliberately omits server-side TLS — on every supported board
+### CircuitPython server-side TLS works (the API is just different from CPython's)
 
-Verified live 2026-04-27 on **two different CP boards** during chumicro-http-server slice 7t investigation:
+Initial conclusion ("CP can't host TLS server because `ssl.PROTOCOL_TLS_SERVER` doesn't exist") was wrong — corrected by the user pointing at adafruit_httpserver's working `https=True` path.  CircuitPython's `ssl` module exposes only `SSLContext` and `create_default_context`, but the recipe that works is:
 
-* **Pi Pico W (rp2)** — CP 10.2.0-rc.0, ~157 KB free heap.  `SSL_AVAILABLE_PROTOCOLS []`, `AttributeError("'module' object has no attribute 'PROTOCOL_TLS_SERVER'")`.
-* **Lolin S2 (ESP32-S2)** — CP 10.2.0-rc.0, **~2.04 MB free heap** (13× the Pi Pico W).  Same `SSL_AVAILABLE_PROTOCOLS []`, same outcome.
+```python
+ctx = ssl.create_default_context()        # nominally client-side
+ctx.load_verify_locations(cadata="")      # required pre-load step
+ctx.load_cert_chain(cert_path, key_path)  # paths, not bytes
+sock = ctx.wrap_socket(sock, server_side=True)  # works anyway
+```
 
-Memory class doesn't matter; the limitation is in CircuitPython's `shared-bindings/ssl/` — `dir(ssl)` exposes no `PROTOCOL_*` constants on any tested board, and `ssl.SSLContext()` is hard-wired client-side with no server-side flag.  Adafruit's `httpserver` runs into the same wall and quietly degrades on every CP board (despite the `https=True` flag implying otherwise).
+Two gotchas that bit me on the way:
 
-Workaround for HTTPS on CircuitPython: terminate TLS in front of the board with a proxy (Caddy / nginx / Cloudflare Tunnel) and let the board speak plain HTTP on the LAN behind it.  Lifted to `chumicro_sockets.ssl_context_with_cert_and_key`'s CP adapter, which raises `UnsupportedSSLConfigError` with a clear explanation rather than the bare `AttributeError`.
+1. `load_cert_chain` on CP **requires filesystem paths**, not in-memory PEM bytes.  Passing bytes raises `OSError(2, <bytes>)` — mbedTLS interprets them as a path it can't open.  CPython + MicroPython both accept bytes; CP is the odd one.
+2. The empty `load_verify_locations(cadata="")` call is required before `load_cert_chain` will accept the server identity (verified empirically — without it, the chain load was ignored).
+
+Live-verified on Lolin S2 ESP32-S2 / CP 10.2.0-rc.0: 6 KB SSLContext + 35 KB handshake heap cost, ~2 MB free heap remaining; HTTPS GET round-trip from a host CPython client succeeded.  Adafruit's "limited to ESP32-S3" framing in the `httpserver` README is overstated — S2 works fine.
+
+`chumicro_sockets.ssl_context_with_cert_and_key_paths(cert_path, key_path)` is the cross-runtime API that handles all three runtimes (CP needs paths; MP + CPython convert paths to bytes internally and use the in-memory helper).
+
+### CircuitPython rp2 (Pi Pico W) currently fails server-side TLS post-handshake
+
+Same chumicro-sockets code path that succeeded on Lolin S2 ESP32-S2 (CP 10.2.0-rc.0) reaches the listener-open + first accept, but `accept()` raises `OSError(32)` (EPIPE) immediately after the TLS handshake bytes traverse.  Heap was ~115 KB free at the time, so not a memory issue.  Likely an rp2-port mbedTLS feature-flag difference vs ESP-IDF's mbedTLS (the same kind of asymmetry that surfaced for `MBEDTLS_PEM_PARSE_C` on the CA-load path).  Filed as a follow-up — for HTTPS-server use cases on CircuitPython today, recommend ESP32-family boards (S2 / S3) over Pi Pico W.
 
 ### MicroPython TLS server *does* fit on Pi Pico W (Adafruit's "limited" framing was too pessimistic)
 

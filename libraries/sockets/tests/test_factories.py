@@ -19,6 +19,7 @@ import pytest
 from chumicro_sockets import (
     UnsupportedSSLConfigError,
     ssl_context_with_ca,
+    ssl_context_with_cert_and_key_paths,
     tcp_client_socket,
     tcp_listening_socket,
     tls_client_socket,
@@ -318,6 +319,66 @@ class TestTLSListenerRouting:
         result = tls_listening_socket("0.0.0.0", 8443, context="ctx", backlog=8)
         assert result == "mp-tls-listener"
         assert captured["called"] == ("0.0.0.0", 8443, "ctx", 8)
+
+
+class TestSslContextWithCertAndKeyPaths:
+    """Path-based helper works on every runtime (CP requires it)."""
+
+    def test_cpython_loads_from_paths(self, tmp_path) -> None:
+        """Generate a self-signed cert + key, write to disk, load from path."""
+        from datetime import datetime, timedelta  # noqa: PLC0415
+
+        from cryptography import x509  # noqa: PLC0415
+        from cryptography.hazmat.primitives import hashes, serialization  # noqa: PLC0415
+        from cryptography.hazmat.primitives.asymmetric import ec  # noqa: PLC0415
+        from cryptography.x509.oid import NameOID  # noqa: PLC0415
+
+        private_key = ec.generate_private_key(ec.SECP256R1())
+        subject = x509.Name([
+            x509.NameAttribute(NameOID.COMMON_NAME, "test.local"),
+        ])
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(subject)
+            .issuer_name(subject)
+            .public_key(private_key.public_key())
+            .serial_number(1)
+            .not_valid_before(datetime.now(UTC) - timedelta(minutes=5))
+            .not_valid_after(datetime.now(UTC) + timedelta(hours=1))
+            .sign(private_key, hashes.SHA256())
+        )
+        cert_path = tmp_path / "cert.pem"
+        key_path = tmp_path / "key.pem"
+        cert_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+        key_path.write_bytes(private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        ))
+
+        context = ssl_context_with_cert_and_key_paths(
+            str(cert_path), str(key_path),
+        )
+        assert context.get_ciphers() is not None
+
+    def test_circuitpython_routes_to_path_adapter(self, monkeypatch) -> None:
+        captured: dict = {}
+
+        def fake_helper(cert_path, key_path):
+            captured["called"] = (cert_path, key_path)
+            return "cp-server-ctx"
+
+        from chumicro_sockets._adapters import cp as cp_adapter
+        monkeypatch.setattr(
+            cp_adapter, "ssl_context_with_cert_and_key_paths", fake_helper,
+        )
+        monkeypatch.setattr("chumicro_sockets._runtime_name", lambda: "circuitpython")
+
+        result = ssl_context_with_cert_and_key_paths(
+            "/lib/cert.pem", "/lib/key.pem",
+        )
+        assert result == "cp-server-ctx"
+        assert captured["called"] == ("/lib/cert.pem", "/lib/key.pem")
 
 
 class TestSslContextWithCertAndKeyRouting:

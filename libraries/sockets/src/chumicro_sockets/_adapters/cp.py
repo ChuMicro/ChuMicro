@@ -93,85 +93,115 @@ def listen_tcp(host, port, *, backlog=4, radio):  # pragma: no cover - device on
 
 
 def ssl_context_with_cert_and_key(cert_pem, key_pem):  # pragma: no cover - device only
-    """Server-side TLS on CircuitPython is not supported.
+    """In-memory cert + key isn't supported on CP — paths are required.
 
-    CircuitPython's `ssl` module deliberately omits
-    `PROTOCOL_TLS_SERVER` (verified live on CP 10.2.0-rc.0 against
-    Pi Pico W: ``dir(ssl)`` exposes no ``PROTOCOL_*`` constants).
-    The `ssl.SSLContext()` exposed by CP is hard-wired to the
-    client side.  This is a CP-platform limitation, not a heap
-    constraint — adafruit_httpserver's ``https=True`` flag is
-    similarly inert on CP for the same reason.
+    CircuitPython's ``ssl.SSLContext.load_cert_chain`` only accepts
+    *filesystem paths*, not in-memory PEM bytes (verified live 2026-04-27
+    on Lolin S2 ESP32-S2 — passing bytes raises
+    ``OSError(2, <pem-bytes>)`` because mbedTLS treats the bytes as a
+    path it can't open).  Use :func:`ssl_context_with_cert_and_key_paths`
+    instead.
 
-    Slice 7t verified TLS server **does** fit on Pi Pico W
-    MicroPython (8 KB context + 25 KB handshake, 130 KB free
-    heap remaining).  CP users who want HTTPS on a Pi Pico W
-    must terminate TLS in front of the board (Caddy / nginx /
-    Cloudflare Tunnel) and let the board speak plain HTTP on
-    the LAN behind it.
+    On MicroPython + CPython, the bytes-shaped helper works directly —
+    only CP forces the path-based API.
     """
     raise UnsupportedSSLConfigError(
-        "CircuitPython's ssl module does not expose PROTOCOL_TLS_SERVER; "
-        "server-side TLS is not supported on CP.  Use chumicro-http-server "
-        "behind a TLS-terminating proxy instead, or run on MicroPython "
-        "(slice 7t verified TLS server on Pi Pico W MP).",
+        "CircuitPython's ssl.SSLContext.load_cert_chain requires "
+        "filesystem paths, not in-memory PEM bytes.  Call "
+        "ssl_context_with_cert_and_key_paths(cert_path, key_path) "
+        "instead — deploy the cert.pem + key.pem files to the device's "
+        "/lib/ (or /) directory and pass their paths.",
     )
+
+
+def ssl_context_with_cert_and_key_paths(cert_path, key_path):  # pragma: no cover - device only
+    """Build a CP server-side SSLContext from cert + key file paths.
+
+    Mirrors ``adafruit_httpserver``'s HTTPS path
+    (verified live on Lolin S2 ESP32-S2 / CP 10.2.0-rc.0):
+
+        ctx = ssl.create_default_context()
+        ctx.load_verify_locations(cadata="")
+        ctx.load_cert_chain(cert_path, key_path)
+
+    CircuitPython's ``create_default_context()`` returns an
+    ``SSLContext`` that's nominally client-side, but ``wrap_socket(sock,
+    server_side=True)`` works on it as long as ``load_cert_chain`` has
+    been called with valid cert + key paths.  The empty-cadata
+    ``load_verify_locations`` call is required by CP's mbedTLS
+    binding before ``load_cert_chain`` is accepted.
+
+    Returns an ``ssl.SSLContext`` ready to pass to
+    :func:`tls_listening_socket`.
+
+    Args:
+        cert_path: On-device filesystem path to the cert PEM file
+            (e.g. ``"/lib/server_cert.pem"``).
+        key_path: On-device filesystem path to the private-key PEM
+            file (e.g. ``"/lib/server_key.pem"``).
+
+    Live-verified on Lolin S2 ESP32-S2 with 6 KB context + 35 KB
+    handshake heap cost, ~2 MB free heap remaining.  Pi Pico W
+    (rp2) currently fails post-handshake with ``OSError(32)``
+    (EPIPE) — likely an rp2-port mbedTLS feature-flag issue, under
+    investigation; ESP32-S2 / S3 work.
+    """
+    import ssl  # noqa: PLC0415 — CP-only import
+
+    context = ssl.create_default_context()
+    context.load_verify_locations(cadata="")
+    context.load_cert_chain(cert_path, key_path)
+    return context
 
 
 def listen_tls(host, port, *, context, backlog=4, radio):  # pragma: no cover - device only
-    """Server-side TLS on CircuitPython is not supported.
+    """Open a non-blocking TLS listening socket via CP socketpool.
 
-    See :func:`ssl_context_with_cert_and_key` for the platform-
-    limitation explanation.  This stub raises immediately so callers
-    get a clear error rather than silently constructing a half-built
-    listener.
+    CircuitPython's TLS-server path differs from the CPython /
+    MP one: ``wrap_socket(server_side=True)`` is called on the
+    LISTENING socket *before* bind/listen — every accepted client
+    socket is automatically TLS-wrapped via inheritance from the
+    parent.  Mirrors adafruit_httpserver's `_create_server_socket`.
+
+    Verified live 2026-04-27 on Lolin S2 ESP32-S2 (CP 10.2.0-rc.0):
+    handshake completes synchronously inside ``accept()``, response
+    delivered end-to-end against a host CPython HTTPS client.
+    Pi Pico W rp2 currently fails post-handshake with ``OSError(32)``
+    (EPIPE) on accept — likely an rp2-port mbedTLS feature-flag
+    issue, under investigation.
     """
-    raise UnsupportedSSLConfigError(
-        "CircuitPython does not support server-side TLS — "
-        "tls_listening_socket is not available on CP.  See "
-        "chumicro_sockets._adapters.cp.ssl_context_with_cert_and_key "
-        "for the recommended workaround (TLS-terminating proxy in "
-        "front of the board).",
-    )
+    pool = _pool_for(radio)
+    raw = pool.socket(pool.AF_INET, pool.SOCK_STREAM)
+    wrapped = context.wrap_socket(raw, server_side=True)
+    wrapped.bind((host, port))
+    wrapped.listen(backlog)
+    wrapped.setblocking(False)
+    return _CPTLSListenerWrapper(wrapped)
 
 
 class _CPTLSListenerWrapper:  # pragma: no cover - device only
-    """Wraps a CP listening socket so accept() yields TLS-wrapped sockets."""
+    """Wraps a CP TLS listener so accept() returns the standard
+    ``(client_socket, address)`` tuple.
 
-    def __init__(self, raw_listener, context):
-        self._raw = raw_listener
-        self._context = context
+    The underlying CP wrapped-socket's ``accept()`` already returns
+    a TLS-wrapped client socket (because the listener itself was
+    wrapped) — we just normalise the return shape.
+    """
+
+    def __init__(self, wrapped_listener):
+        self._sock = wrapped_listener
 
     def accept(self):
-        client_raw, address = self._raw.accept()
-        # CP's `wrap_socket(server_side=True)` performs the TLS
-        # handshake synchronously.  Make the raw socket blocking
-        # for the handshake (CP's mbedTLS doesn't support
-        # async server handshake), then back to non-blocking.
-        client_raw.setblocking(True)
-        try:
-            wrapped = self._context.wrap_socket(
-                client_raw, server_side=True,
-            )
-        except Exception:
-            client_raw.close()
-            raise
-        # Some CP builds reject `setblocking(False)` on SSLSocket;
-        # try and swallow.
-        try:
-            wrapped.setblocking(False)
-        except (AttributeError, OSError):
-            pass
-        return wrapped, address
+        return self._sock.accept()
 
     def close(self):
-        self._raw.close()
+        self._sock.close()
 
     def setblocking(self, flag):
-        self._raw.setblocking(flag)
+        self._sock.setblocking(flag)
 
     def fileno(self):
-        return self._raw.fileno() if hasattr(self._raw, "fileno") else -1
+        return self._sock.fileno() if hasattr(self._sock, "fileno") else -1
 
 
 def ssl_context_with_ca(ca_pem):  # pragma: no cover - device only

@@ -191,16 +191,51 @@ real blocker, for a different reason.
 * Result: full HTTPS GET round-trip succeeded, response delivered.
   See ``.scratch/run_tls_server_probe.py``.
 
-**CircuitPython 10.2.0-rc.0 — server-side TLS not possible.**
-``ssl.PROTOCOL_TLS_SERVER`` does not exist on CP; ``dir(ssl)``
-exposes no ``PROTOCOL_*`` constants whatsoever.  CP's
-``ssl.SSLContext()`` is hard-wired to client-side use.  Verified
-on **both** Pi Pico W (rp2 port, ~157 KB free heap) **and**
-Lolin S2 (ESP32-S2 port, ~2.04 MB free heap) — the result is
-identical, confirming this is a CircuitPython platform decision
-in the shared-bindings layer, not a per-port or heap-class issue.
-Adafruit's ``httpserver`` runs into the same wall on every CP
-board for the same reason.
+**CircuitPython 10.2.0-rc.0 — server-side TLS works on ESP32-S2 / S3
+via the path-based cert API.**
+
+Initially I claimed CP TLS server was blocked by
+missing ``PROTOCOL_TLS_SERVER``; that was wrong (the user
+correctly pushed back).  CP exposes only ``SSLContext`` and
+``create_default_context`` at module level — no ``PROTOCOL_*``
+constants, no ``Purpose`` enum — but adafruit_httpserver's HTTPS
+path **does** work, because:
+
+```python
+ctx = ssl.create_default_context()       # nominally client-side
+ctx.load_verify_locations(cadata="")     # required pre-load step
+ctx.load_cert_chain(cert_path, key_path) # paths, not bytes
+sock = ctx.wrap_socket(sock, server_side=True)  # works anyway
+```
+
+The only gotcha vs the in-memory bytes path the MP / CPython
+adapters use: CP's ``load_cert_chain`` requires *filesystem
+paths* (it raises ``OSError(2)`` on bytes, treating them as a
+path it can't open).  Cross-runtime API:
+:func:`chumicro_sockets.ssl_context_with_cert_and_key_paths`
+(works everywhere) vs
+:func:`ssl_context_with_cert_and_key` (bytes; CP raises clear
+error pointing to the path-based helper).
+
+**Live measurements on Lolin S2 (ESP32-S2) / CP 10.2.0-rc.0:**
+
+* SSLContext build + cert load: ~6 KB heap.
+* Per-connection handshake cost: ~35 KB heap.
+* Free heap remaining post-handshake: ~1.99 MB.
+* End-to-end: HTTPS GET round-trip from a host CPython client
+  to the device handshakes + delivers response.
+
+**Pi Pico W (rp2) / CP 10.2.0-rc.0 — fails post-handshake** with
+``OSError(32)`` (EPIPE) on the server-side ``accept()`` after the
+TLS handshake completes.  Heap was 115 KB free at the time, so
+not a memory issue — likely an rp2-port mbedTLS feature-flag
+problem.  Filed as a follow-up; the ESP32 family is the
+recommended Pi Pico W alternative for HTTPS server use cases on
+CircuitPython today.
+
+Adafruit's "ESP32-S3 only" framing in the ``httpserver`` README
+overstates the constraint — verified ESP32-S2 also works.  S3 +
+larger boards work fine; rp2 has a port-specific issue.
 
 **Shipping policy:**
 * `chumicro_sockets.tls_listening_socket(...)` works on MicroPython
