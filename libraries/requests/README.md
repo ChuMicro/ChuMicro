@@ -100,9 +100,10 @@ print(response.json())            # parsed JSON when Content-Type is application
 | `HttpError` + subclasses | `HttpBusyError`, `HttpTimeoutError`, `HttpProtocolError`, `HttpURLError`, `HttpOversizedError`. |
 | `chumicro_requests.testing.FakeHttpClient` | Host-only fake for downstream test suites. |
 
-v1 scope (Decision 0040): plain HTTP GET (slice 3a) + body decode
-(`.text` / `.json()` / charset sniff — slice 3b). HTTPS, POST,
-redirects, and chunked transfer-encoding land in subsequent slices.
+v1 scope (Decision 0040): plain HTTP GET (3a), body decode + `.text` /
+`.json()` / charset sniff (3b), HTTPS via TLS (3c, live-verified on
+Pi Pico W), POST + PUT + PATCH + DELETE + JSON helper (3d).
+Redirects (3e) and chunked transfer-encoding decode (3f) round out v1.
 
 ## Platform support
 

@@ -30,6 +30,31 @@ print(response.text)               # decoded str
 print(response.json())             # parsed JSON
 ```
 
+## POST / PUT / PATCH / DELETE
+
+`HttpClient` exposes a method per verb. Bodies can be raw bytes / str
+or a Python object that gets JSON-encoded:
+
+```python
+# Raw bytes / str body
+handle = client.post("http://api/widgets", body=b"<custom-bytes>")
+handle = client.post("http://api/widgets", body="text/plain payload")
+
+# JSON helper — auto-encodes + sets Content-Type: application/json
+handle = client.post("http://api/widgets", json={"name": "thing", "qty": 3})
+
+# PUT / PATCH share the same body / json semantics
+handle = client.put("http://api/widgets/42", json={"name": "renamed"})
+handle = client.patch("http://api/widgets/42", body=b"diff-bytes")
+
+# DELETE is intransitive in v1 — no body parameter
+handle = client.delete("http://api/widgets/42")
+```
+
+Caller-supplied `headers={"Content-Type": "..."}` always wins over the
+JSON-helper default. Pass exactly one of `body=` or `json=`; passing
+both raises `ValueError`.
+
 ## Body decoding
 
 `Response.body` is always raw `bytes`.  `Response.text` decodes those

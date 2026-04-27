@@ -31,6 +31,7 @@ from chumicro_requests._wire import (
     DEFAULT_MAX_BODY_BYTES,
     DEFAULT_RECV_BUDGET_PER_TICK,
     DEFAULT_TIMEOUT_MS,
+    CaseInsensitiveDict,
     HttpBusyError,
     HttpError,
     HttpOversizedError,
@@ -74,6 +75,30 @@ class WhenOversized:
 def _no_callback(*_args, **_kwargs):
     """Default no-op callback so handlers can be stored unconditionally."""
     return None
+
+
+def _merge_default_header(user_headers, name, value):
+    """Return a CaseInsensitiveDict with *name=value* applied unless overridden.
+
+    *user_headers* may be ``None``, a ``dict``, a
+    :class:`CaseInsensitiveDict`, or an iterable of ``(name, value)``
+    pairs.  Used by :meth:`HttpClient.post` to default
+    ``Content-Type: application/json`` when the caller passed
+    ``json=...`` without setting Content-Type explicitly.
+    """
+    merged = CaseInsensitiveDict()
+    merged[name] = value
+    if user_headers is None:
+        return merged
+    if isinstance(user_headers, CaseInsensitiveDict):
+        iterable = user_headers.items()
+    elif isinstance(user_headers, dict):
+        iterable = user_headers.items()
+    else:
+        iterable = user_headers
+    for header_name, header_value in iterable:
+        merged[header_name] = header_value
+    return merged
 
 
 def _force_non_blocking(socket):
@@ -394,8 +419,7 @@ class HttpClient:
         read ``handle.result`` for the :class:`Response`.
 
         Args:
-            url: Absolute URL — ``http://...``.  HTTPS support lands
-                in slice 3c (Decision 0040).
+            url: Absolute URL — ``http://...`` or ``https://...``.
             headers: Optional ``dict`` / ``CaseInsensitiveDict`` /
                 iterable of ``(name, value)`` pairs to override the
                 defaults (``Host``, ``User-Agent``, ``Accept``,
@@ -408,6 +432,87 @@ class HttpClient:
             HttpURLError: *url* didn't parse as a valid HTTP URL.
         """
         return self._start_request("GET", url, headers=headers, timeout_ms=timeout_ms)
+
+    def post(
+        self,
+        url: str,
+        *,
+        body: bytes | str | None = None,
+        json: object | None = None,
+        headers: object | None = None,
+        timeout_ms: int | None = None,
+    ) -> "RequestHandle":
+        """Issue a POST request; return a :class:`RequestHandle`.
+
+        Pass exactly one of *body* or *json*.  *json* auto-encodes via
+        :func:`json.dumps` and sets ``Content-Type: application/json``
+        unless the caller overrides it via *headers*.  *body* as ``str``
+        is encoded UTF-8.
+
+        Args:
+            url: Absolute URL — ``http://...`` or ``https://...``.
+            body: Raw request body — ``bytes`` (passed verbatim) or
+                ``str`` (encoded UTF-8).
+            json: Python object to serialize as the JSON body.
+                Mutually exclusive with *body*.
+            headers: Optional header overrides.  Same shape as
+                :meth:`get`.  ``Content-Length`` is auto-added.
+            timeout_ms: Per-request timeout override.
+
+        Raises:
+            HttpBusyError: A request is already in flight.
+            HttpURLError: *url* didn't parse as a valid HTTP URL.
+            ValueError: Both *body* and *json* supplied.
+        """
+        return self._start_request(
+            "POST", url,
+            body=body, json_body=json,
+            headers=headers, timeout_ms=timeout_ms,
+        )
+
+    def put(
+        self,
+        url: str,
+        *,
+        body: bytes | str | None = None,
+        json: object | None = None,
+        headers: object | None = None,
+        timeout_ms: int | None = None,
+    ) -> "RequestHandle":
+        """Issue a PUT request.  Same body / json semantics as :meth:`post`."""
+        return self._start_request(
+            "PUT", url,
+            body=body, json_body=json,
+            headers=headers, timeout_ms=timeout_ms,
+        )
+
+    def patch(
+        self,
+        url: str,
+        *,
+        body: bytes | str | None = None,
+        json: object | None = None,
+        headers: object | None = None,
+        timeout_ms: int | None = None,
+    ) -> "RequestHandle":
+        """Issue a PATCH request.  Same body / json semantics as :meth:`post`."""
+        return self._start_request(
+            "PATCH", url,
+            body=body, json_body=json,
+            headers=headers, timeout_ms=timeout_ms,
+        )
+
+    def delete(
+        self,
+        url: str,
+        *,
+        headers: object | None = None,
+        timeout_ms: int | None = None,
+    ) -> "RequestHandle":
+        """Issue a DELETE request.  No body — the verb is intransitive in v1."""
+        return self._start_request(
+            "DELETE", url, headers=headers, timeout_ms=timeout_ms,
+        )
 
     # ------------------------------------------------------------------
     # Runner contract — Decision 0014
@@ -453,12 +558,37 @@ class HttpClient:
     # Internal — request lifecycle
     # ------------------------------------------------------------------
 
-    def _start_request(self, method, url, *, headers, timeout_ms):
-        """Common path for GET (and future POST/PUT/etc.)."""
+    def _start_request(
+        self, method, url, *, headers, timeout_ms,
+        body=None, json_body=None,
+    ):
+        """Common path for GET / POST / PUT / PATCH / DELETE."""
         if self._state != _RequestState.IDLE:
             raise HttpBusyError(
                 f"client busy on {self._url!r}; await handle.done before issuing another",
             )
+        if body is not None and json_body is not None:
+            raise ValueError(
+                "pass body= or json= but not both",
+            )
+        merged_headers = headers
+        encoded_body: bytes | None = None
+        if json_body is not None:
+            encoded_body = json.dumps(json_body).encode("utf-8")
+            # Auto-add Content-Type unless the caller already set one.
+            merged_headers = _merge_default_header(
+                headers, "Content-Type", "application/json",
+            )
+        elif body is not None:
+            if isinstance(body, str):
+                encoded_body = body.encode("utf-8")
+            elif isinstance(body, (bytes, bytearray)):
+                encoded_body = bytes(body)
+            else:
+                raise TypeError(
+                    f"body must be bytes / bytearray / str, got {type(body).__name__}",
+                )
+
         scheme, host, port, path = parse_url(url)
         use_tls = scheme == "https"
         # Build the Host header — include the port unless it's the
@@ -469,7 +599,8 @@ class HttpClient:
             method,
             host_header,
             path,
-            headers=headers,
+            headers=merged_headers,
+            body=encoded_body,
             user_agent=self._user_agent,
         )
         timeout = timeout_ms if timeout_ms is not None else self._default_timeout_ms
