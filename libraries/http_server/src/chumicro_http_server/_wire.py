@@ -1,26 +1,24 @@
 """HTTP/1.1 wire format for chumicro-http-server.
 
-Mirrors :mod:`chumicro_requests._wire`'s shape, swapped for the
-server-side perspective: a streaming :class:`RequestParser` reads
-the request line + headers (+ optional body) one chunk at a time,
-fed bytes by the per-connection state machine in ``server.py``.
+Server-side counterpart to :mod:`chumicro_requests._wire`: a streaming
+:class:`RequestParser` reads the request line + headers (+ optional
+body) one chunk at a time, fed bytes by the per-connection state
+machine in ``server.py``.
 
-Reuses :class:`chumicro_requests.CaseInsensitiveDict`,
-:func:`chumicro_requests.parse_charset`, and the
-:class:`chumicro_requests.HttpError` hierarchy — same wire format,
-same primitives.  See Decision 0041 §5 for the rationale on the
-``http_server → requests`` dependency direction.
+The shared HTTP/1.1 primitives needed by both client and server —
+:class:`CaseInsensitiveDict` (case-insensitive header dict, RFC 7230
+§3.2) and :func:`parse_charset` (Content-Type charset, RFC 7231
+§3.1.1.5) — are inlined here rather than imported from
+:mod:`chumicro_requests`.  Decision 0041 §5 originally took the dep
+to share these primitives, but the dep pulled the full client (~1.8K
+lines) onto server-only boards for ~125 lines of shared code; the
+inline copy halves the flash footprint of a server-only deploy.  The
+RFCs are stable, so the duplication has near-zero drift cost.
 
 v1 scope (Decision 0041): request line + headers + ``Content-Length``
 body buffering.  Chunked request bodies and streaming-via-chunk-
 callback are v2.
 """
-
-from chumicro_requests import (
-    CaseInsensitiveDict,
-    HttpError,
-    parse_charset,
-)
 
 try:
     from micropython import const
@@ -57,22 +55,158 @@ CRLF = b"\r\n"
 # ---------------------------------------------------------------------------
 
 
-class ServerError(HttpError):
+class ServerError(Exception):
     """Base class for chumicro-http-server failures.
 
-    Subclasses :class:`chumicro_requests.HttpError` so callers can
-    catch either side of the wire with one ``except HttpError:``
-    block when they don't care which library raised.
+    Independent of :mod:`chumicro_requests`'s ``HttpError`` so the
+    server can ship without the client library.  Callers that run
+    both halves on one board and want to catch either side can use
+    ``except (HttpError, ServerError):``.
     """
 
 
 class ServerProtocolError(ServerError):
     """Inbound bytes don't conform to HTTP/1.1.
 
-    Wraps :class:`chumicro_requests.HttpProtocolError`-style failures
-    on the request-parsing side.  Connection should be torn down + a
-    400 returned (best-effort).
+    Connection should be torn down + a 400 returned (best-effort).
     """
+
+
+# ---------------------------------------------------------------------------
+# Case-insensitive header dict
+# ---------------------------------------------------------------------------
+
+
+class CaseInsensitiveDict:
+    """Header dict whose lookups fold to lowercase.
+
+    HTTP/1.1 §3.2 requires header names to be case-insensitive on
+    receipt (servers and clients alike).  We store the original-cased
+    name (so callers see ``Content-Type`` and not ``content-type``)
+    keyed off the lowercased form.
+
+    Multi-value headers (``Set-Cookie``, ``Via``) join with ``, ``
+    per RFC 7230 §3.2.2 when the same header arrives twice.
+
+    Implements ``__getitem__`` / ``__setitem__`` / ``__contains__`` /
+    ``__len__`` / ``__iter__`` / ``get`` / ``items`` — enough for the
+    request/response API surface.  Not a full :class:`MutableMapping`
+    to keep the embedded footprint small.
+
+    Inlined from chumicro-requests to keep the server self-contained;
+    behaviour matches :class:`chumicro_requests.CaseInsensitiveDict`
+    byte-for-byte.
+    """
+
+    def __init__(self):
+        # Lowercase key -> (original_name, value).
+        self._entries = {}
+
+    def __setitem__(self, name, value):
+        lower = name.lower()
+        self._entries[lower] = (name, value)
+
+    def __getitem__(self, name):
+        return self._entries[name.lower()][1]
+
+    def __contains__(self, name):
+        return name.lower() in self._entries
+
+    def __iter__(self):
+        for original_name, _value in self._entries.values():
+            yield original_name
+
+    def __len__(self):
+        return len(self._entries)
+
+    def __eq__(self, other):
+        if not isinstance(other, CaseInsensitiveDict):
+            return NotImplemented
+        if len(self._entries) != len(other._entries):
+            return False
+        for lower, (_name, value) in self._entries.items():
+            if lower not in other._entries:
+                return False
+            if other._entries[lower][1] != value:
+                return False
+        return True
+
+    def __repr__(self):
+        pairs = ", ".join(
+            f"{name!r}: {value!r}"
+            for name, value in self.items()
+        )
+        return f"CaseInsensitiveDict({{{pairs}}})"
+
+    def get(self, name, default=None):
+        """Return the value for *name* or *default* if missing."""
+        entry = self._entries.get(name.lower())
+        if entry is None:
+            return default
+        return entry[1]
+
+    def items(self):
+        """Yield ``(original_name, value)`` pairs."""
+        yield from self._entries.values()
+
+    def add(self, name, value):
+        """Append *value* to the existing header, joining with ``, ``.
+
+        New keys behave like :meth:`__setitem__`.  Used by the parser
+        for repeated header lines (``Set-Cookie``, ``Via``).
+        """
+        lower = name.lower()
+        existing = self._entries.get(lower)
+        if existing is None:
+            self._entries[lower] = (name, value)
+            return
+        original_name, current_value = existing
+        joined = f"{current_value}, {value}"
+        self._entries[lower] = (original_name, joined)
+
+
+# ---------------------------------------------------------------------------
+# Content-Type charset parsing
+# ---------------------------------------------------------------------------
+
+
+def parse_charset(content_type):
+    """Extract the ``charset=...`` parameter from a Content-Type header.
+
+    Per RFC 7231 §3.1.1.5 the Content-Type value may carry a
+    ``charset`` parameter — for example ``text/html; charset=utf-8``
+    or ``application/json; charset="ISO-8859-1"``.  We tokenize on
+    semicolons, look for a ``charset=`` token (case-insensitive),
+    strip optional surrounding quotes per RFC 7231 §3.1.1.1, and
+    fall back to ``"utf-8"`` when no charset is present or the
+    header itself is missing.
+
+    Defaulting to UTF-8 matches RFC 8259 §8.1 for ``application/json``
+    and aligns with current web practice for ``text/*`` even though
+    historical RFC 2616 defaulted text to ISO-8859-1.
+
+    Inlined from chumicro-requests to keep the server self-contained;
+    behaviour matches :func:`chumicro_requests.parse_charset`
+    byte-for-byte.
+
+    Args:
+        content_type: Raw ``Content-Type`` header value, or ``None``.
+
+    Returns:
+        The detected charset name, or ``"utf-8"`` as the safe default.
+    """
+    if not content_type:
+        return "utf-8"
+    parts = content_type.split(";")
+    for part in parts[1:]:
+        token = part.strip()
+        if token[:8].lower() != "charset=":
+            continue
+        value = token[8:].strip()
+        if value.startswith('"') and value.endswith('"'):
+            value = value[1:-1]
+        return value or "utf-8"
+    return "utf-8"
 
 
 # ---------------------------------------------------------------------------

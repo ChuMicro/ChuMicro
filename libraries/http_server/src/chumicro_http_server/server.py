@@ -70,10 +70,10 @@ def _no_callback(*_args, **_kwargs):  # pragma: no cover - default no-op stub
 def _force_non_blocking(socket):
     """Best-effort ``setblocking(False)`` on a socket.
 
-    Mirrors :func:`chumicro_requests.client._force_non_blocking` and
-    the equivalent in chumicro-mqtt — every accepted connection is
-    flipped to non-blocking up front so the per-connection state
-    machine never stalls on a read or write.
+    Same shape as the equivalent helper in chumicro-requests and
+    chumicro-mqtt — every accepted connection is flipped to non-
+    blocking up front so the per-connection state machine never
+    stalls on a read or write.
     """
     setblocking = getattr(socket, "setblocking", None)
     if setblocking is None:  # pragma: no cover - defensive (every supported sock has it)

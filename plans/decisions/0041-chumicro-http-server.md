@@ -111,25 +111,37 @@ takes a precompiled `re` object instead of a string).
 | `max_request_body_bytes` | 16 384 | Cap on a single buffered request body.  16 KB is a reasonable IoT payload ceiling. |
 | `accept_per_tick` | 1 | Avoid burst-accepting 4 conns in one tick — spread them out so the runner can interleave. |
 
-### 5. Reuses from `chumicro-requests`
+### 5. Inlined HTTP/1.1 primitives (no `chumicro-requests` dep)
 
 The wire format primitives we built for the client are exactly what
-the server-side parser needs.  `chumicro-http-server` depends on
-`chumicro-requests` for:
+the server-side parser needs:
 
-* `CaseInsensitiveDict` — header dict shape
-* `parse_charset` — Content-Type charset sniff
+* `CaseInsensitiveDict` — header dict shape (RFC 7230 §3.2)
+* `parse_charset` — Content-Type charset sniff (RFC 7231 §3.1.1.5)
 * The chunked-decoder state-machine pattern (lifted into a
-  `_RequestBodyParser` analogous to `ResponseParser`)
-* `HttpError` / `HttpProtocolError` / `HttpURLError` exception
-  hierarchy (re-exported as `ServerError` etc. for caller-facing
-  ergonomics)
+  `_RequestBodyParser` analogous to `ResponseParser` for v2; v1 only
+  buffers Content-Length bodies)
 
-This couples server → requests, which is mildly weird (server
-depending on the client library).  The pragmatic alternative — extract
-the shared primitives into a `chumicro-http` library — is real work
-across already-shipped v1 surface and is deferred until a third
-consumer surfaces (matches the `WhenOversized` precedent).
+**Original v1 plan (2026-04-26): import from `chumicro-requests`.**
+The dep direction (server → client) was mildly weird but matched the
+`WhenOversized` precedent — share working code, extract a third
+package only when a third consumer surfaces.
+
+**Decoupling (2026-04-27, post-v1):** the import felt cheap until we
+measured the flash cost.  Pulling all of `chumicro-requests` (~1.8K
+lines: `client.py` 900 + `_wire.py` 908) onto a server-only board
+for ~125 lines of shared primitives is wrong.  Inlining the two
+primitives (and giving the server its own `ServerError` base) cuts
+the device footprint of a server-only deploy roughly in half with
+near-zero drift cost — the RFCs are stable; both copies stay
+byte-for-byte equivalent.  Tests in both libraries lock the
+equivalence in.
+
+The `_wire.py` files in client and server are now sibling
+implementations of the same RFC, not one-imports-the-other.  Should
+a third HTTP-aware library appear, extracting a `chumicro-http`
+package becomes the right move; until then, two ~125-line copies is
+cheaper than one extra package on PyPI + the bundle.
 
 ### 6. Listener factory + new `chumicro-sockets` helper
 
@@ -274,7 +286,7 @@ larger boards work fine; rp2 has a port-specific issue.
 * New device library `libraries/http_server/` ships pure-Python
   source compatible with all three runtimes.  Depends on
   `chumicro-sockets` (transport + new listener) + `chumicro-timing`
-  (ticks) + `chumicro-requests` (wire-format primitives).  Optional
+  (ticks) only — wire-format primitives are inlined (§5).  Optional
   `chumicro-runner` hook: `HttpServer` satisfies `check(now_ms) ->
   bool` so `Runner` can drive it directly.
 * `chumicro-sockets` 0.1.6 adds `tcp_listening_socket` per-runtime.
@@ -293,8 +305,9 @@ larger boards work fine; rp2 has a port-specific issue.
   * **7c** — Bounded multi-connection (`max_connections` >= 1);
     per-tick budgets; `request_timeout_ms`.
   * **7d** — Live-board verification on Pi Pico W (CP + MP).
-* Decision 0040's "extract shared HTTP wire primitives" follow-up
-  becomes more concrete — server reuses `CaseInsensitiveDict` /
-  `parse_charset` / chunked decoder.  When a third consumer
-  surfaces (e.g. `chumicro-websocket`) we extract to a
-  `chumicro-http` library.  Until then, server depends on requests.
+* Decision 0040's "extract shared HTTP wire primitives" follow-up:
+  decided post-v1 (2026-04-27) to inline rather than depend.  See
+  §5 for the flash-cost rationale.  When a third HTTP-aware
+  consumer appears (e.g. a `chumicro-websocket`) the case for a
+  shared `chumicro-http` package gets stronger; until then, two
+  small RFC-stable copies cost less than one extra package.

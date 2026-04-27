@@ -13,7 +13,6 @@ authors = [
     { name = "ChuMicro" },
 ]
 dependencies = [
-    "chumicro-requests",
     "chumicro-sockets",
     "chumicro-timing",
 ]

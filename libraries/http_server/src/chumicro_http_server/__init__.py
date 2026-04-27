@@ -1,14 +1,16 @@
 """Non-blocking HTTP/1.1 server for CircuitPython, MicroPython, and CPython.
 
 Built on :mod:`chumicro_sockets` (TCP listener + accepted client
-sockets), :mod:`chumicro_timing` (ticks), and :mod:`chumicro_requests`
-(shared wire-format primitives — `CaseInsensitiveDict`,
-`parse_charset`, exception hierarchy).  No async, no threads —
-Decision 0014's runner pattern: :meth:`HttpServer.check(now_ms) -> bool`
-reports whether work is pending; :meth:`handle(now_ms)` does one tick
-of progress.  The canonical promise (Decision 0041): an LED can keep
-blinking on the same board while requests are being served, even
-through a slow upload or a stalled client.
+sockets) and :mod:`chumicro_timing` (ticks) only — the shared
+HTTP/1.1 wire primitives (case-insensitive header dict, charset
+parsing) are inlined into :mod:`chumicro_http_server._wire` so a
+server-only board doesn't need to ship the full client library.
+No async, no threads — Decision 0014's runner pattern:
+:meth:`HttpServer.check(now_ms) -> bool` reports whether work is
+pending; :meth:`handle(now_ms)` does one tick of progress.  The
+canonical promise (Decision 0041): an LED can keep blinking on the
+same board while requests are being served, even through a slow
+upload or a stalled client.
 
 Public API::
 
@@ -32,7 +34,7 @@ Public API::
         if server.check(ticks_ms()):
             server.handle(ticks_ms())
 
-Source layout (mirrors :mod:`chumicro_requests`'s post-Decision-0029 split):
+Source layout (mirrors chumicro-requests' post-Decision-0029 split):
 
 * :mod:`chumicro_http_server._wire` — `RequestParser` streaming
   state machine, request-target helpers, exception classes,

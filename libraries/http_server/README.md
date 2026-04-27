@@ -4,10 +4,11 @@
 align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 Non-blocking HTTP/1.1 server for CircuitPython, MicroPython, and CPython.
-Built on `chumicro-sockets` (TCP listener) and `chumicro-timing` (ticks),
-sharing wire-format primitives with `chumicro-requests`.  Each connection
-is a state machine advanced one chunk per runner tick — an LED keeps
-blinking while requests are being served.
+Built on `chumicro-sockets` (TCP listener) and `chumicro-timing` (ticks).
+Each connection is a state machine advanced one chunk per runner tick —
+an LED keeps blinking while requests are being served.  Self-contained
+(no `chumicro-requests` dep) so a server-only board only ships server
+code.
 
 <br clear="left">
 
@@ -89,9 +90,9 @@ upload, sub-app mounting, async handlers.  See Decision 0041 §8.
 ## Platform support
 
 Works on CPython, MicroPython, and CircuitPython.  Pure Python; depends
-only on `chumicro-sockets`, `chumicro-timing`, and `chumicro-requests`
-(for shared wire-format primitives — `CaseInsensitiveDict`,
-`parse_charset`, exception hierarchy).
+only on `chumicro-sockets` and `chumicro-timing`.  The shared HTTP/1.1
+primitives (case-insensitive header dict, charset parsing) are inlined
+locally — no `chumicro-requests` dependency on the device.
 
 ## Examples
 
