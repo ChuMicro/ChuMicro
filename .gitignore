@@ -28,7 +28,6 @@ libraries/*/docs/assets/
 .scratch/
 .claude/
 devices.yml
-device-config.yml
 
 # Local-machine dev config for chumicro contributors — wifi creds for
 # real-network functional tests, broker overrides, etc.  Materialised by

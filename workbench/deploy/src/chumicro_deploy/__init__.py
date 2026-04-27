@@ -48,6 +48,16 @@ if TYPE_CHECKING:
         SerialPort,
         find_circuitpy_drive,
     )
+    from .config.default import (
+        DEFAULT_DEVICES_FILENAME,
+        DeviceConfigError,
+        DeviceDefaults,
+        DeviceEntry,
+        filter_devices,
+        load_device_registry,
+        load_devices,
+        resolve_ide_devices,
+    )
     from .deployer import Deployer
     from .device import Device
     from .firmware import (
@@ -96,12 +106,16 @@ _LAZY_ATTRS: dict[str, str] = {
     "CircuitpythonMidDeployDisconnected": "circuitpython_transport",
     "CircuitpythonTransport": "circuitpython_transport",
     "CircuitpythonTransportError": "circuitpython_transport",
+    "DEFAULT_DEVICES_FILENAME": "config.default",
     "DeployError": "result",
     "DeployFailureKind": "recovery",
     "DeployMode": "protocol",
     "DeployResult": "result",
     "Deployer": "deployer",
     "Device": "device",
+    "DeviceConfigError": "config.default",
+    "DeviceDefaults": "config.default",
+    "DeviceEntry": "config.default",
     "DeviceImplementation": "protocol",
     "DeviceInfo": "probe",
     "DirectorySource": "sources",
@@ -129,11 +143,15 @@ _LAZY_ATTRS: dict[str, str] = {
     "build_circuitpython_deploy_scripts": "circuitpython_bootstrap",
     "classify_deploy_failure": "recovery",
     "detect_fskit_wedge": "macos_fskit",
+    "filter_devices": "config.default",
     "find_circuitpy_drive": "circuitpython_transport",
     "flash_firmware": "firmware",
+    "load_device_registry": "config.default",
+    "load_devices": "config.default",
     "probe_device": "probe",
     "recovery_plan_for": "recovery",
     "resolve_firmware_url": "firmware",
+    "resolve_ide_devices": "config.default",
 }
 
 #: Public API surface.  Spelled as a literal list so static type
@@ -145,12 +163,16 @@ __all__ = [
     "CircuitpythonMidDeployDisconnected",
     "CircuitpythonTransport",
     "CircuitpythonTransportError",
+    "DEFAULT_DEVICES_FILENAME",
     "DeployError",
     "DeployFailureKind",
     "DeployMode",
     "DeployResult",
     "Deployer",
     "Device",
+    "DeviceConfigError",
+    "DeviceDefaults",
+    "DeviceEntry",
     "DeviceImplementation",
     "DeviceInfo",
     "DirectorySource",
@@ -178,11 +200,15 @@ __all__ = [
     "build_circuitpython_deploy_scripts",
     "classify_deploy_failure",
     "detect_fskit_wedge",
+    "filter_devices",
     "find_circuitpy_drive",
     "flash_firmware",
+    "load_device_registry",
+    "load_devices",
     "probe_device",
     "recovery_plan_for",
     "resolve_firmware_url",
+    "resolve_ide_devices",
 ]
 assert sorted(__all__) == __all__, "__all__ must be alphabetized"
 assert set(__all__) == set(_LAZY_ATTRS), "__all__ must match _LAZY_ATTRS"

@@ -41,12 +41,9 @@ import time
 from pathlib import Path
 
 import pytest
-from chumicro_deploy import Deployer, Device
+from chumicro_deploy import Deployer, Device, DeviceEntry
 from chumicro_workspace import thing_import_graph_source
 from chumicro_workspace.workspace import WorkspaceLayout
-
-# scripts/ is on sys.path via root conftest.py.
-from device_config import DeviceEntry  # type: ignore[import-not-found]
 
 # ---------------------------------------------------------------------------
 # Locate the canonical workspace template clone (or skip)

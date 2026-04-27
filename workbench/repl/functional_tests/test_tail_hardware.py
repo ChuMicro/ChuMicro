@@ -28,12 +28,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from chumicro_deploy import Deployer, Device, FileMapSource
+from chumicro_deploy import Deployer, Device, DeviceEntry, FileMapSource
 from chumicro_repl import ExitCode, tail
 from chumicro_repl.highlight import strip_ansi_sequences
-
-# scripts/ is on sys.path via root conftest.py.
-from device_config import DeviceEntry  # type: ignore[import-not-found]
 
 
 def _build_device(entry: DeviceEntry, deploy_mode: str) -> Device:

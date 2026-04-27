@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import device_testing
 import pytest
-from device_config import DeviceEntry
+from chumicro_deploy import DeviceEntry
 
 
 class TestBuildBootstrap:

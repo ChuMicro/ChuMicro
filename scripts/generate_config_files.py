@@ -7,12 +7,12 @@ are never overwritten.
 
 Files generated:
 
-* ``devices.yml`` / ``device-config.yml`` — board registry + per-
-  device deploy hints used by the functional-test runner.
+* ``devices.yml`` — board registry used by the functional-test
+  runner.  Schema owned by ``chumicro_deploy.config.default``.
 * ``chumicro-dev-config.toml`` — local-machine config for
-  contributors: wifi creds for real-network functional tests, MQTT
-  broker overrides, etc.  Gitignored.  See the file header for
-  schema.
+  contributors: wifi creds for real-network functional tests,
+  MQTT broker overrides, etc.  Gitignored.  See the file header
+  for schema.
 
 Called by ``python scripts/run.py setup``.
 """
@@ -25,7 +25,6 @@ from workspace import ROOT
 #: Files to generate: (relative path, template filename).
 _CONFIGS: list[tuple[str, str]] = [
     ("devices.yml", "devices.yml.template"),
-    ("device-config.yml", "device-config.yml.template"),
     ("chumicro-dev-config.toml", "chumicro-dev-config.toml.template"),
 ]
 

@@ -31,25 +31,17 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-# Make scripts/ importable the same way the pytest conftest does.
-_REPO_ROOT = Path(__file__).resolve().parents[3]
-_SCRIPTS_DIR = _REPO_ROOT / "scripts"
-if str(_SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(_SCRIPTS_DIR))
-
-from chumicro_deploy import (  # noqa: E402
+from chumicro_deploy import (
     CircuitpythonTransportError,
     Deployer,
     DeployFailureKind,
     Device,
+    DeviceConfigError,
+    DeviceEntry,
     FileMapSource,
     InteractiveDeployer,
     MicropythonTransportError,
     classify_deploy_failure,
-)
-from device_config import (  # type: ignore[import-not-found]  # noqa: E402
-    DeviceConfigError,
-    DeviceEntry,
     load_device_registry,
 )
 

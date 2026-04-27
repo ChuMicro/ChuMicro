@@ -13,10 +13,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from chumicro_deploy import Deployer, Device, DirectorySource, FileMapSource
-
-# scripts/ is on sys.path via root conftest.py.
-from device_config import DeviceEntry  # type: ignore[import-not-found]
+from chumicro_deploy import (
+    Deployer,
+    Device,
+    DeviceEntry,
+    DirectorySource,
+    FileMapSource,
+)
 
 
 def _build_device(entry: DeviceEntry, deploy_mode: str) -> Device:

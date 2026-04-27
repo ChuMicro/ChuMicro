@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 import pytest_device
-from device_config import DeviceEntry
+from chumicro_deploy import DeviceEntry
 from result_parser import TestResult as ParsedTestResult
 
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pr_summary
-from device_config import DeviceEntry
+from chumicro_deploy import DeviceEntry
 
 
 def _make_device_result(

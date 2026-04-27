@@ -19,9 +19,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
-
-# scripts/ is on sys.path via root conftest.py.
-from device_config import (  # type: ignore[import-not-found]
+from chumicro_deploy import (
     DeviceConfigError,
     DeviceDefaults,
     DeviceEntry,

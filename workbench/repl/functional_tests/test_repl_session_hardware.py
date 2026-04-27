@@ -16,11 +16,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from chumicro_deploy import Device
+from chumicro_deploy import Device, DeviceEntry
 from chumicro_repl import ReplSession
-
-# scripts/ is on sys.path via root conftest.py.
-from device_config import DeviceEntry  # type: ignore[import-not-found]
 
 
 def _build_device(entry: DeviceEntry) -> Device:

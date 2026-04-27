@@ -37,14 +37,13 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-# Make scripts/ importable the same way the pytest conftest does.
-_REPO_ROOT = Path(__file__).resolve().parents[3]
-_SCRIPTS_DIR = _REPO_ROOT / "scripts"
-if str(_SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(_SCRIPTS_DIR))
-
-from chumicro_deploy import Device  # noqa: E402
-from chumicro_repl import (  # noqa: E402
+from chumicro_deploy import (
+    Device,
+    DeviceConfigError,
+    DeviceEntry,
+    load_device_registry,
+)
+from chumicro_repl import (
     ExitCode,
     InteractiveReplSession,
     ReplFailureKind,
@@ -52,12 +51,7 @@ from chumicro_repl import (  # noqa: E402
     classify_session_failure,
     tail,
 )
-from chumicro_repl.highlight import strip_ansi_sequences  # noqa: E402
-from device_config import (  # type: ignore[import-not-found]  # noqa: E402
-    DeviceConfigError,
-    DeviceEntry,
-    load_device_registry,
-)
+from chumicro_repl.highlight import strip_ansi_sequences
 
 # ---------------------------------------------------------------------------
 # Terminal helpers — ANSI colour when isatty, plain text otherwise

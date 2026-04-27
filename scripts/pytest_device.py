@@ -39,11 +39,12 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
-from chumicro_deploy import DeviceImplementation, TransportProtocol
-from device_config import (
+from chumicro_deploy import (
     DeviceConfigError,
     DeviceDefaults,
     DeviceEntry,
+    DeviceImplementation,
+    TransportProtocol,
     load_device_registry,
     resolve_ide_devices,
 )

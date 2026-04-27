@@ -41,10 +41,277 @@ YAML layout) can register their own loader via the
 
 from __future__ import annotations
 
+import os
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from ..device import Device
+
+#: Default filename for the device registry.
+DEFAULT_DEVICES_FILENAME = "devices.yml"
+
+#: Required fields for each device entry in ``devices.yml``.
+_REQUIRED_DEVICE_FIELDS = ("id", "runtime", "address")
+#: Allowed runtime values.
+_VALID_RUNTIMES = ("micropython", "circuitpython")
+#: Allowed deploy mode values.
+_VALID_DEPLOY_MODES = ("ram", "flash")
+#: Allowed ide_runtime values.
+_VALID_IDE_RUNTIMES = ("micropython", "circuitpython", "both")
+
+
+# ---------------------------------------------------------------------------
+# Validated registry shape
+#
+# Sits one level above :class:`Device`: a registry record with
+# description, setup_command, and arbitrary extra metadata that
+# orchestration layers (the chumicro mono-repo's IDE-test
+# orchestration, future project-workspace template loaders) want to
+# carry alongside the deploy-relevant fields.  :class:`Device` is the
+# transport-construction primitive; :class:`DeviceEntry` is the
+# devices.yml record.
+# ---------------------------------------------------------------------------
+
+
+class DeviceConfigError(Exception):
+    """Raised when a ``devices.yml`` is missing or fails validation."""
+
+
+@dataclass
+class DeviceEntry:
+    """A single device from a validated ``devices.yml`` registry."""
+
+    identifier: str
+    runtime: str
+    address: str
+    description: str = ""
+    connection_type: str = "serial"
+    serial_baudrate: int = 115200
+    deploy_mode: str = "ram"
+    circuitpy_drive_path: str | None = None
+    setup_command: str | None = None
+    extra: dict = field(default_factory=dict)
+
+
+@dataclass
+class DeviceDefaults:
+    """Top-level defaults from the ``defaults:`` section of ``devices.yml``.
+
+    Controls which devices are targeted from IDE play buttons, the
+    default deploy mode for all devices, and which runtimes the IDE
+    targets.
+    """
+
+    micropython: str | None = None
+    circuitpython: str | None = None
+    deploy_mode: str = "ram"
+    ide_runtime: str = "micropython"
+
+
+def _resolve_devices_path(
+    workspace_root: Path | None = None,
+    *,
+    environment_variable: str = "CHUMICRO_DEVICES",
+) -> Path:
+    """Resolve a ``devices.yml`` path from env var or workspace root.
+
+    Args:
+        workspace_root: Directory that contains ``devices.yml``.
+            Defaults to :func:`Path.cwd`.
+        environment_variable: Env var that overrides the default
+            location when set.  ``CHUMICRO_DEVICES`` is the
+            chumicro convention.
+    """
+    override = os.environ.get(environment_variable)
+    if override:
+        return Path(override)
+    root = workspace_root if workspace_root is not None else Path.cwd()
+    return root / DEFAULT_DEVICES_FILENAME
+
+
+def _parse_defaults(raw: dict) -> DeviceDefaults:
+    """Validate and parse the ``defaults:`` block of ``devices.yml``."""
+    deploy_mode = raw.get("deploy_mode", "ram")
+    if deploy_mode not in _VALID_DEPLOY_MODES:
+        raise DeviceConfigError(
+            f"Invalid deploy_mode '{deploy_mode}' in defaults, "
+            f"must be one of {_VALID_DEPLOY_MODES}"
+        )
+    ide_runtime = raw.get("ide_runtime", "micropython")
+    if ide_runtime not in _VALID_IDE_RUNTIMES:
+        raise DeviceConfigError(
+            f"Invalid ide_runtime '{ide_runtime}' in defaults, "
+            f"must be one of {_VALID_IDE_RUNTIMES}"
+        )
+    return DeviceDefaults(
+        micropython=raw.get("micropython"),
+        circuitpython=raw.get("circuitpython"),
+        deploy_mode=deploy_mode,
+        ide_runtime=ide_runtime,
+    )
+
+
+def _validate_device(
+    raw: dict, index: int, *, global_deploy_mode: str = "ram",
+) -> DeviceEntry:
+    """Validate a single raw entry and return a :class:`DeviceEntry`."""
+    missing = [
+        field_name for field_name in _REQUIRED_DEVICE_FIELDS
+        if field_name not in raw
+    ]
+    if missing:
+        raise DeviceConfigError(
+            f"Device entry {index}: missing required fields: "
+            f"{', '.join(missing)}"
+        )
+
+    runtime = raw["runtime"]
+    if runtime not in _VALID_RUNTIMES:
+        raise DeviceConfigError(
+            f"Device entry {index} ({raw['id']}): "
+            f"invalid runtime '{runtime}', must be one of {_VALID_RUNTIMES}"
+        )
+
+    if "deploy_mode" in raw and raw["deploy_mode"] not in _VALID_DEPLOY_MODES:
+        raise DeviceConfigError(
+            f"Device entry {index} ({raw['id']}): "
+            f"invalid deploy_mode '{raw['deploy_mode']}', "
+            f"must be one of {_VALID_DEPLOY_MODES}"
+        )
+
+    known_keys = {
+        "id", "runtime", "address", "description", "connection_type",
+        "serial_baudrate", "deploy_mode",
+        "circuitpy_drive_path", "setup_command",
+    }
+    extra = {key: value for key, value in raw.items() if key not in known_keys}
+
+    return DeviceEntry(
+        identifier=raw["id"],
+        runtime=runtime,
+        address=raw["address"],
+        description=raw.get("description", ""),
+        connection_type=raw.get("connection_type", "serial"),
+        serial_baudrate=raw.get("serial_baudrate", 115200),
+        deploy_mode=raw.get("deploy_mode", global_deploy_mode),
+        circuitpy_drive_path=raw.get("circuitpy_drive_path"),
+        setup_command=raw.get("setup_command"),
+        extra=extra,
+    )
+
+
+def load_device_registry(
+    path: Path | None = None,
+    *,
+    workspace_root: Path | None = None,
+) -> tuple[list[DeviceEntry], DeviceDefaults]:
+    """Load and validate ``devices.yml`` into ``(entries, defaults)``.
+
+    The full validated registry — useful for orchestration layers
+    that need the rich :class:`DeviceEntry` shape with descriptions
+    and extra metadata, not just one :class:`Device` for a single
+    transport.
+
+    Args:
+        path: Explicit path to ``devices.yml``.  When ``None``, checks
+            the ``CHUMICRO_DEVICES`` env var, then falls back to
+            ``workspace_root / devices.yml``.
+        workspace_root: Directory that contains ``devices.yml``.
+            Defaults to :func:`Path.cwd`.
+
+    Returns:
+        Tuple of ``(devices, defaults)``.
+
+    Raises:
+        DeviceConfigError: File missing, malformed, or fails validation.
+    """
+    import yaml
+
+    resolved = path or _resolve_devices_path(workspace_root)
+    try:
+        entries, raw_defaults = load_raw_entries(resolved)
+    except FileNotFoundError as error:
+        raise DeviceConfigError(
+            f"Config file not found: {resolved}\n"
+            "Run 'python scripts/run.py setup' to generate it."
+        ) from error
+    except (yaml.YAMLError, ValueError) as error:
+        raise DeviceConfigError(str(error)) from error
+
+    if not entries:
+        raise DeviceConfigError(f"Expected a 'devices' list in {resolved}")
+
+    defaults = _parse_defaults(raw_defaults)
+    return (
+        [
+            _validate_device(
+                entry, index, global_deploy_mode=defaults.deploy_mode,
+            )
+            for index, entry in enumerate(entries)
+        ],
+        defaults,
+    )
+
+
+def load_devices(
+    path: Path | None = None,
+    *,
+    workspace_root: Path | None = None,
+) -> list[DeviceEntry]:
+    """Load just the validated device list from ``devices.yml``.
+
+    Convenience wrapper around :func:`load_device_registry`.
+    """
+    devices, _defaults = load_device_registry(path, workspace_root=workspace_root)
+    return devices
+
+
+def filter_devices(
+    devices: list[DeviceEntry],
+    *,
+    runtime: str | None = None,
+    device_id: str | None = None,
+) -> list[DeviceEntry]:
+    """Filter a registry list by runtime and/or device ID."""
+    result = devices
+    if runtime:
+        result = [device for device in result if device.runtime == runtime]
+    if device_id:
+        result = [device for device in result if device.identifier == device_id]
+    return result
+
+
+def resolve_ide_devices(
+    devices: list[DeviceEntry],
+    defaults: DeviceDefaults,
+) -> list[DeviceEntry]:
+    """Return the devices an IDE play button should target.
+
+    For each runtime selected by ``defaults.ide_runtime``, picks the
+    device whose ID matches ``defaults.<runtime>``, or the first
+    device of that runtime when no default is set.
+    """
+    runtimes_to_target: list[str] = []
+    if defaults.ide_runtime in ("micropython", "both"):
+        runtimes_to_target.append("micropython")
+    if defaults.ide_runtime in ("circuitpython", "both"):
+        runtimes_to_target.append("circuitpython")
+
+    result: list[DeviceEntry] = []
+    for runtime in runtimes_to_target:
+        target_id = getattr(defaults, runtime, None)
+        if target_id:
+            for device in devices:
+                if device.identifier == target_id:
+                    result.append(device)
+                    break
+        else:
+            for device in devices:
+                if device.runtime == runtime:
+                    result.append(device)
+                    break
+    return result
 
 
 def load_raw_entries(

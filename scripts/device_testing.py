@@ -18,10 +18,10 @@ from typing import Any, cast
 
 from chumicro_deploy import (
     Device,
+    DeviceEntry,
     ExtendedTransportProtocol,
     TransportProtocol,
 )
-from device_config import DeviceEntry
 from workspace import (
     ROOT,
     library_name_from_module,

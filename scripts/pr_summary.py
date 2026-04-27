@@ -15,8 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from chumicro_deploy import DeviceImplementation
-from device_config import DeviceEntry
+from chumicro_deploy import DeviceEntry, DeviceImplementation
 from result_parser import TestResult
 
 
