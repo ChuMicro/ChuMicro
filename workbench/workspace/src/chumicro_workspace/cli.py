@@ -76,6 +76,7 @@ from chumicro_workspace.onboarding import (
     probe_with_runtime_inference,
 )
 from chumicro_workspace.workspace import (
+    ThingClassification,
     WorkspaceLayout,
     WorkspaceNotFoundError,
 )
@@ -354,6 +355,36 @@ def _validate_thing_name(name: str) -> None:
 _THING_ENTRY_POINT_FILENAMES: tuple[str, ...] = ("app.py", "code.py", "main.py")
 
 
+def _ensure_namespace_parents(
+    workspace: WorkspaceLayout, target: Path,
+) -> list[Path]:
+    """Create empty ``__init__.py``-marked namespace dirs above *target*.
+
+    Returns the list of namespace dirs newly created so the caller can
+    print a per-command trace line.  Pre-existing namespace dirs are
+    reused silently.  Used by both ``new`` and ``rename`` so a thing
+    moved into ``garage/sensors/`` lands with the same host-side
+    namespace marker layout ``new`` would produce.
+    """
+    workspace.things_dir.mkdir(parents=True, exist_ok=True)
+    parent = target.parent
+    if parent == workspace.things_dir:
+        return []
+    created: list[Path] = []
+    relative_parent = parent.relative_to(workspace.things_dir)
+    for segment_count in range(1, len(relative_parent.parts) + 1):
+        namespace_dir = workspace.things_dir.joinpath(
+            *relative_parent.parts[:segment_count],
+        )
+        init_path = namespace_dir / "__init__.py"
+        if not namespace_dir.exists():
+            namespace_dir.mkdir(parents=True)
+            created.append(namespace_dir)
+        if not init_path.exists():
+            init_path.write_text("")
+    return created
+
+
 def _resolve_new_source(
     workspace: WorkspaceLayout, from_path: str | None,
 ) -> Path:
@@ -429,22 +460,12 @@ def _cmd_new(args: argparse.Namespace) -> int:
     target = workspace.thing_dir(args.name)
     if target.exists():
         raise SystemExit(f"error: {target} already exists")
-    # Auto-create intermediate namespace directories with empty
-    # __init__.py markers so host-side imports work cleanly.
-    workspace.things_dir.mkdir(parents=True, exist_ok=True)
-    parent = target.parent
-    if parent != workspace.things_dir:
-        relative_parent = parent.relative_to(workspace.things_dir)
-        for segment_count in range(1, len(relative_parent.parts) + 1):
-            namespace_dir = workspace.things_dir.joinpath(
-                *relative_parent.parts[:segment_count],
-            )
-            init_path = namespace_dir / "__init__.py"
-            if not namespace_dir.exists():
-                namespace_dir.mkdir(parents=True)
-                print(f"new: creating namespace {namespace_dir.relative_to(workspace.root)}/")
-            if not init_path.exists():
-                init_path.write_text("")
+    created_namespaces = _ensure_namespace_parents(workspace, target)
+    for namespace_dir in created_namespaces:
+        print(
+            f"new: creating namespace "
+            f"{namespace_dir.relative_to(workspace.root)}/",
+        )
     shutil.copytree(source, target)
     print(f"new: created {target}")
     return 0
@@ -701,22 +722,95 @@ def _cmd_switch(args: argparse.Namespace) -> int:
     return 0
 
 
+def _render_things_tree(
+    workspace: WorkspaceLayout,
+) -> str:
+    """Format the workspace's things as an indented Unicode tree.
+
+    Empty workspace prints a friendly marker.  Otherwise:
+
+    .. code-block:: text
+
+        things/
+        ├── thermostat
+        ├── upstairs/
+        │   ├── bedroom_sensor
+        │   └── nightstand_lamp
+        └── garage/
+            ├── controls/
+            │   └── heater
+            └── sensors/
+                └── door_open
+
+    Driven by :meth:`WorkspaceLayout.iter_things_with_classification`
+    so namespace dirs (``upstairs/``) always sit above their thing
+    leaves, matching depth-first display order.
+    """
+    items = workspace.iter_things_with_classification()
+    if not items:
+        return "(no things in this workspace)"
+    classification_by_path: dict[str, ThingClassification] = dict(items)
+    # children["parent/path"] = sorted list of leaf segments.  Empty
+    # string is the top level (children of `things/`).
+    children: dict[str, list[str]] = {"": []}
+    for path in classification_by_path:
+        segments = path.split("/")
+        for depth in range(len(segments)):
+            parent_key = "/".join(segments[:depth])
+            children.setdefault(parent_key, [])
+            leaf = segments[depth]
+            if depth == len(segments) - 1 and leaf not in children[parent_key]:
+                children[parent_key].append(leaf)
+    for kids in children.values():
+        kids.sort()
+
+    lines = ["things/"]
+
+    def _walk(parent_path: str, prefix: str) -> None:
+        kids = children.get(parent_path, [])
+        for index, leaf in enumerate(kids):
+            full_path = f"{parent_path}/{leaf}" if parent_path else leaf
+            is_last = index == len(kids) - 1
+            connector = "└── " if is_last else "├── "
+            extension = "    " if is_last else "│   "
+            classification = classification_by_path[full_path]
+            if classification is ThingClassification.NAMESPACE:
+                lines.append(f"{prefix}{connector}{leaf}/")
+                _walk(full_path, prefix + extension)
+            else:
+                lines.append(f"{prefix}{connector}{leaf}")
+
+    _walk("", "")
+    return "\n".join(lines)
+
+
 def _cmd_things(args: argparse.Namespace) -> int:
     """List the things defined in the workspace under ``things/``.
 
-    Local-only: lists ``things/<name>/`` directories filtered by
-    :meth:`WorkspaceLayout.list_things` (skips ``_template`` and
-    leading ``.`` / ``_`` names).  An on-device variant that probes
-    ``/lib/things/`` for installed payloads is a follow-on once the
-    REPL one-shot pattern lands as a public helper.
+    Two views: the default :func:`_render_things_tree` (Slice 4)
+    draws an indented Unicode tree so namespaced workspaces are
+    legible at a glance; ``--flat`` falls back to the legacy
+    one-thing-per-line slash-form output (handy for shell pipelines
+    and ``grep``-style filtering).
+
+    Local-only: walks ``things/`` via
+    :meth:`WorkspaceLayout.list_things` and
+    :meth:`WorkspaceLayout.iter_things_with_classification`, both of
+    which skip ``_template`` and leading ``.`` / ``_`` names.  An
+    on-device variant that probes ``/lib/things/`` for installed
+    payloads is a follow-on once the REPL one-shot pattern lands as
+    a public helper.
     """
     workspace = _resolve_workspace(args)
-    names = workspace.list_things()
-    if not names:
-        print("(no things in this workspace)")
+    if args.flat:
+        names = workspace.list_things()
+        if not names:
+            print("(no things in this workspace)")
+            return 0
+        for name in names:
+            print(name)
         return 0
-    for name in names:
-        print(name)
+    print(_render_things_tree(workspace))
     return 0
 
 
@@ -1301,9 +1395,16 @@ def _cmd_add_device(args: argparse.Namespace) -> int:
 def _cmd_rename(args: argparse.Namespace) -> int:
     """Rename a thing directory or a device id.
 
-    Two modes (mutually exclusive): ``--thing OLD NEW`` does a
-    ``mv things/OLD things/NEW``; ``--device OLD NEW`` rewrites the
-    devices.yml entry id + every reference to it under ``defaults:``.
+    Two modes (mutually exclusive): ``--thing OLD NEW`` moves the
+    thing directory under ``things/`` (Slice 4 — both names accept
+    bare / slash / dotted forms, intermediate namespace dirs are
+    auto-created when the new path is in a fresh namespace);
+    ``--device OLD NEW`` rewrites the devices.yml entry id + every
+    reference to it under ``defaults:``.
+
+    A thing rename does NOT touch already-deployed devices —
+    re-deploy the thing under its new name to refresh ``/active.py``
+    on each board.
     """
     workspace = _resolve_workspace(args)
 
@@ -1315,17 +1416,30 @@ def _cmd_rename(args: argparse.Namespace) -> int:
         return 2
 
     if args.thing is not None:
-        old_name, new_name = args.thing
-        old_path = workspace.thing_dir(old_name)
-        new_path = workspace.thing_dir(new_name)
+        old_input, new_input = args.thing
+        _validate_thing_name(old_input)
+        _validate_thing_name(new_input)
+        # Old name accepts bare-name disambiguation against the live
+        # tree (mirrors deploy / switch).  New name is just normalised
+        # — it doesn't exist yet so disambiguation doesn't apply.
+        resolved_old = _resolve_thing_name(workspace, old_input)
+        resolved_new = new_input.replace(".", "/")
+        old_path = workspace.thing_dir(resolved_old)
+        new_path = workspace.thing_dir(resolved_new)
         if not old_path.is_dir():
             print(f"rename: thing {old_path} not found", file=sys.stderr)
             return 1
         if new_path.exists():
             print(f"rename: {new_path} already exists", file=sys.stderr)
             return 1
+        created_namespaces = _ensure_namespace_parents(workspace, new_path)
+        for namespace_dir in created_namespaces:
+            print(
+                f"rename: creating namespace "
+                f"{namespace_dir.relative_to(workspace.root)}/",
+            )
         old_path.rename(new_path)
-        print(f"rename: {old_name} → {new_name}")
+        print(f"rename: {resolved_old} → {resolved_new}")
         return 0
 
     old_id, new_id = args.device
@@ -1622,6 +1736,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="List the things defined under the workspace's things/ tree.",
     )
     _add_workspace_arg(things_parser)
+    things_parser.add_argument(
+        "--flat",
+        action="store_true",
+        help=(
+            "Print one slash-form path per line instead of the default "
+            "tree view (handy for shell pipelines)."
+        ),
+    )
     things_parser.set_defaults(func=_cmd_things)
 
     # ----- demo ----------------------------------------------------------

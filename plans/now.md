@@ -6,9 +6,9 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **Workspace ecosystem completion — Phase 1 in flight.**  Phase 1 (`plans/workstreams/nested-things-and-examples.md`) Slices 1-3 shipped.  Slice 3: `_cmd_new` accepts slash/dotted paths, auto-creates intermediate namespace dirs (with empty `__init__.py` markers + a trace line) so host-side `from things.<a>.<b>.<c>.app import run` works.  New `--from <example-path>` flag copies from any thing-shaped directory under the workspace root, validated against the entry-point grammar.  Slice 4 next: `things` tree renderer + path-aware `rename`.
-- **Last shipped:** Slice 3 — `new` accepts paths + `--from <example-path>`.
-- **In flight:** Phase 1 Slice 4 — `things` tree renderer + path-aware `rename`.
+- **Phase:** **Workspace ecosystem completion — Phase 1 in flight.**  Phase 1 (`plans/workstreams/nested-things-and-examples.md`) Slices 1-4 shipped.  Slice 4: `_cmd_things` defaults to a Unicode-tree view of the namespace tree (`--flat` keeps the slash-form list); `_cmd_rename --thing` accepts slash / dotted paths on both sides with bare-name disambiguation on the source, auto-creates intermediate namespace dirs with empty `__init__.py` markers (shared `_ensure_namespace_parents` helper now used by `new` + `rename`).  Slice 5 next: examples folder shipped to the template repo.
+- **Last shipped:** Slice 4 — `things` tree renderer + path-aware `rename`.
+- **In flight:** Phase 1 Slice 5 — examples folder shipped (template-repo + mono-repo `_payloads/`).
 - **Blocked on:** —
 - **Last touched:** `workbench/workspace/src/chumicro_workspace/cli.py`, `workbench/workspace/tests/test_cli.py`, `plans/now.md`.
 
@@ -40,8 +40,8 @@ This is the front door. Everything else is deeper read.
 | 1 — Recursive thing detection | **shipped** |
 | 2 — Deploy + boot-shim nesting | **shipped** |
 | 3 — `new` accepts paths + `--from` | **shipped** |
-| 4 — `things` tree renderer + path-aware `rename` | next up |
-| 5 — `examples/` folder shipped | pending |
+| 4 — `things` tree renderer + path-aware `rename` | **shipped** |
+| 5 — `examples/` folder shipped | next up |
 | 6 — Tests, docs, polish | pending |
 | 7 — Drop `switch` command | pending (can ship standalone) |
 

@@ -1176,7 +1176,9 @@ class TestThings:
     ) -> None:
         root = _seed_workspace(tmp_path)
         _seed_two_things(root)
-        exit_code = cli.main(["things", "--workspace-dir", str(root)])
+        exit_code = cli.main([
+            "things", "--workspace-dir", str(root), "--flat",
+        ])
         assert exit_code == 0
         out = capsys.readouterr().out.splitlines()
         assert sorted(out) == ["heater", "weather"]
@@ -1189,7 +1191,9 @@ class TestThings:
         root = _seed_workspace(tmp_path)
         # things/ exists if any thing was seeded; without seeding it doesn't.
         # Either way list_things() returns [].
-        exit_code = cli.main(["things", "--workspace-dir", str(root)])
+        exit_code = cli.main([
+            "things", "--workspace-dir", str(root), "--flat",
+        ])
         assert exit_code == 0
         assert "no things" in capsys.readouterr().out
 
@@ -1203,11 +1207,69 @@ class TestThings:
         _seed_thing(root, name="back-porch")
         (root / "things" / "_template").mkdir()
         (root / "things" / "_template" / "config.toml").write_text("\n")
-        exit_code = cli.main(["things", "--workspace-dir", str(root)])
+        exit_code = cli.main([
+            "things", "--workspace-dir", str(root), "--flat",
+        ])
         assert exit_code == 0
         out = capsys.readouterr().out.splitlines()
         assert "_template" not in out
         assert "back-porch" in out
+
+
+class TestThingsTreeView:
+    """Slice 4 — `things` defaults to a Unicode tree, `--flat` keeps the list."""
+
+    def test_default_renders_tree_with_namespaces(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        _seed_thing(root, name="thermostat")
+        _seed_thing(root, name="upstairs/bedroom_sensor")
+        _seed_thing(root, name="upstairs/nightstand_lamp")
+        _seed_thing(root, name="garage/sensors/door_open")
+
+        exit_code = cli.main(["things", "--workspace-dir", str(root)])
+        assert exit_code == 0
+        out = capsys.readouterr().out
+        # Root marker.
+        assert out.startswith("things/\n")
+        # Top-level alpha order: garage/, thermostat, upstairs/.
+        assert "├── garage/" in out
+        assert "├── thermostat" in out
+        assert "└── upstairs/" in out
+        # Namespace branches preserve nesting.
+        assert "│   └── sensors/" in out or "    └── sensors/" in out
+        assert "door_open" in out
+        assert "bedroom_sensor" in out
+        assert "nightstand_lamp" in out
+
+    def test_flat_one_line_per_thing(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        _seed_thing(root, name="thermostat")
+        _seed_thing(root, name="upstairs/bedroom_sensor")
+        _seed_thing(root, name="garage/sensors/door_open")
+        exit_code = cli.main([
+            "things", "--workspace-dir", str(root), "--flat",
+        ])
+        assert exit_code == 0
+        out_lines = [
+            line for line in capsys.readouterr().out.splitlines() if line
+        ]
+        assert sorted(out_lines) == [
+            "garage/sensors/door_open",
+            "thermostat",
+            "upstairs/bedroom_sensor",
+        ]
+
+    def test_default_on_empty_workspace_shows_marker(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        exit_code = cli.main(["things", "--workspace-dir", str(root)])
+        assert exit_code == 0
+        assert "no things" in capsys.readouterr().out
 
 
 # ---------------------------------------------------------------------------
@@ -2627,14 +2689,14 @@ class TestAddDeviceRuntimeInference:
 class TestRename:
     def test_thing_renames_directory(self, tmp_path: Path) -> None:
         root = _seed_workspace(tmp_path)
-        _seed_thing(root, "old-name")
+        _seed_thing(root, "old_name")
         exit_code = cli.main([
             "rename", "--workspace-dir", str(root),
-            "--thing", "old-name", "new-name",
+            "--thing", "old_name", "new_name",
         ])
         assert exit_code == 0
-        assert not (root / "things" / "old-name").exists()
-        assert (root / "things" / "new-name" / "code.py").exists()
+        assert not (root / "things" / "old_name").exists()
+        assert (root / "things" / "new_name" / "code.py").exists()
 
     def test_thing_missing_returns_one(
         self,
@@ -2663,6 +2725,104 @@ class TestRename:
         ])
         assert exit_code == 1
         assert "already exists" in capsys.readouterr().err
+
+    def test_thing_rejects_invalid_new_segment(
+        self, tmp_path: Path,
+    ) -> None:
+        """``_validate_thing_name`` runs on both sides of the rename."""
+        root = _seed_workspace(tmp_path)
+        _seed_thing(root, "alpha")
+        with pytest.raises(SystemExit) as caught:
+            cli.main([
+                "rename", "--workspace-dir", str(root),
+                "--thing", "alpha", "kitchen-sensor",
+            ])
+        assert "valid Python identifier" in str(caught.value)
+
+
+class TestRenameNested:
+    """Slice 4 — `rename --thing` accepts slash / dotted paths on both sides."""
+
+    def test_moves_into_new_namespace(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        _seed_thing(root, "bedroom_sensor")
+
+        exit_code = cli.main([
+            "rename", "--workspace-dir", str(root),
+            "--thing", "bedroom_sensor", "upstairs/bedroom_sensor",
+        ])
+        assert exit_code == 0
+        assert not (root / "things" / "bedroom_sensor").exists()
+        assert (
+            root / "things" / "upstairs" / "bedroom_sensor" / "code.py"
+        ).is_file()
+        # Auto-created namespace dir got an __init__.py marker.
+        assert (root / "things" / "upstairs" / "__init__.py").is_file()
+        out = capsys.readouterr().out
+        assert "creating namespace things/upstairs/" in out
+
+    def test_moves_between_namespaces(
+        self, tmp_path: Path,
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        _seed_thing(root, "garage/door_open")
+
+        exit_code = cli.main([
+            "rename", "--workspace-dir", str(root),
+            "--thing", "garage/door_open", "upstairs/door_open",
+        ])
+        assert exit_code == 0
+        assert not (
+            root / "things" / "garage" / "door_open"
+        ).exists()
+        assert (
+            root / "things" / "upstairs" / "door_open" / "code.py"
+        ).is_file()
+
+    def test_dotted_form_normalises(self, tmp_path: Path) -> None:
+        root = _seed_workspace(tmp_path)
+        _seed_thing(root, "garage/door_open")
+
+        exit_code = cli.main([
+            "rename", "--workspace-dir", str(root),
+            "--thing", "garage.door_open", "upstairs.door_open",
+        ])
+        assert exit_code == 0
+        assert (
+            root / "things" / "upstairs" / "door_open" / "code.py"
+        ).is_file()
+
+    def test_bare_name_disambiguates_against_tree(
+        self, tmp_path: Path,
+    ) -> None:
+        """Bare old-name resolves uniquely when only one path matches."""
+        root = _seed_workspace(tmp_path)
+        _seed_thing(root, "garage/door_open")
+        _seed_thing(root, "thermostat")
+
+        exit_code = cli.main([
+            "rename", "--workspace-dir", str(root),
+            "--thing", "door_open", "front_door_open",
+        ])
+        assert exit_code == 0
+        assert (
+            root / "things" / "front_door_open" / "code.py"
+        ).is_file()
+
+    def test_bare_name_ambiguous_lists_candidates(
+        self, tmp_path: Path,
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        _seed_thing(root, "upstairs/sensor")
+        _seed_thing(root, "garage/sensor")
+        with pytest.raises(SystemExit) as caught:
+            cli.main([
+                "rename", "--workspace-dir", str(root),
+                "--thing", "sensor", "renamed_sensor",
+            ])
+        assert "ambiguous" in str(caught.value)
 
     def test_device_rename_rewrites_id_and_default(self, tmp_path: Path) -> None:
         root = _seed_workspace(tmp_path)
