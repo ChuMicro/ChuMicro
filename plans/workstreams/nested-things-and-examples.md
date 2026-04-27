@@ -265,6 +265,26 @@ Each slice ends with green preflight + task-checkpoint commit + push.
 
 **Acceptance:** preflight green at 94 % across all touched packages.  Template-repo README walks a user through "create a nested thing → deploy from an example → list the tree."
 
+### Slice 7 — Drop the `switch` command
+
+User triage 2026-04-27 confirmed: `switch` exists today only to support the multi-thing-staging path (re-point `/active.py` at a different thing already deployed under `/lib/things/<each>/`).  That path is itself on the chopping block (`plans/next-up.md` "Replace multi-thing staging with scoped diff-deploy").  With no backward-compat burden, the cleanest move is to drop `switch` outright now — slot the deletion alongside Phase 1's deploy refactor since deploy's positional args are already being reworked.
+
+Concrete changes:
+
+* Delete `_cmd_switch` from `chumicro_workspace/cli.py`.
+* Delete the `switch` subparser registration.
+* Delete `chumicro_workspace.boot_shim::multi_thing_boot_source` and `switch_source`.
+* Delete `_cmd_switch` tests in `workbench/workspace/tests/test_cli.py`.
+* Delete the `switch` row from `AGENTS.md` commands table in the template repo.
+* Delete the `--boot-shim` and `--active` flags on `deploy` (they only made sense with multi-thing staging).
+* Update `workbench/workspace/functional_tests/test_boot_shim_hardware.py` — keep the single-thing-boot-shim tests, drop the multi-thing-active-runs and switch-runs-new-active tests.
+
+What stays: `thing_boot_source` (single-thing boot via `/active.py` indirection — still used).
+
+**Acceptance:** `python run.py --help` no longer lists `switch`.  `deploy <a> <b> <c>` returns a helpful error ("multi-thing deploys are no longer supported; use `deploy <one>` per device").  Existing single-thing deploy + boot-shim chain unaffected.
+
+This slice can land independently of Slices 1-6 if the user wants to ship it standalone; it's logically grouped here because deploy is being touched anyway.
+
 ## Test plan
 
 * Unit tests under `workbench/workspace/tests/` — every classifier branch, every CLI dispatch path with nested names.

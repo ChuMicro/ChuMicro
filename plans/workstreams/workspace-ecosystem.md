@@ -1,6 +1,6 @@
 # Workstream: Workspace ecosystem completion
 
-Status: `planned` — drafted 2026-04-27 as the next-session entry point after the workspace-template testing-infrastructure audit closed.  No code shipped under this workstream yet.
+Status: `planned` — drafted 2026-04-27, revised 2026-04-27 with user triage.  Next-session entry point.  No code shipped under this workstream yet.
 
 ## Premise
 
@@ -8,10 +8,13 @@ Project-workspace's eight phases shipped (`plans/workstreams/project-workspace.m
 
 * Things layout is flat-only — no namespacing, no examples folder.
 * No worked examples beyond `things/example_sensor/`.
-* No `status` / `doctor` / `deploy --dry-run` / `deploy --watch` quality-of-life commands.
-* `workspace.yml`'s `lint` / `coverage_threshold` / `agent_strictness` knobs documented but not wired up.
+* No `status` / `doctor` / `deploy --dry-run` quality-of-life commands.
+* No app-level error recovery hints — raw tracebacks only.
+* `workspace.yml`'s quality knobs (lint / coverage / agent_strictness) documented but not wired up.
+* No environment layering — single config set for dev / staging / prod.
 * `scripts/new_library_scaffold.py` is a mono-repo-only contributor tool that logically belongs in `chumicro-workspace`.
-* Documentation across both the chumicro mono-repo and the template repo has drifted in places — never audited as a single pass.
+* The `switch` command is a vestige of the soon-to-be-deprecated multi-thing-staging path; with no backward-compat burden, drop it.
+* Documentation across both repos has drifted in places — never audited as a single pass.
 
 This workstream coordinates the remaining work to bring the ecosystem from "feature-complete" to "user-friendly for beginners and advanced users."
 
@@ -22,30 +25,34 @@ A fresh agent picking this up cold should:
 1. Read this file end to end.
 2. Read `plans/now.md` for the current snapshot.
 3. Read `plans/workstreams/project-workspace.md` (closed) to understand what shipped.
-4. Read `plans/workstreams/nested-things-and-examples.md` (the detailed plan for Phase 1).
-5. **Important constraint:** nothing has been published to PyPI yet.  No backward-compatibility burden.  The plan can change file formats, CLI flags, on-device shim layouts, etc. without migration paths.
+4. Read `plans/workstreams/nested-things-and-examples.md` (Phase 1 detail).
+5. **Constraint:** nothing has been published to PyPI yet.  No backward-compatibility burden.  Change file formats, CLI flags, on-device shim layouts, and remove-and-replace commands freely.
 
-## Phase list
+## Phase list (revised after user triage 2026-04-27)
 
-Each phase is independent enough to ship on its own.  Sequencing reflects priority — earlier phases unblock more downstream work.
-
-### Phase 1 — Nested things + examples folder
+### Phase 1 — Nested things + examples folder (+ drop `switch`)
 
 **Detail:** [`plans/workstreams/nested-things-and-examples.md`](nested-things-and-examples.md).
 
-Replace the flat `things/<name>/` layout with a nested-namespace tree (`things/upstairs/bedroom_sensor/`, `things/garage/sensors/door_open/`, etc.) and add an `examples/` folder of multi-thing demos to the template repo.  The two are coupled because the most natural example (`examples/two_things/{server,sensor}/`) is itself a nested layout.
+Replace flat `things/<name>/` with a nested-namespace tree, add an `examples/` folder of multi-thing demos, and drop the `switch` command since deploy is being reworked anyway.  Slice list (per the detail doc):
 
-Touches both repos: chumicro mono-repo (deploy machinery, boot shim, CLI) and the template repo (examples content, README updates).
+* Slice 1 — Recursive thing detection
+* Slice 2 — Deploy + boot-shim handle nesting
+* Slice 3 — `new` accepts paths + `--from <example>` flag
+* Slice 4 — `things` tree renderer + path-aware `rename`
+* Slice 5 — `examples/` folder shipped
+* Slice 6 — Tests, docs, polish
+* Slice 7 — **Drop the `switch` command** (added 2026-04-27 after user triage)
 
-Estimated scope: ~600 LOC across 8 files in the mono-repo + ~10 new files in the template repo.  Probably 2-3 sessions to land cleanly with task-checkpoint commits per slice.
+Estimated scope: ~600 LOC across 8 files in the mono-repo + ~10 new files in the template repo.  2-3 sessions.
 
-### Phase 2 — Workspace ergonomics quick wins
+### Phase 2 — Ergonomics quick wins (six small commands)
 
-Four small commands, each ~50–200 LOC.  Independent — can land in any order.
+Each independent, ships in any order.  Per-command estimates ~50–200 LOC.  Batch as one Phase or split per session — whichever's cleaner at the time.
 
 #### 2a — `python run.py status`
 
-Reports workspace health at a glance.  Output:
+Reports workspace health at a glance.
 
 ```
 $ python run.py status
@@ -60,13 +67,11 @@ ACTIVE THING     back-porch: garage/sensors/door_open
                  greenhouse: (no active thing — not yet deployed)
 ```
 
-Reads workspace.yml, devices.yml, secrets.yml, walks `things/`, optionally probes `/active.py` on each registered device (with `--no-probe` to skip).  Each row has its own check function that returns a (status, hint) tuple.  Output is colour-coded green / yellow / red.
-
-Touches: `chumicro_workspace/cli.py` (new `_cmd_status`), `chumicro_workspace/health.py` (new module).
+Touches: `chumicro_workspace/cli.py` (new `_cmd_status`), new `chumicro_workspace/health.py` module.
 
 #### 2b — `python run.py doctor`
 
-Stricter sibling of `status` — runs every health check + remediation hint.  Catches failure modes before deploy:
+Stricter sibling of `status` — runs every health check + remediation hint.
 
 ```
 $ python run.py doctor
@@ -84,13 +89,11 @@ $ python run.py doctor
     HINT: try `python run.py discover` to see currently-attached ports
 ```
 
-Same scaffolding as `status` plus per-thing AST scan (does `app.py` define `run`?), config-merge dry-run (do all `!secret` references resolve?), and per-device probe-or-fail.
-
-Touches: `chumicro_workspace/cli.py` (new `_cmd_doctor`), `chumicro_workspace/health.py` (extends 2a).
+Same scaffolding as 2a + per-thing AST scan (does `app.py` define `run`?), config-merge dry-run (do all `!secret` references resolve?), and per-device probe-or-fail.
 
 #### 2c — `python run.py deploy --dry-run`
 
-Show what would land where, without writing.  Output:
+Show what would land where, without writing.  **Doubles as documentation** — `--dry-run` output is the canonical "what does deploy actually do" reference.
 
 ```
 $ python run.py deploy garage/sensors/door_open --dry-run
@@ -110,30 +113,84 @@ device files (12 total, 38 KiB):
   /runtime_config.msgpack                   (210 B, baked from config.toml + workspace.yml + secrets.yml)
 ```
 
-Hooks the existing `Deployer.deploy` flow with a no-op transport that records intended writes.  Useful for "did the !secret merge actually flatten?" debugging.
+Useful for "did the !secret merge actually flatten?" debugging too.  Doc-piece deliverable: link the `--dry-run` walkthrough from the workspace template's `README.md` and the chumicro-workspace `docs/guide.md`.
 
-Touches: `chumicro_deploy` (new `DryRunTransport`), `chumicro_workspace/cli.py` (`--dry-run` flag on `_cmd_deploy`).
+Touches: `chumicro_deploy` (new `DryRunTransport`), `chumicro_workspace/cli.py` (`--dry-run` flag), docs (the documentation piece).
 
-#### 2d — `python run.py deploy --watch`
+#### 2d — App-level error recovery hints
 
-File-watcher: re-deploys on save.  Stays in the foreground; `Ctrl-C` exits.
+Today's deploy surfaces raw tracebacks when the thing's own code fails.  No coaching ("did you mean to import …", "your config has an undefined `!secret` reference").  The `chumicro-deploy` recovery layer does this for *transport* failures; nothing does it for *app-level* failures.
 
+Pattern detector + hint table:
+
+| Detected pattern | Hint shown |
+|---|---|
+| `NameError: name 'foo' is not defined` | `did you forget to import? Common imports: …` |
+| `KeyError: 'wifi'` in config-merge | `your thing's config.toml or workspace.yml has no [wifi] section` |
+| `ValueError` mentioning `!secret` | `secrets.yml has no entry for that name — did you forget to fill it in?` |
+| `OSError: [Errno 2] /runtime_config.msgpack` | `RAM-mode deploy doesn't persist runtime_config — switch to flash mode for things that read config` |
+| `ImportError: no module named chumicro_*` | `library not installed in this venv — run `python run.py setup` to refresh deps` |
+
+Hits both stdlib pattern matching and known runtime errors.  ~150 LOC + a hint table that's easy to extend.
+
+Touches: `chumicro_workspace/recovery.py` (new), `chumicro_workspace/cli.py::_cmd_deploy` (run hint pass on failed deploy), `chumicro_deploy/recovery.py` (extend the existing pattern-match table if needed).
+
+#### 2e — `python run.py repl --tail <thing>` auto-deploys before tailing
+
+Today: `python run.py deploy <thing> && python run.py repl --tail`.  Two commands.  Combine: `repl --tail <thing>` deploys then tails.
+
+```bash
+python run.py repl --tail garage/sensors/door_open
+# deploys, then streams the next 30 s of REPL output, exits clean
 ```
-$ python run.py deploy garage/sensors/door_open --watch
-deploying initial...
-deployed in 4.2s
-watching things/garage/sensors/door_open/, workspace.yml, secrets.yml
-... edit + save app.py ...
-detected change: things/garage/sensors/door_open/app.py
-deploying...
-deployed in 1.8s
+
+Falls back to the existing tail behaviour when no positional thing is given.  Tiny addition (~30 LOC) on top of existing `_cmd_repl`.
+
+#### 2f — Multi-device deploys
+
+`python run.py deploy thing1 --to board-a` plus mapping config.  Today: separate invocations per device.
+
+**Scope assessment first.**  If the work is a thin orchestration loop over per-device deploys (~100 LOC), ship it in this Phase.  If it requires reshaping the deploy pipeline to accept multiple targets cleanly, defer it alongside `deploy --watch` (rainy-day).
+
+Decision rule: write a one-paragraph design sketch as the first step of 2f.  If the sketch fits on a sticky note and the implementation is mostly looping, ship.  Otherwise file as a follow-on and move on.
+
+### Phase 3 — Per-environment deploys
+
+User flagged: implement before it gets hard.  Layering env-specific overrides retroactively is invasive once the deploy pipeline matures; ship the seam now while it's simple.
+
+`workspace.yml` gains an `environments:` block:
+
+```yaml
+defaults:
+  app_marker_prefix: my-house
+
+environments:
+  dev:
+    mqtt:
+      broker: localhost
+  staging:
+    mqtt:
+      broker: staging-broker.example.com
+  prod:
+    mqtt:
+      broker: prod-broker.example.com
 ```
 
-Uses the stdlib (`os.path.getmtime` polling at 0.5s interval) — avoids pulling `watchdog` as a dep.  Watches the thing dir + workspace-level config files.  Debounces rapid saves (200ms).
+CLI:
 
-Touches: `chumicro_workspace/cli.py` (`--watch` flag on `_cmd_deploy`), `chumicro_workspace/_watch.py` (new tiny module, ~80 LOC).
+```bash
+python run.py deploy garage/sensors/door_open --env prod
+python run.py use prod          # set the active env in workspace state
+python run.py env               # list envs + show active
+```
 
-### Phase 3 — Library scaffolder migration
+The existing stub `_cmd_env` / `_cmd_use` get real implementations.  Active-env state lives in a gitignored `~/.chumicro/<workspace-name>/active-env` file (per-user, per-workspace; not in workspace.yml so it doesn't pollute git diffs).
+
+Merge order: `defaults` (lowest) ← `environments.<active>` ← `things/<name>/config.toml` ← `secrets.yml` (`!secret` resolution; highest).
+
+Estimated scope: ~250 LOC.  Touches `chumicro_workspace/{cli.py,merge.py,environments.py (new)}`, plus tests + a doc note.
+
+### Phase 4 — Library scaffolder migration
 
 Move `scripts/new_library_scaffold.py` (208 LOC, mono-repo-only contributor tool that creates `libraries/<name>/`) into `chumicro-workspace` as `python run.py new --library <name>`.  Mirrors the existing `python run.py new <thing>` shape.
 
@@ -141,17 +198,15 @@ Why migrate: scaffolding is a workspace-package concern (Decision 0032 §Rule 8 
 
 Slices:
 
-* **3a** — Carve the templated content out of `scripts/templates/*.template` files into `chumicro-workspace`'s `_payloads/` tree.  Materialise a `chumicro_workspace.scaffold` module with `scaffold_library(target_dir, name)` and `scaffold_thing(target_dir, name)` functions.
-* **3b** — Add `--library` flag to `python run.py new`.  Auto-routes: bare name → thing scaffold, `--library` → library scaffold.  Library scaffold writes to `libraries/<name>/` (relative to workspace root) by default; `--into <path>` overrides.
-* **3c** — Update `scripts/run.py new-library` to call `chumicro_workspace.scaffold.scaffold_library` instead of the local `scripts/new_library_scaffold.py`.  Delete the local copy + its tests; relocate tests to `workbench/workspace/tests/test_scaffold.py`.
-
-Touches: `workbench/workspace/src/chumicro_workspace/{cli.py,scaffold.py,_payloads/library_template/*}`, `scripts/{new_library_scaffold.py (delete),tests/test_new_library_scaffold.py (delete)}`, `scripts/run.py` (rewire `new-library` task).
+* **4a** — Carve templated content out of `scripts/templates/*.template` files into `chumicro-workspace`'s `_payloads/` tree.  Materialise a `chumicro_workspace.scaffold` module with `scaffold_library(target_dir, name)` and `scaffold_thing(target_dir, name)` functions.
+* **4b** — Add `--library` flag to `python run.py new`.  Library scaffold writes to `libraries/<name>/` (relative to workspace root) by default; `--into <path>` overrides.
+* **4c** — Update `scripts/run.py new-library` to call `chumicro_workspace.scaffold.scaffold_library` instead of the local copy.  Delete the local copy + its tests; relocate tests to `workbench/workspace/tests/test_scaffold.py`.
 
 Estimated scope: ~250 LOC moved + ~50 LOC adapter glue.  Single session.
 
-### Phase 4 — workspace.yml knobs wired up
+### Phase 5 — Wire `workspace.yml` quality knobs
 
-The `workspace.yml` design (Decision 0029) includes three quality knobs:
+The `workspace.yml` design (Decision 0029) includes three quality knobs that aren't wired to anything today:
 
 ```yaml
 quality:
@@ -162,80 +217,80 @@ quality:
   agent_strictness: relaxed   # or "strict"
 ```
 
-None of these are wired to anything.  Phase 4 wires them:
-
 * `lint.enabled = false` → `python run.py lint` becomes a no-op with a hint.
 * `lint.select` → forwarded to ruff as `--select`.
 * `coverage_threshold` → forwarded to pytest's `--cov-fail-under`.
-* `agent_strictness = strict` → enables AST-level checks in the test harness (no naked `except:`, no global state in things).  `relaxed` skips those.
+* `agent_strictness = strict` → enables AST-level checks (no naked `except:`, no global state in things).  `relaxed` skips them.
 
-Touches: `chumicro_workspace/quality.py` (new), `chumicro_workspace/cli.py` (`_cmd_lint`/`_cmd_test` consult the loaded config), workspace template's `workspace.yml` template (add the example knobs commented out).
+Touches: `chumicro_workspace/quality.py` (new), `chumicro_workspace/cli.py` (`_cmd_lint` / `_cmd_test` consult the loaded config), workspace template's `workspace.yml` (add the example knobs commented out).
 
 Estimated scope: ~150 LOC + tests.
 
-### Phase 5 — Documentation audit
+### Phase 6 — Documentation audit
 
-After Phases 1–4 land.  Single review pass across both repos catching anything stale.
-
-Areas to audit:
+After Phases 1–5 land.  Single review pass across both repos catching anything stale.
 
 | Path | What to check |
 |---|---|
-| `workbench/workspace/docs/guide.md` | Walks the user through the full workflow.  Update for nested things, examples folder, new commands (status/doctor/dry-run/watch). |
+| `workbench/workspace/docs/guide.md` | Walks the user through the full workflow.  Update for nested things, examples folder, new commands (status/doctor/dry-run/--env). |
 | `ChuMicro-Workspace-Template/README.md` | Quickstart + worked example.  Add examples/ section, nested-things tip, new commands. |
 | `ChuMicro-Workspace-Template/AGENTS.md` | Commands table + rules of thumb.  Same updates. |
-| `ChuMicro-Workspace-Template/CONTRIBUTING.md` | Last touched 2026-04-26 — verify it still matches the post-Phase-1 layout. |
-| `libraries/*/README.md` (12 libraries) | Each one separately — most stable, but `chumicro-config` / `chumicro-workspace` install snippets may need refreshing if Phase 3 changes `pip install` paths. |
-| `docs/contributing/*.md` (mono-repo) | Likely has stale references to migrated/deleted scripts (`device_config.py`, `pytest_device.py`, etc.). |
-| `plans/now.md` + `plans/next-up.md` | Already kept fresh by the task-checkpoint discipline; verify after the audit pass. |
-| Decision docs `plans/decisions/00**.md` | Mostly retrospective, but Decision 0029 (project workspace) and Decision 0038 (workspace template) may need addenda for nested layouts. |
+| `ChuMicro-Workspace-Template/CONTRIBUTING.md` | Verify it still matches the post-Phase-1 layout. |
+| `libraries/*/README.md` (12 libraries) | Each one separately — refresh install snippets if Phase 4 changed `pip install` paths. |
+| `docs/contributing/*.md` (mono-repo) | Likely has stale references to migrated/deleted scripts. |
+| `plans/now.md` + `plans/next-up.md` | Verify after the audit pass. |
+| Decision docs `plans/decisions/00**.md` | Decision 0029 (project workspace) and Decision 0038 (workspace template) may need addenda for nested layouts + envs. |
 
-Output: a single audit-results commit with every doc edit.  No new content — only freshening / fact-checking / cross-link repair.
+Output: a single audit-results commit per repo with every doc edit.  No new content — only freshening / fact-checking / cross-link repair.
 
 Estimated scope: ~10–20 file edits.  Half a session.
 
-### Phase 6 (separate track) — Richer REPL
+### Phase 7 (parallel track) — Richer REPL
 
-[`plans/workstreams/repl-playground.md`](repl-playground.md) Phase 1a/b/c.  Independent of Phases 1–5; can run in parallel with another contributor.
+[`plans/workstreams/repl-playground.md`](repl-playground.md) Phase 1a/b/c.  Independent of Phases 1–6; can run in parallel.
 
 * **1a** — line mode + persistent per-device history (~250 LOC)
 * **1b** — `:edit` / `:save` / `:load` / `:snippets` (~150 LOC)
 * **1c** — tab completion via on-device `dir()` query (~200 LOC)
 
-Detail already drafted in the linked workstream doc.  Not blocked by anything in this workstream; not blocking anything either.
+Detail already drafted in the linked workstream doc.  Not blocked by anything; not blocking anything.
 
-## Out of scope for this workstream
+## Out of scope / deferred (after user triage 2026-04-27)
 
-The following appear in `plans/next-up.md` but are intentionally not part of this ecosystem-completion pass:
+These were on the original Plan C list; user explicitly deferred them.  Captured here so they don't get lost.
 
-* **Rebrand ChuMicro → ChipPy** — separate workstream (`plans/workstreams/rename-to-chippy.md`), executes when ready for first public open.
-* **OTA** — its own unscoped workstream (`plans/workstreams/ota.md`), waits for "thing on a wall for 30+ days" trigger.
-* **Multi-thing-staging cleanup** — flash-budget-driven redesign of `switch`; waits for "build a real second simple thing as a fixture" per the existing next-up entry.
-* **`pytest_device` `_test_creds` deploy bridge** — orthogonal infrastructure work; tests skip silently without it.
-* **`generate_config_files.py` calling `chumicro_workspace` directly** — one bullet of the migration backlog still open.  Lower priority than Phases 1–5.
-* **Per-runtime adapter helper extraction** — waits for third consumer.
-* **Expand device test matrix beyond ESP32-S2** — orthogonal hardware work.
-* **GitHub Copilot review as PR gate** — defer until community contributions begin.
-* **Digital I/O second library seam** — independent library work.
-* **Performance / resource benchmarking infrastructure** — independent infrastructure.
-* **Slow MP RAM-mode functional test investigation** — independent profiling.
+| Item | Reason |
+|---|---|
+| `python run.py deploy --watch` (file-watcher auto-deploy) | "Save for a rainy day" — nice-to-have inner-loop polish, not user-pain-blocking. |
+| `python run.py edit <thing>` (open `app.py` + `config.toml` together in `$EDITOR`) | IDE users open the whole workspace already; vim users navigate themselves.  Not enough value-add over `cd things/foo && vim app.py config.toml` for non-IDE users. |
+| Multi-device deploys, IF the design sketch isn't simple | Conditional on Phase 2f's first-step assessment.  If reshaping the deploy pipeline is required, defer. |
+| Persistent log capture (`python run.py logs <device>`) | **Open design question.**  User flagged this might be a REPL concern rather than a workspace concern.  My take: the *capture* mechanism uses `chumicro_repl.tail()`, but persistent state across sessions is workspace territory (lives in `~/.chumicro/<workspace>/logs/`).  Recommend revisit as part of a later REPL-or-workspace-feature design pass — not in this workstream. |
 
-These stay queued in `plans/next-up.md` and get picked up after this workstream closes.
+The following stay in `plans/next-up.md` queue (out of scope for this workstream, will be picked up after it closes):
+
+* Rebrand ChuMicro → ChipPy
+* OTA (`plans/workstreams/ota.md`, unscoped)
+* Multi-thing-staging cleanup (waits for "build a real second simple thing" trigger; partly subsumed by Phase 1 dropping `switch`)
+* `pytest_device` `_test_creds` deploy bridge
+* `generate_config_files.py` calling `chumicro_workspace` directly
+* Per-runtime adapter helper extraction
+* Expand device test matrix beyond ESP32-S2
+* Performance benchmarking infrastructure
 
 ## Sequencing recommendation
 
 ```
-Phase 1 (nested things + examples)              ← user's directive; biggest win
-   └→ Phase 5 (doc audit)                        ← after structural changes settle
+Phase 1 (nested things + examples + drop switch)    ← user's directive; biggest win
 
-Phase 2 (ergonomics) ──┐
-Phase 3 (scaffolder) ──┼─→ Phase 5 (doc audit)
-Phase 4 (yml knobs)  ──┘
+Phase 2 (ergonomics quick wins) ──┐
+Phase 3 (per-env deploys)        ─┼─→ Phase 6 (doc audit)
+Phase 4 (scaffolder)             ─┤
+Phase 5 (yml knobs)              ─┘
 
-Phase 6 (REPL) — runs in parallel with everything; standalone track
+Phase 7 (REPL) — runs in parallel with everything; standalone track
 ```
 
-Phases 2–4 can land in any order between Phase 1 and Phase 5.  Phase 5 must come last because it's the cleanup pass.
+Phases 2–5 can land in any order between Phase 1 and Phase 6.  Phase 6 must come last because it's the cleanup pass.  Phase 3 (per-env) is bumped up in priority because the user flagged "implement before it gets hard."
 
 ## Acceptance for the workstream as a whole
 
@@ -244,16 +299,18 @@ A user clones [`ChuMicro-Workspace-Template`](https://github.com/ChuMicro/ChuMic
 1. Runs `python run.py setup` then `python run.py status` to confirm everything's wired.
 2. Browses `examples/` to see real worked projects (single-thing + multi-thing).
 3. Runs `python run.py new garage/door_open` and gets a nested thing scaffolded.
-4. Edits + runs `python run.py deploy garage/door_open --watch` for a fast inner loop.
-5. Hits `python run.py doctor` when something goes wrong; gets a precise hint.
-6. Reads any of the cross-referenced docs and finds them current.
+4. Runs `python run.py deploy garage/door_open --dry-run` to preview what lands.
+5. Runs `python run.py deploy garage/door_open --env staging` to deploy with env overrides.
+6. Hits `python run.py doctor` when something goes wrong; gets a precise hint.
+7. When their app code throws, gets a contextual recovery hint instead of a raw traceback.
+8. Reads any of the cross-referenced docs and finds them current.
 
-Plus an advanced user can develop their own chumicro-style libraries with `python run.py new --library mylib` (Phase 3).
+Plus an advanced user can develop their own chumicro-style libraries with `python run.py new --library mylib` (Phase 4).
 
 ## Notes for the executor
 
-* **No backward compatibility.**  Nothing has been published.  Change `THING_NAME` format, CLI flag shapes, file layouts freely if it makes the design cleaner.  Do NOT add migration logic.
-* **Two-repo flow.**  Phases 1, 2, 3, 4 each touch the chumicro mono-repo.  Phase 1 + Phase 5 also touch the template repo.  Each phase's commit list should call out which repo each file lives in.
-* **Task-checkpoint per slice.**  Every slice ends with a green preflight + commit + push.  Don't batch multiple slices into one commit.
+* **No backward compatibility.**  Nothing has been published.  Change `THING_NAME` format, CLI flag shapes, file layouts, and remove commands (e.g. `switch`) freely if it makes the design cleaner.  Do NOT add migration logic.
+* **Two-repo flow.**  Phases 1, 2, 3, 4, 5 each touch the chumicro mono-repo.  Phases 1 + 6 also touch the template repo (local clone at `/Users/chuxor/circuitpython/ChuMicro-Workspace-Template`).
+* **Task-checkpoint per slice.**  Every slice ends with a green preflight + commit + push.  Don't batch slices.
 * **Tests come along.**  Every new module gets a test file.  Coverage gate stays at 94 % for changed packages.
-* **Templates are under `workbench/workspace/src/chumicro_workspace/_payloads/` not the template repo's `_templates/`.**  The template repo's `_templates/` is a *materialisation source* for `secrets.yml` / `devices.yml`; the *scaffolds* (thing, library) live in the package payload tree so `chumicro-workspace new` can run independently of any template-repo clone.
+* **Templates live in `_payloads/`.**  Canonical scaffolds (thing, library, examples) live under `workbench/workspace/src/chumicro_workspace/_payloads/`.  The template repo's `_templates/` is a *user-owned-config materialisation source* (secrets.yml etc.) — not where scaffolds belong.
