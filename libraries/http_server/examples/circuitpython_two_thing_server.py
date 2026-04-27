@@ -1,7 +1,8 @@
 """Two-thing demo — display server side.
 
-Pairs with ``two_thing_sensor.py`` running on a separate board.  This
-side opens an HTTP server on port 8080 with three routes:
+Pairs with ``circuitpython_two_thing_sensor.py`` running on a
+separate board.  This side opens an HTTP server on port 8080 with
+three routes:
 
 * ``GET /`` — HTML status page showing the latest reading.
 * ``GET /api/latest`` — JSON ``{"value": <last>, "received_at": <ms>}``.
@@ -16,13 +17,33 @@ Architecture (Decision 0014 + Decision 0041):
 * In-memory state: latest reading lives in a ``_State`` dataclass.
   No persistence — power cycle clears.
 
-Run on a board (CircuitPython or MicroPython) configured with WiFi
-via ``chumicro-workspace``:
+WiFi config
+===========
+
+Reads wifi credentials via the standard chumicro pipeline:
+:func:`chumicro_config.load_runtime_config` reads
+``/runtime_config.msgpack`` (baked from ``secrets.yml`` at deploy
+time by ``chumicro-workspace``).  The ``[wifi]`` section is fed to
+:meth:`chumicro_wifi.WifiConfig.from_dict`.
+
+If ``runtime_config.msgpack`` isn't present (raw deploy without
+``chumicro-workspace``), the example falls back to the
+``WIFI_SSID`` / ``WIFI_PASSWORD`` constants below — edit them in
+place before deploying.
+
+Deploying
+=========
+
+Recommended (workspace-managed)::
 
     chumicro-workspace deploy --thing two_thing_server
 
-Or copy this single file as ``main.py`` / ``code.py`` after the
-``chumicro-{wifi,sockets,http_server}`` libraries land at ``/lib``.
+Raw (single-file copy)::
+
+    1. Edit WIFI_SSID + WIFI_PASSWORD below.
+    2. Copy this file to ``/code.py`` (CP) or ``/main.py`` (MP).
+    3. Ensure ``chumicro-{wifi,sockets,http_server,config,timing,
+       runner,msgpack}`` are present under ``/lib/``.
 
 Example output (server side stdout)::
 
@@ -40,9 +61,31 @@ from chumicro_http_server import HttpServer, build_response
 from chumicro_sockets import tcp_listening_socket
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 
+# Fallback constants used only when runtime_config.msgpack is absent.
+# Edit before raw single-file deployments; harmless when chumicro-
+# workspace bakes runtime_config.msgpack from secrets.yml.
 WIFI_SSID = "your-wifi-ssid"  # noqa: S105 — replace before deploying
 WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 — replace before deploying
 LISTEN_PORT = 8080
+
+
+def _load_wifi_config() -> WifiConfig:
+    """Standard pattern: runtime_config first, fallback to constants."""
+    try:
+        from chumicro_config import load_runtime_config
+
+        config = load_runtime_config()
+        if config and "wifi" in config:
+            return WifiConfig.from_dict(config["wifi"])
+    except (ImportError, OSError):
+        # ImportError: chumicro-config missing on the board.
+        # OSError: runtime_config.msgpack not at the expected path.
+        pass
+    return WifiConfig(
+        ssid=WIFI_SSID,
+        password=WIFI_PASSWORD,
+        connect_timeout_ms=15_000,
+    )
 
 
 class _State:
@@ -71,10 +114,7 @@ def _now_ms():
 # Wifi up.  See chumicro-wifi docs for production-grade reconnect.
 # ---------------------------------------------------------------------------
 
-config = WifiConfig(
-    ssid=WIFI_SSID, password=WIFI_PASSWORD, connect_timeout_ms=15_000,
-)
-service = WifiService(config)
+service = WifiService(_load_wifi_config())
 
 
 def _drive_until(predicate, deadline_ms):

@@ -1,9 +1,10 @@
 """Two-thing demo — sensor side.
 
-Pairs with ``two_thing_server.py`` running on a different board.
-This side reads a "sensor" value (we use a synthetic sine-wave
-since this example doesn't assume a real sensor on the board) and
-POSTs it to the server's ``/api/sensor`` endpoint every 5 seconds.
+Pairs with ``circuitpython_two_thing_server.py`` running on a
+different board.  This side reads a "sensor" value (we use a
+synthetic sine-wave since this example doesn't assume a real
+sensor on the board) and POSTs it to the server's
+``/api/sensor`` endpoint every 5 seconds.
 
 Architecture (Decision 0014 + Decision 0040):
 
@@ -13,8 +14,20 @@ Architecture (Decision 0014 + Decision 0040):
   shape as ``chumicro-mqtt``.
 * No persistence — restart starts the synthetic sensor's clock at 0.
 
+WiFi config + sensor target
+===========================
+
+WiFi creds come from ``runtime_config.msgpack`` (baked from
+``secrets.yml`` by ``chumicro-workspace``) when present, or from
+the ``WIFI_SSID`` / ``WIFI_PASSWORD`` constants below for raw
+deploys.  The sensor's target server (``SERVER_HOST`` /
+``SERVER_PORT``) is read from the ``[two_thing_sensor]`` section
+of ``runtime_config.msgpack`` if present, falling back to the
+constants below.
+
 Replace ``SERVER_HOST`` with the IP of the board running
-``two_thing_server.py`` (which prints its IP at startup).
+``circuitpython_two_thing_server.py`` (which prints its IP at
+startup).
 
 Example output::
 
@@ -32,6 +45,7 @@ import time
 from chumicro_requests import HttpClient, chumicro_sockets_factory
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 
+# Fallback constants — used only when runtime_config.msgpack absent.
 WIFI_SSID = "your-wifi-ssid"  # noqa: S105 — replace before deploying
 WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 — replace before deploying
 SERVER_HOST = "10.0.0.42"  # replace with the server-thing's IP
@@ -40,14 +54,45 @@ SENSOR_ID = "demo-temp"
 POST_INTERVAL_S = 5
 
 
+def _load_runtime_settings():
+    """Return ``(wifi_config, server_host, server_port, sensor_id)``.
+
+    Tries ``chumicro_config.load_runtime_config()`` first; on missing
+    config or missing module, falls back to the constants above.
+    """
+    wifi_config = None
+    server_host = SERVER_HOST
+    server_port = SERVER_PORT
+    sensor_id = SENSOR_ID
+    try:
+        from chumicro_config import load_runtime_config
+
+        config = load_runtime_config()
+        if config:
+            wifi_section = config.get("wifi")
+            if wifi_section:
+                wifi_config = WifiConfig.from_dict(wifi_section)
+            sensor_section = config.get("two_thing_sensor", {})
+            server_host = sensor_section.get("server_host", server_host)
+            server_port = sensor_section.get("server_port", server_port)
+            sensor_id = sensor_section.get("sensor_id", sensor_id)
+    except (ImportError, OSError):
+        pass
+    if wifi_config is None:
+        wifi_config = WifiConfig(
+            ssid=WIFI_SSID,
+            password=WIFI_PASSWORD,
+            connect_timeout_ms=15_000,
+        )
+    return wifi_config, server_host, server_port, sensor_id
+
+
 # ---------------------------------------------------------------------------
 # Wifi up.
 # ---------------------------------------------------------------------------
 
-config = WifiConfig(
-    ssid=WIFI_SSID, password=WIFI_PASSWORD, connect_timeout_ms=15_000,
-)
-service = WifiService(config)
+wifi_config, server_host, server_port, sensor_id = _load_runtime_settings()
+service = WifiService(wifi_config)
 
 
 def _drive_until(predicate, deadline_ms):
@@ -87,7 +132,7 @@ client = HttpClient(
     connection_factory=chumicro_sockets_factory(radio=wifi_radio),
     default_timeout_ms=8_000,
 )
-url = f"http://{SERVER_HOST}:{SERVER_PORT}/api/sensor"
+url = f"http://{server_host}:{server_port}/api/sensor"
 
 print(f"Posting to {url} every {POST_INTERVAL_S} s")
 
@@ -112,7 +157,7 @@ while True:
     attempt += 1
     elapsed = time.monotonic() - start_seconds
     payload = {
-        "sensor_id": SENSOR_ID,
+        "sensor_id": sensor_id,
         "value": _synthetic_reading(elapsed),
         "uptime_s": round(elapsed, 1),
     }

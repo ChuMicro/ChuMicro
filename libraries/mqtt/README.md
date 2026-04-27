@@ -107,6 +107,7 @@ Works on CPython, MicroPython, and CircuitPython.
 | Example | What it shows |
 |---|---|
 | [`quickstart.py`](examples/quickstart.py) | FakeSocket-driven CONNECT → SUBSCRIBE → PUBLISH → inbound-message round trip.  Identical on every runtime; no network needed. |
+| [`circuitpython_telemetry.py`](examples/circuitpython_telemetry.py) | Periodic QoS-1 publish on a real CP/MP board.  Brings wifi up, connects to a broker, subscribes to a command topic, publishes a synthetic reading every N seconds while an LED-blink counter verifies the publish never blocks waiting for PUBACK.  Reads wifi + broker config from `runtime_config.msgpack` (chumicro-workspace) with constants fallback.  Default broker: `test.mosquitto.org:1883`. |
 
 ## Memory + leak testing
 

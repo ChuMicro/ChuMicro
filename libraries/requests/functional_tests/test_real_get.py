@@ -1,0 +1,145 @@
+"""Real-network acceptance for chumicro-requests.
+
+End-to-end: bring wifi up on the device, issue an HTTP GET against
+a stable public endpoint, drive the runner-shaped client to
+completion, verify the response.
+
+Skips silently when no credentials are configured — matches the
+wifi acceptance pattern (``libraries/wifi/functional_tests/
+test_acceptance.py``).  Credentials live in a gitignored
+``_test_creds.py`` shim that the host-side runner generates from
+``.scratch/wifi-creds.toml`` (see ``conftest.py``).
+
+Verifies the canonical promise (Decision 0040): an LED-style
+counter keeps incrementing on the same loop while the request is
+in flight.  No async, no threads — the per-tick ``check`` /
+``handle`` gate cooperates with everything else on the runtime.
+
+Endpoint: ``http://example.com/`` is the lowest-friction stable
+HTTP endpoint — no TLS, returns a known small body, IANA-reserved
+so it won't disappear.  Avoids HTTPS deliberately so this test
+runs on Pi Pico W CP (which has the post-handshake EPIPE issue
+documented as an open follow-up in plans/next-up.md).
+"""
+
+import sys
+import time
+
+from chumicro_requests import HttpClient, chumicro_sockets_factory
+from chumicro_wifi import WifiConfig, WifiService, WifiState
+
+try:
+    from _test_creds import PASSWORD, SSID
+    _HAS_CREDS = True
+except ImportError:
+    SSID = ""
+    PASSWORD = ""
+    _HAS_CREDS = False
+
+
+_IS_DEVICE_RUNTIME = sys.implementation.name in ("circuitpython", "micropython")
+_TARGET_URL = "http://example.com/"
+_REQUEST_TIMEOUT_MS = 10_000
+_WIFI_CONNECT_TIMEOUT_MS = 15_000
+
+
+def _sleep_ms(duration_ms: int) -> None:
+    runtime_sleep_ms = getattr(time, "sleep_ms", None)
+    if callable(runtime_sleep_ms):
+        runtime_sleep_ms(duration_ms)
+        return
+    time.sleep(duration_ms / 1000)
+
+
+def _ticks_ms() -> int:
+    """Cross-runtime millisecond clock matching the wifi/requests stack."""
+    runtime_ticks_ms = getattr(time, "ticks_ms", None)
+    if callable(runtime_ticks_ms):
+        return runtime_ticks_ms()
+    return int(time.monotonic() * 1000)
+
+
+def _bring_wifi_up(timeout_ms: int = _WIFI_CONNECT_TIMEOUT_MS) -> WifiService:
+    """Connect to the configured AP, return the linked service."""
+    wifi = WifiService(
+        WifiConfig(
+            ssid=SSID,
+            password=PASSWORD,
+            connect_timeout_ms=timeout_ms,
+        ),
+    )
+    deadline = _ticks_ms() + timeout_ms
+    while wifi.state != WifiState.CONNECTED:
+        if _ticks_ms() > deadline:
+            raise AssertionError(
+                f"wifi did not link within {timeout_ms} ms; "
+                f"state={wifi.state}",
+            )
+        if wifi.check(_ticks_ms()):
+            wifi.handle(_ticks_ms())
+        _sleep_ms(50)
+    return wifi
+
+
+def test_real_http_get_completes_runner_shaped() -> None:
+    """Live HTTP GET drives to completion; LED-blink counter keeps ticking."""
+    if not (_HAS_CREDS and _IS_DEVICE_RUNTIME):
+        return
+
+    wifi = _bring_wifi_up()
+    print(f"WIFI_OK ip={wifi.ip}")
+
+    # Build a runner-shaped client using the chumicro_sockets factory.
+    client = HttpClient(connection_factory=chumicro_sockets_factory(radio=wifi.adapter.radio))
+    request = client.get(_TARGET_URL, timeout_ms=_REQUEST_TIMEOUT_MS)
+
+    # Drive the request + an LED-blink counter together.  The counter
+    # is the canonical Decision 0014 invariant: it MUST keep ticking
+    # while the request is in flight.  If it stops, somebody
+    # block-called.
+    led_counter = 0
+    deadline = _ticks_ms() + _REQUEST_TIMEOUT_MS + 5_000
+    while not request.done:
+        if _ticks_ms() > deadline:
+            raise AssertionError(
+                f"request did not complete within deadline; "
+                f"state={request.state if hasattr(request, 'state') else 'unknown'}",
+            )
+        # Cooperate: tick wifi, tick client, blink, sleep.
+        if wifi.check(_ticks_ms()):
+            wifi.handle(_ticks_ms())
+        if client.check(_ticks_ms()):
+            client.handle(_ticks_ms())
+        led_counter += 1
+        _sleep_ms(20)
+
+    response = request.result  # raises HttpError on failure
+    print(
+        f"GOT {response.status_code} bytes={len(response.body)} "
+        f"led_ticks={led_counter}",
+    )
+
+    # Real assertions about the response.
+    assert response.status_code == 200, (
+        f"expected 200, got {response.status_code}"
+    )
+    assert response.body, "response body should be non-empty"
+    assert b"Example Domain" in response.body or len(response.body) > 100, (
+        "response body should contain example.com's known marker text "
+        "or at minimum be substantial"
+    )
+
+    # Real assertion about the LED-blink invariant: the counter
+    # should have ticked many times during the request.  A
+    # blocking call would have left it at 0 or 1.
+    assert led_counter > 5, (
+        f"LED counter only ticked {led_counter} times — somebody "
+        f"block-called during the request"
+    )
+
+
+def test_real_http_get_skip_when_no_creds_configured() -> None:
+    """Document the no-creds path; always passes."""
+    if _HAS_CREDS:
+        return
+    # No assertion needed — early returns above handle it.
