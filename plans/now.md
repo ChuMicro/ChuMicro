@@ -6,19 +6,31 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **beginner-onramp** Step 6 — `chumicro-requests` library.  Slices 3a (plain HTTP GET) + 3b (body decode) + 3c (HTTPS, live-board-verified) all shipped 2026-04-26.  Three remaining: 3d (POST + JSON helpers) → 3e (redirects) → 3f (chunked transfer-encoding) → Step 7 (`chumicro-http-server`) → Step 8 (examples org + two-thing demo).  See `plans/workstreams/beginner-onramp.md`.
-- **Last shipped:** Step 6 slice 3c — HTTPS verified live on Pi Pico W CP + MP against `https://example.com/` (status 200, 540 body bytes, `CERT_REQUIRED` with CA-pinned context).  Three live-only bugs fixed: CP `del bytearray[:n]` → reassign-via-slice; MP `bytearray.clear()` → reassign-fresh; MP TLS `recv → None` conflated with peer close → wrapper now raises EAGAIN (`chumicro-sockets` 0.1.5).  Three live-board limitations documented (flash-mode required, CA-pinned context required, RTC-synced required).  117 host tests at 96 % combined coverage; preflight green at the 94 % gate.
+- **Phase:** **beginner-onramp workstream COMPLETE 2026-04-27** — all eight steps shipped.  See `plans/workstreams/beginner-onramp.md`.  A user with a freshly-plugged board can now run `chumicro-workspace bootstrap --with-demo` for first-run, `chumicro-workspace new <thing>` to scaffold a new thing, and ship a sensor + display pair using the in-tree two-thing demo as the template.  The full HTTP / HTTPS / runner stack is verified live across the four-board canonical matrix (Pi Pico W CP/MP, Lolin S2 CP/MP).  Pick the next workstream from `plans/next-up.md`'s `## Next` queue.
+- **Last shipped:** Step 8 — two-thing demo example pair (`libraries/http_server/examples/circuitpython_two_thing_{server,sensor}.py`).  Sensor side uses `chumicro-requests`'s runner-shaped `HttpClient.post`; server side uses `chumicro-http-server`'s `@route`-decorated `HttpServer`.  Both halves runner-shaped — LED-blink invariant holds during requests + accepts.  Verified by static-analysis verify-examples (hardware-prefixed filenames mark them CP/MP-only); not run live as a pair (the four-corner verification grid in slices 7d + 7t already covered every combination of HTTP/HTTPS × runtime × chip).
 - **In flight:** —
 - **Blocked on:** —
-- **Last touched:** `libraries/requests/src/chumicro_requests/_wire.py` (CP-safe slice replacement + MP-safe `clear()`), `libraries/sockets/src/chumicro_sockets/_adapters/mp.py` (raise EAGAIN on `None`), `libraries/sockets/VERSION` (0.1.4 → 0.1.5), `libraries/sockets/tests/test_mp_adapter.py` (new test for None-raises-EAGAIN), `libraries/requests/docs/guide.md` (Platform notes), `plans/decisions/0040-chumicro-requests.md` (Live-board limitations section), `plans/learnings.md` (3 entries), `plans/workstreams/beginner-onramp.md` Step 6 status log, `plans/next-up.md`.
+- **Last touched:** `libraries/http_server/examples/circuitpython_two_thing_*.py` (new), `libraries/http_server/README.md` + `docs/guide.md` (two-thing demo section), `plans/workstreams/beginner-onramp.md` Step 8 entry, `plans/next-up.md` workstream-closed entry, `plans/learnings.md` (ESP32-S2 HW-crypto handshake heap learning from slice 7d).
 
 ---
 
+## Workstream summary (commits 7376b79..76441a3)
+
+Eight steps shipped over 2026-04-26 + 2026-04-27:
+
+* **1** firmware floor (Decision 0039) — `chumicro-workspace`'s registration warns on too-old MP/CP.
+* **2** single-thing deploy default — `chumicro-workspace deploy` with no positional uses the lone thing.
+* **3** add-device auto-inference — `add-device --address <port> <id>` infers runtime via probe.
+* **4** bootstrap wizard — `chumicro-workspace bootstrap --with-demo` chains everything end-to-end.
+* **5** demo command — `chumicro-workspace demo` deploys a baked-in print loop to validate the deploy chain.
+* **6** **`chumicro-requests` v1** (Decision 0040, six slices 3a-3f) — runner-shaped HTTP/1.1 client, HTTPS via `chumicro-sockets`, POST/PUT/PATCH/DELETE + JSON, 301-308 redirects with budget, chunked transfer-encoding.  166 tests at 97 % coverage.  HTTPS live-verified on Pi Pico W CP + MP.
+* **7** **`chumicro-http-server` v1** (Decision 0041, slices 7a + 7b + 7d + 7t) — runner-shaped HTTP/1.1 server, two-dict router, path parameters, 404/405 with `Allow:`.  Live-verified on the four-board matrix: HTTP works on every board, HTTPS works on 3 of 4 (ESP32-S2 + Pi Pico W MP fit; Pi Pico W CP fails post-handshake on a deeper rp2-port mbedTLS issue).  Surprise finding: ESP32-S2's HW crypto cuts the TLS handshake heap cost from 25 KB (rp2 software mbedTLS) to 1 KB.
+* **8** two-thing demo — example pair in `libraries/http_server/examples/`.
+
 ## How this file works
 
-- One screen, never more. If a section grows past two lines, it belongs somewhere else.
-- Overwritten, not appended. Older snapshots are recoverable from `git log plans/now.md`.
-- The agent updates this in step 4 of `task-checkpoint`. Humans can update it manually too.
-- "Phase" / "In flight" / "Blocked on" are the load-bearing fields. The others are convenience.
+- One screen, never more.
+- Overwritten, not appended.  Older snapshots are recoverable from `git log plans/now.md`.
+- Updated in step 4 of `task-checkpoint`.
 
-If you're an agent picking up cold: read this, then `git --no-pager log --oneline -20`, then `plans/next-up.md` if you need the queue. That's the warm-up. Everything else (`history.md`, `decisions/`, `patterns.md`, `learnings.md`, workstreams) is deep-dive on demand.
+If you're an agent picking up cold: read this, then `git --no-pager log --oneline -20`, then `plans/next-up.md` if you need the queue.
