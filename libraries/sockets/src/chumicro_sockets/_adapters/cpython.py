@@ -50,6 +50,28 @@ def connect_tls(host, port, *, context=None):
     return resolved_context.wrap_socket(raw, server_hostname=host)
 
 
+def listen_tcp(host, port, *, backlog=4):
+    """Open a non-blocking TCP listening socket.
+
+    Returns a real :class:`socket.socket` set to non-blocking mode and
+    bound + listening on (*host*, *port*).  Already satisfies the
+    ``ListeningSocket`` structural protocol — :meth:`socket.accept`
+    returns ``(socket, address)`` and raises ``OSError(EAGAIN)`` when
+    no connection is queued.
+
+    ``SO_REUSEADDR`` is set so a quick restart of the server doesn't
+    trip ``OSError(EADDRINUSE)`` on the rebind.
+    """
+    import socket  # noqa: PLC0415 — runtime-gated
+
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    listener.bind((host, port))
+    listener.listen(backlog)
+    listener.setblocking(False)
+    return listener
+
+
 def ssl_context_with_ca(ca_pem):
     """Build an SSLContext that trusts only the CA(s) in *ca_pem*.
 

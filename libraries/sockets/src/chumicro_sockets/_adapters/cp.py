@@ -70,6 +70,27 @@ def connect_tls(host, port, *, context=None, radio):  # pragma: no cover - devic
     return wrapped
 
 
+def listen_tcp(host, port, *, backlog=4, radio):  # pragma: no cover - device only
+    """Open a non-blocking TCP listening socket via the CP socketpool.
+
+    CP's ``socketpool.Socket`` exposes ``bind`` / ``listen`` / ``accept``
+    (since CP 7.x).  ``accept()`` returns ``(new_socket, address)``.
+    The new socket inherits the listener's blocking flag — we set the
+    listener to non-blocking up front so accepts and per-connection
+    recv/send don't stall the runner.
+    """
+    pool = _pool_for(radio)
+    listener = pool.socket(pool.AF_INET, pool.SOCK_STREAM)
+    # CP's socketpool doesn't expose SO_REUSEADDR directly; rebind on a
+    # quick restart can fail with OSError(EADDRINUSE).  We accept that
+    # — Pi Pico W users will rarely restart so fast it matters, and
+    # exposing the option requires runtime-private socket constants.
+    listener.bind((host, port))
+    listener.listen(backlog)
+    listener.setblocking(False)
+    return listener
+
+
 def ssl_context_with_ca(ca_pem):  # pragma: no cover - device only
     """Build an SSL context that trusts *ca_pem* on a CP radio.
 

@@ -165,6 +165,52 @@ def connect_tls(host, port, *, context=None):  # pragma: no cover - device only
     return _MpSocketWrapper(wrapped)
 
 
+def listen_tcp(host, port, *, backlog=4):  # pragma: no cover - device only
+    """Open a non-blocking TCP listening socket on MicroPython.
+
+    Wraps the result so ``accept()`` returns a ``(_MpSocketWrapper,
+    address)`` tuple — the new connection satisfies our
+    :class:`TCPClientSocket` protocol.
+
+    ``SO_REUSEADDR`` is set when the platform supports it (rp2 + esp32
+    do); failures are swallowed so older ports without the option
+    don't break the listener.
+    """
+    import socket  # noqa: PLC0415 — runtime-gated
+
+    address_info = socket.getaddrinfo(host, port)[0]
+    listener = socket.socket(address_info[0], address_info[1])
+    try:
+        listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    except OSError:
+        # Some MP ports don't expose SO_REUSEADDR; non-fatal.
+        pass
+    listener.bind(address_info[-1])
+    listener.listen(backlog)
+    listener.setblocking(False)
+    return _MpListeningSocketWrapper(listener)
+
+
+class _MpListeningSocketWrapper:  # pragma: no cover - device only
+    """Adapts an MP listening socket so ``accept()`` returns a
+    wrapped client socket (matching our protocol)."""
+
+    def __init__(self, sock):
+        self._sock = sock
+        self.close = sock.close
+        forwarded_fileno = getattr(sock, "fileno", None)
+        self.fileno = forwarded_fileno if forwarded_fileno is not None else _no_fileno
+
+    def accept(self):
+        """Accept a pending connection.  Raises ``OSError(EAGAIN)`` when
+        none is queued (matches the cross-runtime contract)."""
+        new_sock, address = self._sock.accept()
+        return _MpSocketWrapper(new_sock), address
+
+    def setblocking(self, flag):
+        self._sock.setblocking(flag)
+
+
 def ssl_context_with_ca(ca_pem):  # pragma: no cover - device only
     """Build an MP ``ssl.SSLContext`` that trusts only *ca_pem*.
 

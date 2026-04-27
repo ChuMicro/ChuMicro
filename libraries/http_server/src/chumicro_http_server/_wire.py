@@ -1,0 +1,420 @@
+"""HTTP/1.1 wire format for chumicro-http-server.
+
+Mirrors :mod:`chumicro_requests._wire`'s shape, swapped for the
+server-side perspective: a streaming :class:`RequestParser` reads
+the request line + headers (+ optional body) one chunk at a time,
+fed bytes by the per-connection state machine in ``server.py``.
+
+Reuses :class:`chumicro_requests.CaseInsensitiveDict`,
+:func:`chumicro_requests.parse_charset`, and the
+:class:`chumicro_requests.HttpError` hierarchy — same wire format,
+same primitives.  See Decision 0041 §5 for the rationale on the
+``http_server → requests`` dependency direction.
+
+v1 scope (Decision 0041): request line + headers + ``Content-Length``
+body buffering.  Chunked request bodies and streaming-via-chunk-
+callback are v2.
+"""
+
+from chumicro_requests import (
+    CaseInsensitiveDict,
+    HttpError,
+    parse_charset,
+)
+
+try:
+    from micropython import const
+except ImportError:
+    def const(value):
+        return value
+
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+#: Default per-connection recv cap — Decision 0041 §4.
+DEFAULT_RECV_BUDGET_PER_TICK = const(1024)
+
+#: Default per-connection send cap — Decision 0041 §4.
+DEFAULT_SEND_BUDGET_PER_TICK = const(4096)
+
+#: Default per-request body cap — Decision 0041 §4.
+DEFAULT_MAX_REQUEST_BODY_BYTES = const(16384)
+
+#: Default per-connection deadline — Decision 0041 §4.
+DEFAULT_REQUEST_TIMEOUT_MS = const(10000)
+
+#: Default in-flight connection cap — Decision 0041 §4.
+DEFAULT_MAX_CONNECTIONS = const(4)
+
+#: HTTP/1.1 line terminator.
+CRLF = b"\r\n"
+
+
+# ---------------------------------------------------------------------------
+# Server-facing exceptions
+# ---------------------------------------------------------------------------
+
+
+class ServerError(HttpError):
+    """Base class for chumicro-http-server failures.
+
+    Subclasses :class:`chumicro_requests.HttpError` so callers can
+    catch either side of the wire with one ``except HttpError:``
+    block when they don't care which library raised.
+    """
+
+
+class ServerProtocolError(ServerError):
+    """Inbound bytes don't conform to HTTP/1.1.
+
+    Wraps :class:`chumicro_requests.HttpProtocolError`-style failures
+    on the request-parsing side.  Connection should be torn down + a
+    400 returned (best-effort).
+    """
+
+
+# ---------------------------------------------------------------------------
+# Request parser
+# ---------------------------------------------------------------------------
+
+
+class RequestParseState:
+    """Streaming request parser states.
+
+    Forward-only::
+
+      REQUEST_LINE -> HEADERS -> BODY -> DONE
+                                   \\-> ERROR (any state)
+    """
+
+    REQUEST_LINE = "request_line"
+    HEADERS = "headers"
+    BODY = "body"
+    DONE = "done"
+    ERROR = "error"
+
+
+class RequestParser:
+    """Streaming HTTP/1.1 request parser.
+
+    Fed raw bytes via :meth:`feed`; the state advances as soon as
+    enough bytes arrive.  Callers check :attr:`state` to know whether
+    to keep feeding (anything other than ``DONE``/``ERROR``) or stop.
+
+    Body framing supported in slice 7a:
+
+    * ``Content-Length: N`` — read exactly N bytes (capped at
+      *max_body_bytes*).
+    * No ``Content-Length`` (and no chunked) — assume zero-length
+      body, transition straight to ``DONE``.
+
+    Chunked request bodies land in v2.
+    """
+
+    def __init__(self, *, max_body_bytes=DEFAULT_MAX_REQUEST_BODY_BYTES):
+        self._max_body_bytes = max_body_bytes
+        self._buffer = bytearray()
+        self._state = RequestParseState.REQUEST_LINE
+        self._method = ""
+        self._target = ""
+        self._http_version = ""
+        self._headers = CaseInsensitiveDict()
+        self._body = bytearray()
+        self._body_remaining = 0
+        self._error = None
+
+    # ------------------------------------------------------------------
+    # Public observation
+    # ------------------------------------------------------------------
+
+    @property
+    def state(self):
+        """Current :class:`RequestParseState`."""
+        return self._state
+
+    @property
+    def method(self):
+        """HTTP method (e.g. ``"GET"``, ``"POST"``) once request line parses."""
+        return self._method
+
+    @property
+    def target(self):
+        """Request target — typically a path + optional query string.
+
+        For example: ``"/api/v1/widgets?page=2"``.  Use
+        :meth:`split_target` to separate the path and query.
+        """
+        return self._target
+
+    @property
+    def http_version(self):
+        """HTTP version string (e.g. ``"HTTP/1.1"``) once request line parses."""
+        return self._http_version
+
+    @property
+    def headers(self):
+        """Case-insensitive :class:`CaseInsensitiveDict` of request headers."""
+        return self._headers
+
+    @property
+    def body(self):
+        """Body bytes received so far (final once :attr:`state` is ``DONE``)."""
+        return bytes(self._body)
+
+    @property
+    def error(self):
+        """Last error raised during parsing or ``None``."""
+        return self._error
+
+    # ------------------------------------------------------------------
+    # Driving the parser
+    # ------------------------------------------------------------------
+
+    def feed(self, chunk):
+        """Append *chunk* to the parser's buffer and advance the state.
+
+        Raises :class:`ServerProtocolError` when the bytes can't be
+        reconciled with HTTP/1.1.
+        """
+        if self._state in (RequestParseState.DONE, RequestParseState.ERROR):
+            return
+        if chunk:
+            if self._state == RequestParseState.BODY:
+                self._absorb_body_bytes(chunk)
+            else:
+                self._buffer.extend(chunk)
+        self._advance()
+
+    def feed_eof(self):
+        """Signal that the peer closed.  Mid-headers is a protocol error."""
+        if self._state in (RequestParseState.DONE, RequestParseState.ERROR):
+            return
+        if self._state == RequestParseState.BODY and self._body_remaining > 0:
+            self._fail(ServerProtocolError(
+                f"client closed mid-body; {self._body_remaining} bytes "
+                "still expected per Content-Length",
+            ))
+            return
+        self._fail(ServerProtocolError(
+            f"client closed before request completed (state={self._state})",
+        ))
+
+    # ------------------------------------------------------------------
+    # Internals
+    # ------------------------------------------------------------------
+
+    def _advance(self):
+        """Consume buffered bytes until no more progress is possible."""
+        while True:
+            if self._state == RequestParseState.REQUEST_LINE:
+                if not self._try_parse_request_line():
+                    return
+                continue
+            if self._state == RequestParseState.HEADERS:
+                if not self._try_parse_headers():
+                    return
+                continue
+            return  # BODY (handled in feed) / DONE / ERROR
+
+    def _try_parse_request_line(self):
+        """Consume the request line; return True if state advanced.
+
+        Format per RFC 7230 §3.1.1::
+
+            method SP request-target SP HTTP-version CRLF
+        """
+        crlf_index = self._buffer.find(CRLF)
+        if crlf_index == -1:
+            return False
+        line = bytes(self._buffer[:crlf_index])
+        # CP 10.x's bytearray rejects ``del buffer[:n]``; reassign via
+        # slice for cross-runtime safety (same pattern as
+        # chumicro-requests' ResponseParser — see learnings.md).
+        self._buffer = bytearray(self._buffer[crlf_index + 2:])
+        try:
+            text = line.decode("ascii")
+        # HTTP/1.1 §3.1 forbids non-ASCII; defensive only.
+        except UnicodeDecodeError as decode_error:  # pragma: no cover
+            self._fail(ServerProtocolError(
+                f"non-ASCII request line: {line!r}",
+            ))
+            raise self._error from decode_error
+        parts = text.split(" ")
+        if len(parts) != 3:
+            self._fail(ServerProtocolError(
+                f"malformed request line: {text!r}",
+            ))
+            return True
+        method, target, version_str = parts
+        if not version_str.startswith("HTTP/"):
+            self._fail(ServerProtocolError(
+                f"request line missing HTTP version: {text!r}",
+            ))
+            return True
+        if not method:
+            self._fail(ServerProtocolError(
+                f"empty method: {text!r}",
+            ))
+            return True
+        if not target:
+            self._fail(ServerProtocolError(
+                f"empty request-target: {text!r}",
+            ))
+            return True
+        self._method = method
+        self._target = target
+        self._http_version = version_str
+        self._state = RequestParseState.HEADERS
+        return True
+
+    def _try_parse_headers(self):
+        """Consume one header line; return True if state advanced or
+        another header was parsed."""
+        crlf_index = self._buffer.find(CRLF)
+        if crlf_index == -1:
+            return False
+        if crlf_index == 0:
+            # Empty line — end of headers.
+            self._buffer = bytearray(self._buffer[2:])
+            self._enter_body_state()
+            return True
+        line = bytes(self._buffer[:crlf_index])
+        self._buffer = bytearray(self._buffer[crlf_index + 2:])
+        try:
+            text = line.decode("ascii")
+        # HTTP/1.1 §3.2 forbids non-ASCII; defensive only.
+        except UnicodeDecodeError as decode_error:  # pragma: no cover
+            self._fail(ServerProtocolError(
+                f"non-ASCII header line: {line!r}",
+            ))
+            raise self._error from decode_error
+        colon_index = text.find(":")
+        if colon_index <= 0:
+            self._fail(ServerProtocolError(
+                f"header line missing ':' or empty name: {text!r}",
+            ))
+            return True
+        name = text[:colon_index]
+        value = text[colon_index + 1:].strip()
+        self._headers.add(name, value)
+        return True
+
+    def _enter_body_state(self):
+        """Headers-complete: figure out body framing."""
+        content_length_str = self._headers.get("Content-Length")
+        if content_length_str is None:
+            # No Content-Length, no chunked (v2) — assume zero body.
+            self._state = RequestParseState.DONE
+            return
+        try:
+            content_length = int(content_length_str)
+        except ValueError:
+            self._fail(ServerProtocolError(
+                f"non-integer Content-Length: {content_length_str!r}",
+            ))
+            return
+        if content_length < 0:
+            self._fail(ServerProtocolError(
+                f"negative Content-Length: {content_length}",
+            ))
+            return
+        if content_length > self._max_body_bytes:
+            self._fail(ServerProtocolError(
+                f"Content-Length {content_length} exceeds cap "
+                f"{self._max_body_bytes}",
+            ))
+            return
+        self._body_remaining = content_length
+        if content_length == 0:
+            self._state = RequestParseState.DONE
+            return
+        self._state = RequestParseState.BODY
+        # Any bytes left over from header parsing are body bytes.
+        if self._buffer:
+            tail = bytes(self._buffer)
+            self._buffer = bytearray()
+            self._absorb_body_bytes(tail)
+
+    def _absorb_body_bytes(self, chunk):
+        """Append body bytes; honor Content-Length cap."""
+        if self._body_remaining == 0:
+            return  # Already complete; ignore extra (client sent too many).
+        take = min(self._body_remaining, len(chunk))
+        chunk = chunk[:take]
+        self._body_remaining -= take
+        self._body.extend(chunk)
+        if self._body_remaining == 0:
+            self._state = RequestParseState.DONE
+
+    def _fail(self, error):
+        """Latch *error* and transition to ERROR."""
+        self._error = error
+        self._state = RequestParseState.ERROR
+
+
+# ---------------------------------------------------------------------------
+# Request-target helpers
+# ---------------------------------------------------------------------------
+
+
+def split_target(target: str) -> tuple[str, str]:
+    """Split a request-target into ``(path, raw_query)``.
+
+    *path* always starts with ``/`` (matches the request-target shape
+    HTTP clients use).  *raw_query* is everything after the first ``?``
+    or ``""`` when none is present — caller parses further with
+    :func:`parse_query` if needed.
+    """
+    question_index = target.find("?")
+    if question_index == -1:
+        return target, ""
+    return target[:question_index], target[question_index + 1:]
+
+
+def parse_query(raw_query: str) -> "CaseInsensitiveDict":
+    """Parse a ``foo=bar&baz=qux`` query string into a header-shaped dict.
+
+    Repeated keys join with ``,`` per the same RFC 7230 §3.2.2 rule
+    headers use — caller can `.split(",")` if they need both values.
+    Percent-decoding is **not** done in v1; URL-encoded values come
+    through as-is (most embedded REST APIs use bare alphanumeric
+    keys + values).  Documented as a limitation.
+    """
+    result = CaseInsensitiveDict()
+    if not raw_query:
+        return result
+    for pair in raw_query.split("&"):
+        if not pair:
+            continue
+        equals_index = pair.find("=")
+        if equals_index == -1:
+            name = pair
+            value = ""
+        else:
+            name = pair[:equals_index]
+            value = pair[equals_index + 1:]
+        if name:
+            result.add(name, value)
+    return result
+
+
+# Re-export the shared primitive so server-side callers don't need to
+# also import from chumicro_requests.
+__all__ = [
+    "CRLF",
+    "DEFAULT_MAX_CONNECTIONS",
+    "DEFAULT_MAX_REQUEST_BODY_BYTES",
+    "DEFAULT_RECV_BUDGET_PER_TICK",
+    "DEFAULT_REQUEST_TIMEOUT_MS",
+    "DEFAULT_SEND_BUDGET_PER_TICK",
+    "CaseInsensitiveDict",
+    "RequestParseState",
+    "RequestParser",
+    "ServerError",
+    "ServerProtocolError",
+    "parse_charset",
+    "parse_query",
+    "split_target",
+]

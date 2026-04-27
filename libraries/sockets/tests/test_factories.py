@@ -19,6 +19,7 @@ from chumicro_sockets import (
     UnsupportedSSLConfigError,
     ssl_context_with_ca,
     tcp_client_socket,
+    tcp_listening_socket,
     tls_client_socket,
 )
 
@@ -67,6 +68,116 @@ class TestCPythonTCP:
         # ConnectionRefused) is wrapped in OSError on stdlib.
         with pytest.raises(OSError):
             tcp_client_socket("no-such-host.invalid", 1)
+
+
+class TestCPythonListener:
+    """``tcp_listening_socket`` — non-blocking accept loop on CPython."""
+
+    def test_listener_accepts_loopback_connection(self) -> None:
+        import time as time_module
+
+        listener = tcp_listening_socket("127.0.0.1", 0)
+        try:
+            host, port = listener.getsockname()
+            client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
+                client.connect((host, port))
+                # Non-blocking accept may race ahead of the kernel's
+                # accept queue update on macOS even on loopback; retry
+                # a handful of times before declaring failure.
+                accepted = None
+                peer = None
+                for _ in range(20):
+                    try:
+                        accepted, peer = listener.accept()
+                        break
+                    except (BlockingIOError, OSError) as accept_error:
+                        if accept_error.args and accept_error.args[0] not in (11, 35):
+                            raise
+                        time_module.sleep(0.01)
+                assert accepted is not None, "non-blocking accept never returned a connection"
+                try:
+                    assert accepted.fileno() > 0
+                finally:
+                    accepted.close()
+            finally:
+                client.close()
+        finally:
+            listener.close()
+
+    def test_listener_is_non_blocking(self) -> None:
+        """``accept()`` raises EAGAIN when no connection is queued."""
+        listener = tcp_listening_socket("127.0.0.1", 0)
+        try:
+            with pytest.raises((BlockingIOError, OSError)):
+                listener.accept()
+        finally:
+            listener.close()
+
+    def test_so_reuseaddr_set(self) -> None:
+        """Quick rebind on the same port doesn't trip EADDRINUSE."""
+        listener = tcp_listening_socket("127.0.0.1", 0)
+        host, port = listener.getsockname()
+        listener.close()
+        # Immediate rebind on the same port — would fail without
+        # SO_REUSEADDR on most platforms during TIME_WAIT.
+        rebound = tcp_listening_socket("127.0.0.1", port)
+        try:
+            assert rebound.getsockname()[1] == port
+        finally:
+            rebound.close()
+
+
+class TestListenerRouting:
+    """``tcp_listening_socket`` dispatches to the runtime-appropriate adapter."""
+
+    def test_circuitpython_runtime_routes_to_cp_adapter(
+        self, monkeypatch,
+    ) -> None:
+        captured: dict = {}
+
+        def fake_listen(host, port, *, backlog, radio):
+            captured["called"] = (host, port, backlog, radio)
+            return "cp-listener"
+
+        # Patch the function on the already-imported module — same
+        # pattern TestAdapterRouting uses for the cp adapter.  The
+        # cp adapter lazy-imports socketpool inside the function, so
+        # loading the module on CPython is fine.
+        from chumicro_sockets._adapters import cp as cp_adapter
+        monkeypatch.setattr(cp_adapter, "listen_tcp", fake_listen)
+        monkeypatch.setattr("chumicro_sockets._runtime_name", lambda: "circuitpython")
+
+        result = tcp_listening_socket("0.0.0.0", 8080, radio="fake-radio")
+        assert result == "cp-listener"
+        assert captured["called"] == ("0.0.0.0", 8080, 4, "fake-radio")
+
+    def test_micropython_runtime_routes_to_mp_adapter(
+        self, monkeypatch,
+    ) -> None:
+        captured: dict = {}
+
+        # Stub the MP adapter module via sys.modules so importing it
+        # doesn't try to pull in MicroPython's stdlib.  Mirror the
+        # TestAdapterRouting pattern; importing the real mp adapter
+        # leaves a stale package attribute that subsequent tests'
+        # sys.modules monkey-patches don't invalidate.
+        import sys as _sys
+        import types as _types
+
+        fake_mp = _types.ModuleType("chumicro_sockets._adapters.mp")
+
+        def fake_listen(host, port, *, backlog):
+            captured["called"] = (host, port, backlog)
+            return "mp-listener"
+
+        fake_mp.listen_tcp = fake_listen
+        monkeypatch.setitem(_sys.modules, "chumicro_sockets._adapters.mp", fake_mp)
+        monkeypatch.setattr("chumicro_sockets._runtime_name", lambda: "micropython")
+
+        result = tcp_listening_socket("0.0.0.0", 8080, backlog=8)
+        assert result == "mp-listener"
+        assert captured["called"] == ("0.0.0.0", 8080, 8)
 
 
 # ---------------------------------------------------------------------------

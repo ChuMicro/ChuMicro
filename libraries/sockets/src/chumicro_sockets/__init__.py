@@ -34,6 +34,7 @@ __all__ = [
     "UnsupportedSSLConfigError",
     "ssl_context_with_ca",
     "tcp_client_socket",
+    "tcp_listening_socket",
     "tls_client_socket",
 ]
 
@@ -133,6 +134,63 @@ def tls_client_socket(
     from chumicro_sockets._adapters import cpython  # noqa: PLC0415 — runtime-gated import
 
     return cpython.connect_tls(host, port, context=context)
+
+
+def tcp_listening_socket(
+    host: str,
+    port: int,
+    *,
+    backlog: int = 4,
+    radio: object | None = None,
+) -> object:
+    """Open a non-blocking TCP listening socket.
+
+    Routes to the runtime-appropriate adapter:
+
+    * **CircuitPython** — ``socketpool.SocketPool(radio).socket().bind().listen()``
+      (since CP 7.x).  *radio* is required (typically ``wifi.radio``).
+    * **MicroPython** — ``socket.socket().bind().listen()``;
+      ``setsockopt(SO_REUSEADDR, 1)`` is best-effort (some ports don't
+      expose the option).  *radio* is ignored.
+    * **CPython** — stdlib ``socket.socket().bind().listen()`` with
+      ``SO_REUSEADDR`` set.  *radio* is ignored.
+
+    The returned listener is in non-blocking mode — ``accept()``
+    returns ``(client_socket, address)`` when a connection is ready
+    or raises ``OSError(EAGAIN)`` when the queue is empty.  Substrate
+    for ``chumicro-http-server``.
+
+    Args:
+        host: Address to bind to.  ``"0.0.0.0"`` accepts on every
+            interface (typical for boards on a single LAN).
+        port: TCP port to bind.
+        backlog: SYN-queue depth for incoming connections.  4 is a
+            reasonable default for a small-IoT server; raise for
+            higher-volume listeners.
+        radio: CP-only radio object.  Required on CP, ignored
+            elsewhere.
+
+    Returns:
+        A listening socket object exposing ``accept()`` / ``close()``
+        / ``setblocking()`` / ``fileno()``.
+
+    Raises:
+        OSError: Bind / listen failed (port in use, permission denied,
+            etc.).
+        TypeError: CP runtime invoked without a *radio* argument.
+    """
+    runtime = _runtime_name()
+    if runtime == "circuitpython":
+        from chumicro_sockets._adapters import cp  # noqa: PLC0415 — runtime-gated
+
+        return cp.listen_tcp(host, port, backlog=backlog, radio=radio)
+    if runtime == "micropython":
+        from chumicro_sockets._adapters import mp  # noqa: PLC0415 — runtime-gated
+
+        return mp.listen_tcp(host, port, backlog=backlog)
+    from chumicro_sockets._adapters import cpython  # noqa: PLC0415 — runtime-gated
+
+    return cpython.listen_tcp(host, port, backlog=backlog)
 
 
 def ssl_context_with_ca(ca_pem: str | bytes) -> object:
