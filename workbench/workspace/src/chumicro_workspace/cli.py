@@ -307,32 +307,48 @@ def _cmd_update(args: argparse.Namespace) -> int:
 def _validate_thing_name(name: str) -> None:
     """Reject thing names that won't survive ``import things.<name>.app``.
 
-    Thing directories are imported as Python modules at deploy time
-    (and inside the on-device boot shim), so the name has to be a
-    valid identifier — no hyphens, no dots, no leading digits.
-    Leading underscore is reserved for workspace-internal directories
-    such as ``_template``; ``list_things`` filters those out, so a
-    user-created ``_foo`` would be invisible to ``things``/``deploy``.
+    Accepts three shapes: bare (``"bedroom_sensor"``), slash-form
+    (``"upstairs/bedroom_sensor"``), and dotted
+    (``"upstairs.bedroom_sensor"``).  Each path segment is validated
+    independently — the on-device import path is
+    ``things.<seg1>.<seg2>.app`` so every segment must be a valid
+    Python identifier (no hyphens, leading digits, leading underscore,
+    or Python keywords).
+
+    Leading underscore is reserved at every level for
+    workspace-internal directories such as ``_template`` /
+    ``_generated``; the recursive thing classifier filters those out,
+    so a user-created ``_foo/bar`` segment would be invisible to
+    ``things``/``deploy``.
     """
     if not name:
         raise SystemExit("error: thing name must not be empty")
-    if not name.isidentifier():
-        raise SystemExit(
-            f"error: thing name {name!r} is not a valid Python identifier "
-            "— thing directories are imported as modules, so use "
-            "snake_case (letters, digits, underscores; no hyphens, "
-            "dots, or spaces; no leading digit).",
-        )
-    if name.startswith("_"):
-        raise SystemExit(
-            f"error: thing name {name!r} starts with '_' — leading "
-            "underscore is reserved for workspace-internal directories "
-            "(e.g. _template).",
-        )
-    if keyword.iskeyword(name):
-        raise SystemExit(
-            f"error: thing name {name!r} is a Python keyword.",
-        )
+    segments = re.split(r"[/.]", name)
+    for segment in segments:
+        if not segment:
+            raise SystemExit(
+                f"error: thing name {name!r} has an empty path segment "
+                "— check for stray '/' or '.' separators.",
+            )
+        if not segment.isidentifier():
+            raise SystemExit(
+                f"error: thing name segment {segment!r} (in {name!r}) "
+                "is not a valid Python identifier — thing directories "
+                "are imported as modules, so each segment must use "
+                "snake_case (letters, digits, underscores; no hyphens "
+                "or spaces; no leading digit).",
+            )
+        if segment.startswith("_"):
+            raise SystemExit(
+                f"error: thing name segment {segment!r} (in {name!r}) "
+                "starts with '_' — leading underscore is reserved for "
+                "workspace-internal directories (e.g. _template).",
+            )
+        if keyword.iskeyword(segment):
+            raise SystemExit(
+                f"error: thing name segment {segment!r} (in {name!r}) "
+                "is a Python keyword.",
+            )
 
 
 def _cmd_new(args: argparse.Namespace) -> int:

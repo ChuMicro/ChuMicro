@@ -279,14 +279,20 @@ class TestNew:
     @pytest.mark.parametrize(
         ("bad_name", "match"),
         [
+            # Single-segment violations.
             ("kitchen-sensor", "valid Python identifier"),
             ("1sensor", "valid Python identifier"),
-            ("kitchen.sensor", "valid Python identifier"),
             ("kitchen sensor", "valid Python identifier"),
             ("_template", "leading"),
             ("_private", "leading"),
             ("class", "keyword"),
             ("import", "keyword"),
+            # Per-segment violations on slash/dotted paths.
+            ("upstairs/kitchen-sensor", "valid Python identifier"),
+            ("garage/_private", "leading"),
+            ("garage/sensors/class", "keyword"),
+            ("kitchen..sensor", "empty path segment"),
+            ("garage//door_open", "empty path segment"),
         ],
     )
     def test_rejects_invalid_thing_names(
@@ -303,6 +309,33 @@ class TestNew:
             cli.main(["new", "--workspace-dir", str(root), bad_name])
         assert match in str(caught.value)
         assert not (root / "things").exists()
+
+    @pytest.mark.parametrize(
+        "good_name",
+        [
+            "upstairs/bedroom_sensor",
+            "garage/sensors/door_open",
+            "upstairs.bedroom_sensor",
+        ],
+    )
+    def test_accepts_nested_path_segments(
+        self,
+        tmp_path: Path,
+        good_name: str,
+    ) -> None:
+        """Slash- and dotted-form paths pass validation when each segment is valid.
+
+        Validation alone — ``_cmd_new`` still requires the template to
+        exist, so we only assert the validator doesn't bail before the
+        template lookup raises its own (more specific) ``SystemExit``.
+        """
+        root = _seed_workspace(tmp_path)
+        with pytest.raises(SystemExit) as caught:
+            cli.main(["new", "--workspace-dir", str(root), good_name])
+        # Past validation → template-missing message, not identifier message.
+        message = str(caught.value)
+        assert "valid Python identifier" not in message
+        assert "leading" not in message
 
     def test_rejects_empty_thing_name(self, tmp_path: Path) -> None:
         root = _seed_workspace(tmp_path)
