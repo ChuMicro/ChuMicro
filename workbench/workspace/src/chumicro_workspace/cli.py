@@ -849,7 +849,13 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
                 entrypoint=source.entrypoint(),
             ))
             continue
-        result = Deployer(device).deploy(source)
+        deleted: list[str] = []
+        result = Deployer(device).deploy_diff(
+            source,
+            on_file_deleted=deleted.append,
+        )
+        for stale_path in deleted:
+            print(f"deploy: removed stale {stale_path}")
         if result.execute_output:
             print(result.execute_output, end="")
         if not result.success:
@@ -1469,7 +1475,13 @@ def _cmd_repl(args: argparse.Namespace) -> int:
             entrypoint_filename=device.effective_entrypoint,
         )
         print(f"repl: deploying {resolved_name} ...")
-        deploy_result = Deployer(device).deploy(source)
+        deleted: list[str] = []
+        deploy_result = Deployer(device).deploy_diff(
+            source,
+            on_file_deleted=deleted.append,
+        )
+        for stale_path in deleted:
+            print(f"repl: removed stale {stale_path}")
         if deploy_result.execute_output:
             print(deploy_result.execute_output, end="")
         if not deploy_result.success:

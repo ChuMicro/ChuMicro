@@ -4,21 +4,20 @@ Verifies the multi-thing-staging-replacement primitives
 (``list_files_in_scope`` / ``delete_files`` /
 ``Deployer.deploy_diff``) against plugged-in boards.
 
-Two coverage paths:
+Two coverage paths, both exercised on CircuitPython and
+MicroPython:
 
 * **Flash mode** — full diff exercise: plant initial set, second
   deploy with mixed new + stale files, confirm the stale subset
-  was reported via ``on_file_deleted``.  CircuitPython lands here
-  by default; MicroPython flash tests have a known sensitivity to
-  pre-existing on-device ``/main.py`` content (a bad-state
-  ``/main.py`` from a prior run can block ``enter_raw_repl`` on
-  the next mpremote subprocess).  When the board's flash is in a
-  clean state the MP-flash tests pass; otherwise they document the
-  requirement to wipe the device.
-
+  was reported via ``on_file_deleted``.  Second deploy's
+  entrypoint imports both kept + added libs so the successful
+  exec is end-to-end evidence the new payload landed.
 * **RAM mode** — diff routine collapses to ``deploy_files`` since
   RAM mode never wrote to flash.  Confirms the primitive doesn't
   regress the existing RAM-mode flow.
+
+Plus a non-hardware smoke test that the :class:`FakeTransport`
+in-memory state stays in sync with the real-board contract.
 
 Skipped cleanly when ``devices.yml`` has no matching device.
 """

@@ -1093,6 +1093,73 @@ class TestDeployFailureHints:
         assert "chumicro_wifi" in captured_stderr
 
 
+class TestDeployDiffCleanup:
+    """`python run.py deploy <thing>` runs a scoped diff-deploy by default.
+
+    Pre-Phase-7-follow-on, the CLI used `Deployer.deploy()` which
+    leaves stale on-device files alone.  After the multi-thing-
+    staging-replacement work the CLI routes through
+    `Deployer.deploy_diff()` — stale `/lib/*` from a previous
+    deploy gets cleaned + a "removed stale" line surfaces in the
+    CLI output for transparency.
+    """
+
+    def test_stale_files_are_deleted_and_logged(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        _seed_thing(root, name="back-porch")
+
+        # Pre-populate the fake device's flash with a stale file the
+        # new payload won't include — the diff routine should remove it.
+        transport = FakeTransport(
+            mode="copy",
+            execute_output="",
+            device_files={
+                "/main.py": b"# previous main.py",
+                "/lib/old_thing.py": b"old-content",
+            },
+        )
+        monkeypatch.setattr(Device, "create_transport", lambda _self: transport)
+
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root), "back-porch",
+        ])
+        assert exit_code == 0
+        out = capsys.readouterr().out
+        assert "removed stale /lib/old_thing.py" in out
+        # Transport saw both the listing primitive + the delete primitive.
+        labels = [call[0] for call in transport.calls]
+        assert "list_files_in_scope" in labels
+        assert "delete_files" in labels
+        assert "deploy_files" in labels
+
+    def test_no_stale_files_no_log_lines(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Empty stale set → no `removed stale` lines in CLI output."""
+        root = _seed_workspace(tmp_path)
+        _seed_thing(root, name="back-porch")
+
+        transport = FakeTransport(mode="copy", execute_output="")
+        monkeypatch.setattr(Device, "create_transport", lambda _self: transport)
+
+        cli.main(["deploy", "--workspace-dir", str(root), "back-porch"])
+        out = capsys.readouterr().out
+        assert "removed stale" not in out
+        labels = [call[0] for call in transport.calls]
+        # list call still happens (the diff routine queries first);
+        # delete should NOT have fired since nothing was stale.
+        assert "list_files_in_scope" in labels
+        assert "delete_files" not in labels
+
+
 class TestDeployDryRun:
     """Phase 2c — `deploy --dry-run` shows the file map without writing."""
 
