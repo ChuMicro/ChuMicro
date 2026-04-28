@@ -240,6 +240,57 @@ Existing examples:
 Related: Decision 0010 (prefer provided fakes over ad-hoc mocks), settings
 library design in `next-up.md`.
 
+## FIFO queues use `deque`, not `list`
+
+Any internal FIFO queue in library code uses `collections.deque(iterable, maxlen)`
+rather than a plain `list`.  `list.pop(0)` is O(n) — every element shifts down
+one slot — and on small VMs the per-pop reallocation also fragments the heap.
+`deque` makes both `append` and `popleft` O(1) and the deque's native
+`maxlen` enforcement gives drop-oldest behaviour for free.
+
+```python
+from collections import deque
+
+# Bounded queue — drops oldest on overflow.
+self._queue = deque((), capacity)
+
+# Hot-path append — O(1), auto-drops oldest at maxlen.
+if len(self._queue) >= self._capacity:
+    self._dropped += 1   # count drops; the deque does the drop itself
+self._queue.append(record)
+
+# Drain — O(1) per popleft.
+while self._queue:
+    record = self._queue.popleft()
+    ...
+
+# Reset — reassign rather than calling .clear().  MicroPython's deque
+# does not implement clear() in every build.
+self._queue = deque((), self._capacity)
+```
+
+**Cross-runtime portability:**
+
+- Constructor signature **must be positional**: `deque(iterable, maxlen)`.
+  MicroPython rejects keyword `maxlen=`.  Pass an empty iterable like
+  `()` or `[]` to start empty.
+- Methods used safely on all three runtimes: `append`, `popleft`, `__len__`,
+  iteration, indexing.  `clear()` and `appendleft` / `pop` (right-pop) are
+  patchy on MP — avoid them.
+- The deque's `maxlen` enforces drop-oldest at append time without any
+  explicit pop.  Track the drop count in a sibling `_dropped` integer if
+  the count is part of the public surface (chumicro-events and
+  chumicro-logging both expose this).
+
+Used today by: `chumicro-events.EventBus._queue`,
+`chumicro-logging.BufferedHandler._buffer`.  Apply the same pattern to any
+new bounded FIFO — including subscriber backlogs, request queues, and tick
+buffers.  Subscriber lists keyed by topic are *not* FIFO and stay as
+`list` (membership matters more than head/tail performance).
+
+Related: workstream 2026-04-27 micro-benchmark, the deque support
+verification in `plans/workstreams/library-pipeline.md`.
+
 ## Per-library test isolation
 
 Each library's tests run in a separate pytest subprocess.  Coverage is

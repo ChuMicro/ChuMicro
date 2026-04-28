@@ -1,0 +1,142 @@
+# User Guide
+
+## Overview
+
+`chumicro-events` is a small in-process pub/sub event bus that runs
+identically on CircuitPython, MicroPython, and CPython.  Topics are
+exact-match strings — no hierarchies, no wildcards.  Publishers
+enqueue records; subscribers register handlers; the bus dispatches
+everything in batches when the runner ticks `handle`.  The queue is
+bounded and drops the **oldest** record on overflow so recent
+activity always wins.
+
+By [Decision 0042](../../../plans/decisions/0042-library-dependency-policy.md)'s
+"decoration / observability" rule, **no other chumicro library imports
+this one**.  Apps that want service state changes to land in a single
+place wire the bus themselves — typically by binding each service's
+`on_state_change` callback to a `bus.publisher(topic)`.
+
+The two key types are `EventBus` (the bus itself) and `Subscription`
+(an opaque token returned by `subscribe`).
+
+## Getting started
+
+```python
+from chumicro_events import EventBus
+
+
+def on_event(topic: str, payload: object) -> None:
+    print(f"{topic} -> {payload}")
+
+
+bus = EventBus()
+bus.subscribe("wifi.state", on_event)
+bus.publish("wifi.state", "connected")
+
+# Subscribers don't see the event yet — dispatch is deferred.
+bus.handle(now_ms=0)   # -> wifi.state -> connected
+```
+
+`publish` enqueues a `(topic, payload)` record and returns
+immediately — subscribers are not invoked synchronously.  Dispatch
+happens on the next call to `handle`, which iterates the queue in
+publish order and routes each record to every subscriber currently
+attached to its topic.
+
+This intentional asynchrony is what makes the bus safe to call from
+inside a service's own tick.  A subscriber that publishes back into
+the bus from inside its handler does not re-enter the publisher; the
+new record sits in the queue until the next drain.
+
+## Wiring service callbacks
+
+The canonical pattern from Decision 0042: services expose
+`on_state_change` callbacks; the application binds each one to a bus
+publisher; subscribers react to the cross-service stream.
+
+```python
+from chumicro_events import EventBus
+
+bus = EventBus()
+
+# Each service's callback becomes a one-line publisher.
+wifi.on_state_change = bus.publisher("wifi.state")
+mqtt.on_state_change = bus.publisher("mqtt.state")
+
+# A single subscriber sees everything.
+def audit(topic: str, payload: object) -> None:
+    log.info(f"{topic}: {payload}")
+
+bus.subscribe("wifi.state", audit)
+bus.subscribe("mqtt.state", audit)
+```
+
+`bus.publisher(topic)` returns a callable bound to that topic.  The
+callable accepts an optional payload positional argument; calling it
+with no argument publishes `None`.  This matches the shape of the
+existing service `on_state_change` callbacks across `chumicro-wifi`,
+`chumicro-mqtt`, and any future libraries that follow Decision 0042.
+
+## Runner pattern
+
+`EventBus` already implements the runner contract:
+
+- `check(now_ms)` returns `True` when the queue has records to drain
+- `handle(now_ms)` dispatches every queued record and returns the
+  count
+
+Wire the bus directly into a `chumicro-runner.Runner` and the runner
+will drain the queue once per tick.  Order of registration matters
+when other registered services both publish and subscribe — register
+the bus *after* its publishers so the publishers' check/handle runs
+first and their events make it into the queue before the bus drains.
+
+## Memory notes
+
+The internal queue is a `collections.deque(iterable, maxlen)` rather
+than a list.  `append` and `popleft` are O(1) and the deque's native
+`maxlen` enforcement gives drop-oldest behaviour without the O(n)
+shift cost that `list.pop(0)` carries on small VMs.  See
+[`plans/patterns.md`](../../../plans/patterns.md) §"FIFO queues use
+`deque`, not `list`" for the project-wide rule.
+
+Subscriber lists are still ordinary lists, since adding and removing
+subscribers happens rarely and the lists are short (typically one to
+three handlers per topic).  Iterating them is O(n) in the bucket
+size, which dominates dispatch cost only when a topic has many
+subscribers — uncommon in practice.
+
+## Platform notes
+
+Runs identically on CPython, MicroPython, and CircuitPython.  The
+only stdlib import is `collections.deque`, which all three runtimes
+implement with the same `(iterable, maxlen)` signature and the same
+`append` / `popleft` / `__len__` / iteration surface that this
+library uses.
+
+## Examples
+
+| Example | What it shows |
+|---|---|
+| [`examples/quickstart.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/events/examples/quickstart.py) | Minimal `EventBus` end-to-end: publish, check, handle, dispatch order. |
+| [`examples/wiring_services.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/events/examples/wiring_services.py) | The Decision 0042 wiring pattern — bind service callbacks to bus publishers. |
+
+Both examples run on every supported runtime; neither requires
+hardware.
+
+## What's new
+
+*No changes yet — this section will be updated with each release.*
+
+---
+
+<div class="chumicro-footer" markdown>
+
+[← Home](index.md)
+
+[Source](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/events) · \
+[PyPI](https://pypi.org/project/chumicro-events/) · \
+[Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) · \
+[Experimental Bundle](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
+
+</div>

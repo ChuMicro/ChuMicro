@@ -1,10 +1,17 @@
 """Core implementation for chumicro-logging.
 
 See ``__init__`` for the public API summary.  This module is pure-Python,
-imports only ``sys``, and is identical on every supported runtime.
+imports ``sys`` and ``collections.deque``, and is identical on every
+supported runtime.
+
+``BufferedHandler``'s queue is a ``deque(iterable, maxlen)`` rather than
+a list — ``append`` and ``popleft`` are O(1) and the deque's native
+``maxlen`` enforcement gives drop-oldest behaviour without the O(n)
+shift cost of ``list.pop(0)`` on small VMs.
 """
 
 import sys
+from collections import deque
 
 DEBUG = 10
 INFO = 20
@@ -264,7 +271,7 @@ class BufferedHandler:
         self._downstream = downstream
         self._capacity = capacity
         self._level = level
-        self._buffer: list = []
+        self._buffer = deque((), capacity)
         self._dropped = 0
 
     @property
@@ -296,8 +303,8 @@ class BufferedHandler:
         if level < self._level:
             return
         if len(self._buffer) >= self._capacity:
-            self._buffer.pop(0)
             self._dropped += 1
+        # deque(maxlen=capacity) drops the oldest record automatically.
         self._buffer.append((level, name, message))
 
     def check(self, now_ms: int) -> bool:
@@ -321,7 +328,7 @@ class BufferedHandler:
         """
         flushed = 0
         while self._buffer:
-            record = self._buffer.pop(0)
+            record = self._buffer.popleft()
             self._downstream.emit(record[0], record[1], record[2])
             flushed += 1
         return flushed
