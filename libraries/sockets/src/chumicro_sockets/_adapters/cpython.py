@@ -165,6 +165,48 @@ class _CPythonTLSListenerWrapper:
         return self._raw.getsockname()
 
 
+def udp_socket(*, bind_host="0.0.0.0", bind_port=0, broadcast=False):
+    """Open a UDP socket on CPython, bound to (bind_host, bind_port).
+
+    Returns a :class:`_CPythonUDPWrapper` so the public ``sendto(data,
+    host, port)`` separated-arg shape is honoured (stdlib expects a
+    ``(host, port)`` tuple).
+    """
+    import socket  # noqa: PLC0415 — runtime-gated
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    if broadcast:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    sock.bind((bind_host, bind_port))
+    return _CPythonUDPWrapper(sock)
+
+
+class _CPythonUDPWrapper:
+    """Adapts a CPython ``socket.socket`` to the chumicro_sockets UDP protocol.
+
+    Normalises ``sendto`` to the separated ``(data, host, port)``
+    signature and ``recvfrom_into`` to the ``(nbytes, (host, port))``
+    return tuple.
+    """
+
+    def __init__(self, sock):
+        self._sock = sock
+        self.close = sock.close
+        self.setblocking = sock.setblocking
+        self.settimeout = sock.settimeout
+        self.fileno = sock.fileno
+        self.getsockname = sock.getsockname
+
+    def sendto(self, data, host, port):
+        return self._sock.sendto(data, (host, port))
+
+    def recvfrom_into(self, buffer, nbytes=0):
+        size = nbytes if nbytes > 0 else len(buffer)
+        view = memoryview(buffer)[:size]
+        nbytes_received, address = self._sock.recvfrom_into(view, size)
+        return nbytes_received, address
+
+
 def ssl_context_with_ca(ca_pem):
     """Build an SSLContext that trusts only the CA(s) in *ca_pem*.
 

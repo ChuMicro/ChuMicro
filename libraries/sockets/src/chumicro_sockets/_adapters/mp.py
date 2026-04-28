@@ -165,6 +165,81 @@ def connect_tls(host, port, *, context=None):  # pragma: no cover - device only
     return _MpSocketWrapper(wrapped)
 
 
+def udp_socket(  # pragma: no cover - device only
+    *,
+    bind_host="0.0.0.0",
+    bind_port=0,
+    broadcast=False,
+):
+    """Open a UDP socket on MicroPython, bound to (bind_host, bind_port).
+
+    MP exposes ``socket.socket(AF_INET, SOCK_DGRAM)`` on every supported
+    port (rp2 + esp32, MP 1.24+).  ``recvfrom`` is universal; ``recvfrom_into``
+    is patchy (rp2 has it, esp32 may lack it depending on build), so the
+    wrapper polyfills via ``recvfrom`` + buffer copy.
+
+    ``SO_BROADCAST`` is best-effort — failures are swallowed so older
+    ports without the option don't break the socket factory.
+    """
+    import socket  # noqa: PLC0415 — runtime-gated; lazy so CP can stage this file
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    if broadcast:
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        except OSError:
+            # Some MP ports don't expose SO_BROADCAST; non-fatal.
+            pass
+    address_info = socket.getaddrinfo(bind_host, bind_port)[0]
+    sock.bind(address_info[-1])
+    return _MpUDPWrapper(sock)
+
+
+class _MpUDPWrapper:  # pragma: no cover - device only
+    """Adapts an MP UDP socket to the chumicro_sockets UDP protocol.
+
+    MP's UDP socket exposes ``sendto((data, address))`` as
+    ``sendto(data, address_tuple)`` and ``recvfrom(nbytes)`` returning
+    ``(data, address)``.  We normalise both into the separated-arg
+    public surface and polyfill ``recvfrom_into`` via ``recvfrom`` +
+    bytearray copy (matches the TCP ``_MpSocketWrapper.recv_into``
+    polyfill rationale: small one-shot allocation, no concurrent
+    network in flight).
+    """
+
+    def __init__(self, sock):
+        self._sock = sock
+        self.close = sock.close
+        self.setblocking = getattr(sock, "setblocking", _no_op)
+        self.settimeout = getattr(sock, "settimeout", _no_op)
+        forwarded_fileno = getattr(sock, "fileno", None)
+        self.fileno = forwarded_fileno if forwarded_fileno is not None else _no_fileno
+        forwarded_getsockname = getattr(sock, "getsockname", None)
+        if forwarded_getsockname is not None:
+            self.getsockname = forwarded_getsockname
+        else:
+            # Some MP ports omit getsockname; report a placeholder so
+            # downstream code doesn't trip on an absent attribute.
+            self.getsockname = lambda: ("0.0.0.0", 0)
+
+    def sendto(self, data, host, port):
+        return self._sock.sendto(data, (host, port))
+
+    def recvfrom_into(self, buffer, nbytes=0):
+        size = nbytes if nbytes > 0 else len(buffer)
+        result = self._sock.recvfrom(size)
+        # MP returns (data, address); some ports may return None on
+        # would-block instead of raising — match the TCP wrapper's
+        # contract by raising EAGAIN explicitly.
+        if result is None:
+            raise OSError(11, "would block")
+        data, address = result
+        copied = len(data)
+        if copied:
+            buffer[:copied] = data
+        return copied, address
+
+
 def listen_tcp(host, port, *, backlog=4):  # pragma: no cover - device only
     """Open a non-blocking TCP listening socket on MicroPython.
 

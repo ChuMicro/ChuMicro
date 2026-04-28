@@ -164,3 +164,160 @@ class FakeSocket:
             # the same shape so downstream error-handling code that
             # checks ``except OSError`` works identically.
             raise OSError(9, "socket closed")
+
+
+class FakeUDPSocket:
+    """In-memory ``UDPSocket`` for tests.
+
+    Datagram-shaped counterpart of :class:`FakeSocket`.  All methods
+    match the :class:`~chumicro_sockets.protocol.UDPSocket` protocol;
+    plus :meth:`enqueue_recv` scripts future ``recvfrom_into`` returns
+    and :attr:`sent` exposes the byte log of every ``sendto`` call as
+    ``(data, host, port)`` tuples.
+
+    Idiom for downstream tests::
+
+        from chumicro_sockets.testing import FakeUDPSocket
+
+        sock = FakeUDPSocket()
+        sock.enqueue_recv(b"reply", host="10.0.0.5", port=123)
+        client = NTPClient(sock=sock)
+        client.send_request("10.0.0.5")
+
+        assert sock.sent[0] == (b"<48-byte NTP request>", "10.0.0.5", 123)
+
+    Args:
+        bind_host: Reported by :meth:`getsockname` as the locally-bound
+            host.  Defaults to ``"0.0.0.0"``.
+        bind_port: Reported by :meth:`getsockname` as the locally-bound
+            port.  Defaults to ``54321`` (a stand-in for an OS-assigned
+            ephemeral port).
+    """
+
+    def __init__(
+        self,
+        bind_host: str = "0.0.0.0",
+        bind_port: int = 54321,
+    ) -> None:
+        self.sent: list = []
+        self._recv_queue: deque = deque()
+        self._closed: bool = False
+        self._blocking: bool = True
+        self._timeout: float | None = None
+        self._send_eagains: int = 0
+        self._recv_eagains: int = 0
+        self._bind_host = bind_host
+        self._bind_port = bind_port
+        self._fileno: int = id(self) & 0x7FFFFFFF
+
+    # -- scripting ------------------------------------------------------
+
+    def enqueue_recv(
+        self,
+        data: bytes,
+        *,
+        host: str = "0.0.0.0",
+        port: int = 0,
+    ) -> None:
+        """Append a datagram to the recv-side queue.
+
+        The next :meth:`recvfrom_into` call pops it off the head and
+        copies up to ``len(buffer)`` bytes from it (truncates the rest
+        — matches real UDP semantics).  *host* and *port* identify the
+        sender; tests assert against them when their protocol cares
+        who replied.
+        """
+        if not isinstance(data, (bytes, bytearray, memoryview)):
+            raise TypeError("enqueue_recv expects bytes-like")
+        self._recv_queue.append((bytes(data), (host, port)))
+
+    def enqueue_eagain_for_send(self, count: int = 1) -> None:
+        """Script the next *count* :meth:`sendto` calls to raise EAGAIN."""
+        self._send_eagains += int(count)
+
+    def enqueue_eagain_for_recv(self, count: int = 1) -> None:
+        """Script the next *count* :meth:`recvfrom_into` calls to raise EAGAIN."""
+        self._recv_eagains += int(count)
+
+    def set_fileno(self, fd: int) -> None:
+        """Override the integer fd :meth:`fileno` returns."""
+        self._fileno = int(fd)
+
+    # -- protocol surface ----------------------------------------------
+
+    def sendto(self, data: bytes, host: str, port: int) -> int:
+        """Append ``(bytes(data), host, port)`` to :attr:`sent`."""
+        self._raise_if_closed()
+        if self._send_eagains > 0:
+            self._send_eagains -= 1
+            raise OSError(EAGAIN, "would block")
+        view = memoryview(data)
+        self.sent.append((bytes(view), host, port))
+        return len(view)
+
+    def recvfrom_into(self, buffer: bytearray, nbytes: int = 0) -> tuple:
+        """Pop a queued datagram into *buffer*, return ``(n, (host, port))``.
+
+        Returns ``(0, ("0.0.0.0", 0))`` when the queue is empty — UDP
+        has no peer-close, so an empty queue and a non-blocking socket
+        is just "no datagram this tick".  Datagrams larger than
+        ``nbytes`` (or ``len(buffer)`` when ``nbytes=0``) are
+        truncated; the unread tail is discarded — matches real UDP.
+        """
+        self._raise_if_closed()
+        if self._recv_eagains > 0:
+            self._recv_eagains -= 1
+            raise OSError(EAGAIN, "would block")
+        if not self._recv_queue:
+            return 0, ("0.0.0.0", 0)
+        capacity = nbytes if nbytes > 0 else len(buffer)
+        data, address = self._recv_queue.popleft()
+        consumed = min(capacity, len(data))
+        if consumed:
+            buffer[:consumed] = data[:consumed]
+        return consumed, address
+
+    def close(self) -> None:
+        """Mark the socket closed.  Idempotent."""
+        self._closed = True
+
+    def setblocking(self, flag: bool) -> None:
+        self._blocking = bool(flag)
+        self._timeout = None if flag else 0.0
+
+    def settimeout(self, seconds: float | None) -> None:
+        self._timeout = seconds
+        self._blocking = seconds is None
+
+    def fileno(self) -> int:
+        return self._fileno
+
+    def getsockname(self) -> tuple:
+        """Report the bound ``(host, port)`` tuple given at construction."""
+        return self._bind_host, self._bind_port
+
+    # -- introspection -------------------------------------------------
+
+    @property
+    def closed(self) -> bool:
+        """``True`` when :meth:`close` has been called."""
+        return self._closed
+
+    @property
+    def blocking(self) -> bool:
+        return self._blocking
+
+    @property
+    def timeout(self) -> float | None:
+        return self._timeout
+
+    @property
+    def pending_recv_chunks(self) -> int:
+        """Number of unconsumed datagrams left in the recv queue."""
+        return len(self._recv_queue)
+
+    # -- helpers -------------------------------------------------------
+
+    def _raise_if_closed(self) -> None:
+        if self._closed:
+            raise OSError(9, "socket closed")

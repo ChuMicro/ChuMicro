@@ -1,36 +1,40 @@
-"""Cross-runtime TCP + TLS sockets for CircuitPython, MicroPython, and CPython.
+"""Cross-runtime TCP + TLS + UDP sockets for CircuitPython, MicroPython, and CPython.
 
 Public API::
 
     from chumicro_sockets import (
-        TCPClientSocket,           # protocol every adapter implements
+        TCPClientSocket,           # TCP protocol every adapter implements
+        UDPSocket,                 # UDP protocol every adapter implements
         UnsupportedSSLConfigError, # raised when the requested TLS shape isn't supported
         tcp_client_socket,         # plain-TCP factory
         tls_client_socket,         # TLS factory
+        udp_socket,                # UDP datagram factory (unicast + broadcast)
         ssl_context_with_ca,       # custom-CA helper
     )
 
-    from chumicro_sockets.testing import FakeSocket
+    from chumicro_sockets.testing import FakeSocket, FakeUDPSocket
 
-Per-runtime adapters live under ``_adapters/``; two sibling factories
-(``tcp_client_socket`` / ``tls_client_socket``) pick the right adapter
-via ``sys.implementation.name`` so user code never sees a runtime
-check.  TLS is an injected ``ssl.SSLContext`` (not a flag); the path
-is identical across runtimes — every supported board ships on-board
-``ssl``.
+Per-runtime adapters live under ``_adapters/``; sibling factories
+(``tcp_client_socket`` / ``tls_client_socket`` / ``udp_socket``)
+pick the right adapter via ``sys.implementation.name`` so user code
+never sees a runtime check.  TLS is an injected ``ssl.SSLContext``
+(not a flag); the path is identical across runtimes — every supported
+board ships on-board ``ssl``.
 
-Substrate for ``chumicro-mqtt``; downstream libs annotate against
-``TCPClientSocket`` instead of importing ``socketpool`` / ``socket``
-/ ``ssl`` directly.
+Substrate for ``chumicro-mqtt``, ``chumicro-requests``,
+``chumicro-http-server`` (TCP/TLS), and ``chumicro-ntp`` (UDP).
+Downstream libs annotate against ``TCPClientSocket`` / ``UDPSocket``
+instead of importing ``socketpool`` / ``socket`` / ``ssl`` directly.
 """
 
 import sys
 
 from chumicro_sockets.errors import UnsupportedSSLConfigError
-from chumicro_sockets.protocol import TCPClientSocket
+from chumicro_sockets.protocol import TCPClientSocket, UDPSocket
 
 __all__ = [
     "TCPClientSocket",
+    "UDPSocket",
     "UnsupportedSSLConfigError",
     "ssl_context_with_ca",
     "ssl_context_with_cert_and_key",
@@ -39,6 +43,7 @@ __all__ = [
     "tcp_listening_socket",
     "tls_client_socket",
     "tls_listening_socket",
+    "udp_socket",
 ]
 
 
@@ -334,6 +339,80 @@ def ssl_context_with_cert_and_key_paths(
     from chumicro_sockets._adapters import cpython  # noqa: PLC0415 — runtime-gated
 
     return cpython.ssl_context_with_cert_and_key(cert_bytes, key_bytes)
+
+
+def udp_socket(
+    bind_host: str = "0.0.0.0",
+    bind_port: int = 0,
+    *,
+    radio: object | None = None,
+    broadcast: bool = False,
+) -> UDPSocket:
+    """Open a UDP datagram socket.
+
+    Routes to the runtime-appropriate adapter:
+
+    * **CircuitPython** —
+      ``socketpool.SocketPool(radio).socket(AF_INET, SOCK_DGRAM)``,
+      ``bind((bind_host, bind_port))``, optional ``setsockopt(SOL_SOCKET,
+      SO_BROADCAST, 1)``.  *radio* is required (typically ``wifi.radio``).
+    * **MicroPython** — stdlib ``socket.socket(AF_INET, SOCK_DGRAM)``
+      + ``bind`` + optional ``SO_BROADCAST``.  *radio* is ignored.
+    * **CPython** — stdlib ``socket.socket(AF_INET, SOCK_DGRAM)`` +
+      ``bind`` + optional ``SO_BROADCAST``.  *radio* is ignored.
+
+    The default ``bind_host="0.0.0.0"``, ``bind_port=0`` requests an
+    ephemeral port on every interface — the OS picks a free port and
+    binds it.  Pass ``bind_port=N`` for a server / receiver that
+    listens on a known port (NTP responses, mDNS replies, etc.).
+
+    Use :meth:`UDPSocket.getsockname` after construction to learn
+    the bound address — useful when ``bind_port=0`` and the caller
+    needs to know which port the OS assigned.
+
+    Args:
+        bind_host: Local address to bind.  ``"0.0.0.0"`` accepts on
+            every interface (the typical case for boards on a single
+            LAN).
+        bind_port: Local port.  ``0`` = ephemeral.
+        radio: CP-only radio object.  Required on CP, ignored elsewhere.
+        broadcast: Set ``SO_BROADCAST`` so ``sendto`` to a broadcast
+            address (typically ``"255.255.255.255"`` or the LAN
+            broadcast address) succeeds.  Off by default — kernels
+            reject broadcast sends without it.
+
+    Returns:
+        Bound :class:`UDPSocket`.
+
+    Raises:
+        OSError: Bind failed (port in use, permission denied, etc.).
+        TypeError: CP runtime invoked without a *radio* argument.
+    """
+    runtime = _runtime_name()
+    if runtime == "circuitpython":
+        from chumicro_sockets._adapters import cp  # noqa: PLC0415 — runtime-gated
+
+        return cp.udp_socket(
+            bind_host=bind_host,
+            bind_port=bind_port,
+            radio=radio,
+            broadcast=broadcast,
+        )
+    if runtime == "micropython":
+        from chumicro_sockets._adapters import mp  # noqa: PLC0415 — runtime-gated
+
+        return mp.udp_socket(
+            bind_host=bind_host,
+            bind_port=bind_port,
+            broadcast=broadcast,
+        )
+    from chumicro_sockets._adapters import cpython  # noqa: PLC0415 — runtime-gated
+
+    return cpython.udp_socket(
+        bind_host=bind_host,
+        bind_port=bind_port,
+        broadcast=broadcast,
+    )
 
 
 def ssl_context_with_ca(ca_pem: str | bytes) -> object:
