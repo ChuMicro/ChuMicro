@@ -23,6 +23,9 @@ site/
 libraries/*/docs/stylesheets/
 libraries/*/docs/img/
 libraries/*/docs/assets/
+workbench/*/docs/stylesheets/
+workbench/*/docs/img/
+workbench/*/docs/assets/
 
 .mypy_cache/
 .scratch/

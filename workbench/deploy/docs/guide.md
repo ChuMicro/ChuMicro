@@ -41,7 +41,7 @@ chumicro-deploy deploy \
     --directory ./my_app --entrypoint /code.py
 ```
 
-All subcommands accept `--help` for their full option list. `chumicro-deploy flash` supports `--non-interactive` for automated flows that don't have stdin.
+All subcommands accept `--help` for their full option list. Both `chumicro-deploy deploy` and `chumicro-deploy flash` support `--non-interactive`.  Without that flag, `deploy` wraps every run in `InteractiveDeployer` (see [Interactive recovery](#interactive-recovery--interactivedeployer) below) so transport failures are classified and coached instead of producing a raw traceback.  Pass `--non-interactive` from CI / scripted flows that don't have stdin to answer retry prompts.
 
 Every CLI command also accepts `--devices-file devices.yml --device <id>` instead of `--transport` + `--address`, so a workspace with one source-of-truth `devices.yml` doesn't repeat the same connection details everywhere:
 
@@ -208,7 +208,7 @@ Callbacks are all optional. `on_progress` emits coarse milestones (0.0 connectin
 
 ## Recover from deploy failures — `InteractiveDeployer`
 
-`Deployer.deploy()` raises transport errors directly — it's the deterministic programmatic surface that automation pipelines depend on.  For interactive use (the CLI, a human invocation), `InteractiveDeployer` wraps a `Deployer` with classification, retry-loop, and user-facing coaching on failure.
+`Deployer.deploy()` raises transport errors directly — it's the deterministic programmatic surface that automation pipelines depend on.  For interactive use, `InteractiveDeployer` wraps a `Deployer` with classification, retry-loop, and user-facing coaching on failure.  The `chumicro-deploy deploy` CLI does this wrapping for you by default; pass `--non-interactive` to opt out.  `chumicro-workspace deploy` / `repl <thing>` / `demo` do the same.  When you call `Deployer.deploy()` from your own Python code you opt in by constructing the wrapper explicitly:
 
 ```python
 from chumicro_deploy import Deployer, InteractiveDeployer
@@ -219,6 +219,10 @@ interactive = InteractiveDeployer(
 )
 
 result = interactive.deploy(source)
+
+# .deploy_diff() mirrors Deployer.deploy_diff() through the same
+# classify/coach/retry loop — workspace's diff-deploy path uses it.
+result = interactive.deploy_diff(source, wipe=True)
 ```
 
 When the underlying `Deployer.deploy()` raises a `CircuitpythonTransportError` or `MicropythonTransportError`, the interactive deployer:
@@ -286,6 +290,12 @@ Detection is non-darwin-safe (returns `False` immediately on Linux / Windows) an
 ### Try it against real boards
 
 [`workbench/deploy/examples/demo_recovery_hand_holding.py`](https://github.com/ChuMicro/ChuMicro/blob/main/workbench/deploy/examples/demo_recovery_hand_holding.py) walks every configured `devices.yml` board through each failure scenario and prints the coaching output live.  Scenarios today: happy-path baseline, traceback-on-board, physical unplug (`PORT_UNAVAILABLE`), drive-ejected (`CIRCUITPY_DRIVE_MISSING`, with `MACOS_FSKIT_WEDGED` promotion when the wedge is live), oversized-payload (`FLASH_COPY_FAILED`), and silent bootloader-reset verification.  Run it when you want to see what the CLI actually says to the user on a real cable-out / drive-ejected / board-rebooted failure.
+
+For shorter end-to-end examples that exercise each built-in `FileSource` against a plugged-in board, see also:
+
+- [`programmatic_deploy.py`](https://github.com/ChuMicro/ChuMicro/blob/main/workbench/deploy/examples/programmatic_deploy.py) — `DirectorySource` walking a local dir.
+- [`file_map_deploy.py`](https://github.com/ChuMicro/ChuMicro/blob/main/workbench/deploy/examples/file_map_deploy.py) — `FileMapSource` for an in-memory multi-file payload.
+- [`import_graph_deploy.py`](https://github.com/ChuMicro/ChuMicro/blob/main/workbench/deploy/examples/import_graph_deploy.py) — `ImportGraphSource` AST-walking from an entrypoint, shipping only reachable modules.
 
 ## Probe a board — `probe_device`
 

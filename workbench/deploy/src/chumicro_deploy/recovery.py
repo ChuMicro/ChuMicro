@@ -504,17 +504,58 @@ class InteractiveDeployer:
         callback parameters are forwarded.  The only new behaviour
         is the retry loop + user prompts on classified failures.
         """
+        return self._retry_loop(
+            lambda: self._deployer.deploy(
+                source,
+                on_progress=on_progress,
+                on_file_staged=on_file_staged,
+                on_execute_line=on_execute_line,
+            ),
+        )
+
+    def deploy_diff(
+        self,
+        source: FileSource,
+        *,
+        wipe: bool = False,
+        on_progress: Callable[[float, str], None] | None = None,
+        on_file_staged: Callable[[str], None] | None = None,
+        on_file_deleted: Callable[[str], None] | None = None,
+        on_execute_line: Callable[[str], None] | None = None,
+    ) -> DeployResult:
+        """Diff-deploy *source*, prompting the user to recover on failure.
+
+        Signature matches :meth:`Deployer.deploy_diff` exactly — all
+        callback parameters and the ``wipe`` flag are forwarded.  The
+        only new behaviour is the retry loop + user prompts on
+        classified failures, identical in shape to :meth:`deploy`.
+        """
+        return self._retry_loop(
+            lambda: self._deployer.deploy_diff(
+                source,
+                wipe=wipe,
+                on_progress=on_progress,
+                on_file_staged=on_file_staged,
+                on_file_deleted=on_file_deleted,
+                on_execute_line=on_execute_line,
+            ),
+        )
+
+    def _retry_loop(
+        self, call: Callable[[], DeployResult],
+    ) -> DeployResult:
+        """Drive *call* through the classify / coach / retry loop.
+
+        Same shape for both :meth:`deploy` and :meth:`deploy_diff` —
+        only the inner deployer call differs, so the loop body lives
+        here once and the public methods are thin lambda wrappers.
+        """
         attempt = 0
         last_error: Exception | None = None
         while attempt < self._max_attempts:
             attempt += 1
             try:
-                result = self._deployer.deploy(
-                    source,
-                    on_progress=on_progress,
-                    on_file_staged=on_file_staged,
-                    on_execute_line=on_execute_line,
-                )
+                result = call()
             except (
                 CircuitpythonTransportError,
                 MicropythonTransportError,
