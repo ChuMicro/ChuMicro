@@ -10,6 +10,7 @@ import pytest
 from chumicro_repl.line_mode import (
     BUILTIN_COMMANDS,
     DEFAULT_HISTORY_ROOT,
+    LineModeContext,
     _split_command,
     format_line_mode_banner,
     history_path_for,
@@ -140,18 +141,29 @@ class TestSplitCommand:
         )
 
 
+def _context(
+    *, output: io.StringIO | None = None, port=None, **kwargs,
+) -> LineModeContext:
+    """Test helper — minimal `LineModeContext` for handler unit tests."""
+    return LineModeContext(
+        port=port or _stub_port(),  # type: ignore[arg-type]
+        output=output if output is not None else io.StringIO(),
+        **kwargs,
+    )
+
+
 class TestBuiltinCommands:
     def test_help_prints_registered_commands(self) -> None:
-        output = io.StringIO()
-        keep_running = BUILTIN_COMMANDS["help"](":help", output)
+        context = _context()
+        keep_running = BUILTIN_COMMANDS["help"](context, "")
         assert keep_running is True
-        text = output.getvalue()
+        text = context.output.getvalue()
         assert ":help" in text
         assert ":quit" in text
 
     def test_quit_returns_false(self) -> None:
-        output = io.StringIO()
-        assert BUILTIN_COMMANDS["quit"](":quit", output) is False
+        context = _context()
+        assert BUILTIN_COMMANDS["quit"](context, "") is False
 
 
 class TestFormatLineModeBanner:
@@ -307,16 +319,16 @@ class TestRunLineMode:
     def test_custom_command_table_overrides_builtins(
         self, tmp_path: Path,
     ) -> None:
-        """The `commands=` parameter lets Slice 1b layer richer commands in."""
+        """The `commands=` parameter lets external commands layer in."""
         port = _stub_port()
-        session = _StubPromptSession([":save back-porch", ":quit"])
-        called: list[str] = []
+        session = _StubPromptSession([":custom_thing extra args", ":quit"])
+        called: list[tuple[LineModeContext, str]] = []
 
-        def fake_save(line: str, output) -> bool:
-            called.append(line)
+        def fake_handler(context: LineModeContext, rest: str) -> bool:
+            called.append((context, rest))
             return True
 
-        custom = dict(BUILTIN_COMMANDS, save=fake_save)
+        custom = dict(BUILTIN_COMMANDS, custom_thing=fake_handler)
         output = io.StringIO()
         run_line_mode(
             port,
@@ -327,7 +339,228 @@ class TestRunLineMode:
             prompt_session=session,
             time=_FastTime(),  # type: ignore[arg-type]
         )
-        assert called == [":save back-porch"]
+        assert len(called) == 1
+        passed_context, passed_rest = called[0]
+        assert passed_rest == "extra args"
+        assert passed_context.port is port
+
+
+class TestSaveLoadSnippets:
+    """Slice 1b — `:save` writes input history; `:load` replays it."""
+
+    def test_save_and_load_round_trip(self, tmp_path: Path) -> None:
+        snippets = tmp_path / "snippets"
+        port = _stub_port()
+        context = LineModeContext(
+            port=port,  # type: ignore[arg-type]
+            output=io.StringIO(),
+            snippets_root=snippets,
+        )
+        # Simulate two prior input lines.
+        context.input_history.extend([
+            "import board",
+            "led = board.LED",
+        ])
+        # Save under a name.
+        BUILTIN_COMMANDS["save"](context, "my_setup")
+        snippet_file = snippets / "my_setup.py"
+        assert snippet_file.is_file()
+        body = snippet_file.read_text()
+        assert "import board" in body
+        assert "led = board.LED" in body
+
+        # Load into a fresh context — should ship lines to its port.
+        fresh_port = _stub_port()
+        fresh_context = LineModeContext(
+            port=fresh_port,  # type: ignore[arg-type]
+            output=io.StringIO(),
+            snippets_root=snippets,
+        )
+        BUILTIN_COMMANDS["load"](fresh_context, "my_setup")
+        recorded = b"".join(fresh_port.writes)  # type: ignore[attr-defined]
+        assert b"import board\r\n" in recorded
+        assert b"led = board.LED\r\n" in recorded
+        # Loaded lines also added to the new session's history.
+        assert "import board" in fresh_context.input_history
+
+    def test_save_without_name_prints_usage(self, tmp_path: Path) -> None:
+        context = _context(
+            output=io.StringIO(),
+            snippets_root=tmp_path / "snippets",
+        )
+        BUILTIN_COMMANDS["save"](context, "")
+        assert "usage" in context.output.getvalue()
+
+    def test_save_with_empty_history_does_nothing(self, tmp_path: Path) -> None:
+        context = _context(
+            output=io.StringIO(),
+            snippets_root=tmp_path / "snippets",
+        )
+        BUILTIN_COMMANDS["save"](context, "empty")
+        assert "nothing to save" in context.output.getvalue()
+        # No file written.
+        assert not (tmp_path / "snippets").exists() or not list(
+            (tmp_path / "snippets").iterdir()
+        )
+
+    def test_save_caps_at_tail_lines(self, tmp_path: Path) -> None:
+        """`:save` writes the most recent 10 lines, not all history."""
+        context = _context(
+            output=io.StringIO(),
+            snippets_root=tmp_path / "snippets",
+        )
+        context.input_history.extend(f"line {index}" for index in range(20))
+        BUILTIN_COMMANDS["save"](context, "tail")
+        body = (tmp_path / "snippets" / "tail.py").read_text()
+        # First 10 lines (0..9) shouldn't appear; lines 10..19 should.
+        assert "line 0\n" not in body
+        assert "line 19\n" in body
+        assert body.count("\n") == 10  # 10 lines + trailing newline
+
+    def test_load_unknown_snippet_warns(self, tmp_path: Path) -> None:
+        context = _context(
+            output=io.StringIO(),
+            snippets_root=tmp_path / "snippets",
+        )
+        BUILTIN_COMMANDS["load"](context, "ghost")
+        assert "not found" in context.output.getvalue()
+
+    def test_load_without_name_prints_usage(self, tmp_path: Path) -> None:
+        context = _context(
+            output=io.StringIO(),
+            snippets_root=tmp_path / "snippets",
+        )
+        BUILTIN_COMMANDS["load"](context, "")
+        assert "usage" in context.output.getvalue()
+
+    def test_snippets_lists_saved(self, tmp_path: Path) -> None:
+        snippets = tmp_path / "snippets"
+        snippets.mkdir()
+        (snippets / "alpha.py").write_text("a = 1\n")
+        (snippets / "beta.py").write_text("b = 2\n")
+        # Non-.py file should be ignored.
+        (snippets / "notes.txt").write_text("ignored\n")
+        context = _context(output=io.StringIO(), snippets_root=snippets)
+        BUILTIN_COMMANDS["snippets"](context, "")
+        text = context.output.getvalue()
+        assert "alpha" in text
+        assert "beta" in text
+        assert "notes" not in text
+
+    def test_snippets_empty_dir(self, tmp_path: Path) -> None:
+        context = _context(
+            output=io.StringIO(),
+            snippets_root=tmp_path / "snippets",
+        )
+        BUILTIN_COMMANDS["snippets"](context, "")
+        assert "no snippets" in context.output.getvalue()
+
+    def test_snippet_name_with_path_separator_sanitized(
+        self, tmp_path: Path,
+    ) -> None:
+        """`:save foo/bar` shouldn't escape the snippet root."""
+        context = _context(
+            output=io.StringIO(),
+            snippets_root=tmp_path / "snippets",
+        )
+        context.input_history.append("x = 1")
+        BUILTIN_COMMANDS["save"](context, "foo/bar")
+        # Whatever name the sanitizer produced, the file lives under
+        # the snippet root — not at /tmp/.../foo/bar.py.
+        assert (tmp_path / "snippets").iterdir()
+        for path in (tmp_path / "snippets").iterdir():
+            assert path.parent == tmp_path / "snippets"
+
+
+class TestEditCommand:
+    """Slice 1b — `:edit` ships editor-saved buffer to the device."""
+
+    def test_edit_ships_lines_via_stub_editor(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # Stub `_open_editor` so the test never actually shells out.
+        port = _stub_port()
+        context = LineModeContext(
+            port=port,  # type: ignore[arg-type]
+            output=io.StringIO(),
+            snippets_root=tmp_path / "snippets",
+            editor="ignored",
+        )
+
+        def fake_open_editor(*, editor: str, file_path) -> int:
+            file_path.write_text("a = 1\nb = 2\n")
+            return 0
+
+        from chumicro_repl import line_mode as line_mode_module
+        monkeypatch.setattr(line_mode_module, "_open_editor", fake_open_editor)
+
+        keep_running = BUILTIN_COMMANDS["edit"](context, "")
+        assert keep_running is True
+        recorded = b"".join(port.writes)  # type: ignore[attr-defined]
+        assert b"a = 1\r\n" in recorded
+        assert b"b = 2\r\n" in recorded
+        assert "shipped 2 line(s)" in context.output.getvalue()
+
+    def test_edit_nonzero_exit_skips_ship(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        port = _stub_port()
+        context = LineModeContext(
+            port=port,  # type: ignore[arg-type]
+            output=io.StringIO(),
+            snippets_root=tmp_path / "snippets",
+        )
+        from chumicro_repl import line_mode as line_mode_module
+        monkeypatch.setattr(
+            line_mode_module, "_open_editor",
+            lambda *, editor, file_path: 1,
+        )
+        BUILTIN_COMMANDS["edit"](context, "")
+        assert port.writes == []  # type: ignore[attr-defined]
+        assert "editor exited 1" in context.output.getvalue()
+
+    def test_edit_empty_buffer_no_ship(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        port = _stub_port()
+        context = LineModeContext(
+            port=port,  # type: ignore[arg-type]
+            output=io.StringIO(),
+            snippets_root=tmp_path / "snippets",
+        )
+
+        def fake_open_editor(*, editor: str, file_path) -> int:
+            # Editor closed without writing anything.
+            return 0
+
+        from chumicro_repl import line_mode as line_mode_module
+        monkeypatch.setattr(line_mode_module, "_open_editor", fake_open_editor)
+        BUILTIN_COMMANDS["edit"](context, "")
+        assert port.writes == []  # type: ignore[attr-defined]
+        assert "buffer empty" in context.output.getvalue()
+
+    def test_edit_seeds_with_recent_history(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The tempfile prefilled with recent input lets users polish without retyping."""
+        port = _stub_port()
+        context = LineModeContext(
+            port=port,  # type: ignore[arg-type]
+            output=io.StringIO(),
+            snippets_root=tmp_path / "snippets",
+        )
+        context.input_history.extend(["seed_a", "seed_b"])
+        captured: dict[str, str] = {}
+
+        def fake_open_editor(*, editor: str, file_path) -> int:
+            captured["seed"] = file_path.read_text()
+            return 1  # exit non-zero so ship-loop is skipped
+
+        from chumicro_repl import line_mode as line_mode_module
+        monkeypatch.setattr(line_mode_module, "_open_editor", fake_open_editor)
+        BUILTIN_COMMANDS["edit"](context, "")
+        assert "seed_a" in captured["seed"]
+        assert "seed_b" in captured["seed"]
 
 
 class TestPromptSessionConstruction:

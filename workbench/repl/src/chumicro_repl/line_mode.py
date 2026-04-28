@@ -31,9 +31,14 @@ CLI's ``--mode`` flag picks one or the other.
 
 from __future__ import annotations
 
+import os
 import re
+import shlex
+import subprocess
+import tempfile
 import time as _time_module
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, TextIO, cast
 
@@ -67,6 +72,15 @@ _DRAIN_SETTLE_SECONDS: float = 0.05
 #: its own subdirectory keyed off a sanitized form of the serial
 #: address — ``/dev/cu.usbmodem1101`` → ``dev_cu_usbmodem1101``.
 DEFAULT_HISTORY_ROOT: Path = Path.home() / ".chumicro-repl" / "history"
+
+#: Default location for ``:save`` / ``:load`` snippet files.  Flat
+#: directory keyed by name — ``:save back-porch-bringup`` lands at
+#: ``~/.chumicro-repl/snippets/back-porch-bringup.py``.
+DEFAULT_SNIPPETS_ROOT: Path = Path.home() / ".chumicro-repl" / "snippets"
+
+#: Default editor for ``:edit`` when ``$EDITOR`` is unset.  ``vi`` is
+#: the lowest-common-denominator install on every POSIX host.
+DEFAULT_EDITOR: str = "vi"
 
 #: Prefix that turns a line into a `:command`.  Plain shell convention.
 COMMAND_PREFIX: str = ":"
@@ -113,38 +127,232 @@ def history_path_for(
 
 
 # ---------------------------------------------------------------------------
-# Command registry
+# Command registry + execution context
 # ---------------------------------------------------------------------------
 
 
-#: Signature: ``(line, output) -> True | False``.  Return False to
-#: ask the loop to exit.  Slice 1a registers two commands;
-#: Slice 1b layers `:edit` / `:save` / `:load` / `:snippets` on
-#: top of the same registry.
-CommandHandler = Callable[[str, TextIO], bool]
+@dataclass
+class LineModeContext:
+    """Per-session state passed to every :command handler.
+
+    Carries everything a richer command needs that it can't derive
+    from its argument string: the live serial port, the rendering
+    output stream, the snippet directory, the editor binary, and a
+    rolling list of input lines that ``:save`` writes out as a
+    snippet.
+
+    The line list is updated by :func:`run_line_mode` on every
+    non-command line, so handlers reading ``input_history`` see
+    everything the user has shipped to the device this session in
+    order.
+    """
+
+    port: SerialPort
+    output: TextIO
+    snippets_root: Path = field(default_factory=lambda: DEFAULT_SNIPPETS_ROOT)
+    editor: str = field(
+        default_factory=lambda: os.environ.get("EDITOR") or DEFAULT_EDITOR,
+    )
+    #: Lines the user has typed and shipped this session, in order.
+    #: ``:save`` writes the (deduplicated, last-10) tail to disk.
+    input_history: list[str] = field(default_factory=list)
+
+    def send_line(self, line: str) -> None:
+        """Ship *line* to the device with a CRLF; record in the history list.
+
+        Used by ``:edit`` / ``:load`` to replay buffered text.  The
+        non-command branch of :func:`run_line_mode` also calls this
+        so editor- and snippet-replayed lines line up alongside
+        manually-typed ones in the session history.
+        """
+        self.port.write((line + "\r\n").encode("utf-8"))
+        self.input_history.append(line)
 
 
-def _cmd_quit(_line: str, output: TextIO) -> bool:
+#: Signature: ``(context, rest) -> True | False``.  *rest* is the
+#: substring after the command name.  Return False to ask the loop
+#: to exit.  Slice 1a shipped `:help` / `:quit` against an earlier
+#: signature; Slice 1b promotes to the context-bearing form so
+#: `:edit` can ship lines + `:save` can read history.
+CommandHandler = Callable[["LineModeContext", str], bool]
+
+
+def _cmd_quit(_context: LineModeContext, _rest: str) -> bool:
     """``:quit`` — exit the line-mode loop without rebooting the device."""
-    output.write("line-mode: bye\n")
-    output.flush()
+    _context.output.write("line-mode: bye\n")
+    _context.output.flush()
     return False
 
 
-def _cmd_help(_line: str, output: TextIO) -> bool:
+def _cmd_help(context: LineModeContext, _rest: str) -> bool:
     """``:help`` — list registered commands."""
-    output.write("commands:\n")
+    context.output.write("commands:\n")
     for name, handler in sorted(BUILTIN_COMMANDS.items()):
         doc = (handler.__doc__ or "").splitlines()[0].strip()
-        output.write(f"  :{name:<10}{doc}\n")
-    output.flush()
+        context.output.write(f"  :{name:<10}{doc}\n")
+    context.output.flush()
     return True
 
 
-#: Built-in command set for Slice 1a.  Slice 1b extends.
+#: Maximum number of recent input lines ``:save`` writes to disk.
+#: Keeps a "save my last burst" save short enough to be useful as a
+#: replay buffer; users wanting larger captures use the editor
+#: handoff (``:edit`` writes to a tempfile they can save manually).
+_SNIPPET_TAIL_LINES: int = 10
+
+
+def _snippet_path(context: LineModeContext, name: str) -> Path:
+    """Resolve a snippet name to its on-disk path.
+
+    Names go through :func:`sanitize_address`'s rules — keeps the
+    snippet root flat without surprises from path-separator bytes
+    in user-supplied names.
+    """
+    return context.snippets_root / f"{sanitize_address(name)}.py"
+
+
+def _cmd_save(context: LineModeContext, rest: str) -> bool:
+    """``:save <name>`` — write the last 10 input lines to a snippet."""
+    name = rest.strip()
+    if not name:
+        context.output.write("line-mode: usage — :save <name>\n")
+        context.output.flush()
+        return True
+    context.snippets_root.mkdir(parents=True, exist_ok=True)
+    target = _snippet_path(context, name)
+    tail = context.input_history[-_SNIPPET_TAIL_LINES:]
+    if not tail:
+        context.output.write(
+            "line-mode: nothing to save — type a line first.\n",
+        )
+        context.output.flush()
+        return True
+    target.write_text("\n".join(tail) + "\n")
+    context.output.write(
+        f"line-mode: saved {len(tail)} line(s) to {target}\n",
+    )
+    context.output.flush()
+    return True
+
+
+def _cmd_load(context: LineModeContext, rest: str) -> bool:
+    """``:load <name>`` — replay a saved snippet line-by-line to the device."""
+    name = rest.strip()
+    if not name:
+        context.output.write("line-mode: usage — :load <name>\n")
+        context.output.flush()
+        return True
+    target = _snippet_path(context, name)
+    if not target.is_file():
+        context.output.write(
+            f"line-mode: snippet not found: {target}\n",
+        )
+        context.output.flush()
+        return True
+    text = target.read_text()
+    lines = [line for line in text.splitlines() if line.strip() != ""]
+    for line in lines:
+        context.send_line(line)
+    context.output.write(
+        f"line-mode: replayed {len(lines)} line(s) from {target}\n",
+    )
+    context.output.flush()
+    return True
+
+
+def _cmd_snippets(context: LineModeContext, _rest: str) -> bool:
+    """``:snippets`` — list saved snippets."""
+    if not context.snippets_root.is_dir():
+        context.output.write("line-mode: no snippets saved yet\n")
+        context.output.flush()
+        return True
+    snippets = sorted(
+        path.stem
+        for path in context.snippets_root.iterdir()
+        if path.is_file() and path.suffix == ".py"
+    )
+    if not snippets:
+        context.output.write("line-mode: no snippets saved yet\n")
+    else:
+        context.output.write(f"snippets ({context.snippets_root}):\n")
+        for snippet in snippets:
+            context.output.write(f"  {snippet}\n")
+    context.output.flush()
+    return True
+
+
+def _open_editor(*, editor: str, file_path: Path) -> int:
+    """Run ``$EDITOR <file_path>`` and return its exit code.
+
+    Args:
+        editor: Editor command line.  Honors shell-shaped values
+            via ``shlex.split`` so things like ``"code -w"`` work.
+        file_path: File the editor opens.
+
+    Indirection point — tests stub this so they don't shell out.
+    """
+    argv = shlex.split(editor) + [str(file_path)]
+    completed = subprocess.run(argv, check=False)  # noqa: S603 — shlex-parsed user editor
+    return completed.returncode
+
+
+def _cmd_edit(context: LineModeContext, _rest: str) -> bool:
+    """``:edit`` — open ``$EDITOR``; ship the saved buffer to the device.
+
+    Match IPython's ``%edit`` semantics: the editor opens with the
+    last input prefilled (so the user can polish a multi-line block
+    without retyping it).  On save+exit, every non-empty line ships
+    to the device line-by-line.  Empty editor exit (no save / saved
+    empty) is a no-op.
+    """
+    seed = "\n".join(context.input_history[-_SNIPPET_TAIL_LINES:])
+    with tempfile.NamedTemporaryFile(
+        mode="w+", suffix=".py", delete=False,
+    ) as handle:
+        handle.write(seed)
+        if seed and not seed.endswith("\n"):
+            handle.write("\n")
+        tmp_path = Path(handle.name)
+    try:
+        editor_exit = _open_editor(editor=context.editor, file_path=tmp_path)
+        if editor_exit != 0:
+            context.output.write(
+                f"line-mode: editor exited {editor_exit}; nothing shipped\n",
+            )
+            context.output.flush()
+            return True
+        text = tmp_path.read_text()
+        lines = [line for line in text.splitlines() if line.strip() != ""]
+        if not lines:
+            context.output.write(
+                "line-mode: editor buffer empty; nothing shipped\n",
+            )
+            context.output.flush()
+            return True
+        for line in lines:
+            context.send_line(line)
+        context.output.write(
+            f"line-mode: shipped {len(lines)} line(s) from editor\n",
+        )
+        context.output.flush()
+    finally:
+        try:
+            tmp_path.unlink()
+        except OSError:  # pragma: no cover — tmpfile unlinks best-effort
+            pass
+    return True
+
+
+#: Built-in command set.  Slice 1b adds `:edit` / `:save` /
+#: `:load` / `:snippets`; richer commands layer in via the
+#: ``commands=`` param on :func:`run_line_mode`.
 BUILTIN_COMMANDS: dict[str, CommandHandler] = {
+    "edit": _cmd_edit,
     "help": _cmd_help,
+    "load": _cmd_load,
     "quit": _cmd_quit,
+    "save": _cmd_save,
+    "snippets": _cmd_snippets,
 }
 
 
@@ -221,6 +429,8 @@ def run_line_mode(
     output: TextIO,
     address: str,
     history_root: Path | None = None,
+    snippets_root: Path | None = None,
+    editor: str | None = None,
     commands: Mapping[str, CommandHandler] | None = None,
     prompt: str = ">>> ",
     welcome_banner: str = "",
@@ -273,6 +483,18 @@ def run_line_mode(
     )
     decoder = Utf8StreamDecoder()
     detector = StreamingPatternDetector()
+    context = LineModeContext(
+        port=port,
+        output=output,
+        snippets_root=(
+            snippets_root if snippets_root is not None else DEFAULT_SNIPPETS_ROOT
+        ),
+        editor=(
+            editor
+            if editor is not None
+            else (os.environ.get("EDITOR") or DEFAULT_EDITOR)
+        ),
+    )
 
     if welcome_banner:
         output.write(welcome_banner)
@@ -308,7 +530,7 @@ def run_line_mode(
         if not line:
             continue
         if line.startswith(COMMAND_PREFIX):
-            name, _rest = _split_command(line)
+            name, rest = _split_command(line)
             handler = command_table.get(name)
             if handler is None:
                 output.write(
@@ -317,12 +539,22 @@ def run_line_mode(
                 )
                 output.flush()
                 continue
-            keep_running = handler(line, output)
+            keep_running = handler(context, rest)
             if not keep_running:
                 return 0
+            _drain_serial(
+                port,
+                output=output,
+                decoder=decoder,
+                detector=detector,
+                theme=active_theme,
+                time=active_time,
+                window_seconds=drain_window_seconds,
+                settle_seconds=drain_settle_seconds,
+            )
             continue
         try:
-            port.write((line + "\r\n").encode("utf-8"))
+            context.send_line(line)
         except OSError as error:  # pragma: no cover — port dropped mid-line
             output.write(f"line-mode: write failed: {error!r}\n")
             output.flush()

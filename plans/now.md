@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **Workspace ecosystem completion — Phase 7 in flight.**  Phases 1, 2, 4, 5, 6 shipped earlier in this session.  Phase 7 Slice 1a just landed: new `chumicro_workspace.line_mode` module wraps `prompt_toolkit.PromptSession` with persistent per-device history (under `~/.chumicro-repl/history/<sanitized-address>/`) + a `:command` registry stub (`:help` / `:quit` for now); CLI gains `--mode {line,passthrough}` (defaults to `passthrough` until raw-REPL auto-detect lands); new `interactive_line()` entry point on `chumicro_repl.tui` mirrors the existing `interactive()` shape but routes through the line-mode loop.  `prompt_toolkit>=3.0` added as a runtime dep (CPython-only, fine per Decision 0032 §6).  Slice 1b (`:edit` / `:save` / `:load` / `:snippets`) and 1c (tab completion) are the remaining sub-slices.
-- **Last shipped:** Phase 7 Slice 1a — line mode + persistent history.
-- **In flight:** Phase 7 Slice 1b next — editor handoff + snippet store.
+- **Phase:** **Workspace ecosystem completion — Phase 7 in flight.**  Phases 1, 2, 4, 5, 6 shipped earlier in this session.  Phase 7 Slices 1a + 1b shipped.  Slice 1b (just landed): editor handoff + snippet store.  `LineModeContext` dataclass carries port + output + snippets-root + editor + per-session input_history; `CommandHandler` signature promoted from `(line, output)` to `(context, rest)`.  Four new commands wired into `BUILTIN_COMMANDS`: `:edit` (opens `$EDITOR` with the recent history pre-seeded, ships saved buffer line-by-line on save), `:save <name>` (writes the last 10 input lines to `~/.chumicro-repl/snippets/<name>.py`), `:load <name>` (replays a saved snippet to the device), `:snippets` (lists saved snippets).  Editor stub indirection (`_open_editor`) keeps tests off the shell-out.  Slice 1c (tab completion via on-device `dir()`) is the only remaining sub-slice.
+- **Last shipped:** Phase 7 Slice 1b — editor handoff + snippet store.
+- **In flight:** Phase 7 Slice 1c — tab completion via on-device `dir()` query.
 - **Blocked on:** —
-- **Last touched:** `workbench/repl/src/chumicro_repl/{__init__,cli,line_mode,tui}.py`, `workbench/repl/tests/{test_line_mode,test_tui}.py`, `workbench/repl/pyproject.toml`, `plans/now.md`.
+- **Last touched:** `workbench/repl/src/chumicro_repl/{__init__,line_mode}.py`, `workbench/repl/tests/test_line_mode.py`, `plans/now.md`.
 
 ---
 
