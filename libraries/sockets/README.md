@@ -3,7 +3,7 @@
 <img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png"
 align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-Cross-runtime TCP + TLS client sockets for CircuitPython, MicroPython, and CPython.  One protocol, one factory, runtime-appropriate adapters underneath.
+Cross-runtime TCP + TLS + UDP sockets for CircuitPython, MicroPython, and CPython.  One protocol per shape, one factory each, runtime-appropriate adapters underneath.
 
 <br clear="left">
 
@@ -88,10 +88,15 @@ without hitting the network.
 |---|---|
 | `tcp_client_socket(host, port, *, radio=None)` | Open a plain TCP connection. |
 | `tls_client_socket(host, port, *, context=None, radio=None)` | Open a TLS connection. |
-| `ssl_context_with_ca(ca_pem)` | Build an `ssl.SSLContext` trusting only the supplied CA(s). Works on every supported runtime. |
-| `TCPClientSocket` (Protocol) | The minimum surface every adapter implements (`send`, `recv_into`, `close`, `setblocking`, `settimeout`, `fileno`). |
-| `UnsupportedSSLConfigError` | Reserved for future adapter additions; today's boards (Pi Pico W, ESP32-S2/S3 native wifi) don't raise it. |
-| `chumicro_sockets.testing.FakeSocket` | In-memory test double covering the full protocol. |
+| `tcp_listening_socket(host, port, *, backlog=4, radio=None)` | Open a non-blocking TCP listening socket. |
+| `tls_listening_socket(host, port, *, context, backlog=4, radio=None)` | Open a non-blocking TLS listening socket. |
+| `udp_socket(bind_host="0.0.0.0", bind_port=0, *, radio=None, broadcast=False)` | Open a UDP datagram socket; default args bind ephemeral. |
+| `ssl_context_with_ca(ca_pem)` | Build an `ssl.SSLContext` trusting only the supplied CA(s).  Works on every supported runtime. |
+| `ssl_context_with_cert_and_key_paths(cert_path, key_path)` | Server-side `ssl.SSLContext` from PEM file paths.  CP-portable shape. |
+| `TCPClientSocket` (Protocol) | TCP surface (`send`, `recv_into`, `close`, `setblocking`, `settimeout`, `fileno`). |
+| `UDPSocket` (Protocol) | UDP surface (`sendto(data, host, port)`, `recvfrom_into(buffer, nbytes=0) -> (n, (host, port))`, `close`, `setblocking`, `settimeout`, `fileno`, `getsockname`). |
+| `UnsupportedSSLConfigError` | Raised when the requested TLS shape isn't supported by the current runtime (e.g. CP's in-memory cert+key). |
+| `chumicro_sockets.testing.FakeSocket` / `FakeUDPSocket` | In-memory test doubles covering the full TCP / UDP protocol. |
 
 ## Platform support
 
@@ -104,6 +109,8 @@ Works on CPython, MicroPython, and CircuitPython.
 | [`quickstart.py`](examples/quickstart.py) | FakeSocket round-trip — send/recv/close exercising the protocol against in-memory bytearrays. Identical on every runtime. |
 | [`tcp_roundtrip.py`](examples/tcp_roundtrip.py) | Real TCP connect → send → recv → close.  Same shape on CP/MP/CPython; CP needs `radio=wifi.radio`, MP/CPython ignore. |
 | [`tls_with_custom_ca.py`](examples/tls_with_custom_ca.py) | Custom-CA TLS via `ssl_context_with_ca`.  Documents the substrate quirks observed on Pi Pico W mbedTLS in the docstring. |
+| [`udp_echo_loopback.py`](examples/udp_echo_loopback.py) | Two UDP sockets on loopback — one-shot send/echo round trip.  Runs on CPython directly; same shape on a board with `radio=wifi.radio`. |
+| [`circuitpython_udp_echo_client.py`](examples/circuitpython_udp_echo_client.py) | Board-side UDP echo client — wifi up, send datagram to a host echo server, read echo back, non-blocking. |
 
 ## Developing this library
 

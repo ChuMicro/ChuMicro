@@ -71,6 +71,70 @@ def connect_tls(host, port, *, context=None, radio):  # pragma: no cover - devic
     return wrapped
 
 
+def udp_socket(  # pragma: no cover - device only
+    *,
+    bind_host="0.0.0.0",
+    bind_port=0,
+    radio,
+    broadcast=False,
+):
+    """Open a UDP socket on a CP radio, bound to (bind_host, bind_port).
+
+    CP's ``socketpool`` supports ``AF_INET`` + ``SOCK_DGRAM`` (verified
+    on CP 10.x for both ESP32-S2 and rp2).  Returns a wrapper that
+    normalises ``sendto`` to the separated ``(data, host, port)``
+    signature and exposes ``recvfrom_into`` directly (CP's socketpool
+    already exposes it natively as ``recvfrom_into(buffer)`` returning
+    ``(nbytes, (host, port))``).
+
+    ``SO_BROADCAST`` setup is best-effort: CP's socketpool does expose
+    ``setsockopt`` on recent firmware, but older builds may not — we
+    swallow ``OSError`` / ``AttributeError`` so the factory stays
+    portable.
+    """
+    pool = _pool_for(radio)
+    sock = pool.socket(pool.AF_INET, pool.SOCK_DGRAM)
+    if broadcast:
+        try:
+            sock.setsockopt(pool.SOL_SOCKET, pool.SO_BROADCAST, 1)
+        except (OSError, AttributeError):
+            # Older CP firmware may lack SO_BROADCAST or setsockopt; non-fatal.
+            pass
+    sock.bind((bind_host, bind_port))
+    return _CPUDPWrapper(sock)
+
+
+class _CPUDPWrapper:  # pragma: no cover - device only
+    """Adapts a CP socketpool UDP socket to the chumicro_sockets UDP protocol.
+
+    Normalises ``sendto`` to the separated ``(data, host, port)``
+    signature.  CP's ``recvfrom_into(buffer)`` already returns the
+    ``(nbytes, (host, port))`` tuple our protocol promises, so it's
+    forwarded directly.
+    """
+
+    def __init__(self, sock):
+        self._sock = sock
+        self.close = sock.close
+        self.setblocking = sock.setblocking
+        # CP socketpool exposes settimeout on recent firmware; fall
+        # back to a no-op so the protocol stays satisfied on older builds.
+        self.settimeout = getattr(sock, "settimeout", lambda _seconds: None)
+        forwarded_fileno = getattr(sock, "fileno", None)
+        self.fileno = forwarded_fileno if forwarded_fileno is not None else (lambda: -1)
+        forwarded_getsockname = getattr(sock, "getsockname", None)
+        if forwarded_getsockname is not None:
+            self.getsockname = forwarded_getsockname
+        else:
+            # CP socketpool may omit getsockname; report a placeholder.
+            self.getsockname = lambda: ("0.0.0.0", 0)
+        # CP's recvfrom_into returns (nbytes, address) — forward.
+        self.recvfrom_into = sock.recvfrom_into
+
+    def sendto(self, data, host, port):
+        return self._sock.sendto(data, (host, port))
+
+
 def listen_tcp(host, port, *, backlog=4, radio):  # pragma: no cover - device only
     """Open a non-blocking TCP listening socket via the CP socketpool.
 

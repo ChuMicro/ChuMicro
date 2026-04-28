@@ -37,6 +37,63 @@ except ImportError:  # pragma: no cover — MP / CP without typing stub
 
 
 @runtime_checkable
+class UDPSocket(Protocol):
+    """Minimum surface every UDP adapter implements.
+
+    Datagram-oriented: ``sendto`` carries the destination on every
+    call; ``recvfrom_into`` returns ``(nbytes, (host, port))`` so the
+    caller can identify the sender for protocols that need it
+    (NTP, mDNS, SSDP, ad-hoc replies).
+
+    Satisfied by CP socketpool, MP stdlib socket, CPython stdlib
+    socket, and ``FakeUDPSocket`` (:mod:`chumicro_sockets.testing`)
+    via per-runtime wrappers in :mod:`chumicro_sockets._adapters`.
+    """
+
+    def sendto(self, data: bytes, host: str, port: int) -> int:
+        """Send *data* as one datagram to ``(host, port)``.
+
+        Returns the number of bytes accepted by the kernel — usually
+        equal to ``len(data)``.  Datagrams larger than the path MTU
+        are typically rejected with ``OSError(EMSGSIZE)``.  Pass IPv4
+        dotted-quad strings or hostnames that resolve to one;
+        adapters delegate name resolution to the runtime.
+        """
+
+    def recvfrom_into(self, buffer: bytearray, nbytes: int = 0) -> tuple:
+        """Receive one datagram into *buffer*.
+
+        Returns ``(nbytes_received, (sender_host, sender_port))``.
+        Returns ``(0, (host, port))`` only when *buffer* is empty —
+        UDP has no peer-close semantics.  Datagrams larger than
+        *nbytes* (or ``len(buffer)`` when ``nbytes=0``) are
+        **truncated**; the unread tail is discarded.
+
+        Raises ``OSError(EAGAIN=11)`` when no datagram is queued and
+        the socket is non-blocking.
+        """
+
+    def close(self) -> None:
+        """Release the underlying socket handle.  Idempotent."""
+
+    def setblocking(self, flag: bool) -> None:
+        """Toggle blocking / non-blocking I/O.  Same semantics as TCP."""
+
+    def settimeout(self, seconds) -> None:
+        """Set a timeout for blocking calls.  Same semantics as TCP."""
+
+    def fileno(self) -> int:
+        """Return the integer fd or ``-1`` if the adapter has no real fd."""
+
+    def getsockname(self) -> tuple:
+        """Return the locally-bound ``(host, port)`` tuple.
+
+        Useful when the socket was bound with ``port=0`` to obtain
+        an ephemeral port the OS picked.
+        """
+
+
+@runtime_checkable
 class TCPClientSocket(Protocol):
     """Minimum surface every TCP adapter implements.
 
