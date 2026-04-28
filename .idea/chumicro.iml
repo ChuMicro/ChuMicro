@@ -22,6 +22,9 @@
       <sourceFolder url="file://$MODULE_DIR$/libraries/kvstore/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/kvstore/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/kvstore/functional_tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/logging/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/logging/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/logging/functional_tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/mqtt/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/mqtt/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/mqtt/functional_tests" isTestSource="true" />
