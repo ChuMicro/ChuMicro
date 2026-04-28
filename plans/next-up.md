@@ -16,13 +16,13 @@
 
   Both MicroPython boards (Pi Pico W + Lolin S2) pass the QoS 1 publish/subscribe round-trip end-to-end against a host-side mosquitto fixture; host-side `test_mosquitto_integration.py` (6 tests, including QoS 1 + concurrent QoS 1 + retain) also passes against a real broker on CPython.
 
-- [ ] **CP MQTT functional test hangs on TCP connect to host mosquitto** (noted 2026-04-28).  After the parser-race fix landed, Lolin S2 CP and Pi Pico W CP (flash mode) still fail `test_real_mqtt_publish_subscribe_round_trip` — but via a different failure mode.  The device's wifi connects (we see `WIFI_OK ip=172.16.1.X`), then nothing further prints; the idle-timeout correctly waits 10 s before bailing.  Same mosquitto fixture works from the MicroPython boards on the same LAN at 2.66 s, so the broker is reachable.
+- [x] ~~**CP MQTT functional test hangs on TCP connect to host mosquitto**~~ — **fixed 2026-04-28** (this commit, after empirical diagnosis).  The hang was a red herring; the actual bug was a clock-domain mismatch in microseconds.  CircuitPython doesn't have `time.ticks_ms`, so the test's local `_ticks_ms()` helper fell back to `time.monotonic() * 1000` (unwrapped float-derived ms).  `chumicro-timing` on CP resolves to `supervisor.ticks_ms` (29-bit-wrapped per Decision 0008).  MQTT client computed deadlines via `chumicro_timing` but consumed the test's `now_ms` from the other domain.  `ticks_diff(wrapped_deadline, unwrapped_now_ms)` produced wrong-signed results and `_check_deadlines` fired CONNACK timeout on the very first tick, before any inbound recv even happened.
 
-  Hypothesis: CP socketpool's TCP `connect()` is blocking on something that doesn't bite MP — possibly a routing quirk between the wifi stack and the host's mosquitto bind (macOS Application Firewall? bind interface mismatch?) or a CP-specific timeout default that makes a transient SYN drop turn into a multi-second hang.
+  Two-part fix:
+  1. **Test side** — use `chumicro_timing.ticks_ms` directly so any value passed to chumicro-mqtt is in the same domain as its internal deadline arithmetic.
+  2. **Library side** (`chumicro-mqtt 0.1.5 → 0.1.6`) — `MQTTClient.handle(now_ms)` now ignores the caller-supplied `now_ms` for internal deadline math and uses its own injected `ticks_ms_func` (the constructor-injected source from Decision 0010).  Callers passing values from a different time domain no longer trip the bug; the runner-supplied `now_ms` is informational, not authoritative.
 
-  Action: instrument the test (or chumicro-sockets CP TCP path) to localize the hang — add prints around `tcp_client_socket(BROKER_HOST, BROKER_PORT, radio=…)` and `MQTTClient.connect()` so the next failure shows which call hangs.  If it's the connect, check macOS firewall (`sudo /usr/libexec/ApplicationFirewall/socketfilterfw --add /opt/homebrew/sbin/mosquitto`) and verify CP can reach the host LAN IP via a simpler standalone TCP probe.
-
-  Out of scope for this commit; the parser-race fix is complete and validated independently via the bake test.
+  All four boards now pass `test_real_mqtt_publish_subscribe_round_trip` against the host-side mosquitto fixture: Pi Pico W MP 2.75 s, Pi Pico W CP (flash) 3.42 s, Lolin S2 MP 4.08 s, Lolin S2 CP 4.48 s.  Diagnosed by spawning mosquitto manually with verbose logging and comparing the broker's view of the connection (CONNACK sent, client closed immediately) with `_check_deadlines`-side instrumentation that revealed `state=failed` after a single tick.
 
 - [ ] **`.scratch/run_*_acceptance.py` runners deploy to root, not /lib/** (low priority — noted 2026-04-26).  Gitignored debug tools.  Symptom (stale `/lib/` shadowing fresh `/` library files) only bites when a workspace deploy preceded the runner deploy.
 

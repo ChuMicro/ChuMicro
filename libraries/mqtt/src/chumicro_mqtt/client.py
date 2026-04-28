@@ -638,6 +638,18 @@ class MQTTClient:
         because wifi is still down) leaves the client in ``FAILED``
         and the next tick retries — naturally rate-limited by the
         runner's tick cadence.
+
+        The *now_ms* argument is **ignored** for deadline arithmetic;
+        the client uses its own injected ``ticks_ms_func`` (default
+        :func:`chumicro_timing.ticks_ms`) so the deadline values it
+        computed at ``connect()`` / ``publish()`` time are guaranteed
+        to be in the same time domain as the value compared against
+        them.  Callers passing a tick from a different source — e.g.
+        ``time.monotonic() * 1000`` on a CircuitPython board where
+        ``chumicro_timing`` resolves to ``supervisor.ticks_ms`` — used
+        to trip ``ticks_diff(deadline, foreign_now)`` to a negative
+        result on the first tick, immediately failing CONNECT with
+        "timed out awaiting connack".  Hardened 2026-04-28.
         """
         if self._state == ProtocolState.FAILED:
             if self._socket_factory is None or not self._user_wants_connected:
@@ -647,11 +659,16 @@ class MQTTClient:
             # Self-heal succeeded — fall through and tick the new connection.
         if self._state == ProtocolState.DISCONNECTED:
             return
+        # Use the client's own tick source for deadline arithmetic so
+        # we are immune to caller / chumicro_timing-domain mismatches
+        # (see docstring).  Same value passed to both deadline and
+        # keepalive checks for intra-tick consistency.
+        self_now_ms = self._ticks_ms()
         try:
             self._drain_tx_queue()
             self._read_inbound()
-            self._check_deadlines(now_ms)
-            self._check_keepalive(now_ms)
+            self._check_deadlines(self_now_ms)
+            self._check_keepalive(self_now_ms)
             self._drain_tx_queue()
         except MQTTError as error:
             self._last_error = error
