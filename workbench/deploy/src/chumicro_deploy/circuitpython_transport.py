@@ -852,7 +852,16 @@ class CircuitpythonTransport:
                 extra_modules=extra_modules,
             )
             try:
-                flash_drive.rsync(staging_path, drive_path)
+                flash_drive.rsync(
+                    staging_path,
+                    drive_path,
+                    # Functional tests want a clean slate between test
+                    # files (stale test code from a prior run would
+                    # confuse the harness); preserve firmware user-
+                    # config files the device needs across runs.
+                    delete=True,
+                    additional_excludes=flash_drive.FUNCTIONAL_TEST_EXTRA_EXCLUDES,
+                )
             except flash_drive.FlashDriveError as error:
                 raise CircuitpythonTransportError(str(error)) from error
 
@@ -1145,21 +1154,43 @@ class CircuitpythonTransport:
             "import supervisor; supervisor.runtime.autoreload = False"
         )
 
+        # Build a local staging tree mirroring the desired drive
+        # layout, then rsync it onto the drive.  Single primitive both
+        # this path and ``_stage_to_flash`` (functional tests) share
+        # so we have one set of FAT-write reliability guarantees
+        # (``--checksum`` + ``--inplace`` to dodge the failure modes
+        # of direct per-file ``Path.write_bytes`` on USB-MSC FAT32).
+        # ``delete=False`` preserves user-data files on the drive
+        # that aren't part of the deploy's file map (``settings.toml``,
+        # custom modules); ``chumicro-workspace deploy --wipe`` is the
+        # destructive escape hatch.
         try:
-            for device_path in sorted(files.keys()):
-                relative = device_path.lstrip("/")
-                destination = drive_path / relative
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                destination.write_bytes(files[device_path])
-                if on_file_staged is not None:
-                    on_file_staged(device_path)
+            with tempfile.TemporaryDirectory() as staging_directory:
+                staging_path = Path(staging_directory)
+                for device_path in sorted(files.keys()):
+                    relative = device_path.lstrip("/")
+                    staging_destination = staging_path / relative
+                    staging_destination.parent.mkdir(parents=True, exist_ok=True)
+                    staging_destination.write_bytes(files[device_path])
+                    if on_file_staged is not None:
+                        on_file_staged(device_path)
+                flash_drive.strip_extended_attributes(staging_path)
+                flash_drive.rsync(
+                    staging_path,
+                    drive_path,
+                    delete=False,
+                )
+        except flash_drive.FlashDriveError as rsync_error:
+            raise CircuitpythonTransportError(
+                str(rsync_error),
+            ) from rsync_error
         except OSError as error:
-            # A probe-pass doesn't guarantee the drive stays writable —
-            # the user could eject between the probe and the real copy,
-            # or fill it up with non-staged data, or remount it RO.
-            # Re-raise with the same accurate wrapper the probe path
-            # uses so the classifier routes disk-full / RO to
-            # FLASH_COPY_FAILED instead of CIRCUITPY_DRIVE_MISSING.
+            # The host-side staging-tree build can still hit OSError
+            # (out of /tmp space, etc.); the probe-pass guarantee
+            # covered the drive itself.  Re-raise with the same
+            # wrapper the probe path uses so the classifier routes
+            # disk-full / RO to FLASH_COPY_FAILED instead of
+            # CIRCUITPY_DRIVE_MISSING.
             raise CircuitpythonTransportError(
                 _format_probe_error(drive_path, error),
             ) from error
@@ -1492,22 +1523,42 @@ class CircuitpythonTransport:
         return self._staged_sources
 
     def _read_until(self, marker: bytes) -> bytes:
-        """Read from serial until *marker* is found or timeout is reached.
+        """Read from serial until *marker* is found or the link goes idle.
+
+        Uses an **idle timeout** rather than a fixed wall-clock deadline:
+        as long as new bytes keep arriving, ``_read_until`` keeps reading.
+        Only ``self.timeout`` seconds of *consecutive silence* end the
+        wait.
+
+        Why: long-running scripts (functional-test chunks doing wifi
+        connect + MQTT QoS 1 round-trip + LAN echo, e.g. 15-30 s of
+        device-side work) emit output across the whole window and only
+        send the trailing ``\\x04>`` markers when the script finishes.
+        A wall-clock-bounded read aborts mid-script with a partial
+        buffer like ``'OKWIFI_OK ip=…\\r\\n'`` (verified live on
+        Pi Pico W CP / Lolin S2 CP, 2026-04-28) and
+        :meth:`_parse_raw_repl_response` raises a confusing
+        "Malformed raw REPL response (missing \\x04 markers)" error.
+        Idle-timeout semantics let the read keep up with the script's
+        natural pacing while still bounding the no-data case.
 
         Args:
             marker: Byte sequence to look for.
 
         Returns:
-            All bytes read, including the marker if found.
+            All bytes read, including the marker if found.  When the
+            wait ends due to idle timeout, returns whatever was
+            accumulated.
         """
         assert self._port is not None
         accumulated = b""
-        deadline = self._time.monotonic() + self.timeout
-        while self._time.monotonic() < deadline:
+        last_progress = self._time.monotonic()
+        while self._time.monotonic() - last_progress < self.timeout:
             waiting = self._port.in_waiting
             if waiting > 0:
                 chunk = self._port.read(waiting)
                 accumulated += chunk
+                last_progress = self._time.monotonic()
                 if marker in accumulated:
                     return accumulated
             else:

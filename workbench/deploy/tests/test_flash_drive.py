@@ -121,15 +121,19 @@ class TestRsync:
             with pytest.raises(FlashDriveError, match="rsync is required"):
                 flash_drive.rsync(source, destination)
 
-    def test_uses_expected_excludes(self, tmp_path: Path) -> None:
-        """rsync command excludes user-config files, build artifacts, and macOS noise.
+    def test_default_excludes(self, tmp_path: Path) -> None:
+        """Default rsync command carries the base exclude set + ``--delete``.
 
+        Build artifacts, macOS file-level detritus, and macOS volume-
+        level noise dirs / sentinels are unconditional excludes.  The
         macOS-noise-dir excludes prevent ``rsync --delete`` from
         aborting with ``unlinkat: Operation not permitted`` when the
-        kernel locks ``.Trashes/<UID>/`` read-only on a FAT volume —
-        same root cause the ``.Trashes`` skip sentinel in
-        :func:`flash_drive.neuter_macos_metadata` prevents going
-        forward.  Excludes here cover already-contaminated drives.
+        kernel locks ``.Trashes/<UID>/`` read-only on a FAT volume.
+        User-config filenames (``boot.py``, ``code.py``, etc.) are
+        **not** in the base set — they're caller-supplied via
+        ``additional_excludes`` so the production deploy path can
+        write a deploy's ``code.py`` entrypoint without hitting an
+        exclude rule (see ``test_additional_excludes_flow_through``).
         """
         source = tmp_path / "source"
         source.mkdir()
@@ -158,10 +162,6 @@ class TestRsync:
             "--exclude=*.pyc",
             "--exclude=.DS_Store",
             "--exclude=._*",
-            "--exclude=boot.py",
-            "--exclude=boot_out.txt",
-            "--exclude=code.py",
-            "--exclude=settings.toml",
             # macOS noise dirs (auto-created, kernel-locked).
             "--exclude=.Trashes",
             "--exclude=.Spotlight-V100",
@@ -172,6 +172,74 @@ class TestRsync:
             "--exclude=.metadata_never_index",
         ):
             assert exclude in command
+        # User-config filenames are NOT in the base set.
+        for caller_supplied in (
+            "--exclude=boot.py",
+            "--exclude=code.py",
+            "--exclude=settings.toml",
+        ):
+            assert caller_supplied not in command
+
+    def test_delete_false_omits_delete_flag(self, tmp_path: Path) -> None:
+        """``delete=False`` (production deploy path) drops ``--delete``."""
+        source = tmp_path / "source"
+        source.mkdir()
+        destination = tmp_path / "destination"
+        destination.mkdir()
+
+        captured: list[list[str]] = []
+
+        def fake_run(command, **kwargs):
+            captured.append(command)
+            return subprocess.CompletedProcess(args=command, returncode=0)
+
+        with patch(
+            "chumicro_deploy.flash_drive.subprocess.run",
+            side_effect=fake_run,
+        ):
+            flash_drive.rsync(source, destination, delete=False)
+
+        assert captured
+        assert "--delete" not in captured[0]
+        # Base excludes still in place — the only divergence is --delete.
+        assert "--exclude=__pycache__" in captured[0]
+        assert "--exclude=.Trashes" in captured[0]
+
+    def test_additional_excludes_flow_through(self, tmp_path: Path) -> None:
+        """``additional_excludes`` are passed through verbatim.
+
+        Functional tests use this to keep the firmware's user-config
+        files (``boot.py``, ``code.py``, ``settings.toml``) safe from
+        ``--delete`` while still cleaning stale test files.
+        """
+        source = tmp_path / "source"
+        source.mkdir()
+        destination = tmp_path / "destination"
+        destination.mkdir()
+
+        captured: list[list[str]] = []
+
+        def fake_run(command, **kwargs):
+            captured.append(command)
+            return subprocess.CompletedProcess(args=command, returncode=0)
+
+        with patch(
+            "chumicro_deploy.flash_drive.subprocess.run",
+            side_effect=fake_run,
+        ):
+            flash_drive.rsync(
+                source,
+                destination,
+                additional_excludes=flash_drive.FUNCTIONAL_TEST_EXTRA_EXCLUDES,
+            )
+
+        for extra in (
+            "--exclude=boot.py",
+            "--exclude=boot_out.txt",
+            "--exclude=code.py",
+            "--exclude=settings.toml",
+        ):
+            assert extra in captured[0]
 
 
 class TestMacOSHelpers:
