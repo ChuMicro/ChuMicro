@@ -15,6 +15,7 @@
         "libraries/logging/src",
         "libraries/mqtt/src",
         "libraries/msgpack/src",
+        "libraries/ntp/src",
         "libraries/requests/src",
         "libraries/runner/src",
         "libraries/sockets/src",
