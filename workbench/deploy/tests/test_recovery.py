@@ -370,6 +370,22 @@ class _FakeDeployer:
         on_file_staged: Callable[[str], None] | None = None,
         on_execute_line: Callable[[str], None] | None = None,
     ) -> DeployResult:
+        return self._consume()
+
+    def deploy_diff(
+        self,
+        source,
+        *,
+        wipe: bool = False,
+        on_progress: Callable[[float, str], None] | None = None,
+        on_file_staged: Callable[[str], None] | None = None,
+        on_file_deleted: Callable[[str], None] | None = None,
+        on_execute_line: Callable[[str], None] | None = None,
+    ) -> DeployResult:
+        self.last_wipe = wipe
+        return self._consume()
+
+    def _consume(self) -> DeployResult:
         self.calls += 1
         if not self._outcomes:
             raise AssertionError(
@@ -680,6 +696,89 @@ def test_deployer_property_exposes_wrapped_instance() -> None:
         output=sink,
     )
     assert interactive.deployer is fake
+
+
+# ---------------------------------------------------------------------------
+# InteractiveDeployer.deploy_diff — mirror of .deploy with wipe + on_file_deleted
+# ---------------------------------------------------------------------------
+
+
+def test_deploy_diff_succeeds_on_first_attempt() -> None:
+    ok = DeployResult(success=True, execute_output="ok\n")
+    fake = _FakeDeployer([ok])
+    sink, lines = _capturing_output()
+    interactive = InteractiveDeployer(
+        fake,  # type: ignore[arg-type]
+        prompt=_ScriptedPrompt([]),
+        output=sink,
+    )
+
+    result = interactive.deploy_diff(_DUMMY_SOURCE)  # type: ignore[arg-type]
+
+    assert result is ok
+    assert fake.calls == 1
+    assert fake.last_wipe is False
+    assert lines == []
+
+
+def test_deploy_diff_forwards_wipe_to_underlying_deployer() -> None:
+    ok = DeployResult(success=True)
+    fake = _FakeDeployer([ok])
+    interactive = InteractiveDeployer(
+        fake,  # type: ignore[arg-type]
+        prompt=_ScriptedPrompt([]),
+        output=_capturing_output()[0],
+    )
+
+    interactive.deploy_diff(_DUMMY_SOURCE, wipe=True)  # type: ignore[arg-type]
+
+    assert fake.last_wipe is True
+
+
+def test_deploy_diff_retries_on_port_unavailable_then_succeeds() -> None:
+    ok = DeployResult(success=True)
+    fake = _FakeDeployer(
+        [
+            CircuitpythonTransportError(
+                "Failed to open serial port /dev/cu.usbmodem: Resource busy",
+            ),
+            ok,
+        ],
+    )
+    sink, lines = _capturing_output()
+    prompt = _ScriptedPrompt([""])
+    interactive = InteractiveDeployer(
+        fake,  # type: ignore[arg-type]
+        prompt=prompt,
+        output=sink,
+    )
+
+    result = interactive.deploy_diff(_DUMMY_SOURCE)  # type: ignore[arg-type]
+
+    assert result is ok
+    assert fake.calls == 2
+    # Coaching went out before the retry.
+    assert any("port_unavailable" in line for line in lines)
+
+
+def test_deploy_diff_traceback_returns_result_but_prints_coaching() -> None:
+    bad = DeployResult(
+        success=False,
+        execute_output="boom",
+        traceback="Traceback (most recent call last):\n  File 'app.py', line 1\nValueError",
+    )
+    fake = _FakeDeployer([bad])
+    sink, lines = _capturing_output()
+    interactive = InteractiveDeployer(
+        fake,  # type: ignore[arg-type]
+        prompt=_ScriptedPrompt([]),
+        output=sink,
+    )
+
+    result = interactive.deploy_diff(_DUMMY_SOURCE)  # type: ignore[arg-type]
+
+    assert result is bad
+    assert any("traceback" in line.lower() for line in lines)
 
 
 # ---------------------------------------------------------------------------

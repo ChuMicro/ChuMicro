@@ -198,10 +198,8 @@ def _cmd_resolve_firmware_url(args: argparse.Namespace) -> int:
 
 def _cmd_deploy(args: argparse.Namespace) -> int:
     """Push a file set onto a connected board and run the entrypoint."""
-    # Import here so the top-level CLI stays lightweight — deployer
-    # pulls in transport machinery that is irrelevant for probe /
-    # resolve-firmware-url invocations.
     from .deployer import Deployer
+    from .recovery import InteractiveDeployer
 
     if args.directory is not None and args.file_map is not None:
         print(
@@ -234,9 +232,11 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
         )
         return 2
 
-    result = Deployer(_device_from_args(args)).deploy(
-        source, on_progress=_stderr_progress,
+    deployer = Deployer(_device_from_args(args))
+    runner: Deployer | InteractiveDeployer = (
+        deployer if args.non_interactive else InteractiveDeployer(deployer)
     )
+    result = runner.deploy(source, on_progress=_stderr_progress)
     if result.execute_output:
         print(result.execute_output, end="")
     if not result.success:
@@ -376,6 +376,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--resource-prefix",
         default="/",
         help="On-device prefix for non-entrypoint files (default /).",
+    )
+    deploy_parser.add_argument(
+        "--non-interactive",
+        action="store_true",
+        help=(
+            "Skip the recovery-coaching wrapper and let transport "
+            "errors propagate uncaught.  Use in CI / scripted flows "
+            "that don't have stdin to answer retry prompts.  "
+            "Interactive coaching is on by default."
+        ),
     )
     deploy_parser.set_defaults(func=_cmd_deploy)
 

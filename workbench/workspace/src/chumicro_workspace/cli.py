@@ -585,6 +585,27 @@ def _cmd_devices(args: argparse.Namespace) -> int:
     return 0
 
 
+def _make_deploy_runner(device: Any, *, non_interactive: bool) -> Any:
+    """Construct the deploy runner for a CLI command.
+
+    Wraps a fresh :class:`chumicro_deploy.Deployer` in
+    :class:`chumicro_deploy.InteractiveDeployer` by default so transport
+    failures (port busy, drive missing, FSKit wedge) get classified and
+    coached.  ``--non-interactive`` opts out for CI / scripted flows
+    where the retry prompt has no stdin to answer.
+
+    Returns the runner; caller invokes ``.deploy()`` or
+    ``.deploy_diff()`` as needed (both signatures are mirrored on the
+    interactive wrapper).
+    """
+    from chumicro_deploy import Deployer, InteractiveDeployer  # noqa: PLC0415
+
+    deployer = Deployer(device)
+    if non_interactive:
+        return deployer
+    return InteractiveDeployer(deployer)
+
+
 def _emit_failure_hints(deploy_result: Any) -> None:
     """Print the traceback + matching app-level recovery hints to stderr.
 
@@ -814,7 +835,6 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
         devices = _resolve_all_devices(workspace)
     else:
         devices = [_resolve_device(workspace, args)]
-    from chumicro_deploy import Deployer  # noqa: PLC0415
 
     exit_code = 0
     for device in devices:
@@ -865,7 +885,9 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
                 f"{device.transport}@{device.address} before deploy",
             )
         deleted: list[str] = []
-        result = Deployer(device).deploy_diff(
+        result = _make_deploy_runner(
+            device, non_interactive=args.non_interactive,
+        ).deploy_diff(
             source,
             wipe=args.wipe,
             on_file_deleted=deleted.append,
@@ -1095,7 +1117,7 @@ def _cmd_demo(args: argparse.Namespace) -> int:
     """
     workspace = _resolve_workspace(args)
     device = _resolve_device(workspace, args)
-    from chumicro_deploy import Deployer, FileMapSource  # noqa: PLC0415
+    from chumicro_deploy import FileMapSource  # noqa: PLC0415
 
     entrypoint_path = f"/{device.effective_entrypoint}"
     source = FileMapSource(
@@ -1106,7 +1128,9 @@ def _cmd_demo(args: argparse.Namespace) -> int:
         f"demo: deploying built-in payload to "
         f"{device.transport} @ {device.address} ...",
     )
-    result = Deployer(device).deploy(source)
+    result = _make_deploy_runner(
+        device, non_interactive=args.non_interactive,
+    ).deploy(source)
     if result.execute_output:
         print(result.execute_output, end="")
     if not result.success:
@@ -1348,6 +1372,7 @@ def _cmd_bootstrap(  # noqa: C901, PLR0912 — wizard branches stay flat for rea
             workspace_dir=args.workspace_dir,
             device_id=device_id,
             runtime=None,
+            non_interactive=False,
         )
         demo_exit = _cmd_demo(demo_args)
         if demo_exit != 0:
@@ -1482,8 +1507,6 @@ def _cmd_repl(args: argparse.Namespace) -> int:
         thing_dir = workspace.thing_dir(resolved_name)
         if not thing_dir.is_dir():
             raise SystemExit(f"error: thing {thing_dir} not found")
-        from chumicro_deploy import Deployer  # noqa: PLC0415
-
         source = thing_boot_source(
             thing_dir,
             workspace=workspace,
@@ -1492,7 +1515,9 @@ def _cmd_repl(args: argparse.Namespace) -> int:
         )
         print(f"repl: deploying {resolved_name} ...")
         deleted: list[str] = []
-        deploy_result = Deployer(device).deploy_diff(
+        deploy_result = _make_deploy_runner(
+            device, non_interactive=args.non_interactive,
+        ).deploy_diff(
             source,
             on_file_deleted=deleted.append,
         )
@@ -2087,6 +2112,16 @@ def build_parser() -> argparse.ArgumentParser:
             "(nothing in flash to wipe)."
         ),
     )
+    deploy_parser.add_argument(
+        "--non-interactive",
+        action="store_true",
+        help=(
+            "Skip the recovery-coaching wrapper and let transport "
+            "errors propagate uncaught.  Use in CI / scripted flows "
+            "that don't have stdin to answer retry prompts.  "
+            "Interactive coaching is on by default."
+        ),
+    )
     deploy_parser.set_defaults(func=_cmd_deploy)
 
     # ----- things --------------------------------------------------------
@@ -2139,6 +2174,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_workspace_arg(demo_parser)
     _add_device_selector(demo_parser)
+    demo_parser.add_argument(
+        "--non-interactive",
+        action="store_true",
+        help=(
+            "Skip the recovery-coaching wrapper and let transport "
+            "errors propagate uncaught.  Use in CI / scripted flows."
+        ),
+    )
     demo_parser.set_defaults(func=_cmd_demo)
 
     # ----- bootstrap -----------------------------------------------------
@@ -2250,6 +2293,18 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_false",
         default=True,
         help="Tail mode only: do not exit non-zero on a detected traceback.",
+    )
+    repl_parser.add_argument(
+        "--non-interactive",
+        action="store_true",
+        help=(
+            "When a positional thing is given, skip the recovery-"
+            "coaching wrapper around the deploy-then-tail flow.  "
+            "Use in CI / scripted flows that don't have stdin to "
+            "answer retry prompts.  No effect when `repl` is "
+            "invoked without a thing (interactive TUI mode already "
+            "owns stdin)."
+        ),
     )
     repl_parser.set_defaults(func=_cmd_repl)
 

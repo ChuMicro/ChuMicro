@@ -326,3 +326,83 @@ class TestCommandDeploy:
             "--entrypoint", "/main.py",
         ])
         assert exit_code == 1
+
+    def test_non_interactive_skips_recovery_wrapper(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    ) -> None:
+        # With --non-interactive, a transport error must propagate
+        # uncaught instead of being captured by InteractiveDeployer's
+        # retry loop (which would block for stdin).
+        from chumicro_deploy.circuitpython_transport import (
+            CircuitpythonTransportError,
+        )
+
+        source_dir = tmp_path / "app"
+        source_dir.mkdir()
+        (source_dir / "main.py").write_text("print('ok')")
+
+        class FakeDeployer:
+            def __init__(self, device):  # noqa: ANN001
+                pass
+
+            def deploy(self, source, **kwargs):  # noqa: ANN001
+                raise CircuitpythonTransportError("Failed to open serial port")
+
+        monkeypatch.setattr("chumicro_deploy.deployer.Deployer", FakeDeployer)
+
+        with pytest.raises(CircuitpythonTransportError):
+            main([
+                "deploy",
+                "--transport", "circuitpython",
+                "--address", "/dev/x",
+                "--directory", str(source_dir),
+                "--entrypoint", "/code.py",
+                "--non-interactive",
+            ])
+
+    def test_default_wraps_in_interactive_deployer(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    ) -> None:
+        # Without --non-interactive (default), the CLI must wrap the
+        # underlying Deployer in InteractiveDeployer.  Sentinel-patch
+        # the wrapper class so we can observe construction without
+        # actually entering its retry loop (which would block on
+        # input()).
+        source_dir = tmp_path / "app"
+        source_dir.mkdir()
+        (source_dir / "main.py").write_text("print('ok')")
+
+        captured: dict[str, Any] = {"wrapped": False}
+
+        class FakeDeployer:
+            def __init__(self, device):  # noqa: ANN001
+                pass
+
+            def deploy(self, source, **kwargs):  # noqa: ANN001
+                from chumicro_deploy import DeployResult
+                return DeployResult(success=True, execute_output="")
+
+        class _SpyInteractive:
+            def __init__(self, inner):  # noqa: ANN001
+                captured["wrapped"] = True
+                captured["inner"] = inner
+
+            def deploy(self, source, **kwargs):  # noqa: ANN001
+                from chumicro_deploy import DeployResult
+                return DeployResult(success=True, execute_output="")
+
+        monkeypatch.setattr("chumicro_deploy.deployer.Deployer", FakeDeployer)
+        monkeypatch.setattr(
+            "chumicro_deploy.recovery.InteractiveDeployer", _SpyInteractive,
+        )
+
+        exit_code = main([
+            "deploy",
+            "--transport", "circuitpython",
+            "--address", "/dev/x",
+            "--directory", str(source_dir),
+            "--entrypoint", "/code.py",
+        ])
+        assert exit_code == 0
+        assert captured["wrapped"] is True
+        assert isinstance(captured["inner"], FakeDeployer)
