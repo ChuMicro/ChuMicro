@@ -12,6 +12,8 @@ The connection model lives here too (:class:`ProtocolState`,
 sit in :mod:`chumicro_mqtt._wire`.
 """
 
+from collections import deque
+
 from chumicro_timing import ticks_add, ticks_diff, ticks_ms
 
 from chumicro_mqtt._wire import (
@@ -187,6 +189,25 @@ def _no_callback(*_args, **_kwargs):
     return None
 
 
+def _new_tx_queue(maxlen):
+    """Return a fresh outbound ``deque`` sized at *maxlen* with ``appendleft``.
+
+    MicroPython and CircuitPython require ``flags=1`` as a third
+    positional argument to enable ``appendleft`` (and other
+    bidirectional ops); CPython rejects the third arg with
+    ``TypeError`` because its full-featured deque needs no flag.  Try
+    the MP/CP shape first so embedded gets the cheaper path; fall back
+    to the 2-arg shape on CPython.
+
+    See ``plans/patterns.md`` §"FIFO queues use ``deque``, not
+    ``list``" for the cross-runtime rules.
+    """
+    try:
+        return deque((), maxlen, 1)
+    except TypeError:  # CPython: 2-arg constructor, appendleft already supported.
+        return deque((), maxlen)
+
+
 def _force_non_blocking(socket):
     """Best-effort ``setblocking(False)`` on a chumicro-sockets socket.
 
@@ -352,7 +373,19 @@ class MQTTClient:
         self._state = ProtocolState.DISCONNECTED
         self._in_flight = InFlightTable()
         self._pending_responses = []
-        self._tx_queue = []  # Backpressure-safe outbound queue.
+        # Outbound queue.  ``deque(maxlen=...)`` for O(1) append /
+        # popleft / appendleft (vs list's O(n) ``pop(0)`` /
+        # ``insert(0, ...)``); ``flags=1`` enables ``appendleft`` on
+        # MicroPython and CircuitPython.  The maxlen has 64-slot
+        # headroom over ``_max_tx_queue_size`` so the QoS 1 retry path
+        # and the PINGREQ path — neither of which guards against
+        # overrun — don't silently lose in-flight packets when the
+        # queue is full; the public ``_enqueue`` ``len() >= max``
+        # check (line below in this file) remains the sole
+        # backpressure-rejection signal.  See ``plans/patterns.md``
+        # §"FIFO queues use ``deque``, not ``list``" for the rule.
+        self._tx_queue = _new_tx_queue(max_tx_queue_size + 64)
+        self._tx_queue_overrun_headroom = 64  # for documentation / introspection
         self._partial_send = None  # (bytes, offset) when last send was short.
 
         self._next_ping_due_ticks = 0
@@ -658,7 +691,9 @@ class MQTTClient:
         # in-flight QoS 1 table intact when clean_session=False so a
         # broker that supports session resumption can pick up where we
         # left off; clear it on clean_session=True (the safer default).
-        self._tx_queue.clear()
+        # Reassign rather than calling .clear() — MicroPython's deque
+        # does not implement clear() (verified on MP 1.26 + CP 10.x).
+        self._tx_queue = _new_tx_queue(self._max_tx_queue_size + 64)
         self._partial_send = None
         self._pending_responses.clear()
         # Fresh decoder — discards any partial inbound packet from the
@@ -699,7 +734,7 @@ class MQTTClient:
             head = self._tx_queue[0]
             if isinstance(head, tuple) and head[0] == "__qos0_callback__":
                 _, callback, topic, payload = head
-                self._tx_queue.pop(0)
+                self._tx_queue.popleft()
                 callback(topic, payload)
                 self.on_publish(topic, payload)
                 continue
@@ -709,9 +744,9 @@ class MQTTClient:
                 return  # Socket would block — wait for next tick.
             if sent < len(packet):  # pragma: no cover - rare partial-send path
                 self._partial_send = (packet, sent)
-                self._tx_queue.pop(0)
+                self._tx_queue.popleft()
                 return
-            self._tx_queue.pop(0)
+            self._tx_queue.popleft()
 
     def _send_raw(self, payload):
         """Send *payload*; return bytes sent (may be 0 on EAGAIN)."""
@@ -819,7 +854,7 @@ class MQTTClient:
                 handler(packet.topic, packet.payload)
         self.on_message(packet.topic, packet.payload)
         if packet.qos == 1:
-            self._tx_queue.insert(0, encode_puback(packet_id=packet.packet_id))
+            self._tx_queue.appendleft(encode_puback(packet_id=packet.packet_id))
 
     def _handle_oversized(self, packet):
         """Apply the configured WhenOversized policy."""
@@ -835,7 +870,7 @@ class MQTTClient:
         # PUBACK QoS 1 oversized messages even when dropping payload —
         # broker would otherwise retransmit.
         if packet.qos == 1 and self._when_oversized != WhenOversized.DISCONNECT:
-            self._tx_queue.insert(0, encode_puback(packet_id=packet.packet_id))
+            self._tx_queue.appendleft(encode_puback(packet_id=packet.packet_id))
 
     def _handle_ack(self, packet):
         """Match an inbound CONNACK / SUBACK / PUBACK / etc. to its pending entry."""
