@@ -81,20 +81,69 @@ def merge_packages(
         )
 
 
-def rsync(source: Path, destination: Path) -> None:
+#: Excludes every CP rsync uses regardless of caller — build artifacts,
+#: macOS file-level detritus, and the macOS volume-level noise dirs +
+#: skip-sentinels :func:`neuter_macos_metadata` plants.  See the
+#: docstring on each block in :func:`rsync` for the rationale.
+_BASE_RSYNC_EXCLUDES: tuple[str, ...] = (
+    "__pycache__",
+    "*.pyc",
+    ".DS_Store",
+    "._*",
+    # macOS noise dirs (auto-created, kernel-locked).
+    ".Trashes",
+    ".Spotlight-V100",
+    ".TemporaryItems",
+    ".DocumentRevisions-V100",
+    # macOS skip sentinels we plant; rsync --delete must not remove them.
+    ".fseventsd",
+    ".metadata_never_index",
+)
+
+
+def rsync(
+    source: Path,
+    destination: Path,
+    *,
+    delete: bool = True,
+    additional_excludes: tuple[str, ...] | list[str] = (),
+) -> None:
     """Rsync a source directory's contents to a destination.
 
-    Uses ``--checksum`` to verify content (FAT32 timestamps are
-    unreliable), ``--inplace`` to write directly into files (avoids
-    temp-file rename races on FAT32), and ``--delete`` to remove stale
-    files from the destination.
+    Single primitive both the production deploy path
+    (:meth:`CircuitpythonTransport.deploy_files`) and the functional-
+    test stage path (:meth:`CircuitpythonTransport.stage`) use.  Both
+    callers want the same FAT-write reliability (``--checksum`` to
+    verify content because FAT32 timestamps are unreliable,
+    ``--inplace`` to avoid temp-file rename races on FAT32) — they
+    differ only on the *delete-semantic* and the *exclude list*:
 
-    Device config files and build artifacts that live on the drive but
-    are not part of the test deployment are excluded from deletion.
+    * **Functional tests** call ``delete=True`` with
+      ``additional_excludes=("boot.py", "boot_out.txt", "code.py",
+      "settings.toml")`` — clean slate between test files, but
+      preserve the user-config files the firmware needs.
+    * **Production deploys** call ``delete=False`` with no extra
+      excludes — preserve user files (``settings.toml``, custom
+      modules in ``/lib/`` not currently in the import graph) and
+      let the deploy's file map drive what gets written.  The
+      ``chumicro-workspace deploy --wipe`` flag covers the
+      destructive case.
+
+    The base exclude set (build artifacts + macOS noise / sentinel
+    dirs) is shared and unconditional — see :data:`_BASE_RSYNC_EXCLUDES`.
 
     Args:
         source: Source directory whose contents to sync.
         destination: Destination directory.
+        delete: When ``True``, pass ``--delete`` so files in
+            destination but not source are removed.  ``False`` is the
+            production-deploy default — stale files persist, which
+            preserves user data (``settings.toml`` etc.) that's not
+            part of the deploy's file map.
+        additional_excludes: Extra basenames to add to ``--exclude``.
+            Functional-test callers pass user-config filenames so
+            ``--delete`` doesn't wipe them.  Production callers leave
+            empty.
 
     Raises:
         FlashDriveError: If rsync is not installed or the sync fails.
@@ -104,37 +153,15 @@ def rsync(source: Path, destination: Path) -> None:
         "--recursive",
         "--checksum",
         "--inplace",
-        "--delete",
-        "--exclude=__pycache__",
-        "--exclude=*.pyc",
-        "--exclude=.DS_Store",
-        "--exclude=._*",
-        "--exclude=boot.py",
-        "--exclude=boot_out.txt",
-        "--exclude=code.py",
-        "--exclude=settings.toml",
-        # macOS noise directories — auto-created on FAT volumes and
-        # protected by the kernel against deletion (``.Trashes/<uid>/``
-        # in particular is read-only at unlinkat time even from the
-        # mounting user, so ``rsync --delete`` aborts with
-        # "Operation not permitted" if it tries to clean them).
-        # ``neuter_macos_metadata`` makes a best-effort cleanup pass
-        # before rsync runs, but if macOS holds onto them rsync must
-        # leave them alone — the device side ignores ``.``-prefixed
-        # entries anyway, so they cost nothing on-board.
-        "--exclude=.Trashes",
-        "--exclude=.Spotlight-V100",
-        "--exclude=.TemporaryItems",
-        "--exclude=.DocumentRevisions-V100",
-        # macOS skip-sentinels we plant on every CP drive; rsync
-        # ``--delete`` would otherwise remove them on every deploy
-        # (they aren't in the staging tree) and macOS would re-create
-        # the noise dirs they exist to suppress.
-        "--exclude=.fseventsd",
-        "--exclude=.metadata_never_index",
-        str(source) + "/",
-        str(destination) + "/",
     ]
+    if delete:
+        command.append("--delete")
+    for pattern in _BASE_RSYNC_EXCLUDES:
+        command.append(f"--exclude={pattern}")
+    for pattern in additional_excludes:
+        command.append(f"--exclude={pattern}")
+    command.append(str(source) + "/")
+    command.append(str(destination) + "/")
     try:
         subprocess.run(command, capture_output=True, text=True, check=True)
     except FileNotFoundError as not_found_error:
@@ -146,6 +173,19 @@ def rsync(source: Path, destination: Path) -> None:
         raise FlashDriveError(
             f"rsync failed: {rsync_error.stderr}"
         ) from rsync_error
+
+
+#: Filenames the functional-test stage path adds to ``--exclude`` so
+#: ``--delete`` doesn't wipe firmware-required user-config files.
+#: Production deploys don't add these — when a deploy's file map
+#: contains ``code.py`` (the entrypoint) we want it written, not
+#: skipped.
+FUNCTIONAL_TEST_EXTRA_EXCLUDES: tuple[str, ...] = (
+    "boot.py",
+    "boot_out.txt",
+    "code.py",
+    "settings.toml",
+)
 
 
 def strip_extended_attributes(path: Path) -> None:
