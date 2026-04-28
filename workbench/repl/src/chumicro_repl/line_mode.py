@@ -580,12 +580,22 @@ def _build_prompt_session(
 
     Imported lazily so the module-level cost of `chumicro_repl` doesn't
     pay for prompt_toolkit unless line mode is actually entered.
+
+    Slice 1c plumbed the default completer in: the static
+    keyword/builtins catalog ships out of the box; richer
+    device-backed completion is a follow-on plug-in via
+    :class:`chumicro_repl.completion.DeviceCompleter`.
     """
     from prompt_toolkit import PromptSession  # noqa: PLC0415
     from prompt_toolkit.history import FileHistory  # noqa: PLC0415
 
+    from .completion import build_default_completer  # noqa: PLC0415
+
     history_file = history_path_for(address, root=history_root)
-    return PromptSession(history=FileHistory(str(history_file)))
+    return PromptSession(
+        history=FileHistory(str(history_file)),
+        completer=build_default_completer(),  # type: ignore[arg-type]
+    )
 
 
 # ---------------------------------------------------------------------------

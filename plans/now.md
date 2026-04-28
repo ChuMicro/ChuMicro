@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **Workspace ecosystem completion — Phase 7 in flight.**  Phases 1, 2, 4, 5, 6 shipped earlier in this session.  Phase 7 Slices 1a + 1b shipped.  Slice 1b (just landed): editor handoff + snippet store.  `LineModeContext` dataclass carries port + output + snippets-root + editor + per-session input_history; `CommandHandler` signature promoted from `(line, output)` to `(context, rest)`.  Four new commands wired into `BUILTIN_COMMANDS`: `:edit` (opens `$EDITOR` with the recent history pre-seeded, ships saved buffer line-by-line on save), `:save <name>` (writes the last 10 input lines to `~/.chumicro-repl/snippets/<name>.py`), `:load <name>` (replays a saved snippet to the device), `:snippets` (lists saved snippets).  Editor stub indirection (`_open_editor`) keeps tests off the shell-out.  Slice 1c (tab completion via on-device `dir()`) is the only remaining sub-slice.
-- **Last shipped:** Phase 7 Slice 1b — editor handoff + snippet store.
-- **In flight:** Phase 7 Slice 1c — tab completion via on-device `dir()` query.
+- **Phase:** **Workspace ecosystem completion — main thread + Phase 7 closed.**  Phases 1, 2, 4, 5, 6 shipped earlier this session; Phase 7 Slices 1a + 1b + 1c just shipped, closing the umbrella's main thread.  Slice 1c (just landed): new `chumicro_repl.completion` module with a `Completer` Protocol, `KeywordCompleter` (Python keywords + public builtins, ~150-entry static catalog computed once at import), `CompletionCache` (deduped + sorted, dict-shaped invalidation surface), `DeviceCompleter` (pluggable fetcher protocol; ships the architecture without the on-wire query implementation since friendly-↔-raw REPL mode-switching needs its own design pass), `CombinedCompleter` (dedup-then-sort merge of multiple sources), `PromptToolkitCompleter` (the prompt_toolkit adapter that maps `_completable_tail` → `Completion(text, start_position=-len(prefix))`).  `_build_prompt_session` plugs the default completer (keywords + empty device source) into every session by default.  Phase 3 (per-env deploys) is the only remaining piece of the umbrella, deferred at user request.
+- **Last shipped:** Phase 7 Slice 1c — tab completion infrastructure (static catalog + pluggable device source).
+- **In flight:** —
 - **Blocked on:** —
-- **Last touched:** `workbench/repl/src/chumicro_repl/{__init__,line_mode}.py`, `workbench/repl/tests/test_line_mode.py`, `plans/now.md`.
+- **Last touched:** `workbench/repl/src/chumicro_repl/{__init__,completion,line_mode}.py`, `workbench/repl/tests/test_completion.py`, `plans/now.md`.
 
 ---
 

@@ -1,6 +1,6 @@
 # Workstream: Workspace ecosystem completion
 
-Status: **Phases 1, 2, 4, 5, 6 shipped** (2026-04-27).  Phase 3 deferred at user direction during Phase 4.  Phase 7 (richer REPL — parallel track) still planned.  Drafted 2026-04-27, revised same day with user triage, executed Phases 1-2-4-5-6 immediately after.
+Status: **Phases 1, 2, 4, 5, 6, 7 shipped** (2026-04-27).  Phase 3 deferred at user direction during Phase 4 — only piece of the umbrella still planned.  Drafted 2026-04-27, revised same day with user triage, executed Phases 1-2-4-5-6-7 immediately after.
 
 ## Phase progress
 
@@ -12,7 +12,7 @@ Status: **Phases 1, 2, 4, 5, 6 shipped** (2026-04-27).  Phase 3 deferred at user
 | 4 — Library scaffolder migration | **shipped** | `scripts/new_library_scaffold.py` → `chumicro_workspace.scaffold` + `python run.py new --library <name>` CLI mode.  Templates moved to `_payloads/library_template/`. |
 | 5 — Wire `workspace.yml` quality knobs | **shipped** | New `chumicro_workspace.quality` module + CLI wiring; `agent_strictness` accepted but enforcement deferred (no AST-level checks yet — own design pass). |
 | 6 — Documentation audit | **shipped** | Cross-repo doc-freshness sweep — both repos' commands tables, README / guide / AGENTS / CONTRIBUTING refreshed for Phases 1, 2, 4, 5 surface; `docs/contributing/new-library.md` notes the Phase 4 scaffolder migration. |
-| 7 — Richer REPL (parallel track) | planned | See [`repl-playground.md`](repl-playground.md). |
+| 7 — Richer REPL (parallel track) | **shipped** | Slices 1a (`chumicro_repl.line_mode` + `--mode line`), 1b (`:edit` / `:save` / `:load` / `:snippets`), 1c (tab-completion infrastructure: keyword catalog + pluggable device source).  Detail in [`repl-playground.md`](repl-playground.md). |
 
 ## Premise
 

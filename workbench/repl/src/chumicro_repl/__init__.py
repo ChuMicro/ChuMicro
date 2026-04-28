@@ -30,6 +30,14 @@ if TYPE_CHECKING:
     # so pyright / mypy can see every name declared in ``__all__``
     # without eagerly loading every submodule.
     from ._follow import ExitCode, tail
+    from .completion import (
+        STATIC_CATALOG,
+        CombinedCompleter,
+        CompletionCache,
+        DeviceCompleter,
+        KeywordCompleter,
+        build_default_completer,
+    )
     from .framing import Utf8StreamDecoder
     from .highlight import Theme, colorize, strip_ansi_sequences
     from .line_mode import (
@@ -58,11 +66,15 @@ if TYPE_CHECKING:
 #: first read.
 _LAZY_ATTRS: dict[str, str] = {
     "BUILTIN_COMMANDS": "line_mode",
+    "CombinedCompleter": "completion",
     "CommandHandler": "line_mode",
+    "CompletionCache": "completion",
     "DEFAULT_HISTORY_ROOT": "line_mode",
     "DEFAULT_SNIPPETS_ROOT": "line_mode",
+    "DeviceCompleter": "completion",
     "ExitCode": "_follow",
     "InteractiveReplSession": "recovery",
+    "KeywordCompleter": "completion",
     "LineModeContext": "line_mode",
     "PatternKind": "patterns",
     "PatternMatch": "patterns",
@@ -71,8 +83,10 @@ _LAZY_ATTRS: dict[str, str] = {
     "ReplSession": "session",
     "ReplSessionDisconnected": "session",
     "ReplSessionError": "session",
+    "STATIC_CATALOG": "completion",
     "Theme": "highlight",
     "Utf8StreamDecoder": "framing",
+    "build_default_completer": "completion",
     "classify_session_failure": "recovery",
     "colorize": "highlight",
     "detect_patterns": "patterns",
@@ -91,11 +105,15 @@ _LAZY_ATTRS: dict[str, str] = {
 #: Keep alphabetized; a sorted assertion below catches drift.
 __all__ = [
     "BUILTIN_COMMANDS",
+    "CombinedCompleter",
     "CommandHandler",
+    "CompletionCache",
     "DEFAULT_HISTORY_ROOT",
     "DEFAULT_SNIPPETS_ROOT",
+    "DeviceCompleter",
     "ExitCode",
     "InteractiveReplSession",
+    "KeywordCompleter",
     "LineModeContext",
     "PatternKind",
     "PatternMatch",
@@ -104,8 +122,10 @@ __all__ = [
     "ReplSession",
     "ReplSessionDisconnected",
     "ReplSessionError",
+    "STATIC_CATALOG",
     "Theme",
     "Utf8StreamDecoder",
+    "build_default_completer",
     "classify_session_failure",
     "colorize",
     "detect_patterns",
