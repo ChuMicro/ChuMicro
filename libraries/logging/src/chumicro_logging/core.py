@@ -1,0 +1,349 @@
+"""Core implementation for chumicro-logging.
+
+See ``__init__`` for the public API summary.  This module is pure-Python,
+imports only ``sys``, and is identical on every supported runtime.
+"""
+
+import sys
+
+DEBUG = 10
+INFO = 20
+WARNING = 30
+ERROR = 40
+CRITICAL = 50
+
+_LEVEL_NAMES = {
+    DEBUG: "DEBUG",
+    INFO: "INFO",
+    WARNING: "WARNING",
+    ERROR: "ERROR",
+    CRITICAL: "CRITICAL",
+}
+
+
+def level_name(level: int) -> str:
+    """Return the human name for *level*.
+
+    Unknown levels render as ``LEVEL<n>`` so log output stays readable
+    even when callers use intermediate values.
+
+    Args:
+        level: An integer level.
+
+    Returns:
+        ``"DEBUG"`` / ``"INFO"`` / ``"WARNING"`` / ``"ERROR"`` /
+        ``"CRITICAL"`` for the standard levels, or ``"LEVEL<n>"``
+        for any other integer.
+    """
+    name = _LEVEL_NAMES.get(level)
+    if name is not None:
+        return name
+    return f"LEVEL{level}"
+
+
+def default_formatter(level: int, name: str, message: str) -> str:
+    """Render a record as ``LEVEL:name:message`` on a single line.
+
+    Args:
+        level: The record's integer level.
+        name: The originating logger's name.
+        message: The pre-formatted message.
+
+    Returns:
+        A single-line string suitable for writing to a stream.
+    """
+    return f"{level_name(level)}:{name}:{message}"
+
+
+class Logger:
+    """A named logger with a level threshold and a list of handlers.
+
+    Loggers are not registered globally — the caller owns the instance
+    and passes it explicitly to subsystems that want to emit (the
+    decoration rule from Decision 0042).  This avoids import-order
+    surprises and keeps the library stateless.
+
+    Records below the configured level are dropped before any handler
+    is consulted.  Each handler decides independently whether to emit.
+
+    Handler exceptions never escape the logger — they increment
+    ``handler_errors`` and are otherwise swallowed.  Logging must
+    not crash the application that uses it.
+
+    Args:
+        name: Logger name; appears in formatted records.
+        level: Minimum level emitted.  Defaults to ``INFO``.
+        handlers: Initial handlers; copied into an internal list.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        level: int = INFO,
+        handlers: list | None = None,
+    ) -> None:
+        self._name = name
+        self._level = level
+        self._handlers: list = list(handlers) if handlers else []
+        self._handler_errors = 0
+
+    @property
+    def name(self) -> str:
+        """The logger's name."""
+        return self._name
+
+    @property
+    def level(self) -> int:
+        """Current minimum-emit level."""
+        return self._level
+
+    @level.setter
+    def level(self, value: int) -> None:
+        self._level = value
+
+    @property
+    def handlers(self) -> tuple:
+        """Snapshot of attached handlers as a tuple."""
+        return tuple(self._handlers)
+
+    @property
+    def handler_errors(self) -> int:
+        """Count of handler exceptions swallowed since construction."""
+        return self._handler_errors
+
+    def add_handler(self, handler: object) -> None:
+        """Attach a handler.  No-op if already attached.
+
+        Args:
+            handler: An object exposing ``emit(level, name, message)``.
+        """
+        if handler not in self._handlers:
+            self._handlers.append(handler)
+
+    def remove_handler(self, handler: object) -> None:
+        """Detach a handler.  No-op if not attached.
+
+        Args:
+            handler: A previously attached handler.
+        """
+        if handler in self._handlers:
+            self._handlers.remove(handler)
+
+    def is_enabled(self, level: int) -> bool:
+        """Return ``True`` if *level* would be emitted by this logger.
+
+        Useful for skipping expensive message construction when the
+        record would be dropped anyway.
+
+        Args:
+            level: An integer level.
+        """
+        return level >= self._level
+
+    def log(self, level: int, message: str) -> None:
+        """Emit *message* at *level* to every attached handler.
+
+        Args:
+            level: An integer level.
+            message: The pre-formatted message.
+        """
+        if level < self._level:
+            return
+        for handler in self._handlers:
+            try:
+                handler.emit(level, self._name, message)
+            except Exception:  # noqa: BLE001
+                self._handler_errors += 1
+
+    def debug(self, message: str) -> None:
+        """Emit at ``DEBUG``."""
+        self.log(DEBUG, message)
+
+    def info(self, message: str) -> None:
+        """Emit at ``INFO``."""
+        self.log(INFO, message)
+
+    def warning(self, message: str) -> None:
+        """Emit at ``WARNING``."""
+        self.log(WARNING, message)
+
+    def error(self, message: str) -> None:
+        """Emit at ``ERROR``."""
+        self.log(ERROR, message)
+
+    def critical(self, message: str) -> None:
+        """Emit at ``CRITICAL``."""
+        self.log(CRITICAL, message)
+
+
+class StreamHandler:
+    """Synchronous handler writing formatted records to a writable stream.
+
+    Calls ``stream.write(line + "\\n")`` and ``stream.flush()`` (when
+    available) for every emitted record.  On microcontrollers this
+    typically resolves to the serial console via ``sys.stdout``; on
+    CPython any file-like object works.
+
+    The handler keeps no buffer of its own — every call to ``emit``
+    hits the stream.  Use ``BufferedHandler`` to decouple emission
+    from a hot path.
+
+    Args:
+        stream: A writable stream.  Defaults to ``sys.stdout``.
+        level: Minimum level emitted.  Defaults to ``DEBUG``.
+        formatter: Callable rendering ``(level, name, message)`` to
+            a string.  Defaults to ``default_formatter``.
+    """
+
+    def __init__(
+        self,
+        stream: object | None = None,
+        level: int = DEBUG,
+        formatter: object | None = None,
+    ) -> None:
+        self._stream = stream if stream is not None else sys.stdout
+        self._level = level
+        self._formatter = formatter if formatter is not None else default_formatter
+
+    @property
+    def level(self) -> int:
+        """Current minimum-emit level."""
+        return self._level
+
+    @level.setter
+    def level(self, value: int) -> None:
+        self._level = value
+
+    def emit(self, level: int, name: str, message: str) -> None:
+        """Format the record and write it to the stream.
+
+        Records below the handler's level are dropped silently.
+        """
+        if level < self._level:
+            return
+        line = self._formatter(level, name, message)
+        self._stream.write(f"{line}\n")
+        flush = getattr(self._stream, "flush", None)
+        if flush is not None:
+            flush()
+
+
+class BufferedHandler:
+    """Runner-shaped handler buffering records and flushing on ``handle``.
+
+    Drop-in front of any other handler.  ``emit`` is cheap — it appends
+    to a bounded list — so libraries on a hot tick can log freely
+    without paying for I/O.  ``check(now_ms)`` returns ``True`` when
+    the buffer is non-empty; ``handle(now_ms)`` drains it to the
+    downstream handler.  Wire the buffered handler into a
+    ``chumicro-runner`` instance for automatic draining.
+
+    When the buffer is full, the **oldest** record is dropped and
+    ``dropped`` is incremented.  The newest record always wins on the
+    assumption the operator wants to see *recent* activity when the
+    rate exceeds the flush cadence.
+
+    Args:
+        downstream: A handler exposing ``emit(level, name, message)``
+            (typically a ``StreamHandler``).
+        capacity: Maximum buffered records.  Must be >= 1.
+        level: Minimum level buffered.  Defaults to ``DEBUG``.
+
+    Raises:
+        ValueError: If *capacity* < 1.
+    """
+
+    def __init__(
+        self,
+        downstream: object,
+        capacity: int = 32,
+        level: int = DEBUG,
+    ) -> None:
+        if capacity < 1:
+            raise ValueError("capacity must be at least 1")
+        self._downstream = downstream
+        self._capacity = capacity
+        self._level = level
+        self._buffer: list = []
+        self._dropped = 0
+
+    @property
+    def level(self) -> int:
+        """Current minimum-buffer level."""
+        return self._level
+
+    @level.setter
+    def level(self, value: int) -> None:
+        self._level = value
+
+    @property
+    def capacity(self) -> int:
+        """Maximum buffered records before drop-oldest kicks in."""
+        return self._capacity
+
+    @property
+    def buffered(self) -> int:
+        """Records currently buffered, awaiting flush."""
+        return len(self._buffer)
+
+    @property
+    def dropped(self) -> int:
+        """Records dropped due to overflow since construction."""
+        return self._dropped
+
+    def emit(self, level: int, name: str, message: str) -> None:
+        """Buffer the record.  Drop the oldest if full."""
+        if level < self._level:
+            return
+        if len(self._buffer) >= self._capacity:
+            self._buffer.pop(0)
+            self._dropped += 1
+        self._buffer.append((level, name, message))
+
+    def check(self, now_ms: int) -> bool:
+        """Return ``True`` when the buffer has records to flush.
+
+        Args:
+            now_ms: Current tick value (unused; required by the
+                runner contract).
+        """
+        return len(self._buffer) > 0
+
+    def handle(self, now_ms: int) -> int:
+        """Drain the buffer to the downstream handler.
+
+        Args:
+            now_ms: Current tick value (unused; required by the
+                runner contract).
+
+        Returns:
+            The number of records flushed.
+        """
+        flushed = 0
+        while self._buffer:
+            record = self._buffer.pop(0)
+            self._downstream.emit(record[0], record[1], record[2])
+            flushed += 1
+        return flushed
+
+
+def get_logger(
+    name: str,
+    level: int = INFO,
+    handlers: list | None = None,
+) -> Logger:
+    """Construct a logger with the given name, level, and handlers.
+
+    No global registry — ``get_logger("foo")`` and a second
+    ``get_logger("foo")`` return *different* logger instances.  The
+    caller owns and stores them.
+
+    Args:
+        name: Logger name.
+        level: Minimum level.  Defaults to ``INFO``.
+        handlers: Initial handlers.
+
+    Returns:
+        A new ``Logger``.
+    """
+    return Logger(name=name, level=level, handlers=handlers)

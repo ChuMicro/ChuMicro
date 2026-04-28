@@ -78,6 +78,60 @@ Existing libraries that already match this pattern (and need no change):
 `chumicro-mqtt`, `chumicro-requests`, `chumicro-http-server`. Audit on next
 release-prep cycle to confirm.
 
+#### Sub-rule — factory helpers live in a separate submodule
+
+The hard dep is unavoidable at install-time (`pip install chumicro-mqtt`
+brings `chumicro-sockets` into the host venv whether or not the user
+calls the helper).  The dep **is** avoidable at *deploy-time* — what
+ships to the board — if the helper is structured so the AST-walking
+import-graph deploy (Decision 0029) doesn't follow it.
+
+**Rule:** the `chumicro_<infra>_factory(...)` helper lives in its own
+submodule (e.g. `chumicro_requests/sockets_factory.py`).  The library's
+`__init__.py` and core implementation modules **must not import the
+helper**.  Users opt in to the default wiring by importing the
+submodule explicitly:
+
+```python
+# default wiring — chumicro-sockets ships to the device
+from chumicro_requests import HttpClient
+from chumicro_requests.sockets_factory import chumicro_sockets_factory
+client = HttpClient(connection_factory=chumicro_sockets_factory(radio=wifi.radio))
+
+# custom transport — chumicro-sockets does NOT ship to the device
+from chumicro_requests import HttpClient
+client = HttpClient(connection_factory=my_custom_factory)
+```
+
+Why this works: the deploy tool walks AST imports starting from the
+user's app.  If the app never references `chumicro_requests.sockets_factory`,
+the AST walker never enters that module, so the lazy `import
+chumicro_sockets` inside it is never observed, so `chumicro_sockets` is
+never shipped to the device.  Lazy imports inside `client.py` (or
+anything `__init__.py` pulls in) **don't** give the user this opt-out
+— the walker still sees them when it analyzes `client.py`.
+
+**Audit follow-up.**  Today's `chumicro-requests` defines
+`chumicro_sockets_factory` in `client.py` and re-exports it from
+`__init__.py`.  This was correct under the prior, looser policy.  Under
+this rule it's a structural defect: a user injecting a custom transport
+still pays the deploy cost for `chumicro-sockets`.  Fix in a follow-up:
+move the helper to `chumicro_requests/sockets_factory.py`, drop the
+`__init__.py` re-export, update README + docs + functional-test
+imports.  Same fix shape will be needed for any future
+`chumicro-mqtt` / `chumicro-http-server` factory helpers — none exist
+today.
+
+#### What the rule does not solve
+
+`pip install chumicro-mqtt` still installs `chumicro-sockets` into the
+host venv as a transitive dep.  That is install-time, not deploy-time.
+For users who want to fully avoid the dep on disk too (rare — chumicro
+libraries are tiny), the escape hatch is `pip install --no-deps
+chumicro-mqtt`, which we deliberately do not document.  The
+deploy-time opt-out covers the only audience that actually cares
+(memory-constrained boards).
+
 ### Class 2 — decoration / observability: callbacks only, never imported
 
 A library is *decoration* if the library it observes functions perfectly
@@ -142,11 +196,14 @@ the upstream-side counterpart to the downstream-side factory helper.
 
 ### Negative
 
-- **Hard deps cannot be opted out of without forking.** A user who
-  wants `chumicro-mqtt` over a custom transport still gets
-  `chumicro-sockets` installed even if they pass their own factory.
-  Acceptable cost — `chumicro-sockets` is small and harmless when
-  unused.
+- **Hard deps still install on the host venv.**  A user who wants
+  `chumicro-mqtt` over a custom transport gets `chumicro-sockets`
+  installed in their CPython venv even if they pass their own
+  factory.  Acceptable cost — `chumicro-sockets` is small and
+  harmless when unused.  The deploy-time opt-out (factory helper in
+  a separate submodule, see sub-rule above) ensures it does **not**
+  ship to the device when unused, which is the case that matters
+  for memory-constrained boards.
 - **The decoration libraries cannot ergonomically wire themselves
   in.** Apps must do the wiring. Mitigated by: (a) `chumicro-presence`
   ships a one-line `presence.bind(wifi=..., mqtt=...)` that does the
@@ -166,7 +223,11 @@ the upstream-side counterpart to the downstream-side factory helper.
       decoration deps.
 - [ ] `chumicro-mqtt`, `chumicro-requests`, `chumicro-http-server`:
       each ships a `chumicro_sockets_factory(...)` helper or
-      equivalent.
+      equivalent — and that helper lives in its **own submodule**
+      (per sub-rule), not in `__init__.py` or `client.py`.
+- [ ] `chumicro-requests` follow-up: move existing
+      `chumicro_sockets_factory` from `client.py` into
+      `sockets_factory.py`, drop the `__init__.py` re-export.
 - [ ] All libraries expose an `on_state_change` callback or
       equivalent hook shape.
 - [ ] `chumicro-logging` (when shipped): no chumicro deps.
