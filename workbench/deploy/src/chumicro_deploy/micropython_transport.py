@@ -63,6 +63,75 @@ class MicropythonMidDeployDisconnected(MicropythonTransportError):
         self.cause = cause
 
 
+#: Sentinel prefix the on-device scope-listing script emits in front of
+#: every found file path.  Host-side parsing scans for this marker so
+#: any incidental ``print()`` from an autorun ``boot.py`` etc. doesn't
+#: contaminate the listing.
+_SCOPE_LISTING_MARKER: str = "__CHU_F:"
+
+
+#: On-device script that walks the deploy's managed scope and prints a
+#: marker-prefixed listing of every file in scope.  Pure stdlib —
+#: ``os.listdir`` + ``os.stat`` — so it runs on every CP / MP build
+#: without preinstalling helper libs.
+#:
+#: The four canonical entrypoint / state files are probed at the
+#: device root; ``/lib/`` is walked recursively.  Missing dirs and
+#: per-file ``OSError`` are tolerated so a fresh-flashed board (no
+#: ``/lib/`` yet) returns an empty listing instead of erroring out.
+#:
+#: Kept in sync with :data:`chumicro_deploy.protocol.DEPLOY_SCOPE_FILES`
+#: + :data:`chumicro_deploy.protocol.DEPLOY_SCOPE_PREFIXES`.  The mirror
+#: is intentional — embedding the constants directly in the on-device
+#: script keeps each side self-contained and the host doesn't need to
+#: marshal a values list every call.
+_LIST_SCOPE_SCRIPT: str = (
+    "import os\n"
+    "def _walk(p):\n"
+    "    try:\n"
+    "        names = os.listdir(p)\n"
+    "    except OSError:\n"
+    "        return\n"
+    "    for name in names:\n"
+    "        full = p + '/' + name if p != '/' else '/' + name\n"
+    "        try:\n"
+    "            stat = os.stat(full)\n"
+    "        except OSError:\n"
+    "            continue\n"
+    "        if stat[0] & 0x4000:\n"
+    "            _walk(full)\n"
+    "        else:\n"
+    "            print('__CHU_F:' + full)\n"
+    "for path in ('/code.py', '/main.py', '/active.py', '/runtime_config.msgpack'):\n"
+    "    try:\n"
+    "        os.stat(path)\n"
+    "    except OSError:\n"
+    "        continue\n"
+    "    print('__CHU_F:' + path)\n"
+    "_walk('/lib')\n"
+)
+
+
+def _parse_scope_listing(output: str) -> list[str]:
+    """Extract device paths from the scope-listing script's stdout.
+
+    Filters to lines starting with :data:`_SCOPE_LISTING_MARKER` so
+    surrounding output (raw-REPL banner, autorun prints) doesn't
+    contaminate the result.  Returns deduplicated paths in the
+    order they appear.
+    """
+    seen: set[str] = set()
+    result: list[str] = []
+    for line in output.splitlines():
+        if not line.startswith(_SCOPE_LISTING_MARKER):
+            continue
+        path = line[len(_SCOPE_LISTING_MARKER):].strip()
+        if path and path not in seen:
+            seen.add(path)
+            result.append(path)
+    return result
+
+
 def _resolve_mpremote_binary() -> str:
     """Return the ``mpremote`` executable path to invoke via subprocess.
 
@@ -497,6 +566,81 @@ class MicropythonTransport:
             for output_line in output.splitlines():
                 on_execute_line(output_line)
         return output
+
+    def list_files_in_scope(self) -> list[str]:
+        """List on-device files within the deploy's managed scope.
+
+        Walks ``/lib/`` recursively + checks the four canonical
+        scope files (``/code.py``, ``/main.py``, ``/active.py``,
+        ``/runtime_config.msgpack``).  Returns paths in
+        leading-slash form.
+
+        Mount-mode (RAM) deploys return an empty list — mount mode
+        doesn't write to flash, so there's nothing persistent to
+        diff between deploys.  See ``plans/next-up.md`` "Replace
+        multi-thing staging with scoped diff-deploy" for the design
+        rationale.
+
+        Raises :class:`MicropythonTransportError` on raw-REPL failure
+        — :meth:`Deployer.deploy_diff` translates this to "skip the
+        diff cleanup, fall through to a plain deploy_files" so a
+        transient REPL hiccup doesn't block a deploy.
+        """
+        if self.mode != "copy":
+            return []
+        if self._mounted and self._serial is not None:
+            try:
+                self._serial.umount_local()
+            except Exception:  # pragma: no cover — best-effort cleanup
+                pass
+            self._mounted = False
+        self._ensure_serial()
+        try:
+            result = self._serial.exec_raw(_LIST_SCOPE_SCRIPT, timeout=30)
+        except Exception as error:
+            raise MicropythonTransportError(
+                f"list_files_in_scope failed: {error}",
+            ) from error
+        output = _decode_exec_result(result)
+        return _parse_scope_listing(output)
+
+    def delete_files(self, paths: list[str]) -> None:
+        """Delete *paths* from the device's filesystem.
+
+        No-op in mount (RAM) mode — mount mode doesn't write to
+        flash, so there's nothing to delete.  Otherwise sends a
+        small script that calls ``os.remove`` on each path; missing
+        paths and per-path errors are tolerated silently so the
+        diff-cleanup pass never blocks the actual deploy.
+        """
+        if not paths:
+            return
+        if self.mode != "copy":
+            return
+        if self._mounted and self._serial is not None:
+            try:
+                self._serial.umount_local()
+            except Exception:  # pragma: no cover — best-effort cleanup
+                pass
+            self._mounted = False
+        self._ensure_serial()
+        # `repr(paths)` round-trips a list of strings cleanly into
+        # a Python literal — no manual escaping required.
+        script = (
+            "import os\n"
+            f"_paths = {paths!r}\n"
+            "for _path in _paths:\n"
+            "    try:\n"
+            "        os.remove(_path)\n"
+            "    except OSError:\n"
+            "        pass\n"
+        )
+        try:
+            self._serial.exec_raw(script, timeout=30)
+        except Exception as error:
+            raise MicropythonTransportError(
+                f"delete_files failed: {error}",
+            ) from error
 
     # ------------------------------------------------------------------
     # Internal helpers

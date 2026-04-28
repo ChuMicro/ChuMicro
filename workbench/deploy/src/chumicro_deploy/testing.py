@@ -212,6 +212,13 @@ class FakeTransport:
     #: simulates a successful dispatch; ``False`` exercises the
     #: flasher's interactive-manual-entry fallback path.
     bootloader_reset_result: bool = True
+    #: Simulated on-device file state for the diff-deploy primitives
+    #: (`list_files_in_scope` / `delete_files`).  Tests pre-populate this
+    #: to assert what the deploy routine considers "stale" + verify
+    #: deletion.  Mirrors the leading-slash device-path form
+    #: :meth:`deploy_files` accepts.  See ``plans/next-up.md`` "Replace
+    #: multi-thing staging with scoped diff-deploy".
+    device_files: dict[str, bytes] = field(default_factory=dict)
     calls: list[tuple[str, tuple]] = field(default_factory=list)
     connected: bool = False
 
@@ -322,6 +329,10 @@ class FakeTransport:
         the payload and the callback ordering.
         """
         self.calls.append(("deploy_files", (dict(files), entrypoint)))
+        # Update simulated on-device state so a subsequent
+        # `list_files_in_scope` reflects what was just shipped.
+        for device_path, payload in files.items():
+            self.device_files[device_path] = payload
         for device_path in sorted(files.keys()):
             if on_file_staged is not None:
                 on_file_staged(device_path)
@@ -329,3 +340,22 @@ class FakeTransport:
             for output_line in self.execute_output.splitlines():
                 on_execute_line(output_line)
         return self.execute_output
+
+    def list_files_in_scope(self) -> list[str]:
+        """Return on-device paths in scope (mirrors `device_files`).
+
+        Filters :attr:`device_files` to those paths that
+        :func:`is_in_deploy_scope` accepts so a test can pre-populate
+        a mix of in-scope and out-of-scope files and verify the
+        diff-routine ignores the latter.
+        """
+        from .protocol import is_in_deploy_scope  # noqa: PLC0415 — avoid cycle
+
+        self.calls.append(("list_files_in_scope", ()))
+        return [path for path in self.device_files if is_in_deploy_scope(path)]
+
+    def delete_files(self, paths: list[str]) -> None:
+        """Remove *paths* from the simulated on-device state."""
+        self.calls.append(("delete_files", (list(paths),)))
+        for path in paths:
+            self.device_files.pop(path, None)

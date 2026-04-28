@@ -928,3 +928,147 @@ class TestDeployFiles:
             assert first_staging != second_staging
         finally:
             transport.disconnect()
+
+
+class TestListFilesInScope:
+    """MicroPython transport's diff-deploy scope listing primitive."""
+
+    def test_returns_empty_in_mount_mode(self) -> None:
+        """Mount-mode (RAM) deploys never wrote to flash → no scope listing."""
+        runner = FakeRunner()
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0", runner=runner, mode="mount",
+        )
+        assert transport.list_files_in_scope() == []
+
+    def test_copy_mode_parses_scope_marker_lines(self) -> None:
+        serial = FakeSerialTransport(
+            "/dev/ttyUSB0",
+            exec_outputs=[
+                b"__CHU_F:/main.py\n__CHU_F:/lib/foo.py\n",
+            ],
+        )
+        runner = FakeRunner()
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0",
+            runner=runner,
+            mode="copy",
+            transport_factory=_factory_for(serial),
+        )
+        result = transport.list_files_in_scope()
+        assert sorted(result) == ["/lib/foo.py", "/main.py"]
+        # The exec_raw call shipped the listing script.
+        exec_calls = [call for call in serial.calls if call[0] == "exec_raw"]
+        assert len(exec_calls) == 1
+        assert "__CHU_F:" in exec_calls[0][1][0]
+
+    def test_copy_mode_unmounts_before_listing(self) -> None:
+        """If a mount is live (left over from a prior mode-mix), drop it first.
+
+        Listing runs raw-REPL `os` calls; an active mount wraps the
+        serial intercept and would garble I/O — matches the deploy_files
+        + delete_files defensive pattern.
+        """
+        serial = FakeSerialTransport(
+            "/dev/ttyUSB0", exec_outputs=[b""],
+        )
+        runner = FakeRunner()
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0",
+            runner=runner,
+            mode="copy",
+            transport_factory=_factory_for(serial),
+        )
+        # Force the transport into the "mounted" state.
+        transport._serial = serial
+        transport._mounted = True
+        transport.list_files_in_scope()
+        assert ("umount_local", ()) in serial.calls
+
+    def test_copy_mode_exec_failure_raises(self) -> None:
+        serial = FakeSerialTransport(
+            "/dev/ttyUSB0",
+            raise_on_execute=RuntimeError("device dropped"),
+        )
+        runner = FakeRunner()
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0",
+            runner=runner,
+            mode="copy",
+            transport_factory=_factory_for(serial),
+        )
+        with pytest.raises(MicropythonTransportError, match="list_files_in_scope"):
+            transport.list_files_in_scope()
+
+
+class TestDeleteFiles:
+    """MicroPython transport's diff-deploy scope deletion primitive."""
+
+    def test_empty_paths_no_op(self) -> None:
+        """delete_files with no paths shouldn't open the serial transport."""
+        runner = FakeRunner()
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0", runner=runner, mode="copy",
+        )
+        # No factory installed → if delete_files tried to open serial
+        # it'd fail.  Confirm the empty-list path doesn't hit serial.
+        transport.delete_files([])
+
+    def test_mount_mode_no_op(self) -> None:
+        """RAM mode never wrote to flash → nothing to delete."""
+        runner = FakeRunner()
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0", runner=runner, mode="mount",
+        )
+        transport.delete_files(["/lib/foo.py"])
+
+    def test_copy_mode_runs_remove_script(self) -> None:
+        serial = FakeSerialTransport(
+            "/dev/ttyUSB0", exec_outputs=[b""],
+        )
+        runner = FakeRunner()
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0",
+            runner=runner,
+            mode="copy",
+            transport_factory=_factory_for(serial),
+        )
+        transport.delete_files(["/lib/old.py", "/active.py"])
+        exec_calls = [call for call in serial.calls if call[0] == "exec_raw"]
+        assert len(exec_calls) == 1
+        script = exec_calls[0][1][0]
+        # Both paths embedded in the script as a literal Python list.
+        assert "/lib/old.py" in script
+        assert "/active.py" in script
+        assert "os.remove" in script
+
+    def test_copy_mode_unmounts_before_delete(self) -> None:
+        serial = FakeSerialTransport(
+            "/dev/ttyUSB0", exec_outputs=[b""],
+        )
+        runner = FakeRunner()
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0",
+            runner=runner,
+            mode="copy",
+            transport_factory=_factory_for(serial),
+        )
+        transport._serial = serial
+        transport._mounted = True
+        transport.delete_files(["/lib/old.py"])
+        assert ("umount_local", ()) in serial.calls
+
+    def test_copy_mode_exec_failure_raises(self) -> None:
+        serial = FakeSerialTransport(
+            "/dev/ttyUSB0",
+            raise_on_execute=RuntimeError("dropped"),
+        )
+        runner = FakeRunner()
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0",
+            runner=runner,
+            mode="copy",
+            transport_factory=_factory_for(serial),
+        )
+        with pytest.raises(MicropythonTransportError, match="delete_files"):
+            transport.delete_files(["/lib/old.py"])

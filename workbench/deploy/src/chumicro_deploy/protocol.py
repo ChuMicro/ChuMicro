@@ -142,6 +142,51 @@ PROBE_IMPLEMENTATION_SCRIPT = (
 )
 
 
+#: Top-level on-device files chumicro-deploy treats as managed.
+#: A diff-deploy that doesn't see one of these in the new payload
+#: removes the existing copy from the device.  Outside-scope files
+#: (user-uploaded images, hand-edited boot.py, etc.) are never
+#: touched.  Replaces the multi-thing-staging path retired in
+#: workspace-ecosystem Slice 7 (`plans/next-up.md` "Replace
+#: multi-thing staging with scoped diff-deploy").
+DEPLOY_SCOPE_FILES: frozenset[str] = frozenset(
+    {
+        "/code.py",
+        "/main.py",
+        "/active.py",
+        "/runtime_config.msgpack",
+    },
+)
+
+#: Directory prefixes whose entire subtree is managed by deploy.
+#: Anything below ``/lib/`` is host-deployed; anything else under
+#: the device root is the user's territory.
+DEPLOY_SCOPE_PREFIXES: tuple[str, ...] = ("/lib/",)
+
+
+def is_in_deploy_scope(device_path: str) -> bool:
+    """Return True when *device_path* falls inside the deploy's managed scope.
+
+    Scope rule (Slice 7 follow-on, ``plans/next-up.md`` "Replace
+    multi-thing staging with scoped diff-deploy"):
+
+    * The four canonical entrypoint / state files
+      (``/code.py``, ``/main.py``, ``/active.py``,
+      ``/runtime_config.msgpack``) — see :data:`DEPLOY_SCOPE_FILES`.
+    * Everything under ``/lib/`` — see :data:`DEPLOY_SCOPE_PREFIXES`.
+
+    Anything else — user-uploaded images, manually-edited
+    ``boot.py`` overrides, hand-tuned ``settings.toml`` knobs — is
+    out of scope and survives every diff-deploy untouched.
+
+    The check is path-shape only: callers should normalise their
+    paths to leading-slash form before calling.
+    """
+    if device_path in DEPLOY_SCOPE_FILES:
+        return True
+    return any(device_path.startswith(prefix) for prefix in DEPLOY_SCOPE_PREFIXES)
+
+
 def validate_entrypoint_in_files(
     files: Mapping[str, object],
     entrypoint: str,
@@ -304,6 +349,43 @@ class TransportProtocol(Protocol):
 
         Returns:
             Combined stdout from the entrypoint execution.
+        """
+        ...
+
+    def list_files_in_scope(self) -> list[str]:
+        """Enumerate device files within the deploy's managed scope.
+
+        Used by :meth:`Deployer.deploy_diff` to compute "what's on the
+        device today that the next deploy would replace" — the
+        difference becomes the *stale* set the diff routine deletes
+        before writing the new payload.
+
+        Returns paths in the same leading-slash form
+        :meth:`deploy_files` accepts (``"/lib/foo.py"``,
+        ``"/code.py"``, ``"/active.py"``, etc.).  Order is
+        unspecified; callers sort if they need deterministic output.
+
+        Transports that don't support persistent state (RAM-mode
+        deploys: nothing survives across deploys to be diffed) return
+        an empty list.  See ``plans/next-up.md`` "Replace multi-thing
+        staging with scoped diff-deploy" for the design rationale.
+        """
+        ...
+
+    def delete_files(self, paths: list[str]) -> None:
+        """Delete *paths* from the device's filesystem.
+
+        No-op when *paths* is empty.  Each path must be in the same
+        leading-slash form :meth:`deploy_files` accepts; transports
+        normalise internally.  Missing paths are tolerated silently
+        (the diff-routine call site is `delete what isn't in the new
+        payload`, and a previous deploy may have already removed
+        something — re-deleting shouldn't error).
+
+        Best-effort: a single delete failure logs a warning but does
+        not abort the batch.  The deploy that follows still writes
+        the new payload — leaving a stale file in scope is preferable
+        to skipping the deploy outright.
         """
         ...
 

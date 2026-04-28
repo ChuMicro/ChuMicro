@@ -1,0 +1,323 @@
+"""Tests for the scoped diff-deploy primitive (multi-thing-staging replacement)."""
+
+from __future__ import annotations
+
+import pytest
+from chumicro_deploy import (
+    DEPLOY_SCOPE_FILES,
+    DEPLOY_SCOPE_PREFIXES,
+    Deployer,
+    Device,
+    FakeTransport,
+    FileMapSource,
+    is_in_deploy_scope,
+)
+
+# ---------------------------------------------------------------------------
+# Scope helpers
+# ---------------------------------------------------------------------------
+
+
+class TestIsInDeployScope:
+    @pytest.mark.parametrize(
+        "path",
+        sorted(DEPLOY_SCOPE_FILES) + [
+            "/lib/foo.py",
+            "/lib/things/__init__.py",
+            "/lib/things/garage/sensors/door_open/app.py",
+        ],
+    )
+    def test_in_scope_paths(self, path: str) -> None:
+        assert is_in_deploy_scope(path)
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/settings.toml",        # CP user-config — out of scope
+            "/boot.py",              # user-managed boot hook
+            "/.fseventsd/...",       # macOS metadata on CIRCUITPY
+            "/photo.jpg",            # user-uploaded asset
+            "/data/log.txt",         # user-managed data dir
+            "/secrets.toml",         # CP-style secrets
+        ],
+    )
+    def test_out_of_scope_paths(self, path: str) -> None:
+        assert not is_in_deploy_scope(path)
+
+    def test_scope_prefixes_documented(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Sanity — the prefix list is what the test cases above assume."""
+        assert DEPLOY_SCOPE_PREFIXES == ("/lib/",)
+
+
+# ---------------------------------------------------------------------------
+# FakeTransport list / delete primitives
+# ---------------------------------------------------------------------------
+
+
+class TestFakeTransportPrimitives:
+    def test_list_in_scope_filters_to_scope(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        transport = FakeTransport(device_files={
+            "/code.py": b"# entrypoint",
+            "/lib/foo.py": b"x = 1",
+            "/photo.jpg": b"<jpeg>",          # out of scope
+            "/settings.toml": b"WIFI_SSID=...",  # out of scope
+        })
+        listed = sorted(transport.list_files_in_scope())
+        assert listed == ["/code.py", "/lib/foo.py"]
+        assert ("list_files_in_scope", ()) in transport.calls
+
+    def test_delete_drops_paths_from_state(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        transport = FakeTransport(device_files={
+            "/code.py": b"a",
+            "/lib/old.py": b"b",
+            "/lib/keep.py": b"c",
+        })
+        transport.delete_files(["/lib/old.py", "/missing.py"])
+        # Missing path tolerated silently; rest survive.
+        assert "/code.py" in transport.device_files
+        assert "/lib/keep.py" in transport.device_files
+        assert "/lib/old.py" not in transport.device_files
+        assert ("delete_files", (["/lib/old.py", "/missing.py"],)) in transport.calls
+
+    def test_deploy_files_updates_simulated_state(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A deploy_files call writes to FakeTransport.device_files for next list."""
+        transport = FakeTransport()
+        transport.deploy_files(
+            {"/code.py": b"# new", "/lib/foo.py": b"y = 2"},
+            "/code.py",
+        )
+        assert transport.device_files["/code.py"] == b"# new"
+        assert transport.device_files["/lib/foo.py"] == b"y = 2"
+
+
+# ---------------------------------------------------------------------------
+# Deployer.deploy_diff orchestration
+# ---------------------------------------------------------------------------
+
+
+def _build_device(deploy_mode: str = "flash") -> Device:
+    return Device(
+        transport="micropython",
+        address="/dev/cu.fake",
+        deploy_mode=deploy_mode,
+    )
+
+
+def _patch_factory(
+    monkeypatch: pytest.MonkeyPatch, transport: FakeTransport,
+) -> None:
+    """Make every Device.create_transport call return *transport*."""
+    monkeypatch.setattr(
+        Device, "create_transport", lambda _self: transport,
+    )
+
+
+class TestDeployerDeployDiff:
+    def test_deletes_stale_in_scope_files(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """File on device + not in new payload → deleted; new payload written."""
+        transport = FakeTransport(
+            mode="copy",
+            device_files={
+                "/code.py": b"# previous deploy",
+                "/lib/old_thing.py": b"old code",
+                "/lib/shared.py": b"shared v1",
+            },
+        )
+        _patch_factory(monkeypatch, transport)
+        deployer = Deployer(_build_device("flash"))
+        new_payload = {
+            "/code.py": b"# new deploy",
+            "/lib/shared.py": b"shared v2",
+            "/lib/new_thing.py": b"new code",
+        }
+        deleted: list[str] = []
+        result = deployer.deploy_diff(
+            FileMapSource(new_payload, entrypoint="/code.py"),
+            on_file_deleted=deleted.append,
+        )
+        assert result.success
+        # Stale file deleted; shared file replaced; new file added.
+        assert deleted == ["/lib/old_thing.py"]
+        assert transport.device_files["/code.py"] == b"# new deploy"
+        assert transport.device_files["/lib/shared.py"] == b"shared v2"
+        assert transport.device_files["/lib/new_thing.py"] == b"new code"
+        assert "/lib/old_thing.py" not in transport.device_files
+
+    def test_out_of_scope_files_survive(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """User-managed files (settings.toml, photos, etc.) never get deleted."""
+        transport = FakeTransport(
+            mode="copy",
+            device_files={
+                "/code.py": b"# previous",
+                "/settings.toml": b"WIFI_SSID = 'home'",
+                "/photo.jpg": b"<jpeg>",
+                "/data/log.txt": b"old log",
+                "/lib/foo.py": b"old foo",
+            },
+        )
+        _patch_factory(monkeypatch, transport)
+        deployer = Deployer(_build_device("flash"))
+        deployer.deploy_diff(
+            FileMapSource(
+                {"/code.py": b"# new"},
+                entrypoint="/code.py",
+            ),
+        )
+        # Out-of-scope files preserved in the simulated state.
+        assert transport.device_files["/settings.toml"] == b"WIFI_SSID = 'home'"
+        assert transport.device_files["/photo.jpg"] == b"<jpeg>"
+        assert transport.device_files["/data/log.txt"] == b"old log"
+        # In-scope file dropped because not in new payload.
+        assert "/lib/foo.py" not in transport.device_files
+
+    def test_no_stale_files_skips_delete_call(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Empty stale set → delete_files not called (no transport round-trip)."""
+        transport = FakeTransport(
+            mode="copy",
+            device_files={"/code.py": b"# v1"},
+        )
+        _patch_factory(monkeypatch, transport)
+        deployer = Deployer(_build_device("flash"))
+        deployer.deploy_diff(
+            FileMapSource(
+                {
+                    "/code.py": b"# v2",
+                    "/lib/new.py": b"x = 1",
+                },
+                entrypoint="/code.py",
+            ),
+        )
+        # delete_files NOT in the call log — there was nothing stale.
+        delete_calls = [
+            call for call in transport.calls if call[0] == "delete_files"
+        ]
+        assert delete_calls == []
+
+    def test_first_deploy_to_empty_device(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """No prior deploy → no stale files, normal write flow."""
+        transport = FakeTransport(mode="copy", device_files={})
+        _patch_factory(monkeypatch, transport)
+        deployer = Deployer(_build_device("flash"))
+        result = deployer.deploy_diff(
+            FileMapSource(
+                {"/code.py": b"# first deploy"},
+                entrypoint="/code.py",
+            ),
+        )
+        assert result.success
+        assert transport.device_files == {"/code.py": b"# first deploy"}
+
+    def test_ram_mode_collapses_to_plain_deploy(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """RAM-mode FakeTransport.list_files_in_scope returns [] — no diff cleanup.
+
+        Tests with the FakeTransport whose `device_files` populates from
+        prior deploys but starts empty here — the equivalent of "RAM
+        mode never wrote anything to flash."
+        """
+        transport = FakeTransport(mode="ram", device_files={})
+        _patch_factory(monkeypatch, transport)
+        deployer = Deployer(_build_device("flash"))
+        result = deployer.deploy_diff(
+            FileMapSource(
+                {"/main.py": b"print('hi')"},
+                entrypoint="/main.py",
+            ),
+        )
+        assert result.success
+        # No deletions attempted; deploy_files was called.
+        delete_calls = [
+            call for call in transport.calls if call[0] == "delete_files"
+        ]
+        deploy_calls = [
+            call for call in transport.calls if call[0] == "deploy_files"
+        ]
+        assert delete_calls == []
+        assert len(deploy_calls) == 1
+
+    def test_traceback_marks_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Diff-deploy uses the same traceback detection as plain deploy."""
+        transport = FakeTransport(
+            mode="copy",
+            device_files={"/code.py": b"# v1"},
+            execute_output=(
+                "Traceback (most recent call last):\n"
+                "  File \"/code.py\", line 1\n"
+                "RuntimeError: boom\n"
+            ),
+        )
+        _patch_factory(monkeypatch, transport)
+        deployer = Deployer(_build_device("flash"))
+        result = deployer.deploy_diff(
+            FileMapSource(
+                {"/code.py": b"# crashy"},
+                entrypoint="/code.py",
+            ),
+        )
+        assert not result.success
+        assert "RuntimeError: boom" in (result.traceback or "")
+
+    def test_progress_callbacks_fire_in_order(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        transport = FakeTransport(
+            mode="copy",
+            device_files={"/lib/old.py": b"x"},
+        )
+        _patch_factory(monkeypatch, transport)
+        deployer = Deployer(_build_device("flash"))
+        progress: list[tuple[float, str]] = []
+        deployer.deploy_diff(
+            FileMapSource(
+                {"/code.py": b"# new"},
+                entrypoint="/code.py",
+            ),
+            on_progress=lambda fraction, message: progress.append(
+                (fraction, message),
+            ),
+        )
+        # Stages monotonic, last is "done".
+        fractions = [item[0] for item in progress]
+        assert fractions == sorted(fractions)
+        assert progress[-1][1] == "done"
+        # The "cleaning stale" stage fired since /lib/old.py was stale.
+        cleaning_messages = [
+            message for _, message in progress if "cleaning" in message
+        ]
+        assert cleaning_messages, progress
+
+    def test_disconnect_called_even_on_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Transport.disconnect() must run via the finally guard."""
+        transport = FakeTransport(
+            mode="copy",
+            device_files={},
+            execute_output="Traceback (most recent call last):\nValueError: x",
+        )
+        _patch_factory(monkeypatch, transport)
+        deployer = Deployer(_build_device("flash"))
+        deployer.deploy_diff(
+            FileMapSource(
+                {"/code.py": b"# x"},
+                entrypoint="/code.py",
+            ),
+        )
+        assert ("disconnect", ()) in transport.calls
+
+
+class TestMicropythonScopeListingParser:
+    """Module-level parser for the on-device listing script."""
+
+    def test_extracts_marked_lines_only(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from chumicro_deploy.micropython_transport import _parse_scope_listing
+
+        output = (
+            "boot ok\n"
+            "__CHU_F:/code.py\n"
+            "extraneous noise\n"
+            "__CHU_F:/lib/foo.py\n"
+            "__CHU_F:/lib/foo.py\n"  # dedup
+        )
+        assert _parse_scope_listing(output) == ["/code.py", "/lib/foo.py"]
+
+    def test_empty_output_returns_empty_list(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from chumicro_deploy.micropython_transport import _parse_scope_listing
+
+        assert _parse_scope_listing("") == []
+        assert _parse_scope_listing("nothing matches\n") == []

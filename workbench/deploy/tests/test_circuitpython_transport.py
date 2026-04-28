@@ -2453,3 +2453,144 @@ class TestFormatProbeError:
         # is in _FLASH_DRIVE_STATE_PATTERNS).
         assert "not found or not writable" in message
         assert "Input/output error" in message
+
+
+class TestListFilesInScopeAndDelete:
+    """CP transport's diff-deploy primitives (multi-thing-staging replacement)."""
+
+    def test_ram_mode_returns_empty(self) -> None:
+        """RAM-mode never wrote to flash → list_files_in_scope yields nothing."""
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            mode="ram",
+            time=FakeTime(),
+        )
+        assert transport.list_files_in_scope() == []
+
+    def test_ram_mode_delete_no_op(self) -> None:
+        """RAM-mode delete_files is a no-op (nothing on flash to remove)."""
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            mode="ram",
+            time=FakeTime(),
+        )
+        # Doesn't raise even with paths supplied.
+        transport.delete_files(["/lib/foo.py"])
+
+    def test_flash_mode_lists_in_scope_files(self, tmp_path: Path) -> None:
+        """Walks the CIRCUITPY drive + filters to deploy-scope paths."""
+        # Plant a mix of in-scope and out-of-scope files on a fake drive.
+        (tmp_path / "code.py").write_text("# code")
+        (tmp_path / "active.py").write_text("THING_NAME = 'x'")
+        (tmp_path / "settings.toml").write_text("WIFI = '...'")  # out of scope
+        (tmp_path / "boot_out.txt").write_text("ignored")  # out of scope
+        (tmp_path / "lib").mkdir()
+        (tmp_path / "lib" / "foo.py").write_text("x = 1")
+        (tmp_path / "lib" / "nested").mkdir()
+        (tmp_path / "lib" / "nested" / "bar.py").write_text("y = 2")
+        (tmp_path / "data").mkdir()
+        (tmp_path / "data" / "log.txt").write_text("user data")  # out of scope
+
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            mode="flash",
+            circuitpy_drive_path=str(tmp_path),
+            time=FakeTime(),
+        )
+        result = sorted(transport.list_files_in_scope())
+        assert result == [
+            "/active.py",
+            "/code.py",
+            "/lib/foo.py",
+            "/lib/nested/bar.py",
+        ]
+
+    def test_flash_mode_lists_returns_empty_on_missing_drive(
+        self, tmp_path: Path,
+    ) -> None:
+        """Drive resolution failure → empty listing (no exception)."""
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            mode="flash",
+            circuitpy_drive_path=str(tmp_path / "no-such-drive"),
+            time=FakeTime(),
+        )
+        assert transport.list_files_in_scope() == []
+
+    def test_flash_mode_deletes_paths_under_drive(self, tmp_path: Path) -> None:
+        (tmp_path / "lib").mkdir()
+        target = tmp_path / "lib" / "stale.py"
+        target.write_text("# old")
+        keeper = tmp_path / "lib" / "keep.py"
+        keeper.write_text("# keep")
+
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            mode="flash",
+            circuitpy_drive_path=str(tmp_path),
+            time=FakeTime(),
+        )
+        transport.delete_files(["/lib/stale.py", "/lib/missing.py"])
+        # Stale removed; missing tolerated silently; keeper survives.
+        assert not target.exists()
+        assert keeper.exists()
+
+    def test_flash_mode_delete_with_empty_paths_returns_immediately(
+        self, tmp_path: Path,
+    ) -> None:
+        """delete_files([]) shouldn't even resolve the drive."""
+        # Pass a clearly-missing drive path; if the call tried to resolve,
+        # it would silently succeed (delete is best-effort), so this is a
+        # sanity guard rather than a strict assertion.
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            mode="flash",
+            circuitpy_drive_path=str(tmp_path / "no-such"),
+            time=FakeTime(),
+        )
+        transport.delete_files([])  # no exception, no error
+
+
+class TestListScopeOnDriveHelper:
+    """Module-level CIRCUITPY-walk helper used by `list_files_in_scope`."""
+
+    def test_includes_canonical_state_files(self, tmp_path: Path) -> None:
+        from chumicro_deploy.circuitpython_transport import _list_scope_on_drive
+
+        for filename in ("code.py", "main.py", "active.py", "runtime_config.msgpack"):
+            (tmp_path / filename).write_text("")
+        result = sorted(_list_scope_on_drive(tmp_path))
+        assert result == [
+            "/active.py",
+            "/code.py",
+            "/main.py",
+            "/runtime_config.msgpack",
+        ]
+
+    def test_omits_user_managed_root_files(self, tmp_path: Path) -> None:
+        from chumicro_deploy.circuitpython_transport import _list_scope_on_drive
+
+        # In-scope.
+        (tmp_path / "code.py").write_text("")
+        # Out-of-scope.
+        (tmp_path / "settings.toml").write_text("")
+        (tmp_path / "secrets.toml").write_text("")
+        (tmp_path / "boot.py").write_text("")
+        (tmp_path / "photo.jpg").write_bytes(b"")
+        result = sorted(_list_scope_on_drive(tmp_path))
+        assert result == ["/code.py"]
+
+    def test_walks_lib_recursively(self, tmp_path: Path) -> None:
+        from chumicro_deploy.circuitpython_transport import _list_scope_on_drive
+
+        (tmp_path / "lib").mkdir()
+        (tmp_path / "lib" / "a.py").write_text("")
+        (tmp_path / "lib" / "deep").mkdir()
+        (tmp_path / "lib" / "deep" / "b.py").write_text("")
+        result = sorted(_list_scope_on_drive(tmp_path))
+        assert result == ["/lib/a.py", "/lib/deep/b.py"]
+
+    def test_empty_drive_returns_empty(self, tmp_path: Path) -> None:
+        from chumicro_deploy.circuitpython_transport import _list_scope_on_drive
+
+        assert _list_scope_on_drive(tmp_path) == []

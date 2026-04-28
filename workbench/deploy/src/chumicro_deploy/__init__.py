@@ -79,12 +79,15 @@ if TYPE_CHECKING:
     )
     from .probe import DeviceInfo, probe_device
     from .protocol import (
+        DEPLOY_SCOPE_FILES,
+        DEPLOY_SCOPE_PREFIXES,
         DeployMode,
         DeviceImplementation,
         ExtendedTransportProtocol,
         ReflashMethod,
         Runtime,
         TransportProtocol,
+        is_in_deploy_scope,
     )
     from .recovery import (
         DeployFailureKind,
@@ -107,6 +110,8 @@ _LAZY_ATTRS: dict[str, str] = {
     "CircuitpythonTransport": "circuitpython_transport",
     "CircuitpythonTransportError": "circuitpython_transport",
     "DEFAULT_DEVICES_FILENAME": "config.default",
+    "DEPLOY_SCOPE_FILES": "protocol",
+    "DEPLOY_SCOPE_PREFIXES": "protocol",
     "DeployError": "result",
     "DeployFailureKind": "recovery",
     "DeployMode": "protocol",
@@ -146,6 +151,7 @@ _LAZY_ATTRS: dict[str, str] = {
     "filter_devices": "config.default",
     "find_circuitpy_drive": "circuitpython_transport",
     "flash_firmware": "firmware",
+    "is_in_deploy_scope": "protocol",
     "load_device_registry": "config.default",
     "load_devices": "config.default",
     "probe_device": "probe",
@@ -164,6 +170,8 @@ __all__ = [
     "CircuitpythonTransport",
     "CircuitpythonTransportError",
     "DEFAULT_DEVICES_FILENAME",
+    "DEPLOY_SCOPE_FILES",
+    "DEPLOY_SCOPE_PREFIXES",
     "DeployError",
     "DeployFailureKind",
     "DeployMode",
@@ -203,6 +211,7 @@ __all__ = [
     "filter_devices",
     "find_circuitpy_drive",
     "flash_firmware",
+    "is_in_deploy_scope",
     "load_device_registry",
     "load_devices",
     "probe_device",

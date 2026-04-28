@@ -361,6 +361,30 @@ def find_circuitpy_drive_for_machine(target_machine: str) -> str | None:
     return None
 
 
+def _list_scope_on_drive(drive: Path) -> list[str]:
+    """Walk a CIRCUITPY drive and return the deploy's in-scope paths.
+
+    Flash-mode helper for :meth:`CircuitpythonTransport.list_files_in_scope`.
+    Returns the four canonical state files (``/code.py``,
+    ``/main.py``, ``/active.py``, ``/runtime_config.msgpack``) when
+    they exist, plus every file under ``/lib/`` recursively.
+    Out-of-scope files (user-uploaded images, hand-edited
+    ``settings.toml``, the dotfile sentinels CIRCUITPY drops itself)
+    are omitted so the diff routine never deletes them.
+    """
+    found: list[str] = []
+    for filename in ("code.py", "main.py", "active.py", "runtime_config.msgpack"):
+        if (drive / filename).is_file():
+            found.append(f"/{filename}")
+    lib_root = drive / "lib"
+    if lib_root.is_dir():
+        for path in sorted(lib_root.rglob("*")):
+            if path.is_file():
+                relative = path.relative_to(drive).as_posix()
+                found.append(f"/{relative}")
+    return found
+
+
 class SerialPort(Protocol):
     """Structural interface for a serial port.
 
@@ -1134,6 +1158,49 @@ class CircuitpythonTransport:
             for output_line in output.splitlines():
                 on_execute_line(output_line)
         return output
+
+    def list_files_in_scope(self) -> list[str]:
+        """List on-device files within the deploy's managed scope.
+
+        Flash mode walks the CIRCUITPY USB drive directly via stdlib
+        ``pathlib`` — faster + simpler than a raw-REPL round-trip,
+        and the drive's contents *are* the device's filesystem.
+
+        RAM mode returns an empty list — RAM-mode deploys never
+        touch flash, so there's nothing persistent to diff between
+        deploys.
+        """
+        if self.mode != "flash":
+            return []
+        try:
+            drive = self._resolve_circuitpy_drive()
+        except CircuitpythonTransportError:
+            return []
+        return _list_scope_on_drive(drive)
+
+    def delete_files(self, paths: list[str]) -> None:
+        """Delete *paths* from the CIRCUITPY drive.
+
+        Flash mode only — RAM mode is a no-op since nothing was
+        ever written to flash.  Each path is normalised to a
+        leading-slash form, joined under the CIRCUITPY mount point,
+        and unlinked best-effort.  Missing paths and per-path errors
+        are tolerated silently so a transient I/O hiccup never blocks
+        the deploy that follows.
+        """
+        if not paths or self.mode != "flash":
+            return
+        try:
+            drive = self._resolve_circuitpy_drive()
+        except CircuitpythonTransportError:
+            return
+        for device_path in paths:
+            relative = device_path.lstrip("/")
+            target = drive / relative
+            try:
+                target.unlink()
+            except (OSError, FileNotFoundError):  # pragma: no cover — best-effort
+                pass
 
     def _deploy_files_ram(
         self,

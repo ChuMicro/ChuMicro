@@ -63,6 +63,103 @@ class Deployer:
         """The target :class:`Device` this Deployer was constructed with."""
         return self._device
 
+    def deploy_diff(
+        self,
+        source: FileSource,
+        *,
+        on_progress: Callable[[float, str], None] | None = None,
+        on_file_staged: Callable[[str], None] | None = None,
+        on_file_deleted: Callable[[str], None] | None = None,
+        on_execute_line: Callable[[str], None] | None = None,
+    ) -> DeployResult:
+        """Diff-deploy *source* — delete stale in-scope files, then deploy.
+
+        Replaces the multi-thing-staging flow retired in workspace-
+        ecosystem Slice 7.  Per the design in ``plans/next-up.md``
+        ("Replace multi-thing staging with scoped diff-deploy"):
+
+        1. Connect.
+        2. Ask the transport for every in-scope file currently on the
+           device (``list_files_in_scope``).
+        3. Compute the stale set — paths on the device that aren't in
+           the new payload.
+        4. Delete the stale set (``delete_files``).
+        5. Hand off to the normal :meth:`deploy_files` for the actual
+           write + execute.
+
+        Out-of-scope files (user-uploaded images, hand-edited
+        ``settings.toml``, etc.) are never touched — see
+        :func:`chumicro_deploy.protocol.is_in_deploy_scope` for the rule.
+
+        Mode-aware: in RAM-mode deploys (CP RAM, MP mount) the
+        transport's ``list_files_in_scope`` returns an empty list and
+        the diff routine collapses to a plain :meth:`deploy_files`
+        call — RAM mode never wrote to flash so there's nothing
+        persistent to diff against.
+
+        Args:
+            source: :class:`FileSource` to deploy.
+            on_progress: Optional ``(fraction, message)`` callback.
+                Stages: ``connecting``, ``listing in-scope``,
+                ``cleaning stale``, ``staging``, ``executing``, ``done``.
+            on_file_staged: Forwarded to ``deploy_files``.
+            on_file_deleted: Per-file callback invoked with each
+                stale on-device path before deletion.  Lets the CLI
+                surface "removed: /lib/old.py" lines for transparency.
+            on_execute_line: Forwarded to ``deploy_files``.
+
+        Returns:
+            :class:`DeployResult` populated as in :meth:`deploy`.  The
+            ``staged_files`` field carries the new payload's keys
+            (the deletion list is observable via *on_file_deleted*
+            during the call but not retained on the result).
+        """
+
+        def _report(fraction: float, message: str) -> None:
+            if on_progress is not None:
+                on_progress(fraction, message)
+
+        if (
+            self._device.transport == Runtime.CIRCUITPYTHON
+            and self._device.deploy_mode == DeployMode.FLASH
+        ):
+            check_rsync_available()
+
+        transport = self._device.create_transport()
+        _report(0.0, "connecting")
+        transport.connect()
+        try:
+            _report(0.1, "listing in-scope")
+            on_device = set(transport.list_files_in_scope())
+            files = source.files()
+            entrypoint = source.entrypoint()
+            stale = sorted(on_device - set(files))
+            if stale:
+                _report(0.2, f"cleaning stale ({len(stale)})")
+                if on_file_deleted is not None:
+                    for path in stale:
+                        on_file_deleted(path)
+                transport.delete_files(stale)
+            _report(0.3, "staging")
+            output = transport.deploy_files(
+                files,
+                entrypoint,
+                on_file_staged=on_file_staged,
+                on_execute_line=on_execute_line,
+            )
+            _report(0.9, "executing")
+        finally:
+            transport.disconnect()
+
+        traceback_text = _extract_traceback(output)
+        _report(1.0, "done")
+        return DeployResult(
+            success=traceback_text is None,
+            staged_files=sorted(files.keys()),
+            execute_output=output,
+            traceback=traceback_text,
+        )
+
     def deploy(
         self,
         source: FileSource,
