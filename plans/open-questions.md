@@ -12,6 +12,23 @@ Questions that lead to structural tradeoffs should become decisions in
 
 ## Active
 
+### Library dependency policy (hard-injection vs. lazy default vs. hard dep)
+
+Today every chumicro service takes its dependencies via constructor injection
+(e.g. `MQTTClient(sockets=…)`).  Clean for testing, but creates an onboarding
+cliff — users without prior context don't know they need to install
+`chumicro-sockets` separately, and every example carries injection boilerplate.
+
+`plans/workstreams/library-pipeline.md` §"Dependency policy" lays out three
+options (A: hard-injection, B: lazy default with optional dep, C: hard dep
+with override) and recommends a split: **hard-dep + override** for *core
+infrastructure* (sockets, runner, timing) so libraries work on a single
+`pip install`; **callbacks-only** for *decoration / observability*
+(events, logging, the proposed presence/feedback layer) so they can never
+become required deps.  Decide before the next batch of libraries
+(logging, ntp, events) lands and audit existing `pyproject.toml` files
+against it.  Should land as `plans/decisions/NNNN-library-dependency-policy.md`.
+
 ### Boot-cost measurement benchmark for libraries
 
 The 2026-04-25 lazy-loading investigation

@@ -81,6 +81,8 @@ When an integration issue is resolved by changing a library API, the resolution 
 
 **Capture for now**, no implementation.  The sensor thing doesn't need it yet.  Revisit when a thing genuinely wants visible-from-across-the-room feedback (or when "why isn't this thing publishing?" becomes a recurring debugging question).
 
+**Update 2026-04-27:** widened and folded into `plans/workstreams/library-pipeline.md` §"Device-feedback layer".  The new framing treats indicator LEDs as one output of a broader "device presence" layer that also covers multi-purpose buttons, status overlays on an LCD, and audible feedback — all driven by the same event stream from networking / storage / app services.  Keep this section as the historical capture; the active design lives in the library-pipeline doc.
+
 ## Resolved
 
 ### Thing directory names must follow Python identifier rules (resolved 2026-04-26)
