@@ -122,7 +122,15 @@ class TestRsync:
                 flash_drive.rsync(source, destination)
 
     def test_uses_expected_excludes(self, tmp_path: Path) -> None:
-        """rsync command excludes boot.py, settings.toml, .DS_Store, ._*, __pycache__."""
+        """rsync command excludes user-config files, build artifacts, and macOS noise.
+
+        macOS-noise-dir excludes prevent ``rsync --delete`` from
+        aborting with ``unlinkat: Operation not permitted`` when the
+        kernel locks ``.Trashes/<UID>/`` read-only on a FAT volume —
+        same root cause the ``.Trashes`` skip sentinel in
+        :func:`flash_drive.neuter_macos_metadata` prevents going
+        forward.  Excludes here cover already-contaminated drives.
+        """
         source = tmp_path / "source"
         source.mkdir()
         destination = tmp_path / "destination"
@@ -154,6 +162,14 @@ class TestRsync:
             "--exclude=boot_out.txt",
             "--exclude=code.py",
             "--exclude=settings.toml",
+            # macOS noise dirs (auto-created, kernel-locked).
+            "--exclude=.Trashes",
+            "--exclude=.Spotlight-V100",
+            "--exclude=.TemporaryItems",
+            "--exclude=.DocumentRevisions-V100",
+            # macOS skip sentinels (we plant; rsync must not delete).
+            "--exclude=.fseventsd",
+            "--exclude=.metadata_never_index",
         ):
             assert exclude in command
 
@@ -288,7 +304,7 @@ class TestNeuterMacosMetadata:
     def test_plants_skip_sentinels_on_darwin(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Spotlight + FSEvents skip sentinels are planted at the drive root."""
+        """Spotlight + FSEvents + Trash skip sentinels are planted at the drive root."""
         monkeypatch.setattr(
             "chumicro_deploy.flash_drive._sys_module.platform",
             "darwin",
@@ -297,6 +313,10 @@ class TestNeuterMacosMetadata:
 
         assert (tmp_path / ".metadata_never_index").is_file()
         assert (tmp_path / ".fseventsd" / "no_log").is_file()
+        # ``.Trashes`` is planted as a *file* so macOS cannot create
+        # the protected ``.Trashes/<UID>/`` directory the kernel
+        # otherwise locks down with read-only perms.
+        assert (tmp_path / ".Trashes").is_file()
 
     def test_idempotent(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
@@ -315,14 +335,21 @@ class TestNeuterMacosMetadata:
     def test_removes_existing_noise_directories(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """``.Spotlight-V100`` / ``.Trashes`` / ``.TemporaryItems`` get removed."""
+        """``.Spotlight-V100`` / ``.TemporaryItems`` / ``.DocumentRevisions-V100`` get removed.
+
+        ``.Trashes`` is intentionally NOT in this list — once macOS has
+        created ``.Trashes/<UID>/`` the kernel sets it read-only and
+        even ``shutil.rmtree`` cannot remove it (verified live: rsync
+        ``--delete`` fails with ``unlinkat: Operation not permitted``).
+        Prevention via the file sentinel is the only working strategy
+        for that one; see ``test_plants_skip_sentinels_on_darwin``.
+        """
         monkeypatch.setattr(
             "chumicro_deploy.flash_drive._sys_module.platform",
             "darwin",
         )
         for noise_relative in (
-            ".Spotlight-V100", ".Trashes", ".TemporaryItems",
-            ".DocumentRevisions-V100",
+            ".Spotlight-V100", ".TemporaryItems", ".DocumentRevisions-V100",
         ):
             noise_dir = tmp_path / noise_relative
             noise_dir.mkdir()
@@ -331,7 +358,6 @@ class TestNeuterMacosMetadata:
         flash_drive.neuter_macos_metadata(tmp_path)
 
         assert not (tmp_path / ".Spotlight-V100").exists()
-        assert not (tmp_path / ".Trashes").exists()
         assert not (tmp_path / ".TemporaryItems").exists()
         assert not (tmp_path / ".DocumentRevisions-V100").exists()
 

@@ -113,6 +113,25 @@ def rsync(source: Path, destination: Path) -> None:
         "--exclude=boot_out.txt",
         "--exclude=code.py",
         "--exclude=settings.toml",
+        # macOS noise directories — auto-created on FAT volumes and
+        # protected by the kernel against deletion (``.Trashes/<uid>/``
+        # in particular is read-only at unlinkat time even from the
+        # mounting user, so ``rsync --delete`` aborts with
+        # "Operation not permitted" if it tries to clean them).
+        # ``neuter_macos_metadata`` makes a best-effort cleanup pass
+        # before rsync runs, but if macOS holds onto them rsync must
+        # leave them alone — the device side ignores ``.``-prefixed
+        # entries anyway, so they cost nothing on-board.
+        "--exclude=.Trashes",
+        "--exclude=.Spotlight-V100",
+        "--exclude=.TemporaryItems",
+        "--exclude=.DocumentRevisions-V100",
+        # macOS skip-sentinels we plant on every CP drive; rsync
+        # ``--delete`` would otherwise remove them on every deploy
+        # (they aren't in the staging tree) and macOS would re-create
+        # the noise dirs they exist to suppress.
+        "--exclude=.fseventsd",
+        "--exclude=.metadata_never_index",
         str(source) + "/",
         str(destination) + "/",
     ]
@@ -209,17 +228,33 @@ def disable_spotlight_indexing(drive_path: Path) -> None:
 #: Sentinel files / directories macOS recognises to skip a volume.  Planted
 #: at the drive root so subsequent remounts inherit the suppression — the
 #: equivalent of ``mdutil -i off`` (which resets on remount) but persistent.
+#:
+#: ``.Trashes`` is the load-bearing one: macOS preemptively creates
+#: ``.Trashes/<UID>/`` on every FAT mount, then sets the inner UID dir
+#: read-only at the kernel level so even the mounting user can't
+#: ``unlinkat`` it (verified live: ``rsync --delete`` aborts with
+#: ``Operation not permitted``).  Planting ``.Trashes`` as a *file*
+#: blocks macOS from creating the directory in the first place — the
+#: kernel can't ``mkdir`` over an existing non-directory entry.
+#: Already-contaminated drives keep their protected dir; the rsync
+#: exclude in :func:`rsync` handles those.
 _MACOS_SKIP_SENTINELS = (
     ".metadata_never_index",  # Spotlight: skip indexing this volume.
     ".fseventsd/no_log",      # FSEvents daemon: skip logging this volume.
+    ".Trashes",               # Trash daemon: file-shaped sentinel blocks dir creation.
 )
 
 #: Metadata directories macOS auto-creates on FAT volumes.  Removed defensively
 #: at deploy time — they re-appear if macOS still wants them, but the sentinel
 #: files above usually persuade it not to.
+#:
+#: ``.Trashes`` is intentionally absent from this list now that the
+#: sentinel above blocks it from being created.  If a drive was
+#: already contaminated before the sentinel landed, the rsync
+#: ``--exclude=.Trashes`` line in :func:`rsync` lets the deploy
+#: proceed without trying to delete the protected directory.
 _MACOS_NOISE_DIRS = (
     ".Spotlight-V100",
-    ".Trashes",
     ".TemporaryItems",
     ".DocumentRevisions-V100",
 )
@@ -229,19 +264,24 @@ def neuter_macos_metadata(drive_path: Path) -> None:
     """Suppress macOS auto-created metadata files / dirs on a FAT volume.
 
     Belt-and-suspenders prevention paired with :func:`disable_spotlight_indexing`
-    and :func:`clean_dot_files`.  Plants two sentinel files macOS honours
+    and :func:`clean_dot_files`.  Plants three sentinel files macOS honours
     persistently across remounts, then removes any noise directories that
     have already accumulated:
 
     * ``.metadata_never_index`` — Spotlight skips this volume entirely.
     * ``.fseventsd/no_log`` — FSEvents daemon skips logging.
-    * removes ``.Spotlight-V100`` / ``.Trashes`` / ``.TemporaryItems`` /
+    * ``.Trashes`` (as a *file*) — kernel cannot ``mkdir`` it into the
+      preemptively-created ``.Trashes/<UID>/`` directory macOS would
+      otherwise plant on every FAT mount and lock down with
+      kernel-level read-only perms (the EPERM-on-``unlinkat`` that
+      breaks ``rsync --delete``).
+    * removes ``.Spotlight-V100`` / ``.TemporaryItems`` /
       ``.DocumentRevisions-V100`` if present.
 
     Sentinels survive remount (unlike ``mdutil -i off``), so a
     once-deployed CIRCUITPY drive carries the suppression forward
     even if the host changes Spotlight policy mid-session.  Cluster
-    cost on FAT12 (Pi Pico W: ~870 KB / 4 KB clusters): two clusters
+    cost on FAT12 (Pi Pico W: ~870 KB / 4 KB clusters): three clusters
     for the sentinels, dwarfed by the .Spotlight-V100 directory it
     prevents (often hundreds of KB on a busy host).
 
