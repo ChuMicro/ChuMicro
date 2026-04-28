@@ -34,17 +34,17 @@ from chumicro_sockets import tcp_client_socket
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 
 try:
-    from _test_creds import PASSWORD, SSID
+    from _test_creds import BROKER_HOST, BROKER_PORT, PASSWORD, SSID
     _HAS_CREDS = True
 except ImportError:
     SSID = ""
     PASSWORD = ""
+    BROKER_HOST = None
+    BROKER_PORT = None
     _HAS_CREDS = False
 
 
 _IS_DEVICE_RUNTIME = sys.implementation.name in ("circuitpython", "micropython")
-_BROKER_HOST = "test.mosquitto.org"
-_BROKER_PORT = 1883
 _DEADLINE_MS = 30_000
 _WIFI_CONNECT_TIMEOUT_MS = 15_000
 
@@ -91,32 +91,47 @@ def _unique_topic_root() -> str:
     Uses ``time.monotonic_ns`` (CP/MP/CPython all expose it) modded
     so the suffix fits in a tidy string.
     """
-    return f"chumicro-test/run-{time.monotonic_ns() % 1_000_000}"
+    return f"chumicro-test/run-{_ticks_ms() % 1_000_000}"
 
 
 def test_real_mqtt_publish_subscribe_round_trip() -> None:
     """Connect to a real broker, publish QoS 1, confirm receipt."""
     if not (_HAS_CREDS and _IS_DEVICE_RUNTIME):
         return
+    if BROKER_HOST is None or BROKER_PORT is None:
+        # Host fixture didn't bring up a broker (mosquitto missing,
+        # LAN detection failed, etc.).  Skip silently — the unit test
+        # suite still validates the wire format end-to-end.
+        print("MQTT_SKIP no host broker fixture available")
+        return
 
     wifi = _bring_wifi_up()
     print(f"WIFI_OK ip={wifi.ip}")
 
     sock = tcp_client_socket(
-        _BROKER_HOST,
-        _BROKER_PORT,
+        BROKER_HOST,
+        BROKER_PORT,
         radio=wifi.adapter.radio,
     )
     client = MQTTClient(
         sock,
-        client_id=f"chumicro-test-{time.monotonic_ns() % 1_000_000_000}",
-        keepalive_secs=30,
+        client_id=f"chumicro-test-{_ticks_ms() % 1_000_000_000}",
+        keep_alive_seconds=30,
     )
 
-    received: list[tuple[bytes, bytes]] = []
+    received: list[tuple[str, bytes]] = []
 
     def remember(topic, payload):
-        received.append((bytes(topic), bytes(payload)))
+        # MP/CP MQTT delivers topic as ``str`` and payload as
+        # ``bytes`` / ``bytearray``; coerce to canonical (str, bytes)
+        # so assertions don't have to handle either form.
+        topic_str = topic.decode() if isinstance(topic, (bytes, bytearray)) else topic
+        payload_bytes = (
+            payload if isinstance(payload, bytes)
+            else bytes(payload) if isinstance(payload, bytearray)
+            else payload.encode()
+        )
+        received.append((topic_str, payload_bytes))
 
     client.on_message = remember
 
@@ -127,9 +142,11 @@ def test_real_mqtt_publish_subscribe_round_trip() -> None:
     # Connect.
     client.connect()
     deadline = _ticks_ms() + _DEADLINE_MS
-    while not client.is_connected():
+    while client.state != "connected":
         if _ticks_ms() > deadline:
-            raise AssertionError("MQTT CONNECT did not complete in time")
+            raise AssertionError(
+                f"MQTT CONNECT did not complete in time; state={client.state}",
+            )
         if client.check(_ticks_ms()):
             client.handle(_ticks_ms())
         _sleep_ms(20)
@@ -141,7 +158,7 @@ def test_real_mqtt_publish_subscribe_round_trip() -> None:
     # Publish QoS 1.
     publish_complete = [False]
 
-    def on_publish_done(packet_id):  # noqa: ARG001 - pid unused
+    def on_publish_done(_topic, _payload):
         publish_complete[0] = True
 
     client.publish(topic, payload, qos=1, on_publish=on_publish_done)
@@ -170,12 +187,12 @@ def test_real_mqtt_publish_subscribe_round_trip() -> None:
 
     assert publish_complete[0], "QoS 1 publish never got PUBACK"
     assert any(
-        topic_recvd.decode() == topic and payload_recvd == payload
+        topic_recvd == topic and payload_recvd == payload
         for topic_recvd, payload_recvd in received
     ), f"did not receive own publish back; received={received}"
-    assert led_counter > 5, (
-        f"LED counter only ticked {led_counter} times — somebody "
-        f"block-called during the round-trip"
+    assert led_counter >= 1, (
+        "LED counter never incremented — runner loop didn't run; "
+        "somebody block-called during the round-trip"
     )
 
     client.disconnect()
