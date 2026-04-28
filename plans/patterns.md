@@ -288,6 +288,48 @@ new bounded FIFO — including subscriber backlogs, request queues, and tick
 buffers.  Subscriber lists keyed by topic are *not* FIFO and stay as
 `list` (membership matters more than head/tail performance).
 
+#### Audit results (2026-04-27)
+
+Codebase-wide grep for `pop(0)` / `insert(0, ...)` in `libraries/*/src/`
+returns exactly one runtime-side genuine candidate:
+
+* **`libraries/mqtt/src/chumicro_mqtt/client.py` `_tx_queue`** — list
+  with `pop(0)` (FIFO drain, 3 sites), `insert(0, ...)` (PUBACK
+  priority head-prepend, 2 sites), `[0]` peek, `clear()`, and
+  unbounded `append()`.  Hot path on every `handle()` tick.
+  Migration is straightforward but has two subtle implications
+  worth a focused commit:
+
+  - **PUBACK ordering** — `insert(0, ...)` becomes `appendleft(...)`
+    requiring `deque((), maxlen, flags=1)` on MP/CP.  Verified on
+    both unix ports: `flags=1` is supported.  PUBACK semantics must
+    survive the migration unchanged (validated by
+    `functional_tests/test_real_broker.py`'s QoS 1 round-trip).
+  - **Retry / PINGREQ backpressure** — today's list-backed code
+    enforces `_max_tx_queue_size` only on the public `_enqueue`
+    path; retry / PINGREQ append unconditionally and grow the list
+    past max.  Migrating to `deque(maxlen=_max_tx_queue_size)` would
+    silently drop the oldest on overrun — wrong semantics for QoS 1
+    retry (drops in-flight packets to make room for an older retry).
+    Use `maxlen=_max_tx_queue_size + 64` for headroom, keeping the
+    existing `len() >= max` check as the sole enforcement mechanism.
+
+  Tracked as a follow-up (see `plans/next-up.md`); not migrated in
+  the audit pass because the MQTT functional test suite needs a
+  real-broker fixture and the corner cases warrant their own commit.
+
+Patterns that are *not* candidates:
+
+* **`libraries/*/testing.py` fakes** (`wifi`, `requests`).  Never
+  ship to devices — testing.py is excluded from per-runtime mpy
+  bundles.  CPython-only host-side tests; `list.pop(0)` cost is
+  irrelevant.
+* **`libraries/*/examples/*.py`** — examples favor clarity over
+  micro-optimization; running on tiny test data on CPython.
+* **`workbench/deploy/src/chumicro_deploy/sources.py:239`** —
+  workbench is CPython-only; deque on a single import-graph walk
+  saves nothing.
+
 Related: workstream 2026-04-27 micro-benchmark, the deque support
 verification in `plans/workstreams/library-pipeline.md`.
 
