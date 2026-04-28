@@ -126,6 +126,18 @@ class WifiService:
         """Stable identifier for the active adapter."""
         return self._adapter.name
 
+    @property
+    def adapter(self):
+        """The active :class:`~chumicro_wifi._adapters.base.WifiAdapter`.
+
+        Exposed so consumers needing a per-runtime substrate handle
+        — typically CircuitPython's radio — can write
+        ``radio=wifi.adapter.radio`` uniformly across every runtime.
+        On MP / CPython the base class supplies ``radio = None`` so
+        the same line is well-defined and harmless.
+        """
+        return self._adapter
+
     def on_state_change(self, callback: object) -> None:
         """Register a callback invoked on every state transition.
 

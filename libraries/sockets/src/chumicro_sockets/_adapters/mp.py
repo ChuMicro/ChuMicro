@@ -223,7 +223,20 @@ class _MpUDPWrapper:  # pragma: no cover - device only
             self.getsockname = lambda: ("0.0.0.0", 0)
 
     def sendto(self, data, host, port):
-        return self._sock.sendto(data, (host, port))
+        # MP's UDP ``sendto`` does not auto-resolve hostnames — passing
+        # ``("pool.ntp.org", 123)`` raises ``ValueError: invalid
+        # arguments`` because MP expects a packed sockaddr.  Route
+        # through ``getaddrinfo`` (which CircuitPython and CPython
+        # already do internally) so the public API is hostname-clean
+        # across every runtime.  Numeric-IP callers pay an O(1)
+        # short-circuit lookup; hostname callers pay one DNS round-trip
+        # per ``sendto`` — acceptable for chumicro-ntp-shaped traffic
+        # (one send per query).  Callers in tighter loops should
+        # pre-resolve and cache the IP themselves.
+        import socket  # noqa: PLC0415 — runtime-gated; lazy so CP can stage this file
+
+        address_info = socket.getaddrinfo(host, port)[0]
+        return self._sock.sendto(data, address_info[-1])
 
     def recvfrom_into(self, buffer, nbytes=0):
         size = nbytes if nbytes > 0 else len(buffer)

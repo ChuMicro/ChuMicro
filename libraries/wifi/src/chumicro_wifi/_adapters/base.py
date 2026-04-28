@@ -31,6 +31,14 @@ class WifiAdapter:
 
     name = "base"
 
+    #: Runtime-specific radio handle.  Only meaningful on CircuitPython,
+    #: where downstream libraries (``chumicro-sockets``,
+    #: ``chumicro-ntp``) need a ``radio=`` argument routed through the
+    #: socketpool.  MP / CPython adapters keep this as ``None`` so user
+    #: code can write ``radio=wifi.adapter.radio`` uniformly across
+    #: every runtime.
+    radio = None
+
     def configure(self, config):
         """Apply hostname / power-save / static-IP settings.
 

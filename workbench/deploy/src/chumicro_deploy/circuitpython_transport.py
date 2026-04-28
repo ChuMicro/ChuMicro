@@ -557,6 +557,8 @@ class CircuitpythonTransport:
         source_dirs: list[Path],
         test_files: list[Path],
         harness_source: Path,
+        *,
+        extra_modules: list[Path] | None = None,
     ) -> None:
         """Read source files into memory for inline execution.
 
@@ -571,6 +573,11 @@ class CircuitpythonTransport:
             test_files: Test files to stage (stored for bootstrap
                 generation).
             harness_source: Path to the test harness ``src/`` directory.
+            extra_modules: Optional sibling Python files (e.g.
+                ``_test_creds.py``) to register as importable on the
+                device alongside library sources.  In RAM mode they
+                join ``staged_sources``; in flash mode they land at the
+                drive root next to the test files.
         """
         self._staged_sources = []
         # Collect library package sources (needed for both modes).
@@ -579,8 +586,19 @@ class CircuitpythonTransport:
         # Collect harness sources.
         self._collect_package_sources(harness_source)
 
+        # Register sibling modules so the test source's top-level
+        # `from _foo import ...` resolves when the inline bootstrap runs.
+        if extra_modules:
+            for module_path in extra_modules:
+                self._staged_sources.append(
+                    (module_path.stem, module_path.read_text(encoding="utf-8")),
+                )
+
         if self.mode == "flash":
-            self._stage_to_flash(source_dirs, test_files, harness_source)
+            self._stage_to_flash(
+                source_dirs, test_files, harness_source,
+                extra_modules=extra_modules,
+            )
         self._staged = True
 
     def _verify_drive_for_board(self, drive_path: Path) -> Path:
@@ -720,14 +738,17 @@ class CircuitpythonTransport:
         source_dirs: list[Path],
         test_files: list[Path],
         harness_source: Path,
+        *,
+        extra_modules: list[Path] | None = None,
     ) -> None:
         """Mirror the desired drive layout inside a local staging directory.
 
-        Library and harness packages go under ``lib/``; test files go at
-        the root.  Building locally is reliable (no FAT32 quirks) — only
-        the rsync that follows has to deal with the device drive.
-        macOS extended attributes are stripped at the end so ``._``
-        resource forks don't end up on the FAT32 volume.
+        Library and harness packages go under ``lib/``; test files and
+        sibling extra modules go at the root.  Building locally is
+        reliable (no FAT32 quirks) — only the rsync that follows has
+        to deal with the device drive.  macOS extended attributes are
+        stripped at the end so ``._`` resource forks don't end up on
+        the FAT32 volume.
         """
         lib_staging = staging_path / "lib"
         lib_staging.mkdir()
@@ -737,6 +758,10 @@ class CircuitpythonTransport:
 
         for test_file in test_files:
             shutil.copy2(test_file, staging_path / test_file.name)
+
+        if extra_modules:
+            for module_path in extra_modules:
+                shutil.copy2(module_path, staging_path / module_path.name)
 
         flash_drive.strip_extended_attributes(staging_path)
 
@@ -770,6 +795,8 @@ class CircuitpythonTransport:
         source_dirs: list[Path],
         test_files: list[Path],
         harness_source: Path,
+        *,
+        extra_modules: list[Path] | None = None,
     ) -> None:
         """Copy staged files to the CIRCUITPY USB drive via rsync.
 
@@ -822,6 +849,7 @@ class CircuitpythonTransport:
             staging_path = Path(staging_directory)
             self._build_local_staging_tree(
                 staging_path, source_dirs, test_files, harness_source,
+                extra_modules=extra_modules,
             )
             try:
                 flash_drive.rsync(staging_path, drive_path)
