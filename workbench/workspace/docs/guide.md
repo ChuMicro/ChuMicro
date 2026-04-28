@@ -215,6 +215,16 @@ python run.py deploy garage/door_open --all-devices
 
 Loops over every entry in `devices.yml` and ships the thing to each in declaration order.  Per-device failures don't abort the loop; the exit code is 1 if any device's deploy failed, 0 otherwise.  Mutually exclusive with `--device` / `--runtime` (caught at runtime with a precise message).
 
+### Clean-slate deploys — `--wipe`
+
+```bash
+python run.py deploy garage/door_open --wipe
+```
+
+Erases the entire device filesystem before staging the new payload — destructive, wipes user-managed files (`settings.toml`, uploaded assets, hand-edited `boot.py`) along with managed deploy scope.  Use for corruption recovery, freeing space, or any "I want a known-empty board before this deploy" situation; ordinary deploys already clean stale `/lib/*` files via the diff-deploy primitive, so reach for `--wipe` only when the diff isn't enough.
+
+CircuitPython drives `import storage; storage.erase_filesystem()` (which reformats the FAT volume and reboots the board); MicroPython walks the user filesystem and removes every file + directory.  Firmware partitions are untouched on both runtimes.  No-op in RAM-mode deploys (RAM never wrote to flash, nothing to wipe).
+
 ### Failure hints
 
 When the deploy traceback matches a known workspace-shaped pattern, an indented `--- hints ---` block prints below it pointing at the fix:

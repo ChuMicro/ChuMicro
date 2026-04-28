@@ -389,6 +389,36 @@ class TransportProtocol(Protocol):
         """
         ...
 
+    def wipe_filesystem(self) -> None:
+        """Erase the device's user filesystem before the next deploy.
+
+        Destructive — wipes *every* file the runtime can see, both
+        in-scope (``/lib/*``, ``/code.py`` / ``/main.py`` / etc.) and
+        out-of-scope (``/settings.toml``, hand-edited ``boot.py``,
+        user-uploaded assets).  Used by ``chumicro-workspace deploy
+        --wipe`` for clean-slate / corruption-recovery flows where
+        an ordinary diff-deploy isn't enough.
+
+        CircuitPython flash drives ``import storage;
+        storage.erase_filesystem()`` over the raw REPL, which
+        reformats the FAT volume and reboots the board — the
+        transport swallows the connection-drop and re-establishes
+        raw REPL afterwards.
+
+        MicroPython walks ``/`` and removes every file + directory
+        via ``os.remove`` / ``os.rmdir``.  Firmware partitions are
+        untouched.
+
+        RAM-mode / mount-mode deploys (CP RAM, MP mount) are no-ops
+        — neither writes to flash, so there's nothing persistent to
+        wipe.  Callers don't need to gate on mode; the transport
+        does the right thing.
+
+        Best-effort: per-file errors are tolerated silently so a
+        transient I/O hiccup doesn't block the deploy that follows.
+        """
+        ...
+
 
 @runtime_checkable
 class ExtendedTransportProtocol(TransportProtocol, Protocol):

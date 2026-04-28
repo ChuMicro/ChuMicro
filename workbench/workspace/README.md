@@ -29,7 +29,7 @@ The package ships `python -m chumicro_workspace` (also exposed as the `chumicro-
 | `things [--flat]` | Default Unicode tree view; `--flat` for one-line-per-thing slash-form output. |
 | `status` | One-line-per-check workspace health snapshot — `workspace.yml` validity, `devices.yml` count, `secrets.yml` placeholder detection, things-tree summary. |
 | `doctor` | Strict sibling of `status` — adds Python ≥3.11 check, per-thing AST scan for `def run`, and a config-merge dry-run that catches unresolved `!secret` references. |
-| `deploy <name> [--boot-shim] [--import-graph] [--dry-run] [--all-devices]` | Ship a thing.  *name* accepts bare / slash / dotted (with bare-name disambiguation against the live tree).  `--dry-run` prints the file map without writing.  `--all-devices` loops over every entry in `devices.yml`. |
+| `deploy <name> [--boot-shim] [--import-graph] [--dry-run] [--all-devices] [--wipe]` | Ship a thing.  *name* accepts bare / slash / dotted (with bare-name disambiguation against the live tree).  `--dry-run` prints the file map without writing.  `--all-devices` loops over every entry in `devices.yml`.  `--wipe` erases the device filesystem before deploying (destructive — clean-slate / corruption recovery only). |
 | `demo` | Deploy a built-in print-loop payload to the active device (no wifi, ~5s).  Useful as the first-deploy sanity check. |
 | `repl [--tail SECONDS] [<thing>]` | Interactive REPL by default.  `--tail SECONDS` captures output for a window.  Optional positional thing deploys then tails (default 30s window). |
 | `install-firmware [--url URL] --method <uf2\|esptool>` | Download + flash firmware (URL auto-derived from `hardware.firmware_source` / `hardware.board_id` / `hardware.machine` when omitted). |

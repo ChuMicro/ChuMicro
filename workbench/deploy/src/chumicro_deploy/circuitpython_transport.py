@@ -81,6 +81,13 @@ _BOARD_FILE_VISIBLE_POST_SETTLE = 0.5
 #: Volume name CircuitPython uses by default.
 _CIRCUITPY_VOLUME_NAME = "CIRCUITPY"
 
+#: Seconds to wait after ``storage.erase_filesystem()`` before
+#: re-opening the serial port.  The call reformats the FAT volume
+#: and reboots the board; CDC takes a beat to come back.  Five
+#: seconds is what the manual ``.scratch/clean_circuitpy_board.py``
+#: helper uses and has been reliable on every supported board.
+_WIPE_REBOOT_SETTLE_SECONDS = 5.0
+
 
 def _format_probe_error(drive_path: Path, error: OSError) -> str:
     """Translate a probe-write OSError into a recovery-friendly message.
@@ -1201,6 +1208,39 @@ class CircuitpythonTransport:
                 target.unlink()
             except (OSError, FileNotFoundError):  # pragma: no cover — best-effort
                 pass
+
+    def wipe_filesystem(self) -> None:
+        """Reformat the CIRCUITPY drive via ``storage.erase_filesystem()``.
+
+        Flash mode only — RAM mode is a no-op (nothing in flash to
+        wipe).  Drives the on-board nuclear option through raw REPL:
+        the call reformats the FAT volume and reboots the board.
+        The host-side serial session goes away mid-call as USB-CDC
+        drops; the failure that surfaces is expected and swallowed.
+        After waiting for the reformat + reboot to settle the port is
+        re-opened and raw REPL re-entered, leaving the transport in
+        the same state :meth:`connect` does so a follow-up
+        :meth:`deploy_files` works without further setup.
+        """
+        if self.mode != "flash":
+            return
+        if self._port is None:
+            raise CircuitpythonTransportError(
+                "connect() must be called before wipe_filesystem()",
+            )
+        try:
+            self._send_repl_command(
+                "import storage\nstorage.erase_filesystem()\n",
+            )
+        except Exception:  # noqa: BLE001 — reboot kills the REPL mid-call
+            pass
+        try:
+            self._port.close()
+        except Exception:  # pragma: no cover — port may already be torn down
+            pass
+        self._port = None
+        self._time.sleep(_WIPE_REBOOT_SETTLE_SECONDS)
+        self.connect()
 
     def _deploy_files_ram(
         self,

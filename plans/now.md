@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **Idle — picking next workstream.**  Workspace-ecosystem umbrella (Phases 1, 2, 4, 5, 6, 7) closed 2026-04-27 — 6 of 7 phases shipped; only Phase 3 (per-environment deploys) deferred at user direction.  Multi-thing-staging-replacement also shipped end-to-end (`a7955fd`): transport primitive (`Deployer.deploy_diff` + `list_files_in_scope` + `delete_files`) plus workspace-CLI wiring so `python run.py deploy <thing>` and `repl <thing>` get scope cleanup by default.  Hardware-validated across all four runtime/board combos (CP flash + RAM, MP flash + RAM).  Only carry-over: a `--wipe` CLI flag for the corruption-recovery / clean-slate case.
-- **Last shipped:** `a7955fd` — workspace CLI routes deploy + repl-with-thing through `Deployer.deploy_diff`.
+- **Phase:** **Idle — picking next workstream.**  Multi-thing-staging-replacement workstream now fully closed: `--wipe` CLI flag shipped end-to-end (`Deployer.deploy_diff(wipe=True)` + `TransportProtocol.wipe_filesystem()` on CP / MP / FakeTransport + `chumicro-workspace deploy --wipe`).  Ordinary deploys clean stale `/lib/*` via the diff primitive shipped 2026-04-27; `--wipe` covers the corruption-recovery / clean-slate case where the user wants the whole user filesystem gone (CP `storage.erase_filesystem()`, MP recursive walk-and-delete).  RAM-mode no-ops silently inside the transport.  Workspace-ecosystem umbrella: only Phase 3 (per-environment deploys) deferred at user direction.
+- **Last shipped:** workspace + chumicro-deploy: `--wipe` flag for corruption-recovery / clean-slate deploys.
 - **In flight:** —
 - **Blocked on:** —
-- **Last touched:** `workbench/workspace/src/chumicro_workspace/cli.py`, `workbench/workspace/tests/test_cli.py`, `workbench/deploy/functional_tests/test_diff_deploy_hardware.py`, `plans/{now,next-up}.md`.
+- **Last touched:** `workbench/deploy/src/chumicro_deploy/{protocol,deployer,circuitpython_transport,micropython_transport,testing}.py`, `workbench/deploy/tests/test_{circuitpython,micropython}_transport.py`, `workbench/deploy/tests/test_diff_deploy.py`, `workbench/workspace/src/chumicro_workspace/cli.py`, `workbench/workspace/tests/test_cli.py`, `workbench/workspace/{README.md,docs/guide.md}`, `workbench/{deploy,workspace}/VERSION`, `plans/{now,next-up}.md`.
 
 ---
 
@@ -25,8 +25,8 @@ This is the front door. Everything else is deeper read.
 
 | Candidate | Where | Notes |
 |---|---|---|
-| `--wipe` CLI flag | `chumicro-workspace deploy --wipe` | Last carry-over from multi-thing-staging-replacement.  Calls `storage.erase_filesystem()` (CP) / walk-and-delete (MP) before deploy.  Sketch in `plans/next-up.md`'s "Replace multi-thing staging…" entry.  Small slice; depends on the diff-deploy primitive that already shipped. |
 | Phase 3 (per-env deploys) | `plans/workstreams/workspace-ecosystem.md` §Phase 3 | Deferred at user direction during Phase 4.  ~250 LOC sketched in the umbrella plan: workspace.yml `environments:` block, `deploy --env <name>`, `use <env>` to set the active env in `~/.chumicro/<workspace>/active-env`. |
+| Hardware validation of `--wipe` | live boards | `--wipe` shipped behind unit tests + FakeTransport; the CP `storage.erase_filesystem()` reboot-and-reconnect dance and the MP recursive walk both want a one-time hardware soak across the four-board matrix before being declared production-ready.  `.scratch/clean_circuitpy_board.py` already exercises both runtime paths manually if a hand-driven check is preferred. |
 | Carry-over: 3 deferred examples | template repo `examples/` | Hardware-network-stack examples (`periodic_get`, `telemetry_publisher`, `two_things`) were shipped in [`5ce73d4`](https://github.com/ChuMicro/ChuMicro-Workspace-Template/commit/5ce73d4); double-check them in `examples/README.md` and tweak if needed. |
 | Carry-over: Phase 5 `agent_strictness` | `chumicro_workspace.quality` | Field accepted today, AST-level enforcement (no naked `except:`, no global state in things) deferred.  Own design pass. |
 | Carry-over: Phase 7 device-side completer | `chumicro_repl.completion.DeviceCompleter` | Architecture shipped; the on-wire `dir()` query is a follow-on once friendly-↔-raw REPL mode-switching has a clean design. |

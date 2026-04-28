@@ -659,6 +659,7 @@ def _render_dry_run_summary(
     layout: str,
     files: dict[str, bytes],
     entrypoint: str,
+    wipe: bool = False,
 ) -> str:
     """Format the ``deploy --dry-run`` output.
 
@@ -667,14 +668,22 @@ def _render_dry_run_summary(
     The output doubles as user-facing documentation for
     "what does deploy actually do" — link from docs/guide.md +
     workspace template README.
+
+    When *wipe* is ``True``, an additional ``would wipe filesystem``
+    line surfaces between the header and the file table so dry-run
+    output matches the destructive variant of the real deploy.
     """
     total_bytes = sum(len(content) for content in files.values())
     lines = [
         f"would deploy {thing_name} to {device.transport}@{device.address} "
         f"using {layout} layout",
         f"entrypoint: {entrypoint}",
-        f"device files ({len(files)} total, {_format_size(total_bytes)}):",
     ]
+    if wipe:
+        lines.append("would wipe filesystem before deploy")
+    lines.append(
+        f"device files ({len(files)} total, {_format_size(total_bytes)}):",
+    )
     if not files:
         lines.append("  (file map is empty)")
         return "\n".join(lines)
@@ -847,11 +856,18 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
                 layout=layout,
                 files=source.files(),
                 entrypoint=source.entrypoint(),
+                wipe=args.wipe,
             ))
             continue
+        if args.wipe:
+            print(
+                f"deploy: wiping filesystem on "
+                f"{device.transport}@{device.address} before deploy",
+            )
         deleted: list[str] = []
         result = Deployer(device).deploy_diff(
             source,
+            wipe=args.wipe,
             on_file_deleted=deleted.append,
         )
         for stale_path in deleted:
@@ -2056,6 +2072,19 @@ def build_parser() -> argparse.ArgumentParser:
             "Mutually exclusive with --device / --runtime.  "
             "Per-device failures don't abort the loop — every device "
             "gets a chance, exit code reflects whether any failed."
+        ),
+    )
+    deploy_parser.add_argument(
+        "--wipe",
+        action="store_true",
+        help=(
+            "Erase the entire device filesystem before deploying.  "
+            "Destructive — wipes user-managed files (settings.toml, "
+            "uploaded assets, hand-edited boot.py) along with managed "
+            "deploy scope.  Use for clean-slate / corruption-recovery "
+            "flows; an ordinary deploy already cleans stale /lib/* "
+            "files via the diff-deploy primitive.  No-op in RAM mode "
+            "(nothing in flash to wipe)."
         ),
     )
     deploy_parser.set_defaults(func=_cmd_deploy)

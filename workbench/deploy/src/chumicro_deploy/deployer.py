@@ -67,6 +67,7 @@ class Deployer:
         self,
         source: FileSource,
         *,
+        wipe: bool = False,
         on_progress: Callable[[float, str], None] | None = None,
         on_file_staged: Callable[[str], None] | None = None,
         on_file_deleted: Callable[[str], None] | None = None,
@@ -99,9 +100,16 @@ class Deployer:
 
         Args:
             source: :class:`FileSource` to deploy.
+            wipe: When ``True``, call ``transport.wipe_filesystem()``
+                before staging — destructive clean-slate path used by
+                ``chumicro-workspace deploy --wipe``.  Skips the diff
+                cleanup entirely (nothing left to diff against after a
+                wipe).  RAM-mode transports treat the wipe as a no-op
+                so callers don't need to gate on mode.
             on_progress: Optional ``(fraction, message)`` callback.
-                Stages: ``connecting``, ``listing in-scope``,
-                ``cleaning stale``, ``staging``, ``executing``, ``done``.
+                Stages: ``connecting``, ``listing in-scope`` /
+                ``wiping``, ``cleaning stale``, ``staging``,
+                ``executing``, ``done``.
             on_file_staged: Forwarded to ``deploy_files``.
             on_file_deleted: Per-file callback invoked with each
                 stale on-device path before deletion.  Lets the CLI
@@ -129,17 +137,21 @@ class Deployer:
         _report(0.0, "connecting")
         transport.connect()
         try:
-            _report(0.1, "listing in-scope")
-            on_device = set(transport.list_files_in_scope())
             files = source.files()
             entrypoint = source.entrypoint()
-            stale = sorted(on_device - set(files))
-            if stale:
-                _report(0.2, f"cleaning stale ({len(stale)})")
-                if on_file_deleted is not None:
-                    for path in stale:
-                        on_file_deleted(path)
-                transport.delete_files(stale)
+            if wipe:
+                _report(0.1, "wiping filesystem")
+                transport.wipe_filesystem()
+            else:
+                _report(0.1, "listing in-scope")
+                on_device = set(transport.list_files_in_scope())
+                stale = sorted(on_device - set(files))
+                if stale:
+                    _report(0.2, f"cleaning stale ({len(stale)})")
+                    if on_file_deleted is not None:
+                        for path in stale:
+                            on_file_deleted(path)
+                    transport.delete_files(stale)
             _report(0.3, "staging")
             output = transport.deploy_files(
                 files,

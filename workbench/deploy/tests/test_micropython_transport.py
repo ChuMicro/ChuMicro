@@ -1072,3 +1072,67 @@ class TestDeleteFiles:
         )
         with pytest.raises(MicropythonTransportError, match="delete_files"):
             transport.delete_files(["/lib/old.py"])
+
+
+class TestWipeFilesystem:
+    """`wipe_filesystem()` walks `/` and removes every file + directory."""
+
+    def test_mount_mode_no_op(self) -> None:
+        """RAM/mount mode never wrote to flash → wipe is a silent no-op."""
+        runner = FakeRunner()
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0", runner=runner, mode="mount",
+        )
+        # No factory installed → if wipe tried to open serial it'd fail.
+        transport.wipe_filesystem()
+
+    def test_copy_mode_runs_wipe_script(self) -> None:
+        serial = FakeSerialTransport(
+            "/dev/ttyUSB0", exec_outputs=[b""],
+        )
+        runner = FakeRunner()
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0",
+            runner=runner,
+            mode="copy",
+            transport_factory=_factory_for(serial),
+        )
+        transport.wipe_filesystem()
+        exec_calls = [call for call in serial.calls if call[0] == "exec_raw"]
+        assert len(exec_calls) == 1
+        script = exec_calls[0][1][0]
+        # Recursive walker that removes every file via os.remove.
+        assert "_rmrf" in script
+        assert "os.remove" in script
+        assert "_rmrf('/')" in script
+
+    def test_copy_mode_unmounts_before_wipe(self) -> None:
+        serial = FakeSerialTransport(
+            "/dev/ttyUSB0", exec_outputs=[b""],
+        )
+        runner = FakeRunner()
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0",
+            runner=runner,
+            mode="copy",
+            transport_factory=_factory_for(serial),
+        )
+        transport._serial = serial
+        transport._mounted = True
+        transport.wipe_filesystem()
+        assert ("umount_local", ()) in serial.calls
+
+    def test_copy_mode_exec_failure_raises(self) -> None:
+        serial = FakeSerialTransport(
+            "/dev/ttyUSB0",
+            raise_on_execute=RuntimeError("dropped"),
+        )
+        runner = FakeRunner()
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0",
+            runner=runner,
+            mode="copy",
+            transport_factory=_factory_for(serial),
+        )
+        with pytest.raises(MicropythonTransportError, match="wipe_filesystem"):
+            transport.wipe_filesystem()

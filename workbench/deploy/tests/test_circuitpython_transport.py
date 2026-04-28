@@ -2551,6 +2551,77 @@ class TestListFilesInScopeAndDelete:
         transport.delete_files([])  # no exception, no error
 
 
+class TestWipeFilesystem:
+    """`wipe_filesystem()` drives `storage.erase_filesystem()` then re-connects."""
+
+    def test_ram_mode_is_no_op(self) -> None:
+        """RAM mode never wrote to flash → wipe is a silent no-op."""
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0", mode="ram", time=FakeTime(),
+        )
+        # No exception, no port writes (no port even exists).
+        transport.wipe_filesystem()
+
+    def test_flash_mode_without_connect_raises(self) -> None:
+        """Calling wipe before connect surfaces a precise error."""
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0", mode="flash", time=FakeTime(),
+        )
+        with pytest.raises(CircuitpythonTransportError, match="connect"):
+            transport.wipe_filesystem()
+
+    def test_flash_mode_drives_erase_and_reconnects(self) -> None:
+        """Sends erase_filesystem, swallows the dropped REPL, re-opens port."""
+        # First port: serves connect() then dies during the wipe REPL call
+        # (no further read responses → _send_repl_command raises, which we
+        # swallow as expected behavior).  Second port: serves the post-wipe
+        # reconnect.
+        first_port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
+        second_port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
+        ports = [first_port, second_port]
+
+        def factory(**kwargs):
+            return ports.pop(0)
+
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            mode="flash",
+            timeout=0.05,
+            serial_port_factory=factory,
+            time=FakeTime(),
+        )
+        transport.connect()
+        transport.wipe_filesystem()
+
+        # The wipe script was issued on the first port.
+        wipe_writes = b"".join(first_port.writes)
+        assert b"storage.erase_filesystem" in wipe_writes
+        # First port closed; second port serves the re-connect.
+        assert first_port.closed
+        assert ports == []  # both ports consumed by the factory
+
+    def test_flash_mode_close_failure_is_tolerated(self) -> None:
+        """A failure tearing the dropped port down doesn't block re-connect."""
+        class _UncloseablePort(FakeSerialPort):
+            def close(self) -> None:
+                raise OSError("simulated close failure")
+
+        first_port = _UncloseablePort(read_responses=[_RAW_REPL_PROMPT])
+        second_port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
+        ports = [first_port, second_port]
+
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            mode="flash",
+            timeout=0.05,
+            serial_port_factory=lambda **_: ports.pop(0),
+            time=FakeTime(),
+        )
+        transport.connect()
+        transport.wipe_filesystem()  # close failure swallowed; re-connect runs
+        assert ports == []
+
+
 class TestListScopeOnDriveHelper:
     """Module-level CIRCUITPY-walk helper used by `list_files_in_scope`."""
 

@@ -359,3 +359,16 @@ class FakeTransport:
         self.calls.append(("delete_files", (list(paths),)))
         for path in paths:
             self.device_files.pop(path, None)
+
+    def wipe_filesystem(self) -> None:
+        """Erase every simulated on-device file.
+
+        Mirrors the real-transport contract: in flash/copy mode the
+        whole user filesystem (in-scope + out-of-scope alike) is gone
+        after this returns.  In RAM/mount mode the call is a no-op so
+        tests for the ``deploy --wipe`` plumbing exercise both
+        branches against the same fake.
+        """
+        self.calls.append(("wipe_filesystem", ()))
+        if self.mode in ("flash", "copy"):
+            self.device_files.clear()

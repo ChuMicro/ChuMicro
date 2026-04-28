@@ -301,6 +301,122 @@ class TestDeployerDeployDiff:
         assert ("disconnect", ()) in transport.calls
 
 
+class TestDeployerWipeFlag:
+    """`Deployer.deploy_diff(..., wipe=True)` — destructive clean-slate path."""
+
+    def test_wipe_clears_everything_and_skips_diff(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Wipe nukes in-scope + out-of-scope alike, then plain deploy_files runs."""
+        transport = FakeTransport(
+            mode="copy",
+            device_files={
+                "/code.py": b"# previous",
+                "/lib/old.py": b"old",
+                "/settings.toml": b"WIFI_SSID = 'home'",
+                "/photo.jpg": b"<jpeg>",
+            },
+        )
+        _patch_factory(monkeypatch, transport)
+        deployer = Deployer(_build_device("flash"))
+        deleted: list[str] = []
+        result = deployer.deploy_diff(
+            FileMapSource(
+                {"/code.py": b"# fresh", "/lib/new.py": b"x = 1"},
+                entrypoint="/code.py",
+            ),
+            wipe=True,
+            on_file_deleted=deleted.append,
+        )
+        assert result.success
+        # Wipe ran; out-of-scope files are GONE (this is the whole point).
+        assert "wipe_filesystem" in [call[0] for call in transport.calls]
+        assert "/settings.toml" not in transport.device_files
+        assert "/photo.jpg" not in transport.device_files
+        # Diff-cleanup primitives were skipped — wipe makes them redundant.
+        labels = [call[0] for call in transport.calls]
+        assert "list_files_in_scope" not in labels
+        assert "delete_files" not in labels
+        assert deleted == []
+        # New payload landed.
+        assert transport.device_files == {
+            "/code.py": b"# fresh",
+            "/lib/new.py": b"x = 1",
+        }
+
+    def test_wipe_progress_reports_wiping_stage(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        transport = FakeTransport(
+            mode="copy", device_files={"/code.py": b"# v1"},
+        )
+        _patch_factory(monkeypatch, transport)
+        deployer = Deployer(_build_device("flash"))
+        progress: list[tuple[float, str]] = []
+        deployer.deploy_diff(
+            FileMapSource({"/code.py": b"# v2"}, entrypoint="/code.py"),
+            wipe=True,
+            on_progress=lambda fraction, message: progress.append(
+                (fraction, message),
+            ),
+        )
+        wipe_messages = [
+            message for _, message in progress if "wiping" in message
+        ]
+        assert wipe_messages, progress
+        # Listing/cleaning stages should NOT show up — we wiped instead.
+        cleaning_messages = [
+            message for _, message in progress if "cleaning" in message
+        ]
+        listing_messages = [
+            message for _, message in progress if "listing" in message
+        ]
+        assert cleaning_messages == []
+        assert listing_messages == []
+
+    def test_wipe_ram_mode_no_op_still_deploys(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """RAM-mode FakeTransport.wipe_filesystem() leaves device_files alone."""
+        transport = FakeTransport(mode="ram", device_files={})
+        _patch_factory(monkeypatch, transport)
+        deployer = Deployer(_build_device("flash"))
+        result = deployer.deploy_diff(
+            FileMapSource({"/main.py": b"# hi"}, entrypoint="/main.py"),
+            wipe=True,
+        )
+        assert result.success
+        # wipe_filesystem still got called — the no-op happens inside the
+        # transport, callers don't have to gate on mode.
+        assert "wipe_filesystem" in [call[0] for call in transport.calls]
+
+
+class TestFakeTransportWipe:
+    def test_wipe_clears_flash_mode_state(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        transport = FakeTransport(
+            mode="copy",
+            device_files={"/lib/foo.py": b"x", "/photo.jpg": b"y"},
+        )
+        transport.wipe_filesystem()
+        assert transport.device_files == {}
+        assert ("wipe_filesystem", ()) in transport.calls
+
+    def test_wipe_ram_mode_is_no_op(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """RAM/mount transports leave device_files alone — nothing in flash."""
+        transport = FakeTransport(
+            mode="ram",
+            device_files={"/lib/foo.py": b"x"},
+        )
+        transport.wipe_filesystem()
+        # Files still there because RAM mode never wrote them to flash.
+        assert transport.device_files == {"/lib/foo.py": b"x"}
+        assert ("wipe_filesystem", ()) in transport.calls
+
+
 class TestMicropythonScopeListingParser:
     """Module-level parser for the on-device listing script."""
 

@@ -1160,6 +1160,74 @@ class TestDeployDiffCleanup:
         assert "delete_files" not in labels
 
 
+class TestDeployWipeFlag:
+    """`deploy --wipe` calls wipe_filesystem before staging the new payload."""
+
+    def test_wipe_runs_and_clears_out_of_scope_files(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        _seed_thing(root, name="back-porch")
+
+        transport = FakeTransport(
+            mode="copy",
+            execute_output="",
+            device_files={
+                "/main.py": b"# previous main.py",
+                "/lib/old_thing.py": b"old",
+                "/settings.toml": b"WIFI = '...'",  # out of scope
+                "/photo.jpg": b"<jpeg>",            # out of scope
+            },
+        )
+        monkeypatch.setattr(Device, "create_transport", lambda _self: transport)
+
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root), "back-porch", "--wipe",
+        ])
+        assert exit_code == 0
+        out = capsys.readouterr().out
+        assert "wiping filesystem" in out
+        # No "removed stale" lines — wipe replaces the diff cleanup.
+        assert "removed stale" not in out
+
+        labels = [call[0] for call in transport.calls]
+        assert "wipe_filesystem" in labels
+        assert "deploy_files" in labels
+        # Diff primitives skipped (the wipe makes them redundant).
+        assert "list_files_in_scope" not in labels
+        assert "delete_files" not in labels
+        # Out-of-scope files are gone (the whole point of --wipe).
+        assert "/settings.toml" not in transport.device_files
+        assert "/photo.jpg" not in transport.device_files
+
+    def test_dry_run_with_wipe_shows_wipe_line(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """`deploy --wipe --dry-run` surfaces the wipe in the dry-run summary."""
+        root = _seed_workspace(tmp_path)
+        _seed_thing(root, name="back-porch")
+
+        transport = FakeTransport(execute_output="")
+        monkeypatch.setattr(Device, "create_transport", lambda _self: transport)
+
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root),
+            "back-porch", "--wipe", "--dry-run",
+        ])
+        assert exit_code == 0
+        out = capsys.readouterr().out
+        assert "would wipe filesystem before deploy" in out
+        # Dry-run still doesn't touch the transport.
+        assert not any(call[0] == "wipe_filesystem" for call in transport.calls)
+        assert not any(call[0] == "deploy_files" for call in transport.calls)
+
+
 class TestDeployDryRun:
     """Phase 2c — `deploy --dry-run` shows the file map without writing."""
 

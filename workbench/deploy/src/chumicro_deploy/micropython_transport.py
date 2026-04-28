@@ -112,6 +112,32 @@ _LIST_SCOPE_SCRIPT: str = (
 )
 
 
+#: Wipe the user filesystem: walk ``/`` recursively and remove every
+#: file + directory.  Errors are tolerated silently — the deploy that
+#: follows still has to write the new payload, and a stale file is
+#: better than no deploy.  Firmware lives on a separate partition,
+#: untouched by the user-fs walk.
+_WIPE_FILESYSTEM_SCRIPT: str = (
+    "import os\n"
+    "def _rmrf(p):\n"
+    "    try:\n"
+    "        names = os.listdir(p)\n"
+    "    except OSError:\n"
+    "        return\n"
+    "    for name in names:\n"
+    "        full = p + '/' + name if p != '/' else '/' + name\n"
+    "        try:\n"
+    "            os.remove(full)\n"
+    "        except OSError:\n"
+    "            _rmrf(full)\n"
+    "            try:\n"
+    "                os.rmdir(full)\n"
+    "            except OSError:\n"
+    "                pass\n"
+    "_rmrf('/')\n"
+)
+
+
 def _parse_scope_listing(output: str) -> list[str]:
     """Extract device paths from the scope-listing script's stdout.
 
@@ -640,6 +666,32 @@ class MicropythonTransport:
         except Exception as error:
             raise MicropythonTransportError(
                 f"delete_files failed: {error}",
+            ) from error
+
+    def wipe_filesystem(self) -> None:
+        """Erase the entire user filesystem via a recursive walk.
+
+        Mount-mode (RAM) is a no-op — nothing was written to flash.
+        Otherwise sends :data:`_WIPE_FILESYSTEM_SCRIPT` which walks
+        ``/`` and removes every file and directory.  Firmware lives
+        on a separate partition, untouched.  Per-file errors are
+        tolerated silently so the deploy that follows isn't blocked
+        by a transient I/O hiccup mid-walk.
+        """
+        if self.mode != "copy":
+            return
+        if self._mounted and self._serial is not None:
+            try:
+                self._serial.umount_local()
+            except Exception:  # pragma: no cover — best-effort cleanup
+                pass
+            self._mounted = False
+        self._ensure_serial()
+        try:
+            self._serial.exec_raw(_WIPE_FILESYSTEM_SCRIPT, timeout=60)
+        except Exception as error:
+            raise MicropythonTransportError(
+                f"wipe_filesystem failed: {error}",
             ) from error
 
     # ------------------------------------------------------------------
