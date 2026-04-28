@@ -31,6 +31,7 @@ import time
 
 from chumicro_mqtt import MQTTClient
 from chumicro_sockets import tcp_client_socket
+from chumicro_timing import ticks_ms as _chumicro_ticks_ms
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 
 try:
@@ -57,11 +58,17 @@ def _sleep_ms(duration_ms: int) -> None:
     time.sleep(duration_ms / 1000)
 
 
-def _ticks_ms() -> int:
-    runtime_ticks_ms = getattr(time, "ticks_ms", None)
-    if callable(runtime_ticks_ms):
-        return runtime_ticks_ms()
-    return int(time.monotonic() * 1000)
+#: Use chumicro-timing's ``ticks_ms`` rather than a per-test-file
+#: shim so the value we feed into ``MQTTClient.handle(now_ms)`` is in
+#: the same time domain as the deadlines the client computes
+#: internally.  On CircuitPython, ``time.ticks_ms`` does not exist —
+#: a naive ``time.monotonic() * 1000`` shim returns an unwrapped
+#: float-derived ms count, while ``chumicro-timing`` resolves to
+#: ``supervisor.ticks_ms`` which is 29-bit-wrapped (Decision 0008's
+#: portable tick contract).  Mixing the two on CP makes
+#: ``ticks_diff(deadline, now_ms)`` go negative on the first tick
+#: and the client immediately reports "timed out awaiting connack".
+_ticks_ms = _chumicro_ticks_ms
 
 
 def _bring_wifi_up() -> WifiService:
@@ -139,18 +146,32 @@ def test_real_mqtt_publish_subscribe_round_trip() -> None:
     topic = f"{topic_root}/echo"
     payload = b"hello from chumicro acceptance"
 
-    # Connect.
+    # Connect.  Emit a heartbeat print every ~1 s so the host's
+    # idle-timeout doesn't fire during legitimate slow CONNACK waits
+    # on CP boards (where the wifi → TCP → MQTT CONNECT-CONNACK chain
+    # can spend several seconds in non-blocking recv polls before the
+    # broker's reply arrives).
+    print("MQTT_CONNECTING")
     client.connect()
     deadline = _ticks_ms() + _DEADLINE_MS
+    poll_count = 0
     while client.state != "connected":
         if _ticks_ms() > deadline:
             raise AssertionError(
-                f"MQTT CONNECT did not complete in time; state={client.state}",
+                f"MQTT CONNECT did not complete in time; "
+                f"state={client.state} last_error={client.last_error!r}",
+            )
+        if client.state == "failed":
+            raise AssertionError(
+                f"MQTT CONNECT failed; last_error={client.last_error!r}",
             )
         if client.check(_ticks_ms()):
             client.handle(_ticks_ms())
+        poll_count += 1
+        if poll_count % 50 == 0:
+            print(f"MQTT_POLL count={poll_count} state={client.state}")
         _sleep_ms(20)
-    print("MQTT_CONNECTED")
+    print(f"MQTT_CONNECTED after {poll_count} polls")
 
     # Subscribe.
     client.subscribe(topic, qos=1)
