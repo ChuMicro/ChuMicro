@@ -6,8 +6,8 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **Multi-thing-staging replacement — primitive + workspace-CLI wiring shipped.**  Workspace-ecosystem umbrella main thread closed earlier this session.  Followed up with the `chumicro-deploy` transport primitive (`list_files_in_scope` / `delete_files` / `Deployer.deploy_diff`); this commit wires it into the workspace CLI's `_cmd_deploy` + `_cmd_repl` deploy-then-tail paths.  `python run.py deploy <thing>` now lists in-scope files first, deletes anything not in the new payload, then ships — with "deploy: removed stale /lib/old_thing.py" lines printed for each pruned file.  Hardware-validated on all four runtime/board combos (CP flash, CP RAM, MP flash, MP RAM — the test Pi Pico W came back online mid-session).  Out-of-scope files (settings.toml, photo.jpg, hand-edited boot.py) survive untouched.  `_cmd_demo` deliberately stays on plain `deploy()` — demo is a one-shot diagnostic that shouldn't wipe a user's `/lib/` state.  Remaining carry-over: `--wipe` CLI flag (CP `storage.erase_filesystem()` / MP walk-and-delete) for the corruption-recovery case.
-- **Last shipped:** workspace CLI wiring of `Deployer.deploy_diff` — `python run.py deploy <thing>` benefits from scope cleanup by default; full hardware coverage across all four runtime/board combos.
+- **Phase:** **Idle — picking next workstream.**  Workspace-ecosystem umbrella (Phases 1, 2, 4, 5, 6, 7) closed 2026-04-27 — 6 of 7 phases shipped; only Phase 3 (per-environment deploys) deferred at user direction.  Multi-thing-staging-replacement also shipped end-to-end (`a7955fd`): transport primitive (`Deployer.deploy_diff` + `list_files_in_scope` + `delete_files`) plus workspace-CLI wiring so `python run.py deploy <thing>` and `repl <thing>` get scope cleanup by default.  Hardware-validated across all four runtime/board combos (CP flash + RAM, MP flash + RAM).  Only carry-over: a `--wipe` CLI flag for the corruption-recovery / clean-slate case.
+- **Last shipped:** `a7955fd` — workspace CLI routes deploy + repl-with-thing through `Deployer.deploy_diff`.
 - **In flight:** —
 - **Blocked on:** —
 - **Last touched:** `workbench/workspace/src/chumicro_workspace/cli.py`, `workbench/workspace/tests/test_cli.py`, `workbench/deploy/functional_tests/test_diff_deploy_hardware.py`, `plans/{now,next-up}.md`.
@@ -17,62 +17,31 @@ This is the front door. Everything else is deeper read.
 ## What a fresh session should read first
 
 1. This file (`plans/now.md`).
-2. `plans/workstreams/workspace-ecosystem.md` — umbrella covering 7 phases (revised).
-3. `plans/workstreams/nested-things-and-examples.md` — Phase 1 detail (slices 1-7, file lists, acceptance per slice).
-4. `plans/next-up.md` — queue + done log.
+2. `git --no-pager log --oneline -20` — what just shipped, in order.
+3. `plans/next-up.md` — queue (`## Now`) + recent done log.
+4. `plans/decisions/` — only when proposing structural changes.
 
-## Phase summary (revised after user triage)
+## Pick-up candidates (sorted by readiness)
 
-| Phase | What | Detail | Estimated |
-|---|---|---|---|
-| **1** | Nested things + `examples/` folder + drop `switch` | `nested-things-and-examples.md` | 2-3 sessions, ~600 LOC + 10 new files |
-| **2** | Ergonomics quick wins: `status`, `doctor`, `deploy --dry-run`, app-level error recovery hints, `repl --tail <thing>` auto-deploy, multi-device deploy (assess) | umbrella §Phase 2 (six sub-items 2a-2f) | 1 session per sub-item |
-| **3** | Per-environment deploys (bumped up — "before it gets hard") | umbrella §Phase 3 | ~250 LOC, 1 session |
-| **4** | `new_library_scaffold.py` → `chumicro-workspace new --library` | umbrella §Phase 4 | ~250 LOC moved, 1 session |
-| **5** | Wire `workspace.yml` quality knobs (`lint` / `coverage` / `agent_strictness`) | umbrella §Phase 5 | ~150 LOC |
-| **6** | Documentation audit pass | umbrella §Phase 6 | Half session, no new code |
-| **7** | Richer REPL Phases 1a/b/c (parallel track) | `repl-playground.md` §Phase 1 | ~600 LOC across 3 sub-phases |
+| Candidate | Where | Notes |
+|---|---|---|
+| `--wipe` CLI flag | `chumicro-workspace deploy --wipe` | Last carry-over from multi-thing-staging-replacement.  Calls `storage.erase_filesystem()` (CP) / walk-and-delete (MP) before deploy.  Sketch in `plans/next-up.md`'s "Replace multi-thing staging…" entry.  Small slice; depends on the diff-deploy primitive that already shipped. |
+| Phase 3 (per-env deploys) | `plans/workstreams/workspace-ecosystem.md` §Phase 3 | Deferred at user direction during Phase 4.  ~250 LOC sketched in the umbrella plan: workspace.yml `environments:` block, `deploy --env <name>`, `use <env>` to set the active env in `~/.chumicro/<workspace>/active-env`. |
+| Carry-over: 3 deferred examples | template repo `examples/` | Hardware-network-stack examples (`periodic_get`, `telemetry_publisher`, `two_things`) were shipped in [`5ce73d4`](https://github.com/ChuMicro/ChuMicro-Workspace-Template/commit/5ce73d4); double-check them in `examples/README.md` and tweak if needed. |
+| Carry-over: Phase 5 `agent_strictness` | `chumicro_workspace.quality` | Field accepted today, AST-level enforcement (no naked `except:`, no global state in things) deferred.  Own design pass. |
+| Carry-over: Phase 7 device-side completer | `chumicro_repl.completion.DeviceCompleter` | Architecture shipped; the on-wire `dir()` query is a follow-on once friendly-↔-raw REPL mode-switching has a clean design. |
+| Carry-over: Phase 2f mapping config | umbrella §Phase 2f | Per-thing → per-device mapping configuration (deploy this thing to that device by default).  `--all-devices` covered the common case. |
+| Anything else in `## Now` of `next-up.md` | `plans/next-up.md` | Rebrand to ChipPy, OTA workstream (`plans/workstreams/ota.md`), shared per-runtime adapter helper, performance benchmarking infrastructure, etc. |
 
-## Phase 1 slice progress (closed 2026-04-27)
+## Hard rules to remember (non-negotiables)
 
-| Slice | Status |
-|---|---|
-| 1 — Recursive thing detection | shipped |
-| 2 — Deploy + boot-shim nesting | shipped |
-| 3 — `new` accepts paths + `--from` | shipped |
-| 4 — `things` tree renderer + path-aware `rename` | shipped |
-| 5 — `examples/` folder shipped | shipped (2 of 5 examples; 3 deferred) |
-| 7 — Drop `switch` command | shipped |
-| 6 — Tests, docs, polish | shipped |
-
-## What the user explicitly deferred this round
-
-| Item | Reason captured in umbrella's "Out of scope" |
-|---|---|
-| `deploy --watch` (file-watcher auto-deploy) | "Save for a rainy day" |
-| `edit <thing>` (open both files in $EDITOR) | IDE/vim users handle this themselves |
-| Multi-device deploys (Phase 2f), if not cheap | Conditional on first-step design sketch — assess before shipping |
-| Persistent `logs <device>` capture | Open design question — REPL concern vs workspace concern; revisit later |
-
-## Constraints the executor needs to know
-
-* **No backward compatibility.**  Nothing has been published to PyPI.  Change file formats, CLI flag shapes, on-device shim layouts, and remove commands (e.g. `switch`) freely.  Do NOT add migration logic.
-* **Two-repo flow.**  Phases 1, 2, 3, 4, 5 each touch the chumicro mono-repo.  Phases 1 + 6 also touch the [`ChuMicro-Workspace-Template`](https://github.com/ChuMicro/ChuMicro-Workspace-Template) repo (local clone at `/Users/chuxor/circuitpython/ChuMicro-Workspace-Template`).
-* **Templates live in `_payloads/`.**  Canonical scaffolds (thing, library, examples) live under `workbench/workspace/src/chumicro_workspace/_payloads/`.  The template repo's `_templates/` is a *user-owned-config materialisation source* (secrets.yml etc.) — not where scaffolds belong.
-* **Task-checkpoint per slice.**  Every slice ends with a green preflight + commit + push.  Don't batch slices.
-
-## What's explicitly out of scope for this workstream
-
-(All preserved in `plans/next-up.md` queue.)
-
-* Rebrand ChuMicro → ChipPy
-* OTA (`plans/workstreams/ota.md`, unscoped)
-* Multi-thing-staging cleanup (partly subsumed by Phase 1 Slice 7 dropping `switch`; the rest waits for "build a real second simple thing" trigger)
-* `pytest_device` `_test_creds` deploy bridge
-* `generate_config_files.py` calling `chumicro_workspace` directly
-* Per-runtime adapter helper extraction
-* Expand device test matrix beyond ESP32-S2
-* Performance benchmarking infrastructure
+- **`AGENTS.md` non-negotiables apply.**  Read it on session start.
+- **No backward compatibility burden.**  Nothing's published to PyPI yet — change formats, flags, layouts freely.  Do not add migration logic.
+- **Task-checkpoint per slice.**  Every coherent unit ends with green preflight (`python scripts/run.py preflight --coverage-threshold 94`) + commit + push.
+- **`git commit -F .scratch/commit-msg.txt`** — write the message to a file via Write tool, then `git commit -F`.  No `-m`, no heredocs in the terminal.  No `Co-Authored-By: Claude` trailer.
+- **Two-repo flow.**  The mono-repo is at `/Users/chuxor/circuitpython/chumicro`; the workspace template repo is at `/Users/chuxor/circuitpython/ChuMicro-Workspace-Template`.  Several workstreams touch both.
+- **Branching policy.**  Repo is private — commit directly to `main`; no PRs.
+- **All four boards plugged in.**  `devices.yml` registers Lolin S2 (CP+MP) and Pi Pico W (CP+MP).  Hardware-functional tests are runnable via `python scripts/run.py test-workbench-functional` / `test-libraries-functional`.
 
 ## How this file works
 

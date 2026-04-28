@@ -11,15 +11,7 @@
 
 ## Next
 
-The **`workspace-ecosystem` umbrella workstream** (in `## Now`) folds in several formerly-independent items — see the umbrella's phase list for the canonical scope.  Specifically:
-
-* **`new_library_scaffold.py` migration** is Phase 3 of the umbrella.
-* **Beginner on-ramp UX** is closed (Phase 7 of project-workspace shipped; the original `plans/workstreams/beginner-onramp.md` lives in Done now).
-* **`examples/` folder + two-thing example** is Phase 1 (alongside nested things) per `plans/workstreams/nested-things-and-examples.md`.
-* **Documentation audit** is Phase 5.
-* **Richer REPL** is Phase 6 (parallel track, detail in `plans/workstreams/repl-playground.md`).
-
-Remaining queued items below are independent of the umbrella.
+Independent items.  The **`workspace-ecosystem` umbrella** in `## Now` is essentially closed (only Phase 3 deferred at user direction); the multi-thing-staging-replacement workstream is also down to its last carry-over (the `--wipe` flag).
 
 - [ ] **Rebrand ChuMicro → ChipPy** (see `plans/workstreams/rename-to-chippy.md`). Full org + package + bundle rename, all library `VERSION` files reset to `0.0.0`. Execute when the project is ready for first public opening; sheds accumulated test-churn releases from PyPI since the namespace changes.
 - [ ] **Scripts → workbench migration backlog** (Decision 0032 rule 8).  Phases 1 + 2 + 3 shipped 2026-04-27 — see commits `e76b9f9` (Phase 1: device-registry schema → `chumicro_deploy.config.default`), `3e01cbf` (Phase 2: `chumicro-pytest-device` 0.1.0 carved out of `scripts/{pytest_device,pr_summary,result_parser,device_testing}.py`), and the workspace-ecosystem Phase 4 commit (Phase 3: `scripts/new_library_scaffold.py` → `chumicro_workspace.scaffold`).  Remaining smaller-scope candidates outside both workstreams, none urgent:
