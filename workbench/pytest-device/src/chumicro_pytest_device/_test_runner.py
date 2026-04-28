@@ -80,6 +80,40 @@ def build_bootstrap(
     )
 
 
+#: Filenames the plugin auto-stages alongside any functional test
+#: that imports them.  ``_test_creds.py`` is materialized by each
+#: library's functional-tests ``conftest.py`` from
+#: ``chumicro-dev-config.toml`` and carries wifi creds plus any
+#: per-library secrets (host echo IPs, broker addresses, etc.) the
+#: tests need at runtime.  Listed by exact basename so the heuristic
+#: stays predictable — extending the list is a deliberate change.
+_KNOWN_TEST_SIBLING_MODULES = ("_test_creds.py",)
+
+
+def resolve_test_sibling_modules(test_file: Path) -> list[Path]:
+    """Return helper modules that live next to *test_file* and should be staged.
+
+    Today's only entry is ``_test_creds.py`` — a gitignored shim each
+    library's ``conftest.py`` materializes from the dev config.  Without
+    this staging hook the test source's ``from _test_creds import …``
+    fails on the device with ``ImportError``, the test catches it, sets
+    ``_HAS_CREDS = False``, and returns silently — appearing to PASS
+    while never exercising any real hardware.  The deploy graph
+    walker can't pick this up via AST because ``_test_creds`` isn't a
+    chumicro module.
+
+    Args:
+        test_file: Functional test file under ``functional_tests/``.
+
+    Returns:
+        Sorted list of sibling Python files that exist on disk.  Empty
+        when the conftest hasn't materialized them (e.g. a CI run
+        without dev creds).
+    """
+    candidates = [test_file.parent / name for name in _KNOWN_TEST_SIBLING_MODULES]
+    return [path for path in candidates if path.is_file()]
+
+
 def _resolve_test_imported_library_names(test_files: list[Path]) -> list[str]:
     """Return workspace library names imported by functional test files."""
     imported_library_names: set[str] = set()

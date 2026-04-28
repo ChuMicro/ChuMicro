@@ -638,8 +638,17 @@ class _HotPathTransport:
         if self._connect_raises is not None:
             raise self._connect_raises
 
-    def stage(self, source_dirs, test_files, harness_source) -> None:
-        self.calls.append(("stage", (source_dirs, test_files, harness_source)))
+    def stage(
+        self,
+        source_dirs,
+        test_files,
+        harness_source,
+        *,
+        extra_modules=None,
+    ) -> None:
+        self.calls.append(
+            ("stage", (source_dirs, test_files, harness_source, extra_modules)),
+        )
 
     def execute(self, bootstrap_script: str) -> str:
         self.calls.append(("execute", (bootstrap_script,)))

@@ -267,8 +267,19 @@ class TransportProtocol(Protocol):
         source_dirs: list[Path],
         test_files: list[Path],
         harness_source: Path,
+        *,
+        extra_modules: list[Path] | None = None,
     ) -> None:
-        """Prepare the host-side staging area and (mode-dependent) push to device."""
+        """Prepare the host-side staging area and (mode-dependent) push to device.
+
+        *extra_modules* are additional Python files that the test files
+        import as top-level modules — typically siblings like
+        ``_test_creds.py`` that materialize secrets at fixture time.
+        Each is registered as importable on the device alongside library
+        sources: in RAM mode they join ``staged_sources`` so the inline
+        bootstrap registers them; in flash / copy / mount modes they
+        land at the device root next to the test files.
+        """
         ...
 
     def execute(self, bootstrap_script: str) -> str:

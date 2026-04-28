@@ -276,6 +276,8 @@ class MicropythonTransport:
         source_dirs: list[Path],
         test_files: list[Path],
         harness_source: Path,
+        *,
+        extra_modules: list[Path] | None = None,
     ) -> None:
         """Prepare a staging directory with library sources, tests, and harness.
 
@@ -293,6 +295,9 @@ class MicropythonTransport:
             source_dirs: Library ``src/`` directories to include.
             test_files: Test files to stage.
             harness_source: Path to the test harness ``src/`` directory.
+            extra_modules: Optional sibling Python files to copy to
+                the staging root next to the test files (e.g.
+                ``_test_creds.py``).
         """
         # Drop any mount/tempdir left from a prior stage() on this
         # transport so re-staging is idempotent.
@@ -322,6 +327,14 @@ class MicropythonTransport:
         for test_file in test_files:
             destination = staging_path / test_file.name
             destination.write_bytes(test_file.read_bytes())
+
+        # Copy extra sibling modules (e.g. _test_creds.py) into staging
+        # root so the test source's `from _test_creds import ...` line
+        # resolves against a real file on the device.
+        if extra_modules:
+            for module_path in extra_modules:
+                destination = staging_path / module_path.name
+                destination.write_bytes(module_path.read_bytes())
 
         if self.mode == "copy":
             # Subprocess `fs cp -r` — release the serial port if held.

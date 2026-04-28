@@ -35,6 +35,18 @@ class CpWifiAdapter(WifiAdapter):
             radio = self._acquire_runtime_radio()
         self._radio = radio
 
+    @property
+    def radio(self):
+        """Underlying ``wifi.radio`` singleton, or the injected fake.
+
+        Exposed so consumers like ``chumicro-sockets`` /
+        ``chumicro-ntp`` can take ``radio=wifi.adapter.radio``
+        uniformly across every runtime — the ``WifiAdapter`` base
+        class supplies a ``radio = None`` class attribute on MP /
+        CPython where there's no per-radio handle.
+        """
+        return self._radio
+
     @staticmethod
     def _acquire_runtime_radio():
         """Return ``wifi.radio`` or raise a clear error.

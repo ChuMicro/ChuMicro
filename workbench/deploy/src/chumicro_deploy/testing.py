@@ -232,6 +232,8 @@ class FakeTransport:
         source_dirs: list[Path],
         test_files: list[Path],
         harness_source: Path,
+        *,
+        extra_modules: list[Path] | None = None,
     ) -> None:
         """Record a stage call.
 
@@ -239,8 +241,12 @@ class FakeTransport:
             source_dirs: Library source directories.
             test_files: Test file paths.
             harness_source: Harness source directory.
+            extra_modules: Sibling Python files (e.g. ``_test_creds.py``)
+                to register as importable on the device.
         """
-        self.calls.append(("stage", (source_dirs, test_files, harness_source)))
+        self.calls.append(
+            ("stage", (source_dirs, test_files, harness_source, extra_modules)),
+        )
 
     def execute(self, bootstrap_script: str) -> str:
         """Record an execute call and return canned output.

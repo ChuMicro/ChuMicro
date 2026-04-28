@@ -55,6 +55,7 @@ from ._test_runner import (
     execute_device_bootstrap,
     resolve_effective_deploy_mode,
     resolve_library_source_dirs,
+    resolve_test_sibling_modules,
 )
 from .pr_summary import (
     DeviceRunResult,
@@ -814,6 +815,7 @@ class DeviceRuntimeItem(pytest.Item):
                     source_dirs,
                     [self.test_file],
                     _harness_source_dir(self.session),
+                    extra_modules=resolve_test_sibling_modules(self.test_file),
                 )
                 cache.mark_staged(staging_key)
 
@@ -1076,6 +1078,8 @@ def _bulk_stage_for_device(
     seen_source_dirs: list[Path] = []
     seen_test_files: list[Path] = []
     seen_test_file_ids: set[str] = set()
+    seen_extra_modules: list[Path] = []
+    seen_extra_module_ids: set[str] = set()
 
     for item in session.items:
         if not isinstance(item, DeviceTestItem):
@@ -1099,8 +1103,19 @@ def _bulk_stage_for_device(
             seen_test_file_ids.add(test_file_key)
             seen_test_files.append(item.test_file)
 
+        # Collect sibling helper modules (e.g. _test_creds.py) so the
+        # bulk stage covers every test file's import surface.
+        for sibling in resolve_test_sibling_modules(item.test_file):
+            sibling_key = str(sibling)
+            if sibling_key not in seen_extra_module_ids:
+                seen_extra_module_ids.add(sibling_key)
+                seen_extra_modules.append(sibling)
+
     transport.stage(
-        seen_source_dirs, seen_test_files, _harness_source_dir(session),
+        seen_source_dirs,
+        seen_test_files,
+        _harness_source_dir(session),
+        extra_modules=seen_extra_modules,
     )
 
 
