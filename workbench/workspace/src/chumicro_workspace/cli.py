@@ -81,6 +81,7 @@ from chumicro_workspace.onboarding import (
 from chumicro_workspace.quality import load_quality_config
 from chumicro_workspace.recovery import detect_hints, format_hints
 from chumicro_workspace.workspace import (
+    ENTRY_POINT_FILENAMES,
     ThingClassification,
     WorkspaceLayout,
     WorkspaceNotFoundError,
@@ -385,7 +386,10 @@ def _validate_thing_name(name: str) -> None:
             )
 
 
-_THING_ENTRY_POINT_FILENAMES: tuple[str, ...] = ("app.py", "code.py", "main.py")
+# Thing-entrypoint filenames are defined once in
+# :data:`chumicro_workspace.workspace.ENTRY_POINT_FILENAMES` — single
+# source of truth for "what files mark a thing dir."  Imported above
+# alongside the other workspace.py exports.
 
 
 def _ensure_namespace_parents(
@@ -427,9 +431,9 @@ def _resolve_new_source(
     before Slice 3 added the flag).  With ``--from <path>``, resolves
     *path* relative to the workspace root and validates that the
     resulting directory exists and looks like a thing — i.e. has at
-    least one of :data:`_THING_ENTRY_POINT_FILENAMES`.  An entry-point
-    is the only way to confirm the source is a thing (vs. a
-    namespace dir or a docs folder).
+    least one of :data:`~chumicro_workspace.workspace.ENTRY_POINT_FILENAMES`.
+    An entry-point is the only way to confirm the source is a thing
+    (vs. a namespace dir or a docs folder).
     """
     if from_path is None:
         template = workspace.things_dir / "_template"
@@ -456,7 +460,7 @@ def _resolve_new_source(
         )
     has_entry_point = any(
         (candidate / filename).is_file()
-        for filename in _THING_ENTRY_POINT_FILENAMES
+        for filename in ENTRY_POINT_FILENAMES
     )
     if not has_entry_point:
         raise SystemExit(
