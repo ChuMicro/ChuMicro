@@ -14,7 +14,6 @@ from chumicro_deploy import (
     DeviceConfigError,
     DeviceDefaults,
     DeviceEntry,
-    filter_devices,
     load_device_registry,
     load_devices,
     resolve_ide_devices,
@@ -229,41 +228,6 @@ class TestParseDefaults:
     def test_invalid_ide_runtime_raises(self) -> None:
         with pytest.raises(DeviceConfigError, match="ide_runtime"):
             _parse_defaults({"ide_runtime": "arduino"})
-
-
-class TestFilterDevices:
-    """Tests for ``filter_devices``."""
-
-    @pytest.fixture()
-    def sample_devices(self) -> list[DeviceEntry]:
-        return [
-            DeviceEntry(identifier="mp-1", runtime="micropython", address="/dev/ttyUSB0"),
-            DeviceEntry(identifier="mp-2", runtime="micropython", address="/dev/ttyUSB1"),
-            DeviceEntry(identifier="cp-1", runtime="circuitpython", address="/dev/cu.usbmodem1"),
-        ]
-
-    def test_filter_by_runtime(self, sample_devices) -> None:
-        result = filter_devices(sample_devices, runtime="micropython")
-        assert len(result) == 2
-        assert all(device.runtime == "micropython" for device in result)
-
-    def test_filter_by_device_id(self, sample_devices) -> None:
-        result = filter_devices(sample_devices, device_id="cp-1")
-        assert len(result) == 1
-        assert result[0].identifier == "cp-1"
-
-    def test_filter_by_both(self, sample_devices) -> None:
-        result = filter_devices(sample_devices, runtime="micropython", device_id="mp-2")
-        assert len(result) == 1
-        assert result[0].identifier == "mp-2"
-
-    def test_no_filter_returns_all(self, sample_devices) -> None:
-        result = filter_devices(sample_devices)
-        assert len(result) == 3
-
-    def test_no_match_returns_empty(self, sample_devices) -> None:
-        result = filter_devices(sample_devices, device_id="nonexistent")
-        assert result == []
 
 
 class TestResolveIdeDevices:

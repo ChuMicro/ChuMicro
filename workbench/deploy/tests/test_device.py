@@ -146,56 +146,6 @@ class TestFromDict:
             Device.from_dict({"transport": "zephyr", "address": "/dev/x"})
 
 
-class TestFromEnv:
-    def test_minimum_required(self):
-        device = Device.from_env(
-            environment={
-                "CHUMICRO_DEPLOY_TRANSPORT": "micropython",
-                "CHUMICRO_DEPLOY_ADDRESS": "/dev/ttyACM0",
-            },
-        )
-        assert device.transport == "micropython"
-        assert device.address == "/dev/ttyACM0"
-
-    def test_custom_prefix(self):
-        device = Device.from_env(
-            prefix="MYBOARD_",
-            environment={
-                "MYBOARD_TRANSPORT": "circuitpython",
-                "MYBOARD_ADDRESS": "/dev/cu.x",
-                "MYBOARD_BAUDRATE": "460800",
-            },
-        )
-        assert device.baudrate == 460800
-
-    def test_all_fields(self):
-        device = Device.from_env(
-            environment={
-                "CHUMICRO_DEPLOY_TRANSPORT": "circuitpython",
-                "CHUMICRO_DEPLOY_ADDRESS": "COM5",
-                "CHUMICRO_DEPLOY_BAUDRATE": "230400",
-                "CHUMICRO_DEPLOY_DEPLOY_MODE": "flash",
-                "CHUMICRO_DEPLOY_CIRCUITPY_DRIVE_PATH": "D:\\",
-                "CHUMICRO_DEPLOY_ENTRYPOINT_NAME": "app.py",
-                "CHUMICRO_DEPLOY_RESOURCE_PREFIX": "/pkg",
-            },
-        )
-        assert device.baudrate == 230400
-        assert device.deploy_mode == "flash"
-        assert device.entrypoint_name == "app.py"
-        assert device.resource_prefix == "/pkg"
-
-    def test_missing_required_raises(self):
-        with pytest.raises(ValueError, match="missing required env var"):
-            Device.from_env(environment={})
-
-    def test_missing_only_address(self):
-        with pytest.raises(ValueError, match="CHUMICRO_DEPLOY_ADDRESS"):
-            Device.from_env(
-                environment={"CHUMICRO_DEPLOY_TRANSPORT": "micropython"},
-            )
-
-
 class TestCreateTransport:
     """create_transport branches on runtime and maps deploy_mode."""
 

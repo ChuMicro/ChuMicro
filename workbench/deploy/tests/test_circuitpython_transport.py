@@ -1092,32 +1092,13 @@ class TestFlashMode:
     def test_flash_disconnect_restores_autoreload(
         self, tmp_path: Path,
     ) -> None:
-        """disconnect() in flash mode should re-enable autoreload."""
-        port = FakeSerialPort(
-            read_responses=[
-                _RAW_REPL_PROMPT,   # connect
-                _RAW_REPL_PROMPT,   # _enter_raw_repl in disconnect
-                _OK_RESPONSE,       # autoreload restore (disconnect)
-            ],
-        )
+        """disconnect() should re-enter raw REPL and restore autoreload.
 
-        transport = self._make_flash_transport(
-            port, str(tmp_path / "CIRCUITPY"),
-        )
-        transport.connect()
-        port.writes.clear()
-
-        transport.disconnect()
-
-        # Should have sent autoreload = True and supervisor.reload().
-        written_data = b"".join(port.writes)
-        assert b"autoreload" in written_data
-        assert b"True" in written_data
-
-    def test_flash_disconnect_restores_autoreload(
-        self, tmp_path: Path,
-    ) -> None:
-        """disconnect() should re-enter raw REPL and restore autoreload."""
+        Confirms the symmetry that the disable-site comments in
+        :meth:`_stage_to_flash` and :meth:`deploy_files` (flash path)
+        rely on: ``disconnect()`` is the canonical site that flips
+        autoreload back on.
+        """
         port = FakeSerialPort(
             read_responses=[
                 _RAW_REPL_PROMPT,   # connect
