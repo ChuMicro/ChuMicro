@@ -25,7 +25,7 @@ print(result.execute_output)
 
 ## What you get
 
-- **`Device`** — configure a target board (runtime, address, deploy mode). Construct it explicitly, from a dict via `Device.from_dict`, from env vars via `Device.from_env`, or load it from a `devices.yml` workspace file (see below).
+- **`Device`** — configure a target board (runtime, address, deploy mode). Construct it explicitly, from a dict via `Device.from_dict`, or load it from a `devices.yml` workspace file (see below).
 - **`Deployer`** — write files onto the board and run the entrypoint.
 - **`InteractiveDeployer`** — sibling deployer that classifies transport failures and coaches the user through a retry loop (unplug, drive ejected, REPL stuck, macOS FSKit wedge).
 - **`FileSource` variants** — `FileMapSource` for in-memory dicts, `DirectorySource` for a host directory, `ImportGraphSource` to walk Python imports.

@@ -267,21 +267,6 @@ def load_devices(
     return devices
 
 
-def filter_devices(
-    devices: list[DeviceEntry],
-    *,
-    runtime: str | None = None,
-    device_id: str | None = None,
-) -> list[DeviceEntry]:
-    """Filter a registry list by runtime and/or device ID."""
-    result = devices
-    if runtime:
-        result = [device for device in result if device.runtime == runtime]
-    if device_id:
-        result = [device for device in result if device.identifier == device_id]
-    return result
-
-
 def resolve_ide_devices(
     devices: list[DeviceEntry],
     defaults: DeviceDefaults,

@@ -15,7 +15,6 @@ single ``Device`` instance through the deploy pipeline.
 
 from __future__ import annotations
 
-import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -41,8 +40,7 @@ class Device:
     """Configuration for a target board.
 
     Constructed explicitly in code, from a dict
-    (``Device.from_dict(...)``), from environment variables
-    (``Device.from_env(prefix=...)``), or via the built-in
+    (``Device.from_dict(...)``), or via the built-in
     ``devices.yml`` loader
     (``chumicro_deploy.config.default.load_devices_yml``) — or a
     third-party loader registered through the
@@ -145,75 +143,6 @@ class Device:
             entrypoint_name=data.get("entrypoint_name"),
             resource_prefix=data.get("resource_prefix", DEFAULT_RESOURCE_PREFIX),
         )
-
-    @classmethod
-    def from_env(  # noqa: CHU001 — public API name matches workstream spec
-        cls,
-        *,
-        prefix: str = "CHUMICRO_DEPLOY_",
-        environment: Mapping[str, str] | None = None,
-    ) -> Device:
-        """Construct a :class:`Device` from environment variables.
-
-        Reads ``<PREFIX>TRANSPORT``, ``<PREFIX>ADDRESS``,
-        ``<PREFIX>BAUDRATE``, ``<PREFIX>DEPLOY_MODE``,
-        ``<PREFIX>CIRCUITPY_DRIVE_PATH``,
-        ``<PREFIX>ENTRYPOINT_NAME``, and ``<PREFIX>RESOURCE_PREFIX``.
-        Field names map 1:1 to the constructor — uppercased,
-        dot-free, prepended with *prefix*.
-
-        Args:
-            prefix: Environment-variable prefix.  Defaults to
-                ``"CHUMICRO_DEPLOY_"`` which keeps the namespace
-                clean when multiple tools share the env; pass a
-                shorter prefix (e.g. ``"MYBOARD_"``) for
-                third-party templates with their own conventions.
-            environment: Mapping used as the environment.  Defaults
-                to :data:`os.environ`.  Injectable for tests.
-
-        Raises:
-            ValueError: Required ``TRANSPORT`` or ``ADDRESS`` is
-                missing, or a field fails the constructor's
-                validation.
-        """
-        source = environment if environment is not None else os.environ
-
-        def _get(field_name: str) -> str | None:
-            return source.get(f"{prefix}{field_name.upper()}")
-
-        transport = _get("transport")
-        address = _get("address")
-        if transport is None or address is None:
-            missing = []
-            if transport is None:
-                missing.append(f"{prefix}TRANSPORT")
-            if address is None:
-                missing.append(f"{prefix}ADDRESS")
-            raise ValueError(
-                f"Device.from_env missing required env var(s): {missing!r}"
-            )
-
-        data: dict[str, Any] = {
-            "transport": transport,
-            "address": address,
-        }
-        baudrate = _get("baudrate")
-        if baudrate is not None:
-            data["baudrate"] = baudrate
-        deploy_mode = _get("deploy_mode")
-        if deploy_mode is not None:
-            data["deploy_mode"] = deploy_mode
-        drive = _get("circuitpy_drive_path")
-        if drive is not None:
-            data["circuitpy_drive_path"] = drive
-        entrypoint = _get("entrypoint_name")
-        if entrypoint is not None:
-            data["entrypoint_name"] = entrypoint
-        resource_prefix = _get("resource_prefix")
-        if resource_prefix is not None:
-            data["resource_prefix"] = resource_prefix
-
-        return cls.from_dict(data)
 
     def create_transport(self) -> TransportProtocol:
         """Construct the concrete transport for this device.
