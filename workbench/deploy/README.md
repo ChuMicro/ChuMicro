@@ -13,7 +13,7 @@ Pre-alpha.  Phase 1 complete (Decision 0029): host-side device transports, `Devi
 - `TransportProtocol` / `ExtendedTransportProtocol` — the duck-typed transport contract (Decision 0027).
 - `MicropythonTransport` — mpremote-driven transport with `mount` and `copy` deploy modes (Decision 0028).
 - `CircuitpythonTransport` — pyserial raw-REPL transport with `ram` and `flash` deploy modes.
-- `build_circuitpython_bootstrap(_scripts)` — on-device test-harness bootstrap builders.
+- `build_circuitpython_bootstrap_scripts` / `build_circuitpython_deploy_scripts` — chunked raw-REPL script builders for the on-device test harness and production deploys.
 - `Deployer` / `InteractiveDeployer` — programmatic + interactive deploy orchestration.  The interactive variant classifies failures and coaches the user through a retry loop (unplug, raw-REPL stuck, drive ejected, flash copy failed, source traceback, macOS FSKit wedge).
 - `detect_fskit_wedge` — macOS-only detector for the FSKit / DiskArbitration wedge that can leave CIRCUITPY drives unmountable; drives the automatic `CIRCUITPY_DRIVE_MISSING` → `MACOS_FSKIT_WEDGED` promotion.
 - `probe_device` / `flash_firmware` / `resolve_firmware_url` — board probing and firmware flashing (UF2 + esptool paths).

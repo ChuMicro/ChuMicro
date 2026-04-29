@@ -156,46 +156,47 @@ _MIN_INLINE_SCRIPT_BUDGET_BYTES = 8 * 1024
 _MAX_INLINE_SCRIPT_BUDGET_BYTES = 48 * 1024
 
 
-def find_circuitpy_drive() -> str | None:
-    """Auto-detect the CIRCUITPY USB drive mount path.
+def _circuitpy_base_paths() -> list[Path]:
+    """Return the OS-specific base directories that CIRCUITPY mounts under.
 
-    Checks common mount locations on macOS and Linux.  Returns the
-    first path that exists as a directory, or ``None`` if no drive
-    is found.
-
-    Checked locations (in order):
-
-    - macOS: ``/Volumes/CIRCUITPY``
-    - Linux: ``/media/<user>/CIRCUITPY``
-    - Linux (systemd): ``/run/media/<user>/CIRCUITPY``
-    """
-    username = _resolve_username()
-    candidates = [Path("/Volumes") / _CIRCUITPY_VOLUME_NAME]
-    if username:
-        candidates.append(Path("/media") / username / _CIRCUITPY_VOLUME_NAME)
-        candidates.append(Path("/run/media") / username / _CIRCUITPY_VOLUME_NAME)
-    for candidate in candidates:
-        if candidate.is_dir():
-            return str(candidate)
-    return None
-
-
-def _circuitpy_volume_candidates() -> list[Path]:
-    """Return all mounted CIRCUITPY* directories across common OS mount points.
-
-    macOS assigns ``/Volumes/CIRCUITPY`` by mount order; additional
-    CircuitPython boards get ``/Volumes/CIRCUITPY 1``, ``CIRCUITPY 2``,
-    etc.  This helper globs for all of them so the drive-verification
-    path can search across every mounted device to find the one whose
-    ``boot_out.txt`` matches the connected board.
+    macOS: ``/Volumes``.  Linux: ``/media/<user>``.  Linux (systemd):
+    ``/run/media/<user>``.  Used by both the bare-name finder and
+    the multi-mount glob so the discovery list lives in one place.
     """
     username = _resolve_username()
     bases = [Path("/Volumes")]
     if username:
         bases.append(Path("/media") / username)
         bases.append(Path("/run/media") / username)
+    return bases
+
+
+def find_circuitpy_drive() -> str | None:
+    """Auto-detect the CIRCUITPY USB drive mount path.
+
+    Checks common mount locations on macOS and Linux.  Returns the
+    first path that exists as a directory, or ``None`` if no drive
+    is found.  Bare-name only — does not match ``CIRCUITPY 1`` etc.;
+    use :func:`_circuitpy_volume_candidates` for the multi-mount sweep.
+    """
+    for base in _circuitpy_base_paths():
+        candidate = base / _CIRCUITPY_VOLUME_NAME
+        if candidate.is_dir():
+            return str(candidate)
+    return None
+
+
+def _circuitpy_volume_candidates() -> list[Path]:
+    """Return every mounted CIRCUITPY* directory across the base paths.
+
+    macOS assigns ``/Volumes/CIRCUITPY`` by mount order; additional
+    CircuitPython boards get ``/Volumes/CIRCUITPY 1``, ``CIRCUITPY 2``,
+    etc.  Globs all of them so the drive-verification path can scan
+    every mounted device to find the one whose ``boot_out.txt``
+    matches the connected board.  Bare-name match is included.
+    """
     found: list[Path] = []
-    for base in bases:
+    for base in _circuitpy_base_paths():
         if not base.is_dir():
             continue
         for candidate in sorted(base.glob(f"{_CIRCUITPY_VOLUME_NAME}*")):
@@ -207,9 +208,9 @@ def _circuitpy_volume_candidates() -> list[Path]:
 def _read_boot_out_text(drive_path: Path) -> str | None:
     """Return the full text of ``boot_out.txt`` on *drive_path*, or ``None``.
 
-    Centralised so the machine / UID readers share one read (and one
-    error-swallowing policy).  A missing or unreadable file yields
-    ``None`` and the caller degrades gracefully.
+    Centralised so the identity reader has one error-swallowing policy.
+    A missing or unreadable file yields ``None`` and the caller
+    degrades gracefully.
     """
     boot_out = drive_path / "boot_out.txt"
     if not boot_out.is_file():
@@ -220,50 +221,41 @@ def _read_boot_out_text(drive_path: Path) -> str | None:
         return None
 
 
-def _read_boot_out_machine(drive_path: Path) -> str | None:
-    """Return the board-machine suffix from ``boot_out.txt`` on *drive_path*.
+def _read_boot_out_identity(
+    drive_path: Path,
+) -> tuple[str | None, str | None]:
+    """Return ``(uid, machine)`` from ``boot_out.txt`` in one file read.
 
-    CircuitPython writes ``boot_out.txt`` at boot with a first line of
-    the form::
+    CircuitPython writes ``boot_out.txt`` at boot with a header line::
 
         Adafruit CircuitPython 10.2.0-rc.0 on 2026-04-16; Raspberry Pi Pico W with rp2040
 
-    The portion after ``on DATE; `` matches ``sys.implementation._machine``
-    on the running board, so comparing the two tells us whether this
-    drive actually belongs to the connected board.  Returns ``None``
-    when the file is missing, unreadable, or doesn't follow the
-    expected shape — callers treat that as "can't verify" and proceed.
+    plus a ``UID:...`` line.  Both fields are needed by
+    :meth:`CircuitpythonTransport._verify_drive_for_board` on every
+    deploy and by the per-candidate identity sweep in
+    :func:`find_circuitpy_drive_for_uid` /
+    :func:`find_circuitpy_drive_for_machine`; reading once and
+    extracting both avoids redundant I/O on a USB FAT mount.
+
+    Either field is ``None`` when the file is missing, unreadable,
+    or doesn't carry that field.
     """
     text = _read_boot_out_text(drive_path)
     if text is None:
-        return None
+        return None, None
+    uid: str | None = None
+    machine: str | None = None
     lines = text.splitlines()
-    if not lines:
-        return None
-    first_line = lines[0]
-    semicolon_index = first_line.find(";")
-    if semicolon_index == -1:
-        return None
-    return first_line[semicolon_index + 1:].strip()
-
-
-def _read_boot_out_uid(drive_path: Path) -> str | None:
-    """Return the hex-uppercase CPU UID from ``boot_out.txt`` on *drive_path*.
-
-    CircuitPython writes a ``UID:...`` line to ``boot_out.txt`` at
-    boot, matching what ``microcontroller.cpu.uid`` reports over
-    raw REPL (see :data:`PROBE_IMPLEMENTATION_SCRIPT`).  Matching by
-    UID — rather than the looser machine string — disambiguates two
-    boards of the same model connected at once.  Returns ``None``
-    when the file is missing, unreadable, or has no UID line.
-    """
-    text = _read_boot_out_text(drive_path)
-    if text is None:
-        return None
-    for line in text.splitlines():
+    if lines:
+        first_line = lines[0]
+        semicolon_index = first_line.find(";")
+        if semicolon_index != -1:
+            machine = first_line[semicolon_index + 1:].strip()
+    for line in lines:
         if line.startswith("UID:"):
-            return line[len("UID:"):].strip().upper()
-    return None
+            uid = line[len("UID:"):].strip().upper()
+            break
+    return uid, machine
 
 
 def find_circuitpy_drive_for_uid(target_uid: str) -> str | None:
@@ -281,7 +273,7 @@ def find_circuitpy_drive_for_uid(target_uid: str) -> str | None:
         return None
     target = target_uid.upper()
     for candidate in _circuitpy_volume_candidates():
-        uid = _read_boot_out_uid(candidate)
+        uid, _machine = _read_boot_out_identity(candidate)
         if uid and uid == target:
             return str(candidate)
     return None
@@ -362,7 +354,7 @@ def find_circuitpy_drive_for_machine(target_machine: str) -> str | None:
     if not target_machine:
         return None
     for candidate in _circuitpy_volume_candidates():
-        machine = _read_boot_out_machine(candidate)
+        _uid, machine = _read_boot_out_identity(candidate)
         if machine and machine == target_machine:
             return str(candidate)
     return None
@@ -562,6 +554,12 @@ class CircuitpythonTransport:
     ) -> None:
         """Read source files into memory for inline execution.
 
+        **Test-harness API.**  Sister of :meth:`deploy_files` for the
+        ``test-libraries-functional`` orchestrator (`source_dirs` +
+        `test_files` + `harness_source` are test-runner concepts).
+        Production deploys use :meth:`deploy_files` with a flat
+        ``files: dict[device_path, bytes]`` instead.
+
         In RAM mode, source code is read and stored for embedding into
         the bootstrap code block sent via raw REPL.
 
@@ -631,8 +629,7 @@ class CircuitpythonTransport:
         roundtrip is skipped entirely in environments that don't have
         it (test drives mocked with a bare ``tmp_path``, for instance).
         """
-        boot_uid = _read_boot_out_uid(drive_path)
-        boot_machine = _read_boot_out_machine(drive_path)
+        boot_uid, boot_machine = _read_boot_out_identity(drive_path)
         if boot_uid is None and boot_machine is None:
             return drive_path
         probe = self.probe_implementation()
@@ -839,7 +836,17 @@ class CircuitpythonTransport:
         flash_drive.disable_spotlight_indexing(drive_path)
         flash_drive.neuter_macos_metadata(drive_path)
 
-        # Disable autoreload to prevent restarts during file copy.
+        # Disable autoreload to prevent the board restarting mid-copy.
+        # Restoration is intentionally NOT local to this method: the
+        # symmetric ``autoreload = True`` lives in :meth:`disconnect`,
+        # which always runs (Deployer wraps deploy_files in a
+        # try/finally → disconnect()).  Locality was rejected because
+        # disconnect() must restore anyway — it follows a soft-reboot
+        # that needs autoreload back on, and after a soft-reboot raw
+        # REPL is gone so the inline send would race the re-enter.
+        # Two restores per deploy was the cost of doing it locally
+        # too.  If you call this transport directly without going
+        # through Deployer, call ``disconnect()`` to restore.
         self._send_repl_command(
             "import supervisor; "
             "supervisor.runtime.autoreload = False"
@@ -1053,13 +1060,6 @@ class CircuitpythonTransport:
         # Re-enter raw REPL for the next test group.
         self._enter_raw_repl()
 
-    def reset(self) -> None:
-        """Soft-reset the device via Ctrl-D."""
-        if self._port is not None:
-            self._port.write(_CTRL_D)
-            # Allow time for the reset to complete.
-            self._time.sleep(0.5)
-
     def recover(self) -> None:
         """Attempt to recover raw REPL after a failed test.
 
@@ -1086,6 +1086,15 @@ class CircuitpythonTransport:
         on_execute_line: Callable[[str], None] | None = None,
     ) -> str:
         """Deploy *files* and execute *entrypoint* in the configured mode.
+
+        **Production deploy API.**  Sister of :meth:`stage` (test-
+        harness use only).  Takes a flat ``files: dict[device_path,
+        bytes]`` rather than `source_dirs` + `test_files` so it
+        composes cleanly with arbitrary :class:`FileSource`
+        implementations (`DirectorySource`, `FileMapSource`,
+        `ImportGraphSource`, workspace-shaped sources).  The CLI's
+        ``chumicro-deploy deploy`` and `Deployer.deploy` /
+        `deploy_diff` both route here.
 
         Flash mode writes every entry of *files* to the CIRCUITPY USB
         drive (auto-detecting the mount path when not configured),
@@ -1150,6 +1159,18 @@ class CircuitpythonTransport:
         # sees ~2x the file count, doubling apparent on-disk footprint.
         flash_drive.disable_spotlight_indexing(drive_path)
         flash_drive.neuter_macos_metadata(drive_path)
+        # Disable autoreload to prevent the board restarting mid-copy.
+        # Restoration is intentionally NOT local to this method: the
+        # symmetric ``autoreload = True`` lives in :meth:`disconnect`,
+        # which always runs (Deployer wraps deploy_files in a
+        # try/finally → disconnect()).  Locality was rejected because
+        # disconnect() must restore anyway — it follows the
+        # Ctrl-B/Ctrl-D soft-reboot below that needs autoreload back
+        # on, and the soft-reboot tears down raw REPL so any inline
+        # send here would race the re-enter.  Two restores per deploy
+        # was the cost of doing it locally too.  If you call this
+        # transport directly without going through Deployer, call
+        # ``disconnect()`` to restore.
         self._send_repl_command(
             "import supervisor; supervisor.runtime.autoreload = False"
         )
@@ -1253,6 +1274,15 @@ class CircuitpythonTransport:
         and unlinked best-effort.  Missing paths and per-path errors
         are tolerated silently so a transient I/O hiccup never blocks
         the deploy that follows.
+
+        Uses :meth:`pathlib.Path.unlink` rather than rsync ``--delete``
+        on purpose: rsync's delete semantics are "remove anything in
+        DEST not in SRC" — wrong shape for "delete these specific
+        files."  Unlink also dodges FAT32's data-write reliability
+        concerns (Decision 0033) by only touching directory entries,
+        no payload bytes.  The diff layer recomputes the stale set
+        on every deploy, so a swallowed error here just retries
+        next time.
         """
         if not paths or self.mode != "flash":
             return
@@ -1482,7 +1512,13 @@ class CircuitpythonTransport:
         Restores the board to normal operation regardless of mode:
 
         1. Re-enters raw REPL (in case a reset exited it).
-        2. In flash mode, re-enables autoreload via supervisor.
+        2. In flash mode, re-enables autoreload via supervisor —
+           **this is the canonical restoration site** for the
+           ``autoreload = False`` that :meth:`_stage_to_flash` and
+           :meth:`deploy_files` (flash path) issue at the top of
+           their write windows.  Those methods deliberately do NOT
+           restore locally; see the disable-site comment for the
+           reasoning.
         3. Exits raw REPL with Ctrl-B (back to normal REPL).
         4. Soft-reboots with Ctrl-D so code.py runs normally.
         5. Waits briefly for the reboot to complete.

@@ -649,12 +649,15 @@ class _TransportCache:
         self._fully_staged.discard(device_id)
 
     def disconnect_all(self) -> None:
-        """Reset and disconnect all cached transports."""
+        """Disconnect all cached transports.
+
+        ``disconnect()`` already restores the board to a normal state
+        (re-enables autoreload on CP, exits raw REPL, soft-reboots so
+        the next code.py cycle runs clean), so the previously-paired
+        ``reset()`` call was redundant — and ``reset()`` itself was
+        deleted in the deploy-audit-followup pass.
+        """
         for transport in self._transports.values():
-            try:
-                transport.reset()
-            except Exception:  # pragma: no cover
-                pass
             try:
                 transport.disconnect()
             except Exception:  # pragma: no cover
