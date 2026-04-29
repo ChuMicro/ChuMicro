@@ -31,36 +31,13 @@ from typing import TypeVar
 from urllib.error import URLError
 
 from .device import Device
+from .firmware_url import (
+    CIRCUITPYTHON_FIRMWARE_URL_TEMPLATE,
+    UnresolvedFirmwareError,
+)
 from .protocol import ReflashMethod, Runtime
 
 _DEFAULT_LANGUAGE = "en_US"
-
-#: Adafruit publishes CP firmware at a stable path shape:
-#:   ``https://downloads.circuitpython.org/bin/<board_id>/<lang>/\
-#:   adafruit-circuitpython-<board_id>-<lang>-<version>.uf2``
-#: Version format matches the Adafruit release (e.g. ``10.1.4`` for
-#: stable, ``10.2.0-rc.0`` for pre-release).  This is the template
-#: the ``resolve_firmware_url`` helper formats.
-CIRCUITPYTHON_FIRMWARE_URL_TEMPLATE = (
-    "https://downloads.circuitpython.org/bin/{board_id}/{language}/"
-    "adafruit-circuitpython-{board_id}-{language}-{version}.uf2"
-)
-
-
-class UnresolvedFirmwareError(Exception):
-    """Raised when the firmware URL cannot be built from inputs.
-
-    Typical causes:
-
-    - Runtime is ``"micropython"``.  MP firmware URLs embed a
-      per-build date that can't be inferred from the version alone;
-      this primitive doesn't scrape — use
-      :func:`chumicro_workspace.derive_firmware_url` for the
-      higher-level lookup that walks the curated machine→BOARD map
-      against micropython.org's listing page.
-    - Runtime is unrecognised (not ``circuitpython`` / ``micropython``).
-    - A required field (board_id, version) is empty.
-    """
 
 
 def resolve_firmware_url(
@@ -71,6 +48,12 @@ def resolve_firmware_url(
     language: str = _DEFAULT_LANGUAGE,
 ) -> str:
     """Return the canonical firmware download URL.
+
+    Pure URL formatter — no network access.  When you have an
+    explicit version (e.g. from CI, a release script, or
+    user-supplied), this is the right primitive.  For "give me the
+    latest version available" use :func:`firmware_url.derive_firmware_url`
+    or :func:`firmware_url.latest_circuitpython_url` instead.
 
     Args:
         board_id: Board identifier.  CircuitPython boards use the
@@ -88,12 +71,18 @@ def resolve_firmware_url(
 
     Raises:
         UnresolvedFirmwareError: If *runtime* is not supported, or
-            if any required field is empty.
+            if any required field is empty.  ``cause`` carries the
+            specific failure (``"no_board_id"``, ``"no_version"``,
+            ``"micropython_needs_listing"``, ``"unsupported_runtime"``).
     """
     if not board_id:
-        raise UnresolvedFirmwareError("board_id is required")
+        raise UnresolvedFirmwareError(
+            "board_id is required", cause="no_board_id",
+        )
     if not version:
-        raise UnresolvedFirmwareError("version is required")
+        raise UnresolvedFirmwareError(
+            "version is required", cause="no_version",
+        )
     if runtime == Runtime.CIRCUITPYTHON:
         return CIRCUITPYTHON_FIRMWARE_URL_TEMPLATE.format(
             board_id=board_id, version=version, language=language,
@@ -102,12 +91,14 @@ def resolve_firmware_url(
         raise UnresolvedFirmwareError(
             "MicroPython firmware URLs embed a per-build date that "
             "cannot be inferred from the version alone.  Use "
-            "chumicro_workspace.derive_firmware_url for the listing-"
-            "page lookup, or supply the URL directly."
+            "chumicro_deploy.firmware_url.derive_firmware_url for the "
+            "listing-page lookup, or supply the URL directly.",
+            cause="micropython_needs_listing",
         )
     allowed = ", ".join(f"{member.value!r}" for member in Runtime)
     raise UnresolvedFirmwareError(
-        f"Unsupported runtime: {runtime!r} (expected {allowed})"
+        f"Unsupported runtime: {runtime!r} (expected {allowed})",
+        cause="unsupported_runtime",
     )
 
 
