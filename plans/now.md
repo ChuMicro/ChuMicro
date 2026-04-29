@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **Idle — picking next workstream.**  Multi-thing-staging-replacement workstream now fully closed: `--wipe` CLI flag shipped end-to-end (`Deployer.deploy_diff(wipe=True)` + `TransportProtocol.wipe_filesystem()` on CP / MP / FakeTransport + `chumicro-workspace deploy --wipe`).  Ordinary deploys clean stale `/lib/*` via the diff primitive shipped 2026-04-27; `--wipe` covers the corruption-recovery / clean-slate case where the user wants the whole user filesystem gone (CP `storage.erase_filesystem()`, MP recursive walk-and-delete).  RAM-mode no-ops silently inside the transport.  Workspace-ecosystem umbrella: **closed** as of 2026-04-29 (Phase 3 per-environment deploys dropped — speculative dev/staging/prod seam, no concrete consumer).  Three independent carry-overs (Phase 2f mapping config / Phase 5 `agent_strictness` checks / Phase 7 device-side completer) tracked in `plans/next-up.md` for if-and-when triggers appear.
-- **Last shipped:** workspace + chumicro-deploy: `--wipe` flag for corruption-recovery / clean-slate deploys.
+- **Phase:** **Mechanical sweep landed — chumicro-repl audit queued next.**  `_ticks_ms` shim sweep across six functional tests shipped (`1ee6a88`); preflight blocker on main fixed in the same session (`fecbc4c` gated `chumicro-msgpack` native delegation to CircuitPython only — PyPI msgpack 1.1.2 had silently drifted the wrapper away from the chumicro 32-bit/16-bit subset on CPython).  Workspace-ecosystem umbrella remains closed as of 2026-04-29; three carry-overs tracked in `plans/next-up.md` for if-and-when triggers appear.  User-confirmed cadence next: **chumicro-repl audit** (highest-readiness pickup), then Pi-Pico-W-CP-MQTT flash-mode-only routing, then `--wipe` four-board hardware soak (boards plugged in).
+- **Last shipped:** functional_tests `_ticks_ms` shim sweep + chumicro-msgpack 1.1.2 drift fix.
 - **In flight:** —
 - **Blocked on:** —
-- **Last touched:** `workbench/deploy/src/chumicro_deploy/{protocol,deployer,circuitpython_transport,micropython_transport,testing}.py`, `workbench/deploy/tests/test_{circuitpython,micropython}_transport.py`, `workbench/deploy/tests/test_diff_deploy.py`, `workbench/workspace/src/chumicro_workspace/cli.py`, `workbench/workspace/tests/test_cli.py`, `workbench/workspace/{README.md,docs/guide.md}`, `workbench/{deploy,workspace}/VERSION`, `plans/{now,next-up}.md`.
+- **Last touched:** `libraries/msgpack/src/chumicro_msgpack/{__init__,_pure}.py`, `libraries/{sockets,requests,ntp,http_server}/functional_tests/test_real_*.py`, `plans/{now,next-up}.md`.
 
 ---
 
