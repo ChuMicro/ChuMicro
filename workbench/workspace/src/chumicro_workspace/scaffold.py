@@ -95,6 +95,8 @@ def _display_name(name: str) -> str:
 def scaffold_library(
     target_dir: Path,
     name: str,
+    *,
+    package_kind: str = "library",
 ) -> Path:
     """Create a library tree at ``target_dir / name``.
 
@@ -103,6 +105,16 @@ def scaffold_library(
         name: Library short name (e.g. ``"gpio"``).  Hyphens get
             converted to underscores in the import path
             (``chumicro-my-thing`` → ``chumicro_my_thing``).
+        package_kind: ``"library"`` (default) for cross-runtime
+            device packages — produces the standard chumicro library
+            shape with no extras.  ``"workbench"`` for host-only
+            CPython tools — uses a workbench-flavoured pyproject
+            template with a ``[project.scripts]`` block (CLI entry
+            point) and source URL pointing at ``workbench/<name>/``
+            instead of ``libraries/<name>/``.  All other
+            scaffolded files (src/tests/docs/examples/README/mkdocs)
+            are identical between kinds — the directory shape that
+            chumicro mono-repo uses for both.
 
     Returns:
         Path to the created library directory.
@@ -111,7 +123,15 @@ def scaffold_library(
         LibraryAlreadyExistsError: When the target dir already
             exists.  Caller decides whether to delete + retry or
             bail.
+        ValueError: When *package_kind* isn't one of the supported
+            values.
     """
+    if package_kind not in ("library", "workbench"):
+        raise ValueError(
+            f"package_kind must be 'library' or 'workbench', "
+            f"got {package_kind!r}",
+        )
+
     library_dir = target_dir / name
     if library_dir.exists():
         raise LibraryAlreadyExistsError(library_dir)
@@ -129,12 +149,18 @@ def scaffold_library(
     (library_dir / "examples").mkdir()
     (library_dir / "functional_tests" / ".gitkeep").touch()
 
-    # VERSION — every library starts at 0.1.0 per the SemVer policy.
+    # VERSION — every package starts at 0.1.0 per the SemVer policy.
     (library_dir / "VERSION").write_text("0.1.0\n")
 
-    # Top-level config + docs.
+    # Top-level config + docs.  Workbench-kind packages use a
+    # different pyproject template with a CLI entry point.
+    pyproject_template = (
+        "pyproject.workbench.toml.template"
+        if package_kind == "workbench"
+        else "pyproject.toml.template"
+    )
     (library_dir / "pyproject.toml").write_text(
-        _load_template("pyproject.toml.template").format(
+        _load_template(pyproject_template).format(
             name=name, import_name=import_name,
         ),
     )

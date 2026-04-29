@@ -115,9 +115,12 @@ def build_search_paths(
     Resolution order::
 
         1. library_sources_override values (Decision 0029 §7)
-        2. workspace/libs/         (user-authored shared modules)
-        3. workspace/packages/     (third-party, gitignored)
-        4. extra_search_paths      (caller-supplied tail; e.g. mono-repo
+        2. workspace/libs/         (user-authored shared modules — flat layout)
+        3. workspace/libraries/<name>/src/  (full chumicro-style library
+                                             packages, scaffolded via
+                                             ``new --library``)
+        4. workspace/packages/     (third-party, gitignored)
+        5. extra_search_paths      (caller-supplied tail; e.g. mono-repo
                                     devs adding the live chumicro src/)
 
     Only paths that actually exist on disk are returned —
@@ -145,6 +148,17 @@ def build_search_paths(
         for _name, override_path in sorted(library_sources_override.items()):
             candidates.append(override_path)
     candidates.append(workspace.libs_dir)
+    # Full chumicro-style library packages scaffolded via
+    # ``new --library`` live at ``libraries/<name>/`` with the
+    # importable module under ``src/``.  Add each ``src/`` so a
+    # thing's ``import my_lib`` resolves against the local checkout
+    # without forcing the user to register an entry in
+    # ``library_sources:``.
+    if workspace.libraries_dir.is_dir():
+        for library_dir in sorted(workspace.libraries_dir.iterdir()):
+            src_dir = library_dir / "src"
+            if src_dir.is_dir():
+                candidates.append(src_dir)
     candidates.append(workspace.packages_dir)
     if extra_search_paths:
         candidates.extend(extra_search_paths)

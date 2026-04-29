@@ -159,8 +159,33 @@ class WorkspaceLayout:
 
     @property
     def libs_dir(self) -> Path:
-        """Path to ``<root>/libs/`` — shared library source for thing imports."""
+        """Path to ``<root>/libs/`` — small shared modules dropped flat.
+
+        The lighter-weight cousin of :attr:`libraries_dir`.  Files under
+        ``libs/`` are imported by things directly (``from libs.foo import
+        bar``) without any package scaffolding.  Use this for "I wrote a
+        50-line helper my things need to share" — no tests, no version,
+        no chumicro library shape.  See :attr:`libraries_dir` for the
+        full-package alternative.
+        """
         return self.root / "libs"
+
+    @property
+    def libraries_dir(self) -> Path:
+        """Path to ``<root>/libraries/`` — full chumicro-style library trees.
+
+        The heavier-weight cousin of :attr:`libs_dir`.  Each entry is a
+        proper chumicro library package — ``src/<name>/``, ``tests/``,
+        optional ``docs/`` and ``examples/``, ``pyproject.toml``,
+        ``VERSION``.  Created by ``chumicro-workspace new --library``.
+        Use this when you intend to publish (or later might) — you get
+        the same scaffolding the chumicro mono-repo uses.
+
+        ``import_graph.build_search_paths`` includes
+        ``libraries/<name>/src/`` for every entry so things can ``import
+        my_lib`` without a separate :data:`library_sources` mapping.
+        """
+        return self.root / "libraries"
 
     @property
     def packages_dir(self) -> Path:

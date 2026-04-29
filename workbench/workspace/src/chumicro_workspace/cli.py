@@ -493,11 +493,20 @@ def _cmd_new(args: argparse.Namespace) -> int:
     _validate_thing_name(args.name)
     workspace = _resolve_workspace(args)
 
-    if args.library:
+    if args.library or args.workbench:
         if args.from_path is not None:
             print(
-                "new: --from / --library are mutually exclusive — "
-                "library scaffolding uses the built-in template.",
+                "new: --from / --library / --workbench are mutually "
+                "exclusive — package scaffolding uses the built-in "
+                "template.",
+                file=sys.stderr,
+            )
+            return 2
+        if args.library and args.workbench:
+            print(
+                "new: --library and --workbench are mutually exclusive — "
+                "pick one (libraries/ for cross-runtime device libs; "
+                "workbench/ for host-only CPython tools).",
                 file=sys.stderr,
             )
             return 2
@@ -505,16 +514,24 @@ def _cmd_new(args: argparse.Namespace) -> int:
             LibraryAlreadyExistsError,
             scaffold_library,
         )
+        package_kind = "workbench" if args.workbench else "library"
+        default_parent = (
+            workspace.root / "workbench"
+            if args.workbench
+            else workspace.root / "libraries"
+        )
         target_dir = (
             Path(args.into).resolve()
             if args.into is not None
-            else workspace.root / "libraries"
+            else default_parent
         )
         try:
-            created = scaffold_library(target_dir, args.name)
+            created = scaffold_library(
+                target_dir, args.name, package_kind=package_kind,
+            )
         except LibraryAlreadyExistsError as exception:
             raise SystemExit(f"error: {exception} already exists") from exception
-        print(f"new: created library {created}")
+        print(f"new: created {package_kind} {created}")
         return 0
 
     source = _resolve_new_source(workspace, args.from_path)
@@ -786,6 +803,47 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
     multi-thing-staging path; pass one positional per ``deploy`` call.
     """
     workspace = _resolve_workspace(args)
+
+    # Pre-deploy fast health gate.  Catches the user-visible failure
+    # modes that *would* deploy but ship junk to the device — most
+    # importantly, secrets.yml carrying ``replace-me`` placeholder
+    # values that would land on the board verbatim and silently
+    # break wifi-connect / auth flows.  Skips the slower per-thing
+    # AST + config-merge checks that ``doctor`` runs (those add
+    # latency to every deploy).  ``--skip-health-check`` opts out
+    # for power-users + CI.
+    if not args.skip_health_check:
+        gate_findings = collect_health_findings(workspace)
+        gate_blockers = [
+            finding for finding in gate_findings
+            if finding.level is HealthLevel.ERROR
+        ]
+        gate_warnings = [
+            finding for finding in gate_findings
+            if finding.level is HealthLevel.WARN
+        ]
+        for finding in gate_warnings:
+            print(
+                f"deploy: WARN {finding.label}: {finding.message}",
+                file=sys.stderr,
+            )
+            if finding.hint:
+                print(f"  hint: {finding.hint}", file=sys.stderr)
+        if gate_blockers:
+            for finding in gate_blockers:
+                print(
+                    f"deploy: ERROR {finding.label}: {finding.message}",
+                    file=sys.stderr,
+                )
+                if finding.hint:
+                    print(f"  hint: {finding.hint}", file=sys.stderr)
+            print(
+                "deploy: aborting before sending bytes to the device "
+                "(pass --skip-health-check to override).",
+                file=sys.stderr,
+            )
+            return 2
+
     if not args.names:
         candidates = workspace.list_things()
         if not candidates:
@@ -1423,6 +1481,108 @@ def _cmd_test(args: argparse.Namespace) -> int:
     return completed.returncode
 
 
+def _cmd_preflight(args: argparse.Namespace) -> int:
+    """Run lint + tests as a single sanity gate.
+
+    Composition of :func:`_cmd_lint` then :func:`_cmd_test` — same
+    workspace, same ``quality:`` knobs from ``workspace.yml``
+    (``lint.enabled`` / ``lint.select`` / ``coverage_threshold``),
+    no extra args forwarded.  Mirrors the chumicro mono-repo's
+    ``preflight`` shape for "all the fast static checks I'd want
+    before pushing" — without CI, this is the gate the user runs
+    by hand.
+
+    Returns nonzero on the first failing step (short-circuit) so
+    a lint failure doesn't cost a test run.  Both steps respect
+    their disable knobs (``lint.enabled = false`` skips lint silently;
+    no equivalent disable for tests today — matches the chumicro
+    monorepo's preflight behaviour).
+    """
+    workspace = _resolve_workspace(args)
+    print(f"preflight: {workspace.root}")
+
+    print("\npreflight: --- lint ---")
+    lint_args = argparse.Namespace(
+        workspace_dir=args.workspace_dir,
+        ruff_args=[],
+    )
+    lint_exit = _cmd_lint(lint_args)
+    if lint_exit != 0:
+        print(f"\npreflight: lint failed (exit {lint_exit})")
+        return lint_exit
+
+    print("\npreflight: --- test ---")
+    test_args = argparse.Namespace(
+        workspace_dir=args.workspace_dir,
+        pytest_args=[],
+    )
+    test_exit = _cmd_test(test_args)
+    if test_exit != 0:
+        print(f"\npreflight: tests failed (exit {test_exit})")
+        return test_exit
+
+    print("\npreflight: lint + tests both passed.")
+    return 0
+
+
+def _cmd_dump_config(args: argparse.Namespace) -> int:
+    """Print the merged runtime config a thing would receive on deploy.
+
+    Runs the deploy-time pipeline up to (but not through) the msgpack
+    write — workspace defaults + thing config + secrets resolution —
+    then pretty-prints the result.  Lets users see exactly what their
+    on-device ``chumicro_config.runtime`` will read without actually
+    deploying.
+
+    Useful for: "is this !secret resolving to what I expect?",
+    debugging which config section a key landed in after the merge,
+    inspecting the shape before adding consumers on the device.
+
+    Output format defaults to JSON (sorted keys, indent 2) for
+    diffability; ``--repr`` switches to ``repr()`` for cases where
+    the raw Python types matter (e.g. seeing ``bytes`` vs ``str``).
+    """
+    from chumicro_workspace.deploy_source import find_thing_config  # noqa: PLC0415
+    from chumicro_workspace.loaders import (  # noqa: PLC0415
+        read_secrets_yaml,
+        read_thing_config,
+        read_workspace_yaml,
+    )
+    from chumicro_workspace.merge import merge_configs  # noqa: PLC0415
+    from chumicro_workspace.secrets import (  # noqa: PLC0415
+        UnresolvedSecretError,
+        resolve_secrets,
+    )
+
+    workspace = _resolve_workspace(args)
+    thing_dir = workspace.thing_dir(_resolve_thing_name(workspace, args.thing))
+    if not thing_dir.is_dir():
+        raise SystemExit(f"error: thing {thing_dir} not found")
+
+    workspace_dict = read_workspace_yaml(workspace.workspace_yaml)
+    thing_config_path = find_thing_config(thing_dir)
+    thing_dict = (
+        read_thing_config(thing_config_path) if thing_config_path else {}
+    )
+    secrets = (
+        read_secrets_yaml(workspace.secrets_yaml)
+        if workspace.secrets_yaml.is_file() else {}
+    )
+    merged = merge_configs(workspace_dict, thing_dict)
+    try:
+        resolved = resolve_secrets(merged, secrets)
+    except UnresolvedSecretError as exception:
+        print(f"error: {exception}", file=sys.stderr)
+        return 1
+
+    if args.repr:
+        print(repr(resolved))
+    else:
+        import json  # noqa: PLC0415
+        print(json.dumps(resolved, indent=2, sort_keys=True, default=repr))
+    return 0
+
+
 def _cmd_lint(args: argparse.Namespace) -> int:
     """Run ``ruff check`` across the workspace.
 
@@ -1958,7 +2118,20 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Scaffold a chumicro-style library under "
             "<workspace>/libraries/<name>/ (Phase 4).  Mutually "
-            "exclusive with --from; uses the built-in scaffolder."
+            "exclusive with --from / --workbench; uses the built-in "
+            "scaffolder."
+        ),
+    )
+    new_parser.add_argument(
+        "--workbench",
+        action="store_true",
+        help=(
+            "Scaffold a host-only workbench tool under "
+            "<workspace>/workbench/<name>/.  Same scaffolder as "
+            "--library, but uses a workbench-flavoured pyproject "
+            "template (CLI entry point, no cross-runtime concerns; "
+            "free to depend on CPython-only third-party libs).  "
+            "Mutually exclusive with --library / --from."
         ),
     )
     new_parser.add_argument(
@@ -2123,6 +2296,19 @@ def build_parser() -> argparse.ArgumentParser:
             "Interactive coaching is on by default."
         ),
     )
+    deploy_parser.add_argument(
+        "--skip-health-check",
+        action="store_true",
+        help=(
+            "Skip the pre-deploy fast health gate.  By default, deploy "
+            "runs `status`-equivalent checks (workspace.yml / "
+            "devices.yml / secrets.yml shape, secret-placeholder "
+            "detection) and aborts on ERROR-level findings before "
+            "sending bytes to the device.  Use this flag for power-"
+            "user CLI runs or CI flows that have already validated "
+            "the workspace state externally."
+        ),
+    )
     deploy_parser.set_defaults(func=_cmd_deploy)
 
     # ----- things --------------------------------------------------------
@@ -2214,12 +2400,16 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     bootstrap_parser.add_argument(
-        "--with-demo",
+        "--no-demo",
         dest="with_demo",
-        action="store_true",
+        action="store_false",
+        default=True,
         help=(
-            "After registration, deploy the built-in demo payload "
-            "(equivalent to running `demo` afterward)."
+            "Skip the built-in demo deploy at the end of the wizard.  "
+            "Default behaviour is to chain into the demo so a freshly "
+            "registered board ships *something* in one command — pass "
+            "this flag in CI / scripted flows where you'll deploy your "
+            "own payload next."
         ),
     )
     bootstrap_parser.set_defaults(func=_cmd_bootstrap)
@@ -2257,6 +2447,42 @@ def build_parser() -> argparse.ArgumentParser:
         help="Args forwarded verbatim to ruff (place after `--`).",
     )
     lint_parser.set_defaults(func=_cmd_lint)
+
+    # ----- preflight -----------------------------------------------------
+    preflight_parser = subparsers.add_parser(
+        "preflight",
+        help=(
+            "Run lint + tests as a single sanity gate (chumicro mono-repo's "
+            "preflight shape, scaled down for workspaces without CI).  "
+            "Respects workspace.yml's `quality:` knobs."
+        ),
+    )
+    _add_workspace_arg(preflight_parser)
+    preflight_parser.set_defaults(func=_cmd_preflight)
+
+    # ----- dump-config ---------------------------------------------------
+    dump_config_parser = subparsers.add_parser(
+        "dump-config",
+        help=(
+            "Print the merged runtime config a thing would receive on "
+            "deploy (workspace defaults + thing config + resolved secrets), "
+            "without actually deploying."
+        ),
+    )
+    _add_workspace_arg(dump_config_parser)
+    dump_config_parser.add_argument(
+        "thing",
+        help="Thing name (bare / slash / dotted).",
+    )
+    dump_config_parser.add_argument(
+        "--repr",
+        action="store_true",
+        help=(
+            "Use repr() instead of JSON for the dump.  Useful when the "
+            "raw Python types matter (e.g. distinguishing bytes vs str)."
+        ),
+    )
+    dump_config_parser.set_defaults(func=_cmd_dump_config)
 
     # ----- repl ----------------------------------------------------------
     repl_parser = subparsers.add_parser(
