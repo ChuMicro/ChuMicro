@@ -17,45 +17,55 @@ Public API
 On CircuitPython boards that include the native ``msgpack`` module,
 all four functions delegate to the C implementation.  The pure-Python
 encoder in ``_pure`` is never imported, saving ~700 bytes of heap RAM.
+
+CPython's PyPI ``msgpack`` package implements the full upstream
+MessagePack spec — 64-bit integers, 32-bit length prefixes,
+``strict_map_key=True`` by default — which silently drifts away from
+the chumicro 32-bit/16-bit subset.  Delegation to the native module is
+therefore gated to CircuitPython, where it's a built-in C module that
+faithfully implements the same subset chumicro promises.  CPython
+tests + CPython runtime use the pure-Python implementation, keeping
+the contract identical across runtimes.
 """
 
+import sys
 from io import BytesIO
 
-try:
-    # CircuitPython C built-in — stream-based API.
+if sys.implementation.name == "circuitpython":
+    try:
+        from msgpack import pack, unpack  # noqa: F401
 
-    from msgpack import pack, unpack  # noqa: F401
+        def packb(obj: object) -> bytes:  # pragma: no cover
+            """Pack *obj* to msgpack bytes using the native encoder.
 
-    def packb(obj: object) -> bytes:  # pragma: no cover — native C path
-        """Pack *obj* to msgpack bytes using the native encoder.
+            Allocates a ``BytesIO`` buffer internally.  For small payloads
+            this is fine; for larger data or tight loops, prefer
+            ``pack(obj, stream)`` to write directly to a destination.
 
-        Allocates a ``BytesIO`` buffer internally.  For small payloads
-        this is fine; for larger data or tight loops, prefer
-        ``pack(obj, stream)`` to write directly to a destination.
+            Args:
+                obj: Python object to serialize.
 
-        Args:
-            obj: Python object to serialize.
+            Returns:
+                Msgpack-encoded data.
+            """
+            buffer = BytesIO()
+            pack(obj, buffer)
+            return buffer.getvalue()
 
-        Returns:
-            Msgpack-encoded data.
-        """
-        buffer = BytesIO()
-        pack(obj, buffer)
-        return buffer.getvalue()
+        def unpackb(data: bytes | bytearray | memoryview) -> object:  # pragma: no cover
+            """Unpack msgpack *data* to a Python object using the native decoder.
 
-    def unpackb(data: bytes | bytearray | memoryview) -> object:  # pragma: no cover — native C path
-        """Unpack msgpack *data* to a Python object using the native decoder.
+            Args:
+                data: Msgpack-encoded data.
 
-        Args:
-            data: Msgpack-encoded data.
+            Returns:
+                Deserialized Python object.
+            """
+            return unpack(BytesIO(data))
 
-        Returns:
-            Deserialized Python object.
-        """
-        return unpack(BytesIO(data))
-
-except ImportError:
-    # No native msgpack — load the pure-Python implementation.
+    except ImportError:
+        from chumicro_msgpack._pure import pack, packb, unpack, unpackb  # noqa: F401
+else:
     from chumicro_msgpack._pure import pack, packb, unpack, unpackb  # noqa: F401
 
 __all__ = ["pack", "packb", "unpack", "unpackb"]

@@ -5,6 +5,7 @@ bytearray, list, tuple, and dict.
 """
 
 import struct
+import sys
 
 # ---------------------------------------------------------------------------
 # Encoding
@@ -346,9 +347,20 @@ def unpackb(data: bytes | bytearray | memoryview) -> object:
 # Public API — stream-based (native CircuitPython when available)
 # ---------------------------------------------------------------------------
 
-try:
-    from msgpack import pack, unpack  # CircuitPython C built-in
-except ImportError:
+if sys.implementation.name == "circuitpython":
+    try:
+        from msgpack import pack, unpack  # CircuitPython C built-in
+        _HAS_NATIVE_STREAM = True
+    except ImportError:
+        _HAS_NATIVE_STREAM = False
+else:
+    # On CPython / MicroPython the upstream PyPI ``msgpack`` package
+    # implements the full spec, not the chumicro subset — keep the
+    # pure-Python stream API to preserve contract parity with packb /
+    # unpackb above (which is also gated to native-on-CP only).
+    _HAS_NATIVE_STREAM = False
+
+if not _HAS_NATIVE_STREAM:
     def pack(obj: object, stream: object) -> None:
         """Pack *obj* to *stream* in msgpack format.
 
