@@ -3,7 +3,7 @@
 from pathlib import Path
 
 import pytest
-from chumicro_workspace.devices_yaml import (
+from chumicro_deploy.config.devices_yaml import (
     DeviceAlreadyExistsError,
     DeviceNotFoundError,
     DevicesYamlError,

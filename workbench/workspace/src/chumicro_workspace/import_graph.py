@@ -30,7 +30,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import yaml
+from ruamel.yaml import YAML
 
 from chumicro_workspace.deploy_source import (
     GENERATED_DIRNAME,
@@ -67,7 +67,7 @@ def read_library_sources(workspace_yaml: Path) -> dict[str, Path]:
     if not workspace_yaml.is_file():
         return {}
     with workspace_yaml.open("r", encoding="utf-8") as handle:
-        loaded = yaml.safe_load(handle)
+        loaded = YAML(typ="safe").load(handle)
     if loaded is None:
         return {}
     if not isinstance(loaded, dict):

@@ -42,6 +42,22 @@ microcontroller.  Workbench tools and scripts (the workspace's
 ``chumicro-config`` (Decision 0036).
 """
 
+from chumicro_deploy.config.devices_yaml import (
+    DeviceAlreadyExistsError,
+    DeviceNotFoundError,
+    DevicesYamlError,
+    HardwareOverwriteError,
+    add_device,
+    dump_devices,
+    find_device,
+    list_device_ids,
+    load_devices,
+    rename_device,
+    set_runtime_default,
+    update_device_address,
+    update_device_hardware,
+)
+
 from chumicro_workspace.boot_shim import (
     BOOT_MODULE_DEVICE_PATH,
     SHIM_ENTRYPOINT_SOURCE,
@@ -57,21 +73,6 @@ from chumicro_workspace.deploy_source import (
     WithRuntimeConfig,
     find_thing_config,
     thing_directory_source,
-)
-from chumicro_workspace.devices_yaml import (
-    DeviceAlreadyExistsError,
-    DeviceNotFoundError,
-    DevicesYamlError,
-    HardwareOverwriteError,
-    add_device,
-    dump_devices,
-    find_device,
-    list_device_ids,
-    load_devices,
-    rename_device,
-    set_runtime_default,
-    update_device_address,
-    update_device_hardware,
 )
 from chumicro_workspace.firmware_url import (
     MICROPYTHON_BOARD_BY_MACHINE,

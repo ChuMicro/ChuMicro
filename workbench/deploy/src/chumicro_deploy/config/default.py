@@ -47,6 +47,7 @@ from pathlib import Path
 from typing import Any
 
 from ..device import Device
+from .devices_yaml import ALL_TOP_LEVEL_ENTRY_FIELDS
 
 #: Default filename for the device registry.
 DEFAULT_DEVICES_FILENAME = "devices.yml"
@@ -59,6 +60,16 @@ _VALID_RUNTIMES = ("micropython", "circuitpython")
 _VALID_DEPLOY_MODES = ("ram", "flash")
 #: Allowed ide_runtime values.
 _VALID_IDE_RUNTIMES = ("micropython", "circuitpython", "both")
+
+#: Fields the reader exposes as typed properties on :class:`DeviceEntry`.
+#: Derived from the zone-classified spec
+#: (:data:`chumicro_deploy.config.devices_yaml.ALL_TOP_LEVEL_ENTRY_FIELDS`)
+#: plus the small set of deploy-only fields the writer doesn't need
+#: to manage zone-wise (``connection_type`` is always ``"serial"``
+#: today; carried for forward-compatibility with future transports).
+#: Anything outside this set falls into :attr:`DeviceEntry.extra`.
+_DEPLOY_ONLY_FIELDS: frozenset[str] = frozenset({"connection_type"})
+_KNOWN_KEYS: frozenset[str] = ALL_TOP_LEVEL_ENTRY_FIELDS | _DEPLOY_ONLY_FIELDS
 
 
 # ---------------------------------------------------------------------------
@@ -180,12 +191,7 @@ def _validate_device(
             f"must be one of {_VALID_DEPLOY_MODES}"
         )
 
-    known_keys = {
-        "id", "runtime", "address", "description", "connection_type",
-        "serial_baudrate", "deploy_mode",
-        "circuitpy_drive_path", "setup_command",
-    }
-    extra = {key: value for key, value in raw.items() if key not in known_keys}
+    extra = {key: value for key, value in raw.items() if key not in _KNOWN_KEYS}
 
     return DeviceEntry(
         identifier=raw["id"],
@@ -226,8 +232,6 @@ def load_device_registry(
     Raises:
         DeviceConfigError: File missing, malformed, or fails validation.
     """
-    import yaml
-
     resolved = path or _resolve_devices_path(workspace_root)
     try:
         entries, raw_defaults = load_raw_entries(resolved)
@@ -236,7 +240,10 @@ def load_device_registry(
             f"Config file not found: {resolved}\n"
             "Run 'python scripts/run.py setup' to generate it."
         ) from error
-    except (yaml.YAMLError, ValueError) as error:
+    except ValueError as error:
+        # ``load_raw_entries`` already wraps ruamel.yaml's parse errors
+        # in ``ValueError`` so the deploy public surface doesn't leak
+        # the underlying parser type.
         raise DeviceConfigError(str(error)) from error
 
     if not entries:
@@ -327,14 +334,18 @@ def load_raw_entries(
             ``defaults:`` / ``devices:`` are present but the wrong
             type.
     """
-    import yaml
+    from ruamel.yaml import YAML, YAMLError  # noqa: PLC0415
 
     yaml_path = Path(path)
     if not yaml_path.is_file():
         raise FileNotFoundError(f"devices.yml not found: {yaml_path!s}")
 
-    with yaml_path.open("r", encoding="utf-8") as handle:
-        document = yaml.safe_load(handle) or {}
+    yaml_loader = YAML(typ="safe")
+    try:
+        with yaml_path.open("r", encoding="utf-8") as handle:
+            document = yaml_loader.load(handle) or {}
+    except YAMLError as error:
+        raise ValueError(str(error)) from error
 
     if not isinstance(document, dict):
         raise ValueError(

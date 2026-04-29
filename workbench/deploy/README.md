@@ -72,6 +72,22 @@ For a workspace project that already has a `devices.yml`, swap the `Device(...)`
 | `classify_deploy_failure(error)` → `DeployFailureKind` | Standalone classifier for building your own failure-handling on top of `Deployer` |
 | `detect_fskit_wedge()` → `bool` | macOS-only probe for the FSKit / DiskArbitration wedge that can leave CIRCUITPY drives unmountable |
 
+### `devices.yml` writer surface
+
+`chumicro_deploy.config.devices_yaml` (separate submodule) — round-trip read/write of the device registry with comments and key order preserved, three-zone classification (user-owned / hardware-once / probed-always) per Decision 0029 §9.  This is what `chumicro-workspace add-device` and friends sit on; consumers building their own onboarding flow against `devices.yml` use this surface directly.
+
+| Symbol | What it does |
+|---|---|
+| `load_devices(path)` → `CommentedMap` | Parse with comments + key order preserved (returns ruamel `CommentedMap`, distinct from the typed reader at `chumicro_deploy.config.default.load_devices`) |
+| `dump_devices(data, path)` | Atomic write back via tempfile + rename |
+| `find_device(data, device_id)` / `list_device_ids(data)` | Read-only lookups against the loaded document |
+| `add_device(data, *, device_id, runtime, address, hardware, ...)` | Append a new entry; raises `DeviceAlreadyExistsError` on id collision |
+| `update_device_address(data, device_id, new_address)` | Silent refresh — address is the probed-always zone |
+| `update_device_firmware_version(data, device_id, new_version)` | Silent refresh of the cached `firmware_version` |
+| `update_device_hardware(data, device_id, *, force=False, **fields)` | Hardware-once zone — raises `HardwareOverwriteError` on a value change unless `force=True` |
+| `rename_device(data, old_id, new_id)` / `set_runtime_default(data, runtime, device_id)` | Higher-level mutations |
+| `USER_OWNED_FIELDS` / `PROBED_ALWAYS_FIELDS` / `HARDWARE_ONCE_FIELDS` / `HARDWARE_BLOCK_ZONES` | The canonical zone classification — single source of truth that the typed reader's `_KNOWN_KEYS` derives from |
+
 ### CLI subcommands
 
 `python -m chumicro_deploy <subcommand>` (or just `chumicro-deploy <subcommand>` after `pip install`).  Each accepts `--devices-file devices.yml --device <id>` instead of `--transport` + `--address` for workspace-style invocations.

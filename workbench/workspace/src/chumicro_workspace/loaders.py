@@ -23,7 +23,7 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
-import yaml
+from ruamel.yaml import YAML
 
 
 class WorkspaceConfigError(ValueError):
@@ -38,7 +38,7 @@ class WorkspaceConfigError(ValueError):
 def _read_yaml(path: Path) -> dict[str, Any]:
     """Parse YAML + assert dict at the top level."""
     with path.open("r", encoding="utf-8") as handle:
-        loaded = yaml.safe_load(handle)
+        loaded = YAML(typ="safe").load(handle)
     if loaded is None:
         return {}
     if not isinstance(loaded, dict):

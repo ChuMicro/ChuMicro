@@ -70,6 +70,19 @@ HARDWARE_BLOCK_ZONES: dict[str, str] = {
     "firmware_source": "hardware-once",
 }
 
+#: Every top-level entry key the writer knows about.  The single
+#: source of truth for "is this a recognised devices.yml field?" —
+#: deploy's reader (``_validate_device``) derives its
+#: ``known_keys`` from this so adding a field in one place keeps the
+#: reader in sync automatically.  ``"hardware"`` is the nested
+#: block; its leaves are classified by :data:`HARDWARE_BLOCK_ZONES`.
+ALL_TOP_LEVEL_ENTRY_FIELDS: frozenset[str] = (
+    USER_OWNED_FIELDS
+    | PROBED_ALWAYS_FIELDS
+    | HARDWARE_ONCE_FIELDS
+    | frozenset({"hardware"})
+)
+
 
 class DevicesYamlError(ValueError):
     """Raised on malformed devices.yml structure."""
