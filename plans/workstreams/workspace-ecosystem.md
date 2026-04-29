@@ -1,6 +1,6 @@
 # Workstream: Workspace ecosystem completion
 
-Status: **Phases 1, 2, 4, 5, 6, 7 shipped** (2026-04-27).  Phase 3 deferred at user direction during Phase 4 — only piece of the umbrella still planned.  Drafted 2026-04-27, revised same day with user triage, executed Phases 1-2-4-5-6-7 immediately after.
+Status: **Closed.**  Phases 1, 2, 4, 5, 6, 7 shipped 2026-04-27.  Phase 3 (per-environment deploys) dropped 2026-04-29 per user direction — speculative dev/staging/prod seam with no concrete consumer.  Drafted 2026-04-27, revised same day with user triage, executed Phases 1-2-4-5-6-7 immediately after.  Phase 3 plan body retained below for reference if the trigger ever arrives.
 
 ## Phase progress
 
@@ -8,7 +8,7 @@ Status: **Phases 1, 2, 4, 5, 6, 7 shipped** (2026-04-27).  Phase 3 deferred at u
 |---|---|---|
 | 1 — Nested things + examples + drop `switch` | **shipped** | Detail in [`nested-things-and-examples.md`](nested-things-and-examples.md); commits `98fa8d0..c8a05fe` mono-repo, `4523c89..5ce73d4` template repo (with `5ce73d4` shipping the 3 originally-deferred examples). |
 | 2 — Ergonomics quick wins | **shipped** | Six sub-items: 2e (`repl <thing>` `333d900`), 2a (`status` `7697deb`), 2c (`deploy --dry-run` `f2a055d`), 2d (deploy-failure hints `93b7c7a`), 2b (`doctor` `045f819`), 2f (`deploy --all-devices` `139b0ee`).  Per-thing → per-device mapping config deferred from 2f. |
-| 3 — Per-environment deploys | deferred | Per user direction during Phase 4; pick up when needed. |
+| 3 — Per-environment deploys | **dropped 2026-04-29** | Speculative dev/staging/prod seam; no concrete consumer surfaced.  Per user: "I dont know if we need a dev/production concept here to track. maybe some day but not any time soon."  Same reasoning that retired `Device.from_env` and `filter_devices` — until a real use case surfaces, building the seam is design overhead.  Phase plan body retained below for reference if the trigger ever arrives. |
 | 4 — Library scaffolder migration | **shipped** | `scripts/new_library_scaffold.py` → `chumicro_workspace.scaffold` + `python run.py new --library <name>` CLI mode.  Templates moved to `_payloads/library_template/`. |
 | 5 — Wire `workspace.yml` quality knobs | **shipped** | New `chumicro_workspace.quality` module + CLI wiring; `agent_strictness` accepted but enforcement deferred (no AST-level checks yet — own design pass). |
 | 6 — Documentation audit | **shipped** | Cross-repo doc-freshness sweep — both repos' commands tables, README / guide / AGENTS / CONTRIBUTING refreshed for Phases 1, 2, 4, 5 surface; `docs/contributing/new-library.md` notes the Phase 4 scaffolder migration. |
