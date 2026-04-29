@@ -28,6 +28,21 @@
 
 - [ ] **`.scratch/run_*_acceptance.py` runners deploy to root, not /lib/** (low priority — noted 2026-04-26).  Gitignored debug tools.  Symptom (stale `/lib/` shadowing fresh `/` library files) only bites when a workspace deploy preceded the runner deploy.
 
+- [ ] **Audit `chumicro-repl` end-to-end — same shape as the deploy + workspace audits** (noted 2026-04-29).  The deploy + workspace passes ran across multiple sessions on 2026-04-28 (commits `2d3e0ec`, `ecbf190`, `611b7b3`, `529f17d`, `9b03abf`, `a67c1eb`, `d79a106`, `25eae9b`); repl wasn't covered.  User-flagged concerns: package has been updated recently but the docs don't reflect the changes, and overall code quality / surface coherence is unclear.
+
+  Re-run the same audit playbook against `workbench/repl/`:
+  - **Code health.**  Long methods, single-call helpers, confusing flow, dead code, comments-as-code, suspicious error handling.  Ratio of LOC by module to surface what's swelling unnoticed.  ~30 modules / 6 K LOC was the workspace baseline — repl is meaningfully smaller, but the same lens applies.
+  - **Cross-package duplication.**  Earlier audits found and unified: `devices.yml` schema (deploy), firmware URL surface (deploy), pre-deploy gate (workspace), config pipeline (workspace).  Check repl for the same pattern — anything in repl that re-implements deploy primitives (raw-REPL framing, port discovery, fail-fast hints) should consolidate.  The earlier deploy audit noted repl + deploy independently implemented raw-REPL primitives (~200 lines of overlap, two `Ctrl-A` / `Ctrl-D` / `\x04` framers); the verdict at the time was "small enough to defer, revisit if either side grows."  Re-evaluate against current state.
+  - **No-speculative-API sweep.**  Apply the [feedback memory](feedback_no_speculative_public_api.md): grep workbench + scripts/ + the workspace template repo for every public symbol; symbols with zero callers anywhere outside their own tests should be deleted, not preserved as "documented API for hypothetical external users."  Earlier passes deleted `Device.from_env`, `filter_devices`, `build_circuitpython_bootstrap`, `Transport.reset()` on this principle.
+  - **Workbench-no-libraries-imports check.**  Apply the [feedback memory](feedback_workbench_no_libraries_imports.md): grep `workbench/repl/src/` for `import chumicro_<libname>` where `<libname>` is anything in `libraries/`.  Earlier swept deploy + workspace + pytest-device; only workspace had a real violation (`chumicro_msgpack` → standard `msgpack`).
+  - **README + docs alignment.**  Three workbench READMEs (deploy, workspace, pytest-device) were rewritten to the library-template shape (hero image + tagline + install + quick example + What's-included tables + companion-package cross-link block + Examples table + Find-this-library footer).  Repl's README was already rewritten in commit `d79a106` Phase J — but verify it's accurate against current code (the user-flagged concern: docs lag behind code).  Sweep `docs/guide.md` for stale references to retired surfaces; update.
+  - **Examples + functional tests.**  Repl currently has 2 examples (`tail_after_deploy.py`, `demo_repl_robustness.py`).  Reasonable; confirm both still run end-to-end against a board.  Functional tests under `workbench/repl/functional_tests/` — verify they cover the load-bearing behaviours (interactive TUI auto-reconnect on cable drop, `tail` traceback fail-fast, raw-REPL `exec()` round-trips, `InteractiveReplSession` retry coaching).
+  - **Hardware sweep.**  Same four-board matrix (Pi Pico W ×2, Lolin S2 ×2, CP + MP each).  Verify USB ports + `devices.yml` mappings before testing — the prior session found 3 of 4 ports had drifted since the last functional run.
+
+  Topic-branch + squash-merge to main when the audit lands — the workflow the deploy + workspace audits followed (overrides the standard "commit directly to main" policy for multi-phase audit work).  The deploy + workspace audits went through ~8 commits each; repl is smaller-surface so likely 3-5.
+
+  Output: a summary report similar to the deploy + workspace audit-reply messages — concrete code:line citations, "what's actually duplicated vs layered" calls, and a phased plan the user can sign off on before any code changes.
+
 
 ## Next
 
