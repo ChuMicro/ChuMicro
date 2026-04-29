@@ -27,6 +27,7 @@ import sys
 import time
 
 from chumicro_requests import HttpClient, chumicro_sockets_factory
+from chumicro_timing import ticks_ms as _ticks_ms
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 
 try:
@@ -50,14 +51,6 @@ def _sleep_ms(duration_ms: int) -> None:
         runtime_sleep_ms(duration_ms)
         return
     time.sleep(duration_ms / 1000)
-
-
-def _ticks_ms() -> int:
-    """Cross-runtime millisecond clock matching the wifi/requests stack."""
-    runtime_ticks_ms = getattr(time, "ticks_ms", None)
-    if callable(runtime_ticks_ms):
-        return runtime_ticks_ms()
-    return int(time.monotonic() * 1000)
 
 
 def _bring_wifi_up(timeout_ms: int = _WIFI_CONNECT_TIMEOUT_MS) -> WifiService:
