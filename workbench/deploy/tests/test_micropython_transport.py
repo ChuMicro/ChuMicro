@@ -400,21 +400,21 @@ class TestExecute:
         transport.disconnect()
 
 
-class TestReset:
-    """Tests for MicropythonTransport.reset / soft_reset."""
+class TestSoftReset:
+    """Tests for MicropythonTransport.soft_reset."""
 
-    def test_reset_without_serial_runs_subprocess(self) -> None:
-        """reset() without an open serial transport runs mpremote reset."""
+    def test_soft_reset_without_serial_runs_subprocess(self) -> None:
+        """soft_reset() without an open serial transport runs mpremote reset."""
         runner = FakeRunner()
         transport = MicropythonTransport("/dev/ttyUSB0", runner=runner)
-        transport.reset()
+        transport.soft_reset()
 
         command = runner.calls[0][0]
         assert command[0].endswith("mpremote") or command[0].endswith("mpremote.exe")
         assert command[1:] == ["connect", "/dev/ttyUSB0", "reset"]
 
-    def test_reset_with_serial_umounts_then_re_enters_raw_repl(self, tmp_path) -> None:
-        """reset() with an open serial transport umounts, exits, then soft-resets.
+    def test_soft_reset_with_serial_umounts_then_re_enters_raw_repl(self, tmp_path) -> None:
+        """soft_reset() with an open serial transport umounts, exits, then soft-resets.
 
         The mount is deliberately *not* restored inside ``soft_reset``;
         ``stage()`` owns remounting.  Re-mounting here would double-wrap
@@ -437,7 +437,7 @@ class TestReset:
         transport.stage([source_dir], [], harness_dir)
 
         prior_call_count = len(serial.calls)
-        transport.reset()
+        transport.soft_reset()
         new_calls = [name for name, _ in serial.calls[prior_call_count:]]
         # Contract: umount_local must come before enter_raw_repl so the
         # SerialIntercept is unwrapped while device-side mount state is
@@ -587,17 +587,15 @@ class TestFakeTransport:
         fake.stage([], [], None)
         output = fake.execute("script")
         fake.soft_reset()
-        fake.reset()
         fake.disconnect()
 
         assert output == "PASS test_ok (0.001s)\n"
-        assert len(fake.calls) == 6
+        assert len(fake.calls) == 5
         assert fake.calls[0] == ("connect", ())
         assert fake.calls[1][0] == "stage"
         assert fake.calls[2][0] == "execute"
         assert fake.calls[3] == ("soft_reset", ())
-        assert fake.calls[4] == ("reset", ())
-        assert fake.calls[5] == ("disconnect", ())
+        assert fake.calls[4] == ("disconnect", ())
 
     def test_connected_state(self) -> None:
         """FakeTransport should track connected state."""

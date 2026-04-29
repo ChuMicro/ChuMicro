@@ -60,35 +60,6 @@ class CircuitpythonBootstrapTooLargeError(ValueError):
     """Raised when an inline CircuitPython bootstrap is too large to send safely."""
 
 
-def build_circuitpython_bootstrap(
-    staged_sources: list[tuple[str, str]],
-    test_file: Path,
-    *,
-    name_filter: str | None = None,
-) -> str:
-    """Generate a bootstrap code block for CircuitPython raw REPL execution.
-
-    The generated code is self-contained — it does not rely on any
-    ``import`` statements for ChuMicro libraries or the test harness.
-    Everything is injected via ``exec()`` and ``sys.modules``.
-
-    Args:
-        staged_sources: List of ``(dotted_module_name, source_text)``
-            tuples from the transport's ``stage()`` step.
-        test_file: Path to the test file to execute.
-        name_filter: Optional substring filter passed to ``run_module``.
-
-    Returns:
-        Python source code string for raw REPL execution.
-    """
-    return "\n\n".join(build_circuitpython_bootstrap_scripts(
-        staged_sources,
-        test_file,
-        name_filter=name_filter,
-        max_chunk_size_bytes=1024 * 1024 * 1024,
-    ))
-
-
 def build_circuitpython_bootstrap_scripts(
     staged_sources: list[tuple[str, str]],
     test_file: Path,

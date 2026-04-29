@@ -10,14 +10,42 @@ from chumicro_deploy.circuitpython_bootstrap import (
     _derive_module_name,
     _escape_source,
     _prepare_inline_source,
-    build_circuitpython_bootstrap,
     build_circuitpython_bootstrap_scripts,
     build_circuitpython_deploy_scripts,
 )
 
+# Tests below assert against the *combined* bootstrap text — convenient
+# for substring checks like "_register_module" / "run_module".  In
+# production, the transport executes the chunks one by one
+# (`execute_scripts`), but for unit-test substring assertions an
+# arbitrary-sized single chunk is the simpler shape.  The 1 MiB
+# budget is well over any test fixture's payload.
+_UNCAPPED_BUDGET = 1024 * 1024
+
+
+def _combined_bootstrap_text(
+    staged_sources: list[tuple[str, str]],
+    test_file: Path,
+    *,
+    name_filter: str | None = None,
+) -> str:
+    """Test helper — call `_scripts` with a huge budget and join the result.
+
+    Production code never combines the chunks; the transport executes
+    them one by one via ``execute_scripts``.  But unit-test substring
+    assertions are easier against the combined text, so this helper
+    asks for an effectively-unbounded single chunk.
+    """
+    return "\n\n".join(build_circuitpython_bootstrap_scripts(
+        staged_sources,
+        test_file,
+        name_filter=name_filter,
+        max_chunk_size_bytes=_UNCAPPED_BUDGET,
+    ))
+
 
 class TestBuildCircuitpythonBootstrap:
-    """Tests for build_circuitpython_bootstrap."""
+    """Tests for the combined bootstrap text via :func:`_combined_bootstrap_text`."""
 
     def test_generates_module_injection(self, tmp_path: Path) -> None:
         """Bootstrap should contain populate calls for each module."""
@@ -28,7 +56,7 @@ class TestBuildCircuitpythonBootstrap:
         test_file = tmp_path / "test_example.py"
         test_file.write_text("def test_ok(): pass")
 
-        result = build_circuitpython_bootstrap(staged_sources, test_file)
+        result = _combined_bootstrap_text(staged_sources, test_file)
 
         assert "_m='chumicro_timing'" in result
         assert "_m='chumicro_timing.ticks'" in result
@@ -39,7 +67,7 @@ class TestBuildCircuitpythonBootstrap:
         test_file = tmp_path / "test_example.py"
         test_file.write_text("def test_ok(): pass")
 
-        result = build_circuitpython_bootstrap([], test_file)
+        result = _combined_bootstrap_text([], test_file)
 
         assert "def _register_stub(module_name):" in result
         assert "def _populate_module(module_name, source_code):" in result
@@ -50,7 +78,7 @@ class TestBuildCircuitpythonBootstrap:
         test_file = tmp_path / "test_example.py"
         test_file.write_text("def test_hello(): assert True")
 
-        result = build_circuitpython_bootstrap([], test_file)
+        result = _combined_bootstrap_text([], test_file)
 
         assert "exec(" in result
         assert "_test_namespace" in result
@@ -61,7 +89,7 @@ class TestBuildCircuitpythonBootstrap:
         test_file = tmp_path / "test_example.py"
         test_file.write_text("def test_ok(): pass")
 
-        result = build_circuitpython_bootstrap([], test_file)
+        result = _combined_bootstrap_text([], test_file)
 
         assert "run_module(_TestModule" in result
 
@@ -70,7 +98,7 @@ class TestBuildCircuitpythonBootstrap:
         test_file = tmp_path / "test_example.py"
         test_file.write_text("def test_ok(): pass")
 
-        result = build_circuitpython_bootstrap(
+        result = _combined_bootstrap_text(
             [], test_file, name_filter="test_specific",
         )
 
@@ -81,7 +109,7 @@ class TestBuildCircuitpythonBootstrap:
         test_file = tmp_path / "test_example.py"
         test_file.write_text("def test_ok(): pass")
 
-        result = build_circuitpython_bootstrap([], test_file)
+        result = _combined_bootstrap_text([], test_file)
 
         assert "name_filter=None" in result
 
@@ -90,7 +118,7 @@ class TestBuildCircuitpythonBootstrap:
         test_file = tmp_path / "test_example.py"
         test_file.write_text("def test_ok(): pass")
 
-        result = build_circuitpython_bootstrap([], test_file)
+        result = _combined_bootstrap_text([], test_file)
 
         assert "import sys" in result
 
@@ -99,7 +127,7 @@ class TestBuildCircuitpythonBootstrap:
         test_file = tmp_path / "test_example.py"
         test_file.write_text("def test_ok(): pass")
 
-        result = build_circuitpython_bootstrap([], test_file)
+        result = _combined_bootstrap_text([], test_file)
 
         assert "class _TestModule:" in result
         assert "setattr(_TestModule" in result
@@ -111,7 +139,7 @@ class TestBuildCircuitpythonBootstrap:
         test_file = tmp_path / "test_example.py"
         test_file.write_text("def test_ok(): pass")
 
-        result = build_circuitpython_bootstrap(
+        result = _combined_bootstrap_text(
             [("pkg", "x = 1"), ("pkg.sub", "y = 2")],
             test_file,
         )
@@ -128,7 +156,7 @@ class TestBuildCircuitpythonBootstrap:
         test_file = tmp_path / "test_example.py"
         test_file.write_text("def test_ok(): pass")
 
-        result = build_circuitpython_bootstrap(staged_sources, test_file)
+        result = _combined_bootstrap_text(staged_sources, test_file)
 
         # Stubs should appear before populate calls.
         stub_position = result.index("_register_stub(")
@@ -140,7 +168,7 @@ class TestBuildCircuitpythonBootstrap:
         test_file = tmp_path / "test_example.py"
         test_file.write_text("def test_ok(): pass")
 
-        result = build_circuitpython_bootstrap([], test_file)
+        result = _combined_bootstrap_text([], test_file)
 
         assert "sys.exit" not in result
 
@@ -153,7 +181,7 @@ class TestBuildCircuitpythonBootstrap:
         test_file = tmp_path / "test_example.py"
         test_file.write_text("def test_ok():\n    assert True\n")
 
-        result = build_circuitpython_bootstrap(
+        result = _combined_bootstrap_text(
             staged_sources, test_file, name_filter="test_ok",
         )
 
@@ -170,7 +198,7 @@ class TestBuildCircuitpythonBootstrap:
         test_file = tmp_path / "test_example.py"
         test_file.write_text("def test_ok(): pass")
 
-        result = build_circuitpython_bootstrap(staged_sources, test_file)
+        result = _combined_bootstrap_text(staged_sources, test_file)
 
         # Should be valid Python despite tricky source content.
         compile(result, "<bootstrap>", "exec")
@@ -248,7 +276,7 @@ class TestBuildCircuitpythonBootstrap:
         module_source = "def helper():\n    return 'value'\n"
         test_file.write_text("def test_ok(): pass")
 
-        result = build_circuitpython_bootstrap(
+        result = _combined_bootstrap_text(
             [("chumicro_sample", module_source)],
             test_file,
         )
@@ -271,7 +299,7 @@ class TestBuildCircuitpythonBootstrap:
             '    return value\n'
         )
 
-        result = build_circuitpython_bootstrap(
+        result = _combined_bootstrap_text(
             [("chumicro_sample", staged_source)],
             test_file,
         )
@@ -288,7 +316,7 @@ class TestBuildCircuitpythonBootstrap:
         test_file.write_text("def test_ok(): pass")
         staged_source = 'class OnlyDoc:\n    """doc"""\n'
 
-        result = build_circuitpython_bootstrap(
+        result = _combined_bootstrap_text(
             [("chumicro_sample", staged_source)],
             test_file,
         )

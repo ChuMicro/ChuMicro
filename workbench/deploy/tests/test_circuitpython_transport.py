@@ -671,38 +671,6 @@ class TestProbeImplementation:
         transport.disconnect()
 
 
-class TestReset:
-    """Tests for CircuitpythonTransport.reset."""
-
-    def test_reset_sends_ctrl_d(self) -> None:
-        """reset() should send Ctrl-D for soft reboot."""
-        port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
-
-        def factory(**kwargs):
-            return port
-
-        transport = CircuitpythonTransport(
-            "/dev/ttyUSB0",
-            serial_port_factory=factory,
-            time=FakeTime(),
-        )
-        transport.connect()
-        port.writes.clear()
-
-        transport.reset()
-
-        assert _CTRL_D in port.writes
-
-    def test_reset_without_connect_is_safe(self) -> None:
-        """reset() without a connected port should not raise."""
-        transport = CircuitpythonTransport(
-            "/dev/ttyUSB0",
-            serial_port_factory=lambda **kw: None,
-            time=FakeTime(),
-        )
-        transport.reset()  # Should not raise.
-
-
 class TestSoftReset:
     """Tests for CircuitpythonTransport.soft_reset."""
 
@@ -1146,10 +1114,10 @@ class TestFlashMode:
         assert b"autoreload" in written_data
         assert b"True" in written_data
 
-    def test_flash_disconnect_restores_autoreload_after_reset(
+    def test_flash_disconnect_restores_autoreload(
         self, tmp_path: Path,
     ) -> None:
-        """disconnect() after reset() should re-enter raw REPL and restore."""
+        """disconnect() should re-enter raw REPL and restore autoreload."""
         port = FakeSerialPort(
             read_responses=[
                 _RAW_REPL_PROMPT,   # connect
@@ -1162,9 +1130,6 @@ class TestFlashMode:
             port, str(tmp_path / "CIRCUITPY"),
         )
         transport.connect()
-
-        # Simulate what _run_tests_on_device does: reset then disconnect.
-        transport.reset()
         port.writes.clear()
 
         transport.disconnect()
@@ -2201,12 +2166,12 @@ class TestDriveVerification:
         )
         assert transport._verify_drive_for_board(drive) == drive
 
-    def test_read_boot_out_machine_extracts_suffix(
+    def test_read_boot_out_identity_extracts_machine_suffix(
         self, tmp_path: Path,
     ) -> None:
         """``on DATE; MACHINE`` suffix is returned; malformed files -> None."""
         from chumicro_deploy.circuitpython_transport import (
-            _read_boot_out_machine,
+            _read_boot_out_identity,
         )
 
         drive = tmp_path / "CIRCUITPY"
@@ -2216,18 +2181,20 @@ class TestDriveVerification:
             "Board ID:foo\n",
             encoding="utf-8",
         )
-        assert _read_boot_out_machine(drive) == "Foo Board with xyz"
+        _uid, machine = _read_boot_out_identity(drive)
+        assert machine == "Foo Board with xyz"
 
-        # Missing file
+        # Missing file → both fields None.
         empty = tmp_path / "OTHER"
         empty.mkdir()
-        assert _read_boot_out_machine(empty) is None
+        assert _read_boot_out_identity(empty) == (None, None)
 
-        # Malformed (no semicolon)
+        # Malformed first line (no semicolon) → machine is None.
         bad = tmp_path / "BAD"
         bad.mkdir()
         (bad / "boot_out.txt").write_text("weird line\n", encoding="utf-8")
-        assert _read_boot_out_machine(bad) is None
+        _uid_bad, machine_bad = _read_boot_out_identity(bad)
+        assert machine_bad is None
 
     def test_find_circuitpy_drive_for_machine_scans_mounts(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
@@ -2356,12 +2323,12 @@ class TestDriveVerification:
         )
         assert transport._verify_drive_for_board(drive) == drive
 
-    def test_read_boot_out_uid_extracts_uid_line(
+    def test_read_boot_out_identity_extracts_uid_line(
         self, tmp_path: Path,
     ) -> None:
         """``UID:`` line is extracted and normalised to uppercase."""
         from chumicro_deploy.circuitpython_transport import (
-            _read_boot_out_uid,
+            _read_boot_out_identity,
         )
 
         drive = tmp_path / "CIRCUITPY"
@@ -2370,14 +2337,10 @@ class TestDriveVerification:
             self._boot_out("S2Mini with ESP32S2-S2FN4R2", uid="487f301f0224"),
             encoding="utf-8",
         )
-        assert _read_boot_out_uid(drive) == "487F301F0224"
+        uid, _machine = _read_boot_out_identity(drive)
+        assert uid == "487F301F0224"
 
-        # Missing file
-        empty = tmp_path / "OTHER"
-        empty.mkdir()
-        assert _read_boot_out_uid(empty) is None
-
-        # File without UID line
+        # File without UID line → uid is None even though machine parses.
         bad = tmp_path / "BAD"
         bad.mkdir()
         (bad / "boot_out.txt").write_text(
@@ -2385,7 +2348,9 @@ class TestDriveVerification:
             "Board ID:foo\n",
             encoding="utf-8",
         )
-        assert _read_boot_out_uid(bad) is None
+        uid_bad, machine_bad = _read_boot_out_identity(bad)
+        assert uid_bad is None
+        assert machine_bad == "Foo Board"
 
     def test_find_circuitpy_drive_for_uid_scans_mounts(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,

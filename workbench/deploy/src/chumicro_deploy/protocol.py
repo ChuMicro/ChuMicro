@@ -290,10 +290,6 @@ class TransportProtocol(Protocol):
         """Soft-reset the interpreter to clear modules and free heap."""
         ...
 
-    def reset(self) -> None:
-        """Planned reset between healthy library groups."""
-        ...
-
     def recover(self) -> None:
         """Aggressive reset after a failure when board state is unknown."""
         ...

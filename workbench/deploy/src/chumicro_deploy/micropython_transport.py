@@ -421,17 +421,6 @@ class MicropythonTransport:
             pass
         self._serial.enter_raw_repl(soft_reset=True)
 
-    def reset(self) -> None:
-        """Soft-reset the device.
-
-        Used between library groups so each group starts with a clean
-        interpreter.  Distinct from :meth:`recover` only in intent: this
-        is a planned reset between healthy runs, while :meth:`recover` is
-        called after a failed test when the board state is unknown.
-        Both share :meth:`soft_reset`'s implementation.
-        """
-        self.soft_reset()
-
     def recover(self) -> None:
         """Attempt to recover after a failed test.
 

@@ -289,10 +289,6 @@ class FakeTransport:
         self.calls.append(("probe_implementation", ()))
         return self.probe_result
 
-    def reset(self) -> None:
-        """Record a reset call."""
-        self.calls.append(("reset", ()))
-
     def soft_reset(self) -> None:
         """Record a soft_reset call."""
         self.calls.append(("soft_reset", ()))
