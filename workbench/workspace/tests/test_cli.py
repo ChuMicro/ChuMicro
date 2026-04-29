@@ -2272,7 +2272,7 @@ class TestInstallFirmware:
         """No --url + no --device id → can't derive, exit 2."""
         root = _seed_workspace(tmp_path)
         # Default-resolution lands on lolin-s2, which has no
-        # hardware block → derive raises UnresolvableFirmwareError.
+        # hardware block → derive raises UnresolvedFirmwareError.
         exit_code = cli.main([
             "install-firmware", "--workspace-dir", str(root),
             "--method", "uf2",

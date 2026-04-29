@@ -43,8 +43,10 @@ CIRCUITPYTHON_S3_BUCKET_URL = "https://adafruit-circuit-python.s3.amazonaws.com/
 
 #: Adafruit's CDN download URL — used for the actual firmware
 #: download (lower latency than the bucket URL).  Listing happens on
-#: the bucket; download happens on the CDN.
-CIRCUITPYTHON_DOWNLOAD_TEMPLATE = (
+#: the bucket; download happens on the CDN.  Single source of truth
+#: for the CP firmware URL shape; ``firmware.resolve_firmware_url``
+#: also formats against this constant.
+CIRCUITPYTHON_FIRMWARE_URL_TEMPLATE = (
     "https://downloads.circuitpython.org/bin/{board_id}/{language}/"
     "adafruit-circuitpython-{board_id}-{language}-{version}.uf2"
 )
@@ -106,12 +108,16 @@ MICROPYTHON_BOARD_BY_MACHINE: dict[str, str] = {
 UrlOpener = Callable[[str], Any]
 
 
-class UnresolvableFirmwareError(RuntimeError):
-    """Raised when no firmware URL can be derived for a device entry.
+class UnresolvedFirmwareError(Exception):
+    """Raised when no firmware URL can be derived for the inputs.
 
     Carries the diagnosis so the CLI can surface a helpful message:
 
-    - ``cause="no_board_id"`` — CP path needs ``hardware.board_id``.
+    - ``cause="no_board_id"`` — CP path needs ``hardware.board_id``
+      (or :func:`resolve_firmware_url` was called with empty
+      ``board_id``).
+    - ``cause="no_version"`` — :func:`resolve_firmware_url` was
+      called with an empty ``version`` argument.
     - ``cause="no_machine"`` — MP path needs ``hardware.machine``.
     - ``cause="machine_not_in_map"`` — MP machine string isn't in
       the curated map, and no ``hardware.firmware_source`` is set.
@@ -126,9 +132,15 @@ class UnresolvableFirmwareError(RuntimeError):
       moved upstream.
     - ``cause="unsupported_runtime"`` — runtime isn't ``circuitpython``
       or ``micropython``.
+    - ``cause="micropython_needs_listing"`` — caller invoked
+      :func:`resolve_firmware_url` (the pure URL formatter) with
+      runtime=micropython, which embeds a per-build date that can't
+      be inferred from version alone.  Use
+      :func:`derive_firmware_url` or :func:`latest_micropython_url`
+      for the listing-based path instead.
     """
 
-    def __init__(self, message: str, *, cause: str) -> None:
+    def __init__(self, message: str, *, cause: str = "") -> None:
         super().__init__(message)
         self.cause = cause
 
@@ -160,12 +172,12 @@ def list_circuitpython_versions(
             leave it ``None`` and use :func:`urllib.request.urlopen`.
 
     Raises:
-        UnresolvableFirmwareError: The S3 prefix lookup returned no
+        UnresolvedFirmwareError: The S3 prefix lookup returned no
             ``.uf2`` keys (wrong board id, or the language isn't
             published for that board).
     """
     if not board_id:
-        raise UnresolvableFirmwareError(
+        raise UnresolvedFirmwareError(
             "board_id is required for CircuitPython firmware lookup",
             cause="no_board_id",
         )
@@ -175,7 +187,7 @@ def list_circuitpython_versions(
     body = _read_url(opener, listing_url)
     versions = _parse_circuitpython_versions(body, prefix=prefix)
     if not versions:
-        raise UnresolvableFirmwareError(
+        raise UnresolvedFirmwareError(
             f"S3 listing for prefix {prefix!r} returned no .uf2 keys "
             f"(wrong board id, or language not published for this board)",
             cause="no_versions_listed",
@@ -201,7 +213,7 @@ def latest_circuitpython_version(
     ``(major, minor, patch)`` ascending; the last element wins.
 
     Raises:
-        UnresolvableFirmwareError: No matching versions after the
+        UnresolvedFirmwareError: No matching versions after the
             stable filter.
     """
     versions = list_circuitpython_versions(
@@ -212,7 +224,7 @@ def latest_circuitpython_version(
     else:
         candidates = [version for version in versions if _STABLE_VERSION_PATTERN.match(version)]
     if not candidates:
-        raise UnresolvableFirmwareError(
+        raise UnresolvedFirmwareError(
             f"No stable versions found for {board_id!r} "
             f"(pass allow_prerelease=True to include pre-releases)",
             cause="no_stable_versions",
@@ -235,7 +247,7 @@ def latest_circuitpython_url(
         allow_prerelease=allow_prerelease,
         url_opener=url_opener,
     )
-    return CIRCUITPYTHON_DOWNLOAD_TEMPLATE.format(
+    return CIRCUITPYTHON_FIRMWARE_URL_TEMPLATE.format(
         board_id=board_id, language=language, version=version,
     )
 
@@ -355,12 +367,12 @@ def list_micropython_builds(
             leave it ``None``.
 
     Raises:
-        UnresolvableFirmwareError: ``board`` is empty, or the page
+        UnresolvedFirmwareError: ``board`` is empty, or the page
             returned no parsable firmware anchors for the chosen
             file extension.
     """
     if not board:
-        raise UnresolvableFirmwareError(
+        raise UnresolvedFirmwareError(
             "BOARD is required for MicroPython firmware lookup",
             cause="no_machine",
         )
@@ -371,7 +383,7 @@ def list_micropython_builds(
         body, board=board, file_extension=file_extension,
     )
     if not builds:
-        raise UnresolvableFirmwareError(
+        raise UnresolvedFirmwareError(
             f"micropython.org/download/{board}/ returned no .{file_extension} "
             f"build anchors (wrong BOARD name, board moved upstream, or this "
             f"port doesn't publish .{file_extension} firmware — try another "
@@ -397,7 +409,7 @@ def latest_micropython_url(
     of an older version (rare but observed during preview windows).
 
     Raises:
-        UnresolvableFirmwareError: No matching builds after the
+        UnresolvedFirmwareError: No matching builds after the
             stable filter (``cause="no_stable_versions"``) or no
             anchors at all (``cause="no_mp_builds_listed"``).
     """
@@ -417,7 +429,7 @@ def latest_micropython_url(
             and _MP_STABLE_VERSION_PATTERN.match(build[1]) is not None
         ]
     if not candidates:
-        raise UnresolvableFirmwareError(
+        raise UnresolvedFirmwareError(
             f"No stable MicroPython builds found for {board!r} "
             "(pass allow_prerelease=True to include unstable / preview).",
             cause="no_stable_versions",
@@ -460,7 +472,7 @@ def derive_firmware_url(
         url_opener: Inject for tests.
 
     Raises:
-        UnresolvableFirmwareError: When no path through the
+        UnresolvedFirmwareError: When no path through the
             resolution order produces a URL.  ``cause`` carries
             which step failed (no_board_id / no_machine /
             machine_not_in_map / no_versions_listed /
@@ -483,7 +495,7 @@ def derive_firmware_url(
     if runtime == "micropython":
         machine_string = hardware.get("machine", "")
         if not machine_string:
-            raise UnresolvableFirmwareError(
+            raise UnresolvedFirmwareError(
                 "MicroPython firmware lookup needs hardware.machine "
                 "(set automatically by `add-device`'s probe; check "
                 "that the entry was registered against a live board)",
@@ -491,7 +503,7 @@ def derive_firmware_url(
             )
         board = micropython_board_for_machine(machine_string)
         if board is None:
-            raise UnresolvableFirmwareError(
+            raise UnresolvedFirmwareError(
                 f"machine {machine_string!r} is not in the curated "
                 "BOARD map.  Set hardware.firmware_source to an "
                 "explicit firmware URL (or path) and re-run.",
@@ -510,7 +522,7 @@ def derive_firmware_url(
             file_extension=file_extension,
             url_opener=url_opener,
         )
-    raise UnresolvableFirmwareError(
+    raise UnresolvedFirmwareError(
         f"unsupported runtime {runtime!r} (expected 'circuitpython' "
         "or 'micropython')",
         cause="unsupported_runtime",

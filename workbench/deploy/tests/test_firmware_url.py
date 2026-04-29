@@ -6,12 +6,12 @@ from io import BytesIO
 from typing import Any
 
 import pytest
-from chumicro_workspace.firmware_url import (
-    CIRCUITPYTHON_DOWNLOAD_TEMPLATE,
+from chumicro_deploy.firmware_url import (
+    CIRCUITPYTHON_FIRMWARE_URL_TEMPLATE,
     MICROPYTHON_BOARD_BY_MACHINE,
     MICROPYTHON_DOWNLOAD_URL_TEMPLATE,
     MICROPYTHON_FIRMWARE_BASE_URL,
-    UnresolvableFirmwareError,
+    UnresolvedFirmwareError,
     derive_firmware_url,
     latest_circuitpython_url,
     latest_circuitpython_version,
@@ -89,7 +89,7 @@ class TestListCircuitpythonVersions:
 
     def test_passes_correct_prefix_to_opener(self) -> None:
         opener = _make_opener(_bucket_xml([]))
-        with pytest.raises(UnresolvableFirmwareError):
+        with pytest.raises(UnresolvedFirmwareError):
             list_circuitpython_versions("some_board", url_opener=opener)
         # The captured URL must include the prefix=bin/<board_id>/<lang>/.
         captured = opener.captured  # type: ignore[attr-defined]
@@ -97,7 +97,7 @@ class TestListCircuitpythonVersions:
 
     def test_language_override_changes_prefix(self) -> None:
         opener = _make_opener(_bucket_xml([]))
-        with pytest.raises(UnresolvableFirmwareError):
+        with pytest.raises(UnresolvedFirmwareError):
             list_circuitpython_versions(
                 "some_board", language="fr", url_opener=opener,
             )
@@ -144,12 +144,12 @@ class TestListCircuitpythonVersions:
 
     def test_empty_listing_raises(self) -> None:
         opener = _make_opener(_bucket_xml([]))
-        with pytest.raises(UnresolvableFirmwareError) as caught:
+        with pytest.raises(UnresolvedFirmwareError) as caught:
             list_circuitpython_versions("board", url_opener=opener)
         assert caught.value.cause == "no_versions_listed"
 
     def test_empty_board_id_raises(self) -> None:
-        with pytest.raises(UnresolvableFirmwareError) as caught:
+        with pytest.raises(UnresolvedFirmwareError) as caught:
             list_circuitpython_versions("", url_opener=lambda _url: None)
         assert caught.value.cause == "no_board_id"
 
@@ -238,7 +238,7 @@ class TestLatestCircuitpythonVersion:
                 ],
             ),
         )
-        with pytest.raises(UnresolvableFirmwareError) as caught:
+        with pytest.raises(UnresolvedFirmwareError) as caught:
             latest_circuitpython_version("b", url_opener=opener)
         assert caught.value.cause == "no_stable_versions"
 
@@ -258,7 +258,7 @@ class TestLatestCircuitpythonUrl:
             ),
         )
         url = latest_circuitpython_url("b", url_opener=opener)
-        assert url == CIRCUITPYTHON_DOWNLOAD_TEMPLATE.format(
+        assert url == CIRCUITPYTHON_FIRMWARE_URL_TEMPLATE.format(
             board_id="b", language="en_US", version="10.1.4",
         )
 
@@ -427,19 +427,19 @@ class TestListMicropythonBuilds:
 
     def test_empty_listing_raises(self) -> None:
         opener = _make_opener(b"<html><body>no builds yet</body></html>")
-        with pytest.raises(UnresolvableFirmwareError) as caught:
+        with pytest.raises(UnresolvedFirmwareError) as caught:
             list_micropython_builds("RPI_PICO_W", url_opener=opener)
         assert caught.value.cause == "no_mp_builds_listed"
 
     def test_non_utf8_body_returns_empty(self) -> None:
         """Garbage body (e.g. binary 404 served as 200) produces no builds."""
         opener = _make_opener(b"\xff\xfe\x00\x00binary garbage")
-        with pytest.raises(UnresolvableFirmwareError) as caught:
+        with pytest.raises(UnresolvedFirmwareError) as caught:
             list_micropython_builds("RPI_PICO_W", url_opener=opener)
         assert caught.value.cause == "no_mp_builds_listed"
 
     def test_empty_board_raises(self) -> None:
-        with pytest.raises(UnresolvableFirmwareError) as caught:
+        with pytest.raises(UnresolvedFirmwareError) as caught:
             list_micropython_builds("", url_opener=lambda _url: None)
         assert caught.value.cause == "no_machine"
 
@@ -510,7 +510,7 @@ class TestLatestMicropythonUrl:
                 builds=[("20240301", "v1.23.0", True, "uf2")],
             ),
         )
-        with pytest.raises(UnresolvableFirmwareError) as caught:
+        with pytest.raises(UnresolvedFirmwareError) as caught:
             latest_micropython_url("RPI_PICO_W", url_opener=opener)
         assert caught.value.cause == "no_stable_versions"
 
@@ -658,13 +658,13 @@ class TestDeriveFirmwareUrl:
 
     def test_circuitpython_no_board_id_raises(self) -> None:
         entry = {"id": "x", "runtime": "circuitpython", "hardware": {}}
-        with pytest.raises(UnresolvableFirmwareError) as caught:
+        with pytest.raises(UnresolvedFirmwareError) as caught:
             derive_firmware_url(entry, url_opener=lambda _url: None)
         assert caught.value.cause == "no_board_id"
 
     def test_micropython_no_machine_raises(self) -> None:
         entry = {"id": "x", "runtime": "micropython", "hardware": {}}
-        with pytest.raises(UnresolvableFirmwareError) as caught:
+        with pytest.raises(UnresolvedFirmwareError) as caught:
             derive_firmware_url(entry)
         assert caught.value.cause == "no_machine"
 
@@ -674,7 +674,7 @@ class TestDeriveFirmwareUrl:
             "runtime": "micropython",
             "hardware": {"machine": "Made-up Board with FAKE-CPU"},
         }
-        with pytest.raises(UnresolvableFirmwareError) as caught:
+        with pytest.raises(UnresolvedFirmwareError) as caught:
             derive_firmware_url(entry)
         assert caught.value.cause == "machine_not_in_map"
 
@@ -719,13 +719,13 @@ class TestDeriveFirmwareUrl:
 
     def test_no_hardware_block_is_handled_as_empty(self) -> None:
         entry = {"id": "x", "runtime": "circuitpython"}
-        with pytest.raises(UnresolvableFirmwareError) as caught:
+        with pytest.raises(UnresolvedFirmwareError) as caught:
             derive_firmware_url(entry, url_opener=lambda _url: None)
         assert caught.value.cause == "no_board_id"
 
     def test_unsupported_runtime_raises(self) -> None:
         entry = {"id": "x", "runtime": "totally-made-up", "hardware": {}}
-        with pytest.raises(UnresolvableFirmwareError) as caught:
+        with pytest.raises(UnresolvedFirmwareError) as caught:
             derive_firmware_url(entry)
         assert caught.value.cause == "unsupported_runtime"
 

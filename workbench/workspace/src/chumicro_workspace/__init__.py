@@ -57,6 +57,17 @@ from chumicro_deploy.config.devices_yaml import (
     update_device_address,
     update_device_hardware,
 )
+from chumicro_deploy.firmware_url import (
+    MICROPYTHON_BOARD_BY_MACHINE,
+    UnresolvedFirmwareError,
+    derive_firmware_url,
+    latest_circuitpython_url,
+    latest_circuitpython_version,
+    latest_micropython_url,
+    list_circuitpython_versions,
+    list_micropython_builds,
+    micropython_board_for_machine,
+)
 
 from chumicro_workspace.boot_shim import (
     BOOT_MODULE_DEVICE_PATH,
@@ -73,17 +84,6 @@ from chumicro_workspace.deploy_source import (
     WithRuntimeConfig,
     find_thing_config,
     thing_directory_source,
-)
-from chumicro_workspace.firmware_url import (
-    MICROPYTHON_BOARD_BY_MACHINE,
-    UnresolvableFirmwareError,
-    derive_firmware_url,
-    latest_circuitpython_url,
-    latest_circuitpython_version,
-    latest_micropython_url,
-    list_circuitpython_versions,
-    list_micropython_builds,
-    micropython_board_for_machine,
 )
 from chumicro_workspace.import_graph import (
     build_search_paths,
@@ -120,7 +120,7 @@ __all__ = [
     "DevicesYamlError",
     "HardwareOverwriteError",
     "OnboardingDiagnosis",
-    "UnresolvableFirmwareError",
+    "UnresolvedFirmwareError",
     "UnresolvedSecretError",
     "WithRuntimeConfig",
     "WorkspaceConfigError",

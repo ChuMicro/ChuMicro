@@ -52,6 +52,10 @@ from chumicro_deploy.config.devices_yaml import (
     update_device_firmware_version,
     update_device_hardware,
 )
+from chumicro_deploy.firmware_url import (
+    UnresolvedFirmwareError,
+    derive_firmware_url,
+)
 
 from chumicro_workspace.boot_shim import thing_boot_source
 from chumicro_workspace.deploy_source import thing_directory_source
@@ -61,10 +65,6 @@ from chumicro_workspace.firmware_support import (
 )
 from chumicro_workspace.firmware_support import (
     explain as explain_firmware_support,
-)
-from chumicro_workspace.firmware_url import (
-    UnresolvableFirmwareError,
-    derive_firmware_url,
 )
 from chumicro_workspace.health import (
     HealthFinding,
@@ -1587,7 +1587,7 @@ def _cmd_install_firmware(args: argparse.Namespace) -> int:
             return 2
         try:
             firmware_url = derive_firmware_url(entry, allow_prerelease=args.allow_prerelease)
-        except UnresolvableFirmwareError as exception:
+        except UnresolvedFirmwareError as exception:
             print(f"install-firmware: {exception}", file=sys.stderr)
             return 2
         print(f"install-firmware: resolved {firmware_url}")

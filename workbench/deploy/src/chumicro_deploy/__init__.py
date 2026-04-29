@@ -41,11 +41,13 @@ from .config.default import (
 from .deployer import Deployer
 from .device import Device
 from .firmware import (
-    CIRCUITPYTHON_FIRMWARE_URL_TEMPLATE,
     FlashFirmwareError,
-    UnresolvedFirmwareError,
     flash_firmware,
     resolve_firmware_url,
+)
+from .firmware_url import (
+    CIRCUITPYTHON_FIRMWARE_URL_TEMPLATE,
+    UnresolvedFirmwareError,
 )
 from .host_platform import RsyncMissingError, WindowsNotSupportedError
 from .macos_fskit import (
