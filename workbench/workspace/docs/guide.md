@@ -22,11 +22,29 @@ my-workspace/
 │   │   └── app.py         # def run(): ...
 │   └── kitchen/
 │       └── ...
-├── libs/                  # checked-in user libraries (deploy --import-graph reaches these)
+├── libs/                  # flat shared modules — `from libs.foo import bar`
+├── libraries/             # full chumicro-style library packages (scaffolded via `new --library`)
+│   └── buttons/
+│       ├── src/chumicro_buttons/
+│       ├── tests/
+│       ├── docs/
+│       └── pyproject.toml
 └── packages/              # gitignored, resolved from manifest at sync time
 ```
 
 The two requirements are `workspace.yml` (`WorkspaceLayout` walks up from cwd to find it, git-style) and `things/`.
+
+### `libs/` vs `libraries/` — when to use each
+
+Both hold code your things can `import`.  Pick by *weight*:
+
+| Want to ship… | Drop it under | Imports look like | Notes |
+|---|---|---|---|
+| A 50-line helper your things share | `libs/foo.py` | `from libs.foo import bar` | No tests, no version, no scaffolding. |
+| A full chumicro-style library you might publish someday | `libraries/<name>/` (via `new --library`) | `import <name>` | Gets `src/`, `tests/`, `docs/`, `examples/`, `pyproject.toml`, `VERSION` — same shape the chumicro mono-repo uses. |
+| A third-party package | `packages/` (via `sync`) | `import <name>` | Gitignored mirror cache. |
+
+The import-graph search path resolves in this order: explicit `library_sources:` overrides → `libs/` → every `libraries/<name>/src/` (auto-discovered) → `packages/`. So a library scaffolded with `new --library buttons` is importable as `import buttons` from any thing without further wiring.
 
 ## Day-zero: bring up a board
 
@@ -66,7 +84,9 @@ python run.py add-device back-porch --address /dev/cu.usbmodem1101 --runtime mic
 
 ## Workspace health
 
-`status` is the one-screen "is anything obviously broken" check.  Run it before the first deploy to catch un-edited `secrets.yml` placeholders, missing `devices.yml`, or a malformed `workspace.yml`:
+`status` is the one-screen "is anything obviously broken" check.  Every `deploy` runs the same fast checks as a pre-flight gate — ERROR-level findings (malformed `workspace.yml` / `devices.yml` / `secrets.yml`) abort before sending bytes to the device; WARN-level findings (placeholder secrets, no devices registered yet) print but proceed.  Pass `deploy --skip-health-check` to skip the gate (CI / power-user flows).
+
+Run it directly to see the snapshot:
 
 ```bash
 python run.py status
@@ -107,6 +127,33 @@ python run.py new garage/heater --from examples/wifi_only
 # --into <dir> overrides.
 python run.py new gpio --library
 ```
+
+### How config flows from your edits to the device
+
+The runtime config a thing receives at boot is the merge of three host-side sources, with secret references resolved at deploy time:
+
+```
+secrets.yml                workspace.yml              things/<name>/config.toml
+   (host)                     (host)                          (host)
+      │                          │                              │
+      └──────────────┬───────────┴──────────────────────────────┘
+                     ▼
+                 merge_configs                  ← chumicro_workspace.merge
+                     │                              (deep per-key merge: thing
+                     ▼                               wins over workspace defaults)
+                 resolve_secrets                ← chumicro_workspace.secrets
+                     │                              (replaces "!secret <name>"
+                     ▼                               → secrets.yml value)
+                 packb (msgpack)                ← chumicro_workspace.writer
+                     │                              (use_single_float=True so
+                     ▼                               CircuitPython's native
+       /runtime_config.msgpack on device            msgpack module accepts it)
+                     │
+                     ▼
+              chumicro_config.runtime           ← READS the msgpack on the device
+```
+
+Use `chumicro-workspace dump-config <thing>` to print the merged dict your thing would receive without actually deploying — useful for "is this `!secret` resolving to what I think it is?" debugging.
 
 `config.toml` carries the per-thing knobs.  Use `!secret <name>` to reference values from `secrets.yml`:
 

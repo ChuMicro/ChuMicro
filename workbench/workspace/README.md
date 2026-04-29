@@ -1,168 +1,199 @@
 # chumicro-workspace
 
-Host-side runtime for ChuMicro project workspaces.  Wraps `chumicro-deploy` and `chumicro-repl` with the workspace-shaped conventions a `things/`-and-`devices.yml` repo expects: deploy-time config merge, a CLI that reads `workspace.yml`, three-zone `devices.yml` round-trip, board-state onboarding, firmware URL derivation, an import-graph deploy mode, and the boot-shim layout that boots a single thing through the `workspace_runtime` indirection.
+<img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) workspace.  Workbench tool — runs on your laptop to drive connected boards.  See [Decision 0032](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0032-workbench-host-tools.md) for the workbench pattern, [Decision 0029](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0029-project-workspace.md) for the workspace contract, and [Decision 0035](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0035-runtime-config-structure.md) for the config-merge story.
+**One-stop host CLI for ChuMicro project workspaces — onboard a board, write app code, deploy to one or many targets, watch the REPL.**
 
-## Status
+Wraps `chumicro-deploy` and `chumicro-repl` with the workspace-shaped pieces those packages don't own: a deploy-time config-merge pipeline (`workspace.yml` + `things/*/config.toml` + `secrets.yml` → `runtime_config.msgpack`), a CLI that reads `workspace.yml`, three-zone `devices.yml` round-trip, board-state onboarding, firmware URL derivation, and the boot-shim layout that lets a single board host one thing without you writing a `code.py`.
 
-Project-workspace Phase 4a feature-complete + workspace-ecosystem Phases 1, 2, 4, 5 shipped (2026-04-27).  The package consolidates everything Decision 0029 / 0035 / 0038 specified plus the user-friendliness pass that followed: nested thing namespaces, an `examples/` folder for read-and-scaffold demos, `status` / `doctor` health snapshots, `deploy --dry-run`, `deploy --all-devices`, `repl <thing>` one-shot deploy + tail, app-level deploy-failure recovery hints, `new --library` for chumicro-style libraries, and `workspace.yml` `quality:` knob wiring (`lint.enabled` / `lint.select` / `coverage_threshold` / `agent_strictness`).  The `switch` command + multi-thing staging path retired in 2026-04-27 — single-thing deploys via `thing_boot_source` are the canonical shape.  The canonical workspace template ships as a separate Git repo at [`ChuMicro/ChuMicro-Workspace-Template`](https://github.com/ChuMicro/ChuMicro-Workspace-Template); `init` / `update` orchestrate cloning + tool-owned re-flow.
+<br clear="left">
 
-## What's here today
+> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family — small, focused Python libraries for microcontrollers and laptops. [See all libraries.](https://github.com/ChuMicro/ChuMicro#whats-in-the-box)
+> This is a [workbench tool](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/workbench.md) — runs on your laptop, not on the board.  The on-device side is [`chumicro-config`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/config), which reads the msgpack this package writes.
 
-### CLI
-
-The package ships `python -m chumicro_workspace` (also exposed as the `chumicro-workspace` console script and consumed via the workspace template's `run.py` shim).
-
-| Command | Purpose |
-|---|---|
-| `init <target> [--from <url>] [--ref <branch>]` | Clone the canonical workspace template into *target*.  `setup` is the natural follow-up. |
-| `setup` | `pip install -e .` the workspace's pyproject + materialize `_templates/` files (one-time per clone; idempotent). |
-| `update [--ref <branch>]` | Pull tool-owned file refreshes from the template upstream — re-flows `_templates/`, `examples/`, `things/_template/`, `.github/skills/`, `run.py`, `AGENTS.md`, `CONTRIBUTING.md`, `pyproject.toml`.  User-owned files (your `things/`, `secrets.yml`, `devices.yml`, `workspace.yml`, `libs/`, `packages/`) untouched. |
-| `bootstrap [--port <p>] [--device-id <id>] [--with-demo]` | End-to-end onboarding wizard: pick a port → probe runtime → register the device → optionally deploy the demo payload. |
-| `new <path> [--from <example>]` | Scaffold a new thing under `things/<path>/`.  *path* accepts bare / slash / dotted forms; intermediate namespace dirs auto-created.  `--from <example>` copies an `examples/<x>/` tree instead of `things/_template/`. |
-| `new <name> --library [--into <dir>]` | Scaffold a chumicro-style library tree (`src/chumicro_<name>/`, tests, docs, examples).  Defaults to `<workspace>/libraries/<name>/`. |
-| `add-device <id> --address <port> [--runtime <cp\|mp>] [--description <text>] [--force]` | Probe a board and write the entry into `devices.yml`.  Runtime auto-detected when omitted. |
-| `probe` | Print the runtime identity reported by the selected board. |
-| `discover` | List the serial ports the host currently sees. |
-| `devices` | Print every entry in `devices.yml`. |
-| `things [--flat]` | Default Unicode tree view; `--flat` for one-line-per-thing slash-form output. |
-| `status` | One-line-per-check workspace health snapshot — `workspace.yml` validity, `devices.yml` count, `secrets.yml` placeholder detection, things-tree summary. |
-| `doctor` | Strict sibling of `status` — adds Python ≥3.11 check, per-thing AST scan for `def run`, and a config-merge dry-run that catches unresolved `!secret` references. |
-| `deploy <name> [--boot-shim] [--import-graph] [--dry-run] [--all-devices] [--wipe]` | Ship a thing.  *name* accepts bare / slash / dotted (with bare-name disambiguation against the live tree).  `--dry-run` prints the file map without writing.  `--all-devices` loops over every entry in `devices.yml`.  `--wipe` erases the device filesystem before deploying (destructive — clean-slate / corruption recovery only). |
-| `demo` | Deploy a built-in print-loop payload to the active device (no wifi, ~5s).  Useful as the first-deploy sanity check. |
-| `repl [--tail SECONDS] [<thing>]` | Interactive REPL by default.  `--tail SECONDS` captures output for a window.  Optional positional thing deploys then tails (default 30s window). |
-| `install-firmware [--url URL] --method <uf2\|esptool>` | Download + flash firmware (URL auto-derived from `hardware.firmware_source` / `hardware.board_id` / `hardware.machine` when omitted). |
-| `upgrade-firmware` | Alias of `install-firmware`. |
-| `rename --thing OLD NEW \| --device OLD NEW` | Rename a thing dir (slash/dotted on both sides; intermediate namespaces auto-created) or a `devices.yml` entry id. |
-| `test [-- ...]` | Run pytest at the workspace root.  Workspace.yml `quality.coverage_threshold` (when set) prepends `--cov-fail-under=N`. |
-| `lint [-- ...]` | Run `ruff check`.  Workspace.yml `quality.lint.enabled = false` skips with a hint; `quality.lint.select` prepends `--select <list>`. |
-| `sim`, `env`, `use` | Stubbed — emit a "registered, not yet implemented" message. |
-| `sync`, `upgrade` | Deprecated aliases for `update` — emit a "superseded by `update`" message. |
-
-### Boot-shim layout
-
-`deploy --boot-shim <name>` ships the [Decision 0029 §3](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0029-project-workspace.md) on-device shape.  Nested thing names produce a parallel namespace tree under `/lib/things/`:
-
-```
-/code.py                              # two-line shim: import workspace_runtime; boot()
-/active.py                            # THING_NAME = "garage.sensors.door_open"
-/runtime_config.msgpack               # merged config
-/lib/workspace_runtime/__init__.py    # boot module — imports things.<dotted>.app and calls run()
-/lib/things/__init__.py               # package marker
-/lib/things/garage/__init__.py        # namespace marker (one per level)
-/lib/things/garage/sensors/__init__.py
-/lib/things/garage/sensors/door_open/ # the thing's files
-    __init__.py
-    app.py
-```
-
-For a flat single-segment thing the layout collapses to the
-single-level shape (`/lib/things/<name>/`).
-
-The original Phase 4a multi-thing-on-one-device path
-(`deploy --boot-shim foo bar baz --active foo` + a `switch <name>`
-command for re-pointing `/active.py`) was retired in Slice 7 of
-the nested-things-and-examples workstream — it blew the flash
-budget on Decision 0015 minimum boards and the "instant switch"
-pitch wasn't worth the cost.  See [`plans/next-up.md`'s "Replace
-multi-thing staging with scoped diff-deploy" entry](https://github.com/ChuMicro/ChuMicro/blob/main/plans/next-up.md)
-for the workstream that replaces it.
-
-### Public Python API
-
-```python
-from chumicro_workspace import (
-    # Config merge (Decision 0035)
-    build_runtime_config,        # all sources -> merged dict -> msgpack
-    merge_configs,               # deep per-key merge of two or more dicts
-    resolve_secrets,             # walk a value, replace !secret <name> refs
-    read_workspace_yaml,         # parse workspace.yml -> defaults dict
-    read_thing_config,           # parse things/<name>/config.{toml,yml,yaml}
-    read_secrets_yaml,           # parse secrets.yml -> dict (empty when absent)
-    write_runtime_config,        # write merged dict to msgpack at given path
-    UnresolvedSecretError,       # !secret <name> resolved against missing key
-    WorkspaceConfigError,        # YAML/TOML top-level shape malformed
-
-    # Deploy sources
-    WithRuntimeConfig,           # FileSource decorator that injects the msgpack
-    thing_directory_source,      # flat layout: thing dir at device root
-    thing_boot_source,           # boot-shim layout: thing under /lib/things/<...>/<name>/
-    thing_import_graph_source,   # AST-walked layout: only reachable modules
-
-    # devices.yml three-zone round-trip (Decision 0029 §9)
-    add_device,                  # add a probed entry, prompting on hardware-once changes
-    update_device_address,       # silent address refresh (probed-always zone)
-    update_device_hardware,      # raises HardwareOverwriteError on hardware-once collision
-    rename_device,               # rewrites entry id + defaults: references
-    set_runtime_default,         # pin defaults.<runtime> = <id>
-    load_devices,                # ruamel-backed read preserving comments + order
-    dump_devices,                # atomic write preserving comments + order
-
-    # Onboarding (Decision 0029 §4)
-    BoardState,                  # REPL_REACHABLE / UF2_BOOTLOADER / NO_PROBE_RESPONSE / SERIAL_UNREACHABLE
-    OnboardingDiagnosis,
-    detect_board_state,          # picks the right next-steps message
-    find_uf2_drive,              # scan for INFO_UF2.TXT mounts
-
-    # Firmware URL derivation (Decision 0029 §5)
-    derive_firmware_url,         # entry -> URL via firmware_source / S3 / micropython.org
-    latest_circuitpython_url,
-    latest_micropython_url,      # micropython.org/download/<BOARD>/ scrape
-    list_circuitpython_versions,
-    list_micropython_builds,
-    micropython_board_for_machine,
-    UnresolvableFirmwareError,
-
-    # Import-graph (Decision 0029 §6+§7)
-    build_search_paths,          # libs/ + packages/ + library_sources: overrides
-    read_library_sources,        # workspace.yml's library_sources: block
-
-    # Constants
-    RUNTIME_CONFIG_DEVICE_PATH,  # "/runtime_config.msgpack"
-    GENERATED_DIRNAME,           # "_generated"
-    BOOT_MODULE_DEVICE_PATH,
-    THINGS_PACKAGE_INIT_DEVICE_PATH,
-    SHIM_ENTRYPOINT_SOURCE,
-)
-
-# Workspace-ecosystem add-ons (Phases 1–5)
-from chumicro_workspace.workspace import (
-    ThingClassification,         # THING / NAMESPACE / SUPPORTING
-    WorkspaceLayout,             # gains list_things() recursive walk + iter_things_with_classification()
-)
-from chumicro_workspace.health import (
-    HealthFinding,               # one row in status / doctor
-    HealthLevel,                 # OK / WARN / ERROR
-    SECRET_PLACEHOLDER,          # the canonical "replace-me" sentinel
-    collect_health_findings,     # status's four checks
-    collect_doctor_findings,     # doctor's seven checks
-)
-from chumicro_workspace.recovery import (
-    AppErrorHint,                # one matched-pattern hint
-    detect_hints,                # traceback → list[AppErrorHint]
-    format_hints,                # render the --- hints --- block
-)
-from chumicro_workspace.scaffold import (
-    LibraryAlreadyExistsError,
-    scaffold_library,            # create a chumicro-style library tree
-)
-from chumicro_workspace.quality import (
-    LintConfig,                  # lint sub-config (enabled, select)
-    QualityConfig,               # workspace.yml quality: block, typed
-    load_quality_config,         # parse + validate the block
-)
-```
-
-See [`docs/guide.md`](docs/guide.md) for end-to-end walkthroughs and [`docs/api.md`](docs/api.md) for the auto-generated reference.
-
-## Install
+## Installation
 
 ```bash
 pip install chumicro-workspace
 ```
 
-The package lives on the host only; nothing in it lands on a microcontroller.  The on-device boot module ships as a payload that the `--boot-shim` deploy stages onto the device under `/lib/workspace_runtime/`.
+`chumicro-deploy` (and its `pyserial` / `mpremote` deps) plus `msgpack` and `ruamel.yaml` come along.  The canonical workspace template lives at [`ChuMicro/ChuMicro-Workspace-Template`](https://github.com/ChuMicro/ChuMicro-Workspace-Template) — typical bootstrap is `git clone` it (or click "Use this template" on GitHub) then run `python run.py setup`, which creates a venv and installs this package.
+
+<details>
+<summary>Experimental (pre-release) versions and channel switching</summary>
+
+Pre-release builds publish automatically when the package version is bumped.
+
+```bash
+pip install chumicro-workspace-experimental
+```
+
+</details>
+
+## Quick example
+
+The workspace template ships a `run.py` shim that forwards to `chumicro-workspace` — typical day-zero is:
+
+```bash
+# Inside a freshly cloned workspace:
+python run.py setup                                 # one-time bootstrap
+python run.py bootstrap --port /dev/cu.usbmodem1101 --device-id back-porch
+# (the wizard probes the runtime, registers the device, deploys
+# the built-in demo payload — pass --no-demo to skip the demo step.)
+
+# Then iterate:
+python run.py new my_thing                          # scaffold from things/_template/
+python run.py deploy my_thing                       # ship + run on the active device
+python run.py repl my_thing --tail 30               # deploy + tail for 30 s
+```
+
+### How config flows from your edits to the device
+
+The runtime config a thing receives at boot is the merge of three host-side sources, with secret references resolved at deploy time:
+
+```
+secrets.yml                workspace.yml              things/<name>/config.toml
+   (host)                     (host)                          (host)
+      │                          │                              │
+      └──────────────┬───────────┴──────────────────────────────┘
+                     ▼
+                 merge_configs                  ← chumicro_workspace.merge
+                     │                              (deep per-key merge: thing
+                     ▼                               wins over workspace defaults)
+                 resolve_secrets                ← chumicro_workspace.secrets
+                     │                              (replaces "!secret <name>"
+                     ▼                               → secrets.yml value)
+                 packb (msgpack)                ← chumicro_workspace.writer
+                     │                              (use_single_float=True so
+                     ▼                               CircuitPython's native
+       /runtime_config.msgpack on device            msgpack module accepts it)
+                     │
+                     ▼
+              chumicro_config.runtime           ← READS the msgpack on the device
+```
+
+`chumicro-workspace dump-config <thing>` prints the merged dict your thing would receive without actually deploying — useful when debugging which config section a key landed in or whether a `!secret` resolved to what you expected.
+
+## What's included
+
+### CLI subcommands
+
+`chumicro-workspace <subcommand>` (or `python run.py <subcommand>` from a workspace).
+
+| Group | Commands |
+|---|---|
+| **Bootstrap / setup** | `init`, `setup`, `update`, `bootstrap` |
+| **Authoring** | `new <path>` (thing), `new --library <name>` (chumicro-style library), `dump-config <thing>` |
+| **Devices** | `add-device`, `probe`, `discover`, `devices`, `rename --device` |
+| **Deploy / run** | `deploy <thing>`, `demo`, `repl [<thing>] [--tail SECONDS]`, `things [--flat]` |
+| **Health** | `status`, `doctor` (also runs as a fast pre-deploy gate; `deploy --skip-health-check` opts out) |
+| **Quality** | `test`, `lint`, `preflight` (chains lint + test; respects `workspace.yml`'s `quality:` block) |
+| **Firmware** | `install-firmware`, `upgrade-firmware` |
+| **Stubs** | `sim`, `env`, `use`, `sync`, `upgrade` (planned / deprecated — print a "not yet" message) |
+
+### `libs/` vs `libraries/` — when to use each
+
+Both hold code your things can `import`.  Pick by *weight*:
+
+| Want to ship… | Drop it under | Imports look like | Notes |
+|---|---|---|---|
+| A 50-line helper your things share | `libs/foo.py` | `from libs.foo import bar` | No tests, no version, no scaffolding. |
+| A full chumicro-style library you might publish someday | `libraries/<name>/` (via `new --library`) | `import <name>` | Gets `src/`, `tests/`, `docs/`, `examples/`, `pyproject.toml`, `VERSION` — same shape the chumicro mono-repo uses. |
+| A third-party package | `packages/` (via `sync`) | `import <name>` | Gitignored mirror cache. |
+
+The import-graph search path resolves explicit `library_sources:` overrides → `libs/` → every `libraries/<name>/src/` (auto-discovered) → `packages/`.
+
+### Boot-shim layout
+
+`deploy --boot-shim <name>` ships the [Decision 0029 §3](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0029-project-workspace.md) on-device shape:
+
+```
+/code.py                              # two-line shim: import workspace_runtime; boot()
+/active.py                            # THING_NAME = "garage.sensors.door_open"
+/runtime_config.msgpack               # merged config (see pipeline above)
+/lib/workspace_runtime/__init__.py    # boot module — imports things.<dotted>.app and calls run()
+/lib/things/__init__.py               # package marker
+/lib/things/garage/__init__.py        # one per nested namespace level
+/lib/things/garage/sensors/door_open/ # the thing's files
+    __init__.py
+    app.py                            # def run(): ...  ← your code
+```
+
+Three layers, three responsibilities: `code.py` is the firmware entrypoint (stable across deploys), `active.py` names which thing is current (regenerated per deploy), `app.py` is your code (lives inside the thing dir).  None of these names is a CircuitPython convention except `code.py` itself — `app.py` is workspace's name for "the thing's entrypoint module exporting `run()`".
+
+### Status
+
+> Project-workspace Phase 4a feature-complete + workspace-ecosystem Phases 1, 2, 4, 5 shipped (2026-04-27).  The package consolidates everything Decision 0029 / 0035 / 0038 specified plus the user-friendliness pass that followed: nested thing namespaces, an `examples/` folder for read-and-scaffold demos, `status` / `doctor` health snapshots (now also a pre-deploy gate), `deploy --dry-run`, `deploy --all-devices`, `repl <thing>` one-shot deploy + tail, app-level deploy-failure recovery hints, `new --library` for chumicro-style libraries, `workspace.yml` `quality:` knob wiring, `preflight` + `dump-config` commands.
+
+## Public Python API
+
+```python
+from chumicro_workspace import (
+    # Config merge (Decision 0035)
+    build_runtime_config, merge_configs, resolve_secrets,
+    read_workspace_yaml, read_thing_config, read_secrets_yaml,
+    write_runtime_config, UnresolvedSecretError, WorkspaceConfigError,
+
+    # Deploy sources
+    WithRuntimeConfig, thing_directory_source,
+    thing_boot_source, thing_import_graph_source,
+
+    # devices.yml three-zone round-trip (Decision 0029 §9)
+    add_device, update_device_address, update_device_hardware,
+    rename_device, set_runtime_default, load_devices, dump_devices,
+
+    # Onboarding (Decision 0029 §4)
+    BoardState, OnboardingDiagnosis, detect_board_state, find_uf2_drive,
+
+    # Firmware URL derivation (Decision 0029 §5)
+    derive_firmware_url, latest_circuitpython_url, latest_micropython_url,
+    list_circuitpython_versions, list_micropython_builds,
+    micropython_board_for_machine, UnresolvedFirmwareError,
+
+    # Import-graph (Decision 0029 §6+§7)
+    build_search_paths, read_library_sources,
+
+    # Constants
+    RUNTIME_CONFIG_DEVICE_PATH, GENERATED_DIRNAME,
+    BOOT_MODULE_DEVICE_PATH, THINGS_PACKAGE_INIT_DEVICE_PATH,
+    SHIM_ENTRYPOINT_SOURCE,
+)
+```
+
+Plus `chumicro_workspace.workspace.WorkspaceLayout`, `chumicro_workspace.health.*`, `chumicro_workspace.recovery.*`, `chumicro_workspace.scaffold.*`, and `chumicro_workspace.quality.*` for the workspace-ecosystem add-ons.
+
+## Companions
+
+| Workbench tool | Why you'd use it alongside |
+|---|---|
+| [`chumicro-deploy`](../deploy/) | Lower-level transport + flashing.  Workspace composes on top |
+| [`chumicro-repl`](../repl/) | Interactive + tail-after-deploy serial REPL |
+| [`chumicro-pytest-device`](../pytest-device/) | Run tests on real boards via pytest |
+
+## Examples
+
+This package is a CLI tool — there's no "use it in your code" example shape that doesn't just mirror a CLI subcommand.  See the [user guide](docs/guide.md) for end-to-end walkthroughs (config pipeline, deploy modes, library scaffolding, board onboarding) and `chumicro-workspace --help` for the full command surface.
+
+The Python API surface (the `from chumicro_workspace import ...` block above) exists so [`chumicro-deploy`](../deploy/), the workspace template's `run.py` shim, and the [`chumicro-workspace` CLI](src/chumicro_workspace/cli.py) itself can compose against it — not as a "build your own workspace tool" surface.  If you find yourself reaching for it, the CLI probably already exposes what you want; file an issue if it doesn't.
+
+## Developing this library
+
+```bash
+python scripts/run.py test --libraries workspace
+python scripts/run.py test-workbench-functional --workbench workspace
+```
+
+Functional tests need a real board and `devices.yml` populated — `python scripts/run.py setup` materializes the local config files.
+
+## Docs
+
+📖 **[Stable docs](https://chumicro.github.io/ChuMicro/workspace/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/workspace/experimental/)**
+
+## Find this library
+
+- **PyPI:** [chumicro-workspace](https://pypi.org/project/chumicro-workspace/)
+- **Source:** [workbench/workspace](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/workspace)
+- **Workspace template:** [`ChuMicro/ChuMicro-Workspace-Template`](https://github.com/ChuMicro/ChuMicro-Workspace-Template)
 
 ## License
 

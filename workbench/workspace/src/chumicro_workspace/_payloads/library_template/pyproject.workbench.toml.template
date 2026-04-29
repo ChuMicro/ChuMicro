@@ -1,0 +1,58 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "chumicro-{name}"
+dynamic = ["version"]
+# TODO: replace with a one-line description; rendered on the docs landing page
+# and on PyPI. An empty value renders as an empty card.
+description = ""
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [
+    {{ name = "ChuMicro" }},
+]
+keywords = [
+    # Workbench tools run on the host (laptop), not on a board.  Tag with
+    # the things they help you do — typical entries: "deploy", "serial",
+    # "config", "workspace", etc.
+    "host", "workbench",
+]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Software Development :: Build Tools",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    # Workbench packages may freely depend on CPython-only third-party
+    # libraries (pyserial, pyyaml, ruamel, rich, etc.) per
+    # Decision 0032 §6.  Don't depend on chumicro libraries from
+    # libraries/ — those are for the device.
+]
+
+[project.urls]
+Homepage = "https://github.com/ChuMicro/ChuMicro"
+Documentation = "https://chumicro.github.io/ChuMicro/{name}/stable/"
+Source = "https://github.com/ChuMicro/ChuMicro/tree/main/workbench/{name}"
+Issues = "https://github.com/ChuMicro/ChuMicro/issues"
+
+[project.scripts]
+# Workbench packages typically expose a CLI.  Wire the entry-point
+# function here; argparse + dispatch live in src/chumicro_{import_name}/cli.py.
+chumicro-{name} = "chumicro_{import_name}.cli:main"
+
+[tool.hatch.version]
+path = "VERSION"
+pattern = "(?P<version>\\S+)"
+
+[tool.hatch.build.targets.sdist]
+include = ["src/", "VERSION", "README.md"]
+exclude = [".gitignore"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/chumicro_{import_name}"]

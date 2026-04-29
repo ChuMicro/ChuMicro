@@ -23,12 +23,16 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
-from ruamel.yaml import YAML
+from ruamel.yaml import YAML, YAMLError
 
 
 class WorkspaceConfigError(ValueError):
     """Raised when a config file's top-level structure is malformed.
 
+    Wraps both top-level shape failures (root must be a mapping) and
+    underlying parser errors (ruamel ``YAMLError``) so callers
+    (most importantly ``check_workspace_yaml`` in :mod:`health`)
+    only need to catch one exception type to render a clean error.
     File-level validation only (Decision 0035 §6) — schema-level
     checks happen at the library boundary when each `from_dict`
     fires on device.
@@ -37,8 +41,13 @@ class WorkspaceConfigError(ValueError):
 
 def _read_yaml(path: Path) -> dict[str, Any]:
     """Parse YAML + assert dict at the top level."""
-    with path.open("r", encoding="utf-8") as handle:
-        loaded = YAML(typ="safe").load(handle)
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            loaded = YAML(typ="safe").load(handle)
+    except YAMLError as parse_error:
+        raise WorkspaceConfigError(
+            f"{path}: parse error — {parse_error}"
+        ) from parse_error
     if loaded is None:
         return {}
     if not isinstance(loaded, dict):

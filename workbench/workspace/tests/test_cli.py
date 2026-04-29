@@ -1749,6 +1749,7 @@ class TestBootstrapWizard:
             "bootstrap", "--workspace-dir", str(root),
             "--port", "/dev/cu.fake",
             "--device-id", "pico",
+            "--no-demo",  # this test focuses on the registration path
         ])
         assert exit_code == 0
         captured = capsys.readouterr()
@@ -1842,6 +1843,7 @@ class TestBootstrapWizard:
             "bootstrap", "--workspace-dir", str(root),
             "--port", "/dev/cu.x",
             "--device-id", "pico",
+            "--no-demo",  # focused on the floor-warning surface, not demo
         ])
         assert exit_code == 0
         captured = capsys.readouterr()
@@ -1895,12 +1897,19 @@ class TestBootstrapWizard:
         captured = capsys.readouterr()
         assert "already exists" in captured.err
 
-    def test_with_demo_chains_into_deploy(
+    def test_demo_runs_by_default(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
+        """Bootstrap chains into demo unless ``--no-demo`` is passed.
+
+        The wizard's value is "freshly registered board ships
+        *something* in one command" — having to remember a separate
+        ``--with-demo`` flag defeats that.  Demo on by default;
+        ``--no-demo`` is the CI / scripted-flow opt-out.
+        """
         root = self._seed(tmp_path)
 
         from chumicro_workspace import cli as workspace_cli
@@ -1927,17 +1936,62 @@ class TestBootstrapWizard:
         )
         monkeypatch.setattr(Device, "create_transport", lambda self: transport)
 
+        # No --with-demo flag — demo is the default behaviour now.
         exit_code = cli.main([
             "bootstrap", "--workspace-dir", str(root),
             "--port", "/dev/cu.fake",
             "--device-id", "pico",
-            "--with-demo",
         ])
         assert exit_code == 0
         captured = capsys.readouterr()
         assert "registered pico" in captured.out
-        # The demo's execute output reaches stdout.
         assert "Hello from ChuMicro" in captured.out
+
+    def test_no_demo_skips_demo_step(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """``--no-demo`` opts out of the demo deploy."""
+        root = self._seed(tmp_path)
+
+        from chumicro_workspace import cli as workspace_cli
+        from chumicro_workspace import onboarding
+
+        def fake_inference(address: str, **_kw):
+            return onboarding.RuntimeInferenceResult(
+                info=_fake_probe_info(version="1.27.0"),
+                runtime="micropython",
+                transport_used="micropython",
+            )
+
+        monkeypatch.setattr(
+            workspace_cli, "probe_with_runtime_inference", fake_inference,
+        )
+        monkeypatch.setattr(
+            onboarding, "probe_with_runtime_inference", fake_inference,
+        )
+
+        # If demo ran, this transport would be invoked; spy on construction.
+        constructed: list[bool] = []
+        def spy_transport(self):  # noqa: ANN001
+            constructed.append(True)
+            return FakeTransport(execute_output="should not run")
+        monkeypatch.setattr(Device, "create_transport", spy_transport)
+
+        exit_code = cli.main([
+            "bootstrap", "--workspace-dir", str(root),
+            "--port", "/dev/cu.fake",
+            "--device-id", "pico",
+            "--no-demo",
+        ])
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "registered pico" in captured.out
+        # Demo deploy never ran, so transport was never constructed.
+        assert constructed == []
+        assert "should not run" not in captured.out
 
 
 # ---------------------------------------------------------------------------
@@ -3334,3 +3388,222 @@ class TestRenameNested:
         root = _seed_workspace(tmp_path)
         with pytest.raises(SystemExit):
             cli.main(["rename", "--workspace-dir", str(root)])
+
+
+class TestDeployHealthGate:
+    """Pre-deploy fast health gate — block on ERROR, warn on WARN, opt-out flag."""
+
+    def test_aborts_on_error_level_finding(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Malformed workspace.yml is an ERROR; deploy aborts with exit 2."""
+        root = _seed_workspace(tmp_path)
+        _seed_thing(root)
+        # Corrupt workspace.yml to trigger an ERROR-level finding.
+        (root / "workspace.yml").write_text("not: valid: yaml: ::\n")
+
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root),
+            "--device", "lolin-s2", "back-porch",
+        ])
+        assert exit_code == 2
+        captured = capsys.readouterr()
+        assert "ERROR WORKSPACE.YML" in captured.err
+        assert "aborting before sending bytes" in captured.err
+
+    def test_skip_health_check_bypasses_error_gate(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """--skip-health-check bypasses the gate even on ERROR findings.
+
+        Synthesises an ERROR-level finding via monkeypatch (rather
+        than actually corrupting workspace.yml — that would also
+        break the surrounding ``_resolve_workspace`` read, which is
+        a separate failure mode).  The point of this test is that
+        the gate's *abort* is what gets bypassed, not the deeper
+        config-file reads.
+        """
+        root = _seed_workspace(tmp_path)
+        _seed_thing(root)
+
+        from chumicro_workspace import cli as workspace_cli
+        from chumicro_workspace.health import HealthFinding, HealthLevel
+
+        synthetic_error = HealthFinding(
+            label="WORKSPACE.YML",
+            level=HealthLevel.ERROR,
+            message="synthesised for test",
+            hint="ignore — test fixture",
+        )
+        monkeypatch.setattr(
+            workspace_cli, "collect_health_findings",
+            lambda _ws: [synthetic_error],
+        )
+
+        # Stub the deploy transport so the test doesn't need real hardware.
+        transport = FakeTransport(execute_output="ok\n")
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root),
+            "--device", "lolin-s2", "back-porch",
+            "--skip-health-check", "--non-interactive",
+        ])
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        # Gate suppressed → no "aborting" line.
+        assert "aborting before sending bytes" not in captured.err
+        # And no per-finding ERROR lines either.
+        assert "ERROR WORKSPACE.YML" not in captured.err
+
+    def test_warn_findings_print_but_do_not_block(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Placeholder secrets are WARN — printed but deploy proceeds."""
+        root = _seed_workspace(tmp_path)
+        _seed_thing(root)
+        # secrets.yml carries a placeholder.
+        (root / "secrets.yml").write_text("wifi_password: replace-me\n")
+
+        transport = FakeTransport(execute_output="proceeded\n")
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root),
+            "--device", "lolin-s2", "back-porch",
+            "--non-interactive",
+        ])
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "WARN SECRETS.YML" in captured.err
+        assert "proceeded" in captured.out
+
+
+class TestCommandPreflight:
+    """preflight chains lint then test, short-circuits on failure."""
+
+    def test_skips_test_when_lint_fails(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        calls: list[str] = []
+
+        def fake_lint(args):  # noqa: ANN001
+            calls.append("lint")
+            return 1
+        def fake_test(args):  # noqa: ANN001
+            calls.append("test")
+            return 0
+        monkeypatch.setattr(cli, "_cmd_lint", fake_lint)
+        monkeypatch.setattr(cli, "_cmd_test", fake_test)
+
+        exit_code = cli.main(["preflight", "--workspace-dir", str(root)])
+        assert exit_code == 1
+        assert calls == ["lint"]  # short-circuit
+        assert "lint failed" in capsys.readouterr().out
+
+    def test_runs_both_when_lint_passes(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        calls: list[str] = []
+        monkeypatch.setattr(
+            cli, "_cmd_lint", lambda args: calls.append("lint") or 0,  # noqa: ARG005
+        )
+        monkeypatch.setattr(
+            cli, "_cmd_test", lambda args: calls.append("test") or 0,  # noqa: ARG005
+        )
+
+        exit_code = cli.main(["preflight", "--workspace-dir", str(root)])
+        assert exit_code == 0
+        assert calls == ["lint", "test"]
+        assert "passed" in capsys.readouterr().out
+
+    def test_returns_test_exit_when_lint_passes_test_fails(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        monkeypatch.setattr(cli, "_cmd_lint", lambda args: 0)  # noqa: ARG005
+        monkeypatch.setattr(cli, "_cmd_test", lambda args: 5)  # noqa: ARG005
+        exit_code = cli.main(["preflight", "--workspace-dir", str(root)])
+        assert exit_code == 5
+
+
+class TestCommandDumpConfig:
+    """dump-config prints the merged + secret-resolved config for a thing."""
+
+    def test_prints_merged_config_as_json(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        _seed_thing(root, "back-porch")
+
+        exit_code = cli.main([
+            "dump-config", "--workspace-dir", str(root), "back-porch",
+        ])
+        assert exit_code == 0
+        import json
+        printed = json.loads(capsys.readouterr().out)
+        # Workspace defaults merged with thing config; secret resolved.
+        assert printed["wifi"]["ssid"] == "HomeNet"
+        assert printed["wifi"]["password"] == "shh"
+        assert printed["wifi"]["hostname_prefix"] == "chu-"
+
+    def test_repr_mode_uses_python_repr(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        _seed_thing(root)
+        exit_code = cli.main([
+            "dump-config", "--workspace-dir", str(root), "back-porch", "--repr",
+        ])
+        assert exit_code == 0
+        # repr() of a dict starts with `{`, not `{\n  "key"`.
+        out = capsys.readouterr().out
+        assert out.startswith("{")
+        assert "'wifi'" in out
+
+    def test_unresolved_secret_returns_nonzero_with_message(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = _seed_workspace(tmp_path)
+        thing_dir = root / "things" / "back-porch"
+        thing_dir.mkdir(parents=True)
+        (thing_dir / "config.toml").write_text(
+            "[wifi]\npassword = '!secret missing_key'\n",
+        )
+
+        exit_code = cli.main([
+            "dump-config", "--workspace-dir", str(root), "back-porch",
+        ])
+        assert exit_code == 1
+        assert "missing_key" in capsys.readouterr().err
+
+    def test_missing_thing_raises(self, tmp_path: Path) -> None:
+        root = _seed_workspace(tmp_path)
+        with pytest.raises(SystemExit, match="not found"):
+            cli.main([
+                "dump-config", "--workspace-dir", str(root), "ghost-thing",
+            ])
