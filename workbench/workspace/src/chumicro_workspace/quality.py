@@ -41,7 +41,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import yaml
+from ruamel.yaml import YAML
 
 from chumicro_workspace.loaders import WorkspaceConfigError
 
@@ -93,7 +93,7 @@ def _read_yaml_dict(path: Path) -> dict[str, Any]:
     if not path.is_file():
         return {}
     with path.open("r", encoding="utf-8") as handle:
-        loaded = yaml.safe_load(handle)
+        loaded = YAML(typ="safe").load(handle)
     if loaded is None:
         return {}
     if not isinstance(loaded, dict):

@@ -28,7 +28,12 @@ classifiers = [
 dependencies = [
     "mpremote>=1.26",
     "pyserial>=3.5",
-    "pyyaml>=6.0",
+    # ruamel.yaml — preserves comments + key order on round-trip writes
+    # for ``chumicro_deploy.config.devices_yaml``; reads use the same
+    # parser via ``YAML(typ="safe")``.  Standardised on a single YAML
+    # library across the workbench rather than splitting read (PyYAML)
+    # and write (ruamel) responsibilities across packages.
+    "ruamel.yaml>=0.18",
 ]
 
 [project.urls]

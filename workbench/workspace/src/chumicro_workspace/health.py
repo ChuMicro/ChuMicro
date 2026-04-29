@@ -21,8 +21,9 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING
 
+from chumicro_deploy.config.devices_yaml import load_devices
+
 from chumicro_workspace.deploy_source import find_thing_config
-from chumicro_workspace.devices_yaml import load_devices
 from chumicro_workspace.loaders import (
     WorkspaceConfigError,
     read_secrets_yaml,

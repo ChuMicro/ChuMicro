@@ -39,9 +39,7 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from chumicro_workspace.boot_shim import thing_boot_source
-from chumicro_workspace.deploy_source import thing_directory_source
-from chumicro_workspace.devices_yaml import (
+from chumicro_deploy.config.devices_yaml import (
     DeviceAlreadyExistsError,
     DeviceNotFoundError,
     HardwareOverwriteError,
@@ -54,6 +52,9 @@ from chumicro_workspace.devices_yaml import (
     update_device_firmware_version,
     update_device_hardware,
 )
+
+from chumicro_workspace.boot_shim import thing_boot_source
+from chumicro_workspace.deploy_source import thing_directory_source
 from chumicro_workspace.firmware_support import (
     FirmwareSupportStatus,
     check_firmware_supported,
@@ -570,9 +571,9 @@ def _cmd_devices(args: argparse.Namespace) -> int:
     if not workspace.devices_yaml.is_file():
         print(f"devices: {workspace.devices_yaml} does not exist yet")
         return 0
-    import yaml  # noqa: PLC0415
+    from ruamel.yaml import YAML  # noqa: PLC0415
 
-    raw = yaml.safe_load(workspace.devices_yaml.read_text()) or {}
+    raw = YAML(typ="safe").load(workspace.devices_yaml.read_text()) or {}
     devices = raw.get("devices", [])
     if not devices:
         print("devices: no entries")
