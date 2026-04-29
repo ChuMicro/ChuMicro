@@ -8,6 +8,18 @@ overlays it onto device flash later); the path constant for the
 on-device location lives in ``chumicro_config.runtime``
 (Decision 0036) so the write side and the read side stay in sync
 through one source of truth.
+
+Encoder choice: standard ``msgpack`` from PyPI (the well-maintained
+host-side library) rather than the device-side ``chumicro-msgpack``.
+Workbench packages don't import from ``libraries/`` per the
+ecosystem boundary — those packages are *for the board*.  Wire
+compatibility is preserved by passing ``use_single_float=True`` so
+floats encode as float32 (``0xca`` + 4 bytes) — matching what
+``chumicro_msgpack._pure`` produces and what CircuitPython's native
+``msgpack`` module accepts (CP doesn't support float64).  Verified
+empirically: ``msgpack.packb(obj, use_single_float=True)`` produces
+byte-for-byte identical output to ``chumicro_msgpack._pure.packb(obj)``
+for the runtime-config shape.
 """
 
 from __future__ import annotations
@@ -15,7 +27,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from chumicro_msgpack import packb
+from msgpack import packb
 
 
 def write_runtime_config(merged: dict[str, Any], output_path: Path) -> None:
@@ -33,9 +45,9 @@ def write_runtime_config(merged: dict[str, Any], output_path: Path) -> None:
             flash at ``/runtime_config.msgpack``.
 
     Raises:
-        TypeError: *merged* contains a value chumicro-msgpack can't
-            encode (cycles, sets, custom classes — see Decision
-            0034 §10 for the supported value types).
+        TypeError: *merged* contains a value msgpack can't encode
+            (cycles, sets, custom classes — see Decision 0034 §10
+            for the supported value types).
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_bytes(packb(merged))
+    output_path.write_bytes(packb(merged, use_single_float=True))
