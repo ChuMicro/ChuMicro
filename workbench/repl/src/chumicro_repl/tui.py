@@ -150,15 +150,29 @@ def run_loop(
     # type through every call site.
     user_exit_flag: list[bool] = [False]
 
-    def _recover(error: OSError) -> SerialPort | None:
-        """Run the reconnect loop after *error*.
+    def _try_recover(
+        error: OSError,
+        *,
+        send_initial_after: bool,
+    ) -> int | tuple[SerialPort, Utf8StreamDecoder, StreamingPatternDetector]:
+        """Run the reconnect loop after *error* and prepare fresh state.
 
-        Returns the new port on success; ``None`` if either the
-        budget ran out or the user pressed *exit_key* during the
-        reconnect.  ``user_exit_flag[0]`` distinguishes the two
-        cases for the caller's return value.
+        Returns either:
+          * An ``int`` exit code — the caller must return it from
+            :func:`run_loop` immediately (``0`` on user-requested exit
+            during reconnect, :data:`DISCONNECTED_EXIT_CODE` on budget
+            exhaustion).
+          * A ``(port, decoder, detector)`` tuple — the caller swaps
+            its locals for these fresh instances and continues the
+            loop.
+
+        When *send_initial_after* is true and *initial_send* is non-
+        empty, the helper writes *initial_send* to the new port so
+        the friendly REPL reprints its ``>>>`` after the reconnect.
+        Pass ``False`` from the initial-send branch (where the caller
+        is about to retry the initial write itself).
         """
-        return _tui_reconnect(
+        new_port = _tui_reconnect(
             error=error,
             output=output,
             keyboard=keyboard,
@@ -170,18 +184,24 @@ def run_loop(
             old_port=port,
             user_exit_flag=user_exit_flag,
         )
+        if user_exit_flag[0]:
+            return 0
+        if new_port is None:
+            return DISCONNECTED_EXIT_CODE
+        if send_initial_after and initial_send:
+            try:
+                new_port.write(initial_send)
+            except OSError:  # pragma: no cover — replug-then-replug
+                pass
+        return new_port, Utf8StreamDecoder(), StreamingPatternDetector()
     if initial_send:
         try:
             port.write(initial_send)
         except OSError as initial_error:
-            new_port = _recover(initial_error)
-            if user_exit_flag[0]:
-                return 0
-            if new_port is None:
-                return DISCONNECTED_EXIT_CODE
-            port = new_port
-            decoder = Utf8StreamDecoder()
-            detector = StreamingPatternDetector()
+            outcome = _try_recover(initial_error, send_initial_after=False)
+            if isinstance(outcome, int):
+                return outcome
+            port, decoder, detector = outcome
             try:
                 port.write(initial_send)
             except OSError:  # pragma: no cover — replug-then-replug
@@ -202,19 +222,10 @@ def run_loop(
                 try:
                     port.write(key_bytes)
                 except OSError as write_error:
-                    new_port = _recover(write_error)
-                    if user_exit_flag[0]:
-                        return 0
-                    if new_port is None:
-                        return DISCONNECTED_EXIT_CODE
-                    port = new_port
-                    decoder = Utf8StreamDecoder()
-                    detector = StreamingPatternDetector()
-                    if initial_send:
-                        try:
-                            port.write(initial_send)
-                        except OSError:  # pragma: no cover — replug-then-replug
-                            pass
+                    outcome = _try_recover(write_error, send_initial_after=True)
+                    if isinstance(outcome, int):
+                        return outcome
+                    port, decoder, detector = outcome
                     continue
         # Drain serial output before honoring an exit request, so
         # the user sees whatever the board printed in response to
@@ -229,19 +240,10 @@ def run_loop(
                     break
                 chunk = port.read(available)
             except OSError as read_error:
-                new_port = _recover(read_error)
-                if user_exit_flag[0]:
-                    return 0
-                if new_port is None:
-                    return DISCONNECTED_EXIT_CODE
-                port = new_port
-                decoder = Utf8StreamDecoder()
-                detector = StreamingPatternDetector()
-                if initial_send:
-                    try:
-                        port.write(initial_send)
-                    except OSError:  # pragma: no cover — replug-then-replug
-                        pass
+                outcome = _try_recover(read_error, send_initial_after=True)
+                if isinstance(outcome, int):
+                    return outcome
+                port, decoder, detector = outcome
                 break
             had_serial_activity = True
             decoded = decoder.decode(chunk)

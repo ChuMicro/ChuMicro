@@ -43,6 +43,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, TextIO, cast
 
 from ._serial import SerialPort, TimeSource
+from .completion import CompletionCache, build_default_completer
 from .framing import Utf8StreamDecoder
 from .highlight import DEFAULT_THEME, Theme
 from .patterns import StreamingPatternDetector
@@ -156,6 +157,12 @@ class LineModeContext:
     #: Lines the user has typed and shipped this session, in order.
     #: ``:save`` writes the (deduplicated, last-10) tail to disk.
     input_history: list[str] = field(default_factory=list)
+    #: Tab-completion cache wired to :func:`run_line_mode`'s
+    #: completer.  ``:rescan`` calls ``.clear()`` so the next Tab
+    #: re-queries the device.  ``None`` when the loop is running
+    #: without device-side completion (e.g. a test injecting its
+    #: own ``prompt_session``).
+    completion_cache: CompletionCache | None = None
 
     def send_line(self, line: str) -> None:
         """Ship *line* to the device with a CRLF; record in the history list.
@@ -343,14 +350,35 @@ def _cmd_edit(context: LineModeContext, _rest: str) -> bool:
     return True
 
 
-#: Built-in command set.  Slice 1b adds `:edit` / `:save` /
-#: `:load` / `:snippets`; richer commands layer in via the
-#: ``commands=`` param on :func:`run_line_mode`.
+def _cmd_rescan(context: LineModeContext, _rest: str) -> bool:
+    """``:rescan`` — drop the cached ``dir()`` so the next Tab re-queries.
+
+    Use after ``import``-ing a new module or defining new names — the
+    completer otherwise serves the snapshot it took on first Tab.
+    No-op (with a status line) when the loop is running without
+    device-side completion.
+    """
+    if context.completion_cache is None:
+        context.output.write(
+            "line-mode: completion cache not in use (no port-backed completer)\n",
+        )
+        context.output.flush()
+        return True
+    context.completion_cache.clear()
+    context.output.write(
+        "line-mode: completion cache cleared; next Tab will re-query the device\n",
+    )
+    context.output.flush()
+    return True
+
+
+#: Built-in command set.
 BUILTIN_COMMANDS: dict[str, CommandHandler] = {
     "edit": _cmd_edit,
     "help": _cmd_help,
     "load": _cmd_load,
     "quit": _cmd_quit,
+    "rescan": _cmd_rescan,
     "save": _cmd_save,
     "snippets": _cmd_snippets,
 }
@@ -483,6 +511,12 @@ def run_line_mode(
     )
     decoder = Utf8StreamDecoder()
     detector = StreamingPatternDetector()
+    # When tests inject their own prompt_session we leave the cache
+    # unwired — the test owns its completer.  Otherwise we build the
+    # device-completer cache here so :rescan can invalidate it.
+    completion_cache: CompletionCache | None = (
+        None if prompt_session is not None else CompletionCache()
+    )
     context = LineModeContext(
         port=port,
         output=output,
@@ -494,6 +528,7 @@ def run_line_mode(
             if editor is not None
             else (os.environ.get("EDITOR") or DEFAULT_EDITOR)
         ),
+        completion_cache=completion_cache,
     )
 
     if welcome_banner:
@@ -517,7 +552,13 @@ def run_line_mode(
     session: PromptSession[str] = (
         cast("PromptSession[str]", prompt_session)
         if prompt_session is not None
-        else _build_prompt_session(address=address, history_root=history_root)
+        else _build_prompt_session(
+            address=address,
+            history_root=history_root,
+            port=port,
+            time=active_time,
+            cache=completion_cache,
+        )
     )
 
     while True:
@@ -575,26 +616,28 @@ def _build_prompt_session(
     *,
     address: str,
     history_root: Path | None,
+    port: SerialPort,
+    time: TimeSource,
+    cache: CompletionCache | None,
 ) -> object:
     """Construct a real ``prompt_toolkit.PromptSession`` for *address*.
 
     Imported lazily so the module-level cost of `chumicro_repl` doesn't
     pay for prompt_toolkit unless line mode is actually entered.
 
-    Slice 1c plumbed the default completer in: the static
-    keyword/builtins catalog ships out of the box; richer
-    device-backed completion is a follow-on plug-in via
-    :class:`chumicro_repl.completion.DeviceCompleter`.
+    The completer is wired to the live *port* — Tab queries
+    ``dir()`` on the device and caches the result in *cache*; the
+    line-mode ``:rescan`` builtin invalidates the cache when the
+    user wants to refresh after a new ``import``.
     """
     from prompt_toolkit import PromptSession  # noqa: PLC0415
     from prompt_toolkit.history import FileHistory  # noqa: PLC0415
 
-    from .completion import build_default_completer  # noqa: PLC0415
-
     history_file = history_path_for(address, root=history_root)
+    completer = build_default_completer(port=port, time=time, cache=cache)
     return PromptSession(
         history=FileHistory(str(history_file)),
-        completer=build_default_completer(),  # type: ignore[arg-type]
+        completer=completer,  # type: ignore[arg-type]
     )
 
 

@@ -11,8 +11,11 @@ from chumicro_repl.completion import (
     KeywordCompleter,
     PromptToolkitCompleter,
     _completable_tail,
+    _parse_dir_response,
     build_default_completer,
+    fetch_device_names,
 )
+from chumicro_repl.testing import FakeSerialPort, FakeTime
 
 
 class TestCompletableTail:
@@ -217,3 +220,178 @@ class TestBuildDefaultCompleter:
         results = list(completer.get_completions(document, CompleteEvent()))  # type: ignore[attr-defined]
         texts = [completion.text for completion in results]
         assert "print" in texts
+
+    def test_with_port_wires_device_completer(self) -> None:
+        pytest.importorskip("prompt_toolkit")
+        from prompt_toolkit.completion import CompleteEvent
+        from prompt_toolkit.document import Document
+
+        port = FakeSerialPort(read_chunks=[
+            b"raw REPL; CTRL-B to exit\r\n>",
+            b"OK['foo_device', 'bar_device']\n\x04\x04>",
+            b"\r\nMicroPython v1.28.0\r\n>>> ",
+        ])
+        completer = build_default_completer(port=port, time=FakeTime())
+        document = Document("foo_d", cursor_position=5)
+        results = list(completer.get_completions(document, CompleteEvent()))  # type: ignore[attr-defined]
+        texts = [completion.text for completion in results]
+        assert "foo_device" in texts
+        # Static catalog still merges in for keyword-prefix tabs.
+        document = Document("pri", cursor_position=3)
+        results = list(completer.get_completions(document, CompleteEvent()))  # type: ignore[attr-defined]
+        assert "print" in [completion.text for completion in results]
+
+    def test_caller_owned_cache_lets_invalidation_propagate(self) -> None:
+        """build_default_completer's cache parameter lets callers
+        retain a reference to the cache for ``:rescan``-shaped
+        invalidation.  The default-completer wrapping must thread it
+        through to the underlying DeviceCompleter so a clear() on the
+        caller's reference forces a re-fetch on the next Tab.
+        """
+        pytest.importorskip("prompt_toolkit")
+        from prompt_toolkit.completion import CompleteEvent
+        from prompt_toolkit.document import Document
+
+        # First round-trip: device says ['alpha'].  Second round-trip:
+        # device says ['beta'].  An interposed clear() should reach
+        # the second snapshot on the next Tab.
+        port = FakeSerialPort(read_chunks=[
+            # Round 1.
+            b"raw REPL; CTRL-B to exit\r\n>",
+            b"OK['alpha']\n\x04\x04>",
+            b"\r\n>>> ",
+            # Round 2 (after cache.clear()).
+            b"raw REPL; CTRL-B to exit\r\n>",
+            b"OK['beta']\n\x04\x04>",
+            b"\r\n>>> ",
+        ])
+        cache = CompletionCache()
+        completer = build_default_completer(
+            port=port, time=FakeTime(), cache=cache,
+        )
+
+        document = Document("a", cursor_position=1)
+        first = [
+            completion.text
+            for completion in completer.get_completions(  # type: ignore[attr-defined]
+                document, CompleteEvent(),
+            )
+        ]
+        assert "alpha" in first
+
+        cache.clear()
+
+        document = Document("b", cursor_position=1)
+        second = [
+            completion.text
+            for completion in completer.get_completions(  # type: ignore[attr-defined]
+                document, CompleteEvent(),
+            )
+        ]
+        assert "beta" in second
+
+
+class TestFetchDeviceNames:
+    """Drives the friendly→raw→dir()→friendly round-trip end-to-end."""
+
+    def _scripted_port(
+        self,
+        names_repr: bytes = b"['foo', 'bar', '_private']",
+    ) -> FakeSerialPort:
+        return FakeSerialPort(read_chunks=[
+            b"\r\n",  # whatever drift was in flight before Ctrl-A
+            b"raw REPL; CTRL-B to exit\r\n>",
+            b"OK" + names_repr + b"\n\x04\x04>",
+            b"\r\nMicroPython v1.28.0\r\n>>> ",
+        ])
+
+    def test_happy_path_returns_sorted_public_names(self) -> None:
+        port = self._scripted_port()
+        names = fetch_device_names(port, time=FakeTime())
+        # Sorted, dedup'd, and `_private` filtered out (matches
+        # KeywordCompleter's "no dunders / no leading-underscore"
+        # convention).
+        assert names == ["bar", "foo"]
+
+    def test_sends_the_expected_byte_sequence(self) -> None:
+        port = self._scripted_port()
+        fetch_device_names(port, time=FakeTime())
+        # Must have written: Ctrl-C Ctrl-C Ctrl-A, the dir() command
+        # (with trailing Ctrl-D), then Ctrl-B.  We stitch the writes
+        # together to compare, since the fetcher may flush in any
+        # number of chunks.
+        joined = b"".join(port.writes)
+        assert joined.startswith(b"\x03\x03\x01")
+        assert b"print(repr(dir()))" in joined
+        assert b"\x04" in joined
+        assert joined.endswith(b"\x02")
+
+    def test_expression_parameter_substitutes_into_dir(self) -> None:
+        port = FakeSerialPort(read_chunks=[
+            b"raw REPL; CTRL-B to exit\r\n>",
+            b"OK['radio', 'connect']\n\x04\x04>",
+            b"\r\n>>> ",
+        ])
+        names = fetch_device_names(
+            port, expression="wifi", time=FakeTime(),
+        )
+        assert names == ["connect", "radio"]
+        joined = b"".join(port.writes)
+        assert b"print(repr(dir(wifi)))" in joined
+
+    def test_timeout_returns_none(self) -> None:
+        # No raw-REPL banner ever arrives; the fetcher times out and
+        # returns None.  Best-effort recovery sends Ctrl-B.
+        port = FakeSerialPort(read_chunks=[])
+        names = fetch_device_names(
+            port, time=FakeTime(), timeout=0.01,
+        )
+        assert names is None
+
+    def test_garbage_repr_returns_none(self) -> None:
+        port = FakeSerialPort(read_chunks=[
+            b"raw REPL; CTRL-B to exit\r\n>",
+            b"OKnot a list literal\n\x04\x04>",
+            b"\r\n>>> ",
+        ])
+        names = fetch_device_names(port, time=FakeTime())
+        assert names is None
+
+    def test_empty_list_returns_empty(self) -> None:
+        port = FakeSerialPort(read_chunks=[
+            b"raw REPL; CTRL-B to exit\r\n>",
+            b"OK[]\n\x04\x04>",
+            b"\r\n>>> ",
+        ])
+        names = fetch_device_names(port, time=FakeTime())
+        assert names == []
+
+
+class TestParseDirResponse:
+    """The repr-parser is robust against partial / malformed frames."""
+
+    def test_well_formed_response(self) -> None:
+        assert _parse_dir_response(
+            b"OK['foo', 'bar']\n\x04\x04>",
+        ) == ["bar", "foo"]
+
+    def test_filters_dunders_and_private(self) -> None:
+        assert _parse_dir_response(
+            b"OK['__name__', '_private', 'foo', '__init__']\n\x04\x04>",
+        ) == ["foo"]
+
+    def test_no_ok_marker_returns_none(self) -> None:
+        assert _parse_dir_response(b"garbage\x04>") is None
+
+    def test_no_eot_marker_returns_none(self) -> None:
+        assert _parse_dir_response(b"OK['foo']") is None
+
+    def test_non_list_repr_returns_none(self) -> None:
+        # `dir()` always returns a list, but a buggy response that
+        # came back as a tuple repr should not corrupt the cache.
+        assert _parse_dir_response(b"OK('foo', 'bar')\n\x04\x04>") is None
+
+    def test_unparseable_repr_returns_none(self) -> None:
+        # A repr containing a non-literal Python type — e.g. an
+        # expression literal_eval refuses — falls back to None.
+        assert _parse_dir_response(b"OK[<built-in>]\n\x04\x04>") is None

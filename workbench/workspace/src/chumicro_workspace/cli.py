@@ -1645,6 +1645,24 @@ def _cmd_lint(args: argparse.Namespace) -> int:
 _DEFAULT_REPL_TAIL_SECONDS: float = 30.0
 
 
+def _resolve_repl_mode(requested: str, *, stdin: object) -> str:
+    """Pick the actual REPL mode given the user's *requested* value.
+
+    *requested* is ``"auto"`` / ``"line"`` / ``"passthrough"``.  Auto
+    picks ``line`` when stdin is a TTY (an interactive terminal) and
+    ``passthrough`` otherwise — line mode requires interactive input
+    (``prompt_toolkit`` reads from the terminal), so falling back to
+    passthrough lets the same command work under CI / piped stdin.
+
+    *stdin* is injected so tests can verify both branches without
+    monkey-patching ``sys.stdin``.
+    """
+    if requested != "auto":
+        return requested
+    isatty = getattr(stdin, "isatty", None)
+    return "line" if (callable(isatty) and isatty()) else "passthrough"
+
+
 def _cmd_repl(args: argparse.Namespace) -> int:
     """Open an interactive REPL, tail output, or deploy-then-tail.
 
@@ -1714,9 +1732,25 @@ def _cmd_repl(args: argparse.Namespace) -> int:
             fail_on_traceback=args.fail_on_traceback,
             output=sys.stdout,
         ))
-    from chumicro_repl import interactive  # noqa: PLC0415
 
-    return interactive(device)
+    mode = _resolve_repl_mode(args.mode, stdin=sys.stdin)
+    if mode == "line":
+        from chumicro_repl import interactive_line  # noqa: PLC0415
+
+        def open_session() -> int:
+            return interactive_line(device)
+    else:
+        from chumicro_repl import interactive  # noqa: PLC0415
+
+        def open_session() -> int:
+            return interactive(device)
+
+    if args.non_interactive:
+        return open_session()
+
+    from chumicro_repl import coached_session_start  # noqa: PLC0415
+
+    return coached_session_start(open_session)
 
 
 def _cmd_install_firmware(args: argparse.Namespace) -> int:
@@ -2529,12 +2563,30 @@ def build_parser() -> argparse.ArgumentParser:
         "--non-interactive",
         action="store_true",
         help=(
-            "When a positional thing is given, skip the recovery-"
-            "coaching wrapper around the deploy-then-tail flow.  "
-            "Use in CI / scripted flows that don't have stdin to "
-            "answer retry prompts.  No effect when `repl` is "
-            "invoked without a thing (interactive TUI mode already "
-            "owns stdin)."
+            "Skip the recovery-coaching wrapper around session-start "
+            "errors (port-busy / port-not-found / permission-denied / "
+            "raw-REPL-unresponsive).  With a positional thing, also "
+            "skips the wrapper around the deploy-then-tail flow.  "
+            "Use in CI / scripted flows that can't answer retry "
+            "prompts."
+        ),
+    )
+    repl_parser.add_argument(
+        "--mode",
+        choices=("auto", "line", "passthrough"),
+        default="auto",
+        help=(
+            "Interactive REPL mode.  `line` (the better-featured "
+            "default for terminal sessions) ships a host-side line "
+            "editor with persistent history, `:edit` editor handoff, "
+            "`:save`/`:load`/`:snippets`, and Tab completion against "
+            "the on-device namespace.  `passthrough` forwards "
+            "keystrokes byte-by-byte (mpremote-style — needed for "
+            "raw REPL framing or paste mode).  `auto` (default) "
+            "picks `line` when stdin is a TTY and `passthrough` "
+            "otherwise.  No effect with `--tail` or with a "
+            "positional thing (those flows always use the tail "
+            "follower)."
         ),
     )
     repl_parser.set_defaults(func=_cmd_repl)

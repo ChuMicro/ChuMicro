@@ -1,6 +1,6 @@
 # User Guide
 
-`chumicro-repl` ships three surfaces — an interactive TUI, a one-shot `tail()` follow-mode, and a programmatic `ReplSession` — that share a pyserial wrapper, a UTF-8 safe streaming decoder, and a pattern detector for the kinds of output that matter (tracebacks, safe-mode banners, hard faults, soft reboots).
+`chumicro-repl` ships four surfaces — an interactive line-mode editor (default), a byte-passthrough TUI, a one-shot `tail()` follow-mode, and a programmatic `ReplSession` — that share a pyserial wrapper, a UTF-8 safe streaming decoder, and a pattern detector for the kinds of output that matter (tracebacks, safe-mode banners, hard faults, soft reboots).
 
 ## Install
 
@@ -40,9 +40,62 @@ When `--devices-file` is supplied, `chumicro-repl` resolves the target in this o
 
 The schema and loader are owned by `chumicro_deploy.config.default.load_devices_yml` — no parallel parser, same `defaults:` / `devices:` shape `chumicro-deploy` reads.
 
-When you connect, `chumicro-repl` prints a dim startup banner identifying the connection (`chumicro-repl · /dev/cu.usbmodem11401 · circuitpython · 115200 baud`) and the four keys you might want (`Ctrl-X exit · Ctrl-C interrupt · Ctrl-D soft-reboot · Ctrl-E paste mode`), then sends a single carriage return to nudge the friendly REPL into reprinting its `>>>` prompt — so you don't sit at a blank screen waiting for output that the device already printed before you connected.
+By default in a TTY, `chumicro-repl` opens **line mode** — a host-side line editor that buffers each line locally before shipping to the device.  Switch to byte-passthrough with `--mode passthrough` if you need raw-REPL framing or paste-mode forwarding.
 
-The interactive TUI mirrors `mpremote repl`:
+## Line mode
+
+The default for terminal sessions.  `prompt_toolkit` reads a complete line on the host — cursor edit, arrow keys, history navigation, Ctrl-R reverse search — then ships it to the device when you press Enter.  The device responds in the friendly REPL; the response streams back through the same pattern detector + traceback highlighter `tail()` uses.
+
+Lines starting with `:` are interpreted locally as builtin commands rather than shipped to the device:
+
+| Command | What it does |
+|---|---|
+| `:help` | List every registered command. |
+| `:edit` | Open `$EDITOR` with the last 10 input lines pre-seeded.  On save+exit, every non-empty line ships line-by-line to the device.  Falls back to `vi` when `$EDITOR` is unset.  Honors shell-shaped values: `EDITOR="code -w"` works. |
+| `:save NAME` | Persist the last 10 input lines to `~/.chumicro-repl/snippets/NAME.py`. |
+| `:load NAME` | Replay a saved snippet line-by-line. |
+| `:snippets` | List saved snippet names. |
+| `:rescan` | Drop the cached `dir()` so the next Tab re-queries the device.  Use after `import`-ing a new module. |
+| `:quit` | Exit without rebooting the device.  EOF (Ctrl-D) / Ctrl-C at an empty prompt do the same. |
+
+```text
+chumicro-repl · /dev/cu.usbmodem14101 · circuitpython · 115200 baud
+:help to list commands · :quit to exit
+
+>>> import wifi
+>>> :rescan
+line-mode: completion cache cleared; next Tab will re-query the device
+>>> wifi.r<Tab>
+            radio
+>>> wifi.radio.connect("MySSID", "secret")
+>>> :save bringup-wifi
+line-mode: saved 3 line(s) to ~/.chumicro-repl/snippets/bringup-wifi.py
+>>> :quit
+line-mode: bye
+```
+
+History is persistent per-device at `~/.chumicro-repl/history/<sanitized-address>/history.txt` so a session on `back-porch` doesn't pollute one on `greenhouse`.
+
+### Tab completion
+
+Two sources merge in line mode:
+
+* **Static catalog** — Python keywords (`for`, `import`, `True`, …) and public builtins (`print`, `range`, `len`, …).  Always available; no device round-trip.
+* **On-device `dir()`** — populated lazily on first Tab via a `print(repr(dir()))` round-trip through raw REPL.  Hardware-measured RTT across the four-board matrix is 8–45 ms — well below the perceptual "instant" threshold.  Cached for the session; `:rescan` invalidates after a new `import`.
+
+The friendly-banner reprint that the round-trip's `Ctrl-B` triggers is captured before line-mode resumes drawing, so it never leaks into your terminal.  Embedding the round-trip in your own shape?  Call `chumicro_repl.completion.fetch_device_names(port)`.
+
+CircuitPython's bare REPL has an empty user namespace by design — `dir()` returns only `__name__` / `__file__` until you `import` something.  MicroPython pre-imports a handful of platform modules (`gc`, `os`, `machine`, `rp2`, `vfs`).  The static catalog covers what's typed most regardless.
+
+## Passthrough mode (`--mode passthrough`)
+
+When you need byte-exact forwarding — paste mode, raw-REPL framing, mpremote-shape Ctrl-C/Ctrl-D semantics — pass `--mode passthrough`.  Keystrokes go straight to the device; the board does its own line editing.
+
+```bash
+chumicro-repl --mode passthrough --address /dev/cu.usbmodem14101
+```
+
+Startup prints a dim banner identifying the connection (`chumicro-repl · /dev/cu.usbmodem14101 · circuitpython · 115200 baud`) and the four keys you might want, then sends a single carriage return to nudge the friendly REPL into reprinting its `>>>`:
 
 | Key | Effect |
 |-----|--------|
@@ -51,7 +104,9 @@ The interactive TUI mirrors `mpremote repl`:
 | Ctrl-E | Forwarded — enters MicroPython paste mode. |
 | Ctrl-X | **Local exit** — quits the TUI without rebooting the board. |
 
-All other keystrokes pass through unchanged. The board does its own line editing — arrow keys, backspace, history all work.
+All other keystrokes pass through unchanged.  The board does its own line editing — arrow keys, backspace, history all work, but they live on the device, not the host.  No `:` commands, no Tab completion against the host catalog, no persistent history file (the device's own history scrolls inside the runtime's `>>>` prompt).
+
+Choose passthrough when you need byte-exact behaviour or when you're piping input over stdin (line mode requires interactive input from a TTY); choose line mode for everyday inner-loop work.  `--mode auto` (the default for the standalone `chumicro-repl` CLI and for `python run.py repl` from a workspace) inspects `sys.stdin.isatty()` and picks the right one.
 
 ## Tail mode for deploy follow-ups
 
