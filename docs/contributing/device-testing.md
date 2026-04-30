@@ -112,18 +112,6 @@ Supported fields today:
 
 Use `ram` for day-to-day functional-test iteration. Use `flash` when a board cannot hold the RAM-mode payload comfortably or when you need persistence semantics.
 
-### Auto-upgrade for known-OOM combinations
-
-A small constraint table inside `chumicro_pytest_device._test_runner` (`_RAM_MODE_TOO_CONSTRAINED`) lists `(library, runtime, board)` triples where the RAM-mode bootstrap is empirically known to OOM the device.  When `defaults.deploy_mode: ram` would have applied to one of these combinations, the test runner silently upgrades to `flash` and prints a one-line note:
-
-```
-[chumicro-pytest-device] pi-pico-w-circuitpython-board: forcing 'flash' for chumicro-mqtt (known to OOM in 'ram' on this board)
-```
-
-Today's only entry: `chumicro-mqtt` on Pi Pico W CircuitPython.  The combined MQTT + sockets + wifi + harness inline-bootstrap chunk needs ~14 KB of heap on top of its own size to AST-build; the rp2 port's 264 KB SRAM doesn't have it.  Flash mode mpy-compiles off-device, sidestepping the parse pressure.
-
-An explicit `--chumicro-deploy-mode ram` CLI override still wins over the auto-upgrade — the override is the escape hatch when you specifically want to reproduce the OOM.  Add a row to the table when a new `(library, board)` combination is empirically confirmed to OOM in RAM mode.
-
 ## 3. Configure `device-config.yml`
 
 `device-config.yml` is a plain YAML mapping injected into device runs as `device_config`.
