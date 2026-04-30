@@ -102,6 +102,22 @@ QoS 0 + QoS 1 are implemented; QoS 2 raises `UnsupportedQoSError`.  Last-will, r
 
 Works on CPython, MicroPython, and CircuitPython.
 
+> **Heads-up for small-RAM CircuitPython boards (e.g. Pi Pico W).**
+> `chumicro-mqtt` plus its `chumicro-sockets` + `chumicro-wifi` deps
+> exceed CircuitPython's heap budget for inline-bootstrap (RAM-mode)
+> deploys on the smallest supported boards — the parser needs ~14 KB
+> of heap on top of each chunk's own size to AST-build, which a 264 KB-
+> SRAM rp2 port doesn't have to spare.  Symptom: `MemoryError: memory
+> allocation failed, allocating <N> bytes` partway through the deploy.
+> Use **flash mode** on those boards — `mpy-cross` compiles the
+> payload off-device, sidestepping the on-device parse pressure
+> entirely.  From `chumicro-deploy` directly: `--deploy-mode flash`.
+> From a `chumicro-workspace` project: set `deploy_mode: flash` on
+> the device entry in `devices.yml`.  The recovery layer in
+> `chumicro-deploy` recognises the symptom and points at the same
+> fix when it surfaces — but pre-empting it via `devices.yml` saves a
+> failed-deploy round-trip.
+
 ## Examples
 
 | Example | What it shows |

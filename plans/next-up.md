@@ -33,6 +33,8 @@
 
 - [ ] **`.scratch/run_*_acceptance.py` runners deploy to root, not /lib/** (low priority — noted 2026-04-26).  Gitignored debug tools.  Symptom (stale `/lib/` shadowing fresh `/` library files) only bites when a workspace deploy preceded the runner deploy.
 
+- [ ] **Library-self-declared deploy-mode constraints** (noted 2026-04-30, follow-up to the reverted constraint table in the chumicro-pytest-device routing fix).  Right shape for "this library is too heavy for that board in RAM mode": let the library declare its constraint via a `[tool.chumicro]` block in its own `pyproject.toml` (e.g. `disabled_ram_mode_targets = ["circuitpython:rp2040"]` or a heap-floor heuristic).  Both `chumicro-deploy` (production deploy path) and `chumicro-pytest-device` (test path) read the declaration and auto-route, giving symmetric coverage.  Producer owns the knowledge; consumers honor it; neither generic tool ends up with a hardcoded library × board × runtime table.  Today's stop-gap: the recovery-layer `INSUFFICIENT_MEMORY` plan in `chumicro-deploy` recognises the symptom and tells the user to switch to flash mode (one round-trip), and `libraries/mqtt/README.md` documents the constraint up front.  Pick this up when a second library (or board) hits the same wall — one data point isn't enough to design the right schema.
+
 ## Next
 
 Independent items.  The **`workspace-ecosystem` umbrella** in `## Now` is essentially closed (only Phase 3 deferred at user direction); the multi-thing-staging-replacement workstream closed end-to-end on 2026-04-27 with the `--wipe` flag landing.
