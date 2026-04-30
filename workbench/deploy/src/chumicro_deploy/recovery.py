@@ -377,22 +377,11 @@ _PLANS: dict[DeployFailureKind, RecoveryPlan] = {
             "(RAM-mode) deploy."
         ),
         fix_steps=(
-            "Switch to flash mode — it mpy-compiles the payload off-"
-            "device and writes to the CIRCUITPY drive instead, "
-            "sidestepping the on-device parse pressure entirely.  "
-            "From `chumicro-deploy` directly: pass "
-            "`--deploy-mode flash`.  From a `chumicro-workspace` "
-            "deploy (`python run.py deploy <thing>`): set "
-            "`deploy_mode: flash` on the device entry in "
-            "`devices.yml`, or `defaults.deploy_mode: flash` "
-            "workspace-wide.",
-            "If switching modes isn't an option, reduce payload "
-            "size by trimming unused imports or splitting the "
-            "deploy across multiple runs.  Some libraries (notably "
-            "`chumicro-mqtt` plus its `chumicro-sockets` + "
-            "`chumicro-wifi` deps) are flat-out too large for the "
-            "smallest CP boards in RAM mode regardless of trimming "
-            "— on a Pi Pico W CP, flash mode is the only way.",
+            "Re-run with `--deploy-mode flash` to land the files on "
+            "the CIRCUITPY drive instead — flash mode is the "
+            "built-in escape hatch for payloads that do not fit.",
+            "Reduce payload size by trimming unused imports, or "
+            "split the deploy across multiple runs.",
         ),
         retryable=False,
     ),
