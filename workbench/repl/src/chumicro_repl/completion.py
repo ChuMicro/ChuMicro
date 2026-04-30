@@ -1,37 +1,70 @@
-"""Tab-completion for the line-mode REPL — Phase 7 Slice 1c.
+"""Tab-completion for the line-mode REPL.
 
 The line-mode loop hands a `prompt_toolkit.completion.Completer`
-to its `PromptSession`.  Tab on a partial token then yields a
-list of completion strings drawn from one or more *sources*:
+to its `PromptSession`.  Tab on a partial token yields a list of
+completion strings drawn from two sources:
 
 * :class:`KeywordCompleter` — Python keywords + common builtins.
-  Always works, no device round-trip; covers ~80 % of Tab
-  presses (loops, `print`, `range`, `import`, etc.).
-* :class:`DeviceCompleter` — protocol for device-backed
-  completers that query the on-device REPL for ``dir()`` /
-  ``dir(<expr>)``.  This module ships the architecture plus an
-  in-memory :class:`CompletionCache` keyed by namespace
-  expression; the wire protocol that fills the cache is
-  follow-on work (the friendly-REPL ↔ raw-REPL switching
-  needed to query the device cleanly mid-session is a
-  design pass of its own).
+  Always works, no device round-trip; covers ~80 % of Tab presses
+  (``print``, ``range``, ``for``, ``import``, …).
+* :class:`DeviceCompleter` — queries the on-device REPL for
+  ``dir(<expression>)`` and caches the result in a
+  :class:`CompletionCache` keyed by namespace expression.
 
-A :class:`CombinedCompleter` glues several sources together so
-the static + device-driven streams compose without either source
-hiding the other.
+The mode-switch round-trip
+--------------------------
+:func:`fetch_device_names` drives the friendly-REPL → raw-REPL →
+``print(repr(dir(<expression>)))`` → friendly-REPL cycle in one
+function call.  Hardware-measured RTT across the canonical
+four-board matrix (Lolin S2 CP/MP, Pi Pico W CP/MP) sits between
+8 and 45 ms — well below the perceptual threshold for "instant"
+Tab response.  The friendly-banner reprint that ``Ctrl-B``
+triggers is consumed by the fetcher's read-until-``>>> ``,
+so the bytes never surface into the line-mode drain loop or the
+user's terminal.
+
+The fetcher runs synchronously inside the prompt_toolkit
+completer callback — the line-mode loop is parked in
+``session.prompt(...)`` while the user is typing, so no other
+code is touching the port.  No locking required.
+
+Caching policy: a successful ``dir()`` populates the cache for
+the lifetime of the session.  ``DeviceCompleter.cache.clear()``
+forces a re-query on the next Tab — wired into the line-mode
+``:rescan`` builtin command.
 """
 
 from __future__ import annotations
 
+import ast
 import builtins
 import keyword
 import re
-from collections.abc import Iterable
-from typing import TYPE_CHECKING, Protocol
+import time as _time_module
+from collections.abc import Callable, Iterable
+from typing import TYPE_CHECKING, Protocol, cast
+
+from ._serial import (
+    CTRL_A,
+    CTRL_B,
+    CTRL_C,
+    CTRL_D,
+    RAW_REPL_EOT,
+    RAW_REPL_PROMPT,
+    SerialPort,
+    TimeSource,
+)
 
 if TYPE_CHECKING:  # pragma: no cover — type-only
     from prompt_toolkit.completion import CompleteEvent, Completion
     from prompt_toolkit.document import Document
+
+
+#: Callable signature for the fetcher that backs a :class:`DeviceCompleter`.
+#: ``expression`` is ``""`` for the top-level namespace (``dir()``) or
+#: ``"foo.bar"`` for ``dir(foo.bar)``.  Returning ``None`` is a soft
+#: failure (timeout / parse error) — callers retry on the next Tab.
+NamespaceFetcher = Callable[[str], Iterable[str] | None]
 
 
 #: Identifier-ish character class — matches the trailing token
@@ -192,7 +225,7 @@ class DeviceCompleter:
     def __init__(
         self,
         *,
-        fetcher: _NamespaceFetcher | None = None,
+        fetcher: NamespaceFetcher | None = None,
         cache: CompletionCache | None = None,
     ) -> None:
         self._fetcher = fetcher
@@ -276,28 +309,195 @@ class PromptToolkitCompleter:
 
 
 # ---------------------------------------------------------------------------
-# Convenience
+# Device-side fetcher — the friendly→raw→dir()→friendly round-trip
 # ---------------------------------------------------------------------------
 
 
-#: Type alias for the fetcher callback expected by `DeviceCompleter`.
-#: Defined after the class to keep the public surface readable.
-_NamespaceFetcher = "Callable[[str], Iterable[str] | None]"
+#: Per-step deadline inside :func:`fetch_device_names`.  The whole
+#: round-trip clocks in at 8–45 ms across the four-board matrix; a
+#: 2 s budget leaves ample slack for a board that's mid-busy.
+_FETCH_TIMEOUT_SECONDS: float = 2.0
+
+#: Inner poll interval for the fetcher's read loop.  Short enough to
+#: keep latency in the tens of ms; long enough to avoid pegging the
+#: CPU when the device is briefly silent.
+_FETCH_POLL_INTERVAL: float = 0.005
+
+#: Friendly-REPL prompt the device emits after ``Ctrl-B``.  The
+#: fetcher reads through this so the friendly-banner reprint that
+#: precedes it is consumed cleanly and never leaks into line-mode's
+#: next drain.
+_FRIENDLY_PROMPT: bytes = b">>> "
 
 
-def build_default_completer() -> object:
+def _read_until_marker(
+    port: SerialPort,
+    marker: bytes,
+    *,
+    deadline: float,
+    time: TimeSource,
+) -> bytes:
+    """Drain *port* until *marker* appears in the accumulated bytes.
+
+    Returns the full accumulated buffer (the marker included).
+    Raises :class:`TimeoutError` if *deadline* elapses first.
+    """
+    accumulated = bytearray()
+    while True:
+        if marker in accumulated:
+            return bytes(accumulated)
+        waiting = port.in_waiting
+        if waiting:
+            accumulated.extend(port.read(waiting))
+            continue
+        new_byte = port.read(1)
+        if new_byte:
+            accumulated.extend(new_byte)
+            continue
+        if time.monotonic() >= deadline:
+            raise TimeoutError(
+                f"timed out waiting for {marker!r}; got {bytes(accumulated)!r}"
+            )
+        time.sleep(_FETCH_POLL_INTERVAL)
+
+
+def fetch_device_names(
+    port: SerialPort,
+    *,
+    expression: str = "",
+    time: TimeSource | None = None,
+    timeout: float = _FETCH_TIMEOUT_SECONDS,
+) -> list[str] | None:
+    """Query the device for ``dir(<expression>)`` and return the names.
+
+    Drives one friendly-REPL → raw-REPL → ``print(repr(dir(...)))`` →
+    friendly-REPL round-trip.  Reads through the friendly-banner
+    reprint so its bytes don't surface into the next drain — see the
+    module docstring for the design rationale.
+
+    Args:
+        port: Open :class:`SerialPort` already in friendly REPL.  The
+            fetcher leaves the device back in friendly REPL on every
+            return path (success, parse failure, timeout).
+        expression: ``""`` for the top-level namespace (``dir()``);
+            ``"foo"`` / ``"foo.bar"`` for ``dir(foo)`` / ``dir(foo.bar)``.
+        time: Injectable :class:`TimeSource` for tests.  Defaults to
+            the stdlib ``time`` module.
+        timeout: Per-round-trip wall-clock budget.  Default 2 s.
+
+    Returns:
+        Sorted list of names, or ``None`` if the round-trip failed
+        (timeout, parse error, port error).  ``DeviceCompleter`` treats
+        ``None`` as "retry on next Tab"; an empty list means
+        "successfully queried, nothing to suggest".
+    """
+    active_time = time if time is not None else cast(TimeSource, _time_module)
+    deadline = active_time.monotonic() + timeout
+    source = (
+        f"print(repr(dir({expression})))\r\n" if expression
+        else "print(repr(dir()))\r\n"
+    )
+    try:
+        # friendly → raw
+        port.reset_input_buffer()
+        port.write(CTRL_C + CTRL_C + CTRL_A)
+        _read_until_marker(port, RAW_REPL_PROMPT, deadline=deadline, time=active_time)
+        # run dir()
+        port.write(source.encode("utf-8") + CTRL_D)
+        response = _read_until_marker(
+            port, RAW_REPL_EOT + b">", deadline=deadline, time=active_time,
+        )
+    except (OSError, TimeoutError):
+        # Best-effort restore to friendly REPL before bailing.
+        try:
+            port.write(CTRL_B)
+            _read_until_marker(
+                port, _FRIENDLY_PROMPT, deadline=deadline, time=active_time,
+            )
+        except (OSError, TimeoutError):  # pragma: no cover — replug-then-replug
+            pass
+        return None
+    # raw → friendly (consume the banner reprint cleanly)
+    try:
+        port.write(CTRL_B)
+        _read_until_marker(
+            port, _FRIENDLY_PROMPT, deadline=deadline, time=active_time,
+        )
+    except (OSError, TimeoutError):
+        return None
+    return _parse_dir_response(response)
+
+
+def _parse_dir_response(response: bytes) -> list[str] | None:
+    """Extract the ``dir()`` list from a raw-REPL ``OK<stdout>\\x04<stderr>\\x04>``.
+
+    Returns ``None`` on any parse failure — caller treats that as
+    "retry on next Tab" rather than poisoning the cache.
+    """
+    if b"OK" not in response:
+        return None
+    body = response.split(b"OK", 1)[1]
+    if RAW_REPL_EOT not in body:
+        return None
+    stdout, _, _rest = body.partition(RAW_REPL_EOT)
+    text = stdout.decode("utf-8", errors="replace").strip()
+    if not text:
+        return []
+    try:
+        parsed = ast.literal_eval(text)
+    except (SyntaxError, ValueError):
+        return None
+    if not isinstance(parsed, list):
+        return None
+    names: list[str] = []
+    for entry in parsed:
+        if isinstance(entry, str) and not entry.startswith("_"):
+            names.append(entry)
+    return sorted(set(names))
+
+
+# ---------------------------------------------------------------------------
+# Default completer factory
+# ---------------------------------------------------------------------------
+
+
+def build_default_completer(
+    *,
+    port: SerialPort | None = None,
+    time: TimeSource | None = None,
+    cache: CompletionCache | None = None,
+) -> object:
     """Return a `prompt_toolkit.completion.Completer` for line mode.
 
-    Composes the static :class:`KeywordCompleter` with an
-    empty-fetcher :class:`DeviceCompleter`; users who want device-
-    backed completion plug a real fetcher into the `DeviceCompleter`
-    constructor and re-build the combined completer.
+    Composes :class:`KeywordCompleter` (always on) with a
+    :class:`DeviceCompleter` wired to :func:`fetch_device_names` when
+    *port* is given.  When *port* is ``None``, only the static
+    keyword/builtins catalog is offered — useful for tests and for
+    calling code that hasn't opened a port yet.
+
+    Args:
+        port: Open :class:`SerialPort` in friendly REPL.  When given,
+            Tab-presses query ``dir()`` on the device and cache the
+            result.
+        time: Injectable :class:`TimeSource` for tests.
+        cache: Pre-constructed :class:`CompletionCache` the caller
+            wants to retain a reference to (for ``:rescan``-style
+            invalidation).  When ``None``, a fresh cache is created
+            internally; the caller has no handle on it.
+
+    Returns:
+        A :class:`PromptToolkitCompleter` ready to plug into a
+        ``prompt_toolkit.PromptSession``.
     """
     keyword_source = KeywordCompleter()
-    device_source = DeviceCompleter()
-    combined = CombinedCompleter([keyword_source, device_source])
-    return PromptToolkitCompleter(combined)
-
-
-# Re-export for type checkers — Callable type used in the fetcher
-# alias.  Done last to avoid forward-reference ordering issues.
+    if port is None:
+        return PromptToolkitCompleter(CombinedCompleter([keyword_source]))
+    device_source = DeviceCompleter(
+        fetcher=lambda expression: fetch_device_names(
+            port, expression=expression, time=time,
+        ),
+        cache=cache,
+    )
+    return PromptToolkitCompleter(
+        CombinedCompleter([keyword_source, device_source]),
+    )

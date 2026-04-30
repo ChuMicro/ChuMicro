@@ -2192,11 +2192,12 @@ class TestReplWithThing:
 
 
 class TestRepl:
-    def test_interactive_path(
+    def test_passthrough_mode(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        """`repl --mode passthrough` forwards keystrokes byte-by-byte."""
         root = _seed_workspace(tmp_path)
         captured: dict[str, Any] = {}
 
@@ -2206,7 +2207,32 @@ class TestRepl:
 
         import chumicro_repl
         monkeypatch.setattr(chumicro_repl, "interactive", fake_interactive)
-        exit_code = cli.main(["repl", "--workspace-dir", str(root)])
+        exit_code = cli.main([
+            "repl", "--workspace-dir", str(root), "--mode", "passthrough",
+        ])
+        assert exit_code == 0
+        assert captured["device"].address == "/dev/cu.fake"
+
+    def test_line_mode(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """`repl --mode line` opens the host-side line editor (default for TTYs)."""
+        root = _seed_workspace(tmp_path)
+        captured: dict[str, Any] = {}
+
+        def fake_interactive_line(device: Device) -> int:
+            captured["device"] = device
+            return 0
+
+        import chumicro_repl
+        monkeypatch.setattr(
+            chumicro_repl, "interactive_line", fake_interactive_line,
+        )
+        exit_code = cli.main([
+            "repl", "--workspace-dir", str(root), "--mode", "line",
+        ])
         assert exit_code == 0
         assert captured["device"].address == "/dev/cu.fake"
 
@@ -2232,6 +2258,128 @@ class TestRepl:
         assert exit_code == 0
         assert captured["seconds"] == 1.5
         assert captured["fail_on_traceback"] is False
+
+    def test_session_failure_routes_through_coaching(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Port-not-found on `repl` enters the coaching loop, not a bare traceback."""
+        import errno
+
+        root = _seed_workspace(tmp_path)
+        attempts: list[int] = []
+
+        def fake_interactive_line(_device: Device) -> int:
+            attempts.append(1)
+            if len(attempts) == 1:
+                raise OSError(errno.ENOENT, "No such file or directory")
+            return 0
+
+        outputs: list[str] = []
+
+        def fake_coached(callable_, **_kwargs: Any) -> int:
+            # Pretend the user retried once and succeeded — capture
+            # that we routed through the coaching wrapper rather than
+            # checking the raw stdin/stdout flow at the unit-test
+            # level.
+            try:
+                return callable_()
+            except OSError:
+                outputs.append("coached")
+                return callable_()
+
+        import chumicro_repl
+        monkeypatch.setattr(
+            chumicro_repl, "interactive_line", fake_interactive_line,
+        )
+        monkeypatch.setattr(
+            chumicro_repl, "coached_session_start", fake_coached,
+        )
+        exit_code = cli.main([
+            "repl", "--workspace-dir", str(root), "--mode", "line",
+        ])
+        assert exit_code == 0
+        assert outputs == ["coached"]
+        assert len(attempts) == 2
+
+    def test_non_interactive_skips_coaching(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """`--non-interactive` bypasses the coaching wrapper entirely."""
+        root = _seed_workspace(tmp_path)
+        coached_called: list[bool] = []
+
+        def fake_interactive_line(_device: Device) -> int:
+            return 0
+
+        def fake_coached(*_args: Any, **_kwargs: Any) -> int:
+            coached_called.append(True)
+            return 0
+
+        import chumicro_repl
+        monkeypatch.setattr(
+            chumicro_repl, "interactive_line", fake_interactive_line,
+        )
+        monkeypatch.setattr(
+            chumicro_repl, "coached_session_start", fake_coached,
+        )
+        exit_code = cli.main([
+            "repl", "--workspace-dir", str(root),
+            "--mode", "line", "--non-interactive",
+        ])
+        assert exit_code == 0
+        assert coached_called == []  # coaching wrapper never invoked
+
+
+class TestResolveReplMode:
+    """`_resolve_repl_mode` picks line for TTY stdin, passthrough otherwise."""
+
+    def test_explicit_line_passes_through(self) -> None:
+        from chumicro_workspace.cli import _resolve_repl_mode
+
+        # Caller-specified value wins over the auto check.
+        assert _resolve_repl_mode("line", stdin=_StubStdin(isatty=False)) == "line"
+
+    def test_explicit_passthrough_passes_through(self) -> None:
+        from chumicro_workspace.cli import _resolve_repl_mode
+
+        assert _resolve_repl_mode(
+            "passthrough", stdin=_StubStdin(isatty=True),
+        ) == "passthrough"
+
+    def test_auto_picks_line_on_tty(self) -> None:
+        from chumicro_workspace.cli import _resolve_repl_mode
+
+        assert _resolve_repl_mode("auto", stdin=_StubStdin(isatty=True)) == "line"
+
+    def test_auto_picks_passthrough_otherwise(self) -> None:
+        from chumicro_workspace.cli import _resolve_repl_mode
+
+        assert _resolve_repl_mode(
+            "auto", stdin=_StubStdin(isatty=False),
+        ) == "passthrough"
+
+    def test_auto_picks_passthrough_when_stdin_lacks_isatty(self) -> None:
+        """A non-stream stdin (e.g. None / a stub without isatty) falls back."""
+        from chumicro_workspace.cli import _resolve_repl_mode
+
+        class _Bare:
+            pass
+
+        assert _resolve_repl_mode("auto", stdin=_Bare()) == "passthrough"
+
+
+class _StubStdin:
+    """Tiny stand-in for ``sys.stdin`` exposing only ``isatty()``."""
+
+    def __init__(self, *, isatty: bool) -> None:
+        self._isatty = isatty
+
+    def isatty(self) -> bool:
+        return self._isatty
 
 
 # ---------------------------------------------------------------------------

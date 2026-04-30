@@ -11,6 +11,7 @@ from chumicro_repl import (
     ReplFailureKind,
     ReplSessionError,
     classify_session_failure,
+    coached_session_start,
     recovery_plan_for,
 )
 from chumicro_repl.session import ReplSessionDisconnected
@@ -321,3 +322,99 @@ class TestInteractiveReplSessionExitClosesInner:
         with wrapper:
             assert not port.closed
         assert port.closed
+
+
+class TestCoachedSessionStart:
+    """The reusable coaching loop wraps any zero-arg callable."""
+
+    def test_first_attempt_success_passes_through(self):
+        """Happy path: callable returns on first try, no coaching emitted."""
+        outputs: list[str] = []
+        result = coached_session_start(
+            lambda: 42,
+            output=outputs.append,
+            prompt=lambda _text: "",
+        )
+        assert result == 42
+        # No retry coaching should have rendered.
+        assert outputs == []
+
+    def test_classify_path_invokes_recovery_plan(self):
+        # First attempt raises ENOENT, second succeeds.
+        attempts = iter([
+            (False, OSError(errno.ENOENT, "missing")),
+            (True, "session-handle"),
+        ])
+
+        def callable_under_test():
+            ok, payload = next(attempts)
+            if not ok:
+                raise payload
+            return payload
+
+        outputs: list[str] = []
+        result = coached_session_start(
+            callable_under_test,
+            output=outputs.append,
+            prompt=lambda _text: "",
+        )
+        assert result == "session-handle"
+        rendered = "\n".join(outputs).lower()
+        assert "port path does not exist" in rendered
+        assert "attempt 1" in rendered
+
+    def test_user_aborts(self):
+        def callable_under_test():
+            raise OSError(errno.EBUSY, "busy")
+
+        with pytest.raises(OSError, match="busy"):
+            coached_session_start(
+                callable_under_test,
+                output=lambda _line: None,
+                prompt=lambda _text: "q",
+                max_attempts=5,
+            )
+
+    def test_max_attempts_zero_rejected(self):
+        with pytest.raises(ValueError, match="max_attempts"):
+            coached_session_start(
+                lambda: None,
+                output=lambda _line: None,
+                prompt=lambda _text: "",
+                max_attempts=0,
+            )
+
+    def test_replsessionerror_handled(self):
+        # ReplSessionError is one of the catch-classes the loop
+        # routes through the classifier — verify it doesn't escape
+        # uncoached on attempt 1, and the second attempt completes.
+        attempts = iter([
+            (False, ReplSessionError("raw REPL did not announce itself")),
+            (True, "ok"),
+        ])
+
+        def callable_under_test():
+            ok, payload = next(attempts)
+            if not ok:
+                raise payload
+            return payload
+
+        outputs: list[str] = []
+        result = coached_session_start(
+            callable_under_test,
+            output=outputs.append,
+            prompt=lambda _text: "",
+        )
+        assert result == "ok"
+        assert any("raw-REPL handshake" in line for line in outputs)
+
+    def test_unrelated_exception_bubbles_unchanged(self):
+        def callable_under_test():
+            raise RuntimeError("not a session-start failure")
+
+        with pytest.raises(RuntimeError, match="not a session-start"):
+            coached_session_start(
+                callable_under_test,
+                output=lambda _line: None,
+                prompt=lambda _text: "",
+            )

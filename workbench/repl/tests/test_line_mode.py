@@ -165,6 +165,32 @@ class TestBuiltinCommands:
         context = _context()
         assert BUILTIN_COMMANDS["quit"](context, "") is False
 
+    def test_rescan_clears_completion_cache(self) -> None:
+        from chumicro_repl.completion import CompletionCache
+
+        cache = CompletionCache()
+        cache.put("", ["alpha", "beta"])
+        assert len(cache) == 1
+        context = _context(completion_cache=cache)
+        keep_running = BUILTIN_COMMANDS["rescan"](context, "")
+        assert keep_running is True
+        assert len(cache) == 0
+        assert "completion cache cleared" in context.output.getvalue()
+
+    def test_rescan_no_cache_explains(self) -> None:
+        # Tests inject their own prompt_session — completion_cache is
+        # left None.  :rescan should explain rather than NPE.
+        context = _context()
+        assert context.completion_cache is None
+        keep_running = BUILTIN_COMMANDS["rescan"](context, "")
+        assert keep_running is True
+        assert "no port-backed completer" in context.output.getvalue()
+
+    def test_help_lists_rescan(self) -> None:
+        context = _context()
+        BUILTIN_COMMANDS["help"](context, "")
+        assert ":rescan" in context.output.getvalue()
+
 
 class TestFormatLineModeBanner:
     def test_includes_address_and_exit_hint(self) -> None:
@@ -569,9 +595,14 @@ class TestPromptSessionConstruction:
     def test_real_session_has_history_attached(self, tmp_path: Path) -> None:
         pytest.importorskip("prompt_toolkit")
         from chumicro_repl.line_mode import _build_prompt_session
+        from chumicro_repl.testing import FakeSerialPort, FakeTime
 
         session = _build_prompt_session(
-            address="/dev/cu.fake", history_root=tmp_path,
+            address="/dev/cu.fake",
+            history_root=tmp_path,
+            port=FakeSerialPort(read_chunks=[]),
+            time=FakeTime(),
+            cache=None,
         )
         # The underlying session carries a FileHistory with our path.
         from prompt_toolkit.history import FileHistory

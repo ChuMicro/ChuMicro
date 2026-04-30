@@ -33,7 +33,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from types import TracebackType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar
 
 from ._serial import PortFactory, TimeSource
 from .session import (
@@ -42,6 +42,8 @@ from .session import (
     ReplSessionDisconnected,
     ReplSessionError,
 )
+
+_T = TypeVar("_T")
 
 if TYPE_CHECKING:
     from chumicro_deploy import Device
@@ -297,6 +299,144 @@ def recovery_plan_for(kind: ReplFailureKind) -> RecoveryPlan:
 
 
 # ---------------------------------------------------------------------------
+# Reusable coaching loop
+# ---------------------------------------------------------------------------
+
+
+_ABORT_RESPONSES = frozenset({"q", "quit", "abort", "exit"})
+
+
+def coached_session_start(
+    callable: Callable[[], _T],
+    *,
+    output: Callable[[str], None] = print,
+    prompt: Callable[[str], str] = input,
+    max_attempts: int = _DEFAULT_MAX_ATTEMPTS,
+) -> _T:
+    """Run *callable* with classify-coach-retry on session-start failures.
+
+    Wraps any zero-arg callable that may raise :class:`OSError`,
+    :class:`ReplSessionDisconnected`, or :class:`ReplSessionError`
+    on its connect step.  On a recognized failure:
+
+    1. :func:`classify_session_failure` maps the exception to a
+       :class:`ReplFailureKind`.
+    2. The matching :class:`RecoveryPlan` (headline + bulleted
+       fix-steps) renders to *output*.
+    3. *prompt* asks whether to retry; an abort response (``q`` /
+       ``quit`` / ``abort`` / ``exit``) re-raises the last error.
+       Empty / whitespace-only retries.
+    4. After *max_attempts* attempts, the last error re-raises.
+
+    Used by:
+
+    * :class:`InteractiveReplSession` — which wraps a
+      :class:`ReplSession` context manager around the coaching loop
+      so programmatic callers get the same retry behaviour.
+    * The workspace ``repl`` CLI — which wraps the
+      :func:`~chumicro_repl.tui.interactive_line` /
+      :func:`~chumicro_repl.tui.interactive` calls so port-busy /
+      port-not-found / permission-denied errors get the
+      user-friendly coaching prompt instead of a bare traceback.
+
+    Args:
+        callable: Zero-arg callable performing the session start.
+            Returns any value on success (caller's choice — could
+            be a :class:`ReplSession`, an int exit code, ``None``,
+            etc.); raises on connect failure.
+        output: Sink for plan rendering.  Defaults to :func:`print`.
+        prompt: Asks the user to retry vs abort.  Defaults to
+            :func:`input`.
+        max_attempts: Ceiling on retry attempts.  Defaults to 3.
+            Must be ``>= 1``.
+
+    Returns:
+        Whatever *callable* returns on a successful attempt.
+
+    Raises:
+        ValueError: ``max_attempts < 1``.
+        Exception: The last classified error after retries are
+            exhausted or the user aborts.
+    """
+    if max_attempts < 1:
+        raise ValueError(
+            f"max_attempts must be >= 1, got {max_attempts}"
+        )
+    attempt = 0
+    last_error: Exception | None = None
+    while attempt < max_attempts:
+        attempt += 1
+        try:
+            return callable()
+        except (OSError, ReplSessionError) as error:
+            last_error = error
+            kind = classify_session_failure(error)
+            plan = recovery_plan_for(kind)
+            _render_plan(
+                output=output,
+                attempt=attempt,
+                max_attempts=max_attempts,
+                error=error,
+                plan=plan,
+            )
+            if not plan.retryable:
+                raise
+            if attempt >= max_attempts:
+                raise
+            if not _ask_retry(
+                prompt=prompt,
+                attempt=attempt,
+                max_attempts=max_attempts,
+            ):
+                raise
+            continue
+    # Unreachable in practice — the except branch always raises
+    # once attempts are exhausted.  Deterministic fallback for the
+    # type checker.
+    assert last_error is not None
+    raise last_error  # pragma: no cover
+
+
+def _render_plan(
+    *,
+    output: Callable[[str], None],
+    attempt: int,
+    max_attempts: int,
+    error: Exception,
+    plan: RecoveryPlan,
+) -> None:
+    """Print the recovery plan via *output*."""
+    output("")
+    output(
+        f"Attempt {attempt}/{max_attempts} failed: "
+        f"{type(error).__name__}"
+    )
+    output(f"  {error}")
+    output("")
+    output(plan.headline)
+    for step in plan.fix_steps:
+        output(f"  • {step}")
+
+
+def _ask_retry(
+    *,
+    prompt: Callable[[str], str],
+    attempt: int,
+    max_attempts: int,
+) -> bool:
+    """Prompt the user; return ``False`` if they asked to abort."""
+    remaining = max_attempts - attempt
+    suffix = (
+        f"  ({remaining} retr{'y' if remaining == 1 else 'ies'} "
+        f"remaining; type 'q' to abort) "
+    )
+    response = prompt(
+        f"\nFix the condition above and press Enter to retry…{suffix}"
+    ).strip().lower()
+    return response not in _ABORT_RESPONSES
+
+
+# ---------------------------------------------------------------------------
 # Interactive session wrapper
 # ---------------------------------------------------------------------------
 
@@ -346,8 +486,6 @@ class InteractiveReplSession:
         ValueError: ``max_attempts < 1``.
     """
 
-    _ABORT_RESPONSES = frozenset({"q", "quit", "abort", "exit"})
-
     def __init__(
         self,
         device: Device | str,
@@ -377,32 +515,19 @@ class InteractiveReplSession:
         self._inner: ReplSession | None = None
 
     def __enter__(self) -> ReplSession:
-        attempt = 0
-        last_error: Exception | None = None
-        while attempt < self._max_attempts:
-            attempt += 1
+        def open_session() -> ReplSession:
             session = ReplSession(self._device, **self._session_kwargs)  # type: ignore[arg-type]
-            try:
-                session.__enter__()
-            except (OSError, ReplSessionError) as error:
-                last_error = error
-                kind = classify_session_failure(error)
-                plan = recovery_plan_for(kind)
-                self._report_failure(attempt, error, kind, plan)
-                if not plan.retryable:
-                    raise
-                if attempt >= self._max_attempts:
-                    raise
-                if not self._ask_retry(attempt):
-                    raise
-                continue
-            self._inner = session
+            session.__enter__()
             return session
-        # Unreachable in practice — the except branch always raises
-        # once attempts are exhausted.  Keep a deterministic fallback
-        # so static analysis is happy.
-        assert last_error is not None
-        raise last_error  # pragma: no cover
+
+        session = coached_session_start(
+            open_session,
+            output=self._output,
+            prompt=self._prompt,
+            max_attempts=self._max_attempts,
+        )
+        self._inner = session
+        return session
 
     def __exit__(
         self,
@@ -413,38 +538,3 @@ class InteractiveReplSession:
         if self._inner is not None:
             self._inner.__exit__(exc_type, exc_val, exc_tb)
             self._inner = None
-
-    # ------------------------------------------------------------------
-    # Internals
-    # ------------------------------------------------------------------
-
-    def _report_failure(
-        self,
-        attempt: int,
-        error: Exception,
-        kind: ReplFailureKind,
-        plan: RecoveryPlan,
-    ) -> None:
-        """Render a recovery plan via the injected ``output`` callable."""
-        self._output("")
-        self._output(
-            f"Attempt {attempt}/{self._max_attempts} failed: "
-            f"{type(error).__name__}"
-        )
-        self._output(f"  {error}")
-        self._output("")
-        self._output(plan.headline)
-        for step in plan.fix_steps:
-            self._output(f"  • {step}")
-
-    def _ask_retry(self, attempt: int) -> bool:
-        """Prompt the user; return ``False`` if they asked to abort."""
-        remaining = self._max_attempts - attempt
-        suffix = (
-            f"  ({remaining} retr{'y' if remaining == 1 else 'ies'} "
-            f"remaining; type 'q' to abort) "
-        )
-        response = self._prompt(
-            f"\nFix the condition above and press Enter to retry…{suffix}"
-        ).strip().lower()
-        return response not in self._ABORT_RESPONSES

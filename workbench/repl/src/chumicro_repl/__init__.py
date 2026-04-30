@@ -37,6 +37,7 @@ if TYPE_CHECKING:
         DeviceCompleter,
         KeywordCompleter,
         build_default_completer,
+        fetch_device_names,
     )
     from .framing import Utf8StreamDecoder
     from .highlight import Theme, colorize, strip_ansi_sequences
@@ -56,6 +57,7 @@ if TYPE_CHECKING:
         RecoveryPlan,
         ReplFailureKind,
         classify_session_failure,
+        coached_session_start,
         recovery_plan_for,
     )
     from .session import ReplSession, ReplSessionDisconnected, ReplSessionError
@@ -88,8 +90,10 @@ _LAZY_ATTRS: dict[str, str] = {
     "Utf8StreamDecoder": "framing",
     "build_default_completer": "completion",
     "classify_session_failure": "recovery",
+    "coached_session_start": "recovery",
     "colorize": "highlight",
     "detect_patterns": "patterns",
+    "fetch_device_names": "completion",
     "history_path_for": "line_mode",
     "interactive": "tui",
     "interactive_line": "tui",
@@ -127,8 +131,10 @@ __all__ = [
     "Utf8StreamDecoder",
     "build_default_completer",
     "classify_session_failure",
+    "coached_session_start",
     "colorize",
     "detect_patterns",
+    "fetch_device_names",
     "history_path_for",
     "interactive",
     "interactive_line",
