@@ -236,6 +236,7 @@ class _PRSummaryCollector:
                 resolve_effective_deploy_mode(
                     device,
                     _session_deploy_mode_override(item.session),
+                    library_name=getattr(item, "_library_name", None),
                 ),
             )
             cache = _session_cache(item.session)
@@ -513,20 +514,49 @@ class _TransportCache:
         ] = {}
 
     def get_transport(
-        self, device_entry: DeviceEntry, deploy_mode: str | None,
+        self,
+        device_entry: DeviceEntry,
+        deploy_mode: str | None,
+        *,
+        library_name: str | None = None,
     ) -> TransportProtocol:
         """Get or create a connected transport for the device.
 
         Args:
             device_entry: A ``DeviceEntry`` from the config loader.
             deploy_mode: Deploy mode override, or ``None``.
+            library_name: The library being tested.  Forwarded to
+                :func:`create_transport` so a (library, device)
+                combination known to OOM in RAM mode (e.g.
+                chumicro-mqtt on Pi Pico W CP) auto-upgrades to flash.
+                Only consulted on first transport construction; later
+                callers reusing the cached transport see the same mode.
 
         Returns:
             A connected transport instance.
         """
         key = device_entry.identifier
         if key not in self._transports:
-            transport = create_transport(device_entry, deploy_mode=deploy_mode)
+            # Surface (library, device) deploy-mode auto-upgrades so
+            # the user sees why their `defaults.deploy_mode: ram` got
+            # silently flipped to flash for this combination.
+            naive_mode = resolve_effective_deploy_mode(
+                device_entry, deploy_mode, library_name=None,
+            )
+            effective_mode = resolve_effective_deploy_mode(
+                device_entry, deploy_mode, library_name=library_name,
+            )
+            if effective_mode != naive_mode and library_name is not None:
+                print(
+                    f"[chumicro-pytest-device] {key}: forcing "
+                    f"{effective_mode!r} for chumicro-{library_name} "
+                    f"(known to OOM in {naive_mode!r} on this board)",
+                )
+            transport = create_transport(
+                device_entry,
+                deploy_mode=deploy_mode,
+                library_name=library_name,
+            )
             transport.connect()
             self._transports[key] = transport
         return self._transports[key]
@@ -782,7 +812,10 @@ class DeviceRuntimeItem(pytest.Item):
         deploy_mode = _session_deploy_mode_override(self.session)
 
         try:
-            transport = cache.get_transport(device_entry, deploy_mode)
+            transport = cache.get_transport(
+                device_entry, deploy_mode,
+                library_name=self._library_name,
+            )
         except Exception as error:
             cache.cache_batch_result(
                 self._batch_key(device_entry),
@@ -838,6 +871,7 @@ class DeviceRuntimeItem(pytest.Item):
             self._ensure_prepared(device_entry)
             transport = cache.get_transport(
                 device_entry, _session_deploy_mode_override(self.session),
+                library_name=self._library_name,
             )
 
             # Run ALL tests in the file (no name_filter) to amortize
