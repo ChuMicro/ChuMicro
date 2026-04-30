@@ -316,7 +316,7 @@ class TestTransportCache:
 
         calls: list[str] = []
 
-        def fake_create(device_entry, deploy_mode=None):
+        def fake_create(device_entry, deploy_mode=None, *, library_name=None):
             transport = FakeTransport()
             calls.append("created")
             return transport
@@ -367,7 +367,10 @@ class TestTransportCache:
             address="/dev/ttyUSB0",
         )
         original = pytest_device.create_transport
-        pytest_device.create_transport = lambda device_entry, deploy_mode=None: FakeTransport()
+        pytest_device.create_transport = (
+            lambda device_entry, deploy_mode=None, *,
+                library_name=None: FakeTransport()
+        )
         try:
             transport = cache.get_transport(device, None)
             cache.mark_staged(("dev1", "timing", "test_ticks.py"))
@@ -847,7 +850,7 @@ class TestEnsurePrepared:
         """A failed get_transport fails the item and caches the error."""
         device = _hot_path_device()
 
-        def raise_on_create(device_entry, deploy_mode=None):
+        def raise_on_create(device_entry, deploy_mode=None, *, library_name=None):
             raise RuntimeError("device not reachable")
 
         monkeypatch.setattr(pytest_device, "create_transport", raise_on_create)
