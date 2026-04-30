@@ -14,8 +14,8 @@ from typing import Any
 import pytest
 from chumicro_deploy import Device
 from chumicro_deploy.testing import FakeTransport
-from chumicro_msgpack import unpackb
 from chumicro_workspace import cli
+from msgpack import unpackb
 
 
 def _seed_workspace(tmp_path: Path) -> Path:

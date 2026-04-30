@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from chumicro_msgpack import unpackb
 from chumicro_workspace import (
     BOOT_MODULE_DEVICE_PATH,
     RUNTIME_CONFIG_DEVICE_PATH,
@@ -17,6 +16,7 @@ from chumicro_workspace import (
     thing_boot_source,
 )
 from chumicro_workspace.workspace import WorkspaceLayout
+from msgpack import unpackb
 
 # ---------------------------------------------------------------------------
 # Static helpers

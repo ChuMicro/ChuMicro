@@ -335,3 +335,14 @@ Pi Pico W CP audit before/after on `chumicro_wifi`:
 * **After fix:** `lib_files=7`, `lib_bytes=20 110`, `flash_free=492 544` — exactly matches the `bundle_manager` Decision 0037 prediction (CP-mpy bundle = 7 files).
 
 Lesson: when you're auditing on-device file counts on macOS, always cross-check against the bundle audit's prediction.  A 2× discrepancy is almost certainly AppleDouble noise, not a real deploy bug.
+
+### `chumicro-msgpack` wire format = PyPI `msgpack` with `use_single_float=True`
+
+`chumicro_msgpack.packb(obj)` produces bytes byte-for-byte identical to `msgpack.packb(obj, use_single_float=True)` for any subset-conforming input (ints in `[-2^31, 2^32-1]`, no float64, sizes < 65 536, no ext types).  This is the load-bearing fact that lets workbench packages import PyPI `msgpack` while device packages import `chumicro_msgpack` — they share a wire format with zero conversion.  The contract is pinned by `test_byte_identity_with_pypi_msgpack` in `libraries/msgpack/tests/test_msgpack_pytest.py`.
+
+Two ways the contract has historically broken and would break again without vigilance:
+
+1. **PyPI default float encoding is float64.**  Without `use_single_float=True`, `msgpack.packb(0.5)` emits `0xcb` + 8 bytes; chumicro's decoder rejects `0xcb`.  The workbench writer in `workbench/workspace/src/chumicro_workspace/writer.py` hard-codes the flag for this reason.
+2. **CPython sees PyPI msgpack via the same `import msgpack`.**  An earlier version of `chumicro_msgpack/__init__.py` did `try: from msgpack import pack, unpack` on every runtime — on CPython that succeeded against the PyPI package and silently switched the encoder to one that produced float64 / int64 / strict_map_key bytes.  Commit `fecbc4c` gated the native delegation to `sys.implementation.name == "circuitpython"`.  If you see a similar pattern anywhere — `try: import <X>` where `<X>` is a CPython PyPI package name with a different contract from the device-side library — flag it.
+
+The decoder names the offending tag in its `ValueError` (e.g. `"float64 (0xcb) not in chumicro msgpack subset; encode with msgpack.packb(obj, use_single_float=True)"`) so a debugging session lands on the fix immediately.
