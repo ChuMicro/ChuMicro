@@ -82,11 +82,25 @@ _BOARD_FILE_VISIBLE_POST_SETTLE = 0.5
 _CIRCUITPY_VOLUME_NAME = "CIRCUITPY"
 
 #: Seconds to wait after ``storage.erase_filesystem()`` before
-#: re-opening the serial port.  The call reformats the FAT volume
-#: and reboots the board; CDC takes a beat to come back.  Five
-#: seconds is what the manual ``.scratch/clean_circuitpy_board.py``
-#: helper uses and has been reliable on every supported board.
-_WIPE_REBOOT_SETTLE_SECONDS = 5.0
+#: Initial settle delay before the first reconnect attempt after
+#: ``storage.erase_filesystem()`` reboots the board.  CDC takes a
+#: beat to come back; this is the minimum we wait before even
+#: starting to poll for the port.
+_WIPE_REBOOT_SETTLE_SECONDS = 2.0
+#: Total wall-clock budget for the post-wipe reconnect.  CP boards
+#: with a populated FAT volume occasionally take 6-10 seconds to
+#: re-enumerate after ``storage.erase_filesystem()`` reformats the
+#: volume — a stricter budget surfaces as a bare ``could not open
+#: port`` error during a deploy that the user reasonably expects
+#: to recover transparently.  Empirically determined against the
+#: four-board canonical matrix (`.scratch/wipe_soak.py`).
+_WIPE_RECONNECT_TIMEOUT_SECONDS = 30.0
+#: Poll interval between reconnect attempts inside
+#: ``_WIPE_RECONNECT_TIMEOUT_SECONDS``.  Short enough to keep a
+#: fast-back-up board's wipe latency under a second; long enough
+#: not to flood the OS with port-open syscalls during the
+#: reformat window.
+_WIPE_RECONNECT_POLL_SECONDS = 0.5
 
 
 def _format_probe_error(drive_path: Path, error: OSError) -> str:
@@ -1328,8 +1342,30 @@ class CircuitpythonTransport:
         except Exception:  # pragma: no cover — port may already be torn down
             pass
         self._port = None
+        # Settle, then poll-reconnect.  USB-CDC takes a beat to come
+        # back after ``storage.erase_filesystem()`` reformats the
+        # volume + reboots; on boards with a populated FAT it can be
+        # 6-10 seconds before the host sees the device again.  A
+        # one-shot connect after a fixed sleep races that window;
+        # poll up to ``_WIPE_RECONNECT_TIMEOUT_SECONDS`` so a slower
+        # board still recovers transparently.
         self._time.sleep(_WIPE_REBOOT_SETTLE_SECONDS)
-        self.connect()
+        deadline = (
+            self._time.monotonic() + _WIPE_RECONNECT_TIMEOUT_SECONDS
+        )
+        last_error: Exception | None = None
+        while self._time.monotonic() < deadline:
+            try:
+                self.connect()
+                return
+            except CircuitpythonTransportError as connect_error:
+                last_error = connect_error
+                self._time.sleep(_WIPE_RECONNECT_POLL_SECONDS)
+        raise CircuitpythonTransportError(
+            f"Failed to reconnect to {self.address} within "
+            f"{_WIPE_RECONNECT_TIMEOUT_SECONDS:.0f}s of "
+            f"storage.erase_filesystem(); last error: {last_error}"
+        )
 
     def _deploy_files_ram(
         self,
