@@ -4,7 +4,9 @@
 
 **Compact [MessagePack](https://msgpack.org) serialization — much smaller than JSON.**
 
-Turns Python dicts, lists, and values into binary bytes, typically 30–50% smaller than JSON. Good for NVM storage, serial protocols, and anywhere bytes matter. On CircuitPython boards with the native `msgpack` C module, everything delegates to the built-in — the pure-Python code is never loaded, saving ~700 bytes of heap. Works on CircuitPython, MicroPython, and CPython.
+Turns Python dicts, lists, and values into binary bytes, typically 30–50% smaller than JSON. Good for NVM storage, serial protocols, and anywhere bytes matter. Works on CircuitPython, MicroPython, and CPython.
+
+**Wire-compatible with standard MessagePack.** chumicro-msgpack writes a strict 32-bit-int / 16-bit-length subset of the [MessagePack spec](https://github.com/msgpack/msgpack/blob/master/spec.md) — its bytes are valid msgpack that any spec-compliant reader (PyPI `msgpack`, CircuitPython native, Go, JS, Rust, etc.) can decode. The subset is what fits on a small board: integers in `[-2^31, 2^32-1]`, single-precision floats, payload sizes under 65 536. On CircuitPython boards with the native `msgpack` C module, encoding/decoding delegates to the built-in — the pure-Python code is never loaded, saving ~700 bytes of heap.
 
 <br clear="left">
 
@@ -94,18 +96,39 @@ Use `pack`/`unpack` when writing to files, sockets, or NVM.  Use `packb`/`unpack
 
 ### Supported types
 
-| Python type | msgpack format |
-|---|---|
-| `None` | nil |
-| `True` / `False` | bool |
-| `int` (−2³¹ to 2³²−1) | fixint, int8/16/32, uint8/16/32 |
-| `float` | float32 |
-| `str` | fixstr, str8, str16 |
-| `bytes` / `bytearray` | bin8, bin16 |
-| `list` / `tuple` | fixarray, array16 |
-| `dict` | fixmap, map16 |
+| Python type | msgpack format | Limit |
+|---|---|---|
+| `None` | nil | — |
+| `True` / `False` | bool | — |
+| `int` | fixint, int8/16/32, uint8/16/32 | `-2^31 ≤ value ≤ 2^32 − 1` |
+| `float` | float32 | single precision (~7 decimal digits) |
+| `str` | fixstr, str8, str16 | up to 65 535 bytes UTF-8 |
+| `bytes` / `bytearray` | bin8, bin16 | up to 65 535 bytes |
+| `list` / `tuple` | fixarray, array16 | up to 65 535 elements |
+| `dict` | fixmap, map16 | up to 65 535 entries |
 
-64-bit integers and floats are not supported, matching CircuitPython's built-in limitation.
+Values outside these limits raise `OverflowError` on encode. Tags outside the subset (`float64` `0xcb`, `int64` `0xd3`, `uint64` `0xcf`, the `*32`-length variants) raise a descriptive `ValueError` on decode that names the offending tag.
+
+`tuple` decodes back as `list` — msgpack has no tuple type. `dict` keys may be any supported type, including `int` (no `strict_map_key` enforcement). Ext types (timestamps, custom classes) are not supported in either direction.
+
+## Cross-runtime compatibility
+
+| Direction | Works? | Notes |
+|---|---|---|
+| chumicro device writes → host reads | ✓ always | Bytes are spec-compliant; any standard reader decodes them |
+| chumicro device writes → chumicro device reads | ✓ always | The common case; full round-trip |
+| Host writes with PyPI `msgpack` → chumicro device reads | ✓ if host stays in subset | See recipe below |
+| Host writes default PyPI `msgpack` → chumicro device reads | ✗ | PyPI defaults to `float64`, decodes raise on device |
+
+**Host-side recipe** — when a host script needs to produce bytes a chumicro device will read:
+
+```python
+import msgpack  # standard PyPI library
+data = msgpack.packb(obj, use_single_float=True)
+# Caller's job: keep ints in [-2**31, 2**32-1] and lengths under 65 536.
+```
+
+`use_single_float=True` switches PyPI msgpack from `float64` to `float32`, matching what chumicro reads.  This is what [`chumicro-workspace`](../../workbench/workspace) uses to write `runtime_config.msgpack` for the device.
 
 ## Platform support
 

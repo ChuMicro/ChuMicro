@@ -1,11 +1,14 @@
 """MessagePack serialization for CircuitPython, MicroPython, and CPython.
 
-Implements a subset of the `msgpack specification <https://msgpack.org>`_
-suitable for embedded use: integers (up to 32-bit), floats (32-bit),
-strings, bytes, booleans, None, lists, tuples, and dicts.
+Implements a strict 32-bit-int / 16-bit-length subset of the
+`MessagePack spec <https://github.com/msgpack/msgpack/blob/master/spec.md>`_:
 
-64-bit integers and floats are not supported, matching CircuitPython's
-built-in ``msgpack`` module limitation.
+- integers in ``[-2**31, 2**32-1]``  (fixint, ``int8/16/32``, ``uint8/16/32``)
+- 32-bit floats only  (``float32``)
+- strings, bytes, arrays, and maps up to 65 535 elements / bytes
+
+The subset is what fits on a small board, but the bytes are
+spec-compliant — any standard MessagePack reader decodes them.
 
 Public API
 ----------
@@ -14,18 +17,26 @@ Public API
 - ``pack(obj, stream)`` — pack to a writable stream.
 - ``unpack(stream)`` — unpack one object from a readable stream.
 
+Cross-runtime compatibility
+---------------------------
 On CircuitPython boards that include the native ``msgpack`` module,
 all four functions delegate to the C implementation.  The pure-Python
 encoder in ``_pure`` is never imported, saving ~700 bytes of heap RAM.
 
-CPython's PyPI ``msgpack`` package implements the full upstream
-MessagePack spec — 64-bit integers, 32-bit length prefixes,
-``strict_map_key=True`` by default — which silently drifts away from
-the chumicro 32-bit/16-bit subset.  Delegation to the native module is
-therefore gated to CircuitPython, where it's a built-in C module that
-faithfully implements the same subset chumicro promises.  CPython
-tests + CPython runtime use the pure-Python implementation, keeping
-the contract identical across runtimes.
+On CPython and MicroPython, the implementation is always the pure
+Python ``_pure`` encoder.  Note that PyPI's ``msgpack`` package
+implements the *full* spec (``float64``, ``int64``, ``*32``-length
+prefixes, ``strict_map_key=True`` by default) — that's a different
+contract.  Host code that produces bytes for a chumicro device should
+use ``msgpack.packb(obj, use_single_float=True)`` and stay inside the
+size limits above; the resulting bytes are byte-for-byte identical to
+``chumicro_msgpack.packb(obj)``.  This identity is pinned by the
+``test_byte_identity_with_pypi_msgpack`` test in this package's tests.
+
+Out-of-subset bytes encountered on decode (``0xcb`` float64, ``0xcf``
+uint64, ``0xd3`` int64, ``0xc6/0xdb/0xdd/0xdf`` ``*32``-length tags)
+raise ``ValueError`` with a message that names the tag and points at
+the producer-side fix.
 """
 
 import sys

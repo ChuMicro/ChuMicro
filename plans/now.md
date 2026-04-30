@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **Mechanical sweep landed — chumicro-repl audit queued next.**  `_ticks_ms` shim sweep across six functional tests shipped (`1ee6a88`); preflight blocker on main fixed in the same session (`fecbc4c` gated `chumicro-msgpack` native delegation to CircuitPython only — PyPI msgpack 1.1.2 had silently drifted the wrapper away from the chumicro 32-bit/16-bit subset on CPython).  Workspace-ecosystem umbrella remains closed as of 2026-04-29; three carry-overs tracked in `plans/next-up.md` for if-and-when triggers appear.  User-confirmed cadence next: **chumicro-repl audit** (highest-readiness pickup), then Pi-Pico-W-CP-MQTT flash-mode-only routing, then `--wipe` four-board hardware soak (boards plugged in).
-- **Last shipped:** functional_tests `_ticks_ms` shim sweep + chumicro-msgpack 1.1.2 drift fix.
+- **Phase:** **chumicro-msgpack audit follow-ups landed — chumicro-repl audit queued next.**  Audit was triggered by user noticing `chumicro_msgpack` imported from `workbench/workspace/tests/`, which violates the workbench-no-libraries boundary; same audit walked the wire-format subset story end-to-end.  Five workbench test imports flipped to PyPI `msgpack`; decoder error messages now name the offending tag (float64 / int64 / uint64 / `*32`-length) and point at the fix; byte-identity contract with `msgpack.packb(use_single_float=True)` pinned by a parametrised test in `libraries/msgpack/tests/test_msgpack_pytest.py`; README + module docstring rewritten to lead with "strict subset of standard MessagePack — bytes are spec-compliant" framing instead of "different from msgpack".  No 64-bit support added (intentional — keeps board-side decoder simple); stream API kept (already shipped, low cost).  Workspace-ecosystem umbrella remains closed as of 2026-04-29; three carry-overs tracked in `plans/next-up.md`.  User-confirmed cadence next: **chumicro-repl audit** (highest-readiness pickup), then Pi-Pico-W-CP-MQTT flash-mode-only routing, then `--wipe` four-board hardware soak.
+- **Last shipped:** chumicro-msgpack audit follow-ups (workbench boundary fix, decoder error clarity, byte-identity contract test, README rewrite).
 - **In flight:** —
 - **Blocked on:** —
-- **Last touched:** `libraries/msgpack/src/chumicro_msgpack/{__init__,_pure}.py`, `libraries/{sockets,requests,ntp,http_server}/functional_tests/test_real_*.py`, `plans/{now,next-up}.md`.
+- **Last touched:** `libraries/msgpack/{README.md, src/chumicro_msgpack/{__init__,_pure}.py, tests/test_msgpack{,_pytest}.py}`, `workbench/workspace/{src/chumicro_workspace/writer.py, tests/test_*.py}`, `plans/{now,learnings}.md`.
 
 ---
 

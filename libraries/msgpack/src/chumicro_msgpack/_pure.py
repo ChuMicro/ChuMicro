@@ -265,6 +265,45 @@ def _decode(data: memoryview, offset: int) -> tuple:
     if byte >= 0xe0:
         return byte - 256, offset + 1
 
+    # Tags that are valid msgpack but outside the chumicro 32-bit/16-bit
+    # subset — point the producer at the fix instead of saying
+    # "unsupported byte".
+    if byte == 0xcb:
+        raise ValueError(
+            "float64 (0xcb) not in chumicro msgpack subset; "
+            "encode with msgpack.packb(obj, use_single_float=True)"
+        )
+    if byte == 0xcf:
+        raise ValueError(
+            "uint64 (0xcf) not in chumicro msgpack subset; "
+            "keep integers in [-2**31, 2**32-1]"
+        )
+    if byte == 0xd3:
+        raise ValueError(
+            "int64 (0xd3) not in chumicro msgpack subset; "
+            "keep integers in [-2**31, 2**32-1]"
+        )
+    if byte == 0xc6:
+        raise ValueError(
+            "bin32 (0xc6) not in chumicro msgpack subset; "
+            "bytes payloads must be under 65 536 bytes"
+        )
+    if byte == 0xdb:
+        raise ValueError(
+            "str32 (0xdb) not in chumicro msgpack subset; "
+            "strings must be under 65 536 bytes"
+        )
+    if byte == 0xdd:
+        raise ValueError(
+            "array32 (0xdd) not in chumicro msgpack subset; "
+            "arrays must be under 65 536 elements"
+        )
+    if byte == 0xdf:
+        raise ValueError(
+            "map32 (0xdf) not in chumicro msgpack subset; "
+            "maps must be under 65 536 entries"
+        )
+
     raise ValueError(f"unsupported msgpack type byte: 0x{byte:02x}")
 
 

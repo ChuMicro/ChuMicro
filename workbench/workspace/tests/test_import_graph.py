@@ -3,7 +3,6 @@
 from pathlib import Path
 
 import pytest
-from chumicro_msgpack import unpackb
 from chumicro_workspace import (
     RUNTIME_CONFIG_DEVICE_PATH,
     WorkspaceConfigError,
@@ -12,6 +11,7 @@ from chumicro_workspace import (
     thing_import_graph_source,
 )
 from chumicro_workspace.workspace import WorkspaceLayout
+from msgpack import unpackb
 
 # ---------------------------------------------------------------------------
 # read_library_sources

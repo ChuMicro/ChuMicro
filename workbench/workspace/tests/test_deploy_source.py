@@ -10,7 +10,6 @@ from pathlib import Path
 import pytest
 from chumicro_deploy import Deployer, Device, FileMapSource
 from chumicro_deploy.testing import FakeTransport
-from chumicro_msgpack import unpackb
 from chumicro_workspace import (
     GENERATED_DIRNAME,
     RUNTIME_CONFIG_DEVICE_PATH,
@@ -18,6 +17,7 @@ from chumicro_workspace import (
     find_thing_config,
     thing_directory_source,
 )
+from msgpack import unpackb
 
 # ---------------------------------------------------------------------------
 # find_thing_config

@@ -10,16 +10,16 @@ on-device location lives in ``chumicro_config.runtime``
 through one source of truth.
 
 Encoder choice: standard ``msgpack`` from PyPI (the well-maintained
-host-side library) rather than the device-side ``chumicro-msgpack``.
-Workbench packages don't import from ``libraries/`` per the
-ecosystem boundary — those packages are *for the board*.  Wire
-compatibility is preserved by passing ``use_single_float=True`` so
-floats encode as float32 (``0xca`` + 4 bytes) — matching what
-``chumicro_msgpack._pure`` produces and what CircuitPython's native
-``msgpack`` module accepts (CP doesn't support float64).  Verified
-empirically: ``msgpack.packb(obj, use_single_float=True)`` produces
-byte-for-byte identical output to ``chumicro_msgpack._pure.packb(obj)``
-for the runtime-config shape.
+host-side library).  Workbench packages don't import from
+``libraries/`` per the ecosystem boundary — those packages are
+*for the board*.  Wire compatibility with the device-side reader
+is preserved by passing ``use_single_float=True`` so floats encode
+as float32 (``0xca`` + 4 bytes), which CircuitPython's native
+``msgpack`` module accepts (CP doesn't support float64).  The
+caller is also expected to keep integers in
+``[-2**31, 2**32-1]`` and string/bin/array/map sizes under
+65 536 — matching the chumicro-msgpack 32-bit/16-bit subset that
+the device-side decoder enforces.
 """
 
 from __future__ import annotations

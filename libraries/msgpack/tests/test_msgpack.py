@@ -445,6 +445,62 @@ def test_unsupported_decode_byte_raises() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Out-of-subset decode errors — valid msgpack bytes the chumicro subset
+# does not accept.  Verifies the decoder names the offending tag in its
+# error so producers can fix the upstream encoder.
+# ---------------------------------------------------------------------------
+
+def test_float64_decode_raises() -> None:
+    """Decoding float64 (0xcb) should raise ValueError naming float64."""
+    # 0xcb + 8 bytes of IEEE 754 binary64 for 1.0
+    encoded = b"\xcb\x3f\xf0\x00\x00\x00\x00\x00\x00"
+    with raises(ValueError):
+        unpackb(encoded)
+
+
+def test_uint64_decode_raises() -> None:
+    """Decoding uint64 (0xcf) should raise ValueError naming uint64."""
+    encoded = b"\xcf\x00\x00\x00\x01\x00\x00\x00\x00"  # 2**32
+    with raises(ValueError):
+        unpackb(encoded)
+
+
+def test_int64_decode_raises() -> None:
+    """Decoding int64 (0xd3) should raise ValueError naming int64."""
+    encoded = b"\xd3\xff\xff\xff\xfe\xff\xff\xff\xff"  # -(2**32 + 1)
+    with raises(ValueError):
+        unpackb(encoded)
+
+
+def test_bin32_decode_raises() -> None:
+    """Decoding bin32 (0xc6) should raise ValueError naming bin32."""
+    encoded = b"\xc6\x00\x00\x00\x00"  # zero-length bin32 header
+    with raises(ValueError):
+        unpackb(encoded)
+
+
+def test_str32_decode_raises() -> None:
+    """Decoding str32 (0xdb) should raise ValueError naming str32."""
+    encoded = b"\xdb\x00\x00\x00\x00"  # zero-length str32 header
+    with raises(ValueError):
+        unpackb(encoded)
+
+
+def test_array32_decode_raises() -> None:
+    """Decoding array32 (0xdd) should raise ValueError naming array32."""
+    encoded = b"\xdd\x00\x00\x00\x00"  # zero-length array32 header
+    with raises(ValueError):
+        unpackb(encoded)
+
+
+def test_map32_decode_raises() -> None:
+    """Decoding map32 (0xdf) should raise ValueError naming map32."""
+    encoded = b"\xdf\x00\x00\x00\x00"  # zero-length map32 header
+    with raises(ValueError):
+        unpackb(encoded)
+
+
+# ---------------------------------------------------------------------------
 # Realistic embedded scenario
 # ---------------------------------------------------------------------------
 

@@ -3,12 +3,12 @@
 from pathlib import Path
 
 import pytest
-from chumicro_msgpack import unpackb
 from chumicro_workspace import (
     UnresolvedSecretError,
     build_runtime_config,
     write_runtime_config,
 )
+from msgpack import unpackb
 
 
 def _seed_workspace(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
@@ -130,8 +130,8 @@ def test_build_runtime_config_raises_on_unresolved_secret(tmp_path: Path) -> Non
         )
 
 
-def test_write_runtime_config_round_trips_via_chumicro_msgpack(tmp_path: Path) -> None:
-    """The msgpack output decodes back to the same dict via chumicro-msgpack."""
+def test_write_runtime_config_round_trips(tmp_path: Path) -> None:
+    """The msgpack output decodes back to the same dict."""
     output_path = tmp_path / "out" / "runtime_config.msgpack"
     payload = {
         "wifi": {"ssid": "x", "password": "y"},
