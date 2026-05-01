@@ -101,6 +101,18 @@ _WIPE_RECONNECT_TIMEOUT_SECONDS = 30.0
 #: not to flood the OS with port-open syscalls during the
 #: reformat window.
 _WIPE_RECONNECT_POLL_SECONDS = 0.5
+#: Total wall-clock budget for the CIRCUITPY FAT volume to remount
+#: after ``storage.erase_filesystem()``, measured from the moment
+#: USB-CDC came back.  CDC and the FAT mount re-enumerate on
+#: independent macOS timelines — CDC first, FAT typically a few
+#: seconds later.  Without this wait, a ``deploy_files`` call
+#: immediately after ``wipe_filesystem`` returns races the volume
+#: mount and dies with "CIRCUITPY drive not found".  10 s is well
+#: above empirical FAT-remount latency on the four-board canonical
+#: matrix while staying short enough that a genuinely unmounted
+#: drive (board ejected from Finder, USB cable popped) surfaces
+#: quickly.
+_WIPE_FAT_REMOUNT_TIMEOUT_SECONDS = 10.0
 
 
 def _format_probe_error(drive_path: Path, error: OSError) -> str:
@@ -1357,13 +1369,63 @@ class CircuitpythonTransport:
         while self._time.monotonic() < deadline:
             try:
                 self.connect()
-                return
+                break
             except CircuitpythonTransportError as connect_error:
                 last_error = connect_error
                 self._time.sleep(_WIPE_RECONNECT_POLL_SECONDS)
+        else:
+            raise CircuitpythonTransportError(
+                f"Failed to reconnect to {self.address} within "
+                f"{_WIPE_RECONNECT_TIMEOUT_SECONDS:.0f}s of "
+                f"storage.erase_filesystem(); last error: {last_error}"
+            )
+        self._wait_for_circuitpy_remount()
+
+    def _wait_for_circuitpy_remount(self) -> None:
+        """Block until the CIRCUITPY FAT volume is usable post-wipe.
+
+        ``storage.erase_filesystem()`` reboots the board; USB-CDC
+        and the FAT volume mount on independent macOS timelines —
+        CDC first, FAT typically a few seconds later.  The serial
+        reconnect inside :meth:`wipe_filesystem` only waits for
+        CDC, so a follow-up :meth:`deploy_files` immediately after
+        wipe returns can race two distinct settle phases on the
+        host side:
+
+        1. Mount-not-yet-present — the configured drive path
+           doesn't exist yet (FAT volume hasn't remounted at all).
+        2. Mount-present-but-not-writable — the path is a directory
+           but probe writes hit ``EACCES`` (macOS hasn't finished
+           setting up access for the user).
+
+        Both surface as deploy failures.  Reuses
+        :meth:`_resolve_circuitpy_drive` in a retry loop because it
+        already exercises both checks (``is_dir`` + tiny probe
+        write/unlink); polling it covers either phase without
+        duplicating the probe logic.
+
+        No-ops when ``circuitpy_drive_path`` was not configured
+        (auto-detection mode) — the next :meth:`deploy_files` call
+        will run its own :meth:`_resolve_circuitpy_drive` and
+        surface its own clear error if needed.
+        """
+        if self.circuitpy_drive_path is None:
+            return
+        deadline = (
+            self._time.monotonic() + _WIPE_FAT_REMOUNT_TIMEOUT_SECONDS
+        )
+        last_error: Exception | None = None
+        while self._time.monotonic() < deadline:
+            try:
+                self._resolve_circuitpy_drive()
+                return
+            except CircuitpythonTransportError as resolve_error:
+                last_error = resolve_error
+                self._time.sleep(_WIPE_RECONNECT_POLL_SECONDS)
         raise CircuitpythonTransportError(
-            f"Failed to reconnect to {self.address} within "
-            f"{_WIPE_RECONNECT_TIMEOUT_SECONDS:.0f}s of "
+            f"CIRCUITPY drive {self.circuitpy_drive_path} did not "
+            f"become usable within "
+            f"{_WIPE_FAT_REMOUNT_TIMEOUT_SECONDS:.0f}s of "
             f"storage.erase_filesystem(); last error: {last_error}"
         )
 
