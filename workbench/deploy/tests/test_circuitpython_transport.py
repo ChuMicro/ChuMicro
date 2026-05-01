@@ -11,6 +11,7 @@ from chumicro_deploy.circuitpython_transport import (
     _CTRL_C,
     _CTRL_D,
     _RAW_REPL_PROMPT,
+    _WIPE_FAT_REMOUNT_TIMEOUT_SECONDS,
     CircuitpythonTransport,
     CircuitpythonTransportError,
     _format_probe_error,
@@ -2566,6 +2567,151 @@ class TestWipeFilesystem:
         transport.connect()
         transport.wipe_filesystem()  # close failure swallowed; re-connect runs
         assert ports == []
+
+    def test_flash_mode_waits_for_drive_already_mounted(
+        self, tmp_path: Path,
+    ) -> None:
+        """Drive mounted at the moment serial reconnects: no extra waits."""
+        drive = tmp_path / "CIRCUITPY"
+        drive.mkdir()
+
+        first_port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
+        second_port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
+        ports = [first_port, second_port]
+        fake_time = FakeTime()
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            mode="flash",
+            timeout=0.05,
+            circuitpy_drive_path=str(drive),
+            serial_port_factory=lambda **_: ports.pop(0),
+            time=fake_time,
+        )
+        transport.connect()
+        before = fake_time.monotonic()
+        transport.wipe_filesystem()
+        elapsed = fake_time.monotonic() - before
+        # Reboot settle + (any) serial reconnect polling, but no FAT-remount
+        # polling because the drive is already mounted.
+        assert elapsed < _WIPE_FAT_REMOUNT_TIMEOUT_SECONDS
+        assert ports == []
+
+    def test_flash_mode_waits_for_drive_remount(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Drive that appears mid-poll succeeds without raising."""
+        drive = tmp_path / "CIRCUITPY"
+        drive.mkdir()  # pre-existing on disk, but masked for first probes
+        # Pretend the FAT volume hasn't remounted yet for the first two
+        # poll probes, then "remount" by letting the real is_dir win.
+        original_is_dir = Path.is_dir
+        probe_count = {"value": 0}
+
+        def staged_is_dir(self: Path) -> bool:
+            if self == drive:
+                probe_count["value"] += 1
+                if probe_count["value"] < 3:
+                    return False
+            return original_is_dir(self)
+
+        monkeypatch.setattr(Path, "is_dir", staged_is_dir)
+
+        first_port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
+        second_port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
+        ports = [first_port, second_port]
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            mode="flash",
+            timeout=0.05,
+            circuitpy_drive_path=str(drive),
+            serial_port_factory=lambda **_: ports.pop(0),
+            time=FakeTime(),
+        )
+        transport.connect()
+        transport.wipe_filesystem()
+        # Probed at least 3 times — first two masked, third returned True.
+        assert probe_count["value"] >= 3
+
+    def test_flash_mode_drive_never_remounts_raises(
+        self, tmp_path: Path,
+    ) -> None:
+        """Drive that never reappears within budget raises a clear error."""
+        drive = tmp_path / "CIRCUITPY"  # never created
+
+        first_port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
+        second_port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
+        ports = [first_port, second_port]
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            mode="flash",
+            timeout=0.05,
+            circuitpy_drive_path=str(drive),
+            serial_port_factory=lambda **_: ports.pop(0),
+            time=FakeTime(),
+        )
+        transport.connect()
+        with pytest.raises(
+            CircuitpythonTransportError,
+            match="did not become usable",
+        ):
+            transport.wipe_filesystem()
+
+    def test_flash_mode_drive_present_but_unwritable_polls(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Drive directory exists but probe writes EACCES until macOS settles."""
+        drive = tmp_path / "CIRCUITPY"
+        drive.mkdir()
+        # First two probe writes hit EACCES (drive mounted but not yet
+        # writable post-remount); third succeeds.
+        original_write_bytes = Path.write_bytes
+        write_attempts = {"value": 0}
+
+        def staged_write_bytes(self: Path, data: bytes) -> int:
+            if self.name == ".chu-probe":
+                write_attempts["value"] += 1
+                if write_attempts["value"] < 3:
+                    raise PermissionError(
+                        errno.EACCES, "Permission denied", str(self),
+                    )
+            return original_write_bytes(self, data)
+
+        monkeypatch.setattr(Path, "write_bytes", staged_write_bytes)
+
+        first_port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
+        second_port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
+        ports = [first_port, second_port]
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            mode="flash",
+            timeout=0.05,
+            circuitpy_drive_path=str(drive),
+            serial_port_factory=lambda **_: ports.pop(0),
+            time=FakeTime(),
+        )
+        transport.connect()
+        transport.wipe_filesystem()
+        assert write_attempts["value"] >= 3
+
+    def test_flash_mode_skips_remount_wait_when_path_unset(
+        self, tmp_path: Path,
+    ) -> None:
+        """No circuitpy_drive_path → wipe doesn't poll for any drive."""
+        first_port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
+        second_port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT])
+        ports = [first_port, second_port]
+        transport = CircuitpythonTransport(
+            "/dev/ttyUSB0",
+            mode="flash",
+            timeout=0.05,
+            circuitpy_drive_path=None,
+            serial_port_factory=lambda **_: ports.pop(0),
+            time=FakeTime(),
+        )
+        transport.connect()
+        # Should not raise — the FAT-remount poll is a no-op when no
+        # drive path is configured.
+        transport.wipe_filesystem()
 
 
 class TestListScopeOnDriveHelper:
