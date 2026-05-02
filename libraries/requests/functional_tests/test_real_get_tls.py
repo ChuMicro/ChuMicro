@@ -31,10 +31,20 @@ chain with::
         sys.stdin.read(), re.DOTALL); \\
         print(chr(10).join(certs[1:]))"
 
-Known platform gap (open follow-up in plans/next-up.md): Pi Pico
-W CircuitPython hits a post-handshake EPIPE on the rp2-port
-mbedTLS build.  This test will fail on that combination; the
-failure documents the issue rather than hiding it.
+Known platform gaps:
+
+* Pi Pico W MicroPython OOMs inside ``ssl.wrap_socket`` during the
+  TLS handshake — the rp2 port leaves only ~190 KB MicroPython
+  heap, and mbedTLS + the wifi+sockets+requests payload doesn't
+  have enough headroom.  This is a board-class runtime limit, not
+  a flash-size or library-bug issue (the deploy itself fits fine).
+* Pi Pico W CircuitPython is known-flaky on TLS post-handshake on
+  the rp2-port mbedTLS build — see sockets/test_real_tls.py for
+  the same gap at the raw-socket level.
+
+These failures document the runtime gaps rather than hiding them.
+The test passes on Lolin S2 (MP + CP) and any board with > 200 KB
+post-wifi free heap.
 """
 
 import sys

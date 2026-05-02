@@ -70,6 +70,16 @@ class MicropythonMidDeployDisconnected(MicropythonTransportError):
 _SCOPE_LISTING_MARKER: str = "__CHU_F:"
 
 
+#: Directory / file basenames the test-harness staging path skips when
+#: copying library `src/` trees into the device-bound staging dir.
+#: Mirrors the exclude set used by `chumicro_deploy.sources.PackageSource`
+#: and `flash_drive.rsync` — keeps host-only build artifacts off device
+#: flash.  ``*.pyc`` and ``*.egg-info`` are matched by suffix elsewhere.
+_STAGE_EXCLUDED_NAMES: frozenset[str] = frozenset(
+    {"__pycache__", ".DS_Store", ".git", ".pytest_cache", ".mypy_cache"},
+)
+
+
 #: On-device script that walks the deploy's managed scope and prints a
 #: marker-prefixed listing of every file in scope.  Pure stdlib —
 #: ``os.listdir`` + ``os.stat`` — so it runs on every CP / MP build
@@ -758,6 +768,13 @@ class MicropythonTransport:
         from *source* into *destination*, preserving the package
         directory structure.
 
+        Skips host-only build artifacts that have no business on a
+        device: CPython bytecode caches (``__pycache__``, ``*.pyc``),
+        editable-install metadata (``*.egg-info``), and other VCS /
+        tooling dirs.  Without this filter, a Pi-Pico-W-MP flash
+        deploy of the requests stack triples in size from CPython
+        3.14 .pyc files alone.
+
         Args:
             source: Source directory to copy from (e.g. a ``src/`` dir).
             destination: Destination directory to copy into.
@@ -765,9 +782,21 @@ class MicropythonTransport:
         if not source.is_dir():
             return
         for child in sorted(source.iterdir()):
+            if MicropythonTransport._should_exclude_from_stage(child):
+                continue
             target = destination / child.name
             if child.is_dir():
                 target.mkdir(parents=True, exist_ok=True)
                 MicropythonTransport._copy_tree(child, target)
             elif child.is_file():
                 target.write_bytes(child.read_bytes())
+
+    @staticmethod
+    def _should_exclude_from_stage(path: Path) -> bool:
+        """Return True if *path* is host-only cruft that shouldn't deploy."""
+        name = path.name
+        if name in _STAGE_EXCLUDED_NAMES:
+            return True
+        if name.endswith(".pyc") or name.endswith(".egg-info"):
+            return True
+        return False

@@ -246,6 +246,56 @@ class TestStage:
 
         transport.disconnect()
 
+    def test_stage_skips_host_only_build_artifacts(self, tmp_path) -> None:
+        """``__pycache__``, ``*.pyc``, and ``*.egg-info`` must not deploy.
+
+        Regression: a pytest run on host populates ``__pycache__/``
+        next to every source file with CPython 3.x bytecode; an
+        editable install creates ``*.egg-info`` metadata.  Without
+        the exclude filter, ``mpremote fs cp -r`` flashes both,
+        and a Pi Pico W MP fills its ~860 KB filesystem on the
+        wifi+sockets+requests stack alone — even though the actual
+        library source totals ~240 KB.
+        """
+        source_dir = tmp_path / "src"
+        source_dir.mkdir()
+        package_dir = source_dir / "chumicro_example"
+        package_dir.mkdir()
+        (package_dir / "__init__.py").write_text("# init")
+        (package_dir / "module.py").write_text("# module")
+
+        # Cruft that should NOT deploy.
+        pycache = package_dir / "__pycache__"
+        pycache.mkdir()
+        (pycache / "module.cpython-314.pyc").write_bytes(b"\x00" * 1024)
+        (source_dir / "chumicro_example.egg-info").mkdir()
+        (source_dir / "chumicro_example.egg-info" / "PKG-INFO").write_text("noise")
+        (package_dir / ".DS_Store").write_bytes(b"\x00")
+        (package_dir / "stale.pyc").write_bytes(b"\x00")
+
+        harness_dir = tmp_path / "harness"
+        harness_dir.mkdir()
+
+        runner = FakeRunner()
+        serial = FakeSerialTransport(address="/dev/ttyUSB0")
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0",
+            mode="mount",
+            runner=runner,
+            transport_factory=_factory_for(serial),
+        )
+        transport.stage([source_dir], [], harness_dir)
+
+        staged = transport._staging_path
+        assert staged is not None
+        assert (staged / "chumicro_example" / "module.py").exists()
+        assert not (staged / "chumicro_example" / "__pycache__").exists()
+        assert not (staged / "chumicro_example.egg-info").exists()
+        assert not (staged / "chumicro_example" / ".DS_Store").exists()
+        assert not (staged / "chumicro_example" / "stale.pyc").exists()
+
+        transport.disconnect()
+
 
 class TestExecute:
     """Tests for MicropythonTransport.execute."""
