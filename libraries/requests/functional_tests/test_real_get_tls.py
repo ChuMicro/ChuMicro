@@ -14,22 +14,29 @@ Endpoint: ``https://example.com/`` — IANA-reserved, ships a small
 known body, real CA-signed cert.
 
 Why pin a CA instead of using the runtime's default trust store?
-Pi Pico W's heap can't fit ``ssl.create_default_context()``'s
-bundled CA store on either CP or MP — the same memory pressure
-chumicro-mqtt's TLS path hit.  Pinning just the few certs in
-example.com's chain (~3.7 KB) is the working pattern for that
-board class, and it's the one the test exercises.
+Embedded CP / MP don't ship a real trust store — see
+``plans/learnings.md`` "Embedded ssl.create_default_context() is
+not the CPython equivalent".  The canonical embedded pattern is
+``chumicro_sockets.ssl_context_with_ca(pem)`` with the issuing
+ROOT CA pinned.
 
-Refresh the inlined ``_CA_BUNDLE_PEM`` when Cloudflare rotates the
-issuing intermediate (typically multi-month cadence).  Grab a fresh
-chain with::
+What we pin: just the **root** (`SSL.com TLS ECC Root CA 2022`),
+not the full chain.  mbedTLS validates the server's chain against
+the client's trust anchor — the server provides intermediates
+during the handshake, so the client only needs the root.  Pinning
+the whole chain wastes heap and (in the case of this site's chain)
+drags in a 2025-NotBefore cross-sign that would force RTC seeding
+even though the actual root's NotBefore is 2022-10-21.
+
+Refresh the inlined ``_CA_PEM`` if SSL.com rotates the root (decade
+cadence, not month).  Grab a fresh root with::
 
     echo | openssl s_client -showcerts -servername example.com \\
       -connect example.com:443 2>/dev/null \\
       | python -c "import re, sys; \\
         certs=re.findall(r'-----BEGIN.*?-----END CERTIFICATE-----', \\
         sys.stdin.read(), re.DOTALL); \\
-        print(chr(10).join(certs[1:]))"
+        print(certs[-1])"  # last cert in the chain is the root
 
 Known platform gaps:
 
@@ -70,28 +77,11 @@ _TARGET_URL = "https://example.com/"
 _REQUEST_TIMEOUT_MS = 20_000
 _WIFI_CONNECT_TIMEOUT_MS = 15_000
 
-# CA bundle for example.com's chain (Cloudflare-issued, three certs:
-# issuing intermediate, intermediate root, AAA cross-sign).  Refresh
-# when example.com's cert chain rotates — see module docstring.
-_CA_BUNDLE_PEM = """\
------BEGIN CERTIFICATE-----
-MIIC5DCCAmqgAwIBAgIQLD+iaS9BE707f+W2BLSdTTAKBggqhkjOPQQDAzBPMQsw
-CQYDVQQGEwJVUzEYMBYGA1UECgwPU1NMIENvcnBvcmF0aW9uMSYwJAYDVQQDDB1T
-U0wuY29tIFRMUyBUcmFuc2l0IEVDQyBDQSBSMjAeFw0yMzEwMzExNzE3NDlaFw0z
-MzEwMjgxNzE3NDhaMFIxCzAJBgNVBAYTAlVTMRkwFwYDVQQKDBBDTE9VREZMQVJF
-LCBJTkMuMSgwJgYDVQQDDB9DbG91ZGZsYXJlIFRMUyBJc3N1aW5nIEVDQyBDQSAx
-MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEByHHIHytNSzTS+F3JA7hHMDGd2cp
-cY9i3MLTKmE6DJTKc6JwvW50pwKodvd2Qj4RAAy2jSejsVgw5jeh6syt3KOCASMw
-ggEfMBIGA1UdEwEB/wQIMAYBAf8CAQAwHwYDVR0jBBgwFoAUMqLH2FiL/3/APPJV
-aTPszswfvJcwSAYIKwYBBQUHAQEEPDA6MDgGCCsGAQUFBzAChixodHRwOi8vY2Vy
-dC5zc2wuY29tL1NTTC5jb20tVExTLVQtRUNDLVIyLmNlcjARBgNVHSAECjAIMAYG
-BFUdIAAwHQYDVR0lBBYwFAYIKwYBBQUHAwIGCCsGAQUFBwMBMD0GA1UdHwQ2MDQw
-MqAwoC6GLGh0dHA6Ly9jcmxzLnNzbC5jb20vU1NMLmNvbS1UTFMtVC1FQ0MtUjIu
-Y3JsMB0GA1UdDgQWBBScxAlyRxgXe6caibOSNdXhA4z+kjAOBgNVHQ8BAf8EBAMC
-AYYwCgYIKoZIzj0EAwMDaAAwZQIxAL0Sk3RweR6uG1aSHF3JgHQptubP9xoZyUmz
-HSa+SSdY5wTGSx5qAowrLPCpLio2PAIwXQGgYzf5QzD/1Bsu87WrUcIVtLixr5KQ
-wKBaFAyIJ7OOiWgW0HV/NA1UeuSe0zmN
------END CERTIFICATE-----
+# Trust anchor for example.com — `SSL.com TLS ECC Root CA 2022`,
+# the root that anchors the chain Cloudflare presents.  NotBefore
+# 2022-10-21; valid through 2037.  Single root, not a chain — see
+# module docstring for the rationale.
+_CA_PEM = """\
 -----BEGIN CERTIFICATE-----
 MIIDNDCCArmgAwIBAgIQYE2K+NALqHSLlVhTFyxfLjAKBggqhkjOPQQDAzBOMQsw
 CQYDVQQGEwJVUzEYMBYGA1UECgwPU1NMIENvcnBvcmF0aW9uMSUwIwYDVQQDDBxT
@@ -111,31 +101,6 @@ bC5jb20vU1NMY29tLVRMUy1Sb290LTIwMjItRUNDLmNybDAdBgNVHQ4EFgQUMqLH
 MGYCMQC4SkI+e2cts1nTN9MCRil97z624WxLAp94hT7tNZGPZLe9YiLIyzgKqW/b
 E0b2h9ACMQCvV5XMRcunAylQaCQc4J/GwR1p7yrPC0DRWWeyLAkQWi5Ylta9DxlX
 74QFFksFCP0=
------END CERTIFICATE-----
------BEGIN CERTIFICATE-----
-MIIEPjCCAyagAwIBAgIQFz3KYOqfjhAm2vzXKBDkjjANBgkqhkiG9w0BAQsFADB7
-MQswCQYDVQQGEwJHQjEbMBkGA1UECAwSR3JlYXRlciBNYW5jaGVzdGVyMRAwDgYD
-VQQHDAdTYWxmb3JkMRowGAYDVQQKDBFDb21vZG8gQ0EgTGltaXRlZDEhMB8GA1UE
-AwwYQUFBIENlcnRpZmljYXRlIFNlcnZpY2VzMB4XDTI1MDgwMTAwMDAwMFoXDTI4
-MTIzMTIzNTk1OVowTjELMAkGA1UEBhMCVVMxGDAWBgNVBAoMD1NTTCBDb3Jwb3Jh
-dGlvbjElMCMGA1UEAwwcU1NMLmNvbSBUTFMgRUNDIFJvb3QgQ0EgMjAyMjB2MBAG
-ByqGSM49AgEGBSuBBAAiA2IABEUpNXP6wrgjzhR9qLFNoFs27iosU8NgCTWyJGYm
-acCzldZdkkAZDsalE3D07xJRKF3nzL35PIXBz5SQySvOkkJYWWf9lCcQZIxPBLFN
-SeR7T5v15wj4A4j3p8OSSxlUgaOCAZcwggGTMB8GA1UdIwQYMBaAFKARCiM+lvEH
-7OKvKe+CpX/QMKS0MB0GA1UdDgQWBBSJjy+j6CugFFR781a4Jl9nOAuc0DAOBgNV
-HQ8BAf8EBAMCAYYwEgYDVR0TAQH/BAgwBgEB/wIBAjAdBgNVHSUEFjAUBggrBgEF
-BQcDAQYIKwYBBQUHAwIwgZIGA1UdIASBijCBhzAHBgVngQwBATAIBgZngQwBAgEw
-CAYGZ4EMAQICMAgGBmeBDAECAzAOBgwrBgEEAYKpMAEDAQEwDgYMKwYBBAGCqTAB
-AwECMA4GDCsGAQQBgqkwAQMBAzAOBgwrBgEEAYKpMAEDAQQwDgYMKwYBBAGCqTAB
-AwEFMA4GDCsGAQQBgqkwAQMBBjBDBgNVHR8EPDA6MDigNqA0hjJodHRwOi8vY3Js
-LmNvbW9kb2NhLmNvbS9BQUFDZXJ0aWZpY2F0ZVNlcnZpY2VzLmNybDA0BggrBgEF
-BQcBAQQoMCYwJAYIKwYBBQUHMAGGGGh0dHA6Ly9vY3NwLmNvbW9kb2NhLmNvbTAN
-BgkqhkiG9w0BAQsFAAOCAQEAQ+Vw+0vuJDzwOCiGy95GwysrnGBYAFdba+jQTkXY
-vkJWGtID1xfyUhKf8tZupwURpkOoVB+9ZvsR15BZ8OSZrRw8Uh32Qz6bYale3PZ8
-0izAhlAwSWR0PD7MQxMUxY9b2GsCvSb8z1XgJxfMoZSRRCTVgWDhua7WB2MBdtN+
-A88zoXdY/PhVnox0NZbMxXdCSWc2yojUEO3AwcGEcTL9+I1w6A89onNQ0SKfGXs/
-Xz6UajT8m0gH1BtdUUbur3aB3+n0zJ/U7u35DKiGv5mmNG81ldZrWjBTJ1T9fxVI
-WmmbTVzZvygNMtUumSs5DelljhlJAidAsTc+5iCBJmqRFg==
 -----END CERTIFICATE-----
 """
 
@@ -211,7 +176,7 @@ def test_real_https_get_completes_runner_shaped() -> None:
     wifi = _bring_wifi_up()
     print(f"WIFI_OK ip={wifi.ip}")
 
-    ssl_context = ssl_context_with_ca(_CA_BUNDLE_PEM)
+    ssl_context = ssl_context_with_ca(_CA_PEM)
     client = HttpClient(
         connection_factory=chumicro_sockets_factory(
             radio=wifi.adapter.radio,
