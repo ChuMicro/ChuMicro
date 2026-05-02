@@ -49,6 +49,9 @@
       <sourceFolder url="file://$MODULE_DIR$/libraries/timing/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/timing/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/timing/functional_tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/websockets/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/websockets/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/libraries/websockets/functional_tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/wifi/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/wifi/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/libraries/wifi/functional_tests" isTestSource="true" />
