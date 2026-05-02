@@ -95,8 +95,20 @@ QoS 0 + QoS 1 are implemented; QoS 2 raises `UnsupportedQoSError`.  Last-will, r
 | `client.connect() / .disconnect()` | Lifecycle. |
 | `WhenOversized.{DROP_SILENT,DROP_WITH_EVENT,DISCONNECT}` | Policy for inbound payloads above `max_message_size`. |
 | `ProtocolState.{DISCONNECTED,CONNECTING,CONNECTED,DISCONNECTING,FAILED}` | Lifecycle states. |
+| `MQTTBackpressureError` | Raised when an outbound publish/subscribe overflows `max_tx_queue_size` — caller's signal to drain via `handle()` and retry. |
 | `MQTTError` / `MQTTConnectError` / `MQTTProtocolError` / `UnsupportedQoSError` | Exceptions. |
 | Encoder + decoder primitives (`encode_publish`, `encode_varlen`, `decode_varlen`, `encode_string`, `topic_matches`) | Public for downstream tooling. |
+
+### Tuning for tick-latency vs throughput
+
+Two `MQTTClient(...)` constructor knobs let you trade tick fairness for throughput:
+
+| Knob | Default | What it bounds |
+|---|---|---|
+| `recv_budget_per_tick` | `1024` (bytes) | Soft cap on bytes drained from the socket in one `handle()` call.  Without this, a 100 KB blob in a fat kernel TCP buffer (lwIP on rp2 holds 16–32 KB) would monopolize the tick until drained — visibly stuttering a concurrent LED blink or sub-second control loop.  Raise for fast big-blob ingestion at the cost of LED smoothness. |
+| `max_tx_queue_size` | `100` packets | Hard cap on pending outbound packets.  Appending past the cap raises `MQTTBackpressureError`; protocol-internal traffic (PUBACK responses, retransmits, PINGREQ) bypasses the cap so QoS-1 / keepalive contracts hold.  Failed QoS-1 publishes roll back the `packet_id` allocation cleanly so the id pool isn't leaked on backpressure.  Raise for bursty publishers; lower for memory-tight boards. |
+
+See `plans/learnings.md` §"A naive `recv_into` loop can starve cooperative tasks" for the full root-cause analysis that motivated `recv_budget_per_tick`.
 
 ## Platform support
 

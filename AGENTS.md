@@ -96,12 +96,17 @@ Libraries must be compatible across all three runtimes. If a third-party library
 | [timing](libraries/timing/) | Wraparound-safe millisecond tick helpers, heartbeat scheduling, deterministic test fakes |
 | [runner](libraries/runner/) | Tick-based task runner: check/handle gates, periodic tasks, shared timestamps |
 | [compat](libraries/compat/) | Cross-runtime compatibility polyfills |
-| [msgpack](libraries/msgpack/) | Compact MessagePack serialization with native CircuitPython C module delegation |
+| [logging](libraries/logging/) | Levelled logging — runner-friendly, no chumicro deps; per-logger levels with hierarchy resolution |
+| [events](libraries/events/) | Runner-shaped pub/sub event bus (bounded, drop-oldest); zero chumicro deps and no other library imports it ([Decision 0042](plans/decisions/0042-library-dependency-policy.md)) |
+| [msgpack](libraries/msgpack/) | Compact MessagePack serialization with native CircuitPython C module delegation; wire-compatible subset of PyPI `msgpack(use_single_float=True)` |
 | [config](libraries/config/) | Standardized `from_dict` + on-device `runtime_config.msgpack` reader; section-namespaced runtime-config convention (Decisions [0035](plans/decisions/0035-runtime-config-structure.md) / [0036](plans/decisions/0036-chumicro-config-library.md)) |
 | [kvstore](libraries/kvstore/) | Mapping-shaped persistent key-value store with `auto` / `nvm` / `nvs` / `littlefs` / `memory` backends; CRC-framed CP NVM; atomic LittleFS commits ([Decision 0034](plans/decisions/0034-kvstore-api-and-backends.md)) |
-| [wifi](libraries/wifi/) | Sole-supervisor WiFi service with state machine + reconnect supervisor; per-runtime adapters for CP, MP-ESP32, MP-RP2 (CYW43), and CPython fake |
-| [sockets](libraries/sockets/) | Cross-runtime TCP + TLS client sockets — one protocol over CP `socketpool`, MP `socket`+`ssl`, and CPython stdlib ([Decision 0031](plans/decisions/0031-chumicro-sockets.md)) |
-| [mqtt](libraries/mqtt/) | Non-blocking MQTT 3.1.1 client (QoS 0 + 1) on top of `chumicro-sockets` + `chumicro-timing`; runner-shaped `check`/`handle`; per-`packet_id` in-flight QoS 1 tracking; `WhenOversized` policy enum |
+| [wifi](libraries/wifi/) | Sole-supervisor WiFi service with state machine + reconnect supervisor; per-runtime adapters for CP, substrate-aware MP (auto-detects ESP-IDF vs CYW43), and CPython fake (commit `0304542` unified the previously-split MP-ESP32 / MP-RP2 adapters) |
+| [sockets](libraries/sockets/) | Cross-runtime TCP + TLS + UDP sockets — one protocol per shape over CP `socketpool`, MP `socket`+`ssl`, and CPython stdlib ([Decision 0031](plans/decisions/0031-chumicro-sockets.md)); `ssl_context_with_ca` defaults to `CERT_REQUIRED`, `ssl_context_with_cert_and_key_paths` for CP/MP server-side TLS |
+| [ntp](libraries/ntp/) | Runner-shaped SNTP client over an injected UDP socket; pure-Python, cross-runtime |
+| [requests](libraries/requests/) | Non-blocking HTTP/1.1 client built on `chumicro-sockets` + `chumicro-timing`; LED keeps blinking through TLS handshake / mid-timeout / stalled peer; runner-shaped state machine |
+| [http_server](libraries/http_server/) | Non-blocking HTTP/1.1 server built on `chumicro-sockets` + `chumicro-timing`; per-connection state machine advanced one chunk per tick; `@server.route` decorator with method dispatch + path params; TLS-server-capable on every supported runtime/board pair *except* CP-on-rp2 (use a TLS-wrapped listener from `chumicro_sockets.ssl_context_with_cert_and_key_paths`) |
+| [mqtt](libraries/mqtt/) | Non-blocking MQTT 3.1.1 client (QoS 0 + 1) on top of `chumicro-sockets` + `chumicro-timing`; runner-shaped `check`/`handle`; per-`packet_id` in-flight QoS 1 tracking; `recv_budget_per_tick` + `max_tx_queue_size` for cooperative-tick fairness; `WhenOversized` policy enum; `MQTTBackpressureError` on TX overflow |
 
 ## Workbench (host-only, run on a laptop)
 
@@ -109,7 +114,7 @@ Libraries must be compatible across all three runtimes. If a third-party library
 |---------|-------------|
 | [deploy](workbench/deploy/) | Push code to a board, probe identity, flash firmware (UF2 + esptool); recovery layer that classifies failures and walks the user through fixes |
 | [repl](workbench/repl/) | Serial REPL with traceback highlighting, an `mpremote`-compatible TUI, `tail()` follow-mode for deploy orchestration, programmatic `ReplSession` |
-| [workspace](workbench/workspace/) | One-stop host CLI + Python API for ChuMicro project workspaces — `init` clones a starter, `setup` creates the venv + materializes `_templates/`, plus `add-device`, `deploy`, `switch`, `repl`, `install-firmware`, `update` (re-flow tool-owned files from upstream).  Canonical starter lives at the [ChuMicro-Workspace-Template](https://github.com/ChuMicro/ChuMicro-Workspace-Template) repo (Decision 0038) |
+| [workspace](workbench/workspace/) | One-stop host CLI + Python API for ChuMicro project workspaces — `init` clones a starter, `setup` creates the venv + materializes `_templates/`, plus `add-device`, `deploy` (single thing, `--all-devices`, or `--all-things`), `repl <thing>` (deploy-then-tail one-shot), `install-firmware`, `status` / `doctor` health checks, `new --library` / `new --from`, path-aware `rename`, `update` (re-flow tool-owned files from upstream).  Canonical starter lives at the [ChuMicro-Workspace-Template](https://github.com/ChuMicro/ChuMicro-Workspace-Template) repo (Decision 0038) |
 
 ## Tech stack
 

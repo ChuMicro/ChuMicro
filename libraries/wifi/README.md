@@ -89,7 +89,7 @@ wifi.on_state_change(lambda old, new: print(f"{old} -> {new}"))
 | Symbol | What it does |
 |---|---|
 | `WifiConfig` | Typed connection settings (`ssid`, `password`, hostname, timeouts, reconnect tuning) with `from_dict` factory per [Decision 0036](../../plans/decisions/0036-chumicro-config-library.md). |
-| `WifiService` | State machine + reconnect supervisor; implements `Runner.add()`-compatible `check`/`handle`. Auto-detects the runtime adapter (`fake` on CPython, real adapters on device once Slices 1-3 land). |
+| `WifiService` | State machine + reconnect supervisor; implements `Runner.add()`-compatible `check`/`handle`. Auto-detects the runtime adapter at construction time (`FakeWifiAdapter` on CPython, `CpWifiAdapter` on CircuitPython, substrate-aware `MpWifiAdapter` on MicroPython — handles ESP-IDF + CYW43 transparently). |
 | `WifiState` | String-sentinel state names: `DISCONNECTED`, `CONNECTING`, `CONNECTED`, `RECONNECTING`, `FAILED`. |
 | `chumicro_wifi.testing.FakeWifi` | Drop-in `WifiService` wrapping a `FakeWifiAdapter` with `set_connect_outcome`, `drop_link`, `calls` hooks for downstream library tests. |
 | `_templates/config.toml` | Per-library config template ([ADR 0036 §5](../../plans/decisions/0036-chumicro-config-library.md)) consumed by workspace tooling to scaffold a thing's `config.toml`. |

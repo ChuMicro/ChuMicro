@@ -43,15 +43,21 @@ Source layout (mirrors chumicro-requests' post-Decision-0029 split):
   `Response`, per-connection state machine, response writer,
   `build_response()` helper.
 
-v1 scope (Decision 0041): slice 7a — listener + request line +
-header parser + canned response.  Slices 7b (routing decorator
-+ JSON helpers + multi-method dispatch), 7c (bounded multi-
-connection + per-tick budgets + request_timeout_ms), 7d (live-board
-verification on Pi Pico W) round out v1.
+v1 (Decision 0041) shipped across slices 7a–7d: listener + request
+line + header parser + canned response (7a), `@server.route`
+decorator + JSON helpers + multi-method dispatch (7b), bounded
+multi-connection + per-tick budgets + request_timeout_ms (7c),
+and live-board verification on Pi Pico W (7d).
 
-v1 non-goals: TLS server (Pi Pico W can't host the handshake),
-WebSockets, sessions / cookies / auth helpers, multipart upload,
-sub-app mounting, async handlers.  See Decision 0041 §8.
+TLS-server support is provided transport-side by
+:func:`chumicro_sockets.ssl_context_with_cert_and_key_paths` —
+wrap the listener your ``listener_factory`` returns.  Verified
+working on every supported runtime/board pair *except* CP-on-rp2
+(rp2-port mbedTLS feature-flag gap; use ESP32-family for CP HTTPS).
+
+v1 non-goals: WebSockets, sessions / cookies / auth helpers,
+multipart upload, sub-app mounting, async handlers.  See
+Decision 0041 §8.
 """
 
 from chumicro_http_server._wire import (

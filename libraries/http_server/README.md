@@ -78,11 +78,10 @@ while True:
 | `parse_query` / `split_target` | URL helpers. |
 | `ServerError` + subclasses | Typed exception hierarchy (subclasses `chumicro_requests.HttpError`). |
 
-v1 scope (Decision 0041) ships in slices: 7a — listener + parser +
-canned response (this commit); 7b — `@server.route` decorator + JSON
-helpers + multi-method dispatch; 7c — bounded multi-connection +
-per-tick budgets + request_timeout_ms; 7d — live-board verification
-on Pi Pico W.  TLS server is investigated separately.
+v1 (Decision 0041) shipped end-to-end across slices 7a–7d: listener +
+parser + canned response, `@server.route` decorator + JSON helpers +
+multi-method dispatch, bounded multi-connection + per-tick budgets +
+`request_timeout_ms`, and live-board verification on Pi Pico W.
 
 v1 non-goals: WebSockets, sessions / cookies / auth helpers, multipart
 upload, sub-app mounting, async handlers.  See Decision 0041 §8.
@@ -93,6 +92,26 @@ Works on CPython, MicroPython, and CircuitPython.  Pure Python; depends
 only on `chumicro-sockets` and `chumicro-timing`.  The shared HTTP/1.1
 primitives (case-insensitive header dict, charset parsing) are inlined
 locally — no `chumicro-requests` dependency on the device.
+
+### TLS server (HTTPS)
+
+`chumicro-http-server` itself is transport-agnostic — pass a TLS-wrapped
+listener from
+[`chumicro_sockets.ssl_context_with_cert_and_key_paths`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets)
+into `listener_factory` and the same `HttpServer` runs HTTPS.  Live
+verification across the supported board matrix (`plans/learnings.md`):
+
+| Runtime + board | TLS server status | Notes |
+|---|---|---|
+| CircuitPython on ESP32-S2 (Lolin S2) | ✅ Works | ~6 KB context + ~35 KB handshake heap. |
+| CircuitPython on rp2 (Pi Pico W) | ❌ Fails post-handshake (`OSError(32)`) | rp2-port mbedTLS feature-flag gap; use ESP32-family for HTTPS on CP. |
+| MicroPython on ESP32-S2 | ✅ Works | Hardware-accelerated handshake; ~1 KB heap. |
+| MicroPython on rp2 (Pi Pico W) | ✅ Works (RSA-2048 only) | DER-encoded key; ~25 KB handshake heap; ECC keys fail at context build. |
+
+The TLS handshake is synchronous inside `wrap_socket(..., server_side=True)`;
+budget for a ~100–500 ms listener stall during accept.  Once the
+handshake completes, the per-connection state machine resumes its
+runner-shaped, LED-blink-friendly progression.
 
 ## Examples
 

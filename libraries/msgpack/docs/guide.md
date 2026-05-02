@@ -111,6 +111,43 @@ Unsupported types raise `TypeError`.  Integers outside the 32-bit range raise `O
 
 The wire format is identical regardless of which implementation is used — data packed on one runtime can be unpacked on any other.
 
+## Wire-format compatibility with PyPI `msgpack`
+
+`chumicro_msgpack.packb(obj)` produces bytes byte-for-byte identical to
+`msgpack.packb(obj, use_single_float=True)` for any subset-conforming
+input.  This is the load-bearing fact that lets a host-side workbench
+package import PyPI `msgpack` while the device-side payload uses
+`chumicro_msgpack` — they share a wire format with zero conversion.
+
+The subset is:
+
+* Integers in `[-2**31, 2**32 - 1]`.
+* Floats encoded as 32-bit (the `use_single_float=True` flag on the
+  PyPI side).
+* Strings, bytes, arrays, and maps with sizes under `65_536`.
+* No ext types.
+
+The decoder names the offending tag in its `ValueError` if a stricter
+encoder produces something outside the subset — for example,
+`"float64 (0xcb) not in chumicro msgpack subset; encode with
+msgpack.packb(obj, use_single_float=True)"`.  Two recurring sharp edges
+this avoids:
+
+1. **PyPI's default float encoding is float64.**  Without
+   `use_single_float=True`, `msgpack.packb(0.5)` emits `0xcb` + 8 bytes,
+   which `chumicro_msgpack.unpackb` rejects.
+2. **CPython sees PyPI msgpack via the same `import msgpack`.**  An
+   earlier version of `chumicro_msgpack/__init__.py` did
+   `try: from msgpack import pack, unpack` on every runtime — on CPython
+   that succeeded against the PyPI package and silently switched the
+   encoder to one that produced float64 / int64 / strict_map_key bytes.
+   The native delegation is now gated to
+   `sys.implementation.name == "circuitpython"`.
+
+If you ever see a similar pattern elsewhere (`try: import <X>` where
+`<X>` is a CPython PyPI package name with a different contract from a
+device-side library), flag it.
+
 ## What's new
 
 <!-- Add entries for user-visible changes when bumping VERSION.
