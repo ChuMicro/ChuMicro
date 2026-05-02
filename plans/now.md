@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **Workspace-ecosystem umbrella now genuinely closed.**  Two slices today.  (1) Phase 2f shipped per-thing `deploy_targets:` mapping + `deploy --all-things` end-to-end (mono-repo `ec1d133`, chumicro-workspace 0.0.2 → 0.0.3; template-repo [`4607864`](https://github.com/ChuMicro/ChuMicro-Workspace-Template/commit/4607864)).  (2) The remaining "Phase 5 carry-over: `agent_strictness` AST checks" was dropped per the no-speculative-public-API rule — the `quality.agent_strictness` field had no consumer since 2026-04-27 and the AST-check design pass was never done; removed rather than left as decorative config surface (consumer-less code rots quietly).  Today's earlier work: examples audit (template-repo `e8854fe`) + CP wipe→ready FAT-remount poll (mono-repo `1454c45`, chumicro-deploy 0.4.3).  No workspace-ecosystem carry-overs remain.
-- **Last shipped:** chumicro-workspace 0.0.4 (agent_strictness removal pending) + 0.0.3 (Phase 2f).
+- **Phase:** **Routine consolidation slice on `chumicro-wifi`.**  Unified `MpEsp32WifiAdapter` + `MpRp2WifiAdapter` into a single substrate-aware `MpWifiAdapter` (`_adapters/mp.py`) with `stack="espidf" | "cyw43"` parameterisation.  The two classes shared ~80 % of their bodies; the actual differentiator is which `wlan.config(**kwargs)` knob is applied (ESP-IDF: `reconnects=0` post-first-connect; CYW43: `pm=0xa11140` at configure time).  `WifiService._select_adapter` collapsed from 4-way to 3-way (CP / MP / fake), matching the shape `chumicro-sockets` already uses.  Dead `NAMESPACE = "esp32"` class attribute (zero readers) dropped along the way.  88 unit tests green at 100 % coverage on the new module; 98.88 % library-wide.  `chumicro-wifi` 0.0.2 → 0.0.3.
+- **Last shipped:** chumicro-wifi 0.0.3 — MP adapter unification (commit `0304542`).
 - **In flight:** —
 - **Blocked on:** —
-- **Last touched:** `workbench/workspace/{VERSION, src/chumicro_workspace/quality.py, tests/test_quality.py, docs/guide.md}`; `plans/workstreams/{workspace-ecosystem,project-workspace}.md`; template repo `workspace.yml`.
+- **Last touched:** `libraries/wifi/{VERSION, README.md, src/chumicro_wifi/{service.py, _adapters/mp.py}, tests/{test_wifi.py, test_mp_adapter.py}, functional_tests/test_mp_adapter_on_device.py}`; `plans/learnings.md` (new MP-WLAN-substrate-identity entry).
 
 ---
 
@@ -25,7 +25,9 @@ This is the front door. Everything else is deeper read.
 
 | Candidate | Where | Notes |
 |---|---|---|
-| Anything else in `## Now` of `next-up.md` | `plans/next-up.md` | Rebrand to ChipPy, OTA workstream (`plans/workstreams/ota.md`), shared per-runtime adapter helper, performance benchmarking infrastructure, etc. |
+| Hardware soak the unified MP adapter | four-board matrix | `python scripts/run.py test-libraries-functional --library wifi --runtime micropython` — confirms zero behavioural drift on real ESP-IDF + CYW43 boards.  Logic is byte-identical to the split classes, so low risk; can ship without it but cleaner to verify. |
+| Extract shared per-runtime adapter helper | `next-up.md` `## Next` | Now has only **one** remaining ladder consumer (`chumicro_kvstore.core._select_backend`); the wifi unification removed the second.  Even less urgent than before — the next-up entry's "low urgency until a third consumer surfaces" caveat applies more strongly now. |
+| Anything else in `## Now` of `next-up.md` | `plans/next-up.md` | Rebrand to ChipPy, OTA workstream (`plans/workstreams/ota.md`), performance benchmarking infrastructure, etc. |
 
 ## Hard rules to remember (non-negotiables)
 

@@ -85,6 +85,15 @@ Fix knobs that *don't* work: eager-importing at package top level was tried (com
 
 Observed during 2026-04-19 live PyCharm testing. Suspect: per-file `mpremote mount` cost + cold-start interpreter overhead. Profile against the batched-execute path before optimizing — there's an open investigation in `next-up.md`. Not yet root-caused.
 
+### MP `network.WLAN` API is identical between ESP-IDF and CYW43; only the `config(...)` knobs differ
+
+`network.WLAN(network.STA_IF)`, `active`, `connect`, `isconnected`, `ifconfig`, `disconnect` all behave the same on the MP ESP-IDF port (ESP32, S2, S3, C3, C6) and the MP CYW43 port (Pi Pico W).  What differs is which `wlan.config(**kwargs)` knobs the substrate accepts and *when* they take effect:
+
+* **ESP-IDF**: `config(reconnects=0)` disables the firmware-level auto-reconnect supervisor.  Read at re-association time, not activation time, so it must be applied *after* the first successful link, not at configure time.  Setting it before the first link silently no-ops or raises.
+* **CYW43**: `config(pm=0xa11140)` disables idle power-save (eliminates ~30-100 ms tick spikes).  Stateless from the substrate's perspective — applied at configure time, takes effect on the next idle window.  No firmware reconnect supervisor on CYW43, so no `reconnects` knob exists.
+
+Both knobs are `try`/`except (OSError, ValueError)` — older MP firmware variants (and non-ESP-IDF/non-CYW43 builds) may not expose them at all.  Substrate detection is a one-line probe: `try: import esp32 → "espidf"; except ImportError → "cyw43"`.  The MP `esp32` module ships with every ESP-IDF chip and is absent on CYW43.  See `chumicro_wifi._adapters.mp`.  Commit `0304542` consolidated two per-stack adapter classes into one substrate-aware adapter once the API-identity was confirmed across our four-board matrix.
+
 ### A naive `recv_into` loop can starve cooperative tasks when the kernel TCP buffer is fat
 
 `while True: recv_into(...); break-on-EAGAIN` is the obvious shape for a tick-based protocol parser, but on a Pi Pico W RP2 (lwIP TCP) the kernel can hold ~16-32 KB of inbound bytes, and our `rx_buffer_size`-bounded reads (256 B / call) mean a single `handle()` tick will iterate 60-128 times before EAGAIN drains the buffer.  At 50-200 µs per syscall + memmove on rp2, that's 6-25 ms inside a *single tick* — enough to visibly stutter a 10 ms LED blink rhythm or break a sub-second control loop.
