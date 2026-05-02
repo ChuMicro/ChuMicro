@@ -1003,6 +1003,349 @@ class TestDeployAllDevices:
         assert "no devices" in str(caught.value)
 
 
+class TestDeployTargetsMapping:
+    """Phase 2f — `deploy_targets:` per-thing → per-device mapping."""
+
+    def _seed_two_device_workspace(
+        self, tmp_path: Path, deploy_targets_block: str = "",
+    ) -> Path:
+        """Workspace with two registered devices + optional deploy_targets."""
+        workspace_yaml_body = (
+            "defaults:\n"
+            "  wifi:\n"
+            "    hostname_prefix: chu-\n"
+        )
+        if deploy_targets_block:
+            workspace_yaml_body += deploy_targets_block
+        (tmp_path / "workspace.yml").write_text(workspace_yaml_body)
+        (tmp_path / "secrets.yml").write_text("wifi_password: shh\n")
+        (tmp_path / "devices.yml").write_text(
+            "defaults:\n"
+            "  micropython: lolin-s2\n"
+            "devices:\n"
+            "  - id: lolin-s2\n"
+            "    runtime: micropython\n"
+            "    address: /dev/cu.fake-mp\n"
+            "  - id: pico-w\n"
+            "    runtime: circuitpython\n"
+            "    address: /dev/cu.fake-cp\n",
+        )
+        return tmp_path
+
+    def test_single_thing_picks_mapped_device(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """`deploy <thing>` (no --device) picks the thing's mapped target."""
+        root = self._seed_two_device_workspace(
+            tmp_path,
+            deploy_targets_block=(
+                "deploy_targets:\n"
+                "  back-porch: pico-w\n"
+            ),
+        )
+        _seed_thing(root, name="back-porch")
+
+        addresses_seen: list[str] = []
+
+        def factory(device: Any) -> FakeTransport:
+            addresses_seen.append(device.address)
+            return FakeTransport(execute_output="")
+
+        monkeypatch.setattr(Device, "create_transport", factory)
+
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root), "back-porch",
+        ])
+        assert exit_code == 0
+        # Mapped device wins over devices.yml's "defaults.micropython".
+        assert addresses_seen == ["/dev/cu.fake-cp"]
+
+    def test_single_thing_falls_back_when_unmapped(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A thing not in deploy_targets still uses devices.yml defaults."""
+        root = self._seed_two_device_workspace(
+            tmp_path,
+            deploy_targets_block=(
+                "deploy_targets:\n"
+                "  other-thing: pico-w\n"
+            ),
+        )
+        _seed_thing(root, name="back-porch")
+
+        addresses_seen: list[str] = []
+        monkeypatch.setattr(
+            Device, "create_transport",
+            lambda self: (
+                addresses_seen.append(self.address) or FakeTransport()
+            ),
+        )
+
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root), "back-porch",
+        ])
+        assert exit_code == 0
+        # Falls back to devices.yml's defaults.micropython → lolin-s2.
+        assert addresses_seen == ["/dev/cu.fake-mp"]
+
+    def test_explicit_device_overrides_mapping(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """`--device` always wins, even when deploy_targets has an entry."""
+        root = self._seed_two_device_workspace(
+            tmp_path,
+            deploy_targets_block=(
+                "deploy_targets:\n"
+                "  back-porch: pico-w\n"
+            ),
+        )
+        _seed_thing(root, name="back-porch")
+
+        addresses_seen: list[str] = []
+        monkeypatch.setattr(
+            Device, "create_transport",
+            lambda self: (
+                addresses_seen.append(self.address) or FakeTransport()
+            ),
+        )
+
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root),
+            "back-porch", "--device", "lolin-s2",
+        ])
+        assert exit_code == 0
+        # Explicit --device overrode the mapping.
+        assert addresses_seen == ["/dev/cu.fake-mp"]
+
+    def test_mapped_to_multiple_devices_loops(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A list-valued mapping deploys to every device in declaration order."""
+        root = self._seed_two_device_workspace(
+            tmp_path,
+            deploy_targets_block=(
+                "deploy_targets:\n"
+                "  back-porch:\n"
+                "    - pico-w\n"
+                "    - lolin-s2\n"
+            ),
+        )
+        _seed_thing(root, name="back-porch")
+
+        addresses_seen: list[str] = []
+        monkeypatch.setattr(
+            Device, "create_transport",
+            lambda self: (
+                addresses_seen.append(self.address) or FakeTransport()
+            ),
+        )
+
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root), "back-porch",
+        ])
+        assert exit_code == 0
+        assert addresses_seen == ["/dev/cu.fake-cp", "/dev/cu.fake-mp"]
+
+    def test_mapping_with_unknown_device_id_errors(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = self._seed_two_device_workspace(
+            tmp_path,
+            deploy_targets_block=(
+                "deploy_targets:\n"
+                "  back-porch: ghost-board\n"
+            ),
+        )
+        _seed_thing(root, name="back-porch")
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root), "back-porch",
+        ])
+        assert exit_code == 2
+        captured_stderr = capsys.readouterr().err
+        assert "deploy_targets" in captured_stderr
+        assert "ghost-board" in captured_stderr
+
+
+class TestDeployAllThings:
+    """Phase 2f — `deploy --all-things` walks the deploy_targets mapping."""
+
+    def _seed_three_thing_workspace(self, tmp_path: Path) -> Path:
+        """Two devices, three things, full deploy_targets coverage."""
+        (tmp_path / "workspace.yml").write_text(
+            "defaults:\n"
+            "  wifi:\n"
+            "    hostname_prefix: chu-\n"
+            "deploy_targets:\n"
+            "  back-porch: pico-w\n"
+            "  garage/door: lolin-s2\n"
+            "  garage/window:\n"
+            "    - lolin-s2\n"
+            "    - pico-w\n",
+        )
+        (tmp_path / "secrets.yml").write_text("wifi_password: shh\n")
+        (tmp_path / "devices.yml").write_text(
+            "defaults:\n"
+            "  micropython: lolin-s2\n"
+            "devices:\n"
+            "  - id: lolin-s2\n"
+            "    runtime: micropython\n"
+            "    address: /dev/cu.fake-mp\n"
+            "  - id: pico-w\n"
+            "    runtime: circuitpython\n"
+            "    address: /dev/cu.fake-cp\n",
+        )
+        for name in ("back-porch", "garage/door", "garage/window"):
+            _seed_thing(tmp_path, name=name)
+        return tmp_path
+
+    def test_walks_each_mapped_thing(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = self._seed_three_thing_workspace(tmp_path)
+
+        deploy_calls: list[str] = []
+        monkeypatch.setattr(
+            Device, "create_transport",
+            lambda self: (
+                deploy_calls.append(self.address) or FakeTransport()
+            ),
+        )
+
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root), "--all-things",
+        ])
+        assert exit_code == 0
+        # back-porch → pico-w; garage/door → lolin-s2;
+        # garage/window → [lolin-s2, pico-w].
+        assert deploy_calls == [
+            "/dev/cu.fake-cp",
+            "/dev/cu.fake-mp",
+            "/dev/cu.fake-mp",
+            "/dev/cu.fake-cp",
+        ]
+        out = capsys.readouterr().out
+        # Per-thing header lines fire when more than one thing in flight.
+        assert "=== back-porch ===" in out
+        assert "=== garage/door ===" in out
+        assert "=== garage/window ===" in out
+
+    def test_mutually_exclusive_with_positional(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = self._seed_three_thing_workspace(tmp_path)
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root),
+            "back-porch", "--all-things",
+        ])
+        assert exit_code == 2
+        assert "mutually exclusive" in capsys.readouterr().err
+
+    def test_mutually_exclusive_with_all_devices(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root = self._seed_three_thing_workspace(tmp_path)
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root),
+            "--all-things", "--all-devices",
+        ])
+        assert exit_code == 2
+        assert "mutually exclusive" in capsys.readouterr().err
+
+    def test_missing_deploy_targets_block_errors(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """No deploy_targets at all → exit 2 with a hint."""
+        root = _seed_workspace(tmp_path)
+        _seed_thing(root, name="back-porch")
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root), "--all-things",
+        ])
+        assert exit_code == 2
+        captured_stderr = capsys.readouterr().err
+        assert "deploy_targets" in captured_stderr
+        assert "Map each thing" in captured_stderr
+
+    def test_unknown_thing_in_mapping_errors(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """A thing in the mapping that doesn't exist on disk fails fast."""
+        (tmp_path / "workspace.yml").write_text(
+            "deploy_targets:\n"
+            "  ghost-thing: lolin-s2\n",
+        )
+        (tmp_path / "secrets.yml").write_text("wifi_password: shh\n")
+        (tmp_path / "devices.yml").write_text(
+            "defaults:\n  micropython: lolin-s2\n"
+            "devices:\n"
+            "  - id: lolin-s2\n"
+            "    runtime: micropython\n"
+            "    address: /dev/cu.fake-mp\n",
+        )
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(tmp_path), "--all-things",
+        ])
+        assert exit_code == 2
+        captured_stderr = capsys.readouterr().err
+        assert "unknown thing" in captured_stderr
+        assert "ghost-thing" in captured_stderr
+
+    def test_failure_continues_to_next_thing(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """One bad deploy doesn't short-circuit the loop; exit code is 1."""
+        root = self._seed_three_thing_workspace(tmp_path)
+
+        deploy_calls: list[str] = []
+
+        def factory(self: Any) -> FakeTransport:
+            deploy_calls.append(self.address)
+            if self.address == "/dev/cu.fake-mp":
+                return FakeTransport(
+                    execute_output=(
+                        "Traceback (most recent call last):\n"
+                        "RuntimeError: bad-device\n"
+                    ),
+                )
+            return FakeTransport(execute_output="")
+
+        monkeypatch.setattr(Device, "create_transport", factory)
+
+        exit_code = cli.main([
+            "deploy", "--workspace-dir", str(root), "--all-things",
+        ])
+        assert exit_code == 1
+        # Every (thing, device) pair was attempted despite the failures.
+        assert deploy_calls == [
+            "/dev/cu.fake-cp",
+            "/dev/cu.fake-mp",
+            "/dev/cu.fake-mp",
+            "/dev/cu.fake-cp",
+        ]
+
+
 class TestDeployFailureHints:
     """Phase 2d — failed deploys carry app-level recovery hints to stderr."""
 

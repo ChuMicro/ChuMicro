@@ -123,7 +123,7 @@ Three layers, three responsibilities: `code.py` is the firmware entrypoint (stab
 
 ### Status
 
-> Project-workspace Phase 4a feature-complete + workspace-ecosystem Phases 1, 2, 4, 5 shipped (2026-04-27).  The package consolidates everything Decision 0029 / 0035 / 0038 specified plus the user-friendliness pass that followed: nested thing namespaces, an `examples/` folder for read-and-scaffold demos, `status` / `doctor` health snapshots (now also a pre-deploy gate), `deploy --dry-run`, `deploy --all-devices`, `repl <thing>` one-shot deploy + tail, app-level deploy-failure recovery hints, `new --library` for chumicro-style libraries, `workspace.yml` `quality:` knob wiring, `preflight` + `dump-config` commands.
+> Project-workspace Phase 4a feature-complete + workspace-ecosystem Phases 1, 2, 4, 5 shipped (2026-04-27); Phase 2f closed 2026-05-01.  The package consolidates everything Decision 0029 / 0035 / 0038 specified plus the user-friendliness pass that followed: nested thing namespaces, an `examples/` folder for read-and-scaffold demos, `status` / `doctor` health snapshots (now also a pre-deploy gate), `deploy --dry-run`, `deploy --all-devices`, `deploy --all-things` + per-thing `deploy_targets:` defaults, `repl <thing>` one-shot deploy + tail, app-level deploy-failure recovery hints, `new --library` for chumicro-style libraries, `workspace.yml` `quality:` knob wiring, `preflight` + `dump-config` commands.
 
 ## Public Python API
 
@@ -152,6 +152,9 @@ from chumicro_workspace import (
 
     # Import-graph (Decision 0029 §6+§7)
     build_search_paths, read_library_sources,
+
+    # Per-thing → per-device mapping (Phase 2f)
+    read_deploy_targets,
 
     # Constants
     RUNTIME_CONFIG_DEVICE_PATH, GENERATED_DIRNAME,

@@ -262,6 +262,21 @@ python run.py deploy garage/door_open --all-devices
 
 Loops over every entry in `devices.yml` and ships the thing to each in declaration order.  Per-device failures don't abort the loop; the exit code is 1 if any device's deploy failed, 0 otherwise.  Mutually exclusive with `--device` / `--runtime` (caught at runtime with a precise message).
 
+### Per-thing default device — `deploy_targets:`
+
+When a workspace has multiple boards, typing `--device <id>` for every deploy becomes load-bearing.  `workspace.yml`'s `deploy_targets:` block carries a per-thing → per-device default; a bare `deploy <thing>` (no `--device` / `--runtime`) then picks the thing's mapped target.  Falls back to `devices.yml`'s `defaults:` block for unmapped things.
+
+```yaml
+deploy_targets:
+  garage/door: pi-pico-w-circuitpython-board   # bare string OK
+  garage/window: [lolin-s2-circuitpython-board]
+  garage/server:                               # multiple → list
+    - pi-pico-w-micropython-board
+    - lolin-s2-micropython-board
+```
+
+`deploy --all-things` walks the whole mapping at once — every thing to every device it lists, in declaration order.  Mutually exclusive with positional names / `--device` / `--runtime` / `--all-devices`.  Per-(thing, device) failures don't abort the loop; exit code reflects whether any failed.  Empty / missing `deploy_targets:` block exits 2 with a hint.
+
 ### Clean-slate deploys — `--wipe`
 
 ```bash

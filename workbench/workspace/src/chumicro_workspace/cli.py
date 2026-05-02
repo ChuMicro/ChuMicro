@@ -59,6 +59,7 @@ from chumicro_deploy.firmware_url import (
 
 from chumicro_workspace.boot_shim import thing_boot_source
 from chumicro_workspace.deploy_source import thing_directory_source
+from chumicro_workspace.deploy_targets import read_deploy_targets
 from chumicro_workspace.firmware_support import (
     FirmwareSupportStatus,
     check_firmware_supported,
@@ -848,6 +849,160 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
             )
             return 2
 
+    if args.import_graph and args.boot_shim:
+        print(
+            "deploy: --import-graph and --boot-shim are mutually exclusive.",
+            file=sys.stderr,
+        )
+        return 2
+
+    plan_or_exit = _build_deploy_plan(workspace, args)
+    if isinstance(plan_or_exit, int):
+        return plan_or_exit
+    deploy_plan = plan_or_exit
+
+    exit_code = 0
+    for thing_name, thing_dir, devices in deploy_plan:
+        if len(deploy_plan) > 1:
+            print(f"\ndeploy: === {thing_name} ===")
+        for device in devices:
+            if len(devices) > 1 or len(deploy_plan) > 1:
+                print(
+                    f"deploy: --- {device.transport}@{device.address} ---",
+                )
+            if args.boot_shim:
+                layout = "boot-shim"
+                source = thing_boot_source(
+                    thing_dir,
+                    workspace=workspace,
+                    thing_name=thing_name,
+                    entrypoint_filename=device.effective_entrypoint,
+                )
+            elif args.import_graph:
+                layout = "import-graph"
+                device_entrypoint = (
+                    args.entrypoint or f"/{device.effective_entrypoint}"
+                )
+                source = thing_import_graph_source(
+                    thing_dir,
+                    workspace=workspace,
+                    entrypoint_filename=device.effective_entrypoint,
+                    device_entrypoint=device_entrypoint,
+                )
+            else:
+                layout = "flat"
+                source = thing_directory_source(
+                    thing_dir,
+                    workspace_yaml=workspace.workspace_yaml,
+                    secrets_yaml=workspace.secrets_yaml,
+                    entrypoint=(
+                        args.entrypoint or f"/{device.effective_entrypoint}"
+                    ),
+                )
+            if args.dry_run:
+                print(_render_dry_run_summary(
+                    thing_name=thing_name,
+                    device=device,
+                    layout=layout,
+                    files=source.files(),
+                    entrypoint=source.entrypoint(),
+                    wipe=args.wipe,
+                ))
+                continue
+            if args.wipe:
+                print(
+                    f"deploy: wiping filesystem on "
+                    f"{device.transport}@{device.address} before deploy",
+                )
+            deleted: list[str] = []
+            result = _make_deploy_runner(
+                device, non_interactive=args.non_interactive,
+            ).deploy_diff(
+                source,
+                wipe=args.wipe,
+                on_file_deleted=deleted.append,
+            )
+            for stale_path in deleted:
+                print(f"deploy: removed stale {stale_path}")
+            if result.execute_output:
+                print(result.execute_output, end="")
+            if not result.success:
+                _emit_failure_hints(result)
+                exit_code = 1
+    return exit_code
+
+
+def _build_deploy_plan(
+    workspace: WorkspaceLayout, args: argparse.Namespace,
+) -> list[tuple[str, Path, list[Device]]] | int:
+    """Resolve the (thing, devices) pairs ``deploy`` will iterate.
+
+    Returns a list of ``(thing_slash_path, thing_dir, [Device, ...])``
+    tuples or an integer exit code when input validation fails.
+
+    Three input shapes:
+
+    * ``--all-things`` — walk ``workspace.yml``'s ``deploy_targets``
+      mapping; one tuple per (thing, devices-it-targets) pair.
+    * Positional name + ``--all-devices`` — one tuple targeting every
+      device in ``devices.yml``.
+    * Positional name (or default-when-only-one-thing) — one tuple
+      whose device list is either the user's ``--device`` /
+      ``--runtime`` choice, or — when no per-deploy override is
+      passed — the thing's ``deploy_targets`` entry, falling through
+      to the workspace's ``devices.yml`` default.
+    """
+    if args.all_things:
+        if (
+            args.names
+            or args.device_id is not None
+            or args.runtime is not None
+            or args.all_devices
+        ):
+            print(
+                "deploy: --all-things is mutually exclusive with positional "
+                "names / --device / --runtime / --all-devices.",
+                file=sys.stderr,
+            )
+            return 2
+        targets = read_deploy_targets(workspace.workspace_yaml)
+        if not targets:
+            print(
+                "deploy: --all-things requires a `deploy_targets:` block "
+                f"in {workspace.workspace_yaml.name}.  Map each thing to "
+                "one or more device ids and re-run.",
+                file=sys.stderr,
+            )
+            return 2
+        from chumicro_deploy.config.default import (  # noqa: PLC0415
+            load_devices_yml,
+        )
+
+        plan: list[tuple[str, Path, list[Device]]] = []
+        for thing_path, device_ids in targets.items():
+            thing_dir = workspace.thing_dir(thing_path)
+            if not thing_dir.is_dir():
+                print(
+                    f"deploy: deploy_targets references unknown thing "
+                    f"{thing_path!r} (no things/{thing_path}/ directory).",
+                    file=sys.stderr,
+                )
+                return 2
+            try:
+                thing_devices = [
+                    load_devices_yml(workspace.devices_yaml, device_id=did)
+                    for did in device_ids
+                ]
+            except (FileNotFoundError, ValueError) as error:
+                print(
+                    f"deploy: deploy_targets[{thing_path!r}]: {error}",
+                    file=sys.stderr,
+                )
+                return 2
+            plan.append((thing_path, thing_dir, thing_devices))
+        return plan
+
+    # Positional / default thing resolution.
     if not args.names:
         candidates = workspace.list_things()
         if not candidates:
@@ -864,8 +1019,8 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             return 2
-        names = [candidates[0]]
-        print(f"deploy: defaulting to {names[0]} (only thing in workspace).")
+        thing_name = candidates[0]
+        print(f"deploy: defaulting to {thing_name} (only thing in workspace).")
     else:
         if len(args.names) > 1:
             print(
@@ -874,19 +1029,11 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             return 2
-        names = [_resolve_thing_name(workspace, args.names[0])]
-    if args.import_graph and args.boot_shim:
-        print(
-            "deploy: --import-graph and --boot-shim are mutually exclusive.",
-            file=sys.stderr,
-        )
-        return 2
-    thing_dirs: list[Path] = []
-    for name in names:
-        thing_dir = workspace.thing_dir(name)
-        if not thing_dir.is_dir():
-            raise SystemExit(f"error: thing {thing_dir} not found")
-        thing_dirs.append(thing_dir)
+        thing_name = _resolve_thing_name(workspace, args.names[0])
+    thing_dir = workspace.thing_dir(thing_name)
+    if not thing_dir.is_dir():
+        raise SystemExit(f"error: thing {thing_dir} not found")
+
     if args.all_devices:
         if args.device_id is not None or args.runtime is not None:
             print(
@@ -895,74 +1042,33 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             return 2
-        devices = _resolve_all_devices(workspace)
-    else:
-        devices = [_resolve_device(workspace, args)]
+        return [(thing_name, thing_dir, _resolve_all_devices(workspace))]
 
-    exit_code = 0
-    for device in devices:
-        if len(devices) > 1:
-            print(
-                f"\ndeploy: --- {device.transport}@{device.address} ---",
+    # Default-from-mapping: when the user passed neither --device nor
+    # --runtime, consult workspace.yml's deploy_targets[thing] before
+    # falling back to devices.yml's defaults block.  Lets a workspace
+    # owner with multiple boards stop typing --device for every deploy.
+    if args.device_id is None and args.runtime is None:
+        targets = read_deploy_targets(workspace.workspace_yaml)
+        mapped = targets.get(thing_name)
+        if mapped:
+            from chumicro_deploy.config.default import (  # noqa: PLC0415
+                load_devices_yml,
             )
-        if args.boot_shim:
-            layout = "boot-shim"
-            source = thing_boot_source(
-                thing_dirs[0],
-                workspace=workspace,
-                thing_name=names[0],
-                entrypoint_filename=device.effective_entrypoint,
-            )
-        elif args.import_graph:
-            layout = "import-graph"
-            device_entrypoint = (
-                args.entrypoint or f"/{device.effective_entrypoint}"
-            )
-            source = thing_import_graph_source(
-                thing_dirs[0],
-                workspace=workspace,
-                entrypoint_filename=device.effective_entrypoint,
-                device_entrypoint=device_entrypoint,
-            )
-        else:
-            layout = "flat"
-            source = thing_directory_source(
-                thing_dirs[0],
-                workspace_yaml=workspace.workspace_yaml,
-                secrets_yaml=workspace.secrets_yaml,
-                entrypoint=args.entrypoint or f"/{device.effective_entrypoint}",
-            )
-        if args.dry_run:
-            print(_render_dry_run_summary(
-                thing_name=names[0],
-                device=device,
-                layout=layout,
-                files=source.files(),
-                entrypoint=source.entrypoint(),
-                wipe=args.wipe,
-            ))
-            continue
-        if args.wipe:
-            print(
-                f"deploy: wiping filesystem on "
-                f"{device.transport}@{device.address} before deploy",
-            )
-        deleted: list[str] = []
-        result = _make_deploy_runner(
-            device, non_interactive=args.non_interactive,
-        ).deploy_diff(
-            source,
-            wipe=args.wipe,
-            on_file_deleted=deleted.append,
-        )
-        for stale_path in deleted:
-            print(f"deploy: removed stale {stale_path}")
-        if result.execute_output:
-            print(result.execute_output, end="")
-        if not result.success:
-            _emit_failure_hints(result)
-            exit_code = 1
-    return exit_code
+
+            try:
+                mapped_devices = [
+                    load_devices_yml(workspace.devices_yaml, device_id=did)
+                    for did in mapped
+                ]
+            except (FileNotFoundError, ValueError) as error:
+                print(
+                    f"deploy: deploy_targets[{thing_name!r}]: {error}",
+                    file=sys.stderr,
+                )
+                return 2
+            return [(thing_name, thing_dir, mapped_devices)]
+    return [(thing_name, thing_dir, [_resolve_device(workspace, args)])]
 
 
 def _render_things_tree(
@@ -2309,6 +2415,17 @@ def build_parser() -> argparse.ArgumentParser:
             "Mutually exclusive with --device / --runtime.  "
             "Per-device failures don't abort the loop — every device "
             "gets a chance, exit code reflects whether any failed."
+        ),
+    )
+    deploy_parser.add_argument(
+        "--all-things",
+        action="store_true",
+        help=(
+            "Deploy every thing in workspace.yml's `deploy_targets:` "
+            "mapping to its declared device(s).  Mutually exclusive "
+            "with positional names / --device / --runtime / "
+            "--all-devices.  Per-thing failures don't abort the loop; "
+            "exit code reflects whether any failed."
         ),
     )
     deploy_parser.add_argument(

@@ -85,6 +85,7 @@ from chumicro_workspace.deploy_source import (
     find_thing_config,
     thing_directory_source,
 )
+from chumicro_workspace.deploy_targets import read_deploy_targets
 from chumicro_workspace.import_graph import (
     build_search_paths,
     read_library_sources,
@@ -145,6 +146,7 @@ __all__ = [
     "load_workspace_runtime_payload",
     "merge_configs",
     "micropython_board_for_machine",
+    "read_deploy_targets",
     "read_secrets_yaml",
     "read_library_sources",
     "read_thing_config",
