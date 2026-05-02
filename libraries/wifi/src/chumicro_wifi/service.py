@@ -30,23 +30,20 @@ def _select_adapter():
     """Pick the runtime-appropriate adapter.
 
     CP / MP branches lazy-import the substrate-specific module so the
-    board only parses the adapter it actually uses.  CPython falls
-    back to ``FakeWifiAdapter`` from :mod:`chumicro_wifi.testing` —
-    testing.py is host-only, but the CPython branch is the only place
-    the fallback fires.
+    board only parses the adapter it actually uses.  ``MpWifiAdapter``
+    auto-detects ESP-IDF vs CYW43 internally, so the dispatch here
+    is a clean three-way (CP / MP / fake).  CPython falls back to
+    ``FakeWifiAdapter`` from :mod:`chumicro_wifi.testing` — testing.py
+    is host-only, but the CPython branch is the only place the
+    fallback fires.
     """
     runtime_name = sys.implementation.name
     if runtime_name == "circuitpython":  # pragma: no cover - CP runtime path
         from chumicro_wifi._adapters.cp import CpWifiAdapter
         return CpWifiAdapter()
     if runtime_name == "micropython":  # pragma: no cover - MP runtime path
-        try:
-            import esp32  # noqa: F401
-        except ImportError:
-            from chumicro_wifi._adapters.mp_rp2 import MpRp2WifiAdapter
-            return MpRp2WifiAdapter()
-        from chumicro_wifi._adapters.mp_esp32 import MpEsp32WifiAdapter
-        return MpEsp32WifiAdapter()
+        from chumicro_wifi._adapters.mp import MpWifiAdapter
+        return MpWifiAdapter()
     # CPython host fallback — testing.py owns the fake.
     from chumicro_wifi.testing import FakeWifiAdapter
     return FakeWifiAdapter()
