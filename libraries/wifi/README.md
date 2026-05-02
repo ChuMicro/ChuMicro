@@ -96,7 +96,7 @@ wifi.on_state_change(lambda old, new: print(f"{old} -> {new}"))
 
 ## Platform support
 
-Works on CPython, MicroPython, and CircuitPython.  Ships four adapters: CircuitPython `wifi.radio` (`_adapters/cp.py`), MicroPython ESP32 `network.WLAN` (`_adapters/mp_esp32.py`), MicroPython RP2 CYW43 (`_adapters/mp_rp2.py`), and a `FakeWifiAdapter` for host-side tests.  The right adapter is selected at runtime via `sys.implementation.name` plus an `import esp32` probe.
+Works on CPython, MicroPython, and CircuitPython.  Ships three adapters: CircuitPython `wifi.radio` (`_adapters/cp.py`), MicroPython `network.WLAN` covering both ESP-IDF (ESP32 family) and CYW43 (Pi Pico W) stacks (`_adapters/mp.py`), and a `FakeWifiAdapter` for host-side tests.  The right adapter is selected at runtime via `sys.implementation.name`; the MP adapter then auto-detects ESP-IDF vs CYW43 internally via an `import esp32` probe.
 
 ## Examples
 

@@ -537,30 +537,21 @@ def test_cp_adapter_default_arg_raises_runtime_error_off_cp() -> None:
         CpWifiAdapter()
 
 
-def test_mp_esp32_adapter_default_arg_raises_runtime_error_off_mp() -> None:
-    """MP-ESP32 adapter raises ``RuntimeError`` (with hint) when ``network`` is missing.
+def test_mp_adapter_default_arg_raises_runtime_error_off_mp() -> None:
+    """``MpWifiAdapter`` raises ``RuntimeError`` (with hint) when ``network`` is missing.
 
-    Lands as the real adapter in Slice 2; default-arg construction
-    on CPython surfaces the runtime-incompatibility cleanly so
-    callers know to inject a fake or run on real MP.  The full
-    contract under injection is in ``test_mp_esp32_adapter.py``.
+    Default-arg construction on CPython surfaces the
+    runtime-incompatibility cleanly so callers know to inject a
+    fake or run on real MP.  The full contract under injection
+    (both ESP-IDF and CYW43 stacks) is in ``test_mp_adapter.py``.
     """
-    from chumicro_wifi._adapters.mp_esp32 import MpEsp32WifiAdapter
+    from chumicro_wifi._adapters.mp import MpWifiAdapter
     with raises(RuntimeError):
-        MpEsp32WifiAdapter()
-
-
-def test_mp_rp2_adapter_default_arg_raises_runtime_error_off_mp() -> None:
-    """MP-RP2 adapter raises ``RuntimeError`` (with hint) when ``network`` is missing.
-
-    Lands as the real adapter in Slice 3; default-arg construction
-    on CPython surfaces the runtime-incompatibility cleanly so
-    callers know to inject a fake or run on real MP.  The full
-    contract under injection is in ``test_mp_rp2_adapter.py``.
-    """
-    from chumicro_wifi._adapters.mp_rp2 import MpRp2WifiAdapter
-    with raises(RuntimeError):
-        MpRp2WifiAdapter()
+        # Pass stack explicitly so we hit _acquire_runtime_wlan
+        # (the auto-detect path on CPython would also trip
+        # RuntimeError, but pinning stack keeps the test stable
+        # regardless of host environment quirks).
+        MpWifiAdapter(stack="cyw43")
 
 
 # ---------------------------------------------------------------------------

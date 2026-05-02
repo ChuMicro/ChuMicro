@@ -1,14 +1,19 @@
-"""On-device tests for ``MpEsp32WifiAdapter`` against real ``network.WLAN``.
+"""On-device tests for the unified ``MpWifiAdapter`` against real ``network.WLAN``.
 
-Runs only on MicroPython ESP32 boards.  Pi Pico W MP has no
-``esp32`` module; the file's runtime guard short-circuits there
-so each test is a no-op on non-ESP32 MP devices.
+Runs on every MicroPython board with a wifi chip — covers both
+ESP-IDF stacks (Lolin S2, ESP32 family) and CYW43 stacks (Pi Pico W).
+The file's runtime guard short-circuits each test on non-MP runtimes
+or on MP without a network module, so each test is a no-op there.
+
+Stack-specific assertions (PM constant value, supervisor-disable
+knob) are guarded by the detected stack so they only run on the
+relevant board.
 
 These tests do **not** attempt to associate with a real AP — they
 target the adapter's contract with the substrate (configure /
-connect / is_linked / disconnect / ip / supervisor-disable),
-using a deliberate non-existent SSID so the connect call returns
-``False`` without needing live wifi credentials.
+connect / is_linked / disconnect / ip / per-stack knobs), using a
+deliberate non-existent SSID so the connect call returns ``False``
+without needing live wifi credentials.
 
 Each test calls ``disconnect`` cleanup at the end so the next test
 starts fresh.
@@ -17,24 +22,29 @@ starts fresh.
 import sys
 
 from chumicro_wifi import WifiConfig
-from chumicro_wifi._adapters.mp_esp32 import MpEsp32WifiAdapter
+from chumicro_wifi._adapters.mp import CYW43_PM_DISABLE, MpWifiAdapter
 
 _IS_MICROPYTHON = sys.implementation.name == "micropython"
 
 if _IS_MICROPYTHON:
     try:
-        import esp32  # noqa: F401
         import network
-        _HAS_ESP32 = True
+        _HAS_NETWORK = True
     except ImportError:
-        _HAS_ESP32 = False
+        _HAS_NETWORK = False
+    try:
+        import esp32  # noqa: F401
+        _DETECTED_STACK = "espidf"
+    except ImportError:
+        _DETECTED_STACK = "cyw43"
 else:
-    _HAS_ESP32 = False
+    _HAS_NETWORK = False
+    _DETECTED_STACK = None
 
 
 def _disconnect_quietly():
     """Drop any active station association without complaining."""
-    if not _HAS_ESP32:
+    if not _HAS_NETWORK:
         return
     try:
         wlan = network.WLAN(network.STA_IF)
@@ -44,40 +54,50 @@ def _disconnect_quietly():
 
 
 def test_adapter_constructs_against_real_wlan() -> None:
-    """Default-arg construction picks up the WLAN station handle cleanly."""
-    if not _HAS_ESP32:
+    """Default-arg construction picks up the WLAN station handle cleanly.
+
+    Auto-detects the stack and surfaces the corresponding ``name``
+    string — ``"mp_esp32"`` on ESP-IDF, ``"mp_rp2"`` on CYW43.
+    """
+    if not _HAS_NETWORK:
         return
-    adapter = MpEsp32WifiAdapter()
-    assert adapter.name == "mp_esp32"
+    adapter = MpWifiAdapter()
+    expected_name = "mp_esp32" if _DETECTED_STACK == "espidf" else "mp_rp2"
+    assert adapter.name == expected_name
     assert adapter._wlan is not None  # noqa: SLF001 - test introspection
 
 
 def test_configure_activates_radio_on_real_hardware() -> None:
-    """Configure brings the station up before the first connect attempt."""
-    if not _HAS_ESP32:
+    """Configure brings the station up before the first connect attempt.
+
+    On CYW43 it also applies the PM-disable knob; on ESP-IDF that
+    branch is a no-op.  Either way the substrate accepts the
+    config calls without raising.
+    """
+    if not _HAS_NETWORK:
         return
     _disconnect_quietly()
-    adapter = MpEsp32WifiAdapter()
+    adapter = MpWifiAdapter()
     adapter.configure(WifiConfig(ssid="x", password="y", hostname="chu-test"))
     assert adapter._wlan.active() is True  # noqa: SLF001 - test introspection
 
 
 def test_is_linked_reflects_substrate_state_when_disconnected() -> None:
     """No association → adapter reports False."""
-    if not _HAS_ESP32:
+    if not _HAS_NETWORK:
         return
     _disconnect_quietly()
-    adapter = MpEsp32WifiAdapter()
+    adapter = MpWifiAdapter()
     adapter.configure(WifiConfig(ssid="x", password="y"))
     assert adapter.is_linked() is False
 
 
 def test_ip_returns_none_when_not_linked() -> None:
     """No IP without an active link, even if the radio is active."""
-    if not _HAS_ESP32:
+    if not _HAS_NETWORK:
         return
     _disconnect_quietly()
-    adapter = MpEsp32WifiAdapter()
+    adapter = MpWifiAdapter()
     adapter.configure(WifiConfig(ssid="x", password="y"))
     assert adapter.ip() is None
 
@@ -88,12 +108,13 @@ def test_connect_to_nonexistent_ssid_returns_false_without_link() -> None:
     MP's ``connect`` is non-blocking — the call returns immediately
     after dispatch.  ``isconnected`` then reports ``False`` until /
     unless the AP responds.  Against a non-existent SSID it never
-    flips, so the adapter reports ``False`` correctly.
+    flips, so the adapter reports ``False`` correctly on either
+    stack.
     """
-    if not _HAS_ESP32:
+    if not _HAS_NETWORK:
         return
     _disconnect_quietly()
-    adapter = MpEsp32WifiAdapter()
+    adapter = MpWifiAdapter()
     adapter.configure(WifiConfig(ssid="x", password="y"))
     config = WifiConfig(
         ssid="chumicro-test-no-such-ap-12345",
@@ -107,11 +128,22 @@ def test_connect_to_nonexistent_ssid_returns_false_without_link() -> None:
 
 def test_disconnect_after_configure_is_safe() -> None:
     """Disconnect must succeed even when no association is live."""
-    if not _HAS_ESP32:
+    if not _HAS_NETWORK:
         return
     _disconnect_quietly()
-    adapter = MpEsp32WifiAdapter()
+    adapter = MpWifiAdapter()
     adapter.configure(WifiConfig(ssid="x", password="y"))
     # Should not raise even though there's nothing to disconnect.
     adapter.disconnect()
     assert adapter.is_linked() is False
+
+
+def test_pm_constant_value_matches_cyw43_disable_magic() -> None:
+    """``CYW43_PM_DISABLE`` is the published magic value for power-save off.
+
+    Confirms drift hasn't crept into the constant.  Value comes
+    from CYW43 vendor docs; community measurements confirm the
+    responsiveness improvement.  Runs on every board (the constant
+    isn't stack-gated; the assertion is cheap to keep portable).
+    """
+    assert CYW43_PM_DISABLE == 0xA11140
