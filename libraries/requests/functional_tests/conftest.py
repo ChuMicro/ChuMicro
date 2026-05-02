@@ -24,6 +24,7 @@ directly from the local filesystem.
 from __future__ import annotations
 
 import tomllib
+from datetime import UTC, datetime
 from pathlib import Path
 
 _HERE = Path(__file__).resolve().parent
@@ -45,15 +46,26 @@ def _read_wifi_section() -> tuple[str, str] | None:
 
 
 def pytest_configure(config) -> None:  # noqa: ARG001 - pytest hook signature
-    """Write/refresh ``_test_creds.py`` from the dev config."""
+    """Write/refresh ``_test_creds.py`` from the dev config.
+
+    Also bakes the host's current UTC into ``NOW_UTC_TUPLE`` so the
+    HTTPS test (``test_real_get_tls.py``) can seed the device RTC
+    before TLS validation — boot RTC lands at 2021-01-01 on most
+    ports, which makes mbedTLS reject any cert with NotBefore after
+    that.  Real deployments NTP-sync; this is the bench-test
+    equivalent.
+    """
     creds = _read_wifi_section()
     if creds is None:
         if _SHIM_PATH.exists():
             _SHIM_PATH.unlink()
         return
     ssid, password = creds
+    now = datetime.now(UTC)
+    now_tuple = (now.year, now.month, now.day, now.hour, now.minute, now.second)
     _SHIM_PATH.write_text(
         '"""Auto-generated test creds shim — do not check in."""\n'
         f"SSID = {ssid!r}\n"
-        f"PASSWORD = {password!r}\n",
+        f"PASSWORD = {password!r}\n"
+        f"NOW_UTC_TUPLE = {now_tuple!r}\n",
     )

@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **Routine consolidation slice on `chumicro-wifi` — closed end-to-end.**  Unified `MpEsp32WifiAdapter` + `MpRp2WifiAdapter` into a single substrate-aware `MpWifiAdapter` (`_adapters/mp.py`) with `stack="espidf" | "cyw43"` parameterisation.  The two classes shared ~80 % of their bodies; the actual differentiator is which `wlan.config(**kwargs)` knob is applied (ESP-IDF: `reconnects=0` post-first-connect; CYW43: `pm=0xa11140` at configure time).  `WifiService._select_adapter` collapsed from 4-way to 3-way (CP / MP / fake), matching the shape `chumicro-sockets` already uses.  Dead `NAMESPACE = "esp32"` class attribute (zero readers) dropped along the way.  88 unit tests green at 100 % coverage on the new module; 98.88 % library-wide.  Hardware-soaked across both MP stacks: Pi Pico W (CYW43, MP 1.28.0) 21/21 in 43.3 s, Lolin S2 (ESP-IDF, MP 1.28.0) 21/21 in 48.9 s — auto-detect picked the right stack on each board (`name == "mp_rp2"` / `"mp_esp32"`) and stack-specific assertions held.  `chumicro-wifi` 0.0.2 → 0.0.3.
-- **Last shipped:** chumicro-wifi 0.0.3 — MP adapter unification (commit `0304542`), hardware-soaked clean on both MP stacks.
+- **Phase:** **Two related plan-cleanup slices closed.**  (1) Retired the four `.scratch/run_{wifi,sockets,requests,http_server}_acceptance.py` host-driven runners — superseded by canonical `libraries/*/functional_tests/test_real_*.py` suites since the unified `chumicro-pytest-device` plugin shipped 2026-04-27.  Salvaged the one genuinely distinct path (pinned-CA HTTPS via `chumicro_sockets.ssl_context_with_ca`) into `libraries/requests/functional_tests/test_real_get_tls.py` — HttpClient + TLS context + RTC seed via `_test_creds.NOW_UTC_TUPLE` injected by the conftest; CA bundle inlined for refresh on Cloudflare rotation.  Deleted the four runners and the four scratch CA-bundle PEMs.  Hardware-validated 4/4 on the boards with adequate flash (Pi Pico W CP flash 6.89 s, Lolin S2 MP flash 5.36 s); Pi Pico W MP flash too full to fit the requests stack — pre-existing Decision 0015 boundary, also affects `test_real_get.py`.  (2) Killed the open "library-self-declared deploy-mode constraints" follow-up + stripped the Pi-Pico-W-CP-needs-flash-mode callout from `libraries/mqtt/README.md`.  The originating constraint table experiment had already been reverted (`f225fe5` → `95e57fc`); the README + recovery-hint stop-gap (`9740f15`) was the remaining "prepared support".  Conclusion: the existing `--deploy-mode flash` flag plus the recovery-layer's generic `INSUFFICIENT_MEMORY` plan are sufficient — no library × board × runtime routing infrastructure needed.
+- **Last shipped:** plan/scratch cleanup + chumicro-requests TLS functional test salvage (this commit).
 - **In flight:** —
 - **Blocked on:** —
-- **Last touched:** `libraries/wifi/{VERSION, README.md, src/chumicro_wifi/{service.py, _adapters/mp.py}, tests/{test_wifi.py, test_mp_adapter.py}, functional_tests/test_mp_adapter_on_device.py}`; `plans/learnings.md` (new MP-WLAN-substrate-identity entry).
+- **Last touched:** `libraries/requests/functional_tests/{test_real_get_tls.py (new), conftest.py}`; `libraries/mqtt/README.md`; `plans/next-up.md`; `.scratch/run_*_acceptance.py` + `example_*.pem` (deleted).
 
 ---
 
@@ -25,8 +25,8 @@ This is the front door. Everything else is deeper read.
 
 | Candidate | Where | Notes |
 |---|---|---|
-| Extract shared per-runtime adapter helper | `next-up.md` `## Next` | Now has only **one** remaining ladder consumer (`chumicro_kvstore.core._select_backend`); the wifi unification removed the second.  Even less urgent than before — the next-up entry's "low urgency until a third consumer surfaces" caveat applies more strongly now. |
-| Anything else in `## Now` of `next-up.md` | `plans/next-up.md` | Rebrand to ChipPy, OTA workstream (`plans/workstreams/ota.md`), performance benchmarking infrastructure, etc. |
+| Extract shared per-runtime adapter helper | `next-up.md` `## Next` | Now has only **one** remaining ladder consumer (`chumicro_kvstore.core._select_backend`); the wifi unification removed the second.  Low urgency until a third consumer surfaces. |
+| Anything else in `## Next` of `next-up.md` | `plans/next-up.md` | Rebrand to ChipPy, OTA workstream (`plans/workstreams/ota.md`), digital I/O library, performance benchmarking infrastructure, etc. |
 
 ## Hard rules to remember (non-negotiables)
 
