@@ -1,0 +1,122 @@
+# chumicro-websockets
+
+<img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png"
+align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
+
+Non-blocking WebSocket (RFC 6455) client + server for CircuitPython, MicroPython, and CPython.  Built on `chumicro-sockets` and `chumicro-timing` so an LED can keep blinking through the opening handshake, frame I/O, and the close handshake.
+
+<br clear="left">
+
+> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family — small, focused Python libraries for microcontrollers and laptops. [See all libraries.](https://github.com/ChuMicro/ChuMicro#whats-in-the-box)
+
+## Installation
+
+### CircuitPython ([circup](https://github.com/adafruit/circup))
+
+circup is CircuitPython's package manager — it uses [bundles](https://learn.adafruit.com/keep-your-circuitpython-libraries-on-devices-up-to-date-with-circup/bundle-commands) to find third-party packages. Register the ChuMicro bundle once, then install by name:
+
+```bash
+circup bundle-add ChuMicro/ChuMicro-Bundle
+circup install chumicro-websockets
+```
+
+### MicroPython ([mip](https://docs.micropython.org/en/latest/reference/packages.html))
+
+```bash
+mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_websockets
+```
+
+> **Want pre-compiled `.mpy` bytecode?** Add `mpy6/` before the package name for faster startup and lower RAM usage on boards with mpy format v6 (MicroPython 1.24+):
+> ```
+> mpremote mip install github:ChuMicro/ChuMicro-Bundle/mpy6/chumicro_websockets
+> ```
+
+### CPython (pip)
+
+```bash
+pip install chumicro-websockets
+```
+
+*Just getting started? Skip this — the install commands above are all you need.*
+
+<details>
+<summary>Experimental (pre-release) versions and channel switching</summary>
+
+Pre-release builds are published automatically when a library version is bumped. Do not register both bundles simultaneously — circup may pick either version for a given package.
+
+```bash
+# CircuitPython — switch to experimental
+circup bundle-remove ChuMicro/ChuMicro-Bundle              # skip if never added
+circup bundle-add ChuMicro/ChuMicro-Bundle-Experimental
+circup install chumicro-websockets
+
+# MicroPython
+mpremote mip install github:ChuMicro/ChuMicro-Bundle-Experimental/chumicro_websockets
+
+# CPython
+pip install chumicro-websockets-experimental
+```
+
+</details>
+
+## Quick example
+
+Slice 1 of [Decision 0045](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0045-chumicro-websockets.md) ships the wire layer; the runner-shaped `WebSocketClient` and `WebSocketServer` orchestrators land in slices 2 + 3.  Today the public surface is the framing primitives:
+
+```python
+from chumicro_websockets import OPCODE_TEXT, FrameParser, encode_frame
+
+frame = encode_frame(OPCODE_TEXT, b"hello", mask=b"mask")  # client masks outbound
+parser = FrameParser()
+parser.feed(frame)
+print(parser.payload)  # b'hello'
+```
+
+## What's included
+
+| Component | Purpose |
+|---|---|
+| `parse_ws_url(url)` | Split `ws://` / `wss://` URLs into `(scheme, host, port, path)`. |
+| `make_websocket_key()` / `derive_accept_key(key)` | RFC 6455 §4.2.2 nonce + accept-token derivation. |
+| `encode_client_handshake(...)` / `encode_server_handshake_response(...)` | Build the HTTP/1.1 opening-handshake bytes. |
+| `HandshakeResponseParser` / `HandshakeRequestParser` | Streaming validators for the opening handshake from each side. |
+| `FrameParser` | Streaming RFC 6455 §5 binary-frame parser; one frame at a time. |
+| `encode_frame(opcode, payload, *, fin, mask)` | Build one outbound frame; clients pass `mask=`, servers don't. |
+| `encode_close_payload(code, reason)` / `parse_close_payload(body)` | CLOSE-frame body codec. |
+| `validate_text_payload(bytes)` | RFC 6455 §8.1 UTF-8 validation for text frames. |
+| `WebSocketState` | Lifecycle constants (`CONNECTING` / `OPEN` / `CLOSING` / `CLOSED`). |
+| `WebSocketError` + subclasses | Exception hierarchy: protocol, handshake, URL, timeout, backpressure, oversized, state. |
+
+## Platform support
+
+Works on CPython, MicroPython, and CircuitPython.
+
+## Examples
+
+<!-- TODO: Add an examples table once examples are written.
+| Example | What it shows |
+|---|---|
+| `example.py` | Description |
+-->
+
+## Developing this library
+
+Host-side tests live in `tests/`; real-board functional tests belong in `functional_tests/`.
+
+```bash
+python scripts/run.py test --libraries websockets
+python scripts/run.py test-libraries-functional --library websockets
+```
+
+Before running device tests, generate local board config files with `python scripts/run.py setup`, then fill in `devices.yml`. See the [contributing guide](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md) and the [device testing guide](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/device-testing.md) for the full workflow.
+
+## Docs
+
+📖 **[Stable docs](https://chumicro.github.io/ChuMicro/websockets/stable/)** · **[Experimental docs](https://chumicro.github.io/ChuMicro/websockets/experimental/)**
+
+## Find this library
+
+- **PyPI:** [chumicro-websockets](https://pypi.org/project/chumicro-websockets/)
+- **Bundle:** [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle/tree/main/chumicro_websockets) (CircuitPython & MicroPython)
+- **Experimental bundle:** [ChuMicro-Bundle-Experimental](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental/tree/main/chumicro_websockets)
+- **Source:** [libraries/websockets](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/websockets)
