@@ -102,11 +102,6 @@ QoS 0 + QoS 1 are implemented; QoS 2 raises `UnsupportedQoSError`.  Last-will, r
 
 Works on CPython, MicroPython, and CircuitPython.
 
-> **Pi Pico W CP needs flash mode.**  The `mqtt + sockets + wifi`
-> payload doesn't fit a RAM-mode deploy.  Set `deploy_mode: flash`
-> on the device entry in `devices.yml`, or pass `--deploy-mode flash`
-> to `chumicro-deploy`.
-
 ## Examples
 
 | Example | What it shows |
