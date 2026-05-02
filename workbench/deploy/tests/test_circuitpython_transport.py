@@ -2757,3 +2757,81 @@ class TestListScopeOnDriveHelper:
         from chumicro_deploy.circuitpython_transport import _list_scope_on_drive
 
         assert _list_scope_on_drive(tmp_path) == []
+
+
+def _build_dual_runtime_pkg(source_root: Path) -> Path:
+    """Create a synthetic package with CP, MP, and unmarked files."""
+    pkg = source_root / "chumicro_pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("# universal\n")
+    (pkg / "shared.py").write_text("# universal\n")
+    adapters = pkg / "_adapters"
+    adapters.mkdir()
+    (adapters / "__init__.py").write_text("")
+    (adapters / "cp.py").write_text(
+        '__chumicro_runtimes__ = ("circuitpython",)\n',
+    )
+    (adapters / "mp.py").write_text(
+        '__chumicro_runtimes__ = ("micropython",)\n',
+    )
+    return pkg
+
+
+class TestRuntimeFilteringRamMode:
+    """Decision 0044 — RAM-mode staging drops non-CP marked files."""
+
+    def test_ram_stage_excludes_micropython_files(self, tmp_path: Path) -> None:
+        source_root = tmp_path / "src"
+        source_root.mkdir()
+        _build_dual_runtime_pkg(source_root)
+        harness = tmp_path / "harness"
+        harness.mkdir()
+        (harness / "harness_pkg").mkdir()
+        (harness / "harness_pkg" / "__init__.py").write_text("")
+        transport = CircuitpythonTransport(
+            "/dev/null",
+            serial_port_factory=lambda **_: FakeSerialPort(),
+            time=FakeTime(),
+        )
+        transport.stage([source_root], test_files=[], harness_source=harness)
+        staged = transport.staged_sources or []
+        names = {module_name for module_name, _ in staged}
+        assert "chumicro_pkg._adapters.cp" in names
+        assert "chumicro_pkg._adapters.mp" not in names
+        # Universal files survive.
+        assert "chumicro_pkg.shared" in names
+
+    def test_target_runtime_default_is_circuitpython(self) -> None:
+        """The transport's identity sets the filter — no kwarg needed."""
+        transport = CircuitpythonTransport(
+            "/dev/null",
+            serial_port_factory=lambda **_: FakeSerialPort(),
+            time=FakeTime(),
+        )
+        assert transport._target_runtime == "circuitpython"
+
+
+class TestRuntimeFilteringFlashStaging:
+    """Decision 0044 — flash-mode local staging drops non-CP marked files."""
+
+    def test_build_local_staging_tree_excludes_mp(self, tmp_path: Path) -> None:
+        source_root = tmp_path / "src"
+        source_root.mkdir()
+        _build_dual_runtime_pkg(source_root)
+        harness = tmp_path / "harness"
+        harness.mkdir()
+        # Empty harness — focus on the source dir filtering.
+        staging = tmp_path / "staging"
+        staging.mkdir()
+        transport = CircuitpythonTransport(
+            "/dev/null",
+            serial_port_factory=lambda **_: FakeSerialPort(),
+            time=FakeTime(),
+        )
+        transport._build_local_staging_tree(
+            staging, [source_root], test_files=[], harness_source=harness,
+        )
+        cp_path = staging / "lib" / "chumicro_pkg" / "_adapters" / "cp.py"
+        mp_path = staging / "lib" / "chumicro_pkg" / "_adapters" / "mp.py"
+        assert cp_path.exists()
+        assert not mp_path.exists()

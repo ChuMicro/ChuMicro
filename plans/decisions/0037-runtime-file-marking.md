@@ -4,6 +4,8 @@ Status: `accepted`
 Date: `2026-04-26`
 Related: Decision 0015 (supported board class), Decision 0018 (distribution bundle repo), Decision 0021 (annotations), Decision 0010 (testing fakes), the 2026-04-26 Pi Pico W flash-footprint learning in `plans/learnings.md`.
 
+> **Note:** See also [Decision 0044](0044-deploy-time-runtime-filtering.md), which extends the marker filter to every host-side deploy path (workspace deploy, `chumicro_deploy` CLI, pytest-device staging, examples, functional tests).  The PyPI sdist and source-bundle behavior described here is unchanged.
+
 ## Context
 
 Pi Pico W ships ~870 KB of CIRCUITPY space on FAT12 with 4 KB clusters.  Every `.py` or `.mpy` file pays ≥ 4 KB on disk regardless of content size.  At 51 source files in the workspace (after the 2026-04-26 MQTT 8 → 4 consolidation and `testing.py` exclusion), per-file FAT cluster overhead alone consumes ~204 KB.

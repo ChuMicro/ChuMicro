@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **Library docs audit pass closed.**  Two-commit sweep over the 14 libraries' READMEs + per-library docs/.  Pass 1 (`7ea6491`) fixed AGENTS.md (5 missing libraries added; stale wifi / sockets / mqtt / workspace rows refreshed), corrected the `chumicro-http-server` "TLS server is investigated separately" line that contradicted `plans/learnings.md` (TLS server is verified-working on every runtime/board pair *except* CP-on-rp2), surfaced mqtt 0.1.4's `recv_budget_per_tick` / `max_tx_queue_size` / `MQTTBackpressureError` knobs, and lifted the `chumicro-msgpack` wire-format-compat invariant into the guide.  Pass 2 (`f5e2aa1`) replaced the new-library-scaffolder template fingerprint (61-line stubs with `<!-- GENERATION INSTRUCTIONS -->` blocks intact) on five guides (config, kvstore, wifi, http_server, mqtt), three indexes (http_server, kvstore, mqtt), and one testing helpers page (kvstore) — all derived from the package `__init__.py` exports + module docstrings.  Up next: root README + CONTRIBUTING + workspace-template repo audit.
-- **Last shipped:** docs: library audit pass 2 — fill 5 stub guides + 3 stub indexes + kvstore testing (`f5e2aa1`).
-- **In flight:** root + CONTRIBUTING + ChuMicro-Workspace-Template audit (research stage; user-requested).
+- **Phase:** **Decision 0044 shipped — deploy-time runtime-file filtering.**  Extends Decision 0037's `__chumicro_runtimes__` marker filter from the bundle pipeline to *every* host-side deploy path (`chumicro_deploy` CLI, `chumicro_workspace deploy` flat / `--import-graph` / `--boot-shim`, `pytest-device` staging, examples, functional tests).  Wrong-runtime adapter source no longer lands on a CP / MP board; PyPI sdists are unchanged.  Marker reader extracted to `chumicro_deploy._runtime_marker` so the bundle pipeline + every deploy walker share one implementation.  Filtering on by default at every orchestration boundary; transports own runtime via class identity; CLIs accept `--target-runtime <name>` as override.  AGENTS.md non-negotiable updated; Decision 0037 cross-references 0044.
+- **Last shipped:** TBD on this commit.
+- **In flight:** idle.
 - **Blocked on:** —
-- **Last touched:** AGENTS.md, libraries/{config,kvstore,wifi,http_server,mqtt}/docs/, libraries/{http_server,wifi,mqtt,msgpack}/README.md, libraries/http_server/src/chumicro_http_server/__init__.py.
+- **Last touched:** AGENTS.md, plans/decisions/{0037,0044}-*, plans/next-up.md, scripts/bundle_manager.py, workbench/deploy/src/chumicro_deploy/{_runtime_marker,sources,flash_drive,circuitpython_transport,micropython_transport,cli}.py, workbench/deploy/tests/{test_runtime_marker,test_sources,test_flash_drive,test_circuitpython_transport,test_micropython_transport,test_cli}.py, workbench/workspace/src/chumicro_workspace/{deploy_source,import_graph,boot_shim,cli}.py, workbench/workspace/tests/{test_deploy_source,test_import_graph,test_boot_shim}.py.
 
 ---
 

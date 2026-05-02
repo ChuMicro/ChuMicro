@@ -186,6 +186,7 @@ def thing_import_graph_source(
     resource_prefix: str = "/lib",
     extra_modules: list[str] | None = None,
     extra_search_paths: list[Path] | None = None,
+    target_runtime: str | None = None,
 ) -> WithRuntimeConfig:
     """Build a deploy-ready FileSource using AST-walked imports.
 
@@ -227,6 +228,12 @@ def thing_import_graph_source(
             :class:`ImportGraphSource`.
         extra_search_paths: Additional directories prepended to the
             workspace-derived search path tail.
+        target_runtime: Decision 0044 — forwarded to
+            :class:`ImportGraphSource` so modules marked for a
+            different runtime via ``__chumicro_runtimes__`` are
+            dropped (and their imports not walked).  ``None`` (the
+            default) preserves the prior behavior; the workspace
+            ``deploy`` CLI fills this in from the device's runtime.
 
     Raises:
         FileNotFoundError: When *thing_dir* doesn't contain a
@@ -265,6 +272,7 @@ def thing_import_graph_source(
         extra_modules=extra_modules,
         device_entrypoint=device_entrypoint,
         resource_prefix=resource_prefix,
+        target_runtime=target_runtime,
     )
 
     return WithRuntimeConfig(

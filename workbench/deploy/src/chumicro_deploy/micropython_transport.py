@@ -26,6 +26,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from ._runtime_marker import file_targets_runtime
 from .protocol import (
     PROBE_IMPLEMENTATION_SCRIPT,
     DeviceImplementation,
@@ -270,6 +271,13 @@ class MicropythonTransport:
         self._staging_path: Path | None = None
         self._serial: Any = None
         self._mounted: bool = False
+        #: Decision 0044 — selecting :class:`MicropythonTransport`
+        #: means the deployment target is MicroPython, so files marked
+        #: for another runtime via ``__chumicro_runtimes__`` are
+        #: filtered out of the staging tree.  Sub-runtime markers
+        #: (``micropython_esp32`` / ``micropython_rp2``) fold into
+        #: ``"micropython"`` per Decision 0037.
+        self._target_runtime: str = "micropython"
 
     def connect(self) -> None:
         """Verify the device is reachable by running a no-op command.
@@ -760,8 +768,7 @@ class MicropythonTransport:
             )
         return result
 
-    @staticmethod
-    def _copy_tree(source: Path, destination: Path) -> None:
+    def _copy_tree(self, source: Path, destination: Path) -> None:
         """Recursively copy a directory tree into the destination.
 
         Copies top-level packages (directories with ``__init__.py``)
@@ -775,6 +782,11 @@ class MicropythonTransport:
         deploy of the requests stack triples in size from CPython
         3.14 .pyc files alone.
 
+        Decision 0044 — also drops ``.py`` files whose
+        ``__chumicro_runtimes__`` marker excludes MicroPython, so a
+        wrong-runtime adapter (e.g. ``cp.py``) never lands on the MP
+        device.
+
         Args:
             source: Source directory to copy from (e.g. a ``src/`` dir).
             destination: Destination directory to copy into.
@@ -782,21 +794,24 @@ class MicropythonTransport:
         if not source.is_dir():
             return
         for child in sorted(source.iterdir()):
-            if MicropythonTransport._should_exclude_from_stage(child):
+            if self._should_exclude_from_stage(child):
                 continue
             target = destination / child.name
             if child.is_dir():
                 target.mkdir(parents=True, exist_ok=True)
-                MicropythonTransport._copy_tree(child, target)
+                self._copy_tree(child, target)
             elif child.is_file():
                 target.write_bytes(child.read_bytes())
 
-    @staticmethod
-    def _should_exclude_from_stage(path: Path) -> bool:
+    def _should_exclude_from_stage(self, path: Path) -> bool:
         """Return True if *path* is host-only cruft that shouldn't deploy."""
         name = path.name
         if name in _STAGE_EXCLUDED_NAMES:
             return True
         if name.endswith(".pyc") or name.endswith(".egg-info"):
+            return True
+        if path.is_file() and path.suffix == ".py" and not file_targets_runtime(
+            path, target_runtime=self._target_runtime,
+        ):
             return True
         return False

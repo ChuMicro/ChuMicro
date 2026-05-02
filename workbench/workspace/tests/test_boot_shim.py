@@ -405,6 +405,27 @@ class TestThingBootSource:
         with pytest.raises(FileNotFoundError):
             thing_boot_source(thing_dir, workspace=workspace)
 
+    def test_target_runtime_drops_wrong_runtime_thing_files(
+        self, tmp_path: Path,
+    ) -> None:
+        """Decision 0044 — boot-shim layout filters thing-local ``.py`` markers."""
+        workspace, thing_dir = _seed_thing_for_boot(tmp_path)
+        (thing_dir / "_cp_helper.py").write_text(
+            '__chumicro_runtimes__ = ("circuitpython",)\n',
+        )
+        (thing_dir / "_mp_helper.py").write_text(
+            '__chumicro_runtimes__ = ("micropython",)\n',
+        )
+
+        source = thing_boot_source(
+            thing_dir, workspace=workspace, target_runtime="circuitpython",
+        )
+        files = source.files()
+        assert "/lib/things/back-porch/_cp_helper.py" in files
+        assert "/lib/things/back-porch/_mp_helper.py" not in files
+        # Universal helpers still ship.
+        assert "/lib/things/back-porch/helpers.py" in files
+
 
 def _seed_nested_thing_for_boot(tmp_path: Path) -> tuple[WorkspaceLayout, Path]:
     """Two-level nested thing fixture for boot-shim path tests."""

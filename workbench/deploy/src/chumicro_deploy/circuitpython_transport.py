@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Protocol, cast
 
 from . import flash_drive
+from ._runtime_marker import file_targets_runtime
 from .circuitpython_bootstrap import build_circuitpython_deploy_scripts
 from .protocol import (
     PROBE_IMPLEMENTATION_SCRIPT,
@@ -307,6 +308,8 @@ def find_circuitpy_drive_for_uid(target_uid: str) -> str | None:
 
 def _walk_package_sources(
     source_directory: Path,
+    *,
+    target_runtime: str | None = None,
 ) -> list[tuple[str, str]]:
     """Return every ``.py`` under packages rooted at *source_directory*.
 
@@ -319,6 +322,10 @@ def _walk_package_sources(
     Within a package, the ``__init__.py`` entry is emitted **after**
     every submodule so RAM-mode registration can resolve relative
     imports during the init block.
+
+    Decision 0044 — when *target_runtime* is set, ``.py`` files
+    carrying a ``__chumicro_runtimes__`` marker that doesn't match are
+    skipped.
     """
     if not source_directory.is_dir():
         return []
@@ -330,7 +337,11 @@ def _walk_package_sources(
         if not init_file.exists():
             continue
         collected.extend(
-            _walk_package_files(package_directory, package_directory.name),
+            _walk_package_files(
+                package_directory,
+                package_directory.name,
+                target_runtime=target_runtime,
+            ),
         )
     return collected
 
@@ -338,6 +349,8 @@ def _walk_package_sources(
 def _walk_package_files(
     directory: Path,
     dotted_prefix: str,
+    *,
+    target_runtime: str | None = None,
 ) -> list[tuple[str, str]]:
     """Return ``.py`` entries inside *directory* with ``__init__.py`` last."""
     collected: list[tuple[str, str]] = []
@@ -349,9 +362,14 @@ def _walk_package_files(
                 collected.extend(
                     _walk_package_files(
                         child, f"{dotted_prefix}.{child.name}",
+                        target_runtime=target_runtime,
                     ),
                 )
         elif child.suffix == ".py":
+            if not file_targets_runtime(
+                child, target_runtime=target_runtime,
+            ):
+                continue
             source_text = child.read_text(encoding="utf-8")
             if child.name == "__init__.py":
                 # Deferred — the init block relies on submodules that
@@ -517,6 +535,12 @@ class CircuitpythonTransport:
         #: separate from ``_staged_sources`` so the deploy path does
         #: not have to pretend it staged modules it did not collect.
         self._staged: bool = False
+        #: Decision 0044 — the transport's identity *is* its target
+        #: runtime.  Selecting :class:`CircuitpythonTransport` means
+        #: the deployment target is CircuitPython, so files marked for
+        #: another runtime via ``__chumicro_runtimes__`` are filtered
+        #: out of every staging path (RAM mode + flash mode).
+        self._target_runtime: str = "circuitpython"
 
     @staticmethod
     def _default_serial_factory(**kwargs) -> SerialPort:  # pragma: no cover
@@ -755,8 +779,8 @@ class CircuitpythonTransport:
             ) from error
         return drive_path
 
-    @staticmethod
     def _build_local_staging_tree(
+        self,
         staging_path: Path,
         source_dirs: list[Path],
         test_files: list[Path],
@@ -772,12 +796,23 @@ class CircuitpythonTransport:
         to deal with the device drive.  macOS extended attributes are
         stripped at the end so ``._`` resource forks don't end up on
         the FAT32 volume.
+
+        ``__chumicro_runtimes__``-marked files for a different runtime
+        are dropped at this stage (Decision 0044) — the transport's
+        own ``_target_runtime`` flows into ``merge_packages`` so the
+        wrong-runtime adapters never reach flash.
         """
         lib_staging = staging_path / "lib"
         lib_staging.mkdir()
         for source_directory in source_dirs:
-            flash_drive.merge_packages(source_directory, lib_staging)
-        flash_drive.merge_packages(harness_source, lib_staging)
+            flash_drive.merge_packages(
+                source_directory, lib_staging,
+                target_runtime=self._target_runtime,
+            )
+        flash_drive.merge_packages(
+            harness_source, lib_staging,
+            target_runtime=self._target_runtime,
+        )
 
         for test_file in test_files:
             shutil.copy2(test_file, staging_path / test_file.name)
@@ -912,9 +947,15 @@ class CircuitpythonTransport:
 
         Thin adaptor around :func:`_walk_package_sources` that keeps
         the transport's mutable state contained to this one method.
+        Files marked for a runtime other than CircuitPython via
+        ``__chumicro_runtimes__`` are filtered out (Decision 0044).
         """
         assert self._staged_sources is not None
-        self._staged_sources.extend(_walk_package_sources(source_directory))
+        self._staged_sources.extend(
+            _walk_package_sources(
+                source_directory, target_runtime=self._target_runtime,
+            ),
+        )
 
     def execute(self, bootstrap_script: str) -> str:
         """Send a code block through raw REPL and return captured stdout.

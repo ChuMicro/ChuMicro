@@ -302,6 +302,31 @@ class TestThingDirectorySource:
                 secrets_yaml=tmp_path / "secrets.yml",
             )
 
+    def test_target_runtime_drops_wrong_runtime_files(
+        self, tmp_path: Path,
+    ) -> None:
+        """Decision 0044 — wrong-runtime ``.py`` files are filtered out."""
+        thing_dir, workspace_yaml, secrets_yaml = _seed_thing_dir(tmp_path)
+        # Add a CP-only adapter beside the thing's app code.
+        (thing_dir / "_cp_only.py").write_text(
+            '__chumicro_runtimes__ = ("circuitpython",)\n',
+        )
+        (thing_dir / "_mp_only.py").write_text(
+            '__chumicro_runtimes__ = ("micropython",)\n',
+        )
+
+        source = thing_directory_source(
+            thing_dir,
+            workspace_yaml=workspace_yaml,
+            secrets_yaml=secrets_yaml,
+            target_runtime="micropython",
+        )
+        files = source.files()
+        assert "/_mp_only.py" in files
+        assert "/_cp_only.py" not in files
+        # Universal app code still ships.
+        assert "/code.py" in files
+
 
 # ---------------------------------------------------------------------------
 # End-to-end through Deployer + FakeTransport

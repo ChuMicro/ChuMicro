@@ -406,3 +406,108 @@ class TestCommandDeploy:
         assert exit_code == 0
         assert captured["wrapped"] is True
         assert isinstance(captured["inner"], FakeDeployer)
+
+
+class TestCommandDeployRuntimeFiltering:
+    """Decision 0044 — ``deploy`` filters per device runtime by default."""
+
+    def _build_dual_runtime_app(self, source_dir: Path) -> None:
+        (source_dir / "main.py").write_text("import _adapters\n")
+        adapters = source_dir / "_adapters"
+        adapters.mkdir()
+        (adapters / "__init__.py").write_text("")
+        (adapters / "cp.py").write_text(
+            '__chumicro_runtimes__ = ("circuitpython",)\n',
+        )
+        (adapters / "mp.py").write_text(
+            '__chumicro_runtimes__ = ("micropython",)\n',
+        )
+
+    def _patch_fake_deployer(
+        self, monkeypatch: pytest.MonkeyPatch, captured: dict[str, Any],
+    ) -> None:
+        from chumicro_deploy import DeployResult
+
+        class FakeDeployer:
+            def __init__(self, device):  # noqa: ANN001
+                captured["device"] = device
+
+            def deploy(self, source, **_kwargs):  # noqa: ANN001
+                captured["files"] = source.files()
+                return DeployResult(success=True, execute_output="")
+
+        monkeypatch.setattr(
+            "chumicro_deploy.deployer.Deployer", FakeDeployer,
+        )
+
+    def test_micropython_target_drops_cp_files(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    ) -> None:
+        source_dir = tmp_path / "app"
+        source_dir.mkdir()
+        self._build_dual_runtime_app(source_dir)
+
+        captured: dict[str, Any] = {}
+        self._patch_fake_deployer(monkeypatch, captured)
+
+        exit_code = main([
+            "deploy",
+            "--transport", "micropython",
+            "--address", "/dev/x",
+            "--directory", str(source_dir),
+            "--entrypoint", "/main.py",
+            "--non-interactive",
+        ])
+        assert exit_code == 0
+        files = captured["files"]
+        assert "/_adapters/mp.py" in files
+        assert "/_adapters/cp.py" not in files
+
+    def test_circuitpython_target_drops_mp_files(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    ) -> None:
+        source_dir = tmp_path / "app"
+        source_dir.mkdir()
+        self._build_dual_runtime_app(source_dir)
+
+        captured: dict[str, Any] = {}
+        self._patch_fake_deployer(monkeypatch, captured)
+
+        exit_code = main([
+            "deploy",
+            "--transport", "circuitpython",
+            "--address", "/dev/x",
+            "--directory", str(source_dir),
+            "--entrypoint", "/main.py",
+            "--non-interactive",
+        ])
+        assert exit_code == 0
+        files = captured["files"]
+        assert "/_adapters/cp.py" in files
+        assert "/_adapters/mp.py" not in files
+
+    def test_target_runtime_override(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    ) -> None:
+        """``--target-runtime`` overrides the device's configured runtime."""
+        source_dir = tmp_path / "app"
+        source_dir.mkdir()
+        self._build_dual_runtime_app(source_dir)
+
+        captured: dict[str, Any] = {}
+        self._patch_fake_deployer(monkeypatch, captured)
+
+        # Device is CP but user explicitly forces MP filtering.
+        exit_code = main([
+            "deploy",
+            "--transport", "circuitpython",
+            "--address", "/dev/x",
+            "--directory", str(source_dir),
+            "--entrypoint", "/main.py",
+            "--target-runtime", "micropython",
+            "--non-interactive",
+        ])
+        assert exit_code == 0
+        files = captured["files"]
+        assert "/_adapters/mp.py" in files
+        assert "/_adapters/cp.py" not in files

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import pytest
 from chumicro_deploy.micropython_transport import (
@@ -1184,3 +1185,51 @@ class TestWipeFilesystem:
         )
         with pytest.raises(MicropythonTransportError, match="wipe_filesystem"):
             transport.wipe_filesystem()
+
+
+class TestRuntimeFiltering:
+    """Decision 0044 — wrong-runtime files never land in MP staging."""
+
+    def _build_dual_runtime_pkg(self, source_root: Path) -> None:
+        pkg = source_root / "chumicro_pkg"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("# universal\n")
+        adapters = pkg / "_adapters"
+        adapters.mkdir()
+        (adapters / "__init__.py").write_text("")
+        (adapters / "cp.py").write_text(
+            '__chumicro_runtimes__ = ("circuitpython",)\n',
+        )
+        (adapters / "mp.py").write_text(
+            '__chumicro_runtimes__ = ("micropython",)\n',
+        )
+
+    def test_target_runtime_default_is_micropython(self) -> None:
+        """Selecting :class:`MicropythonTransport` *is* targeting MP."""
+        transport = MicropythonTransport("/dev/ttyUSB0", runner=FakeRunner())
+        assert transport._target_runtime == "micropython"
+
+    def test_stage_excludes_circuitpython_files(self, tmp_path: Path) -> None:
+        source_root = tmp_path / "src"
+        source_root.mkdir()
+        self._build_dual_runtime_pkg(source_root)
+        harness = tmp_path / "harness"
+        harness.mkdir()
+
+        runner = FakeRunner()
+        serial = FakeSerialTransport(address="/dev/ttyUSB0")
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0",
+            mode="mount",
+            runner=runner,
+            transport_factory=_factory_for(serial),
+        )
+        transport.stage([source_root], test_files=[], harness_source=harness)
+
+        staging = transport._staging_path
+        assert staging is not None
+        adapters = staging / "chumicro_pkg" / "_adapters"
+        assert (adapters / "mp.py").exists()
+        assert not (adapters / "cp.py").exists()
+
+        transport.disconnect()

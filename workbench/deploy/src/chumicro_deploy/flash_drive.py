@@ -36,6 +36,7 @@ import sys as _sys_module
 from collections.abc import Callable
 from pathlib import Path
 
+from ._runtime_marker import file_targets_runtime
 from .host_platform import install_hint_for_rsync
 
 
@@ -52,6 +53,8 @@ FLUSH_SETTLE_DELAY = 0.5
 def merge_packages(
     source_directory: Path,
     staging_destination: Path,
+    *,
+    target_runtime: str | None = None,
 ) -> None:
     """Copy top-level packages from a source directory to a staging dir.
 
@@ -63,9 +66,31 @@ def merge_packages(
     Args:
         source_directory: A ``src/`` directory containing packages.
         staging_destination: Local staging directory to merge into.
+        target_runtime: Decision 0044 — when set, ``.py`` files
+            carrying a ``__chumicro_runtimes__`` marker for a
+            different runtime are skipped (in addition to
+            ``__pycache__`` / ``*.pyc``).  ``None`` matches the prior
+            unfiltered behavior.
     """
     if not source_directory.is_dir():
         return
+    pattern_ignore = shutil.ignore_patterns("__pycache__", "*.pyc")
+
+    def _ignore(directory: str, names: list[str]) -> set[str]:
+        ignored = set(pattern_ignore(directory, names))
+        if target_runtime is not None:
+            directory_path = Path(directory)
+            for name in names:
+                if name in ignored:
+                    continue
+                if not name.endswith(".py"):
+                    continue
+                if not file_targets_runtime(
+                    directory_path / name, target_runtime=target_runtime,
+                ):
+                    ignored.add(name)
+        return ignored
+
     for child in sorted(source_directory.iterdir()):
         if not child.is_dir():
             continue
@@ -76,7 +101,7 @@ def merge_packages(
         shutil.copytree(
             child,
             target,
-            ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+            ignore=_ignore,
             dirs_exist_ok=True,
         )
 
