@@ -27,7 +27,6 @@ class TestDefaults:
         assert config == QualityConfig()
         assert config.lint == LintConfig()
         assert config.coverage_threshold is None
-        assert config.agent_strictness == "relaxed"
 
     def test_no_quality_block_returns_defaults(self, tmp_path: Path) -> None:
         path = _write_workspace(tmp_path, "defaults:\n  wifi:\n    ssid: a\n")
@@ -92,7 +91,7 @@ class TestCoverageThreshold:
     def test_default_is_none(self, tmp_path: Path) -> None:
         path = _write_workspace(
             tmp_path,
-            "quality:\n  agent_strictness: relaxed\n",
+            "quality:\n  lint:\n    enabled: true\n",
         )
         assert load_quality_config(path).coverage_threshold is None
 
@@ -109,27 +108,6 @@ class TestCoverageThreshold:
             tmp_path, 'quality:\n  coverage_threshold: "85"\n',
         )
         with pytest.raises(WorkspaceConfigError, match="integer"):
-            load_quality_config(path)
-
-
-class TestAgentStrictness:
-    @pytest.mark.parametrize("value", ["relaxed", "strict"])
-    def test_permitted_values(self, tmp_path: Path, value: str) -> None:
-        path = _write_workspace(
-            tmp_path, f"quality:\n  agent_strictness: {value}\n",
-        )
-        assert load_quality_config(path).agent_strictness == value
-
-    def test_default_is_relaxed(self, tmp_path: Path) -> None:
-        path = _write_workspace(tmp_path, "quality:\n  coverage_threshold: 80\n")
-        assert load_quality_config(path).agent_strictness == "relaxed"
-
-    def test_unknown_value_rejected(self, tmp_path: Path) -> None:
-        path = _write_workspace(
-            tmp_path,
-            "quality:\n  agent_strictness: paranoid\n",
-        )
-        with pytest.raises(WorkspaceConfigError, match="paranoid"):
             load_quality_config(path)
 
 

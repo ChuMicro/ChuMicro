@@ -1,8 +1,8 @@
-"""Workspace quality knobs — `lint`, `coverage`, `agent_strictness`.
+"""Workspace quality knobs — `lint`, `coverage`.
 
-Phase 5 of the workspace-ecosystem workstream.  Decision 0029
-specified a ``quality:`` block on ``workspace.yml`` carrying
-three pass-through knobs:
+Phase 5 of the workspace-ecosystem workstream.  Reads the
+``quality:`` block on ``workspace.yml`` carrying two pass-through
+knobs:
 
 .. code-block:: yaml
 
@@ -11,7 +11,6 @@ three pass-through knobs:
         enabled: true
         select: ["E", "F", "I"]
       coverage_threshold: 85
-      agent_strictness: relaxed   # or "strict"
 
 This module reads the block, validates the shape, and surfaces a
 typed :class:`QualityConfig` the CLI consults.  Pure file read +
@@ -24,15 +23,10 @@ shape validation; no execution side effects.
   win).
 * ``coverage_threshold`` → forwarded to pytest as
   ``--cov-fail-under=<n>``.
-* ``agent_strictness`` — accepted into the dataclass but not yet
-  consumed.  The plan calls for AST-level checks
-  (no naked `except:`, no global state in things) which need their
-  own design pass; surfacing it here lets users set the field
-  without rejection.
 
 Defaults match a "permissive workspace" stance: lint enabled, no
 explicit select (use ruff's pyproject.toml config), no coverage
-gate, agent_strictness=relaxed.
+gate.
 """
 
 from __future__ import annotations
@@ -44,10 +38,6 @@ from typing import Any
 from ruamel.yaml import YAML
 
 from chumicro_workspace.loaders import WorkspaceConfigError
-
-#: Permitted values for ``agent_strictness``.  Keeps a typo from
-#: silently flipping behaviour — the loader rejects unknown values.
-_AGENT_STRICTNESS_VALUES: frozenset[str] = frozenset({"relaxed", "strict"})
 
 
 @dataclass(frozen=True)
@@ -78,14 +68,10 @@ class QualityConfig:
             ``None`` means "don't enforce a gate from workspace.yml"
             (pyproject.toml's ``[tool.coverage.report] fail_under``
             still applies).
-        agent_strictness: ``"relaxed"`` or ``"strict"``.  Accepted but
-            not yet consumed — the AST checks the plan calls for need
-            their own design pass.
     """
 
     lint: LintConfig = field(default_factory=LintConfig)
     coverage_threshold: int | None = None
-    agent_strictness: str = "relaxed"
 
 
 def _read_yaml_dict(path: Path) -> dict[str, Any]:
@@ -138,8 +124,8 @@ def load_quality_config(workspace_yaml: Path) -> QualityConfig:
 
     Missing file or missing ``quality`` block → returns
     :class:`QualityConfig` with library-default values (lint
-    enabled, no coverage gate, ``relaxed`` strictness).  This makes
-    Phase 5 a no-op for workspaces that haven't opted in.
+    enabled, no coverage gate).  This makes Phase 5 a no-op for
+    workspaces that haven't opted in.
 
     Raises :class:`WorkspaceConfigError` on shape violations so the
     user sees the precise field that's wrong rather than a vague
@@ -172,20 +158,7 @@ def load_quality_config(workspace_yaml: Path) -> QualityConfig:
     else:
         coverage_threshold = coverage_threshold_raw
 
-    agent_strictness = raw_quality.get("agent_strictness", "relaxed")
-    if not isinstance(agent_strictness, str):
-        raise WorkspaceConfigError(
-            f"{workspace_yaml}: 'quality.agent_strictness' must be a string",
-        )
-    if agent_strictness not in _AGENT_STRICTNESS_VALUES:
-        permitted = ", ".join(sorted(_AGENT_STRICTNESS_VALUES))
-        raise WorkspaceConfigError(
-            f"{workspace_yaml}: 'quality.agent_strictness' must be one of "
-            f"{permitted}; got {agent_strictness!r}",
-        )
-
     return QualityConfig(
         lint=lint,
         coverage_threshold=coverage_threshold,
-        agent_strictness=agent_strictness,
     )
