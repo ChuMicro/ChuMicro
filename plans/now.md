@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **TLS test now pins the root, not the chain — clean 4/4 across all four boards.**  User pushback on commit `b000306`'s "Pi Pico W MP TLS OOMs at runtime" claim turned out to be the same misdiagnosis pattern as the earlier flash-bloat one: I'd pinned the whole 3-cert chain (3.7 KB PEM) when mbedTLS only needs the root that anchors trust.  The redundant intermediate + cross-sign cost extra handshake heap and (worse) the AAA cross-sign's `NotBefore` 2025-08-01 forced RTC seeding the test wouldn't otherwise need.  Switched to pinning just `SSL.com TLS ECC Root CA 2022` (1.3 KB, `NotBefore` 2022-10-21) — Cloudflare's intermediate comes from the server during the handshake, validation still works.  Pi Pico W MP TLS test now PASSES (5.27 s); previously claimed "real Decision 0015 runtime limit" was actually heap pressure from the over-pinned chain.  Lifted the lesson to `plans/learnings.md` "Pin the root, not the chain — embedded TLS clients only need the trust anchor" so the next session doesn't repeat it.  RTC seeding is still needed because the SSL.com root's 2022 `NotBefore` post-dates the embedded ports' 2021-01-01 boot RTC default; documented in the same learnings entry.
-- **Last shipped:** chumicro-requests TLS test — single-root CA pin (this commit).
+- **Phase:** **Per-runtime adapter-selection helper plan dropped.**  Latest in a small string of "kill speculative scaffolding" cleanups (alongside `agent_strictness` field removal and library-self-declared deploy-mode constraints abandonment, both this week).  Original plan was to extract a `chumicro_compat.runtime.select_for_runtime({...})` helper to dedupe the `sys.implementation.name` ladder shared by `chumicro_wifi.service._select_adapter` and `chumicro_kvstore.core._select_backend`.  Two reasons it's dead: (1) the wifi unification (commit `0304542`) already collapsed wifi's ladder to 3-way by moving substrate-aware logic *inside* the adapter — only kvstore's ladder remains, so no DRY case for a helper.  (2) Kvstore's backends aren't slight API variants the way the wifi adapters were; they're fundamentally different storage technologies (CP NVM raw bytes / MP NVS k/v dict / MP LittleFS files / CPython memory).  Nothing to extract.  20-line dispatch ladder in `_select_backend` is the right shape.
+- **Last shipped:** plan-cleanup: drop per-runtime adapter helper plan (this commit).
 - **In flight:** —
 - **Blocked on:** —
-- **Last touched:** `libraries/requests/functional_tests/test_real_get_tls.py`; `plans/learnings.md` (new "Pin the root, not the chain" entry).
+- **Last touched:** `plans/next-up.md` (entry removed + Done-section pointer added).
 
 ---
 
@@ -25,8 +25,7 @@ This is the front door. Everything else is deeper read.
 
 | Candidate | Where | Notes |
 |---|---|---|
-| Extract shared per-runtime adapter helper | `next-up.md` `## Next` | Now has only **one** remaining ladder consumer (`chumicro_kvstore.core._select_backend`); the wifi unification removed the second.  Low urgency until a third consumer surfaces. |
-| Anything else in `## Next` of `next-up.md` | `plans/next-up.md` | Rebrand to ChipPy, OTA workstream (`plans/workstreams/ota.md`), digital I/O library, performance benchmarking infrastructure, etc. |
+| Anything in `## Next` of `next-up.md` | `plans/next-up.md` | Rebrand to ChipPy, OTA workstream (`plans/workstreams/ota.md`), digital I/O library, performance benchmarking infrastructure, etc.  All are unscoped or trigger-gated. |
 
 ## Hard rules to remember (non-negotiables)
 
