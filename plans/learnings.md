@@ -122,20 +122,38 @@ Live-verified on Lolin S2 ESP32-S2 / CP 10.2.0-rc.0: 6 KB SSLContext + 35 KB han
 
 `chumicro_sockets.ssl_context_with_cert_and_key_paths(cert_path, key_path)` is the cross-runtime API that handles all three runtimes (CP needs paths; MP + CPython convert paths to bytes internally and use the in-memory helper).
 
-### ESP32-S2 has hardware-accelerated crypto for TLS handshake — 25× heap reduction vs rp2
+### TLS handshake heap differences across runtime / port — the real story is allocator placement, not HW accel
 
-Slice 7t / 7d live measurements on Pi Pico W MP (rp2 port) vs Lolin S2 MP (ESP32-S2 port), both running CHUmicro's TLS server with the same RSA-2048 cert + DER encoding:
+Slice 7t / 7d live measurements on Pi Pico W MP (rp2 port) vs Lolin S2 MP (ESP32-S2 port) vs Lolin S2 CP, all running CHUmicro's TLS server with the same RSA-2048 cert + DER encoding:
 
 * **Pi Pico W MP (rp2):** TLS handshake heap cost = **~25 KB**.
 * **Lolin S2 MP (ESP32-S2):** TLS handshake heap cost = **~1 KB** (944 bytes).
+* **Lolin S2 CP (ESP32-S2):** TLS handshake heap cost = **~35 KB**.
 
-The difference is the ESP32-S2's mbedTLS hardware acceleration (`MBEDTLS_HW_*` peripherals — AES, SHA, RSA exponentiation) — handshake state lives partly in dedicated hardware buffers rather than the Python heap.  rp2's mbedTLS is fully software, allocating the same state on the heap.
+An earlier version of this file blamed the rp2-vs-S2 delta on hardware-accelerated mbedTLS on the S2 (`MBEDTLS_HW_*` AES / SHA / RSA peripherals, hand-waved as "handshake state lives in HW buffers").  **That framing is wrong** and was retired after a deep source dive (2026-05-02).  Hardware accel on the S2 (`MBEDTLS_HARDWARE_AES`, `MBEDTLS_HARDWARE_SHA`, `MBEDTLS_HARDWARE_MPI`) replaces the C reference implementations of AES / SHA / bignum with peripheral-driver calls — it shortens handshake **CPU time** (hundreds of ms), not heap footprint.  mbedTLS allocates the same record buffers, x509 parse arena, and ECDH/RSA scratch with or without HW accel.
 
-Practical implication for sizing Pi Pico W vs ESP32-S2 deployments: a Pi Pico W can support a single-in-flight TLS server but feels tight; a Lolin S2 can comfortably support multi-in-flight TLS without breaking sweat.  ESP32-S3 has the same hardware crypto + more SRAM still.
+What actually drives the deltas:
 
-### CircuitPython rp2 (Pi Pico W) currently fails server-side TLS post-handshake
+1. **Allocator placement.**  CP-rp2's mbedtls config (`.tools/circuitpython-10.1.4/lib/mbedtls_config/mbedtls_config.h:117-119`) sets `MBEDTLS_PLATFORM_STD_CALLOC = m_tracked_calloc` — every mbedTLS internal allocation routes through CP's GC heap (`m_malloc_maybe`).  The 16 KB IN buffer + 4 KB OUT buffer + handshake working set show up directly in `gc.mem_free()`.  CP-espressif uses ESP-IDF's `esp_config.h` and `heap_caps_malloc` — mbedTLS internal buffers go to ESP-IDF heap.  But on espressif both runtimes have `MICROPY_GC_SPLIT_HEAP_AUTO=1`, so `gc.mem_free()` includes the largest free ESP-IDF block via `heap_caps_get_largest_free_block` and still reflects the ~35 KB consumption — just at a different probe boundary.
+2. **Per-connection vs per-context state.**  CP's `shared-module/ssl/SSLSocket.h:21-43` inlines `mbedtls_entropy_context`, `mbedtls_ctr_drbg_context`, `mbedtls_ssl_context`, `mbedtls_ssl_config`, two `mbedtls_x509_crt`, and `mbedtls_pk_context` into the **per-connection** `ssl_sslsocket_obj_t`.  `accept()` (`shared-module/ssl/SSLSocket.c:442-452`) creates a brand-new SSLSocket + runs `mbedtls_ssl_setup` per connection, so the 16K+4K record buffers + cert/key parsing arena are paid every accept.  MP (`extmod/modtls_mbedtls.c:84-119`) parks all the heavy state on the **`mp_obj_ssl_context_t`** — created once at `ssl.SSLContext(...)` time.  The chumicro MP adapter reuses one SSLContext across all accepts (`libraries/sockets/src/chumicro_sockets/_adapters/mp.py:344-359`), so the bulk allocation happens once at context-build time and the per-accept measurement looks tiny.
 
-Same chumicro-sockets code path that succeeded on Lolin S2 ESP32-S2 (CP 10.2.0-rc.0) reaches the listener-open + first accept, but `accept()` raises `OSError(32)` (EPIPE) immediately after the TLS handshake bytes traverse.  Heap was ~115 KB free at the time, so not a memory issue.  Likely an rp2-port mbedTLS feature-flag difference vs ESP-IDF's mbedTLS (the same kind of asymmetry that surfaced for `MBEDTLS_PEM_PARSE_C` on the CA-load path).  Filed as a follow-up — for HTTPS-server use cases on CircuitPython today, recommend ESP32-family boards (S2 / S3) over Pi Pico W.
+The "S2 = 1 KB / rp2 = 25 KB / CP-S2 = 35 KB" pattern is fully explained by these two facts.  Reference: [micropython/micropython#8940](https://github.com/micropython/micropython/issues/8940) traces the ~35 KB mbedTLS handshake working set ("16717, 4429, 220, 128, 2240..." — 16 KB IN + 4 KB OUT + cert parse arena + ECDH scratch).
+
+Practical implication for sizing: every supported board pays roughly the same total mbedTLS heap (~35 KB) for a server-side handshake.  Where it lands (Python GC heap vs ESP-IDF heap) depends on the runtime/port pair, but the total is similar.  Pi Pico W has ~115-130 KB free post-wifi-up so a single-in-flight TLS server fits but is tight; ESP32-S2/S3 have ~150 KB+ and comfortably support multi-in-flight TLS.
+
+### CircuitPython rp2 (Pi Pico W) currently fails server-side TLS post-handshake — root cause not yet pinned
+
+Same chumicro-sockets code path that succeeded on Lolin S2 ESP32-S2 (CP 10.2.0-rc.0) reaches the listener-open + first accept, but `accept()` raises `OSError(32)` (EPIPE) immediately after the TLS handshake bytes traverse.  Heap was ~115 KB free at the time, so not a memory issue.
+
+An earlier version of this file blamed an "rp2-port mbedTLS feature-flag gap vs ESP-IDF's mbedTLS" (parallel to the `MBEDTLS_PEM_PARSE_C` story for CA-load).  **That framing was retired** after a 2026-05-02 source dive verified the structural claim does not hold up:
+
+* mbedTLS feature flags on rp2 are fine.  `.tools/circuitpython-10.1.4/lib/mbedtls_config/mbedtls_config.h:53-105` enables every server-side flag we'd need: `MBEDTLS_SSL_SRV_C`, `MBEDTLS_SSL_TLS_C`, `MBEDTLS_KEY_EXCHANGE_RSA_ENABLED`, `MBEDTLS_KEY_EXCHANGE_ECDHE_RSA_ENABLED`, `MBEDTLS_PEM_PARSE_C`, `MBEDTLS_X509_CRT_PARSE_C`, `MBEDTLS_PK_PARSE_C`, `MBEDTLS_RSA_C`.  Buffer sizes: IN 16384, OUT 4096.  MP-on-rp2 working with the same hardware confirms server-side TLS primitives are present and functional.
+* In CP 10.1.4 and 10.2.0-rc.0 both, **espressif and rp2 use the shared `shared-module/ssl/SSLSocket.c`** — there is no per-port override on either side.  Both ports run `do_handshake(sslsock)` synchronously inside `common_hal_ssl_sslsocket_accept` (`shared-module/ssl/SSLSocket.c:442-452`).  An "espressif lazy / rp2 eager" structural divergence sometimes cited from older (pre-9.0, Oct-2023) CP source no longer exists.
+* `OSError(32)` (EPIPE) is not produced by any direct path I could trace in `ports/raspberrypi/common-hal/socketpool/Socket.c`.  The lwIP `error_lookup_table` (lines 95-117 of CP 10.2.0-rc.0) maps to ECONNRESET (104), ENOTCONN (128), ECONNABORTED, ENOMEM — but never EPIPE.  EPIPE only originates from `mp_raise_BrokenPipeError()` in `shared-bindings/socketpool/Socket.c:233,239,263,270` and `shared-bindings/ssl/SSLSocket.c:220,226`.  The SSL BIO's `_mbedtls_ssl_send` calls the C-level `socketpool_socket_send` helper, which bypasses the shared-bindings BrokenPipe paths, so the OSError(32) path through the SSL handshake is not source-derivable.
+
+What chumicro does that may be the trigger and remains untested: `libraries/sockets/src/chumicro_sockets/_adapters/cp.py:239-243` calls `wrapped.setblocking(False)` on the wrapped TLS listener after wrap+bind+listen, before accept.  Each accepted client inherits `accepted->timeout = self->timeout` (`ports/raspberrypi/common-hal/socketpool/Socket.c:817`), so the eager `do_handshake` runs on a non-blocking socket.  `do_handshake` itself handles `WANT_READ`/`WANT_WRITE` correctly via a `mp_hal_delay_ms(1)` loop, so non-blocking-by-itself shouldn't break — but this is the one chumicro-controlled variable left in the loop.
+
+For HTTPS-server use cases on CircuitPython today, the operational guidance still stands: prefer ESP32-family boards (S2 / S3) over Pi Pico W.  See `.scratch/run_cp_rp2_tls_listener_modes.py` for the experimental probe that distinguishes "chumicro setblocking ordering" from "upstream CP-rp2 bug" — until that probe runs, the right framing is "CP-rp2 HTTPS server fails for reasons not yet pinned" rather than the upstream-bug claim.
 
 ### MicroPython TLS server *does* fit on Pi Pico W (Adafruit's "limited" framing was too pessimistic)
 
