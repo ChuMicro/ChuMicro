@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **Per-runtime adapter-selection helper plan dropped.**  Latest in a small string of "kill speculative scaffolding" cleanups (alongside `agent_strictness` field removal and library-self-declared deploy-mode constraints abandonment, both this week).  Original plan was to extract a `chumicro_compat.runtime.select_for_runtime({...})` helper to dedupe the `sys.implementation.name` ladder shared by `chumicro_wifi.service._select_adapter` and `chumicro_kvstore.core._select_backend`.  Two reasons it's dead: (1) the wifi unification (commit `0304542`) already collapsed wifi's ladder to 3-way by moving substrate-aware logic *inside* the adapter — only kvstore's ladder remains, so no DRY case for a helper.  (2) Kvstore's backends aren't slight API variants the way the wifi adapters were; they're fundamentally different storage technologies (CP NVM raw bytes / MP NVS k/v dict / MP LittleFS files / CPython memory).  Nothing to extract.  20-line dispatch ladder in `_select_backend` is the right shape.
-- **Last shipped:** plan-cleanup: drop per-runtime adapter helper plan (this commit).
-- **In flight:** —
+- **Phase:** **Library docs audit pass closed.**  Two-commit sweep over the 14 libraries' READMEs + per-library docs/.  Pass 1 (`7ea6491`) fixed AGENTS.md (5 missing libraries added; stale wifi / sockets / mqtt / workspace rows refreshed), corrected the `chumicro-http-server` "TLS server is investigated separately" line that contradicted `plans/learnings.md` (TLS server is verified-working on every runtime/board pair *except* CP-on-rp2), surfaced mqtt 0.1.4's `recv_budget_per_tick` / `max_tx_queue_size` / `MQTTBackpressureError` knobs, and lifted the `chumicro-msgpack` wire-format-compat invariant into the guide.  Pass 2 (`f5e2aa1`) replaced the new-library-scaffolder template fingerprint (61-line stubs with `<!-- GENERATION INSTRUCTIONS -->` blocks intact) on five guides (config, kvstore, wifi, http_server, mqtt), three indexes (http_server, kvstore, mqtt), and one testing helpers page (kvstore) — all derived from the package `__init__.py` exports + module docstrings.  Up next: root README + CONTRIBUTING + workspace-template repo audit.
+- **Last shipped:** docs: library audit pass 2 — fill 5 stub guides + 3 stub indexes + kvstore testing (`f5e2aa1`).
+- **In flight:** root + CONTRIBUTING + ChuMicro-Workspace-Template audit (research stage; user-requested).
 - **Blocked on:** —
-- **Last touched:** `plans/next-up.md` (entry removed + Done-section pointer added).
+- **Last touched:** AGENTS.md, libraries/{config,kvstore,wifi,http_server,mqtt}/docs/, libraries/{http_server,wifi,mqtt,msgpack}/README.md, libraries/http_server/src/chumicro_http_server/__init__.py.
 
 ---
 
