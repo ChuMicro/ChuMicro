@@ -556,7 +556,7 @@ A user clones the template, runs `python run.py setup`, plugs in a board, runs `
 ## Notes
 
 - `chumicro-mqtt` source-of-truth during refactor: read the original at `/Users/chuxor/circuitpython/pythonProject3/basefilesystem/lib/basefs/mqtt_client.py` and treat it as prior art — reshape, don't port verbatim.
-- `workspace.yml` quality knobs (`lint`, `coverage_threshold`, `agent_strictness`) let the user dial their comfort.  Defaults are relaxed; `AGENTS.md` in the template tells LLM agents how to read them.
+- `workspace.yml` quality knobs (`lint`, `coverage_threshold`) let the user dial their comfort.  Defaults are permissive (lint enabled, no coverage gate).  `AGENTS.md` in the template tells LLM agents how to read them.
 - Library sequencing is a guideline, not a hard ordering — Phase 3a and 3b can interleave, and Phase 2 can start before Phase 1 finishes if a developer-pair splits the work.  Phase 4 is the only gate that genuinely requires everything before it.
 
 ## Open sub-questions

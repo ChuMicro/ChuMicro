@@ -10,7 +10,7 @@ Status: **Closed.**  Phases 1, 2, 4, 5, 6, 7 shipped 2026-04-27.  Phase 3 (per-e
 | 2 — Ergonomics quick wins | **shipped** | Six sub-items: 2e (`repl <thing>` `333d900`), 2a (`status` `7697deb`), 2c (`deploy --dry-run` `f2a055d`), 2d (deploy-failure hints `93b7c7a`), 2b (`doctor` `045f819`), 2f (`deploy --all-devices` `139b0ee`).  Per-thing → per-device mapping config deferred from 2f. |
 | 3 — Per-environment deploys | **dropped 2026-04-29** | Speculative dev/staging/prod seam; no concrete consumer surfaced.  Per user: "I dont know if we need a dev/production concept here to track. maybe some day but not any time soon."  Same reasoning that retired `Device.from_env` and `filter_devices` — until a real use case surfaces, building the seam is design overhead.  Phase plan body retained below for reference if the trigger ever arrives. |
 | 4 — Library scaffolder migration | **shipped** | `scripts/new_library_scaffold.py` → `chumicro_workspace.scaffold` + `python run.py new --library <name>` CLI mode.  Templates moved to `_payloads/library_template/`. |
-| 5 — Wire `workspace.yml` quality knobs | **shipped** | New `chumicro_workspace.quality` module + CLI wiring; `agent_strictness` accepted but enforcement deferred (no AST-level checks yet — own design pass). |
+| 5 — Wire `workspace.yml` quality knobs | **shipped** | New `chumicro_workspace.quality` module + CLI wiring (lint enable / select, coverage_threshold).  Originally also accepted an `agent_strictness` knob but the field had no consumer and was dropped 2026-05-01 per the no-speculative-public-API rule. |
 | 6 — Documentation audit | **shipped** | Cross-repo doc-freshness sweep — both repos' commands tables, README / guide / AGENTS / CONTRIBUTING refreshed for Phases 1, 2, 4, 5 surface; `docs/contributing/new-library.md` notes the Phase 4 scaffolder migration. |
 | 7 — Richer REPL (parallel track) | **shipped** | Slices 1a (`chumicro_repl.line_mode` + `--mode line`), 1b (`:edit` / `:save` / `:load` / `:snippets`), 1c (tab-completion infrastructure: keyword catalog + pluggable device source).  Detail in [`repl-playground.md`](repl-playground.md). |
 
@@ -22,7 +22,7 @@ Project-workspace's eight phases shipped (`plans/workstreams/project-workspace.m
 * No worked examples beyond `things/example_sensor/`.
 * No `status` / `doctor` / `deploy --dry-run` quality-of-life commands.
 * No app-level error recovery hints — raw tracebacks only.
-* `workspace.yml`'s quality knobs (lint / coverage / agent_strictness) documented but not wired up.
+* `workspace.yml`'s quality knobs (lint / coverage) documented but not wired up.
 * No environment layering — single config set for dev / staging / prod.
 * `scripts/new_library_scaffold.py` is a mono-repo-only contributor tool that logically belongs in `chumicro-workspace`.
 * The `switch` command is a vestige of the soon-to-be-deprecated multi-thing-staging path; with no backward-compat burden, drop it.
@@ -218,7 +218,7 @@ Estimated scope: ~250 LOC moved + ~50 LOC adapter glue.  Single session.
 
 ### Phase 5 — Wire `workspace.yml` quality knobs
 
-The `workspace.yml` design (Decision 0029) includes three quality knobs that aren't wired to anything today:
+The `workspace.yml` design (Decision 0029) includes quality knobs that aren't wired to anything today:
 
 ```yaml
 quality:
@@ -226,13 +226,13 @@ quality:
     enabled: true
     select: ["E", "F", "I"]
   coverage_threshold: 85
-  agent_strictness: relaxed   # or "strict"
 ```
 
 * `lint.enabled = false` → `python run.py lint` becomes a no-op with a hint.
 * `lint.select` → forwarded to ruff as `--select`.
 * `coverage_threshold` → forwarded to pytest's `--cov-fail-under`.
-* `agent_strictness = strict` → enables AST-level checks (no naked `except:`, no global state in things).  `relaxed` skips them.
+
+(An `agent_strictness: relaxed | strict` knob was originally part of the plan but dropped 2026-05-01 — the field shipped with no consumer and stayed parked indefinitely; per the no-speculative-public-API rule, removed rather than left as decorative surface.  Re-introduce alongside the AST-level checks if and when a real forcing function appears.)
 
 Touches: `chumicro_workspace/quality.py` (new), `chumicro_workspace/cli.py` (`_cmd_lint` / `_cmd_test` consult the loaded config), workspace template's `workspace.yml` (add the example knobs commented out).
 

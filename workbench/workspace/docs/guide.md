@@ -342,7 +342,7 @@ The deploy half of `repl <thing>` uses [`thing_boot_source`](api.md) — for fla
 
 ## Quality knobs
 
-`workspace.yml`'s `quality:` block carries four pass-through knobs the workspace CLI consults:
+`workspace.yml`'s `quality:` block carries pass-through knobs the workspace CLI consults:
 
 ```yaml
 quality:
@@ -350,15 +350,13 @@ quality:
     enabled: true
     select: ["E", "F", "I"]
   coverage_threshold: 85
-  agent_strictness: relaxed   # or "strict"
 ```
 
 * `lint.enabled = false` → `python run.py lint` becomes a no-op + hint (still discoverable; just doesn't run ruff).
 * `lint.select` → forwarded to ruff as `--select <comma list>` before any user `--` passthrough so user overrides win.
 * `coverage_threshold` → forwarded to pytest as `--cov-fail-under=<n>`.  Lets workspace.yml gate without editing pyproject.toml's `[tool.coverage.report]`.
-* `agent_strictness` — accepted today, AST-level enforcement (no naked `except:`, no global state in things) deferred to a later workstream.
 
-Loader: [`load_quality_config`](api.md).  Missing block → permissive defaults (lint enabled, no coverage gate, agent relaxed) — wiring is purely opt-in.  Shape violations raise `WorkspaceConfigError` with a precise field-named message.
+Loader: [`load_quality_config`](api.md).  Missing block → permissive defaults (lint enabled, no coverage gate) — wiring is purely opt-in.  Shape violations raise `WorkspaceConfigError` with a precise field-named message.
 
 ## Config merge
 

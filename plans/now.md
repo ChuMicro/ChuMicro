@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **Workspace-ecosystem Phase 2f closed.**  Per-thing → per-device mapping landed end-to-end across both repos.  New `workspace.yml` `deploy_targets:` block + `chumicro_workspace.deploy_targets.read_deploy_targets` parser; `_cmd_deploy` extracted into `_build_deploy_plan` returning `[(thing, dir, [Device])]` so the deploy loop is uniform across single-thing / `--all-devices` / `--all-things`.  Two flows: (1) bare `deploy <thing>` without `--device` consults `deploy_targets[thing]` first, falls back to `devices.yml` defaults; (2) new `--all-things` flag walks the whole mapping in declaration order.  Mono-repo commit `ec1d133` (`chumicro-workspace` 0.0.2 → 0.0.3); template-repo commit [`4607864`](https://github.com/ChuMicro/ChuMicro-Workspace-Template/commit/4607864) (workspace.yml docs + AGENTS.md row).  24 new unit tests; 100 % coverage on the new module; preflight green at the agent 94 % gate.  Today's earlier work: examples audit (template-repo `e8854fe`) + CP wipe→ready FAT-remount poll (mono-repo `1454c45`, chumicro-deploy 0.4.3).  One carry-over left in the workspace-ecosystem queue: Phase 5 `agent_strictness` AST checks.
-- **Last shipped:** mono-repo `ec1d133` (chumicro-workspace 0.0.3 — Phase 2f); template-repo `4607864` (workspace.yml docs).
+- **Phase:** **Workspace-ecosystem umbrella now genuinely closed.**  Two slices today.  (1) Phase 2f shipped per-thing `deploy_targets:` mapping + `deploy --all-things` end-to-end (mono-repo `ec1d133`, chumicro-workspace 0.0.2 → 0.0.3; template-repo [`4607864`](https://github.com/ChuMicro/ChuMicro-Workspace-Template/commit/4607864)).  (2) The remaining "Phase 5 carry-over: `agent_strictness` AST checks" was dropped per the no-speculative-public-API rule — the `quality.agent_strictness` field had no consumer since 2026-04-27 and the AST-check design pass was never done; removed rather than left as decorative config surface (consumer-less code rots quietly).  Today's earlier work: examples audit (template-repo `e8854fe`) + CP wipe→ready FAT-remount poll (mono-repo `1454c45`, chumicro-deploy 0.4.3).  No workspace-ecosystem carry-overs remain.
+- **Last shipped:** chumicro-workspace 0.0.4 (agent_strictness removal pending) + 0.0.3 (Phase 2f).
 - **In flight:** —
 - **Blocked on:** —
-- **Last touched:** `workbench/workspace/{VERSION, README.md, docs/guide.md, src/chumicro_workspace/{__init__,cli,deploy_targets}.py, tests/{test_cli,test_deploy_targets}.py}`; template repo `{workspace.yml, AGENTS.md}`.
+- **Last touched:** `workbench/workspace/{VERSION, src/chumicro_workspace/quality.py, tests/test_quality.py, docs/guide.md}`; `plans/workstreams/{workspace-ecosystem,project-workspace}.md`; template repo `workspace.yml`.
 
 ---
 
@@ -25,7 +25,6 @@ This is the front door. Everything else is deeper read.
 
 | Candidate | Where | Notes |
 |---|---|---|
-| Carry-over: Phase 5 `agent_strictness` | `chumicro_workspace.quality` | Field accepted today, AST-level enforcement (no naked `except:`, no module-level mutable state in things) deferred.  Trigger: agent-authored thing code starts surfacing the sloppiness the strictness ratchet was meant to catch.  Own design pass — likely 5–10 checks to settle. |
 | Anything else in `## Now` of `next-up.md` | `plans/next-up.md` | Rebrand to ChipPy, OTA workstream (`plans/workstreams/ota.md`), shared per-runtime adapter helper, performance benchmarking infrastructure, etc. |
 
 ## Hard rules to remember (non-negotiables)
