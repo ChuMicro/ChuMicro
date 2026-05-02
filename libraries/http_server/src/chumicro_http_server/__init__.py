@@ -52,8 +52,10 @@ and live-board verification on Pi Pico W (7d).
 TLS-server support is provided transport-side by
 :func:`chumicro_sockets.ssl_context_with_cert_and_key_paths` —
 wrap the listener your ``listener_factory`` returns.  Verified
-working on every supported runtime/board pair *except* CP-on-rp2
-(rp2-port mbedTLS feature-flag gap; use ESP32-family for CP HTTPS).
+working on every supported runtime/board pair *except* CP-on-rp2,
+where ``chumicro_sockets.tls_listening_socket`` refuses up-front
+with ``UnsupportedSSLConfigError`` (use ESP32-family or
+MicroPython on the same Pi Pico W for HTTPS).
 
 v1 non-goals: WebSockets, sessions / cookies / auth helpers,
 multipart upload, sub-app mounting, async handlers.  See
