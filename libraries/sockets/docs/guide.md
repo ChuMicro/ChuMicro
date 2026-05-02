@@ -114,7 +114,8 @@ constrain how you build certs and shape your TLS handshakes:
 
 | Substrate | Quirk | Workaround |
 |---|---|---|
-| MicroPython on RP2 (Pi Pico W) | mbedTLS build rejects self-signed certs entirely (`ValueError('invalid cert')`) | Use a CA-signed cert.  For dev, skip TLS testing on this combo or use a real CA chain. |
+| CircuitPython on rp2 (Pi Pico W / Pi Pico 2 W) — TLS *server* | `tls_listening_socket` raises `UnsupportedSSLConfigError` up-front. The CYW43 TLS handshake path raises `OSError(32)` mid-handshake AND wedges the chip's station-mode state until USB power-cycle. | Use an ESP32-family board for HTTPS server, or run MicroPython on the same Pi Pico W (verified working). TLS *client* on CP-rp2 is unaffected. |
+| MicroPython on rp2 (Pi Pico W) | mbedTLS build rejects self-signed certs entirely (`ValueError('invalid cert')`) | Use a CA-signed cert.  For dev, skip TLS testing on this combo or use a real CA chain. |
 | MicroPython SSLSocket on some ports | Wrapped TLS socket lacks `settimeout` / `setblocking` / `fileno` | Wrapper falls back to no-op + `fileno() = -1`; non-blocking semantics still hold via the TLS layer. |
 | Stricter mbedTLS builds | Reject IP-only SAN certs | Generate certs with at least one DNS SAN.  On a LAN, `<hostname>.local` works via mDNS; set `server_hostname=` to that DNS name. |
 

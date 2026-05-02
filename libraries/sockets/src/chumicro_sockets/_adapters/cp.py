@@ -218,22 +218,24 @@ def ssl_context_with_cert_and_key_paths(cert_path, key_path):  # pragma: no cove
     return context
 
 
-def listen_tls(host, port, *, context, backlog=4, radio):  # pragma: no cover - device only
+def listen_tls(host, port, *, context, backlog=4, radio):
     """Open a non-blocking TLS listening socket via CP socketpool.
 
-    CircuitPython's TLS-server path differs from the CPython /
-    MP one: ``wrap_socket(server_side=True)`` is called on the
-    LISTENING socket *before* bind/listen — every accepted client
-    socket is automatically TLS-wrapped via inheritance from the
-    parent.  Mirrors adafruit_httpserver's `_create_server_socket`.
+    Wraps the LISTENING socket with ``server_side=True`` before
+    bind/listen — every accepted client inherits the TLS wrap.
+    Mirrors adafruit_httpserver's `_create_server_socket`.  Verified
+    on Lolin S2 ESP32-S2 / CP 10.2.0-rc.0.
 
-    Verified live 2026-04-27 on Lolin S2 ESP32-S2 (CP 10.2.0-rc.0):
-    handshake completes synchronously inside ``accept()``, response
-    delivered end-to-end against a host CPython HTTPS client.
-    Pi Pico W rp2 currently fails post-handshake with ``OSError(32)``
-    (EPIPE) on accept — likely an rp2-port mbedTLS feature-flag
-    issue, under investigation.
+    Refused on CP-rp2 (Pi Pico W / Pi Pico 2 W) — raises
+    :class:`UnsupportedSSLConfigError`.  See plans/learnings.md.
     """
+    import sys  # noqa: PLC0415 - runtime detection only
+    if sys.platform.upper().startswith("RP2"):
+        from chumicro_sockets.errors import UnsupportedSSLConfigError  # noqa: PLC0415
+        raise UnsupportedSSLConfigError(
+            "TLS server not supported on CP-rp2 (Pi Pico W / Pi Pico 2 W). "
+            "Use an ESP32-family board, or MicroPython on rp2."
+        )
     pool = _pool_for(radio)
     raw = pool.socket(pool.AF_INET, pool.SOCK_STREAM)
     wrapped = context.wrap_socket(raw, server_side=True)
