@@ -839,8 +839,7 @@ class TestCircuitPythonTLSPassthrough:
 
 
 # Keep UnsupportedSSLConfigError importable + raisable so future
-# adapter additions can surface as structured failures.  Today's
-# adapters don't raise it — that's by design.
+# adapter additions can surface as structured failures.
 class TestUnsupportedSSLConfigErrorIsAvailable:
     def test_class_is_a_runtime_error(self) -> None:
         assert issubclass(UnsupportedSSLConfigError, RuntimeError)
@@ -848,3 +847,31 @@ class TestUnsupportedSSLConfigErrorIsAvailable:
     def test_class_is_raisable(self) -> None:
         with pytest.raises(UnsupportedSSLConfigError):
             raise UnsupportedSSLConfigError("placeholder")
+
+
+class TestCpListenTlsRefusesOnRp2:
+    def test_rp2040_platform_raises_unsupported(self, monkeypatch) -> None:
+        from chumicro_sockets._adapters import cp as cp_adapter
+        monkeypatch.setattr("sys.platform", "RP2040")
+        with pytest.raises(UnsupportedSSLConfigError) as captured:
+            cp_adapter.listen_tls(
+                "0.0.0.0", 8443, context=object(), backlog=4, radio=object(),
+            )
+        assert "rp2" in str(captured.value).lower()
+
+    def test_rp2350_platform_also_refused(self, monkeypatch) -> None:
+        from chumicro_sockets._adapters import cp as cp_adapter
+        monkeypatch.setattr("sys.platform", "RP2350")
+        with pytest.raises(UnsupportedSSLConfigError):
+            cp_adapter.listen_tls(
+                "0.0.0.0", 8443, context=object(), backlog=4, radio=object(),
+            )
+
+    def test_non_rp2_platform_does_not_short_circuit(self, monkeypatch) -> None:
+        from chumicro_sockets._adapters import cp as cp_adapter
+        monkeypatch.setattr("sys.platform", "Espressif ESP32-S2")
+        with pytest.raises(Exception) as captured:  # noqa: PT011, BLE001
+            cp_adapter.listen_tls(
+                "0.0.0.0", 8443, context=object(), backlog=4, radio=object(),
+            )
+        assert not isinstance(captured.value, UnsupportedSSLConfigError)
