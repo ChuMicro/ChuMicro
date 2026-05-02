@@ -101,7 +101,7 @@ Every failure message tells you exactly what to do.
 |---|---|
 | Lint error | Run `python scripts/run.py lint`, fix the flagged lines — the error message tells you what's wrong |
 | Test failure | Read the assertion error — the test name and line number point you right to it |
-| Coverage too low | The gate is 85 % (configured in `pyproject.toml`). Check the `Missing` column for uncovered line numbers. If it's code you didn't write, note it in the PR. For hardware-only code that can't be tested on CPython, see [coverage exclusions](style-guide.md#coverage-exclusions) |
+| Coverage too low | The human gate is 85 % (configured in `pyproject.toml`); **agents must run with `--coverage-threshold 94`** ([Decision 0025](../../plans/decisions/0025-dual-coverage-thresholds.md), AGENTS.md non-negotiable rules).  Check the `Missing` column for uncovered line numbers. If it's code you didn't write, note it in the PR. For hardware-only code that can't be tested on CPython, see [coverage exclusions](style-guide.md#coverage-exclusions) |
 | `check-version` | Edit `libraries/<name>/VERSION` (patch bump is usually right) |
 | `griffe warnings` | Add type annotations to function signatures |
 | `functional_tests/` say no device is configured | Run `python scripts/run.py setup`, then fill in `devices.yml`. See [device testing](device-testing.md) |

@@ -46,6 +46,8 @@ Affects: timing
 
 Use imperative mood in the subject — "Add test", not "Added" or "Adds". Name affected libraries in the body.
 
+> **Working with an AI agent?** Strip any default agent-authorship trailer (e.g. `Co-Authored-By: Claude …`) before committing.  Commits in this repo are authored by the human running the agent — see the AGENTS.md non-negotiable rules and the `git-commit` skill.  Most agent harnesses add the trailer automatically; the `git-commit` skill includes a pre-commit step to remove it.
+
 ## Push and open the PR
 
 ```bash

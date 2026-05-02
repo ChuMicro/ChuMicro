@@ -426,7 +426,7 @@ We use full words so everyone can read the code without looking things up — ne
 
 ## Project decisions
 
-Major design choices live in [`plans/decisions/`](plans/decisions/) — each file explains what was decided, why, and when. Current direction lives in [`plans/roadmap.md`](plans/roadmap.md). Unresolved threads live in [`plans/open-questions.md`](plans/open-questions.md). **Search these before proposing structural changes** — if your idea was already considered, the decision doc tells you the reasoning and whether circumstances have changed.
+Major design choices live in [`plans/decisions/`](plans/decisions/) — each file explains what was decided, why, and when. Current direction lives in [`plans/roadmap.md`](plans/roadmap.md). Unresolved threads live in [`plans/open-questions.md`](plans/open-questions.md). Hard-won empirical findings — hardware quirks, runtime gotchas, third-party-tool surprises — live in [`plans/learnings.md`](plans/learnings.md); browse it before debugging a class of problem you suspect someone else has already hit. **Search all of these before proposing structural changes** — if your idea was already considered, the decision doc tells you the reasoning and whether circumstances have changed.
 
 ## Getting help
 
