@@ -28,11 +28,16 @@ Small, focused libraries you can install independently. Use what you need.
 | **[timing](libraries/timing/)** | Timers that don't freeze your code — your loop keeps running while waiting. No more `time.sleep()` locking everything up. |
 | **[runner](libraries/runner/)** | A simple task scheduler — register your services, call `runner.tick()` in your loop. No async needed. |
 | **[compat](libraries/compat/)** | Standard library features that CircuitPython and MicroPython are missing (like `functools.partial`). |
-| **[msgpack](libraries/msgpack/)** | Compact binary serialization — 30–50% smaller than JSON, great for settings and sensor data. |
+| **[logging](libraries/logging/)** | Levelled logging that's runner-friendly and never blocks your loop. Per-logger levels with hierarchy resolution; zero chumicro deps. |
+| **[events](libraries/events/)** | Runner-shaped pub/sub event bus — bounded, drop-oldest, zero deps. Wires service callbacks (e.g. wifi state changes) into application-level handlers. |
+| **[msgpack](libraries/msgpack/)** | Compact binary serialization — 30–50% smaller than JSON, great for settings and sensor data. Wire-compatible with PyPI `msgpack(use_single_float=True)`. |
 | **[config](libraries/config/)** | Standardized runtime-config helpers — one file per thing, section-namespaced, with `<Name>Config.from_dict()` for each consumer library. |
 | **[kvstore](libraries/kvstore/)** | Tiny persistent key-value store — counters, timestamps, tokens. Picks the right backend (NVM / NVS / LittleFS) for your board. |
 | **[wifi](libraries/wifi/)** | One WiFi service across CP, MP-ESP32, and MP-Pico-W — state machine, reconnect supervisor, no firmware-level surprises. |
-| **[sockets](libraries/sockets/)** | Cross-runtime TCP + TLS client — one protocol over CP `socketpool`, MP `socket`/`ssl`, and CPython stdlib. Substrate for chumicro-mqtt and friends. |
+| **[sockets](libraries/sockets/)** | Cross-runtime TCP + TLS + UDP — one protocol per shape over CP `socketpool`, MP `socket`/`ssl`, and CPython stdlib. Substrate for the network libraries above and below. |
+| **[ntp](libraries/ntp/)** | Runner-shaped SNTP client over an injected UDP socket. Pure-Python, cross-runtime; gets the device clock close enough for TLS validity-period checks. |
+| **[requests](libraries/requests/)** | Non-blocking HTTP/1.1 client — LED keeps blinking through a TLS handshake, mid-timeout, or against a stalled peer. |
+| **[http_server](libraries/http_server/)** | Non-blocking HTTP/1.1 server — `@server.route` decorator with method dispatch + path params; per-connection state machine advances one chunk per tick. TLS-server-capable on every supported runtime/board pair *except* CP-on-rp2. |
 | **[mqtt](libraries/mqtt/)** | Non-blocking MQTT 3.1.1 client (QoS 0 + 1) — runner-shaped, no threads or async. Concurrent QoS 1 publishes, configurable oversized-message policy, last-will + retain. |
 
 Works on ESP32 (S2, S3, C3, C6), RP2040/RP2350 (Raspberry Pi Pico), STM32, and most boards with at least 256 KB RAM and 4 MB flash. Browse the [documentation site](https://chumicro.github.io/ChuMicro/) for guides and API references, or look through `libraries/` — each library's README has install commands, a quick example, and an API summary.
@@ -43,15 +48,20 @@ Works on ESP32 (S2, S3, C3, C6), RP2040/RP2350 (Raspberry Pi Pico), STM32, and m
 ### Dependencies
 
 ```
-runner   → timing
-wifi     → config, timing
-mqtt     → sockets, timing
-config   → msgpack
-kvstore  → msgpack
-timing   (no dependencies)
-compat   (no dependencies)
-msgpack  (no dependencies)
-sockets  (no dependencies — pure platform shim)
+runner       → timing
+wifi         → config, timing
+ntp          → timing
+sockets      (no dependencies — pure platform shim)
+requests     → sockets, timing
+http_server  → sockets, timing
+mqtt         → sockets, timing
+config       → msgpack
+kvstore      → msgpack
+timing       (no dependencies)
+compat       (no dependencies)
+logging      (no dependencies)
+events       (no dependencies — and nothing else imports it; apps wire it up)
+msgpack      (no dependencies)
 ```
 
 ### Start with the problem you're solving
@@ -62,8 +72,13 @@ sockets  (no dependencies — pure platform shim)
 - **"I need to read deploy-time config on the device"** → [config](libraries/config/) (with [msgpack](libraries/msgpack/))
 - **"I need to persist a counter across reboots"** → [kvstore](libraries/kvstore/)
 - **"I need WiFi that auto-reconnects without surprises"** → [wifi](libraries/wifi/)
-- **"I need a TCP / TLS socket that works on CP and MP"** → [sockets](libraries/sockets/)
+- **"I need a TCP / TLS / UDP socket that works on CP and MP"** → [sockets](libraries/sockets/)
+- **"I need to set the device clock from an NTP server"** → [ntp](libraries/ntp/)
+- **"I need to fetch a URL without blocking my loop"** → [requests](libraries/requests/)
+- **"I need to expose HTTP routes on the device"** → [http_server](libraries/http_server/)
 - **"I need an MQTT client that doesn't freeze my loop"** → [mqtt](libraries/mqtt/)
+- **"I want levelled logging that doesn't pull in chumicro deps"** → [logging](libraries/logging/)
+- **"I want a pub/sub bus to wire wifi-state-change into app handlers"** → [events](libraries/events/)
 - **"functools.partial doesn't exist on my board"** → [compat](libraries/compat/)
 
 ### Companion host-side tools
@@ -74,7 +89,8 @@ Workbench packages live alongside the libraries — they run on your laptop and 
 |---|---|
 | **[deploy](workbench/deploy/)** | Push code onto a CircuitPython or MicroPython board, probe its identity, and flash firmware (UF2 or esptool). Programmatic API + `chumicro-deploy` CLI; recovery layer that classifies failures and walks you through fixes. |
 | **[repl](workbench/repl/)** | Serial REPL with traceback highlighting, an `mpremote`-compatible TUI, a `tail()` follow-mode for deploy orchestration, and a programmatic `ReplSession` for headless test fixtures. `chumicro-repl` CLI. |
-| **[workspace](workbench/workspace/)** | One-stop host CLI + Python API for ChuMicro project workspaces — `init` (clone a starter), `setup` (bootstrap a venv), `add-device`, `deploy`, `switch`, `repl`, `install-firmware`, `update` (re-flow tool-owned template files), and the deploy-time config-merge pipeline.  Canonical starter lives at [`ChuMicro-Workspace-Template`](https://github.com/ChuMicro/ChuMicro-Workspace-Template). |
+| **[workspace](workbench/workspace/)** | One-stop host CLI + Python API for ChuMicro project workspaces — `init` (clone a starter), `setup` (bootstrap a venv), `add-device`, `deploy` (single thing, `--all-devices`, or `--all-things`), `repl <thing>` (deploy-then-tail), `install-firmware`, `status` / `doctor` health checks, `new --library` / `new --from`, path-aware `rename`, `update` (re-flow tool-owned template files).  Canonical starter lives at [`ChuMicro-Workspace-Template`](https://github.com/ChuMicro/ChuMicro-Workspace-Template). |
+| **[pytest-device](workbench/pytest-device/)** | Pytest plugin that intercepts collection under any `functional_tests/` directory, stages your library + test source onto a connected CP / MP board via `chumicro-deploy`, runs the test in the device runtime, and surfaces the on-device outcome to host-side pytest.  Auto-registers via `pytest11`; reads `devices.yml`. |
 
 </details>
 

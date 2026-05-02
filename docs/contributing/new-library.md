@@ -14,7 +14,7 @@ Check [open issues](https://github.com/ChuMicro/ChuMicro/issues) and [discussion
 python scripts/run.py new-library my-thing
 ```
 
-The mono-repo wrapper composes the `chumicro_workspace.scaffold.scaffold_library` primitive (lifted out of `scripts/` in workspace-ecosystem Phase 4 — see `plans/workstreams/workspace-ecosystem.md`) with the mono-repo-only follow-ups (editable install + IDE config sync).  External users developing their own chumicro-style libraries get the same scaffolder via `python run.py new --library <name>` from inside their workspace.
+The mono-repo wrapper composes the `chumicro_workspace.scaffold.scaffold_library` primitive — owned by the workbench `chumicro-workspace` package — with the mono-repo-only follow-ups (editable install + IDE config sync).  External users developing their own chumicro-style libraries get the same scaffolder via `python run.py new --library <name>` from inside their workspace.
 
 This creates `libraries/my-thing/` with:
 
