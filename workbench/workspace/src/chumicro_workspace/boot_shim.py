@@ -50,6 +50,8 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from chumicro_deploy._runtime_marker import file_targets_runtime
+
 from chumicro_workspace.deploy_source import (
     GENERATED_DIRNAME,
     WithRuntimeConfig,
@@ -234,6 +236,7 @@ def _walk_thing_files(
     *,
     thing_name: str,
     extra_excluded: Iterable[str] = (),
+    target_runtime: str | None = None,
 ) -> dict[str, bytes]:
     """Walk *thing_dir* and return ``/lib/things/<...>/<name>/...`` → bytes.
 
@@ -242,6 +245,10 @@ def _walk_thing_files(
     *extra_excluded* augments the skip set.  *thing_name* drives the
     on-device prefix via :func:`_device_thing_dir` so nested thing
     names produce nested paths.
+
+    Decision 0044 — when *target_runtime* is set, ``.py`` files
+    carrying a ``__chumicro_runtimes__`` marker for a different
+    runtime are dropped before they reach the device.
     """
     excluded = _DEFAULT_EXCLUDED_DIRS | set(extra_excluded)
     device_prefix = _device_thing_dir(thing_name)
@@ -254,6 +261,10 @@ def _walk_thing_files(
         if any(part in excluded for part in parts):
             continue
         if relative.name in _THING_HOST_ONLY_NAMES:
+            continue
+        if source_path.suffix == ".py" and not file_targets_runtime(
+            source_path, target_runtime=target_runtime,
+        ):
             continue
         device_relative = "/".join(parts)
         device_path = f"{device_prefix}/{device_relative}"
@@ -277,11 +288,13 @@ class _BootShimSource:
         thing_name: str,
         entrypoint_filename: str,
         extra_excluded: Iterable[str] = (),
+        target_runtime: str | None = None,
     ) -> None:
         self._thing_dir = thing_dir
         self._thing_name = thing_name
         self._entrypoint_filename = entrypoint_filename
         self._extra_excluded = tuple(extra_excluded)
+        self._target_runtime = target_runtime
 
     def files(self) -> dict[str, bytes]:
         """Combine shim layer + thing files at their on-device paths."""
@@ -294,6 +307,7 @@ class _BootShimSource:
                 self._thing_dir,
                 thing_name=self._thing_name,
                 extra_excluded=self._extra_excluded,
+                target_runtime=self._target_runtime,
             ),
         )
         return files
@@ -312,6 +326,7 @@ def thing_boot_source(
     workspace_yaml: Path | None = None,
     secrets_yaml: Path | None = None,
     extra_excluded: Iterable[str] = (),
+    target_runtime: str | None = None,
 ) -> WithRuntimeConfig:
     """Build a deploy-ready ``FileSource`` using the boot-shim layout.
 
@@ -339,6 +354,11 @@ def thing_boot_source(
         secrets_yaml: Override ``secrets_yaml`` path.
         extra_excluded: Additional filename / directory names to
             skip on the thing walk.
+        target_runtime: Decision 0044 — when set, ``.py`` files in
+            the thing directory whose ``__chumicro_runtimes__`` marker
+            excludes this runtime are dropped.  ``None`` (the default)
+            preserves the prior behavior; the workspace ``deploy``
+            CLI fills this in from the device's runtime.
 
     Raises:
         FileNotFoundError: When *thing_dir* contains no
@@ -355,6 +375,7 @@ def thing_boot_source(
         thing_name=resolved_name,
         entrypoint_filename=entrypoint_filename,
         extra_excluded=extra_excluded,
+        target_runtime=target_runtime,
     )
     return WithRuntimeConfig(
         inner,

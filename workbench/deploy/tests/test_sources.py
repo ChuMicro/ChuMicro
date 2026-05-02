@@ -350,3 +350,157 @@ class TestImportGraphSource:
         # from app.py.
         files = source.files()
         assert "/lib/pkg/__init__.py" in files
+
+
+class TestDirectorySourceTargetRuntime:
+    """Decision 0044 — ``target_runtime`` filters wrong-runtime ``.py`` files."""
+
+    def _build_pkg(self, root: Path) -> None:
+        pkg = root / "chumicro_pkg"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("# universal\n")
+        (pkg / "shared.py").write_text("# universal\n")
+        adapters = pkg / "_adapters"
+        adapters.mkdir()
+        (adapters / "__init__.py").write_text("# universal\n")
+        (adapters / "cp.py").write_text(
+            '__chumicro_runtimes__ = ("circuitpython",)\n',
+        )
+        (adapters / "mp.py").write_text(
+            '__chumicro_runtimes__ = ("micropython",)\n',
+        )
+        (adapters / "cpython.py").write_text(
+            '__chumicro_runtimes__ = ("cpython",)\n',
+        )
+
+    def test_target_runtime_none_ships_everything(self, tmp_path: Path) -> None:
+        """Default behavior preserved — no filtering."""
+        root = tmp_path / "src"
+        root.mkdir()
+        self._build_pkg(root)
+        source = DirectorySource(root, entrypoint="/chumicro_pkg/__init__.py")
+        files = source.files()
+        assert "/chumicro_pkg/_adapters/cp.py" in files
+        assert "/chumicro_pkg/_adapters/mp.py" in files
+        assert "/chumicro_pkg/_adapters/cpython.py" in files
+
+    def test_circuitpython_target_drops_mp_and_cpython(
+        self, tmp_path: Path,
+    ) -> None:
+        root = tmp_path / "src"
+        root.mkdir()
+        self._build_pkg(root)
+        source = DirectorySource(
+            root,
+            entrypoint="/chumicro_pkg/__init__.py",
+            target_runtime="circuitpython",
+        )
+        files = source.files()
+        assert "/chumicro_pkg/_adapters/cp.py" in files
+        assert "/chumicro_pkg/_adapters/mp.py" not in files
+        assert "/chumicro_pkg/_adapters/cpython.py" not in files
+        # Universal files (no marker) still ship.
+        assert "/chumicro_pkg/shared.py" in files
+        assert "/chumicro_pkg/_adapters/__init__.py" in files
+
+    def test_micropython_target_drops_cp_and_cpython(
+        self, tmp_path: Path,
+    ) -> None:
+        root = tmp_path / "src"
+        root.mkdir()
+        self._build_pkg(root)
+        source = DirectorySource(
+            root,
+            entrypoint="/chumicro_pkg/__init__.py",
+            target_runtime="micropython",
+        )
+        files = source.files()
+        assert "/chumicro_pkg/_adapters/mp.py" in files
+        assert "/chumicro_pkg/_adapters/cp.py" not in files
+        assert "/chumicro_pkg/_adapters/cpython.py" not in files
+
+    def test_non_python_files_unaffected(self, tmp_path: Path) -> None:
+        """Markers only filter ``.py`` files; data files always ship."""
+        root = tmp_path / "src"
+        root.mkdir()
+        (root / "code.py").write_text("# entrypoint\n")
+        (root / "ca.pem").write_bytes(b"-----BEGIN CERTIFICATE-----\n")
+        source = DirectorySource(
+            root, entrypoint="/code.py", target_runtime="circuitpython",
+        )
+        files = source.files()
+        assert "/ca.pem" in files
+
+
+class TestImportGraphSourceTargetRuntime:
+    """Decision 0044 — ``target_runtime`` drops wrong-runtime modules."""
+
+    def _build_workspace(self, tmp_path: Path) -> tuple[Path, Path]:
+        libs = tmp_path / "libs"
+        libs.mkdir()
+        adapters = libs / "_adapters"
+        adapters.mkdir()
+        (adapters / "__init__.py").write_text("")
+        (adapters / "cp.py").write_text(
+            '__chumicro_runtimes__ = ("circuitpython",)\n',
+        )
+        (adapters / "mp.py").write_text(
+            '__chumicro_runtimes__ = ("micropython",)\n',
+        )
+        entrypoint = tmp_path / "code.py"
+        entrypoint.write_text(
+            "from _adapters import cp\nfrom _adapters import mp\n",
+        )
+        return entrypoint, libs
+
+    def test_target_runtime_none_ships_both(self, tmp_path: Path) -> None:
+        entrypoint, libs = self._build_workspace(tmp_path)
+        source = ImportGraphSource(entrypoint, search_paths=[libs])
+        files = source.files()
+        assert "/lib/_adapters/cp.py" in files
+        assert "/lib/_adapters/mp.py" in files
+
+    def test_circuitpython_target_drops_mp(self, tmp_path: Path) -> None:
+        entrypoint, libs = self._build_workspace(tmp_path)
+        source = ImportGraphSource(
+            entrypoint,
+            search_paths=[libs],
+            target_runtime="circuitpython",
+        )
+        files = source.files()
+        assert "/lib/_adapters/cp.py" in files
+        assert "/lib/_adapters/mp.py" not in files
+
+    def test_micropython_target_drops_cp(self, tmp_path: Path) -> None:
+        entrypoint, libs = self._build_workspace(tmp_path)
+        source = ImportGraphSource(
+            entrypoint,
+            search_paths=[libs],
+            target_runtime="micropython",
+        )
+        files = source.files()
+        assert "/lib/_adapters/mp.py" in files
+        assert "/lib/_adapters/cp.py" not in files
+
+    def test_filtered_module_imports_not_walked(self, tmp_path: Path) -> None:
+        """A dropped module's imports must not pull more files into the bundle."""
+        libs = tmp_path / "libs"
+        libs.mkdir()
+        cp_only = libs / "cp_only.py"
+        cp_only.write_text(
+            '__chumicro_runtimes__ = ("circuitpython",)\n'
+            "import cp_dependency\n",
+        )
+        # cp_dependency would be walked if cp_only.py were included.
+        (libs / "cp_dependency.py").write_text("# CP-only support module\n")
+        entrypoint = tmp_path / "code.py"
+        entrypoint.write_text("import cp_only\n")
+        source = ImportGraphSource(
+            entrypoint,
+            search_paths=[libs],
+            target_runtime="micropython",
+        )
+        files = source.files()
+        assert "/lib/cp_only.py" not in files
+        # cp_dependency was reachable only via cp_only — also dropped.
+        assert "/lib/cp_dependency.py" not in files

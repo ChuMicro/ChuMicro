@@ -870,6 +870,11 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
                 print(
                     f"deploy: --- {device.transport}@{device.address} ---",
                 )
+            # Decision 0044 — every staging path filters out files
+            # marked ``__chumicro_runtimes__`` for a different runtime.
+            # ``--target-runtime`` overrides; otherwise the device's
+            # configured runtime drives the filter.
+            target_runtime = args.target_runtime or str(device.transport)
             if args.boot_shim:
                 layout = "boot-shim"
                 source = thing_boot_source(
@@ -877,6 +882,7 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
                     workspace=workspace,
                     thing_name=thing_name,
                     entrypoint_filename=device.effective_entrypoint,
+                    target_runtime=target_runtime,
                 )
             elif args.import_graph:
                 layout = "import-graph"
@@ -888,6 +894,7 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
                     workspace=workspace,
                     entrypoint_filename=device.effective_entrypoint,
                     device_entrypoint=device_entrypoint,
+                    target_runtime=target_runtime,
                 )
             else:
                 layout = "flat"
@@ -898,6 +905,7 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
                     entrypoint=(
                         args.entrypoint or f"/{device.effective_entrypoint}"
                     ),
+                    target_runtime=target_runtime,
                 )
             if args.dry_run:
                 print(_render_dry_run_summary(
@@ -2462,6 +2470,17 @@ def build_parser() -> argparse.ArgumentParser:
             "sending bytes to the device.  Use this flag for power-"
             "user CLI runs or CI flows that have already validated "
             "the workspace state externally."
+        ),
+    )
+    deploy_parser.add_argument(
+        "--target-runtime",
+        choices=("circuitpython", "micropython"),
+        default=None,
+        help=(
+            "Override the deploy-time runtime filter (Decision 0044).  "
+            "Defaults to the device's configured runtime — files marked "
+            "for a different runtime via __chumicro_runtimes__ are "
+            "filtered out.  Set this to override the auto-derived value."
         ),
     )
     deploy_parser.set_defaults(func=_cmd_deploy)

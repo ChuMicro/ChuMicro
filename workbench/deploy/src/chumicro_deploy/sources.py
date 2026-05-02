@@ -20,6 +20,7 @@ import ast
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
+from ._runtime_marker import file_targets_runtime
 from .protocol import validate_entrypoint_in_files
 
 
@@ -106,6 +107,12 @@ class DirectorySource:
         excluded_names: Filename / directory names to skip entirely
             (exact match, not glob).  Defaults to common artifacts
             (``__pycache__``, ``.DS_Store``, ``.git``, etc.).
+        target_runtime: Decision 0044 — when set
+            (``"circuitpython"`` / ``"micropython"`` / ``"cpython"``),
+            ``.py`` files carrying a ``__chumicro_runtimes__`` marker
+            are skipped if the marker doesn't include *target_runtime*.
+            ``None`` (the default) ships every file, matching the prior
+            unfiltered behavior.  Non-``.py`` files are unaffected.
 
     Raises:
         NotADirectoryError: If *root* does not exist or is not a
@@ -124,6 +131,7 @@ class DirectorySource:
         entrypoint: str,
         resource_prefix: str = "/",
         excluded_names: frozenset[str] | None = None,
+        target_runtime: str | None = None,
     ) -> None:
         if not root.is_dir():
             raise NotADirectoryError(f"DirectorySource root not a directory: {root}")
@@ -133,6 +141,7 @@ class DirectorySource:
         self._excluded = (
             excluded_names if excluded_names is not None else self.DEFAULT_EXCLUDED
         )
+        self._target_runtime = target_runtime
         self._files: dict[str, bytes] | None = None
 
     def _walk(self) -> dict[str, bytes]:
@@ -141,6 +150,10 @@ class DirectorySource:
             if not file_path.is_file():
                 continue
             if any(part in self._excluded for part in file_path.relative_to(self._root).parts):
+                continue
+            if file_path.suffix == ".py" and not file_targets_runtime(
+                file_path, target_runtime=self._target_runtime,
+            ):
                 continue
             relative_path = file_path.relative_to(self._root).as_posix()
             device_path = self._join_prefix(self._resource_prefix, relative_path)
@@ -197,6 +210,17 @@ class ImportGraphSource:
             ``/code.py``).
         resource_prefix: On-device prefix for every non-entrypoint
             module file (default ``/lib``).
+        target_runtime: Decision 0044 — when set
+            (``"circuitpython"`` / ``"micropython"`` / ``"cpython"``),
+            modules carrying a ``__chumicro_runtimes__`` marker for a
+            different runtime are dropped, and their imports are not
+            walked further.  ``None`` (the default) ships every
+            reachable module, matching the prior unfiltered behavior;
+            this is the right setting when the runtime selector
+            reaches both adapters at import time and you want the
+            unmatched one available so the selector can fail loudly
+            on misclassification.  The entrypoint itself is never
+            filtered.
 
     Raises:
         FileNotFoundError: If *entrypoint* does not exist.
@@ -212,6 +236,7 @@ class ImportGraphSource:
         extra_modules: list[str] | None = None,
         device_entrypoint: str = "/code.py",
         resource_prefix: str = "/lib",
+        target_runtime: str | None = None,
     ) -> None:
         if not entrypoint.is_file():
             raise FileNotFoundError(f"ImportGraphSource entrypoint not found: {entrypoint}")
@@ -225,6 +250,7 @@ class ImportGraphSource:
         self._extra_modules = list(extra_modules) if extra_modules else []
         self._device_entrypoint = device_entrypoint
         self._resource_prefix = resource_prefix
+        self._target_runtime = target_runtime
         self._files = self._collect()
 
     def _collect(self) -> dict[str, bytes]:
@@ -242,6 +268,12 @@ class ImportGraphSource:
             visited.add(module_name)
             resolved_path = self._resolve_module(module_name)
             if resolved_path is None:
+                continue
+            if not file_targets_runtime(
+                resolved_path, target_runtime=self._target_runtime,
+            ):
+                # Wrong-runtime module: drop it and don't walk its
+                # imports — they are likely runtime-specific too.
                 continue
             device_path = self._device_path_for(module_name, resolved_path)
             collected[device_path] = resolved_path.read_bytes()

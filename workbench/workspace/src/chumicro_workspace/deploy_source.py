@@ -155,6 +155,7 @@ def thing_directory_source(
     entrypoint: str = "/code.py",
     resource_prefix: str = "/",
     extra_excluded: Iterable[str] = (),
+    target_runtime: str | None = None,
 ) -> WithRuntimeConfig:
     """Build a deploy-ready ``FileSource`` for a typical thing directory.
 
@@ -175,6 +176,12 @@ def thing_directory_source(
         extra_excluded: Additional filename / directory names to skip
             beyond the defaults (config files, ``_generated/``,
             ``__pycache__/``, etc.).
+        target_runtime: Decision 0044 — forwarded to
+            :class:`DirectorySource` so ``.py`` files marked for a
+            different runtime via ``__chumicro_runtimes__`` are
+            filtered out before staging.  ``None`` (the default)
+            preserves the prior unfiltered behavior; the workspace
+            ``deploy`` CLI fills this in from the device's runtime.
 
     Raises:
         FileNotFoundError: When *thing_dir* contains no recognized
@@ -196,6 +203,7 @@ def thing_directory_source(
         entrypoint=entrypoint,
         resource_prefix=resource_prefix,
         excluded_names=excluded,
+        target_runtime=target_runtime,
     )
     return WithRuntimeConfig(
         inner,

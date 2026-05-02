@@ -208,12 +208,20 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
         )
         return 2
 
+    # Build the device first so we can derive the deploy-time runtime
+    # filter (Decision 0044): unless --target-runtime overrides, the
+    # filter is the device's configured runtime (--transport /
+    # --devices-file).
+    device = _device_from_args(args)
+    target_runtime = args.target_runtime or str(device.transport)
+
     source: DirectorySource | FileMapSource
     if args.directory is not None:
         source = DirectorySource(
             args.directory,
             entrypoint=args.entrypoint,
             resource_prefix=args.resource_prefix,
+            target_runtime=target_runtime,
         )
     elif args.file_map is not None:
         file_map_data = json.loads(args.file_map.read_text())
@@ -224,6 +232,9 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             return 2
+        # FileMapSource is bytes-already-chosen by the caller — no
+        # filesystem walk to filter.  --target-runtime is silently
+        # ignored for this source.
         source = FileMapSource(file_map_data, entrypoint=args.entrypoint)
     else:
         print(
@@ -232,7 +243,7 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
         )
         return 2
 
-    deployer = Deployer(_device_from_args(args))
+    deployer = Deployer(device)
     runner: Deployer | InteractiveDeployer = (
         deployer if args.non_interactive else InteractiveDeployer(deployer)
     )
@@ -376,6 +387,18 @@ def build_parser() -> argparse.ArgumentParser:
         "--resource-prefix",
         default="/",
         help="On-device prefix for non-entrypoint files (default /).",
+    )
+    deploy_parser.add_argument(
+        "--target-runtime",
+        choices=_RUNTIME_CHOICES,
+        default=None,
+        help=(
+            "Override which runtime's files are deployed.  Defaults to "
+            "the device's configured runtime (--transport / "
+            "--devices-file) — files marked for a different runtime "
+            "via __chumicro_runtimes__ are filtered out (Decision 0044).  "
+            "Set explicitly to override the auto-derived value."
+        ),
     )
     deploy_parser.add_argument(
         "--non-interactive",

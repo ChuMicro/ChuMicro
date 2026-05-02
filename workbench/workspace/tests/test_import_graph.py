@@ -310,3 +310,38 @@ class TestThingImportGraphSource:
         )
         files = source.files()
         assert "/lib/dynamic_target.py" in files
+
+    def test_target_runtime_drops_wrong_runtime_modules(
+        self, tmp_path: Path,
+    ) -> None:
+        """Decision 0044 — wrong-runtime adapters do not ride the import graph."""
+        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "secrets.yml").write_text("\n")
+        libs = tmp_path / "libs"
+        libs.mkdir()
+        adapters = libs / "_adapters"
+        adapters.mkdir()
+        (adapters / "__init__.py").write_text("")
+        (adapters / "cp.py").write_text(
+            '__chumicro_runtimes__ = ("circuitpython",)\n',
+        )
+        (adapters / "mp.py").write_text(
+            '__chumicro_runtimes__ = ("micropython",)\n',
+        )
+
+        thing_dir = tmp_path / "things" / "two-adapters"
+        thing_dir.mkdir(parents=True)
+        (thing_dir / "config.toml").write_text("[app]\n")
+        (thing_dir / "code.py").write_text(
+            "from _adapters import cp\nfrom _adapters import mp\n",
+        )
+        workspace = WorkspaceLayout(root=tmp_path)
+
+        source = thing_import_graph_source(
+            thing_dir,
+            workspace=workspace,
+            target_runtime="micropython",
+        )
+        files = source.files()
+        assert "/lib/_adapters/mp.py" in files
+        assert "/lib/_adapters/cp.py" not in files

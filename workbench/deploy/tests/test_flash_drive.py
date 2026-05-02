@@ -87,6 +87,51 @@ class TestMergePackages:
 
         assert not (staging / "pkg" / "__pycache__").exists()
 
+    def test_target_runtime_filters_marked_files(self, tmp_path: Path) -> None:
+        """Decision 0044 — wrong-runtime ``.py`` files are dropped at merge."""
+        source = tmp_path / "src"
+        source.mkdir()
+        package = source / "pkg"
+        package.mkdir()
+        (package / "__init__.py").write_text("")
+        (package / "shared.py").write_text("# universal\n")
+        (package / "cp.py").write_text(
+            '__chumicro_runtimes__ = ("circuitpython",)\n',
+        )
+        (package / "mp.py").write_text(
+            '__chumicro_runtimes__ = ("micropython",)\n',
+        )
+
+        staging = tmp_path / "staging"
+        staging.mkdir()
+        flash_drive.merge_packages(
+            source, staging, target_runtime="circuitpython",
+        )
+
+        assert (staging / "pkg" / "cp.py").exists()
+        assert not (staging / "pkg" / "mp.py").exists()
+        # Universal shared.py and __init__.py still ship.
+        assert (staging / "pkg" / "shared.py").exists()
+        assert (staging / "pkg" / "__init__.py").exists()
+
+    def test_target_runtime_none_preserves_old_behavior(
+        self, tmp_path: Path,
+    ) -> None:
+        source = tmp_path / "src"
+        source.mkdir()
+        package = source / "pkg"
+        package.mkdir()
+        (package / "__init__.py").write_text("")
+        (package / "mp.py").write_text(
+            '__chumicro_runtimes__ = ("micropython",)\n',
+        )
+
+        staging = tmp_path / "staging"
+        staging.mkdir()
+        flash_drive.merge_packages(source, staging)
+
+        assert (staging / "pkg" / "mp.py").exists()
+
 
 class TestRsync:
     """Tests for flash_drive.rsync."""
