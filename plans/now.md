@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **CP-rp2 TLS server officially unsupported.**  Live-reproduced 2026-05-02 on Pi Pico W (CP 10.2.0-rc.0): `wrap_socket(server_side=True) + accept()` raises `OSError(32)` mid-handshake when a real host TLS client connects, AND the failure wedges the CYW43 chip's station-mode state — every subsequent `wifi.radio.connect()` returns `Unknown failure 1` until USB power-cycle (`microcontroller.reset()` doesn't toggle CYW43's WL_REG_ON).  `chumicro_sockets.tls_listening_socket` now refuses CP-rp2 up-front via `UnsupportedSSLConfigError` (detection: `sys.platform.upper().startswith("RP2")` covers both rp2040 + rp2350).  Stale "rp2-port mbedTLS feature-flag gap" framing retired everywhere.  chumicro-sockets 0.2.1 → 0.2.2.
-- **Last shipped:** commits `5a51448` (learnings.md correction) + `5316181` (CP-rp2 listen_tls guard + Decision 0041 §8 rewrite + docs sweep).
-- **In flight:** idle.
+- **Phase:** **chumicro-websockets — Decision 0045 + slice 1 (wire format) shipped.**  New library `libraries/websockets/` covering both `WebSocketClient` and `WebSocketServer` per Decision 0045 (RFC 6455, runner-shaped per Decision 0014, hard-dep + factory-helper-in-own-submodule per Decision 0042 Class 1, single library because ~80% of the wire code is shared between roles).  Slice 1 ships the bytes-on-the-wire layer — exception hierarchy, opcode/close-code constants, `WebSocketState`, `CaseInsensitiveDict`, URL parser, `make_websocket_key` + `derive_accept_key` (RFC §4.2.2 worked example verified), client + server handshake encoders, streaming `HandshakeResponseParser` / `HandshakeRequestParser`, streaming `FrameParser` (7/16/64-bit length, MASK, RSV rejection, control-frame size limit, fragmentation, oversize-at-length-byte-stage), `encode_frame` (masked/unmasked), close-payload codec, `validate_text_payload` UTF-8 enforcement.  135 tests, 99% line coverage.
+- **Last shipped:** `c585d5c` (slice 1 wire), `fbe483f` (Decision 0045 ADR).
+- **In flight:** Slice 2 — `WebSocketClient` (state machine + `connect`/`send_text`/`send_binary`/`close` + auto-pong + handshake/close timeouts, FakeConnection-driven tests).
 - **Blocked on:** —
-- **Last touched:** AGENTS.md, libraries/{http_server,sockets}/docs/guide.md, libraries/http_server/{README.md,src/chumicro_http_server/__init__.py}, libraries/sockets/{VERSION,src/chumicro_sockets/{__init__,_adapters/cp}.py,tests/test_factories.py}, plans/decisions/0041-chumicro-http-server.md, plans/learnings.md.
+- **Last touched:** plans/decisions/0045-chumicro-websockets.md, libraries/websockets/{VERSION,README.md,pyproject.toml,docs/,examples/quickstart.py,src/chumicro_websockets/{__init__,_wire,testing}.py,tests/test_websockets.py}, IDE configs (.idea/chumicro.iml, .vscode/settings.json, pyrightconfig.json).
 
 ---
 
