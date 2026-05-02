@@ -159,6 +159,16 @@ MP plain TCP non-blocking `recv` raises `OSError(11)` (EAGAIN) when no data is a
 
 Fix: the wrapper now raises `OSError(11)` on `None`, restoring the standard contract uniformly across plain TCP and TLS.  See `chumicro-sockets` 0.1.5 + slice 3c.
 
+### Pin the root, not the chain — embedded TLS clients only need the trust anchor
+
+mbedTLS validates the server's chain against the client's trust anchor.  The server presents its leaf + intermediates during the handshake; the client only needs the **root** that signs the chain.  Pinning the whole chain (root + intermediates + leaf) wastes heap on every handshake and (worse) silently drags in cross-signs that may have far-future `NotBefore` dates and force RTC seeding the test would otherwise not need.
+
+Concrete instance from `libraries/requests/functional_tests/test_real_get_tls.py` (2026-05-02): example.com's chain has three certs — Cloudflare's TLS Issuing ECC CA 1 intermediate, the SSL.com TLS ECC Root CA 2022, and an AAA Comodo cross-sign of the same SSL.com root with `NotBefore` 2025-08-01.  Initial draft of the test pinned all three (3.7 KB PEM); the cross-sign forced an RTC seed on every embedded port (boot RTC = 2021-01-01) and the extra heap pushed Pi Pico W MP into ENOMEM during `ssl.wrap_socket`.  Switching to just the SSL.com root (1.3 KB PEM, `NotBefore` 2022-10-21) shrank the bundle, the chain still validates because Cloudflare's intermediate comes from the server, and Pi Pico W MP now passes (5.27 s).
+
+How to find the right cert in a server's `s_client -showcerts` output: the **last** cert in the printed chain is the root (or the highest cert the server chose to send, which chains directly to a root the client should pin).  Discard everything above it.
+
+RTC seeding is still needed if the chosen root's `NotBefore` post-dates the boot RTC default (most embedded ports default to 2021-01-01 / Unix epoch).  But pinning the root with the *earliest viable* `NotBefore` minimises how far forward the device clock has to be nudged.
+
 ### Embedded `ssl.create_default_context()` is not the CPython equivalent
 
 Probed live 2026-04-26 on Pi Pico W (MP 1.28.0 / rp2 + CP 10.2.0-rc.0) in flash mode:
