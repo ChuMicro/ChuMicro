@@ -205,10 +205,10 @@ def ssl_context_with_cert_and_key_paths(cert_path, key_path):  # pragma: no cove
             file (e.g. ``"/lib/server_key.pem"``).
 
     Live-verified on Lolin S2 ESP32-S2 with 6 KB context + 35 KB
-    handshake heap cost, ~2 MB free heap remaining.  Pi Pico W
-    (rp2) currently fails post-handshake with ``OSError(32)``
-    (EPIPE) — likely an rp2-port mbedTLS feature-flag issue, under
-    investigation; ESP32-S2 / S3 work.
+    handshake heap cost, ~2 MB free heap remaining.  CP-rp2 boards
+    (Pi Pico W / Pi Pico 2 W) are unsupported — :func:`listen_tls`
+    refuses up-front via ``UnsupportedSSLConfigError``; this helper
+    can still build the context but it'll have nowhere to go.
     """
     import ssl  # noqa: PLC0415 — CP-only import
 

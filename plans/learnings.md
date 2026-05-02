@@ -141,7 +141,7 @@ The "S2 = 1 KB / rp2 = 25 KB / CP-S2 = 35 KB" pattern is fully explained by thes
 
 Practical implication for sizing: every supported board pays roughly the same total mbedTLS heap (~35 KB) for a server-side handshake.  Where it lands (Python GC heap vs ESP-IDF heap) depends on the runtime/port pair, but the total is similar.  Pi Pico W has ~115-130 KB free post-wifi-up so a single-in-flight TLS server fits but is tight; ESP32-S2/S3 have ~150 KB+ and comfortably support multi-in-flight TLS.
 
-### CircuitPython rp2 (Pi Pico W) currently fails server-side TLS post-handshake — root cause not yet pinned
+### CircuitPython rp2 (Pi Pico W) — server-side TLS unsupported (mid-handshake OSError(32) + CYW43 chip wedge)
 
 Same chumicro-sockets code path that succeeded on Lolin S2 ESP32-S2 (CP 10.2.0-rc.0) reaches the listener-open + first accept, but `accept()` raises `OSError(32)` (EPIPE) immediately after the TLS handshake bytes traverse.  Heap was ~115 KB free at the time, so not a memory issue.
 

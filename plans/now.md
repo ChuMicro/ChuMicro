@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **Decision 0044 shipped — deploy-time runtime-file filtering.**  Extends Decision 0037's `__chumicro_runtimes__` marker filter from the bundle pipeline to *every* host-side deploy path (`chumicro_deploy` CLI, `chumicro_workspace deploy` flat / `--import-graph` / `--boot-shim`, `pytest-device` staging, examples, functional tests).  Wrong-runtime adapter source no longer lands on a CP / MP board; PyPI sdists are unchanged.  Marker reader extracted to `chumicro_deploy._runtime_marker` so the bundle pipeline + every deploy walker share one implementation.  Filtering on by default at every orchestration boundary; transports own runtime via class identity; CLIs accept `--target-runtime <name>` as override.  AGENTS.md non-negotiable updated; Decision 0037 cross-references 0044.
-- **Last shipped:** TBD on this commit.
+- **Phase:** **CP-rp2 TLS server officially unsupported.**  Live-reproduced 2026-05-02 on Pi Pico W (CP 10.2.0-rc.0): `wrap_socket(server_side=True) + accept()` raises `OSError(32)` mid-handshake when a real host TLS client connects, AND the failure wedges the CYW43 chip's station-mode state — every subsequent `wifi.radio.connect()` returns `Unknown failure 1` until USB power-cycle (`microcontroller.reset()` doesn't toggle CYW43's WL_REG_ON).  `chumicro_sockets.tls_listening_socket` now refuses CP-rp2 up-front via `UnsupportedSSLConfigError` (detection: `sys.platform.upper().startswith("RP2")` covers both rp2040 + rp2350).  Stale "rp2-port mbedTLS feature-flag gap" framing retired everywhere.  chumicro-sockets 0.2.1 → 0.2.2.
+- **Last shipped:** commits `5a51448` (learnings.md correction) + `5316181` (CP-rp2 listen_tls guard + Decision 0041 §8 rewrite + docs sweep).
 - **In flight:** idle.
 - **Blocked on:** —
-- **Last touched:** AGENTS.md, plans/decisions/{0037,0044}-*, plans/next-up.md, scripts/bundle_manager.py, workbench/deploy/src/chumicro_deploy/{_runtime_marker,sources,flash_drive,circuitpython_transport,micropython_transport,cli}.py, workbench/deploy/tests/{test_runtime_marker,test_sources,test_flash_drive,test_circuitpython_transport,test_micropython_transport,test_cli}.py, workbench/workspace/src/chumicro_workspace/{deploy_source,import_graph,boot_shim,cli}.py, workbench/workspace/tests/{test_deploy_source,test_import_graph,test_boot_shim}.py.
+- **Last touched:** AGENTS.md, libraries/{http_server,sockets}/docs/guide.md, libraries/http_server/{README.md,src/chumicro_http_server/__init__.py}, libraries/sockets/{VERSION,src/chumicro_sockets/{__init__,_adapters/cp}.py,tests/test_factories.py}, plans/decisions/0041-chumicro-http-server.md, plans/learnings.md.
 
 ---
 

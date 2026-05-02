@@ -310,9 +310,8 @@ def ssl_context_with_cert_and_key_paths(
     Live-verified on Lolin S2 ESP32-S2 (CP 10.2.0-rc.0): 6 KB
     context + 35 KB handshake heap cost, ~2 MB free heap
     remaining; HTTPS GET round-trip from a host CPython client
-    succeeded.  Pi Pico W (rp2) currently fails post-handshake
-    with ``OSError(32)`` (EPIPE) — under investigation, likely
-    an rp2-port mbedTLS feature-flag issue.
+    succeeded.  CP-rp2 (Pi Pico W / Pi Pico 2 W) is unsupported —
+    :func:`tls_listening_socket` refuses up-front there.
 
     Args:
         cert_path: On-device filesystem path to the cert PEM file.

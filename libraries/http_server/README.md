@@ -104,7 +104,7 @@ verification across the supported board matrix (`plans/learnings.md`):
 | Runtime + board | TLS server status | Notes |
 |---|---|---|
 | CircuitPython on ESP32-S2 (Lolin S2) | ✅ Works | ~6 KB context + ~35 KB handshake heap. |
-| CircuitPython on rp2 (Pi Pico W) | ❌ Fails post-handshake (`OSError(32)`) | rp2-port mbedTLS feature-flag gap; use ESP32-family for HTTPS on CP. |
+| CircuitPython on rp2 (Pi Pico W / Pi Pico 2 W) | ❌ Refused (`UnsupportedSSLConfigError`) | `chumicro_sockets.tls_listening_socket` raises up-front; the underlying CYW43 TLS path raises `OSError(32)` mid-handshake AND wedges the chip's station-mode state. Use ESP32-family or MicroPython on rp2. |
 | MicroPython on ESP32-S2 | ✅ Works | Hardware-accelerated handshake; ~1 KB heap. |
 | MicroPython on rp2 (Pi Pico W) | ✅ Works (RSA-2048 only) | DER-encoded key; ~25 KB handshake heap; ECC keys fail at context build. |
 
