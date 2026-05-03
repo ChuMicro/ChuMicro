@@ -617,7 +617,7 @@ class HandshakeResponseParser(_HandshakeLineParser):
     def _parse_first_line(self, line: bytes) -> None:
         try:
             decoded = line.decode("ascii")
-        except UnicodeDecodeError as decode_error:
+        except UnicodeError as decode_error:
             raise self._fail(
                 f"non-ASCII bytes in status line: {decode_error}",
             ) from decode_error
@@ -685,7 +685,7 @@ class HandshakeRequestParser(_HandshakeLineParser):
     def _parse_first_line(self, line: bytes) -> None:
         try:
             decoded = line.decode("ascii")
-        except UnicodeDecodeError as decode_error:
+        except UnicodeError as decode_error:
             raise self._fail(
                 f"non-ASCII bytes in request line: {decode_error}",
             ) from decode_error
@@ -717,7 +717,9 @@ class HandshakeRequestParser(_HandshakeLineParser):
             raise self._fail("client request missing Sec-WebSocket-Key")
         try:
             decoded_key = binascii.a2b_base64(key.encode("ascii"))
-        except (binascii.Error, ValueError) as decode_error:
+        # ``binascii.Error`` subclasses ``ValueError`` on CPython;
+        # MicroPython raises ``ValueError`` directly.  Catch the parent.
+        except ValueError as decode_error:
             raise self._fail(
                 f"Sec-WebSocket-Key is not valid base64: {decode_error}",
             ) from decode_error
@@ -1147,7 +1149,7 @@ def parse_close_payload(payload: bytes) -> tuple[int | None, str]:
         )
     try:
         reason = bytes(payload[2:]).decode("utf-8")
-    except UnicodeDecodeError as decode_error:
+    except UnicodeError as decode_error:
         raise WebSocketProtocolError(
             f"close reason is not valid UTF-8: {decode_error}",
         ) from decode_error
@@ -1172,7 +1174,7 @@ def validate_text_payload(payload: bytes) -> str:
     """
     try:
         return bytes(payload).decode("utf-8")
-    except UnicodeDecodeError as decode_error:
+    except UnicodeError as decode_error:
         raise WebSocketProtocolError(
             f"text payload is not valid UTF-8: {decode_error}",
         ) from decode_error
