@@ -7,10 +7,10 @@ This is the front door. Everything else is deeper read.
 ---
 
 - **Phase:** **chumicro-websockets — leanness pass underway** per `plans/workstreams/websockets-cleanup.md`.  v0.6.x ships 3,628 LOC deployed (vs chumicro-mqtt 1,842) — too fat for embedded targets.  Seven independent slices ranked smallest-blast-radius first: A (FrameParser per-byte→per-chunk), C (slim `__init__`), D (slim `CaseInsensitiveDict`), B (namespace classes→constants), F (compact docstrings + dead defensive code), E (merge handshake parsers), G (shared `_session.py`).  Each slice ships its own version bump + green preflight + commit.
-- **Last shipped:** Slice F — drop dead defensive branches (`if opcode in CONTROL_OPCODES` after the explicit close/ping/pong dispatch; AttributeError already covered by `getattr` guard) + compact verbose docstrings across `_wire.py` / `client.py` / `server.py`.  Deployed src 3,290 LOC (was 3,628; net −338).  Slice B (namespace classes → constants) deferred — diverging websockets alone from the chumicro-mqtt + chumicro-requests namespace pattern was the wrong tradeoff (modest RAM win vs. cross-library inconsistency + worse public ergonomics).  v0.7.3.
-- **In flight:** Slice E — extract shared `_HandshakeLineParser` base for the two handshake parsers (~150 LOC dedup; internal refactor, public API unchanged).
+- **Last shipped:** Slice E — extracted `_HandshakeLineParser` base for both handshake parsers; `HandshakeResponseParser` + `HandshakeRequestParser` now subclass it, each owning only their first-line parser + `_finalize` validation.  Shared `_validate_upgrade_headers(role_label)` + `_commit_done()` helpers consolidate the two-header common validation + DONE transition.  Deployed src 3,290 → 3,208 LOC (net −82 since slice F).  v0.8.0 (minor bump — internal refactor; FYI to consumers reaching into `_wire`).
+- **In flight:** Slice G — extract shared `_session.py` between WebSocketClient + Connection (~600 LOC dedup; biggest win, biggest test churn).
 - **Blocked on:** —
-- **Last touched:** libraries/websockets/src/chumicro_websockets/_wire.py, libraries/websockets/src/chumicro_websockets/client.py, libraries/websockets/src/chumicro_websockets/server.py, libraries/websockets/VERSION, plans/workstreams/websockets-cleanup.md, plans/now.md.
+- **Last touched:** libraries/websockets/src/chumicro_websockets/_wire.py, libraries/websockets/VERSION, plans/now.md.
 
 ---
 
