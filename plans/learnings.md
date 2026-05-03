@@ -296,9 +296,37 @@ CPython promotes `EAGAIN`/`EWOULDBLOCK` `OSError`s to the dedicated `BlockingIOE
 
 CPython allows `deque()` with no args (defaults to empty + unbounded).  MP's `deque` doesn't — `from collections import deque; deque()` raises `TypeError: function missing 2 required positional arguments`.  Use `deque((), 0)` for the same semantics.  Surfaced when running `chumicro_mqtt` fragmentation tests on MP unix-port via `chumicro_sockets.testing.FakeSocket`, which calls `deque()` at line 50.  Test helpers that aren't exercised on MP can ship CPython-only API uses without ever knowing.
 
-### CP unix-port `hashlib` only exposes sha256 — no sha1, no `hashlib.new()`
+### CP unix-port hashlib + ssl gated on `MICROPY_PY_SSL` build flag
 
-`dir(hashlib)` on `circuitpython-10.1.4` unix-port returns `['__class__', '__name__', '__dict__', 'sha256']`.  Code that needs SHA-1 (e.g. `chumicro_websockets._wire._sha1_digest` for the RFC 6455 `Sec-WebSocket-Key` challenge) breaks with `AttributeError: 'module' object has no attribute 'sha1'`.  Hidden until now because no chumicro test had ever run on CP unix-port without skipping (every CP test imports pytest / tracemalloc / unittest, which all fail to import there).  Workaround for tests: detect with `_HAS_SHA1 = hasattr(hashlib, "sha1") or hasattr(hashlib, "new")` and early-return.  Real fix: bundle a pure-Python SHA-1 fallback in `chumicro_compat`.
+Default `circuitpython-10.1.4` unix-port build exposes only `hashlib.sha256` — no `sha1`, no `md5`, no `hashlib.new()`, and no `ssl` module.  The cause is `ports/unix/variants/mpconfigvariant_common.h:99-103`, which gates `MICROPY_PY_HASHLIB_SHA1`, `MICROPY_PY_HASHLIB_MD5`, and `MICROPY_PY_CRYPTOLIB` on `#if MICROPY_PY_SSL` — and the variant doesn't enable SSL by default.  But the SHA1 *implementation* lives in `lib/axtls/crypto/sha1.c` and is only compiled when `extmod/extmod.mk:178-199` sees `MICROPY_PY_SSL=1` AND `MICROPY_SSL_AXTLS=1` — both as Make variables, not CFLAGS.  Setting only `-DMICROPY_PY_HASHLIB_SHA1=1` produces a link error (`hashlib_sha1_make_new` undeclared).
+
+Fix: pass `MICROPY_PY_SSL=1 MICROPY_SSL_AXTLS=1` as Make variables to the `make -C ports/unix` invocation in `scripts/prepare_circuitpython.py`.  Adds ~150 KB to the binary (axtls + the SSL extmod glue), unlocks the full hashlib + ssl surface that real CP boards already expose via per-board mbedTLS configs.  Without this, every cross-runtime test that exercises `chumicro_websockets._wire._sha1_digest` (RFC 6455 `Sec-WebSocket-Key` derivation) cascades to failure on CP unix-port.
+
+Hidden until 2026-05-03 because no chumicro test had ever run on CP unix-port without ImportError-SKIP — every websockets test file imported pytest, which itself failed to import.
+
+### MP / CP `dict` does not preserve insertion order
+
+CPython 3.7+ promoted insertion-order preservation from a CPython implementation detail to a language guarantee.  MP and CP didn't follow — both return `list(d)` in hash-bucket order (try `d = {}; d['z']=1; d['a']=2; print(list(d))` — both print `['a', 'z']`).  Same goes for `collections.OrderedDict` on MP/CP: it's an alias for `dict` and inherits the same hash ordering.
+
+Surfaced in `CaseInsensitiveDict` (the inlined header dict in `chumicro_http_server` and `chumicro_requests`), which originally stored entries as `{lower: (original_name, value)}` and yielded from `.values()` in `__iter__`.  Worked on CPython 3.7+; broke on every MP/CP build: HTTP header iteration came back hash-shuffled.  Fix pattern: pair the dict with a parallel `_order: list[str]` of lowercase keys that's appended-to by `__setitem__` / `add()` and iterated by `__iter__` / `items()`.
+
+If iteration order matters for a cross-runtime data structure, you cannot lean on `dict` — you have to maintain order yourself.
+
+### MP / CP raise `UnicodeError`, not `UnicodeDecodeError`; `binascii` lacks `Error`
+
+CPython exposes `UnicodeDecodeError` and `UnicodeEncodeError` as built-in subclasses of `UnicodeError` (PEP 100).  MP and CP only raise the parent `UnicodeError` for invalid UTF-8 and don't expose the subclasses by name.  `except UnicodeDecodeError:` on MP raises `NameError: name 'UnicodeDecodeError' isn't defined` the first time the line executes (same name-deferral pattern as `BlockingIOError` above).
+
+Same pattern with `binascii.Error` — only on CPython; MP's `binascii` module doesn't expose `Error`, and `a2b_base64` etc. raise plain `ValueError` directly.  `except (binascii.Error, ValueError):` on MP raises `AttributeError: module 'binascii' has no attribute 'Error'` at the bytecode level (attribute access on the module happens at except-clause evaluation).
+
+Affects (now fixed) `chumicro_requests._wire` body / charset decode paths and `chumicro_websockets._wire` close-payload + text-frame validators + base64 key decoder.  Portable fix: catch `UnicodeError` / `ValueError` (the parents) everywhere — same parent on CPython, behaviourally identical, no MP/CP NameError risk.
+
+### Bytes added to a harness module cut into the per-test-file heap budget on MP unix-port
+
+The cross-runtime test harness's `subprocess-per-file` isolation (every test file runs in a fresh MP / CP unix-port process; see commit `c266131`) was meant to mean "each file starts with a clean heap".  It does — but every subprocess still imports `chumicro_test_harness.discovery` + `runner` + `assertions` at startup, and any docstring / module-level data growth in those files comes out of the heap available for the test workload.
+
+A first cut of the ImportError-tightening commit had a 35-line multi-paragraph docstring on `discovery.run_one_file` documenting Decision 0016.  ~640 added bytes.  Just enough to push `libraries/requests/tests/test_memory_fragmentation.py::test_chunked_no_leak_no_fragmentation` past MP unix-port's heap edge: the workload runs 30 iterations of chunked HTTP body parsing, and the cumulative peak allocation lives right at the available-heap boundary on MP.  ~640 fewer bytes available before the workload starts = `MemoryError: memory allocation failed, allocating 2196 bytes` on iteration 30, every time.
+
+Lesson: long-form rationale that belongs in an ADR should *go* in the ADR.  In-tree harness modules pay a per-subprocess heap cost for every byte of bytecode, including docstrings.  Keep harness module docstrings to the one-line summary plus a Decision pointer when the rationale runs long.
 
 ### Test-file imports fragment the unix-port heap as much as anything else
 
