@@ -1,8 +1,21 @@
-"""Tests for workspace.py — workspace discovery, scope resolution, and helpers."""
+"""Tests for workspace.py — workspace discovery, scope resolution, and helpers.
+
+Every test that touches workspace state runs against a synthetic
+workspace materialized under ``tmp_path``: the ``synthetic_workspace``
+fixture stands up a controlled set of fake packages (``libraries/lib_a``,
+``libraries/lib_b``, ``workbench/tool_x``, ``support/helper``) and pins
+``workspace.ROOT`` to the temp tree.  No test reads the real on-disk
+state of any real package — that would couple test outcomes to
+whichever packages happened to live in the workspace on the day the
+test was written, and the same partial-mock smell that broke
+``test_check_version`` (commit ``708cf21``) would silently re-emerge
+here as soon as a real package was renamed or a new one added.
+"""
 
 from pathlib import Path
 
 import pytest
+import workspace
 from workspace import (
     ALL_PLATFORMS,
     GITHUB_ORG,
@@ -30,6 +43,53 @@ from workspace import (
     resolve_named_packages,
     resolve_scope,
 )
+
+
+@pytest.fixture
+def synthetic_workspace(tmp_path: Path, monkeypatch):
+    """Materialize a synthetic workspace under ``tmp_path`` and pin
+    ``workspace.ROOT`` to it.
+
+    The layout (intentionally diverse so tests can exercise filters):
+
+    * ``libraries/lib_a/`` — pyproject + ``src/chumicro_lib_a/`` +
+      ``VERSION`` (``1.0.0``) + ``mkdocs.yml`` + ``tests/``
+    * ``libraries/lib_b/`` — pyproject + ``src/chumicro_lib_b/`` +
+      ``VERSION`` (``0.0.0``) — pre-release floor, no docs
+    * ``workbench/tool_x/`` — pyproject + ``src/chumicro_tool_x/`` +
+      ``VERSION`` (``0.5.0``) + ``mkdocs.yml``
+    * ``support/helper/`` — pyproject + ``src/chumicro_helper/`` (no
+      VERSION; support packages aren't published)
+
+    Clears ``workspace._package_dirs_cache`` so the cached real-workspace
+    discovery from a prior test (or other code path) doesn't bleed in.
+    """
+    layout = [
+        ("libraries", "lib_a", "1.0.0", True, True),
+        ("libraries", "lib_b", "0.0.0", False, False),
+        ("workbench", "tool_x", "0.5.0", True, False),
+        ("support", "helper", None, False, False),
+    ]
+    for parent, name, version, with_mkdocs, with_tests in layout:
+        package_dir = tmp_path / parent / name
+        source_dir = package_dir / "src" / f"chumicro_{name}"
+        source_dir.mkdir(parents=True)
+        (source_dir / "__init__.py").touch()
+        (package_dir / "pyproject.toml").write_text(
+            f'[project]\nname = "chumicro-{name}"\n'
+            f'description = "Synthetic {name} package."\n',
+        )
+        if version is not None:
+            (package_dir / "VERSION").write_text(f"{version}\n")
+        if with_mkdocs:
+            (package_dir / "mkdocs.yml").touch()
+        if with_tests:
+            (package_dir / "tests").mkdir()
+
+    monkeypatch.setattr(workspace, "ROOT", tmp_path)
+    monkeypatch.setattr(workspace, "_package_dirs_cache", None)
+
+    return tmp_path
 
 
 class TestLoadTomllib:
@@ -152,34 +212,46 @@ class TestFilterByPlatform:
 
 
 class TestDiscoverPackageDirs:
-    """Tests for discover_package_dirs (uses the real workspace)."""
+    """Tests for discover_package_dirs against a synthetic workspace."""
 
-    def test_returns_list(self):
-        """discover_package_dirs returns a non-empty list of Paths."""
+    def test_returns_list_of_paths(self, synthetic_workspace):
+        """Returns a list of Paths covering every synthetic package."""
         dirs = discover_package_dirs()
         assert isinstance(dirs, list)
-        assert len(dirs) > 0
         assert all(isinstance(directory, Path) for directory in dirs)
+        names = {directory.name for directory in dirs}
+        assert names == {"lib_a", "lib_b", "tool_x", "helper"}
 
-    def test_all_have_pyproject(self):
-        """Every discovered directory contains a pyproject.toml."""
-        for package_dir in discover_package_dirs():
-            assert (package_dir / "pyproject.toml").exists(), (
-                f"Missing pyproject.toml: {package_dir}"
-            )
+    def test_filters_to_pyproject_dirs(self, synthetic_workspace):
+        """Only directories with a pyproject.toml are returned.
 
-    def test_includes_known_libraries(self):
-        """Known libraries are discovered."""
-        names = {package_dir.name for package_dir in discover_package_dirs()}
-        assert "timing" in names
-        assert "runner" in names
+        Adds an extra directory under ``libraries/`` without a
+        ``pyproject.toml`` and confirms the discovery filter omits it.
+        """
+        (synthetic_workspace / "libraries" / "no_pyproject").mkdir()
+        names = {directory.name for directory in discover_package_dirs()}
+        assert "no_pyproject" not in names
+
+    def test_skips_missing_root_directories(
+        self, tmp_path: Path, monkeypatch,
+    ):
+        """Missing ``support/`` / ``libraries/`` / ``workbench/`` roots
+        are silently skipped — fresh workspaces start with subsets."""
+        (tmp_path / "libraries" / "lone").mkdir(parents=True)
+        (tmp_path / "libraries" / "lone" / "pyproject.toml").touch()
+
+        monkeypatch.setattr(workspace, "ROOT", tmp_path)
+        monkeypatch.setattr(workspace, "_package_dirs_cache", None)
+
+        names = {directory.name for directory in discover_package_dirs()}
+        assert names == {"lone"}
 
 
 class TestDiscoverSourceRoots:
     """Tests for discover_source_roots."""
 
-    def test_all_are_src_dirs(self):
-        """Every source root ends with src/."""
+    def test_all_are_src_dirs(self, synthetic_workspace):
+        """Every source root ends with ``src/`` and exists on disk."""
         for source_root in discover_source_roots():
             assert source_root.name == "src"
             assert source_root.is_dir()
@@ -188,28 +260,39 @@ class TestDiscoverSourceRoots:
 class TestDiscoverRuffPaths:
     """Tests for discover_ruff_paths."""
 
-    def test_includes_scripts(self):
-        """scripts/ is always included in the lint paths."""
+    def test_includes_scripts(self, synthetic_workspace):
+        """``scripts`` is always included in the lint paths."""
         paths = discover_ruff_paths()
         assert "scripts" in paths
 
-    def test_includes_library_source_dirs(self):
-        """Library src/ directories appear in the lint paths."""
+    def test_includes_library_source_dirs(self, synthetic_workspace):
+        """Every library ``src/`` directory appears in the lint paths."""
         paths = discover_ruff_paths()
-        assert any("timing/src" in path for path in paths)
+        assert "libraries/lib_a/src" in paths
+        assert "libraries/lib_b/src" in paths
+
+    def test_includes_workbench_source_dirs(self, synthetic_workspace):
+        """Workbench ``src/`` directories appear in the lint paths."""
+        paths = discover_ruff_paths()
+        assert "workbench/tool_x/src" in paths
+
+    def test_includes_tests_when_present(self, synthetic_workspace):
+        """``tests/`` directories are included when they exist."""
+        paths = discover_ruff_paths()
+        assert "libraries/lib_a/tests" in paths
+        # lib_b has no tests/ in the synthetic layout
+        assert "libraries/lib_b/tests" not in paths
 
 
 class TestCoverageArgsFor:
     """Tests for coverage_args_for."""
 
-    def test_generates_cov_args(self):
+    def test_generates_cov_args(self, synthetic_workspace):
         """Generates --cov arguments for libraries with importable packages."""
-        dirs = discover_package_dirs()
-        timing_dirs = [directory for directory in dirs if directory.name == "timing"]
-        assert timing_dirs, "timing library must exist"
-        args = coverage_args_for(timing_dirs)
+        library_dir = synthetic_workspace / "libraries" / "lib_a"
+        args = coverage_args_for([library_dir])
         assert "--cov" in args
-        assert any("chumicro_timing" in argument for argument in args)
+        assert any("chumicro_lib_a" in argument for argument in args)
 
     def test_empty_list(self):
         """Empty input produces empty output."""
@@ -219,19 +302,19 @@ class TestCoverageArgsFor:
 class TestResolveNamedPackages:
     """Tests for resolve_named_packages."""
 
-    def test_resolve_by_name(self):
+    def test_resolve_by_name(self, synthetic_workspace):
         """Resolves a bare library name to its directory."""
-        result = resolve_named_packages(["timing"])
+        result = resolve_named_packages(["lib_a"])
         assert len(result) == 1
-        assert result[0].name == "timing"
+        assert result[0].name == "lib_a"
 
-    def test_resolve_multiple(self):
+    def test_resolve_multiple(self, synthetic_workspace):
         """Resolves multiple names."""
-        result = resolve_named_packages(["timing", "runner"])
+        result = resolve_named_packages(["lib_a", "lib_b"])
         names = {directory.name for directory in result}
-        assert names == {"timing", "runner"}
+        assert names == {"lib_a", "lib_b"}
 
-    def test_unknown_name_returns_empty(self, capsys):
+    def test_unknown_name_returns_empty(self, synthetic_workspace, capsys):
         """Unknown package name returns empty list and prints error."""
         result = resolve_named_packages(["nonexistent"])
         assert result == []
@@ -242,20 +325,27 @@ class TestResolveNamedPackages:
 class TestFindPublishablePackages:
     """Tests for find_publishable_packages."""
 
-    def test_returns_library_paths(self):
-        """Returns relative paths to publishable packages under libraries/ or workbench/."""
+    def test_returns_only_libraries_and_workbench_paths(
+        self, synthetic_workspace,
+    ):
+        """Returns relative paths to publishable packages under
+        ``libraries/`` or ``workbench/``; excludes ``support/``."""
         packages = find_publishable_packages()
         assert len(packages) > 0
         assert all(
-            package.startswith(("libraries/", "workbench/")) for package in packages
+            package.startswith(("libraries/", "workbench/"))
+            for package in packages
         )
+        assert not any(package.startswith("support/") for package in packages)
 
-    def test_all_have_version_file(self):
-        """Every publishable package has a VERSION file."""
-        from workspace import ROOT
-
+    def test_every_publishable_package_has_version(
+        self, synthetic_workspace,
+    ):
+        """Every publishable package returned by ``find_publishable_packages``
+        has a VERSION file in the synthetic tree — confirms the function
+        only enumerates packages that satisfy the Decision-0002 contract."""
         for package in find_publishable_packages():
-            version_path = ROOT / package / "VERSION"
+            version_path = synthetic_workspace / package / "VERSION"
             assert version_path.exists(), f"Missing VERSION: {package}"
 
 
@@ -283,51 +373,56 @@ class TestReadVersion:
 
 
 class TestChangedPublishablePackages:
-    """Tests for changed_publishable_packages — file path classification."""
+    """Tests for changed_publishable_packages — file path classification.
+
+    Inputs are synthetic git-diff outputs; the path classification is
+    pure string parsing and does not look at on-disk state, so no
+    workspace fixture is needed here.
+    """
 
     def test_library_src_change_detected(self, monkeypatch):
         """A change under libraries/<name>/src/ is release-relevant."""
         monkeypatch.setattr(
             "workspace.changed_files",
-            lambda _base: ["libraries/timing/src/chumicro_timing/core.py"],
+            lambda _base: ["libraries/syn_lib/src/chumicro_syn_lib/core.py"],
         )
         result = changed_publishable_packages("origin/main")
-        assert result == {("libraries", "timing")}
+        assert result == {("libraries", "syn_lib")}
 
     def test_library_pyproject_change_detected(self, monkeypatch):
         """A change to libraries/<name>/pyproject.toml is release-relevant."""
         monkeypatch.setattr(
             "workspace.changed_files",
-            lambda _base: ["libraries/runner/pyproject.toml"],
+            lambda _base: ["libraries/syn_lib/pyproject.toml"],
         )
         result = changed_publishable_packages("origin/main")
-        assert result == {("libraries", "runner")}
+        assert result == {("libraries", "syn_lib")}
 
     def test_workbench_src_change_detected(self, monkeypatch):
         """A change under workbench/<name>/src/ is release-relevant."""
         monkeypatch.setattr(
             "workspace.changed_files",
-            lambda _base: ["workbench/deploy/src/chumicro_deploy/core.py"],
+            lambda _base: ["workbench/syn_tool/src/chumicro_syn_tool/core.py"],
         )
         result = changed_publishable_packages("origin/main")
-        assert result == {("workbench", "deploy")}
+        assert result == {("workbench", "syn_tool")}
 
     def test_workbench_pyproject_change_detected(self, monkeypatch):
         """A change to workbench/<name>/pyproject.toml is release-relevant."""
         monkeypatch.setattr(
             "workspace.changed_files",
-            lambda _base: ["workbench/repl/pyproject.toml"],
+            lambda _base: ["workbench/syn_tool/pyproject.toml"],
         )
         result = changed_publishable_packages("origin/main")
-        assert result == {("workbench", "repl")}
+        assert result == {("workbench", "syn_tool")}
 
     def test_test_change_not_detected(self, monkeypatch):
         """A change under <root>/<name>/tests/ is NOT release-relevant."""
         monkeypatch.setattr(
             "workspace.changed_files",
             lambda _base: [
-                "libraries/timing/tests/test_ticks.py",
-                "workbench/deploy/tests/test_session.py",
+                "libraries/syn_lib/tests/test_a.py",
+                "workbench/syn_tool/tests/test_b.py",
             ],
         )
         result = changed_publishable_packages("origin/main")
@@ -337,7 +432,7 @@ class TestChangedPublishablePackages:
         """A change under <root>/<name>/docs/ is NOT release-relevant."""
         monkeypatch.setattr(
             "workspace.changed_files",
-            lambda _base: ["libraries/timing/docs/guide.md"],
+            lambda _base: ["libraries/syn_lib/docs/guide.md"],
         )
         result = changed_publishable_packages("origin/main")
         assert result == set()
@@ -347,19 +442,19 @@ class TestChangedPublishablePackages:
         monkeypatch.setattr(
             "workspace.changed_files",
             lambda _base: [
-                "libraries/timing/src/chumicro_timing/core.py",
-                "workbench/deploy/src/chumicro_deploy/core.py",
+                "libraries/syn_lib/src/chumicro_syn_lib/core.py",
+                "workbench/syn_tool/src/chumicro_syn_tool/core.py",
             ],
         )
         result = changed_publishable_packages("origin/main")
-        assert result == {("libraries", "timing"), ("workbench", "deploy")}
+        assert result == {("libraries", "syn_lib"), ("workbench", "syn_tool")}
 
     def test_support_paths_ignored(self, monkeypatch):
         """Paths under support/ are not publishable and are ignored."""
         monkeypatch.setattr(
             "workspace.changed_files",
             lambda _base: [
-                "support/test_harness/src/test_harness/core.py",
+                "support/syn_helper/src/syn_helper/core.py",
                 "scripts/run.py",
                 "README.md",
             ],
@@ -425,19 +520,22 @@ class TestDetectChangedPackages:
         )
         assert detect_changed_packages() is None
 
-    def test_library_change_detected(self, monkeypatch):
+    def test_library_change_detected(self, synthetic_workspace, monkeypatch):
         """Library changes return the affected package directories."""
         monkeypatch.setattr(
             "workspace.subprocess.run",
             lambda *_args, **_kwargs: type(
                 "R", (),
-                {"returncode": 0, "stdout": "libraries/timing/src/chumicro_timing/core.py\n"},
+                {
+                    "returncode": 0,
+                    "stdout": "libraries/lib_a/src/chumicro_lib_a/core.py\n",
+                },
             )(),
         )
         result = detect_changed_packages()
         assert result is not None
         names = [package_dir.name for package_dir in result]
-        assert "timing" in names
+        assert "lib_a" in names
 
     def test_git_unavailable_returns_none(self, monkeypatch):
         """When git is not available, returns None."""
@@ -451,21 +549,20 @@ class TestDetectChangedPackages:
 class TestResolveScope:
     """Tests for resolve_scope."""
 
-    def test_all_packages(self):
-        """--all returns all discovered packages."""
+    def test_all_packages(self, synthetic_workspace):
+        """``--all`` returns every synthetic package."""
         result = resolve_scope(all_packages=True)
-        assert len(result) > 0
         names = {package_dir.name for package_dir in result}
-        assert "timing" in names
+        assert names == {"lib_a", "lib_b", "tool_x", "helper"}
 
-    def test_specific_libraries(self):
-        """--libraries returns only the named packages."""
-        result = resolve_scope(libraries="timing")
+    def test_specific_libraries(self, synthetic_workspace):
+        """``--libraries`` returns only the named packages."""
+        result = resolve_scope(libraries="lib_a")
         assert len(result) == 1
-        assert result[0].name == "timing"
+        assert result[0].name == "lib_a"
 
-    def test_unknown_library_exits(self):
-        """Unknown library name raises SystemExit."""
+    def test_unknown_library_exits(self, synthetic_workspace):
+        """Unknown library name raises ``SystemExit``."""
         with pytest.raises(SystemExit):
             resolve_scope(libraries="nonexistent")
 
@@ -473,26 +570,29 @@ class TestResolveScope:
 class TestPythonpathEnvironment:
     """Tests for pythonpath_environment."""
 
-    def test_returns_dict(self):
-        """Returns a dict with PYTHONPATH set."""
+    def test_returns_dict(self, synthetic_workspace):
+        """Returns a dict with ``PYTHONPATH`` set."""
         environment = pythonpath_environment()
         assert isinstance(environment, dict)
         assert "PYTHONPATH" in environment
 
-    def test_includes_source_roots(self):
-        """PYTHONPATH contains library source roots."""
+    def test_includes_source_roots(self, synthetic_workspace):
+        """``PYTHONPATH`` contains every synthetic package's ``src/``."""
         environment = pythonpath_environment()
         pythonpath = environment["PYTHONPATH"]
-        assert "timing" in pythonpath
+        for name in ("lib_a", "lib_b", "tool_x", "helper"):
+            assert name in pythonpath, (
+                f"{name!r} missing from PYTHONPATH={pythonpath!r}"
+            )
 
-    def test_preserves_existing_path(self, monkeypatch):
-        """Existing PYTHONPATH entries are preserved."""
+    def test_preserves_existing_path(self, synthetic_workspace, monkeypatch):
+        """Existing ``PYTHONPATH`` entries are preserved."""
         monkeypatch.setenv("PYTHONPATH", "/existing/path")
         environment = pythonpath_environment()
         assert "/existing/path" in environment["PYTHONPATH"]
 
-    def test_includes_path(self):
-        """PATH from os.environ is preserved."""
+    def test_includes_path(self, synthetic_workspace):
+        """``PATH`` from ``os.environ`` is preserved."""
         environment = pythonpath_environment()
         assert "PATH" in environment
 
@@ -500,61 +600,50 @@ class TestPythonpathEnvironment:
 class TestDiscoverLibraryDirs:
     """Tests for discover_library_dirs."""
 
-    def test_returns_list(self):
-        """discover_library_dirs returns a non-empty list of Paths."""
-        dirs = discover_library_dirs()
-        assert isinstance(dirs, list)
-        assert len(dirs) > 0
+    def test_returns_only_libraries(self, synthetic_workspace):
+        """Returns the library packages and only those."""
+        names = {library_dir.name for library_dir in discover_library_dirs()}
+        assert names == {"lib_a", "lib_b"}
 
-    def test_all_under_libraries(self):
-        """Every returned directory is under libraries/."""
+    def test_all_under_libraries(self, synthetic_workspace):
+        """Every returned directory is under ``libraries/``."""
         for library_dir in discover_library_dirs():
             assert library_dir.parent.name == "libraries"
 
-    def test_excludes_support(self):
-        """Support packages are not included."""
+    def test_excludes_support_and_workbench(self, synthetic_workspace):
+        """Support and workbench packages are not included."""
         names = {library_dir.name for library_dir in discover_library_dirs()}
-        # support packages like test_harness should not appear
-        support_names = {
-            package_dir.name for package_dir in discover_package_dirs()
-            if package_dir.parent.name == "support"
-        }
-        assert names.isdisjoint(support_names)
+        assert "helper" not in names  # support
+        assert "tool_x" not in names  # workbench
 
-    def test_includes_known_libraries(self):
-        """Known libraries are discovered."""
-        names = {library_dir.name for library_dir in discover_library_dirs()}
-        assert "timing" in names
-        assert "runner" in names
-
-    def test_subset_of_discover_package_dirs(self):
-        """Results are a subset of discover_package_dirs."""
-        all_dirs = set(str(directory) for directory in discover_package_dirs())
-        library_dirs = set(str(directory) for directory in discover_library_dirs())
+    def test_subset_of_discover_package_dirs(self, synthetic_workspace):
+        """Results are a subset of ``discover_package_dirs``."""
+        all_dirs = {str(directory) for directory in discover_package_dirs()}
+        library_dirs = {str(directory) for directory in discover_library_dirs()}
         assert library_dirs.issubset(all_dirs)
 
 
 class TestDiscoverWorkbenchDirs:
     """Tests for discover_workbench_dirs."""
 
-    def test_returns_list(self):
-        """discover_workbench_dirs returns a list of Paths."""
-        dirs = discover_workbench_dirs()
-        assert isinstance(dirs, list)
+    def test_returns_only_workbench(self, synthetic_workspace):
+        """Returns the workbench packages and only those."""
+        names = {workbench_dir.name for workbench_dir in discover_workbench_dirs()}
+        assert names == {"tool_x"}
 
-    def test_all_under_workbench(self):
-        """Every returned directory is under workbench/."""
+    def test_all_under_workbench(self, synthetic_workspace):
+        """Every returned directory is under ``workbench/``."""
         for workbench_dir in discover_workbench_dirs():
             assert workbench_dir.parent.name == "workbench"
 
-    def test_excludes_libraries(self):
+    def test_excludes_libraries(self, synthetic_workspace):
         """Library packages are not included."""
         names = {workbench_dir.name for workbench_dir in discover_workbench_dirs()}
         library_names = {library_dir.name for library_dir in discover_library_dirs()}
         assert names.isdisjoint(library_names)
 
-    def test_subset_of_discover_package_dirs(self):
-        """Results are a subset of discover_package_dirs."""
+    def test_subset_of_discover_package_dirs(self, synthetic_workspace):
+        """Results are a subset of ``discover_package_dirs``."""
         all_dirs = {str(directory) for directory in discover_package_dirs()}
         workbench_dirs = {str(directory) for directory in discover_workbench_dirs()}
         assert workbench_dirs.issubset(all_dirs)
@@ -563,13 +652,15 @@ class TestDiscoverWorkbenchDirs:
 class TestReadPyprojectDescription:
     """Tests for read_pyproject_description."""
 
-    def test_reads_from_pyproject(self):
-        """Reads the description field from a real library directory."""
-        from workspace import ROOT
-
-        library_dir = ROOT / "libraries" / "timing"
-        description = read_pyproject_description(library_dir)
-        assert description
+    def test_reads_from_pyproject(self, tmp_path: Path):
+        """Reads the description field from a synthetic pyproject.toml."""
+        (tmp_path / "pyproject.toml").write_text(
+            "[project]\n"
+            'name = "chumicro-synth"\n'
+            'description = "A synthetic library for testing."\n',
+        )
+        description = read_pyproject_description(tmp_path)
+        assert description == "A synthetic library for testing."
         assert "**" not in description
 
     def test_returns_empty_for_missing_field(self, tmp_path: Path):
@@ -593,26 +684,21 @@ class TestReadPyprojectDescription:
 class TestDiscoverDocDirs:
     """Tests for discover_doc_dirs."""
 
-    def test_returns_list(self):
-        """discover_doc_dirs returns a non-empty list."""
-        dirs = discover_doc_dirs()
-        assert isinstance(dirs, list)
-        assert len(dirs) > 0
+    def test_returns_only_packages_with_mkdocs(self, synthetic_workspace):
+        """Returns the synthetic packages that carry an ``mkdocs.yml``.
 
-    def test_all_have_mkdocs(self):
-        """Every returned directory contains an mkdocs.yml."""
+        Synthetic ``lib_a`` and ``tool_x`` have ``mkdocs.yml``;
+        ``lib_b`` and ``helper`` do not — confirms the filter both
+        includes and excludes correctly without depending on which
+        real packages happen to ship docs.
+        """
+        names = {doc_dir.name for doc_dir in discover_doc_dirs()}
+        assert names == {"lib_a", "tool_x"}
+
+    def test_all_have_mkdocs(self, synthetic_workspace):
+        """Every directory returned has an ``mkdocs.yml`` on disk."""
         for doc_dir in discover_doc_dirs():
             assert (doc_dir / "mkdocs.yml").exists()
-
-    def test_includes_known_libraries(self):
-        """Known libraries with docs are discovered."""
-        names = {doc_dir.name for doc_dir in discover_doc_dirs()}
-        assert "timing" in names
-
-    def test_includes_workbench_packages(self):
-        """Workbench packages with mkdocs.yml are discovered by default."""
-        names = {doc_dir.name for doc_dir in discover_doc_dirs()}
-        assert "deploy" in names
 
     def test_accepts_custom_package_dirs(self, tmp_path: Path):
         """Accepts a custom list of package dirs."""

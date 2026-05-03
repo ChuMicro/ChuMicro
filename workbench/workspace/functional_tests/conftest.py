@@ -3,7 +3,7 @@
 These tests deploy boot-shim layouts to real boards through the
 public ``chumicro_workspace`` API and verify the on-device
 ``workspace_runtime.boot()`` chain (``code.py`` →
-``workspace_runtime.boot()`` → ``things.<name>.app.run()``) runs
+``workspace_runtime.boot()`` → ``projects.<name>.app.run()``) runs
 end-to-end.  Skip cleanly when ``devices.yml`` has no matching
 entry, so contributors without hardware run preflight + this
 directory and just see "skipped".

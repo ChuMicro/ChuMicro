@@ -12,7 +12,7 @@ whole workspace tree.  Every file falls into one of three zones:
   them; `update` rewrites them so newer template releases flow in.
 
 * **User-owned** — `projects/<each-real-project>/`, `secrets.yml`,
-  `devices.yml`, `libs/`, `packages/`, `workspace.yml`.  `init`
+  `devices.yml`, `shared/`, `packages/`, `workspace.yml`.  `init`
   writes the starter version (only if absent); `update` never
   touches them.
 
@@ -66,7 +66,7 @@ USER_OWNED_PATHS: frozenset[str] = frozenset({
 #: Directory prefixes whose contents are user-owned.  Anything below
 #: is left alone on ``update``.
 USER_OWNED_PREFIXES: tuple[str, ...] = (
-    "libs/",
+    "shared/",
     "packages/",
 )
 
@@ -86,7 +86,7 @@ def classify(target_path: str) -> Zone:
 
     Lookup order: exact-match user-owned (so the starter
     ``workspace.yml`` is never clobbered by ``update``), user-owned
-    prefixes (``libs/`` / ``packages/``), exact-match init-only,
+    prefixes (``shared/`` / ``packages/``), exact-match init-only,
     exact-match tool-owned, tool-owned prefixes (``projects/_template/``
     / ``_templates/``).  Anything that falls through — typically
     ``projects/<a-real-project>/...`` files the user created post-init —

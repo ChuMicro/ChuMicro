@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **MP transport idle-timeout follow-up — done.**  CP transport's `_EXECUTE_IDLE_TIMEOUT = 60.0` (commit `ecf002c`) closed the silent-bootstrap timeout for CP, but the MP transport hadn't been touched.  On Lolin S2 MP (2 MB heap), the on-device fragmentation tests' histogram bisection blew past the existing `timeout=120` and surfaced as `TransportError: timeout waiting for first EOF reception` from mpremote's `follow()`.  Bumped MP's test-bootstrap path to `_EXECUTE_IDLE_TIMEOUT = 300.0` (proportional to MP's bigger heap) and verified on hardware: every fragmentation test in requests/http_server/websockets now RUNs to completion (180–261 s each); the remaining failures are pre-existing library-side fragmentation/leak metrics, not transport timeouts.
-- **Last shipped:** `chumicro-deploy: MP transport idle-timeout for silent-bootstrap path` (this commit).  Mirrors the CP fix from `ecf002c` for the MicroPython side.  Lifted: learning about `mpremote.exec_raw(timeout=N)` semantics into `plans/learnings.md` §MicroPython runtime quirks.
+- **Phase:** **pytest-device runtime-marker support — done.**  Functional tests for runtime-specific backends (CP NVM, MP LittleFS / NVS, CP / MP wifi adapters) were generating 34 spurious `ImportError`s every full `test-libraries-functional` sweep when `defaults.ide_runtime: both` parametrized them with the wrong runtime.  Plugin now reads each test file's `__chumicro_runtimes__` marker (same convention as device-side source files per Decisions 0037 / 0044) and filters target devices accordingly; a second hook (`pytest_pycollect_makemodule`) returns a no-import stub for `libraries/<name>/functional_tests/test_*.py` paths so pytest's default Module factory never tries to import them on the host.  Five test files lost their dead `if not _IS_X: return` short-circuits in the same commit.
+- **Last shipped:** `chumicro-pytest-device + kvstore/wifi functional tests: honor __chumicro_runtimes__ marker; suppress host-side Module collection` (this commit).  Validated against pi-pico-w MP + CP boards: kvstore 43 passed (was 22 spurious ImportErrors), wifi 41 passed (was 13 spurious ImportErrors).
 - **In flight:** idle.
-- **Blocked on:** —.
-- **Last touched:** workbench/deploy/{src/chumicro_deploy/micropython_transport.py, tests/test_micropython_transport.py}, plans/{learnings,now}.md.
+- **Blocked on:** —.  Pre-existing `test_pre_release_floor_skips_bump_requirement` failure flagged via spawn_task — not in scope for this slice.
+- **Last touched:** workbench/pytest-device/{src,tests}, libraries/{kvstore,wifi}/functional_tests/, plans/now.md.
 
 ---
 

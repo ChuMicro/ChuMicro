@@ -95,6 +95,112 @@ class TestResolveLibraryDir:
         assert result == library_dir
 
 
+class TestFilterTargetsByMarker:
+    """Tests for the ``__chumicro_runtimes__`` collection filter."""
+
+    @staticmethod
+    def _two_runtime_targets() -> list[DeviceEntry]:
+        return [
+            DeviceEntry(
+                identifier="mp-board",
+                runtime="micropython",
+                address="/dev/ttyUSB0",
+            ),
+            DeviceEntry(
+                identifier="cp-board",
+                runtime="circuitpython",
+                address="/dev/cu.usbmodem1",
+            ),
+        ]
+
+    def test_unmarked_file_keeps_every_target(self, tmp_path: Path) -> None:
+        """No marker → every configured target survives the filter."""
+        test_file = tmp_path / "test_universal.py"
+        test_file.write_text("def test_alpha():\n    pass\n")
+        targets = self._two_runtime_targets()
+
+        result = pytest_device._filter_targets_by_marker(targets, test_file)
+
+        assert result == targets
+
+    def test_circuitpython_marker_drops_micropython_target(
+        self, tmp_path: Path,
+    ) -> None:
+        """``("circuitpython",)`` marker keeps only the CP target."""
+        test_file = tmp_path / "test_cp_only.py"
+        test_file.write_text(
+            '__chumicro_runtimes__ = ("circuitpython",)\n'
+            "def test_alpha():\n    pass\n",
+        )
+
+        result = pytest_device._filter_targets_by_marker(
+            self._two_runtime_targets(), test_file,
+        )
+
+        assert [device.runtime for device in result or []] == ["circuitpython"]
+
+    def test_micropython_marker_drops_circuitpython_target(
+        self, tmp_path: Path,
+    ) -> None:
+        """``("micropython",)`` marker keeps only the MP target."""
+        test_file = tmp_path / "test_mp_only.py"
+        test_file.write_text(
+            '__chumicro_runtimes__ = ("micropython",)\n'
+            "def test_alpha():\n    pass\n",
+        )
+
+        result = pytest_device._filter_targets_by_marker(
+            self._two_runtime_targets(), test_file,
+        )
+
+        assert [device.runtime for device in result or []] == ["micropython"]
+
+    def test_sub_runtime_marker_folds_into_base_runtime(
+        self, tmp_path: Path,
+    ) -> None:
+        """``("micropython_esp32",)`` matches generic ``micropython`` targets.
+
+        Folds the same way :func:`chumicro_deploy._runtime_marker.file_targets_runtime`
+        does — both MP variants share one bundle today.
+        """
+        test_file = tmp_path / "test_mp_esp32_only.py"
+        test_file.write_text(
+            '__chumicro_runtimes__ = ("micropython_esp32",)\n'
+            "def test_alpha():\n    pass\n",
+        )
+
+        result = pytest_device._filter_targets_by_marker(
+            self._two_runtime_targets(), test_file,
+        )
+
+        assert [device.runtime for device in result or []] == ["micropython"]
+
+    def test_marker_excluding_every_target_returns_empty_list(
+        self, tmp_path: Path,
+    ) -> None:
+        """All targets dropped → empty list (collect() yields nothing)."""
+        test_file = tmp_path / "test_cpython_only.py"
+        test_file.write_text(
+            '__chumicro_runtimes__ = ("cpython",)\n'
+            "def test_alpha():\n    pass\n",
+        )
+
+        result = pytest_device._filter_targets_by_marker(
+            self._two_runtime_targets(), test_file,
+        )
+
+        assert result == []
+
+    def test_none_targets_passthrough(self, tmp_path: Path) -> None:
+        """No devices.yml → ``None`` flows through unchanged."""
+        test_file = tmp_path / "test_anything.py"
+        test_file.write_text("def test_alpha():\n    pass\n")
+
+        result = pytest_device._filter_targets_by_marker(None, test_file)
+
+        assert result is None
+
+
 class TestIterRuntimeVariants:
     """Tests for _iter_runtime_variants ordering."""
 

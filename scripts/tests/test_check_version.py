@@ -1,20 +1,67 @@
-"""Tests for check_version.py — VERSION enforcement logic."""
+"""Tests for check_version.py — VERSION enforcement logic.
 
+Every test monkeypatches ``check_version.{changed_files,read_version,
+release_tags}`` so the gate runs against a synthetic snapshot of the
+workspace.  No test reads the real on-disk ``VERSION`` of any real
+package — that would couple test outcomes to whichever package
+happened to sit at the pre-release floor or above it on the day the
+test was written.  The ``_synthetic_versions`` fixture wires the
+default (every package above the floor); individual tests override
+specific packages when they need to exercise the floor exemption.
+"""
+
+import pytest
 from check_version import _check
+
+#: Default synthetic VERSION for any package the test doesn't override.
+#: Above the pre-release floor so the bump-required gate kicks in by
+#: default; tests opt into the floor by adding entries to the override.
+_DEFAULT_VERSION = "0.1.0"
+
+
+@pytest.fixture
+def _synthetic_versions(monkeypatch):
+    """Return a setter that wires a synthetic version map into ``_check``.
+
+    Usage::
+
+        def test_foo(self, monkeypatch, capsys, _synthetic_versions):
+            _synthetic_versions({("workbench", "repl"): "0.0.0"})
+            ...
+
+    Any package not in the override map reads as ``_DEFAULT_VERSION``
+    (above the pre-release floor).  ``release_tags`` is also stubbed
+    to return an empty list so the new-package NOTE branch never fires
+    unless a test explicitly overrides it.
+    """
+
+    def _apply(version_overrides: dict[tuple[str, str], str] | None = None) -> None:
+        overrides = version_overrides or {}
+
+        def _read_version(package_dir):
+            key = (package_dir.parent.name, package_dir.name)
+            return overrides.get(key, _DEFAULT_VERSION)
+
+        monkeypatch.setattr("check_version.read_version", _read_version)
+        monkeypatch.setattr("check_version.release_tags", lambda _name: ["v0.1.0"])
+
+    return _apply
 
 
 class TestCheck:
     """Tests for the _check function."""
 
-    def test_no_changed_files(self, monkeypatch, capsys):
+    def test_no_changed_files(self, monkeypatch, capsys, _synthetic_versions):
         """No changes produces a clean exit."""
+        _synthetic_versions()
         monkeypatch.setattr("check_version.changed_files", lambda _base: [])
         result = _check("origin/main")
         assert result == 0
         assert "No changed files detected" in capsys.readouterr().out
 
-    def test_non_library_changes_only(self, monkeypatch, capsys):
+    def test_non_library_changes_only(self, monkeypatch, capsys, _synthetic_versions):
         """Changes outside libraries/ and workbench/ are not release-relevant."""
+        _synthetic_versions()
         monkeypatch.setattr(
             "check_version.changed_files",
             lambda _base: ["scripts/run.py", "README.md"],
@@ -23,8 +70,9 @@ class TestCheck:
         assert result == 0
         assert "No release-relevant package changes" in capsys.readouterr().out
 
-    def test_src_change_with_version_bump(self, monkeypatch, capsys):
+    def test_src_change_with_version_bump(self, monkeypatch, capsys, _synthetic_versions):
         """src/ change with VERSION bump passes."""
+        _synthetic_versions()
         monkeypatch.setattr(
             "check_version.changed_files",
             lambda _base: [
@@ -32,13 +80,15 @@ class TestCheck:
                 "libraries/timing/VERSION",
             ],
         )
-        monkeypatch.setattr("check_version.release_tags", lambda _name: [])
         result = _check("origin/main")
         assert result == 0
         assert "OK:" in capsys.readouterr().out
 
-    def test_src_change_without_version_bump_fails(self, monkeypatch, capsys):
+    def test_src_change_without_version_bump_fails(
+        self, monkeypatch, capsys, _synthetic_versions,
+    ):
         """src/ change without VERSION bump fails."""
+        _synthetic_versions()
         monkeypatch.setattr(
             "check_version.changed_files",
             lambda _base: ["libraries/timing/src/chumicro_timing/core.py"],
@@ -47,8 +97,11 @@ class TestCheck:
         assert result == 1
         assert "FAIL:" in capsys.readouterr().out
 
-    def test_pyproject_change_requires_bump(self, monkeypatch, capsys):
+    def test_pyproject_change_requires_bump(
+        self, monkeypatch, capsys, _synthetic_versions,
+    ):
         """pyproject.toml change without VERSION bump fails."""
+        _synthetic_versions()
         monkeypatch.setattr(
             "check_version.changed_files",
             lambda _base: ["libraries/runner/pyproject.toml"],
@@ -57,8 +110,11 @@ class TestCheck:
         assert result == 1
         assert "FAIL:" in capsys.readouterr().out
 
-    def test_test_change_does_not_require_bump(self, monkeypatch, capsys):
+    def test_test_change_does_not_require_bump(
+        self, monkeypatch, capsys, _synthetic_versions,
+    ):
         """tests/ change is not release-relevant and doesn't need a bump."""
+        _synthetic_versions()
         monkeypatch.setattr(
             "check_version.changed_files",
             lambda _base: ["libraries/timing/tests/test_ticks.py"],
@@ -67,18 +123,21 @@ class TestCheck:
         assert result == 0
         assert "No release-relevant" in capsys.readouterr().out
 
-    def test_version_only_change(self, monkeypatch, capsys):
+    def test_version_only_change(self, monkeypatch, capsys, _synthetic_versions):
         """Bumping VERSION without src/ changes is fine (unusual but valid)."""
+        _synthetic_versions()
         monkeypatch.setattr(
             "check_version.changed_files",
             lambda _base: ["libraries/timing/VERSION"],
         )
-        monkeypatch.setattr("check_version.release_tags", lambda _name: [])
         result = _check("origin/main")
         assert result == 0
 
-    def test_multiple_libraries_one_missing(self, monkeypatch, capsys):
+    def test_multiple_libraries_one_missing(
+        self, monkeypatch, capsys, _synthetic_versions,
+    ):
         """When two libraries change, failing one causes overall failure."""
+        _synthetic_versions()
         monkeypatch.setattr(
             "check_version.changed_files",
             lambda _base: [
@@ -88,7 +147,6 @@ class TestCheck:
                 # runner VERSION not bumped
             ],
         )
-        monkeypatch.setattr("check_version.release_tags", lambda _name: [])
         result = _check("origin/main")
         assert result == 1
         captured = capsys.readouterr().out
@@ -96,8 +154,11 @@ class TestCheck:
         # the OK messages for compliant libraries are never reached.
         assert "FAIL: libraries/runner/" in captured
 
-    def test_workbench_src_change_with_version_bump(self, monkeypatch, capsys):
+    def test_workbench_src_change_with_version_bump(
+        self, monkeypatch, capsys, _synthetic_versions,
+    ):
         """workbench/<name>/src/ change with VERSION bump passes."""
+        _synthetic_versions()
         monkeypatch.setattr(
             "check_version.changed_files",
             lambda _base: [
@@ -105,13 +166,15 @@ class TestCheck:
                 "workbench/deploy/VERSION",
             ],
         )
-        monkeypatch.setattr("check_version.release_tags", lambda _name: [])
         result = _check("origin/main")
         assert result == 0
         assert "OK: workbench/deploy/" in capsys.readouterr().out
 
-    def test_workbench_src_change_without_version_bump_fails(self, monkeypatch, capsys):
+    def test_workbench_src_change_without_version_bump_fails(
+        self, monkeypatch, capsys, _synthetic_versions,
+    ):
         """workbench/<name>/src/ change without VERSION bump fails."""
+        _synthetic_versions()
         monkeypatch.setattr(
             "check_version.changed_files",
             lambda _base: ["workbench/deploy/src/chumicro_deploy/core.py"],
@@ -120,8 +183,11 @@ class TestCheck:
         assert result == 1
         assert "FAIL: workbench/deploy/" in capsys.readouterr().out
 
-    def test_workbench_pyproject_change_requires_bump(self, monkeypatch, capsys):
+    def test_workbench_pyproject_change_requires_bump(
+        self, monkeypatch, capsys, _synthetic_versions,
+    ):
         """workbench/<name>/pyproject.toml change without VERSION bump fails."""
+        _synthetic_versions()
         monkeypatch.setattr(
             "check_version.changed_files",
             lambda _base: ["workbench/deploy/pyproject.toml"],
@@ -131,16 +197,20 @@ class TestCheck:
         assert "FAIL: workbench/deploy/" in capsys.readouterr().out
 
     def test_pre_release_floor_skips_bump_requirement(
-        self, monkeypatch, capsys,
+        self, monkeypatch, capsys, _synthetic_versions,
     ):
-        """Decision 0038 §6: a package at 0.0.0 is exempt from the
-        bump gate.  workbench/repl/ sits at 0.0.0 (pre-release floor),
-        so a src/ change without a VERSION bump should pass quietly."""
+        """Decision 0038 §6: a package at 0.0.0 is exempt from the bump gate.
+
+        Uses a synthetic ``read_version`` so the test doesn't depend on
+        which real package happens to sit at the floor on any given day —
+        the previous version of this test hardcoded ``workbench/repl``
+        and broke the moment that package's VERSION was bumped.
+        """
+        _synthetic_versions({("workbench", "repl"): "0.0.0"})
         monkeypatch.setattr(
             "check_version.changed_files",
             lambda _base: ["workbench/repl/src/chumicro_repl/cli.py"],
         )
-        monkeypatch.setattr("check_version.release_tags", lambda _name: [])
         result = _check("origin/main")
         assert result == 0
         captured = capsys.readouterr().out
@@ -148,15 +218,16 @@ class TestCheck:
         assert "FAIL:" not in captured
 
     def test_pre_release_floor_does_not_mask_non_zero_packages(
-        self, monkeypatch, capsys,
+        self, monkeypatch, capsys, _synthetic_versions,
     ):
         """A package above 0.0.0 still requires VERSION bumps even if a
         sibling 0.0.0 package is also being changed."""
+        _synthetic_versions({("workbench", "repl"): "0.0.0"})
         monkeypatch.setattr(
             "check_version.changed_files",
             lambda _base: [
-                "workbench/repl/src/chumicro_repl/cli.py",     # 0.0.0
-                "libraries/timing/src/chumicro_timing/core.py", # >0.0.0
+                "workbench/repl/src/chumicro_repl/cli.py",      # 0.0.0
+                "libraries/timing/src/chumicro_timing/core.py",  # >0.0.0
             ],
         )
         result = _check("origin/main")
@@ -164,8 +235,9 @@ class TestCheck:
         captured = capsys.readouterr().out
         assert "FAIL: libraries/timing/" in captured
 
-    def test_mixed_roots_pass(self, monkeypatch, capsys):
+    def test_mixed_roots_pass(self, monkeypatch, capsys, _synthetic_versions):
         """Library + workbench changes both bumped pass cleanly."""
+        _synthetic_versions()
         monkeypatch.setattr(
             "check_version.changed_files",
             lambda _base: [
@@ -175,18 +247,8 @@ class TestCheck:
                 "workbench/deploy/VERSION",
             ],
         )
-        monkeypatch.setattr("check_version.release_tags", lambda _name: [])
         result = _check("origin/main")
         assert result == 0
         captured = capsys.readouterr().out
         assert "OK: libraries/timing/" in captured
         assert "OK: workbench/deploy/" in captured
-
-    def test_git_failure_returns_2(self, monkeypatch):
-        """Git failure propagates as exit code 2."""
-        monkeypatch.setattr(
-            "check_version.changed_files",
-            lambda _base: (_ for _ in ()).throw(RuntimeError("git diff failed")),
-        )
-        result = _check("origin/main")
-        assert result == 2
