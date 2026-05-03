@@ -651,11 +651,20 @@ class _TransportCache:
     def disconnect_all(self) -> None:
         """Disconnect all cached transports.
 
-        ``disconnect()`` already restores the board to a normal state
-        (re-enables autoreload on CP, exits raw REPL, soft-reboots so
-        the next code.py cycle runs clean), so the previously-paired
-        ``reset()`` call was redundant — and ``reset()`` itself was
-        deleted in the deploy-audit-followup pass.
+        ``disconnect()`` is pure teardown — exits raw REPL (Ctrl-B)
+        and closes the serial port.  It deliberately does NOT touch
+        ``supervisor.runtime.autoreload`` or fire an explicit Ctrl-D
+        soft-reboot; both were removed in the deploy-audit pass after
+        the ESP32-S2 USB-CDC double-reboot wedge (2026-05-03 Lolin S2
+        bake).
+
+        Net effect at session end: each board is left in friendly
+        REPL with the serial port closed.  On the ``deploy_files``
+        path autoreload is already back to default-on (the deploy
+        soft-reboot reset it); on the functional-test path autoreload
+        stays off until the user resets / power-cycles the board,
+        which is acceptable because tests drive the raw REPL directly
+        and never depend on ``code.py``-style reload-on-edit.
         """
         for transport in self._transports.values():
             try:

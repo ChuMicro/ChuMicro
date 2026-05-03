@@ -883,11 +883,15 @@ class TestFlashMode:
             ".find_circuitpy_drive",
             lambda: None,
         )
-        # Sequence: connect (prompt), autoreload-off in stage (OK),
-        # disconnect's _enter_raw_repl (prompt), autoreload restore (OK).
+        # Sequence: connect (prompt), stage's _enter_raw_repl (prompt),
+        # stage's autoreload-off (OK).  Stage raises before any further
+        # REPL traffic, and disconnect's _enter_raw_repl finds an empty
+        # response and bails silently in its own try/except — that's the
+        # established contract for "drive yanked between connect and
+        # stage" scenarios.
         port = FakeSerialPort(
             read_responses=[
-                _RAW_REPL_PROMPT, _OK_RESPONSE,
+                _RAW_REPL_PROMPT,
                 _RAW_REPL_PROMPT, _OK_RESPONSE,
             ],
         )
@@ -920,11 +924,15 @@ class TestFlashMode:
         self, tmp_path: Path,
     ) -> None:
         """stage() in flash mode should raise when drive path doesn't exist."""
-        # Sequence: connect (prompt), autoreload-off in stage (OK),
-        # disconnect's _enter_raw_repl (prompt), autoreload restore (OK).
+        # Sequence: connect (prompt), stage's _enter_raw_repl (prompt),
+        # stage's autoreload-off (OK).  Stage raises before any further
+        # REPL traffic, and disconnect's _enter_raw_repl finds an empty
+        # response and bails silently in its own try/except — that's the
+        # established contract for "drive yanked between connect and
+        # stage" scenarios.
         port = FakeSerialPort(
             read_responses=[
-                _RAW_REPL_PROMPT, _OK_RESPONSE,
+                _RAW_REPL_PROMPT,
                 _RAW_REPL_PROMPT, _OK_RESPONSE,
             ],
         )
@@ -969,11 +977,15 @@ class TestFlashMode:
 
         drive = tmp_path / "CIRCUITPY"
         drive.mkdir()
-        # Sequence: connect (prompt), autoreload-off in stage (OK),
-        # disconnect's _enter_raw_repl (prompt), autoreload restore (OK).
+        # Sequence: connect (prompt), stage's _enter_raw_repl (prompt),
+        # stage's autoreload-off (OK).  Stage raises before any further
+        # REPL traffic, and disconnect's _enter_raw_repl finds an empty
+        # response and bails silently in its own try/except — that's the
+        # established contract for "drive yanked between connect and
+        # stage" scenarios.
         port = FakeSerialPort(
             read_responses=[
-                _RAW_REPL_PROMPT, _OK_RESPONSE,
+                _RAW_REPL_PROMPT,
                 _RAW_REPL_PROMPT, _OK_RESPONSE,
             ],
         )
@@ -1033,13 +1045,12 @@ class TestFlashMode:
 
         # Responses: connect (prompt), _push_staging_to_drive's
         # _enter_raw_repl (prompt) + autoreload disable (OK), FAT
-        # cache refresh after rsync (OK), disconnect raw_repl (prompt),
-        # autoreload restore (OK).
+        # cache refresh after rsync (OK), disconnect raw_repl (prompt).
         port = FakeSerialPort(
             read_responses=[
                 _RAW_REPL_PROMPT,
                 _RAW_REPL_PROMPT, _OK_RESPONSE, _OK_RESPONSE,
-                _RAW_REPL_PROMPT, _OK_RESPONSE,
+                _RAW_REPL_PROMPT,
             ],
         )
 
@@ -1074,13 +1085,12 @@ class TestFlashMode:
 
         # Responses: connect (prompt), _push_staging_to_drive's
         # _enter_raw_repl (prompt) + autoreload disable (OK), FAT
-        # cache refresh after rsync (OK), disconnect raw_repl (prompt),
-        # autoreload restore (OK).
+        # cache refresh after rsync (OK), disconnect raw_repl (prompt).
         port = FakeSerialPort(
             read_responses=[
                 _RAW_REPL_PROMPT,
                 _RAW_REPL_PROMPT, _OK_RESPONSE, _OK_RESPONSE,
-                _RAW_REPL_PROMPT, _OK_RESPONSE,
+                _RAW_REPL_PROMPT,
             ],
         )
 
@@ -1107,13 +1117,12 @@ class TestFlashMode:
 
         # Responses: connect (prompt), _push_staging_to_drive's
         # _enter_raw_repl (prompt) + autoreload disable (OK), FAT
-        # cache refresh after rsync (OK), disconnect raw_repl (prompt),
-        # autoreload restore (OK).
+        # cache refresh after rsync (OK), disconnect raw_repl (prompt).
         port = FakeSerialPort(
             read_responses=[
                 _RAW_REPL_PROMPT,
                 _RAW_REPL_PROMPT, _OK_RESPONSE, _OK_RESPONSE,
-                _RAW_REPL_PROMPT, _OK_RESPONSE,
+                _RAW_REPL_PROMPT,
             ],
         )
 
@@ -1168,12 +1177,12 @@ class TestFlashMode:
 
         # Sequence: connect prompt; _push_staging_to_drive
         # (enter_raw_repl + autoreload_off + FAT cache refresh);
-        # disconnect (enter_raw_repl + autoreload restore).
+        # disconnect (enter_raw_repl, then Ctrl-B — no further reads).
         port = FakeSerialPort(
             read_responses=[
                 _RAW_REPL_PROMPT,
                 _RAW_REPL_PROMPT, _OK_RESPONSE, _OK_RESPONSE,
-                _RAW_REPL_PROMPT, _OK_RESPONSE,
+                _RAW_REPL_PROMPT,
             ],
         )
 
@@ -1215,21 +1224,24 @@ class TestFlashMode:
             "of D-state."
         )
 
-    def test_flash_disconnect_restores_autoreload(
+    def test_flash_disconnect_does_not_touch_autoreload(
         self, tmp_path: Path,
     ) -> None:
-        """disconnect() should re-enter raw REPL and restore autoreload.
+        """disconnect() must not send any autoreload command, even in flash mode.
 
-        Confirms the symmetry that the disable-site comments in
-        :meth:`_stage_to_flash` and :meth:`deploy_files` (flash path)
-        rely on: ``disconnect()`` is the canonical site that flips
-        autoreload back on.
+        Regression guard for the deploy-audit pass that made
+        ``disconnect()`` pure teardown.  The autoreload-off issued by
+        :meth:`_disable_autoreload_before_drive_writes` is restored
+        implicitly by ``deploy_files``'s mid-method soft-reboot, and
+        intentionally left off on the ``_stage_to_flash`` path; either
+        way, disconnect must not flip it.  An explicit autoreload-on
+        here would re-introduce the ESP32-S2 USB-CDC double-reboot
+        wedge documented in the disconnect docstring.
         """
         port = FakeSerialPort(
             read_responses=[
                 _RAW_REPL_PROMPT,   # connect
                 _RAW_REPL_PROMPT,   # _enter_raw_repl in disconnect
-                _OK_RESPONSE,       # autoreload restore (disconnect)
             ],
         )
 
@@ -1241,16 +1253,22 @@ class TestFlashMode:
 
         transport.disconnect()
 
-        # Should have re-entered raw REPL (Ctrl-C×2, Ctrl-A) and
-        # sent autoreload = True.
+        # Should re-enter raw REPL (Ctrl-C×2, Ctrl-A) + Ctrl-B exit,
+        # and emit no autoreload command at all.
         written_data = b"".join(port.writes)
         assert _CTRL_C in port.writes
         assert _CTRL_A in port.writes
-        assert b"autoreload" in written_data
-        assert b"True" in written_data
+        assert b"autoreload" not in written_data
 
     def test_ram_disconnect_does_not_send_autoreload(self) -> None:
-        """disconnect() in ram mode should restore board but skip autoreload."""
+        """disconnect() in ram mode emits no autoreload command.
+
+        ram mode never disables autoreload in the first place, so there
+        is nothing to restore.  Same final post-condition as the flash
+        path (which also no longer touches autoreload at disconnect),
+        but covered separately so the ram-vs-flash asymmetry that used
+        to exist can't regress silently.
+        """
         port = FakeSerialPort(
             read_responses=[
                 _RAW_REPL_PROMPT,   # connect
@@ -1273,15 +1291,12 @@ class TestFlashMode:
         transport.disconnect()
 
         written_data = b"".join(port.writes)
-        # Should NOT send autoreload commands in ram mode.
+        # No autoreload command in either direction.
         assert b"autoreload" not in written_data
         # Should send Ctrl-B (exit raw REPL → friendly REPL).  No
-        # explicit Ctrl-D — disconnect deliberately omits the
-        # explicit soft-reboot to avoid double-rebooting on top of
-        # the one autoreload's watcher fires when re-enabled (see
-        # disconnect docstring).  In RAM mode autoreload was never
-        # touched so no watcher reboot fires either; the board is
-        # left in friendly REPL.
+        # explicit Ctrl-D either — disconnect is pure teardown; both
+        # the explicit soft-reboot and the autoreload-on were removed
+        # in the deploy-audit pass (see disconnect docstring).
         from chumicro_deploy.circuitpython_transport import _CTRL_B
         assert _CTRL_B in port.writes
         assert _CTRL_D not in port.writes
@@ -1308,13 +1323,13 @@ class TestFlashMode:
 
         # Responses: connect (prompt) + 2 stages (each: enter_raw_repl
         # + autoreload off + FAT cache refresh) + disconnect
-        # (enter_raw_repl + autoreload restore).
+        # (enter_raw_repl).
         port = FakeSerialPort(
             read_responses=[
                 _RAW_REPL_PROMPT,
                 _RAW_REPL_PROMPT, _OK_RESPONSE, _OK_RESPONSE,
                 _RAW_REPL_PROMPT, _OK_RESPONSE, _OK_RESPONSE,
-                _RAW_REPL_PROMPT, _OK_RESPONSE,
+                _RAW_REPL_PROMPT,
             ],
         )
 
@@ -1360,13 +1375,12 @@ class TestFlashMode:
 
         # Responses: connect (prompt), _push_staging_to_drive's
         # _enter_raw_repl (prompt) + autoreload disable (OK), FAT
-        # cache refresh after rsync (OK), disconnect raw_repl (prompt),
-        # autoreload restore (OK).
+        # cache refresh after rsync (OK), disconnect raw_repl (prompt).
         port = FakeSerialPort(
             read_responses=[
                 _RAW_REPL_PROMPT,
                 _RAW_REPL_PROMPT, _OK_RESPONSE, _OK_RESPONSE,
-                _RAW_REPL_PROMPT, _OK_RESPONSE,
+                _RAW_REPL_PROMPT,
             ],
         )
 
@@ -1401,13 +1415,12 @@ class TestFlashMode:
 
         # Responses: connect (prompt), _push_staging_to_drive's
         # _enter_raw_repl (prompt) + autoreload disable (OK), FAT
-        # cache refresh after rsync (OK), disconnect raw_repl (prompt),
-        # autoreload restore (OK).
+        # cache refresh after rsync (OK), disconnect raw_repl (prompt).
         port = FakeSerialPort(
             read_responses=[
                 _RAW_REPL_PROMPT,
                 _RAW_REPL_PROMPT, _OK_RESPONSE, _OK_RESPONSE,
-                _RAW_REPL_PROMPT, _OK_RESPONSE,
+                _RAW_REPL_PROMPT,
             ],
         )
 
@@ -1602,13 +1615,12 @@ class TestFindCircuitpyDrive:
 
         # Responses: connect (prompt), _push_staging_to_drive's
         # _enter_raw_repl (prompt) + autoreload disable (OK), FAT
-        # cache refresh after rsync (OK), disconnect raw_repl (prompt),
-        # autoreload restore (OK).
+        # cache refresh after rsync (OK), disconnect raw_repl (prompt).
         port = FakeSerialPort(
             read_responses=[
                 _RAW_REPL_PROMPT,
                 _RAW_REPL_PROMPT, _OK_RESPONSE, _OK_RESPONSE,
-                _RAW_REPL_PROMPT, _OK_RESPONSE,
+                _RAW_REPL_PROMPT,
             ],
         )
 
@@ -1679,7 +1691,7 @@ class TestResetIntoBootloader:
         port = FakeSerialPort(read_responses=[_RAW_REPL_PROMPT, _OK_RESPONSE])
         transport = CircuitpythonTransport(
             "/dev/ttyUSB0",
-            mode="flash",  # exercises autoreload-restore code path
+            mode="flash",  # disconnect path is mode-uniform now
             serial_port_factory=lambda **_kwargs: port,
             time=FakeTime(),
         )

@@ -608,22 +608,21 @@ class CircuitpythonTransport:
         rsync" failure mode documented in `plans/learnings.md`
         ("rsync to CIRCUITPY can hang in uninterruptible kernel I/O").
 
-        Symmetric with :meth:`_restore_autoreload` (called from
-        :meth:`disconnect`).
+        ``supervisor.runtime.autoreload`` is process-lifetime state on
+        the CP VM, so any soft-reboot resets it back to default-on —
+        no explicit restore is needed on either flash-mode path:
+
+        * ``deploy_files`` issues an explicit Ctrl-D between rsync and
+          ``code.py`` capture; that reboot restores the default.
+        * ``_stage_to_flash`` runs harness code via the live raw REPL
+          session and does not reboot inside the session.  The board
+          is left with autoreload off until the next reset / power
+          cycle, which is fine because functional-test sessions don't
+          need ``code.py``-style reload-on-edit behaviour, and the
+          next flash-mode entry point will re-disable anyway.
         """
         self._send_repl_command(
             "import supervisor; supervisor.runtime.autoreload = False",
-        )
-
-    def _restore_autoreload(self) -> None:
-        """Send the autoreload-on REPL command.
-
-        Symmetric with :meth:`_disable_autoreload_before_drive_writes`.
-        Called from :meth:`disconnect` so the board returns to its
-        default behaviour after every flash-mode session.
-        """
-        self._send_repl_command(
-            "import supervisor; supervisor.runtime.autoreload = True",
         )
 
     def stage(
@@ -1378,8 +1377,9 @@ class CircuitpythonTransport:
         self._port.write(_CTRL_D)  # trigger soft-reboot
         output = self._read_code_py_output()
 
-        # Re-enter raw REPL so disconnect()'s cleanup (autoreload on,
-        # soft-reboot, exit) has a live session to work from.
+        # Re-enter raw REPL so disconnect()'s Ctrl-B exit has a known
+        # starting state (the soft-reboot above dropped the board back
+        # into friendly REPL).
         self._enter_raw_repl()
 
         if on_execute_line is not None:
@@ -1779,55 +1779,49 @@ class CircuitpythonTransport:
     def disconnect(self) -> None:
         """Close the serial port and clear staged data.
 
-        Restores the board to normal operation regardless of mode:
+        Pure teardown — exits raw REPL and closes the port:
 
-        1. Re-enters raw REPL (in case a reset exited it).
-        2. In flash mode, re-enables autoreload via supervisor —
-           **this is the canonical restoration site** for the
-           ``autoreload = False`` that :meth:`_stage_to_flash` and
-           :meth:`deploy_files` (flash path) issue at the top of
-           their write windows.
-        3. Exits raw REPL with Ctrl-B (back to normal REPL).
-        4. Closes the serial port.
+        1. Re-enters raw REPL (idempotent; covers the case where an
+           in-method soft-reboot put the board back in friendly REPL).
+        2. Sends Ctrl-B to exit raw REPL.  This is the only
+           post-condition that matters for "release the board cleanly":
+           a serial-port consumer that opens the port next must not
+           find it parked in raw REPL.
+        3. Closes the serial port.
 
-        **Why no explicit Ctrl-D soft-reboot.**  Earlier versions
-        forced a soft-reboot at this point so ``code.py`` would run
-        after deploy.  That layered a second soft-reboot on top of
-        the one CP's autoreload watcher fires the moment we
-        re-enable autoreload at step 2 (files changed during the
-        off-window, watcher queues a reboot the next time it
-        re-activates).  Two USB-CDC re-enumerations in ~500ms
-        wedged the ESP32-S2 USB-CDC firmware roughly 1 in 4
-        sessions — surfaced 2026-05-03 in the Lolin S2 bake.
+        **No autoreload restore.**  The autoreload-off issued by
+        :meth:`_disable_autoreload_before_drive_writes` is restored
+        implicitly on the ``deploy_files`` path (its mid-method Ctrl-D
+        resets ``supervisor.runtime.autoreload`` to default-on as a
+        side effect of soft-reboot) and intentionally left off on the
+        ``_stage_to_flash`` path (functional tests drive the raw REPL
+        themselves and never need ``code.py``-style reload-on-edit;
+        the board's next reset / power cycle returns it to default).
+        See :meth:`_disable_autoreload_before_drive_writes` for the
+        full rationale.
 
-        Equivalent post-conditions held by step 2 alone:
-
-        * **deploy_files** (production): already triggered its own
-          explicit soft-reboot inside the method (after rsync,
-          before reading code.py output), so the user's code has
-          already run.  The autoreload-on at step 2 sets up
-          subsequent file changes to trigger reloads as expected.
-        * **_stage_to_flash** (functional tests): no code.py to
-          run; the harness drove test execution via raw REPL and
-          is done.  Autoreload-on returns the board to its default
-          behavior; if any files changed during the test session
-          the watcher fires a single reboot, which is fine.
+        **No explicit Ctrl-D.**  Earlier versions forced a soft-reboot
+        at this point so ``code.py`` would run after deploy.  That
+        layered a second soft-reboot on top of the one CP's autoreload
+        watcher fires the moment autoreload was flipped back on (files
+        changed during the off-window, watcher queues a reboot the
+        next time it re-activates).  Two USB-CDC re-enumerations in
+        ~500ms wedged the ESP32-S2 USB-CDC firmware roughly 1 in 4
+        sessions — surfaced 2026-05-03 in the Lolin S2 bake.  Now that
+        disconnect no longer flips autoreload at all, the watcher
+        reboot doesn't happen either, but adding an explicit Ctrl-D
+        here would still be redundant: ``deploy_files`` has already
+        rebooted to run ``code.py``, and ``_stage_to_flash`` doesn't
+        need a reboot (the harness drove the raw REPL session).
 
         When :meth:`reset_into_bootloader` has already been called,
         it closes the port itself and nulls :attr:`_port` — this
-        method then finds nothing to restore or close and only
-        clears :attr:`_staged_sources`.
+        method then finds nothing to close and only clears
+        :attr:`_staged_sources`.
         """
         if self._port is not None:
             try:
                 self._enter_raw_repl()
-                if self.mode == "flash":
-                    self._restore_autoreload()
-                # Exit raw REPL back to normal REPL.  Re-enabled
-                # autoreload becomes active here; if files changed
-                # during the off-window the watcher fires a single
-                # soft-reboot.  No explicit Ctrl-D follows — see
-                # the docstring for why.
                 self._port.write(_CTRL_B)
                 self._time.sleep(_ENTER_DELAY)
             except Exception as restore_error:
