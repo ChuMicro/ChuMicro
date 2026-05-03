@@ -146,10 +146,18 @@ def listen_tcp(host, port, *, backlog=4, radio):  # pragma: no cover - device on
     """
     pool = _pool_for(radio)
     listener = pool.socket(pool.AF_INET, pool.SOCK_STREAM)
-    # CP's socketpool doesn't expose SO_REUSEADDR directly; rebind on a
-    # quick restart can fail with OSError(EADDRINUSE).  We accept that
-    # — Pi Pico W users will rarely restart so fast it matters, and
-    # exposing the option requires runtime-private socket constants.
+    # Best-effort SO_REUSEADDR so a back-to-back rebind on the same
+    # port doesn't fail with OSError(EADDRINUSE) while a previous
+    # socket is still in TIME_WAIT.  CP firmware exposure of
+    # ``pool.SO_REUSEADDR`` and ``setsockopt`` is uneven (older CP /
+    # rp2 ports may not have either); fall through silently when the
+    # API is missing — back-to-back rebinds will fail then exactly as
+    # they did before, but the common case (current CP on ESP32) gets
+    # the same SO_REUSEADDR semantics as MP and CPython.
+    try:
+        listener.setsockopt(pool.SOL_SOCKET, pool.SO_REUSEADDR, 1)
+    except (AttributeError, OSError):
+        pass
     listener.bind((host, port))
     listener.listen(backlog)
     listener.setblocking(False)

@@ -156,7 +156,9 @@ def tcp_listening_socket(
     Routes to the runtime-appropriate adapter:
 
     * **CircuitPython** — ``socketpool.SocketPool(radio).socket().bind().listen()``
-      (since CP 7.x).  *radio* is required (typically ``wifi.radio``).
+      (since CP 7.x).  ``setsockopt(SO_REUSEADDR, 1)`` is best-effort
+      (older CP firmware / rp2 ports may not expose the option).
+      *radio* is required (typically ``wifi.radio``).
     * **MicroPython** — ``socket.socket().bind().listen()``;
       ``setsockopt(SO_REUSEADDR, 1)`` is best-effort (some ports don't
       expose the option).  *radio* is ignored.
