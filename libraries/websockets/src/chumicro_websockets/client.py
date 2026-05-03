@@ -34,7 +34,6 @@ from chumicro_websockets._wire import (
     CLOSE_NORMAL,
     CLOSE_PROTOCOL_ERROR,
     CLOSE_TOO_BIG,
-    CONTROL_OPCODES,
     DEFAULT_CLOSE_TIMEOUT_MS,
     DEFAULT_HANDSHAKE_TIMEOUT_MS,
     DEFAULT_MAX_MESSAGE_BYTES,
@@ -76,27 +75,19 @@ from chumicro_websockets._wire import (
 
 class WhenOversized:
     """Policy for inbound messages exceeding ``max_message_bytes``.
-
-    Mirrors :class:`chumicro_mqtt.WhenOversized` and
-    :class:`chumicro_requests.WhenOversized`.  Decision 0045 §6 +
-    `plans/patterns.md` §"WhenOversized policy".  Copy-don't-couple
-    until a third user triggers extracting a shared enum.
+    Mirrors :class:`chumicro_mqtt.WhenOversized` /
+    :class:`chumicro_requests.WhenOversized`.
     """
 
-    #: Drop the rest of the in-progress message silently; the client
-    #: stays connected and waits for the next message.  Use when
-    #: occasional jumbo messages are fine to skip.
+    #: Drop the message silently; stay connected for the next one.
     DROP_SILENT = "drop_silent"
 
-    #: Default.  Drop the message, fire ``client.on_oversized(reported_length)``
-    #: if set, then close the connection with :data:`CLOSE_TOO_BIG`
-    #: (RFC 6455 §7.4.1, code 1009).  Keeps the application informed.
+    #: Default.  Fire ``on_oversized(reported_length)`` then close with
+    #: :data:`CLOSE_TOO_BIG`.
     DROP_WITH_EVENT = "drop_with_event"
 
-    #: Treat as a protocol error: close immediately with
-    #: :data:`CLOSE_TOO_BIG`.  Use when application invariants assume
-    #: messages fit within the configured cap and seeing a larger one
-    #: means peer or transport corruption.
+    #: Close immediately with :data:`CLOSE_TOO_BIG` — for when oversize
+    #: means peer/transport corruption.
     DISCONNECT = "disconnect"
 
 
@@ -106,12 +97,9 @@ class WhenOversized:
 
 
 class ConnectingPhase:
-    """Sub-states inside the top-level :data:`WebSocketState.CONNECTING`.
-
-    The opening handshake is two distinct I/O phases — sending the
-    upgrade request, then receiving + validating the 101 response.
-    Tracking which sub-phase we're in lets ``handle()`` know whether
-    to write or read.
+    """Sub-states inside CONNECTING — send the upgrade request, then
+    receive + validate the 101.  Tells ``handle()`` whether to write
+    or read.
     """
 
     SENDING_HANDSHAKE = "sending_handshake"
@@ -157,7 +145,7 @@ def _force_non_blocking(socket):
         return
     try:
         setblocking(False)
-    except (OSError, AttributeError):  # pragma: no cover - defensive
+    except OSError:  # pragma: no cover - defensive
         pass
 
 
@@ -184,46 +172,30 @@ def _is_eagain(exception):
 class WebSocketClient:
     """Non-blocking RFC 6455 WebSocket client.
 
-    Construct with a *connection_factory* + user knobs, configure
-    callbacks, then call :meth:`connect`.  Drive via :meth:`check` /
-    :meth:`handle` from a runner tick or a hand-rolled loop.  All
-    callbacks fire from :meth:`handle` — never from a thread or
-    interrupt.
+    Construct with a *connection_factory* (``callable(host, port,
+    use_tls) -> socket`` matching
+    :func:`chumicro_sockets.tcp_client_socket` /
+    :func:`tls_client_socket`) + user knobs, configure callbacks, then
+    call :meth:`connect`.  Drive via :meth:`check` / :meth:`handle`
+    from a runner tick or hand-rolled loop.  Callbacks fire from
+    :meth:`handle` — never from a thread or interrupt.
 
-    Args:
-        connection_factory: ``callable(host: str, port: int, use_tls: bool)
-            -> TCPClientSocket`` (matching :func:`chumicro_sockets.tcp_client_socket`
-            / :func:`tls_client_socket`).  Called once per :meth:`connect`.
-        max_message_bytes: Cap on the assembled inbound message size
-            (sum of fragment payloads).  Default :data:`DEFAULT_MAX_MESSAGE_BYTES`
-            (16 KB).  Per-frame caps land at the same value.
-        recv_budget_per_tick: Max bytes drained from the socket per
-            :meth:`handle` call.  Default :data:`DEFAULT_RECV_BUDGET_PER_TICK`
-            (1024 B).  Keeps tick latency LED-friendly when a large
-            inbound message is mid-flight.
-        send_budget_per_tick: Max bytes pushed to the socket per
-            :meth:`handle` call.  Default :data:`DEFAULT_SEND_BUDGET_PER_TICK`
-            (1024 B).
-        max_tx_queue_size: Bound on the outbound message queue.
-            Default :data:`DEFAULT_MAX_TX_QUEUE_SIZE` (8).  Enqueueing
-            past the cap raises :class:`WebSocketBackpressureError`.
-        when_oversized: Policy for inbound messages above
-            ``max_message_bytes``.  Default
-            :attr:`WhenOversized.DROP_WITH_EVENT`.
-        ping_interval_ms: If set, send an unsolicited PING on this
-            cadence to keep the connection alive.  Default ``None``
-            (disabled — most servers drive their own keep-alive).
-        pong_timeout_ms: If a PING has been outstanding for this long
-            without a PONG, close with :data:`CLOSE_INTERNAL_ERROR`.
-            Default :data:`DEFAULT_PONG_TIMEOUT_MS` (30 s).  Only
-            consulted when :attr:`ping_interval_ms` is set.
-        handshake_timeout_ms: Total opening-handshake budget.
-            Default :data:`DEFAULT_HANDSHAKE_TIMEOUT_MS` (10 s).
-        close_timeout_ms: After we send CLOSE, how long to wait for
-            the peer's CLOSE before forcing TCP teardown.  Default
-            :data:`DEFAULT_CLOSE_TIMEOUT_MS` (5 s).
-        ticks_ms_func / ticks_add_func / ticks_diff_func: Inject
-            fakes for testing.  Default to :mod:`chumicro_timing`.
+    Knobs (all default to the matching ``DEFAULT_*`` constant, mirroring
+    chumicro-mqtt + chumicro-requests):
+
+    * ``max_message_bytes`` — cap on assembled inbound message size.
+    * ``recv_budget_per_tick`` / ``send_budget_per_tick`` — per-tick
+      I/O caps; keeps the LED blinking under big payloads.
+    * ``max_tx_queue_size`` — outbound queue bound; overflow raises
+      :class:`WebSocketBackpressureError`.
+    * ``when_oversized`` — :class:`WhenOversized` policy for inbound
+      payloads above ``max_message_bytes``.
+    * ``ping_interval_ms`` (``None`` = off — most servers drive their
+      own keep-alive) + ``pong_timeout_ms``.
+    * ``handshake_timeout_ms`` / ``close_timeout_ms`` — per-phase
+      timeouts.
+    * ``ticks_ms_func`` / ``ticks_add_func`` / ``ticks_diff_func`` —
+      inject fakes for testing; default to :mod:`chumicro_timing`.
     """
 
     def __init__(
@@ -360,26 +332,17 @@ class WebSocketClient:
     ) -> None:
         """Initiate the opening handshake against *url*.
 
-        Non-blocking modulo the *connection_factory* call (which itself
-        may block briefly through DNS + TCP + TLS handshake — same
-        contract as :func:`chumicro_sockets.tcp_client_socket`).  After
+        Non-blocking modulo the *connection_factory* call (which may
+        block briefly through DNS + TCP + TLS — same contract as
+        :func:`chumicro_sockets.tcp_client_socket`).  After
         :meth:`connect` returns, the client is in
         :data:`WebSocketState.CONNECTING`; subsequent :meth:`handle`
         ticks finish the upgrade and transition to OPEN.
 
-        Args:
-            url: ``ws://`` or ``wss://`` URL.
-            timeout_ms: Override :attr:`handshake_timeout_ms` for this
-                connection.  ``None`` keeps the constructor default.
-            extra_headers: Optional iterable / ``dict`` /
-                :class:`CaseInsensitiveDict` to merge in alongside
-                the mandatory upgrade headers — useful for
-                ``Cookie`` / ``Authorization`` / ``Origin``.
-
-        Raises:
-            WebSocketStateError: Called more than once on the same
-                client.  Reconnection means a fresh client.
-            WebSocketURLError: *url* doesn't parse as ``ws://`` / ``wss://``.
+        *extra_headers* (iterable / ``dict`` / :class:`CaseInsensitiveDict`)
+        is useful for ``Cookie`` / ``Authorization`` / ``Origin``.
+        Reconnection means a fresh client — calling :meth:`connect` a
+        second time raises :class:`WebSocketStateError`.
         """
         if self._connect_called:
             raise WebSocketStateError(
@@ -419,14 +382,8 @@ class WebSocketClient:
         self._connecting_phase = ConnectingPhase.SENDING_HANDSHAKE
 
     def send_text(self, text: str) -> None:
-        """Enqueue a text message.
-
-        Args:
-            text: UTF-8 string payload.
-
-        Raises:
-            WebSocketStateError: Not in :data:`WebSocketState.OPEN`.
-            WebSocketBackpressureError: TX queue is full.
+        """Enqueue a text frame.  Raises :class:`WebSocketStateError`
+        if not OPEN, :class:`WebSocketBackpressureError` if TX is full.
         """
         if self._state != WebSocketState.OPEN:
             raise WebSocketStateError(
@@ -436,14 +393,9 @@ class WebSocketClient:
         self._enqueue_user_frame(OPCODE_TEXT, payload)
 
     def send_binary(self, data) -> None:
-        """Enqueue a binary message.
-
-        Args:
-            data: ``bytes`` / ``bytearray`` / ``memoryview`` payload.
-
-        Raises:
-            WebSocketStateError: Not in :data:`WebSocketState.OPEN`.
-            WebSocketBackpressureError: TX queue is full.
+        """Enqueue a binary frame from ``bytes`` / ``bytearray`` /
+        ``memoryview``.  Raises :class:`WebSocketStateError` if not
+        OPEN, :class:`WebSocketBackpressureError` if TX is full.
         """
         if self._state != WebSocketState.OPEN:
             raise WebSocketStateError(
@@ -459,20 +411,11 @@ class WebSocketClient:
         self._enqueue_user_frame(OPCODE_BINARY, data)
 
     def send_ping(self, payload: bytes = b"") -> None:
-        """Send a PING control frame.
+        """Send a PING (peer must echo as PONG per RFC 6455 §5.5.2).
 
-        The peer is required (RFC 6455 §5.5.2) to reply with a PONG
-        echoing *payload*.  When :attr:`ping_interval_ms` is set, the
-        client sends pings automatically — manual :meth:`send_ping`
-        is for application-level ping/pong, not keep-alive.
-
-        Args:
-            payload: Up to 125 bytes (RFC 6455 §5.5).
-
-        Raises:
-            WebSocketStateError: Not in :data:`WebSocketState.OPEN`.
-            WebSocketBackpressureError: TX queue is full.
-            WebSocketProtocolError: *payload* > 125 bytes.
+        Manual :meth:`send_ping` is for application-level ping/pong;
+        :attr:`ping_interval_ms` controls the auto keep-alive.  Payload
+        is capped at 125 bytes (control-frame limit).
         """
         if self._state != WebSocketState.OPEN:
             raise WebSocketStateError(
@@ -484,17 +427,10 @@ class WebSocketClient:
     def close(self, code: int = CLOSE_NORMAL, reason: str = "") -> None:
         """Initiate a graceful close handshake.
 
-        Sends a CLOSE frame with *code* + *reason* and transitions to
-        :data:`WebSocketState.CLOSING`.  The TCP socket stays open until
-        the peer's CLOSE arrives or :attr:`close_timeout_ms` elapses.
-
-        Args:
-            code: RFC 6455 §7.4 status code.  Default
-                :data:`CLOSE_NORMAL` (1000).
-            reason: UTF-8 string explaining the close.
-
-        Raises:
-            WebSocketStateError: Already CLOSING or CLOSED.
+        Sends a CLOSE frame and transitions to CLOSING; the TCP socket
+        stays open until the peer's CLOSE arrives or
+        :attr:`close_timeout_ms` elapses.  Raises
+        :class:`WebSocketStateError` if already CLOSING/CLOSED.
         """
         if self._state in (WebSocketState.CLOSING, WebSocketState.CLOSED):
             raise WebSocketStateError(
@@ -507,13 +443,8 @@ class WebSocketClient:
     # ------------------------------------------------------------------
 
     def check(self, now_ms: int) -> bool:
-        """Return ``True`` if there's work to do on this tick.
-
-        Cheap to call; safe to invoke before :meth:`connect` (returns
-        ``False``).
-
-        Args:
-            now_ms: Current monotonic-ish millisecond reading.
+        """Return ``True`` if there's work to do on this tick.  Cheap to
+        call; safe to invoke before :meth:`connect` (returns ``False``).
         """
         if self._state == WebSocketState.CLOSED:
             return False
@@ -532,15 +463,9 @@ class WebSocketClient:
         return False  # pragma: no cover - exhaustive
 
     def handle(self, now_ms: int) -> None:
-        """Do one tick of progress.
-
-        Drains a bounded amount of inbound bytes through the
-        framing parser, then drains a bounded amount of outbound
-        bytes from the TX queue.  All callbacks fire here.  Safe to
-        call when there's no work — returns quickly.
-
-        Args:
-            now_ms: Current monotonic-ish millisecond reading.
+        """One tick of progress: drain bounded inbound through the
+        framing parser, then bounded outbound from the TX queue.  All
+        callbacks fire here.  Safe to call when there's no work.
         """
         if self._state == WebSocketState.CLOSED or not self._connect_called:
             return
@@ -712,14 +637,8 @@ class WebSocketClient:
         if opcode == OPCODE_PONG:
             self._handle_pong_frame(payload)
             return
-        if opcode in CONTROL_OPCODES:  # pragma: no cover - exhaustive
-            self._send_close(
-                CLOSE_PROTOCOL_ERROR,
-                f"unhandled control opcode 0x{opcode:x}",
-            )
-            return
-
-        # Data frame — TEXT, BINARY, or CONT.
+        # Reserved opcodes (0xB-0xF) are caught upstream by FrameParser.
+        # Anything that gets here is a data opcode (TEXT, BINARY, or CONT).
         self._handle_data_frame(opcode, fin, payload)
 
     def _handle_data_frame(self, opcode: int, fin: bool, payload: bytes) -> None:
