@@ -296,13 +296,17 @@ CPython promotes `EAGAIN`/`EWOULDBLOCK` `OSError`s to the dedicated `BlockingIOE
 
 CPython allows `deque()` with no args (defaults to empty + unbounded).  MP's `deque` doesn't — `from collections import deque; deque()` raises `TypeError: function missing 2 required positional arguments`.  Use `deque((), 0)` for the same semantics.  Surfaced when running `chumicro_mqtt` fragmentation tests on MP unix-port via `chumicro_sockets.testing.FakeSocket`, which calls `deque()` at line 50.  Test helpers that aren't exercised on MP can ship CPython-only API uses without ever knowing.
 
-### CP unix-port hashlib + ssl gated on `MICROPY_PY_SSL` build flag
+### CP unix-port hashlib gated on `MICROPY_PY_SSL` build flag (ssl is *not* unlocked)
 
 Default `circuitpython-10.1.4` unix-port build exposes only `hashlib.sha256` — no `sha1`, no `md5`, no `hashlib.new()`, and no `ssl` module.  The cause is `ports/unix/variants/mpconfigvariant_common.h:99-103`, which gates `MICROPY_PY_HASHLIB_SHA1`, `MICROPY_PY_HASHLIB_MD5`, and `MICROPY_PY_CRYPTOLIB` on `#if MICROPY_PY_SSL` — and the variant doesn't enable SSL by default.  But the SHA1 *implementation* lives in `lib/axtls/crypto/sha1.c` and is only compiled when `extmod/extmod.mk:178-199` sees `MICROPY_PY_SSL=1` AND `MICROPY_SSL_AXTLS=1` — both as Make variables, not CFLAGS.  Setting only `-DMICROPY_PY_HASHLIB_SHA1=1` produces a link error (`hashlib_sha1_make_new` undeclared).
 
-Fix: pass `MICROPY_PY_SSL=1 MICROPY_SSL_AXTLS=1` as Make variables to the `make -C ports/unix` invocation in `scripts/prepare_circuitpython.py`.  Adds ~150 KB to the binary (axtls + the SSL extmod glue), unlocks the full hashlib + ssl surface that real CP boards already expose via per-board mbedTLS configs.  Without this, every cross-runtime test that exercises `chumicro_websockets._wire._sha1_digest` (RFC 6455 `Sec-WebSocket-Key` derivation) cascades to failure on CP unix-port.
+Fix: pass `MICROPY_PY_SSL=1 MICROPY_SSL_AXTLS=1` as Make variables to the `make -C ports/unix` invocation in `scripts/prepare_circuitpython.py`.  Adds ~150 KB to the binary (axtls + the crypto primitives) and unlocks `hashlib.sha1` + `hashlib.md5`.  Without this, every cross-runtime test that exercises `chumicro_websockets._wire._sha1_digest` (RFC 6455 `Sec-WebSocket-Key` derivation) cascades to failure on CP unix-port.
 
-Hidden until 2026-05-03 because no chumicro test had ever run on CP unix-port without ImportError-SKIP — every websockets test file imported pytest, which itself failed to import.
+**The ssl module does not come along for the ride.**  CP ships an `ssl.py` shim that does `import tls` — `tls` is mbedtls's expected bridge module name; axtls doesn't expose itself that way.  Result: `import ssl` on the CP unix-port still fails with `ImportError: no module named 'tls'` even after the SSL+axtls enable.  Tests that need `import ssl` (or that do `monkeypatch.setattr(ssl, ...)`) are still CPython-only or MP-unix-only on the host.  Either build CP with mbedtls instead of axtls (heavier dep), or write a `tls.py` shim that exposes axtls's surface in the shape `ssl.py` expects (CP-side work).  Until then: CP unix-port is "hashlib full, ssl absent".
+
+For comparison, the MP unix-port has full `ssl` (including `SSLContext`, `CERT_REQUIRED`, etc.) via mbedtls — `dir(ssl)` returns the whole TLS surface.  The discrepancy is purely the CP-side axtls-vs-mbedtls choice.
+
+Hidden until 2026-05-03 because no chumicro test had ever run on CP unix-port without ImportError-SKIP — every websockets / TLS / SSL test file imported pytest, which itself failed to import.
 
 ### MP / CP `dict` does not preserve insertion order
 
