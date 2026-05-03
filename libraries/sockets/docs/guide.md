@@ -2,7 +2,7 @@
 
 ## Overview
 
-`chumicro-sockets` provides a single TCP + TLS client API that works the same way on CircuitPython, MicroPython, and CPython.  The runtimes diverge in irreducible ways — CP has no `socket` module, only `socketpool(radio)`; MP has stdlib socket + mbedTLS-backed ssl on current builds; CPython has the full stdlib stack — so the library exposes one [`TCPClientSocket`](api.md#chumicro_sockets.protocol.TCPClientSocket) protocol and routes [`tcp_client_socket`](api.md#chumicro_sockets.tcp_client_socket) / [`tls_client_socket`](api.md#chumicro_sockets.tls_client_socket) to a runtime-appropriate adapter.
+`chumicro-sockets` provides a single TCP + TLS client API that works the same way on CircuitPython, MicroPython, and CPython.  The runtimes diverge in irreducible ways — CP has no `socket` module, only `socketpool(radio)`; MP has stdlib socket + mbedTLS-backed ssl on current builds; CPython has the full stdlib stack — so the library exposes one [`TCPClientSocket`](api.md#chumicro_sockets.TCPClientSocket) protocol and routes [`tcp_client_socket`](api.md#chumicro_sockets.tcp_client_socket) / [`tls_client_socket`](api.md#chumicro_sockets.tls_client_socket) to a runtime-appropriate adapter.
 
 Decision 0031 captures the architecture rationale (why not depend on `adafruit_connection_manager`, why TLS is a sibling factory rather than an `ssl=True|context` flag, why `recv()` is omitted in favor of `recv_into()`).
 
