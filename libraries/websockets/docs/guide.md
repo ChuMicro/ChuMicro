@@ -1,51 +1,197 @@
 # User Guide
 
-<!-- GENERATION INSTRUCTIONS — delete this block once the guide is written.
-
-     This guide should be generated from the library's source code, docstrings,
-     tests, and examples.  See the guide-generation skill for the
-     full prompt an AI agent can use.  Every section below is required unless
-     marked conditional.  Do not leave placeholder comments in the final guide. -->
-
 ## Overview
 
-<!-- Required. 2-4 sentences: what the library does, why it exists, the core
-     concept. Name the key classes/functions. -->
+`chumicro-websockets` is a non-blocking WebSocket (RFC 6455) client + server
+built on `chumicro-sockets` and `chumicro-timing`.  Two top-level classes —
+`WebSocketClient` for outbound `ws://` / `wss://` connections, and
+`WebSocketServer` for inbound — both runner-shaped per Decision 0014: each
+exposes `check(now_ms)` / `handle(now_ms)` so an LED can keep blinking through
+the opening handshake, frame I/O, control-frame interleave, and the close
+handshake.
 
-## Getting started
+Single library, two roles — see [Decision 0045](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0045-chumicro-websockets.md)
+for why ~80% of the wire code is shared and the split into separate
+publishable libraries was rejected.
 
-<!-- Required. The most common usage pattern as a copy-pasteable snippet.
-     Import from the public package, not internal modules. -->
+## Getting started — client
+
+```python
+from chumicro_websockets import WebSocketClient, WebSocketState
+from chumicro_websockets.sockets_factory import chumicro_sockets_factory
+from chumicro_timing import ticks_ms
+from chumicro_wifi import wifi
+
+client = WebSocketClient(
+    connection_factory=chumicro_sockets_factory(radio=wifi.adapter.radio),
+)
+client.on_text = lambda text: print(f"got: {text}")
+client.on_close = lambda code, reason: print(f"closed {code} {reason}")
+client.connect("ws://api.example.com/stream", timeout_ms=10000)
+
+while client.state != WebSocketState.CLOSED:
+    if client.check(ticks_ms()):
+        client.handle(ticks_ms())
+    if client.state == WebSocketState.OPEN and want_to_send_now:
+        client.send_text("hello")
+        want_to_send_now = False
+```
+
+## Getting started — server
+
+```python
+from chumicro_websockets import WebSocketServer
+from chumicro_sockets import tcp_listening_socket
+from chumicro_timing import ticks_ms
+from chumicro_wifi import wifi
+
+def on_connection(connection):
+    connection.on_text = lambda text: connection.send_text(f"echo: {text}")
+    connection.on_close = lambda code, reason: print(f"client gone: {code}")
+
+listener = tcp_listening_socket("0.0.0.0", 8765, radio=wifi.adapter.radio)
+server = WebSocketServer(
+    listener=listener,
+    on_connection=on_connection,
+    max_connections=2,
+)
+
+while True:
+    if server.check(ticks_ms()):
+        server.handle(ticks_ms())
+```
 
 ## Runner pattern
 
-<!-- Conditional. Include if the library has classes that implement
-     check(now_ms) -> bool. Show how to wire them into a Runner.
-     Omit if not applicable. -->
+Both `WebSocketClient` and `WebSocketServer` satisfy the
+[Decision 0014](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0014-tick-based-runner.md)
+runner contract — drop them into a `chumicro_runner.Runner` and they get
+ticked alongside your other tasks:
+
+```python
+from chumicro_runner import Runner
+
+runner = Runner()
+runner.add_task("websocket", websocket_client)   # has check + handle
+runner.add_task("led", led_blink)
+runner.add_task("sensor", sensor_loop)
+runner.run()
+```
+
+`check(now_ms) -> bool` reports whether work is pending; `handle(now_ms)`
+does at most one tick of progress, capped by `recv_budget_per_tick` and
+`send_budget_per_tick`.
+
+## Callbacks
+
+All callbacks default to no-op functions and fire from inside `handle()` —
+never from a thread or interrupt.
+
+### Client (`WebSocketClient`)
+
+| Callback | Fired when |
+|---|---|
+| `on_open()` | The opening handshake completes; `state` is now `OPEN`. |
+| `on_text(text: str)` | A complete text message has been received and UTF-8-validated. |
+| `on_binary(data: bytes)` | A complete binary message has been received. |
+| `on_ping(payload: bytes)` | The server sent a PING; the client has already auto-queued the PONG echo. |
+| `on_pong(payload: bytes)` | The server replied to one of our PINGs. |
+| `on_close(code: int, reason: str)` | The connection has reached `CLOSED` (graceful or abnormal). |
+| `on_oversized(reported_length: int)` | An inbound message exceeded `max_message_bytes`; `WhenOversized` policy decided what to do. |
+
+### Server (`Connection`)
+
+The user wires callbacks inside `on_connection(connection)`, which fires
+once per accepted connection at the moment its handshake completes:
+
+```python
+def on_connection(connection):
+    connection.on_text = ...
+    connection.on_binary = ...
+    connection.on_close = ...
+    connection.on_oversized = ...
+```
+
+Same shape as the client's callbacks; semantically identical.
 
 ## Memory notes
 
-<!-- Conditional. Include if the library manages buffers, queues, or
-     pre-allocated structures. Explain allocation strategy and tuning. -->
+The library is sized for a Decision 0015 minimum board (256 KB MCU RAM,
+4 MB flash):
 
-## Platform notes
+- `max_message_bytes` defaults to `16384` (16 KB).  Inbound messages
+  larger than this trigger `WhenOversized` policy.  Per-frame
+  `FrameParser.max_payload_bytes` defaults to the same value, so a
+  hostile peer with a 64-bit length header can't pin heap before
+  the parser rejects.
+- `max_tx_queue_size` defaults to `8` outbound messages.  Enqueueing
+  past the cap raises `WebSocketBackpressureError`.  System-driven
+  frames (auto-pong, close handshake) bypass the cap via 8 slots
+  of headroom.
+- `recv_budget_per_tick` / `send_budget_per_tick` default to `1024`
+  bytes each.  A 16 KB message takes ~16 ticks to drain end-to-end —
+  well within LED-blink latency.
+- The frame parser is one-shot per frame: parsed payload moves
+  out of the parser into the message reassembly buffer in the
+  client / connection, then the parser resets to header-reading.
+  No held references to old frame bytes.
 
-<!-- Required. Runtime-specific behavior or limitations. If the library works
-     identically on all three runtimes, say so in one line. -->
+## TLS (`wss://`)
+
+`wss://` client connections reuse `chumicro_sockets.tls_client_socket` +
+`chumicro_sockets.ssl_context_with_ca` per
+[Decision 0040 §"Live-board limitations"](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0040-chumicro-requests.md).
+The same constraints apply verbatim:
+
+- **Device RTC must be set before `wss://`.**  mbedTLS rejects every
+  cert as "validity starts in the future" if the RTC is at boot
+  default.  NTP-sync via `chumicro-ntp` first.
+- **CA pinning is required.**  Build the `ssl_context` with
+  `chumicro_sockets.ssl_context_with_ca(pem)` and pass it through
+  `chumicro_sockets_factory(radio=..., ssl_context=ctx)`.
+- **Pi Pico W needs flash deploy mode** for any `wss://` use —
+  RAM-mode leaves <50 KB free for the mbedTLS handshake.
+
+`wss://` **server** connections inherit
+`chumicro_sockets.tls_listening_socket`'s reality: works on
+MicroPython everywhere, works on CircuitPython on the ESP32 family
+(S2 / S3), refused up-front by `UnsupportedSSLConfigError` on
+CircuitPython on the Pi Pico W (rp2 port).  See
+`plans/learnings.md` for the full per-board status.
+
+## Per-tick knobs
+
+| Knob | Default | Why |
+|---|---|---|
+| `recv_budget_per_tick` | `1024` | LED-friendly inbound drain. |
+| `send_budget_per_tick` | `1024` | LED-friendly outbound drain. |
+| `max_message_bytes` | `16384` | 16 KB cap on assembled inbound messages. |
+| `max_tx_queue_size` | `8` | Bounded TX queue. |
+| `when_oversized` | `WhenOversized.DROP_WITH_EVENT` | Fire `on_oversized`, close with 1009. |
+| `ping_interval_ms` | `None` (disabled) | Optional client-side keep-alive ping cadence. |
+| `pong_timeout_ms` | `30000` | Close after 30 s without PONG to a PING. |
+| `handshake_timeout_ms` | `10000` | Total opening-handshake budget. |
+| `close_timeout_ms` | `5000` | Wait window for peer's CLOSE before forcing TCP teardown. |
 
 ## Examples
 
-<!-- Required. List all examples from the examples/ directory in a table:
-     | Example | What it shows |
-     Note which are simulated (CPython) vs hardware. -->
+| Example | What it shows |
+|---|---|
+| [`quickstart.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/websockets/examples/quickstart.py) | In-memory client + server loopback (CPython, MicroPython, CircuitPython). |
+| [`circuitpython_client.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/websockets/examples/circuitpython_client.py) | CircuitPython board connecting to a remote `ws://` echo server. |
+| [`circuitpython_server.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/websockets/examples/circuitpython_server.py) | CircuitPython board accepting inbound websocket connections. |
 
 ## What's new
 
-<!-- Add entries for user-visible changes when bumping VERSION.
-     One bullet per change. Internal refactors don't need entries.
-     At stable promotion, collapse/edit as needed. -->
+*0.3.0 — Slice 4: public `chumicro_websockets.testing` (FakeConnection,
+FakeListener, TickClock) + end-to-end client↔server integration suite.*
 
-*No changes yet — this section will be updated with each release.*
+*0.2.0 — Slice 2 + 3: `WebSocketClient` and `WebSocketServer` +
+`Connection`.  Fragmentation reassembly, oversize policy, auto-pong,
+optional auto-ping, full close handshake.*
+
+*0.1.0 — Slice 1: wire-format primitives (`FrameParser`, `encode_frame`,
+handshake encoders + parsers, close-payload codec, exception hierarchy).*
 
 ---
 
