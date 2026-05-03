@@ -22,7 +22,7 @@ my-workspace/
 │   │   └── app.py         # def run(): ...
 │   └── kitchen/
 │       └── ...
-├── libs/                  # flat shared modules — `from libs.foo import bar`
+├── shared/                  # flat shared modules — `from shared.foo import bar`
 ├── libraries/             # full chumicro-style library packages (scaffolded via `new --library`)
 │   └── buttons/
 │       ├── src/chumicro_buttons/
@@ -34,17 +34,17 @@ my-workspace/
 
 The two requirements are `workspace.yml` (`WorkspaceLayout` walks up from cwd to find it, git-style) and `projects/`.
 
-### `libs/` vs `libraries/` — when to use each
+### `shared/` vs `libraries/` — when to use each
 
 Both hold code your projects can `import`.  Pick by *weight*:
 
 | Want to ship… | Drop it under | Imports look like | Notes |
 |---|---|---|---|
-| A 50-line helper your projects share | `libs/foo.py` | `from libs.foo import bar` | No tests, no version, no scaffolding. |
+| A 50-line helper your projects share | `shared/foo.py` | `from shared.foo import bar` | No tests, no version, no scaffolding. |
 | A full chumicro-style library you might publish someday | `libraries/<name>/` (via `new --library`) | `import <name>` | Gets `src/`, `tests/`, `docs/`, `examples/`, `pyproject.toml`, `VERSION` — same shape the chumicro mono-repo uses. |
 | A third-party package | `packages/` (via `sync`) | `import <name>` | Gitignored mirror cache. |
 
-The import-graph search path resolves in this order: explicit `library_sources:` overrides → `libs/` → every `libraries/<name>/src/` (auto-discovered) → `packages/`. So a library scaffolded with `new --library buttons` is importable as `import buttons` from any project without further wiring.
+The import-graph search path resolves in this order: explicit `library_sources:` overrides → `shared/` → every `libraries/<name>/src/` (auto-discovered) → `packages/`. So a library scaffolded with `new --library buttons` is importable as `import buttons` from any project without further wiring.
 
 ## Day-zero: bring up a board
 
@@ -197,7 +197,7 @@ Ships the project's directory contents to the device root via [`project_director
 python run.py deploy back-porch --import-graph
 ```
 
-Routes through [`project_import_graph_source`](api.md): AST-parses the entrypoint, walks `import` / `from ... import` targets, resolves against the workspace's `libs/` + `packages/` + any `library_sources:` overrides in `workspace.yml`, and ships only the reachable modules.  Useful for projects that import shared libs.
+Routes through [`project_import_graph_source`](api.md): AST-parses the entrypoint, walks `import` / `from ... import` targets, resolves against the workspace's `shared/` + `packages/` + any `library_sources:` overrides in `workspace.yml`, and ships only the reachable modules.  Useful for projects that import shared libs.
 
 ### Single project, boot-shim layout
 

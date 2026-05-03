@@ -3,7 +3,8 @@
 Status: `accepted`
 Date: `2026-04-21`
 Revised: `2026-05-02` — vocabulary update from `thing` to `project`.  Directory renamed (was `things/`, now `projects/`), CLI flag was `--thing`, now `--project`.  The structural decisions below are unchanged; only the noun.
-Related: Decision 0026, Decision 0027, Decision 0028, Decision 0030, Decision 0031
+Revised: `2026-05-02` — workspace folder shape: §1's default-layout list and §7's resolution order were superseded by [Decision 0046](0046-shared-and-lazy-libraries.md).  `libs/` renamed to `shared/` (with a README explaining the folder); `libraries/` is no longer shipped pre-existing — it materialises only when `python run.py new --library <name>` runs.  `packages/` unchanged.  The §1 prose below is left as the original record; read it together with Decision 0046.
+Related: Decision 0026, Decision 0027, Decision 0028, Decision 0030, Decision 0031, Decision 0046
 
 ## Context
 

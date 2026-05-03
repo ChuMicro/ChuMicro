@@ -3,7 +3,7 @@
 ``chumicro_deploy.ImportGraphSource`` already performs the AST walk
 (parses an entrypoint, follows ``import`` / ``from ... import``
 targets, recurses).  This module assembles the *workspace-shaped*
-search-path list — project directory + ``libs/`` (user-authored
+search-path list — project directory + ``shared/`` (user-authored
 shared modules) + ``packages/`` (third-party, gitignored) +
 optional ``library_sources:`` overrides — and wraps the result
 with :class:`WithRuntimeConfig` so the merged runtime-config
@@ -16,7 +16,7 @@ Two pieces:
   0029 §7 makes these explicit overrides for "use the local
   checkout instead of the published copy"; the value is a search
   path that the import-graph walker tries before the workspace's
-  ``libs/`` / ``packages/`` defaults.
+  ``shared/`` / ``packages/`` defaults.
 * :func:`project_import_graph_source` — convenience that builds the
   search-path list, constructs an :class:`ImportGraphSource` for
   the project's entrypoint, and wraps with :class:`WithRuntimeConfig`.
@@ -115,7 +115,7 @@ def build_search_paths(
     Resolution order::
 
         1. library_sources_override values (Decision 0029 §7)
-        2. workspace/libs/         (user-authored shared modules — flat layout)
+        2. workspace/shared/         (user-authored shared modules — flat layout)
         3. workspace/libraries/<name>/src/  (full chumicro-style library
                                              packages, scaffolded via
                                              ``new --library``)
@@ -147,7 +147,7 @@ def build_search_paths(
         # with the same map produce the same search-path list.
         for _name, override_path in sorted(library_sources_override.items()):
             candidates.append(override_path)
-    candidates.append(workspace.libs_dir)
+    candidates.append(workspace.shared_dir)
     # Full chumicro-style library packages scaffolded via
     # ``new --library`` live at ``libraries/<name>/`` with the
     # importable module under ``src/``.  Add each ``src/`` so a
@@ -196,7 +196,7 @@ def project_import_graph_source(
     when the workspace has many shared libs.
 
     The project's entrypoint file is parsed; every reachable module
-    via ``libs/`` / ``packages/`` / ``library_sources:`` lands in
+    via ``shared/`` / ``packages/`` / ``library_sources:`` lands in
     the deploy.  Modules that don't resolve (``gc``, ``time``,
     ``board``, etc.) are silently skipped — they're assumed to be
     runtime built-ins the host can't ship anyway.

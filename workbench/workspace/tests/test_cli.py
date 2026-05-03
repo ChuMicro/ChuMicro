@@ -810,11 +810,11 @@ class TestDeploy:
     ) -> None:
         """Slice 6: --import-graph routes through project_import_graph_source."""
         root = _seed_workspace(tmp_path)
-        # Stage a libs/ module alongside the project's main.py.
-        libs = root / "libs"
-        libs.mkdir()
-        (libs / "imported_module.py").write_text("def helper(): pass\n")
-        (libs / "unimported_module.py").write_text("# never reached\n")
+        # Stage a shared/ module alongside the project's main.py.
+        shared = root / "shared"
+        shared.mkdir()
+        (shared / "imported_module.py").write_text("def helper(): pass\n")
+        (shared / "unimported_module.py").write_text("# never reached\n")
 
         project_dir = root / "projects" / "back-porch"
         project_dir.mkdir(parents=True)
