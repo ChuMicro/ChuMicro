@@ -3,7 +3,7 @@
 <img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png"
 align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-Unified wifi supervisor across CircuitPython, MicroPython, and CPython. Sole-supervisor model — no `CIRCUITPY_WIFI_*` keys, no firmware-level auto-reconnect. Ships per-runtime adapters under `_adapters/` (lazy-loaded per the Tier B pattern in [`plans/patterns.md`](../../plans/patterns.md)) and consumes its config section via `chumicro-config` (Decisions [0035](../../plans/decisions/0035-runtime-config-structure.md) / [0036](../../plans/decisions/0036-chumicro-config-library.md)).
+**Wifi that auto-reconnects without freezing your loop.**  One service across CircuitPython, MicroPython, and CPython — register it with [`chumicro-runner`](../runner/) and your LED keeps blinking through every connect, drop, and reconnect.  This library owns the radio (no `CIRCUITPY_WIFI_*` settings, no firmware-level auto-reconnect competing with you), exposes a state machine you can introspect or hook into, and reads its config section via [`chumicro-config`](../config/).
 
 <br clear="left">
 

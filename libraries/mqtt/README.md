@@ -3,7 +3,7 @@
 <img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png"
 align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-Non-blocking MQTT 3.1.1 client (QoS 0 + 1) for CircuitPython, MicroPython, and CPython.  Built on `chumicro-sockets` (TCP + TLS) and `chumicro-timing` (ticks).  Runner-shaped: `check(now_ms) -> bool` + `handle(now_ms)` from your tick loop — no threads, no async.
+**Non-blocking MQTT 3.1.1 client (QoS 0 + 1)** for CircuitPython, MicroPython, and CPython.  Runner-shaped: `check(now_ms) -> bool` + `handle(now_ms)` from your tick loop — your LED keeps blinking through CONNECT, SUBSCRIBE, PUBLISH, and PUBACK round-trips.  Built on [`chumicro-sockets`](../sockets/) (TCP + TLS) and [`chumicro-timing`](../timing/) (ticks).
 
 <br clear="left">
 
