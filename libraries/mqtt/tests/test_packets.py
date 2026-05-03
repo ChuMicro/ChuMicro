@@ -1,18 +1,17 @@
 """Tests for the wire-format primitives."""
 
-import pytest
 from chumicro_mqtt._wire import (
     decode_varlen,
     encode_string,
     encode_varlen,
     topic_matches,
 )
+from chumicro_test_harness.assertions import raises
 
 
 class TestEncodeVarlen:
-    @pytest.mark.parametrize(
-        ("value", "expected"),
-        [
+    def test_canonical_encodings(self) -> None:
+        cases = [
             (0, b"\x00"),
             (1, b"\x01"),
             (127, b"\x7f"),
@@ -22,17 +21,19 @@ class TestEncodeVarlen:
             (2_097_151, b"\xff\xff\x7f"),
             (2_097_152, b"\x80\x80\x80\x01"),
             (268_435_455, b"\xff\xff\xff\x7f"),
-        ],
-    )
-    def test_canonical_encodings(self, value: int, expected: bytes) -> None:
-        assert bytes(encode_varlen(value)) == expected
+        ]
+        for value, expected in cases:
+            actual = bytes(encode_varlen(value))
+            assert actual == expected, (
+                f"encode_varlen({value}) = {actual!r}, expected {expected!r}"
+            )
 
     def test_negative_raises(self) -> None:
-        with pytest.raises(ValueError):
+        with raises(ValueError):
             encode_varlen(-1)
 
     def test_above_max_raises(self) -> None:
-        with pytest.raises(ValueError):
+        with raises(ValueError):
             encode_varlen(268_435_456)
 
     def test_round_trips_through_decode(self) -> None:
@@ -80,9 +81,8 @@ class TestEncodeString:
 
 
 class TestTopicMatches:
-    @pytest.mark.parametrize(
-        ("topic", "pattern"),
-        [
+    def test_matches(self) -> None:
+        cases = [
             ("a/b/c", "a/b/c"),
             ("a/b/c", "a/+/c"),
             ("a/b/c", "+/+/+"),
@@ -92,23 +92,24 @@ class TestTopicMatches:
             ("a/b", "a/+"),
             ("sensors/temperature/back-porch", "sensors/+/back-porch"),
             ("sensors/temperature/back-porch", "sensors/temperature/#"),
-        ],
-    )
-    def test_matches(self, topic: str, pattern: str) -> None:
-        assert topic_matches(topic, pattern)
+        ]
+        for topic, pattern in cases:
+            assert topic_matches(topic, pattern), (
+                f"expected match: topic={topic!r} pattern={pattern!r}"
+            )
 
-    @pytest.mark.parametrize(
-        ("topic", "pattern"),
-        [
+    def test_does_not_match(self) -> None:
+        cases = [
             ("a/b", "a/b/c"),
             ("a/b/c", "a/b"),  # extra topic level after pattern ends
             ("a/b/c/d", "a/+/c"),  # +'s only one level
             ("a/b/c", "x/+/+"),
             ("a", "+/+"),  # topic too short for pattern
-        ],
-    )
-    def test_does_not_match(self, topic: str, pattern: str) -> None:
-        assert not topic_matches(topic, pattern)
+        ]
+        for topic, pattern in cases:
+            assert not topic_matches(topic, pattern), (
+                f"expected no match: topic={topic!r} pattern={pattern!r}"
+            )
 
     def test_hash_must_be_last(self) -> None:
         # The original client returns False here per spec (#'s only
