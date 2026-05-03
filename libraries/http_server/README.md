@@ -12,28 +12,22 @@ code.
 
 <br clear="left">
 
-> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family — small, focused Python libraries for microcontrollers and laptops. [See all libraries.](https://github.com/ChuMicro/ChuMicro#whats-in-the-box)
+> Part of the [ChuMicro](https://github.com/ChuMicro/ChuMicro) family — small, focused Python libraries for microcontrollers and laptops. [Browse all libraries.](https://github.com/ChuMicro/ChuMicro/tree/main/libraries)
 
-## Installation
-
-### CircuitPython ([circup](https://github.com/adafruit/circup))
+## Install
 
 ```bash
-circup bundle-add ChuMicro/ChuMicro-Bundle
+# CircuitPython (after `circup bundle-add ChuMicro/ChuMicro-Bundle`)
 circup install chumicro-http-server
-```
 
-### MicroPython ([mip](https://docs.micropython.org/en/latest/reference/packages.html))
-
-```bash
+# MicroPython
 mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_http_server
-```
 
-### CPython (pip)
-
-```bash
+# CPython
 pip install chumicro-http-server
 ```
+
+For bundle setup, pre-compiled `.mpy` bundles, the experimental channel, and details on PyPI naming, see the [chumicro INSTALL guide](https://github.com/ChuMicro/ChuMicro/blob/main/INSTALL.md).
 
 ## Quick example
 
