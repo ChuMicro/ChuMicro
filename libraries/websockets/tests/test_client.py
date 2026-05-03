@@ -39,100 +39,19 @@ from chumicro_websockets import (
     encode_close_payload,
     encode_frame,
 )
+from chumicro_websockets.testing import FakeConnection, TickClock
 
 # ---------------------------------------------------------------------------
-# In-memory test fakes
+# Test helpers
 # ---------------------------------------------------------------------------
 
 
-class FakeSocket:
-    """Bidirectional in-memory pipe modelling :class:`TCPClientSocket`.
-
-    ``feed_inbound(bytes)``: peer-side push (becomes available to ``recv_into``).
-    ``read_outbound() -> bytes``: drain whatever the client has sent.
-    ``close_inbound()``: signal peer-EOF (``recv_into`` returns 0).
-    ``raise_on_send`` / ``raise_on_recv``: inject socket errors.
-    """
-
-    def __init__(self):
-        self.outbound = bytearray()
-        self.inbound = bytearray()
-        self.closed = False
-        self.eof = False
-        self.raise_on_send = None
-        self.raise_on_recv = None
-        self.send_chunk_cap = None  # short-write simulation: cap each send
-
-    def feed_inbound(self, data: bytes) -> None:
-        self.inbound.extend(data)
-
-    def read_outbound(self) -> bytes:
-        data = bytes(self.outbound)
-        self.outbound = bytearray()
-        return data
-
-    def peek_outbound(self) -> bytes:
-        return bytes(self.outbound)
-
-    def close_inbound(self) -> None:
-        self.eof = True
-
-    # --- TCPClientSocket protocol --------------------------------------
-
-    def setblocking(self, flag: bool) -> None:  # noqa: ARG002 — protocol
-        pass
-
-    def send(self, data: bytes) -> int:
-        if self.raise_on_send is not None:
-            error_to_raise = self.raise_on_send
-            self.raise_on_send = None
-            raise error_to_raise
-        cap = self.send_chunk_cap
-        if cap is None or len(data) <= cap:
-            self.outbound.extend(data)
-            return len(data)
-        self.outbound.extend(data[:cap])
-        return cap
-
-    def recv_into(self, buffer, nbytes: int = 0) -> int:
-        if self.raise_on_recv is not None:
-            error_to_raise = self.raise_on_recv
-            self.raise_on_recv = None
-            raise error_to_raise
-        cap = nbytes if nbytes else len(buffer)
-        if not self.inbound:
-            if self.eof:
-                return 0
-            raise BlockingIOError(11, "no data ready")
-        take = min(cap, len(self.inbound))
-        buffer[:take] = self.inbound[:take]
-        del self.inbound[:take]
-        return take
-
-    def close(self) -> None:
-        self.closed = True
+# Backwards-compatible alias kept so the in-test name in this module reads
+# naturally — the public testing fake is :class:`FakeConnection`.
+FakeSocket = FakeConnection
 
 
-class TickClock:
-    """Manually-advanced fake for the chumicro-timing tick API."""
-
-    def __init__(self, start: int = 0):
-        self._now = start
-
-    def now(self) -> int:
-        return self._now
-
-    def advance(self, milliseconds: int) -> None:
-        self._now += milliseconds
-
-    def add(self, ticks: int, milliseconds: int) -> int:
-        return ticks + milliseconds
-
-    def diff(self, deadline: int, now: int) -> int:
-        return deadline - now
-
-
-def _make_factory(socket: FakeSocket, *, expected_use_tls: bool | None = None):
+def _make_factory(socket: FakeConnection, *, expected_use_tls: bool | None = None):
     """Connection-factory closure that records its args + returns *socket*."""
     record = {"calls": []}
 
