@@ -11,7 +11,7 @@ In priority order:
 1. **Saving space.**  Less source = less flash, less parse-time RAM, less bytecode in `.mpy`.
 2. **Performance.**  Fewer per-tick allocations, less GC pressure, fewer method-call frames on the hot path.
 3. **Minimizing duplications.**  ~600 LOC duplicated client.py↔server.py; ~150 LOC duplicated between the two handshake parsers.
-4. **Fewer abstractions.**  Six namespace-only classes; speculative public API; a `CaseInsensitiveDict` whose `__eq__` / `__repr__` / `add` / `__iter__` / `__len__` aren't called.
+4. **Fewer abstractions.**  Six namespace-only classes; speculative public API; a `CaseInsensitiveDict` whose `__eq__` / `__repr__` / `__iter__` / `__len__` aren't called by library code.
 5. **Method length.**  A handful of methods are long because the abstraction was wrong, not because the work is irreducible.
 
 ## Style for the cleanup itself
@@ -80,12 +80,12 @@ Target: ~25 names.
 ### Slice D — Slim `CaseInsensitiveDict` (space, dedup with chumicro-requests)
 
 **Problem.**  Inlined copy from chumicro-requests' `_wire.py`.  Ships:
-* `__getitem__`, `__setitem__`, `__contains__`, `get`, `items`, `__iter__`, `__len__`, `__eq__`, `__repr__`, `add`.
+* `__getitem__`, `__setitem__`, `__contains__`, `get`, `items`, `__iter__`, `__len__`, `__eq__`, `__repr__`.
 
-Used by chumicro-websockets:
+Used by chumicro-websockets library code:
 * `__getitem__`, `__setitem__`, `__contains__`, `get`, `items` only.
 
-The other five methods (`__iter__`, `__len__`, `__eq__`, `__repr__`, `add`) exist because chumicro-requests' code uses them.  Cargo-culted into our copy.
+The other four methods (`__iter__`, `__len__`, `__eq__`, `__repr__`) exist because chumicro-requests' code uses them.  Cargo-culted into our copy.  (Note: chumicro-requests' copy *does* additionally ship an `add` method for repeated-name folding; ours never had one — so no `add` work.)
 
 **Approach.**  Drop the unused methods from our copy.  Keep the inlined-copy structural decision (Decision 0040 §Consequences "extract shared HTTP wire primitives" still pending the third user).  ~30 LOC.
 

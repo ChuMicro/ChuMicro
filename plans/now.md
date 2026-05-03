@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **chumicro-websockets — Decision 0045 v0.5.1 shipped + four-board live-verified.**  New library `libraries/websockets/` covering both `WebSocketClient` and `WebSocketServer` per Decision 0045 (RFC 6455, runner-shaped per Decision 0014, hard-dep + factory-helper-in-own-submodule per Decision 0042 Class 1).  Six slices: wire layer → client → server → testing fakes + integration → sockets_factory + docs/examples → live-board functional.  267 host-side tests at 95% coverage.  **Four-board live matrix verified PASS:** Lolin S2 CP+MP run the full loopback (handshake + 3 echoes + close) end-to-end; Pi Pico W CP+MP exit cleanly via the rp2 self-loopback platform guard.  Live verification turned up three real cross-runtime bugs the host harness couldn't catch: CP's `hashlib.sha1` is feature-gated off (added pure-Python SHA-1 fallback, FIPS 180-4 verified), CP rejects `del bytearray[start:stop]` (switched to slice-rebind in handshake parsers + FakeConnection.recv_into), and Pi Pico W rp2 can't single-device-loopback (test now skips cleanly on rp2 with a clear printed reason — independent of websockets, the rp2 lwIP self-loopback limit also affects chumicro-http-server).  Pi Pico W also needs `--deploy-mode flash` (multi-stack RAM-too-heavy per the existing learnings.md guidance).
-- **Last shipped:** `b116f06` (slice 6 + cross-runtime fixes), `a2bd336` (slice 5 docs+sockets_factory), `a1a810b` (slice 4 testing+integration), `065dc75` (slice 3 server), `613cc99` (slice 2 client), `c585d5c` (slice 1 wire), `fbe483f` (Decision 0045 ADR).
-- **In flight:** idle — chumicro-websockets v0.5.1 is feature-complete per Decision 0045 v1 scope and four-board live-verified.
+- **Phase:** **chumicro-websockets — leanness pass underway** per `plans/workstreams/websockets-cleanup.md`.  v0.6.x ships 3,628 LOC deployed (vs chumicro-mqtt 1,842) — too fat for embedded targets.  Seven independent slices ranked smallest-blast-radius first: A (FrameParser per-byte→per-chunk), C (slim `__init__`), D (slim `CaseInsensitiveDict`), B (namespace classes→constants), F (compact docstrings + dead defensive code), E (merge handshake parsers), G (shared `_session.py`).  Each slice ships its own version bump + green preflight + commit.
+- **Last shipped:** Slice A FrameParser per-chunk refactor — drops 1,024 method calls per recv-budget tick on the hot path.  v0.7.0.  All 268 host tests pass at 95% coverage; preflight green.
+- **In flight:** Slice C — slim `__init__.py` exports from ~50 names to ~25 (drop spec-trivia constants + handshake parsers + frame parser internals; tests reach via `chumicro_websockets._wire`).
 - **Blocked on:** —
-- **Last touched:** plans/decisions/0045-chumicro-websockets.md, libraries/websockets/ (whole tree), IDE configs (.idea/chumicro.iml, .vscode/settings.json, pyrightconfig.json).
+- **Last touched:** libraries/websockets/src/chumicro_websockets/_wire.py, libraries/websockets/VERSION, plans/workstreams/websockets-cleanup.md, plans/now.md.
 
 ---
 
