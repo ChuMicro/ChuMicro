@@ -10,10 +10,14 @@ These don't replicate device-level fragmentation (CP / MP allocators
 differ from CPython); :mod:`test_memory_fragmentation` covers that
 on the MicroPython / CircuitPython unix-port runners.
 
-Mirrors :mod:`chumicro_websockets.tests.test_memory_pressure` and
-:mod:`chumicro_mqtt.tests.test_memory_pressure` — the established
-chumicro pattern: no library code calls ``gc.collect()``; instead we
-prove convergence in tests.
+Why the library itself never calls ``gc.collect()``: fragmentation is
+prevented by design (parser tears down per-request, no module-level
+or per-instance accumulation, bounded body cap) and caught by tests
+— leaks here, heap shape in :mod:`test_memory_fragmentation`.  A
+library calling ``gc.collect()`` invisibly inside ``handle()`` would
+impose its collect cadence on every other task in the system; the
+runner contract (``handle`` returns quickly) keeps that decision in
+the user's hands.
 """
 
 import gc

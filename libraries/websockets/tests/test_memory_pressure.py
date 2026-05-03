@@ -16,9 +16,16 @@ Pair with the live-board functional tests in
 ``libraries/websockets/functional_tests/`` for end-to-end
 heap-fragmentation measurement against real hardware.
 
-Mirrors :mod:`chumicro_mqtt.tests.test_memory_pressure` (the
-established pattern across the chumicro family — no library code
-calls ``gc.collect()``; instead we prove convergence in tests).
+Why the library itself never calls ``gc.collect()``: fragmentation
+is prevented by design (pre-allocated recv + frame-parser buffers,
+bounded TX queue, no per-message data-structure growth in steady
+state) and caught by tests — leaks here, fragmentation in
+:mod:`chumicro_websockets.tests.test_memory_fragmentation` (when
+present) and on-device functional tests.  A library calling
+``gc.collect()`` invisibly inside ``handle()`` would impose its
+collect cadence on every other task in the system; the runner
+contract (``handle`` returns quickly) keeps that decision in the
+user's hands.
 """
 
 import gc
