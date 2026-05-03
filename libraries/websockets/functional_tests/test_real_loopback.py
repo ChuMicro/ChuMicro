@@ -20,6 +20,14 @@ in :mod:`chumicro_http_server`'s test_real_serve.py and applies the
 same per-board limits.  Cover ``wss://`` server in a follow-up
 slice once the four-board matrix has been re-verified for TLS-server
 on this stack.
+
+**Deploy mode:** Pi Pico W requires ``--deploy-mode flash`` (the
+multi-stack-needs-flash rule from ``plans/learnings.md``).  RAM-mode
+keeps the full library bootstrap on the heap — wifi + sockets +
+websockets server + websockets client together exceed the ~150 KB
+free heap on a Pi Pico W and the bootstrap fails with
+``MemoryError`` before any test code runs.  Lolin S2 (ESP32-S2)
+has ~2 MB free heap and runs fine in either mode.
 """
 
 import sys
