@@ -70,7 +70,10 @@ class MpNvsBackend(Backend):
             length = self._nvs.get_blob(self.PAYLOAD_KEY, self._read_buffer)
         except OSError:
             return b""
-        return bytes(self._read_buffer[:length])
+        # ``bytes(memoryview(buf)[:n])`` is one copy; the prior
+        # ``bytes(buf[:n])`` was two (slice creates a new bytearray,
+        # bytes() copies that).
+        return bytes(memoryview(self._read_buffer)[:length])
 
     def save(self, payload: bytes) -> None:
         """Write ``payload`` and commit.

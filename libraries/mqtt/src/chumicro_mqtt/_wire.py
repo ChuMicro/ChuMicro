@@ -417,13 +417,21 @@ class PacketDecoder:
         max_message_size=DEFAULT_MAX_MESSAGE_SIZE,
     ):
         self._buffer = bytearray(rx_buffer_size)
+        # Cached memoryview into ``_buffer`` — the steady-state buffer
+        # is allocated once and never resized, so the view is stable
+        # for the parser's lifetime.  Cached to avoid constructing a
+        # fresh memoryview on every ``fill_buffer``/``read_next`` call
+        # (per-packet hot path on a busy MQTT subscriber).
+        self._buffer_view = memoryview(self._buffer)
         self._buffer_size = rx_buffer_size
         self._buffer_length = 0
         self._max_message_size = max_message_size
         # Degraded path: one-shot buffer for oversize messages whose
         # bodies don't fit in the steady-state buffer.  Drained to
-        # recover sync, then released.
+        # recover sync, then released.  ``_degraded_view`` mirrors the
+        # cached-view pattern when the path activates.
         self._degraded_buffer = None
+        self._degraded_view = None
         self._degraded_total = 0
         self._degraded_consumed = 0
         self._degraded_topic = None
@@ -433,8 +441,8 @@ class PacketDecoder:
     def fill_buffer(self):
         """Return the bytearray slice the next ``recv_into`` should write into."""
         if self._degraded_buffer is not None:
-            return memoryview(self._degraded_buffer)[self._degraded_consumed:]
-        return memoryview(self._buffer)[self._buffer_length:]
+            return self._degraded_view[self._degraded_consumed:]
+        return self._buffer_view[self._buffer_length:]
 
     def fill_capacity(self):
         """Bytes the parser is willing to receive on the next ``recv_into``."""
@@ -468,7 +476,11 @@ class PacketDecoder:
         if self._buffer_length < 2:
             return None
 
-        view = memoryview(self._buffer)
+        # Use the cached view rather than constructing a fresh one
+        # per call.  ``_buffer`` is allocated once at construction
+        # and never resized, so the view is stable for the parser's
+        # lifetime.
+        view = self._buffer_view
         fixed_byte = view[0]
         message_length, varlen_consumed = decode_varlen(view, 1)
         if varlen_consumed == 0:
@@ -515,11 +527,15 @@ class PacketDecoder:
         # qos bits are bits 1-2 of the fixed-header byte; retain is bit 0.
         qos = (fixed_byte >> 1) & 0x03
         retain = bool(fixed_byte & 0x01)
-        topic_length = struct.unpack(">H", bytes(view[body_start:body_start + 2]))[0]
+        # ``struct.unpack`` accepts memoryview directly — no ``bytes()``
+        # wrap needed, which would otherwise copy 2 bytes per integer
+        # field (4-6 wasted allocs per PUBLISH).
+        topic_length = struct.unpack(">H", view[body_start:body_start + 2])[0]
         topic_start = body_start + 2
         topic_end = topic_start + topic_length
         if topic_end > body_end:
             raise MQTTProtocolError("PUBLISH topic length exceeds remaining bytes")
+        # ``bytes(view[a:b]).decode()`` stays — memoryview lacks decode().
         topic = bytes(view[topic_start:topic_end]).decode("utf-8")
         cursor = topic_end
         packet_id = None
@@ -528,11 +544,10 @@ class PacketDecoder:
                 raise MQTTProtocolError(
                     "QoS > 0 PUBLISH missing 2-byte packet identifier",
                 )
-            packet_id = struct.unpack(
-                ">H", bytes(view[cursor:cursor + 2]),
-            )[0]
+            packet_id = struct.unpack(">H", view[cursor:cursor + 2])[0]
             cursor += 2
-        # Payload is everything left in the body.
+        # Payload is returned to the caller as ``bytes`` (immutable +
+        # decoupled from the parser's reusable buffer); one copy.
         payload = bytes(view[cursor:body_end])
         return ParsedPublish(
             topic=topic,
@@ -554,18 +569,14 @@ class PacketDecoder:
             raise MQTTProtocolError(
                 f"packet type 0x{packet_type:02X} body must be 2 bytes",
             )
-        packet_id = struct.unpack(
-            ">H", bytes(view[body_start:body_start + 2]),
-        )[0]
+        packet_id = struct.unpack(">H", view[body_start:body_start + 2])[0]
         return ParsedAck(packet_type=packet_type, packet_id=packet_id)
 
     def _parse_suback(self, view, body_start, body_end):
         body_length = body_end - body_start
         if body_length < 3:
             raise MQTTProtocolError("SUBACK body must be at least 3 bytes")
-        packet_id = struct.unpack(
-            ">H", bytes(view[body_start:body_start + 2]),
-        )[0]
+        packet_id = struct.unpack(">H", view[body_start:body_start + 2])[0]
         granted_qos = list(view[body_start + 2:body_end])
         return ParsedAck(
             packet_type=PACKET_SUBACK,
@@ -590,10 +601,11 @@ class PacketDecoder:
         body_start = header_length
         if self._buffer_length < body_start + 2:
             return None  # Need a few more bytes before we can parse the topic.
-        topic_length = struct.unpack(
-            ">H",
-            bytes(memoryview(self._buffer)[body_start:body_start + 2]),
-        )[0]
+        # Use the cached ``_buffer_view`` (zero-copy slice) and skip the
+        # ``bytes()`` wrap on struct.unpack args — memoryview is a
+        # bytes-like object that struct accepts directly.
+        view = self._buffer_view
+        topic_length = struct.unpack(">H", view[body_start:body_start + 2])[0]
         topic_start = body_start + 2
         topic_end = topic_start + topic_length
         qos = (fixed_byte >> 1) & 0x03
@@ -601,13 +613,10 @@ class PacketDecoder:
         prelude_total = topic_end + packet_id_bytes
         if self._buffer_length < prelude_total:
             return None  # Need a few more bytes before we can parse the prelude.
-        topic = bytes(memoryview(self._buffer)[topic_start:topic_end]).decode("utf-8")
+        topic = bytes(view[topic_start:topic_end]).decode("utf-8")
         packet_id = None
         if qos > 0:
-            packet_id = struct.unpack(
-                ">H",
-                bytes(memoryview(self._buffer)[topic_end:topic_end + 2]),
-            )[0]
+            packet_id = struct.unpack(">H", view[topic_end:topic_end + 2])[0]
         payload_remaining = (
             (header_length + message_length) - prelude_total
         )
@@ -624,8 +633,10 @@ class PacketDecoder:
                 qos=qos,
                 packet_id=packet_id,
             )
-        # Normal path: drain into a degraded buffer.
+        # Normal path: drain into a degraded buffer.  Cache its view
+        # so ``fill_buffer`` doesn't construct a fresh one per recv.
         self._degraded_buffer = bytearray(payload_to_drain)
+        self._degraded_view = memoryview(self._degraded_buffer)
         self._degraded_total = payload_to_drain
         self._degraded_consumed = 0
         self._degraded_topic = topic
@@ -645,6 +656,7 @@ class PacketDecoder:
             packet_id=self._degraded_packet_id,
         )
         self._degraded_buffer = None
+        self._degraded_view = None
         self._degraded_total = 0
         self._degraded_consumed = 0
         self._degraded_topic = None

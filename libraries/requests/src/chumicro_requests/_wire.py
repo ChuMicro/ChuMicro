@@ -87,6 +87,12 @@ DEFAULT_MAX_BODY_BYTES = const(65536)
 #: LED-friendly.
 DEFAULT_RECV_BUDGET_PER_TICK = const(1024)
 
+#: Default initial capacity for chunked-decode body buffer.  Covers
+#: the common short-body case in one alloc; chunked transfers larger
+#: than this still grow via slice-assign-at-end (extends like the
+#: original ``extend`` shape).
+DEFAULT_CHUNKED_BODY_CAPACITY = const(256)
+
 #: Default per-request timeout in ms — Decision 0040 §3.
 DEFAULT_TIMEOUT_MS = const(10000)
 
@@ -515,7 +521,14 @@ class ResponseParser:
         self._reason = ""
         self._http_version = ""
         self._headers = CaseInsensitiveDict()
+        # ``_body`` is the underlying buffer; ``_body_view`` is the
+        # cached memoryview the property + read-side ops slice through
+        # (constructing memoryview each access would itself allocate).
+        # Both are rebound when ``_body`` is reallocated (Content-Length
+        # known / chunked initial / chunked grow-past-default).
         self._body = bytearray()
+        self._body_view = memoryview(self._body)
+        self._body_write_offset = 0
         # -1 = unknown (read until close).  Set to a non-negative
         # value when Content-Length parses successfully.
         self._body_remaining = -1
@@ -596,8 +609,14 @@ class ResponseParser:
 
     @property
     def body(self):
-        """Body bytes received so far (final once :attr:`state` is ``DONE``)."""
-        return bytes(self._body)
+        """Body bytes received so far (final once :attr:`state` is ``DONE``).
+
+        Reads through the cached ``_body_view`` (zero-copy memoryview
+        slice) and snapshots one ``bytes`` copy for the caller —
+        ``Response.text`` calls ``.decode()`` on the result, which
+        memoryview lacks.
+        """
+        return bytes(self._body_view[:self._body_write_offset])
 
     @property
     def error(self):
@@ -808,12 +827,19 @@ class ResponseParser:
                 self._state = ParseState.DONE
                 return
             self._state = ParseState.BODY
+            # Pre-allocate body to exact Content-Length so the absorb
+            # path writes via slice-assign (one tier-N alloc) instead
+            # of growing via extend.  Refresh the cached view because
+            # ``_body`` rebound to a fresh bytearray.
+            self._body = bytearray(content_length)
+            self._body_view = memoryview(self._body)
+            self._body_write_offset = 0
             # Any bytes left in the buffer after the header CRLF are
             # the start of the body — flush into the body absorber.
             if self._live_len() > 0:
-                tail = bytes(self._live_slice(0))
+                tail_view = self._live_slice(0)
                 self._reset_buffer()
-                self._absorb_body_bytes(tail)
+                self._absorb_body_bytes(tail_view)
             return
         # Length-unknown — read until peer closes.
         self._body_remaining = -1
@@ -868,7 +894,7 @@ class ResponseParser:
             return True
         # Enforce the max-body cap as the chunk sizes accumulate so a
         # malicious server can't trickle in 64K + 1B before we notice.
-        if len(self._body) + chunk_size > self._max_body_bytes:
+        if self._body_write_offset + chunk_size > self._max_body_bytes:
             self._fail(HttpOversizedError(
                 f"chunked body would exceed cap {self._max_body_bytes}",
             ))
@@ -876,6 +902,16 @@ class ResponseParser:
         if chunk_size == 0:
             self._state = ParseState.CHUNK_TRAILER
             return True
+        # Pre-allocate the body to a sensible initial capacity on the
+        # first chunk — covers most chunked transfers in one alloc.
+        # Subsequent chunks slice-assign-at-end (extends if past
+        # capacity); we refresh ``_body_view`` then because the realloc
+        # would invalidate the cached view.  Single-alloc replaces
+        # log2(N) intermediate-tier reallocs for the common case.
+        if not self._body:
+            initial_capacity = max(chunk_size, DEFAULT_CHUNKED_BODY_CAPACITY)
+            self._body = bytearray(initial_capacity)
+            self._body_view = memoryview(self._body)
         self._chunk_remaining = chunk_size
         self._state = ParseState.CHUNK_DATA
         return True
@@ -887,18 +923,34 @@ class ResponseParser:
         terminating CRLF parsed) so :meth:`_advance` keeps walking.
         Returns False when there's not enough buffered to make
         progress — caller waits for the next :meth:`feed`.
+
+        Body writes use slice-assign at ``_body_write_offset``: in-place
+        when the offset+take fits inside the pre-allocated buffer
+        (single-chunk hot path), implicit-resize when it doesn't (multi-
+        chunk grow path — ``bytearray[N:N] = data`` extends).
         """
         if self._chunk_remaining > 0:
             available = min(self._chunk_remaining, self._live_len())
             if available == 0:
                 return False
-            # ``bytearray.extend`` accepts a memoryview — zero-copy on
-            # the source side; ``_body`` still grows in place.
-            self._body.extend(
-                memoryview(self._buffer)[
-                    self._read_offset:self._read_offset + available
-                ],
-            )
+            write_offset = self._body_write_offset
+            end_offset = write_offset + available
+            source = memoryview(self._buffer)[
+                self._read_offset:self._read_offset + available
+            ]
+            if end_offset > len(self._body_view):
+                # Past the steady-state capacity — slice-assign-at-end
+                # extends the bytearray.  CPython refuses the resize
+                # while an exported memoryview (``_body_view``) holds
+                # a reference; drop the cached view first, write, then
+                # refresh.  MP doesn't track exports, so the drop is a
+                # no-op there.
+                self._body_view = None
+                self._body[write_offset:end_offset] = source
+                self._body_view = memoryview(self._body)
+            else:
+                self._body[write_offset:end_offset] = source
+            self._body_write_offset = end_offset
             self._consume(available)
             self._chunk_remaining -= available
             if self._chunk_remaining > 0:
@@ -937,25 +989,43 @@ class ResponseParser:
         return True
 
     def _absorb_body_bytes(self, chunk):
-        """Append body bytes; honor the length cap and oversize policy."""
+        """Append body bytes; honor the length cap and oversize policy.
+
+        Two paths:
+
+        * **Length-known** (``_body_remaining >= 0``): body was
+          pre-allocated to ``Content-Length`` in :meth:`_enter_body_state`;
+          we write into it via slice-assign at ``_body_write_offset``.
+          One alloc, in-place writes.
+
+        * **Length-unknown** (``_body_remaining == -1``): we don't know
+          the final size, so the body grows via ``extend``.  Sync
+          ``_body_write_offset`` to ``len(self._body)`` so the
+          :attr:`body` property reads the right prefix.
+        """
         if self._body_remaining == 0:
             return  # Already complete; ignore extra bytes (server bug).
         if self._body_remaining > 0:
             take = min(self._body_remaining, len(chunk))
-            chunk = chunk[:take]
+            write_offset = self._body_write_offset
+            self._body[write_offset:write_offset + take] = chunk[:take]
+            self._body_write_offset = write_offset + take
             self._body_remaining -= take
+            if self._body_remaining == 0:
+                self._state = ParseState.DONE
+            return
         # Length-unknown: enforce the max-body cap as we go.
-        if (
-            self._body_remaining < 0
-            and len(self._body) + len(chunk) > self._max_body_bytes
-        ):
+        if len(self._body) + len(chunk) > self._max_body_bytes:
             self._fail(HttpOversizedError(
                 f"response body exceeded cap {self._max_body_bytes}",
             ))
             return
+        # Release the cached view before extending — CPython refuses
+        # to resize a bytearray with an exported buffer.  MP-noop.
+        self._body_view = None
         self._body.extend(chunk)
-        if self._body_remaining == 0:
-            self._state = ParseState.DONE
+        self._body_view = memoryview(self._body)
+        self._body_write_offset = len(self._body)
 
     def _fail(self, error):
         """Latch *error* and transition to ERROR."""

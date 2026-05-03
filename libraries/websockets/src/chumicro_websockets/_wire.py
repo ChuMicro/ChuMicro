@@ -131,6 +131,13 @@ DEFAULT_MAX_MESSAGE_BYTES = const(16384)
 #: Default bound on the outbound TX queue — Decision 0045 §6.
 DEFAULT_MAX_TX_QUEUE_SIZE = const(8)
 
+#: Default steady-state payload buffer size for :class:`FrameParser`.
+#: Sized to cover the common short text/binary frame without per-frame
+#: allocation; frames bigger than this fall back to a one-shot
+#: ``bytearray(payload_length)``.  Same trade-off as
+#: :data:`chumicro_mqtt._wire.DEFAULT_RX_BUFFER_SIZE`.
+DEFAULT_PAYLOAD_BUFFER_SIZE = const(256)
+
 #: Default opening-handshake budget in ms — Decision 0045 §6.
 DEFAULT_HANDSHAKE_TIMEOUT_MS = const(10000)
 
@@ -820,7 +827,12 @@ class FrameParser:
     * :attr:`payload`    — ``bytes`` of unmasked payload
     """
 
-    def __init__(self, *, max_payload_bytes: int = DEFAULT_MAX_MESSAGE_BYTES):
+    def __init__(
+        self,
+        *,
+        max_payload_bytes: int = DEFAULT_MAX_MESSAGE_BYTES,
+        payload_buffer_size: int = DEFAULT_PAYLOAD_BUFFER_SIZE,
+    ):
         self._max_payload_bytes = max_payload_bytes
         self._state = FrameParseState.READING_HEADER
         self._buffer = bytearray()
@@ -830,7 +842,24 @@ class FrameParser:
         self._had_mask = False
         self._payload_length = 0
         self._mask_key = b""
-        self._payload = bytearray()
+        # Steady-state payload buffer reused across frames — same shape
+        # as :class:`chumicro_mqtt._wire.PacketDecoder`.  Frames whose
+        # payload fits in ``payload_buffer_size`` reuse the buffer
+        # (zero alloc per frame).  Oversized frames fall back to a
+        # one-shot ``bytearray(payload_length)`` that gets dropped on
+        # the next :meth:`reset`.  ``_payload_view`` is the cached
+        # memoryview so per-write slice indexing doesn't construct a
+        # fresh view object every call; refreshed only when ``_payload``
+        # rebinds to a one-shot oversized buffer.  Live-board signal
+        # came from ``test_short_text_frame_no_leak_no_fragmentation
+        # _on_device``: per-frame ``bytearray(N)`` was the residual
+        # fragmentation source after the recv-buffer fix.
+        self._payload_buffer = bytearray(payload_buffer_size)
+        self._payload_buffer_view = memoryview(self._payload_buffer)
+        self._payload_capacity = payload_buffer_size
+        self._payload = self._payload_buffer
+        self._payload_view = self._payload_buffer_view
+        self._payload_write_offset = 0
         self._error = None
 
     # ------------------------------------------------------------------
@@ -866,9 +895,12 @@ class FrameParser:
     def payload(self):
         """Unmasked payload of the just-completed frame as ``bytes``.
 
-        Returns ``b""`` until :attr:`state` == ``FRAME_READY``.
+        Returns ``b""`` until :attr:`state` == ``FRAME_READY``.  Reads
+        through the cached ``_payload_view`` (zero-copy memoryview slice)
+        and snapshots one ``bytes`` copy for the caller — handlers may
+        ``.decode()`` the result, which memoryview lacks.
         """
-        return bytes(self._payload)
+        return bytes(self._payload_view[:self._payload_write_offset])
 
     @property
     def error(self):
@@ -882,7 +914,10 @@ class FrameParser:
     def reset(self) -> None:
         """Return to ``READING_HEADER`` for the next frame.
 
-        Discards the just-finished frame's metadata + payload.
+        Discards the just-finished frame's metadata + payload.  Rebinds
+        ``_payload`` to the steady-state ``_payload_buffer`` (no alloc);
+        any one-shot oversized buffer from the prior frame is now
+        unreferenced and GC-eligible.
         """
         self._state = FrameParseState.READING_HEADER
         self._buffer = bytearray()
@@ -892,7 +927,9 @@ class FrameParser:
         self._had_mask = False
         self._payload_length = 0
         self._mask_key = b""
-        self._payload = bytearray()
+        self._payload = self._payload_buffer
+        self._payload_view = self._payload_buffer_view
+        self._payload_write_offset = 0
 
     def feed(self, chunk: bytes) -> int:
         """Consume bytes from *chunk*; return how many were used.
@@ -929,20 +966,24 @@ class FrameParser:
             state = self._state
             if state == FrameParseState.READING_PAYLOAD:
                 payload = self._payload
-                need = self._payload_length - len(payload)
+                write_offset = self._payload_write_offset
+                need = self._payload_length - write_offset
                 take = need if need <= remaining else remaining
                 if self._had_mask:
-                    start_index = len(payload)
                     mask_key = self._mask_key
                     for index in range(take):
-                        payload.append(
+                        payload[write_offset + index] = (
                             chunk_view[consumed + index]
-                            ^ mask_key[(start_index + index) & 3],
+                            ^ mask_key[(write_offset + index) & 3]
                         )
                 else:
-                    payload.extend(chunk_view[consumed : consumed + take])
+                    payload[write_offset:write_offset + take] = (
+                        chunk_view[consumed : consumed + take]
+                    )
                 consumed += take
-                if len(payload) >= self._payload_length:
+                write_offset += take
+                self._payload_write_offset = write_offset
+                if write_offset >= self._payload_length:
                     self._state = FrameParseState.FRAME_READY
                 continue
 
@@ -1028,6 +1069,15 @@ class FrameParser:
         if self._payload_length == 0:
             self._state = FrameParseState.FRAME_READY
             return
+        # Reuse the steady-state payload buffer when the frame fits.
+        # Only oversized frames pay a per-frame allocation, and that
+        # one-shot bytearray is released on the next :meth:`reset`.
+        if self._payload_length > self._payload_capacity:
+            self._payload = bytearray(self._payload_length)
+            self._payload_view = memoryview(self._payload)
+        # else: ``_payload`` / ``_payload_view`` already alias the
+        # steady-state buffer from :meth:`__init__` / :meth:`reset`.
+        self._payload_write_offset = 0
         self._state = FrameParseState.READING_PAYLOAD
 
     def _fail(self, message: str) -> WebSocketProtocolError:

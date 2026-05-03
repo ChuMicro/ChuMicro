@@ -273,7 +273,17 @@ class RequestParser:
         self._target = ""
         self._http_version = ""
         self._headers = CaseInsensitiveDict()
+        # ``_body`` is the underlying buffer; ``_body_view`` is the
+        # cached memoryview the property + read-side ops slice through
+        # (constructing memoryview each access would itself allocate).
+        # Both rebind when ``_body`` is reallocated to the exact
+        # ``Content-Length`` in :meth:`_enter_body_state` so a 1 KiB
+        # POST gets one tier-1024 alloc instead of seven intermediate-
+        # tier reallocs (16 → 32 → ... → 1024) as ``extend`` doubles
+        # the underlying buffer.
         self._body = bytearray()
+        self._body_view = memoryview(self._body)
+        self._body_write_offset = 0
         self._body_remaining = 0
         self._error = None
 
@@ -351,8 +361,13 @@ class RequestParser:
 
     @property
     def body(self):
-        """Body bytes received so far (final once :attr:`state` is ``DONE``)."""
-        return bytes(self._body)
+        """Body bytes received so far (final once :attr:`state` is ``DONE``).
+
+        Reads through the cached ``_body_view`` (zero-copy memoryview
+        slice) and snapshots one ``bytes`` copy for the caller —
+        handlers may ``.decode()`` the result, which memoryview lacks.
+        """
+        return bytes(self._body_view[:self._body_write_offset])
 
     @property
     def error(self):
@@ -519,20 +534,33 @@ class RequestParser:
             self._state = RequestParseState.DONE
             return
         self._state = RequestParseState.BODY
+        # Pre-allocate body to exact Content-Length so the absorb path
+        # writes via slice-assign instead of growing via extend.
+        # Refresh the cached view because ``_body`` rebinds.
+        self._body = bytearray(content_length)
+        self._body_view = memoryview(self._body)
+        self._body_write_offset = 0
         # Any bytes left over from header parsing are body bytes.
         if self._live_len() > 0:
-            tail = bytes(self._live_slice(0))
+            tail_view = self._live_slice(0)
             self._reset_buffer()
-            self._absorb_body_bytes(tail)
+            self._absorb_body_bytes(tail_view)
 
     def _absorb_body_bytes(self, chunk):
-        """Append body bytes; honor Content-Length cap."""
+        """Write body bytes via the pre-allocated buffer's write cursor.
+
+        ``chunk`` may be ``bytes``, ``bytearray``, or ``memoryview``;
+        slicing returns the same flavor and ``bytearray[a:b] = view`` is
+        a cross-runtime-safe in-place write (no realloc) when the LHS
+        slice length matches.
+        """
         if self._body_remaining == 0:
             return  # Already complete; ignore extra (client sent too many).
         take = min(self._body_remaining, len(chunk))
-        chunk = chunk[:take]
+        write_offset = self._body_write_offset
+        self._body[write_offset:write_offset + take] = chunk[:take]
+        self._body_write_offset = write_offset + take
         self._body_remaining -= take
-        self._body.extend(chunk)
         if self._body_remaining == 0:
             self._state = RequestParseState.DONE
 

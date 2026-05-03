@@ -328,11 +328,11 @@ class TestRecvBufferReuse:
         assert len(buffer_ids) == 1, "session reallocated its recv buffer mid-flight"
 
     def test_frame_parser_state_resets_cleanly(self) -> None:
-        """The FrameParser's internal buffers reset between frames.
+        """The FrameParser's internal write cursors reset between frames.
 
-        After parsing N frames the FrameParser's own ``_buffer`` and
-        ``_payload`` should be empty bytearrays again — no
-        across-frame retention.
+        After parsing N frames the FrameParser's own ``_buffer`` is
+        empty and the steady-state ``_payload`` is reused but its
+        write cursor is back to zero — no across-frame retention.
         """
         socket = FakeConnection()
         clock = TickClock()
@@ -345,11 +345,15 @@ class TestRecvBufferReuse:
             socket.feed_inbound(frame)
             client.handle(clock.now())
 
-        # Frame parser should be in READING_HEADER with empty buffers.
+        # Frame parser should be in READING_HEADER with the buffer
+        # empty; the steady-state payload buffer is reused (len stays
+        # at the buffer capacity) but the logical write cursor is 0.
         from chumicro_websockets._wire import FrameParseState
-        assert client._frame_parser.state == FrameParseState.READING_HEADER
-        assert len(client._frame_parser._buffer) == 0
-        assert len(client._frame_parser._payload) == 0
+        parser = client._frame_parser
+        assert parser.state == FrameParseState.READING_HEADER
+        assert len(parser._buffer) == 0
+        assert parser._payload is parser._payload_buffer
+        assert parser._payload_write_offset == 0
 
 
 # ---------------------------------------------------------------------------
