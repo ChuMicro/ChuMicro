@@ -7,10 +7,10 @@ This is the front door. Everything else is deeper read.
 ---
 
 - **Phase:** **chumicro-websockets — leanness pass underway** per `plans/workstreams/websockets-cleanup.md`.  v0.6.x ships 3,628 LOC deployed (vs chumicro-mqtt 1,842) — too fat for embedded targets.  Seven independent slices ranked smallest-blast-radius first: A (FrameParser per-byte→per-chunk), C (slim `__init__`), D (slim `CaseInsensitiveDict`), B (namespace classes→constants), F (compact docstrings + dead defensive code), E (merge handshake parsers), G (shared `_session.py`).  Each slice ships its own version bump + green preflight + commit.
-- **Last shipped:** Slice A FrameParser per-chunk refactor — drops 1,024 method calls per recv-budget tick on the hot path.  v0.7.0.  All 268 host tests pass at 95% coverage; preflight green.
-- **In flight:** Slice C — slim `__init__.py` exports from ~50 names to ~25 (drop spec-trivia constants + handshake parsers + frame parser internals; tests reach via `chumicro_websockets._wire`).
+- **Last shipped:** Slice C — `__init__.py` cut from ~50 to 28 exports (drop spec-trivia close codes, DEFAULT_* knobs, handshake parsers, FrameParser, CaseInsensitiveDict, encode_*, validate_text_payload, make_mask_key — all moved to `chumicro_websockets._wire` access).  Tests + README updated.  v0.7.1.
+- **In flight:** Slice D — slim CaseInsensitiveDict (drop unused `__iter__`/`__len__`/`__eq__`/`__repr__` + their tests).
 - **Blocked on:** —
-- **Last touched:** libraries/websockets/src/chumicro_websockets/_wire.py, libraries/websockets/VERSION, plans/workstreams/websockets-cleanup.md, plans/now.md.
+- **Last touched:** libraries/websockets/src/chumicro_websockets/__init__.py, libraries/websockets/tests/, libraries/websockets/README.md, libraries/websockets/VERSION, plans/now.md.
 
 ---
 

@@ -23,19 +23,29 @@ import struct
 
 import pytest
 from chumicro_websockets import (
-    CLOSE_ABNORMAL,
     CLOSE_BAD_DATA,
     CLOSE_GOING_AWAY,
     CLOSE_NORMAL,
     CLOSE_PROTOCOL_ERROR,
-    DEFAULT_MAX_MESSAGE_BYTES,
-    MAX_CONTROL_PAYLOAD_BYTES,
     OPCODE_BINARY,
     OPCODE_CLOSE,
     OPCODE_CONTINUATION,
     OPCODE_PING,
     OPCODE_PONG,
     OPCODE_TEXT,
+    WebSocketError,
+    WebSocketHandshakeError,
+    WebSocketProtocolError,
+    WebSocketState,
+    WebSocketURLError,
+    derive_accept_key,
+    make_websocket_key,
+    parse_ws_url,
+)
+from chumicro_websockets._wire import (
+    CLOSE_ABNORMAL,
+    DEFAULT_MAX_MESSAGE_BYTES,
+    MAX_CONTROL_PAYLOAD_BYTES,
     WS_MAGIC_GUID,
     WS_VERSION,
     CaseInsensitiveDict,
@@ -44,21 +54,13 @@ from chumicro_websockets import (
     HandshakeParseState,
     HandshakeRequestParser,
     HandshakeResponseParser,
-    WebSocketError,
-    WebSocketHandshakeError,
-    WebSocketProtocolError,
-    WebSocketState,
-    WebSocketURLError,
-    derive_accept_key,
     encode_client_handshake,
     encode_close_payload,
     encode_frame,
     encode_server_handshake_response,
     encode_server_rejection,
     make_mask_key,
-    make_websocket_key,
     parse_close_payload,
-    parse_ws_url,
     validate_text_payload,
 )
 
@@ -1160,7 +1162,7 @@ class TestConstants:
         assert WebSocketState.CLOSED == "closed"
 
     def test_opcode_categories(self):
-        from chumicro_websockets import CONTROL_OPCODES, DATA_OPCODES
+        from chumicro_websockets._wire import CONTROL_OPCODES, DATA_OPCODES
 
         assert OPCODE_TEXT in DATA_OPCODES
         assert OPCODE_BINARY in DATA_OPCODES

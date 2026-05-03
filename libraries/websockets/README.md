@@ -61,16 +61,22 @@ pip install chumicro-websockets-experimental
 
 ## Quick example
 
-Slice 1 of [Decision 0045](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0045-chumicro-websockets.md) ships the wire layer; the runner-shaped `WebSocketClient` and `WebSocketServer` orchestrators land in slices 2 + 3.  Today the public surface is the framing primitives:
-
 ```python
-from chumicro_websockets import OPCODE_TEXT, FrameParser, encode_frame
+from chumicro_websockets import WebSocketClient, WebSocketState
+from chumicro_websockets.sockets_factory import chumicro_sockets_factory
+from chumicro_timing import ticks_ms
+import wifi
 
-frame = encode_frame(OPCODE_TEXT, b"hello", mask=b"mask")  # client masks outbound
-parser = FrameParser()
-parser.feed(frame)
-print(parser.payload)  # b'hello'
+client = WebSocketClient(connection_factory=chumicro_sockets_factory(radio=wifi.radio))
+client.on_text = lambda text: print(f"got: {text}")
+client.connect("ws://api.example.com/stream")
+
+while client.state != WebSocketState.CLOSED:
+    if client.check(ticks_ms()):
+        client.handle(ticks_ms())
 ```
+
+Framing primitives (`FrameParser`, `encode_frame`, the handshake parsers, the `DEFAULT_*` knob constants) live in `chumicro_websockets._wire` for advanced users + tests; the public top-level surface stays small to keep flash + RAM lean on the device.
 
 ## What's included
 
