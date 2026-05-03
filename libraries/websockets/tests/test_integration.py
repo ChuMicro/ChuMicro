@@ -20,7 +20,6 @@ Proves the slice 1/2/3 components fit together:
 * Bidirectional traffic in the same tick survives intact.
 """
 
-import pytest
 from chumicro_websockets import (
     CLOSE_GOING_AWAY,
     CLOSE_NORMAL,
@@ -109,7 +108,7 @@ def _drive_until(
         _pump(client_socket, server_socket)
         if predicate():
             return
-    pytest.fail(
+    raise AssertionError(
         f"predicate did not become true within {max_ticks} ticks; "
         f"client.state={client.state}, "
         f"server.connection_count={server.connection_count}",

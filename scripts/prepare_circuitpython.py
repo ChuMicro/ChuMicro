@@ -63,15 +63,36 @@ def prepare_circuitpython() -> int:
             ),
             # mpy-cross is the bytecode compiler — required before the port build.
             RuntimePrepStep(["make", "-C", source_dir / "mpy-cross", jobs]),
-            # The actual unix-port binary.  CircuitPython 10.1.4 has a bug in
-            # py/py.mk: objringio.c is listed in py.cmake but missing from
-            # py.mk.  The workaround disables the RingIO type so the missing
-            # object file is not required.  See
-            # plans/decisions/0017-circuitpython-ringio-bug.md.
+            # The actual unix-port binary.  Two non-default knobs:
+            #
+            # 1. ``-DMICROPY_PY_MICROPYTHON_RINGIO=0`` works around a
+            #    bug in CircuitPython 10.1.4's ``py/py.mk``: the file
+            #    ``objringio.c`` is listed in ``py.cmake`` but missing
+            #    from ``py.mk``.  Disabling the RingIO type sidesteps
+            #    the missing-object-file linker error.  See
+            #    ``plans/decisions/0017-circuitpython-ringio-bug.md``.
+            #
+            # 2. ``MICROPY_PY_SSL=1 MICROPY_SSL_AXTLS=1`` (passed as
+            #    Make variables, not CFLAGS — the Makefile blocks that
+            #    pull in ``lib/axtls/crypto/sha1.c`` are gated on
+            #    Make-level conditionals in ``extmod/extmod.mk``).
+            #    Enables ``hashlib.sha1`` + ``hashlib.md5`` (gated on
+            #    ``MICROPY_PY_SSL`` in
+            #    ``ports/unix/variants/mpconfigvariant_common.h``) and
+            #    the ``ssl`` module — both present on every real CP
+            #    board (which ship per-board mbedTLS configs) but
+            #    absent on the default unix-port build.  Aligns the
+            #    test environment with what real CP boards expose so
+            #    cross-runtime tests don't silently SKIP behind
+            #    ``ImportError`` on the unix-port.  See ``plans/
+            #    learnings.md`` §"CP unix-port hashlib + ssl gated on
+            #    SSL build flag".
             RuntimePrepStep(
                 [
                     "make", "-C", source_dir / "ports/unix",
                     f"VARIANT={_UNIX_VARIANT}", jobs,
+                    "MICROPY_PY_SSL=1",
+                    "MICROPY_SSL_AXTLS=1",
                 ],
                 environment=build_environment("-DMICROPY_PY_MICROPYTHON_RINGIO=0"),
             ),
