@@ -29,7 +29,7 @@ from chumicro_sockets.errors import UnsupportedSSLConfigError
 _POOLS: dict = {}
 
 
-def _pool_for(radio):  # pragma: no cover - device only
+def _pool_for(radio):
     """Return (or memoize) a ``socketpool.SocketPool`` for *radio*."""
     if radio is None:
         raise TypeError(
@@ -45,7 +45,7 @@ def _pool_for(radio):  # pragma: no cover - device only
     return pool
 
 
-def connect_tcp(host, port, *, radio):  # pragma: no cover - device only
+def connect_tcp(host, port, *, radio):
     """Open a plain TCP connection via the CP socketpool."""
     pool = _pool_for(radio)
     sock = pool.socket(pool.AF_INET, pool.SOCK_STREAM)
@@ -53,7 +53,7 @@ def connect_tcp(host, port, *, radio):  # pragma: no cover - device only
     return sock
 
 
-def connect_tls(host, port, *, context=None, radio):  # pragma: no cover - device only
+def connect_tls(host, port, *, context=None, radio):
     """Open a TLS connection on a CP radio.
 
     *context=None* uses :func:`ssl.create_default_context` — picks up
@@ -78,7 +78,7 @@ def connect_tls(host, port, *, context=None, radio):  # pragma: no cover - devic
     return wrapped
 
 
-def udp_socket(  # pragma: no cover - device only
+def udp_socket(
     *,
     bind_host="0.0.0.0",
     bind_port=0,
@@ -111,7 +111,7 @@ def udp_socket(  # pragma: no cover - device only
     return _CPUDPWrapper(sock)
 
 
-class _CPUDPWrapper:  # pragma: no cover - device only
+class _CPUDPWrapper:
     """Adapts a CP socketpool UDP socket to the chumicro_sockets UDP protocol.
 
     Normalises ``sendto`` to the separated ``(data, host, port)``
@@ -142,7 +142,7 @@ class _CPUDPWrapper:  # pragma: no cover - device only
         return self._sock.sendto(data, (host, port))
 
 
-def listen_tcp(host, port, *, backlog=4, radio):  # pragma: no cover - device only
+def listen_tcp(host, port, *, backlog=4, radio):
     """Open a non-blocking TCP listening socket via the CP socketpool.
 
     CP's ``socketpool.Socket`` exposes ``bind`` / ``listen`` / ``accept``
@@ -171,7 +171,7 @@ def listen_tcp(host, port, *, backlog=4, radio):  # pragma: no cover - device on
     return listener
 
 
-def ssl_context_with_cert_and_key(cert_pem, key_pem):  # pragma: no cover - device only
+def ssl_context_with_cert_and_key(cert_pem, key_pem):
     """In-memory cert + key isn't supported on CP — paths are required.
 
     CircuitPython's ``ssl.SSLContext.load_cert_chain`` only accepts
@@ -193,7 +193,7 @@ def ssl_context_with_cert_and_key(cert_pem, key_pem):  # pragma: no cover - devi
     )
 
 
-def ssl_context_with_cert_and_key_paths(cert_path, key_path):  # pragma: no cover - device only
+def ssl_context_with_cert_and_key_paths(cert_path, key_path):
     """Build a CP server-side SSLContext from cert + key file paths.
 
     Mirrors ``adafruit_httpserver``'s HTTPS path
@@ -260,7 +260,7 @@ def listen_tls(host, port, *, context, backlog=4, radio):
     return _CPTLSListenerWrapper(wrapped)
 
 
-class _CPTLSListenerWrapper:  # pragma: no cover - device only
+class _CPTLSListenerWrapper:
     """Wraps a CP TLS listener so accept() returns the standard
     ``(client_socket, address)`` tuple.
 
@@ -285,7 +285,7 @@ class _CPTLSListenerWrapper:  # pragma: no cover - device only
         return self._sock.fileno() if hasattr(self._sock, "fileno") else -1
 
 
-def ssl_context_with_ca(ca_pem):  # pragma: no cover - device only
+def ssl_context_with_ca(ca_pem):
     """Build an SSL context that trusts *ca_pem* on a CP radio.
 
     Identical shape to the CPython and MP helpers — supported CP
