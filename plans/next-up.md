@@ -57,10 +57,7 @@ Independent items.  The **`workspace-ecosystem` umbrella** in `## Now` is essent
         3. **`chumicro-requests` HttpClient orchestration coverage** — current tests cover only the `ResponseParser`.  The `HttpClient` orchestration layer (redirect chain replays, POST-with-body request encoding) is untested for fragmentation; not blocked on anything, just hasn't been written.
         4. **`chumicro-websockets` outbound + ping-pong + mixed coverage** — the current file only has the inbound-text test; outbound is blocked on the `BlockingIOError` bug below.
 
-- [ ] **Cross-runtime bugs surfaced by the fragmentation-test investigation.**  Each is a small, focused fix; tests blocked on them are documented above.
-    - `chumicro_sockets.testing.FakeSocket.__init__` calls `deque()` with no args (`libraries/sockets/src/chumicro_sockets/testing.py:50`), which raises `TypeError` on MicroPython (see `learnings.md` §"MP `collections.deque()` requires positional args").  Fix: `deque((), 0)`.  Affects every MP test that uses `FakeSocket` — currently zero, because no MP test imports it.
-    - `chumicro_websockets._session._is_eagain` references `BlockingIOError` by bare name (`libraries/websockets/src/chumicro_websockets/_session.py:119`), which does not exist on MicroPython (see `learnings.md` §"MP doesn't expose `BlockingIOError`").  Same pattern in `libraries/websockets/src/chumicro_websockets/testing.py:132,168`.  Fix: errno-based check.  Affects the outbound send path; would also block deploying chumicro-websockets to a real MP board.
-    - `chumicro_websockets._wire._sha1_digest` calls `hashlib.sha1.new` (`libraries/websockets/src/chumicro_websockets/_wire.py:48`) — `module.new` doesn't exist on CircuitPython unix-port `hashlib`.  Surfaced by the fragmentation-investigation probe script.  Fix: use `hashlib.sha1(...)` constructor directly, which is the canonical idiom on all three runtimes.
+- [x] ~~**Cross-runtime bugs surfaced by the fragmentation-test investigation.**~~ — **shipped 2026-05-03** (commits `8bd7f14`, `e8fc3ec`, `bcc3219`).  All three fixed in the broader cross-runtime test recovery push (see Done section).  In addition to the three originally tracked, the conversion surfaced `CaseInsensitiveDict` insertion-order assumption in `chumicro_http_server` + `chumicro_requests` (CPython 3.7+ dict order, broken on MP/CP) and `UnicodeDecodeError` references in `chumicro_requests._wire` + `chumicro_websockets._wire` (only `UnicodeError` exists on MP/CP).  Fixed in the same push.
 
 - [ ] Enable GitHub Copilot code review as a PR quality gate (low priority — defer until community contributions begin).
 - [ ] Add digital I/O as the second library seam (alongside CI/release work, not sequentially).
@@ -81,6 +78,29 @@ Independent items.  The **`workspace-ecosystem` umbrella** in `## Now` is essent
 - [ ] **Investigate slow MicroPython RAM-mode functional test runs** — observed during 2026-04-19 live PyCharm testing that MicroPython RAM-mode functional tests took noticeably longer than expected. CircuitPython RAM-mode is fast in comparison. Suspects: per-file `mpremote mount` cost, cold-start interpreter overhead, batch-vs-per-test trade-off. Profile against the new batch-execute path and identify whether amortization can be improved.
 
 ## Done (recent)
+
+- [x] **Cross-runtime test recovery — 365 → 1147 tests passing on each unix-port** (2026-05-03, commits `8bd7f14`..`3e392df`).  Audit at session start showed 24 silently-SKIPped test files holding ~889 test functions never actually exercised on MicroPython / CircuitPython unix-ports — about 71% of nominally cross-runtime tests.  Decision 0016 was already in place but the harness's silent-SKIP-on-ImportError fallback was letting mis-classified files quietly disappear.
+
+  **Source-side fixes** (cross-runtime bugs the silent SKIPs were hiding):
+  * `chumicro_sockets.testing.{FakeSocket,FakeUDPSocket}` — `deque()` no-args fails on MP; switched to `deque((), 1024)` per `patterns.md` "FIFO queues use deque" rule.
+  * `chumicro_websockets._session._is_eagain` — `BlockingIOError` bare reference; fixed with local `_BlockingIOError` fallback subclass of `OSError`.
+  * `chumicro_websockets.testing.{FakeConnection,FakeListener}` — `raise BlockingIOError(11, ...)` → `raise OSError(11, ...)`.
+  * `chumicro_{requests,websockets}._wire` — `except UnicodeDecodeError` → `except UnicodeError` (MP/CP only have the parent class).
+  * `chumicro_websockets._wire` — `except (binascii.Error, ValueError)` → `except ValueError` (MP `binascii` lacks `.Error`).
+  * `chumicro_{http_server,requests}.CaseInsensitiveDict` — paired `_entries: dict` with `_order: list` to preserve insertion order (CPython 3.7+ dict guarantee, broken on MP/CP).
+
+  **Test-side conversions** (drop `import pytest`, swap `pytest.raises` → harness `raises`): `events`, `mqtt/test_{decoder,encoder,state,testing_helpers,client,packets}`, `sockets/test_{testing,protocol}`, `http_server/test_http_server`, `requests/test_requests`, `ntp/test_ntp`, `logging/test_logging` (capsys → identity check), `websockets/test_{client,server,websockets,integration,sockets_factory}`.
+
+  **Renamed to `_pytest`** (genuinely CPython-only): tracemalloc memory_pressure × 3, mosquitto_integration (subprocess), sockets/{factories,mp_adapter,tls_integration,udp} (cryptography / threading / unittest.mock / stdlib socket).
+
+  **Build-side**: enabled `MICROPY_PY_SSL=1 MICROPY_SSL_AXTLS=1` in CP unix-port build (`scripts/prepare_circuitpython.py`) — gives `hashlib.sha1`, `hashlib.md5`, and the `ssl` module surface, matching what real CP boards ship.
+
+  **Harness changes**:
+  * `assertions.raises` gained `match=` (regex via `re.search`) and `.value` alias for pytest compatibility.
+  * `runner._iter_test_functions` discovers class-grouped tests (`class Test*: def test_*(self)`) — without this, every pytest-style test class collected as zero tests on the unix ports.
+  * `discovery.run_one_file` and `_run_all_inline` now FAIL on `ImportError`, not silent SKIP — the contract is self-enforcing.
+
+  Result: 1147 cross-runtime tests passing on each unix-port, 0 failures, 0 SKIPs, 0 contract-violating files.
 
 - [x] **Decision 0044 — deploy-time runtime-file filtering** (2026-05-02).  Extends Decision 0037's `__chumicro_runtimes__` marker filter from the bundle pipeline to *every* host-side deploy path: `chumicro_deploy` CLI, `chumicro_workspace deploy` (flat / `--import-graph` / `--boot-shim`), `pytest-device` staging, examples, and functional tests.  Wrong-runtime adapter source no longer lands on a CP / MP board; PyPI sdists keep shipping every file unfiltered (per Decision 0037 §"Source bundle").  Marker reader extracted to `chumicro_deploy._runtime_marker` so the bundle pipeline and the deploy paths share one implementation.  Filtering is on-by-default at every orchestration boundary — transports own the runtime as part of their identity (`CircuitpythonTransport` ⇒ `"circuitpython"`, `MicropythonTransport` ⇒ `"micropython"`); CLIs default to the device's configured runtime, with `--target-runtime <name>` as the only override.  No `--no-runtime-filter` escape hatch.  Touches `chumicro_deploy.{sources,flash_drive,circuitpython_transport,micropython_transport,cli}` + `chumicro_workspace.{deploy_source,import_graph,boot_shim,cli}` + `scripts/bundle_manager`.  ~150 lines of new tests across `test_runtime_marker.py` (new), `test_sources.py`, `test_flash_drive.py`, `test_circuitpython_transport.py`, `test_micropython_transport.py`, `test_cli.py`, `test_deploy_source.py`, `test_import_graph.py`, `test_boot_shim.py`.  AGENTS.md non-negotiable updated; Decision 0037 cross-references 0044.
 
