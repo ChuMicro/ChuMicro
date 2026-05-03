@@ -6,9 +6,9 @@ unix ports.
 """
 
 import chumicro_events
-import pytest
 from chumicro_events import EventBus, Subscription
 from chumicro_events.testing import FailingSubscriber, RecordingSubscriber
+from chumicro_test_harness.assertions import raises
 
 # ---------------------------------------------------------------------------
 # Public surface
@@ -36,7 +36,7 @@ def test_custom_capacity() -> None:
 
 
 def test_capacity_must_be_positive() -> None:
-    with pytest.raises(ValueError):
+    with raises(ValueError):
         EventBus(capacity=0)
 
 
@@ -387,12 +387,12 @@ def test_recording_subscriber_no_filter_records_everything() -> None:
 
 def test_failing_subscriber_default_exception() -> None:
     failing = FailingSubscriber()
-    with pytest.raises(RuntimeError, match="subscriber boom"):
+    with raises(RuntimeError, match="subscriber boom"):
         failing("topic", "x")
     assert failing.calls == 1
 
 
 def test_failing_subscriber_custom_exception() -> None:
     failing = FailingSubscriber(exception=ValueError("nope"))
-    with pytest.raises(ValueError, match="nope"):
+    with raises(ValueError, match="nope"):
         failing("topic", "x")

@@ -10,7 +10,6 @@ real connection, parses the request, runs the handler, writes the
 response back to the FakeSocket's `sent` buffer where tests assert.
 """
 
-import pytest
 from chumicro_http_server import (
     CaseInsensitiveDict,
     HttpServer,
@@ -24,6 +23,7 @@ from chumicro_http_server import (
     split_target,
 )
 from chumicro_sockets.testing import FakeSocket
+from chumicro_test_harness.assertions import raises
 from chumicro_timing.testing import FakeTicks
 
 # ---------------------------------------------------------------------------
@@ -326,11 +326,11 @@ class TestBuildResponse:
         assert response.headers["Content-Type"] == "application/vnd.custom+json"
 
     def test_multiple_body_kwargs_rejected(self):
-        with pytest.raises(ValueError, match="at most one"):
+        with raises(ValueError, match="at most one"):
             build_response(200, body=b"x", json={"k": "v"})
 
     def test_non_bytes_str_body_rejected(self):
-        with pytest.raises(TypeError, match="bytes / bytearray / str"):
+        with raises(TypeError, match="bytes / bytearray / str"):
             build_response(200, body=42)
 
     def test_unknown_status_uses_unknown_reason(self):

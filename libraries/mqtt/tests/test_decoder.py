@@ -1,6 +1,5 @@
 """Tests for the streaming inbound packet decoder."""
 
-import pytest
 from chumicro_mqtt import (
     PACKET_CONNACK,
     PACKET_PINGRESP,
@@ -23,6 +22,7 @@ from chumicro_mqtt.testing import (
     canned_suback_bytes,
     canned_unsuback_bytes,
 )
+from chumicro_test_harness.assertions import raises
 
 
 def _feed(decoder: PacketDecoder, payload: bytes) -> None:
@@ -164,7 +164,7 @@ class TestProtocolErrors:
         decoder = PacketDecoder()
         # 0xF0 is the reserved high-nibble for AUTH (MQTT 5 only).
         _feed(decoder, b"\xf0\x00")
-        with pytest.raises(MQTTProtocolError):
+        with raises(MQTTProtocolError):
             decoder.read_next()
 
     def test_oversized_simple_ack_raises(self) -> None:
@@ -177,7 +177,7 @@ class TestProtocolErrors:
         # Feed enough to trip the size check.
         decoder.fill_buffer()[:2] = packet[:2]
         decoder.advance(2)
-        with pytest.raises(MQTTProtocolError):
+        with raises(MQTTProtocolError):
             decoder.read_next()
 
 

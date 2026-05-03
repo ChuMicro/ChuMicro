@@ -1,6 +1,5 @@
 """End-to-end tests for ``MQTTClient`` via FakeSocket + FakeTicks."""
 
-import pytest
 from chumicro_mqtt import (
     MQTTBackpressureError,
     MQTTClient,
@@ -18,6 +17,7 @@ from chumicro_mqtt.testing import (
     canned_unsuback_bytes,
 )
 from chumicro_sockets.testing import FakeSocket
+from chumicro_test_harness.assertions import raises
 from chumicro_timing.testing import FakeTicks
 
 
@@ -136,7 +136,7 @@ class TestConnect:
         ticks = FakeTicks()
         client = _new_client(sock, ticks)
         client.connect()  # sets state to CONNECTING
-        with pytest.raises(Exception):  # noqa: B017
+        with raises(Exception):  # noqa: B017
             client.connect()
 
 
@@ -170,7 +170,7 @@ class TestPublishQos0:
         client.connect()
         _drive(client, ticks, count=2)
 
-        sock.sent.clear()
+        sock.sent = bytearray()  # MP bytearray lacks .clear()
         client.publish("temp", b"42", qos=0)
         _drive(client, ticks, count=1)
         # First byte 0x30 = PUBLISH qos 0.
@@ -264,7 +264,7 @@ class TestPublishQos1:
         client.connect()
         _drive(client, ticks, count=2)
 
-        sock.sent.clear()
+        sock.sent = bytearray()  # MP bytearray lacks .clear()
         client.publish("temp", b"42", qos=1)
         _drive(client, ticks, count=1)
         first_send_length = len(sock.sent)
@@ -283,7 +283,7 @@ class TestPublishQos1:
         client = _new_client(sock, ticks)
         client.connect()
         _drive(client, ticks, count=2)
-        with pytest.raises(UnsupportedQoSError):
+        with raises(UnsupportedQoSError):
             client.publish("topic", b"x", qos=2)
 
 
@@ -358,7 +358,7 @@ class TestInboundPublish:
         client = _new_client(sock, ticks)
         client.connect()
         _drive(client, ticks, count=2)
-        sock.sent.clear()
+        sock.sent = bytearray()  # MP bytearray lacks .clear()
 
         sock.enqueue_recv(canned_publish_bytes("temp", b"99", qos=1, packet_id=42))
         _drive(client, ticks, count=2)
@@ -398,7 +398,7 @@ class TestKeepalive:
         client = _new_client(sock, ticks, keep_alive_seconds=30)
         client.connect()
         _drive(client, ticks, count=2)
-        sock.sent.clear()
+        sock.sent = bytearray()  # MP bytearray lacks .clear()
 
         # Just past the 15-second mark — half of keepalive.
         ticks.advance(15_500)
@@ -476,21 +476,21 @@ class TestNotConnectedGuards:
         sock = FakeSocket()
         ticks = FakeTicks()
         client = _new_client(sock, ticks)
-        with pytest.raises(Exception):  # noqa: B017
+        with raises(Exception):  # noqa: B017
             client.publish("x", b"y")
 
     def test_subscribe_before_connect_raises(self) -> None:
         sock = FakeSocket()
         ticks = FakeTicks()
         client = _new_client(sock, ticks)
-        with pytest.raises(Exception):  # noqa: B017
+        with raises(Exception):  # noqa: B017
             client.subscribe("x")
 
     def test_unsubscribe_before_connect_raises(self) -> None:
         sock = FakeSocket()
         ticks = FakeTicks()
         client = _new_client(sock, ticks)
-        with pytest.raises(Exception):  # noqa: B017
+        with raises(Exception):  # noqa: B017
             client.unsubscribe("x")
 
 
@@ -619,7 +619,7 @@ class TestSocketFactorySelfHeal:
     """
 
     def test_neither_socket_nor_factory_raises(self) -> None:
-        with pytest.raises(ValueError, match="socket or a socket_factory"):
+        with raises(ValueError, match="socket or a socket_factory"):
             MQTTClient(client_id="x")
 
     def test_factory_only_constructor_builds_initial_socket(self) -> None:
@@ -902,7 +902,7 @@ class TestTxQueueBackpressure:
         client.publish("topic/a", b"one", qos=0)
         client.publish("topic/a", b"two", qos=0)
         client.publish("topic/a", b"three", qos=0)
-        with pytest.raises(MQTTBackpressureError, match="tx queue full"):
+        with raises(MQTTBackpressureError, match="tx queue full"):
             client.publish("topic/a", b"four", qos=0)
 
     def test_qos1_publish_rolls_back_packet_id_on_backpressure(self) -> None:
@@ -923,7 +923,7 @@ class TestTxQueueBackpressure:
 
         # Second publish overflows; expect the packet_id allocation to
         # be discarded along with the raise.
-        with pytest.raises(MQTTBackpressureError):
+        with raises(MQTTBackpressureError):
             client.publish("topic/a", b"two", qos=1)
         in_flight_after_failed = list(client._in_flight)  # noqa: SLF001
         assert len(in_flight_after_failed) == 1  # rolled back, not leaked

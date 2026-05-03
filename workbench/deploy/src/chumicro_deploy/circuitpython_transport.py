@@ -1786,13 +1786,32 @@ class CircuitpythonTransport:
            **this is the canonical restoration site** for the
            ``autoreload = False`` that :meth:`_stage_to_flash` and
            :meth:`deploy_files` (flash path) issue at the top of
-           their write windows.  Those methods deliberately do NOT
-           restore locally; see the disable-site comment for the
-           reasoning.
+           their write windows.
         3. Exits raw REPL with Ctrl-B (back to normal REPL).
-        4. Soft-reboots with Ctrl-D so code.py runs normally.
-        5. Waits briefly for the reboot to complete.
-        6. Closes the serial port.
+        4. Closes the serial port.
+
+        **Why no explicit Ctrl-D soft-reboot.**  Earlier versions
+        forced a soft-reboot at this point so ``code.py`` would run
+        after deploy.  That layered a second soft-reboot on top of
+        the one CP's autoreload watcher fires the moment we
+        re-enable autoreload at step 2 (files changed during the
+        off-window, watcher queues a reboot the next time it
+        re-activates).  Two USB-CDC re-enumerations in ~500ms
+        wedged the ESP32-S2 USB-CDC firmware roughly 1 in 4
+        sessions — surfaced 2026-05-03 in the Lolin S2 bake.
+
+        Equivalent post-conditions held by step 2 alone:
+
+        * **deploy_files** (production): already triggered its own
+          explicit soft-reboot inside the method (after rsync,
+          before reading code.py output), so the user's code has
+          already run.  The autoreload-on at step 2 sets up
+          subsequent file changes to trigger reloads as expected.
+        * **_stage_to_flash** (functional tests): no code.py to
+          run; the harness drove test execution via raw REPL and
+          is done.  Autoreload-on returns the board to its default
+          behavior; if any files changed during the test session
+          the watcher fires a single reboot, which is fine.
 
         When :meth:`reset_into_bootloader` has already been called,
         it closes the port itself and nulls :attr:`_port` — this
@@ -1804,12 +1823,13 @@ class CircuitpythonTransport:
                 self._enter_raw_repl()
                 if self.mode == "flash":
                     self._restore_autoreload()
-                # Exit raw REPL back to normal REPL.
+                # Exit raw REPL back to normal REPL.  Re-enabled
+                # autoreload becomes active here; if files changed
+                # during the off-window the watcher fires a single
+                # soft-reboot.  No explicit Ctrl-D follows — see
+                # the docstring for why.
                 self._port.write(_CTRL_B)
                 self._time.sleep(_ENTER_DELAY)
-                # Soft-reboot so code.py starts normally.
-                self._port.write(_CTRL_D)
-                self._time.sleep(0.5)
             except Exception as restore_error:
                 print(f"WARNING: Failed to restore board state on disconnect: {restore_error}")
             try:

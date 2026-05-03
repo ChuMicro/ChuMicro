@@ -310,11 +310,18 @@ class CaseInsensitiveDict:
     """
 
     def __init__(self):
-        # Lowercase key -> (original_name, value).
+        # Lowercase key -> (original_name, value).  Paired with
+        # ``_order`` (list of lowercase keys) so iteration preserves
+        # insertion order on every runtime — MicroPython and
+        # CircuitPython dicts do not guarantee insertion order, unlike
+        # CPython 3.7+.
         self._entries = {}
+        self._order = []
 
     def __setitem__(self, name, value):
         lower = name.lower()
+        if lower not in self._entries:
+            self._order.append(lower)
         self._entries[lower] = (name, value)
 
     def __getitem__(self, name):
@@ -324,8 +331,8 @@ class CaseInsensitiveDict:
         return name.lower() in self._entries
 
     def __iter__(self):
-        for original_name, _value in self._entries.values():
-            yield original_name
+        for lower in self._order:
+            yield self._entries[lower][0]
 
     def __len__(self):
         return len(self._entries)
@@ -357,8 +364,9 @@ class CaseInsensitiveDict:
         return entry[1]
 
     def items(self):
-        """Yield ``(original_name, value)`` pairs."""
-        yield from self._entries.values()
+        """Yield ``(original_name, value)`` pairs in insertion order."""
+        for lower in self._order:
+            yield self._entries[lower]
 
     def add(self, name, value):
         """Append *value* to the existing header, joining with ``, ``.
@@ -369,6 +377,7 @@ class CaseInsensitiveDict:
         lower = name.lower()
         existing = self._entries.get(lower)
         if existing is None:
+            self._order.append(lower)
             self._entries[lower] = (name, value)
             return
         original_name, current_value = existing
@@ -648,7 +657,7 @@ class ResponseParser:
         # Status-Line per RFC 7230 §3.1.2: HTTP-version SP status-code SP reason-phrase
         try:
             text = line.decode("ascii")
-        except UnicodeDecodeError as decode_error:
+        except UnicodeError as decode_error:
             self._fail(HttpProtocolError(
                 f"non-ASCII status line: {line!r}",
             ))
@@ -691,7 +700,7 @@ class ResponseParser:
         self._buffer = bytearray(self._buffer[crlf_index + 2:])
         try:
             text = line.decode("ascii")
-        except UnicodeDecodeError as decode_error:
+        except UnicodeError as decode_error:
             self._fail(HttpProtocolError(
                 f"non-ASCII header line: {line!r}",
             ))
@@ -791,7 +800,7 @@ class ResponseParser:
         self._buffer = bytearray(self._buffer[crlf_index + 2:])
         try:
             text = line.decode("ascii")
-        except UnicodeDecodeError as decode_error:
+        except UnicodeError as decode_error:
             self._fail(HttpProtocolError(
                 f"non-ASCII chunk-size line: {line!r}",
             ))

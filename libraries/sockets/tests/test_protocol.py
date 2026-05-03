@@ -1,15 +1,22 @@
-"""Conformance tests for the TCPClientSocket protocol surface."""
+"""Conformance tests for the TCPClientSocket protocol surface.
+
+The two ``isinstance(..., TCPClientSocket)`` positive-assertion tests
+live in ``test_protocol_pytest.py`` — they rely on
+``typing.runtime_checkable``-backed structural matching, which only
+exists on CPython.  MP / CP unix-ports use the ``Protocol`` stand-in
+in :mod:`chumicro_sockets.protocol` (no ``typing`` module), where
+``isinstance`` against an unrelated class is always ``False``.
+
+The negative-assertion conformance checks (a dict isn't a socket; a
+partial-implementation class isn't a socket) work on every runtime —
+they're true under both real Protocol and the stand-in.
+"""
 
 from chumicro_sockets import TCPClientSocket
 from chumicro_sockets.testing import FakeSocket
 
 
 class TestProtocolConformance:
-    def test_fakesocket_satisfies_protocol(self) -> None:
-        """FakeSocket implements every method the protocol declares."""
-        sock = FakeSocket()
-        assert isinstance(sock, TCPClientSocket)
-
     def test_protocol_attributes_called(self) -> None:
         """Each protocol method exists on the fake and returns the right shape."""
         sock = FakeSocket()
@@ -32,7 +39,7 @@ class TestProtocolConformance:
 
 
 class TestRuntimeCheckable:
-    """`isinstance(sock, TCPClientSocket)` works at runtime."""
+    """Negative-assertion checks — true under both real Protocol and the stand-in."""
 
     def test_real_dict_is_not_a_socket(self) -> None:
         # Sanity — a plain dict obviously doesn't satisfy the protocol.
@@ -45,25 +52,3 @@ class TestRuntimeCheckable:
             # Missing every other method.
 
         assert not isinstance(_Partial(), TCPClientSocket)
-
-    def test_full_duck_typed_passes(self) -> None:
-        class _DuckSocket:
-            def send(self, data: bytes) -> int:
-                return len(data)
-
-            def recv_into(self, buffer: bytearray, nbytes: int = 0) -> int:
-                return 0
-
-            def close(self) -> None:
-                pass
-
-            def setblocking(self, flag: bool) -> None:
-                pass
-
-            def settimeout(self, seconds: float | None) -> None:
-                pass
-
-            def fileno(self) -> int:
-                return -1
-
-        assert isinstance(_DuckSocket(), TCPClientSocket)

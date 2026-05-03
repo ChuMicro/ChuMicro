@@ -234,7 +234,7 @@ class Response:
     def text(self) -> str:
         """:attr:`body` decoded using :attr:`encoding`.
 
-        Raises ``UnicodeDecodeError`` if the body bytes don't match
+        Raises ``UnicodeError`` if the body bytes don't match
         the encoding.  Override :attr:`encoding` first if you know
         the server's Content-Type is wrong.
         """
