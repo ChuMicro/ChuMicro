@@ -7,11 +7,8 @@ explicitly::
 
     from chumicro_websockets import WebSocketClient
     from chumicro_websockets.sockets_factory import chumicro_sockets_factory
-    from chumicro_wifi import wifi
 
-    client = WebSocketClient(
-        connection_factory=chumicro_sockets_factory(radio=wifi.adapter.radio),
-    )
+    client = WebSocketClient(connection_factory=chumicro_sockets_factory())
     client.connect("wss://api.example.com/stream")
 
 Users injecting a custom transport simply skip the import — the
@@ -38,9 +35,9 @@ def chumicro_sockets_factory(*, radio=None, ssl_context=None):
     the supplied *ssl_context* (or the runtime default when omitted).
 
     Args:
-        radio: Required on CircuitPython (typically ``wifi.radio``
-            from :mod:`chumicro_wifi`); ignored on MicroPython and
-            CPython.
+        radio: CP-only radio object.  Defaults to ``wifi.radio`` on CP
+            (auto-detected); ignored on MP and CPython.  Pass explicitly
+            for multi-radio prototypes or boards without a ``wifi`` module.
         ssl_context: Pre-built :class:`ssl.SSLContext` to use for
             ``wss://`` connections.  Build via
             :func:`chumicro_sockets.ssl_context_with_ca` for the

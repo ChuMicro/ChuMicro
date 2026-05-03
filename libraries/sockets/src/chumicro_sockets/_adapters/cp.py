@@ -30,12 +30,25 @@ _POOLS: dict = {}
 
 
 def _pool_for(radio):
-    """Return (or memoize) a ``socketpool.SocketPool`` for *radio*."""
+    """Return (or memoize) a ``socketpool.SocketPool`` for *radio*.
+
+    *radio=None* auto-detects ``wifi.radio`` — the only radio on any
+    production wifi-capable CP board.  Boards without a wifi module
+    (SAMD M0 etc.) still get a ``TypeError`` directing them to pass
+    ``radio=`` explicitly with whatever they're using.  Callers that
+    want a non-default radio (multi-radio prototypes, AirLift, etc.)
+    pass it explicitly and bypass the auto-detect.
+    """
     if radio is None:
-        raise TypeError(
-            "CircuitPython adapter requires a radio= argument "
-            "(typically wifi.radio)",
-        )
+        try:
+            import wifi  # noqa: PLC0415 — CP-only import
+            radio = wifi.radio
+        except (ImportError, AttributeError) as auto_detect_failure:
+            raise TypeError(
+                "CircuitPython adapter could not auto-detect a radio "
+                "(`import wifi` failed). Pass radio= explicitly with "
+                "whatever radio object your board exposes.",
+            ) from auto_detect_failure
     cached = _POOLS.get(id(radio))
     if cached is not None:
         return cached

@@ -64,9 +64,9 @@ pip install chumicro-sockets-experimental
 ```python
 from chumicro_sockets import tcp_client_socket, tls_client_socket
 
-# Plain TCP — runtime picks the right adapter.  CircuitPython
-# requires `radio=wifi.radio`; MP and CPython ignore the kwarg.
-sock = tcp_client_socket("broker.example.com", 1883, radio=None)
+# Plain TCP — runtime picks the right adapter.  CP auto-detects
+# `wifi.radio`; MP and CPython have no equivalent.  No kwarg needed.
+sock = tcp_client_socket("broker.example.com", 1883)
 sock.send(b"PING\r\n")
 buffer = bytearray(128)
 nbytes = sock.recv_into(buffer, 128)
@@ -74,8 +74,10 @@ print(bytes(buffer[:nbytes]))
 sock.close()
 
 # TLS with the runtime's default CA store.
-sock = tls_client_socket("api.example.com", 443, radio=None)
+sock = tls_client_socket("api.example.com", 443)
 ```
+
+> **CP boards without a `wifi` module** (SAMD M0, etc.) still need an explicit `radio=` — pass whatever radio object your board exposes. The kwarg is also there for multi-radio prototypes that want to bypass the auto-detect.
 
 For tests, `chumicro_sockets.testing.FakeSocket` implements the same
 protocol against in-memory bytearrays so downstream libraries
@@ -107,9 +109,9 @@ Works on CPython, MicroPython, and CircuitPython.
 | Example | What it shows |
 |---|---|
 | [`quickstart.py`](examples/quickstart.py) | FakeSocket round-trip — send/recv/close exercising the protocol against in-memory bytearrays. Identical on every runtime. |
-| [`tcp_roundtrip.py`](examples/tcp_roundtrip.py) | Real TCP connect → send → recv → close.  Same shape on CP/MP/CPython; CP needs `radio=wifi.radio`, MP/CPython ignore. |
+| [`tcp_roundtrip.py`](examples/tcp_roundtrip.py) | Real TCP connect → send → recv → close.  Same shape on every runtime; CP auto-detects `wifi.radio`. |
 | [`tls_with_custom_ca.py`](examples/tls_with_custom_ca.py) | Custom-CA TLS via `ssl_context_with_ca`.  Documents the substrate quirks observed on Pi Pico W mbedTLS in the docstring. |
-| [`udp_echo_loopback.py`](examples/udp_echo_loopback.py) | Two UDP sockets on loopback — one-shot send/echo round trip.  Runs on CPython directly; same shape on a board with `radio=wifi.radio`. |
+| [`udp_echo_loopback.py`](examples/udp_echo_loopback.py) | Two UDP sockets on loopback — one-shot send/echo round trip.  Runs on CPython directly; same shape on a board (CP auto-detects `wifi.radio`). |
 | [`circuitpython_udp_echo_client.py`](examples/circuitpython_udp_echo_client.py) | Board-side UDP echo client — wifi up, send datagram to a host echo server, read echo back, non-blocking. |
 
 ## Developing this library

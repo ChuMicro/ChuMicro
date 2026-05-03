@@ -65,9 +65,8 @@ pip install chumicro-websockets-experimental
 from chumicro_websockets import WebSocketClient, WebSocketState
 from chumicro_websockets.sockets_factory import chumicro_sockets_factory
 from chumicro_timing import ticks_ms
-import wifi
 
-client = WebSocketClient(connection_factory=chumicro_sockets_factory(radio=wifi.radio))
+client = WebSocketClient(connection_factory=chumicro_sockets_factory())
 client.on_text = lambda text: print(f"got: {text}")
 client.connect("ws://api.example.com/stream")
 

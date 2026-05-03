@@ -349,9 +349,7 @@ class HttpClient:
     :func:`chumicro_sockets_factory` to wire up the default::
 
         from chumicro_requests import HttpClient, chumicro_sockets_factory
-        client = HttpClient(
-            connection_factory=chumicro_sockets_factory(radio=wifi.radio),
-        )
+        client = HttpClient(connection_factory=chumicro_sockets_factory())
     """
 
     def __init__(
@@ -897,8 +895,9 @@ def chumicro_sockets_factory(*, radio=None, ssl_context=None):
     :func:`chumicro_sockets.tls_client_socket` with the supplied
     *ssl_context* (or the runtime default when omitted).
 
-    *radio* is required on CircuitPython (typically ``wifi.radio``);
-    ignored on MicroPython and CPython.
+    *radio* defaults to ``wifi.radio`` on CircuitPython (auto-detected);
+    ignored on MicroPython and CPython.  Pass explicitly for multi-radio
+    prototypes or boards without a ``wifi`` module.
 
     Lazy-imports :mod:`chumicro_sockets` so the requests library
     can be unit-tested with a hand-rolled factory + ``FakeSocket``

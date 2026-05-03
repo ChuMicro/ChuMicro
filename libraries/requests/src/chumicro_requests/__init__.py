@@ -13,7 +13,7 @@ Public API::
     from chumicro_requests import HttpClient, chumicro_sockets_factory
     from chumicro_timing import ticks_ms
 
-    client = HttpClient(connection_factory=chumicro_sockets_factory(radio=wifi.radio))
+    client = HttpClient(connection_factory=chumicro_sockets_factory())
     handle = client.get("http://api.example.com/now", timeout_ms=5000)
 
     while not handle.done:
