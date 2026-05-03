@@ -463,25 +463,22 @@ class HandshakeParseState:
     ERROR = "error"
 
 
-class HandshakeResponseParser:
-    """Streaming parser for the server's HTTP/1.1 ``101`` response.
+class _HandshakeLineParser:
+    """Shared scaffolding for the streaming HTTP/1.1 first-line + header
+    parsers used by both sides of the websocket opening handshake.
 
-    The client feeds raw bytes via :meth:`feed`; the parser extracts
-    the status line + headers and validates: status code is ``101``,
-    ``Upgrade`` contains ``websocket``, ``Connection`` contains
-    ``upgrade``, and ``Sec-WebSocket-Accept`` matches *expected_accept*
-    (derived from the client's nonce).  Body bytes past the terminator
-    sit in :attr:`leftover` for the caller to feed into the frame
-    parser.  *max_header_bytes* (default ``8192``) bounds heap.
+    Subclasses override :attr:`_initial_state`, :meth:`_parse_first_line`,
+    and :meth:`_finalize`.  The base handles buffering, CRLF-bounded
+    line extraction, the cap on buffered bytes, header line parsing,
+    and the ``ERROR`` transition.
     """
 
-    def __init__(self, expected_accept: str, *, max_header_bytes: int = 8192):
-        self._expected_accept = expected_accept
+    _initial_state: str = ""
+
+    def __init__(self, *, max_header_bytes: int = 8192):
         self._max_header_bytes = max_header_bytes
         self._buffer = bytearray()
-        self._state = HandshakeParseState.STATUS_LINE
-        self._status_code = None
-        self._reason = ""
+        self._state = self._initial_state
         self._http_version = ""
         self._headers = CaseInsensitiveDict()
         self._error = None
@@ -491,16 +488,6 @@ class HandshakeResponseParser:
     def state(self):
         """Current :class:`HandshakeParseState`."""
         return self._state
-
-    @property
-    def status_code(self):
-        """Parsed status code (e.g. ``101``), or ``None`` until parsed."""
-        return self._status_code
-
-    @property
-    def reason(self):
-        """Parsed reason phrase, or ``""`` until parsed."""
-        return self._reason
 
     @property
     def http_version(self):
@@ -519,24 +506,18 @@ class HandshakeResponseParser:
 
     @property
     def leftover(self):
-        """Bytes consumed past the header terminator.
+        """Bytes past the header terminator (start of the framing stream).
 
-        Empty until :attr:`state` == ``DONE``.  When non-empty,
-        these are the first bytes of the websocket framing stream
-        — the caller hands them straight to :class:`FrameParser`.
+        Empty until :attr:`state` == ``DONE``.
         """
         return self._leftover
 
     def feed(self, chunk: bytes) -> None:
         """Consume *chunk* bytes; advance state if possible.
 
-        Raises:
-            WebSocketHandshakeError: Buffer would exceed ``max_header_bytes``,
-                status line is malformed, status is not ``101``, a
-                required upgrade header is missing or wrong, or
-                ``Sec-WebSocket-Accept`` doesn't match.  The parser
-                also transitions to ``ERROR`` and stores the message
-                in :attr:`error`.
+        Raises :class:`WebSocketHandshakeError` on overflow, malformed
+        first line, or any subclass validation failure (and transitions
+        to ``ERROR``).
         """
         if self._state in (HandshakeParseState.DONE, HandshakeParseState.ERROR):
             return
@@ -556,15 +537,84 @@ class HandshakeResponseParser:
             # rebind works everywhere.
             self._buffer = bytearray(self._buffer[terminator_index + 2:])
 
-            if self._state == HandshakeParseState.STATUS_LINE:
-                self._parse_status_line(line)
-            elif self._state == HandshakeParseState.HEADERS:
+            if self._state == HandshakeParseState.HEADERS:
                 if not line:
                     self._finalize()
                     return
                 self._parse_header_line(line)
+            else:
+                self._parse_first_line(line)
 
-    def _parse_status_line(self, line: bytes) -> None:
+    def _parse_header_line(self, line: bytes) -> None:
+        decoded = line.decode("iso-8859-1")
+        colon_index = decoded.find(":")
+        if colon_index == -1:
+            raise self._fail(f"header line missing colon: {decoded!r}")
+        header_name = decoded[:colon_index].strip()
+        header_value = decoded[colon_index + 1:].strip()
+        if not header_name:
+            raise self._fail(f"empty header name in {decoded!r}")
+        self._headers[header_name] = header_value
+
+    def _validate_upgrade_headers(self, role_label: str) -> None:
+        """Check the two upgrade headers shared by both sides."""
+        upgrade = self._headers.get("Upgrade", "").lower()
+        if "websocket" not in upgrade:
+            raise self._fail(
+                f"{role_label} missing 'Upgrade: websocket' (got {upgrade!r})",
+            )
+        connection = self._headers.get("Connection", "").lower()
+        connection_tokens = {token.strip() for token in connection.split(",")}
+        if "upgrade" not in connection_tokens:
+            raise self._fail(
+                f"{role_label} missing 'Connection: Upgrade' (got {connection!r})",
+            )
+
+    def _commit_done(self) -> None:
+        """Stash remaining buffered bytes as :attr:`leftover` + transition DONE."""
+        self._leftover = bytes(self._buffer)
+        self._buffer = bytearray()
+        self._state = HandshakeParseState.DONE
+
+    def _fail(self, message: str) -> WebSocketHandshakeError:
+        self._error = message
+        self._state = HandshakeParseState.ERROR
+        return WebSocketHandshakeError(message)
+
+    def _parse_first_line(self, line: bytes) -> None:  # pragma: no cover - abstract
+        raise NotImplementedError
+
+    def _finalize(self) -> None:  # pragma: no cover - abstract
+        raise NotImplementedError
+
+
+class HandshakeResponseParser(_HandshakeLineParser):
+    """Streaming parser for the server's HTTP/1.1 ``101`` response.
+
+    Validates: status is ``101``, ``Upgrade``/``Connection`` carry the
+    upgrade tokens, and ``Sec-WebSocket-Accept`` matches *expected_accept*
+    (derived from the client's nonce).
+    """
+
+    _initial_state = HandshakeParseState.STATUS_LINE
+
+    def __init__(self, expected_accept: str, *, max_header_bytes: int = 8192):
+        super().__init__(max_header_bytes=max_header_bytes)
+        self._expected_accept = expected_accept
+        self._status_code = None
+        self._reason = ""
+
+    @property
+    def status_code(self):
+        """Parsed status code (e.g. ``101``), or ``None`` until parsed."""
+        return self._status_code
+
+    @property
+    def reason(self):
+        """Parsed reason phrase, or ``""`` until parsed."""
+        return self._reason
+
+    def _parse_first_line(self, line: bytes) -> None:
         try:
             decoded = line.decode("ascii")
         except UnicodeDecodeError as decode_error:
@@ -590,76 +640,32 @@ class HandshakeResponseParser:
             )
         self._state = HandshakeParseState.HEADERS
 
-    def _parse_header_line(self, line: bytes) -> None:
-        decoded = line.decode("iso-8859-1")
-        colon_index = decoded.find(":")
-        if colon_index == -1:
-            raise self._fail(f"header line missing colon: {decoded!r}")
-        header_name = decoded[:colon_index].strip()
-        header_value = decoded[colon_index + 1:].strip()
-        if not header_name:
-            raise self._fail(f"empty header name in {decoded!r}")
-        self._headers[header_name] = header_value
-
     def _finalize(self) -> None:
-        upgrade = self._headers.get("Upgrade", "").lower()
-        if "websocket" not in upgrade:
-            raise self._fail(
-                f"server response missing 'Upgrade: websocket' "
-                f"(got {upgrade!r})",
-            )
-        connection = self._headers.get("Connection", "").lower()
-        connection_tokens = {token.strip() for token in connection.split(",")}
-        if "upgrade" not in connection_tokens:
-            raise self._fail(
-                f"server response missing 'Connection: Upgrade' "
-                f"(got {connection!r})",
-            )
+        self._validate_upgrade_headers("server response")
         accept = self._headers.get("Sec-WebSocket-Accept", "")
         if accept != self._expected_accept:
             raise self._fail(
                 f"Sec-WebSocket-Accept mismatch: expected "
                 f"{self._expected_accept!r}, got {accept!r}",
             )
-        self._leftover = bytes(self._buffer)
-        self._buffer = bytearray()
-        self._state = HandshakeParseState.DONE
-
-    def _fail(self, message: str) -> WebSocketHandshakeError:
-        self._error = message
-        self._state = HandshakeParseState.ERROR
-        return WebSocketHandshakeError(message)
+        self._commit_done()
 
 
-class HandshakeRequestParser:
+class HandshakeRequestParser(_HandshakeLineParser):
     """Streaming parser for the client's HTTP/1.1 upgrade request.
 
-    The server feeds raw bytes via :meth:`feed`; the parser extracts
-    the request line + headers and validates: method is ``GET``,
-    version is ``HTTP/1.1+``, ``Upgrade`` contains ``websocket``,
-    ``Connection`` contains ``upgrade``, ``Sec-WebSocket-Version`` is
-    ``13``, and ``Sec-WebSocket-Key`` is present + base64-decodes to
-    16 bytes.  After :attr:`state` == ``DONE``, :attr:`method` /
-    :attr:`path` / :attr:`http_version` / :attr:`headers` /
-    :attr:`client_key` are populated.  *max_header_bytes* (default
-    ``8192``) bounds heap.
+    Validates: method is ``GET``, version is ``HTTP/1.1+``,
+    ``Upgrade``/``Connection`` carry the upgrade tokens,
+    ``Sec-WebSocket-Version`` is ``13``, and ``Sec-WebSocket-Key`` is
+    present + base64-decodes to 16 bytes.
     """
 
+    _initial_state = HandshakeParseState.REQUEST_LINE
+
     def __init__(self, *, max_header_bytes: int = 8192):
-        self._max_header_bytes = max_header_bytes
-        self._buffer = bytearray()
-        self._state = HandshakeParseState.REQUEST_LINE
+        super().__init__(max_header_bytes=max_header_bytes)
         self._method = ""
         self._path = ""
-        self._http_version = ""
-        self._headers = CaseInsensitiveDict()
-        self._error = None
-        self._leftover = b""
-
-    @property
-    def state(self):
-        """Current :class:`HandshakeParseState`."""
-        return self._state
 
     @property
     def method(self):
@@ -672,69 +678,11 @@ class HandshakeRequestParser:
         return self._path
 
     @property
-    def http_version(self):
-        """Parsed HTTP version, or ``""``."""
-        return self._http_version
-
-    @property
-    def headers(self):
-        """Parsed headers as a :class:`CaseInsensitiveDict`."""
-        return self._headers
-
-    @property
     def client_key(self):
         """Verbatim ``Sec-WebSocket-Key`` once headers parse, else ``""``."""
         return self._headers.get("Sec-WebSocket-Key", "")
 
-    @property
-    def error(self):
-        """Last parse error if :attr:`state` == ``ERROR``."""
-        return self._error
-
-    @property
-    def leftover(self):
-        """Bytes consumed past the request terminator.
-
-        Empty until :attr:`state` == ``DONE``.  These are the first
-        bytes of the websocket framing stream from the client.
-        """
-        return self._leftover
-
-    def feed(self, chunk: bytes) -> None:
-        """Consume *chunk* bytes; advance state if possible.
-
-        Raises:
-            WebSocketHandshakeError: Buffer would exceed ``max_header_bytes``,
-                request line is malformed, method is not ``GET``, or a
-                required upgrade header is missing / wrong / unparseable.
-        """
-        if self._state in (HandshakeParseState.DONE, HandshakeParseState.ERROR):
-            return
-        self._buffer.extend(chunk)
-        if len(self._buffer) > self._max_header_bytes:
-            raise self._fail(
-                f"handshake exceeded max_header_bytes={self._max_header_bytes}",
-            )
-
-        while True:
-            terminator_index = self._buffer.find(CRLF)
-            if terminator_index == -1:
-                return
-            line = bytes(self._buffer[:terminator_index])
-            # CircuitPython doesn't support `del bytearray[start:stop]` on
-            # the unix port (and likely the embedded ports too).  Slice-
-            # rebind works everywhere.
-            self._buffer = bytearray(self._buffer[terminator_index + 2:])
-
-            if self._state == HandshakeParseState.REQUEST_LINE:
-                self._parse_request_line(line)
-            elif self._state == HandshakeParseState.HEADERS:
-                if not line:
-                    self._finalize()
-                    return
-                self._parse_header_line(line)
-
-    def _parse_request_line(self, line: bytes) -> None:
+    def _parse_first_line(self, line: bytes) -> None:
         try:
             decoded = line.decode("ascii")
         except UnicodeDecodeError as decode_error:
@@ -756,31 +704,8 @@ class HandshakeRequestParser:
             )
         self._state = HandshakeParseState.HEADERS
 
-    def _parse_header_line(self, line: bytes) -> None:
-        decoded = line.decode("iso-8859-1")
-        colon_index = decoded.find(":")
-        if colon_index == -1:
-            raise self._fail(f"header line missing colon: {decoded!r}")
-        header_name = decoded[:colon_index].strip()
-        header_value = decoded[colon_index + 1:].strip()
-        if not header_name:
-            raise self._fail(f"empty header name in {decoded!r}")
-        self._headers[header_name] = header_value
-
     def _finalize(self) -> None:
-        upgrade = self._headers.get("Upgrade", "").lower()
-        if "websocket" not in upgrade:
-            raise self._fail(
-                f"client request missing 'Upgrade: websocket' "
-                f"(got {upgrade!r})",
-            )
-        connection = self._headers.get("Connection", "").lower()
-        connection_tokens = {token.strip() for token in connection.split(",")}
-        if "upgrade" not in connection_tokens:
-            raise self._fail(
-                f"client request missing 'Connection: Upgrade' "
-                f"(got {connection!r})",
-            )
+        self._validate_upgrade_headers("client request")
         version = self._headers.get("Sec-WebSocket-Version", "")
         if version != WS_VERSION:
             raise self._fail(
@@ -801,14 +726,7 @@ class HandshakeRequestParser:
                 f"Sec-WebSocket-Key must decode to 16 bytes, got "
                 f"{len(decoded_key)}",
             )
-        self._leftover = bytes(self._buffer)
-        self._buffer = bytearray()
-        self._state = HandshakeParseState.DONE
-
-    def _fail(self, message: str) -> WebSocketHandshakeError:
-        self._error = message
-        self._state = HandshakeParseState.ERROR
-        return WebSocketHandshakeError(message)
+        self._commit_done()
 
 
 # ---------------------------------------------------------------------------
