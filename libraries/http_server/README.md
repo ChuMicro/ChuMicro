@@ -100,6 +100,8 @@ verification across the supported board matrix (`plans/learnings.md`):
 | MicroPython on ESP32-S2 | ✅ Works | Hardware-accelerated handshake; ~1 KB heap. |
 | MicroPython on rp2 (Pi Pico W) | ✅ Works (RSA-2048 only) | DER-encoded key; ~25 KB handshake heap; ECC keys fail at context build. |
 
+> **Why the CP-on-rp2 row?**  The CYW43 stack's TLS server path raises `OSError(32)` mid-handshake and wedges the chip's station state until a USB power-cycle.  The empirical findings + reproduction probe live in [`plans/learnings.md`](https://github.com/ChuMicro/ChuMicro/blob/main/plans/learnings.md) under "circuitpython-rp2 / Pi Pico W — server-side TLS."  No upstream fix is in flight; for HTTPS server work on rp2, use MicroPython.
+
 The TLS handshake is synchronous inside `wrap_socket(..., server_side=True)`;
 budget for a ~100–500 ms listener stall during accept.  Once the
 handshake completes, the per-connection state machine resumes its
