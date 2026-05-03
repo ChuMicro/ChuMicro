@@ -17,5 +17,6 @@ zensical
 pyserial
 pyyaml
 mpremote
+cryptography
 mike @ git+https://github.com/squidfunk/mike.git
 mkdocstrings[python]
