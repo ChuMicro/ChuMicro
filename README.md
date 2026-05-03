@@ -4,204 +4,89 @@
 <h1 align="center">ChuMicro</h1>
 
 <p align="center">
-  <strong><big>Python libraries that work on your microcontroller <em>and</em> your laptop.</big></strong><br>
-  <big>Write once, run on CircuitPython, MicroPython, and CPython.</big>
+  <strong><big>Microcontroller code that doesn't freeze.</big></strong><br>
+  <big>Your LED keeps blinking through wifi reconnect, TLS handshake, slow HTTP, stalled MQTT.</big><br>
+  <big>Cross-runtime: CircuitPython, MicroPython, CPython.</big>
 </p>
 
 <p align="center">
   <a href="https://chumicro.github.io/ChuMicro/">Docs</a> •
-  <a href="https://pypi.org/search/?q=chumicro">PyPI</a> •
-  <a href="https://github.com/ChuMicro/ChuMicro-Bundle">Bundle</a> •
-  <a href="https://github.com/ChuMicro/ChuMicro-Bundle-Experimental">Experimental</a> •
-  <a href="https://github.com/ChuMicro/ChuMicro/issues">Issues</a> •
-  <a href="#install">Install</a>
+  <a href="https://github.com/ChuMicro/ChuMicro-Workspace-Template">Workspace template</a> •
+  <a href="libraries/">Libraries</a> •
+  <a href="workbench/">Workbench tools</a> •
+  <a href="https://github.com/ChuMicro/ChuMicro/issues">Issues</a>
 </p>
 
 ---
 
-## What's in the box?
+## Eight lines, no freeze
 
-Small, focused libraries you can install independently. Use what you need.
-
-| Library | What it does |
-|---|---|
-| **[timing](libraries/timing/)** | Timers that don't freeze your code — your loop keeps running while waiting. No more `time.sleep()` locking everything up. |
-| **[runner](libraries/runner/)** | A simple task scheduler — register your services, call `runner.tick()` in your loop. No async needed. |
-| **[compat](libraries/compat/)** | Standard library features that CircuitPython and MicroPython are missing (like `functools.partial`). |
-| **[logging](libraries/logging/)** | Levelled logging that's runner-friendly and never blocks your loop. Per-logger levels with hierarchy resolution; zero chumicro deps. |
-| **[events](libraries/events/)** | Runner-shaped pub/sub event bus — bounded, drop-oldest, zero deps. Wires service callbacks (e.g. wifi state changes) into application-level handlers. |
-| **[msgpack](libraries/msgpack/)** | Compact binary serialization — 30–50% smaller than JSON, great for settings and sensor data. Wire-compatible with PyPI `msgpack(use_single_float=True)`. |
-| **[config](libraries/config/)** | Standardized runtime-config helpers — one file per thing, section-namespaced, with `<Name>Config.from_dict()` for each consumer library. |
-| **[kvstore](libraries/kvstore/)** | Tiny persistent key-value store — counters, timestamps, tokens. Picks the right backend (NVM / NVS / LittleFS) for your board. |
-| **[wifi](libraries/wifi/)** | One WiFi service across CP, MP-ESP32, and MP-Pico-W — state machine, reconnect supervisor, no firmware-level surprises. |
-| **[sockets](libraries/sockets/)** | Cross-runtime TCP + TLS + UDP — one protocol per shape over CP `socketpool`, MP `socket`/`ssl`, and CPython stdlib. Substrate for the network libraries above and below. |
-| **[ntp](libraries/ntp/)** | Runner-shaped SNTP client over an injected UDP socket. Pure-Python, cross-runtime; gets the device clock close enough for TLS validity-period checks. |
-| **[requests](libraries/requests/)** | Non-blocking HTTP/1.1 client — LED keeps blinking through a TLS handshake, mid-timeout, or against a stalled peer. |
-| **[http_server](libraries/http_server/)** | Non-blocking HTTP/1.1 server — `@server.route` decorator with method dispatch + path params; per-connection state machine advances one chunk per tick. TLS-server-capable on every supported runtime/board pair *except* CP-on-rp2. |
-| **[mqtt](libraries/mqtt/)** | Non-blocking MQTT 3.1.1 client (QoS 0 + 1) — runner-shaped, no threads or async. Concurrent QoS 1 publishes, configurable oversized-message policy, last-will + retain. |
-
-Works on ESP32 (S2, S3, C3, C6), RP2040/RP2350 (Raspberry Pi Pico), STM32, and most boards with at least 256 KB RAM and 4 MB flash. Browse the [documentation site](https://chumicro.github.io/ChuMicro/) for guides and API references, or look through `libraries/` — each library's README has install commands, a quick example, and an API summary.
-
-<details>
-<summary>Which libraries do I need? (dependencies and selection guide)</summary>
-
-### Dependencies
-
-```
-runner       → timing
-wifi         → config, timing
-ntp          → timing
-sockets      (no dependencies — pure platform shim)
-requests     → sockets, timing
-http_server  → sockets, timing
-mqtt         → sockets, timing
-config       → msgpack
-kvstore      → msgpack
-timing       (no dependencies)
-compat       (no dependencies)
-logging      (no dependencies)
-events       (no dependencies — and nothing else imports it; apps wire it up)
-msgpack      (no dependencies)
-```
-
-### Start with the problem you're solving
-
-- **"I need timers that don't freeze my loop"** → [timing](libraries/timing/)
-- **"I have multiple things happening in my loop"** → [runner](libraries/runner/) (includes timing)
-- **"I need to store settings or send data compactly"** → [msgpack](libraries/msgpack/)
-- **"I need to read deploy-time config on the device"** → [config](libraries/config/) (with [msgpack](libraries/msgpack/))
-- **"I need to persist a counter across reboots"** → [kvstore](libraries/kvstore/)
-- **"I need WiFi that auto-reconnects without surprises"** → [wifi](libraries/wifi/)
-- **"I need a TCP / TLS / UDP socket that works on CP and MP"** → [sockets](libraries/sockets/)
-- **"I need to set the device clock from an NTP server"** → [ntp](libraries/ntp/)
-- **"I need to fetch a URL without blocking my loop"** → [requests](libraries/requests/)
-- **"I need to expose HTTP routes on the device"** → [http_server](libraries/http_server/)
-- **"I need an MQTT client that doesn't freeze my loop"** → [mqtt](libraries/mqtt/)
-- **"I want levelled logging that doesn't pull in chumicro deps"** → [logging](libraries/logging/)
-- **"I want a pub/sub bus to wire wifi-state-change into app handlers"** → [events](libraries/events/)
-- **"functools.partial doesn't exist on my board"** → [compat](libraries/compat/)
-
-### Companion host-side tools
-
-Workbench packages live alongside the libraries — they run on your laptop and help you manage connected boards. They are optional; you can use the libraries above without them.
-
-| Tool | What it does |
-|---|---|
-| **[deploy](workbench/deploy/)** | Push code onto a CircuitPython or MicroPython board, probe its identity, and flash firmware (UF2 or esptool). Programmatic API + `chumicro-deploy` CLI; recovery layer that classifies failures and walks you through fixes. |
-| **[repl](workbench/repl/)** | Serial REPL with traceback highlighting, an `mpremote`-compatible TUI, a `tail()` follow-mode for deploy orchestration, and a programmatic `ReplSession` for headless test fixtures. `chumicro-repl` CLI. |
-| **[workspace](workbench/workspace/)** | One-stop host CLI + Python API for ChuMicro project workspaces — `init` (clone a starter), `setup` (bootstrap a venv), `add-device`, `deploy` (single thing, `--all-devices`, or `--all-things`), `repl <thing>` (deploy-then-tail), `install-firmware`, `status` / `doctor` health checks, `new --library` / `new --from`, path-aware `rename`, `update` (re-flow tool-owned template files).  Canonical starter lives at [`ChuMicro-Workspace-Template`](https://github.com/ChuMicro/ChuMicro-Workspace-Template). |
-| **[pytest-device](workbench/pytest-device/)** | Pytest plugin that intercepts collection under any `functional_tests/` directory, stages your library + test source onto a connected CP / MP board via `chumicro-deploy`, runs the test in the device runtime, and surfaces the on-device outcome to host-side pytest.  Auto-registers via `pytest11`; reads `devices.yml`. |
-
-</details>
-
-## Install
-
-Pick the install method for your runtime — swap `chumicro-timing` for whichever library you need.
-
-> **A note on naming:** pip uses hyphens (`chumicro-timing`); the import name and bundle path use underscores (`chumicro_timing`). That's standard across the Python ecosystem — PyPI uses hyphens by convention, but Python import names must be valid identifiers. Copy commands from the blocks below as-is.
-
-**CircuitPython ([circup](https://github.com/adafruit/circup)):**
-
-circup is CircuitPython's package manager — it uses [bundles](https://learn.adafruit.com/keep-your-circuitpython-libraries-on-devices-up-to-date-with-circup/bundle-commands) to find third-party packages. Register the ChuMicro bundle once, then install any library by name:
-
-```bash
-circup bundle-add ChuMicro/ChuMicro-Bundle
-circup install chumicro-timing
-```
-
-**MicroPython ([mip](https://docs.micropython.org/en/latest/reference/packages.html)):**
-
-```bash
-mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_timing
-```
-
-Or from the REPL on a network-capable board:
-
-```python
-import mip
-mip.install("github:ChuMicro/ChuMicro-Bundle/chumicro_timing")
-```
-
-> **Want pre-compiled `.mpy` bytecode?** Add `mpy6/` before the package name for faster startup and lower RAM usage on boards with mpy format v6 (MicroPython 1.24+):
-> ```
-> mpremote mip install github:ChuMicro/ChuMicro-Bundle/mpy6/chumicro_timing
-> ```
-
-**CPython (pip):**
-
-On your laptop, install from PyPI — no bundle needed:
-
-```bash
-pip install chumicro-timing
-```
-
-*New here? The install commands above are all you need — the experimental-builds section below is only for users who want to track pre-release versions.*
-
-<details>
-<summary>Experimental (pre-release) builds and channel switching</summary>
-
-Pre-release builds are published automatically when a library version is bumped. Do not register both bundles simultaneously — circup may pick either version for a given package.
-
-```bash
-# CircuitPython — switch to experimental
-circup bundle-remove ChuMicro/ChuMicro-Bundle              # skip if never added
-circup bundle-add ChuMicro/ChuMicro-Bundle-Experimental
-circup install chumicro-timing
-
-# MicroPython
-mpremote mip install github:ChuMicro/ChuMicro-Bundle-Experimental/chumicro_timing
-
-# CPython
-pip install chumicro-timing-experimental
-```
-
-| Channel | Bundle repo | Source |
-|---|---|---|
-| **Stable** | [ChuMicro-Bundle](https://github.com/ChuMicro/ChuMicro-Bundle) | tagged releases |
-| **Experimental** | [ChuMicro-Bundle-Experimental](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental) | `main` |
-
-</details>
-
-## Your first program
-
-A blink that doesn't freeze — the microcontroller hello world:
+> _\[TODO `support/docs/heartbeat-vs-sleep.gif` — side-by-side LED on the same board, left runs `time.sleep(1)` (LED stalls during a network call), right runs `Heartbeat` (LED keeps cadence while the same call runs).]_
 
 ```python
 from chumicro_timing import Heartbeat, ticks_ms
 
-heartbeat = Heartbeat(period_ms=1000)
+heartbeat = Heartbeat(period_ms=500)
 
 while True:
-    now = ticks_ms()
-    if heartbeat.poll(now):
-        print("one second elapsed")  # or: led.value = not led.value
+    if heartbeat.poll(ticks_ms()):
+        print("blink")  # or toggle an LED here
+    # ... add wifi, sockets, MQTT here — the print/LED keeps cadence ...
 ```
 
-Or try it in the REPL:
+Drop that on a CircuitPython or MicroPython board (or paste it into Python on your laptop) and the print fires every 500 ms forever.  The loop runs hundreds of times per second between prints, ready for whatever else you want to do.
 
+**Why it matters.**  Every networked service ChuMicro ships — `chumicro-wifi`, `chumicro-sockets`, `chumicro-mqtt`, `chumicro-requests`, `chumicro-http-server`, `chumicro-websockets` — is the same shape: `check(now_ms) -> bool` + `handle(now_ms)`.  Register as many as you need with [`chumicro-runner`](libraries/runner/).  Every state change is visible from `print()` on the serial console; nothing hides inside an event loop.  We picked tick-based scheduling because transparent state matters more than syntactic concurrency on a board where serial output is your only window.
+
+<details>
+<summary>How to actually blink an LED (per-runtime GPIO)</summary>
+
+CircuitPython:
 ```python
->>> from chumicro_timing import ticks_ms
->>> ticks_ms()
-42387
+import board, digitalio
+led = digitalio.DigitalInOut(board.LED)
+led.direction = digitalio.Direction.OUTPUT
+# inside the `if heartbeat.poll(...):` block:
+led.value = not led.value
 ```
+
+MicroPython (board pin number varies):
+```python
+from machine import Pin
+led = Pin(2, Pin.OUT)
+# inside the `if heartbeat.poll(...):` block:
+led.value(not led.value())
+```
+</details>
+
+## Install
+
+```bash
+# CircuitPython (via circup)
+circup bundle-add ChuMicro/ChuMicro-Bundle
+circup install chumicro-timing
+
+# MicroPython (via mip)
+mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_timing
+
+# CPython (via pip)
+pip install chumicro-timing
+```
+
+For pre-compiled `.mpy` bundles, the experimental channel, and the full install matrix, see [`INSTALL.md`](INSTALL.md).
+
+## Now what?
+
+| | |
+|---|---|
+| **Want a real project layout?** | [`ChuMicro-Workspace-Template`](https://github.com/ChuMicro/ChuMicro-Workspace-Template) — clone-and-go.  Safer than editing `code.py` directly on the device (no FAT-filesystem wear, no losing files when the CIRCUITPY drive hiccups).  Recommended even for a single-project board. |
+| **Want more libraries?** | [`libraries/`](libraries/) — wifi, mqtt, sockets, requests, http_server, websockets, ntp, kvstore, config, msgpack, runner, events, logging, compat. |
+| **Want host-side tools?** | [`workbench/`](workbench/) — `chumicro-deploy`, `chumicro-repl`, `chumicro-workspace`, `chumicro-pytest-device`. |
+| **Want to build your own?** | [`CONTRIBUTING.md`](CONTRIBUTING.md) — scaffold one with `python scripts/run.py new-library`. |
 
 ## Documentation
 
-📖 **[Browse the docs](https://chumicro.github.io/ChuMicro/)** — guides, API references, and examples for every library.
-
-Each library has its own docs with a version selector so you can switch between stable and experimental.
-
-## Contributing
-
-We welcome contributors of all experience levels. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup, guidelines, and how to submit a pull request. Want the short version? Check the [contributor cheat sheet](docs/contributing/cheat-sheet.md). Not sure where to start? Check out [good first contributions](CONTRIBUTING.md#good-first-contributions).
-
-### Development quick links
-
-- [Contributor cheat sheet](docs/contributing/cheat-sheet.md)
-- [Device testing](docs/contributing/device-testing.md)
-- [PyCharm guide](docs/contributing/development-pycharm.md)
-- [VS Code guide](docs/contributing/development-vscode.md)
-- [Other editors / CLI guide](docs/contributing/development-other-editors.md)
+📖 **[chumicro.github.io/ChuMicro](https://chumicro.github.io/ChuMicro/)** — guides, API references, and examples for every library.  Each library has its own docs with a version selector so you can switch between stable and experimental.
 
 ## Repository layout
 
@@ -219,7 +104,6 @@ chumicro/
 ├── target-runtimes.toml   # Pinned runtime versions
 └── LICENSE                # MIT
 ```
-
 
 ## License
 
