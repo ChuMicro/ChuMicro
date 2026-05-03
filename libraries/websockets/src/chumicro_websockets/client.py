@@ -258,6 +258,14 @@ class WebSocketClient:
         self._ticks_add = ticks_add_func
         self._ticks_diff = ticks_diff_func
 
+        # Pre-allocated recv scratch buffer — reused on every tick so
+        # we don't churn the heap with ~1 KB allocations per handle()
+        # call.  Live-board MemoryError on Pi Pico W (124 KB free heap)
+        # caught the per-call allocation; matches the chumicro-mqtt
+        # PacketDecoder.fill_buffer() pre-allocation pattern.
+        self._recv_buffer = bytearray(self._recv_budget_per_tick)
+        self._recv_view = memoryview(self._recv_buffer)
+
         self._state = WebSocketState.CONNECTING
         # Set on the first connect() call; before then state stays
         # CONNECTING but with no socket / no parsers — `connect()` is
@@ -866,10 +874,16 @@ class WebSocketClient:
             budget -= sent
 
     def _recv_chunk(self, max_bytes: int):
-        """Non-blocking recv; ``bytes``, ``b""`` on EOF, or ``None`` on EAGAIN."""
-        buffer = bytearray(max_bytes)
+        """Non-blocking recv; ``bytes``, ``b""`` on EOF, or ``None`` on EAGAIN.
+
+        Reads into the pre-allocated :attr:`_recv_buffer` (sized to
+        ``recv_budget_per_tick`` at construction time) so we don't
+        churn the heap.  Caller gets back a fresh ``bytes`` slice of
+        exactly the bytes received.
+        """
+        cap = max_bytes if max_bytes <= len(self._recv_buffer) else len(self._recv_buffer)
         try:
-            received = self._socket.recv_into(buffer, max_bytes)
+            received = self._socket.recv_into(self._recv_view[:cap], cap)
         except Exception as recv_error:  # noqa: BLE001 — narrow below
             if _is_eagain(recv_error):
                 return None
@@ -883,7 +897,7 @@ class WebSocketClient:
             return None
         if received == 0:
             return b""
-        return bytes(buffer[:received])
+        return bytes(self._recv_buffer[:received])
 
     # ------------------------------------------------------------------
     # Internal: close + finalize

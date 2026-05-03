@@ -149,6 +149,10 @@ class Connection:
         self._ticks_add = ticks_add_func
         self._ticks_diff = ticks_diff_func
 
+        # Pre-allocated recv scratch buffer — see WebSocketClient for rationale.
+        self._recv_buffer = bytearray(self._recv_budget_per_tick)
+        self._recv_view = memoryview(self._recv_buffer)
+
         self._state = WebSocketState.CONNECTING
         self._handshake_phase = ServerHandshakePhase.READING_REQUEST
         self._handshake_request_parser = HandshakeRequestParser()
@@ -636,9 +640,9 @@ class Connection:
             budget -= sent
 
     def _recv_chunk(self, max_bytes: int):
-        buffer = bytearray(max_bytes)
+        cap = max_bytes if max_bytes <= len(self._recv_buffer) else len(self._recv_buffer)
         try:
-            received = self._socket.recv_into(buffer, max_bytes)
+            received = self._socket.recv_into(self._recv_view[:cap], cap)
         except Exception as recv_error:  # noqa: BLE001 - narrow below
             if _is_eagain(recv_error):
                 return None
@@ -652,7 +656,7 @@ class Connection:
             return None
         if received == 0:
             return b""
-        return bytes(buffer[:received])
+        return bytes(self._recv_buffer[:received])
 
     # ------------------------------------------------------------------
     # Internal: close + finalize
