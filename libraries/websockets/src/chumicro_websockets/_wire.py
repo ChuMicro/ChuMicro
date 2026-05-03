@@ -247,15 +247,13 @@ class CaseInsensitiveDict:
     """Header dict whose lookups fold to lowercase.
 
     HTTP/1.1 §3.2 requires header names to be case-insensitive on
-    receipt — the websocket opening handshake is HTTP/1.1.  We
-    store the original-cased name (so callers see ``Upgrade`` not
-    ``upgrade``) keyed off the lowercased form.
-
-    Inlined copy of :class:`chumicro_requests._wire.CaseInsensitiveDict`
-    — when a third HTTP/1.1-aware consumer arrives and we factor a
-    shared ``chumicro-http`` package out (Decision 0040 §Consequences,
-    Decision 0041 §Consequences), this copy retires.  Until then,
-    copy-don't-couple.
+    receipt — the websocket opening handshake is HTTP/1.1.  We store
+    the original-cased name (so callers see ``Upgrade`` not
+    ``upgrade``) keyed off the lowercased form.  Inlined from
+    :class:`chumicro_requests._wire.CaseInsensitiveDict` per the
+    copy-don't-couple rule until a third HTTP/1.1-aware consumer
+    triggers extracting a shared ``chumicro-http`` package
+    (Decision 0040/0041 §Consequences).
     """
 
     def __init__(self):
@@ -269,32 +267,6 @@ class CaseInsensitiveDict:
 
     def __contains__(self, name):
         return name.lower() in self._entries
-
-    def __iter__(self):
-        for original_name, _value in self._entries.values():
-            yield original_name
-
-    def __len__(self):
-        return len(self._entries)
-
-    def __eq__(self, other):
-        if not isinstance(other, CaseInsensitiveDict):
-            return NotImplemented
-        if len(self._entries) != len(other._entries):
-            return False
-        for lower, (_name, value) in self._entries.items():
-            if lower not in other._entries:
-                return False
-            if other._entries[lower][1] != value:
-                return False
-        return True
-
-    def __repr__(self):
-        pairs = ", ".join(
-            f"{name!r}: {value!r}"
-            for name, value in self.items()
-        )
-        return f"CaseInsensitiveDict({{{pairs}}})"
 
     def get(self, name, default=None):
         """Return the value for *name* or *default* if missing."""
