@@ -32,20 +32,38 @@ except ImportError:
 
 
 def _sha1_digest(data: bytes) -> bytes:
-    """Return the SHA-1 digest of *data*.
+    """Return the SHA-1 digest of *data* using the fastest available backend.
 
-    CPython and most MicroPython ports expose ``hashlib.sha1``, but
-    CircuitPython's default ``MICROPY_PY_HASHLIB_SHA1=0`` (`py/mpconfig.h`)
-    leaves it off — RFC 6455 §4.2.2 requires SHA-1 for the
-    Sec-WebSocket-Accept derivation, so we fall back to a small
-    pure-Python implementation on runtimes that don't expose it.
+    Three-tier dispatch:
+
+    1. **``hashlib.sha1(data)``** — CPython, MicroPython on every
+       supported port.  The C-backed fast path.
+    2. **``hashlib.new("sha1", data)``** — CircuitPython.  The mbedtls-
+       backed factory works even though ``hashlib.sha1`` itself is
+       gated off by ``MICROPY_PY_HASHLIB_SHA1=0`` in
+       ``py/mpconfig.h:1807``.  Live-board probe on Pi Pico W CP
+       confirmed ``hashlib.new("sha1", b"abc").digest()`` matches
+       the FIPS vector.
+    3. **Pure-Python ``_pure_sha1``** — last-resort fallback for any
+       runtime that exposes neither.  Allocates ~80 LOC of ints +
+       bytearrays per hash; on tight-heap boards this fragments the
+       heap badly and can crash the chip mid-``client.connect()``.
+       Live-board reproduced on Pi Pico W CP before the
+       ``hashlib.new`` path was wired up.
 
     The only thing we ever hash is the ``client_key + WS_MAGIC_GUID``
-    constant (~60 bytes), so a slow Python implementation is fine.
+    constant (~60 bytes), so even the slow path is fine when reached —
+    the issue is the heap pressure from int allocation, not throughput.
     """
     hasher_factory = getattr(hashlib, "sha1", None)
     if hasher_factory is not None:
         return hasher_factory(data).digest()
+    new_factory = getattr(hashlib, "new", None)
+    if new_factory is not None:
+        try:
+            return new_factory("sha1", data).digest()
+        except (ValueError, TypeError):
+            pass
     return _pure_sha1(data)
 
 
