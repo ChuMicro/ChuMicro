@@ -7,10 +7,10 @@ This is the front door. Everything else is deeper read.
 ---
 
 - **Phase:** **chumicro-websockets — leanness pass underway** per `plans/workstreams/websockets-cleanup.md`.  v0.6.x ships 3,628 LOC deployed (vs chumicro-mqtt 1,842) — too fat for embedded targets.  Seven independent slices ranked smallest-blast-radius first: A (FrameParser per-byte→per-chunk), C (slim `__init__`), D (slim `CaseInsensitiveDict`), B (namespace classes→constants), F (compact docstrings + dead defensive code), E (merge handshake parsers), G (shared `_session.py`).  Each slice ships its own version bump + green preflight + commit.
-- **Last shipped:** Slice E — extracted `_HandshakeLineParser` base for both handshake parsers; `HandshakeResponseParser` + `HandshakeRequestParser` now subclass it, each owning only their first-line parser + `_finalize` validation.  Shared `_validate_upgrade_headers(role_label)` + `_commit_done()` helpers consolidate the two-header common validation + DONE transition.  Deployed src 3,290 → 3,208 LOC (net −82 since slice F).  v0.8.0 (minor bump — internal refactor; FYI to consumers reaching into `_wire`).
-- **In flight:** Slice G — extract shared `_session.py` between WebSocketClient + Connection (~600 LOC dedup; biggest win, biggest test churn).
+- **Last shipped:** Slice G — extracted `_BaseSession` into `_session.py`; `WebSocketClient` + `Connection` now subclass it, each owning only role-specific code (handshake direction, mask discipline, auto-ping for the client, accept-loop for the server).  `client.py` 1,036 → 411 LOC (net −625 with shared base accounted); `server.py` 946 → 511 LOC (−435 net).  Deployed src 3,628 → 2,916 LOC (net −712, ~20% cut over the 7-slice pass).  Coverage 96.17%.  v0.9.0.  All 260 host-side tests pass.
+- **In flight:** idle — websockets leanness pass complete.
 - **Blocked on:** —
-- **Last touched:** libraries/websockets/src/chumicro_websockets/_wire.py, libraries/websockets/VERSION, plans/now.md.
+- **Last touched:** libraries/websockets/src/chumicro_websockets/_session.py (new), libraries/websockets/src/chumicro_websockets/client.py, libraries/websockets/src/chumicro_websockets/server.py, libraries/websockets/VERSION, plans/now.md.
 
 ---
 
