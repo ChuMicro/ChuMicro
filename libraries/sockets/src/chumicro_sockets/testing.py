@@ -29,8 +29,6 @@ real closed socket would.
 """
 
 
-from collections import deque
-
 # Errno 11 (EAGAIN) is the cross-runtime "would block" code.  Spelt
 # out as a constant so callers don't have to remember the magic.
 EAGAIN = 11
@@ -47,7 +45,11 @@ class FakeSocket:
 
     def __init__(self) -> None:
         self.sent: bytearray = bytearray()
-        self._recv_queue: deque[bytes] = deque()
+        # ``list`` rather than ``collections.deque`` — the test fake
+        # has no perf budget, and MicroPython's deque requires a
+        # positive ``maxlen`` (no unbounded form).  See
+        # plans/learnings.md §"MP collections.deque()".
+        self._recv_queue: list[bytes] = []
         self._closed: bool = False
         self._blocking: bool = True
         self._timeout: float | None = None
@@ -113,11 +115,11 @@ class FakeSocket:
         capacity = nbytes if nbytes > 0 else len(buffer)
         if capacity <= 0:
             return 0
-        chunk = self._recv_queue.popleft()
+        chunk = self._recv_queue.pop(0)
         consumed = min(capacity, len(chunk))
         buffer[:consumed] = chunk[:consumed]
         if consumed < len(chunk):
-            self._recv_queue.appendleft(chunk[consumed:])
+            self._recv_queue.insert(0, chunk[consumed:])
         return consumed
 
     def close(self) -> None:
@@ -200,7 +202,9 @@ class FakeUDPSocket:
         bind_port: int = 54321,
     ) -> None:
         self.sent: list = []
-        self._recv_queue: deque = deque()
+        # ``list`` rather than ``collections.deque`` — see FakeSocket
+        # for the reasoning.
+        self._recv_queue: list = []
         self._closed: bool = False
         self._blocking: bool = True
         self._timeout: float | None = None
@@ -271,7 +275,7 @@ class FakeUDPSocket:
         if not self._recv_queue:
             return 0, ("0.0.0.0", 0)
         capacity = nbytes if nbytes > 0 else len(buffer)
-        data, address = self._recv_queue.popleft()
+        data, address = self._recv_queue.pop(0)
         consumed = min(capacity, len(data))
         if consumed:
             buffer[:consumed] = data[:consumed]
