@@ -7,10 +7,10 @@ This is the front door. Everything else is deeper read.
 ---
 
 - **Phase:** **chumicro-websockets — leanness pass underway** per `plans/workstreams/websockets-cleanup.md`.  v0.6.x ships 3,628 LOC deployed (vs chumicro-mqtt 1,842) — too fat for embedded targets.  Seven independent slices ranked smallest-blast-radius first: A (FrameParser per-byte→per-chunk), C (slim `__init__`), D (slim `CaseInsensitiveDict`), B (namespace classes→constants), F (compact docstrings + dead defensive code), E (merge handshake parsers), G (shared `_session.py`).  Each slice ships its own version bump + green preflight + commit.
-- **Last shipped:** Slice G — extracted `_BaseSession` into `_session.py`; `WebSocketClient` + `Connection` now subclass it, each owning only role-specific code (handshake direction, mask discipline, auto-ping for the client, accept-loop for the server).  `client.py` 1,036 → 411 LOC (net −625 with shared base accounted); `server.py` 946 → 511 LOC (−435 net).  Deployed src 3,628 → 2,916 LOC (net −712, ~20% cut over the 7-slice pass).  Coverage 96.17%.  v0.9.0.  All 260 host-side tests pass.
-- **In flight:** idle — websockets leanness pass complete.
-- **Blocked on:** —
-- **Last touched:** libraries/websockets/src/chumicro_websockets/_session.py (new), libraries/websockets/src/chumicro_websockets/client.py, libraries/websockets/src/chumicro_websockets/server.py, libraries/websockets/VERSION, plans/now.md.
+- **Last shipped:** Memory-pressure regression tests for chumicro-websockets (`tests/test_memory_pressure.py`, mirrors `chumicro_mqtt.tests.test_memory_pressure`).  10 tests cover send_text/send_binary/inbound text/inbound binary/ping-pong (300-500 iterations each, all <4 KiB tracemalloc growth post-GC), recv-buffer id() stability across 100 frames, FrameParser state-reset cleanliness, bounded handle()-with-no-data, and server-side mirrors.  All pass.  Live-board re-verification on **Pi Pico W CP+MP**: 8/8 functional tests pass in flash mode (37s total).  Verdict: no `gc.collect()` calls needed in library code (matches the chumicro-mqtt/requests/http_server family pattern).
+- **In flight:** idle — websockets leanness pass + memory regression coverage complete.
+- **Blocked on:** Lolin S2 CIRCUITPY mount wedged by FSKit (rsync burst); needs board unplug + replug.  See `plans/learnings.md:387-389`.
+- **Last touched:** libraries/websockets/tests/test_memory_pressure.py (new), plans/now.md.
 
 ---
 
