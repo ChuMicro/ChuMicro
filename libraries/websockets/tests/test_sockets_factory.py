@@ -4,11 +4,40 @@ Verifies the Decision 0042 sub-rule wiring: the helper lives in
 its own submodule, ``__init__.py`` doesn't re-export it, and the
 returned factory routes TLS / non-TLS to the right
 :mod:`chumicro_sockets` constructor with the right arguments.
+
+Cross-runtime: pure-Python.  The original suite used
+``unittest.mock.patch`` (CPython-only) to swap module-level symbols;
+this version does the same swap manually with ``setattr`` /
+``try`` / ``finally`` so the tests run on the MP / CP unix-ports too.
 """
 
-from unittest import mock
-
+import chumicro_sockets
 from chumicro_websockets.sockets_factory import chumicro_sockets_factory
+
+
+class _SwapAttribute:
+    """Context manager — swap ``module.name`` with a stand-in, restore on exit."""
+
+    def __init__(self, module: object, name: str, replacement: object) -> None:
+        self.module = module
+        self.name = name
+        self.replacement = replacement
+        self._original: object = None
+        self._had_attr: bool = False
+
+    def __enter__(self) -> "_SwapAttribute":
+        self._had_attr = hasattr(self.module, self.name)
+        if self._had_attr:
+            self._original = getattr(self.module, self.name)
+        setattr(self.module, self.name, self.replacement)
+        return self
+
+    def __exit__(self, exc_type, exc_value, exc_traceback) -> bool:
+        if self._had_attr:
+            setattr(self.module, self.name, self._original)
+        else:
+            delattr(self.module, self.name)
+        return False
 
 
 class TestSocketsFactory:
@@ -17,47 +46,64 @@ class TestSocketsFactory:
         assert callable(factory)
 
     def test_plain_tcp_routes_to_tcp_client_socket(self):
+        tcp_calls: list = []
+        tls_calls: list = []
+
+        def fake_tcp(host, port, *, radio):
+            tcp_calls.append((host, port, radio))
+            return "tcp-socket"
+
+        def fake_tls(host, port, *, context, radio):
+            tls_calls.append((host, port, context, radio))
+            return "tls-socket"
+
         factory = chumicro_sockets_factory(radio="radio-handle")
-        with mock.patch(
-            "chumicro_sockets.tcp_client_socket",
-            return_value="tcp-socket",
-        ) as tcp_mock, mock.patch(
-            "chumicro_sockets.tls_client_socket",
-            return_value="tls-socket",
-        ) as tls_mock:
+        with _SwapAttribute(chumicro_sockets, "tcp_client_socket", fake_tcp), \
+                _SwapAttribute(chumicro_sockets, "tls_client_socket", fake_tls):
             result = factory("example.com", 80, False)
-        tcp_mock.assert_called_once_with("example.com", 80, radio="radio-handle")
-        tls_mock.assert_not_called()
+
         assert result == "tcp-socket"
+        assert tcp_calls == [("example.com", 80, "radio-handle")]
+        assert tls_calls == []
 
     def test_tls_routes_to_tls_client_socket(self):
+        tcp_calls: list = []
+        tls_calls: list = []
+
+        def fake_tcp(host, port, *, radio):
+            tcp_calls.append((host, port, radio))
+            return "tcp-socket"
+
+        def fake_tls(host, port, *, context, radio):
+            tls_calls.append((host, port, context, radio))
+            return "tls-socket"
+
         context = object()
         factory = chumicro_sockets_factory(radio="radio", ssl_context=context)
-        with mock.patch(
-            "chumicro_sockets.tcp_client_socket",
-            return_value="tcp-socket",
-        ) as tcp_mock, mock.patch(
-            "chumicro_sockets.tls_client_socket",
-            return_value="tls-socket",
-        ) as tls_mock:
+        with _SwapAttribute(chumicro_sockets, "tcp_client_socket", fake_tcp), \
+                _SwapAttribute(chumicro_sockets, "tls_client_socket", fake_tls):
             result = factory("example.com", 443, True)
-        tls_mock.assert_called_once_with(
-            "example.com",
-            443,
-            context=context,
-            radio="radio",
-        )
-        tcp_mock.assert_not_called()
+
         assert result == "tls-socket"
+        assert tls_calls == [("example.com", 443, context, "radio")]
+        assert tcp_calls == []
 
     def test_default_ssl_context_is_none(self):
+        tls_calls: list = []
+
+        def fake_tls(host, port, *, context, radio):
+            tls_calls.append((host, port, context, radio))
+            return "tls-socket"
+
+        def fake_tcp(host, port, *, radio):
+            return "tcp-socket"
+
         factory = chumicro_sockets_factory()
-        with mock.patch(
-            "chumicro_sockets.tls_client_socket",
-            return_value="tls-socket",
-        ) as tls_mock, mock.patch("chumicro_sockets.tcp_client_socket"):
+        with _SwapAttribute(chumicro_sockets, "tls_client_socket", fake_tls), \
+                _SwapAttribute(chumicro_sockets, "tcp_client_socket", fake_tcp):
             factory("h", 443, True)
-        tls_mock.assert_called_once_with("h", 443, context=None, radio=None)
+
+        assert tls_calls == [("h", 443, None, None)]
 
     def test_helper_not_re_exported_from_init(self):
         """Decision 0042 sub-rule: __init__.py must NOT re-export the helper.

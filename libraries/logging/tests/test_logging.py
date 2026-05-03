@@ -6,9 +6,9 @@ chumicro-test-harness on MicroPython and CircuitPython unix ports.
 """
 
 import io
+import sys
 
 import chumicro_logging
-import pytest
 from chumicro_logging import (
     CRITICAL,
     DEBUG,
@@ -23,6 +23,7 @@ from chumicro_logging import (
     level_name,
 )
 from chumicro_logging.testing import FailingHandler, RecordingHandler
+from chumicro_test_harness.assertions import raises
 
 # ---------------------------------------------------------------------------
 # Public surface
@@ -225,11 +226,18 @@ def test_stream_handler_writes_formatted_line() -> None:
     assert stream.getvalue() == "INFO:boot:ready\n"
 
 
-def test_stream_handler_default_stream_is_stdout(capsys: pytest.CaptureFixture[str]) -> None:
+def test_stream_handler_default_stream_is_stdout() -> None:
+    """``StreamHandler()`` (no ``stream=``) captures ``sys.stdout``.
+
+    Verified by checking the handler's internal stream attribute
+    rather than swapping ``sys.stdout`` for an in-memory buffer:
+    MicroPython's ``sys`` module is read-only (no ``__setattr__``),
+    so the swap-and-restore pattern raises ``AttributeError`` on the
+    unix-port.  Asserting the reference identity is what we actually
+    care about anyway — that no copy / wrapper sneaks in between.
+    """
     handler = StreamHandler()
-    handler.emit(INFO, "boot", "ready")
-    captured = capsys.readouterr()
-    assert captured.out == "INFO:boot:ready\n"
+    assert handler._stream is sys.stdout  # noqa: SLF001
 
 
 def test_stream_handler_drops_below_level() -> None:
@@ -302,7 +310,7 @@ def test_stream_handler_skips_flush_when_unavailable() -> None:
 
 def test_buffered_handler_capacity_must_be_positive() -> None:
     downstream = RecordingHandler()
-    with pytest.raises(ValueError):
+    with raises(ValueError):
         BufferedHandler(downstream=downstream, capacity=0)
 
 
@@ -448,12 +456,12 @@ def test_recording_handler_level_property_round_trips() -> None:
 
 def test_failing_handler_uses_default_exception() -> None:
     handler = FailingHandler()
-    with pytest.raises(RuntimeError, match="handler boom"):
+    with raises(RuntimeError, match="handler boom"):
         handler.emit(INFO, "x", "y")
     assert handler.calls == 1
 
 
 def test_failing_handler_uses_supplied_exception() -> None:
     handler = FailingHandler(exception=ValueError("nope"))
-    with pytest.raises(ValueError, match="nope"):
+    with raises(ValueError, match="nope"):
         handler.emit(INFO, "x", "y")
