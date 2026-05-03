@@ -16,6 +16,18 @@ Catches regressions the FakeSocket suite can't see:
   directions in one process.
 
 Tests skip cleanly when ``mosquitto`` is unavailable (typical CI).
+
+Why ``_pytest`` (CPython-only)
+==============================
+
+Spawning the Mosquitto subprocess requires :mod:`subprocess` (not on
+MicroPython / CircuitPython) and :mod:`shutil.which` (same).  The
+*test logic itself* — driving the chumicro-mqtt client against a
+real broker — could in principle run on the unix-port if a host-side
+wrapper spun up the broker first and handed the port number to the
+unix-port test.  Worth doing if cross-runtime broker coverage
+becomes valuable; today FakeSocket coverage + the on-device
+functional tests (real broker over real wifi) are sufficient.
 """
 
 import shutil
