@@ -10,10 +10,10 @@ server is contacted.
 """
 
 import chumicro_ntp
-import pytest
 from chumicro_ntp import NTPClient, NTPError, NTPResult
 from chumicro_ntp.core import _NTP_TO_UNIX, _build_request, _parse_response
 from chumicro_sockets.testing import FakeUDPSocket
+from chumicro_test_harness.assertions import raises
 
 # ---------------------------------------------------------------------------
 # Helpers — synthesize SNTP responses
@@ -75,21 +75,21 @@ def test_parse_response_extracts_unix_seconds() -> None:
 
 
 def test_parse_response_rejects_short_packet() -> None:
-    with pytest.raises(NTPError):
+    with raises(NTPError):
         _parse_response(b"\x00" * 16)
 
 
 def test_parse_response_rejects_wrong_mode() -> None:
     packet = bytearray(_server_response(1))
     packet[0] = 0x23  # client mode (3) — invalid in a response
-    with pytest.raises(NTPError):
+    with raises(NTPError):
         _parse_response(bytes(packet))
 
 
 def test_parse_response_rejects_kiss_of_death() -> None:
     packet = bytearray(_server_response(1))
     packet[1] = 0  # stratum 0 = kiss-of-death
-    with pytest.raises(NTPError):
+    with raises(NTPError):
         _parse_response(bytes(packet))
 
 
@@ -110,9 +110,9 @@ def test_default_construction() -> None:
 
 def test_constructor_rejects_nonpositive_timeout() -> None:
     sock = FakeUDPSocket()
-    with pytest.raises(ValueError):
+    with raises(ValueError):
         NTPClient(socket=sock, timeout_ms=0)
-    with pytest.raises(ValueError):
+    with raises(ValueError):
         NTPClient(socket=sock, timeout_ms=-1)
 
 
@@ -183,7 +183,7 @@ def test_query_while_busy_raises() -> None:
     sock = FakeUDPSocket()
     client = NTPClient(socket=sock)
     client.query()
-    with pytest.raises(RuntimeError):
+    with raises(RuntimeError):
         client.query()
 
 
@@ -194,7 +194,7 @@ def test_query_while_busy_raises() -> None:
 
 def test_unix_seconds_before_done_raises() -> None:
     result = NTPResult(ticks_started_ms=0)
-    with pytest.raises(RuntimeError):
+    with raises(RuntimeError):
         _ = result.unix_seconds
 
 
@@ -213,7 +213,7 @@ def test_unix_seconds_when_errored_raises_underlying() -> None:
     client.handle(now_ms=ticks.value)
     assert request.done is True
     assert isinstance(request.error, NTPError)
-    with pytest.raises(NTPError):
+    with raises(NTPError):
         _ = request.unix_seconds
 
 
@@ -358,41 +358,9 @@ def test_cancel_in_flight_marks_failed() -> None:
     assert "cancelled" in str(request.error)
 
 
-# ---------------------------------------------------------------------------
-# sockets_factory submodule — Decision 0042 deploy-rule contract
-# ---------------------------------------------------------------------------
-
-
-def test_sockets_factory_returns_chumicro_sockets_udp_socket() -> None:
-    """Importing the factory submodule returns a ``udp_socket``-shaped wrapper."""
-    from chumicro_ntp.sockets_factory import chumicro_sockets_factory
-
-    sock = chumicro_sockets_factory()
-    try:
-        # Bound to an ephemeral port on every interface (default args).
-        host, port = sock.getsockname()
-        assert host == "0.0.0.0"
-        assert port > 0
-        # Has the UDP protocol surface — sendto + recvfrom_into present.
-        assert callable(sock.sendto)
-        assert callable(sock.recvfrom_into)
-    finally:
-        sock.close()
-
-
-def test_sockets_factory_passes_through_broadcast_flag() -> None:
-    from chumicro_ntp.sockets_factory import chumicro_sockets_factory
-
-    sock = chumicro_sockets_factory(broadcast=True)
-    try:
-        # CPython exposes the wrapped socket directly on the
-        # _CPythonUDPWrapper; test the SO_BROADCAST round-trip via
-        # the underlying stdlib socket.
-        import socket as stdlib_socket
-        value = sock._sock.getsockopt(  # noqa: SLF001 — testing the wrapper
-            stdlib_socket.SOL_SOCKET,
-            stdlib_socket.SO_BROADCAST,
-        )
-        assert value != 0
-    finally:
-        sock.close()
+# sockets_factory submodule lives in test_ntp_pytest.py — those tests
+# poke CPython-internal stdlib socket state and the CP unix-port factory
+# can't construct without a hardware ``radio=``.  The cross-runtime
+# contract (factory returns a working UDP socket bound to ephemeral
+# port, with sendto/recvfrom_into/getsockname) is exercised on real
+# hardware in functional_tests/test_real_ntp.py.
