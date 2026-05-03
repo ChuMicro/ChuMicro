@@ -889,6 +889,110 @@ class CircuitpythonTransport:
             f"too short for this board"
         )
 
+    def _push_staging_to_drive(
+        self,
+        staging_path: Path,
+        *,
+        rsync_delete: bool,
+        rsync_additional_excludes: tuple[str, ...] = (),
+        strip_xattrs: bool = False,
+    ) -> Path:
+        """Common drive-write phase shared by ``_stage_to_flash`` (functional
+        tests) and ``deploy_files`` (production deploy).
+
+        Both callers build their staging tree differently — functional
+        tests assemble it from package source directories + harness +
+        test files; production deploys take a flat ``{path: bytes}``
+        dict — but once the local tree is built, the host-side work is
+        identical: enter raw REPL, disable autoreload, resolve and
+        verify the drive, plant macOS skip-sentinels into the staging
+        tree, optionally strip xattrs, rsync, post-cleanup, flush.
+
+        Caller-specific concerns kept out of this helper:
+
+        * **Building the staging tree.**  Functional tests use
+          :meth:`_build_local_staging_tree`; ``deploy_files`` walks the
+          flat file dict.  This split is the legitimate difference
+          between the two call paths.
+        * **What happens after the rsync.**  ``_stage_to_flash`` does a
+          cheap directory-walk FAT-cache refresh (the harness expects
+          the raw-REPL session to stay alive); ``deploy_files`` does a
+          full soft-reboot via Ctrl-D (it's about to run code.py
+          anyway).  Both invalidate CP's in-RAM FAT cache so the
+          freshly-rsynced files are visible to the importer; the
+          choice of mechanism is caller-driven.
+
+        Args:
+            staging_path: Local staging directory whose contents are
+                rsynced onto the drive.
+            rsync_delete: ``--delete`` flag.  Functional tests pass
+                ``True`` (clean slate between test files); production
+                deploys pass ``False`` (preserve user data not in the
+                file map).
+            rsync_additional_excludes: Extra basenames to exclude.
+                Functional tests pass ``FUNCTIONAL_TEST_EXTRA_EXCLUDES``
+                (boot.py, code.py, settings.toml — preserved across
+                runs); production deploys leave empty.
+            strip_xattrs: When ``True``, strip macOS extended
+                attributes from the staging tree before rsync.
+                Production deploys want this so AppleDouble ``._foo``
+                companions don't materialize on the FAT volume; the
+                functional-test path skips it because the staging
+                tree is built from source files that already passed
+                through ``shutil.copytree`` (no xattrs survive).
+
+        Returns:
+            The resolved drive path, for callers that need it for
+            their post-deploy work (e.g. polling for entrypoint
+            visibility, warning if a flush left an empty marker).
+
+        Raises:
+            CircuitpythonTransportError: Drive can't be resolved /
+                verified, or the rsync subprocess fails / times out.
+        """
+        # Order is load-bearing.  Enter raw REPL FIRST + disable
+        # autoreload BEFORE any host-side drive write — see
+        # `plans/learnings.md` "rsync to CIRCUITPY can hang...".
+        # ``_enter_raw_repl`` is idempotent (resends Ctrl-C / Ctrl-A)
+        # so the second call from ``deploy_files`` after ``connect()``
+        # is safe; ``_stage_to_flash`` benefits because its caller
+        # (the pytest-device session cache) may have soft-rebooted
+        # the board between batches.
+        self._enter_raw_repl()
+        self._disable_autoreload_before_drive_writes()
+        drive_path = self._resolve_circuitpy_drive()
+        drive_path = self._verify_drive_for_board(drive_path)
+
+        # macOS skip-sentinels go into the staging tree so they ride
+        # along in the rsync — not as separate on-drive writes that
+        # would compound the wedge risk.
+        flash_drive.plant_macos_sentinels_in_staging(staging_path)
+        if strip_xattrs:
+            flash_drive.strip_extended_attributes(staging_path)
+
+        try:
+            flash_drive.rsync(
+                staging_path,
+                drive_path,
+                delete=rsync_delete,
+                additional_excludes=rsync_additional_excludes,
+            )
+        except flash_drive.FlashDriveError as rsync_error:
+            raise CircuitpythonTransportError(
+                str(rsync_error),
+            ) from rsync_error
+
+        # Post-rsync cleanup of legacy noise dirs — only fires on
+        # already-contaminated drives; idempotent once the sentinels
+        # have prevented re-creation.
+        flash_drive.cleanup_macos_noise_dirs_post_rsync(drive_path)
+        # Strip macOS AppleDouble (._foo) companions before flushing.
+        flash_drive.clean_dot_files(drive_path)
+        # Flush the volume so the device reads current content.
+        flash_drive.flush_volume(drive_path, sleep=self._time.sleep)
+
+        return drive_path
+
     def _stage_to_flash(
         self,
         source_dirs: list[Path],
@@ -930,55 +1034,26 @@ class CircuitpythonTransport:
             CircuitpythonTransportError: If the CIRCUITPY drive cannot
                 be found or is not writable.
         """
-        # Order is load-bearing.  Disable autoreload BEFORE any
-        # host-side drive write — see the helper docstring + the
-        # learnings entry "rsync to CIRCUITPY can hang ...".  We're
-        # already in raw REPL from ``connect()`` (or re-entered after
-        # a previous batch's soft-reboot via the pytest-device
-        # cache); the helper just sends the supervisor command on
-        # the open serial channel.
-        self._disable_autoreload_before_drive_writes()
-
-        drive_path = self._resolve_circuitpy_drive()
-        drive_path = self._verify_drive_for_board(drive_path)
-
         with tempfile.TemporaryDirectory() as staging_directory:
             staging_path = Path(staging_directory)
             self._build_local_staging_tree(
                 staging_path, source_dirs, test_files, harness_source,
                 extra_modules=extra_modules,
             )
-            # macOS skip-sentinels go into the staging tree so they
-            # ride along in the rsync — not as separate on-drive
-            # writes that would compound the wedge risk
-            # (`plans/learnings.md` "rsync to CIRCUITPY can hang...").
-            flash_drive.plant_macos_sentinels_in_staging(staging_path)
-            try:
-                flash_drive.rsync(
-                    staging_path,
-                    drive_path,
-                    # Functional tests want a clean slate between test
-                    # files (stale test code from a prior run would
-                    # confuse the harness); preserve firmware user-
-                    # config files the device needs across runs.
-                    delete=True,
-                    additional_excludes=flash_drive.FUNCTIONAL_TEST_EXTRA_EXCLUDES,
-                )
-            except flash_drive.FlashDriveError as error:
-                raise CircuitpythonTransportError(str(error)) from error
-
-        # Post-rsync cleanup of legacy noise dirs — only fires on
-        # already-contaminated drives; idempotent once the sentinels
-        # have prevented re-creation.
-        flash_drive.cleanup_macos_noise_dirs_post_rsync(drive_path)
-        # Remove ._ resource fork files that macOS may have created
-        # on the FAT32 volume despite rsync's --exclude=._* flag.
-        flash_drive.clean_dot_files(drive_path)
-
-        # Flush the volume so the device reads current content.
-        flash_drive.flush_volume(drive_path, sleep=self._time.sleep)
+            drive_path = self._push_staging_to_drive(
+                staging_path,
+                rsync_delete=True,
+                rsync_additional_excludes=flash_drive.FUNCTIONAL_TEST_EXTRA_EXCLUDES,
+            )
 
         self._warn_if_flush_produced_empty_file(drive_path, test_files)
+        # Stage path: refresh CP's FAT cache via a directory walk
+        # (cheap, preserves raw REPL session state).  ``deploy_files``
+        # uses a soft-reboot for the same purpose because it has to
+        # boot into code.py anyway; here the harness drives test
+        # execution via the live raw REPL session, so a soft-reboot
+        # would tear down state the harness expects.
+        self._refresh_board_fat_cache_after_rsync()
 
     def _collect_package_sources(self, source_directory: Path) -> None:
         """Walk a source directory and extend ``_staged_sources``.
@@ -1253,28 +1328,6 @@ class CircuitpythonTransport:
                 on_execute_line=on_execute_line,
             )
 
-        # Order is load-bearing.  Enter raw REPL FIRST + disable
-        # autoreload BEFORE any host-side drive write — see
-        # `plans/learnings.md` "rsync to CIRCUITPY can hang...".
-        # Drive prep is now ENTIRELY part of the rsync staging tree
-        # (sentinels are planted into the local staging dir alongside
-        # the deploy payload), so rsync ships everything in one pass
-        # rather than triggering N separate on-drive writes.
-        self._enter_raw_repl()
-        self._disable_autoreload_before_drive_writes()
-        drive_path = self._resolve_circuitpy_drive()
-        drive_path = self._verify_drive_for_board(drive_path)
-
-        # Build a local staging tree mirroring the desired drive
-        # layout, then rsync it onto the drive.  Single primitive both
-        # this path and ``_stage_to_flash`` (functional tests) share
-        # so we have one set of FAT-write reliability guarantees
-        # (``--checksum`` + ``--inplace`` to dodge the failure modes
-        # of direct per-file ``Path.write_bytes`` on USB-MSC FAT32).
-        # ``delete=False`` preserves user-data files on the drive
-        # that aren't part of the deploy's file map (``settings.toml``,
-        # custom modules); ``chumicro-workspace deploy --wipe`` is the
-        # destructive escape hatch.
         try:
             with tempfile.TemporaryDirectory() as staging_directory:
                 staging_path = Path(staging_directory)
@@ -1285,34 +1338,28 @@ class CircuitpythonTransport:
                     staging_destination.write_bytes(files[device_path])
                     if on_file_staged is not None:
                         on_file_staged(device_path)
-                flash_drive.plant_macos_sentinels_in_staging(staging_path)
-                flash_drive.strip_extended_attributes(staging_path)
-                flash_drive.rsync(
+                self._push_staging_to_drive(
                     staging_path,
-                    drive_path,
-                    delete=False,
+                    # Production deploys preserve user-data files on the
+                    # drive that aren't part of the deploy's file map
+                    # (``settings.toml``, custom modules);
+                    # ``chumicro-workspace deploy --wipe`` is the
+                    # destructive escape hatch.
+                    rsync_delete=False,
+                    strip_xattrs=True,
                 )
-        except flash_drive.FlashDriveError as rsync_error:
-            raise CircuitpythonTransportError(
-                str(rsync_error),
-            ) from rsync_error
         except OSError as error:
             # The host-side staging-tree build can still hit OSError
             # (out of /tmp space, etc.).  Re-raise with the
             # ``_format_probe_error`` wrapper so the classifier routes
             # disk-full / RO to FLASH_COPY_FAILED instead of
-            # CIRCUITPY_DRIVE_MISSING.
+            # CIRCUITPY_DRIVE_MISSING.  ``drive_path`` is set inside
+            # the ``with`` only after the dict-walk succeeds, so this
+            # handler covers both the dict-walk and any drive-resolve
+            # failure that surfaces as an OSError.
             raise CircuitpythonTransportError(
-                _format_probe_error(drive_path, error),
+                _format_probe_error(self.circuitpy_drive_path or "", error),
             ) from error
-
-        # Post-rsync cleanup of legacy noise dirs — only fires on
-        # already-contaminated drives; idempotent once the sentinels
-        # have prevented re-creation.
-        flash_drive.cleanup_macos_noise_dirs_post_rsync(drive_path)
-        # Strip macOS AppleDouble (._foo) companions before flushing.
-        flash_drive.clean_dot_files(drive_path)
-        flash_drive.flush_volume(drive_path, sleep=self._time.sleep)
 
         # Wait for the board to see the new entrypoint before soft-
         # rebooting.  Without this check, a slower USB-MSC controller
@@ -1542,6 +1589,59 @@ class CircuitpythonTransport:
             for output_line in output.splitlines():
                 on_execute_line(output_line)
         return output
+
+    def _refresh_board_fat_cache_after_rsync(self) -> None:
+        """Force CP to re-scan FAT directory entries after a host rsync.
+
+        CP caches the FAT directory layout in RAM; an rsync that adds
+        / removes / replaces files on the USB-MSC side updates the
+        FAT on the device's flash, but the in-RAM cache may not pick
+        up the new entries until something forces a directory read.
+        Without this refresh, back-to-back ``_stage_to_flash`` calls
+        on the same board can hit ``ImportError: no module named X.Y``
+        because the freshly-rsynced module is on disk but invisible
+        to CP's importer.
+
+        Implementation: a recursive ``os.listdir`` walk from the FS
+        root.  Listing a directory forces CP to re-read its FAT
+        entries; walking covers nested package layouts (the typical
+        ``/lib/<package>/<submodule>.py`` shape that the importer
+        will hit next).
+
+        Called from :meth:`_stage_to_flash` after the host-side
+        ``flush_volume`` settle delay.  ``deploy_files`` (production
+        path) handles the equivalent invalidation differently — it
+        does an explicit soft-reboot via Ctrl-D after the rsync, which
+        tears down + rebuilds the entire CP runtime including its
+        FAT cache.  ``_stage_to_flash`` cannot soft-reboot because
+        the harness expects the raw-REPL session to stay alive across
+        the call.
+
+        Surfaced 2026-05-03 during the post-wedge cleanup bake — the
+        old prep flow inadvertently invalidated the cache via
+        autoreload firing on pre-rsync sentinel writes.
+        """
+        # The walk script is small enough to inline.  ``S_IFDIR =
+        # 0o40000 = 16384`` is stable across CP/MP and the stat[0]
+        # bit-test is the cross-runtime portable way to detect a
+        # directory entry.
+        self._send_repl_command(
+            "import os\n"
+            "_seen = []\n"
+            "def _walk(path):\n"
+            "    if path in _seen: return\n"
+            "    _seen.append(path)\n"
+            "    try: entries = os.listdir(path)\n"
+            "    except OSError: return\n"
+            "    for entry in entries:\n"
+            "        sub = path + entry if path.endswith('/') else path + '/' + entry\n"
+            "        try:\n"
+            "            mode = os.stat(sub)[0]\n"
+            "            if mode & 16384:\n"
+            "                _walk(sub)\n"
+            "        except OSError: pass\n"
+            "_walk('/')\n"
+        )
 
     def _wait_for_board_to_see_entrypoint(
         self,

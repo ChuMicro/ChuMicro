@@ -1031,11 +1031,14 @@ class TestFlashMode:
         (harness_package / "__init__.py").write_text("# harness")
         (harness_package / "runner.py").write_text("def run_module(): pass")
 
-        # Responses: connect, autoreload disable (stage),
-        # _enter_raw_repl + autoreload restore (disconnect).
+        # Responses: connect (prompt), _push_staging_to_drive's
+        # _enter_raw_repl (prompt) + autoreload disable (OK), FAT
+        # cache refresh after rsync (OK), disconnect raw_repl (prompt),
+        # autoreload restore (OK).
         port = FakeSerialPort(
             read_responses=[
-                _RAW_REPL_PROMPT, _OK_RESPONSE,
+                _RAW_REPL_PROMPT,
+                _RAW_REPL_PROMPT, _OK_RESPONSE, _OK_RESPONSE,
                 _RAW_REPL_PROMPT, _OK_RESPONSE,
             ],
         )
@@ -1069,11 +1072,14 @@ class TestFlashMode:
         test_file = tmp_path / "test_example.py"
         test_file.write_text("def test_ok(): pass")
 
-        # Responses: connect, autoreload disable (stage),
-        # _enter_raw_repl + autoreload restore (disconnect).
+        # Responses: connect (prompt), _push_staging_to_drive's
+        # _enter_raw_repl (prompt) + autoreload disable (OK), FAT
+        # cache refresh after rsync (OK), disconnect raw_repl (prompt),
+        # autoreload restore (OK).
         port = FakeSerialPort(
             read_responses=[
-                _RAW_REPL_PROMPT, _OK_RESPONSE,
+                _RAW_REPL_PROMPT,
+                _RAW_REPL_PROMPT, _OK_RESPONSE, _OK_RESPONSE,
                 _RAW_REPL_PROMPT, _OK_RESPONSE,
             ],
         )
@@ -1099,11 +1105,14 @@ class TestFlashMode:
         harness_dir = tmp_path / "harness"
         harness_dir.mkdir()
 
-        # Responses: connect, autoreload disable (stage),
-        # _enter_raw_repl + autoreload restore (disconnect).
+        # Responses: connect (prompt), _push_staging_to_drive's
+        # _enter_raw_repl (prompt) + autoreload disable (OK), FAT
+        # cache refresh after rsync (OK), disconnect raw_repl (prompt),
+        # autoreload restore (OK).
         port = FakeSerialPort(
             read_responses=[
-                _RAW_REPL_PROMPT, _OK_RESPONSE,
+                _RAW_REPL_PROMPT,
+                _RAW_REPL_PROMPT, _OK_RESPONSE, _OK_RESPONSE,
                 _RAW_REPL_PROMPT, _OK_RESPONSE,
             ],
         )
@@ -1157,10 +1166,14 @@ class TestFlashMode:
         def event(label: str) -> None:
             events.append((len(events), label))
 
+        # Sequence: connect prompt; _push_staging_to_drive
+        # (enter_raw_repl + autoreload_off + FAT cache refresh);
+        # disconnect (enter_raw_repl + autoreload restore).
         port = FakeSerialPort(
             read_responses=[
-                _RAW_REPL_PROMPT, _OK_RESPONSE,                # connect + autoreload off
-                _RAW_REPL_PROMPT, _OK_RESPONSE,                # disconnect raw REPL + restore
+                _RAW_REPL_PROMPT,
+                _RAW_REPL_PROMPT, _OK_RESPONSE, _OK_RESPONSE,
+                _RAW_REPL_PROMPT, _OK_RESPONSE,
             ],
         )
 
@@ -1287,13 +1300,14 @@ class TestFlashMode:
         test_file_two = tmp_path / "test_two.py"
         test_file_two.write_text("def test_two(): pass")
 
-        # Responses: connect, autoreload disable (stage 1),
-        # autoreload disable (stage 2),
-        # _enter_raw_repl + autoreload restore (disconnect).
+        # Responses: connect (prompt) + 2 stages (each: enter_raw_repl
+        # + autoreload off + FAT cache refresh) + disconnect
+        # (enter_raw_repl + autoreload restore).
         port = FakeSerialPort(
             read_responses=[
-                _RAW_REPL_PROMPT, _OK_RESPONSE,
-                _OK_RESPONSE,
+                _RAW_REPL_PROMPT,
+                _RAW_REPL_PROMPT, _OK_RESPONSE, _OK_RESPONSE,
+                _RAW_REPL_PROMPT, _OK_RESPONSE, _OK_RESPONSE,
                 _RAW_REPL_PROMPT, _OK_RESPONSE,
             ],
         )
@@ -1338,11 +1352,14 @@ class TestFlashMode:
         harness_dir = tmp_path / "harness"
         harness_dir.mkdir()
 
-        # Responses: connect, autoreload disable (stage),
-        # _enter_raw_repl + autoreload restore (disconnect).
+        # Responses: connect (prompt), _push_staging_to_drive's
+        # _enter_raw_repl (prompt) + autoreload disable (OK), FAT
+        # cache refresh after rsync (OK), disconnect raw_repl (prompt),
+        # autoreload restore (OK).
         port = FakeSerialPort(
             read_responses=[
-                _RAW_REPL_PROMPT, _OK_RESPONSE,
+                _RAW_REPL_PROMPT,
+                _RAW_REPL_PROMPT, _OK_RESPONSE, _OK_RESPONSE,
                 _RAW_REPL_PROMPT, _OK_RESPONSE,
             ],
         )
@@ -1376,11 +1393,14 @@ class TestFlashMode:
         harness_dir = tmp_path / "harness"
         harness_dir.mkdir()
 
-        # Responses: connect, autoreload disable (stage),
-        # _enter_raw_repl + autoreload restore (disconnect).
+        # Responses: connect (prompt), _push_staging_to_drive's
+        # _enter_raw_repl (prompt) + autoreload disable (OK), FAT
+        # cache refresh after rsync (OK), disconnect raw_repl (prompt),
+        # autoreload restore (OK).
         port = FakeSerialPort(
             read_responses=[
-                _RAW_REPL_PROMPT, _OK_RESPONSE,
+                _RAW_REPL_PROMPT,
+                _RAW_REPL_PROMPT, _OK_RESPONSE, _OK_RESPONSE,
                 _RAW_REPL_PROMPT, _OK_RESPONSE,
             ],
         )
@@ -1574,11 +1594,14 @@ class TestFindCircuitpyDrive:
         harness_dir = tmp_path / "harness"
         harness_dir.mkdir()
 
-        # Responses: connect, autoreload disable (stage),
-        # _enter_raw_repl + autoreload restore (disconnect).
+        # Responses: connect (prompt), _push_staging_to_drive's
+        # _enter_raw_repl (prompt) + autoreload disable (OK), FAT
+        # cache refresh after rsync (OK), disconnect raw_repl (prompt),
+        # autoreload restore (OK).
         port = FakeSerialPort(
             read_responses=[
-                _RAW_REPL_PROMPT, _OK_RESPONSE,
+                _RAW_REPL_PROMPT,
+                _RAW_REPL_PROMPT, _OK_RESPONSE, _OK_RESPONSE,
                 _RAW_REPL_PROMPT, _OK_RESPONSE,
             ],
         )

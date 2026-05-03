@@ -288,6 +288,14 @@ TLS variant — verified live on MP 1.28.0 (Pi Pico W RP2 + Lolin S2 ESP32-S2): 
 
 There IS a contract divergence between plain TCP and TLS recv on MP: plain TCP raises `OSError(11)` on no-data in non-blocking mode, but TLS `recv` returns `None`.  Fix shape: `_MpSocketWrapper.recv_into` polyfill treats `None` as 0 bytes return, which feeds cleanly into chumicro-mqtt's `if got == 0: break` path.  End-to-end TLS+MQTT (3 QoS-1 PUBLISHes against a local self-signed broker) verified working on a Pi Pico W RP2 with this fix.
 
+### MP doesn't expose `BlockingIOError` as a built-in
+
+CPython promotes `EAGAIN`/`EWOULDBLOCK` `OSError`s to the dedicated `BlockingIOError` subclass (PEP 3151).  MicroPython doesn't — code that references `BlockingIOError` by bare name compiles fine on CPython but fails with `NameError` the first time the line executes on MP.  Surfaces only on the path that actually hits it; module-level `import` of code containing `except BlockingIOError:` succeeds because the name lookup is deferred.  Affects `chumicro_websockets._session._is_eagain` and `chumicro_websockets.testing` — discovered when `chumicro_websockets` outbound fragmentation tests ran on MP unix-port.  Portable check: `isinstance(error, OSError) and error.args and error.args[0] in (errno.EAGAIN, errno.EWOULDBLOCK)`.
+
+### MP `collections.deque()` requires positional `iterable, maxlen` args
+
+CPython allows `deque()` with no args (defaults to empty + unbounded).  MP's `deque` doesn't — `from collections import deque; deque()` raises `TypeError: function missing 2 required positional arguments`.  Use `deque((), 0)` for the same semantics.  Surfaced when running `chumicro_mqtt` fragmentation tests on MP unix-port via `chumicro_sockets.testing.FakeSocket`, which calls `deque()` at line 50.  Test helpers that aren't exercised on MP can ship CPython-only API uses without ever knowing.
+
 ---
 
 ## Tooling and process
