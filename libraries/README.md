@@ -34,23 +34,11 @@ Each library's own README has a one-line install command for that library.
 
 ## Dependencies
 
-```
-runner       → timing
-wifi         → config, timing
-ntp          → timing, sockets
-sockets      (no chumicro deps — pure platform shim)
-requests     → sockets, timing
-http_server  → sockets, timing
-mqtt         → sockets, timing
-websockets   → sockets, timing
-config       → msgpack
-kvstore      → msgpack
-timing       (no deps)
-compat       (no deps)
-logging      (no deps)
-events       (no deps — and nothing else imports it; apps wire it up)
-msgpack      (no deps)
-```
+![ChuMicro library dependency graph](../support/docs/dependency-graph.svg)
+
+Solid arrows are strict pyproject.toml dependencies — `pip install chumicro-mqtt` brings `chumicro-sockets` and `chumicro-timing` along.  Dashed arrows are typical-wiring dependencies expressed through constructor injection — every networked service is shaped to register with `chumicro-runner` and most accept an injected `ticks_ms` callable, but the runtime objects don't `import` each other; apps wire them up.
+
+The SVG is regenerated from each library's pyproject.toml by [`scripts/render_dep_graph.py`](../scripts/render_dep_graph.py).  Preflight runs `--check` mode so a contributor who changes a library's deps without re-rendering sees the failure in CI rather than discovering it months later.
 
 ## Pick by problem
 
