@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **Cross-runtime test recovery — done.**  Audit at session start showed 24 silently-SKIPped test files holding ~889 test functions never actually exercised on MicroPython / CircuitPython unix-ports.  Decision 0016 was already in place but the harness's silent-SKIP-on-ImportError fallback was letting mis-classified files quietly disappear.  Now: 1147 cross-runtime tests passing on each unix-port (vs 365 baseline), zero SKIPs, zero contract-violating files.  Harness now FAILs hard on ImportError for non-`_pytest` files.
-- **Last shipped:** **`test_harness`: ImportError on a non-`_pytest` test file is now a hard FAIL** (commit `3e392df`).  Closes the loop: the contract is now self-enforcing — either a file is converted to cross-runtime or it carries a `_pytest` suffix.  Sequence of commits this session: `8bd7f14` (harness `raises(match=)` + deque fix + ntp conversion), `bcc3219` (events/mqtt/sockets/http_server/requests + harness class discovery + 4 source bugs), `e8fc3ec` (websockets source fixes), `73f317e` (CP unix-port SSL+axtls + websockets test conversion), `ceb5ca4` (rename CPython-only files to `_pytest`), `4d31b6a` (clear last 7 SKIPs — convert what's convertible, rename what's genuinely CPython-only), `3e392df` (harness FAIL-on-ImportError tightening).
+- **Phase:** **MP transport idle-timeout follow-up — done.**  CP transport's `_EXECUTE_IDLE_TIMEOUT = 60.0` (commit `ecf002c`) closed the silent-bootstrap timeout for CP, but the MP transport hadn't been touched.  On Lolin S2 MP (2 MB heap), the on-device fragmentation tests' histogram bisection blew past the existing `timeout=120` and surfaced as `TransportError: timeout waiting for first EOF reception` from mpremote's `follow()`.  Bumped MP's test-bootstrap path to `_EXECUTE_IDLE_TIMEOUT = 300.0` (proportional to MP's bigger heap) and verified on hardware: every fragmentation test in requests/http_server/websockets now RUNs to completion (180–261 s each); the remaining failures are pre-existing library-side fragmentation/leak metrics, not transport timeouts.
+- **Last shipped:** `chumicro-deploy: MP transport idle-timeout for silent-bootstrap path` (this commit).  Mirrors the CP fix from `ecf002c` for the MicroPython side.  Lifted: learning about `mpremote.exec_raw(timeout=N)` semantics into `plans/learnings.md` §MicroPython runtime quirks.
 - **In flight:** idle.
 - **Blocked on:** —.
-- **Last touched:** scripts/prepare_circuitpython.py, support/test_harness/{src,tests}, libraries/{events,http_server,logging,mqtt,ntp,requests,sockets,websockets}/{src,tests}, plans/{next-up,learnings,now}.md.
+- **Last touched:** workbench/deploy/{src/chumicro_deploy/micropython_transport.py, tests/test_micropython_transport.py}, plans/{learnings,now}.md.
 
 ---
 

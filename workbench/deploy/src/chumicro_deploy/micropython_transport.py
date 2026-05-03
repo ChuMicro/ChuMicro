@@ -38,6 +38,37 @@ if TYPE_CHECKING:  # pragma: no cover - type-only
     from mpremote.transport_serial import SerialTransport
 
 
+#: Idle timeout (seconds) for ``exec_raw`` on the test-bootstrap path —
+#: ``execute()`` and ``deploy_files()``.  Mirrors
+#: :data:`chumicro_deploy.circuitpython_transport._EXECUTE_IDLE_TIMEOUT`
+#: but bigger because MicroPython boards we test on have larger heaps
+#: than the CP boards (e.g. Lolin S2 MP exposes the full 2 MB SPIRAM,
+#: vs ~150 KB on CP boards), and the on-device fragmentation tests'
+#: histogram bisection scales its silent allocation loop to whatever
+#: heap is available.
+#:
+#: mpremote's ``SerialTransport.exec_raw(command, timeout=N)`` passes
+#: ``N`` straight through to ``follow()`` → ``read_until(timeout=N)``,
+#: where ``timeout`` is documented as "between characters" — i.e. an
+#: idle-between-bytes timeout, **not** wall-clock.  Bytes received by
+#: the host reset the clock; only ``N`` seconds of *consecutive
+#: silence* end the wait.  See ``transport_serial.read_until`` in the
+#: vendored mpremote source for the implementation.
+#:
+#: Failure mode this avoids: the on-device fragmentation tests'
+#: ``_count_blocks_of_size`` runs ``while True: holders.append(
+#: bytearray(size))`` in a tight Python loop until ``MemoryError``,
+#: with no intermediate output.  On a 2 MB heap at the 256-byte tier
+#: that's ~7,500 silent allocations; the surrounding ``gc.collect()``
+#: calls on a fragmented heap can each take seconds on Xtensa-class
+#: MCUs.  The previous ``timeout=120`` was hit mid-bisection on Lolin
+#: S2 MP, surfacing as ``TransportError: timeout waiting for first
+#: EOF reception`` from mpremote's ``follow()``.  Other exec paths
+#: (probe, scope listing, delete, wipe, bootloader) are short
+#: interactive ops and keep their original short timeouts.
+_EXECUTE_IDLE_TIMEOUT: float = 300.0
+
+
 class MicropythonTransportError(Exception):
     """Raised when an mpremote command fails."""
 
@@ -389,7 +420,9 @@ class MicropythonTransport:
             )
         self._ensure_serial()
         try:
-            result = self._serial.exec_raw(bootstrap_script, timeout=120)
+            result = self._serial.exec_raw(
+                bootstrap_script, timeout=_EXECUTE_IDLE_TIMEOUT,
+            )
         except Exception as error:
             raise MicropythonTransportError(
                 f"Device exec failed: {error}"
@@ -602,7 +635,7 @@ class MicropythonTransport:
 
         script = f"{sys_path_prefix}exec(open({entrypoint_on_device!r}).read())"
         try:
-            result = self._serial.exec_raw(script, timeout=120)
+            result = self._serial.exec_raw(script, timeout=_EXECUTE_IDLE_TIMEOUT)
         except Exception as error:
             raise MicropythonTransportError(
                 f"Device deploy-execute failed: {error}"

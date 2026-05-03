@@ -95,6 +95,12 @@ Per-runtime esptool offsets matter — MicroPython ESP32 binary at `0x0` will bo
 
 Classifier must route these strings to `PORT_UNAVAILABLE`, not `BOOTSTRAP_EXEC_FAILED`. Otherwise an unplugged board produces a "fix your source" message. Patterns added to `_PORT_UNAVAILABLE_PATTERNS`. Commit `38fb039`.
 
+### `mpremote.SerialTransport.exec_raw(timeout=N)` is idle-between-bytes, not wall-clock
+
+The `timeout` arg flows straight into `read_until(timeout=N, ...)` in `transport_serial.py`, which docstrings it as "between characters" — bytes received reset the clock; only `N` seconds of *consecutive silence* end the wait.  A separate `timeout_overall=` kwarg exists for wall-clock bounding but isn't exposed via `exec_raw`.
+
+Implication: silent on-device CPU-bound stretches set the floor for `N`, not script wall time.  On a 2 MB heap (Lolin S2 MP), the on-device fragmentation tests' histogram bisection (~7,500 silent `bytearray()` allocs at the 256-byte tier + multi-second `gc.collect()` calls) blew past `timeout=120` and surfaced as `TransportError: timeout waiting for first EOF reception` from mpremote's `follow()`.  Fix: bumped the test-bootstrap path's `exec_raw` timeout to `_EXECUTE_IDLE_TIMEOUT = 300.0` in `chumicro_deploy.micropython_transport`.  Other exec paths (probe / list / delete / wipe / bootloader) stay short — they're interactive ops with predictable round-trip times.  CP transport already had the analogous `_EXECUTE_IDLE_TIMEOUT = 60.0` from commit `ecf002c`; the MP gap was a follow-up.
+
 ### Every `import` on MicroPython mount-mode is an mpremote RPC round-trip
 
 `mpremote mount` exposes the host file system to the device via a `RemoteFS` hook. Every `import` triggers a serial-intercept callback that fetches the source file over USB CDC. A single lazy import inside a hot path (e.g. `Runner.__init__` deferring `chumicro_timing.ticks`) pulled three files over the wire on first call and added ~1 second of inflation on the Lolin S2 mini.
