@@ -1,8 +1,10 @@
 # chumicro-runner
 
-A tick-based task runner for CircuitPython, MicroPython, and CPython — no async required.
+**Tick-based scheduling that's debuggable from `print()`.**
 
-Components implement a `check(now_ms) -> bool` check that gates when a handler fires.  A `Runner` captures time once per tick, checks each service, and batch-fires all due handlers.
+`runner.tick()` runs every registered service once on a shared timestamp.  Each service is one object with `check(now_ms)` + `handle(now_ms)`; your loop is six lines.  Every state change shows up in the order you wrote.
+
+Every networked library in ChuMicro (`chumicro-wifi`, `chumicro-sockets`, `chumicro-mqtt`, `chumicro-requests`, `chumicro-http-server`, `chumicro-websockets`) is shaped to register here — your LED can keep blinking through a TLS handshake, a slow HTTP response, or a stalled MQTT peer because every one of them gets the same fair share of every tick.
 
 ## Quick example
 

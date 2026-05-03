@@ -134,16 +134,7 @@ Device testing is **optional**.  Most contributions don't need it — docs-only,
 
 ## Commit messages
 
-Imperative subject; body explains why.  Name affected libraries in the body when relevant.
-
-```
-Fix wraparound bug in ticks_diff
-
-The previous implementation didn't handle the case where ticks_ms
-wraps past 2^30. Added boundary tests to verify.
-
-Affects: timing
-```
+Imperative subject; body explains why; name affected libraries.  Full conventions + examples in [Creating a Pull Request](docs/contributing/pull-requests.md).
 
 ## VERSION bumps
 
@@ -165,19 +156,7 @@ When your PR merges to `main` with a VERSION bump, the library auto-publishes as
 
 ## Adding a new package
 
-ChuMicro publishes two kinds of package:
-
-- **Device libraries** under `libraries/` — must work on CircuitPython, MicroPython, and CPython unless platform-restricted via `pyproject.toml`.  Cross-runtime tests run on every PR.
-- **Workbench tools** under `workbench/` — host-only CPython.  PyPI only, no bundle.  See [`docs/contributing/workbench.md`](docs/contributing/workbench.md).
-
-```bash
-python scripts/run.py new-library my-project   # scaffolds everything
-# ... write code, tests, docs, examples ...
-python scripts/run.py preflight              # must pass
-# ... open PR, get reviewed, merge — experimental release happens automatically
-```
-
-**Before you scaffold:** read [new-library.md § Before you start](docs/contributing/new-library.md#before-you-start) — a 2-minute scope check (issues, discussions, `plans/roadmap.md`, `plans/decisions/`) saves rewrites if your idea overlaps with planned work or settled design.  See [Adding a New Library](docs/contributing/new-library.md) for the full lifecycle.
+`python scripts/run.py new-library <name>` scaffolds a device library under `libraries/` (cross-runtime, ships to PyPI + the bundle).  For host-only workbench tools under `workbench/` see [`docs/contributing/workbench.md`](docs/contributing/workbench.md).  Before you scaffold, skim [Adding a New Library § Before you start](docs/contributing/new-library.md#before-you-start) for the 2-minute scope check.
 
 ## Project rules
 

@@ -251,12 +251,14 @@ class ImportGraphSource:
         self._device_entrypoint = device_entrypoint
         self._resource_prefix = resource_prefix
         self._target_runtime = target_runtime
+        self._host_paths: list[Path] = []
         self._files = self._collect()
 
     def _collect(self) -> dict[str, bytes]:
         collected: dict[str, bytes] = {
             self._device_entrypoint: self._entrypoint_path.read_bytes(),
         }
+        self._host_paths.append(self._entrypoint_path)
         visited: set[str] = set()
         queue: list[str] = self._imports_from_file(self._entrypoint_path)
         queue.extend(self._extra_modules)
@@ -277,6 +279,7 @@ class ImportGraphSource:
                 continue
             device_path = self._device_path_for(module_name, resolved_path)
             collected[device_path] = resolved_path.read_bytes()
+            self._host_paths.append(resolved_path)
             queue.extend(self._imports_from_file(resolved_path))
         return collected
 
@@ -330,3 +333,15 @@ class ImportGraphSource:
 
     def entrypoint(self) -> str:
         return self._device_entrypoint
+
+    def host_paths(self) -> list[Path]:
+        """Return the host filesystem paths every contributed module
+        was read from, including the entrypoint.
+
+        Used by :mod:`chumicro_deploy.preflight` to walk back from
+        each module to its containing ``pyproject.toml`` and read
+        the ``[tool.chumicro].requires_flash`` flag.  Returns a copy
+        so callers can mutate without affecting the source's
+        internal record.
+        """
+        return list(self._host_paths)

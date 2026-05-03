@@ -145,11 +145,15 @@ class TestCreateTransport:
         with pytest.raises(ValueError, match="Unsupported transport"):
             device_testing.create_transport(entry)
 
-    def test_default_deploy_mode_is_ram(self) -> None:
-        """Default deploy mode (from device entry) should be ram → mount."""
+    def test_default_deploy_mode_is_flash(self) -> None:
+        """Default deploy mode (from device entry) should be flash → copy.
+
+        Decision 0047 — flash is the production-shaped default.  RAM mode
+        stays available as opt-in via per-device or CLI override.
+        """
         entry = self._make_device_entry(runtime="micropython")
         transport = device_testing.create_transport(entry)
-        assert transport.mode == "mount"
+        assert transport.mode == "copy"
 
     def test_device_entry_deploy_mode_flash(self) -> None:
         """Device entry deploy_mode=flash should apply when CLI is None."""
@@ -486,10 +490,12 @@ class TestResolveEffectiveDeployMode:
         )
         assert device_testing.resolve_effective_deploy_mode(device, None) == "flash"
 
-    def test_defaults_to_ram_when_device_entry_field_empty(self) -> None:
-        """Belt-and-braces: an empty ``deploy_mode`` falls back to ram."""
+    def test_defaults_to_flash_when_device_entry_field_empty(self) -> None:
+        """Belt-and-braces: an empty ``deploy_mode`` falls back to flash
+        per Decision 0047 (flash is the production-shaped default).
+        """
         device = DeviceEntry(
             identifier="d", runtime="micropython", address="/dev/a",
         )
         object.__setattr__(device, "deploy_mode", "")
-        assert device_testing.resolve_effective_deploy_mode(device, None) == "ram"
+        assert device_testing.resolve_effective_deploy_mode(device, None) == "flash"

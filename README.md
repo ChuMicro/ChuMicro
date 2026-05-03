@@ -21,8 +21,6 @@
 
 ## Eight lines, no freeze
 
-> _\[TODO `support/docs/heartbeat-vs-sleep.gif` — side-by-side LED on the same board, left runs `time.sleep(1)` (LED stalls during a network call), right runs `Heartbeat` (LED keeps cadence while the same call runs).]_
-
 ```python
 from chumicro_timing import Heartbeat, ticks_ms
 

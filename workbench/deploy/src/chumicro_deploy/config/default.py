@@ -46,7 +46,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from ..device import Device
+from ..device import DEFAULT_DEPLOY_MODE, Device
+from ..protocol import DeployMode
 from .devices_yaml import ALL_TOP_LEVEL_ENTRY_FIELDS
 
 #: Default filename for the device registry.
@@ -56,8 +57,9 @@ DEFAULT_DEVICES_FILENAME = "devices.yml"
 _REQUIRED_DEVICE_FIELDS = ("id", "runtime", "address")
 #: Allowed runtime values.
 _VALID_RUNTIMES = ("micropython", "circuitpython")
-#: Allowed deploy mode values.
-_VALID_DEPLOY_MODES = ("ram", "flash")
+#: Allowed deploy mode values — derived from the :class:`DeployMode`
+#: enum so the tuple can't drift from the source of truth.
+_VALID_DEPLOY_MODES = tuple(mode.value for mode in DeployMode)
 #: Allowed ide_runtime values.
 _VALID_IDE_RUNTIMES = ("micropython", "circuitpython", "both")
 
@@ -99,7 +101,7 @@ class DeviceEntry:
     description: str = ""
     connection_type: str = "serial"
     serial_baudrate: int = 115200
-    deploy_mode: str = "ram"
+    deploy_mode: str = DEFAULT_DEPLOY_MODE
     circuitpy_drive_path: str | None = None
     setup_command: str | None = None
     extra: dict = field(default_factory=dict)
@@ -116,7 +118,7 @@ class DeviceDefaults:
 
     micropython: str | None = None
     circuitpython: str | None = None
-    deploy_mode: str = "ram"
+    deploy_mode: str = DEFAULT_DEPLOY_MODE
     ide_runtime: str = "micropython"
 
 
@@ -143,7 +145,7 @@ def _resolve_devices_path(
 
 def _parse_defaults(raw: dict) -> DeviceDefaults:
     """Validate and parse the ``defaults:`` block of ``devices.yml``."""
-    deploy_mode = raw.get("deploy_mode", "ram")
+    deploy_mode = raw.get("deploy_mode", DEFAULT_DEPLOY_MODE)
     if deploy_mode not in _VALID_DEPLOY_MODES:
         raise DeviceConfigError(
             f"Invalid deploy_mode '{deploy_mode}' in defaults, "
@@ -164,7 +166,7 @@ def _parse_defaults(raw: dict) -> DeviceDefaults:
 
 
 def _validate_device(
-    raw: dict, index: int, *, global_deploy_mode: str = "ram",
+    raw: dict, index: int, *, global_deploy_mode: str = DEFAULT_DEPLOY_MODE,
 ) -> DeviceEntry:
     """Validate a single raw entry and return a :class:`DeviceEntry`."""
     missing = [

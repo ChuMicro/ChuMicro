@@ -525,7 +525,9 @@ class TestLoadFallbackDevice:
         """Should skip with setup instructions when devices.yml is missing."""
         monkeypatch.setenv("CHUMICRO_DEVICES", str(tmp_path / "nope.yml"))
         with pytest.raises(pytest.skip.Exception, match="No devices.yml found"):
-            pytest_device._load_fallback_device(_FakeSession(pytest_device._TransportCache()))
+            pytest_device._load_fallback_device(
+                _FakeSession(pytest_device._TransportCache(), rootpath=tmp_path),
+            )
 
     def test_skips_when_no_devices_configured(self, monkeypatch, tmp_path) -> None:
         """Should skip when no devices match the ide_runtime."""
@@ -540,7 +542,9 @@ class TestLoadFallbackDevice:
         )
         monkeypatch.setenv("CHUMICRO_DEVICES", str(devices_file))
         with pytest.raises(pytest.skip.Exception, match="No devices configured"):
-            pytest_device._load_fallback_device(_FakeSession(pytest_device._TransportCache()))
+            pytest_device._load_fallback_device(
+                _FakeSession(pytest_device._TransportCache(), rootpath=tmp_path),
+            )
 
     def test_returns_target_device(self, monkeypatch, tmp_path) -> None:
         """Should return the device matching ide_runtime defaults."""
@@ -558,7 +562,9 @@ class TestLoadFallbackDevice:
             "    address: /dev/ttyUSB1\n"
         )
         monkeypatch.setenv("CHUMICRO_DEVICES", str(devices_file))
-        device = pytest_device._load_fallback_device(_FakeSession(pytest_device._TransportCache()))
+        device = pytest_device._load_fallback_device(
+            _FakeSession(pytest_device._TransportCache(), rootpath=tmp_path),
+        )
         assert device.identifier == "board2"
 
 
@@ -796,12 +802,12 @@ class _HotPathTransport:
 class _FakeConfig:
     """Minimal pytest.Config stand-in that returns None for every option."""
 
-    def __init__(self, rootpath: Path | None = None) -> None:
+    def __init__(self, rootpath: Path) -> None:
         # ``pytest.Config.rootpath`` is what the plugin uses to derive
-        # ``support/test_harness/src`` and ``libraries/`` paths;
-        # default to the chumicro mono-repo root when running in-tree
-        # so harness-shaped tests still resolve real paths.
-        self.rootpath = rootpath or Path(__file__).resolve().parents[3]
+        # ``support/test_harness/src`` and ``libraries/`` paths.  Always
+        # required — pinning a default to the chumicro mono-repo root
+        # silently coupled tests to live workspace state.
+        self.rootpath = rootpath
 
     def getoption(self, name: str, default=None):  # noqa: D401, ANN001
         return default
@@ -810,9 +816,11 @@ class _FakeConfig:
 class _FakeSession:
     """Minimal pytest.Session stand-in that hosts a _TransportCache."""
 
-    def __init__(self, cache: pytest_device._TransportCache) -> None:
+    def __init__(
+        self, cache: pytest_device._TransportCache, *, rootpath: Path,
+    ) -> None:
         self._device_transport_cache = cache
-        self.config = _FakeConfig()
+        self.config = _FakeConfig(rootpath=rootpath)
 
 
 def _hot_path_device(runtime: str = "circuitpython") -> DeviceEntry:
@@ -840,9 +848,14 @@ def hot_path_cache():
 
 
 @pytest.fixture
-def hot_path_session(hot_path_cache):
-    """Return a minimal session object with the cache attached."""
-    return _FakeSession(hot_path_cache)
+def hot_path_session(hot_path_cache, tmp_path):
+    """Return a minimal session object with the cache attached.
+
+    ``rootpath`` points at ``tmp_path`` so any plugin code path that
+    reads ``session.config.rootpath`` resolves to a synthetic dir
+    rather than the contributor's real workspace.
+    """
+    return _FakeSession(hot_path_cache, rootpath=tmp_path)
 
 
 def _make_prepare_item(session, device_entry, test_file) -> pytest_device.DevicePrepareItem:
