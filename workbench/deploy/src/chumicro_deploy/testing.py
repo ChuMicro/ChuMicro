@@ -217,7 +217,7 @@ class FakeTransport:
     #: to assert what the deploy routine considers "stale" + verify
     #: deletion.  Mirrors the leading-slash device-path form
     #: :meth:`deploy_files` accepts.  See ``plans/next-up.md`` "Replace
-    #: multi-thing staging with scoped diff-deploy".
+    #: multi-project staging with scoped diff-deploy".
     device_files: dict[str, bytes] = field(default_factory=dict)
     calls: list[tuple[str, tuple]] = field(default_factory=list)
     connected: bool = False

@@ -1,6 +1,6 @@
 """File sources — plug-in input types that feed the Deployer.
 
-A :class:`FileSource` produces two things: a mapping of on-device
+A :class:`FileSource` produces two projects: a mapping of on-device
 paths to byte contents, and the name of the entrypoint file the
 runtime should boot into.  Three built-ins cover the common cases:
 

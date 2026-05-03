@@ -171,7 +171,7 @@ ChuMicro publishes two kinds of package:
 - **Workbench tools** under `workbench/` — host-only CPython.  PyPI only, no bundle.  See [`docs/contributing/workbench.md`](docs/contributing/workbench.md).
 
 ```bash
-python scripts/run.py new-library my-thing   # scaffolds everything
+python scripts/run.py new-library my-project   # scaffolds everything
 # ... write code, tests, docs, examples ...
 python scripts/run.py preflight              # must pass
 # ... open PR, get reviewed, merge — experimental release happens automatically

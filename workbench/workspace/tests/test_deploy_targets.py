@@ -50,7 +50,7 @@ class TestReadDeployTargets:
         }
 
     def test_dotted_key_normalised_to_slash_form(self, tmp_path: Path) -> None:
-        """Match the canonical slash form ``_resolve_thing_name`` returns."""
+        """Match the canonical slash form ``_resolve_project_name`` returns."""
         workspace_yaml = tmp_path / "workspace.yml"
         workspace_yaml.write_text(
             "deploy_targets:\n"
@@ -127,7 +127,7 @@ class TestReadDeployTargets:
         ):
             read_deploy_targets(workspace_yaml)
 
-    def test_multiple_things_round_trip(self, tmp_path: Path) -> None:
+    def test_multiple_projects_round_trip(self, tmp_path: Path) -> None:
         """End-to-end: the documented example block parses cleanly."""
         workspace_yaml = tmp_path / "workspace.yml"
         workspace_yaml.write_text(

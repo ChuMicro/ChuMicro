@@ -2,11 +2,11 @@
 
 Combines:
 
-* **Config merge** (Decision 0035) — workspace defaults + per-thing
+* **Config merge** (Decision 0035) — workspace defaults + per-project
   config + secrets → ``/runtime_config.msgpack``.
 * **Deploy integration** — :class:`WithRuntimeConfig` plus
-  :func:`thing_directory_source` / :func:`thing_import_graph_source`
-  / :func:`thing_boot_source` compose with ``chumicro-deploy``'s
+  :func:`project_directory_source` / :func:`project_import_graph_source`
+  / :func:`project_boot_source` compose with ``chumicro-deploy``'s
   ``FileSource``\\ s so a single ``Deployer.deploy(...)`` call ships
   app code + the merged config + (optional) boot shim in one shot.
 * **``devices.yml`` round-trip** — three-zone writer (Decision 0029 §9).
@@ -24,12 +24,12 @@ Public API::
         merge_configs,               # deep per-key merge of two or more dicts
         resolve_secrets,             # walk a value, replace !secret <name> refs
         read_workspace_yaml,         # parse workspace.yml -> defaults dict
-        read_thing_config,           # parse things/<name>/config.{toml,yml,yaml}
+        read_project_config,           # parse projects/<name>/config.{toml,yml,yaml}
         read_secrets_yaml,           # parse secrets.yml -> dict (empty when absent)
         write_runtime_config,        # write merged dict to msgpack at given path
         WithRuntimeConfig,           # FileSource decorator that injects the msgpack
-        thing_directory_source,      # convenience: DirectorySource + WithRuntimeConfig
-        find_thing_config,           # locate config.toml/.yml/.yaml under a thing dir
+        project_directory_source,      # convenience: DirectorySource + WithRuntimeConfig
+        find_project_config,           # locate config.toml/.yml/.yaml under a project dir
         RUNTIME_CONFIG_DEVICE_PATH,  # canonical on-device path (Decision 0035 §8)
         GENERATED_DIRNAME,           # canonical host-side _generated/ dir name
         UnresolvedSecretError,       # !secret <name> resolved against missing key
@@ -71,30 +71,30 @@ from chumicro_deploy.firmware_url import (
 
 from chumicro_workspace.boot_shim import (
     BOOT_MODULE_DEVICE_PATH,
+    PROJECTS_PACKAGE_INIT_DEVICE_PATH,
     SHIM_ENTRYPOINT_SOURCE,
-    THINGS_PACKAGE_INIT_DEVICE_PATH,
     boot_shim_files,
     build_active_py,
     load_workspace_runtime_payload,
-    thing_boot_source,
+    project_boot_source,
 )
 from chumicro_workspace.deploy_source import (
     GENERATED_DIRNAME,
     RUNTIME_CONFIG_DEVICE_PATH,
     WithRuntimeConfig,
-    find_thing_config,
-    thing_directory_source,
+    find_project_config,
+    project_directory_source,
 )
 from chumicro_workspace.deploy_targets import read_deploy_targets
 from chumicro_workspace.import_graph import (
     build_search_paths,
+    project_import_graph_source,
     read_library_sources,
-    thing_import_graph_source,
 )
 from chumicro_workspace.loaders import (
     WorkspaceConfigError,
+    read_project_config,
     read_secrets_yaml,
-    read_thing_config,
     read_workspace_yaml,
 )
 from chumicro_workspace.merge import merge_configs
@@ -114,7 +114,7 @@ __all__ = [
     "MICROPYTHON_BOARD_BY_MACHINE",
     "RUNTIME_CONFIG_DEVICE_PATH",
     "SHIM_ENTRYPOINT_SOURCE",
-    "THINGS_PACKAGE_INIT_DEVICE_PATH",
+    "PROJECTS_PACKAGE_INIT_DEVICE_PATH",
     "BoardState",
     "DeviceAlreadyExistsError",
     "DeviceNotFoundError",
@@ -134,7 +134,7 @@ __all__ = [
     "detect_board_state",
     "dump_devices",
     "find_device",
-    "find_thing_config",
+    "find_project_config",
     "find_uf2_drive",
     "latest_circuitpython_url",
     "latest_circuitpython_version",
@@ -149,14 +149,14 @@ __all__ = [
     "read_deploy_targets",
     "read_secrets_yaml",
     "read_library_sources",
-    "read_thing_config",
+    "read_project_config",
     "read_workspace_yaml",
     "rename_device",
     "resolve_secrets",
     "set_runtime_default",
-    "thing_boot_source",
-    "thing_directory_source",
-    "thing_import_graph_source",
+    "project_boot_source",
+    "project_directory_source",
+    "project_import_graph_source",
     "update_device_address",
     "update_device_hardware",
     "write_runtime_config",

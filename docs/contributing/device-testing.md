@@ -219,7 +219,7 @@ Driving pytest directly gives you access to the same overrides `test-libraries-f
 
 ## 6. Run workbench functional tests — `test-workbench-functional`
 
-Workbench packages (`workbench/<name>/`, Decision 0032) can ship their own `functional_tests/` directories.  Unlike library functional tests, these run host-side — the workbench tool is the thing *driving* a connected board through its public API rather than code that ships onto the device.
+Workbench packages (`workbench/<name>/`, Decision 0032) can ship their own `functional_tests/` directories.  Unlike library functional tests, these run host-side — the workbench tool is the project *driving* a connected board through its public API rather than code that ships onto the device.
 
 ```bash
 # Run every workbench's functional_tests/ suite.

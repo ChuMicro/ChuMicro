@@ -14,19 +14,19 @@ class TestClassify:
             "AGENTS.md",
             "CONTRIBUTING.md",
             "pyproject.toml",
-            "things/_template/config.toml",
-            "things/_template/app.py",
+            "projects/_template/config.toml",
+            "projects/_template/app.py",
             "_templates/secrets.yml",
             "_templates/nested/file.txt",
             ".github/skills/deploy-and-debug/SKILL.md",
-            ".github/skills/add-new-thing/SKILL.md",
+            ".github/skills/add-new-project/SKILL.md",
             ".github/skills/register-board/SKILL.md",
             # Slice 5 — `examples/` is reading material; `update`
             # re-flows the canonical content from upstream.
             "examples/README.md",
             "examples/hello_world/app.py",
             "examples/wifi_only/config.toml",
-            "examples/two_things/server/app.py",
+            "examples/two_projects/server/app.py",
         ],
     )
     def test_tool_owned_paths(self, path: str) -> None:
@@ -41,8 +41,8 @@ class TestClassify:
             "libs/my_lib.py",
             "libs/nested/deep/file.py",
             "packages/some_external/__init__.py",
-            "things/back-porch/app.py",
-            "things/back-porch/helpers/util.py",
+            "projects/back-porch/app.py",
+            "projects/back-porch/helpers/util.py",
         ],
     )
     def test_user_owned_paths(self, path: str) -> None:
@@ -63,12 +63,12 @@ class TestClassify:
         assert classify("Makefile") is Zone.USER_OWNED
         assert classify("custom_dir/script.sh") is Zone.USER_OWNED
 
-    def test_things_real_thing_user_owned_not_template(self) -> None:
-        """`things/back-porch/app.py` is user-owned even though
-        `things/_template/app.py` is tool-owned — guards against a
+    def test_projects_real_project_user_owned_not_template(self) -> None:
+        """`projects/back-porch/app.py` is user-owned even though
+        `projects/_template/app.py` is tool-owned — guards against a
         "tool-owned prefix takes precedence" regression."""
-        assert classify("things/_template/app.py") is Zone.TOOL_OWNED
-        assert classify("things/back-porch/app.py") is Zone.USER_OWNED
+        assert classify("projects/_template/app.py") is Zone.TOOL_OWNED
+        assert classify("projects/back-porch/app.py") is Zone.USER_OWNED
 
     def test_secrets_yml_user_owned_not_init_only(self) -> None:
         """Decision 0038 §5: `secrets.yml` is the materialized output

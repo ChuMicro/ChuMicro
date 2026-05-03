@@ -12,14 +12,14 @@ An AI coding agent is a tool that reads code, proposes changes, runs tests, and 
 - **Fixing lint errors** and formatting issues
 - **Exploring the codebase** to answer "how does X work?" questions
 
-Agents follow the same rules as human contributors — they run preflight, their code goes through review, and their PRs must pass CI. The difference is that agents have a stricter rule set ([`AGENTS.md`](../../AGENTS.md)) because they need explicit instructions for things a human would intuit, like "don't reformat code you didn't change" or "check whether this was already decided." Two agent-specific rules worth knowing about as a human collaborator:
+Agents follow the same rules as human contributors — they run preflight, their code goes through review, and their PRs must pass CI. The difference is that agents have a stricter rule set ([`AGENTS.md`](../../AGENTS.md)) because they need explicit instructions for projects a human would intuit, like "don't reformat code you didn't change" or "check whether this was already decided." Two agent-specific rules worth knowing about as a human collaborator:
 
 - **`task-checkpoint`** — agents run preflight and commit after each unit of work, so the tree stays clean as you collaborate.
 - **94 % coverage threshold** — humans target the 85 % baseline configured in `pyproject.toml`; agents pass `--coverage-threshold 94` on every `test` and `preflight` invocation per [Decision 0025](../../plans/decisions/0025-dual-coverage-thresholds.md). If your agent's coverage failure shows `94.0%`, that's why.
 
 ## What agents don't replace
 
-Agents are capable tools, but some things still need a human in the loop:
+Agents are capable tools, but some projects still need a human in the loop:
 
 - **Design direction** — choosing the right abstraction matters more than generating code quickly
 - **Code review** — agent-generated PRs get the same scrutiny as any other
@@ -32,7 +32,7 @@ If you're using an AI coding tool (GitHub Copilot, Cursor, Claude, etc.), you ca
 
 1. **`AGENTS.md`** in the project root contains the full rule set. Most AI tools detect and follow it automatically.
 2. **The `.github/skills/` directory** has step-by-step instructions for common tasks (committing, testing, creating libraries). Agents read these before acting.
-3. **`plans/decisions/`** gives agents context about *why* things are the way they are, so they don't propose changes that were already considered and rejected.
+3. **`plans/decisions/`** gives agents context about *why* projects are the way they are, so they don't propose changes that were already considered and rejected.
 
 ### Quick start with an agent
 

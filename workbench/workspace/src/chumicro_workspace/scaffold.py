@@ -75,12 +75,12 @@ def _load_template(filename: str) -> str:
 
 
 def _import_name(name: str) -> str:
-    """Map ``my-thing`` → ``chumicro_my_thing`` for source imports."""
+    """Map ``my-project`` → ``chumicro_my_project`` for source imports."""
     return f"chumicro_{name.replace('-', '_')}"
 
 
 def _class_name(name: str) -> str:
-    """Map ``my-thing`` → ``MyThing`` for the starter class."""
+    """Map ``my-project`` → ``MyProject`` for the starter class."""
     return "".join(
         part.capitalize()
         for part in name.replace("-", "_").split("_")
@@ -88,7 +88,7 @@ def _class_name(name: str) -> str:
 
 
 def _display_name(name: str) -> str:
-    """Map ``my-thing`` → ``My Thing`` for human-readable docstrings."""
+    """Map ``my-project`` → ``My Project`` for human-readable docstrings."""
     return name.replace("-", " ").replace("_", " ").title()
 
 
@@ -104,7 +104,7 @@ def scaffold_library(
         target_dir: Parent directory.  Created if missing.
         name: Library short name (e.g. ``"gpio"``).  Hyphens get
             converted to underscores in the import path
-            (``chumicro-my-thing`` → ``chumicro_my_thing``).
+            (``chumicro-my-project`` → ``chumicro_my_project``).
         package_kind: ``"library"`` (default) for cross-runtime
             device packages — produces the standard chumicro library
             shape with no extras.  ``"workbench"`` for host-only
@@ -209,7 +209,7 @@ def scaffold_library(
     # relatives break at deploy).  Eager imports are correct for
     # small-surface libraries (lazy-loading research's Tier A);
     # if the library grows per-runtime adapters, push the lazy
-    # selection into a `_select_<thing>` function rather than a
+    # selection into a `_select_<project>` function rather than a
     # module-level PEP 562 `__getattr__` (the deploy harness's
     # CircuitPython RAM-mode wrapper bypasses PEP 562 — see
     # plans/learnings.md).

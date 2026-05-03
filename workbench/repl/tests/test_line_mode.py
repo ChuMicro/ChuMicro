@@ -347,14 +347,14 @@ class TestRunLineMode:
     ) -> None:
         """The `commands=` parameter lets external commands layer in."""
         port = _stub_port()
-        session = _StubPromptSession([":custom_thing extra args", ":quit"])
+        session = _StubPromptSession([":custom_project extra args", ":quit"])
         called: list[tuple[LineModeContext, str]] = []
 
         def fake_handler(context: LineModeContext, rest: str) -> bool:
             called.append((context, rest))
             return True
 
-        custom = dict(BUILTIN_COMMANDS, custom_thing=fake_handler)
+        custom = dict(BUILTIN_COMMANDS, custom_project=fake_handler)
         output = io.StringIO()
         run_line_mode(
             port,

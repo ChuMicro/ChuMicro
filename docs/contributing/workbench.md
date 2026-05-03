@@ -2,7 +2,7 @@
 
 Companion to `libraries/`.  Where `libraries/` holds code that runs **on a microcontroller** (across CircuitPython, MicroPython, and CPython), `workbench/` holds code that runs **on the developer's laptop** to manage microcontroller projects — deploy tools, REPL clients, onboarding helpers.
 
-> **Too long; just tell me where my thing goes**
+> **Too long; just tell me where my project goes**
 >
 > The folder is decided by *where the installer puts the code*, not by which files the package ships.
 >
@@ -14,7 +14,7 @@ Companion to `libraries/`.  Where `libraries/` holds code that runs **on a micro
 
 ## Why workbench exists
 
-The `libraries/` folder means two things at once: "publishable" and "runs on all three runtimes."  That worked while every publishable package was multi-runtime.  It broke once host-only tools (deploy, repl, firmware flashers) showed up — they are publishable to PyPI, but cannot run on a device and must not go through `.mpy` compilation, cross-runtime testing, or the CircuitPython bundle.
+The `libraries/` folder means two projects at once: "publishable" and "runs on all three runtimes."  That worked while every publishable package was multi-runtime.  It broke once host-only tools (deploy, repl, firmware flashers) showed up — they are publishable to PyPI, but cannot run on a device and must not go through `.mpy` compilation, cross-runtime testing, or the CircuitPython bundle.
 
 `workbench/` cleanly separates "runs on a board" from "runs on your laptop" without forcing every reader to learn which entry in `libraries/` is secretly host-only.
 
@@ -28,7 +28,7 @@ Full rationale in [Decision 0032](../../plans/decisions/0032-workbench-host-tool
 | `workbench/` | PyPI only | CPython only |
 | `support/` | never | CPython only |
 
-`support/` is the "mono-repo internal" escape hatch — things like `support/test_harness/` that we share across packages but nobody outside the repo consumes.
+`support/` is the "mono-repo internal" escape hatch — projects like `support/test_harness/` that we share across packages but nobody outside the repo consumes.
 
 ## If you're using a workbench tool
 
@@ -46,7 +46,7 @@ The shipped tools today:
 
 - **`chumicro-deploy`** ([`workbench/deploy/`](../../workbench/deploy/)) — push code onto a board, probe a connected device, flash firmware (UF2 or esptool), classify failures and walk the user through fixes.
 - **`chumicro-repl`** ([`workbench/repl/`](../../workbench/repl/)) — interactive serial REPL with traceback highlighting, an `mpremote`-compatible TUI, a `tail()` follow-mode for deploy orchestration, and a programmatic `ReplSession` for headless test fixtures.
-- **`chumicro-workspace`** ([`workbench/workspace/`](../../workbench/workspace/)) — one-stop host CLI + Python API for ChuMicro project workspaces.  `init` clones a starter (defaults to [`ChuMicro-Workspace-Template`](https://github.com/ChuMicro/ChuMicro-Workspace-Template), Decision 0038), `setup` creates the venv and materializes any `_templates/` files (Decision 0038 §5), and the rest of the surface owns `devices.yml` three-zone round-trip editing, single-thing / `--all-devices` / `--all-things` deploys, `repl <thing>` (deploy-then-tail one-shot), `status` / `doctor` workspace-health snapshots, `new --library` / `new --from` scaffolding, path-aware `rename`, firmware URL derivation, import-graph deploys, and the deploy-time config-merge pipeline that produces `/runtime_config.msgpack` (Decision 0035).  `update` re-flows tool-owned files from the canonical upstream so template evolutions reach existing workspaces without clobbering user code.
+- **`chumicro-workspace`** ([`workbench/workspace/`](../../workbench/workspace/)) — one-stop host CLI + Python API for ChuMicro project workspaces.  `init` clones a starter (defaults to [`ChuMicro-Workspace-Template`](https://github.com/ChuMicro/ChuMicro-Workspace-Template), Decision 0038), `setup` creates the venv and materializes any `_templates/` files (Decision 0038 §5), and the rest of the surface owns `devices.yml` three-zone round-trip editing, single-project / `--all-devices` / `--all-projects` deploys, `repl <project>` (deploy-then-tail one-shot), `status` / `doctor` workspace-health snapshots, `new --library` / `new --from` scaffolding, path-aware `rename`, firmware URL derivation, import-graph deploys, and the deploy-time config-merge pipeline that produces `/runtime_config.msgpack` (Decision 0035).  `update` re-flows tool-owned files from the canonical upstream so template evolutions reach existing workspaces without clobbering user code.
 - **`chumicro-pytest-device`** ([`workbench/pytest-device/`](../../workbench/pytest-device/)) — pytest plugin that intercepts collection under `functional_tests/`, stages your library + test source onto a connected CP / MP board via `chumicro-deploy`, runs the test in the device runtime, and surfaces the on-device outcome to host-side pytest.  Auto-registers via the `pytest11` entry point — no `pytest_plugins = […]` line needed.  Reads device targets from `devices.yml`.
 
 All four consume the same `devices.yml` schema (owned by `chumicro_deploy.config.default.load_devices_yml`) so a single workspace file points every tool at the same boards.
@@ -78,7 +78,7 @@ Workbench packages ship the same `mkdocs.yml` + `docs/` layout as device librari
 
 ### Differences from libraries at a glance
 
-- **Host-side `functional_tests/`, not on-device** — workbench tools are the thing *driving* devices from the host, not code running on a device.  A workbench package can still ship a `functional_tests/` directory for host-side tests that happen to touch hardware (e.g. [`workbench/deploy/functional_tests/`](../../workbench/deploy/functional_tests/) covers the deploy happy paths against a real board through the public `chumicro_deploy` API).  The root `conftest.py` excludes these from default host collection the same way it does for library functional tests; run them with `python scripts/run.py test-workbench-functional` (the workbench counterpart to `test-libraries-functional`).  Each suite's own `conftest.py` owns device selection — typically by reading `devices.yml` defaults — so the runner itself needs no runtime/device flags.
+- **Host-side `functional_tests/`, not on-device** — workbench tools are the project *driving* devices from the host, not code running on a device.  A workbench package can still ship a `functional_tests/` directory for host-side tests that happen to touch hardware (e.g. [`workbench/deploy/functional_tests/`](../../workbench/deploy/functional_tests/) covers the deploy happy paths against a real board through the public `chumicro_deploy` API).  The root `conftest.py` excludes these from default host collection the same way it does for library functional tests; run them with `python scripts/run.py test-workbench-functional` (the workbench counterpart to `test-libraries-functional`).  Each suite's own `conftest.py` owns device selection — typically by reading `devices.yml` defaults — so the runner itself needs no runtime/device flags.
 - **No cross-runtime tests** — you don't run `test-micropython` or `test-circuitpython`.  Workbench packages target only CPython.
 - **No `.mpy` compilation, no bundle staging** — workbench packages do not appear in `ChuMicro-Bundle` or `ChuMicro-Bundle-Experimental`.
 - **Third-party CPython dependencies are fine** — `pyserial`, `pyyaml`, `rich`, whatever you need.  `libraries/` avoids them because a CPython-only dep can't be `import`ed on a device; workbench doesn't target devices, so the constraint never applied.  Dependency declarations never flow through `circup` or `mpremote` regardless — both bundle tools copy source files per manifest, they do not resolve `pyproject.toml` deps.

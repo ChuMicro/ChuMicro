@@ -2,7 +2,7 @@
 
 The fakes drive scripted ``OSError`` sequences through every public
 entrypoint (``tail``, ``ReplSession``, ``run_loop``, ``interactive``)
-to validate three things uniformly:
+to validate three projects uniformly:
 
 - a clean disconnect notice goes to ``output`` instead of a raw
   traceback bubbling out of the loop;

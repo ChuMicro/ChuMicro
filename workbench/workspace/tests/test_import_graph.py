@@ -7,8 +7,8 @@ from chumicro_workspace import (
     RUNTIME_CONFIG_DEVICE_PATH,
     WorkspaceConfigError,
     build_search_paths,
+    project_import_graph_source,
     read_library_sources,
-    thing_import_graph_source,
 )
 from chumicro_workspace.workspace import WorkspaceLayout
 from msgpack import unpackb
@@ -138,12 +138,12 @@ class TestBuildSearchPaths:
 
 
 # ---------------------------------------------------------------------------
-# thing_import_graph_source — end to end
+# project_import_graph_source — end to end
 # ---------------------------------------------------------------------------
 
 
-def _seed_thing_with_imports(tmp_path: Path) -> WorkspaceLayout:
-    """Stage a workspace with a thing that imports from libs/."""
+def _seed_project_with_imports(tmp_path: Path) -> WorkspaceLayout:
+    """Stage a workspace with a project that imports from libs/."""
     (tmp_path / "workspace.yml").write_text("defaults: {}\n")
     (tmp_path / "secrets.yml").write_text("\n")
     libs = tmp_path / "libs"
@@ -155,23 +155,23 @@ def _seed_thing_with_imports(tmp_path: Path) -> WorkspaceLayout:
         "def never_called():\n    return 42\n"
     )
 
-    thing_dir = tmp_path / "things" / "back-porch"
-    thing_dir.mkdir(parents=True)
-    (thing_dir / "config.toml").write_text(
+    project_dir = tmp_path / "projects" / "back-porch"
+    project_dir.mkdir(parents=True)
+    (project_dir / "config.toml").write_text(
         "[wifi]\nssid = 'HomeNet'\n"
     )
-    (thing_dir / "code.py").write_text(
+    (project_dir / "code.py").write_text(
         "import shared_helper\n"
         "print('result:', shared_helper.add(1, 2))\n"
     )
     return WorkspaceLayout(root=tmp_path)
 
 
-class TestThingImportGraphSource:
+class TestProjectImportGraphSource:
     def test_ships_entrypoint_and_imported_modules(self, tmp_path: Path) -> None:
-        workspace = _seed_thing_with_imports(tmp_path)
-        thing_dir = workspace.thing_dir("back-porch")
-        source = thing_import_graph_source(thing_dir, workspace=workspace)
+        workspace = _seed_project_with_imports(tmp_path)
+        project_dir = workspace.project_dir("back-porch")
+        source = project_import_graph_source(project_dir, workspace=workspace)
         files = source.files()
         # Entrypoint lands at the device default.
         assert "/code.py" in files
@@ -180,17 +180,17 @@ class TestThingImportGraphSource:
 
     def test_skips_unimported_modules(self, tmp_path: Path) -> None:
         """unused_helper.py shouldn't ship — that's the whole point."""
-        workspace = _seed_thing_with_imports(tmp_path)
-        thing_dir = workspace.thing_dir("back-porch")
-        source = thing_import_graph_source(thing_dir, workspace=workspace)
+        workspace = _seed_project_with_imports(tmp_path)
+        project_dir = workspace.project_dir("back-porch")
+        source = project_import_graph_source(project_dir, workspace=workspace)
         files = source.files()
         assert "/lib/unused_helper.py" not in files
 
     def test_runtime_config_msgpack_rides_along(self, tmp_path: Path) -> None:
         """Slice 1's WithRuntimeConfig wraps the import graph too."""
-        workspace = _seed_thing_with_imports(tmp_path)
-        thing_dir = workspace.thing_dir("back-porch")
-        source = thing_import_graph_source(thing_dir, workspace=workspace)
+        workspace = _seed_project_with_imports(tmp_path)
+        project_dir = workspace.project_dir("back-porch")
+        source = project_import_graph_source(project_dir, workspace=workspace)
         files = source.files()
         assert RUNTIME_CONFIG_DEVICE_PATH in files
         decoded = unpackb(files[RUNTIME_CONFIG_DEVICE_PATH])
@@ -219,13 +219,13 @@ class TestThingImportGraphSource:
         libs.mkdir()
         (libs / "shared_helper.py").write_text("MARKER = 'from-libs'\n")
 
-        thing_dir = tmp_path / "things" / "back-porch"
-        thing_dir.mkdir(parents=True)
-        (thing_dir / "config.toml").write_text("[wifi]\nssid = 'x'\n")
-        (thing_dir / "code.py").write_text("import shared_helper\n")
+        project_dir = tmp_path / "projects" / "back-porch"
+        project_dir.mkdir(parents=True)
+        (project_dir / "config.toml").write_text("[wifi]\nssid = 'x'\n")
+        (project_dir / "code.py").write_text("import shared_helper\n")
 
         workspace = WorkspaceLayout(root=tmp_path)
-        source = thing_import_graph_source(thing_dir, workspace=workspace)
+        source = project_import_graph_source(project_dir, workspace=workspace)
         files = source.files()
         # The external version wins over libs/.
         assert b"from-external" in files["/lib/shared_helper.py"]
@@ -238,14 +238,14 @@ class TestThingImportGraphSource:
         """Override entrypoint_filename + device_entrypoint for MP."""
         (tmp_path / "workspace.yml").write_text("defaults: {}\n")
         (tmp_path / "secrets.yml").write_text("\n")
-        thing_dir = tmp_path / "things" / "mp-thing"
-        thing_dir.mkdir(parents=True)
-        (thing_dir / "config.toml").write_text("[app]\n")
-        (thing_dir / "main.py").write_text("print('mp')\n")
+        project_dir = tmp_path / "projects" / "mp-project"
+        project_dir.mkdir(parents=True)
+        (project_dir / "config.toml").write_text("[app]\n")
+        (project_dir / "main.py").write_text("print('mp')\n")
         workspace = WorkspaceLayout(root=tmp_path)
 
-        source = thing_import_graph_source(
-            thing_dir,
+        source = project_import_graph_source(
+            project_dir,
             workspace=workspace,
             entrypoint_filename="main.py",
             device_entrypoint="/main.py",
@@ -256,12 +256,12 @@ class TestThingImportGraphSource:
 
     def test_missing_entrypoint_raises(self, tmp_path: Path) -> None:
         (tmp_path / "workspace.yml").write_text("defaults: {}\n")
-        thing_dir = tmp_path / "things" / "empty"
-        thing_dir.mkdir(parents=True)
-        (thing_dir / "config.toml").write_text("[app]\n")
+        project_dir = tmp_path / "projects" / "empty"
+        project_dir.mkdir(parents=True)
+        (project_dir / "config.toml").write_text("[app]\n")
         workspace = WorkspaceLayout(root=tmp_path)
         with pytest.raises(FileNotFoundError):
-            thing_import_graph_source(thing_dir, workspace=workspace)
+            project_import_graph_source(project_dir, workspace=workspace)
 
     def test_extra_search_paths_used_for_resolution(
         self,
@@ -274,14 +274,14 @@ class TestThingImportGraphSource:
         external.mkdir()
         (external / "extra_module.py").write_text("X = 1\n")
 
-        thing_dir = tmp_path / "things" / "x"
-        thing_dir.mkdir(parents=True)
-        (thing_dir / "config.toml").write_text("[app]\n")
-        (thing_dir / "code.py").write_text("import extra_module\n")
+        project_dir = tmp_path / "projects" / "x"
+        project_dir.mkdir(parents=True)
+        (project_dir / "config.toml").write_text("[app]\n")
+        (project_dir / "code.py").write_text("import extra_module\n")
         workspace = WorkspaceLayout(root=tmp_path)
 
-        source = thing_import_graph_source(
-            thing_dir,
+        source = project_import_graph_source(
+            project_dir,
             workspace=workspace,
             extra_search_paths=[external],
         )
@@ -296,15 +296,15 @@ class TestThingImportGraphSource:
         libs.mkdir()
         (libs / "dynamic_target.py").write_text("Y = 2\n")
 
-        thing_dir = tmp_path / "things" / "x"
-        thing_dir.mkdir(parents=True)
-        (thing_dir / "config.toml").write_text("[app]\n")
+        project_dir = tmp_path / "projects" / "x"
+        project_dir.mkdir(parents=True)
+        (project_dir / "config.toml").write_text("[app]\n")
         # Entrypoint never imports dynamic_target — only force-include picks it up.
-        (thing_dir / "code.py").write_text("print('hi')\n")
+        (project_dir / "code.py").write_text("print('hi')\n")
         workspace = WorkspaceLayout(root=tmp_path)
 
-        source = thing_import_graph_source(
-            thing_dir,
+        source = project_import_graph_source(
+            project_dir,
             workspace=workspace,
             extra_modules=["dynamic_target"],
         )
@@ -329,16 +329,16 @@ class TestThingImportGraphSource:
             '__chumicro_runtimes__ = ("micropython",)\n',
         )
 
-        thing_dir = tmp_path / "things" / "two-adapters"
-        thing_dir.mkdir(parents=True)
-        (thing_dir / "config.toml").write_text("[app]\n")
-        (thing_dir / "code.py").write_text(
+        project_dir = tmp_path / "projects" / "two-adapters"
+        project_dir.mkdir(parents=True)
+        (project_dir / "config.toml").write_text("[app]\n")
+        (project_dir / "code.py").write_text(
             "from _adapters import cp\nfrom _adapters import mp\n",
         )
         workspace = WorkspaceLayout(root=tmp_path)
 
-        source = thing_import_graph_source(
-            thing_dir,
+        source = project_import_graph_source(
+            project_dir,
             workspace=workspace,
             target_runtime="micropython",
         )

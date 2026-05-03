@@ -19,18 +19,18 @@ class TestNameHelpers:
 
     def test_import_name_underscores(self) -> None:
         assert _import_name("gpio") == "chumicro_gpio"
-        assert _import_name("my-thing") == "chumicro_my_thing"
-        assert _import_name("my_thing") == "chumicro_my_thing"
+        assert _import_name("my-project") == "chumicro_my_project"
+        assert _import_name("my_project") == "chumicro_my_project"
 
     def test_class_name_camel_case(self) -> None:
         assert _class_name("gpio") == "Gpio"
-        assert _class_name("my-thing") == "MyThing"
-        assert _class_name("my_thing") == "MyThing"
+        assert _class_name("my-project") == "MyProject"
+        assert _class_name("my_project") == "MyProject"
 
     def test_display_name_title_case(self) -> None:
         assert _display_name("gpio") == "Gpio"
-        assert _display_name("my-thing") == "My Thing"
-        assert _display_name("my_thing") == "My Thing"
+        assert _display_name("my-project") == "My Project"
+        assert _display_name("my_project") == "My Project"
 
 
 class TestScaffoldLibrary:
@@ -70,19 +70,19 @@ class TestScaffoldLibrary:
     def test_hyphen_name_translates_to_snake_case_imports(
         self, tmp_path: Path,
     ) -> None:
-        """`my-thing` → package `chumicro_my_thing`, class `MyThing`."""
-        created = scaffold_library(tmp_path / "libraries", "my-thing")
+        """`my-project` → package `chumicro_my_project`, class `MyProject`."""
+        created = scaffold_library(tmp_path / "libraries", "my-project")
         # Filesystem uses hyphenated short-name (chumicro convention).
-        assert created.name == "my-thing"
+        assert created.name == "my-project"
         # Package + module name use snake_case.
         package_init = (
-            created / "src" / "chumicro_my_thing" / "__init__.py"
+            created / "src" / "chumicro_my_project" / "__init__.py"
         )
         assert package_init.is_file()
         text = package_init.read_text()
-        assert "from chumicro_my_thing.core import MyThing" in text
+        assert "from chumicro_my_project.core import MyProject" in text
         # Test file uses snake_case basename.
-        assert (created / "tests" / "test_my_thing.py").is_file()
+        assert (created / "tests" / "test_my_project.py").is_file()
 
     def test_creates_target_parent_when_missing(self, tmp_path: Path) -> None:
         """Parent dirs are auto-created — no need to pre-mkdir libraries/."""

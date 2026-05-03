@@ -1,10 +1,10 @@
 """Deep per-key merge for the runtime-config pipeline.
 
-Per Decision 0035 §5: workspace defaults + per-thing overrides
-combine **key-by-key within sections**, with the thing winning on
+Per Decision 0035 §5: workspace defaults + per-project overrides
+combine **key-by-key within sections**, with the project winning on
 conflict.  Sections present only in workspace.yml carry through as
-global defaults the thing inherits without restating; sections
-present only in the thing carry through as thing-specific.
+global defaults the project inherits without restating; sections
+present only in the project carry through as project-specific.
 
 Pure functions, fully deterministic — same inputs always yield the
 same merged output.  No file IO; the loaders module handles that.

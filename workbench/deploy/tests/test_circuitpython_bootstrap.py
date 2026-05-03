@@ -338,7 +338,7 @@ class TestBuildCircuitpythonDeployScripts:
         assert "def _register_stub(" in scripts[0]
         assert "_retry_deferred()" in scripts[-1]
         assert "'__main__'" in scripts[-1]
-        # With no lib modules the entrypoint source is the one thing
+        # With no lib modules the entrypoint source is the one project
         # that has to survive.  Round-trip through repr/eval to assert.
         joined = "\n".join(scripts)
         assert "print('hi')" in joined

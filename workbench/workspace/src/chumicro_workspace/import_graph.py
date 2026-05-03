@@ -3,7 +3,7 @@
 ``chumicro_deploy.ImportGraphSource`` already performs the AST walk
 (parses an entrypoint, follows ``import`` / ``from ... import``
 targets, recurses).  This module assembles the *workspace-shaped*
-search-path list — thing directory + ``libs/`` (user-authored
+search-path list — project directory + ``libs/`` (user-authored
 shared modules) + ``packages/`` (third-party, gitignored) +
 optional ``library_sources:`` overrides — and wraps the result
 with :class:`WithRuntimeConfig` so the merged runtime-config
@@ -17,9 +17,9 @@ Two pieces:
   checkout instead of the published copy"; the value is a search
   path that the import-graph walker tries before the workspace's
   ``libs/`` / ``packages/`` defaults.
-* :func:`thing_import_graph_source` — convenience that builds the
+* :func:`project_import_graph_source` — convenience that builds the
   search-path list, constructs an :class:`ImportGraphSource` for
-  the thing's entrypoint, and wraps with :class:`WithRuntimeConfig`.
+  the project's entrypoint, and wraps with :class:`WithRuntimeConfig`.
   The CLI ``deploy --import-graph`` invokes this; programmatic
   callers can compose the layers themselves for finer control
   (custom search paths, extra modules, alternate entrypoint).
@@ -35,7 +35,7 @@ from ruamel.yaml import YAML
 from chumicro_workspace.deploy_source import (
     GENERATED_DIRNAME,
     WithRuntimeConfig,
-    find_thing_config,
+    find_project_config,
 )
 from chumicro_workspace.loaders import WorkspaceConfigError
 
@@ -151,7 +151,7 @@ def build_search_paths(
     # Full chumicro-style library packages scaffolded via
     # ``new --library`` live at ``libraries/<name>/`` with the
     # importable module under ``src/``.  Add each ``src/`` so a
-    # thing's ``import my_lib`` resolves against the local checkout
+    # project's ``import my_lib`` resolves against the local checkout
     # without forcing the user to register an entry in
     # ``library_sources:``.
     if workspace.libraries_dir.is_dir():
@@ -175,8 +175,8 @@ def build_search_paths(
     return resolved
 
 
-def thing_import_graph_source(
-    thing_dir: Path,
+def project_import_graph_source(
+    project_dir: Path,
     *,
     workspace: WorkspaceLayout,
     workspace_yaml: Path | None = None,
@@ -190,21 +190,21 @@ def thing_import_graph_source(
 ) -> WithRuntimeConfig:
     """Build a deploy-ready FileSource using AST-walked imports.
 
-    Mirrors :func:`thing_directory_source` but uses
+    Mirrors :func:`project_directory_source` but uses
     :class:`chumicro_deploy.ImportGraphSource` so only transitively-
     imported modules ship — keeps the device payload minimal even
     when the workspace has many shared libs.
 
-    The thing's entrypoint file is parsed; every reachable module
+    The project's entrypoint file is parsed; every reachable module
     via ``libs/`` / ``packages/`` / ``library_sources:`` lands in
     the deploy.  Modules that don't resolve (``gc``, ``time``,
     ``board``, etc.) are silently skipped — they're assumed to be
     runtime built-ins the host can't ship anyway.
 
     Args:
-        thing_dir: ``things/<name>/`` directory.  Used as the root
+        project_dir: ``projects/<name>/`` directory.  Used as the root
             of the entrypoint lookup *and* as a search path so
-            thing-local modules under the same dir resolve.
+            project-local modules under the same dir resolve.
         workspace: Resolved :class:`WorkspaceLayout`.  Used to
             locate ``workspace.yml`` (defaults block + library_sources)
             and ``secrets.yml`` when those args are ``None``.
@@ -214,8 +214,8 @@ def thing_import_graph_source(
             layout.
         secrets_yaml: Override the secrets.yml path.  Defaults to
             ``workspace.secrets_yaml``.
-        entrypoint_filename: Host-side filename of the thing's
-            entrypoint; must exist under *thing_dir*.  Defaults to
+        entrypoint_filename: Host-side filename of the project's
+            entrypoint; must exist under *project_dir*.  Defaults to
             ``"code.py"`` (CircuitPython convention).  Override to
             ``"main.py"`` for MicroPython.
         device_entrypoint: On-device path the runtime executes
@@ -236,7 +236,7 @@ def thing_import_graph_source(
             ``deploy`` CLI fills this in from the device's runtime.
 
     Raises:
-        FileNotFoundError: When *thing_dir* doesn't contain a
+        FileNotFoundError: When *project_dir* doesn't contain a
             recognized config file or *entrypoint_filename* doesn't
             exist under it.
         WorkspaceConfigError: When workspace.yml's
@@ -249,7 +249,7 @@ def thing_import_graph_source(
     if secrets_yaml is None:
         secrets_yaml = workspace.secrets_yaml
 
-    entrypoint_path = thing_dir / entrypoint_filename
+    entrypoint_path = project_dir / entrypoint_filename
     if not entrypoint_path.is_file():
         raise FileNotFoundError(
             f"entrypoint {entrypoint_path} not found "
@@ -257,7 +257,7 @@ def thing_import_graph_source(
         )
 
     library_sources = read_library_sources(workspace_yaml)
-    search_paths = [thing_dir]
+    search_paths = [project_dir]
     search_paths.extend(
         build_search_paths(
             workspace,
@@ -278,7 +278,7 @@ def thing_import_graph_source(
     return WithRuntimeConfig(
         inner,
         workspace_yaml=workspace_yaml,
-        thing_config=find_thing_config(thing_dir),
+        project_config=find_project_config(project_dir),
         secrets_yaml=secrets_yaml,
-        output_path=thing_dir / GENERATED_DIRNAME / "runtime_config.msgpack",
+        output_path=project_dir / GENERATED_DIRNAME / "runtime_config.msgpack",
     )

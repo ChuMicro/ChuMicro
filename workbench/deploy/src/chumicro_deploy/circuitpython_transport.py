@@ -1013,7 +1013,7 @@ class CircuitpythonTransport:
 
         Builds a local staging directory that mirrors the desired drive
         layout — library and harness packages under ``lib/``, test
-        files at the root — then rsyncs the whole thing to the drive
+        files at the root — then rsyncs the whole project to the drive
         in one pass.  Building locally is reliable (no FAT32 quirks);
         rsync handles the fragile USB-drive write.
 

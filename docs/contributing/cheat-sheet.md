@@ -27,7 +27,7 @@ git add -A && git commit              # imperative subject, explain why
 git push -u origin fix/my-change      # then open PR on GitHub
 ```
 
-## The 10 things
+## The 10 projects
 
 1. **One command to rule them all:** `python scripts/run.py preflight`. If it passes, CI will pass.
 2. **Use descriptive names.** The linter catches abbreviations and suggests replacements. Single-letter for-loop targets (`for i in range(10)`) are fine.
@@ -50,7 +50,7 @@ Grouped by what you're trying to do. Preflight is the one command you actually h
 |---|---|
 | Run everything CI will run | `python scripts/run.py preflight` |
 | Lint only | `python scripts/run.py lint` |
-| Scaffold a new library | `python scripts/run.py new-library my-thing` |
+| Scaffold a new library | `python scripts/run.py new-library my-project` |
 
 ### Testing
 

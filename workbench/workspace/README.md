@@ -4,7 +4,7 @@
 
 **One-stop host CLI for ChuMicro project workspaces — onboard a board, write app code, deploy to one or many targets, watch the REPL.**
 
-Wraps `chumicro-deploy` and `chumicro-repl` with the workspace-shaped pieces those packages don't own: a deploy-time config-merge pipeline (`workspace.yml` + `things/*/config.toml` + `secrets.yml` → `runtime_config.msgpack`), a CLI that reads `workspace.yml`, three-zone `devices.yml` round-trip, board-state onboarding, firmware URL derivation, and the boot-shim layout that lets a single board host one thing without you writing a `code.py`.
+Wraps `chumicro-deploy` and `chumicro-repl` with the workspace-shaped pieces those packages don't own: a deploy-time config-merge pipeline (`workspace.yml` + `projects/*/config.toml` + `secrets.yml` → `runtime_config.msgpack`), a CLI that reads `workspace.yml`, three-zone `devices.yml` round-trip, board-state onboarding, firmware URL derivation, and the boot-shim layout that lets a single board host one project without you writing a `code.py`.
 
 <br clear="left">
 
@@ -42,23 +42,23 @@ python run.py bootstrap --port /dev/cu.usbmodem1101 --device-id back-porch
 # the built-in demo payload — pass --no-demo to skip the demo step.)
 
 # Then iterate:
-python run.py new my_thing                          # scaffold from things/_template/
-python run.py deploy my_thing                       # ship + run on the active device
-python run.py repl my_thing --tail 30               # deploy + tail for 30 s
+python run.py new my_project                          # scaffold from projects/_template/
+python run.py deploy my_project                       # ship + run on the active device
+python run.py repl my_project --tail 30               # deploy + tail for 30 s
 ```
 
 ### How config flows from your edits to the device
 
-The runtime config a thing receives at boot is the merge of three host-side sources, with secret references resolved at deploy time:
+The runtime config a project receives at boot is the merge of three host-side sources, with secret references resolved at deploy time:
 
 ```
-secrets.yml                workspace.yml              things/<name>/config.toml
+secrets.yml                workspace.yml              projects/<name>/config.toml
    (host)                     (host)                          (host)
       │                          │                              │
       └──────────────┬───────────┴──────────────────────────────┘
                      ▼
                  merge_configs                  ← chumicro_workspace.merge
-                     │                              (deep per-key merge: thing
+                     │                              (deep per-key merge: project
                      ▼                               wins over workspace defaults)
                  resolve_secrets                ← chumicro_workspace.secrets
                      │                              (replaces "!secret <name>"
@@ -72,7 +72,7 @@ secrets.yml                workspace.yml              things/<name>/config.toml
               chumicro_config.runtime           ← READS the msgpack on the device
 ```
 
-`chumicro-workspace dump-config <thing>` prints the merged dict your thing would receive without actually deploying — useful when debugging which config section a key landed in or whether a `!secret` resolved to what you expected.
+`chumicro-workspace dump-config <project>` prints the merged dict your project would receive without actually deploying — useful when debugging which config section a key landed in or whether a `!secret` resolved to what you expected.
 
 ## What's included
 
@@ -83,9 +83,9 @@ secrets.yml                workspace.yml              things/<name>/config.toml
 | Group | Commands |
 |---|---|
 | **Bootstrap / setup** | `init`, `setup`, `update`, `bootstrap` |
-| **Authoring** | `new <path>` (thing), `new --library <name>` (chumicro-style library), `dump-config <thing>` |
+| **Authoring** | `new <path>` (project), `new --library <name>` (chumicro-style library), `dump-config <project>` |
 | **Devices** | `add-device`, `probe`, `discover`, `devices`, `rename --device` |
-| **Deploy / run** | `deploy <thing>`, `demo`, `repl [<thing>] [--tail SECONDS]`, `things [--flat]` |
+| **Deploy / run** | `deploy <project>`, `demo`, `repl [<project>] [--tail SECONDS]`, `projects [--flat]` |
 | **Health** | `status`, `doctor` (also runs as a fast pre-deploy gate; `deploy --skip-health-check` opts out) |
 | **Quality** | `test`, `lint`, `preflight` (chains lint + test; respects `workspace.yml`'s `quality:` block) |
 | **Firmware** | `install-firmware`, `upgrade-firmware` |
@@ -93,11 +93,11 @@ secrets.yml                workspace.yml              things/<name>/config.toml
 
 ### `libs/` vs `libraries/` — when to use each
 
-Both hold code your things can `import`.  Pick by *weight*:
+Both hold code your projects can `import`.  Pick by *weight*:
 
 | Want to ship… | Drop it under | Imports look like | Notes |
 |---|---|---|---|
-| A 50-line helper your things share | `libs/foo.py` | `from libs.foo import bar` | No tests, no version, no scaffolding. |
+| A 50-line helper your projects share | `libs/foo.py` | `from libs.foo import bar` | No tests, no version, no scaffolding. |
 | A full chumicro-style library you might publish someday | `libraries/<name>/` (via `new --library`) | `import <name>` | Gets `src/`, `tests/`, `docs/`, `examples/`, `pyproject.toml`, `VERSION` — same shape the chumicro mono-repo uses. |
 | A third-party package | `packages/` (via `sync`) | `import <name>` | Gitignored mirror cache. |
 
@@ -109,21 +109,21 @@ The import-graph search path resolves explicit `library_sources:` overrides → 
 
 ```
 /code.py                              # two-line shim: import workspace_runtime; boot()
-/active.py                            # THING_NAME = "garage.sensors.door_open"
+/active.py                            # PROJECT_NAME = "garage.sensors.door_open"
 /runtime_config.msgpack               # merged config (see pipeline above)
-/lib/workspace_runtime/__init__.py    # boot module — imports things.<dotted>.app and calls run()
-/lib/things/__init__.py               # package marker
-/lib/things/garage/__init__.py        # one per nested namespace level
-/lib/things/garage/sensors/door_open/ # the thing's files
+/lib/workspace_runtime/__init__.py    # boot module — imports projects.<dotted>.app and calls run()
+/lib/projects/__init__.py               # package marker
+/lib/projects/garage/__init__.py        # one per nested namespace level
+/lib/projects/garage/sensors/door_open/ # the project's files
     __init__.py
     app.py                            # def run(): ...  ← your code
 ```
 
-Three layers, three responsibilities: `code.py` is the firmware entrypoint (stable across deploys), `active.py` names which thing is current (regenerated per deploy), `app.py` is your code (lives inside the thing dir).  None of these names is a CircuitPython convention except `code.py` itself — `app.py` is workspace's name for "the thing's entrypoint module exporting `run()`".
+Three layers, three responsibilities: `code.py` is the firmware entrypoint (stable across deploys), `active.py` names which project is current (regenerated per deploy), `app.py` is your code (lives inside the project dir).  None of these names is a CircuitPython convention except `code.py` itself — `app.py` is workspace's name for "the project's entrypoint module exporting `run()`".
 
 ### Status
 
-> Project-workspace Phase 4a feature-complete + workspace-ecosystem Phases 1, 2, 4, 5 shipped (2026-04-27); Phase 2f closed 2026-05-01.  The package consolidates everything Decision 0029 / 0035 / 0038 specified plus the user-friendliness pass that followed: nested thing namespaces, an `examples/` folder for read-and-scaffold demos, `status` / `doctor` health snapshots (now also a pre-deploy gate), `deploy --dry-run`, `deploy --all-devices`, `deploy --all-things` + per-thing `deploy_targets:` defaults, `repl <thing>` one-shot deploy + tail, app-level deploy-failure recovery hints, `new --library` for chumicro-style libraries, `workspace.yml` `quality:` knob wiring, `preflight` + `dump-config` commands.
+> Project-workspace Phase 4a feature-complete + workspace-ecosystem Phases 1, 2, 4, 5 shipped (2026-04-27); Phase 2f closed 2026-05-01.  The package consolidates everything Decision 0029 / 0035 / 0038 specified plus the user-friendliness pass that followed: nested project namespaces, an `examples/` folder for read-and-scaffold demos, `status` / `doctor` health snapshots (now also a pre-deploy gate), `deploy --dry-run`, `deploy --all-devices`, `deploy --all-projects` + per-project `deploy_targets:` defaults, `repl <project>` one-shot deploy + tail, app-level deploy-failure recovery hints, `new --library` for chumicro-style libraries, `workspace.yml` `quality:` knob wiring, `preflight` + `dump-config` commands.
 
 ## Public Python API
 
@@ -131,12 +131,12 @@ Three layers, three responsibilities: `code.py` is the firmware entrypoint (stab
 from chumicro_workspace import (
     # Config merge (Decision 0035)
     build_runtime_config, merge_configs, resolve_secrets,
-    read_workspace_yaml, read_thing_config, read_secrets_yaml,
+    read_workspace_yaml, read_project_config, read_secrets_yaml,
     write_runtime_config, UnresolvedSecretError, WorkspaceConfigError,
 
     # Deploy sources
-    WithRuntimeConfig, thing_directory_source,
-    thing_boot_source, thing_import_graph_source,
+    WithRuntimeConfig, project_directory_source,
+    project_boot_source, project_import_graph_source,
 
     # devices.yml three-zone round-trip (Decision 0029 §9)
     add_device, update_device_address, update_device_hardware,
@@ -153,12 +153,12 @@ from chumicro_workspace import (
     # Import-graph (Decision 0029 §6+§7)
     build_search_paths, read_library_sources,
 
-    # Per-thing → per-device mapping (Phase 2f)
+    # Per-project → per-device mapping (Phase 2f)
     read_deploy_targets,
 
     # Constants
     RUNTIME_CONFIG_DEVICE_PATH, GENERATED_DIRNAME,
-    BOOT_MODULE_DEVICE_PATH, THINGS_PACKAGE_INIT_DEVICE_PATH,
+    BOOT_MODULE_DEVICE_PATH, PROJECTS_PACKAGE_INIT_DEVICE_PATH,
     SHIM_ENTRYPOINT_SOURCE,
 )
 ```

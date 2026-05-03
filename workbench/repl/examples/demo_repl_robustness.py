@@ -1,7 +1,7 @@
 """Interactive demo for chumicro-repl robustness on real boards.
 
 Run this against plugged-in hardware to see the coached failure
-output ``chumicro-repl`` produces when things go wrong.  Unlike the
+output ``chumicro-repl`` produces when projects go wrong.  Unlike the
 pytest-based functional tests, this is an *interactive* script — it
 prompts you to physically create failure conditions (unplug USB,
 hold the port open in another tool, upload code that ignores
@@ -22,7 +22,7 @@ hardware.
 Why a script instead of a pytest?  The failures worth showing all
 require a human action (unplug the cable, open another mpremote,
 flash a tight loop).  Pytest can't do those — it can only assert
-on outcomes.  This script is the thing to run when you want to
+on outcomes.  This script is the project to run when you want to
 *see* the hand-holding, not prove it works in CI.
 
 Mirrors :mod:`workbench.deploy.examples.demo_recovery_hand_holding`

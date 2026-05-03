@@ -293,7 +293,7 @@ def _open_editor(*, editor: str, file_path: Path) -> int:
 
     Args:
         editor: Editor command line.  Honors shell-shaped values
-            via ``shlex.split`` so things like ``"code -w"`` work.
+            via ``shlex.split`` so projects like ``"code -w"`` work.
         file_path: File the editor opens.
 
     Indirection point — tests stub this so they don't shell out.
