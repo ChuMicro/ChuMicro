@@ -403,6 +403,16 @@ class HttpClient:
         """
         self._connection_factory = connection_factory
         self._recv_budget_per_tick = recv_budget_per_tick
+        # Pre-allocated recv scratch buffer — reused on every tick so we
+        # don't churn the heap with per-call allocations.  Mirrors the
+        # static-buffer pattern in :class:`chumicro_mqtt._wire.PacketDecoder`
+        # and ``chumicro_websockets._session.WebSocketSession`` — both caught
+        # the per-tick alloc on a Pi Pico W's 124 KB heap.  Capped at 512 B
+        # so a client with ``recv_budget_per_tick=64K`` doesn't pin 64 KB of
+        # steady-state heap for a buffer that gets sliced down per call.
+        recv_scratch_size = recv_budget_per_tick if recv_budget_per_tick <= 512 else 512
+        self._recv_buffer = bytearray(recv_scratch_size)
+        self._recv_view = memoryview(self._recv_buffer)
         self._max_body_bytes = max_body_bytes
         self._when_oversized = when_oversized
         self._default_timeout_ms = default_timeout_ms
@@ -702,16 +712,23 @@ class HttpClient:
             raise
 
     def _drive_recv(self):
-        """Drain the socket up to ``recv_budget_per_tick``; feed the parser."""
+        """Drain the socket up to ``recv_budget_per_tick``; feed the parser.
+
+        Recv goes into the pre-allocated :attr:`_recv_buffer`; the
+        :meth:`ResponseParser.feed` call gets a ``memoryview`` window into
+        that buffer so neither the recv nor the feed allocates per tick.
+        The parser copies the bytes it keeps (into ``_buffer`` or ``_body``)
+        before returning, so the memoryview's lifetime ends with the call.
+        """
         consumed = 0
         budget = self._recv_budget_per_tick
-        scratch = bytearray(min(budget, 512))
+        scratch_size = len(self._recv_buffer)
         while consumed < budget and self._parser.state not in (
             ParseState.DONE, ParseState.ERROR,
         ):
-            capacity = min(len(scratch), budget - consumed)
+            capacity = min(scratch_size, budget - consumed)
             try:
-                got = self._socket.recv_into(scratch, capacity)
+                got = self._socket.recv_into(self._recv_view[:capacity], capacity)
             except OSError as socket_error:
                 errno = socket_error.args[0] if socket_error.args else None
                 if errno in (11, 35):  # EAGAIN
@@ -723,7 +740,7 @@ class HttpClient:
                 # error (Content-Length short).
                 self._parser.feed_eof()
                 break
-            self._parser.feed(bytes(scratch[:got]))
+            self._parser.feed(self._recv_view[:got])
             consumed += got
         if self._parser.state == ParseState.ERROR:
             raise self._parser.error
