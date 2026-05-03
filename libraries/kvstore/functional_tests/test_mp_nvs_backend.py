@@ -1,28 +1,24 @@
 """On-device tests for ``MpNvsBackend`` against real ``esp32.NVS``.
 
-These tests run only on MicroPython ESP32 boards.  Pi Pico W MP has
-no ``esp32`` module, so every test early-returns there — the file
-collects cleanly on any MP device, but the body only fires on
-ESP32-class boards.
+These tests run only on MicroPython ESP32 boards.  The module-level
+``__chumicro_runtimes__`` marker keeps CP boards out at collection
+time; within MP, Pi Pico W has no ``esp32`` module, so every test
+early-returns there — the file collects cleanly on any MP device,
+but the body only fires on ESP32-class boards.
 
 Each test starts by erasing the ``payload`` key in the ``chu_kv``
 namespace so prior session state does not leak between tests.
 """
 
-import sys
+__chumicro_runtimes__ = ("micropython",)
 
 from chumicro_kvstore import KVStore
 from chumicro_kvstore._backends.mp_nvs import MpNvsBackend
 
-_IS_MICROPYTHON = sys.implementation.name == "micropython"
-
-if _IS_MICROPYTHON:
-    try:
-        import esp32
-        _HAS_ESP32 = True
-    except ImportError:
-        _HAS_ESP32 = False
-else:
+try:
+    import esp32
+    _HAS_ESP32 = True
+except ImportError:
     _HAS_ESP32 = False
 
 
