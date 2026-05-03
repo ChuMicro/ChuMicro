@@ -12,6 +12,7 @@ for the methodology rationale.
 """
 
 import gc
+import sys
 
 from chumicro_http_server._wire import RequestParser, RequestParseState
 
@@ -20,6 +21,15 @@ from chumicro_http_server._wire import RequestParser, RequestParseState
 # ---------------------------------------------------------------------------
 
 _FRAGMENTATION_TIERS = (256, 1024, 4096)
+
+# Tolerances calibrated against live-board allocator entropy — see
+# ``libraries/requests/functional_tests/test_memory_fragmentation_on_device.py``
+# for the rationale.
+if sys.implementation.name == "micropython":
+    _DEFAULT_LEAK_TOLERANCE = 4096
+else:
+    _DEFAULT_LEAK_TOLERANCE = 2048
+_DEFAULT_TIER_DROP_TOLERANCE = 32
 
 
 def _count_blocks_of_size(size):
@@ -41,8 +51,8 @@ def _free_block_histogram(tiers=_FRAGMENTATION_TIERS):
 
 
 def _probe_workload_delta(workload, iterations,
-                          leak_tolerance=2048,
-                          tier_drop_tolerance=4):
+                          leak_tolerance=_DEFAULT_LEAK_TOLERANCE,
+                          tier_drop_tolerance=_DEFAULT_TIER_DROP_TOLERANCE):
     gc.collect()
     baseline_free = gc.mem_free()
     baseline_histogram = _free_block_histogram()

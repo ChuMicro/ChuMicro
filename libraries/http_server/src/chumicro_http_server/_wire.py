@@ -40,6 +40,13 @@ DEFAULT_SEND_BUDGET_PER_TICK = const(4096)
 #: Default per-request body cap — Decision 0041 §4.
 DEFAULT_MAX_REQUEST_BODY_BYTES = const(16384)
 
+#: Default steady-state body buffer size for :class:`RequestParser`.
+#: Sized to cover typical sensor + JSON-API request bodies without
+#: per-request alloc.  Bodies bigger than this fall back to a one-shot
+#: ``bytearray(content_length)`` released on the next :meth:`reset`.
+#: Mirrors :data:`chumicro_requests._wire.DEFAULT_BODY_BUFFER_SIZE`.
+DEFAULT_BODY_BUFFER_SIZE = const(1024)
+
 #: Default per-connection deadline — Decision 0041 §4.
 DEFAULT_REQUEST_TIMEOUT_MS = const(10000)
 
@@ -174,6 +181,7 @@ class CaseInsensitiveDict:
         self._entries[lower] = (original_name, joined)
 
 
+
 # ---------------------------------------------------------------------------
 # Content-Type charset parsing
 # ---------------------------------------------------------------------------
@@ -256,33 +264,57 @@ class RequestParser:
     Chunked request bodies land in v2.
     """
 
-    def __init__(self, *, max_body_bytes=DEFAULT_MAX_REQUEST_BODY_BYTES):
+    def __init__(
+        self,
+        *,
+        max_body_bytes=DEFAULT_MAX_REQUEST_BODY_BYTES,
+        body_buffer=None,
+        body_buffer_view=None,
+    ):
+        """Construct a one-shot parser.
+
+        Args:
+            max_body_bytes: Hard cap on body size.
+            body_buffer: Optional caller-owned ``bytearray`` to use as
+                the steady-state body buffer.  Allows a server with
+                keep-alive (v2) or a connection pool to reuse the
+                buffer across requests.  ``None`` means the parser
+                allocates its own ``bytearray(DEFAULT_BODY_BUFFER_SIZE)``
+                — current default for the v1 server (one connection
+                per request, no reuse).
+            body_buffer_view: Pre-cached ``memoryview(body_buffer)``;
+                required when ``body_buffer`` is provided.
+        """
         self._max_body_bytes = max_body_bytes
         self._buffer = bytearray()
         # Read cursor into ``_buffer``.  Each ``_consume(n)`` advances
         # the cursor and only realloates the bytearray when at least
         # half of it has been consumed — mirrors the read-cursor pattern
-        # in :class:`chumicro_requests._wire.ResponseParser`.  The
-        # slice-reassign idiom (``_buffer = bytearray(_buffer[n:])``)
-        # was the 1024-tier fragmentation source on Lolin S2 ESP32-S2;
-        # see the on-device fragmentation tests in
-        # ``functional_tests/test_memory_fragmentation_on_device.py``.
+        # in :class:`chumicro_requests._wire.ResponseParser`.
         self._read_offset = 0
         self._state = RequestParseState.REQUEST_LINE
         self._method = ""
         self._target = ""
         self._http_version = ""
         self._headers = CaseInsensitiveDict()
-        # ``_body`` is the underlying buffer; ``_body_view`` is the
-        # cached memoryview the property + read-side ops slice through
-        # (constructing memoryview each access would itself allocate).
-        # Both rebind when ``_body`` is reallocated to the exact
-        # ``Content-Length`` in :meth:`_enter_body_state` so a 1 KiB
-        # POST gets one tier-1024 alloc instead of seven intermediate-
-        # tier reallocs (16 → 32 → ... → 1024) as ``extend`` doubles
-        # the underlying buffer.
-        self._body = bytearray()
-        self._body_view = memoryview(self._body)
+        # Body buffer: caller-supplied or self-allocated.  Either way
+        # it's a fixed-size steady-state buffer; oversized bodies
+        # (Content-Length > capacity) rebind ``_body`` to a one-shot
+        # ``bytearray(content_length)`` that gets freed when the parser
+        # is dereferenced.
+        if body_buffer is not None:
+            if body_buffer_view is None:
+                body_buffer_view = memoryview(body_buffer)
+            self._body = body_buffer
+            self._body_view = body_buffer_view
+            self._body_capacity = len(body_buffer)
+        else:
+            # No external buffer — grow on demand.  See the matching
+            # rationale in
+            # :class:`chumicro_requests._wire.ResponseParser.__init__`.
+            self._body = bytearray()
+            self._body_view = memoryview(self._body)
+            self._body_capacity = 0
         self._body_write_offset = 0
         self._body_remaining = 0
         self._error = None
@@ -534,12 +566,13 @@ class RequestParser:
             self._state = RequestParseState.DONE
             return
         self._state = RequestParseState.BODY
-        # Pre-allocate body to exact Content-Length so the absorb path
-        # writes via slice-assign instead of growing via extend.
-        # Refresh the cached view because ``_body`` rebinds.
-        self._body = bytearray(content_length)
-        self._body_view = memoryview(self._body)
         self._body_write_offset = 0
+        # Don't pre-allocate the body upfront: the absorb path uses a
+        # doubling-grow strategy that's measured cleaner on small-heap
+        # boards than a per-request tier-N alloc/free cycle.  When the
+        # consumer supplied an external ``body_buffer`` and the request
+        # fits, no allocation happens at all.  See the matching path in
+        # :class:`chumicro_requests._wire.ResponseParser._enter_body_state`.
         # Any bytes left over from header parsing are body bytes.
         if self._live_len() > 0:
             tail_view = self._live_slice(0)
@@ -547,19 +580,30 @@ class RequestParser:
             self._absorb_body_bytes(tail_view)
 
     def _absorb_body_bytes(self, chunk):
-        """Write body bytes via the pre-allocated buffer's write cursor.
+        """Write body bytes; slice-assign + one-shot grow on overflow.
 
-        ``chunk`` may be ``bytes``, ``bytearray``, or ``memoryview``;
-        slicing returns the same flavor and ``bytearray[a:b] = view`` is
-        a cross-runtime-safe in-place write (no realloc) when the LHS
-        slice length matches.
+        Same shape as
+        :meth:`chumicro_requests._wire.ResponseParser._absorb_body_chunk`:
+        slice-assign in place when the write fits, one-shot exact-size
+        replace when it doesn't.  Never uses ``bytearray.extend`` —
+        that's three allocations per logical write on CP / MP.
         """
         if self._body_remaining == 0:
             return  # Already complete; ignore extra (client sent too many).
         take = min(self._body_remaining, len(chunk))
         write_offset = self._body_write_offset
-        self._body[write_offset:write_offset + take] = chunk[:take]
-        self._body_write_offset = write_offset + take
+        end_offset = write_offset + take
+        source = chunk[:take] if take < len(chunk) else chunk
+        if end_offset <= len(self._body_view):
+            self._body[write_offset:end_offset] = source
+        else:
+            new_body = bytearray(end_offset)
+            new_body[:write_offset] = self._body_view[:write_offset]
+            new_body[write_offset:end_offset] = source
+            self._body = new_body
+            self._body_view = memoryview(new_body)
+            self._body_capacity = end_offset
+        self._body_write_offset = end_offset
         self._body_remaining -= take
         if self._body_remaining == 0:
             self._state = RequestParseState.DONE
