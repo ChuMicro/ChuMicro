@@ -2,9 +2,13 @@
 
 <img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-**A tick-based task scheduler — no async, no threads, just `runner.tick()` in your loop.**
+**Tick-based scheduling that's debuggable from `print()`.**
 
-Register services with check/handle methods, add periodic callbacks, and the runner dispatches everything on a shared timestamp. Each service runs on its own schedule while you write the interesting parts. Works on CircuitPython, MicroPython, and CPython. Built on [timing](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing).
+`runner.tick()` runs every registered service once on a shared timestamp.  Each service is one object with `check(now_ms)` + `handle(now_ms)`; your loop is six lines.  Every state change shows up in the order you wrote.
+
+Every networked library in ChuMicro ([wifi](../wifi/), [sockets](../sockets/), [mqtt](../mqtt/), [requests](../requests/), [http_server](../http_server/), [websockets](../websockets/)) is shaped to register here — your LED can keep blinking through a TLS handshake, a slow HTTP response, or a stalled MQTT peer because every one of them gets the same fair share of every tick.
+
+We picked tick-based over an event loop because transparent state matters more than syntactic concurrency on a board where serial output is your only window.  Works on CircuitPython, MicroPython, and CPython.  Built on [chumicro-timing](../timing/).
 
 <br clear="left">
 
