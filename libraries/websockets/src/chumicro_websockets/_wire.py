@@ -32,25 +32,15 @@ except ImportError:
 
 
 def _sha1_digest(data: bytes) -> bytes:
-    """Return the SHA-1 digest of *data* using the fastest available backend.
+    """Return ``sha1(data).digest()`` via whichever hashlib path the
+    runtime exposes.
 
-    Two-tier dispatch matching the reality of every runtime we ship to:
-
-    1. **``hashlib.sha1(data)``** — CPython, MicroPython on every
-       supported port (``MICROPY_PY_HASHLIB_SHA1=1`` in
-       ``ports/{esp32,rp2}/mpconfigport.h``).
-    2. **``hashlib.new("sha1", data)``** — CircuitPython.  The
-       mbedtls-backed factory works even though ``hashlib.sha1``
-       itself is gated off by ``MICROPY_PY_HASHLIB_SHA1=0`` in
-       ``py/mpconfig.h:1807``.  Live-board probe on Pi Pico W CP
-       confirmed ``hashlib.new("sha1", b"abc").digest()`` matches
-       the FIPS vector.
-
-    A hypothetical runtime exposing neither would surface as a clear
-    ``AttributeError`` here at the first hash — which is the right
-    failure mode (call out the missing crypto primitive, don't
-    silently route through a pure-Python fallback that fragments
-    embedded heaps).
+    CPython + MicroPython expose ``hashlib.sha1``; CircuitPython gates
+    it off (``MICROPY_PY_HASHLIB_SHA1=0``) but the mbedtls-backed
+    ``hashlib.new("sha1", data)`` factory works.  A runtime exposing
+    neither surfaces as a clear ``AttributeError`` here, which is the
+    right failure mode — don't silently fall back to pure-Python and
+    fragment the embedded heap.
     """
     hasher_factory = getattr(hashlib, "sha1", None)
     if hasher_factory is not None:
@@ -68,26 +58,16 @@ class WebSocketError(Exception):
 
 
 class WebSocketProtocolError(WebSocketError):
-    """Peer sent bytes the spec doesn't allow.
-
-    Reserved opcode, missing/forbidden mask, fragmented control
-    frame, control payload >125 bytes, invalid close-frame body,
-    text frame with invalid UTF-8, length encoded with non-minimal
-    width — anything RFC 6455 calls out as MUST close.  Always a
-    peer or network bug; the right response is close with
-    :data:`CLOSE_PROTOCOL_ERROR` (or :data:`CLOSE_BAD_DATA` for
-    UTF-8 failures) and surface the error to the caller.
+    """Peer sent bytes the spec doesn't allow — anything RFC 6455 calls
+    out as MUST close.  Right response: close with
+    :data:`CLOSE_PROTOCOL_ERROR` (or :data:`CLOSE_BAD_DATA` for UTF-8).
     """
 
 
 class WebSocketHandshakeError(WebSocketError):
-    """Opening-handshake failed.
-
-    Server sent a non-101 status, missing/wrong ``Sec-WebSocket-Accept``,
-    missing ``Upgrade: websocket`` / ``Connection: Upgrade``, or the
-    handshake bytes weren't well-formed HTTP/1.1.  Server-side: the
-    client's request was missing required upgrade headers, used the
-    wrong method, or quoted a key that wasn't a 16-byte base64 nonce.
+    """Opening-handshake failed — non-101 status, wrong accept token,
+    missing/wrong ``Upgrade``/``Connection`` headers, or malformed
+    HTTP/1.1 (server-side: bad method/version/key).
     """
 
 
@@ -96,39 +76,25 @@ class WebSocketURLError(WebSocketError):
 
 
 class WebSocketTimeoutError(WebSocketError):
-    """A per-phase timeout budget elapsed.
-
-    Opening-handshake budget (``handshake_timeout_ms``), close-handshake
-    budget (``close_timeout_ms``), or pong-after-ping budget
-    (``pong_timeout_ms``).
-    """
+    """A per-phase timeout elapsed (handshake, close, or pong-after-ping)."""
 
 
 class WebSocketBackpressureError(WebSocketError):
-    """TX queue overflowed when ``when_oversized=DISCONNECT``.
-
-    Mirrors :class:`chumicro_mqtt.MQTTBackpressureError` — caller
-    enqueued more than ``max_tx_queue_size`` outbound frames before
-    the runner could drain them.
+    """TX queue overflowed (more than ``max_tx_queue_size`` outbound
+    frames enqueued before the runner could drain them).
     """
 
 
 class WebSocketOversizedError(WebSocketError):
-    """Inbound message exceeded ``max_message_bytes``.
-
-    Raised when ``when_oversized=DISCONNECT`` (Decision 0045 §6).
-    The other policies (``DROP_SILENT``, ``DROP_WITH_EVENT``) drop
-    the payload silently or fire ``on_oversized`` without raising,
-    then close the connection with :data:`CLOSE_TOO_BIG`.
+    """Inbound message exceeded ``max_message_bytes``.  Raised only
+    when ``when_oversized=DISCONNECT``; the other policies drop the
+    payload + close with :data:`CLOSE_TOO_BIG` instead of raising.
     """
 
 
 class WebSocketStateError(WebSocketError):
-    """Caller invoked an operation that requires a different state.
-
-    Examples: ``send_text`` before the connection reaches
-    :data:`WebSocketState.OPEN`, or ``connect`` on a client already in
-    :data:`WebSocketState.OPEN`.
+    """Caller invoked an operation that requires a different state
+    (e.g., ``send_text`` before OPEN, ``connect`` after OPEN).
     """
 
 
@@ -222,14 +188,10 @@ RESERVED_CLOSE_CODES = frozenset({
 
 
 class WebSocketState:
-    """Lifecycle states for a websocket session — Decision 0045 §5.
+    """Lifecycle states for a websocket session (Decision 0045 §5).
 
-    Forward-only::
-
-        CONNECTING -> OPEN -> CLOSING -> CLOSED
-
-    Either side may shortcut directly from ``CONNECTING`` to
-    ``CLOSED`` if the opening handshake fails.
+    Forward-only ``CONNECTING -> OPEN -> CLOSING -> CLOSED``; either
+    side may shortcut to ``CLOSED`` if the opening handshake fails.
     """
 
     CONNECTING = "connecting"
@@ -288,20 +250,13 @@ class CaseInsensitiveDict:
 def parse_ws_url(url: str) -> tuple[str, str, int, str]:
     """Split a ``ws://`` / ``wss://`` *url* into ``(scheme, host, port, path)``.
 
-    Args:
-        url: WebSocket URL.  Examples::
+    *path* always starts with ``/`` and includes the query string if
+    present.  Raises :class:`WebSocketURLError` on bad scheme, missing
+    host, or out-of-range port.  Examples::
 
-            ws://example.com/      -> ("ws", "example.com", 80, "/")
-            wss://api.host:8443/v1 -> ("wss", "api.host", 8443, "/v1")
-            ws://h/p?q=1           -> ("ws", "h", 80, "/p?q=1")
-
-    Returns:
-        4-tuple ``(scheme, host, port, path)``.  *path* always starts
-        with ``/`` and includes the query string if present.
-
-    Raises:
-        WebSocketURLError: Scheme is not ``ws`` / ``wss``, host is
-            missing, or port is not a base-10 integer in 1-65535.
+        ws://example.com/      -> ("ws", "example.com", 80, "/")
+        wss://api.host:8443/v1 -> ("wss", "api.host", 8443, "/v1")
+        ws://h/p?q=1           -> ("ws", "h", 80, "/p?q=1")
     """
     if not isinstance(url, str):
         raise WebSocketURLError(
@@ -361,12 +316,8 @@ def parse_ws_url(url: str) -> tuple[str, str, int, str]:
 
 
 def make_websocket_key() -> str:
-    """Generate a fresh ``Sec-WebSocket-Key`` per RFC 6455 §4.1.
-
-    16 random bytes, base64-encoded, returned as ASCII ``str``.
-
-    Returns:
-        Base64 ``str`` suitable for the ``Sec-WebSocket-Key`` header.
+    """Generate a fresh ``Sec-WebSocket-Key`` per RFC 6455 §4.1
+    (16 random bytes, base64-encoded as ASCII ``str``).
     """
     nonce = os.urandom(16)
     encoded = binascii.b2a_base64(nonce)
@@ -377,15 +328,8 @@ def make_websocket_key() -> str:
 def derive_accept_key(client_key: str) -> str:
     """Compute ``Sec-WebSocket-Accept`` from the client's nonce.
 
-    Per RFC 6455 §4.2.2: ``base64(sha1(client_key + WS_MAGIC_GUID))``.
-
-    Args:
-        client_key: The ``Sec-WebSocket-Key`` header value verbatim
-            (already base64-encoded; do not decode first).
-
-    Returns:
-        Base64 ``str`` to put in the server's ``Sec-WebSocket-Accept``
-        header.
+    RFC 6455 §4.2.2: ``base64(sha1(client_key + WS_MAGIC_GUID))``.
+    *client_key* is the verbatim base64 nonce — do not decode first.
     """
     digest = _sha1_digest((client_key + WS_MAGIC_GUID).encode("ascii"))
     encoded = binascii.b2a_base64(digest)
@@ -407,23 +351,11 @@ def encode_client_handshake(
 ) -> bytes:
     """Encode the client's opening-handshake HTTP/1.1 request.
 
-    Args:
-        host: Hostname for the ``Host:`` header.  No port suffix.
-        port: TCP port; appended to ``Host:`` only when non-default
-            (80 for ``ws://``, 443 for ``wss://``).  The transport
-            decides which based on the URL scheme — pass either.
-        path: Request-target — typically the URL path + query.
-        key: Pre-generated nonce from :func:`make_websocket_key`.
-        extra_headers: Optional iterable of ``(name, value)`` pairs,
-            a ``dict``, or a :class:`CaseInsensitiveDict` to merge in
-            after the required upgrade headers.  Caller-supplied headers
-            override defaults; the four mandatory upgrade headers
-            (``Host``, ``Upgrade``, ``Connection``, ``Sec-WebSocket-Key``,
-            ``Sec-WebSocket-Version``) are always re-applied at the end
-            so callers can't accidentally break the handshake.
-
-    Returns:
-        Encoded request as ``bytes``.
+    *port* is appended to ``Host:`` only when non-default (80/443).
+    *extra_headers* (iterable / ``dict`` / :class:`CaseInsensitiveDict`)
+    is merged in first; the five mandatory upgrade headers are
+    re-applied at the end so callers can't accidentally break the
+    handshake.
     """
     is_default_port = port in (80, 443)
     host_value = host if is_default_port else f"{host}:{port}"
@@ -459,17 +391,10 @@ def encode_server_handshake_response(
 ) -> bytes:
     """Encode the server's ``101 Switching Protocols`` response.
 
-    Args:
-        client_key: The verbatim ``Sec-WebSocket-Key`` value the
-            client sent; used to derive the accept token.
-        extra_headers: Optional iterable / ``dict`` /
-            :class:`CaseInsensitiveDict` to include after the
-            mandatory upgrade headers.  Cannot override the
-            four mandatory headers (``Upgrade``, ``Connection``,
-            ``Sec-WebSocket-Accept``, status line).
-
-    Returns:
-        Encoded response as ``bytes``.
+    *client_key* is the verbatim ``Sec-WebSocket-Key`` from the request;
+    *extra_headers* is merged in first, then the three mandatory
+    upgrade headers (``Upgrade``, ``Connection``, ``Sec-WebSocket-Accept``)
+    are re-applied at the end so they can't be overridden.
     """
     accept_token = derive_accept_key(client_key)
 
@@ -501,22 +426,10 @@ def encode_server_rejection(
     body: bytes | None = None,
     content_type: str = "text/plain; charset=utf-8",
 ) -> bytes:
-    """Encode an HTTP/1.1 error response for a rejected WS upgrade.
-
-    Used when the client's request didn't pass the upgrade checks
-    (wrong path, missing required header, unsupported version, etc.)
-    so the server should answer with a regular HTTP error rather than
-    a ``101``.  The connection is then closed.
-
-    Args:
-        status_code: HTTP status code (e.g. ``400``, ``404``, ``426``).
-        reason_phrase: Reason text after the status code.
-        body: Optional body bytes.  ``Content-Length`` is auto-added
-            when set.
-        content_type: ``Content-Type`` header value when *body* is set.
-
-    Returns:
-        Encoded response as ``bytes``.
+    """Encode a regular HTTP/1.1 error response for a rejected WS
+    upgrade (wrong path, missing header, unsupported version) — sent
+    instead of ``101`` and the connection then closes.
+    ``Content-Length`` is auto-added when *body* is set.
     """
     parts = [f"HTTP/1.1 {status_code} {reason_phrase}\r\n".encode("ascii")]
     parts.append(b"Connection: close\r\n")
@@ -553,27 +466,13 @@ class HandshakeParseState:
 class HandshakeResponseParser:
     """Streaming parser for the server's HTTP/1.1 ``101`` response.
 
-    The websocket client feeds raw bytes via :meth:`feed`; the parser
-    extracts status line + headers and validates the four upgrade
-    invariants:
-
-    1. Status code is ``101``.
-    2. ``Upgrade:`` (case-insensitive) contains ``websocket``.
-    3. ``Connection:`` (case-insensitive, comma-separated) contains
-       ``upgrade``.
-    4. ``Sec-WebSocket-Accept`` matches the value derived from the
-       client's nonce via :func:`derive_accept_key`.
-
-    Body bytes (if any — the ``101`` response should have none) sit
-    in :attr:`leftover` for the caller to feed into the frame parser.
-
-    Args:
-        expected_accept: The accept token the client expects, derived
-            from the nonce it sent.  Validation #4 compares against
-            this verbatim.
-        max_header_bytes: Cap on the buffered handshake to bound heap.
-            Default ``8192`` — a real websocket response is well under
-            this; if a peer sends more, raise rather than grow.
+    The client feeds raw bytes via :meth:`feed`; the parser extracts
+    the status line + headers and validates: status code is ``101``,
+    ``Upgrade`` contains ``websocket``, ``Connection`` contains
+    ``upgrade``, and ``Sec-WebSocket-Accept`` matches *expected_accept*
+    (derived from the client's nonce).  Body bytes past the terminator
+    sit in :attr:`leftover` for the caller to feed into the frame
+    parser.  *max_header_bytes* (default ``8192``) bounds heap.
     """
 
     def __init__(self, expected_accept: str, *, max_header_bytes: int = 8192):
@@ -735,30 +634,15 @@ class HandshakeResponseParser:
 class HandshakeRequestParser:
     """Streaming parser for the client's HTTP/1.1 upgrade request.
 
-    The websocket server feeds raw bytes via :meth:`feed`; the
-    parser extracts request line + headers and validates the
-    upgrade invariants:
-
-    1. Method is ``GET``.
-    2. HTTP version is ``HTTP/1.1`` or higher (``HTTP/2`` doesn't
-       speak this handshake; reject with 400 in the caller).
-    3. ``Upgrade:`` (case-insensitive) contains ``websocket``.
-    4. ``Connection:`` (case-insensitive, comma-separated) contains
-       ``upgrade``.
-    5. ``Sec-WebSocket-Version`` is ``13``.
-    6. ``Sec-WebSocket-Key`` is present and base64-decodes to 16
-       bytes.
-
-    Args:
-        max_header_bytes: Cap on the buffered request to bound heap.
-            Default ``8192``.
-
-    Properties accessible after :attr:`state` == ``DONE``:
-
-    * :attr:`method`, :attr:`path`, :attr:`http_version`
-    * :attr:`headers`
-    * :attr:`client_key` — the ``Sec-WebSocket-Key`` value verbatim
-      (caller hands to :func:`derive_accept_key`).
+    The server feeds raw bytes via :meth:`feed`; the parser extracts
+    the request line + headers and validates: method is ``GET``,
+    version is ``HTTP/1.1+``, ``Upgrade`` contains ``websocket``,
+    ``Connection`` contains ``upgrade``, ``Sec-WebSocket-Version`` is
+    ``13``, and ``Sec-WebSocket-Key`` is present + base64-decodes to
+    16 bytes.  After :attr:`state` == ``DONE``, :attr:`method` /
+    :attr:`path` / :attr:`http_version` / :attr:`headers` /
+    :attr:`client_key` are populated.  *max_header_bytes* (default
+    ``8192``) bounds heap.
     """
 
     def __init__(self, *, max_header_bytes: int = 8192):

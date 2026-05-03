@@ -29,7 +29,6 @@ from chumicro_websockets._wire import (
     CLOSE_NORMAL,
     CLOSE_PROTOCOL_ERROR,
     CLOSE_TOO_BIG,
-    CONTROL_OPCODES,
     DEFAULT_CLOSE_TIMEOUT_MS,
     DEFAULT_HANDSHAKE_TIMEOUT_MS,
     DEFAULT_MAX_MESSAGE_BYTES,
@@ -74,11 +73,8 @@ from chumicro_websockets.client import (
 
 
 class ServerHandshakePhase:
-    """Sub-states inside the server-side :data:`WebSocketState.CONNECTING`.
-
-    The opening handshake on the server is two distinct I/O phases
-    in the opposite order from the client: read the request first,
-    then write the 101 response.
+    """Sub-states inside CONNECTING — server-side, opposite order from
+    the client: read the request first, then write the 101 response.
     """
 
     READING_REQUEST = "reading_request"
@@ -93,26 +89,16 @@ class ServerHandshakePhase:
 class Connection:
     """Server-side per-connection state machine + framing pipeline.
 
-    Constructed by :class:`WebSocketServer` once per accepted socket.
-    Caller-visible API (the user wires callbacks in their
-    ``on_connection`` hook):
+    Constructed by :class:`WebSocketServer` once per accepted socket;
+    the user wires callbacks via the ``on_connection`` hook.  Server-
+    side outbound is never masked (RFC 6455 §5.1).
 
-    * :meth:`send_text` / :meth:`send_binary` / :meth:`send_ping`
-      — enqueue an outbound frame.  Server-side outbound is
-      **never masked** per RFC 6455 §5.1.
-    * :meth:`close` — initiate the close handshake.
-    * :attr:`state` / :attr:`last_close_code` / :attr:`last_close_reason`
-      / :attr:`last_error` — observation.
-    * :attr:`request_path` — the URI path from the upgrade request
-      (set once :data:`WebSocketState.OPEN` is reached).
-    * :attr:`request_headers` — the upgrade request headers
-      (:class:`CaseInsensitiveDict`); read-only once OPEN.
-    * Callbacks: :attr:`on_text` / :attr:`on_binary` / :attr:`on_ping` /
-      :attr:`on_pong` / :attr:`on_close` / :attr:`on_oversized`.
-
-    Driven by :class:`WebSocketServer` — the server's
-    :meth:`WebSocketServer.handle` walks every active connection
-    each tick.
+    Public surface: :meth:`send_text` / :meth:`send_binary` /
+    :meth:`send_ping` / :meth:`close`; :attr:`state`,
+    :attr:`last_close_code`, :attr:`last_close_reason`,
+    :attr:`last_error`, :attr:`request_path`, :attr:`request_headers`
+    (set once OPEN); callbacks ``on_text`` / ``on_binary`` /
+    ``on_ping`` / ``on_pong`` / ``on_close`` / ``on_oversized``.
     """
 
     def __init__(
@@ -498,13 +484,8 @@ class Connection:
         if opcode == OPCODE_PONG:
             self._handle_pong_frame(payload)
             return
-        if opcode in CONTROL_OPCODES:  # pragma: no cover - exhaustive
-            self._send_close(
-                CLOSE_PROTOCOL_ERROR,
-                f"unhandled control opcode 0x{opcode:x}",
-            )
-            return
-
+        # Reserved opcodes (0xB-0xF) are caught upstream by FrameParser.
+        # Anything that gets here is a data opcode (TEXT, BINARY, or CONT).
         self._handle_data_frame(opcode, fin, payload)
 
     def _handle_data_frame(self, opcode: int, fin: bool, payload: bytes) -> None:
@@ -758,38 +739,25 @@ class Connection:
 class WebSocketServer:
     """Runner-shaped WebSocket server owning a TCP/TLS listening socket.
 
-    Construct with a *listener* + the *on_connection* hook + knobs;
-    drive via :meth:`check` / :meth:`handle` from a runner tick or
-    a hand-rolled loop.  Standalone-port shape only in v1
-    (Decision 0045 §4).
+    *listener* is typically from
+    :func:`chumicro_sockets.tcp_listening_socket` /
+    :func:`tls_listening_socket`.  *on_connection* (``callable(connection)``)
+    fires once per inbound connection at handshake completion; it
+    wires ``connection.on_text`` / ``on_binary`` / ``on_close`` etc.
+    before any frames arrive.  Raising from the callback rejects with
+    :data:`CLOSE_INTERNAL_ERROR`.  Standalone-port shape only in v1
+    (Decision 0045 §4); ``accept_path`` filters by URI path with 404
+    on mismatch.
 
-    Args:
-        listener: A non-blocking listening socket whose ``accept()``
-            returns ``(client_socket, address)`` or raises EAGAIN.
-            Typically built via
-            :func:`chumicro_sockets.tcp_listening_socket` or
-            :func:`tls_listening_socket`.
-        on_connection: ``callable(connection: Connection)`` invoked
-            once per inbound connection at the moment the upgrade
-            handshake completes.  The callback wires
-            ``connection.on_text`` / ``on_binary`` / ``on_close`` /
-            etc. before any frames arrive.  May raise to reject —
-            the offending connection then closes with
-            :data:`CLOSE_INTERNAL_ERROR`.
-        max_connections: Maximum number of simultaneously-active
-            connections.  Default ``2``.  Inbound accepts past the
-            cap close the freshly-accepted socket immediately
-            without going through the handshake (avoids both heap
-            and per-tick budget overrun).
-        accept_path: If set, only upgrade requests whose URI path
-            matches are accepted.  Other paths get ``404 Not Found``
-            and the socket closes.  Default ``None`` (accept any path).
-        max_message_bytes / recv_budget_per_tick / send_budget_per_tick /
-            max_tx_queue_size / when_oversized / pong_timeout_ms /
-            handshake_timeout_ms / close_timeout_ms — same semantics
-            as :class:`WebSocketClient`; per-connection caps.
-        ticks_ms_func / ticks_add_func / ticks_diff_func: Inject
-            fakes for testing.  Default to :mod:`chumicro_timing`.
+    Knobs: ``max_connections`` (default 2; inbound accepts past the
+    cap close immediately to bound heap + per-tick work);
+    ``max_message_bytes`` / ``recv_budget_per_tick`` /
+    ``send_budget_per_tick`` / ``max_tx_queue_size`` / ``when_oversized`` /
+    ``pong_timeout_ms`` / ``handshake_timeout_ms`` /
+    ``close_timeout_ms`` — same semantics as
+    :class:`WebSocketClient`, applied per-connection;
+    ``ticks_ms_func`` / ``ticks_add_func`` / ``ticks_diff_func`` —
+    inject fakes for testing.
     """
 
     def __init__(
@@ -856,11 +824,9 @@ class WebSocketServer:
 
     def close(self) -> None:
         """Stop accepting new connections + close every active session.
-
-        The listener and every per-connection socket are closed; the
-        ``on_close`` callbacks fire as connections finalize.  After
-        :meth:`close` the server's :meth:`check` returns ``False``
-        and :meth:`handle` is a no-op.
+        Per-connection ``on_close`` callbacks fire as they finalize.
+        After :meth:`close`, :meth:`check` returns ``False`` and
+        :meth:`handle` is a no-op.
         """
         if self._closed:
             return

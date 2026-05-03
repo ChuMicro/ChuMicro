@@ -51,17 +51,22 @@ Same LOC (~50 in `_step`); much less GC pressure on the hot path.  Public API un
 
 **Acceptance.**  Existing FrameParser tests pass; live four-board matrix stays green.  Quick benchmark on host: feed a 16 KB payload through the parser, assert <100 ms (rough order-of-magnitude check).
 
-### Slice B — Replace namespace classes with module constants (space)
+### Slice B — Replace namespace classes with module constants (space) — **DEFERRED**
 
 **Problem.**  Six classes whose entire body is `STATE_FOO = "foo"` lines:
 * `WebSocketState`, `FrameParseState`, `HandshakeParseState`, `ConnectingPhase`, `ServerHandshakePhase`, `WhenOversized`.
 Six class objects + six `__dict__`s in RAM for grouping that module-level constants give for free.
 
-**Approach.**  Promote each class's attributes to module-level constants prefixed by the (former) class name — `WS_STATE_OPEN`, `FRAME_STATE_READING_HEADER`, etc.  Or: keep the namespace shape but switch to `class _Namespace: __slots__ = ()` with class-attribute strings (still cheaper than `__dict__`).
+**Approach (originally proposed).**  Promote each class's attributes to module-level constants prefixed by the (former) class name — `WS_STATE_OPEN`, `FRAME_STATE_READING_HEADER`, etc.
 
-Decision: **module-level constants** with a clear naming prefix — simpler, no class-object overhead.  Public API: re-export old names too (`WebSocketState = _WebSocketStateNamespace`) if the prior-callsite imports look like `from chumicro_websockets import WebSocketState; if state == WebSocketState.OPEN`.  Or just deprecate the namespace shape — public API hasn't shipped to PyPI yet, so we can change freely (per AGENTS.md "no backward compat burden").
+**Decision (deferred 2026-05-02 during execution).**  After looking at the cross-library consistency picture, this slice is no longer worth doing in v1:
 
-**Acceptance.**  Tests updated to new constant names; preflight green; docs/guide.md sample updated.
+* `chumicro_mqtt.WhenOversized`, `chumicro_mqtt.ProtocolState`, `chumicro_requests.WhenOversized`, `chumicro_requests._wire.ParseState` are all namespace classes — switching websockets alone diverges the family pattern.
+* The actual savings are modest: ~200-400 bytes per class object + dict entries, vs. ~1.2-2.4 KB total across all six.  Not zero on a 256 KB MCU, but small relative to slice G's ~600 LOC dedup win.
+* Public-API ergonomics: `if state == WebSocketState.OPEN` reads better than `if state == WS_STATE_OPEN`.  The namespace class IS the type of the state.
+* User feedback memory ("No speculative public API") supports treating namespace-classes-of-strings as dressed-up constants, but the same memory + the cross-library pattern point at consistency over symbol-count micro-optimization.
+
+If this becomes a real RAM constraint on the smallest tier (Decision 0015), revisit the whole family at once — split chumicro-mqtt's `ProtocolState` + `WhenOversized`, chumicro-requests' `ParseState` + `WhenOversized`, and ours together.  Don't diverge websockets alone.
 
 ### Slice C — Slim `__init__.py` exports (space)
 
@@ -148,15 +153,15 @@ Parameterised by:
 
 Recommended order — smallest-blast-radius first:
 
-1. **Slice A** (FrameParser per-chunk) — mechanical, public API unchanged, isolated to one method.
-2. **Slice C** (slim __init__) — purely deletions from public surface.
-3. **Slice D** (slim CaseInsensitiveDict) — purely deletions.
-4. **Slice B** (namespace classes → constants) — touches every callsite that uses these enums.
+1. **Slice A** (FrameParser per-chunk) — mechanical, public API unchanged, isolated to one method.  ✅ shipped `f58b1ca`.
+2. **Slice C** (slim __init__) — purely deletions from public surface.  ✅ shipped `0acee5c`.
+3. **Slice D** (slim CaseInsensitiveDict) — purely deletions.  ✅ shipped `4115e2d`.
+4. **Slice B** (namespace classes → constants) — **deferred** (see slice section above for reasoning).
 5. **Slice F** (compact docstrings + dead-code) — pass through every file once.
 6. **Slice E** (merge handshake parsers) — internal refactor, public API unchanged.
 7. **Slice G** (shared `_session.py`) — biggest LOC win, biggest test churn.  Last.
 
-Each slice ships its own VERSION bump (patch for B/C/D/F, minor for A/E/G — observable behaviour change in A; refactors in E/G that change internals).
+Each slice ships its own VERSION bump (patch for C/D/F, minor for A/E/G — observable behaviour change in A; refactors in E/G that change internals).
 
 ## Acceptance for the workstream as a whole
 
