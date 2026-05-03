@@ -21,7 +21,7 @@ object that satisfies `chumicro_sockets.UDPSocket`.  Tests inject
 socket either directly or via the
 `chumicro_ntp.sockets_factory.chumicro_sockets_factory()` helper.
 
-By [Decision 0042](../../../plans/decisions/0042-library-dependency-policy.md):
+By [Decision 0042](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0042-library-dependency-policy.md):
 
 - `chumicro-sockets` is a **hard dep** — single `pip install
   chumicro-ntp` brings the stack.
@@ -74,7 +74,7 @@ client = NTPClient(socket=my_custom_udp_socket, server="my.lan.ntp")
 The deploy-graph walker never enters `chumicro_ntp.sockets_factory`
 in this case, so `chumicro-sockets` is not shipped to the device.
 This is the structural reason the helper lives in its own submodule
-([Decision 0042](../../../plans/decisions/0042-library-dependency-policy.md)
+([Decision 0042](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0042-library-dependency-policy.md)
 deploy-time sub-rule).
 
 ## Runner pattern

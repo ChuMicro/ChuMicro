@@ -41,7 +41,7 @@ chumicro-deploy deploy \
     --directory ./my_app --entrypoint /code.py
 ```
 
-All subcommands accept `--help` for their full option list. Both `chumicro-deploy deploy` and `chumicro-deploy flash` support `--non-interactive`.  Without that flag, `deploy` wraps every run in `InteractiveDeployer` (see [Interactive recovery](#interactive-recovery--interactivedeployer) below) so transport failures are classified and coached instead of producing a raw traceback.  Pass `--non-interactive` from CI / scripted flows that don't have stdin to answer retry prompts.
+All subcommands accept `--help` for their full option list. Both `chumicro-deploy deploy` and `chumicro-deploy flash` support `--non-interactive`.  Without that flag, `deploy` wraps every run in `InteractiveDeployer` (see [Interactive recovery](#interactive-recovery-interactivedeployer) below) so transport failures are classified and coached instead of producing a raw traceback.  Pass `--non-interactive` from CI / scripted flows that don't have stdin to answer retry prompts.
 
 Every CLI command also accepts `--devices-file devices.yml --device <id>` instead of `--transport` + `--address`, so a workspace with one source-of-truth `devices.yml` doesn't repeat the same connection details everywhere:
 
@@ -51,7 +51,7 @@ chumicro-deploy deploy --devices-file devices.yml --device back-porch \
     --directory ./my_app --entrypoint /code.py
 ```
 
-When `defaults:` in the file pins a single runtime, omitting `--device` lets the loader pick that default. The schema is documented in [Decision 0027](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0027-device-testing-infrastructure.md) and lives at [`chumicro_deploy.config.default.load_devices_yml`](api.md#devices-yml-schema-and-loader-registry).
+When `defaults:` in the file pins a single runtime, omitting `--device` lets the loader pick that default. The schema is documented in [Decision 0027](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0027-device-testing-infrastructure.md) and lives at [`chumicro_deploy.config.default.load_devices_yml`](api.md#devicesyml-schema-and-loader-registry).
 
 ### Programmatic devices.yml
 
