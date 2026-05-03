@@ -6,32 +6,32 @@ assertions only fire on runtimes that expose ``gc.mem_free`` —
 i.e. MP and CP — because this is a property of those allocators,
 not of CPython's pymalloc.
 
-Methodology — delta-based assertions on baseline-after-setup
------------------------------------------------------------
+Methodology — size-stratified free-block histogram
+--------------------------------------------------
 
-Captures the heap baseline AFTER the test's fixture setup but
-BEFORE the workload loop.  The assertions then measure ONLY what
-the workload itself contributes — bytes consumed and bytes of
-new fragmentation holes added — independent of whatever heap
-state the test inherited from the harness.
+A naive "did the largest contiguous block shrink?" check misses
+fragmentation that breaks middle-sized regions while leaving the
+single biggest block intact.  Example: workload splits a 500 KB
+free region into ten 50 KB blocks — ``largest`` (1 MB elsewhere)
+doesn't move, but allocations in the 50 KB–500 KB range now fail
+where they used to succeed.
 
-This matters because the unix-port test harness runs all
-libraries' tests in a single process: prior libraries' test
-imports leave permanent allocations in ``sys.modules`` (test
-data, canned bytes literals, test functions), and that residue
-fragments the heap before any test runs.  An assertion like
-``final_largest / final_free ≥ 0.85`` would be dominated by that
-inherited fragmentation, not by anything the workload did.
-Probe data confirmed: a fresh-process unix-port heap has
-baseline ratio 0.9559; after the requests test files are
-imported (no tests run), the ratio drops to 0.8463; and the
-parser workload itself adds **0 bytes** of holes on top of
-either baseline.
+To catch that, we sample **how many independent N-byte blocks the
+heap can hold simultaneously** at five size tiers spanning the
+parser's own working sizes (256 B header lines through 64 KB
+response bodies).  Each tier is measured from a clean (post-collect)
+heap, so the count is "how many ``size``-byte allocations would
+currently succeed at once" — the metric that actually predicts
+whether N-byte-class code will run.
 
-This pattern is unique to the test harness — on a real board
-modules are frozen in flash (not heap), test files don't ship,
-and there are no test fixtures.  See ``plans/next-up.md``
-§"Heap-fragmentation test methodology" for the investigation.
+Auto-GC remains enabled during the workload (we don't disable it):
+production behaviour is auto-managed GC, and disabling it during a
+fragmentation test creates artificial heap pressure that's a test
+artifact rather than something the parser would experience on a
+device.  The earlier ``_largest_free_block``-based metric had a
+sign bug (``baseline_gap - final_gap`` instead of the reverse) that
+made it impossible to fail; replacing the metric outright avoids
+inviting that class of bug back.
 
 Hot paths exercised: ``_try_parse_status_line``,
 ``_try_parse_headers`` (slice-reassignment), ``_absorb_body_bytes``
@@ -51,35 +51,41 @@ _HAS_MEM_FREE = hasattr(gc, "mem_free")
 
 
 # ---------------------------------------------------------------------------
-# Largest-contiguous-block probe
+# Size-stratified free-block histogram
 # ---------------------------------------------------------------------------
 
+#: Size tiers (bytes) we sample for fragmentation detection.  Spans the
+#: parser's per-line scratch (~256 B), per-chunk scratch (~1–4 KB),
+#: typical body buffer (16 KB), and full-response capacity (64 KB).
+#: A drop at any tier between baseline and final indicates the workload
+#: fragmented the heap in a way that prevents allocations of that size.
+_FRAGMENTATION_TIERS = (256, 1024, 4096, 16384, 65536)
 
-def _largest_free_block(upper_hint):
-    """Return the largest currently-allocatable bytearray size in bytes.
 
-    Bisects between 0 and *upper_hint* (typically ``gc.mem_free``).
-    Each successful sub-allocation is followed by ``gc.collect()``
-    because MP/CP don't refcount — without the per-iteration collect
-    each successful probe would permanently consume the space it
-    just measured and the bisect would converge on free / 2.
+def _count_blocks_of_size(size):
+    """Return how many independent ``size``-byte bytearrays we can hold.
+
+    Allocates greedily until ``MemoryError``, counts, then frees + collects.
+    This is the metric that actually predicts whether the next test can
+    do its work: ``largest`` says nothing about how many independent
+    free runs of that size exist.
     """
     gc.collect()
-    low = 0
-    high = upper_hint
-    best = 0
-    while low <= high:
-        mid = (low + high) // 2
-        try:
-            probe = bytearray(mid)
-        except MemoryError:
-            high = mid - 1
-        else:
-            best = mid
-            del probe
-            gc.collect()
-            low = mid + 1
-    return best
+    holders = []
+    try:
+        while True:
+            holders.append(bytearray(size))
+    except MemoryError:
+        pass
+    count = len(holders)
+    del holders
+    gc.collect()
+    return count
+
+
+def _free_block_histogram(tiers=_FRAGMENTATION_TIERS):
+    """Return a ``{size: count}`` snapshot of allocatable-block availability."""
+    return {size: _count_blocks_of_size(size) for size in tiers}
 
 
 # ---------------------------------------------------------------------------
@@ -122,13 +128,18 @@ def _drive_parser(response_bytes, chunk_size=512):
 
 def _probe_workload_delta(workload, iterations,
                           leak_tolerance=4096,
-                          fragmentation_tolerance=4096):
-    """Assert *workload* contributes ≤ tolerance bytes consumed + fragmented.
+                          tier_drop_tolerance=2):
+    """Assert *workload* doesn't leak bytes or fragment any size tier.
 
     Baseline captured *after* the test's fixture setup, so the delta
     reflects only the workload itself — not whatever the test
-    environment had already allocated.  See module docstring for
-    the methodology rationale.
+    environment had already allocated.
+
+    For each tier in :data:`_FRAGMENTATION_TIERS`, asserts that the
+    drop in available-block count between baseline and final is at
+    most *tier_drop_tolerance* blocks.  A drop > tolerance at any
+    tier means the workload broke the heap's ability to satisfy
+    allocations at that size class.
 
     On CPython (no ``mem_free``) the workload still runs as a
     smoke check but no heap assertions fire.
@@ -140,28 +151,34 @@ def _probe_workload_delta(workload, iterations,
 
     gc.collect()
     baseline_free = gc.mem_free()
-    baseline_largest = _largest_free_block(baseline_free)
+    baseline_histogram = _free_block_histogram()
 
     for _ in range(iterations):
         workload()
     gc.collect()
 
     final_free = gc.mem_free()
-    final_largest = _largest_free_block(final_free)
+    final_histogram = _free_block_histogram()
 
     bytes_consumed = baseline_free - final_free
-    holes_added = (baseline_free - baseline_largest) - (final_free - final_largest)
 
     assert bytes_consumed <= leak_tolerance, (
         f"workload consumed {bytes_consumed} bytes over {iterations} iterations "
         f"(baseline_free={baseline_free}, final_free={final_free}, "
         f"leak_tolerance={leak_tolerance})"
     )
-    assert holes_added <= fragmentation_tolerance, (
-        f"workload added {holes_added} bytes of fragmentation over {iterations} "
-        f"iterations (baseline_largest={baseline_largest}, "
-        f"final_largest={final_largest}, fragmentation_tolerance={fragmentation_tolerance})"
-    )
+
+    for size, baseline_count in baseline_histogram.items():
+        final_count = final_histogram[size]
+        drop = baseline_count - final_count
+        assert drop <= tier_drop_tolerance, (
+            f"workload fragmented {size}-byte tier over {iterations} "
+            f"iterations: baseline={baseline_count} blocks, "
+            f"final={final_count} blocks, drop={drop} blocks "
+            f"(tier_drop_tolerance={tier_drop_tolerance}). "
+            f"baseline_histogram={baseline_histogram}, "
+            f"final_histogram={final_histogram}"
+        )
 
 
 # ---------------------------------------------------------------------------

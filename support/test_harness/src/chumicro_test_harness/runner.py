@@ -115,10 +115,22 @@ def run_module(module, name_filter=None):
 	"""Run all ``test_*`` callables on a module-like object.
 
 	Prints per-test duration and PASS/FAIL status.  When ``gc.mem_free``
-	is available (MicroPython / CircuitPython boards), automatic GC is
-	disabled for the run and ``gc.collect()`` is called explicitly between
-	tests.  This gives per-test heap deltas that reflect only that test's
-	retained allocations, plus a module-level summary.
+	is available (MicroPython / CircuitPython boards), per-test heap
+	deltas and a module-level summary are emitted.  Auto-GC is **left
+	enabled** during tests so the workload sees the same heap-management
+	behaviour as production code.
+
+	Why not disable auto-GC for "deterministic deltas"?  An earlier
+	version of this runner did exactly that, on the theory that disabling
+	auto-GC during a test makes each test's heap delta a clean
+	"bytes retained by this test" measurement.  In practice it gives
+	misleading answers for any test whose workload allocates transient
+	garbage: with auto-GC off, that garbage piles up until the explicit
+	``gc.collect()`` runs, and a single round of bisection-based heap
+	probing (the fragmentation tests' histogram metric, ~7,500 greedy
+	``bytearray`` allocs at the 256-byte tier) perturbs the allocator's
+	``mem_free`` reporting by hundreds of KB on ESP32-class hardware.
+	Real boards run with auto-GC on; the runner should mirror that.
 
 	Args:
 		module: Module-like object containing ``test_*`` callables.
@@ -134,15 +146,12 @@ def run_module(module, name_filter=None):
 
 	run_start = _now_seconds()
 
-	# Disable automatic GC so collections happen only at explicit points
-	# between tests.  Manual gc.collect() still works.  This makes per-test
-	# heap deltas deterministic: each delta reflects only that test's
-	# retained allocations, not debris from a prior test that happened to
-	# become collectible mid-run.
+	# Auto-GC stays enabled (default).  Each test is bracketed by an
+	# explicit ``gc.collect()`` for the per-test delta measurement, but
+	# the test body itself runs under production-realistic auto-GC.
 	gc_tracking = _MEM_FREE_AVAILABLE
 	if gc_tracking:
 		_gc.collect()
-		_gc.disable()
 		module_heap_before = _gc.mem_free()
 
 	for name, function in _iter_test_functions(module):
@@ -191,7 +200,6 @@ def run_module(module, name_filter=None):
 	if gc_tracking:
 		_gc.collect()
 		module_heap_after = _gc.mem_free()
-		_gc.enable()
 		delta = module_heap_after - module_heap_before
 		sign = "+" if delta >= 0 else ""
 		print(f"HEAP {module_heap_after} bytes free (delta {sign}{delta} bytes)")
