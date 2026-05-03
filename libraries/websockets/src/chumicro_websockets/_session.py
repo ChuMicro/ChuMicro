@@ -105,6 +105,17 @@ def _force_non_blocking(socket):
         pass
 
 
+# MicroPython does not expose ``BlockingIOError`` as a built-in (see
+# plans/learnings.md §"MP doesn't expose BlockingIOError as a built-in").
+# Define a local fallback subclass of ``OSError`` so the
+# ``isinstance(..., BlockingIOError)`` check below works on every runtime.
+try:
+    _BlockingIOError = BlockingIOError
+except NameError:  # pragma: no cover — MP / CP unix-port path
+    class _BlockingIOError(OSError):  # type: ignore[no-redef]
+        pass
+
+
 def _is_eagain(exception):
     """Return True if *exception* indicates "no data ready / would block".
 
@@ -116,7 +127,7 @@ def _is_eagain(exception):
     errno_attr = getattr(exception, "errno", None)
     if errno_attr in (11, 35, 9):  # EAGAIN, EWOULDBLOCK on macOS, EBADF
         return True
-    return isinstance(exception, BlockingIOError)
+    return isinstance(exception, _BlockingIOError)
 
 
 # ---------------------------------------------------------------------------

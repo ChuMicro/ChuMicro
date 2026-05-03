@@ -10,9 +10,8 @@ don't write their own):
   :class:`WebSocketClient` / :class:`Connection`.  Drive both sides
   via :meth:`feed_inbound` (peer pushes data the local end will
   read) + :meth:`read_outbound` (drain whatever the local end has
-  written).  Inject ``BlockingIOError`` / ``OSError`` via
-  ``raise_on_send`` / ``raise_on_recv`` to exercise EAGAIN and
-  socket-error paths.
+  written).  Inject an ``OSError`` via ``raise_on_send`` /
+  ``raise_on_recv`` to exercise EAGAIN and socket-error paths.
 
 * :class:`FakeListener` — stand-in for
   :func:`chumicro_sockets.tcp_listening_socket`.  Tests call
@@ -47,9 +46,9 @@ class FakeConnection:
       (via :meth:`send`) so test assertions can inspect the bytes.
 
     The fake is non-blocking: an empty inbound buffer raises
-    :class:`BlockingIOError` (errno ``EAGAIN``).  Closing inbound via
-    :meth:`close_inbound` flips the EAGAIN behaviour to "EOF" so
-    tests can simulate a peer disconnecting.
+    ``OSError(EAGAIN)``.  Closing inbound via :meth:`close_inbound`
+    flips the EAGAIN behaviour to "EOF" so tests can simulate a
+    peer disconnecting.
 
     Error injection:
 
@@ -129,7 +128,12 @@ class FakeConnection:
         if not self.inbound:
             if self.eof:
                 return 0
-            raise BlockingIOError(11, "no data ready")
+            # ``OSError(EAGAIN)`` rather than ``BlockingIOError`` —
+            # MicroPython lacks the latter (see plans/learnings.md
+            # §"MP doesn't expose BlockingIOError").  Real adapters
+            # raise ``OSError`` too on every runtime, so this is
+            # closer to what production sees.
+            raise OSError(11, "no data ready")
         take = min(cap, len(self.inbound))
         buffer[:take] = self.inbound[:take]
         # CircuitPython doesn't support `del bytearray[start:stop]` —
@@ -147,8 +151,7 @@ class FakeListener:
 
     Tests call :meth:`queue_accept` to enqueue a peer connection
     that the next :meth:`accept` call returns; an empty queue
-    raises :class:`BlockingIOError` (EAGAIN) just like a real
-    non-blocking listener.
+    raises ``OSError(EAGAIN)`` just like a real non-blocking listener.
 
     Inject into :class:`WebSocketServer` via the ``listener=``
     constructor argument.
@@ -165,7 +168,8 @@ class FakeListener:
     def accept(self):
         """Return ``(connection, address)`` or raise EAGAIN if no pending."""
         if not self._pending:
-            raise BlockingIOError(11, "no pending connection")
+            # OSError, not BlockingIOError — see FakeConnection.recv_into above.
+            raise OSError(11, "no pending connection")
         peer = self._pending.pop(0)
         return peer, ("127.0.0.1", 12345)
 
