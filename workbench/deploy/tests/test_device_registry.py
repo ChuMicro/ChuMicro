@@ -45,7 +45,8 @@ devices:
         assert devices[0].runtime == "micropython"
         assert devices[0].address == "/dev/ttyUSB0"
         assert devices[0].description == "Test board"
-        assert devices[0].deploy_mode == "ram"
+        # Decision 0047 — flash is the default when no deploy_mode is set.
+        assert devices[0].deploy_mode == "flash"
 
     def test_loads_multiple_devices(self, tmp_path) -> None:
         """Multiple device entries should all be returned."""
@@ -130,7 +131,8 @@ devices:
         device = load_devices(devices_file)[0]
         assert device.connection_type == "serial"
         assert device.serial_baudrate == 115200
-        assert device.deploy_mode == "ram"
+        # Decision 0047 — flash is the default when no deploy_mode is set.
+        assert device.deploy_mode == "flash"
         assert device.setup_command is None
         assert device.description == ""
 
@@ -192,11 +194,12 @@ devices:
     address: /dev/ttyUSB0
 """)
         devices, defaults = load_device_registry(devices_file)
-        assert defaults.deploy_mode == "ram"
+        # Decision 0047 — flash is the default fall-through.
+        assert defaults.deploy_mode == "flash"
         assert defaults.ide_runtime == "micropython"
         assert defaults.micropython is None
         assert defaults.circuitpython is None
-        assert devices[0].deploy_mode == "ram"
+        assert devices[0].deploy_mode == "flash"
 
 
 class TestParseDefaults:
@@ -204,7 +207,8 @@ class TestParseDefaults:
 
     def test_empty_dict_returns_defaults(self) -> None:
         result = _parse_defaults({})
-        assert result.deploy_mode == "ram"
+        # Decision 0047 — flash is the default fall-through.
+        assert result.deploy_mode == "flash"
         assert result.ide_runtime == "micropython"
         assert result.micropython is None
         assert result.circuitpython is None

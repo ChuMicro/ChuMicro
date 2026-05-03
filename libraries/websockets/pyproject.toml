@@ -48,3 +48,11 @@ exclude = [".gitignore"]
 [tool.hatch.build.targets.wheel]
 packages = ["src/chumicro_websockets"]
 
+[tool.chumicro]
+# Decision 0047 — flag this library as flash-mode-only on smaller boards.
+# Multi-KB RFC 6455 frame parser + handshake state + recv buffers often
+# OOM in RAM mode on Pi Pico W class boards.  chumicro-deploy's pre-
+# flight check auto-switches RAM-mode deploys to flash when this flag
+# is set.
+requires_flash = true
+
