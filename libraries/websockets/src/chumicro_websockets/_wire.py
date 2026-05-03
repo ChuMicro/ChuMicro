@@ -478,6 +478,12 @@ class _HandshakeLineParser:
     def __init__(self, *, max_header_bytes: int = 8192):
         self._max_header_bytes = max_header_bytes
         self._buffer = bytearray()
+        # Read cursor into ``_buffer`` — same pattern as
+        # :class:`chumicro_requests._wire.ResponseParser`.  Per-line
+        # ``_buffer = bytearray(_buffer[N:])`` was the 1024-tier
+        # fragmentation source on Lolin S2 ESP32-S2.  See on-device
+        # tests in ``functional_tests/test_memory_fragmentation_on_device.py``.
+        self._read_offset = 0
         self._state = self._initial_state
         self._http_version = ""
         self._headers = CaseInsensitiveDict()
@@ -522,20 +528,21 @@ class _HandshakeLineParser:
         if self._state in (HandshakeParseState.DONE, HandshakeParseState.ERROR):
             return
         self._buffer.extend(chunk)
-        if len(self._buffer) > self._max_header_bytes:
+        # Cap is on *unconsumed* bytes — the cursor amortizes the
+        # bytearray reuse, so checking ``len(_buffer)`` would over-count
+        # bytes the cursor has logically dropped but the compaction step
+        # hasn't reclaimed yet.
+        if self._live_len() > self._max_header_bytes:
             raise self._fail(
                 f"handshake exceeded max_header_bytes={self._max_header_bytes}",
             )
 
         while True:
-            terminator_index = self._buffer.find(CRLF)
+            terminator_index = self._live_find(CRLF)
             if terminator_index == -1:
                 return
-            line = bytes(self._buffer[:terminator_index])
-            # CircuitPython doesn't support `del bytearray[start:stop]` on
-            # the unix port (and likely the embedded ports too).  Slice-
-            # rebind works everywhere.
-            self._buffer = bytearray(self._buffer[terminator_index + 2:])
+            line = bytes(self._live_slice(0, terminator_index))
+            self._consume(terminator_index + 2)
 
             if self._state == HandshakeParseState.HEADERS:
                 if not line:
@@ -544,6 +551,35 @@ class _HandshakeLineParser:
                 self._parse_header_line(line)
             else:
                 self._parse_first_line(line)
+
+    # ------------------------------------------------------------------
+    # Buffer helpers (read-cursor pattern — see ResponseParser)
+    # ------------------------------------------------------------------
+
+    def _live_len(self):
+        """Number of unconsumed bytes in ``_buffer``."""
+        return len(self._buffer) - self._read_offset
+
+    def _live_find(self, target):
+        """``find`` *target* in the unconsumed region; relative position or -1."""
+        position = self._buffer.find(target, self._read_offset)
+        if position == -1:
+            return -1
+        return position - self._read_offset
+
+    def _live_slice(self, start, end=None):
+        """Slice of unconsumed data.  Indices are relative to the cursor."""
+        absolute_start = self._read_offset + start
+        if end is None:
+            return self._buffer[absolute_start:]
+        return self._buffer[absolute_start:absolute_start + end]
+
+    def _consume(self, count):
+        """Advance the cursor; compact when past the halfway mark."""
+        self._read_offset += count
+        if self._read_offset > 0 and self._read_offset * 2 >= len(self._buffer):
+            self._buffer = bytearray(self._buffer[self._read_offset:])
+            self._read_offset = 0
 
     def _parse_header_line(self, line: bytes) -> None:
         decoded = line.decode("iso-8859-1")
@@ -572,8 +608,9 @@ class _HandshakeLineParser:
 
     def _commit_done(self) -> None:
         """Stash remaining buffered bytes as :attr:`leftover` + transition DONE."""
-        self._leftover = bytes(self._buffer)
+        self._leftover = bytes(self._live_slice(0))
         self._buffer = bytearray()
+        self._read_offset = 0
         self._state = HandshakeParseState.DONE
 
     def _fail(self, message: str) -> WebSocketHandshakeError:
@@ -880,6 +917,10 @@ class FrameParser:
         """
         consumed = 0
         chunk_length = len(chunk)
+        # Bind memoryview once so each per-state slice is zero-copy on
+        # the source side.  Skip when the chunk is itself a memoryview
+        # (callers like ``_session._recv_chunk`` already pass a view).
+        chunk_view = chunk if isinstance(chunk, memoryview) else memoryview(chunk)
         while consumed < chunk_length and self._state not in (
             FrameParseState.FRAME_READY,
             FrameParseState.ERROR,
@@ -895,11 +936,11 @@ class FrameParser:
                     mask_key = self._mask_key
                     for index in range(take):
                         payload.append(
-                            chunk[consumed + index]
+                            chunk_view[consumed + index]
                             ^ mask_key[(start_index + index) & 3],
                         )
                 else:
-                    payload.extend(chunk[consumed : consumed + take])
+                    payload.extend(chunk_view[consumed : consumed + take])
                 consumed += take
                 if len(payload) >= self._payload_length:
                     self._state = FrameParseState.FRAME_READY
@@ -914,7 +955,7 @@ class FrameParser:
             else:  # READING_MASK
                 need = 4 - len(self._buffer)
             take = need if need <= remaining else remaining
-            self._buffer.extend(chunk[consumed : consumed + take])
+            self._buffer.extend(chunk_view[consumed : consumed + take])
             consumed += take
             if len(self._buffer) < need:
                 continue

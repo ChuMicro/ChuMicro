@@ -84,6 +84,82 @@ services should follow.
 
 Related: Decision 0014, `libraries/runner/src/chumicro_runner/core.py`.
 
+## Static recv buffer + memoryview window
+
+Networking and serialization code that runs on a small-heap board MUST
+own its recv buffer instead of allocating one per tick / per call.  The
+shape is: pre-allocate a fixed `bytearray` once at construction time;
+hand out `memoryview` slices for `recv_into` / `extend` / parser feed
+calls.  Each tick reuses the same backing buffer.
+
+```python
+# ✅ Static buffer — no per-tick alloc, no fragmentation
+class Driver:
+    def __init__(self, recv_budget_per_tick=1024):
+        self._recv_buffer = bytearray(min(recv_budget_per_tick, 512))
+        self._recv_view = memoryview(self._recv_buffer)
+
+    def _drive_recv(self):
+        cap = len(self._recv_buffer)
+        got = self._socket.recv_into(self._recv_view[:cap], cap)
+        if got > 0:
+            self._parser.feed(self._recv_view[:got])  # zero-copy
+
+# ❌ Per-tick alloc — invisible on host, fragments small-heap boards
+class Driver:
+    def _drive_recv(self):
+        scratch = bytearray(512)                  # alloc every tick
+        got = self._socket.recv_into(scratch, 512)
+        self._parser.feed(bytes(scratch[:got]))   # second alloc copy
+```
+
+The pattern has two parts that both matter:
+
+1. **Pre-allocate the recv buffer at construction.**  A 1024-byte fresh
+   `bytearray` per tick lands a block in the 1024-byte allocator tier;
+   when the block frees and the next tick allocates, the allocator may
+   not reclaim the same slot, so the tier's free-block count drifts
+   downward — that's the on-device fragmentation signal.
+
+2. **Pass `memoryview(buffer)[:n]` instead of `bytes(buffer[:n])` to
+   the consumer.**  `bytes(buffer[:n])` does *two* allocations: the
+   slice creates a new `bytearray`, then `bytes()` copies it again.
+   `memoryview[:n]` is zero-copy.  Parsers / decoders that copy what
+   they keep (into a private `_buffer` or `_body`) before returning
+   are memoryview-safe — the view's lifetime ends with the call.
+
+Required when: code lives under `libraries/*/src/` AND owns a recv
+loop or a per-call hot-path scratch buffer.  Not required when: the
+allocation is genuinely one-shot (handshake key, request packet
+built once and sent), or the runtime can't avoid it (MP's
+`recv` polyfill in `chumicro_sockets._adapters.mp` returns a fresh
+`bytes` because MP doesn't expose `recv_into` on every socket type).
+
+Existing examples:
+
+* `chumicro_mqtt._wire.PacketDecoder` — `fill_buffer()` returns
+  `memoryview(self._buffer)[self._buffer_length:]`; the MQTT client's
+  recv loop (`client._handle_recv`) uses it directly.  Reference
+  implementation borrowed from the basefs MQTT client.
+* `chumicro_websockets._session.WebSocketSession` — `_recv_buffer` +
+  cached `_recv_view` allocated once in `__init__`.
+* `chumicro_requests.client.HttpClient` and
+  `chumicro_http_server.server._Connection` — same shape.
+* `chumicro_ntp.core.NTPClient` — pre-allocated `_recv_buffer` sized
+  to the SNTP packet (48 bytes).
+* `chumicro_kvstore._backends.mp_nvs.MpNvsBackend` — pre-allocated
+  `_read_buffer` sized to the configured capacity, passed to
+  `esp32.NVS.get_blob` as the destination.
+
+Companion: when a parser has a "consume bytes from the front" pattern
+(HTTP headers, websocket handshake), use the **read-cursor pattern**
+from `chumicro_requests._wire.ResponseParser._consume` so the per-line
+`self._buffer = bytearray(self._buffer[N:])` reassignment doesn't
+churn small-tier blocks.  The cursor amortizes the bytearray
+reallocation to one per ~half buffer of consumption, and is
+cross-runtime safe (CP rejects `del bytearray[:n]`, MP lacks
+`bytearray.clear()` — see learnings.md).
+
 ## Constructor injection
 
 Accept dependencies (time, I/O, network) as constructor parameters.  Never

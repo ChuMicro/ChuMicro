@@ -219,6 +219,8 @@ class _Connection:
         "_parser",
         "_peer",
         "_recv_budget",
+        "_recv_buffer",
+        "_recv_view",
         "_response_bytes",
         "_response_offset",
         "_send_budget",
@@ -245,6 +247,17 @@ class _Connection:
         self._send_budget = send_budget
         self._max_request_body_bytes = max_request_body_bytes
         self._parser = RequestParser(max_body_bytes=max_request_body_bytes)
+        # Pre-allocated recv scratch reused by every :meth:`_drive_recv` call
+        # — mirrors :class:`chumicro_mqtt._wire.PacketDecoder` and
+        # ``chumicro_websockets._session.WebSocketSession``.  A 4-conn
+        # server with the default 1024-byte budget pins ~2 KB of steady-
+        # state heap (4 × min(1024, 512)) instead of churning a fresh
+        # bytearray per tick per connection.  Capped at 512 so a server
+        # configured with a large recv_budget doesn't pin big buffers
+        # per connection.
+        recv_scratch_size = recv_budget if recv_budget <= 512 else 512
+        self._recv_buffer = bytearray(recv_scratch_size)
+        self._recv_view = memoryview(self._recv_buffer)
         self._response_bytes = b""
         self._response_offset = 0
         self._state = _ConnState.WANT_REQUEST_LINE
@@ -298,15 +311,22 @@ class _Connection:
     # ------------------------------------------------------------------
 
     def _drive_recv(self):
+        """Drain the socket up to ``recv_budget``; feed the parser.
+
+        Recv goes into the pre-allocated :attr:`_recv_buffer`; the
+        :meth:`RequestParser.feed` call gets a ``memoryview`` window so
+        neither the recv nor the feed allocates per tick.  Parser copies
+        what it keeps before returning, so the memoryview is single-use.
+        """
         consumed = 0
         budget = self._recv_budget
-        scratch = bytearray(min(budget, 512))
+        scratch_size = len(self._recv_buffer)
         while consumed < budget and self._parser.state not in (
             RequestParseState.DONE, RequestParseState.ERROR,
         ):
-            capacity = min(len(scratch), budget - consumed)
+            capacity = min(scratch_size, budget - consumed)
             try:
-                got = self._socket.recv_into(scratch, capacity)
+                got = self._socket.recv_into(self._recv_view[:capacity], capacity)
             except OSError as socket_error:
                 errno = socket_error.args[0] if socket_error.args else None
                 if errno in (11, 35):  # EAGAIN
@@ -315,7 +335,7 @@ class _Connection:
             if got == 0:
                 self._parser.feed_eof()
                 break
-            self._parser.feed(bytes(scratch[:got]))
+            self._parser.feed(self._recv_view[:got])
             consumed += got
         # Map parser state back to connection state.
         parser_state = self._parser.state

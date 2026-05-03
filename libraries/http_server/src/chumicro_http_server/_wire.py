@@ -259,6 +259,15 @@ class RequestParser:
     def __init__(self, *, max_body_bytes=DEFAULT_MAX_REQUEST_BODY_BYTES):
         self._max_body_bytes = max_body_bytes
         self._buffer = bytearray()
+        # Read cursor into ``_buffer``.  Each ``_consume(n)`` advances
+        # the cursor and only realloates the bytearray when at least
+        # half of it has been consumed — mirrors the read-cursor pattern
+        # in :class:`chumicro_requests._wire.ResponseParser`.  The
+        # slice-reassign idiom (``_buffer = bytearray(_buffer[n:])``)
+        # was the 1024-tier fragmentation source on Lolin S2 ESP32-S2;
+        # see the on-device fragmentation tests in
+        # ``functional_tests/test_memory_fragmentation_on_device.py``.
+        self._read_offset = 0
         self._state = RequestParseState.REQUEST_LINE
         self._method = ""
         self._target = ""
@@ -267,6 +276,45 @@ class RequestParser:
         self._body = bytearray()
         self._body_remaining = 0
         self._error = None
+
+    # ------------------------------------------------------------------
+    # Buffer helpers (read-cursor pattern — see ResponseParser)
+    # ------------------------------------------------------------------
+
+    def _live_len(self):
+        """Number of unconsumed bytes in ``_buffer``."""
+        return len(self._buffer) - self._read_offset
+
+    def _live_find(self, target):
+        """``find`` *target* in the unconsumed region; relative position or -1."""
+        position = self._buffer.find(target, self._read_offset)
+        if position == -1:
+            return -1
+        return position - self._read_offset
+
+    def _live_slice(self, start, end=None):
+        """Slice of unconsumed data.  Indices are relative to the cursor."""
+        absolute_start = self._read_offset + start
+        if end is None:
+            return self._buffer[absolute_start:]
+        return self._buffer[absolute_start:absolute_start + end]
+
+    def _consume(self, count):
+        """Advance the cursor; compact when past the halfway mark.
+
+        Replaces the per-call ``self._buffer = bytearray(self._buffer[n:])``
+        idiom.  See :meth:`chumicro_requests._wire.ResponseParser._consume`
+        for the fragmentation rationale.
+        """
+        self._read_offset += count
+        if self._read_offset > 0 and self._read_offset * 2 >= len(self._buffer):
+            self._buffer = bytearray(self._buffer[self._read_offset:])
+            self._read_offset = 0
+
+    def _reset_buffer(self):
+        """Drop every buffered byte and reset the cursor."""
+        self._buffer = bytearray()
+        self._read_offset = 0
 
     # ------------------------------------------------------------------
     # Public observation
@@ -368,14 +416,11 @@ class RequestParser:
 
             method SP request-target SP HTTP-version CRLF
         """
-        crlf_index = self._buffer.find(CRLF)
+        crlf_index = self._live_find(CRLF)
         if crlf_index == -1:
             return False
-        line = bytes(self._buffer[:crlf_index])
-        # CP 10.x's bytearray rejects ``del buffer[:n]``; reassign via
-        # slice for cross-runtime safety (same pattern as
-        # chumicro-requests' ResponseParser — see learnings.md).
-        self._buffer = bytearray(self._buffer[crlf_index + 2:])
+        line = bytes(self._live_slice(0, crlf_index))
+        self._consume(crlf_index + 2)
         try:
             text = line.decode("ascii")
         # HTTP/1.1 §3.1 forbids non-ASCII; defensive only.
@@ -415,16 +460,16 @@ class RequestParser:
     def _try_parse_headers(self):
         """Consume one header line; return True if state advanced or
         another header was parsed."""
-        crlf_index = self._buffer.find(CRLF)
+        crlf_index = self._live_find(CRLF)
         if crlf_index == -1:
             return False
         if crlf_index == 0:
             # Empty line — end of headers.
-            self._buffer = bytearray(self._buffer[2:])
+            self._consume(2)
             self._enter_body_state()
             return True
-        line = bytes(self._buffer[:crlf_index])
-        self._buffer = bytearray(self._buffer[crlf_index + 2:])
+        line = bytes(self._live_slice(0, crlf_index))
+        self._consume(crlf_index + 2)
         try:
             text = line.decode("ascii")
         # HTTP/1.1 §3.2 forbids non-ASCII; defensive only.
@@ -475,9 +520,9 @@ class RequestParser:
             return
         self._state = RequestParseState.BODY
         # Any bytes left over from header parsing are body bytes.
-        if self._buffer:
-            tail = bytes(self._buffer)
-            self._buffer = bytearray()
+        if self._live_len() > 0:
+            tail = bytes(self._live_slice(0))
+            self._reset_buffer()
             self._absorb_body_bytes(tail)
 
     def _absorb_body_bytes(self, chunk):
