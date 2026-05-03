@@ -181,7 +181,6 @@ class CaseInsensitiveDict:
         self._entries[lower] = (original_name, joined)
 
 
-
 # ---------------------------------------------------------------------------
 # Content-Type charset parsing
 # ---------------------------------------------------------------------------
