@@ -19,7 +19,7 @@ Agents follow the same rules as human contributors — they run preflight, their
 
 ## What agents don't replace
 
-Agents are capable tools, but some projects still need a human in the loop:
+Agents are capable tools, but some things still need a human in the loop:
 
 - **Design direction** — choosing the right abstraction matters more than generating code quickly
 - **Code review** — agent-generated PRs get the same scrutiny as any other

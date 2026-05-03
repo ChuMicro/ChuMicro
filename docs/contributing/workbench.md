@@ -14,7 +14,7 @@ Companion to `libraries/`.  Where `libraries/` holds code that runs **on a micro
 
 ## Why workbench exists
 
-The `libraries/` folder means two projects at once: "publishable" and "runs on all three runtimes."  That worked while every publishable package was multi-runtime.  It broke once host-only tools (deploy, repl, firmware flashers) showed up — they are publishable to PyPI, but cannot run on a device and must not go through `.mpy` compilation, cross-runtime testing, or the CircuitPython bundle.
+The `libraries/` folder means two things at once: "publishable" and "runs on all three runtimes."  That worked while every publishable package was multi-runtime.  It broke once host-only tools (deploy, repl, firmware flashers) showed up — they are publishable to PyPI, but cannot run on a device and must not go through `.mpy` compilation, cross-runtime testing, or the CircuitPython bundle.
 
 `workbench/` cleanly separates "runs on a board" from "runs on your laptop" without forcing every reader to learn which entry in `libraries/` is secretly host-only.
 
