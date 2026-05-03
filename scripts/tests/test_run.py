@@ -139,6 +139,7 @@ class TestMainDispatch:
                 "verbose": False,
                 "no_cov": True,
                 "coverage_threshold": None,
+                "elevated_packages": None,
             }),
         ]
 
@@ -164,8 +165,48 @@ class TestMainDispatch:
                 "verbose": False,
                 "no_cov": False,
                 "coverage_threshold": None,
+                "elevated_packages": None,
             }),
         ]
+
+    def test_test_command_parses_elevated_packages_csv(self, monkeypatch) -> None:
+        """`--elevated-packages a,b,c` becomes a {a, b, c} set on test_cpython."""
+        resolved_packages = [Path("/tmp/timing"), Path("/tmp/runner")]
+        monkeypatch.setattr(
+            run, "resolve_scope", lambda **kwargs: resolved_packages,
+        )
+        command_calls, fake_test_cpython = _make_fake_command(return_value=23)
+        monkeypatch.setattr(run, "test_cpython", fake_test_cpython)
+
+        result = run.main([
+            "run.py", "test", "--all",
+            "--coverage-threshold", "94",
+            "--elevated-packages", "timing,runner, websockets ",
+        ])
+
+        assert result == 23
+        # Whitespace tolerated, empty entries dropped.
+        assert command_calls[0][1]["elevated_packages"] == {
+            "timing", "runner", "websockets",
+        }
+        assert command_calls[0][1]["coverage_threshold"] == 94
+
+    def test_test_command_empty_elevated_packages_resolves_to_none(
+        self, monkeypatch,
+    ) -> None:
+        """`--elevated-packages ,, ` collapses to None (no opt-in libraries)."""
+        monkeypatch.setattr(
+            run, "resolve_scope", lambda **kwargs: [Path("/tmp/timing")],
+        )
+        command_calls, fake_test_cpython = _make_fake_command(return_value=29)
+        monkeypatch.setattr(run, "test_cpython", fake_test_cpython)
+
+        result = run.main([
+            "run.py", "test", "--all", "--elevated-packages", " , , ",
+        ])
+
+        assert result == 29
+        assert command_calls[0][1]["elevated_packages"] is None
 
     def test_verify_examples_dispatches_resolved_scope(self, monkeypatch) -> None:
         """verify-examples should receive the resolved package list."""
@@ -723,21 +764,20 @@ class TestCompositeTestCommands:
     def test_preflight_with_functional_appends_functional_phases(
         self, monkeypatch,
     ) -> None:
-        """preflight(with_functional=True) should append both functional phases."""
-        # Stub the unit-test phases that preflight already runs, then verify
-        # the two functional phases get called when --with-functional is set.
-        monkeypatch.setattr(run, "lint", lambda: 0)
-        monkeypatch.setattr(run, "build", lambda: 0)
-        monkeypatch.setattr(run, "docs", lambda *args, **kwargs: 0)
-        monkeypatch.setattr(run, "test_cpython", lambda *args, **kwargs: 0)
-        monkeypatch.setattr(run, "test_scripts", lambda *args, **kwargs: 0)
-        monkeypatch.setattr(run, "verify_examples", lambda *args, **kwargs: 0)
-        monkeypatch.setattr(run, "check_version", lambda: 0)
-        monkeypatch.setattr(run, "check_api", lambda: 0)
-        monkeypatch.setattr(run, "test_micropython", lambda *args, **kwargs: 0)
-        monkeypatch.setattr(run, "test_circuitpython", lambda *args, **kwargs: 0)
+        """preflight(with_functional=True) should append both functional phases.
+
+        After Decision 0048 the unit-test phases are subprocess
+        re-invocations of ``python scripts/run.py <subcommand>``,
+        fanned out via ``_preflight_run_parallel_phases``.  We
+        monkeypatch that single seam to bypass the subprocess block
+        and verify the post-block functional tail still runs both
+        phases serially in submission order.
+        """
+        monkeypatch.setattr(
+            run, "_preflight_run_parallel_phases",
+            lambda phases: 0,
+        )
         monkeypatch.setattr(run, "is_ref_reachable", lambda *_args, **_kwargs: True)
-        monkeypatch.setattr(run, "discover_package_dirs", lambda: [])
 
         functional_calls: list[str] = []
         monkeypatch.setattr(
@@ -1062,3 +1102,262 @@ class TestRunPhasesInParallel:
         assert result == 1
         out = capsys.readouterr().out
         assert "crashed" in out
+
+
+# ---------------------------------------------------------------------------
+# Tests for the Decision 0048 preflight phase-level parallel block
+# ---------------------------------------------------------------------------
+
+
+class TestPreflightPhaseSubprocessFactory:
+    """Tests for the subprocess-runner closure built per phase."""
+
+    def test_returns_completed_subprocess_output_on_success(self, monkeypatch):
+        """Stdout + stderr + a leading ``+ <cmd>`` banner all flow back."""
+        captured: dict[str, list[str]] = {}
+
+        class _FakeCompleted:
+            returncode = 0
+            stdout = "hello stdout\n"
+            stderr = "hello stderr\n"
+
+        def fake_subprocess_run(command, **kwargs):
+            captured["command"] = list(command)
+            captured["kwargs"] = kwargs
+            return _FakeCompleted()
+
+        monkeypatch.setattr(run.subprocess, "run", fake_subprocess_run)
+
+        factory = run._preflight_phase_subprocess_factory(
+            "lint", ["lint"],
+        )
+        exit_code, output = factory()
+
+        assert exit_code == 0
+        assert captured["command"][1:] == ["scripts/run.py", "lint"]
+        assert captured["kwargs"]["capture_output"] is True
+        assert captured["kwargs"]["text"] is True
+        assert captured["kwargs"]["check"] is False
+        assert captured["kwargs"]["cwd"] == run.ROOT
+        # The banner ``+ <cmd>`` must come first (matches docs/build banners).
+        first_line = output.splitlines()[0]
+        assert first_line.startswith("+ ")
+        assert "scripts/run.py lint" in first_line
+        assert "hello stdout" in output
+        assert "hello stderr" in output
+        # On success no failure banner is appended.
+        assert "Phase failed" not in output
+
+    def test_appends_failure_banner_on_nonzero_exit(self, monkeypatch):
+        """A non-zero exit code produces a ``Phase failed: <label>`` line."""
+
+        class _FakeCompleted:
+            returncode = 7
+            stdout = ""
+            stderr = "error text\n"
+
+        monkeypatch.setattr(
+            run.subprocess, "run", lambda *_a, **_kw: _FakeCompleted(),
+        )
+
+        factory = run._preflight_phase_subprocess_factory(
+            "test (python 3.13)", ["test", "--all"],
+        )
+        exit_code, output = factory()
+
+        assert exit_code == 7
+        assert "error text" in output
+        assert "Phase failed: test (python 3.13)" in output
+
+    def test_forwards_extra_subcommand_args(self, monkeypatch):
+        """Extra args land after ``scripts/run.py <subcommand>`` verbatim."""
+        seen_command: list[str] = []
+
+        class _FakeCompleted:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        def fake_subprocess_run(command, **_kwargs):
+            seen_command.extend(command)
+            return _FakeCompleted()
+
+        monkeypatch.setattr(run.subprocess, "run", fake_subprocess_run)
+
+        factory = run._preflight_phase_subprocess_factory(
+            "test", ["test", "--all", "--coverage-threshold", "94"],
+        )
+        factory()
+
+        # The first element is the running interpreter; the rest is
+        # exactly what we asked for.
+        assert seen_command[1:] == [
+            "scripts/run.py", "test", "--all", "--coverage-threshold", "94",
+        ]
+
+
+class TestResolvePreflightPhaseParallelWorkers:
+    """Tests for the env-var override of the phase-level worker cap."""
+
+    def test_default_when_unset(self, monkeypatch):
+        """No env var means the documented default (4)."""
+        monkeypatch.delenv("CHUMICRO_PARALLEL_PREFLIGHT_PHASES", raising=False)
+        assert run._resolve_preflight_phase_parallel_workers() == 4
+
+    def test_env_var_overrides(self, monkeypatch):
+        """A valid integer env var is honored verbatim."""
+        monkeypatch.setenv("CHUMICRO_PARALLEL_PREFLIGHT_PHASES", "8")
+        assert run._resolve_preflight_phase_parallel_workers() == 8
+
+    def test_invalid_env_var_falls_back_to_default(self, monkeypatch, capsys):
+        """A non-integer env var emits a warning and uses the default."""
+        monkeypatch.setenv("CHUMICRO_PARALLEL_PREFLIGHT_PHASES", "not-an-int")
+        assert run._resolve_preflight_phase_parallel_workers() == 4
+        warning = capsys.readouterr().out
+        assert "WARNING" in warning
+        assert "not-an-int" in warning
+
+    def test_negative_value_clamped_to_one(self, monkeypatch):
+        """Zero or negative gets clamped to 1 to keep the pool runnable."""
+        monkeypatch.setenv("CHUMICRO_PARALLEL_PREFLIGHT_PHASES", "0")
+        assert run._resolve_preflight_phase_parallel_workers() == 1
+
+
+class TestPreflightParallelDispatch:
+    """Tests for preflight()'s phase-list construction and dispatch."""
+
+    def test_skips_diff_phases_when_origin_main_unreachable(
+        self, monkeypatch, capsys,
+    ):
+        """check-version + check-api skip when origin/main is unreachable."""
+        monkeypatch.setattr(run, "is_ref_reachable", lambda *_a, **_kw: False)
+
+        captured_phases: list[list[str]] = []
+
+        def fake_run(phases):
+            captured_phases.extend([label for label, _ in phases])
+            return 0
+
+        monkeypatch.setattr(run, "_preflight_run_parallel_phases", fake_run)
+
+        result = run.preflight()
+        assert result == 0
+        out = capsys.readouterr().out
+        # Both diff phases got their skip notice printed up-front.
+        assert "== check-version ==" in out
+        assert "== check-api ==" in out
+        assert "SKIP" in out
+        # And neither got handed to the parallel block.
+        assert "check-version" not in captured_phases
+        assert "check-api" not in captured_phases
+        # The other 9 phases are all present.
+        for expected in (
+            "lint", "build", "docs", "test-scripts", "verify-examples",
+            "check-dep-graph", "test-micropython", "test-circuitpython",
+        ):
+            assert expected in captured_phases
+
+    def test_includes_diff_phases_when_origin_main_reachable(self, monkeypatch):
+        """All 11 phases dispatch when origin/main is reachable."""
+        monkeypatch.setattr(run, "is_ref_reachable", lambda *_a, **_kw: True)
+
+        captured_labels: list[str] = []
+
+        def fake_run(phases):
+            captured_labels.extend([label for label, _ in phases])
+            return 0
+
+        monkeypatch.setattr(run, "_preflight_run_parallel_phases", fake_run)
+
+        result = run.preflight()
+        assert result == 0
+        # Submission order matches the documented log-replay order.
+        python_version = (
+            f"test (python "
+            f"{run.sys.version_info.major}.{run.sys.version_info.minor})"
+        )
+        assert captured_labels == [
+            "lint", "build", "docs", python_version, "test-scripts",
+            "verify-examples", "check-dep-graph", "check-version",
+            "check-api", "test-micropython", "test-circuitpython",
+        ]
+
+    def test_coverage_threshold_flows_to_test_phase_args(self, monkeypatch):
+        """--coverage-threshold becomes a flag on the test subcommand args."""
+        monkeypatch.setattr(run, "is_ref_reachable", lambda *_a, **_kw: True)
+
+        seen: list[list[str]] = []
+
+        def capturing_factory(label, args):
+            seen.append([label, *args])
+            return lambda: (0, "")
+
+        monkeypatch.setattr(
+            run, "_preflight_phase_subprocess_factory", capturing_factory,
+        )
+        monkeypatch.setattr(
+            run, "_preflight_run_parallel_phases", lambda phases: 0,
+        )
+
+        run.preflight(coverage_threshold=94)
+
+        # The "test (python ...)" phase carries --coverage-threshold 94.
+        test_invocation = next(
+            entry for entry in seen if entry[1] == "test"
+        )
+        assert "--coverage-threshold" in test_invocation
+        assert "94" in test_invocation
+
+    def test_binary_overrides_flow_to_runtime_phases(self, monkeypatch):
+        """--micropython-binary / --circuitpython-binary flow to the right phases."""
+        monkeypatch.setattr(run, "is_ref_reachable", lambda *_a, **_kw: True)
+
+        seen: list[list[str]] = []
+
+        def capturing_factory(label, args):
+            seen.append([label, *args])
+            return lambda: (0, "")
+
+        monkeypatch.setattr(
+            run, "_preflight_phase_subprocess_factory", capturing_factory,
+        )
+        monkeypatch.setattr(
+            run, "_preflight_run_parallel_phases", lambda phases: 0,
+        )
+
+        run.preflight(
+            micropython_binary="/tmp/mpy",
+            circuitpython_binary="/tmp/cpy",
+        )
+
+        mpy_invocation = next(
+            entry for entry in seen if entry[1] == "test-micropython"
+        )
+        cpy_invocation = next(
+            entry for entry in seen if entry[1] == "test-circuitpython"
+        )
+        assert "--micropython-binary" in mpy_invocation
+        assert "/tmp/mpy" in mpy_invocation
+        assert "--circuitpython-binary" in cpy_invocation
+        assert "/tmp/cpy" in cpy_invocation
+
+    def test_parallel_block_failure_returns_exit_code(self, monkeypatch, capsys):
+        """A failing parallel block short-circuits before the functional tail."""
+        monkeypatch.setattr(run, "is_ref_reachable", lambda *_a, **_kw: True)
+        monkeypatch.setattr(
+            run, "_preflight_run_parallel_phases", lambda phases: 13,
+        )
+
+        functional_calls: list[str] = []
+
+        def fail_libraries():
+            functional_calls.append("libraries")
+            return 0
+
+        monkeypatch.setattr(run, "test_libraries_functional", fail_libraries)
+
+        result = run.preflight(with_functional=True)
+        assert result == 13
+        # The functional tail must NOT run when the parallel block failed.
+        assert functional_calls == []
+        assert "Preflight failed" in capsys.readouterr().out

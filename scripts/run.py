@@ -725,6 +725,13 @@ def preflight(
     scripts infrastructure tests, example verification, version-check,
     api-check, MicroPython and CircuitPython cross-runtime unit tests.
 
+    The 11 unit-test phases run **in parallel** as independent
+    subprocess re-invocations of ``python scripts/run.py <subcommand>``;
+    output is captured per phase and replayed in submission order so
+    the on-screen log reads as if the loop ran serially.  See
+    Decision 0048 for the design.  The ``--with-functional`` tail
+    stays serial because both phases drive the same physical hardware.
+
     Pass *coverage_threshold* to override the ``pyproject.toml`` default
     (85 %).  Agents should pass ``--coverage-threshold 94`` (Decision 0025).
 
@@ -738,70 +745,108 @@ def preflight(
     (running with ``devices.yml`` defaults) to the end of the sweep.
     """
     python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
-    all_packages = discover_package_dirs()
 
     # When --coverage-threshold is set, only apply the elevated threshold
     # to libraries the caller actually changed.  Libraries the caller
     # didn't touch keep the pyproject.toml default (85 %).  This prevents
     # agents from failing on pre-existing coverage in human-authored code.
-    elevated_packages: set[str] | None = None
+    elevated_package_names: list[str] | None = None
     if coverage_threshold is not None:
         changed = detect_changed_packages()
         if changed is not None:
-            elevated_packages = {package_dir.name for package_dir in changed}
+            elevated_package_names = sorted(
+                package_dir.name for package_dir in changed
+            )
         # When changed is None (infrastructure change or no diff), all
-        # packages are considered "changed" — leave elevated_packages as
-        # None so the threshold applies everywhere.
+        # packages are considered "changed" — leave elevated_package_names
+        # as None so the threshold applies everywhere.
 
     # version-check and api-check need a base ref to diff against.
     # If origin/main isn't reachable (detached HEAD, no remote, etc.),
-    # skip them with a warning rather than crashing preflight.
+    # skip them with a warning rather than crashing preflight.  We
+    # decide reachability here in the parent so the parallel block
+    # never sees an unreachable phase — the skip line prints in the
+    # per-phase ordering below.
     base_reference = "origin/main"
     can_diff = is_ref_reachable(base_reference)
 
-    steps: list[tuple[str, Callable[[], int]]] = [
-        ("lint", lint),
-        ("build", build),
-        ("docs", lambda: docs(all_packages)),
-        (
-            f"test (python {python_version})",
-            lambda: test_cpython(
-                all_packages,
-                coverage_threshold=coverage_threshold,
-                elevated_packages=elevated_packages,
-            ),
-        ),
-        ("test-scripts", test_scripts),
-        ("verify-examples", lambda: verify_examples(all_packages)),
-        ("check-dep-graph", check_dep_graph),
-        ("check-version", check_version),
-        ("check-api", check_api),
-        (
-            "test-micropython",
-            lambda: test_micropython(micropython_binary),
-        ),
-        (
-            "test-circuitpython",
-            lambda: test_circuitpython(circuitpython_binary),
-        ),
+    # Build the parallel-phase list.  Order matters for log replay:
+    # `_run_capture_phases_in_parallel` prints headers + captured
+    # output in submission order, so the log keeps the documented
+    # "lint first, test-circuitpython last" shape regardless of
+    # which phase actually finishes first.
+    test_args = ["test", "--all"]
+    if coverage_threshold is not None:
+        test_args.extend(["--coverage-threshold", str(coverage_threshold)])
+    if elevated_package_names is not None:
+        test_args.extend(
+            ["--elevated-packages", ",".join(elevated_package_names)],
+        )
+
+    test_micropython_args = ["test-micropython"]
+    if micropython_binary is not None:
+        test_micropython_args.extend(["--micropython-binary", micropython_binary])
+
+    test_circuitpython_args = ["test-circuitpython"]
+    if circuitpython_binary is not None:
+        test_circuitpython_args.extend(
+            ["--circuitpython-binary", circuitpython_binary],
+        )
+
+    parallel_specs: list[tuple[str, list[str] | None]] = [
+        ("lint", ["lint"]),
+        ("build", ["build"]),
+        ("docs", ["docs", "--all"]),
+        (f"test (python {python_version})", test_args),
+        ("test-scripts", ["test-scripts"]),
+        ("verify-examples", ["verify-examples", "--all"]),
+        ("check-dep-graph", ["check-dep-graph"]),
+        ("check-version", ["check-version"] if can_diff else None),
+        ("check-api", ["check-api"] if can_diff else None),
+        ("test-micropython", test_micropython_args),
+        ("test-circuitpython", test_circuitpython_args),
     ]
 
-    if with_functional:
-        steps.append(("test-libraries-functional", test_libraries_functional))
-        steps.append(("test-workbench-functional", test_workbench_functional))
-
-    for step_name, step in steps:
-        # Skip diff-based checks when the base ref is unreachable.
-        if step_name in ("check-version", "check-api") and not can_diff:
-            print(f"== {step_name} ==")
-            print(f"  SKIP: {base_reference} not reachable (fetch or set --base).")
+    parallel_phases: list[tuple[str, Callable[[], tuple[int, str]]]] = []
+    skipped_phases: list[str] = []
+    for label, args in parallel_specs:
+        if args is None:
+            skipped_phases.append(label)
             continue
+        parallel_phases.append(
+            (label, _preflight_phase_subprocess_factory(label, args)),
+        )
 
-        print(f"== {step_name} ==")
-        result = step()
-        if result != 0:
-            print(f"Preflight failed at: {step_name}")
-            return result
+    # Print skip notices up-front so the user sees them before the
+    # parallel block (which can take 20-30 s to flush).  Order: same
+    # as in the spec list above.
+    for label in skipped_phases:
+        print(f"== {label} ==")
+        print(f"  SKIP: {base_reference} not reachable (fetch or set --base).")
+
+    parallel_result = _preflight_run_parallel_phases(parallel_phases)
+    if parallel_result != 0:
+        # `_run_capture_phases_in_parallel` already printed each
+        # phase's banner and a "Step failed: <label>" line for the
+        # first failure; finish with the preflight-level banner.
+        print("Preflight failed.")
+        return parallel_result
+
+    # Functional tests on real hardware run **after** the parallel
+    # block and **serially** between themselves — both phases drive
+    # the same boards via devices.yml defaults, so concurrent access
+    # would deadlock.  See Decision 0048.
+    if with_functional:
+        functional_steps: list[tuple[str, Callable[[], int]]] = [
+            ("test-libraries-functional", test_libraries_functional),
+            ("test-workbench-functional", test_workbench_functional),
+        ]
+        for step_name, step in functional_steps:
+            print(f"== {step_name} ==")
+            result = step()
+            if result != 0:
+                print(f"Preflight failed at: {step_name}")
+                return result
 
     print("Preflight passed — required CI checks should pass.")
     return 0
@@ -1001,6 +1046,33 @@ def _resolve_package_parallel_workers() -> int:
     return max(1, value)
 
 
+#: Cap on concurrent ``preflight`` *phases*.  Each phase is its own
+#: ``python scripts/run.py <subcommand>`` subprocess that may itself
+#: fan out internally (build / docs at 4×, test_cpython via pytest,
+#: etc.), so a higher phase-level cap multiplies subprocess count.
+#: 4 keeps the laptop responsive at roughly 16 peak concurrent
+#: subprocesses; CI runners with more cores can crank this up via
+#: ``CHUMICRO_PARALLEL_PREFLIGHT_PHASES``.  See Decision 0048.
+_DEFAULT_PREFLIGHT_PHASE_PARALLEL_WORKERS = 4
+
+
+def _resolve_preflight_phase_parallel_workers() -> int:
+    """Return the preflight phase-level fan-out cap from env or default."""
+    raw = os.environ.get("CHUMICRO_PARALLEL_PREFLIGHT_PHASES")
+    if not raw:
+        return _DEFAULT_PREFLIGHT_PHASE_PARALLEL_WORKERS
+    try:
+        value = int(raw)
+    except ValueError:
+        print(
+            f"WARNING: CHUMICRO_PARALLEL_PREFLIGHT_PHASES={raw!r} is not an "
+            f"integer — falling back to default "
+            f"({_DEFAULT_PREFLIGHT_PHASE_PARALLEL_WORKERS})."
+        )
+        return _DEFAULT_PREFLIGHT_PHASE_PARALLEL_WORKERS
+    return max(1, value)
+
+
 def _run_capture_phases_in_parallel(
     phases: Sequence[tuple[str, Callable[[], tuple[int, str]]]],
     *,
@@ -1050,6 +1122,65 @@ def _run_capture_phases_in_parallel(
             first_failure = exit_code
             print(f"Step failed: {label}")
     return first_failure
+
+
+def _preflight_phase_subprocess_factory(
+    label: str,
+    subcommand_args: list[str],
+) -> Callable[[], tuple[int, str]]:
+    """Build a phase closure that subprocess-runs ``python scripts/run.py``.
+
+    Each preflight phase becomes a self-contained ``python scripts/run.py
+    <subcommand> [flags]`` invocation whose stdout + stderr are captured
+    into a single buffer and returned alongside the exit code.  This is
+    the contract :func:`_run_capture_phases_in_parallel` expects.
+
+    Subprocess re-invocation (rather than calling the Python-level phase
+    function in-thread) is the only way to safely capture child-process
+    output during phase-level parallelism: ``run_command`` lets child
+    output go straight to the parent's actual stdout fd, and
+    ``contextlib.redirect_stdout`` only catches Python-level ``print``
+    calls.  See Decision 0048.
+
+    Args:
+        label: Phase header to print under (also used in failure banner).
+        subcommand_args: Arguments to append after ``[python,
+            "scripts/run.py"]`` — e.g. ``["lint"]`` or
+            ``["test", "--all", "--coverage-threshold", "94"]``.
+    """
+    command = [PYTHON, "scripts/run.py", *subcommand_args]
+    printable_command = " ".join(command)
+
+    def run_phase() -> tuple[int, str]:
+        completed = subprocess.run(
+            command, cwd=ROOT, capture_output=True, text=True, check=False,
+        )
+        output_parts = [f"+ {printable_command}"]
+        if completed.stdout:
+            output_parts.append(completed.stdout.rstrip("\n"))
+        if completed.stderr:
+            output_parts.append(completed.stderr.rstrip("\n"))
+        if completed.returncode != 0:
+            output_parts.append(f"Phase failed: {label}")
+        return completed.returncode, "\n".join(output_parts) + "\n"
+
+    return run_phase
+
+
+def _preflight_run_parallel_phases(
+    phases: Sequence[tuple[str, Callable[[], tuple[int, str]]]],
+) -> int:
+    """Dispatch the parallel preflight phase block.
+
+    Thin wrapper over :func:`_run_capture_phases_in_parallel` that
+    applies the preflight-specific worker cap from
+    :func:`_resolve_preflight_phase_parallel_workers`.  The wrapper
+    exists as a named seam so tests can monkeypatch the parallel block
+    without forking the subprocess invocations on every preflight test.
+    """
+    return _run_capture_phases_in_parallel(
+        phases, max_workers=_resolve_preflight_phase_parallel_workers(),
+    )
 
 
 def test_functional(
@@ -1564,6 +1695,10 @@ def _build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("check-version", help="check VERSION enforcement for changed libraries")
     subparsers.add_parser("check-api", help="check API breakages against last release tag")
+    subparsers.add_parser(
+        "check-dep-graph",
+        help="verify support/docs/dependency-graph.svg matches current pyproject deps",
+    )
 
     validate_mip_parser = subparsers.add_parser(
         "validate-mip",
@@ -1662,6 +1797,16 @@ def _build_parser() -> argparse.ArgumentParser:
             "(default: from pyproject.toml)"
         ),
     )
+    test_parser.add_argument(
+        "--elevated-packages", metavar="NAMES",
+        help=(
+            "comma-separated package names that should use "
+            "--coverage-threshold; other packages keep the pyproject.toml "
+            "default.  Used by preflight to enforce a higher bar on "
+            "changed libraries without failing on pre-existing coverage "
+            "in untouched ones."
+        ),
+    )
     subparsers.add_parser("verify-examples", parents=[scope], help="import-check examples")
 
     docs_parser = subparsers.add_parser("docs", parents=[scope], help="build library docs")
@@ -1721,6 +1866,13 @@ def main(argv: list[str]) -> int:
             package_dirs = []
         else:
             package_dirs = _resolve_scoped_packages(args)
+        elevated_packages: set[str] | None = None
+        if args.elevated_packages:
+            elevated_packages = {
+                name.strip()
+                for name in args.elevated_packages.split(",")
+                if name.strip()
+            } or None
         return test_cpython(
             package_dirs,
             filter_expression=args.filter_expression,
@@ -1728,6 +1880,7 @@ def main(argv: list[str]) -> int:
             verbose=args.verbose,
             no_cov=args.no_cov,
             coverage_threshold=args.coverage_threshold,
+            elevated_packages=elevated_packages,
         )
 
     if args.task == "verify-examples":
@@ -1817,6 +1970,7 @@ def main(argv: list[str]) -> int:
         "prepare-mpy-cross": prepare_mpy_cross,
         "check-version": check_version,
         "check-api": check_api,
+        "check-dep-graph": check_dep_graph,
     }
 
     if args.task in no_arg:
