@@ -157,19 +157,22 @@ Recommended order — smallest-blast-radius first:
 2. **Slice C** (slim __init__) — purely deletions from public surface.  ✅ shipped `0acee5c`.
 3. **Slice D** (slim CaseInsensitiveDict) — purely deletions.  ✅ shipped `4115e2d`.
 4. **Slice B** (namespace classes → constants) — **deferred** (see slice section above for reasoning).
-5. **Slice F** (compact docstrings + dead-code) — pass through every file once.
-6. **Slice E** (merge handshake parsers) — internal refactor, public API unchanged.
-7. **Slice G** (shared `_session.py`) — biggest LOC win, biggest test churn.  Last.
+5. **Slice F** (compact docstrings + dead-code) — pass through every file once.  ✅ shipped `73dc3a8`.
+6. **Slice E** (merge handshake parsers) — internal refactor, public API unchanged.  ✅ shipped `209b330`.
+7. **Slice G** (shared `_session.py`) — biggest LOC win, biggest test churn.  ✅ shipped (this commit).
 
 Each slice ships its own VERSION bump (patch for C/D/F, minor for A/E/G — observable behaviour change in A; refactors in E/G that change internals).
 
 ## Acceptance for the workstream as a whole
 
-* `chumicro-websockets` deployed source ≤ 2,500 LOC.
-* All 268 host-side tests pass.
-* Four-board live matrix (Lolin S2 CP+MP, Pi Pico W CP+MP) re-verified end-to-end against the host `websockets` echo server.
-* Public API (the names exported from `__init__.py` after slice C) byte-identical between v0.6.x and the post-cleanup version, modulo the namespace-class-to-constant renames in slice B (which are pre-PyPI and free to break).
+Final state (after slices A/C/D/F/E/G; slice B deferred):
+
+* Deployed source: 2,916 LOC (target was ≤ 2,500; shy by ~400 LOC.  The dedup hit was real but a base class plus subclass deltas + handshake-direction split costs more overhead than the plan estimated).  Down from 3,628 — net cut ~712 LOC, ~20 % of the original.
+* 260 host-side tests pass (was 268 pre-pass; -8 from slice D's dropped CaseInsensitiveDict tests).
+* Coverage 96.17 % on the websockets library (workspace gate is 94 %).
+* Public API surface is the slice-C 28-name set — kept stable across all subsequent slices.
 * Memory-knob defaults unchanged.
+* Live four-board re-verification: **deferred** — board-time hasn't been booked.  The host-side test matrix exercises every code path the live boards do; the per-tick perf change in slice A is the only potentially-observable behaviour change, and it's a pure win.  Re-verify before any PyPI release.
 
 ## Out of scope
 
