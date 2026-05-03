@@ -75,7 +75,7 @@ When `/Volumes/CIRCUITPY` lingers as a placeholder after Finder eject (or during
 
 ### CP flash deploy needs a settle delay after the board sees a new entrypoint
 
-Without a post-visible settle, output captured immediately after `autoreload` re-engagement is one cycle behind reality. See `_BOARD_FILE_VISIBLE_POST_SETTLE` in `chumicro_deploy/transports/`. Hardware-tuned, do not remove. Commits `a561c02`, `3f11d09`.
+Without a post-visible settle, the explicit Ctrl-D soft-reboot inside `deploy_files` can fire while in-flight FAT bookkeeping / flash program-erase is still completing, so the post-reboot capture comes back one cycle behind reality (we get the *previous* run's output instead of the just-deployed code's).  `_wait_for_board_to_see_entrypoint` polls `os.stat` over raw REPL until the board reports the new size, then sleeps `_BOARD_FILE_VISIBLE_POST_SETTLE` (0.5 s) before triggering the Ctrl-D.  Hardware-tuned, do not remove.  Commits `a561c02`, `3f11d09`.  (Original framing tied the settle to "autoreload re-engagement"; that was correct under an earlier flow where `disconnect()` flipped autoreload back on and the watcher fired the reboot.  After the deploy-audit pass removed the autoreload-on at disconnect, the reboot is exclusively the explicit Ctrl-D in `deploy_files` — same constant, same need, different trigger.)
 
 ---
 
