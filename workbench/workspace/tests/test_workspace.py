@@ -36,7 +36,7 @@ class TestWorkspaceLayout:
         assert layout.devices_yaml == root / "devices.yml"
         assert layout.secrets_yaml == root / "secrets.yml"
         assert layout.projects_dir == root / "projects"
-        assert layout.libs_dir == root / "libs"
+        assert layout.shared_dir == root / "shared"
         assert layout.packages_dir == root / "packages"
 
     def test_project_dir_returns_named_subdir(self, tmp_path: Path) -> None:

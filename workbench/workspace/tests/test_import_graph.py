@@ -77,7 +77,7 @@ def _seed_workspace_root(tmp_path: Path, *, with_libs: bool = True,
                          with_packages: bool = True) -> WorkspaceLayout:
     (tmp_path / "workspace.yml").write_text("defaults: {}\n")
     if with_libs:
-        (tmp_path / "libs").mkdir()
+        (tmp_path / "shared").mkdir()
     if with_packages:
         (tmp_path / "packages").mkdir()
     return WorkspaceLayout(root=tmp_path)
@@ -87,10 +87,10 @@ class TestBuildSearchPaths:
     def test_default_returns_libs_then_packages(self, tmp_path: Path) -> None:
         layout = _seed_workspace_root(tmp_path)
         result = build_search_paths(layout)
-        assert result == [layout.libs_dir, layout.packages_dir]
+        assert result == [layout.shared_dir, layout.packages_dir]
 
     def test_skips_missing_dirs(self, tmp_path: Path) -> None:
-        """libs/ + packages/ both absent → empty list."""
+        """shared/ + packages/ both absent → empty list."""
         layout = _seed_workspace_root(tmp_path, with_libs=False, with_packages=False)
         assert build_search_paths(layout) == []
 
@@ -102,7 +102,7 @@ class TestBuildSearchPaths:
             layout, library_sources_override={"chumicro_wifi": override_dir},
         )
         assert result[0] == override_dir
-        assert layout.libs_dir in result
+        assert layout.shared_dir in result
         assert layout.packages_dir in result
 
     def test_extra_search_paths_appended_at_tail(self, tmp_path: Path) -> None:
@@ -116,11 +116,11 @@ class TestBuildSearchPaths:
         layout = _seed_workspace_root(tmp_path)
         result = build_search_paths(
             layout,
-            library_sources_override={"foo": layout.libs_dir},
+            library_sources_override={"foo": layout.shared_dir},
         )
-        # libs/ appears once even though it shows up in both
+        # shared/ appears once even though it shows up in both
         # the override map (under name 'foo') and the default.
-        assert result.count(layout.libs_dir) == 1
+        assert result.count(layout.shared_dir) == 1
 
     def test_library_sources_sorted_by_name_for_stability(self, tmp_path: Path) -> None:
         """Two invocations with the same map produce the same path order."""
@@ -143,15 +143,15 @@ class TestBuildSearchPaths:
 
 
 def _seed_project_with_imports(tmp_path: Path) -> WorkspaceLayout:
-    """Stage a workspace with a project that imports from libs/."""
+    """Stage a workspace with a project that imports from shared/."""
     (tmp_path / "workspace.yml").write_text("defaults: {}\n")
     (tmp_path / "secrets.yml").write_text("\n")
-    libs = tmp_path / "libs"
-    libs.mkdir()
-    (libs / "shared_helper.py").write_text(
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    (shared / "shared_helper.py").write_text(
         "def add(left, right):\n    return left + right\n"
     )
-    (libs / "unused_helper.py").write_text(
+    (shared / "unused_helper.py").write_text(
         "def never_called():\n    return 42\n"
     )
 
@@ -200,8 +200,8 @@ class TestProjectImportGraphSource:
         self,
         tmp_path: Path,
     ) -> None:
-        """library_sources: in workspace.yml lets a checkout shadow libs/."""
-        # Set up a workspace whose libs/ has one version of a module
+        """library_sources: in workspace.yml lets a checkout shadow shared/."""
+        # Set up a workspace whose shared/ has one version of a module
         # and an external path whose copy must win.
         external = tmp_path / "checkout"
         external.mkdir()
@@ -215,9 +215,9 @@ class TestProjectImportGraphSource:
             f"  shared_helper: {external}\n"
         )
         (tmp_path / "secrets.yml").write_text("\n")
-        libs = tmp_path / "libs"
-        libs.mkdir()
-        (libs / "shared_helper.py").write_text("MARKER = 'from-libs'\n")
+        shared = tmp_path / "shared"
+        shared.mkdir()
+        (shared / "shared_helper.py").write_text("MARKER = 'from-shared'\n")
 
         project_dir = tmp_path / "projects" / "back-porch"
         project_dir.mkdir(parents=True)
@@ -227,9 +227,9 @@ class TestProjectImportGraphSource:
         workspace = WorkspaceLayout(root=tmp_path)
         source = project_import_graph_source(project_dir, workspace=workspace)
         files = source.files()
-        # The external version wins over libs/.
+        # The external version wins over shared/.
         assert b"from-external" in files["/lib/shared_helper.py"]
-        assert b"from-libs" not in files["/lib/shared_helper.py"]
+        assert b"from-shared" not in files["/lib/shared_helper.py"]
 
     def test_main_py_entrypoint_works_for_micropython(
         self,
@@ -267,7 +267,7 @@ class TestProjectImportGraphSource:
         self,
         tmp_path: Path,
     ) -> None:
-        """Caller-supplied tail search path resolves modules not under libs/."""
+        """Caller-supplied tail search path resolves modules not under shared/."""
         (tmp_path / "workspace.yml").write_text("defaults: {}\n")
         (tmp_path / "secrets.yml").write_text("\n")
         external = tmp_path / "external"
@@ -292,9 +292,9 @@ class TestProjectImportGraphSource:
         """extra_modules forwards through to ImportGraphSource."""
         (tmp_path / "workspace.yml").write_text("defaults: {}\n")
         (tmp_path / "secrets.yml").write_text("\n")
-        libs = tmp_path / "libs"
-        libs.mkdir()
-        (libs / "dynamic_target.py").write_text("Y = 2\n")
+        shared = tmp_path / "shared"
+        shared.mkdir()
+        (shared / "dynamic_target.py").write_text("Y = 2\n")
 
         project_dir = tmp_path / "projects" / "x"
         project_dir.mkdir(parents=True)
@@ -317,9 +317,9 @@ class TestProjectImportGraphSource:
         """Decision 0044 — wrong-runtime adapters do not ride the import graph."""
         (tmp_path / "workspace.yml").write_text("defaults: {}\n")
         (tmp_path / "secrets.yml").write_text("\n")
-        libs = tmp_path / "libs"
-        libs.mkdir()
-        adapters = libs / "_adapters"
+        shared = tmp_path / "shared"
+        shared.mkdir()
+        adapters = shared / "_adapters"
         adapters.mkdir()
         (adapters / "__init__.py").write_text("")
         (adapters / "cp.py").write_text(
