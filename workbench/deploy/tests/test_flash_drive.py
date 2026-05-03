@@ -184,7 +184,7 @@ class TestRsync:
         with patch(
             "chumicro_deploy.flash_drive.subprocess.run",
             side_effect=subprocess.TimeoutExpired(
-                cmd="rsync", timeout=flash_drive.RSYNC_TIMEOUT_SECONDS,
+                cmd="rsync", timeout=flash_drive.RSYNC_TIMEOUT_MIN_SECONDS,
             ),
         ):
             with pytest.raises(FlashDriveError) as exc_info:
@@ -194,11 +194,12 @@ class TestRsync:
         assert "Reboot the board" in message
         assert "plans/learnings.md" in message
 
-    def test_passes_timeout_to_subprocess_run(self, tmp_path: Path) -> None:
+    def test_passes_computed_timeout_to_subprocess_run(self, tmp_path: Path) -> None:
         """rsync invocation passes a ``timeout=`` keyword to subprocess.run.
 
-        The hard cap matches :data:`RSYNC_TIMEOUT_SECONDS`.  Catches
-        a regression where someone refactors the call and drops the
+        For an empty staging tree, the auto-computed timeout matches
+        :data:`RSYNC_TIMEOUT_MIN_SECONDS` (the floor).  Catches a
+        regression where someone refactors the call and drops the
         timeout — leading right back to the wedged-D-state bug.
         """
         source = tmp_path / "source"
@@ -218,7 +219,31 @@ class TestRsync:
         ):
             flash_drive.rsync(source, destination)
 
-        assert captured_kwargs.get("timeout") == flash_drive.RSYNC_TIMEOUT_SECONDS
+        # Empty staging → floor.
+        assert (
+            captured_kwargs.get("timeout") == flash_drive.RSYNC_TIMEOUT_MIN_SECONDS
+        )
+
+    def test_explicit_timeout_overrides_auto_compute(self, tmp_path: Path) -> None:
+        """Caller-supplied ``timeout=`` bypasses the auto-compute formula."""
+        source = tmp_path / "source"
+        source.mkdir()
+        destination = tmp_path / "destination"
+        destination.mkdir()
+
+        captured_kwargs: dict[str, object] = {}
+
+        def fake_run(_command, **kwargs):
+            captured_kwargs.update(kwargs)
+            return subprocess.CompletedProcess(args=_command, returncode=0)
+
+        with patch(
+            "chumicro_deploy.flash_drive.subprocess.run",
+            side_effect=fake_run,
+        ):
+            flash_drive.rsync(source, destination, timeout=42.0)
+
+        assert captured_kwargs.get("timeout") == 42.0
 
     def test_default_excludes(self, tmp_path: Path) -> None:
         """Default rsync command carries the base exclude set + ``--delete``.
@@ -661,3 +686,74 @@ class TestMetadataHelpersHaveTimeouts:
         assert (
             captured_kwargs.get("timeout") == flash_drive.SYNC_TIMEOUT_SECONDS
         )
+
+
+class TestComputeRsyncTimeoutSeconds:
+    """Tests for the size-based timeout scaling formula.
+
+    Replaces the old fixed 90-second timeout that fired false-positives
+    on slow boards (Lolin S2 / ESP32-S2 CP).  Per-MB scaling lets the
+    timeout grow with the deploy payload while still bounding the
+    "actually wedged" case via the floor.
+    """
+
+    def test_zero_size_returns_floor(self) -> None:
+        """Empty staging -> RSYNC_TIMEOUT_MIN_SECONDS (the floor)."""
+        assert (
+            flash_drive.compute_rsync_timeout_seconds(0)
+            == flash_drive.RSYNC_TIMEOUT_MIN_SECONDS
+        )
+
+    def test_small_size_below_breakeven_returns_floor(self) -> None:
+        """Size where (base + per-MB * size) < floor -> floor.
+
+        With base=60s and per-MB=120s, 250 KB gives 60+30 = 90s,
+        exactly the 90s floor — anything smaller stays at the floor.
+        """
+        # 100 KB -> 60 + 0.1 * 120 = 72s, capped at 90s.
+        result = flash_drive.compute_rsync_timeout_seconds(100 * 1024)
+        assert result == flash_drive.RSYNC_TIMEOUT_MIN_SECONDS
+
+    def test_large_size_scales_above_floor(self) -> None:
+        """Big staging -> base + per-MB * size, NOT capped at floor."""
+        # 1 MB -> 60 + 1.0 * 120 = 180s.
+        one_mb = 1024 * 1024
+        result = flash_drive.compute_rsync_timeout_seconds(one_mb)
+        expected = (
+            flash_drive.RSYNC_TIMEOUT_BASE_SECONDS
+            + 1.0 * flash_drive.RSYNC_TIMEOUT_PER_MB_SECONDS
+        )
+        assert result == expected
+        assert result > flash_drive.RSYNC_TIMEOUT_MIN_SECONDS
+
+    def test_per_mb_scaling_is_linear(self) -> None:
+        """Doubling the size doubles the per-MB term (base stays fixed)."""
+        one_mb = 1024 * 1024
+        two_mb = 2 * one_mb
+        single = flash_drive.compute_rsync_timeout_seconds(one_mb)
+        double = flash_drive.compute_rsync_timeout_seconds(two_mb)
+        # The DELTA is per_mb_seconds * 1 MB.
+        assert (
+            double - single == flash_drive.RSYNC_TIMEOUT_PER_MB_SECONDS
+        )
+
+
+class TestDirectorySizeBytes:
+    """Tests for the staging-tree size-measurement helper."""
+
+    def test_empty_directory_returns_zero(self, tmp_path: Path) -> None:
+        assert flash_drive._directory_size_bytes(tmp_path) == 0
+
+    def test_nonexistent_directory_returns_zero(self, tmp_path: Path) -> None:
+        assert (
+            flash_drive._directory_size_bytes(tmp_path / "missing") == 0
+        )
+
+    def test_sums_file_sizes_recursively(self, tmp_path: Path) -> None:
+        (tmp_path / "a.txt").write_bytes(b"x" * 100)
+        (tmp_path / "sub").mkdir()
+        (tmp_path / "sub" / "b.txt").write_bytes(b"y" * 250)
+        (tmp_path / "sub" / "nested").mkdir()
+        (tmp_path / "sub" / "nested" / "c.bin").write_bytes(b"z" * 50)
+
+        assert flash_drive._directory_size_bytes(tmp_path) == 400

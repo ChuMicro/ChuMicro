@@ -56,21 +56,38 @@ class FlashDriveError(Exception):
 #: read stale content even after sync returns.
 FLUSH_SETTLE_DELAY = 0.5
 
-#: Hard cap on rsync to a CIRCUITPY drive.  A healthy deploy of the
-#: full chumicro library bundle finishes in 5-15 s; even a slow
-#: re-checksum sweep wraps in under 30 s.  If we hit 90 s, the most
-#: likely cause is the USB-stack stuck in an uninterruptible kernel
-#: I/O wait — board mid-reset, FSKit confused by a stale mount, or
-#: macOS auto-mounting a duplicate ``CIRCUITPY 1`` while the original
-#: handle still pins the bus.  Without this cap, the rsync subprocess
-#: enters D-state and ``kill -9`` is impossible — only board reboot
-#: clears it.  See `plans/learnings.md` "rsync to CIRCUITPY can hang
-#: in uninterruptible kernel I/O".
-RSYNC_TIMEOUT_SECONDS = 90.0
+#: Floor for the rsync timeout — handles cold-start work (USB
+#: enumeration, FAT init, raw REPL handoff) regardless of how small
+#: the deploy is.  Set generously: false-positives (slow board
+#: treated as wedged) are far worse than slow detection of a real
+#: wedge.  Anything actually wedged in D-state will hit the next
+#: ``write()`` syscall almost immediately, so waiting 4 minutes
+#: doesn't materially slow the wedge-detection path.
+RSYNC_TIMEOUT_MIN_SECONDS = 240.0
+
+#: Base seconds added to every rsync timeout regardless of size.
+#: Covers handshake / enumeration / checksum-sweep jitter that
+#: doesn't scale with payload size — Lolin S2 in particular needs
+#: 60-90s of cold-start latency before rsync's first write.
+RSYNC_TIMEOUT_BASE_SECONDS = 120.0
+
+#: Per-MB allowance for rsync.  600 s/MB ≈ 1.7 KB/s — empirically
+#: the slowest sustained USB-MSC FAT12 write rate we've observed
+#: (Lolin S2 / ESP32-S2 CP can drop into this range under
+#: macOS-cache-pressure or after several back-to-back deploys; Pi
+#: Pico W is closer to 100 KB/s so the budget is far above what
+#: most boards need).  Generous on purpose — false-positive
+#: timeouts that surface as "wedge!" recovery are operational
+#: noise, while a real wedge is a clear failure regardless of how
+#: long we waited.
+#:
+#: To override per-call (e.g. an integration test on a known-fast
+#: rig), pass ``timeout=`` explicitly to :func:`rsync`.
+RSYNC_TIMEOUT_PER_MB_SECONDS = 600.0
 
 #: Hard cap on ``sync``.  A clean flush wraps in single-digit seconds
 #: even with 1 MB pending; 30 s is the same "USB stack wedged" guard
-#: as :data:`RSYNC_TIMEOUT_SECONDS`.
+#: as the rsync floor.
 SYNC_TIMEOUT_SECONDS = 30.0
 
 #: Hard cap on the small metadata helpers (``xattr``, ``mdutil``,
@@ -79,6 +96,51 @@ SYNC_TIMEOUT_SECONDS = 30.0
 #: returns immediately.  10 s catches the wedged-USB case without
 #: penalizing slow USB enumeration.
 METADATA_HELPER_TIMEOUT_SECONDS = 10.0
+
+
+def _directory_size_bytes(path: Path) -> int:
+    """Return the sum of file sizes under *path* (recursive).
+
+    Symlinks count once for their target size; broken symlinks and
+    files that race-deleted between iteration and stat are ignored
+    (the rsync that follows will surface any real I/O error).
+    """
+    total = 0
+    if not path.is_dir():
+        return 0
+    for entry in path.rglob("*"):
+        try:
+            if entry.is_file():
+                total += entry.stat().st_size
+        except OSError:  # pragma: no cover - race-deletion guard
+            continue
+    return total
+
+
+def compute_rsync_timeout_seconds(staging_size_bytes: int) -> float:
+    """Pick an rsync timeout proportional to staging-tree size.
+
+    Formula::
+
+        max(RSYNC_TIMEOUT_BASE_SECONDS + size_mb * RSYNC_TIMEOUT_PER_MB_SECONDS,
+            RSYNC_TIMEOUT_MIN_SECONDS)
+
+    For a typical chumicro deploy (~200 KB staging) this lands at the
+    floor (90 s); for a 1 MB deploy it grows to 180 s; for a 5 MB
+    deploy to 660 s.  Keeps fast boards (Pi Pico W, ~5 s rsync in
+    practice) on a tight leash while giving slow boards (Lolin S2 /
+    ESP32-S2, often 60-120 s for the same payload) enough headroom
+    to finish without false-positive timeouts.
+
+    Args:
+        staging_size_bytes: Sum of file sizes in the local staging
+            tree, typically from :func:`_directory_size_bytes`.
+    """
+    size_mb = staging_size_bytes / (1024 * 1024)
+    return max(
+        RSYNC_TIMEOUT_BASE_SECONDS + (size_mb * RSYNC_TIMEOUT_PER_MB_SECONDS),
+        RSYNC_TIMEOUT_MIN_SECONDS,
+    )
 
 
 def _run_subprocess_with_timeout(
@@ -199,6 +261,7 @@ def rsync(
     *,
     delete: bool = True,
     additional_excludes: tuple[str, ...] | list[str] = (),
+    timeout: float | None = None,
 ) -> None:
     """Rsync a source directory's contents to a destination.
 
@@ -236,10 +299,17 @@ def rsync(
             Functional-test callers pass user-config filenames so
             ``--delete`` doesn't wipe them.  Production callers leave
             empty.
+        timeout: Override the auto-computed timeout (seconds).  Default
+            ``None`` lets :func:`compute_rsync_timeout_seconds` pick
+            a value scaled to the staging-tree size — the right
+            choice for production callers.  Tests pass an explicit
+            value to make the assertion deterministic.
 
     Raises:
         FlashDriveError: If rsync is not installed or the sync fails.
     """
+    if timeout is None:
+        timeout = compute_rsync_timeout_seconds(_directory_size_bytes(source))
     command = [
         "rsync",
         "--recursive",
@@ -257,18 +327,23 @@ def rsync(
     try:
         _run_subprocess_with_timeout(
             command,
-            timeout=RSYNC_TIMEOUT_SECONDS,
+            timeout=timeout,
             on_timeout_message=(
-                f"rsync to {destination} hung past "
-                f"{RSYNC_TIMEOUT_SECONDS:.0f}s.  Most common cause is the "
-                "board's USB-CDC firmware hung mid-write (the CP runtime "
-                "got into a bad state during the previous test, or the "
-                "board's USB stack hiccupped).  Reboot the board (unplug + "
-                "replug) and re-run.  Without this timeout the rsync "
-                "subprocess would have entered uninterruptible kernel I/O "
-                "wait, where ``kill -9`` is impossible until the board is "
-                "physically power-cycled.  See plans/learnings.md "
-                "'rsync to CIRCUITPY can hang in uninterruptible kernel I/O'."
+                f"rsync to {destination} hung past {timeout:.0f}s "
+                f"(scaled from staging-tree size).  Most common cause "
+                "is the board's USB-CDC firmware hung mid-write (the "
+                "CP runtime got into a bad state during the previous "
+                "test, or the board's USB stack hiccupped).  Reboot "
+                "the board (unplug + replug) and re-run.  If the rsync "
+                "is just genuinely slow on this board (Lolin S2 / "
+                "ESP32-S2 CP can run ~10× slower than Pi Pico W on "
+                "USB-MSC FAT writes), bump RSYNC_TIMEOUT_PER_MB_SECONDS "
+                "in chumicro_deploy.flash_drive.  Without this timeout "
+                "the rsync subprocess would have entered uninterruptible "
+                "kernel I/O wait, where ``kill -9`` is impossible until "
+                "the board is physically power-cycled.  See "
+                "plans/learnings.md 'rsync to CIRCUITPY can hang in "
+                "uninterruptible kernel I/O'."
             ),
             error_class=FlashDriveError,
             text=True,
