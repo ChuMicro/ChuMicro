@@ -29,9 +29,6 @@ from chumicro_websockets import (
     OPCODE_PONG,
     OPCODE_TEXT,
     Connection,
-    FrameParser,
-    HandshakeResponseParser,
-    ServerHandshakePhase,
     WebSocketBackpressureError,
     WebSocketServer,
     WebSocketState,
@@ -39,12 +36,17 @@ from chumicro_websockets import (
     WebSocketTimeoutError,
     WhenOversized,
     derive_accept_key,
+    make_websocket_key,
+)
+from chumicro_websockets._wire import (
+    FrameParser,
+    HandshakeResponseParser,
     encode_client_handshake,
     encode_close_payload,
     encode_frame,
     make_mask_key,
-    make_websocket_key,
 )
+from chumicro_websockets.server import ServerHandshakePhase
 from chumicro_websockets.testing import FakeConnection, FakeListener, TickClock
 
 # Backwards-compatible alias for in-test references.
@@ -608,7 +610,7 @@ class TestCloseHandshake:
         assert connection.state == WebSocketState.CLOSED
 
     def test_close_with_invalid_payload_falls_back_to_empty(self):
-        from chumicro_websockets import CLOSE_ABNORMAL
+        from chumicro_websockets._wire import CLOSE_ABNORMAL
         observed = []
         server, listener, clock = _make_server(
             on_connection=lambda connection: observed.append(connection),
