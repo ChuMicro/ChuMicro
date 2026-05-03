@@ -28,6 +28,7 @@ import json
 from chumicro_timing import ticks_add, ticks_diff, ticks_ms
 
 from chumicro_requests._wire import (
+    DEFAULT_BODY_BUFFER_SIZE,
     DEFAULT_MAX_BODY_BYTES,
     DEFAULT_MAX_REDIRECTS,
     DEFAULT_RECV_BUDGET_PER_TICK,
@@ -430,6 +431,17 @@ class HttpClient:
         self._tx_buffer = b""  # request bytes pending send
         self._tx_offset = 0
         self._parser = None
+        # Long-lived body buffer reused across requests — the parser is
+        # constructed per-request (Decision 0040 §1: single-in-flight)
+        # but the body buffer is the only per-request alloc big enough
+        # to fragment small-tier free lists on Lolin S2.  We hold the
+        # buffer here and hand it to each parser so per-request body
+        # alloc happens only when ``Content-Length > body_buffer_size``.
+        # Live-board MP signal (``test_large_body_no_leak_no_fragmentation
+        # _on_device``) caught the per-request body alloc churn at the
+        # 1024 tier.
+        self._body_buffer = bytearray(DEFAULT_BODY_BUFFER_SIZE)
+        self._body_buffer_view = memoryview(self._body_buffer)
         self._deadline_ticks = None
         # Per-request redirect bookkeeping — captured at _start_request
         # so each follow-redirect hop sees the same budget + the
@@ -686,7 +698,13 @@ class HttpClient:
         self._url = url
         self._tx_buffer = request_bytes
         self._tx_offset = 0
-        self._parser = ResponseParser(max_body_bytes=self._max_body_bytes)
+        # Per-request parser, but we hand it the long-lived body buffer
+        # so per-request body alloc only happens for oversize responses.
+        self._parser = ResponseParser(
+            max_body_bytes=self._max_body_bytes,
+            body_buffer=self._body_buffer,
+            body_buffer_view=self._body_buffer_view,
+        )
         self._state = _RequestState.SENDING
 
     def _drive_send(self):
@@ -863,6 +881,10 @@ class HttpClient:
         self._socket = None
         self._tx_buffer = b""
         self._tx_offset = 0
+        # Drop the parser instance — the long-lived body buffer it was
+        # using stays alive on ``self._body_buffer`` and gets handed to
+        # the next request's parser.  Only the small parser scaffolding
+        # (cursor, headers dict, etc.) is freed here.
         self._parser = None
         self._state = _RequestState.IDLE  # Brief — _start_hop flips back.
 
