@@ -1,50 +1,90 @@
-"""Frame-level quickstart for chumicro-websockets — slice 1 demo.
+"""WebSocket client + server in-memory loopback — runs everywhere.
 
-Until WebSocketClient + WebSocketServer land in slices 2 + 3, the
-useful public surface is the wire layer.  This example shows the
-round-trip: encode a frame, parse it back, recover the payload.
+Drives a :class:`WebSocketClient` and a :class:`WebSocketServer`
+through a single tick loop, wired together via paired
+:class:`FakeConnection` objects from
+:mod:`chumicro_websockets.testing`.  No real sockets — proves the
+runner contract works end-to-end with zero infrastructure.
 
 Runs on CPython, MicroPython, and CircuitPython.
 
 Example output::
 
-    Encoded text frame: 9 bytes -> 81 85 6d 61 73 6b 0d 0d 0d
-    Parser sees: opcode=1 fin=True payload=b'hello'
-
-    Encoded close frame: 5 bytes
-    Parsed close: code=1000 reason='bye'
+    Server saw upgrade for path: /demo
+    Server received: hello from client
+    Client received: echo: hello from client
+    Client and server both CLOSED.
 """
 
 from chumicro_websockets import (
     CLOSE_NORMAL,
-    OPCODE_CLOSE,
-    OPCODE_TEXT,
-    FrameParser,
-    encode_close_payload,
-    encode_frame,
-    parse_close_payload,
+    WebSocketClient,
+    WebSocketServer,
+    WebSocketState,
 )
+from chumicro_websockets.testing import FakeConnection, FakeListener, TickClock
 
-mask_key = b"mask"
-text_frame = encode_frame(OPCODE_TEXT, b"hello", mask=mask_key)
-print(
-    f"Encoded text frame: {len(text_frame)} bytes -> "
-    f"{' '.join(f'{byte:02x}' for byte in text_frame)}",
+
+def on_connection(connection):
+    print(f"Server saw upgrade for path: {connection.request_path}")
+    connection.on_text = lambda text: (
+        print(f"Server received: {text}"),
+        connection.send_text(f"echo: {text}"),
+    )
+
+
+clock = TickClock()
+client_socket = FakeConnection()
+server_socket = FakeConnection()
+listener = FakeListener()
+listener.queue_accept(server_socket)
+
+server = WebSocketServer(
+    listener=listener,
+    on_connection=on_connection,
+    ticks_ms_func=clock.now,
+    ticks_add_func=clock.add,
+    ticks_diff_func=clock.diff,
 )
-
-parser = FrameParser()
-parser.feed(text_frame)
-print(
-    f"Parser sees: opcode={parser.opcode} fin={parser.fin} "
-    f"payload={parser.payload!r}",
+client = WebSocketClient(
+    connection_factory=lambda *_args, **_kwargs: client_socket,
+    ticks_ms_func=clock.now,
+    ticks_add_func=clock.add,
+    ticks_diff_func=clock.diff,
 )
-print()
+client.on_text = lambda text: print(f"Client received: {text}")
 
-close_body = encode_close_payload(CLOSE_NORMAL, "bye")
-close_frame = encode_frame(OPCODE_CLOSE, close_body)
-print(f"Encoded close frame: {len(close_frame)} bytes")
 
-parser.reset()
-parser.feed(close_frame)
-code, reason = parse_close_payload(parser.payload)
-print(f"Parsed close: code={code} reason={reason!r}")
+def pump():
+    if client_socket.outbound:
+        server_socket.feed_inbound(bytes(client_socket.outbound))
+        client_socket.outbound = bytearray()
+    if server_socket.outbound:
+        client_socket.feed_inbound(bytes(server_socket.outbound))
+        server_socket.outbound = bytearray()
+
+
+client.connect("ws://example.com/demo")
+sent = False
+for _tick in range(50):
+    client.handle(clock.now())
+    server.handle(clock.now())
+    pump()
+    if client.state == WebSocketState.OPEN and not sent:
+        client.send_text("hello from client")
+        sent = True
+    if (
+        sent
+        and client.state == WebSocketState.OPEN
+        and not server_socket.outbound
+        and not client._tx_queue
+        and client._tx_partial is None
+    ):
+        client.close(CLOSE_NORMAL, "demo done")
+    if (
+        client.state == WebSocketState.CLOSED
+        and server.connection_count == 0
+    ):
+        break
+
+print("Client and server both CLOSED.")
