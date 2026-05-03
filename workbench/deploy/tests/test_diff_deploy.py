@@ -1,4 +1,4 @@
-"""Tests for the scoped diff-deploy primitive (multi-thing-staging replacement)."""
+"""Tests for the scoped diff-deploy primitive (multi-project-staging replacement)."""
 
 from __future__ import annotations
 
@@ -23,8 +23,8 @@ class TestIsInDeployScope:
         "path",
         sorted(DEPLOY_SCOPE_FILES) + [
             "/lib/foo.py",
-            "/lib/things/__init__.py",
-            "/lib/things/garage/sensors/door_open/app.py",
+            "/lib/projects/__init__.py",
+            "/lib/projects/garage/sensors/door_open/app.py",
         ],
     )
     def test_in_scope_paths(self, path: str) -> None:
@@ -119,7 +119,7 @@ class TestDeployerDeployDiff:
             mode="copy",
             device_files={
                 "/code.py": b"# previous deploy",
-                "/lib/old_thing.py": b"old code",
+                "/lib/old_project.py": b"old code",
                 "/lib/shared.py": b"shared v1",
             },
         )
@@ -128,7 +128,7 @@ class TestDeployerDeployDiff:
         new_payload = {
             "/code.py": b"# new deploy",
             "/lib/shared.py": b"shared v2",
-            "/lib/new_thing.py": b"new code",
+            "/lib/new_project.py": b"new code",
         }
         deleted: list[str] = []
         result = deployer.deploy_diff(
@@ -137,11 +137,11 @@ class TestDeployerDeployDiff:
         )
         assert result.success
         # Stale file deleted; shared file replaced; new file added.
-        assert deleted == ["/lib/old_thing.py"]
+        assert deleted == ["/lib/old_project.py"]
         assert transport.device_files["/code.py"] == b"# new deploy"
         assert transport.device_files["/lib/shared.py"] == b"shared v2"
-        assert transport.device_files["/lib/new_thing.py"] == b"new code"
-        assert "/lib/old_thing.py" not in transport.device_files
+        assert transport.device_files["/lib/new_project.py"] == b"new code"
+        assert "/lib/old_project.py" not in transport.device_files
 
     def test_out_of_scope_files_survive(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """User-managed files (settings.toml, photos, etc.) never get deleted."""

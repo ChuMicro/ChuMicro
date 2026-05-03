@@ -3,7 +3,7 @@
 The deploy package owns ``FileSource`` (path → bytes producers that
 the ``Deployer`` ships onto a device).  Workspace-runtime composes
 those sources so a single :meth:`Deployer.deploy` call sends both
-the thing's app code and its generated ``/runtime_config.msgpack``
+the project's app code and its generated ``/runtime_config.msgpack``
 in one shot — the user no longer has to remember to regenerate the
 config before each deploy.
 
@@ -13,13 +13,13 @@ Two pieces:
   any inner source (``DirectorySource``, ``FileMapSource``,
   ``ImportGraphSource``, custom) and injects the merged msgpack at
   ``/runtime_config.msgpack`` per Decision 0035 §8.
-* :func:`thing_directory_source` — convenience that builds a
-  ``DirectorySource`` from ``things/<name>/`` (skipping the host-side
+* :func:`project_directory_source` — convenience that builds a
+  ``DirectorySource`` from ``projects/<name>/`` (skipping the host-side
   ``config.{toml,yml,yaml}``, ``_generated/`` output dir, and the
   usual cache artifacts) and wraps it with :class:`WithRuntimeConfig`.
-  Covers the typical "self-contained thing directory" case.
+  Covers the typical "self-contained project directory" case.
 
-For things that import shared libs from elsewhere in the workspace,
+For projects that import shared libs from elsewhere in the workspace,
 build the inner source explicitly (`ImportGraphSource(...)` or a
 custom ``FileSource``) and wrap it with :class:`WithRuntimeConfig`
 yourself.
@@ -41,38 +41,38 @@ if TYPE_CHECKING:  # pragma: no cover — type-only
 #: template assumes this exact location; changing it is an ABI break.
 RUNTIME_CONFIG_DEVICE_PATH: str = "/runtime_config.msgpack"
 
-#: Default subdirectory under ``things/<name>/`` where the generated
+#: Default subdirectory under ``projects/<name>/`` where the generated
 #: msgpack lives on the host.  ``_generated/`` is gitignored at the
 #: workspace level so the file isn't committed alongside the source.
 GENERATED_DIRNAME: str = "_generated"
 
-#: Filenames under ``things/<name>/`` that are workspace-tooling
+#: Filenames under ``projects/<name>/`` that are workspace-tooling
 #: inputs, not runtime payload, and so are skipped when shipping the
-#: thing's directory to the device.
+#: project's directory to the device.
 _SKIP_FILENAMES: frozenset[str] = frozenset(
     {"config.toml", "config.yml", "config.yaml"},
 )
 
 
-def find_thing_config(thing_dir: Path) -> Path:
-    """Return the config file for *thing_dir* — TOML wins over YAML.
+def find_project_config(project_dir: Path) -> Path:
+    """Return the config file for *project_dir* — TOML wins over YAML.
 
-    Per Decision 0035 §1, every thing carries one config file.  This
+    Per Decision 0035 §1, every project carries one config file.  This
     helper picks the canonical name in priority order: ``config.toml``,
     then ``config.yml``, then ``config.yaml``.
 
     Args:
-        thing_dir: Path to ``things/<name>/``.
+        project_dir: Path to ``projects/<name>/``.
 
     Raises:
         FileNotFoundError: When no recognized config file exists.
     """
     for filename in ("config.toml", "config.yml", "config.yaml"):
-        candidate = thing_dir / filename
+        candidate = project_dir / filename
         if candidate.is_file():
             return candidate
     raise FileNotFoundError(
-        f"no config.toml / config.yml / config.yaml in {thing_dir}",
+        f"no config.toml / config.yml / config.yaml in {project_dir}",
     )
 
 
@@ -86,13 +86,13 @@ class WithRuntimeConfig:
     entrypoint is forwarded from the inner source unchanged.
 
     Args:
-        inner: The base ``FileSource`` (typically the thing's app code).
+        inner: The base ``FileSource`` (typically the project's app code).
         workspace_yaml: Path to ``workspace.yml``.
-        thing_config: Path to ``things/<name>/config.{toml,yml,yaml}``.
+        project_config: Path to ``projects/<name>/config.{toml,yml,yaml}``.
         secrets_yaml: Path to ``secrets.yml``.  May not exist —
             ``read_secrets_yaml`` treats absence as "no secrets".
         output_path: Where to write the msgpack on the host.  Defaults
-            to ``thing_config.parent / _generated / runtime_config.msgpack``.
+            to ``project_config.parent / _generated / runtime_config.msgpack``.
         device_path: On-device path for the msgpack.  Defaults to
             :data:`RUNTIME_CONFIG_DEVICE_PATH` (Decision 0035 §8).
 
@@ -108,20 +108,20 @@ class WithRuntimeConfig:
         inner: FileSource,
         *,
         workspace_yaml: Path,
-        thing_config: Path,
+        project_config: Path,
         secrets_yaml: Path,
         output_path: Path | None = None,
         device_path: str = RUNTIME_CONFIG_DEVICE_PATH,
     ) -> None:
         self._inner = inner
         self._workspace_yaml = workspace_yaml
-        self._thing_config = thing_config
+        self._project_config = project_config
         self._secrets_yaml = secrets_yaml
         self._device_path = device_path
         self._output_path = (
             output_path
             if output_path is not None
-            else thing_config.parent / GENERATED_DIRNAME / "runtime_config.msgpack"
+            else project_config.parent / GENERATED_DIRNAME / "runtime_config.msgpack"
         )
         if device_path in inner.files():
             raise ValueError(
@@ -133,7 +133,7 @@ class WithRuntimeConfig:
         """Regenerate the msgpack and merge it into the inner file map."""
         build_runtime_config(
             workspace_yaml=self._workspace_yaml,
-            thing_config=self._thing_config,
+            project_config=self._project_config,
             secrets_yaml=self._secrets_yaml,
             output_path=self._output_path,
         )
@@ -147,8 +147,8 @@ class WithRuntimeConfig:
         return self._inner.entrypoint()
 
 
-def thing_directory_source(
-    thing_dir: Path,
+def project_directory_source(
+    project_dir: Path,
     *,
     workspace_yaml: Path,
     secrets_yaml: Path,
@@ -157,20 +157,20 @@ def thing_directory_source(
     extra_excluded: Iterable[str] = (),
     target_runtime: str | None = None,
 ) -> WithRuntimeConfig:
-    """Build a deploy-ready ``FileSource`` for a typical thing directory.
+    """Build a deploy-ready ``FileSource`` for a typical project directory.
 
-    Walks *thing_dir* with :class:`chumicro_deploy.DirectorySource`,
-    skipping the thing's host-side config files and ``_generated/``
+    Walks *project_dir* with :class:`chumicro_deploy.DirectorySource`,
+    skipping the project's host-side config files and ``_generated/``
     output directory, then wraps the result with
     :class:`WithRuntimeConfig` so the merged msgpack rides the deploy.
 
     Args:
-        thing_dir: ``things/<name>/`` directory.
+        project_dir: ``projects/<name>/`` directory.
         workspace_yaml: Path to ``workspace.yml``.
         secrets_yaml: Path to ``secrets.yml``.
         entrypoint: On-device entrypoint path.  Defaults to
             ``"/code.py"`` (CircuitPython convention).  Override to
-            ``"/main.py"`` for MicroPython things.
+            ``"/main.py"`` for MicroPython projects.
         resource_prefix: On-device prefix prepended to each app file.
             Forwarded to :class:`DirectorySource`.
         extra_excluded: Additional filename / directory names to skip
@@ -184,9 +184,9 @@ def thing_directory_source(
             ``deploy`` CLI fills this in from the device's runtime.
 
     Raises:
-        FileNotFoundError: When *thing_dir* contains no recognized
+        FileNotFoundError: When *project_dir* contains no recognized
             config file.
-        NotADirectoryError: When *thing_dir* is not a directory.
+        NotADirectoryError: When *project_dir* is not a directory.
         ValueError: When the directory walk doesn't include
             *entrypoint*.
     """
@@ -199,7 +199,7 @@ def thing_directory_source(
         | set(extra_excluded),
     )
     inner = DirectorySource(
-        thing_dir,
+        project_dir,
         entrypoint=entrypoint,
         resource_prefix=resource_prefix,
         excluded_names=excluded,
@@ -208,6 +208,6 @@ def thing_directory_source(
     return WithRuntimeConfig(
         inner,
         workspace_yaml=workspace_yaml,
-        thing_config=find_thing_config(thing_dir),
+        project_config=find_project_config(project_dir),
         secrets_yaml=secrets_yaml,
     )

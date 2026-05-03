@@ -3,7 +3,7 @@
 Per Decision 0030 §2 + Decision 0035 §8: device format is msgpack;
 canonical on-device path is ``/runtime_config.msgpack``.  This
 module writes the host-side artifact at
-``things/<name>/_generated/runtime_config.msgpack`` (deployer
+``projects/<name>/_generated/runtime_config.msgpack`` (deployer
 overlays it onto device flash later); the path constant for the
 on-device location lives in ``chumicro_config.runtime``
 (Decision 0036) so the write side and the read side stay in sync
@@ -34,7 +34,7 @@ def write_runtime_config(merged: dict[str, Any], output_path: Path) -> None:
     """Write *merged* as msgpack bytes to *output_path*.
 
     Creates the parent directory if needed (the typical caller
-    targets ``things/<name>/_generated/runtime_config.msgpack``,
+    targets ``projects/<name>/_generated/runtime_config.msgpack``,
     where ``_generated/`` is gitignored and may not exist yet).
 
     Args:

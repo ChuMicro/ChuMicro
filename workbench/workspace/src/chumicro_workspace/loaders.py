@@ -4,8 +4,8 @@ Three input shapes per Decision 0035:
 
 * ``workspace.yml`` — workspace-wide defaults (YAML).  ``defaults:``
   block holds the section-namespaced dict that flows into every
-  thing's merged config as the lowest-precedence layer.
-* ``things/<name>/config.toml`` (or ``.yml``) — per-thing config
+  project's merged config as the lowest-precedence layer.
+* ``projects/<name>/config.toml`` (or ``.yml``) — per-project config
   (TOML default; YAML accepted opt-in).  Sections override
   workspace defaults key-by-key.
 * ``secrets.yml`` — gitignored map of secret name → value (YAML).
@@ -84,8 +84,8 @@ def read_workspace_yaml(path: Path) -> dict[str, Any]:
     return defaults
 
 
-def read_thing_config(path: Path) -> dict[str, Any]:
-    """Read a thing's config file — TOML by default, YAML by suffix.
+def read_project_config(path: Path) -> dict[str, Any]:
+    """Read a project's config file — TOML by default, YAML by suffix.
 
     Args:
         path: Path to ``config.toml`` or ``config.yml`` /

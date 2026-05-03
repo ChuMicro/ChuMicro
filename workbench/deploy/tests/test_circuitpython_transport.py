@@ -2563,7 +2563,7 @@ class TestFormatProbeError:
 
 
 class TestListFilesInScopeAndDelete:
-    """CP transport's diff-deploy primitives (multi-thing-staging replacement)."""
+    """CP transport's diff-deploy primitives (multi-project-staging replacement)."""
 
     def test_ram_mode_returns_empty(self) -> None:
         """RAM-mode never wrote to flash → list_files_in_scope yields nothing."""
@@ -2588,7 +2588,7 @@ class TestListFilesInScopeAndDelete:
         """Walks the CIRCUITPY drive + filters to deploy-scope paths."""
         # Plant a mix of in-scope and out-of-scope files on a fake drive.
         (tmp_path / "code.py").write_text("# code")
-        (tmp_path / "active.py").write_text("THING_NAME = 'x'")
+        (tmp_path / "active.py").write_text("PROJECT_NAME = 'x'")
         (tmp_path / "settings.toml").write_text("WIFI = '...'")  # out of scope
         (tmp_path / "boot_out.txt").write_text("ignored")  # out of scope
         (tmp_path / "lib").mkdir()

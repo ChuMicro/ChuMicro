@@ -28,7 +28,7 @@ class CustomLayoutFileSource:
 
     Keys are on-device paths; values are file paths relative to
     the template root.  Non-chumicro layout on purpose — the
-    important thing is that
+    important project is that
     :class:`chumicro_deploy.sources.FileSource` is structural and
     accepts any ``files()`` + ``entrypoint()`` duck type.
     """

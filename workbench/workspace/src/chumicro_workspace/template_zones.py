@@ -4,14 +4,14 @@ Generalizes Decision 0029 §9's `devices.yml` ownership model to the
 whole workspace tree.  Every file falls into one of three zones:
 
 * **Tool-owned** — `run.py`, `AGENTS.md`, `CONTRIBUTING.md`,
-  `pyproject.toml`, `things/_template/`, `_templates/`
+  `pyproject.toml`, `projects/_template/`, `_templates/`
   (template-source files used to materialize user-edited config
   like `secrets.yml` per Decision 0038 §5), `examples/` (Slice 5
   reading-material demos shipped from the canonical template), and
   the agent-skill documents under `.github/skills/`.  `init` writes
   them; `update` rewrites them so newer template releases flow in.
 
-* **User-owned** — `things/<each-real-thing>/`, `secrets.yml`,
+* **User-owned** — `projects/<each-real-project>/`, `secrets.yml`,
   `devices.yml`, `libs/`, `packages/`, `workspace.yml`.  `init`
   writes the starter version (only if absent); `update` never
   touches them.
@@ -50,7 +50,7 @@ TOOL_OWNED_PATHS: frozenset[str] = frozenset({
 #: Directory prefixes whose contents are tool-owned.  Anything below
 #: a listed prefix is rewritten on ``update``.
 TOOL_OWNED_PREFIXES: tuple[str, ...] = (
-    "things/_template/",
+    "projects/_template/",
     "_templates/",
     ".github/skills/",
     "examples/",
@@ -87,9 +87,9 @@ def classify(target_path: str) -> Zone:
     Lookup order: exact-match user-owned (so the starter
     ``workspace.yml`` is never clobbered by ``update``), user-owned
     prefixes (``libs/`` / ``packages/``), exact-match init-only,
-    exact-match tool-owned, tool-owned prefixes (``things/_template/``
+    exact-match tool-owned, tool-owned prefixes (``projects/_template/``
     / ``_templates/``).  Anything that falls through — typically
-    ``things/<a-real-thing>/...`` files the user created post-init —
+    ``projects/<a-real-project>/...`` files the user created post-init —
     counts as user-owned.
     """
     posix = PurePosixPath(target_path).as_posix()
@@ -103,7 +103,7 @@ def classify(target_path: str) -> Zone:
         return Zone.TOOL_OWNED
     if any(posix.startswith(prefix) for prefix in TOOL_OWNED_PREFIXES):
         return Zone.TOOL_OWNED
-    # Default for unrecognized paths is user-owned — `things/<my-thing>/...`
+    # Default for unrecognized paths is user-owned — `projects/<my-project>/...`
     # post-init falls through here, and any custom files the user
     # adds at the workspace root.  We err on the side of "don't
     # touch" for `update`.

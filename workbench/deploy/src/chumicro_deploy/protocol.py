@@ -146,9 +146,9 @@ PROBE_IMPLEMENTATION_SCRIPT = (
 #: A diff-deploy that doesn't see one of these in the new payload
 #: removes the existing copy from the device.  Outside-scope files
 #: (user-uploaded images, hand-edited boot.py, etc.) are never
-#: touched.  Replaces the multi-thing-staging path retired in
+#: touched.  Replaces the multi-project-staging path retired in
 #: workspace-ecosystem Slice 7 (`plans/next-up.md` "Replace
-#: multi-thing staging with scoped diff-deploy").
+#: multi-project staging with scoped diff-deploy").
 DEPLOY_SCOPE_FILES: frozenset[str] = frozenset(
     {
         "/code.py",
@@ -168,7 +168,7 @@ def is_in_deploy_scope(device_path: str) -> bool:
     """Return True when *device_path* falls inside the deploy's managed scope.
 
     Scope rule (Slice 7 follow-on, ``plans/next-up.md`` "Replace
-    multi-thing staging with scoped diff-deploy"):
+    multi-project staging with scoped diff-deploy"):
 
     * The four canonical entrypoint / state files
       (``/code.py``, ``/main.py``, ``/active.py``,
@@ -374,7 +374,7 @@ class TransportProtocol(Protocol):
 
         Transports that don't support persistent state (RAM-mode
         deploys: nothing survives across deploys to be diffed) return
-        an empty list.  See ``plans/next-up.md`` "Replace multi-thing
+        an empty list.  See ``plans/next-up.md`` "Replace multi-project
         staging with scoped diff-deploy" for the design rationale.
         """
         ...
@@ -419,7 +419,7 @@ class TransportProtocol(Protocol):
         RAM-mode / mount-mode deploys (CP RAM, MP mount) are no-ops
         — neither writes to flash, so there's nothing persistent to
         wipe.  Callers don't need to gate on mode; the transport
-        does the right thing.
+        does the right project.
 
         Best-effort: per-file errors are tolerated silently so a
         transient I/O hiccup doesn't block the deploy that follows.

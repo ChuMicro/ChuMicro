@@ -161,7 +161,7 @@ class TestSecretsYamlMissingDoesNotMatchRamModeRule:
         "trace_line",
         [
             "OSError: [Errno 2] ENOENT: '/secrets.yml'",
-            "OSError: [Errno 2] ENOENT: '/lib/things/foo/app.py'",
+            "OSError: [Errno 2] ENOENT: '/lib/projects/foo/app.py'",
         ],
     )
     def test_unrelated_oserror_does_not_match(self, trace_line: str) -> None:

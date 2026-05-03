@@ -57,8 +57,8 @@ from chumicro_deploy.firmware_url import (
     derive_firmware_url,
 )
 
-from chumicro_workspace.boot_shim import thing_boot_source
-from chumicro_workspace.deploy_source import thing_directory_source
+from chumicro_workspace.boot_shim import project_boot_source
+from chumicro_workspace.deploy_source import project_directory_source
 from chumicro_workspace.deploy_targets import read_deploy_targets
 from chumicro_workspace.firmware_support import (
     FirmwareSupportStatus,
@@ -73,7 +73,7 @@ from chumicro_workspace.health import (
     collect_doctor_findings,
     collect_health_findings,
 )
-from chumicro_workspace.import_graph import thing_import_graph_source
+from chumicro_workspace.import_graph import project_import_graph_source
 from chumicro_workspace.onboarding import (
     BoardState,
     detect_board_state,
@@ -83,7 +83,7 @@ from chumicro_workspace.quality import load_quality_config
 from chumicro_workspace.recovery import detect_hints, format_hints
 from chumicro_workspace.workspace import (
     ENTRY_POINT_FILENAMES,
-    ThingClassification,
+    ProjectClassification,
     WorkspaceLayout,
     WorkspaceNotFoundError,
 )
@@ -340,56 +340,56 @@ def _cmd_update(args: argparse.Namespace) -> int:
     return 0
 
 
-def _validate_thing_name(name: str) -> None:
-    """Reject thing names that won't survive ``import things.<name>.app``.
+def _validate_project_name(name: str) -> None:
+    """Reject project names that won't survive ``import projects.<name>.app``.
 
     Accepts three shapes: bare (``"bedroom_sensor"``), slash-form
     (``"upstairs/bedroom_sensor"``), and dotted
     (``"upstairs.bedroom_sensor"``).  Each path segment is validated
     independently — the on-device import path is
-    ``things.<seg1>.<seg2>.app`` so every segment must be a valid
+    ``projects.<seg1>.<seg2>.app`` so every segment must be a valid
     Python identifier (no hyphens, leading digits, leading underscore,
     or Python keywords).
 
     Leading underscore is reserved at every level for
     workspace-internal directories such as ``_template`` /
-    ``_generated``; the recursive thing classifier filters those out,
+    ``_generated``; the recursive project classifier filters those out,
     so a user-created ``_foo/bar`` segment would be invisible to
-    ``things``/``deploy``.
+    ``projects``/``deploy``.
     """
     if not name:
-        raise SystemExit("error: thing name must not be empty")
+        raise SystemExit("error: project name must not be empty")
     segments = re.split(r"[/.]", name)
     for segment in segments:
         if not segment:
             raise SystemExit(
-                f"error: thing name {name!r} has an empty path segment "
+                f"error: project name {name!r} has an empty path segment "
                 "— check for stray '/' or '.' separators.",
             )
         if not segment.isidentifier():
             raise SystemExit(
-                f"error: thing name segment {segment!r} (in {name!r}) "
-                "is not a valid Python identifier — thing directories "
+                f"error: project name segment {segment!r} (in {name!r}) "
+                "is not a valid Python identifier — project directories "
                 "are imported as modules, so each segment must use "
                 "snake_case (letters, digits, underscores; no hyphens "
                 "or spaces; no leading digit).",
             )
         if segment.startswith("_"):
             raise SystemExit(
-                f"error: thing name segment {segment!r} (in {name!r}) "
+                f"error: project name segment {segment!r} (in {name!r}) "
                 "starts with '_' — leading underscore is reserved for "
                 "workspace-internal directories (e.g. _template).",
             )
         if keyword.iskeyword(segment):
             raise SystemExit(
-                f"error: thing name segment {segment!r} (in {name!r}) "
+                f"error: project name segment {segment!r} (in {name!r}) "
                 "is a Python keyword.",
             )
 
 
-# Thing-entrypoint filenames are defined once in
+# Project-entrypoint filenames are defined once in
 # :data:`chumicro_workspace.workspace.ENTRY_POINT_FILENAMES` — single
-# source of truth for "what files mark a thing dir."  Imported above
+# source of truth for "what files mark a project dir."  Imported above
 # alongside the other workspace.py exports.
 
 
@@ -400,18 +400,18 @@ def _ensure_namespace_parents(
 
     Returns the list of namespace dirs newly created so the caller can
     print a per-command trace line.  Pre-existing namespace dirs are
-    reused silently.  Used by both ``new`` and ``rename`` so a thing
+    reused silently.  Used by both ``new`` and ``rename`` so a project
     moved into ``garage/sensors/`` lands with the same host-side
     namespace marker layout ``new`` would produce.
     """
-    workspace.things_dir.mkdir(parents=True, exist_ok=True)
+    workspace.projects_dir.mkdir(parents=True, exist_ok=True)
     parent = target.parent
-    if parent == workspace.things_dir:
+    if parent == workspace.projects_dir:
         return []
     created: list[Path] = []
-    relative_parent = parent.relative_to(workspace.things_dir)
+    relative_parent = parent.relative_to(workspace.projects_dir)
     for segment_count in range(1, len(relative_parent.parts) + 1):
-        namespace_dir = workspace.things_dir.joinpath(
+        namespace_dir = workspace.projects_dir.joinpath(
             *relative_parent.parts[:segment_count],
         )
         init_path = namespace_dir / "__init__.py"
@@ -428,21 +428,21 @@ def _resolve_new_source(
 ) -> Path:
     """Pick the directory ``new`` will copy into the target.
 
-    Without ``--from``, returns ``things/_template/`` (same default as
+    Without ``--from``, returns ``projects/_template/`` (same default as
     before Slice 3 added the flag).  With ``--from <path>``, resolves
     *path* relative to the workspace root and validates that the
-    resulting directory exists and looks like a thing — i.e. has at
+    resulting directory exists and looks like a project — i.e. has at
     least one of :data:`~chumicro_workspace.workspace.ENTRY_POINT_FILENAMES`.
-    An entry-point is the only way to confirm the source is a thing
+    An entry-point is the only way to confirm the source is a project
     (vs. a namespace dir or a docs folder).
     """
     if from_path is None:
-        template = workspace.things_dir / "_template"
+        template = workspace.projects_dir / "_template"
         if not template.is_dir():
             raise SystemExit(
                 f"error: template {template} not found — run "
                 "`chumicro-workspace init` to clone the canonical "
-                "template, or create `things/_template/` by hand.",
+                "template, or create `projects/_template/` by hand.",
             )
         return template
     candidate = (workspace.root / from_path).resolve()
@@ -466,25 +466,25 @@ def _resolve_new_source(
     if not has_entry_point:
         raise SystemExit(
             f"error: --from source {candidate} has no entry-point "
-            "file (app.py / code.py / main.py) — pick a thing "
+            "file (app.py / code.py / main.py) — pick a project "
             "directory, not a namespace.",
         )
     return candidate
 
 
 def _cmd_new(args: argparse.Namespace) -> int:
-    """Create a thing or library scaffold under the workspace.
+    """Create a project or library scaffold under the workspace.
 
-    Default mode (no ``--library``): creates ``things/<path>/`` by
+    Default mode (no ``--library``): creates ``projects/<path>/`` by
     copying a template or example tree.  *path* may be bare
     (``"bedroom_sensor"``), slash-form (``"upstairs/bedroom_sensor"``),
     or dotted (``"upstairs.bedroom_sensor"``).  Intermediate namespace
     directories are auto-created with empty ``__init__.py`` markers
     so host-side tooling can
-    ``import things.upstairs.bedroom_sensor.app`` without surprises.
+    ``import projects.upstairs.bedroom_sensor.app`` without surprises.
     With ``--from <path>`` the source tree is *path* (resolved
-    relative to the workspace root and validated as a thing) instead
-    of ``things/_template/``.
+    relative to the workspace root and validated as a project) instead
+    of ``projects/_template/``.
 
     Library mode (``--library``): creates a chumicro-style library
     tree under ``libraries/<name>/`` (Phase 4 of the workspace-
@@ -493,9 +493,9 @@ def _cmd_new(args: argparse.Namespace) -> int:
     overrides the parent directory.
 
     Each path segment is validated against the Python identifier
-    grammar (``_validate_thing_name``).
+    grammar (``_validate_project_name``).
     """
-    _validate_thing_name(args.name)
+    _validate_project_name(args.name)
     workspace = _resolve_workspace(args)
 
     if args.library or args.workbench:
@@ -540,7 +540,7 @@ def _cmd_new(args: argparse.Namespace) -> int:
         return 0
 
     source = _resolve_new_source(workspace, args.from_path)
-    target = workspace.thing_dir(args.name)
+    target = workspace.project_dir(args.name)
     if target.exists():
         raise SystemExit(f"error: {target} already exists")
     created_namespaces = _ensure_namespace_parents(workspace, target)
@@ -687,10 +687,10 @@ def _classify_dry_run_path(path: str, content: bytes) -> str:
         return "shim"
     if path == "/runtime_config.msgpack":
         return "config"
-    if path.startswith("/lib/things/"):
+    if path.startswith("/lib/projects/"):
         if path.endswith("/__init__.py") and content == b"":
             return "namespace"
-        return "thing"
+        return "project"
     if path.startswith("/lib/"):
         return "library"
     return "file"
@@ -698,7 +698,7 @@ def _classify_dry_run_path(path: str, content: bytes) -> str:
 
 def _render_dry_run_summary(
     *,
-    thing_name: str,
+    project_name: str,
     device: Device,
     layout: str,
     files: dict[str, bytes],
@@ -707,7 +707,7 @@ def _render_dry_run_summary(
 ) -> str:
     """Format the ``deploy --dry-run`` output.
 
-    Two sections: a one-line header naming the thing / device /
+    Two sections: a one-line header naming the project / device /
     layout, and a sorted file list with size + classification.
     The output doubles as user-facing documentation for
     "what does deploy actually do" — link from docs/guide.md +
@@ -719,7 +719,7 @@ def _render_dry_run_summary(
     """
     total_bytes = sum(len(content) for content in files.values())
     lines = [
-        f"would deploy {thing_name} to {device.transport}@{device.address} "
+        f"would deploy {project_name} to {device.transport}@{device.address} "
         f"using {layout} layout",
         f"entrypoint: {entrypoint}",
     ]
@@ -744,29 +744,29 @@ def _render_dry_run_summary(
     return "\n".join(lines)
 
 
-def _resolve_thing_name(workspace: WorkspaceLayout, name: str) -> str:
-    """Resolve a user-typed thing name to a canonical slash-form path.
+def _resolve_project_name(workspace: WorkspaceLayout, name: str) -> str:
+    """Resolve a user-typed project name to a canonical slash-form path.
 
     Accepts three shapes:
 
     * **Bare** (``"door_open"``) — looked up across the whole
-      ``things/`` tree.  Unique match → that thing.  Multiple matches →
+      ``projects/`` tree.  Unique match → that project.  Multiple matches →
       ``SystemExit`` listing the candidates.  No match → caller's
       existence check surfaces the ``FileNotFoundError``-shaped
       message.
     * **Slash** (``"garage/sensors/door_open"``) — direct path.
     * **Dotted** (``"garage.sensors.door_open"``) — same as slash;
       normalised before return because ``/`` is the canonical form
-      used by :meth:`WorkspaceLayout.list_things`.
+      used by :meth:`WorkspaceLayout.list_projects`.
 
-    Slice 2 of the nested-things-and-examples plan; replaces the
+    Slice 2 of the nested-projects-and-examples plan; replaces the
     flat-only ``names = list(args.names)`` lookup that preceded it.
     """
     normalised = name.replace(".", "/")
     if "/" in normalised:
         return normalised
     candidates = [
-        path for path in workspace.list_things()
+        path for path in workspace.list_projects()
         if path == name or path.endswith("/" + name)
     ]
     if len(candidates) == 1:
@@ -774,38 +774,38 @@ def _resolve_thing_name(workspace: WorkspaceLayout, name: str) -> str:
     if len(candidates) > 1:
         candidate_list = "\n".join(f"  {path}" for path in candidates)
         raise SystemExit(
-            f"deploy: {name!r} is ambiguous — multiple things match:\n"
+            f"deploy: {name!r} is ambiguous — multiple projects match:\n"
             f"{candidate_list}\n"
             f"specify the path: `python run.py deploy {candidates[0]}`",
         )
     # No match — let the caller's existence check produce the standard
-    # "thing not found" message after constructing the dir path.
+    # "project not found" message after constructing the dir path.
     return name
 
 
 def _cmd_deploy(args: argparse.Namespace) -> int:
-    """Deploy a thing to a device.
+    """Deploy a project to a device.
 
-    Single-thing default uses :func:`thing_directory_source` — the
-    flat layout where the thing's files land at the device root.
+    Single-project default uses :func:`project_directory_source` — the
+    flat layout where the project's files land at the device root.
     ``--import-graph`` ships only transitively-imported modules.
-    ``--boot-shim`` ships under ``/lib/things/<...>/<name>/``; combine
+    ``--boot-shim`` ships under ``/lib/projects/<...>/<name>/``; combine
     with the workspace-runtime convention (``app.py`` exporting
     ``def run()``).
 
     Positional name accepts bare (``"door_open"``), slash
     (``"garage/sensors/door_open"``), or dotted forms; bare names that
-    match more than one thing in the tree exit 2 with a list of
+    match more than one project in the tree exit 2 with a list of
     candidates.
 
     When invoked with no positional name and the workspace contains
-    exactly one thing, that thing is deployed by default — covers the
-    "I only have one app" beginner case (Decision 0029).  Zero things
-    or multiple things both require an explicit positional.
+    exactly one project, that project is deployed by default — covers the
+    "I only have one app" beginner case (Decision 0029).  Zero projects
+    or multiple projects both require an explicit positional.
 
-    Multi-thing deploys (``deploy <a> <b> <c>``) are not supported —
-    Slice 7 of the nested-things-and-examples workstream retired the
-    multi-thing-staging path; pass one positional per ``deploy`` call.
+    Multi-project deploys (``deploy <a> <b> <c>``) are not supported —
+    Slice 7 of the nested-projects-and-examples workstream retired the
+    multi-project-staging path; pass one positional per ``deploy`` call.
     """
     workspace = _resolve_workspace(args)
 
@@ -813,7 +813,7 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
     # modes that *would* deploy but ship junk to the device — most
     # importantly, secrets.yml carrying ``replace-me`` placeholder
     # values that would land on the board verbatim and silently
-    # break wifi-connect / auth flows.  Skips the slower per-thing
+    # break wifi-connect / auth flows.  Skips the slower per-project
     # AST + config-merge checks that ``doctor`` runs (those add
     # latency to every deploy).  ``--skip-health-check`` opts out
     # for power-users + CI.
@@ -862,9 +862,9 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
     deploy_plan = plan_or_exit
 
     exit_code = 0
-    for thing_name, thing_dir, devices in deploy_plan:
+    for project_name, project_dir, devices in deploy_plan:
         if len(deploy_plan) > 1:
-            print(f"\ndeploy: === {thing_name} ===")
+            print(f"\ndeploy: === {project_name} ===")
         for device in devices:
             if len(devices) > 1 or len(deploy_plan) > 1:
                 print(
@@ -877,10 +877,10 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
             target_runtime = args.target_runtime or str(device.transport)
             if args.boot_shim:
                 layout = "boot-shim"
-                source = thing_boot_source(
-                    thing_dir,
+                source = project_boot_source(
+                    project_dir,
                     workspace=workspace,
-                    thing_name=thing_name,
+                    project_name=project_name,
                     entrypoint_filename=device.effective_entrypoint,
                     target_runtime=target_runtime,
                 )
@@ -889,8 +889,8 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
                 device_entrypoint = (
                     args.entrypoint or f"/{device.effective_entrypoint}"
                 )
-                source = thing_import_graph_source(
-                    thing_dir,
+                source = project_import_graph_source(
+                    project_dir,
                     workspace=workspace,
                     entrypoint_filename=device.effective_entrypoint,
                     device_entrypoint=device_entrypoint,
@@ -898,8 +898,8 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
                 )
             else:
                 layout = "flat"
-                source = thing_directory_source(
-                    thing_dir,
+                source = project_directory_source(
+                    project_dir,
                     workspace_yaml=workspace.workspace_yaml,
                     secrets_yaml=workspace.secrets_yaml,
                     entrypoint=(
@@ -909,7 +909,7 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
                 )
             if args.dry_run:
                 print(_render_dry_run_summary(
-                    thing_name=thing_name,
+                    project_name=project_name,
                     device=device,
                     layout=layout,
                     files=source.files(),
@@ -943,24 +943,24 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
 def _build_deploy_plan(
     workspace: WorkspaceLayout, args: argparse.Namespace,
 ) -> list[tuple[str, Path, list[Device]]] | int:
-    """Resolve the (thing, devices) pairs ``deploy`` will iterate.
+    """Resolve the (project, devices) pairs ``deploy`` will iterate.
 
-    Returns a list of ``(thing_slash_path, thing_dir, [Device, ...])``
+    Returns a list of ``(project_slash_path, project_dir, [Device, ...])``
     tuples or an integer exit code when input validation fails.
 
     Three input shapes:
 
-    * ``--all-things`` — walk ``workspace.yml``'s ``deploy_targets``
-      mapping; one tuple per (thing, devices-it-targets) pair.
+    * ``--all-projects`` — walk ``workspace.yml``'s ``deploy_targets``
+      mapping; one tuple per (project, devices-it-targets) pair.
     * Positional name + ``--all-devices`` — one tuple targeting every
       device in ``devices.yml``.
-    * Positional name (or default-when-only-one-thing) — one tuple
+    * Positional name (or default-when-only-one-project) — one tuple
       whose device list is either the user's ``--device`` /
       ``--runtime`` choice, or — when no per-deploy override is
-      passed — the thing's ``deploy_targets`` entry, falling through
+      passed — the project's ``deploy_targets`` entry, falling through
       to the workspace's ``devices.yml`` default.
     """
-    if args.all_things:
+    if args.all_projects:
         if (
             args.names
             or args.device_id is not None
@@ -968,7 +968,7 @@ def _build_deploy_plan(
             or args.all_devices
         ):
             print(
-                "deploy: --all-things is mutually exclusive with positional "
+                "deploy: --all-projects is mutually exclusive with positional "
                 "names / --device / --runtime / --all-devices.",
                 file=sys.stderr,
             )
@@ -976,8 +976,8 @@ def _build_deploy_plan(
         targets = read_deploy_targets(workspace.workspace_yaml)
         if not targets:
             print(
-                "deploy: --all-things requires a `deploy_targets:` block "
-                f"in {workspace.workspace_yaml.name}.  Map each thing to "
+                "deploy: --all-projects requires a `deploy_targets:` block "
+                f"in {workspace.workspace_yaml.name}.  Map each project to "
                 "one or more device ids and re-run.",
                 file=sys.stderr,
             )
@@ -987,60 +987,60 @@ def _build_deploy_plan(
         )
 
         plan: list[tuple[str, Path, list[Device]]] = []
-        for thing_path, device_ids in targets.items():
-            thing_dir = workspace.thing_dir(thing_path)
-            if not thing_dir.is_dir():
+        for project_path, device_ids in targets.items():
+            project_dir = workspace.project_dir(project_path)
+            if not project_dir.is_dir():
                 print(
-                    f"deploy: deploy_targets references unknown thing "
-                    f"{thing_path!r} (no things/{thing_path}/ directory).",
+                    f"deploy: deploy_targets references unknown project "
+                    f"{project_path!r} (no projects/{project_path}/ directory).",
                     file=sys.stderr,
                 )
                 return 2
             try:
-                thing_devices = [
+                project_devices = [
                     load_devices_yml(workspace.devices_yaml, device_id=did)
                     for did in device_ids
                 ]
             except (FileNotFoundError, ValueError) as error:
                 print(
-                    f"deploy: deploy_targets[{thing_path!r}]: {error}",
+                    f"deploy: deploy_targets[{project_path!r}]: {error}",
                     file=sys.stderr,
                 )
                 return 2
-            plan.append((thing_path, thing_dir, thing_devices))
+            plan.append((project_path, project_dir, project_devices))
         return plan
 
-    # Positional / default thing resolution.
+    # Positional / default project resolution.
     if not args.names:
-        candidates = workspace.list_things()
+        candidates = workspace.list_projects()
         if not candidates:
             print(
-                "deploy: no things to deploy.  Create one with "
+                "deploy: no projects to deploy.  Create one with "
                 "`new <name>` first.",
                 file=sys.stderr,
             )
             return 2
         if len(candidates) > 1:
             print(
-                "deploy: multiple things in workspace; specify which "
+                "deploy: multiple projects in workspace; specify which "
                 f"to deploy ({', '.join(candidates)}).",
                 file=sys.stderr,
             )
             return 2
-        thing_name = candidates[0]
-        print(f"deploy: defaulting to {thing_name} (only thing in workspace).")
+        project_name = candidates[0]
+        print(f"deploy: defaulting to {project_name} (only project in workspace).")
     else:
         if len(args.names) > 1:
             print(
-                "deploy: multi-thing deploys are no longer supported — "
+                "deploy: multi-project deploys are no longer supported — "
                 "pass one positional name per `deploy` call.",
                 file=sys.stderr,
             )
             return 2
-        thing_name = _resolve_thing_name(workspace, args.names[0])
-    thing_dir = workspace.thing_dir(thing_name)
-    if not thing_dir.is_dir():
-        raise SystemExit(f"error: thing {thing_dir} not found")
+        project_name = _resolve_project_name(workspace, args.names[0])
+    project_dir = workspace.project_dir(project_name)
+    if not project_dir.is_dir():
+        raise SystemExit(f"error: project {project_dir} not found")
 
     if args.all_devices:
         if args.device_id is not None or args.runtime is not None:
@@ -1050,15 +1050,15 @@ def _build_deploy_plan(
                 file=sys.stderr,
             )
             return 2
-        return [(thing_name, thing_dir, _resolve_all_devices(workspace))]
+        return [(project_name, project_dir, _resolve_all_devices(workspace))]
 
     # Default-from-mapping: when the user passed neither --device nor
-    # --runtime, consult workspace.yml's deploy_targets[thing] before
+    # --runtime, consult workspace.yml's deploy_targets[project] before
     # falling back to devices.yml's defaults block.  Lets a workspace
     # owner with multiple boards stop typing --device for every deploy.
     if args.device_id is None and args.runtime is None:
         targets = read_deploy_targets(workspace.workspace_yaml)
-        mapped = targets.get(thing_name)
+        mapped = targets.get(project_name)
         if mapped:
             from chumicro_deploy.config.default import (  # noqa: PLC0415
                 load_devices_yml,
@@ -1071,24 +1071,24 @@ def _build_deploy_plan(
                 ]
             except (FileNotFoundError, ValueError) as error:
                 print(
-                    f"deploy: deploy_targets[{thing_name!r}]: {error}",
+                    f"deploy: deploy_targets[{project_name!r}]: {error}",
                     file=sys.stderr,
                 )
                 return 2
-            return [(thing_name, thing_dir, mapped_devices)]
-    return [(thing_name, thing_dir, [_resolve_device(workspace, args)])]
+            return [(project_name, project_dir, mapped_devices)]
+    return [(project_name, project_dir, [_resolve_device(workspace, args)])]
 
 
-def _render_things_tree(
+def _render_projects_tree(
     workspace: WorkspaceLayout,
 ) -> str:
-    """Format the workspace's things as an indented Unicode tree.
+    """Format the workspace's projects as an indented Unicode tree.
 
     Empty workspace prints a friendly marker.  Otherwise:
 
     .. code-block:: text
 
-        things/
+        projects/
         ├── thermostat
         ├── upstairs/
         │   ├── bedroom_sensor
@@ -1099,16 +1099,16 @@ def _render_things_tree(
             └── sensors/
                 └── door_open
 
-    Driven by :meth:`WorkspaceLayout.iter_things_with_classification`
-    so namespace dirs (``upstairs/``) always sit above their thing
+    Driven by :meth:`WorkspaceLayout.iter_projects_with_classification`
+    so namespace dirs (``upstairs/``) always sit above their project
     leaves, matching depth-first display order.
     """
-    items = workspace.iter_things_with_classification()
+    items = workspace.iter_projects_with_classification()
     if not items:
-        return "(no things in this workspace)"
-    classification_by_path: dict[str, ThingClassification] = dict(items)
+        return "(no projects in this workspace)"
+    classification_by_path: dict[str, ProjectClassification] = dict(items)
     # children["parent/path"] = sorted list of leaf segments.  Empty
-    # string is the top level (children of `things/`).
+    # string is the top level (children of `projects/`).
     children: dict[str, list[str]] = {"": []}
     for path in classification_by_path:
         segments = path.split("/")
@@ -1121,7 +1121,7 @@ def _render_things_tree(
     for kids in children.values():
         kids.sort()
 
-    lines = ["things/"]
+    lines = ["projects/"]
 
     def _walk(parent_path: str, prefix: str) -> None:
         kids = children.get(parent_path, [])
@@ -1131,7 +1131,7 @@ def _render_things_tree(
             connector = "└── " if is_last else "├── "
             extension = "    " if is_last else "│   "
             classification = classification_by_path[full_path]
-            if classification is ThingClassification.NAMESPACE:
+            if classification is ProjectClassification.NAMESPACE:
                 lines.append(f"{prefix}{connector}{leaf}/")
                 _walk(full_path, prefix + extension)
             else:
@@ -1141,33 +1141,33 @@ def _render_things_tree(
     return "\n".join(lines)
 
 
-def _cmd_things(args: argparse.Namespace) -> int:
-    """List the things defined in the workspace under ``things/``.
+def _cmd_projects(args: argparse.Namespace) -> int:
+    """List the projects defined in the workspace under ``projects/``.
 
-    Two views: the default :func:`_render_things_tree` (Slice 4)
+    Two views: the default :func:`_render_projects_tree` (Slice 4)
     draws an indented Unicode tree so namespaced workspaces are
     legible at a glance; ``--flat`` falls back to the legacy
-    one-thing-per-line slash-form output (handy for shell pipelines
+    one-project-per-line slash-form output (handy for shell pipelines
     and ``grep``-style filtering).
 
-    Local-only: walks ``things/`` via
-    :meth:`WorkspaceLayout.list_things` and
-    :meth:`WorkspaceLayout.iter_things_with_classification`, both of
+    Local-only: walks ``projects/`` via
+    :meth:`WorkspaceLayout.list_projects` and
+    :meth:`WorkspaceLayout.iter_projects_with_classification`, both of
     which skip ``_template`` and leading ``.`` / ``_`` names.  An
-    on-device variant that probes ``/lib/things/`` for installed
+    on-device variant that probes ``/lib/projects/`` for installed
     payloads is a follow-on once the REPL one-shot pattern lands as
     a public helper.
     """
     workspace = _resolve_workspace(args)
     if args.flat:
-        names = workspace.list_things()
+        names = workspace.list_projects()
         if not names:
-            print("(no things in this workspace)")
+            print("(no projects in this workspace)")
             return 0
         for name in names:
             print(name)
         return 0
-    print(_render_things_tree(workspace))
+    print(_render_projects_tree(workspace))
     return 0
 
 
@@ -1221,9 +1221,9 @@ def _cmd_status(args: argparse.Namespace) -> int:
 
     Phase 2a of the workspace-ecosystem workstream.  Runs the four
     fast static checks (workspace.yml validity, devices.yml count,
-    secrets.yml placeholder detection, things tree summary).
+    secrets.yml placeholder detection, projects tree summary).
     ``doctor`` (Phase 2b) is the stricter sibling that adds Python
-    version, per-thing AST scans for ``run()``, and a config-merge
+    version, per-project AST scans for ``run()``, and a config-merge
     dry-run that catches unresolved ``!secret`` references.
     """
     workspace = _resolve_workspace(args)
@@ -1237,16 +1237,16 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
 
     * ``check_python_version`` — is the host Python on a supported
       version (3.11+).
-    * ``check_thing_run_functions`` — AST-walks each thing's
+    * ``check_project_run_functions`` — AST-walks each project's
       ``app.py`` and verifies a top-level ``run()`` definition
       exists (the workspace_runtime boot contract).
     * ``check_secret_references`` — performs a config-merge
-      dry-run for every thing and catches ``!secret`` references
+      dry-run for every project and catches ``!secret`` references
       that don't resolve against ``secrets.yml``.
 
     Same renderer + exit-code rules as ``status``: errors flip exit
-    to 1, warnings stay at 0.  Per-thing failures list the failing
-    thing names in the hint so the user can navigate straight to
+    to 1, warnings stay at 0.  Per-project failures list the failing
+    project names in the hint so the user can navigate straight to
     the broken file.
 
     Phase 2b of the workspace-ecosystem workstream.  Per-device
@@ -1282,7 +1282,7 @@ def _cmd_demo(args: argparse.Namespace) -> int:
 
     Step 5 of the beginner-onramp workstream — gives a user with a
     freshly-registered board something to ship on day one without
-    having to write code, configure wifi, or pick a thing.  Runs
+    having to write code, configure wifi, or pick a project.  Runs
     synchronously: deploys the payload, captures execute output,
     prints it.  Total wall-clock ~5 seconds.
 
@@ -1559,12 +1559,12 @@ def _cmd_bootstrap(  # noqa: C901, PLR0912 — wizard branches stay flat for rea
     print()
     print("bootstrap: ready.  Next steps:")
     print(
-        "  python run.py new <thing-name>      "
-        "# create a new thing under things/",
+        "  python run.py new <project-name>      "
+        "# create a new project under projects/",
     )
     print(
         "  python run.py deploy                "
-        "# deploy your only thing (no name needed)",
+        "# deploy your only project (no name needed)",
     )
     print(
         "  python run.py repl                  "
@@ -1644,10 +1644,10 @@ def _cmd_preflight(args: argparse.Namespace) -> int:
 
 
 def _cmd_dump_config(args: argparse.Namespace) -> int:
-    """Print the merged runtime config a thing would receive on deploy.
+    """Print the merged runtime config a project would receive on deploy.
 
     Runs the deploy-time pipeline up to (but not through) the msgpack
-    write — workspace defaults + thing config + secrets resolution —
+    write — workspace defaults + project config + secrets resolution —
     then pretty-prints the result.  Lets users see exactly what their
     on-device ``chumicro_config.runtime`` will read without actually
     deploying.
@@ -1660,10 +1660,10 @@ def _cmd_dump_config(args: argparse.Namespace) -> int:
     diffability; ``--repr`` switches to ``repr()`` for cases where
     the raw Python types matter (e.g. seeing ``bytes`` vs ``str``).
     """
-    from chumicro_workspace.deploy_source import find_thing_config  # noqa: PLC0415
+    from chumicro_workspace.deploy_source import find_project_config  # noqa: PLC0415
     from chumicro_workspace.loaders import (  # noqa: PLC0415
+        read_project_config,
         read_secrets_yaml,
-        read_thing_config,
         read_workspace_yaml,
     )
     from chumicro_workspace.merge import merge_configs  # noqa: PLC0415
@@ -1673,20 +1673,20 @@ def _cmd_dump_config(args: argparse.Namespace) -> int:
     )
 
     workspace = _resolve_workspace(args)
-    thing_dir = workspace.thing_dir(_resolve_thing_name(workspace, args.thing))
-    if not thing_dir.is_dir():
-        raise SystemExit(f"error: thing {thing_dir} not found")
+    project_dir = workspace.project_dir(_resolve_project_name(workspace, args.project))
+    if not project_dir.is_dir():
+        raise SystemExit(f"error: project {project_dir} not found")
 
     workspace_dict = read_workspace_yaml(workspace.workspace_yaml)
-    thing_config_path = find_thing_config(thing_dir)
-    thing_dict = (
-        read_thing_config(thing_config_path) if thing_config_path else {}
+    project_config_path = find_project_config(project_dir)
+    project_dict = (
+        read_project_config(project_config_path) if project_config_path else {}
     )
     secrets = (
         read_secrets_yaml(workspace.secrets_yaml)
         if workspace.secrets_yaml.is_file() else {}
     )
-    merged = merge_configs(workspace_dict, thing_dict)
+    merged = merge_configs(workspace_dict, project_dict)
     try:
         resolved = resolve_secrets(merged, secrets)
     except UnresolvedSecretError as exception:
@@ -1751,9 +1751,9 @@ def _cmd_lint(args: argparse.Namespace) -> int:
     return completed.returncode
 
 
-#: Default tail-window duration (seconds) when ``repl <thing>`` is
+#: Default tail-window duration (seconds) when ``repl <project>`` is
 #: invoked without an explicit ``--tail SECONDS`` value.  Picked to
-#: cover the common "deploy a heartbeat thing, watch a few cycles
+#: cover the common "deploy a heartbeat project, watch a few cycles
 #: print, exit clean" inner-loop pattern; users with long boot
 #: sequences can override.
 _DEFAULT_REPL_TAIL_SECONDS: float = 30.0
@@ -1785,29 +1785,29 @@ def _cmd_repl(args: argparse.Namespace) -> int:
     * ``repl`` — interactive REPL on the selected board.
     * ``repl --tail SECONDS`` — capture the next *SECONDS* of REPL
       output, exit cleanly.
-    * ``repl <thing> [--tail SECONDS]`` — deploy *thing* to the
+    * ``repl <project> [--tail SECONDS]`` — deploy *project* to the
       board first, then tail.  Combines what used to be
-      ``deploy <thing> && repl --tail`` into one command.  When
+      ``deploy <project> && repl --tail`` into one command.  When
       ``--tail`` is omitted with a positional, defaults to
       :data:`_DEFAULT_REPL_TAIL_SECONDS`.
 
-    *thing* accepts bare / slash / dotted forms — same shape as
+    *project* accepts bare / slash / dotted forms — same shape as
     ``deploy``.  The deploy uses the workspace-runtime boot-shim
-    layout (``thing_boot_source``); for flat-layout deploys, run
+    layout (``project_boot_source``); for flat-layout deploys, run
     ``deploy`` and ``repl --tail`` separately.
     """
     workspace = _resolve_workspace(args)
     device = _resolve_device(workspace, args)
 
-    if args.thing is not None:
-        resolved_name = _resolve_thing_name(workspace, args.thing)
-        thing_dir = workspace.thing_dir(resolved_name)
-        if not thing_dir.is_dir():
-            raise SystemExit(f"error: thing {thing_dir} not found")
-        source = thing_boot_source(
-            thing_dir,
+    if args.project is not None:
+        resolved_name = _resolve_project_name(workspace, args.project)
+        project_dir = workspace.project_dir(resolved_name)
+        if not project_dir.is_dir():
+            raise SystemExit(f"error: project {project_dir} not found")
+        source = project_boot_source(
+            project_dir,
             workspace=workspace,
-            thing_name=resolved_name,
+            project_name=resolved_name,
             entrypoint_filename=device.effective_entrypoint,
         )
         print(f"repl: deploying {resolved_name} ...")
@@ -2067,41 +2067,41 @@ def _cmd_add_device(args: argparse.Namespace) -> int:
 
 
 def _cmd_rename(args: argparse.Namespace) -> int:
-    """Rename a thing directory or a device id.
+    """Rename a project directory or a device id.
 
-    Two modes (mutually exclusive): ``--thing OLD NEW`` moves the
-    thing directory under ``things/`` (Slice 4 — both names accept
+    Two modes (mutually exclusive): ``--project OLD NEW`` moves the
+    project directory under ``projects/`` (Slice 4 — both names accept
     bare / slash / dotted forms, intermediate namespace dirs are
     auto-created when the new path is in a fresh namespace);
     ``--device OLD NEW`` rewrites the devices.yml entry id + every
     reference to it under ``defaults:``.
 
-    A thing rename does NOT touch already-deployed devices —
-    re-deploy the thing under its new name to refresh ``/active.py``
+    A project rename does NOT touch already-deployed devices —
+    re-deploy the project under its new name to refresh ``/active.py``
     on each board.
     """
     workspace = _resolve_workspace(args)
 
-    if (args.thing is None) == (args.device is None):
+    if (args.project is None) == (args.device is None):
         print(
-            "rename: pass exactly one of --thing OLD NEW or --device OLD NEW",
+            "rename: pass exactly one of --project OLD NEW or --device OLD NEW",
             file=sys.stderr,
         )
         return 2
 
-    if args.thing is not None:
-        old_input, new_input = args.thing
-        _validate_thing_name(old_input)
-        _validate_thing_name(new_input)
+    if args.project is not None:
+        old_input, new_input = args.project
+        _validate_project_name(old_input)
+        _validate_project_name(new_input)
         # Old name accepts bare-name disambiguation against the live
         # tree (mirrors deploy / switch).  New name is just normalised
         # — it doesn't exist yet so disambiguation doesn't apply.
-        resolved_old = _resolve_thing_name(workspace, old_input)
+        resolved_old = _resolve_project_name(workspace, old_input)
         resolved_new = new_input.replace(".", "/")
-        old_path = workspace.thing_dir(resolved_old)
-        new_path = workspace.thing_dir(resolved_new)
+        old_path = workspace.project_dir(resolved_old)
+        new_path = workspace.project_dir(resolved_new)
         if not old_path.is_dir():
-            print(f"rename: thing {old_path} not found", file=sys.stderr)
+            print(f"rename: project {old_path} not found", file=sys.stderr)
             return 1
         if new_path.exists():
             print(f"rename: {new_path} already exists", file=sys.stderr)
@@ -2132,7 +2132,7 @@ def _cmd_rename(args: argparse.Namespace) -> int:
 
 
 def _cmd_sim(_args: argparse.Namespace) -> int:
-    """Run a thing in CPython simulation."""
+    """Run a project in CPython simulation."""
     return _stub("Phase 4a (sim runner — slice TBD after Slices 3-7)")
 
 
@@ -2169,7 +2169,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="chumicro-workspace",
         description=(
             "Host-side dispatcher for ChuMicro project workspaces — "
-            "deploy things, probe boards, open REPLs, and manage "
+            "deploy projects, probe boards, open REPLs, and manage "
             "devices.yml from one CLI."
         ),
     )
@@ -2239,7 +2239,7 @@ def build_parser() -> argparse.ArgumentParser:
     new_parser = subparsers.add_parser(
         "new",
         help=(
-            "Create things/<path>/ by copying a template or example tree.  "
+            "Create projects/<path>/ by copying a template or example tree.  "
             "Path may be nested (slash- or dotted-form)."
         ),
     )
@@ -2247,7 +2247,7 @@ def build_parser() -> argparse.ArgumentParser:
     new_parser.add_argument(
         "name",
         help=(
-            "Name of the new thing (becomes things/<path>/).  Accepts "
+            "Name of the new project (becomes projects/<path>/).  Accepts "
             "bare ('bedroom_sensor'), slash ('upstairs/bedroom_sensor'), "
             "or dotted ('upstairs.bedroom_sensor') forms.  Intermediate "
             "namespace directories are auto-created."
@@ -2259,9 +2259,9 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "Copy from this directory (relative to the workspace root) "
-            "instead of things/_template/.  Source must contain an "
+            "instead of projects/_template/.  Source must contain an "
             "app.py / code.py / main.py entry-point.  Useful for "
-            "`new garage/heater --from examples/two_things/server`."
+            "`new garage/heater --from examples/two_projects/server`."
         ),
     )
     new_parser.add_argument(
@@ -2365,7 +2365,7 @@ def build_parser() -> argparse.ArgumentParser:
     # ----- deploy --------------------------------------------------------
     deploy_parser = subparsers.add_parser(
         "deploy",
-        help="Deploy one or more things — app code + merged runtime config msgpack.",
+        help="Deploy one or more projects — app code + merged runtime config msgpack.",
     )
     _add_workspace_arg(deploy_parser)
     _add_device_selector(deploy_parser)
@@ -2374,10 +2374,10 @@ def build_parser() -> argparse.ArgumentParser:
         nargs="*",
         metavar="name",
         help=(
-            "Name of the thing under things/ to deploy.  Optional when "
-            "the workspace contains exactly one thing — that thing is "
+            "Name of the project under projects/ to deploy.  Optional when "
+            "the workspace contains exactly one project — that project is "
             "deployed by default.  One positional per `deploy` call; "
-            "multi-thing deploys are no longer supported."
+            "multi-project deploys are no longer supported."
         ),
     )
     deploy_parser.add_argument(
@@ -2393,7 +2393,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "AST-walk the entrypoint and ship only transitively-"
-            "imported modules instead of the full thing directory.  "
+            "imported modules instead of the full project directory.  "
             "Reads workspace.yml's library_sources: for overrides."
         ),
     )
@@ -2401,7 +2401,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--boot-shim",
         action="store_true",
         help=(
-            "Ship the thing under /lib/things/<...>/<name>/ + write a "
+            "Ship the project under /lib/projects/<...>/<name>/ + write a "
             "fixed code.py shim + active.py + workspace_runtime "
             "payload (Decision 0029 §3).  app.py must export run()."
         ),
@@ -2426,13 +2426,13 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     deploy_parser.add_argument(
-        "--all-things",
+        "--all-projects",
         action="store_true",
         help=(
-            "Deploy every thing in workspace.yml's `deploy_targets:` "
+            "Deploy every project in workspace.yml's `deploy_targets:` "
             "mapping to its declared device(s).  Mutually exclusive "
             "with positional names / --device / --runtime / "
-            "--all-devices.  Per-thing failures don't abort the loop; "
+            "--all-devices.  Per-project failures don't abort the loop; "
             "exit code reflects whether any failed."
         ),
     )
@@ -2485,13 +2485,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     deploy_parser.set_defaults(func=_cmd_deploy)
 
-    # ----- things --------------------------------------------------------
-    things_parser = subparsers.add_parser(
-        "things",
-        help="List the things defined under the workspace's things/ tree.",
+    # ----- projects --------------------------------------------------------
+    projects_parser = subparsers.add_parser(
+        "projects",
+        help="List the projects defined under the workspace's projects/ tree.",
     )
-    _add_workspace_arg(things_parser)
-    things_parser.add_argument(
+    _add_workspace_arg(projects_parser)
+    projects_parser.add_argument(
         "--flat",
         action="store_true",
         help=(
@@ -2499,7 +2499,7 @@ def build_parser() -> argparse.ArgumentParser:
             "tree view (handy for shell pipelines)."
         ),
     )
-    things_parser.set_defaults(func=_cmd_things)
+    projects_parser.set_defaults(func=_cmd_projects)
 
     # ----- status --------------------------------------------------------
     status_parser = subparsers.add_parser(
@@ -2507,7 +2507,7 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Print a one-line-per-check workspace health snapshot "
             "(workspace.yml validity, devices.yml count, secrets.yml "
-            "placeholders, things tree summary)."
+            "placeholders, projects tree summary)."
         ),
     )
     _add_workspace_arg(status_parser)
@@ -2518,7 +2518,7 @@ def build_parser() -> argparse.ArgumentParser:
         "doctor",
         help=(
             "Strict sibling of `status` — adds Python version check, "
-            "per-thing AST scan for `run()`, and a config-merge "
+            "per-project AST scan for `run()`, and a config-merge "
             "dry-run that catches unresolved !secret references."
         ),
     )
@@ -2591,7 +2591,7 @@ def build_parser() -> argparse.ArgumentParser:
     # ----- sim -----------------------------------------------------------
     sim_parser = subparsers.add_parser(
         "sim",
-        help="Run a thing in CPython simulation (planned, not yet shipped).",
+        help="Run a project in CPython simulation (planned, not yet shipped).",
     )
     _add_workspace_arg(sim_parser)
     sim_parser.set_defaults(func=_cmd_sim)
@@ -2638,15 +2638,15 @@ def build_parser() -> argparse.ArgumentParser:
     dump_config_parser = subparsers.add_parser(
         "dump-config",
         help=(
-            "Print the merged runtime config a thing would receive on "
-            "deploy (workspace defaults + thing config + resolved secrets), "
+            "Print the merged runtime config a project would receive on "
+            "deploy (workspace defaults + project config + resolved secrets), "
             "without actually deploying."
         ),
     )
     _add_workspace_arg(dump_config_parser)
     dump_config_parser.add_argument(
-        "thing",
-        help="Thing name (bare / slash / dotted).",
+        "project",
+        help="Project name (bare / slash / dotted).",
     )
     dump_config_parser.add_argument(
         "--repr",
@@ -2662,19 +2662,19 @@ def build_parser() -> argparse.ArgumentParser:
     repl_parser = subparsers.add_parser(
         "repl",
         help=(
-            "Interactive REPL on the selected board, or deploy a thing "
+            "Interactive REPL on the selected board, or deploy a project "
             "and tail its output in one command."
         ),
     )
     _add_workspace_arg(repl_parser)
     _add_device_selector(repl_parser)
     repl_parser.add_argument(
-        "thing",
+        "project",
         nargs="?",
         default=None,
         help=(
-            "Optional thing name (bare / slash / dotted).  When given, "
-            "deploys the thing first then enters tail mode for "
+            "Optional project name (bare / slash / dotted).  When given, "
+            "deploys the project first then enters tail mode for "
             "--tail SECONDS (default 30)."
         ),
     )
@@ -2685,7 +2685,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="SECONDS",
         help=(
             "Run in tail mode for SECONDS instead of the interactive "
-            "TUI.  When a positional thing is given, defaults to 30s."
+            "TUI.  When a positional project is given, defaults to 30s."
         ),
     )
     repl_parser.add_argument(
@@ -2701,7 +2701,7 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Skip the recovery-coaching wrapper around session-start "
             "errors (port-busy / port-not-found / permission-denied / "
-            "raw-REPL-unresponsive).  With a positional thing, also "
+            "raw-REPL-unresponsive).  With a positional project, also "
             "skips the wrapper around the deploy-then-tail flow.  "
             "Use in CI / scripted flows that can't answer retry "
             "prompts."
@@ -2721,7 +2721,7 @@ def build_parser() -> argparse.ArgumentParser:
             "raw REPL framing or paste mode).  `auto` (default) "
             "picks `line` when stdin is a TTY and `passthrough` "
             "otherwise.  No effect with `--tail` or with a "
-            "positional thing (those flows always use the tail "
+            "positional project (those flows always use the tail "
             "follower)."
         ),
     )
@@ -2746,16 +2746,16 @@ def build_parser() -> argparse.ArgumentParser:
     # ----- rename --------------------------------------------------------
     rename_parser = subparsers.add_parser(
         "rename",
-        help="Rename a thing directory or a device id.",
+        help="Rename a project directory or a device id.",
     )
     _add_workspace_arg(rename_parser)
     rename_target = rename_parser.add_mutually_exclusive_group(required=True)
     rename_target.add_argument(
-        "--thing",
+        "--project",
         nargs=2,
         metavar=("OLD", "NEW"),
         default=None,
-        help="Rename things/OLD/ to things/NEW/.",
+        help="Rename projects/OLD/ to projects/NEW/.",
     )
     rename_target.add_argument(
         "--device",

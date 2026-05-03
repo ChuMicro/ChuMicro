@@ -1,6 +1,6 @@
 """App-level deploy-failure recovery hints.
 
-When a thing's own code fails on the device, the deploy command's
+When a project's own code fails on the device, the deploy command's
 captured traceback is the only signal the user gets.  Raw tracebacks
 are precise about *what* broke but offer no guidance on *why* — the
 common workspace-shaped causes (missing `!secret`, un-merged config
@@ -16,7 +16,7 @@ Sibling to :mod:`chumicro_deploy.recovery` (which handles
 *transport* failures — wedged macOS FSKit mounts, no-REPL boards,
 etc.).  Different layer: ``chumicro-deploy``'s recovery is about
 "why didn't the deploy land"; this module is about "the deploy
-landed but the thing crashed."
+landed but the project crashed."
 
 Phase 2d of the workspace-ecosystem workstream.
 """
@@ -73,7 +73,7 @@ _HINT_TABLE: tuple[tuple[re.Pattern[str], str, str], ...] = (
         "ram-mode-config",
         (
             "RAM-mode deploys don't persist `/runtime_config.msgpack` "
-            "— switch to flash mode for things that read runtime "
+            "— switch to flash mode for projects that read runtime "
             "config (set `defaults.deploy_mode: flash` in devices.yml "
             "or override per-device)."
         ),
@@ -95,9 +95,9 @@ _HINT_TABLE: tuple[tuple[re.Pattern[str], str, str], ...] = (
         re.compile(r"KeyError:\s*'([^']+)'"),
         "missing-config-key",
         (
-            "missing config key `{0}` — check things/<thing>/config.toml "
+            "missing config key `{0}` — check projects/<project>/config.toml "
             "or workspace.yml's `[defaults]` block.  Use "
-            "`python run.py deploy <thing> --dry-run` to inspect what "
+            "`python run.py deploy <project> --dry-run` to inspect what "
             "the merged runtime config carries."
         ),
     ),

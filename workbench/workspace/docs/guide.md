@@ -1,6 +1,6 @@
 # Guide
 
-`chumicro-workspace` is the host-side CLI for a ChuMicro project workspace — a `things/` + `devices.yml` repo cloned from [`ChuMicro/ChuMicro-Workspace-Template`](https://github.com/ChuMicro/ChuMicro-Workspace-Template) (or a fork; see [Decision 0038](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0038-workspace-bootstrap-via-clone.md)).  It composes [`chumicro-deploy`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/deploy) and [`chumicro-repl`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/repl) with the workspace-shaped pieces those packages don't own: a deploy-time config-merge pipeline, a CLI that reads `workspace.yml`, three-zone `devices.yml` round-trip, board-state onboarding, firmware URL derivation, and the boot-shim layout that lets one board host multiple things.
+`chumicro-workspace` is the host-side CLI for a ChuMicro project workspace — a `projects/` + `devices.yml` repo cloned from [`ChuMicro/ChuMicro-Workspace-Template`](https://github.com/ChuMicro/ChuMicro-Workspace-Template) (or a fork; see [Decision 0038](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0038-workspace-bootstrap-via-clone.md)).  It composes [`chumicro-deploy`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/deploy) and [`chumicro-repl`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/repl) with the workspace-shaped pieces those packages don't own: a deploy-time config-merge pipeline, a CLI that reads `workspace.yml`, three-zone `devices.yml` round-trip, board-state onboarding, firmware URL derivation, and the boot-shim layout that lets one board host multiple projects.
 
 This guide walks through the typical workflows end-to-end.  See the [README](https://github.com/ChuMicro/ChuMicro/blob/main/workbench/workspace/README.md) for the at-a-glance command list and [API reference](api.md) for the auto-generated module docs.
 
@@ -15,9 +15,9 @@ my-workspace/
 ├── secrets.yml            # gitignored — credentials referenced via !secret
 ├── run.py                 # tiny shim: from chumicro_workspace.cli import main
 ├── pyproject.toml
-├── things/
+├── projects/
 │   ├── _template/         # `python run.py new` copies from here
-│   ├── back-porch/        # one thing
+│   ├── back-porch/        # one project
 │   │   ├── config.toml
 │   │   └── app.py         # def run(): ...
 │   └── kitchen/
@@ -32,19 +32,19 @@ my-workspace/
 └── packages/              # gitignored, resolved from manifest at sync time
 ```
 
-The two requirements are `workspace.yml` (`WorkspaceLayout` walks up from cwd to find it, git-style) and `things/`.
+The two requirements are `workspace.yml` (`WorkspaceLayout` walks up from cwd to find it, git-style) and `projects/`.
 
 ### `libs/` vs `libraries/` — when to use each
 
-Both hold code your things can `import`.  Pick by *weight*:
+Both hold code your projects can `import`.  Pick by *weight*:
 
 | Want to ship… | Drop it under | Imports look like | Notes |
 |---|---|---|---|
-| A 50-line helper your things share | `libs/foo.py` | `from libs.foo import bar` | No tests, no version, no scaffolding. |
+| A 50-line helper your projects share | `libs/foo.py` | `from libs.foo import bar` | No tests, no version, no scaffolding. |
 | A full chumicro-style library you might publish someday | `libraries/<name>/` (via `new --library`) | `import <name>` | Gets `src/`, `tests/`, `docs/`, `examples/`, `pyproject.toml`, `VERSION` — same shape the chumicro mono-repo uses. |
 | A third-party package | `packages/` (via `sync`) | `import <name>` | Gitignored mirror cache. |
 
-The import-graph search path resolves in this order: explicit `library_sources:` overrides → `libs/` → every `libraries/<name>/src/` (auto-discovered) → `packages/`. So a library scaffolded with `new --library buttons` is importable as `import buttons` from any thing without further wiring.
+The import-graph search path resolves in this order: explicit `library_sources:` overrides → `libs/` → every `libraries/<name>/src/` (auto-discovered) → `packages/`. So a library scaffolded with `new --library buttons` is importable as `import buttons` from any project without further wiring.
 
 ## Day-zero: bring up a board
 
@@ -95,27 +95,27 @@ python run.py status
 # DEVICES.YML     ✓ 2 devices registered
 # SECRETS.YML     ⚠ placeholder values: wifi_password
 #                   hint: edit secrets.yml — replace `replace-me` …
-# THINGS          ✓ 4 things: garage/sensors/door_open, …
+# PROJECTS          ✓ 4 projects: garage/sensors/door_open, …
 ```
 
-`doctor` is the strict sibling — runs every status check plus a Python-version probe, an AST scan for `def run` in each thing's `app.py`, and a config-merge dry-run that catches `!secret` references with no matching key:
+`doctor` is the strict sibling — runs every status check plus a Python-version probe, an AST scan for `def run` in each project's `app.py`, and a config-merge dry-run that catches `!secret` references with no matching key:
 
 ```bash
 python run.py doctor
-# Adds rows for PYTHON, THING run() defs, SECRET refs.
+# Adds rows for PYTHON, PROJECT run() defs, SECRET refs.
 # Exit code is 1 only on ERROR-level findings; warnings stay 0 so
 # the command composes cleanly with shell-pipe checks.
 ```
 
-## Building a thing
+## Building a project
 
 ```bash
-# Copy things/_template/ into things/back-porch/.
+# Copy projects/_template/ into projects/back-porch/.
 python run.py new back-porch
 
 # Nested layouts are first-class — intermediate namespace dirs are
 # auto-created with empty __init__.py markers so host-side imports
-# (`from things.garage.sensors.door_open.app import run`) work.
+# (`from projects.garage.sensors.door_open.app import run`) work.
 python run.py new garage/sensors/door_open
 python run.py new garage.sensors.door_open      # dotted form, same effect
 
@@ -130,16 +130,16 @@ python run.py new gpio --library
 
 ### How config flows from your edits to the device
 
-The runtime config a thing receives at boot is the merge of three host-side sources, with secret references resolved at deploy time:
+The runtime config a project receives at boot is the merge of three host-side sources, with secret references resolved at deploy time:
 
 ```
-secrets.yml                workspace.yml              things/<name>/config.toml
+secrets.yml                workspace.yml              projects/<name>/config.toml
    (host)                     (host)                          (host)
       │                          │                              │
       └──────────────┬───────────┴──────────────────────────────┘
                      ▼
                  merge_configs                  ← chumicro_workspace.merge
-                     │                              (deep per-key merge: thing
+                     │                              (deep per-key merge: project
                      ▼                               wins over workspace defaults)
                  resolve_secrets                ← chumicro_workspace.secrets
                      │                              (replaces "!secret <name>"
@@ -153,53 +153,53 @@ secrets.yml                workspace.yml              things/<name>/config.toml
               chumicro_config.runtime           ← READS the msgpack on the device
 ```
 
-Use `chumicro-workspace dump-config <thing>` to print the merged dict your thing would receive without actually deploying — useful for "is this `!secret` resolving to what I think it is?" debugging.
+Use `chumicro-workspace dump-config <project>` to print the merged dict your project would receive without actually deploying — useful for "is this `!secret` resolving to what I think it is?" debugging.
 
-`config.toml` carries the per-thing knobs.  Use `!secret <name>` to reference values from `secrets.yml`:
+`config.toml` carries the per-project knobs.  Use `!secret <name>` to reference values from `secrets.yml`:
 
 ```toml
-# things/back-porch/config.toml
+# projects/back-porch/config.toml
 [wifi]
 ssid = "HomeNet"
 password = "!secret wifi_password"
 
 [mqtt]
 host = "192.168.1.10"
-topic = "things/back-porch/state"
+topic = "projects/back-porch/state"
 ```
 
 `app.py` exports a `run()` function — `workspace_runtime.boot()` calls it after import:
 
 ```python
-# things/back-porch/app.py
+# projects/back-porch/app.py
 import time
 
 def run():
     print("back-porch coming up")
     while True:
-        # ... your thing's main loop ...
+        # ... your project's main loop ...
         time.sleep(1)
 ```
 
 ## Deploying
 
-### Single thing, default flat layout
+### Single project, default flat layout
 
 ```bash
 python run.py deploy back-porch
 ```
 
-Ships the thing's directory contents to the device root via [`thing_directory_source`](api.md): `app.py` lands at `/app.py`, `config.toml` is host-only and skipped, `_generated/` is skipped.  The merged runtime config msgpack rides along at `/runtime_config.msgpack` (the canonical path Decision 0035 §8 reserves).  The device entrypoint is `/code.py` for CircuitPython and `/main.py` for MicroPython by default; override with `--entrypoint`.
+Ships the project's directory contents to the device root via [`project_directory_source`](api.md): `app.py` lands at `/app.py`, `config.toml` is host-only and skipped, `_generated/` is skipped.  The merged runtime config msgpack rides along at `/runtime_config.msgpack` (the canonical path Decision 0035 §8 reserves).  The device entrypoint is `/code.py` for CircuitPython and `/main.py` for MicroPython by default; override with `--entrypoint`.
 
-### Single thing, AST-walked
+### Single project, AST-walked
 
 ```bash
 python run.py deploy back-porch --import-graph
 ```
 
-Routes through [`thing_import_graph_source`](api.md): AST-parses the entrypoint, walks `import` / `from ... import` targets, resolves against the workspace's `libs/` + `packages/` + any `library_sources:` overrides in `workspace.yml`, and ships only the reachable modules.  Useful for things that import shared libs.
+Routes through [`project_import_graph_source`](api.md): AST-parses the entrypoint, walks `import` / `from ... import` targets, resolves against the workspace's `libs/` + `packages/` + any `library_sources:` overrides in `workspace.yml`, and ships only the reachable modules.  Useful for projects that import shared libs.
 
-### Single thing, boot-shim layout
+### Single project, boot-shim layout
 
 ```bash
 python run.py deploy back-porch --boot-shim
@@ -209,32 +209,32 @@ Stages the [Decision 0029 §3](https://github.com/ChuMicro/ChuMicro/blob/main/pl
 
 ```
 /code.py                                  # import workspace_runtime; workspace_runtime.boot()
-/active.py                                # THING_NAME = "back-porch"
+/active.py                                # PROJECT_NAME = "back-porch"
 /runtime_config.msgpack                   # merged config
 /lib/workspace_runtime/__init__.py        # boot module
-/lib/things/__init__.py
-/lib/things/back-porch/
+/lib/projects/__init__.py
+/lib/projects/back-porch/
     __init__.py
     app.py
     runtime_config.msgpack
 ```
 
-`workspace_runtime.boot()` reads `THING_NAME` from `/active.py`, imports `things.back-porch.app`, and calls `app.run()`.
+`workspace_runtime.boot()` reads `PROJECT_NAME` from `/active.py`, imports `projects.back-porch.app`, and calls `app.run()`.
 
-### Nested thing names
+### Nested project names
 
-Slash- or dotted-form thing names produce a parallel namespace tree under `/lib/things/`.  `python run.py deploy garage/sensors/door_open --boot-shim` lays down:
+Slash- or dotted-form project names produce a parallel namespace tree under `/lib/projects/`.  `python run.py deploy garage/sensors/door_open --boot-shim` lays down:
 
 ```
-/lib/things/__init__.py
-/lib/things/garage/__init__.py
-/lib/things/garage/sensors/__init__.py
-/lib/things/garage/sensors/door_open/
+/lib/projects/__init__.py
+/lib/projects/garage/__init__.py
+/lib/projects/garage/sensors/__init__.py
+/lib/projects/garage/sensors/door_open/
     __init__.py
     app.py
 ```
 
-`/active.py` carries the dotted form (`THING_NAME = "garage.sensors.door_open"`); `workspace_runtime.boot()` concatenates `"things." + THING_NAME + ".app"` and Python's import machinery walks the namespace inits to the leaf.
+`/active.py` carries the dotted form (`PROJECT_NAME = "garage.sensors.door_open"`); `workspace_runtime.boot()` concatenates `"projects." + PROJECT_NAME + ".app"` and Python's import machinery walks the namespace inits to the leaf.
 
 ### Inspect what would land — `--dry-run`
 
@@ -248,11 +248,11 @@ Builds the source like a real deploy, but prints the file map (path / size / one
 * You're sanity-checking a nested layout — every per-level `__init__.py` shows up classified as `namespace`, so a missing one is obvious.
 * You want to read what deploy actually does — the output's stable shape doubles as documentation.
 
-Categories: `shim` (workspace-runtime infrastructure), `namespace` (empty `__init__.py` markers), `thing` (the thing's own files), `config` (the runtime-config msgpack), `library` (anything else under `/lib/` — typically import-graph-resolved deps), `file` (anything at the device root — typically flat-layout deploys).
+Categories: `shim` (workspace-runtime infrastructure), `namespace` (empty `__init__.py` markers), `project` (the project's own files), `config` (the runtime-config msgpack), `library` (anything else under `/lib/` — typically import-graph-resolved deps), `file` (anything at the device root — typically flat-layout deploys).
 
-### One thing per `deploy` call
+### One project per `deploy` call
 
-Multi-thing-on-one-device deploys (`deploy <a> <b> <c> --boot-shim`) and the matching `switch <name>` re-pointer were retired in Slice 7 of the nested-things-and-examples workstream — multi-thing-staging blew the flash budget on Decision 0015 minimum boards.  Pass one positional per `deploy` invocation; re-deploy when you want to change which thing is active.  See [`plans/next-up.md`'s "Replace multi-thing staging with scoped diff-deploy" entry](https://github.com/ChuMicro/ChuMicro/blob/main/plans/next-up.md) for the workstream that replaces it.
+Multi-project-on-one-device deploys (`deploy <a> <b> <c> --boot-shim`) and the matching `switch <name>` re-pointer were retired in Slice 7 of the nested-projects-and-examples workstream — multi-project-staging blew the flash budget on Decision 0015 minimum boards.  Pass one positional per `deploy` invocation; re-deploy when you want to change which project is active.  See [`plans/next-up.md`'s "Replace multi-project staging with scoped diff-deploy" entry](https://github.com/ChuMicro/ChuMicro/blob/main/plans/next-up.md) for the workstream that replaces it.
 
 ### Multi-board deploys — `--all-devices`
 
@@ -260,11 +260,11 @@ Multi-thing-on-one-device deploys (`deploy <a> <b> <c> --boot-shim`) and the mat
 python run.py deploy garage/door_open --all-devices
 ```
 
-Loops over every entry in `devices.yml` and ships the thing to each in declaration order.  Per-device failures don't abort the loop; the exit code is 1 if any device's deploy failed, 0 otherwise.  Mutually exclusive with `--device` / `--runtime` (caught at runtime with a precise message).
+Loops over every entry in `devices.yml` and ships the project to each in declaration order.  Per-device failures don't abort the loop; the exit code is 1 if any device's deploy failed, 0 otherwise.  Mutually exclusive with `--device` / `--runtime` (caught at runtime with a precise message).
 
-### Per-thing default device — `deploy_targets:`
+### Per-project default device — `deploy_targets:`
 
-When a workspace has multiple boards, typing `--device <id>` for every deploy becomes load-bearing.  `workspace.yml`'s `deploy_targets:` block carries a per-thing → per-device default; a bare `deploy <thing>` (no `--device` / `--runtime`) then picks the thing's mapped target.  Falls back to `devices.yml`'s `defaults:` block for unmapped things.
+When a workspace has multiple boards, typing `--device <id>` for every deploy becomes load-bearing.  `workspace.yml`'s `deploy_targets:` block carries a per-project → per-device default; a bare `deploy <project>` (no `--device` / `--runtime`) then picks the project's mapped target.  Falls back to `devices.yml`'s `defaults:` block for unmapped projects.
 
 ```yaml
 deploy_targets:
@@ -275,7 +275,7 @@ deploy_targets:
     - lolin-s2-micropython-board
 ```
 
-`deploy --all-things` walks the whole mapping at once — every thing to every device it lists, in declaration order.  Mutually exclusive with positional names / `--device` / `--runtime` / `--all-devices`.  Per-(thing, device) failures don't abort the loop; exit code reflects whether any failed.  Empty / missing `deploy_targets:` block exits 2 with a hint.
+`deploy --all-projects` walks the whole mapping at once — every project to every device it lists, in declaration order.  Mutually exclusive with positional names / `--device` / `--runtime` / `--all-devices`.  Per-(project, device) failures don't abort the loop; exit code reflects whether any failed.  Empty / missing `deploy_targets:` block exits 2 with a hint.
 
 ### Clean-slate deploys — `--wipe`
 
@@ -295,7 +295,7 @@ When the deploy traceback matches a known workspace-shaped pattern, an indented 
 * `ValueError ... !secret <name>` → "secrets.yml has no entry for `<name>`…"
 * `OSError ... runtime_config.msgpack` → "RAM-mode deploys don't persist the config msgpack — switch to flash mode."
 * `ImportError`/`ModuleNotFoundError ... chumicro_*` → "library not installed in this venv — run `python run.py setup`."
-* `KeyError: '<key>'` → "missing config key — check `things/<thing>/config.toml` or `workspace.yml`'s `[defaults]` block."
+* `KeyError: '<key>'` → "missing config key — check `projects/<project>/config.toml` or `workspace.yml`'s `[defaults]` block."
 
 Driven by [`detect_hints`](api.md) over the captured traceback + execute output.  Empty hints → no section header (so unmatched failures don't carry an empty heading).
 
@@ -305,16 +305,16 @@ The CLI is a thin wrapper over the public Python API.  Build a source explicitly
 
 ```python
 from chumicro_deploy import Device, Deployer
-from chumicro_workspace import thing_boot_source
+from chumicro_workspace import project_boot_source
 from chumicro_workspace.workspace import WorkspaceLayout
 
 workspace = WorkspaceLayout.from_dir()
 device = Device(transport="micropython", address="/dev/cu.usbmodem1101")
 
-source = thing_boot_source(
-    workspace.thing_dir("garage/sensors/door_open"),
+source = project_boot_source(
+    workspace.project_dir("garage/sensors/door_open"),
     workspace=workspace,
-    thing_name="garage/sensors/door_open",
+    project_name="garage/sensors/door_open",
     entrypoint_filename="main.py",
 )
 result = Deployer(device).deploy(source)
@@ -332,13 +332,13 @@ python run.py repl
 python run.py repl --tail 30
 
 # Deploy then tail in one command (Phase 2e).  Replaces the
-# `deploy <thing> && repl --tail` two-command idiom.  Default tail
+# `deploy <project> && repl --tail` two-command idiom.  Default tail
 # window is 30s; --tail SECONDS overrides.
 python run.py repl garage/sensors/door_open
 python run.py repl garage/sensors/door_open --tail 60
 ```
 
-The deploy half of `repl <thing>` uses [`thing_boot_source`](api.md) — for flat-layout deploys, run `deploy` and `repl --tail` separately.
+The deploy half of `repl <project>` uses [`project_boot_source`](api.md) — for flat-layout deploys, run `deploy` and `repl --tail` separately.
 
 ## Quality knobs
 
@@ -363,11 +363,11 @@ Loader: [`load_quality_config`](api.md).  Missing block → permissive defaults 
 [`build_runtime_config`](api.md) is the deploy-time pipeline (Decision 0035):
 
 1. Read `workspace.yml`'s `defaults:` block.
-2. Read `things/<name>/config.{toml,yml,yaml}`.
+2. Read `projects/<name>/config.{toml,yml,yaml}`.
 3. Read `secrets.yml`.
-4. Deep-merge `defaults` ← `thing_config` (thing wins on conflict; lists replace wholesale; dicts recurse).
+4. Deep-merge `defaults` ← `project_config` (project wins on conflict; lists replace wholesale; dicts recurse).
 5. Walk the merged dict, replace every `!secret <name>` string with `secrets[name]` (raises `UnresolvedSecretError` on miss).
-6. Pack as msgpack via `chumicro-msgpack`, write to `things/<name>/_generated/runtime_config.msgpack`.
+6. Pack as msgpack via `chumicro-msgpack`, write to `projects/<name>/_generated/runtime_config.msgpack`.
 
 The deploy then ships that msgpack to `/runtime_config.msgpack` on the device.  Apps read it with `chumicro-msgpack`'s `unpackb`.
 
@@ -379,9 +379,9 @@ from chumicro_workspace import build_runtime_config
 
 build_runtime_config(
     workspace_yaml=Path("workspace.yml"),
-    thing_config=Path("things/back-porch/config.toml"),
+    project_config=Path("projects/back-porch/config.toml"),
     secrets_yaml=Path("secrets.yml"),
-    output_path=Path("things/back-porch/_generated/runtime_config.msgpack"),
+    output_path=Path("projects/back-porch/_generated/runtime_config.msgpack"),
 )
 ```
 

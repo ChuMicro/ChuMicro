@@ -11,44 +11,44 @@ Check [open issues](https://github.com/ChuMicro/ChuMicro/issues) and [discussion
 ## 1. Scaffold
 
 ```bash
-python scripts/run.py new-library my-thing
+python scripts/run.py new-library my-project
 ```
 
 The mono-repo wrapper composes the `chumicro_workspace.scaffold.scaffold_library` primitive — owned by the workbench `chumicro-workspace` package — with the mono-repo-only follow-ups (editable install + IDE config sync).  External users developing their own chumicro-style libraries get the same scaffolder via `python run.py new --library <name>` from inside their workspace.
 
-This creates `libraries/my-thing/` with:
+This creates `libraries/my-project/` with:
 
 ```
-libraries/my-thing/
+libraries/my-project/
 ├── VERSION                          # starts at 0.1.0
 ├── pyproject.toml                   # package metadata
 ├── README.md                        # package README (fill in TODOs)
 ├── mkdocs.yml                       # docs config
-├── src/chumicro_my_thing/
-│   ├── __init__.py                  # public exports (imports MyThing)
+├── src/chumicro_my_project/
+│   ├── __init__.py                  # public exports (imports MyProject)
 │   ├── core.py                      # starter class with patterns
 │   └── testing.py                   # test fakes (keep or delete)
 ├── tests/
 │   ├── conftest.py                  # pytest config
-│   └── test_my_thing.py             # starter tests (100% coverage)
+│   └── test_my_project.py             # starter tests (100% coverage)
 ├── docs/
 │   ├── index.md                     # docs landing page
 │   ├── guide.md                     # user guide (fill in)
 │   ├── api.md                       # API reference (mkdocstrings renders it)
 │   └── testing.md                   # testing helpers docs
 ├── examples/
-│   └── quickstart.py                # working example using MyThing
+│   └── quickstart.py                # working example using MyProject
 └── functional_tests/
     └── .gitkeep                     # on-device tests live here
 ```
 
-In addition to creating the library directory, the scaffolder runs an editable install (`pip install -e libraries/my-thing`) and re-runs `sync-ide`, which updates the local `.idea/chumicro.iml` plus the tracked `.idea/runConfigurations/`, `pyrightconfig.json`, `.vscode/tasks.json`, and `.vscode/settings.json` so your IDE picks up the new package immediately. The `.iml` stays local and gitignored because PyCharm may rewrite it while the project is open; the tracked config files are the ones you may see in `git status` after running `new-library`.
+In addition to creating the library directory, the scaffolder runs an editable install (`pip install -e libraries/my-project`) and re-runs `sync-ide`, which updates the local `.idea/chumicro.iml` plus the tracked `.idea/runConfigurations/`, `pyrightconfig.json`, `.vscode/tasks.json`, and `.vscode/settings.json` so your IDE picks up the new package immediately. The `.iml` stays local and gitignored because PyCharm may rewrite it while the project is open; the tracked config files are the ones you may see in `git status` after running `new-library`.
 
-The scaffold is immediately runnable — tests pass at 100% coverage, lint is clean, and the example executes. Start by replacing the starter `MyThing` class in `core.py` with your real implementation.
+The scaffold is immediately runnable — tests pass at 100% coverage, lint is clean, and the example executes. Start by replacing the starter `MyProject` class in `core.py` with your real implementation.
 
 ## 2. Implement
 
-Put your code in `src/chumicro_my_thing/`. Follow the [Style Guide](style-guide.md) for naming, annotations, docstrings, and formatting. Key rules for library code:
+Put your code in `src/chumicro_my_project/`. Follow the [Style Guide](style-guide.md) for naming, annotations, docstrings, and formatting. Key rules for library code:
 
 - **No `async`/`await`** — use the tick-based runner pattern. If your library has active components, implement `check(now_ms) -> bool` so they work with [`Runner`](../../libraries/runner/).
 - **No third-party dependencies** that aren't available on all three runtimes.
@@ -86,22 +86,22 @@ See [Decision 0010](../../plans/decisions/0010-library-testability.md) for the r
 Export your public API from `__init__.py`:
 
 ```python
-"""ChuMicro my-thing — one-line description."""
+"""ChuMicro my-project — one-line description."""
 
-from chumicro_my_thing.core import MyClass, helper_function
+from chumicro_my_project.core import MyClass, helper_function
 
 __all__ = ["MyClass", "helper_function"]
 ```
 
 ## 3. Write tests
 
-Tests go in `libraries/my-thing/tests/`. Every library must independently meet the coverage threshold configured in `pyproject.toml`.
+Tests go in `libraries/my-project/tests/`. Every library must independently meet the coverage threshold configured in `pyproject.toml`.
 
 ```bash
-python scripts/run.py test --libraries my-thing
+python scripts/run.py test --libraries my-project
 
 # Quick iteration (skip coverage, stop on first failure)
-python scripts/run.py test -k my-thing/test_core -x -v --no-cov
+python scripts/run.py test -k my-project/test_core -x -v --no-cov
 ```
 
 ### What a test looks like
@@ -111,7 +111,7 @@ Since you accepted dependencies as constructor parameters, testing is straightfo
 ```python
 """Tests for MySensor reading behavior."""
 
-from chumicro_my_thing import MySensor
+from chumicro_my_project import MySensor
 
 
 class FakeI2C:
@@ -140,9 +140,9 @@ Create lightweight fakes for your own interfaces. Use fakes from upstream ChuMic
 
 ### Testing submodule
 
-If downstream libraries or users would benefit from test fakes, keep `src/chumicro_my_thing/testing.py` and implement real fakes. If there's nothing worth faking, delete it and its references:
+If downstream libraries or users would benefit from test fakes, keep `src/chumicro_my_project/testing.py` and implement real fakes. If there's nothing worth faking, delete it and its references:
 
-1. Delete `src/chumicro_my_thing/testing.py`
+1. Delete `src/chumicro_my_project/testing.py`
 2. Delete `docs/testing.md`
 3. Remove `- Testing Helpers: testing.md` from `mkdocs.yml`
 4. Remove the Testing Helpers link from `docs/index.md`
@@ -156,7 +156,7 @@ Run them with:
 
 ```bash
 python scripts/run.py setup
-python scripts/run.py test-libraries-functional --library my-thing
+python scripts/run.py test-libraries-functional --library my-project
 ```
 
 See [Device Testing](device-testing.md) for `devices.yml`, deploy modes, and IDE play-button behavior.
@@ -174,7 +174,7 @@ Replace the placeholder with a real guide covering:
 5. **Cross-runtime notes** — any behavior differences across runtimes
 
 ```bash
-python scripts/run.py docs --libraries my-thing
+python scripts/run.py docs --libraries my-project
 ```
 
 ### API reference (`docs/api.md`)
@@ -200,7 +200,7 @@ See the [Style Guide](style-guide.md#docstrings) for the full format.
 
 ## 5. Write examples
 
-Put examples in `libraries/my-thing/examples/`. Rules:
+Put examples in `libraries/my-project/examples/`. Rules:
 
 - **Top-level code** — no `if __name__ == "__main__":` guard
 - **Descriptive filenames** — `sensor_basic_reading.py`, not `example1.py`
@@ -209,17 +209,17 @@ Put examples in `libraries/my-thing/examples/`. Rules:
 - **Hardware examples** — prefix with `circuitpython_` or `micropython_`
 
 ```bash
-python scripts/run.py verify-examples --libraries my-thing
+python scripts/run.py verify-examples --libraries my-project
 ```
 
 ## 6. Fill in metadata
 
-Update `libraries/my-thing/pyproject.toml`:
+Update `libraries/my-project/pyproject.toml`:
 
 - `description` — one-line package description
 - `dependencies` — if your library depends on other ChuMicro libraries (e.g., `"chumicro-timing>=0.1"`)
 
-Update `libraries/my-thing/README.md` — replace all TODO placeholders.
+Update `libraries/my-project/README.md` — replace all TODO placeholders.
 
 The README template now includes a short development/testing section. Keep it accurate for the library you are adding so contributors can see the host-test and device-test entry points without hunting through the repository docs.
 
@@ -235,23 +235,23 @@ Must print `Preflight passed`. Then push and open a PR on GitHub targeting `main
 
 When your PR merges, the VERSION bump triggers an automatic **experimental release**:
 
-- Your package is published to PyPI as `chumicro-my-thing-experimental`
+- Your package is published to PyPI as `chumicro-my-project-experimental`
 - Files are pushed to the [experimental bundle repo](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
 - Experimental docs are deployed
-- A git tag `my-thing-v0.1.0-experimental` is created
+- A git tag `my-project-v0.1.0-experimental` is created
 
 Users can install your library immediately:
 
 ```bash
 # CircuitPython
 circup bundle-add ChuMicro/ChuMicro-Bundle-Experimental
-circup install chumicro-my-thing
+circup install chumicro-my-project
 
 # MicroPython
-mpremote mip install github:ChuMicro/ChuMicro-Bundle-Experimental/chumicro_my_thing
+mpremote mip install github:ChuMicro/ChuMicro-Bundle-Experimental/chumicro_my_project
 
 # CPython
-pip install chumicro-my-thing-experimental
+pip install chumicro-my-project-experimental
 ```
 
 When you're confident the experimental release is production-ready, open a [Stable Promotion Request](https://github.com/ChuMicro/ChuMicro/issues/new?template=stable_promotion.yml) and a maintainer will promote it. See [Releases](releases.md) for details.

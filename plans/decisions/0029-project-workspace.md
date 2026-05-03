@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-21`
+Revised: `2026-05-02` — vocabulary update from `thing` to `project`.  Directory renamed (was `things/`, now `projects/`), CLI flag was `--thing`, now `--project`.  The structural decisions below are unchanged; only the noun.
 Related: Decision 0026, Decision 0027, Decision 0028, Decision 0030, Decision 0031
 
 ## Context
@@ -14,17 +15,17 @@ This decision records the non-obvious tradeoffs that shape the workstream.  The 
 
 ### 1. Template repo with a local `run.py`, not an installed global CLI
 
-The workspace is a git repo (or zip) containing `run.py`, configuration files, and an empty `things/` directory.  `run.py setup` prepares a local `.venv` with pinned tooling; every workflow command is `python run.py <cmd>`.  `run.py` is a thin shim over a published library (`chumicro-workspace`) so updates reach existing workspaces via `run.py upgrade`.
+The workspace is a git repo (or zip) containing `run.py`, configuration files, and an empty `projects/` directory.  `run.py setup` prepares a local `.venv` with pinned tooling; every workflow command is `python run.py <cmd>`.  `run.py` is a thin shim over a published library (`chumicro-workspace`) so updates reach existing workspaces via `run.py upgrade`.
 
-A `python run.py new <thing>` scaffolding helper is allowed — it is a `cp -r things/_template` convenience, not a code generator.
+A `python run.py new <project>` scaffolding helper is allowed — it is a `cp -r projects/_template` convenience, not a code generator.
 
 **Rejected:** a globally pip-installed `chum` CLI.  PATH burden, install wall, and version skew against the template.
 
-### 2. Things are folders.  No type categorization.
+### 2. Projects are folders.  No type categorization.
 
-A "thing" is a folder under `things/`.  Creating one is `cp -r things/_template things/<name>` (or `python run.py new <name>`).  Things do not declare a category at creation time; `thing.yml` declares `runtimes:` and an explicit `libraries:` manifest.
+A "project" is a folder under `projects/`.  Creating one is `cp -r projects/_template projects/<name>` (or `python run.py new <name>`).  Projects do not declare a category at creation time; `project.yml` declares `runtimes:` and an explicit `libraries:` manifest.
 
-**Rejected:** `--type sensor|controller|headless` flags at creation.  Premature categorization; real things blur.
+**Rejected:** `--type sensor|controller|headless` flags at creation.  Premature categorization; real projects blur.
 
 ### 3. `code.py` is a checked-in delegator, not codegen
 
@@ -36,7 +37,7 @@ import workspace_runtime
 workspace_runtime.boot()
 ```
 
-Boot reads a tiny `active.py` written at deploy time and imports the matching `things/<name>/app.py`.  No jinja, no regeneration.
+Boot reads a tiny `active.py` written at deploy time and imports the matching `projects/<name>/app.py`.  No jinja, no regeneration.
 
 **Rejected:** a generated `code.py` with a `chum eject` escape hatch.  Users get confused when their edits get overwritten; eject adds surface area without earning it.
 
@@ -58,7 +59,7 @@ A small per-chip-family reflash table (`esp32* → esptool`, `rp2040/rp2350/nrf5
 
 ### 6. Deploy is import-graph-driven
 
-`python run.py deploy <thing>` AST-parses the thing's entrypoint, walks imports transitively into `libs/` (checked-in, user-authored) and `packages/` (gitignored, resolved from manifest), and copies only reachable files to `/lib/` on the device.  `thing.yml`'s `libraries:` list is a sanity-check assertion against the computed graph.
+`python run.py deploy <project>` AST-parses the project's entrypoint, walks imports transitively into `libs/` (checked-in, user-authored) and `packages/` (gitignored, resolved from manifest), and copies only reachable files to `/lib/` on the device.  `project.yml`'s `libraries:` list is a sanity-check assertion against the computed graph.
 
 **Rejected:** a blanket `shared/` folder copied to every board.  Wastes flash, pollutes namespaces.
 
@@ -74,7 +75,7 @@ The deploy package must be usable three ways: by the chumicro mono repo's existi
 
 Consequences for the API shape:
 
-- Nothing from `workspace.yml`, `things/`, `library_sources:`, `packages/`, or `libs/` leaks into the deploy package.  Those concepts live in `chumicro-workspace`.
+- Nothing from `workspace.yml`, `projects/`, `library_sources:`, `packages/`, or `libs/` leaks into the deploy package.  Those concepts live in `chumicro-workspace`.
 - Transports, file sources, and config loaders are pluggable protocols, not hard-coded to chumicro file layouts.
 - The built-in `devices.yml` schema is owned by `chumicro-deploy` and read by the built-in loader at `chumicro_deploy.config.default`, registered in the loader registry under the reserved name `"default"`.  The loader is behind an opt-in import — importing it pulls in PyYAML, so consumers who only want the top-level `Device` / `Deployer` API never pay that cost.  The schema is shared across the `chumicro` mono repo, the eventual project-workspace template repo, and any third-party consumer.
 - Third parties register custom config loaders via Python entry points (`chumicro_deploy.config_loaders`), not by subclassing workspace internals.  The mono repo consumes the loader via the editable-install of `workbench/deploy` so the YAML schema has a single source of truth; see the corresponding scripts-consumption principle in Decision 0032.

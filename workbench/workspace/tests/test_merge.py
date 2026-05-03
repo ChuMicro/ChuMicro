@@ -23,8 +23,8 @@ class TestMergeConfigs:
 
     def test_two_dicts_keys_in_one_only_carry_through(self) -> None:
         workspace = {"wifi": {"hostname_prefix": "chu-"}}
-        thing = {"mqtt": {"broker": "mqtt.local"}}
-        result = merge_configs(workspace, thing)
+        project = {"mqtt": {"broker": "mqtt.local"}}
+        result = merge_configs(workspace, project)
         assert result == {
             "wifi": {"hostname_prefix": "chu-"},
             "mqtt": {"broker": "mqtt.local"},
@@ -33,31 +33,31 @@ class TestMergeConfigs:
     def test_overlapping_section_merges_key_by_key(self) -> None:
         """Per ADR 0035 §5: deep, key-level within sections."""
         workspace = {"wifi": {"hostname_prefix": "chu-", "timeout_ms": 15000}}
-        thing = {"wifi": {"ssid": "HomeNet", "timeout_ms": 5000}}
-        result = merge_configs(workspace, thing)
+        project = {"wifi": {"ssid": "HomeNet", "timeout_ms": 5000}}
+        result = merge_configs(workspace, project)
         assert result["wifi"] == {
             "hostname_prefix": "chu-",   # from workspace
-            "ssid": "HomeNet",           # from thing
-            "timeout_ms": 5000,          # thing overrode workspace
+            "ssid": "HomeNet",           # from project
+            "timeout_ms": 5000,          # project overrode workspace
         }
 
-    def test_thing_wins_on_scalar_conflict(self) -> None:
+    def test_project_wins_on_scalar_conflict(self) -> None:
         workspace = {"wifi": {"timeout_ms": 15000}}
-        thing = {"wifi": {"timeout_ms": 5000}}
-        result = merge_configs(workspace, thing)
+        project = {"wifi": {"timeout_ms": 5000}}
+        result = merge_configs(workspace, project)
         assert result["wifi"]["timeout_ms"] == 5000
 
     def test_lists_replace_wholesale(self) -> None:
         """ADR 0035 §5: merge is key-level, not element-level."""
         workspace = {"app": {"sources": ["a", "b"]}}
-        thing = {"app": {"sources": ["c"]}}
-        result = merge_configs(workspace, thing)
+        project = {"app": {"sources": ["c"]}}
+        result = merge_configs(workspace, project)
         assert result["app"]["sources"] == ["c"]
 
     def test_nested_dict_merges_recursively(self) -> None:
         workspace = {"app": {"flags": {"new_ui": True, "verbose": False}}}
-        thing = {"app": {"flags": {"verbose": True, "experimental": True}}}
-        result = merge_configs(workspace, thing)
+        project = {"app": {"flags": {"verbose": True, "experimental": True}}}
+        result = merge_configs(workspace, project)
         assert result["app"]["flags"] == {
             "new_ui": True,
             "verbose": True,
@@ -68,29 +68,29 @@ class TestMergeConfigs:
         """A future environment-defaults / global-overrides layer would compose this way."""
         workspace = {"wifi": {"a": 1}}
         environment = {"wifi": {"b": 2}}
-        thing = {"wifi": {"a": 99, "c": 3}}
-        result = merge_configs(workspace, environment, thing)
+        project = {"wifi": {"a": 99, "c": 3}}
+        result = merge_configs(workspace, environment, project)
         assert result["wifi"] == {"a": 99, "b": 2, "c": 3}
 
     def test_does_not_mutate_inputs(self) -> None:
         workspace = {"wifi": {"hostname_prefix": "chu-"}}
-        thing = {"wifi": {"ssid": "HomeNet"}}
+        project = {"wifi": {"ssid": "HomeNet"}}
         snapshot_workspace = {"wifi": {"hostname_prefix": "chu-"}}
-        snapshot_thing = {"wifi": {"ssid": "HomeNet"}}
-        merge_configs(workspace, thing)
+        snapshot_project = {"wifi": {"ssid": "HomeNet"}}
+        merge_configs(workspace, project)
         assert workspace == snapshot_workspace
-        assert thing == snapshot_thing
+        assert project == snapshot_project
 
     def test_dict_replaces_scalar(self) -> None:
         """When the override turns a scalar into a dict, override wins wholesale."""
         workspace = {"wifi": "legacy-string"}
-        thing = {"wifi": {"ssid": "HomeNet"}}
-        result = merge_configs(workspace, thing)
+        project = {"wifi": {"ssid": "HomeNet"}}
+        result = merge_configs(workspace, project)
         assert result["wifi"] == {"ssid": "HomeNet"}
 
     def test_scalar_replaces_dict(self) -> None:
         """When the override turns a dict into a scalar, override wins wholesale."""
         workspace = {"wifi": {"ssid": "HomeNet"}}
-        thing = {"wifi": "disabled"}
-        result = merge_configs(workspace, thing)
+        project = {"wifi": "disabled"}
+        result = merge_configs(workspace, project)
         assert result["wifi"] == "disabled"

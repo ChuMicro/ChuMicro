@@ -35,8 +35,8 @@ def _seed_workspace(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def _seed_thing(workspace_root: Path, name: str = "back-porch") -> Path:
-    """Add a thing under *workspace_root*/things/<name>/ and return its dir.
+def _seed_project(workspace_root: Path, name: str = "back-porch") -> Path:
+    """Add a project under *workspace_root*/projects/<name>/ and return its dir.
 
     Carries both ``code.py`` (CircuitPython convention) and ``main.py``
     (MicroPython convention) so the deploy command's runtime-derived
@@ -46,14 +46,14 @@ def _seed_thing(workspace_root: Path, name: str = "back-porch") -> Path:
     *name* may be slash-form (``"upstairs/bedroom_sensor"``) — the
     intermediate parent directories are created automatically.
     """
-    thing_dir = workspace_root / "things" / name
-    thing_dir.mkdir(parents=True)
-    (thing_dir / "config.toml").write_text(
+    project_dir = workspace_root / "projects" / name
+    project_dir.mkdir(parents=True)
+    (project_dir / "config.toml").write_text(
         "[wifi]\nssid = 'HomeNet'\npassword = '!secret wifi_password'\n"
     )
-    (thing_dir / "code.py").write_text("print('hello from thing')\n")
-    (thing_dir / "main.py").write_text("print('hello from thing')\n")
-    return thing_dir
+    (project_dir / "code.py").write_text("print('hello from project')\n")
+    (project_dir / "main.py").write_text("print('hello from project')\n")
+    return project_dir
 
 
 # ---------------------------------------------------------------------------
@@ -66,7 +66,7 @@ class TestParser:
 
     EXPECTED_COMMANDS = (
         "setup", "init", "update", "new", "add-device", "probe",
-        "discover", "devices", "deploy", "things", "status", "doctor",
+        "discover", "devices", "deploy", "projects", "status", "doctor",
         "demo", "bootstrap", "sim", "test", "repl", "env", "use",
         "rename", "install-firmware", "upgrade-firmware", "sync", "upgrade",
     )
@@ -249,7 +249,7 @@ class TestUpdateCommand:
 class TestNew:
     def test_copies_template_to_named_dir(self, tmp_path: Path) -> None:
         root = _seed_workspace(tmp_path)
-        template = root / "things" / "_template"
+        template = root / "projects" / "_template"
         template.mkdir(parents=True)
         (template / "code.py").write_text("# template\n")
         (template / "config.toml").write_text("[app]\n")
@@ -259,7 +259,7 @@ class TestNew:
         )
         assert exit_code == 0
 
-        target = root / "things" / "kitchen_sensor"
+        target = root / "projects" / "kitchen_sensor"
         assert (target / "code.py").read_text() == "# template\n"
         assert (target / "config.toml").read_text() == "[app]\n"
 
@@ -271,10 +271,10 @@ class TestNew:
 
     def test_existing_target_raises(self, tmp_path: Path) -> None:
         root = _seed_workspace(tmp_path)
-        template = root / "things" / "_template"
+        template = root / "projects" / "_template"
         template.mkdir(parents=True)
         (template / "code.py").write_text("\n")
-        (root / "things" / "exists").mkdir()
+        (root / "projects" / "exists").mkdir()
         with pytest.raises(SystemExit) as caught:
             cli.main(["new", "--workspace-dir", str(root), "exists"])
         assert "already exists" in str(caught.value)
@@ -298,20 +298,20 @@ class TestNew:
             ("garage//door_open", "empty path segment"),
         ],
     )
-    def test_rejects_invalid_thing_names(
+    def test_rejects_invalid_project_names(
         self,
         tmp_path: Path,
         bad_name: str,
         match: str,
     ) -> None:
         # Validation runs before the template lookup, so we deliberately
-        # don't pre-create things/_template — that lets us verify the
+        # don't pre-create projects/_template — that lets us verify the
         # filesystem is untouched on rejection.
         root = _seed_workspace(tmp_path)
         with pytest.raises(SystemExit) as caught:
             cli.main(["new", "--workspace-dir", str(root), bad_name])
         assert match in str(caught.value)
-        assert not (root / "things").exists()
+        assert not (root / "projects").exists()
 
     @pytest.mark.parametrize(
         "good_name",
@@ -340,7 +340,7 @@ class TestNew:
         assert "valid Python identifier" not in message
         assert "leading" not in message
 
-    def test_rejects_empty_thing_name(self, tmp_path: Path) -> None:
+    def test_rejects_empty_project_name(self, tmp_path: Path) -> None:
         root = _seed_workspace(tmp_path)
         with pytest.raises(SystemExit) as caught:
             cli.main(["new", "--workspace-dir", str(root), ""])
@@ -351,13 +351,13 @@ class TestNewNested:
     """Slice 3 — `new` accepts nested paths and auto-creates namespaces."""
 
     def _seed_template(self, root: Path) -> Path:
-        template = root / "things" / "_template"
+        template = root / "projects" / "_template"
         template.mkdir(parents=True)
         (template / "code.py").write_text("# template\n")
         (template / "config.toml").write_text("[app]\n")
         return template
 
-    def test_creates_nested_thing_with_intermediate_dirs(
+    def test_creates_nested_project_with_intermediate_dirs(
         self, tmp_path: Path,
     ) -> None:
         root = _seed_workspace(tmp_path)
@@ -369,7 +369,7 @@ class TestNewNested:
         ])
         assert exit_code == 0
 
-        target = root / "things" / "garage" / "sensors" / "door_open"
+        target = root / "projects" / "garage" / "sensors" / "door_open"
         assert (target / "code.py").read_text() == "# template\n"
         assert (target / "config.toml").read_text() == "[app]\n"
 
@@ -378,7 +378,7 @@ class TestNewNested:
     ) -> None:
         """Auto-created namespace dirs get empty ``__init__.py`` markers.
 
-        Lets host-side tests do ``from things.garage.sensors.door_open.app
+        Lets host-side tests do ``from projects.garage.sensors.door_open.app
         import run`` without PEP 420 namespace-package surprises.
         """
         root = _seed_workspace(tmp_path)
@@ -390,12 +390,12 @@ class TestNewNested:
         ])
         assert exit_code == 0
 
-        assert (root / "things" / "garage" / "__init__.py").is_file()
+        assert (root / "projects" / "garage" / "__init__.py").is_file()
         assert (
-            root / "things" / "garage" / "sensors" / "__init__.py"
+            root / "projects" / "garage" / "sensors" / "__init__.py"
         ).is_file()
-        # The leaf is the thing dir itself; no synthetic __init__.py
-        # written inside the thing — that's the template's territory.
+        # The leaf is the project dir itself; no synthetic __init__.py
+        # written inside the project — that's the template's territory.
 
     def test_dotted_form_creates_same_layout_as_slash_form(
         self, tmp_path: Path,
@@ -410,36 +410,36 @@ class TestNewNested:
         assert exit_code == 0
         # Dotted form normalises to the slash-form filesystem layout.
         assert (
-            root / "things" / "garage" / "sensors" / "door_open" / "code.py"
+            root / "projects" / "garage" / "sensors" / "door_open" / "code.py"
         ).is_file()
 
     def test_existing_intermediate_namespace_reused(
         self, tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        """A pre-existing ``things/garage/`` is left in place."""
+        """A pre-existing ``projects/garage/`` is left in place."""
         root = _seed_workspace(tmp_path)
         self._seed_template(root)
         # Pre-create the namespace (e.g. user previously created
         # garage/heater) — the second `new garage/door_open` reuses it.
-        (root / "things" / "garage").mkdir(parents=True)
-        (root / "things" / "garage" / "__init__.py").write_text("")
-        (root / "things" / "garage" / "marker.txt").write_text("preserved\n")
+        (root / "projects" / "garage").mkdir(parents=True)
+        (root / "projects" / "garage" / "__init__.py").write_text("")
+        (root / "projects" / "garage" / "marker.txt").write_text("preserved\n")
 
         exit_code = cli.main([
             "new", "--workspace-dir", str(root), "garage/door_open",
         ])
         assert exit_code == 0
-        # Old namespace marker survives; new thing exists alongside.
-        assert (root / "things" / "garage" / "marker.txt").read_text() == (
+        # Old namespace marker survives; new project exists alongside.
+        assert (root / "projects" / "garage" / "marker.txt").read_text() == (
             "preserved\n"
         )
         assert (
-            root / "things" / "garage" / "door_open" / "code.py"
+            root / "projects" / "garage" / "door_open" / "code.py"
         ).is_file()
         out = capsys.readouterr().out
         # Existing namespace dir didn't trigger a creation trace.
-        assert "creating namespace things/garage/" not in out
+        assert "creating namespace projects/garage/" not in out
 
     def test_creating_new_namespace_traces(
         self, tmp_path: Path,
@@ -453,7 +453,7 @@ class TestNewNested:
             "upstairs/bedroom_sensor",
         ])
         out = capsys.readouterr().out
-        assert "creating namespace things/upstairs/" in out
+        assert "creating namespace projects/upstairs/" in out
 
 
 class TestNewLibrary:
@@ -523,7 +523,7 @@ class TestNewFromFlag:
     def _seed_workspace_with_example(self, tmp_path: Path) -> Path:
         root = _seed_workspace(tmp_path)
         # Seed a fake examples/ tree.
-        example_root = root / "examples" / "two_things" / "server"
+        example_root = root / "examples" / "two_projects" / "server"
         example_root.mkdir(parents=True)
         (example_root / "app.py").write_text(
             "def run():\n    print('server')\n",
@@ -538,11 +538,11 @@ class TestNewFromFlag:
         exit_code = cli.main([
             "new", "--workspace-dir", str(root),
             "garage/heater",
-            "--from", "examples/two_things/server",
+            "--from", "examples/two_projects/server",
         ])
         assert exit_code == 0
 
-        target = root / "things" / "garage" / "heater"
+        target = root / "projects" / "garage" / "heater"
         assert (target / "app.py").read_text().startswith("def run")
         assert (target / "config.toml").read_text() == "[server]\n"
         assert (target / "README.md").read_text() == "# example server\n"
@@ -551,7 +551,7 @@ class TestNewFromFlag:
         self, tmp_path: Path,
     ) -> None:
         root = _seed_workspace(tmp_path)
-        # Make a directory that's not a thing — README only.
+        # Make a directory that's not a project — README only.
         notes_dir = root / "examples" / "design_notes"
         notes_dir.mkdir(parents=True)
         (notes_dir / "wiring.md").write_text("\n")
@@ -562,7 +562,7 @@ class TestNewFromFlag:
                 "kitchen", "--from", "examples/design_notes",
             ])
         assert "no entry-point file" in str(caught.value)
-        assert not (root / "things" / "kitchen").exists()
+        assert not (root / "projects" / "kitchen").exists()
 
     def test_rejects_missing_source_dir(self, tmp_path: Path) -> None:
         root = _seed_workspace(tmp_path)
@@ -677,13 +677,13 @@ class TestDevices:
 
 
 class TestDeploy:
-    def test_ships_thing_through_fake_transport(
+    def test_ships_project_through_fake_transport(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         root = _seed_workspace(tmp_path)
-        _seed_thing(root)
+        _seed_project(root)
 
         transport = FakeTransport(execute_output="")
         monkeypatch.setattr(Device, "create_transport", lambda self: transport)
@@ -700,7 +700,7 @@ class TestDeploy:
         decoded = unpackb(files["/runtime_config.msgpack"])
         assert decoded["wifi"]["password"] == "shh"
 
-    def test_missing_thing_raises(self, tmp_path: Path) -> None:
+    def test_missing_project_raises(self, tmp_path: Path) -> None:
         root = _seed_workspace(tmp_path)
         with pytest.raises(SystemExit) as caught:
             cli.main(["deploy", "--workspace-dir", str(root), "ghost"])
@@ -713,7 +713,7 @@ class TestDeploy:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         root = _seed_workspace(tmp_path)
-        _seed_thing(root)
+        _seed_project(root)
         # FakeTransport returns whatever ``execute_output`` it's
         # carrying — supply a synthetic traceback so the deployer's
         # success heuristic flips to False.
@@ -738,8 +738,8 @@ class TestDeploy:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         root = _seed_workspace(tmp_path)
-        thing_dir = _seed_thing(root)
-        (thing_dir / "boot.py").write_text("print('boot')\n")
+        project_dir = _seed_project(root)
+        (project_dir / "boot.py").write_text("print('boot')\n")
 
         transport = FakeTransport(execute_output="")
         monkeypatch.setattr(Device, "create_transport", lambda self: transport)
@@ -756,14 +756,14 @@ class TestDeploy:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Slice 7: --boot-shim routes through thing_boot_source."""
+        """Slice 7: --boot-shim routes through project_boot_source."""
         root = _seed_workspace(tmp_path)
-        thing_dir = root / "things" / "back-porch"
-        thing_dir.mkdir(parents=True)
-        (thing_dir / "config.toml").write_text(
+        project_dir = root / "projects" / "back-porch"
+        project_dir.mkdir(parents=True)
+        (project_dir / "config.toml").write_text(
             "[wifi]\nssid = 'HomeNet'\npassword = '!secret wifi_password'\n"
         )
-        (thing_dir / "app.py").write_text("def run(): print('hi')\n")
+        (project_dir / "app.py").write_text("def run(): print('hi')\n")
 
         transport = FakeTransport(execute_output="")
         monkeypatch.setattr(Device, "create_transport", lambda self: transport)
@@ -775,12 +775,12 @@ class TestDeploy:
         assert exit_code == 0
         deploy_calls = [call for call in transport.calls if call[0] == "deploy_files"]
         files, entrypoint = deploy_calls[0][1]
-        # Boot-shim layout: shim entrypoint at root, thing under /lib/things/.
+        # Boot-shim layout: shim entrypoint at root, project under /lib/projects/.
         assert entrypoint == "/main.py"  # MP runtime in seed
         assert "/main.py" in files
         assert "/active.py" in files
         assert "/lib/workspace_runtime/__init__.py" in files
-        assert "/lib/things/back-porch/app.py" in files
+        assert "/lib/projects/back-porch/app.py" in files
         assert b'"back-porch"' in files["/active.py"]
 
     def test_boot_shim_and_import_graph_mutually_exclusive(
@@ -790,11 +790,11 @@ class TestDeploy:
     ) -> None:
         """The two layouts can't combine — they ship different on-device shapes."""
         root = _seed_workspace(tmp_path)
-        thing_dir = root / "things" / "back-porch"
-        thing_dir.mkdir(parents=True)
-        (thing_dir / "config.toml").write_text("[wifi]\nssid = 'x'\n")
-        (thing_dir / "app.py").write_text("def run(): pass\n")
-        (thing_dir / "main.py").write_text("import x\n")
+        project_dir = root / "projects" / "back-porch"
+        project_dir.mkdir(parents=True)
+        (project_dir / "config.toml").write_text("[wifi]\nssid = 'x'\n")
+        (project_dir / "app.py").write_text("def run(): pass\n")
+        (project_dir / "main.py").write_text("import x\n")
 
         exit_code = cli.main([
             "deploy", "--workspace-dir", str(root),
@@ -808,21 +808,21 @@ class TestDeploy:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Slice 6: --import-graph routes through thing_import_graph_source."""
+        """Slice 6: --import-graph routes through project_import_graph_source."""
         root = _seed_workspace(tmp_path)
-        # Stage a libs/ module alongside the thing's main.py.
+        # Stage a libs/ module alongside the project's main.py.
         libs = root / "libs"
         libs.mkdir()
         (libs / "imported_module.py").write_text("def helper(): pass\n")
         (libs / "unimported_module.py").write_text("# never reached\n")
 
-        thing_dir = root / "things" / "back-porch"
-        thing_dir.mkdir(parents=True)
-        (thing_dir / "config.toml").write_text(
+        project_dir = root / "projects" / "back-porch"
+        project_dir.mkdir(parents=True)
+        (project_dir / "config.toml").write_text(
             "[wifi]\nssid = 'HomeNet'\npassword = '!secret wifi_password'\n"
         )
         # MP runtime in seed → effective_entrypoint == 'main.py'.
-        (thing_dir / "main.py").write_text(
+        (project_dir / "main.py").write_text(
             "import imported_module\nprint('hi')\n"
         )
 
@@ -842,17 +842,17 @@ class TestDeploy:
         assert "/lib/unimported_module.py" not in files
 
 
-class TestThings:
-    def test_lists_workspace_things(
+class TestProjects:
+    def test_lists_workspace_projects(
         self,
         tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         root = _seed_workspace(tmp_path)
-        _seed_thing(root, name="weather")
-        _seed_thing(root, name="heater")
+        _seed_project(root, name="weather")
+        _seed_project(root, name="heater")
         exit_code = cli.main([
-            "things", "--workspace-dir", str(root), "--flat",
+            "projects", "--workspace-dir", str(root), "--flat",
         ])
         assert exit_code == 0
         out = capsys.readouterr().out.splitlines()
@@ -864,26 +864,26 @@ class TestThings:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         root = _seed_workspace(tmp_path)
-        # things/ exists if any thing was seeded; without seeding it doesn't.
-        # Either way list_things() returns [].
+        # projects/ exists if any project was seeded; without seeding it doesn't.
+        # Either way list_projects() returns [].
         exit_code = cli.main([
-            "things", "--workspace-dir", str(root), "--flat",
+            "projects", "--workspace-dir", str(root), "--flat",
         ])
         assert exit_code == 0
-        assert "no things" in capsys.readouterr().out
+        assert "no projects" in capsys.readouterr().out
 
     def test_skips_underscore_dirs(
         self,
         tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        """_template / leading-underscore dirs aren't shown as things."""
+        """_template / leading-underscore dirs aren't shown as projects."""
         root = _seed_workspace(tmp_path)
-        _seed_thing(root, name="back-porch")
-        (root / "things" / "_template").mkdir()
-        (root / "things" / "_template" / "config.toml").write_text("\n")
+        _seed_project(root, name="back-porch")
+        (root / "projects" / "_template").mkdir()
+        (root / "projects" / "_template" / "config.toml").write_text("\n")
         exit_code = cli.main([
-            "things", "--workspace-dir", str(root), "--flat",
+            "projects", "--workspace-dir", str(root), "--flat",
         ])
         assert exit_code == 0
         out = capsys.readouterr().out.splitlines()
@@ -920,7 +920,7 @@ class TestDeployAllDevices:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         root = self._seed_two_device_workspace(tmp_path)
-        _seed_thing(root, name="back-porch")
+        _seed_project(root, name="back-porch")
 
         addresses_seen: list[str] = []
 
@@ -951,7 +951,7 @@ class TestDeployAllDevices:
     ) -> None:
         """One bad device doesn't short-circuit the loop; exit code is 1."""
         root = self._seed_two_device_workspace(tmp_path)
-        _seed_thing(root, name="back-porch")
+        _seed_project(root, name="back-porch")
 
         addresses_seen: list[str] = []
 
@@ -982,7 +982,7 @@ class TestDeployAllDevices:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         root = self._seed_two_device_workspace(tmp_path)
-        _seed_thing(root, name="back-porch")
+        _seed_project(root, name="back-porch")
         exit_code = cli.main([
             "deploy", "--workspace-dir", str(root),
             "back-porch", "--all-devices", "--device", "lolin-s2",
@@ -994,7 +994,7 @@ class TestDeployAllDevices:
         root = _seed_workspace(tmp_path)
         # Overwrite the seeded devices.yml with an empty list.
         (root / "devices.yml").write_text("devices: []\n")
-        _seed_thing(root, name="back-porch")
+        _seed_project(root, name="back-porch")
         with pytest.raises(SystemExit) as caught:
             cli.main([
                 "deploy", "--workspace-dir", str(root),
@@ -1004,7 +1004,7 @@ class TestDeployAllDevices:
 
 
 class TestDeployTargetsMapping:
-    """Phase 2f — `deploy_targets:` per-thing → per-device mapping."""
+    """Phase 2f — `deploy_targets:` per-project → per-device mapping."""
 
     def _seed_two_device_workspace(
         self, tmp_path: Path, deploy_targets_block: str = "",
@@ -1032,12 +1032,12 @@ class TestDeployTargetsMapping:
         )
         return tmp_path
 
-    def test_single_thing_picks_mapped_device(
+    def test_single_project_picks_mapped_device(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """`deploy <thing>` (no --device) picks the thing's mapped target."""
+        """`deploy <project>` (no --device) picks the project's mapped target."""
         root = self._seed_two_device_workspace(
             tmp_path,
             deploy_targets_block=(
@@ -1045,7 +1045,7 @@ class TestDeployTargetsMapping:
                 "  back-porch: pico-w\n"
             ),
         )
-        _seed_thing(root, name="back-porch")
+        _seed_project(root, name="back-porch")
 
         addresses_seen: list[str] = []
 
@@ -1062,20 +1062,20 @@ class TestDeployTargetsMapping:
         # Mapped device wins over devices.yml's "defaults.micropython".
         assert addresses_seen == ["/dev/cu.fake-cp"]
 
-    def test_single_thing_falls_back_when_unmapped(
+    def test_single_project_falls_back_when_unmapped(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """A thing not in deploy_targets still uses devices.yml defaults."""
+        """A project not in deploy_targets still uses devices.yml defaults."""
         root = self._seed_two_device_workspace(
             tmp_path,
             deploy_targets_block=(
                 "deploy_targets:\n"
-                "  other-thing: pico-w\n"
+                "  other-project: pico-w\n"
             ),
         )
-        _seed_thing(root, name="back-porch")
+        _seed_project(root, name="back-porch")
 
         addresses_seen: list[str] = []
         monkeypatch.setattr(
@@ -1105,7 +1105,7 @@ class TestDeployTargetsMapping:
                 "  back-porch: pico-w\n"
             ),
         )
-        _seed_thing(root, name="back-porch")
+        _seed_project(root, name="back-porch")
 
         addresses_seen: list[str] = []
         monkeypatch.setattr(
@@ -1138,7 +1138,7 @@ class TestDeployTargetsMapping:
                 "    - lolin-s2\n"
             ),
         )
-        _seed_thing(root, name="back-porch")
+        _seed_project(root, name="back-porch")
 
         addresses_seen: list[str] = []
         monkeypatch.setattr(
@@ -1166,7 +1166,7 @@ class TestDeployTargetsMapping:
                 "  back-porch: ghost-board\n"
             ),
         )
-        _seed_thing(root, name="back-porch")
+        _seed_project(root, name="back-porch")
         exit_code = cli.main([
             "deploy", "--workspace-dir", str(root), "back-porch",
         ])
@@ -1176,11 +1176,11 @@ class TestDeployTargetsMapping:
         assert "ghost-board" in captured_stderr
 
 
-class TestDeployAllThings:
-    """Phase 2f — `deploy --all-things` walks the deploy_targets mapping."""
+class TestDeployAllProjects:
+    """Phase 2f — `deploy --all-projects` walks the deploy_targets mapping."""
 
-    def _seed_three_thing_workspace(self, tmp_path: Path) -> Path:
-        """Two devices, three things, full deploy_targets coverage."""
+    def _seed_three_project_workspace(self, tmp_path: Path) -> Path:
+        """Two devices, three projects, full deploy_targets coverage."""
         (tmp_path / "workspace.yml").write_text(
             "defaults:\n"
             "  wifi:\n"
@@ -1205,16 +1205,16 @@ class TestDeployAllThings:
             "    address: /dev/cu.fake-cp\n",
         )
         for name in ("back-porch", "garage/door", "garage/window"):
-            _seed_thing(tmp_path, name=name)
+            _seed_project(tmp_path, name=name)
         return tmp_path
 
-    def test_walks_each_mapped_thing(
+    def test_walks_each_mapped_project(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root = self._seed_three_thing_workspace(tmp_path)
+        root = self._seed_three_project_workspace(tmp_path)
 
         deploy_calls: list[str] = []
         monkeypatch.setattr(
@@ -1225,7 +1225,7 @@ class TestDeployAllThings:
         )
 
         exit_code = cli.main([
-            "deploy", "--workspace-dir", str(root), "--all-things",
+            "deploy", "--workspace-dir", str(root), "--all-projects",
         ])
         assert exit_code == 0
         # back-porch → pico-w; garage/door → lolin-s2;
@@ -1237,7 +1237,7 @@ class TestDeployAllThings:
             "/dev/cu.fake-cp",
         ]
         out = capsys.readouterr().out
-        # Per-thing header lines fire when more than one thing in flight.
+        # Per-project header lines fire when more than one project in flight.
         assert "=== back-porch ===" in out
         assert "=== garage/door ===" in out
         assert "=== garage/window ===" in out
@@ -1247,10 +1247,10 @@ class TestDeployAllThings:
         tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root = self._seed_three_thing_workspace(tmp_path)
+        root = self._seed_three_project_workspace(tmp_path)
         exit_code = cli.main([
             "deploy", "--workspace-dir", str(root),
-            "back-porch", "--all-things",
+            "back-porch", "--all-projects",
         ])
         assert exit_code == 2
         assert "mutually exclusive" in capsys.readouterr().err
@@ -1260,10 +1260,10 @@ class TestDeployAllThings:
         tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        root = self._seed_three_thing_workspace(tmp_path)
+        root = self._seed_three_project_workspace(tmp_path)
         exit_code = cli.main([
             "deploy", "--workspace-dir", str(root),
-            "--all-things", "--all-devices",
+            "--all-projects", "--all-devices",
         ])
         assert exit_code == 2
         assert "mutually exclusive" in capsys.readouterr().err
@@ -1275,24 +1275,24 @@ class TestDeployAllThings:
     ) -> None:
         """No deploy_targets at all → exit 2 with a hint."""
         root = _seed_workspace(tmp_path)
-        _seed_thing(root, name="back-porch")
+        _seed_project(root, name="back-porch")
         exit_code = cli.main([
-            "deploy", "--workspace-dir", str(root), "--all-things",
+            "deploy", "--workspace-dir", str(root), "--all-projects",
         ])
         assert exit_code == 2
         captured_stderr = capsys.readouterr().err
         assert "deploy_targets" in captured_stderr
-        assert "Map each thing" in captured_stderr
+        assert "Map each project" in captured_stderr
 
-    def test_unknown_thing_in_mapping_errors(
+    def test_unknown_project_in_mapping_errors(
         self,
         tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        """A thing in the mapping that doesn't exist on disk fails fast."""
+        """A project in the mapping that doesn't exist on disk fails fast."""
         (tmp_path / "workspace.yml").write_text(
             "deploy_targets:\n"
-            "  ghost-thing: lolin-s2\n",
+            "  ghost-project: lolin-s2\n",
         )
         (tmp_path / "secrets.yml").write_text("wifi_password: shh\n")
         (tmp_path / "devices.yml").write_text(
@@ -1303,20 +1303,20 @@ class TestDeployAllThings:
             "    address: /dev/cu.fake-mp\n",
         )
         exit_code = cli.main([
-            "deploy", "--workspace-dir", str(tmp_path), "--all-things",
+            "deploy", "--workspace-dir", str(tmp_path), "--all-projects",
         ])
         assert exit_code == 2
         captured_stderr = capsys.readouterr().err
-        assert "unknown thing" in captured_stderr
-        assert "ghost-thing" in captured_stderr
+        assert "unknown project" in captured_stderr
+        assert "ghost-project" in captured_stderr
 
-    def test_failure_continues_to_next_thing(
+    def test_failure_continues_to_next_project(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """One bad deploy doesn't short-circuit the loop; exit code is 1."""
-        root = self._seed_three_thing_workspace(tmp_path)
+        root = self._seed_three_project_workspace(tmp_path)
 
         deploy_calls: list[str] = []
 
@@ -1334,10 +1334,10 @@ class TestDeployAllThings:
         monkeypatch.setattr(Device, "create_transport", factory)
 
         exit_code = cli.main([
-            "deploy", "--workspace-dir", str(root), "--all-things",
+            "deploy", "--workspace-dir", str(root), "--all-projects",
         ])
         assert exit_code == 1
-        # Every (thing, device) pair was attempted despite the failures.
+        # Every (project, device) pair was attempted despite the failures.
         assert deploy_calls == [
             "/dev/cu.fake-cp",
             "/dev/cu.fake-mp",
@@ -1356,7 +1356,7 @@ class TestDeployFailureHints:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         root = _seed_workspace(tmp_path)
-        _seed_thing(root)
+        _seed_project(root)
         transport = FakeTransport(
             execute_output=(
                 "Traceback (most recent call last):\n"
@@ -1383,7 +1383,7 @@ class TestDeployFailureHints:
     ) -> None:
         """Generic ZeroDivisionError carries no hint — no empty section."""
         root = _seed_workspace(tmp_path)
-        _seed_thing(root)
+        _seed_project(root)
         transport = FakeTransport(
             execute_output=(
                 "Traceback (most recent call last):\n"
@@ -1400,16 +1400,16 @@ class TestDeployFailureHints:
         captured_stderr = capsys.readouterr().err
         assert "--- hints ---" not in captured_stderr
 
-    def test_repl_with_thing_failure_prints_hint(
+    def test_repl_with_project_failure_prints_hint(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        """`repl <thing>` deploy failures route through the same hint pass."""
+        """`repl <project>` deploy failures route through the same hint pass."""
         root = _seed_workspace(tmp_path)
-        thing_dir = _seed_thing(root, name="back-porch")
-        (thing_dir / "app.py").write_text("def run(): pass\n")
+        project_dir = _seed_project(root, name="back-porch")
+        (project_dir / "app.py").write_text("def run(): pass\n")
         transport = FakeTransport(
             execute_output=(
                 "Traceback (most recent call last):\n"
@@ -1437,10 +1437,10 @@ class TestDeployFailureHints:
 
 
 class TestDeployDiffCleanup:
-    """`python run.py deploy <thing>` runs a scoped diff-deploy by default.
+    """`python run.py deploy <project>` runs a scoped diff-deploy by default.
 
     Pre-Phase-7-follow-on, the CLI used `Deployer.deploy()` which
-    leaves stale on-device files alone.  After the multi-thing-
+    leaves stale on-device files alone.  After the multi-project-
     staging-replacement work the CLI routes through
     `Deployer.deploy_diff()` — stale `/lib/*` from a previous
     deploy gets cleaned + a "removed stale" line surfaces in the
@@ -1454,7 +1454,7 @@ class TestDeployDiffCleanup:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         root = _seed_workspace(tmp_path)
-        _seed_thing(root, name="back-porch")
+        _seed_project(root, name="back-porch")
 
         # Pre-populate the fake device's flash with a stale file the
         # new payload won't include — the diff routine should remove it.
@@ -1463,7 +1463,7 @@ class TestDeployDiffCleanup:
             execute_output="",
             device_files={
                 "/main.py": b"# previous main.py",
-                "/lib/old_thing.py": b"old-content",
+                "/lib/old_project.py": b"old-content",
             },
         )
         monkeypatch.setattr(Device, "create_transport", lambda _self: transport)
@@ -1473,7 +1473,7 @@ class TestDeployDiffCleanup:
         ])
         assert exit_code == 0
         out = capsys.readouterr().out
-        assert "removed stale /lib/old_thing.py" in out
+        assert "removed stale /lib/old_project.py" in out
         # Transport saw both the listing primitive + the delete primitive.
         labels = [call[0] for call in transport.calls]
         assert "list_files_in_scope" in labels
@@ -1488,7 +1488,7 @@ class TestDeployDiffCleanup:
     ) -> None:
         """Empty stale set → no `removed stale` lines in CLI output."""
         root = _seed_workspace(tmp_path)
-        _seed_thing(root, name="back-porch")
+        _seed_project(root, name="back-porch")
 
         transport = FakeTransport(mode="copy", execute_output="")
         monkeypatch.setattr(Device, "create_transport", lambda _self: transport)
@@ -1513,14 +1513,14 @@ class TestDeployWipeFlag:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         root = _seed_workspace(tmp_path)
-        _seed_thing(root, name="back-porch")
+        _seed_project(root, name="back-porch")
 
         transport = FakeTransport(
             mode="copy",
             execute_output="",
             device_files={
                 "/main.py": b"# previous main.py",
-                "/lib/old_thing.py": b"old",
+                "/lib/old_project.py": b"old",
                 "/settings.toml": b"WIFI = '...'",  # out of scope
                 "/photo.jpg": b"<jpeg>",            # out of scope
             },
@@ -1554,7 +1554,7 @@ class TestDeployWipeFlag:
     ) -> None:
         """`deploy --wipe --dry-run` surfaces the wipe in the dry-run summary."""
         root = _seed_workspace(tmp_path)
-        _seed_thing(root, name="back-porch")
+        _seed_project(root, name="back-porch")
 
         transport = FakeTransport(execute_output="")
         monkeypatch.setattr(Device, "create_transport", lambda _self: transport)
@@ -1581,7 +1581,7 @@ class TestDeployDryRun:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         root = _seed_workspace(tmp_path)
-        _seed_thing(root, name="back-porch")
+        _seed_project(root, name="back-porch")
 
         transport = FakeTransport(execute_output="")
         monkeypatch.setattr(Device, "create_transport", lambda self: transport)
@@ -1605,8 +1605,8 @@ class TestDeployDryRun:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         root = _seed_workspace(tmp_path)
-        thing_dir = _seed_thing(root, name="garage/sensors/door_open")
-        (thing_dir / "app.py").write_text("def run(): pass\n")
+        project_dir = _seed_project(root, name="garage/sensors/door_open")
+        (project_dir / "app.py").write_text("def run(): pass\n")
 
         transport = FakeTransport(execute_output="")
         monkeypatch.setattr(Device, "create_transport", lambda self: transport)
@@ -1620,13 +1620,13 @@ class TestDeployDryRun:
         # Layout label flagged.
         assert "boot-shim layout" in out
         # Each per-level namespace init is present + classified.
-        assert "/lib/things/garage/__init__.py" in out
-        assert "/lib/things/garage/sensors/__init__.py" in out
-        assert "/lib/things/garage/sensors/door_open/app.py" in out
+        assert "/lib/projects/garage/__init__.py" in out
+        assert "/lib/projects/garage/sensors/__init__.py" in out
+        assert "/lib/projects/garage/sensors/door_open/app.py" in out
         # Categories appear at least once each.
         assert "shim" in out
         assert "namespace" in out
-        assert "thing" in out
+        assert "project" in out
         assert "config" in out
 
     def test_flat_layout_skips_namespace_inits(
@@ -1637,7 +1637,7 @@ class TestDeployDryRun:
     ) -> None:
         """Flat layout (no --boot-shim) ships at the device root."""
         root = _seed_workspace(tmp_path)
-        _seed_thing(root, name="back-porch")
+        _seed_project(root, name="back-porch")
 
         transport = FakeTransport(execute_output="")
         monkeypatch.setattr(Device, "create_transport", lambda self: transport)
@@ -1670,12 +1670,12 @@ class TestStatus:
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
     ) -> None:
         root = _seed_workspace(tmp_path)
-        _seed_thing(root, name="back-porch")
+        _seed_project(root, name="back-porch")
         exit_code = cli.main(["status", "--workspace-dir", str(root)])
         assert exit_code == 0
         out = capsys.readouterr().out
         # All four labels appear; OK findings get the check glyph.
-        for label in ("WORKSPACE.YML", "DEVICES.YML", "SECRETS.YML", "THINGS"):
+        for label in ("WORKSPACE.YML", "DEVICES.YML", "SECRETS.YML", "PROJECTS"):
             assert label in out
         assert "✓" in out
 
@@ -1712,12 +1712,12 @@ class TestStatus:
 class TestDoctor:
     """Phase 2b — `doctor` runs status's checks plus AST + config-merge."""
 
-    def test_includes_python_and_thing_run_labels(
+    def test_includes_python_and_project_run_labels(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
     ) -> None:
         root = _seed_workspace(tmp_path)
-        thing_dir = _seed_thing(root, name="back-porch")
-        (thing_dir / "app.py").write_text("def run(): pass\n")
+        project_dir = _seed_project(root, name="back-porch")
+        (project_dir / "app.py").write_text("def run(): pass\n")
         exit_code = cli.main(["doctor", "--workspace-dir", str(root)])
         assert exit_code == 0
         out = capsys.readouterr().out
@@ -1726,8 +1726,8 @@ class TestDoctor:
             "WORKSPACE.YML",
             "DEVICES.YML",
             "SECRETS.YML",
-            "THINGS",
-            "THING run() defs",
+            "PROJECTS",
+            "PROJECT run() defs",
             "SECRET refs",
         ):
             assert label in out
@@ -1736,8 +1736,8 @@ class TestDoctor:
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
     ) -> None:
         root = _seed_workspace(tmp_path)
-        thing_dir = _seed_thing(root, name="back-porch")
-        (thing_dir / "app.py").write_text(
+        project_dir = _seed_project(root, name="back-porch")
+        (project_dir / "app.py").write_text(
             "def something_else(): pass\n",
         )
         exit_code = cli.main(["doctor", "--workspace-dir", str(root)])
@@ -1750,9 +1750,9 @@ class TestDoctor:
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
     ) -> None:
         root = _seed_workspace(tmp_path)
-        thing_dir = _seed_thing(root, name="back-porch")
-        (thing_dir / "app.py").write_text("def run(): pass\n")
-        # _seed_thing's config.toml references !secret wifi_password
+        project_dir = _seed_project(root, name="back-porch")
+        (project_dir / "app.py").write_text("def run(): pass\n")
+        # _seed_project's config.toml references !secret wifi_password
         # which the seeded secrets.yml fulfills.  Wipe secrets.yml so
         # the reference becomes unresolved.
         (root / "secrets.yml").write_text("")
@@ -1762,23 +1762,23 @@ class TestDoctor:
         assert "SECRET refs" in out
 
 
-class TestThingsTreeView:
-    """Slice 4 — `things` defaults to a Unicode tree, `--flat` keeps the list."""
+class TestProjectsTreeView:
+    """Slice 4 — `projects` defaults to a Unicode tree, `--flat` keeps the list."""
 
     def test_default_renders_tree_with_namespaces(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
     ) -> None:
         root = _seed_workspace(tmp_path)
-        _seed_thing(root, name="thermostat")
-        _seed_thing(root, name="upstairs/bedroom_sensor")
-        _seed_thing(root, name="upstairs/nightstand_lamp")
-        _seed_thing(root, name="garage/sensors/door_open")
+        _seed_project(root, name="thermostat")
+        _seed_project(root, name="upstairs/bedroom_sensor")
+        _seed_project(root, name="upstairs/nightstand_lamp")
+        _seed_project(root, name="garage/sensors/door_open")
 
-        exit_code = cli.main(["things", "--workspace-dir", str(root)])
+        exit_code = cli.main(["projects", "--workspace-dir", str(root)])
         assert exit_code == 0
         out = capsys.readouterr().out
         # Root marker.
-        assert out.startswith("things/\n")
+        assert out.startswith("projects/\n")
         # Top-level alpha order: garage/, thermostat, upstairs/.
         assert "├── garage/" in out
         assert "├── thermostat" in out
@@ -1789,15 +1789,15 @@ class TestThingsTreeView:
         assert "bedroom_sensor" in out
         assert "nightstand_lamp" in out
 
-    def test_flat_one_line_per_thing(
+    def test_flat_one_line_per_project(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
     ) -> None:
         root = _seed_workspace(tmp_path)
-        _seed_thing(root, name="thermostat")
-        _seed_thing(root, name="upstairs/bedroom_sensor")
-        _seed_thing(root, name="garage/sensors/door_open")
+        _seed_project(root, name="thermostat")
+        _seed_project(root, name="upstairs/bedroom_sensor")
+        _seed_project(root, name="garage/sensors/door_open")
         exit_code = cli.main([
-            "things", "--workspace-dir", str(root), "--flat",
+            "projects", "--workspace-dir", str(root), "--flat",
         ])
         assert exit_code == 0
         out_lines = [
@@ -1813,9 +1813,9 @@ class TestThingsTreeView:
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
     ) -> None:
         root = _seed_workspace(tmp_path)
-        exit_code = cli.main(["things", "--workspace-dir", str(root)])
+        exit_code = cli.main(["projects", "--workspace-dir", str(root)])
         assert exit_code == 0
-        assert "no things" in capsys.readouterr().out
+        assert "no projects" in capsys.readouterr().out
 
 
 # ---------------------------------------------------------------------------
@@ -2100,7 +2100,7 @@ class TestBootstrapWizard:
         assert "runtime: micropython 1.27.0" in captured.out
         assert "registered pico at /dev/cu.fake" in captured.out
         # Next-steps summary shows all three pointers.
-        assert "new <thing-name>" in captured.out
+        assert "new <project-name>" in captured.out
         assert "deploy" in captured.out
         assert "repl" in captured.out
 
@@ -2394,8 +2394,8 @@ class TestProbe:
 # ---------------------------------------------------------------------------
 
 
-class TestReplWithThing:
-    """Phase 2e — `repl <thing>` deploys then tails in one command."""
+class TestReplWithProject:
+    """Phase 2e — `repl <project>` deploys then tails in one command."""
 
     def test_deploys_then_tails(
         self,
@@ -2403,8 +2403,8 @@ class TestReplWithThing:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         root = _seed_workspace(tmp_path)
-        thing_dir = _seed_thing(root, name="back-porch")
-        (thing_dir / "app.py").write_text("def run(): print('back-porch')\n")
+        project_dir = _seed_project(root, name="back-porch")
+        (project_dir / "app.py").write_text("def run(): print('back-porch')\n")
 
         transport = FakeTransport(execute_output="back-porch\n")
         monkeypatch.setattr(Device, "create_transport", lambda self: transport)
@@ -2429,7 +2429,7 @@ class TestReplWithThing:
         ]
         assert len(deploy_calls) == 1
         files, _entrypoint = deploy_calls[0][1]
-        assert "/lib/things/back-porch/app.py" in files
+        assert "/lib/projects/back-porch/app.py" in files
         assert b'"back-porch"' in files["/active.py"]
 
     def test_explicit_tail_seconds(
@@ -2437,10 +2437,10 @@ class TestReplWithThing:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """`--tail SECONDS <thing>` overrides the 30s default."""
+        """`--tail SECONDS <project>` overrides the 30s default."""
         root = _seed_workspace(tmp_path)
-        thing_dir = _seed_thing(root, name="back-porch")
-        (thing_dir / "app.py").write_text("def run(): print('back-porch')\n")
+        project_dir = _seed_project(root, name="back-porch")
+        (project_dir / "app.py").write_text("def run(): print('back-porch')\n")
 
         transport = FakeTransport(execute_output="")
         monkeypatch.setattr(Device, "create_transport", lambda self: transport)
@@ -2460,14 +2460,14 @@ class TestReplWithThing:
         assert exit_code == 0
         assert captured["seconds"] == 5.0
 
-    def test_nested_thing_name_resolves(
+    def test_nested_project_name_resolves(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         root = _seed_workspace(tmp_path)
-        thing_dir = _seed_thing(root, name="garage/sensors/door_open")
-        (thing_dir / "app.py").write_text("def run(): print('door_open')\n")
+        project_dir = _seed_project(root, name="garage/sensors/door_open")
+        (project_dir / "app.py").write_text("def run(): print('door_open')\n")
 
         transport = FakeTransport(execute_output="")
         monkeypatch.setattr(Device, "create_transport", lambda self: transport)
@@ -2486,7 +2486,7 @@ class TestReplWithThing:
             call for call in transport.calls if call[0] == "deploy_files"
         ]
         files, _entrypoint = deploy_calls[0][1]
-        assert "/lib/things/garage/sensors/door_open/app.py" in files
+        assert "/lib/projects/garage/sensors/door_open/app.py" in files
         assert b'"garage.sensors.door_open"' in files["/active.py"]
 
     def test_failed_deploy_returns_one(
@@ -2497,8 +2497,8 @@ class TestReplWithThing:
     ) -> None:
         """Tail is skipped when the deploy traceback marks failure."""
         root = _seed_workspace(tmp_path)
-        thing_dir = _seed_thing(root, name="back-porch")
-        (thing_dir / "app.py").write_text("def run(): pass\n")
+        project_dir = _seed_project(root, name="back-porch")
+        (project_dir / "app.py").write_text("def run(): pass\n")
 
         transport = FakeTransport(
             execute_output=(
@@ -2525,7 +2525,7 @@ class TestReplWithThing:
         assert tail_called[0] is False
         assert "deploy-failed" in capsys.readouterr().err
 
-    def test_missing_thing_raises(self, tmp_path: Path) -> None:
+    def test_missing_project_raises(self, tmp_path: Path) -> None:
         root = _seed_workspace(tmp_path)
         with pytest.raises(SystemExit) as caught:
             cli.main([
@@ -3682,23 +3682,23 @@ class TestAddDeviceRuntimeInference:
 
 
 # ---------------------------------------------------------------------------
-# rename  (Slice 3 — wired to thing dirs + devices.yml)
+# rename  (Slice 3 — wired to project dirs + devices.yml)
 # ---------------------------------------------------------------------------
 
 
 class TestRename:
-    def test_thing_renames_directory(self, tmp_path: Path) -> None:
+    def test_project_renames_directory(self, tmp_path: Path) -> None:
         root = _seed_workspace(tmp_path)
-        _seed_thing(root, "old_name")
+        _seed_project(root, "old_name")
         exit_code = cli.main([
             "rename", "--workspace-dir", str(root),
-            "--thing", "old_name", "new_name",
+            "--project", "old_name", "new_name",
         ])
         assert exit_code == 0
-        assert not (root / "things" / "old_name").exists()
-        assert (root / "things" / "new_name" / "code.py").exists()
+        assert not (root / "projects" / "old_name").exists()
+        assert (root / "projects" / "new_name" / "code.py").exists()
 
-    def test_thing_missing_returns_one(
+    def test_project_missing_returns_one(
         self,
         tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
@@ -3706,92 +3706,92 @@ class TestRename:
         root = _seed_workspace(tmp_path)
         exit_code = cli.main([
             "rename", "--workspace-dir", str(root),
-            "--thing", "ghost", "spook",
+            "--project", "ghost", "spook",
         ])
         assert exit_code == 1
         assert "not found" in capsys.readouterr().err
 
-    def test_thing_target_exists_returns_one(
+    def test_project_target_exists_returns_one(
         self,
         tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         root = _seed_workspace(tmp_path)
-        _seed_thing(root, "alpha")
-        _seed_thing(root, "beta")
+        _seed_project(root, "alpha")
+        _seed_project(root, "beta")
         exit_code = cli.main([
             "rename", "--workspace-dir", str(root),
-            "--thing", "alpha", "beta",
+            "--project", "alpha", "beta",
         ])
         assert exit_code == 1
         assert "already exists" in capsys.readouterr().err
 
-    def test_thing_rejects_invalid_new_segment(
+    def test_project_rejects_invalid_new_segment(
         self, tmp_path: Path,
     ) -> None:
-        """``_validate_thing_name`` runs on both sides of the rename."""
+        """``_validate_project_name`` runs on both sides of the rename."""
         root = _seed_workspace(tmp_path)
-        _seed_thing(root, "alpha")
+        _seed_project(root, "alpha")
         with pytest.raises(SystemExit) as caught:
             cli.main([
                 "rename", "--workspace-dir", str(root),
-                "--thing", "alpha", "kitchen-sensor",
+                "--project", "alpha", "kitchen-sensor",
             ])
         assert "valid Python identifier" in str(caught.value)
 
 
 class TestRenameNested:
-    """Slice 4 — `rename --thing` accepts slash / dotted paths on both sides."""
+    """Slice 4 — `rename --project` accepts slash / dotted paths on both sides."""
 
     def test_moves_into_new_namespace(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
     ) -> None:
         root = _seed_workspace(tmp_path)
-        _seed_thing(root, "bedroom_sensor")
+        _seed_project(root, "bedroom_sensor")
 
         exit_code = cli.main([
             "rename", "--workspace-dir", str(root),
-            "--thing", "bedroom_sensor", "upstairs/bedroom_sensor",
+            "--project", "bedroom_sensor", "upstairs/bedroom_sensor",
         ])
         assert exit_code == 0
-        assert not (root / "things" / "bedroom_sensor").exists()
+        assert not (root / "projects" / "bedroom_sensor").exists()
         assert (
-            root / "things" / "upstairs" / "bedroom_sensor" / "code.py"
+            root / "projects" / "upstairs" / "bedroom_sensor" / "code.py"
         ).is_file()
         # Auto-created namespace dir got an __init__.py marker.
-        assert (root / "things" / "upstairs" / "__init__.py").is_file()
+        assert (root / "projects" / "upstairs" / "__init__.py").is_file()
         out = capsys.readouterr().out
-        assert "creating namespace things/upstairs/" in out
+        assert "creating namespace projects/upstairs/" in out
 
     def test_moves_between_namespaces(
         self, tmp_path: Path,
     ) -> None:
         root = _seed_workspace(tmp_path)
-        _seed_thing(root, "garage/door_open")
+        _seed_project(root, "garage/door_open")
 
         exit_code = cli.main([
             "rename", "--workspace-dir", str(root),
-            "--thing", "garage/door_open", "upstairs/door_open",
+            "--project", "garage/door_open", "upstairs/door_open",
         ])
         assert exit_code == 0
         assert not (
-            root / "things" / "garage" / "door_open"
+            root / "projects" / "garage" / "door_open"
         ).exists()
         assert (
-            root / "things" / "upstairs" / "door_open" / "code.py"
+            root / "projects" / "upstairs" / "door_open" / "code.py"
         ).is_file()
 
     def test_dotted_form_normalises(self, tmp_path: Path) -> None:
         root = _seed_workspace(tmp_path)
-        _seed_thing(root, "garage/door_open")
+        _seed_project(root, "garage/door_open")
 
         exit_code = cli.main([
             "rename", "--workspace-dir", str(root),
-            "--thing", "garage.door_open", "upstairs.door_open",
+            "--project", "garage.door_open", "upstairs.door_open",
         ])
         assert exit_code == 0
         assert (
-            root / "things" / "upstairs" / "door_open" / "code.py"
+            root / "projects" / "upstairs" / "door_open" / "code.py"
         ).is_file()
 
     def test_bare_name_disambiguates_against_tree(
@@ -3799,28 +3799,28 @@ class TestRenameNested:
     ) -> None:
         """Bare old-name resolves uniquely when only one path matches."""
         root = _seed_workspace(tmp_path)
-        _seed_thing(root, "garage/door_open")
-        _seed_thing(root, "thermostat")
+        _seed_project(root, "garage/door_open")
+        _seed_project(root, "thermostat")
 
         exit_code = cli.main([
             "rename", "--workspace-dir", str(root),
-            "--thing", "door_open", "front_door_open",
+            "--project", "door_open", "front_door_open",
         ])
         assert exit_code == 0
         assert (
-            root / "things" / "front_door_open" / "code.py"
+            root / "projects" / "front_door_open" / "code.py"
         ).is_file()
 
     def test_bare_name_ambiguous_lists_candidates(
         self, tmp_path: Path,
     ) -> None:
         root = _seed_workspace(tmp_path)
-        _seed_thing(root, "upstairs/sensor")
-        _seed_thing(root, "garage/sensor")
+        _seed_project(root, "upstairs/sensor")
+        _seed_project(root, "garage/sensor")
         with pytest.raises(SystemExit) as caught:
             cli.main([
                 "rename", "--workspace-dir", str(root),
-                "--thing", "sensor", "renamed_sensor",
+                "--project", "sensor", "renamed_sensor",
             ])
         assert "ambiguous" in str(caught.value)
 
@@ -3871,7 +3871,7 @@ class TestRenameNested:
         assert exit_code == 1
         assert "already exists" in capsys.readouterr().err
 
-    def test_neither_thing_nor_device_specified_argparse_errors(
+    def test_neither_project_nor_device_specified_argparse_errors(
         self,
         tmp_path: Path,
     ) -> None:
@@ -3891,7 +3891,7 @@ class TestDeployHealthGate:
     ) -> None:
         """Malformed workspace.yml is an ERROR; deploy aborts with exit 2."""
         root = _seed_workspace(tmp_path)
-        _seed_thing(root)
+        _seed_project(root)
         # Corrupt workspace.yml to trigger an ERROR-level finding.
         (root / "workspace.yml").write_text("not: valid: yaml: ::\n")
 
@@ -3920,7 +3920,7 @@ class TestDeployHealthGate:
         config-file reads.
         """
         root = _seed_workspace(tmp_path)
-        _seed_thing(root)
+        _seed_project(root)
 
         from chumicro_workspace import cli as workspace_cli
         from chumicro_workspace.health import HealthFinding, HealthLevel
@@ -3960,7 +3960,7 @@ class TestDeployHealthGate:
     ) -> None:
         """Placeholder secrets are WARN — printed but deploy proceeds."""
         root = _seed_workspace(tmp_path)
-        _seed_thing(root)
+        _seed_project(root)
         # secrets.yml carries a placeholder.
         (root / "secrets.yml").write_text("wifi_password: replace-me\n")
 
@@ -4037,7 +4037,7 @@ class TestCommandPreflight:
 
 
 class TestCommandDumpConfig:
-    """dump-config prints the merged + secret-resolved config for a thing."""
+    """dump-config prints the merged + secret-resolved config for a project."""
 
     def test_prints_merged_config_as_json(
         self,
@@ -4045,7 +4045,7 @@ class TestCommandDumpConfig:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         root = _seed_workspace(tmp_path)
-        _seed_thing(root, "back-porch")
+        _seed_project(root, "back-porch")
 
         exit_code = cli.main([
             "dump-config", "--workspace-dir", str(root), "back-porch",
@@ -4053,7 +4053,7 @@ class TestCommandDumpConfig:
         assert exit_code == 0
         import json
         printed = json.loads(capsys.readouterr().out)
-        # Workspace defaults merged with thing config; secret resolved.
+        # Workspace defaults merged with project config; secret resolved.
         assert printed["wifi"]["ssid"] == "HomeNet"
         assert printed["wifi"]["password"] == "shh"
         assert printed["wifi"]["hostname_prefix"] == "chu-"
@@ -4064,7 +4064,7 @@ class TestCommandDumpConfig:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         root = _seed_workspace(tmp_path)
-        _seed_thing(root)
+        _seed_project(root)
         exit_code = cli.main([
             "dump-config", "--workspace-dir", str(root), "back-porch", "--repr",
         ])
@@ -4080,9 +4080,9 @@ class TestCommandDumpConfig:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         root = _seed_workspace(tmp_path)
-        thing_dir = root / "things" / "back-porch"
-        thing_dir.mkdir(parents=True)
-        (thing_dir / "config.toml").write_text(
+        project_dir = root / "projects" / "back-porch"
+        project_dir.mkdir(parents=True)
+        (project_dir / "config.toml").write_text(
             "[wifi]\npassword = '!secret missing_key'\n",
         )
 
@@ -4092,9 +4092,9 @@ class TestCommandDumpConfig:
         assert exit_code == 1
         assert "missing_key" in capsys.readouterr().err
 
-    def test_missing_thing_raises(self, tmp_path: Path) -> None:
+    def test_missing_project_raises(self, tmp_path: Path) -> None:
         root = _seed_workspace(tmp_path)
         with pytest.raises(SystemExit, match="not found"):
             cli.main([
-                "dump-config", "--workspace-dir", str(root), "ghost-thing",
+                "dump-config", "--workspace-dir", str(root), "ghost-project",
             ])

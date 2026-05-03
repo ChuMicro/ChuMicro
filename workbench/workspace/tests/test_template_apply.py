@@ -42,13 +42,13 @@ def fake_template_repo(tmp_path: Path) -> Path:
     # `_templates/secrets.yml` template source still gets tracked.
     (repo / ".gitignore").write_text(".venv/\n/secrets.yml\n")
     (repo / "workspace.yml").write_text("environment: dev\n")
-    (repo / "things").mkdir()
-    (repo / "things" / "_template").mkdir()
-    (repo / "things" / "_template" / "app.py").write_text(
+    (repo / "projects").mkdir()
+    (repo / "projects" / "_template").mkdir()
+    (repo / "projects" / "_template" / "app.py").write_text(
         "def run(): pass\n",
     )
-    (repo / "things" / "_template" / "config.toml").write_text(
-        '[thing]\nname = "_template"\n',
+    (repo / "projects" / "_template" / "config.toml").write_text(
+        '[project]\nname = "_template"\n',
     )
     (repo / "_templates").mkdir()
     (repo / "_templates" / "secrets.yml").write_text(

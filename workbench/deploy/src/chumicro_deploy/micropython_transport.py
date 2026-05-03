@@ -657,7 +657,7 @@ class MicropythonTransport:
         Mount-mode (RAM) deploys return an empty list — mount mode
         doesn't write to flash, so there's nothing persistent to
         diff between deploys.  See ``plans/next-up.md`` "Replace
-        multi-thing staging with scoped diff-deploy" for the design
+        multi-project staging with scoped diff-deploy" for the design
         rationale.
 
         Raises :class:`MicropythonTransportError` on raw-REPL failure

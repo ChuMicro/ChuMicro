@@ -1,4 +1,4 @@
-"""On-device workspace runtime — boots the active thing.
+"""On-device workspace runtime — boots the active project.
 
 Shipped as a payload by ``chumicro-workspace``; lands on
 the device as ``/lib/workspace_runtime/__init__.py``.  The
@@ -9,14 +9,14 @@ shim::
     workspace_runtime.boot()
 
 :func:`boot` reads ``/active.py`` (a one-line module written by
-the host-side deploy that names the active thing), imports the
-matching ``things.<name>.app`` module, and calls its
+the host-side deploy that names the active project), imports the
+matching ``projects.<name>.app`` module, and calls its
 ``run()`` function.
 
 Decision 0029 §3 pins down the contract: the shim is stable, the
-thing's ``app.py`` is the user-facing edit surface, and
+project's ``app.py`` is the user-facing edit surface, and
 ``active.py`` is the deploy-time selector that lets a single
-device hold multiple thing payloads but boot only one.
+device hold multiple project payloads but boot only one.
 
 Cross-runtime: this module runs on CircuitPython, MicroPython,
 and CPython.  No f-strings on hot paths is overkill (CP / MP
@@ -36,17 +36,17 @@ class WorkspaceBootError(RuntimeError):
 
 
 def boot():
-    """Locate the active thing and run it.
+    """Locate the active project and run it.
 
-    Reads ``/active.py``'s ``THING_NAME``, imports
-    ``things.<THING_NAME>.app``, and calls ``app.run()``.  Errors
+    Reads ``/active.py``'s ``PROJECT_NAME``, imports
+    ``projects.<PROJECT_NAME>.app``, and calls ``app.run()``.  Errors
     surface as :class:`WorkspaceBootError` with a descriptive
     message so the device REPL or ``run.py repl --tail`` shows the
     user where the boot pipeline broke.
 
     Raises:
         WorkspaceBootError: ``/active.py`` is missing or has no
-            ``THING_NAME``; the named thing's ``app.py`` can't be
+            ``PROJECT_NAME``; the named project's ``app.py`` can't be
             imported; or ``app.py`` exists but has no ``run()``
             attribute.
     """
@@ -55,16 +55,16 @@ def boot():
     except ImportError as exception:
         raise WorkspaceBootError(
             "/active.py missing — deploy may not have run, or "
-            "the thing was deployed without the boot shim. "
+            "the project was deployed without the boot shim. "
             "Original ImportError: " + str(exception),
         ) from exception
-    thing_name = getattr(active, "THING_NAME", None)
-    if not thing_name:
+    project_name = getattr(active, "PROJECT_NAME", None)
+    if not project_name:
         raise WorkspaceBootError(
-            "/active.py exists but has no THING_NAME attribute. "
-            "Deploy should write `THING_NAME = \"<name>\"` at the top.",
+            "/active.py exists but has no PROJECT_NAME attribute. "
+            "Deploy should write `PROJECT_NAME = \"<name>\"` at the top.",
         )
-    module_path = "things." + thing_name + ".app"
+    module_path = "projects." + project_name + ".app"
     try:
         # __import__ with fromlist returns the leaf module directly
         # (no manual getattr walk).  Keep parameters positional so
@@ -74,7 +74,7 @@ def boot():
     except ImportError as exception:
         raise WorkspaceBootError(
             "could not import " + module_path + ": " + str(exception)
-            + ".  Check that the thing was deployed and its imports "
+            + ".  Check that the project was deployed and its imports "
             "resolved against /lib/.",
         ) from exception
     run_function = getattr(app_module, "run", None)

@@ -5,8 +5,8 @@ from pathlib import Path
 import pytest
 from chumicro_workspace import (
     WorkspaceConfigError,
+    read_project_config,
     read_secrets_yaml,
-    read_thing_config,
     read_workspace_yaml,
 )
 
@@ -56,11 +56,11 @@ class TestReadWorkspaceYaml:
 
 
 # ---------------------------------------------------------------------------
-# read_thing_config
+# read_project_config
 # ---------------------------------------------------------------------------
 
 
-class TestReadThingConfig:
+class TestReadProjectConfig:
     def test_toml_round_trips(self, tmp_path: Path) -> None:
         path = tmp_path / "config.toml"
         path.write_text(
@@ -71,7 +71,7 @@ class TestReadThingConfig:
             "[app]\n"
             "sample_period_ms = 30000\n"
         )
-        result = read_thing_config(path)
+        result = read_project_config(path)
         assert result == {
             "wifi": {"ssid": "HomeNet", "password": "!secret wifi_password"},
             "app": {"sample_period_ms": 30000},
@@ -86,7 +86,7 @@ class TestReadThingConfig:
             "app:\n"
             "  sample_period_ms: 30000\n"
         )
-        result = read_thing_config(path)
+        result = read_project_config(path)
         assert result["wifi"]["ssid"] == "HomeNet"
         assert result["app"]["sample_period_ms"] == 30000
 
@@ -94,20 +94,20 @@ class TestReadThingConfig:
         """``.yaml`` works the same as ``.yml``."""
         path = tmp_path / "config.yaml"
         path.write_text("wifi:\n  ssid: x\n")
-        result = read_thing_config(path)
+        result = read_project_config(path)
         assert result["wifi"]["ssid"] == "x"
 
     def test_unrecognized_suffix_raises(self, tmp_path: Path) -> None:
         path = tmp_path / "config.json"
         path.write_text('{"wifi": {"ssid": "x"}}')
         with pytest.raises(WorkspaceConfigError):
-            read_thing_config(path)
+            read_project_config(path)
 
     def test_yaml_top_level_list_raises(self, tmp_path: Path) -> None:
         path = tmp_path / "config.yml"
         path.write_text("- one\n- two\n")
         with pytest.raises(WorkspaceConfigError):
-            read_thing_config(path)
+            read_project_config(path)
 
 
 # ---------------------------------------------------------------------------

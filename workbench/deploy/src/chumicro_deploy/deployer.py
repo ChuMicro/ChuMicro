@@ -75,9 +75,9 @@ class Deployer:
     ) -> DeployResult:
         """Diff-deploy *source* — delete stale in-scope files, then deploy.
 
-        Replaces the multi-thing-staging flow retired in workspace-
+        Replaces the multi-project-staging flow retired in workspace-
         ecosystem Slice 7.  Per the design in ``plans/next-up.md``
-        ("Replace multi-thing staging with scoped diff-deploy"):
+        ("Replace multi-project staging with scoped diff-deploy"):
 
         1. Connect.
         2. Ask the transport for every in-scope file currently on the

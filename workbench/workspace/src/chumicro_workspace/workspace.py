@@ -1,20 +1,20 @@
-"""Workspace path resolution + thing-tree classification.
+"""Workspace path resolution + project-tree classification.
 
 Locates the canonical files of a project workspace (workspace.yml,
-devices.yml, secrets.yml, ``things/<...>/``) given a starting
+devices.yml, secrets.yml, ``projects/<...>/``) given a starting
 directory.  The CLI walks up from the current working directory
 until it finds a ``workspace.yml`` so users can invoke commands from
 anywhere inside the workspace tree (typical Git / monorepo
 ergonomics).
 
-Things may be nested arbitrarily deep under ``things/`` —
-``things/upstairs/bedroom_sensor/``, ``things/garage/sensors/door_open/``,
+Projects may be nested arbitrarily deep under ``projects/`` —
+``projects/upstairs/bedroom_sensor/``, ``projects/garage/sensors/door_open/``,
 and so on (Phase 1 of ``plans/workstreams/workspace-ecosystem.md``).
 A directory is classified by walking its contents:
 
-* **thing** — leaf containing an entry-point file
+* **project** — leaf containing an entry-point file
   (``app.py`` / ``code.py`` / ``main.py``).  Deployable.
-* **namespace** — recursively contains at least one thing (or another
+* **namespace** — recursively contains at least one project (or another
   namespace).  Pure organisational structure; not deployed itself.
 * **supporting** — neither.  Silently ignored — lets users park
   ``docs/``, design notes, etc. anywhere in the tree without flagging
@@ -28,7 +28,7 @@ and reified by the canonical template at
         workspace.yml          # workspace defaults (Decision 0035)
         devices.yml            # board entries (chumicro_deploy.config.default)
         secrets.yml            # gitignored, optional
-        things/<...>/<name>/   # one directory per "thing", optionally nested
+        projects/<...>/<name>/   # one directory per "project", optionally nested
         libs/                  # shared library code
         packages/              # third-party packages (gitignored)
 """
@@ -42,23 +42,23 @@ from pathlib import Path
 #: Filename whose presence anchors a workspace root.
 WORKSPACE_MARKER: str = "workspace.yml"
 
-#: Default subdirectory that contains one directory per thing.
-THINGS_DIRNAME: str = "things"
+#: Default subdirectory that contains one directory per project.
+PROJECTS_DIRNAME: str = "projects"
 
-#: Filenames that mark a directory as a deployable "thing".  Order is
+#: Filenames that mark a directory as a deployable "project".  Order is
 #: irrelevant — any single one is enough.  ``app.py`` is the
 #: workspace-runtime convention (Decision 0029); ``code.py`` /
 #: ``main.py`` are accepted so users with bare CircuitPython /
-#: MicroPython entry-points still see their thing classified.
+#: MicroPython entry-points still see their project classified.
 ENTRY_POINT_FILENAMES: tuple[str, ...] = ("app.py", "code.py", "main.py")
 
 
-class ThingClassification(StrEnum):
-    """How a directory under ``things/`` is treated by the workspace tools."""
+class ProjectClassification(StrEnum):
+    """How a directory under ``projects/`` is treated by the workspace tools."""
 
     #: Deployable — has an entry-point file.
-    THING = "thing"
-    #: Recursively contains at least one thing or namespace.
+    PROJECT = "project"
+    #: Recursively contains at least one project or namespace.
     NAMESPACE = "namespace"
     #: Neither — silently ignored by deploy / list / new.
     SUPPORTING = "supporting"
@@ -86,40 +86,40 @@ def _has_entry_point(path: Path) -> bool:
 def _walk_classified(
     parent: Path,
     prefix: tuple[str, ...],
-    out: list[tuple[str, ThingClassification]],
+    out: list[tuple[str, ProjectClassification]],
 ) -> bool:
     """DFS-walk *parent*, append every classified child to *out*.
 
     *prefix* is the slash-form path of *parent* (empty tuple at the
-    things-dir root).  Children classified as ``THING`` are appended
+    projects-dir root).  Children classified as ``PROJECT`` are appended
     immediately; children classified as ``NAMESPACE`` are appended
     after their subtree is walked so a top-down sort puts the
     namespace before its descendants.
 
-    Returns ``True`` when *parent* contained at least one thing or
+    Returns ``True`` when *parent* contained at least one project or
     namespace child — caller uses this to decide whether *parent*
     itself qualifies as a namespace.
     """
-    has_thing_or_namespace = False
+    has_project_or_namespace = False
     for child in parent.iterdir():
         if not child.is_dir() or _is_skipped_dirname(child.name):
             continue
         child_prefix = (*prefix, child.name)
         slash_path = "/".join(child_prefix)
         if _has_entry_point(child):
-            out.append((slash_path, ThingClassification.THING))
-            has_thing_or_namespace = True
+            out.append((slash_path, ProjectClassification.PROJECT))
+            has_project_or_namespace = True
             continue
-        # Not a thing — see if its subtree contains one.  Recurse first
+        # Not a project — see if its subtree contains one.  Recurse first
         # (collects descendants), then decide whether to label *child*
         # itself as a namespace.
         marker = len(out)
         if _walk_classified(child, child_prefix, out):
             # Insert the namespace entry at the marker so namespaces
             # come before their descendants in the result.
-            out.insert(marker, (slash_path, ThingClassification.NAMESPACE))
-            has_thing_or_namespace = True
-    return has_thing_or_namespace
+            out.insert(marker, (slash_path, ProjectClassification.NAMESPACE))
+            has_project_or_namespace = True
+    return has_project_or_namespace
 
 
 @dataclass(frozen=True)
@@ -153,18 +153,18 @@ class WorkspaceLayout:
         return self.root / "secrets.yml"
 
     @property
-    def things_dir(self) -> Path:
-        """Path to ``<root>/things/`` — the parent of every thing directory."""
-        return self.root / THINGS_DIRNAME
+    def projects_dir(self) -> Path:
+        """Path to ``<root>/projects/`` — the parent of every project directory."""
+        return self.root / PROJECTS_DIRNAME
 
     @property
     def libs_dir(self) -> Path:
         """Path to ``<root>/libs/`` — small shared modules dropped flat.
 
         The lighter-weight cousin of :attr:`libraries_dir`.  Files under
-        ``libs/`` are imported by things directly (``from libs.foo import
+        ``libs/`` are imported by projects directly (``from libs.foo import
         bar``) without any package scaffolding.  Use this for "I wrote a
-        50-line helper my things need to share" — no tests, no version,
+        50-line helper my projects need to share" — no tests, no version,
         no chumicro library shape.  See :attr:`libraries_dir` for the
         full-package alternative.
         """
@@ -182,7 +182,7 @@ class WorkspaceLayout:
         the same scaffolding the chumicro mono-repo uses.
 
         ``import_graph.build_search_paths`` includes
-        ``libraries/<name>/src/`` for every entry so things can ``import
+        ``libraries/<name>/src/`` for every entry so projects can ``import
         my_lib`` without a separate :data:`library_sources` mapping.
         """
         return self.root / "libraries"
@@ -192,8 +192,8 @@ class WorkspaceLayout:
         """Path to ``<root>/packages/`` — third-party packages (gitignored)."""
         return self.root / "packages"
 
-    def thing_dir(self, name: str) -> Path:
-        """Return the directory for the named thing (existence not checked).
+    def project_dir(self, name: str) -> Path:
+        """Return the directory for the named project (existence not checked).
 
         *name* may be a single segment (``"bedroom_sensor"``), slash-form
         (``"upstairs/bedroom_sensor"``), or dotted (``"upstairs.bedroom_sensor"``)
@@ -201,42 +201,42 @@ class WorkspaceLayout:
         in the right directory.
         """
         normalised = name.replace(".", "/")
-        return self.things_dir / normalised
+        return self.projects_dir / normalised
 
-    def list_things(self) -> list[str]:
-        """Return slash-form paths for every thing under ``things/``, sorted.
+    def list_projects(self) -> list[str]:
+        """Return slash-form paths for every project under ``projects/``, sorted.
 
         Walks the tree recursively per the classifier in
-        :data:`ThingClassification`.  Each path returned is a deployable
+        :data:`ProjectClassification`.  Each path returned is a deployable
         leaf — namespaces, supporting directories, ``_template`` /
         ``_generated`` and hidden dirs are filtered out.
 
-        Returns an empty list when ``things/`` doesn't exist yet.
+        Returns an empty list when ``projects/`` doesn't exist yet.
         """
-        if not self.things_dir.is_dir():
+        if not self.projects_dir.is_dir():
             return []
-        collected: list[tuple[str, ThingClassification]] = []
-        _walk_classified(self.things_dir, (), collected)
+        collected: list[tuple[str, ProjectClassification]] = []
+        _walk_classified(self.projects_dir, (), collected)
         return sorted(
             slash_path
             for slash_path, classification in collected
-            if classification is ThingClassification.THING
+            if classification is ProjectClassification.PROJECT
         )
 
-    def iter_things_with_classification(
+    def iter_projects_with_classification(
         self,
-    ) -> list[tuple[str, ThingClassification]]:
-        """Return every classified directory under ``things/``, sorted.
+    ) -> list[tuple[str, ProjectClassification]]:
+        """Return every classified directory under ``projects/``, sorted.
 
-        Includes both things and namespaces — namespaces are needed so
+        Includes both projects and namespaces — namespaces are needed so
         the tree renderer can draw branches above leaves and ``doctor``
         can report on empty / supporting branches.  Sorting is by
         slash-form path, which gives natural depth-first display order.
         """
-        if not self.things_dir.is_dir():
+        if not self.projects_dir.is_dir():
             return []
-        collected: list[tuple[str, ThingClassification]] = []
-        _walk_classified(self.things_dir, (), collected)
+        collected: list[tuple[str, ProjectClassification]] = []
+        _walk_classified(self.projects_dir, (), collected)
         return sorted(collected)
 
     @classmethod

@@ -8,14 +8,14 @@ from chumicro_workspace.health import (
     SECRET_PLACEHOLDER,
     HealthLevel,
     check_devices_yaml,
+    check_project_run_functions,
     check_python_version,
     check_secret_references,
     check_secrets_yaml,
-    check_thing_run_functions,
     check_workspace_yaml,
     collect_doctor_findings,
     collect_health_findings,
-    count_things,
+    count_projects,
 )
 from chumicro_workspace.workspace import WorkspaceLayout
 
@@ -26,9 +26,9 @@ def _layout(tmp_path: Path) -> WorkspaceLayout:
     return WorkspaceLayout(root=tmp_path)
 
 
-def _seed_thing(workspace: WorkspaceLayout, *segments: str) -> Path:
-    """Create a leaf thing with an ``app.py`` entry-point."""
-    target = workspace.things_dir.joinpath(*segments)
+def _seed_project(workspace: WorkspaceLayout, *segments: str) -> Path:
+    """Create a leaf project with an ``app.py`` entry-point."""
+    target = workspace.projects_dir.joinpath(*segments)
     target.mkdir(parents=True)
     (target / "app.py").write_text("def run(): pass\n")
     return target
@@ -175,24 +175,24 @@ class TestCheckSecretsYaml:
 
 
 # ---------------------------------------------------------------------------
-# count_things
+# count_projects
 # ---------------------------------------------------------------------------
 
 
-class TestCountThings:
+class TestCountProjects:
     def test_warns_when_empty(self, tmp_path: Path) -> None:
         workspace = _layout(tmp_path)
-        finding = count_things(workspace)
+        finding = count_projects(workspace)
         assert finding.level is HealthLevel.WARN
-        assert "no things" in finding.message
+        assert "no projects" in finding.message
 
     def test_lists_each_when_few(self, tmp_path: Path) -> None:
         workspace = _layout(tmp_path)
-        _seed_thing(workspace, "alpha")
-        _seed_thing(workspace, "beta")
-        finding = count_things(workspace)
+        _seed_project(workspace, "alpha")
+        _seed_project(workspace, "beta")
+        finding = count_projects(workspace)
         assert finding.level is HealthLevel.OK
-        assert "2 things" in finding.message
+        assert "2 projects" in finding.message
         assert "alpha" in finding.message
         assert "beta" in finding.message
 
@@ -200,16 +200,16 @@ class TestCountThings:
         """Only the first three names render; remainder summarized."""
         workspace = _layout(tmp_path)
         for index in range(5):
-            _seed_thing(workspace, f"thing_{index}")
-        finding = count_things(workspace)
-        assert "5 things" in finding.message
+            _seed_project(workspace, f"project_{index}")
+        finding = count_projects(workspace)
+        assert "5 projects" in finding.message
         assert "2 more" in finding.message
 
     def test_singular_when_one(self, tmp_path: Path) -> None:
         workspace = _layout(tmp_path)
-        _seed_thing(workspace, "lonely")
-        finding = count_things(workspace)
-        assert finding.message.startswith("1 thing:")
+        _seed_project(workspace, "lonely")
+        finding = count_projects(workspace)
+        assert finding.message.startswith("1 project:")
 
 
 # ---------------------------------------------------------------------------
@@ -226,7 +226,7 @@ class TestCollectHealthFindings:
             "WORKSPACE.YML",
             "DEVICES.YML",
             "SECRETS.YML",
-            "THINGS",
+            "PROJECTS",
         ]
 
 
@@ -243,70 +243,70 @@ class TestCheckPythonVersion:
         assert finding.label == "PYTHON"
 
 
-def _seed_thing_with_app(
+def _seed_project_with_app(
     workspace: WorkspaceLayout, name: str, app_body: str,
 ) -> Path:
-    """Create things/<name>/app.py with *app_body* + an empty config.toml."""
-    thing_dir = workspace.thing_dir(name)
-    thing_dir.mkdir(parents=True)
-    (thing_dir / "config.toml").write_text("")
-    (thing_dir / "app.py").write_text(app_body)
-    return thing_dir
+    """Create projects/<name>/app.py with *app_body* + an empty config.toml."""
+    project_dir = workspace.project_dir(name)
+    project_dir.mkdir(parents=True)
+    (project_dir / "config.toml").write_text("")
+    (project_dir / "app.py").write_text(app_body)
+    return project_dir
 
 
-class TestCheckThingRunFunctions:
-    def test_no_things_returns_ok(self, tmp_path: Path) -> None:
+class TestCheckProjectRunFunctions:
+    def test_no_projects_returns_ok(self, tmp_path: Path) -> None:
         workspace = _layout(tmp_path)
-        finding = check_thing_run_functions(workspace)
+        finding = check_project_run_functions(workspace)
         assert finding.level is HealthLevel.OK
-        assert "no things" in finding.message
+        assert "no projects" in finding.message
 
-    def test_all_things_define_run(self, tmp_path: Path) -> None:
+    def test_all_projects_define_run(self, tmp_path: Path) -> None:
         workspace = _layout(tmp_path)
-        _seed_thing_with_app(workspace, "alpha", "def run(): pass\n")
-        _seed_thing_with_app(workspace, "beta", "def run(): pass\n")
-        finding = check_thing_run_functions(workspace)
+        _seed_project_with_app(workspace, "alpha", "def run(): pass\n")
+        _seed_project_with_app(workspace, "beta", "def run(): pass\n")
+        finding = check_project_run_functions(workspace)
         assert finding.level is HealthLevel.OK
         assert "all 2 app.py files" in finding.message
 
     def test_async_run_def_accepted(self, tmp_path: Path) -> None:
         workspace = _layout(tmp_path)
-        _seed_thing_with_app(workspace, "asyncthing", "async def run(): pass\n")
-        finding = check_thing_run_functions(workspace)
+        _seed_project_with_app(workspace, "asyncproject", "async def run(): pass\n")
+        finding = check_project_run_functions(workspace)
         assert finding.level is HealthLevel.OK
 
-    def test_missing_run_flags_thing(self, tmp_path: Path) -> None:
+    def test_missing_run_flags_project(self, tmp_path: Path) -> None:
         workspace = _layout(tmp_path)
-        _seed_thing_with_app(workspace, "alpha", "def run(): pass\n")
-        _seed_thing_with_app(
-            workspace, "broken_thing", "def something_else(): pass\n",
+        _seed_project_with_app(workspace, "alpha", "def run(): pass\n")
+        _seed_project_with_app(
+            workspace, "broken_project", "def something_else(): pass\n",
         )
-        finding = check_thing_run_functions(workspace)
+        finding = check_project_run_functions(workspace)
         assert finding.level is HealthLevel.ERROR
-        assert "broken_thing" in finding.message
+        assert "broken_project" in finding.message
         assert finding.hint is not None
 
     def test_syntax_error_counts_as_missing(self, tmp_path: Path) -> None:
         workspace = _layout(tmp_path)
-        _seed_thing_with_app(workspace, "broken", "def run(:\n")
-        finding = check_thing_run_functions(workspace)
+        _seed_project_with_app(workspace, "broken", "def run(:\n")
+        finding = check_project_run_functions(workspace)
         assert finding.level is HealthLevel.ERROR
         assert "broken" in finding.message
 
-    def test_legacy_things_without_app_py_skipped(self, tmp_path: Path) -> None:
-        """Things whose entry-point is code.py / main.py aren't checked.
+    def test_legacy_projects_without_app_py_skipped(self, tmp_path: Path) -> None:
+        """Projects whose entry-point is code.py / main.py aren't checked.
 
-        The run() contract binds only the boot-shim flow.  Flat things
+        The run() contract binds only the boot-shim flow.  Flat projects
         with code.py at the root never get imported as
-        things.<name>.app, so they don't need a top-level run().
+        projects.<name>.app, so they don't need a top-level run().
         """
         workspace = _layout(tmp_path)
-        thing_dir = workspace.thing_dir("legacy")
-        thing_dir.mkdir(parents=True)
-        (thing_dir / "code.py").write_text(
+        project_dir = workspace.project_dir("legacy")
+        project_dir.mkdir(parents=True)
+        (project_dir / "code.py").write_text(
             "print('flat layout, no app.py')\n",
         )
-        finding = check_thing_run_functions(workspace)
+        finding = check_project_run_functions(workspace)
         assert finding.level is HealthLevel.OK
         assert "no app.py" in finding.message
 
@@ -316,46 +316,46 @@ def _write_secrets(workspace: WorkspaceLayout, body: str) -> None:
 
 
 class TestCheckSecretReferences:
-    def test_no_things_returns_ok(self, tmp_path: Path) -> None:
+    def test_no_projects_returns_ok(self, tmp_path: Path) -> None:
         workspace = _layout(tmp_path)
         finding = check_secret_references(workspace)
         assert finding.level is HealthLevel.OK
-        assert "no things" in finding.message
+        assert "no projects" in finding.message
 
     def test_all_resolve(self, tmp_path: Path) -> None:
         workspace = _layout(tmp_path)
         _write_secrets(workspace, "wifi_password: real-pw\n")
-        thing_dir = workspace.thing_dir("alpha")
-        thing_dir.mkdir(parents=True)
-        (thing_dir / "config.toml").write_text(
+        project_dir = workspace.project_dir("alpha")
+        project_dir.mkdir(parents=True)
+        (project_dir / "config.toml").write_text(
             "[wifi]\nssid = 'home'\npassword = '!secret wifi_password'\n",
         )
-        (thing_dir / "app.py").write_text("def run(): pass\n")
+        (project_dir / "app.py").write_text("def run(): pass\n")
         finding = check_secret_references(workspace)
         assert finding.level is HealthLevel.OK
 
     def test_unresolved_secret_flagged(self, tmp_path: Path) -> None:
         workspace = _layout(tmp_path)
         _write_secrets(workspace, "wifi_password: real-pw\n")
-        thing_dir = workspace.thing_dir("alpha")
-        thing_dir.mkdir(parents=True)
-        (thing_dir / "config.toml").write_text(
+        project_dir = workspace.project_dir("alpha")
+        project_dir.mkdir(parents=True)
+        (project_dir / "config.toml").write_text(
             "[mqtt]\ntoken = '!secret mqtt_token'\n",
         )
-        (thing_dir / "app.py").write_text("def run(): pass\n")
+        (project_dir / "app.py").write_text("def run(): pass\n")
         finding = check_secret_references(workspace)
         assert finding.level is HealthLevel.ERROR
-        assert "1 thing(s)" in finding.message
+        assert "1 project(s)" in finding.message
         assert finding.hint is not None
         assert "alpha" in finding.hint
         assert "mqtt_token" in finding.hint
 
-    def test_thing_without_config_skipped(self, tmp_path: Path) -> None:
-        """A thing dir with only app.py (no config) has no secrets to check."""
+    def test_project_without_config_skipped(self, tmp_path: Path) -> None:
+        """A project dir with only app.py (no config) has no secrets to check."""
         workspace = _layout(tmp_path)
-        thing_dir = workspace.thing_dir("alpha")
-        thing_dir.mkdir(parents=True)
-        (thing_dir / "app.py").write_text("def run(): pass\n")
+        project_dir = workspace.project_dir("alpha")
+        project_dir.mkdir(parents=True)
+        (project_dir / "app.py").write_text("def run(): pass\n")
         finding = check_secret_references(workspace)
         assert finding.level is HealthLevel.OK
 
@@ -366,13 +366,13 @@ class TestCollectDoctorFindings:
         findings = collect_doctor_findings(workspace)
         labels = [finding.label for finding in findings]
         # status's four checks are bracketed by python (front) +
-        # thing-run + secret-refs (back).
+        # project-run + secret-refs (back).
         assert labels == [
             "PYTHON",
             "WORKSPACE.YML",
             "DEVICES.YML",
             "SECRETS.YML",
-            "THINGS",
-            "THING run() defs",
+            "PROJECTS",
+            "PROJECT run() defs",
             "SECRET refs",
         ]

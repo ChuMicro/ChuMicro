@@ -8,7 +8,7 @@ from chumicro_repl.patterns import StreamingPatternDetector
 CIRCUITPYTHON_TRACEBACK = (
     "Traceback (most recent call last):\n"
     '  File "code.py", line 4, in <module>\n'
-    "  File \"things/sensor.py\", line 12, in run\n"
+    "  File \"projects/sensor.py\", line 12, in run\n"
     "ValueError: bad sensor reading\n"
 )
 
@@ -90,7 +90,7 @@ class TestMixedScan:
         assert "main loop done" not in matches[0].text
 
     def test_soft_reboot_then_traceback(self):
-        text = SOFT_REBOOT_BANNER + "doing things\n" + MICROPYTHON_TRACEBACK
+        text = SOFT_REBOOT_BANNER + "doing projects\n" + MICROPYTHON_TRACEBACK
         matches = detect_patterns(text)
         kinds = [match.kind for match in matches]
         assert kinds == [PatternKind.SOFT_REBOOT, PatternKind.TRACEBACK]

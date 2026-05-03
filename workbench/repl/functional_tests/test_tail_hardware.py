@@ -20,7 +20,7 @@ the entrypoint to finish before returning, so by the time
 ``tail()`` opens the port the script is done — there is no
 deterministic on-device source of in-window output that doesn't
 require a separate "leave it running" path on the board.  When
-that path lands (Phase 7 sensor-thing template), this file gains
+that path lands (Phase 7 sensor-project template), this file gains
 the assertion-on-output test.
 """
 
