@@ -5,12 +5,14 @@ generation, transport construction, intra-workspace source
 resolution, and deploy-mode precedence.  PR-summary rendering has
 its own test module.
 
-A few tests under ``TestResolveLibrarySourceDirs`` need a real
-multi-library workspace to exercise dependency resolution; they
-pin the chumicro mono-repo's ``libraries/`` directory via
-:data:`_MONO_REPO_LIBRARIES` and skip cleanly when the layout
-isn't where they expect (e.g. the published wheel running against
-a third-party project).
+``TestResolveLibrarySourceDirs`` exercises dependency resolution
+against a synthetic multi-library workspace materialized under
+``tmp_path`` via the ``_make_synthetic_library`` helper — no test
+reads the real on-disk state of any real chumicro library.  The
+prior version pinned ``libraries/runner`` / ``libraries/timing`` /
+``libraries/msgpack`` and silently changed behavior whenever any of
+those packages was renamed, restructured, or had its dependency
+list edited.
 """
 
 from __future__ import annotations
@@ -21,11 +23,50 @@ import pytest
 from chumicro_deploy import DeviceEntry
 from chumicro_pytest_device import _test_runner as device_testing
 
-#: Path to the chumicro mono-repo's ``libraries/`` directory when this
-#: file is checked out in-tree.  ``parents[3]`` walks up from
-#: ``workbench/pytest-device/tests/test_test_runner.py`` to the repo
-#: root.
-_MONO_REPO_LIBRARIES = Path(__file__).resolve().parents[3] / "libraries"
+
+def _make_synthetic_library(
+    libraries_root: Path,
+    name: str,
+    *,
+    deps: list[str] | None = None,
+    test_imports: list[str] | None = None,
+) -> Path:
+    """Stage a synthetic library at ``libraries_root/<name>/`` and return it.
+
+    Materializes ``src/chumicro_<name>/__init__.py`` and a
+    ``pyproject.toml`` listing each ``deps`` entry as
+    ``chumicro-<dep>``.  When ``test_imports`` is supplied, also
+    creates ``functional_tests/test_integration.py`` with one
+    ``import chumicro_<dep>`` line per entry so the
+    test-imported-library path of ``resolve_library_source_dirs``
+    has something to walk.
+    """
+    library_dir = libraries_root / name
+    source_dir = library_dir / "src" / f"chumicro_{name}"
+    source_dir.mkdir(parents=True)
+    (source_dir / "__init__.py").touch()
+
+    if deps:
+        deps_block = "dependencies = [\n" + "".join(
+            f'    "chumicro-{dep}",\n' for dep in deps
+        ) + "]\n"
+    else:
+        deps_block = ""
+    (library_dir / "pyproject.toml").write_text(
+        f'[project]\nname = "chumicro-{name}"\n{deps_block}',
+    )
+
+    if test_imports is not None:
+        functional_dir = library_dir / "functional_tests"
+        functional_dir.mkdir()
+        import_lines = "\n".join(
+            f"import chumicro_{module}" for module in test_imports
+        )
+        (functional_dir / "test_integration.py").write_text(
+            f"{import_lines}\n\ndef test_integration() -> None:\n    pass\n",
+        )
+
+    return library_dir
 
 
 class TestBuildBootstrap:
@@ -267,93 +308,121 @@ class TestBuildDeviceBootstrap:
 
 
 class TestResolveLibrarySourceDirs:
-    """Tests for ``resolve_library_source_dirs``.
+    """Tests for ``resolve_library_source_dirs`` against a synthetic
+    libraries/ tree built per-test under ``tmp_path``."""
 
-    Mono-repo integration tests — they need real ``libraries/runner``,
-    ``libraries/timing``, and ``libraries/msgpack`` directories to
-    exercise dependency resolution, so they skip cleanly when the
-    layout isn't where ``_MONO_REPO_LIBRARIES`` points.
-    """
-
-    def setup_method(self) -> None:
-        if not _MONO_REPO_LIBRARIES.is_dir():
-            pytest.skip("chumicro mono-repo libraries/ not present")
-
-    def test_resolves_chumicro_imports_from_test_files(self) -> None:
+    def test_resolves_chumicro_imports_from_test_files(
+        self, tmp_path: Path,
+    ) -> None:
         """Functional test imports should stage additional ChuMicro libraries."""
-        runner_dir = _MONO_REPO_LIBRARIES / "runner"
-        integration_test = runner_dir / "functional_tests" / "test_integration.py"
+        libraries_root = tmp_path / "libraries"
+        _make_synthetic_library(libraries_root, "leaf")
+        consumer_dir = _make_synthetic_library(
+            libraries_root, "consumer", test_imports=["leaf"],
+        )
+        integration_test = (
+            consumer_dir / "functional_tests" / "test_integration.py"
+        )
 
         result = device_testing.resolve_library_source_dirs(
-            runner_dir,
-            libraries_root=_MONO_REPO_LIBRARIES,
+            consumer_dir,
+            libraries_root=libraries_root,
             test_files=[integration_test],
         )
 
-        msgpack_source = _MONO_REPO_LIBRARIES / "msgpack" / "src"
-        assert msgpack_source in result
+        leaf_source = libraries_root / "leaf" / "src"
+        assert leaf_source in result
 
-    def test_includes_own_source_dir(self) -> None:
-        timing_dir = _MONO_REPO_LIBRARIES / "timing"
+    def test_includes_own_source_dir(self, tmp_path: Path) -> None:
+        """The library under test always shows up with its own ``src/``."""
+        libraries_root = tmp_path / "libraries"
+        library_dir = _make_synthetic_library(libraries_root, "solo")
         result = device_testing.resolve_library_source_dirs(
-            timing_dir, libraries_root=_MONO_REPO_LIBRARIES,
+            library_dir, libraries_root=libraries_root,
         )
-        assert timing_dir / "src" in result
+        assert library_dir / "src" in result
 
-    def test_includes_dependency_source_dirs(self) -> None:
-        """Runner depends on timing — both ``src/`` dirs should appear."""
-        runner_dir = _MONO_REPO_LIBRARIES / "runner"
+    def test_includes_dependency_source_dirs(self, tmp_path: Path) -> None:
+        """A library that depends on another should pull in both ``src/`` dirs."""
+        libraries_root = tmp_path / "libraries"
+        _make_synthetic_library(libraries_root, "leaf")
+        consumer_dir = _make_synthetic_library(
+            libraries_root, "consumer", deps=["leaf"],
+        )
         result = device_testing.resolve_library_source_dirs(
-            runner_dir, libraries_root=_MONO_REPO_LIBRARIES,
+            consumer_dir, libraries_root=libraries_root,
         )
-        timing_source = _MONO_REPO_LIBRARIES / "timing" / "src"
-        runner_source = runner_dir / "src"
-        assert timing_source in result
-        assert runner_source in result
+        leaf_source = libraries_root / "leaf" / "src"
+        consumer_source = consumer_dir / "src"
+        assert leaf_source in result
+        assert consumer_source in result
 
-    def test_dependency_comes_before_library(self) -> None:
-        runner_dir = _MONO_REPO_LIBRARIES / "runner"
+    def test_dependency_comes_before_library(self, tmp_path: Path) -> None:
+        """Dependency ``src/`` dirs precede the consuming library's own ``src/``."""
+        libraries_root = tmp_path / "libraries"
+        _make_synthetic_library(libraries_root, "leaf")
+        consumer_dir = _make_synthetic_library(
+            libraries_root, "consumer", deps=["leaf"],
+        )
         result = device_testing.resolve_library_source_dirs(
-            runner_dir, libraries_root=_MONO_REPO_LIBRARIES,
+            consumer_dir, libraries_root=libraries_root,
         )
-        timing_source = _MONO_REPO_LIBRARIES / "timing" / "src"
-        runner_source = runner_dir / "src"
-        assert result.index(timing_source) < result.index(runner_source)
+        leaf_source = libraries_root / "leaf" / "src"
+        consumer_source = consumer_dir / "src"
+        assert result.index(leaf_source) < result.index(consumer_source)
 
-    def test_test_import_dependency_comes_before_library(self) -> None:
+    def test_test_import_dependency_comes_before_library(
+        self, tmp_path: Path,
+    ) -> None:
         """Test-imported libraries should stage before the library under test."""
-        runner_dir = _MONO_REPO_LIBRARIES / "runner"
-        integration_test = runner_dir / "functional_tests" / "test_integration.py"
+        libraries_root = tmp_path / "libraries"
+        _make_synthetic_library(libraries_root, "leaf")
+        consumer_dir = _make_synthetic_library(
+            libraries_root, "consumer", test_imports=["leaf"],
+        )
+        integration_test = (
+            consumer_dir / "functional_tests" / "test_integration.py"
+        )
 
         result = device_testing.resolve_library_source_dirs(
-            runner_dir,
-            libraries_root=_MONO_REPO_LIBRARIES,
+            consumer_dir,
+            libraries_root=libraries_root,
             test_files=[integration_test],
         )
 
-        msgpack_source = _MONO_REPO_LIBRARIES / "msgpack" / "src"
-        runner_source = runner_dir / "src"
-        assert result.index(msgpack_source) < result.index(runner_source)
+        leaf_source = libraries_root / "leaf" / "src"
+        consumer_source = consumer_dir / "src"
+        assert result.index(leaf_source) < result.index(consumer_source)
 
-    def test_library_without_dependencies(self) -> None:
+    def test_library_without_dependencies(self, tmp_path: Path) -> None:
         """A library with no deps should return only its own ``src/``."""
-        timing_dir = _MONO_REPO_LIBRARIES / "timing"
+        libraries_root = tmp_path / "libraries"
+        library_dir = _make_synthetic_library(libraries_root, "solo")
         result = device_testing.resolve_library_source_dirs(
-            timing_dir, libraries_root=_MONO_REPO_LIBRARIES,
+            library_dir, libraries_root=libraries_root,
         )
-        assert result == [timing_dir / "src"]
+        assert result == [library_dir / "src"]
 
-    def test_nonexistent_library_returns_empty(self, tmp_path) -> None:
+    def test_nonexistent_library_returns_empty(self, tmp_path: Path) -> None:
         """A nonexistent library dir should return an empty list."""
+        libraries_root = tmp_path / "libraries"
+        libraries_root.mkdir()
         result = device_testing.resolve_library_source_dirs(
-            tmp_path / "nope", libraries_root=_MONO_REPO_LIBRARIES,
+            libraries_root / "nope", libraries_root=libraries_root,
         )
         assert result == []
 
-    def test_no_duplicate_entries(self) -> None:
-        runner_dir = _MONO_REPO_LIBRARIES / "runner"
+    def test_no_duplicate_entries(self, tmp_path: Path) -> None:
+        """Diamond-shape deps still produce a deduplicated source list."""
+        libraries_root = tmp_path / "libraries"
+        _make_synthetic_library(libraries_root, "leaf")
+        _make_synthetic_library(libraries_root, "left", deps=["leaf"])
+        _make_synthetic_library(libraries_root, "right", deps=["leaf"])
+        top_dir = _make_synthetic_library(
+            libraries_root, "top", deps=["left", "right"],
+        )
         result = device_testing.resolve_library_source_dirs(
-            runner_dir, libraries_root=_MONO_REPO_LIBRARIES,
+            top_dir, libraries_root=libraries_root,
         )
         assert len(result) == len(set(result))
 
