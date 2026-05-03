@@ -45,32 +45,33 @@ _HAS_MEM_FREE = hasattr(gc, "mem_free")
 
 
 # ---------------------------------------------------------------------------
-# Largest-contiguous-block probe + delta-based assertion helper
+# Size-stratified free-block histogram + delta-based assertion helper
 # ---------------------------------------------------------------------------
 
+_FRAGMENTATION_TIERS = (256, 1024, 4096, 16384, 65536)
 
-def _largest_free_block(upper_hint):
+
+def _count_blocks_of_size(size):
     gc.collect()
-    low = 0
-    high = upper_hint
-    best = 0
-    while low <= high:
-        mid = (low + high) // 2
-        try:
-            probe = bytearray(mid)
-        except MemoryError:
-            high = mid - 1
-        else:
-            best = mid
-            del probe
-            gc.collect()
-            low = mid + 1
-    return best
+    holders = []
+    try:
+        while True:
+            holders.append(bytearray(size))
+    except MemoryError:
+        pass
+    count = len(holders)
+    del holders
+    gc.collect()
+    return count
+
+
+def _free_block_histogram(tiers=_FRAGMENTATION_TIERS):
+    return {size: _count_blocks_of_size(size) for size in tiers}
 
 
 def _probe_workload_delta(workload, iterations,
                           leak_tolerance=4096,
-                          fragmentation_tolerance=4096):
+                          tier_drop_tolerance=2):
     if not _HAS_MEM_FREE:
         for _ in range(iterations):
             workload()
@@ -78,28 +79,34 @@ def _probe_workload_delta(workload, iterations,
 
     gc.collect()
     baseline_free = gc.mem_free()
-    baseline_largest = _largest_free_block(baseline_free)
+    baseline_histogram = _free_block_histogram()
 
     for _ in range(iterations):
         workload()
     gc.collect()
 
     final_free = gc.mem_free()
-    final_largest = _largest_free_block(final_free)
+    final_histogram = _free_block_histogram()
 
     bytes_consumed = baseline_free - final_free
-    holes_added = (baseline_free - baseline_largest) - (final_free - final_largest)
 
     assert bytes_consumed <= leak_tolerance, (
         f"workload consumed {bytes_consumed} bytes over {iterations} iterations "
         f"(baseline_free={baseline_free}, final_free={final_free}, "
         f"leak_tolerance={leak_tolerance})"
     )
-    assert holes_added <= fragmentation_tolerance, (
-        f"workload added {holes_added} bytes of fragmentation over {iterations} "
-        f"iterations (baseline_largest={baseline_largest}, "
-        f"final_largest={final_largest}, fragmentation_tolerance={fragmentation_tolerance})"
-    )
+
+    for size, baseline_count in baseline_histogram.items():
+        final_count = final_histogram[size]
+        drop = baseline_count - final_count
+        assert drop <= tier_drop_tolerance, (
+            f"workload fragmented {size}-byte tier over {iterations} "
+            f"iterations: baseline={baseline_count} blocks, "
+            f"final={final_count} blocks, drop={drop} blocks "
+            f"(tier_drop_tolerance={tier_drop_tolerance}). "
+            f"baseline_histogram={baseline_histogram}, "
+            f"final_histogram={final_histogram}"
+        )
 
 
 # ---------------------------------------------------------------------------

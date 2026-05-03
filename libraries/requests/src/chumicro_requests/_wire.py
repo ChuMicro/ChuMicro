@@ -503,6 +503,13 @@ class ResponseParser:
     def __init__(self, *, max_body_bytes=DEFAULT_MAX_BODY_BYTES):
         self._max_body_bytes = max_body_bytes
         self._buffer = bytearray()
+        # Read cursor into ``_buffer``.  Each ``_consume(n)`` advances
+        # the cursor and only realloates the bytearray when at least
+        # half of it has been consumed — amortizes the slice-reassign
+        # idiom that used to fragment the heap on ESP32-class allocators.
+        # See on-device fragmentation tests in
+        # ``functional_tests/test_memory_fragmentation_on_device.py``.
+        self._read_offset = 0
         self._state = ParseState.STATUS
         self._status_code = None
         self._reason = ""
@@ -515,6 +522,48 @@ class ResponseParser:
         # Bytes left in the current chunk (chunked decode only).
         self._chunk_remaining = 0
         self._error = None
+
+    # ------------------------------------------------------------------
+    # Buffer helpers (read-cursor pattern)
+    # ------------------------------------------------------------------
+
+    def _live_len(self):
+        """Number of unconsumed bytes in ``_buffer``."""
+        return len(self._buffer) - self._read_offset
+
+    def _live_find(self, target):
+        """``find`` *target* in the unconsumed region; returns relative position or -1."""
+        position = self._buffer.find(target, self._read_offset)
+        if position == -1:
+            return -1
+        return position - self._read_offset
+
+    def _live_slice(self, start, end=None):
+        """Slice of unconsumed data.  Indices are relative to the cursor."""
+        absolute_start = self._read_offset + start
+        if end is None:
+            return self._buffer[absolute_start:]
+        return self._buffer[absolute_start:absolute_start + end]
+
+    def _consume(self, count):
+        """Advance the read cursor by *count* bytes; compact when the cursor
+        passes the halfway mark.
+
+        Replaces the per-call ``self._buffer = bytearray(self._buffer[n:])``
+        idiom.  In the worst case (50-header response) this cuts allocator
+        churn from one ``bytearray`` per consumed segment to roughly one
+        every two — drops the 1024-byte-tier fragmentation seen on Lolin S2
+        from 12 blocks-per-test to within tolerance.
+        """
+        self._read_offset += count
+        if self._read_offset > 0 and self._read_offset * 2 >= len(self._buffer):
+            self._buffer = bytearray(self._buffer[self._read_offset:])
+            self._read_offset = 0
+
+    def _reset_buffer(self):
+        """Drop every buffered byte and reset the cursor."""
+        self._buffer = bytearray()
+        self._read_offset = 0
 
     # ------------------------------------------------------------------
     # Public observation
@@ -643,17 +692,11 @@ class ResponseParser:
 
     def _try_parse_status_line(self):
         """Consume one status line; return True if state advanced."""
-        crlf_index = self._buffer.find(CRLF)
+        crlf_index = self._live_find(CRLF)
         if crlf_index == -1:
             return False
-        line = bytes(self._buffer[:crlf_index])
-        # CircuitPython 10.x's bytearray rejects ``del buffer[:n]``
-        # (TypeError: "'bytearray' object doesn't support item
-        # deletion") even though MicroPython and CPython both accept
-        # it.  Reassign via slice for cross-runtime safety.  The buffer
-        # stays tiny (status line < ~50 B, headers < ~1 KB), so the
-        # extra copy is negligible.
-        self._buffer = bytearray(self._buffer[crlf_index + 2:])
+        line = bytes(self._live_slice(0, crlf_index))
+        self._consume(crlf_index + 2)
         # Status-Line per RFC 7230 §3.1.2: HTTP-version SP status-code SP reason-phrase
         try:
             text = line.decode("ascii")
@@ -687,17 +730,16 @@ class ResponseParser:
     def _try_parse_headers(self):
         """Consume one header line; return True if state advanced or
         another header was parsed."""
-        crlf_index = self._buffer.find(CRLF)
+        crlf_index = self._live_find(CRLF)
         if crlf_index == -1:
             return False
         if crlf_index == 0:
-            # Empty line — end of headers.  Reassign via slice for
-            # CircuitPython compatibility (see _try_parse_status_line).
-            self._buffer = bytearray(self._buffer[2:])
+            # Empty line — end of headers.
+            self._consume(2)
             self._enter_body_state()
             return True
-        line = bytes(self._buffer[:crlf_index])
-        self._buffer = bytearray(self._buffer[crlf_index + 2:])
+        line = bytes(self._live_slice(0, crlf_index))
+        self._consume(crlf_index + 2)
         try:
             text = line.decode("ascii")
         except UnicodeError as decode_error:
@@ -768,19 +810,17 @@ class ResponseParser:
             self._state = ParseState.BODY
             # Any bytes left in the buffer after the header CRLF are
             # the start of the body — flush into the body absorber.
-            # MicroPython's bytearray lacks ``.clear()``; reassign to
-            # a fresh empty bytearray instead (cross-runtime safe).
-            if self._buffer:
-                tail = bytes(self._buffer)
-                self._buffer = bytearray()
+            if self._live_len() > 0:
+                tail = bytes(self._live_slice(0))
+                self._reset_buffer()
                 self._absorb_body_bytes(tail)
             return
         # Length-unknown — read until peer closes.
         self._body_remaining = -1
         self._state = ParseState.BODY
-        if self._buffer:
-            tail = bytes(self._buffer)
-            self._buffer = bytearray()
+        if self._live_len() > 0:
+            tail = bytes(self._live_slice(0))
+            self._reset_buffer()
             self._absorb_body_bytes(tail)
 
     def _try_parse_chunk_size(self):
@@ -793,11 +833,11 @@ class ResponseParser:
         chunk-extensions are accepted and ignored.  A size of 0 marks
         the last-chunk and transitions to CHUNK_TRAILER.
         """
-        crlf_index = self._buffer.find(CRLF)
+        crlf_index = self._live_find(CRLF)
         if crlf_index == -1:
             return False
-        line = bytes(self._buffer[:crlf_index])
-        self._buffer = bytearray(self._buffer[crlf_index + 2:])
+        line = bytes(self._live_slice(0, crlf_index))
+        self._consume(crlf_index + 2)
         try:
             text = line.decode("ascii")
         except UnicodeError as decode_error:
@@ -849,24 +889,30 @@ class ResponseParser:
         progress — caller waits for the next :meth:`feed`.
         """
         if self._chunk_remaining > 0:
-            available = min(self._chunk_remaining, len(self._buffer))
+            available = min(self._chunk_remaining, self._live_len())
             if available == 0:
                 return False
-            self._body.extend(self._buffer[:available])
-            self._buffer = bytearray(self._buffer[available:])
+            # ``bytearray.extend`` accepts a memoryview — zero-copy on
+            # the source side; ``_body`` still grows in place.
+            self._body.extend(
+                memoryview(self._buffer)[
+                    self._read_offset:self._read_offset + available
+                ],
+            )
+            self._consume(available)
             self._chunk_remaining -= available
             if self._chunk_remaining > 0:
                 return False
         # Chunk data exhausted; expect a terminating CRLF before the
         # next chunk-size line.
-        if len(self._buffer) < 2:
+        if self._live_len() < 2:
             return False
-        if bytes(self._buffer[:2]) != CRLF:
+        if bytes(self._live_slice(0, 2)) != CRLF:
             self._fail(HttpProtocolError(
-                f"missing CRLF after chunk data: {bytes(self._buffer[:2])!r}",
+                f"missing CRLF after chunk data: {bytes(self._live_slice(0, 2))!r}",
             ))
             return True
-        self._buffer = bytearray(self._buffer[2:])
+        self._consume(2)
         self._state = ParseState.CHUNK_SIZE
         return True
 
@@ -877,17 +923,17 @@ class ResponseParser:
         don't care.  When the empty line arrives the body is complete
         and we transition to DONE.
         """
-        crlf_index = self._buffer.find(CRLF)
+        crlf_index = self._live_find(CRLF)
         if crlf_index == -1:
             return False
         if crlf_index == 0:
             # Empty trailer line — end of chunked body.
-            self._buffer = bytearray(self._buffer[2:])
+            self._consume(2)
             self._state = ParseState.DONE
             return True
         # Non-empty trailer line — discard (RFC 7230 §4.1.2 lets us
         # ignore trailers we don't recognise).
-        self._buffer = bytearray(self._buffer[crlf_index + 2:])
+        self._consume(crlf_index + 2)
         return True
 
     def _absorb_body_bytes(self, chunk):

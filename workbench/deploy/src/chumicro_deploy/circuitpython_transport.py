@@ -49,6 +49,15 @@ _SOFT_REBOOT_MARKER = b"soft reboot"
 #: Default timeout in seconds for serial reads.
 DEFAULT_TIMEOUT = 10.0
 
+#: Idle timeout for ``execute()`` — the test-bootstrap execution path.
+#: Longer than ``DEFAULT_TIMEOUT`` because test bootstraps can include
+#: silent CPU-bound work (the fragmentation-test histogram bisection
+#: does ~7,500 ``bytearray`` allocs at the 256-byte tier on a Lolin S2's
+#: 2 MB heap) that can outlast the interactive-op default.  Short-running
+#: interactive ops (probe, autoreload, ``gc.collect`` between chunks)
+#: still use ``DEFAULT_TIMEOUT`` via :meth:`_send_repl_command`.
+_EXECUTE_IDLE_TIMEOUT = 60.0
+
 #: Delay between Ctrl-C interrupts in seconds.
 _INTERRUPT_DELAY = 0.1
 
@@ -1098,7 +1107,13 @@ class CircuitpythonTransport:
 
         # Read the response.  Raw REPL format:
         # OK<stdout>\x04<stderr>\x04>
-        raw_response = self._read_until(b"\x04>")
+        # Use a longer idle timeout: test-bootstrap scripts can include
+        # silent CPU-bound work (e.g. fragmentation-test histogram
+        # bisection on Lolin S2) that exceeds DEFAULT_TIMEOUT — see
+        # _EXECUTE_IDLE_TIMEOUT.
+        raw_response = self._read_until(
+            b"\x04>", idle_timeout=_EXECUTE_IDLE_TIMEOUT,
+        )
 
         return self._parse_raw_repl_response(raw_response)
 
@@ -1839,28 +1854,42 @@ class CircuitpythonTransport:
         """Return the staged module sources, or None if not staged."""
         return self._staged_sources
 
-    def _read_until(self, marker: bytes) -> bytes:
+    def _read_until(self, marker: bytes, idle_timeout: float | None = None) -> bytes:
         """Read from serial until *marker* is found or the link goes idle.
 
         Uses an **idle timeout** rather than a fixed wall-clock deadline:
         as long as new bytes keep arriving, ``_read_until`` keeps reading.
-        Only ``self.timeout`` seconds of *consecutive silence* end the
-        wait.
+        Only ``idle_timeout`` seconds of *consecutive silence* end the
+        wait.  When ``idle_timeout`` is ``None`` the call uses
+        ``self.timeout`` (the default for short interactive ops).
 
-        Why: long-running scripts (functional-test chunks doing wifi
-        connect + MQTT QoS 1 round-trip + LAN echo, e.g. 15-30 s of
-        device-side work) emit output across the whole window and only
-        send the trailing ``\\x04>`` markers when the script finishes.
-        A wall-clock-bounded read aborts mid-script with a partial
-        buffer like ``'OKWIFI_OK ip=…\\r\\n'`` (verified live on
-        Pi Pico W CP / Lolin S2 CP, 2026-04-28) and
-        :meth:`_parse_raw_repl_response` raises a confusing
-        "Malformed raw REPL response (missing \\x04 markers)" error.
-        Idle-timeout semantics let the read keep up with the script's
-        natural pacing while still bounding the no-data case.
+        Why a per-call idle timeout: two distinct workload classes use
+        this primitive.
+
+        * **Short interactive ops** (autoreload toggle, ``gc.mem_free``
+          probe, ``import gc; gc.collect`` between bootstrap chunks):
+          finish in <1 s; ``self.timeout`` (10 s default) is plenty.
+        * **Test-bootstrap execution** (test source feeding a parser
+          loop, harness ``run_module`` driving 5–10 tests, the
+          fragmentation-test histogram doing thousands of greedy
+          ``bytearray()`` allocs to count free blocks per tier): on
+          Lolin S2 (~2 MB heap, ESP32-S2) the histogram bisection at
+          the 256-byte tier alone runs ~7,500 silent iterations and
+          can exceed 10 s with no intermediate output.  Idle-timeout
+          fires mid-script, and :meth:`_parse_raw_repl_response`
+          raises ``Malformed raw REPL response (missing \\x04 markers)``
+          with only the leading ``OK`` accumulated.  :meth:`execute`
+          passes a longer ``idle_timeout`` for that path.
+
+        Long-running chatty scripts (wifi connect + MQTT QoS 1 round-trip,
+        15–30 s of device-side work) are unaffected — they emit output
+        across the whole window so the idle timer keeps resetting.
 
         Args:
             marker: Byte sequence to look for.
+            idle_timeout: Seconds of consecutive silence that end the
+                wait.  ``None`` means use ``self.timeout`` (the default
+                for interactive ops).
 
         Returns:
             All bytes read, including the marker if found.  When the
@@ -1868,9 +1897,10 @@ class CircuitpythonTransport:
             accumulated.
         """
         assert self._port is not None
+        effective_timeout = self.timeout if idle_timeout is None else idle_timeout
         accumulated = b""
         last_progress = self._time.monotonic()
-        while self._time.monotonic() - last_progress < self.timeout:
+        while self._time.monotonic() - last_progress < effective_timeout:
             waiting = self._port.in_waiting
             if waiting > 0:
                 chunk = self._port.read(waiting)
