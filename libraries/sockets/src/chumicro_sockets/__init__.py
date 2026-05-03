@@ -59,7 +59,8 @@ def tcp_client_socket(host: str, port: int, *, radio: object | None = None) -> T
     Routes to the runtime-appropriate adapter:
 
     * **CircuitPython** — ``socketpool.SocketPool(radio).socket(...).connect``.
-      *radio* is required (typically ``wifi.radio``).
+      *radio* defaults to ``wifi.radio``; pass explicitly for multi-radio
+      prototypes or boards without a ``wifi`` module.
     * **MicroPython** — stdlib ``socket.socket`` + ``connect``.
       *radio* is ignored.
     * **CPython** — stdlib ``socket.create_connection``.  *radio* is ignored.
@@ -67,7 +68,9 @@ def tcp_client_socket(host: str, port: int, *, radio: object | None = None) -> T
     Args:
         host: DNS name or IP literal.
         port: Remote port.
-        radio: CP-only radio object.  Required on CP, ignored elsewhere.
+        radio: CP-only radio object.  Defaults to ``wifi.radio`` on CP;
+            ignored on MP and CPython.  Pass explicitly for multi-radio
+            prototypes or CP boards without a ``wifi`` module.
 
     Returns:
         Connected :class:`TCPClientSocket`.  Already connected — callers
@@ -76,7 +79,8 @@ def tcp_client_socket(host: str, port: int, *, radio: object | None = None) -> T
     Raises:
         OSError: Connection refused, DNS failure, etc.  Adapters
             normalise runtime-specific socket errors into ``OSError``.
-        TypeError: CP runtime invoked without a *radio* argument.
+        TypeError: CP runtime invoked on a board where ``import wifi``
+            fails and no explicit ``radio=`` was passed.
     """
     runtime = _runtime_name()
     if runtime == "circuitpython":
@@ -106,7 +110,8 @@ def tls_client_socket(
     on every runtime (every supported board ships on-board ``ssl``):
 
     * **CircuitPython** — ``context.wrap_socket(socketpool_sock,
-      server_hostname=host)`` then ``connect``.  *radio* required.
+      server_hostname=host)`` then ``connect``.  *radio* defaults to
+      ``wifi.radio``.
     * **MicroPython** — same shape via MP's ``ssl.SSLContext``
       (mbedTLS-backed on RP2 + ESP32 from MP 1.24+).
     * **CPython** — stdlib ``ssl.SSLContext.wrap_socket``.
@@ -121,14 +126,17 @@ def tls_client_socket(
         port: Remote port.
         context: SSLContext to use.  ``None`` = runtime default.
             Pre-build via :func:`ssl_context_with_ca` for custom CAs.
-        radio: CP-only radio object.  Required on CP, ignored elsewhere.
+        radio: CP-only radio object.  Defaults to ``wifi.radio`` on CP;
+            ignored on MP and CPython.  Pass explicitly for multi-radio
+            prototypes or CP boards without a ``wifi`` module.
 
     Returns:
         Connected, TLS-wrapped :class:`TCPClientSocket`.
 
     Raises:
         OSError: Connection or handshake failure.
-        TypeError: CP runtime invoked without a *radio* argument.
+        TypeError: CP runtime invoked on a board where ``import wifi``
+            fails and no explicit ``radio=`` was passed.
     """
     runtime = _runtime_name()
     if runtime == "circuitpython":
@@ -158,7 +166,8 @@ def tcp_listening_socket(
     * **CircuitPython** — ``socketpool.SocketPool(radio).socket().bind().listen()``
       (since CP 7.x).  ``setsockopt(SO_REUSEADDR, 1)`` is best-effort
       (older CP firmware / rp2 ports may not expose the option).
-      *radio* is required (typically ``wifi.radio``).
+      *radio* defaults to ``wifi.radio``; pass explicitly for multi-radio
+      prototypes or boards without a ``wifi`` module.
     * **MicroPython** — ``socket.socket().bind().listen()``;
       ``setsockopt(SO_REUSEADDR, 1)`` is best-effort (some ports don't
       expose the option).  *radio* is ignored.
@@ -187,7 +196,8 @@ def tcp_listening_socket(
     Raises:
         OSError: Bind / listen failed (port in use, permission denied,
             etc.).
-        TypeError: CP runtime invoked without a *radio* argument.
+        TypeError: CP runtime invoked on a board where ``import wifi``
+            fails and no explicit ``radio=`` was passed.
     """
     runtime = _runtime_name()
     if runtime == "circuitpython":
@@ -234,7 +244,8 @@ def tls_listening_socket(
         context: Server-side ``ssl.SSLContext`` from
             :func:`ssl_context_with_cert_and_key`.
         backlog: SYN-queue depth.
-        radio: CP-only radio object.
+        radio: CP-only radio object.  Defaults to ``wifi.radio`` on CP;
+            ignored on MP and CPython.
 
     Returns:
         A listening socket wrapper whose ``accept()`` returns
@@ -376,7 +387,9 @@ def udp_socket(
             every interface (the typical case for boards on a single
             LAN).
         bind_port: Local port.  ``0`` = ephemeral.
-        radio: CP-only radio object.  Required on CP, ignored elsewhere.
+        radio: CP-only radio object.  Defaults to ``wifi.radio`` on CP;
+            ignored on MP and CPython.  Pass explicitly for multi-radio
+            prototypes or CP boards without a ``wifi`` module.
         broadcast: Set ``SO_BROADCAST`` so ``sendto`` to a broadcast
             address (typically ``"255.255.255.255"`` or the LAN
             broadcast address) succeeds.  Off by default — kernels
@@ -387,7 +400,8 @@ def udp_socket(
 
     Raises:
         OSError: Bind failed (port in use, permission denied, etc.).
-        TypeError: CP runtime invoked without a *radio* argument.
+        TypeError: CP runtime invoked on a board where ``import wifi``
+            fails and no explicit ``radio=`` was passed.
     """
     runtime = _runtime_name()
     if runtime == "circuitpython":

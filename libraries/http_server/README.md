@@ -43,9 +43,7 @@ from chumicro_sockets import tcp_listening_socket
 from chumicro_timing import ticks_ms
 
 server = HttpServer(
-    listener_factory=lambda: tcp_listening_socket(
-        host="0.0.0.0", port=8080, radio=wifi.radio,
-    ),
+    listener_factory=lambda: tcp_listening_socket(host="0.0.0.0", port=8080),
 )
 
 @server.route("/")

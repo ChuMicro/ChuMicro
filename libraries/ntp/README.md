@@ -65,7 +65,7 @@ pip install chumicro-ntp-experimental
 from chumicro_ntp import NTPClient
 from chumicro_ntp.sockets_factory import chumicro_sockets_factory
 
-sock = chumicro_sockets_factory(radio=wifi.adapter.radio)
+sock = chumicro_sockets_factory()
 client = NTPClient(socket=sock, server="pool.ntp.org")
 request = client.query()
 while not request.done:

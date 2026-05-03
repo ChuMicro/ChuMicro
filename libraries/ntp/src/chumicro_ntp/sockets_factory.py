@@ -10,7 +10,7 @@ Import explicitly when you want the default::
     from chumicro_ntp import NTPClient
     from chumicro_ntp.sockets_factory import chumicro_sockets_factory
 
-    sock = chumicro_sockets_factory(radio=wifi.adapter.radio)
+    sock = chumicro_sockets_factory()
     client = NTPClient(socket=sock, server="pool.ntp.org")
 
 The deploy-graph walker only enters this module when the app
@@ -26,10 +26,9 @@ def chumicro_sockets_factory(*, radio=None, broadcast: bool = False) -> object:
     """Return a UDP socket wired through ``chumicro-sockets``.
 
     Args:
-        radio: CP-only radio object (typically ``wifi.radio`` or
-            ``wifi.adapter.radio`` when used with chumicro-wifi).
-            Required on CircuitPython, ignored on MicroPython and
-            CPython.
+        radio: CP-only radio object.  Defaults to ``wifi.radio`` on CP
+            (auto-detected); ignored on MP and CPython.  Pass explicitly
+            for multi-radio prototypes or boards without a ``wifi`` module.
         broadcast: Set ``SO_BROADCAST`` on the underlying socket.
             Off by default — NTP doesn't need it.  Enable when
             building "discover any server on the LAN" patterns.

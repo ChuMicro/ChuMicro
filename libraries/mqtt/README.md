@@ -66,8 +66,8 @@ from chumicro_sockets import tcp_client_socket
 from chumicro_timing import ticks_ms
 from chumicro_mqtt import MQTTClient
 
-# CP needs `radio=wifi.radio`; MP / CPython ignore the kwarg.
-sock = tcp_client_socket("broker.example.com", 1883, radio=None)
+# CP auto-detects `wifi.radio`; MP / CPython have no radio.
+sock = tcp_client_socket("broker.example.com", 1883)
 sock.setblocking(False)
 client = MQTTClient(sock, client_id="my-thing", keep_alive_seconds=60)
 

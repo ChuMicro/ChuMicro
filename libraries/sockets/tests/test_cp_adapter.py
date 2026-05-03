@@ -270,10 +270,32 @@ def _clear_pool_cache():
 
 
 class TestPoolFor:
-    def test_none_radio_raises_typeerror(self) -> None:
+    def test_none_radio_auto_detects_wifi_radio(self) -> None:
+        """``radio=None`` falls through to ``wifi.radio`` — the only radio
+        on any production CP board.  Drops the kwarg from cross-runtime
+        examples.
+        """
         from chumicro_sockets._adapters import cp as cp_adapter
         _clear_pool_cache()
-        with raises(TypeError, match="radio="):
+        sentinel_radio = object()
+        fake_wifi = _FakeModule()
+        fake_wifi.radio = sentinel_radio
+        wifi_swap = _SwapItem(sys.modules, "wifi", fake_wifi)
+        pool_swap, fake_pool_module = _install_socketpool_stub()
+        with wifi_swap, pool_swap:
+            pool = cp_adapter._pool_for(None)
+        assert pool is fake_pool_module.created_pools[0]
+        assert pool.radio is sentinel_radio
+
+    def test_none_radio_falls_back_to_typeerror_when_wifi_unavailable(self) -> None:
+        """Boards without a ``wifi`` module (SAMD M0 etc.) get a clear
+        directive to pass ``radio=`` explicitly.
+        """
+        from chumicro_sockets._adapters import cp as cp_adapter
+        _clear_pool_cache()
+        # Force `import wifi` to fail by stubbing sys.modules with None.
+        wifi_swap = _SwapItem(sys.modules, "wifi", None)
+        with wifi_swap, raises(TypeError, match="radio="):
             cp_adapter._pool_for(None)
 
     def test_constructs_pool_via_socketpool_module(self) -> None:
