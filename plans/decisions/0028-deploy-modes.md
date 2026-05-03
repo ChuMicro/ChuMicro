@@ -54,8 +54,19 @@ To avoid that failure mode, CircuitPython RAM mode now probes live free heap fro
 
 Flash mode in `disconnect()`:
 
-- Re-enable autoreload via `supervisor.runtime.autoreload = True`.
-- Trigger reload via `supervisor.reload()`.
+- Pure teardown: re-enter raw REPL (idempotent — the Ctrl-C×2 inside
+  interrupts any code still running from a killed-mid-execute session),
+  then Ctrl-B to exit raw REPL, then close the serial port.  No autoreload
+  manipulation and no soft-reboot at this site — both were removed in the
+  later deploy-audit pass after the ESP32-S2 USB-CDC double-reboot wedge
+  surfaced.  The autoreload-off issued in `stage()` is implicitly
+  restored on the production `deploy_files` path (its mid-method Ctrl-D
+  resets `supervisor.runtime.autoreload` to default-on as a side effect)
+  and intentionally left off on the functional-test path (the harness
+  drove the raw REPL session itself; `code.py`-style reload-on-edit
+  isn't relevant during or after the session).  See
+  `plans/learnings.md` "rsync to CIRCUITPY can hang in uninterruptible
+  kernel I/O" for the failure mode that drove the simplification.
 
 ### CircuitPython drive path configuration
 

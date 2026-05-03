@@ -151,8 +151,15 @@ For deploying persistent files (code.py, libraries to lib/, settings.toml):
 3. Host copies all files to the CIRCUITPY USB drive (batch, no partial restarts).
 4. Host runs `sync` and waits for filesystem flush.
 5. Verify files from REPL via `os.stat()` or `import`.
-6. `supervisor.runtime.autoreload = True` — re-enables.
-7. `supervisor.reload()` or Ctrl-D — single controlled restart.
+6. Production deploy (`deploy_files`): exit raw REPL, send Ctrl-D — single
+   controlled restart that runs `code.py` and (as a side effect) resets
+   `supervisor.runtime.autoreload` to its default-on state.
+   Functional-test stage (`_stage_to_flash`): no soft-reboot — the harness
+   drives the live raw REPL session for the rest of its work.  Either way
+   `disconnect()` does not re-enable autoreload or fire its own Ctrl-D
+   (both were removed in the post-`0028` audit pass after the ESP32-S2
+   USB-CDC double-reboot wedge — see `plans/learnings.md` "rsync to
+   CIRCUITPY can hang in uninterruptible kernel I/O").
 
 Writing files via the REPL (`storage.remount`) is blocked while USB is active (`"Cannot remount path when visible via USB"`).  `storage.disable_usb_drive()` only works in boot.py, not at runtime.  The USB-drive-with-autoreload-control approach is the best available path that preserves normal CIRCUITPY drive convenience.
 
