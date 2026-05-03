@@ -14,7 +14,7 @@ of handlers) and `StreamHandler` (synchronous text output to a
 writable stream).  `BufferedHandler` is a runner-shaped front-end that
 batches records and flushes them on `handle(now_ms)`.
 
-By [Decision 0042](../../../plans/decisions/0042-library-dependency-policy.md)'s
+By [Decision 0042](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0042-library-dependency-policy.md)'s
 "decoration / observability" rule, **no other chumicro library imports
 this one**.  Apps wire logging in by passing a logger callable to the
 optional `logger=` parameter on libraries that accept one.

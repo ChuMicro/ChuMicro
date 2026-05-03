@@ -2,7 +2,7 @@
 
 `chumicro-workspace` is the host-side CLI for a ChuMicro project workspace — a `things/` + `devices.yml` repo cloned from [`ChuMicro/ChuMicro-Workspace-Template`](https://github.com/ChuMicro/ChuMicro-Workspace-Template) (or a fork; see [Decision 0038](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0038-workspace-bootstrap-via-clone.md)).  It composes [`chumicro-deploy`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/deploy) and [`chumicro-repl`](https://github.com/ChuMicro/ChuMicro/tree/main/workbench/repl) with the workspace-shaped pieces those packages don't own: a deploy-time config-merge pipeline, a CLI that reads `workspace.yml`, three-zone `devices.yml` round-trip, board-state onboarding, firmware URL derivation, and the boot-shim layout that lets one board host multiple things.
 
-This guide walks through the typical workflows end-to-end.  See the [README](../README.md) for the at-a-glance command list and [API reference](api.md) for the auto-generated module docs.
+This guide walks through the typical workflows end-to-end.  See the [README](https://github.com/ChuMicro/ChuMicro/blob/main/workbench/workspace/README.md) for the at-a-glance command list and [API reference](api.md) for the auto-generated module docs.
 
 ## Workspace layout
 
