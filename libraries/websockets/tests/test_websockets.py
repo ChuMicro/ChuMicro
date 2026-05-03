@@ -268,6 +268,67 @@ class TestParseWsUrl:
 # ---------------------------------------------------------------------------
 
 
+class TestPureSha1:
+    """Pure-Python SHA-1 fallback matches the stdlib (and FIPS 180-4 vectors).
+
+    Used on CircuitPython where ``hashlib.sha1`` is feature-gated off
+    by default (`MICROPY_PY_HASHLIB_SHA1=0`).  The websocket spec
+    requires SHA-1 for the Sec-WebSocket-Accept derivation.
+    """
+
+    def test_empty_input(self):
+        from chumicro_websockets._wire import _pure_sha1
+
+        # FIPS 180-4 test vector: SHA-1("") = da39a3ee5e6b4b0d3255bfef95601890afd80709
+        assert _pure_sha1(b"") == bytes.fromhex(
+            "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+        )
+
+    def test_abc(self):
+        from chumicro_websockets._wire import _pure_sha1
+
+        # FIPS 180-4 test vector: SHA-1("abc") = a9993e364706816aba3e25717850c26c9cd0d89d
+        assert _pure_sha1(b"abc") == bytes.fromhex(
+            "a9993e364706816aba3e25717850c26c9cd0d89d",
+        )
+
+    def test_quick_brown_fox(self):
+        from chumicro_websockets._wire import _pure_sha1
+
+        assert _pure_sha1(
+            b"The quick brown fox jumps over the lazy dog",
+        ) == bytes.fromhex("2fd4e1c67a2d28fced849ee1bb76e7391b93eb12")
+
+    def test_websocket_accept_derivation_input(self):
+        from chumicro_websockets._wire import _pure_sha1
+
+        # The exact 60-byte input the RFC 6455 §1.3 worked example produces.
+        accept_input = b"dGhlIHNhbXBsZSBub25jZQ==258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+        # Reference: import hashlib; hashlib.sha1(accept_input).hexdigest()
+        assert _pure_sha1(accept_input) == bytes.fromhex(
+            "b37a4f2cc0624f1690f64606cf385945b2bec4ea",
+        )
+
+    def test_dispatcher_uses_pure_when_hashlib_lacks_sha1(self):
+        """When ``hashlib.sha1`` isn't available, dispatcher routes to _pure_sha1."""
+        import hashlib as real_hashlib
+
+        from chumicro_websockets import _wire
+
+        # Save and stash hashlib.sha1 to simulate CircuitPython's defaults.
+        original_sha1 = getattr(real_hashlib, "sha1", None)
+        try:
+            if hasattr(real_hashlib, "sha1"):
+                del real_hashlib.sha1
+            digest = _wire._sha1_digest(b"abc")
+            assert digest == bytes.fromhex(
+                "a9993e364706816aba3e25717850c26c9cd0d89d",
+            )
+        finally:
+            if original_sha1 is not None:
+                real_hashlib.sha1 = original_sha1
+
+
 class TestKeyDerivation:
     """RFC 6455 §1.3 and §4.2.2 worked examples."""
 
