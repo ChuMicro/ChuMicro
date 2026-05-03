@@ -66,10 +66,12 @@ def prepare_circuitpython() -> int:
             # The actual unix-port binary.  Two non-default knobs:
             #
             # 1. ``-DMICROPY_PY_MICROPYTHON_RINGIO=0`` works around a
-            #    bug in CircuitPython 10.1.4's ``py/py.mk``: the file
-            #    ``objringio.c`` is listed in ``py.cmake`` but missing
-            #    from ``py.mk``.  Disabling the RingIO type sidesteps
-            #    the missing-object-file linker error.  See
+            #    bug in CP's ``py`` build: in 10.1.4 the file
+            #    ``objringio.c`` was listed in ``py.cmake`` but missing
+            #    from ``py.mk`` (linker error); 10.2.0 added the .mk
+            #    entry but ``objringio.c`` itself still doesn't compile
+            #    against CP's diverged ringbuf API.  Disabling the
+            #    RingIO type sidesteps both failure modes.  See
             #    ``plans/decisions/0017-circuitpython-ringio-bug.md``.
             #
             # 2. ``MICROPY_PY_SSL=1 MICROPY_SSL_AXTLS=1`` (passed as
@@ -84,20 +86,14 @@ def prepare_circuitpython() -> int:
             #    it, and it's what the CP ``ssl.py`` shim under
             #    ``lib/micropython-lib/python-stdlib/ssl/`` expects
             #    (``import tls``, where ``tls`` is the
-            #    ``extmod/modtls_mbedtls.c`` C module).  But CP 10.1.4's
-            #    source tree is internally inconsistent: ``lib/mbedtls``
-            #    is pinned at v2.28.3 (the older 2.x source layout)
-            #    while ``extmod/extmod.mk`` lists 3.x file names
-            #    (``ssl_client.c``, ``rsa_alt_helpers.c``,
-            #    ``bignum_core.c``, etc.) that don't exist in 2.x.  The
-            #    link step fails with "no such file or directory".
-            #    Updating the CP mbedtls submodule is a CP-side
-            #    decision (would affect every CP board's per-board
-            #    build, not just the unix-port).  Until that lands
-            #    upstream we live with axtls and the resulting
-            #    ``ssl``-module gap on the CP unix-port.  See
-            #    ``plans/learnings.md`` §"CP unix-port hashlib + ssl
-            #    gated on ``MICROPY_PY_SSL`` build flag".
+            #    ``extmod/modtls_mbedtls.c`` C module).  But CP's
+            #    source tree (verified through 10.2.0) has three
+            #    independent problems blocking mbedtls on the unix-port,
+            #    plus zero downstream test-recovery payoff anyway —
+            #    see ``plans/learnings.md`` §"CP unix-port hashlib +
+            #    ssl gated on ``MICROPY_PY_SSL`` build flag" for the
+            #    full triage.  We live with axtls and the resulting
+            #    ``ssl``-module gap on the CP unix-port.
             RuntimePrepStep(
                 [
                     "make", "-C", source_dir / "ports/unix",

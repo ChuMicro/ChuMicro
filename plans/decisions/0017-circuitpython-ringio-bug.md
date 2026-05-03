@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-04`
+Re-verified: `2026-05-03` (CP 10.2.0)
 
 ## Context
 
@@ -9,11 +10,22 @@ Building the CircuitPython 10.1.4 unix port with `VARIANT=standard` fails with a
 unresolved-symbol linker error for `_mp_type_ringio`.  This blocks the
 `prepare-circuitpython` build step.
 
+CP 10.2.0 (2026-05) added `objringio.o` to `py/py.mk`, which fixes the
+*linker* error — but `objringio.c` itself still doesn't compile in CP because
+the `ringbuf_t` struct is missing the `iget` / `iput` members and the
+`ringbuf_avail` / `ringbuf_memcpy_get_internal` helper functions that
+the file references.  CP-side ringbuf evolution diverged from MP's.
+Net effect: the `-DMICROPY_PY_MICROPYTHON_RINGIO=0` workaround is still
+needed in 10.2.0 — the failure mode just shifts from linker to compiler.
+
 ## Root cause
 
 CircuitPython's `py/py.mk` is missing the `objringio.o` object file that
 MicroPython v1.26.0 includes at line 176.  The CMake equivalent (`py/py.cmake`)
 does list `objringio.c` at line 101 — only the Make-based build is affected.
+
+(In CP 10.2.0 the Makefile entry was added but the source file's compile
+errors were not fixed; see Context above.)
 
 The `standard` variant sets `MICROPY_CONFIG_ROM_LEVEL_EXTRA_FEATURES`, which
 enables `MICROPY_PY_MICROPYTHON_RINGIO` by default (`mpconfig.h:1387`).
@@ -83,15 +95,25 @@ ESP32-S2/S3 board behavior than `coverage` (`EVERYTHING` ROM level):
 
 ### Upstream tracking
 
-This is a genuine bug in CircuitPython 10.1.4.  The fix is a one-line addition
-to `py/py.mk` (add `objringio.o \` after the `objrangegen.o` line, matching
-`py.cmake:101` and MicroPython's `py.mk:176`).  However, since CircuitPython
-does not use RingIO and their coverage variant already disables it, the practical
-impact is limited to anyone building `VARIANT=standard` from source.
+This is a genuine bug in CircuitPython 10.1.4 — and still in 10.2.0.
 
-If/when CircuitPython merges the fix upstream or we upgrade the pinned version,
-our `CFLAGS_EXTRA` workaround is harmless — setting a flag that is already `0`
-has no effect.
+* **CP 10.2.0** added `objringio.o` to `py/py.mk` (matching `py.cmake:101`
+  and MicroPython's `py.mk:176`).  Linker is happy.  But `objringio.c`
+  itself still references `ringbuf_t` members (`iget`, `iput`) and
+  helpers (`ringbuf_avail`, `ringbuf_memcpy_get_internal`) that don't
+  exist in CP's diverged ringbuf implementation.  Compile fails.
+* **A complete fix** would require either back-porting MP's ringbuf
+  helpers (`iget`/`iput` + the helper functions) into CP's `py/ringbuf.h`
+  + `py/ringbuf.c`, or replacing `objringio.c` with CP-compatible code.
+  Both are CP-side patches.
+
+Since CircuitPython does not use RingIO and their coverage variant already
+disables it, the practical impact is limited to anyone building
+`VARIANT=standard` from source.  Our workaround stays in place.
+
+If/when CircuitPython fully fixes the bug upstream (compile + link) or we
+upgrade to a CP version that does, our `CFLAGS_EXTRA` workaround is
+harmless — setting a flag that is already `0` has no effect.
 
 ## Consequences
 

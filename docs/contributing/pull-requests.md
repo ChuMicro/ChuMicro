@@ -120,7 +120,7 @@ If your change could behave differently on a real board than in tests — timing
 
 1. **Console output** from running the library on a device (scrub any PII — WiFi passwords, IP addresses)
 2. **Board name** (e.g., "Adafruit QT Py ESP32-S3")
-3. **Runtime and version** (e.g., "CircuitPython 10.1.4" or "MicroPython v1.26.0")
+3. **Runtime and version** (e.g., "CircuitPython 10.2.0" or "MicroPython v1.26.0")
 4. **What was tested** — which examples or functional tests you ran, and their results
 
 Paste the output directly in the PR description or as a comment.

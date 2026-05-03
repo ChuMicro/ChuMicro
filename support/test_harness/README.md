@@ -43,7 +43,7 @@ python scripts/run.py test-circuitpython
 
 If no explicit binary is given, `scripts/run.py` first tries the repo-local prepared runtime under `.tools/`, then a `circuitpython` executable on `PATH`, and otherwise triggers the repo-managed prepare step automatically.  To override, pass `--circuitpython-binary /path/to/binary`.
 
-In this workspace on macOS, the pinned upstream `10.1.4` unix-port build completes and the cross-runtime unit tests pass under both MicroPython and CircuitPython unix-port interpreters.  Both runtime compatibility checks are required CI status checks.
+In this workspace on macOS, the pinned upstream `10.2.0` unix-port build completes and the cross-runtime unit tests pass under both MicroPython and CircuitPython unix-port interpreters.  Both runtime compatibility checks are required CI status checks.
 
 ### Combined host + runtime run
 

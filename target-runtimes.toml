@@ -5,7 +5,7 @@
 # read from this file — no other files need version updates.
 
 [circuitpython]
-version = "10.1.4"
+version = "10.2.0"
 
 [micropython]
 version = "v1.26.0"
