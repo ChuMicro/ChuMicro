@@ -34,107 +34,28 @@ except ImportError:
 def _sha1_digest(data: bytes) -> bytes:
     """Return the SHA-1 digest of *data* using the fastest available backend.
 
-    Three-tier dispatch:
+    Two-tier dispatch matching the reality of every runtime we ship to:
 
     1. **``hashlib.sha1(data)``** — CPython, MicroPython on every
-       supported port.  The C-backed fast path.
-    2. **``hashlib.new("sha1", data)``** — CircuitPython.  The mbedtls-
-       backed factory works even though ``hashlib.sha1`` itself is
-       gated off by ``MICROPY_PY_HASHLIB_SHA1=0`` in
+       supported port (``MICROPY_PY_HASHLIB_SHA1=1`` in
+       ``ports/{esp32,rp2}/mpconfigport.h``).
+    2. **``hashlib.new("sha1", data)``** — CircuitPython.  The
+       mbedtls-backed factory works even though ``hashlib.sha1``
+       itself is gated off by ``MICROPY_PY_HASHLIB_SHA1=0`` in
        ``py/mpconfig.h:1807``.  Live-board probe on Pi Pico W CP
        confirmed ``hashlib.new("sha1", b"abc").digest()`` matches
        the FIPS vector.
-    3. **Pure-Python ``_pure_sha1``** — last-resort fallback for any
-       runtime that exposes neither.  Allocates ~80 LOC of ints +
-       bytearrays per hash; on tight-heap boards this fragments the
-       heap badly and can crash the chip mid-``client.connect()``.
-       Live-board reproduced on Pi Pico W CP before the
-       ``hashlib.new`` path was wired up.
 
-    The only thing we ever hash is the ``client_key + WS_MAGIC_GUID``
-    constant (~60 bytes), so even the slow path is fine when reached —
-    the issue is the heap pressure from int allocation, not throughput.
+    A hypothetical runtime exposing neither would surface as a clear
+    ``AttributeError`` here at the first hash — which is the right
+    failure mode (call out the missing crypto primitive, don't
+    silently route through a pure-Python fallback that fragments
+    embedded heaps).
     """
     hasher_factory = getattr(hashlib, "sha1", None)
     if hasher_factory is not None:
         return hasher_factory(data).digest()
-    new_factory = getattr(hashlib, "new", None)
-    if new_factory is not None:
-        try:
-            return new_factory("sha1", data).digest()
-        except (ValueError, TypeError):
-            pass
-    return _pure_sha1(data)
-
-
-def _pure_sha1(message: bytes) -> bytes:
-    """Pure-Python SHA-1 (FIPS 180-4) — fallback for runtimes without hashlib.sha1.
-
-    Used by :func:`_sha1_digest` when the host doesn't expose
-    ``hashlib.sha1`` — currently CircuitPython, where SHA-1 is feature-
-    gated off by default.  ~60 LOC; correctness verified against the
-    CPython reference + the RFC 6455 §1.3 worked example.
-    """
-    h0 = 0x67452301
-    h1 = 0xEFCDAB89
-    h2 = 0x98BADCFE
-    h3 = 0x10325476
-    h4 = 0xC3D2E1F0
-    message_length_bits = len(message) * 8
-    padded = bytearray(message)
-    padded.append(0x80)
-    while len(padded) % 64 != 56:
-        padded.append(0x00)
-    padded.extend(struct.pack(">Q", message_length_bits))
-
-    mask32 = 0xFFFFFFFF
-    for chunk_offset in range(0, len(padded), 64):
-        chunk = padded[chunk_offset : chunk_offset + 64]
-        words = list(struct.unpack(">16I", bytes(chunk)))
-        for round_index in range(16, 80):
-            value = (
-                words[round_index - 3]
-                ^ words[round_index - 8]
-                ^ words[round_index - 14]
-                ^ words[round_index - 16]
-            )
-            words.append(((value << 1) | (value >> 31)) & mask32)
-        # FIPS 180-4 §6.1.2: working variables a, b, c, d, e are the spec
-        # names — kept verbatim with `# noqa: CHU001` so a future reader
-        # can match this loop against the spec line-for-line.  Round
-        # helpers f and k likewise follow the spec.
-        a, b, c, d, e = h0, h1, h2, h3, h4  # noqa: CHU001
-        for round_index in range(80):
-            if round_index < 20:
-                f = (b & c) | ((~b) & d)  # noqa: CHU001
-                k = 0x5A827999  # noqa: CHU001
-            elif round_index < 40:
-                f = b ^ c ^ d  # noqa: CHU001
-                k = 0x6ED9EBA1  # noqa: CHU001
-            elif round_index < 60:
-                f = (b & c) | (b & d) | (c & d)  # noqa: CHU001
-                k = 0x8F1BBCDC  # noqa: CHU001
-            else:
-                f = b ^ c ^ d  # noqa: CHU001
-                k = 0xCA62C1D6  # noqa: CHU001
-            temp = (
-                (((a << 5) | (a >> 27)) & mask32)
-                + f
-                + e
-                + k
-                + words[round_index]
-            ) & mask32
-            e = d  # noqa: CHU001
-            d = c  # noqa: CHU001
-            c = ((b << 30) | (b >> 2)) & mask32  # noqa: CHU001
-            b = a  # noqa: CHU001
-            a = temp  # noqa: CHU001
-        h0 = (h0 + a) & mask32
-        h1 = (h1 + b) & mask32
-        h2 = (h2 + c) & mask32
-        h3 = (h3 + d) & mask32
-        h4 = (h4 + e) & mask32
-    return struct.pack(">5I", h0, h1, h2, h3, h4)
+    return hashlib.new("sha1", data).digest()
 
 
 # ---------------------------------------------------------------------------
