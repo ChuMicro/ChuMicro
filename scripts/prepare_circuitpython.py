@@ -66,12 +66,15 @@ def prepare_circuitpython() -> int:
             # The actual unix-port binary.  Two non-default knobs:
             #
             # 1. ``-DMICROPY_PY_MICROPYTHON_RINGIO=0`` works around a
-            #    bug in CP's ``py`` build: in 10.1.4 the file
-            #    ``objringio.c`` was listed in ``py.cmake`` but missing
-            #    from ``py.mk`` (linker error); 10.2.0 added the .mk
-            #    entry but ``objringio.c`` itself still doesn't compile
-            #    against CP's diverged ringbuf API.  Disabling the
-            #    RingIO type sidesteps both failure modes.  See
+            #    bug in CP's ``py`` build.  ``objringio.c`` doesn't
+            #    compile against CP's ``ringbuf_t`` (missing ``iget`` /
+            #    ``iput`` members + helper functions) — has been broken
+            #    since the file was inherited from MicroPython.  In
+            #    10.1.4 the file was missing from ``py.mk`` so the
+            #    compile bug was masked behind a linker error for
+            #    ``mp_type_ringio``; 10.2.0 added the ``py.mk`` entry,
+            #    which unmasked the compile bug.  Either way, disabling
+            #    the RingIO type sidesteps both failure modes.  See
             #    ``plans/decisions/0017-circuitpython-ringio-bug.md``.
             #
             # 2. ``MICROPY_PY_SSL=1 MICROPY_SSL_AXTLS=1`` (passed as
