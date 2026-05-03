@@ -5,19 +5,20 @@ the canonical target (no NVS partition, only LittleFS) but ESP32 MP
 boards work too if a user explicitly picks
 ``backend="littlefs"`` instead of the NVS default.
 
+The module-level ``__chumicro_runtimes__`` marker tells the
+pytest-device plugin to skip the wrong-runtime parametrization, so
+CP boards don't even try to import the file.
+
 Each test deletes ``/_chu_kv.msgpack`` (and the tmp file) at start
 so prior session state doesn't leak between tests.
 """
 
-import sys
+__chumicro_runtimes__ = ("micropython",)
+
+import os
 
 from chumicro_kvstore import KVStore
 from chumicro_kvstore._backends.mp_littlefs import MpLittlefsBackend
-
-_IS_MICROPYTHON = sys.implementation.name == "micropython"
-
-if _IS_MICROPYTHON:
-    import os
 
 
 def _wipe_payload_file() -> None:
@@ -32,8 +33,6 @@ def _wipe_payload_file() -> None:
 
 def test_blank_filesystem_loads_as_empty() -> None:
     """A filesystem with no payload file reports empty without raising."""
-    if not _IS_MICROPYTHON:
-        return
     _wipe_payload_file()
     backend = MpLittlefsBackend()
     assert backend.load() == b""
@@ -41,8 +40,6 @@ def test_blank_filesystem_loads_as_empty() -> None:
 
 def test_save_then_load_round_trips_on_real_filesystem() -> None:
     """Bytes survive a write + read cycle through the real flash filesystem."""
-    if not _IS_MICROPYTHON:
-        return
     _wipe_payload_file()
     backend = MpLittlefsBackend()
     payload = b"hello from real littlefs"
@@ -52,8 +49,6 @@ def test_save_then_load_round_trips_on_real_filesystem() -> None:
 
 def test_save_uses_atomic_rename_protocol() -> None:
     """Tmp file should not exist after a successful save (rename consumed it)."""
-    if not _IS_MICROPYTHON:
-        return
     _wipe_payload_file()
     backend = MpLittlefsBackend()
     backend.save(b"check tmp cleanup")
@@ -65,8 +60,6 @@ def test_save_uses_atomic_rename_protocol() -> None:
 
 def test_kvstore_round_trips_through_real_filesystem() -> None:
     """Full KVStore lifecycle: commit on board, read back from filesystem."""
-    if not _IS_MICROPYTHON:
-        return
     _wipe_payload_file()
     store = KVStore(backend=MpLittlefsBackend())
     store["boot_count"] = 1
@@ -80,8 +73,6 @@ def test_kvstore_round_trips_through_real_filesystem() -> None:
 
 def test_boot_counter_increments_across_fresh_kvstore_instances() -> None:
     """Canonical use case: counter persists across re-construction."""
-    if not _IS_MICROPYTHON:
-        return
     _wipe_payload_file()
     for expected in (1, 2, 3, 4):
         store = KVStore(backend=MpLittlefsBackend())
@@ -92,8 +83,6 @@ def test_boot_counter_increments_across_fresh_kvstore_instances() -> None:
 
 def test_commit_if_changed_skips_unchanged_writes() -> None:
     """Wear defense — identical state ⇒ no rename / sync."""
-    if not _IS_MICROPYTHON:
-        return
     _wipe_payload_file()
     store = KVStore(backend=MpLittlefsBackend())
     store["alpha"] = 1
@@ -103,8 +92,6 @@ def test_commit_if_changed_skips_unchanged_writes() -> None:
 
 def test_commit_overwrites_previous_payload() -> None:
     """Each commit replaces the prior payload cleanly."""
-    if not _IS_MICROPYTHON:
-        return
     _wipe_payload_file()
     store = KVStore(backend=MpLittlefsBackend())
     store["alpha"] = 1

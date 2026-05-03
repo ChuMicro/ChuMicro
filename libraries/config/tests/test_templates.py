@@ -27,17 +27,26 @@ if _IS_CPYTHON:
         with raises(MissingTemplateError):
             get_section_template("definitely_not_a_real_chumicro_library")
 
-    def test_installed_library_without_template_raises_clear_error() -> None:
+    def test_installed_library_without_template_raises_clear_error(
+        tmp_path, monkeypatch,
+    ) -> None:
         """A library that doesn't ship a template still raises cleanly.
 
-        ``chumicro-msgpack`` is installed in the workspace but
-        doesn't consume runtime config (and so doesn't ship a
-        ``_templates/config.toml``).  Workspace tooling that walks
-        installed libraries should treat this as "skip" rather than
-        a hard failure.
+        Stages a synthetic installable package with no
+        ``_templates/config.toml`` so the assertion never depends on
+        which real chumicro libraries happen to ship templates today.
         """
+        fake_root = tmp_path / "fake_pkg_root"
+        fake_pkg = fake_root / "chumicro_no_template"
+        fake_pkg.mkdir(parents=True)
+        (fake_pkg / "__init__.py").write_text("")
+
+        monkeypatch.syspath_prepend(str(fake_root))
+        monkeypatch.setitem(sys.modules, "chumicro_no_template", None)
+        sys.modules.pop("chumicro_no_template", None)
+
         with raises(MissingTemplateError):
-            get_section_template("msgpack")
+            get_section_template("no_template")
 
     def test_template_text_round_trips_when_present(tmp_path, monkeypatch) -> None:
         """A real template file under ``_templates/config.toml`` is returned verbatim.

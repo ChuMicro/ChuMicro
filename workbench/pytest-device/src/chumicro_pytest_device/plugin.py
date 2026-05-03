@@ -26,6 +26,13 @@ results for MicroPython and CircuitPython.
 This enables IDE play buttons (PyCharm, VS Code) to run device
 tests at file and function granularity — just click play.
 
+Functional test files that exercise a single-runtime backend can
+opt out of the wrong-runtime parametrization with a module-level
+``__chumicro_runtimes__`` marker — same convention the bundle and
+deploy pipelines use for source files (Decisions 0037 / 0044)::
+
+    __chumicro_runtimes__ = ("circuitpython",)
+
 See Decision 0027 (IDE integration section).
 """
 
@@ -48,6 +55,7 @@ from chumicro_deploy import (
     load_device_registry,
     resolve_ide_devices,
 )
+from chumicro_deploy._runtime_marker import read_runtime_marker
 
 from ._test_runner import (
     build_device_bootstrap,
@@ -382,6 +390,46 @@ def _resolve_library_dir(test_file: Path) -> Path:
     return test_file.parent.parent
 
 
+def _filter_targets_by_marker(
+    targets: list[DeviceEntry] | None,
+    test_file: Path,
+) -> list[DeviceEntry] | None:
+    """Drop targets the file's ``__chumicro_runtimes__`` marker excludes.
+
+    Functional test files that exercise a single-runtime backend
+    (``test_cp_nvm_backend.py``, ``test_mp_adapter_on_device.py``)
+    declare a module-level marker matching the source-file convention
+    introduced by Decision 0037 / 0044::
+
+        __chumicro_runtimes__ = ("circuitpython",)
+
+    Without this filter, the plugin parametrizes every test in the
+    file with both runtimes when ``defaults.ide_runtime: both`` is
+    set in ``devices.yml`` — and the wrong-runtime parametrization
+    fails at import time because the per-runtime source module
+    (e.g. ``chumicro_kvstore._backends.cp_nvm``) was never staged on
+    the wrong-runtime device.
+
+    The marker is read via :func:`read_runtime_marker` (AST-only,
+    same path the deploy pipeline uses).  Sub-runtime names like
+    ``micropython_esp32`` fold into their base (``micropython``),
+    matching :func:`chumicro_deploy._runtime_marker.file_targets_runtime`.
+
+    Files without a marker keep every target — the default-safe path
+    for runtime-agnostic tests.
+    """
+    if targets is None:
+        return None
+    marker = read_runtime_marker(test_file)
+    if marker is None:
+        return targets
+    folded = {
+        name.split("_", 1)[0] if name.startswith("micropython_") else name
+        for name in marker
+    }
+    return [device for device in targets if device.runtime in folded]
+
+
 def _iter_runtime_variants(
     function_names: list[str],
     targets: list[DeviceEntry],
@@ -703,9 +751,25 @@ class DeviceTestFile(pytest.File):
     def collect(self) -> Iterator[pytest.Item]:
         """Yield a :class:`DeviceTestItem` for each test function and target device."""
         function_names = _parse_test_functions(self.path)
-        targets = _session_targets(self.session)
+        raw_targets = _session_targets(self.session)
+        targets = _filter_targets_by_marker(raw_targets, self.path)
 
-        if targets is None or len(targets) <= 1:
+        if targets is not None and not targets:
+            # File's ``__chumicro_runtimes__`` marker excludes every
+            # configured target.  Yield nothing so the IDE / pytest
+            # collection shows zero items for this file rather than
+            # generating wrong-runtime ImportError items.
+            return
+
+        # Preserve the original "session has both runtimes ⇒ suffix names"
+        # convention even when the marker filters down to a single target.
+        # That keeps the IDE display consistent across runtime-agnostic and
+        # runtime-restricted files when ``defaults.ide_runtime: both``.
+        session_has_both_runtimes = (
+            raw_targets is not None and len(raw_targets) > 1
+        )
+
+        if targets is None or (len(targets) <= 1 and not session_has_both_runtimes):
             # No config, single target, or no devices — one item per function.
             device = targets[0] if targets else None
             if device is not None:
@@ -1178,6 +1242,57 @@ def _bulk_stage_for_device(
 # ---------------------------------------------------------------------------
 
 
+def _is_library_functional_test(file_path: Path) -> bool:
+    """Return ``True`` for ``libraries/<name>/functional_tests/test_*.py`` paths."""
+    if not (
+        file_path.suffix == ".py"
+        and file_path.name.startswith("test_")
+        and "functional_tests" in file_path.parts
+    ):
+        return False
+    functional_index = file_path.parts.index("functional_tests")
+    return (
+        functional_index >= 2
+        and file_path.parts[functional_index - 2] == "libraries"
+    )
+
+
+class _NoImportModule(pytest.Module):
+    """Stub Module that yields nothing without importing the file.
+
+    Returned by :func:`pytest_pycollect_makemodule` for files under
+    ``libraries/<name>/functional_tests/`` so the host never tries to
+    import device-only modules at collection time.  The
+    :class:`DeviceTestFile` collector returned by
+    :func:`pytest_collect_file` handles those files via AST — no import.
+    """
+
+    def collect(self) -> Iterator[pytest.Item]:
+        """Yield nothing.  The device-side collector owns these items."""
+        return iter([])
+
+
+def pytest_pycollect_makemodule(
+    module_path: Path, parent: pytest.Collector,
+) -> pytest.Module | None:
+    """Suppress default Module collection for library functional tests.
+
+    Without this, pytest's default Module factory imports the file
+    during collection, which fails for runtime-restricted files
+    declaring ``__chumicro_runtimes__`` since they import device-only
+    modules at top level (``import microcontroller``, ``import wifi``).
+
+    Returning a no-import stub keeps the device-side collector
+    (:class:`DeviceTestFile`) as the sole owner of these files;
+    AST-based discovery means the file is never executed on the host.
+    """
+    if _is_library_functional_test(module_path):
+        return _NoImportModule.from_parent(  # pyright: ignore[reportUnknownMemberType]
+            parent, path=module_path,
+        )
+    return None
+
+
 def pytest_collect_file(
     parent: pytest.Collector, file_path: Path,
 ) -> DeviceTestFile | None:
@@ -1196,17 +1311,7 @@ def pytest_collect_file(
     (checked at collection/run time).
     """
 
-    if not (
-        file_path.suffix == ".py"
-        and file_path.name.startswith("test_")
-        and "functional_tests" in file_path.parts
-    ):
-        return None
-
-    # Only library functional_tests get routed through the device
-    # harness.  Layout is ``libraries/<name>/functional_tests/<file>``.
-    functional_index = file_path.parts.index("functional_tests")
-    if functional_index < 2 or file_path.parts[functional_index - 2] != "libraries":
+    if not _is_library_functional_test(file_path):
         return None
 
     return DeviceTestFile.from_parent(parent, path=file_path)  # pyright: ignore[reportUnknownMemberType]
@@ -1215,13 +1320,15 @@ def pytest_collect_file(
 def pytest_collection_modifyitems(
     config: pytest.Config, items: list[pytest.Item],
 ) -> None:
-    """Remove normal pytest items for functional test files.
+    """Belt-and-suspenders: deselect any non-device items under functional tests.
 
-    ``pytest_collect_file`` adds DeviceTestItems but does not suppress
-    the default Module collector, which also creates regular Function
-    items for the same file.  This hook deselects those duplicates so
-    functional tests only run through the device transport — never
-    locally on CPython.
+    The :func:`pytest_pycollect_makemodule` hook already prevents the
+    default Module factory from importing files under
+    ``libraries/<name>/functional_tests/``, so duplicate items should
+    never be produced in practice.  This sweep exists as a safety net
+    in case another plugin re-introduces a non-:class:`DeviceTestItem`
+    item for one of these paths — the device transport remains the
+    sole execution surface.
     """
     deselected: list[pytest.Item] = []
     selected: list[pytest.Item] = []

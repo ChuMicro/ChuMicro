@@ -1,7 +1,7 @@
-"""Hardware-gated tests for the example_sensor thing in the canonical
+"""Hardware-gated tests for the example_sensor project in the canonical
 workspace template repo (`ChuMicro-Workspace-Template`).
 
-Phase 7 acceptance: the sensor thing exercises the full ChuMicro
+Phase 7 acceptance: the sensor project exercises the full ChuMicro
 runtime stack (wifi + sockets + mqtt + kvstore + workspace) on a
 real board.  This file does as much of that as can be checked from
 the chumicro mono-repo's CI / contributor flow without standing up
@@ -11,13 +11,13 @@ verify message receipt).
 Two layers, both ratchet up the strictness:
 
 1. **Import resolution** — runs without hardware.  Proves the
-   sensor thing's `app.py` imports cleanly through the published
+   sensor project's `app.py` imports cleanly through the published
    chumicro-workspace dep tree on CPython.  Catches API drift that
    per-library tests miss (e.g. a `WifiConfig.from_dict` rename
    would surface here).
 
 2. **Deploy + boot phase markers** — runs on a real board.  Deploys
-   the sensor thing with a fail-fast wifi config (bogus SSID,
+   the sensor project with a fail-fast wifi config (bogus SSID,
    ``reconnect_max=0``, short connect timeout) so `run()` reaches
    the wifi-bringup loop, the loop fails, and `run()` raises
    `SystemExit` cleanly within seconds.  The execute output is
@@ -42,7 +42,7 @@ from pathlib import Path
 
 import pytest
 from chumicro_deploy import Deployer, Device, DeviceEntry
-from chumicro_workspace import thing_import_graph_source
+from chumicro_workspace import project_import_graph_source
 from chumicro_workspace.workspace import WorkspaceLayout
 
 # ---------------------------------------------------------------------------
@@ -62,10 +62,10 @@ def _find_template_repo() -> Path | None:
     override = os.environ.get("CHUMICRO_WORKSPACE_TEMPLATE_PATH")
     if override:
         candidate = Path(override).expanduser()
-        if (candidate / "things" / "example_sensor" / "app.py").is_file():
+        if (candidate / "projects" / "example_sensor" / "app.py").is_file():
             return candidate
     sibling = Path.home() / "circuitpython" / "ChuMicro-Workspace-Template"
-    if (sibling / "things" / "example_sensor" / "app.py").is_file():
+    if (sibling / "projects" / "example_sensor" / "app.py").is_file():
         return sibling
     return None
 
@@ -86,7 +86,7 @@ def template_repo() -> Path:
 # ---------------------------------------------------------------------------
 
 
-def test_sensor_thing_imports_resolve_on_cpython(template_repo: Path) -> None:
+def test_sensor_project_imports_resolve_on_cpython(template_repo: Path) -> None:
     """app.py imports successfully through the chumicro-workspace stack on CPython.
 
     Catches API drift: a renamed `WifiConfig.from_dict`, a missing
@@ -96,7 +96,7 @@ def test_sensor_thing_imports_resolve_on_cpython(template_repo: Path) -> None:
     import importlib.util
     import sys as _sys
 
-    app_path = template_repo / "things" / "example_sensor" / "app.py"
+    app_path = template_repo / "projects" / "example_sensor" / "app.py"
     spec = importlib.util.spec_from_file_location(
         "example_sensor_app_under_test", app_path,
     )
@@ -122,7 +122,7 @@ def test_sensor_thing_imports_resolve_on_cpython(template_repo: Path) -> None:
 
 
 _FAIL_FAST_CONFIG_TOML = """\
-# Per-thing config used by the Layer-2 functional test.  Picks an SSID
+# Per-project config used by the Layer-2 functional test.  Picks an SSID
 # guaranteed not to be in range, caps the connect timeout to a couple
 # of seconds, and zeroes the reconnect budget so wifi transitions to
 # FAILED on the first miss — `run()` then raises SystemExit and the
@@ -162,7 +162,7 @@ def _build_device(entry: DeviceEntry) -> Device:
 def _chumicro_mono_repo_root() -> Path:
     """The mono-repo root that holds this test file.
 
-    `<root>/workbench/workspace/functional_tests/test_sensor_thing_hardware.py`
+    `<root>/workbench/workspace/functional_tests/test_sensor_project_hardware.py`
     so the root is three parents up.
     """
     return Path(__file__).resolve().parents[3]
@@ -171,7 +171,7 @@ def _chumicro_mono_repo_root() -> Path:
 def _chumicro_library_search_paths() -> list[Path]:
     """Every `<root>/libraries/<name>/src` directory.
 
-    The sensor thing imports several chumicro libs; the import-graph
+    The sensor project imports several chumicro libs; the import-graph
     walker needs each library's `src/` on its search path so the
     transitively-needed source files get shipped to the device.
     """
@@ -187,28 +187,28 @@ def _stage_layer2_workspace(
     tmp_path: Path,
     template_repo: Path,
 ) -> tuple[WorkspaceLayout, Path]:
-    """Build a tmp_path workspace whose `things/example_sensor/` is the
-    canonical sensor thing's source with the fail-fast config above.
+    """Build a tmp_path workspace whose `projects/example_sensor/` is the
+    canonical sensor project's source with the fail-fast config above.
 
-    Returns (workspace_layout, sensor_thing_dir).
+    Returns (workspace_layout, sensor_project_dir).
     """
     (tmp_path / "workspace.yml").write_text(
         "defaults:\n  app_marker_prefix: layer2-sensor\n",
     )
     (tmp_path / "secrets.yml").write_text("wifi_password: bogus-test-password\n")
-    things_dir = tmp_path / "things"
-    things_dir.mkdir()
-    sensor_dir = things_dir / "example_sensor"
+    projects_dir = tmp_path / "projects"
+    projects_dir.mkdir()
+    sensor_dir = projects_dir / "example_sensor"
     sensor_dir.mkdir()
     shutil.copy(
-        template_repo / "things" / "example_sensor" / "app.py",
+        template_repo / "projects" / "example_sensor" / "app.py",
         sensor_dir / "app.py",
     )
     (sensor_dir / "config.toml").write_text(_FAIL_FAST_CONFIG_TOML)
     # Bootstrap entrypoint for the import-graph deploy: import app, run.
     # The runtime calls main.py / code.py at boot, which calls our run().
     # Boot-shim path (active.py + workspace_runtime.boot()) doesn't compose
-    # with thing_import_graph_source; this is the simpler shape for tests.
+    # with project_import_graph_source; this is the simpler shape for tests.
     _entrypoint_source = "from app import run\nrun()\n"
     (sensor_dir / "main.py").write_text(_entrypoint_source)
     (sensor_dir / "code.py").write_text(_entrypoint_source)
@@ -218,7 +218,7 @@ def _stage_layer2_workspace(
 def _skip_unless_flash_mode(entry: DeviceEntry) -> None:
     """Layer-2 tests require flash mode.
 
-    The sensor thing calls ``chumicro_config.load_runtime_config()`` which
+    The sensor project calls ``chumicro_config.load_runtime_config()`` which
     reads ``/runtime_config.msgpack`` from the device's actual filesystem.
     RAM-mode deploys (``mpremote mount`` / inline-exec on CP) don't
     persist files to the on-device root — they only map the host tmp
@@ -228,7 +228,7 @@ def _skip_unless_flash_mode(entry: DeviceEntry) -> None:
     """
     if entry.deploy_mode != "flash":
         pytest.skip(
-            f"Layer-2 sensor thing test requires deploy_mode=flash; this "
+            f"Layer-2 sensor project test requires deploy_mode=flash; this "
             f"device is deploy_mode={entry.deploy_mode!r} — set "
             "defaults.deploy_mode: flash in devices.yml to enable.",
         )
@@ -247,18 +247,18 @@ def _assert_layer2_phase_markers(execute_output: str) -> None:
     )
 
 
-def test_sensor_thing_reaches_boot_phase_marker_on_micropython(
+def test_sensor_project_reaches_boot_phase_marker_on_micropython(
     micropython_device: DeviceEntry,
     template_repo: Path,
     tmp_path: Path,
 ) -> None:
-    """MP: sensor thing reaches `sensor: connecting to wifi...` and
+    """MP: sensor project reaches `sensor: connecting to wifi...` and
     SystemExit's cleanly when wifi fails fast.
     """
     _skip_unless_flash_mode(micropython_device)
     workspace, sensor_dir = _stage_layer2_workspace(tmp_path, template_repo)
     device = _build_device(micropython_device)
-    source = thing_import_graph_source(
+    source = project_import_graph_source(
         sensor_dir,
         workspace=workspace,
         entrypoint_filename="main.py",
@@ -269,18 +269,18 @@ def test_sensor_thing_reaches_boot_phase_marker_on_micropython(
     _assert_layer2_phase_markers(result.execute_output)
 
 
-def test_sensor_thing_reaches_boot_phase_marker_on_circuitpython(
+def test_sensor_project_reaches_boot_phase_marker_on_circuitpython(
     circuitpython_device: DeviceEntry,
     template_repo: Path,
     tmp_path: Path,
 ) -> None:
-    """CP: sensor thing reaches `sensor: connecting to wifi...` and
+    """CP: sensor project reaches `sensor: connecting to wifi...` and
     SystemExit's cleanly when wifi fails fast.
     """
     _skip_unless_flash_mode(circuitpython_device)
     workspace, sensor_dir = _stage_layer2_workspace(tmp_path, template_repo)
     device = _build_device(circuitpython_device)
-    source = thing_import_graph_source(
+    source = project_import_graph_source(
         sensor_dir,
         workspace=workspace,
         entrypoint_filename="code.py",
@@ -291,7 +291,7 @@ def test_sensor_thing_reaches_boot_phase_marker_on_circuitpython(
     _assert_layer2_phase_markers(result.execute_output)
 
 
-def test_sensor_thing_boot_counter_persists_across_deploys_on_micropython(
+def test_sensor_project_boot_counter_persists_across_deploys_on_micropython(
     micropython_device: DeviceEntry,
     template_repo: Path,
     tmp_path: Path,
@@ -305,7 +305,7 @@ def test_sensor_thing_boot_counter_persists_across_deploys_on_micropython(
     _skip_unless_flash_mode(micropython_device)
     workspace, sensor_dir = _stage_layer2_workspace(tmp_path, template_repo)
     device = _build_device(micropython_device)
-    source = thing_import_graph_source(
+    source = project_import_graph_source(
         sensor_dir,
         workspace=workspace,
         entrypoint_filename="main.py",
@@ -507,7 +507,7 @@ def _live_broker_config_toml(environment: dict[str, str], port: int) -> str:
     )
 
 
-def test_sensor_thing_publishes_to_live_broker(
+def test_sensor_project_publishes_to_live_broker(
     micropython_device: DeviceEntry,
     template_repo: Path,
     tmp_path: Path,
@@ -539,13 +539,13 @@ def test_sensor_thing_publishes_to_live_broker(
         )
 
         # Deploy + boot.  The deploy returns once the entrypoint exits;
-        # since this thing's run() is `while not _SHUTDOWN_REQUESTED`,
+        # since this project's run() is `while not _SHUTDOWN_REQUESTED`,
         # it'll keep running until the deploy times out.  We don't need
         # to wait for the deploy to return — we just need it to start.
         # Run the deploy in the foreground for now and accept that the
         # test takes ~the deploy timeout.
         device = _build_device(micropython_device)
-        source = thing_import_graph_source(
+        source = project_import_graph_source(
             sensor_dir,
             workspace=workspace,
             entrypoint_filename="main.py",

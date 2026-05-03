@@ -29,7 +29,7 @@ and reified by the canonical template at
         devices.yml            # board entries (chumicro_deploy.config.default)
         secrets.yml            # gitignored, optional
         projects/<...>/<name>/   # one directory per "project", optionally nested
-        libs/                  # shared library code
+        shared/                  # shared library code
         packages/              # third-party packages (gitignored)
 """
 
@@ -158,23 +158,23 @@ class WorkspaceLayout:
         return self.root / PROJECTS_DIRNAME
 
     @property
-    def libs_dir(self) -> Path:
-        """Path to ``<root>/libs/`` — small shared modules dropped flat.
+    def shared_dir(self) -> Path:
+        """Path to ``<root>/shared/`` — small shared modules dropped flat.
 
         The lighter-weight cousin of :attr:`libraries_dir`.  Files under
-        ``libs/`` are imported by projects directly (``from libs.foo import
+        ``shared/`` are imported by projects directly (``from shared.foo import
         bar``) without any package scaffolding.  Use this for "I wrote a
         50-line helper my projects need to share" — no tests, no version,
         no chumicro library shape.  See :attr:`libraries_dir` for the
         full-package alternative.
         """
-        return self.root / "libs"
+        return self.root / "shared"
 
     @property
     def libraries_dir(self) -> Path:
         """Path to ``<root>/libraries/`` — full chumicro-style library trees.
 
-        The heavier-weight cousin of :attr:`libs_dir`.  Each entry is a
+        The heavier-weight cousin of :attr:`shared_dir`.  Each entry is a
         proper chumicro library package — ``src/<name>/``, ``tests/``,
         optional ``docs/`` and ``examples/``, ``pyproject.toml``,
         ``VERSION``.  Created by ``chumicro-workspace new --library``.
