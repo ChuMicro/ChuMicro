@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 from chumicro_deploy.micropython_transport import (
+    _EXECUTE_IDLE_TIMEOUT,
     MicropythonTransport,
     MicropythonTransportError,
 )
@@ -424,6 +425,45 @@ class TestExecute:
 
         with pytest.raises(MicropythonTransportError, match="stage"):
             transport.execute("print('hello')")
+
+    def test_execute_uses_long_idle_timeout(self, tmp_path) -> None:
+        """execute() must pass ``_EXECUTE_IDLE_TIMEOUT`` to ``exec_raw``.
+
+        Regression: a previous fixed ``timeout=120`` fired mid-bisection
+        on the on-device fragmentation tests on Lolin S2 MP (2 MB heap),
+        surfacing as ``TransportError: timeout waiting for first EOF
+        reception``.  mpremote's ``exec_raw(timeout=N)`` is an
+        idle-between-bytes timeout, not wall-clock — so the value needs
+        to cover the longest stretch of pure on-device silence (the
+        histogram tier probe's tight allocation loop plus surrounding
+        ``gc.collect()`` calls).
+        """
+        source_dir = tmp_path / "src"
+        source_dir.mkdir()
+        harness_dir = tmp_path / "harness"
+        harness_dir.mkdir()
+
+        runner = FakeRunner()
+        serial = FakeSerialTransport(
+            address="/dev/ttyUSB0",
+            exec_outputs=[b""],
+        )
+        transport = MicropythonTransport(
+            "/dev/ttyUSB0",
+            mode="mount",
+            runner=runner,
+            transport_factory=_factory_for(serial),
+        )
+        transport.stage([source_dir], [], harness_dir)
+
+        transport.execute("import test_example")
+
+        exec_calls = [args for name, args in serial.calls if name == "exec_raw"]
+        assert len(exec_calls) == 1
+        _command, timeout = exec_calls[0]
+        assert timeout == _EXECUTE_IDLE_TIMEOUT
+
+        transport.disconnect()
 
     def test_execute_failure_raises(self, tmp_path) -> None:
         """execute() should wrap the underlying SerialTransport error."""
@@ -960,6 +1000,23 @@ class TestDeployFiles:
             exec_call = next(call for call in serial.calls if call[0] == "exec_raw")
             script = exec_call[1][0]
             assert "/code.py" in script
+        finally:
+            transport.disconnect()
+
+    def test_deploy_files_uses_long_idle_timeout(self) -> None:
+        """``deploy_files`` execs the entrypoint with ``_EXECUTE_IDLE_TIMEOUT``.
+
+        Same regression as ``test_execute_uses_long_idle_timeout`` — the
+        on-device fragmentation tests run their entrypoint via
+        ``deploy_files``, so this path also has to give the histogram
+        bisection enough idle headroom.
+        """
+        transport, serial, _ = self._prepare_transport()
+        try:
+            transport.deploy_files({"/code.py": b"pass"}, "/code.py")
+            exec_call = next(call for call in serial.calls if call[0] == "exec_raw")
+            _script, timeout = exec_call[1]
+            assert timeout == _EXECUTE_IDLE_TIMEOUT
         finally:
             transport.disconnect()
 
