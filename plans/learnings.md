@@ -403,6 +403,10 @@ When the IDE-side `pytest_device.py` plugin caches a `Transport` per `(device, f
 
 Pattern: on batch-failure, call `transport.recover()` first; if recovery itself fails, drop the transport from the cache (`invalidate_device(device_id)`) but keep the cached batch *result* so subsequent items from the same file see the original failure rather than retrying. The CLI orchestrator had this from the start; the IDE plugin had to be brought into line. Commit `a4566eb`.
 
+### Pytest's default Module factory imports `test_*.py` even when another plugin returned a collector for the same path
+
+A custom `pytest_collect_file` returning a non-`Module` collector does **not** suppress the default `Module` factory — both run, and pytest's post-collection deduplication only deselects the *items*, not the import. For files that import device-only modules at top level (`import microcontroller`, `import wifi`), the default factory's import attempt fails before the deselect logic ever runs. Solution: implement `pytest_pycollect_makemodule` to return a stub `pytest.Module` subclass with empty `collect()` for the paths the custom collector owns. The stub preempts the default factory entirely so the file is never imported on the host. The chumicro-pytest-device plugin does this for `libraries/<name>/functional_tests/test_*.py`. Commit followup to `__chumicro_runtimes__` marker support.
+
 ### `pytest --import-mode=importlib` is required when duplicate test basenames exist across packages
 
 Once root pytest started collecting `workbench/deploy/tests/` + `workbench/repl/tests/` in the same session, duplicate basenames (`test_cli.py` exists in both) tripped pytest's classic-prepend collector with `ImportPathMismatchError`. Switching root pytest to `--import-mode=importlib` resolves it without renaming files. Commit `73e9270`. Decision 0008 originally selected importlib mode for similar reasons within a single library, then Decision 0009 superseded it for per-library pytest runs — this is the third regime: root-level multi-package collection.

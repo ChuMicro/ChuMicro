@@ -2,8 +2,10 @@
 
 Runs on every MicroPython board with a wifi chip — covers both
 ESP-IDF stacks (Lolin S2, ESP32 family) and CYW43 stacks (Pi Pico W).
-The file's runtime guard short-circuits each test on non-MP runtimes
-or on MP without a network module, so each test is a no-op there.
+The module-level ``__chumicro_runtimes__`` marker keeps CP boards
+out at collection time; within MP, the ``_HAS_NETWORK`` guard
+short-circuits each test on MP boards without a ``network`` module
+(currently none of our targets, but kept as belt-and-suspenders).
 
 Stack-specific assertions (PM constant value, supervisor-disable
 knob) are guarded by the detected stack so they only run on the
@@ -19,27 +21,21 @@ Each test calls ``disconnect`` cleanup at the end so the next test
 starts fresh.
 """
 
-import sys
+__chumicro_runtimes__ = ("micropython",)
 
 from chumicro_wifi import WifiConfig
 from chumicro_wifi._adapters.mp import CYW43_PM_DISABLE, MpWifiAdapter
 
-_IS_MICROPYTHON = sys.implementation.name == "micropython"
-
-if _IS_MICROPYTHON:
-    try:
-        import network
-        _HAS_NETWORK = True
-    except ImportError:
-        _HAS_NETWORK = False
-    try:
-        import esp32  # noqa: F401
-        _DETECTED_STACK = "espidf"
-    except ImportError:
-        _DETECTED_STACK = "cyw43"
-else:
+try:
+    import network
+    _HAS_NETWORK = True
+except ImportError:
     _HAS_NETWORK = False
-    _DETECTED_STACK = None
+try:
+    import esp32  # noqa: F401
+    _DETECTED_STACK = "espidf"
+except ImportError:
+    _DETECTED_STACK = "cyw43"
 
 
 def _disconnect_quietly():
