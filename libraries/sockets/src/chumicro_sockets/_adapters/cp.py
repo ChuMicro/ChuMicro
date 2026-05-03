@@ -61,12 +61,19 @@ def connect_tls(host, port, *, context=None, radio):  # pragma: no cover - devic
     Any pre-built :class:`ssl.SSLContext` (e.g. from
     :func:`ssl_context_with_ca` for a custom CA) is accepted.
     """
-    import ssl  # noqa: PLC0415 — CP-only import
-
     pool = _pool_for(radio)
-    resolved_context = context if context is not None else ssl.create_default_context()
+    if context is None:
+        # ``import ssl`` is gated on the *no caller-provided context*
+        # branch so callers that hand us their own context don't pay
+        # the import — relevant for unix-port testing where the CP
+        # ``ssl.py`` shim still ImportErrors even after the
+        # SSL+axtls build flag enable (axtls doesn't expose a
+        # ``tls`` module the shim can find).
+        import ssl  # noqa: PLC0415 — CP-only import
+
+        context = ssl.create_default_context()
     raw = pool.socket(pool.AF_INET, pool.SOCK_STREAM)
-    wrapped = resolved_context.wrap_socket(raw, server_hostname=host)
+    wrapped = context.wrap_socket(raw, server_hostname=host)
     wrapped.connect((host, port))
     return wrapped
 
