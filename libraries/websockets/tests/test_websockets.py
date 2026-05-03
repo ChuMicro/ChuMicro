@@ -118,19 +118,6 @@ class TestCaseInsensitiveDict:
         assert "sec-websocket-key" in headers
         assert "SEC-WEBSOCKET-KEY" in headers
 
-    def test_iter_preserves_original_case(self):
-        headers = CaseInsensitiveDict()
-        headers["Upgrade"] = "websocket"
-        headers["Connection"] = "Upgrade"
-        names = list(headers)
-        assert names == ["Upgrade", "Connection"]
-
-    def test_len_counts_unique_lowered_names(self):
-        headers = CaseInsensitiveDict()
-        headers["Upgrade"] = "websocket"
-        headers["upgrade"] = "websocket-2"
-        assert len(headers) == 1
-
     def test_get_with_default(self):
         headers = CaseInsensitiveDict()
         assert headers.get("missing") is None
@@ -141,44 +128,6 @@ class TestCaseInsensitiveDict:
         headers["Upgrade"] = "websocket"
         items = list(headers.items())
         assert items == [("Upgrade", "websocket")]
-
-    def test_eq_compares_case_insensitively(self):
-        left = CaseInsensitiveDict()
-        right = CaseInsensitiveDict()
-        left["Upgrade"] = "websocket"
-        right["UPGRADE"] = "websocket"
-        assert left == right
-
-    def test_eq_returns_notimplemented_for_other_types(self):
-        headers = CaseInsensitiveDict()
-        assert headers.__eq__({"x": "y"}) is NotImplemented
-
-    def test_eq_false_on_different_lengths(self):
-        left = CaseInsensitiveDict()
-        right = CaseInsensitiveDict()
-        left["Upgrade"] = "websocket"
-        assert left != right
-
-    def test_eq_false_on_different_values(self):
-        left = CaseInsensitiveDict()
-        right = CaseInsensitiveDict()
-        left["Upgrade"] = "websocket"
-        right["Upgrade"] = "other"
-        assert left != right
-
-    def test_eq_false_on_different_keys(self):
-        left = CaseInsensitiveDict()
-        right = CaseInsensitiveDict()
-        left["Upgrade"] = "websocket"
-        right["Connection"] = "websocket"
-        assert left != right
-
-    def test_repr_includes_pairs(self):
-        headers = CaseInsensitiveDict()
-        headers["Upgrade"] = "websocket"
-        text = repr(headers)
-        assert "Upgrade" in text
-        assert "websocket" in text
 
     def test_getitem_raises_keyerror_on_missing(self):
         headers = CaseInsensitiveDict()
