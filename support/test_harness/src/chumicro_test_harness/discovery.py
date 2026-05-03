@@ -148,21 +148,17 @@ def _exec_as_namespace(file_path, name="__main__", package=""):
 def run_one_file(test_file, root_dir="."):
     """Run a single test file in the current process; return shell exit code.
 
-    Used by worker subprocesses spawned by :func:`run_all` in isolated
-    mode, but also callable directly when something needs to run one
-    file inline (e.g. a debugger session, or the legacy non-isolated
-    path).  Sets up ``sys.path`` first so library imports resolve.
+    Per Decision 0016, an ImportError here is a hard FAIL, not a silent
+    SKIP — the offending file must either be converted to cross-runtime
+    or renamed to ``test_<name>_pytest.py``.
     """
     setup_source_paths(root_dir)
     print(f"== {test_file} ==")
     try:
         test_module = _exec_as_namespace(test_file)
     except ImportError as error:
-        # ImportError usually means the file depends on a pytest-only
-        # fixture or a CPython-only module.  Skip gracefully — the
-        # caller treats this as success (skipped, not failed).
-        print(f"SKIP {test_file} (import failed: {error})")
-        return 0
+        print(f"FAIL {test_file} — import failed: {error} (Decision 0016)")
+        return 1
     except Exception as error:
         print(f"ERROR loading {test_file}: {error}")
         return 1
@@ -229,14 +225,13 @@ def _run_all_isolated(root_dir, test_files):
 def _run_all_inline(test_files):
     """Run every test file in this process — legacy path for ``isolate_per_file=False``."""
     total_failed = 0
-    skipped = 0
     for test_file in test_files:
         print(f"== {test_file} ==")
         try:
             test_module = _exec_as_namespace(test_file)
         except ImportError as error:
-            skipped += 1
-            print(f"SKIP {test_file} (import failed: {error})")
+            total_failed += 1
+            print(f"FAIL {test_file} — import failed: {error} (Decision 0016)")
             continue
         except Exception as error:
             total_failed += 1
@@ -245,8 +240,5 @@ def _run_all_inline(test_files):
         result = run_module(test_module)
         if result != 0:
             total_failed += 1
-
-    if skipped:
-        print(f"Skipped {skipped} file(s) (import errors, likely pytest-only)")
 
     return 1 if total_failed else 0

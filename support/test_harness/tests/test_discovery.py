@@ -236,8 +236,15 @@ def test_run_all_runs_discovered_tests(tmp_path, capsys):
     assert "PASS test_pass" in output
 
 
-def test_run_all_skips_import_errors(tmp_path, capsys):
-    """Files that fail to import should be skipped, not cause a failure."""
+def test_run_all_fails_on_import_errors(tmp_path, capsys):
+    """Per Decision 0016: a non-``_pytest`` file that fails to import is FAIL, not SKIP.
+
+    The harness used to swallow ``ImportError`` as a silent SKIP — that
+    let mis-classified files (genuinely cross-runtime in name, but
+    pulling in pytest / unittest / tracemalloc) silently disappear
+    from MP / CP test runs.  Now they're loud failures with a fix
+    hint pointing at the convert-or-rename remediation.
+    """
     root = str(tmp_path)
     _make_library(root, "broken", ["test_broken.py"])
     test_file = os.path.join(root, "libraries", "broken", "tests", "test_broken.py")
@@ -250,10 +257,11 @@ def test_run_all_skips_import_errors(tmp_path, capsys):
     finally:
         sys.path[:] = original_path
 
-    assert result == 0
+    assert result == 1
     output = capsys.readouterr().out
-    assert "SKIP" in output
-    assert "Skipped 1 file(s)" in output
+    assert "FAIL" in output
+    assert "test_broken.py" in output
+    assert "Decision 0016" in output
 
 
 def test_run_all_reports_load_errors(tmp_path, capsys):
@@ -318,8 +326,8 @@ def test_run_one_file_runs_passing_test(tmp_path, capsys):
     assert "PASS test_pass" in output
 
 
-def test_run_one_file_skips_import_errors(tmp_path, capsys):
-    """run_one_file returns 0 (skip) when the file fails to import."""
+def test_run_one_file_fails_on_import_errors(tmp_path, capsys):
+    """run_one_file returns 1 (FAIL) when the file fails to import — Decision 0016."""
     root = str(tmp_path)
     _make_library(root, "broken", ["test_broken.py"])
     test_file = os.path.join(
@@ -334,8 +342,10 @@ def test_run_one_file_skips_import_errors(tmp_path, capsys):
     finally:
         sys.path[:] = original_path
 
-    assert result == 0
-    assert "SKIP" in capsys.readouterr().out
+    assert result == 1
+    output = capsys.readouterr().out
+    assert "FAIL" in output
+    assert "Decision 0016" in output
 
 
 def test_run_one_file_reports_load_errors(tmp_path, capsys):
