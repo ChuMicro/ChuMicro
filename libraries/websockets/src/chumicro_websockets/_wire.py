@@ -1084,16 +1084,23 @@ class FrameParser:
     def feed(self, chunk: bytes) -> int:
         """Consume bytes from *chunk*; return how many were used.
 
+        Per-state chunked consumption — header / length / mask states
+        copy the bytes they need in one slice, payload state extends
+        the buffer by ``min(remaining, payload_remaining)`` per pass.
+        On a 1024-byte recv (the default per-tick budget) this drops
+        from 1024 method calls + appends to a handful of slices, which
+        matters on MicroPython where each call frame allocates.
+
         The parser stops consuming when it transitions to
-        ``FRAME_READY`` so any leftover bytes remain available to
-        the caller for the next frame.
+        ``FRAME_READY`` so any leftover bytes remain available to the
+        caller for the next frame.
 
         Raises:
             WebSocketProtocolError: Reserved opcode, control frame
                 with payload >125, control frame with FIN=0, or
-                payload length exceeds ``max_payload_bytes``.
-                The parser also transitions to ``ERROR`` and stores
-                the message in :attr:`error`.
+                payload length exceeds ``max_payload_bytes``.  The
+                parser also transitions to ``ERROR`` and stores the
+                message in :attr:`error`.
         """
         consumed = 0
         chunk_length = len(chunk)
@@ -1101,53 +1108,56 @@ class FrameParser:
             FrameParseState.FRAME_READY,
             FrameParseState.ERROR,
         ):
-            self._step(chunk[consumed])
-            consumed += 1
-        return consumed
+            remaining = chunk_length - consumed
+            state = self._state
+            if state == FrameParseState.READING_PAYLOAD:
+                payload = self._payload
+                need = self._payload_length - len(payload)
+                take = need if need <= remaining else remaining
+                if self._had_mask:
+                    start_index = len(payload)
+                    mask_key = self._mask_key
+                    for index in range(take):
+                        payload.append(
+                            chunk[consumed + index]
+                            ^ mask_key[(start_index + index) & 3],
+                        )
+                else:
+                    payload.extend(chunk[consumed : consumed + take])
+                consumed += take
+                if len(payload) >= self._payload_length:
+                    self._state = FrameParseState.FRAME_READY
+                continue
 
-    def _step(self, byte_value: int) -> None:
-        """Consume a single byte and update state in place.
+            if state == FrameParseState.READING_HEADER:
+                need = 2 - len(self._buffer)
+            elif state == FrameParseState.READING_LEN16:
+                need = 2 - len(self._buffer)
+            elif state == FrameParseState.READING_LEN64:
+                need = 8 - len(self._buffer)
+            else:  # READING_MASK
+                need = 4 - len(self._buffer)
+            take = need if need <= remaining else remaining
+            self._buffer.extend(chunk[consumed : consumed + take])
+            consumed += take
+            if len(self._buffer) < need:
+                continue
 
-        Raises:
-            WebSocketProtocolError: Reserved opcode, control frame
-                with FIN=0, control frame with payload >125, or
-                payload length exceeds ``max_payload_bytes``.
-        """
-        if self._state == FrameParseState.READING_HEADER:
-            self._buffer.append(byte_value)
-            if len(self._buffer) >= 2:
+            if state == FrameParseState.READING_HEADER:
                 self._dispatch_header()
-            return
-        if self._state == FrameParseState.READING_LEN16:
-            self._buffer.append(byte_value)
-            if len(self._buffer) >= 2:
+            elif state == FrameParseState.READING_LEN16:
                 self._payload_length = struct.unpack("!H", bytes(self._buffer))[0]
                 self._buffer = bytearray()
                 self._after_length()
-            return
-        if self._state == FrameParseState.READING_LEN64:
-            self._buffer.append(byte_value)
-            if len(self._buffer) >= 8:
+            elif state == FrameParseState.READING_LEN64:
                 self._payload_length = struct.unpack("!Q", bytes(self._buffer))[0]
                 self._buffer = bytearray()
                 self._after_length()
-            return
-        if self._state == FrameParseState.READING_MASK:
-            self._buffer.append(byte_value)
-            if len(self._buffer) >= 4:
+            else:  # READING_MASK
                 self._mask_key = bytes(self._buffer)
                 self._buffer = bytearray()
                 self._after_mask()
-            return
-        if self._state == FrameParseState.READING_PAYLOAD:
-            if self._had_mask:
-                mask_byte = self._mask_key[len(self._payload) & 3]
-                self._payload.append(byte_value ^ mask_byte)
-            else:
-                self._payload.append(byte_value)
-            if len(self._payload) >= self._payload_length:
-                self._state = FrameParseState.FRAME_READY
-            return
+        return consumed
 
     def _dispatch_header(self) -> None:
         first_byte = self._buffer[0]
