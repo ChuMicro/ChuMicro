@@ -38,6 +38,16 @@ class raises:
         self.match = match
         self.exception = None
 
+    @property
+    def value(self):
+        """Pytest-compatible alias for :attr:`exception`.
+
+        Tests converted from ``pytest.raises(...) as ctx`` reach for
+        ``ctx.value`` to read the captured exception; expose the same
+        name so the conversion is mechanical.
+        """
+        return self.exception
+
     def __enter__(self):
         """Enter the assertion context."""
         return self

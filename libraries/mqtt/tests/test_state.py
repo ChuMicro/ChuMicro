@@ -1,6 +1,5 @@
 """Tests for ProtocolState + InFlightTable + PendingResponse."""
 
-import pytest
 from chumicro_mqtt import (
     Awaiting,
     InFlightPublish,
@@ -8,6 +7,7 @@ from chumicro_mqtt import (
     PendingResponse,
     ProtocolState,
 )
+from chumicro_test_harness.assertions import raises
 
 
 class TestProtocolState:
@@ -48,18 +48,24 @@ class TestInFlightTable:
     def test_allocate_id_raises_when_table_full(self) -> None:
         """All 65535 ids in use -> OverflowError."""
         table = InFlightTable()
-        # Synthesize a full table by inserting fake entries.
-        for index in range(1, 65536):
-            entry = InFlightPublish(packet_id=index, packet_bytes=b"", deadline_ticks=0)
-            table.add(entry)
-        with pytest.raises(OverflowError):
+        # Allocating 65 535 real ``InFlightPublish`` entries blows the
+        # heap on the MP / CP unix-ports.  ``allocate_id`` only does a
+        # ``candidate not in self._entries`` membership probe, so a
+        # tiny mapping that claims every id is "in" exercises the same
+        # exhausted-id-space path without the per-entry overhead.
+        class _AlwaysFull:
+            def __contains__(self, key: int) -> bool:
+                return True
+
+        table._entries = _AlwaysFull()  # noqa: SLF001 — testing the wraparound
+        with raises(OverflowError):
             table.allocate_id()
 
     def test_add_collision_raises(self) -> None:
         table = InFlightTable()
         entry = InFlightPublish(packet_id=42, packet_bytes=b"", deadline_ticks=0)
         table.add(entry)
-        with pytest.raises(KeyError):
+        with raises(KeyError):
             table.add(entry)
 
     def test_get_returns_entry_or_none(self) -> None:

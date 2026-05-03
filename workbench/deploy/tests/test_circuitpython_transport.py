@@ -1275,10 +1275,16 @@ class TestFlashMode:
         written_data = b"".join(port.writes)
         # Should NOT send autoreload commands in ram mode.
         assert b"autoreload" not in written_data
-        # Should still send Ctrl-B (exit raw REPL) and Ctrl-D (soft reboot).
+        # Should send Ctrl-B (exit raw REPL → friendly REPL).  No
+        # explicit Ctrl-D — disconnect deliberately omits the
+        # explicit soft-reboot to avoid double-rebooting on top of
+        # the one autoreload's watcher fires when re-enabled (see
+        # disconnect docstring).  In RAM mode autoreload was never
+        # touched so no watcher reboot fires either; the board is
+        # left in friendly REPL.
         from chumicro_deploy.circuitpython_transport import _CTRL_B
         assert _CTRL_B in port.writes
-        assert _CTRL_D in port.writes
+        assert _CTRL_D not in port.writes
 
     def test_flash_stage_is_idempotent_across_calls(
         self, tmp_path: Path,

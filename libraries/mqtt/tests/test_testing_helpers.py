@@ -1,6 +1,5 @@
 """Tests for the canned-bytes helpers in chumicro_mqtt.testing."""
 
-import pytest
 from chumicro_mqtt.testing import (
     canned_connack_bytes,
     canned_pingresp_bytes,
@@ -9,6 +8,7 @@ from chumicro_mqtt.testing import (
     canned_suback_bytes,
     canned_unsuback_bytes,
 )
+from chumicro_test_harness.assertions import raises
 
 
 class TestCannedConnack:
@@ -67,7 +67,7 @@ class TestCannedPublish:
         assert b"\x00\x2a" in packet
 
     def test_qos_one_without_packet_id_raises(self) -> None:
-        with pytest.raises(ValueError):
+        with raises(ValueError):
             canned_publish_bytes("topic", b"x", qos=1)
 
     def test_retain_flag(self) -> None:

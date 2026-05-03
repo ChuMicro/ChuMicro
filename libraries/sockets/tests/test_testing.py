@@ -1,7 +1,7 @@
 """Tests for FakeSocket — the in-memory test double."""
 
-import pytest
 from chumicro_sockets.testing import EAGAIN, FakeSocket
+from chumicro_test_harness.assertions import raises
 
 
 class TestSendCapture:
@@ -63,7 +63,7 @@ class TestRecvScripting:
 
     def test_enqueue_rejects_non_bytes(self) -> None:
         sock = FakeSocket()
-        with pytest.raises(TypeError):
+        with raises(TypeError):
             sock.enqueue_recv("not bytes")  # type: ignore[arg-type]
 
 
@@ -71,10 +71,10 @@ class TestEAGAINInjection:
     def test_send_eagain_consumes_one_retry(self) -> None:
         sock = FakeSocket()
         sock.enqueue_eagain_for_send(2)
-        with pytest.raises(OSError) as caught_first:
+        with raises(OSError) as caught_first:
             sock.send(b"x")
         assert caught_first.value.args[0] == EAGAIN
-        with pytest.raises(OSError) as caught_second:
+        with raises(OSError) as caught_second:
             sock.send(b"x")
         assert caught_second.value.args[0] == EAGAIN
         # Third send succeeds — the script is exhausted.
@@ -86,7 +86,7 @@ class TestEAGAINInjection:
         sock.enqueue_eagain_for_recv(1)
         sock.enqueue_recv(b"hello")
         buffer = bytearray(16)
-        with pytest.raises(OSError) as caught:
+        with raises(OSError) as caught:
             sock.recv_into(buffer, 16)
         assert caught.value.args[0] == EAGAIN
         # Second call returns the queued chunk.
@@ -105,7 +105,7 @@ class TestCloseSemantics:
     def test_send_after_close_raises_ebadf(self) -> None:
         sock = FakeSocket()
         sock.close()
-        with pytest.raises(OSError) as caught:
+        with raises(OSError) as caught:
             sock.send(b"x")
         # 9 = EBADF, what stdlib uses for "operation on closed fd".
         assert caught.value.args[0] == 9
@@ -114,7 +114,7 @@ class TestCloseSemantics:
         sock = FakeSocket()
         sock.close()
         buffer = bytearray(4)
-        with pytest.raises(OSError) as caught:
+        with raises(OSError) as caught:
             sock.recv_into(buffer, 4)
         assert caught.value.args[0] == 9
 

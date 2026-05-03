@@ -258,3 +258,79 @@ def test_run_module_name_filter_none_runs_all(capsys) -> None:
     assert result == 0
     assert state["ran"] == 2
     assert "SUMMARY total=2 failed=0" in output
+
+
+def test_run_module_discovers_class_grouped_tests(capsys) -> None:
+    """``class Test*`` collection mirrors pytest — methods + module-level functions both run."""
+    state = {"calls": []}
+
+    class TestExample:
+        def test_alpha(self) -> None:
+            state["calls"].append("TestExample.alpha")
+
+        def test_beta(self) -> None:
+            state["calls"].append("TestExample.beta")
+
+        def helper(self) -> None:  # not collected — no test_ prefix
+            state["calls"].append("helper")
+
+    def test_module_level() -> None:
+        state["calls"].append("module_level")
+
+    module = SimpleNamespace(
+        TestExample=TestExample,
+        test_module_level=test_module_level,
+    )
+
+    result = run_module(module)
+    output = capsys.readouterr().out
+
+    assert result == 0
+    assert sorted(state["calls"]) == [
+        "TestExample.alpha",
+        "TestExample.beta",
+        "module_level",
+    ]
+    assert "PASS TestExample.test_alpha" in output
+    assert "PASS TestExample.test_beta" in output
+    assert "PASS test_module_level" in output
+    assert "SUMMARY total=3 failed=0" in output
+
+
+def test_run_module_class_test_gets_fresh_instance_per_method(capsys) -> None:
+    """Each test method runs against a fresh instance — no state leak."""
+    seen_ids: list[int] = []
+
+    class TestIsolation:
+        def __init__(self) -> None:
+            self.value = 0
+
+        def test_first(self) -> None:
+            seen_ids.append(id(self))
+            self.value = 99
+
+        def test_second(self) -> None:
+            seen_ids.append(id(self))
+            assert self.value == 0  # not 99 from the prior test
+
+    module = SimpleNamespace(TestIsolation=TestIsolation)
+
+    result = run_module(module)
+    capsys.readouterr()
+
+    assert result == 0
+    assert len(seen_ids) == 2
+    assert seen_ids[0] != seen_ids[1]
+
+
+def test_run_module_ignores_non_class_attrs_named_test(capsys) -> None:
+    """Module-level objects named ``Test*`` that aren't classes are ignored."""
+    not_a_class = SimpleNamespace(test_method=lambda self: None)
+
+    module = SimpleNamespace(TestNotAClass=not_a_class)
+
+    result = run_module(module)
+    output = capsys.readouterr().out
+
+    assert result == 0
+    assert "NO TESTS FOUND" in output

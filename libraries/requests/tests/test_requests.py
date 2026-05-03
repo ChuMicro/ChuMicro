@@ -11,7 +11,6 @@ the same one chumicro_mqtt's tests use, so the contract is exercised
 across two libraries.
 """
 
-import pytest
 from chumicro_requests import (
     CaseInsensitiveDict,
     HttpBusyError,
@@ -25,13 +24,13 @@ from chumicro_requests import (
     Response,
     ResponseParser,
     WhenOversized,
-    chumicro_sockets_factory,
     encode_request,
     parse_charset,
     parse_url,
     resolve_redirect_url,
 )
 from chumicro_sockets.testing import FakeSocket
+from chumicro_test_harness.assertions import raises
 from chumicro_timing.testing import FakeTicks
 
 # ---------------------------------------------------------------------------
@@ -127,35 +126,35 @@ class TestParseURL:
         assert result == ("https", "example.com", 8443, "/api")
 
     def test_unsupported_scheme(self):
-        with pytest.raises(HttpURLError, match="http://"):
+        with raises(HttpURLError, match="http://"):
             parse_url("ftp://example.com/")
 
     def test_missing_host(self):
-        with pytest.raises(HttpURLError, match="missing host"):
+        with raises(HttpURLError, match="missing host"):
             parse_url("http:///path")
 
     def test_empty_after_scheme(self):
-        with pytest.raises(HttpURLError, match="missing host"):
+        with raises(HttpURLError, match="missing host"):
             parse_url("http://")
 
     def test_missing_host_with_port(self):
-        with pytest.raises(HttpURLError, match="missing host"):
+        with raises(HttpURLError, match="missing host"):
             parse_url("http://:8080/")
 
     def test_non_integer_port(self):
-        with pytest.raises(HttpURLError, match="non-integer port"):
+        with raises(HttpURLError, match="non-integer port"):
             parse_url("http://example.com:abc/")
 
     def test_port_out_of_range(self):
-        with pytest.raises(HttpURLError, match="out of range"):
+        with raises(HttpURLError, match="out of range"):
             parse_url("http://example.com:99999/")
 
     def test_port_zero_rejected(self):
-        with pytest.raises(HttpURLError, match="out of range"):
+        with raises(HttpURLError, match="out of range"):
             parse_url("http://example.com:0/")
 
     def test_url_must_be_string(self):
-        with pytest.raises(HttpURLError, match="must be str"):
+        with raises(HttpURLError, match="must be str"):
             parse_url(b"http://example.com/")
 
 
@@ -599,13 +598,13 @@ class TestResponseDecode:
 
     def test_json_invalid_raises(self):
         response = self._make(body=b"not-json", content_type="application/json")
-        with pytest.raises(ValueError):
+        with raises(ValueError):
             response.json()
 
     def test_text_decode_error_propagates(self):
         # Latin-1-only byte that's invalid UTF-8.
         response = self._make(body=b"\xff", content_type="text/plain; charset=utf-8")
-        with pytest.raises(UnicodeDecodeError):
+        with raises(UnicodeError):
             _ = response.text
 
 
@@ -773,7 +772,7 @@ class TestHttpClientBusyError:
         socket = FakeSocket()  # no response queued — request will hang
         client, _ticks, _ = make_client(socket_or_factory=socket)
         client.get("http://example.test/one")
-        with pytest.raises(HttpBusyError, match="busy"):
+        with raises(HttpBusyError, match="busy"):
             client.get("http://example.test/two")
 
     def test_can_issue_after_completion(self):
@@ -831,7 +830,7 @@ class TestHttpClientTimeout:
             ticks.advance(2)
         assert handle.done is True
         assert isinstance(handle.error, HttpTimeoutError)
-        with pytest.raises(HttpTimeoutError):
+        with raises(HttpTimeoutError):
             _ = handle.result
 
     def test_default_timeout_used_when_none(self):
@@ -902,7 +901,7 @@ class TestHttpClientErrors:
         socket = FakeSocket()
         client, _ticks, _ = make_client(socket_or_factory=socket)
         handle = client.get("http://example.test/")
-        with pytest.raises(HttpError, match="before done"):
+        with raises(HttpError, match="before done"):
             _ = handle.result
 
 
@@ -1145,7 +1144,7 @@ class TestResolveRedirectURL:
         assert result == "http://example.com/api/items"
 
     def test_empty_location_raises(self):
-        with pytest.raises(HttpURLError, match="empty"):
+        with raises(HttpURLError, match="empty"):
             resolve_redirect_url("http://example.com/", "")
 
 
@@ -1213,12 +1212,12 @@ class TestHttpClientPost:
 
     def test_post_body_and_json_mutually_exclusive(self):
         client, _ticks, _ = make_client()
-        with pytest.raises(ValueError, match="not both"):
+        with raises(ValueError, match="not both"):
             client.post("http://example.test/", body=b"x", json={"k": "v"})
 
     def test_post_rejects_non_bytes_non_str_body(self):
         client, _ticks, _ = make_client()
-        with pytest.raises(TypeError, match="bytes / bytearray / str"):
+        with raises(TypeError, match="bytes / bytearray / str"):
             client.post("http://example.test/", body=42)
 
     def test_post_with_bytearray_body(self):
@@ -1281,12 +1280,12 @@ class TestHttpClientPost:
         socket = FakeSocket()
         client, _ticks, _ = make_client(socket_or_factory=socket)
         client.post("http://example.test/one", body=b"first")
-        with pytest.raises(HttpBusyError):
+        with raises(HttpBusyError):
             client.post("http://example.test/two", body=b"second")
 
     def test_post_url_error_propagates(self):
         client, _ticks, _ = make_client()
-        with pytest.raises(HttpURLError):
+        with raises(HttpURLError):
             client.post("ftp://bad/", body=b"x")
 
 
@@ -1461,50 +1460,10 @@ class TestHttpClientOversizePolicy:
 # ---------------------------------------------------------------------------
 
 
-class TestChumicroSocketsFactory:
-    """The convenience factory dispatches on ``use_tls``."""
-
-    def test_plain_tcp_routes_to_tcp_client_socket(self, monkeypatch):
-        calls = []
-
-        def fake_tcp(host, port, *, radio):
-            calls.append(("tcp", host, port, radio))
-            return "tcp-socket"
-
-        def fake_tls(host, port, *, context, radio):
-            calls.append(("tls", host, port, context, radio))
-            return "tls-socket"  # pragma: no cover - shouldn't be hit here
-
-        from chumicro_sockets import (
-            tcp_client_socket as real_tcp,  # noqa: F401 — verify import path
-        )
-
-        monkeypatch.setattr("chumicro_sockets.tcp_client_socket", fake_tcp)
-        monkeypatch.setattr("chumicro_sockets.tls_client_socket", fake_tls)
-
-        factory = chumicro_sockets_factory(radio="my-radio")
-        result = factory("example.test", 80, False)
-        assert result == "tcp-socket"
-        assert calls == [("tcp", "example.test", 80, "my-radio")]
-
-    def test_tls_routes_to_tls_client_socket(self, monkeypatch):
-        calls = []
-
-        def fake_tcp(host, port, *, radio):
-            calls.append(("tcp", host, port, radio))
-            return "tcp-socket"  # pragma: no cover
-
-        def fake_tls(host, port, *, context, radio):
-            calls.append(("tls", host, port, context, radio))
-            return "tls-socket"
-
-        monkeypatch.setattr("chumicro_sockets.tcp_client_socket", fake_tcp)
-        monkeypatch.setattr("chumicro_sockets.tls_client_socket", fake_tls)
-
-        factory = chumicro_sockets_factory(radio=None, ssl_context="ctx")
-        result = factory("example.test", 443, True)
-        assert result == "tls-socket"
-        assert calls == [("tls", "example.test", 443, "ctx", None)]
+# TestChumicroSocketsFactory lives in test_requests_pytest.py — the
+# original tests use pytest's ``monkeypatch`` fixture to swap module-
+# level ``chumicro_sockets.tcp_client_socket`` / ``tls_client_socket``,
+# which has no portable cross-runtime equivalent.
 
 
 # ---------------------------------------------------------------------------
@@ -1809,21 +1768,21 @@ class TestFakeHttpClient:
         fake.handle(now_ms=0)
         assert handle.done
         assert isinstance(handle.error, HttpTimeoutError)
-        with pytest.raises(HttpTimeoutError, match="simulated"):
+        with raises(HttpTimeoutError, match="simulated"):
             _ = handle.result
 
     def test_enqueue_error_rejects_non_http_error(self):
         from chumicro_requests.testing import FakeHttpClient
 
         fake = FakeHttpClient()
-        with pytest.raises(TypeError, match="HttpError"):
+        with raises(TypeError, match="HttpError"):
             fake.enqueue_error(ValueError("not an HttpError"))
 
     def test_get_without_scripted_response_raises(self):
         from chumicro_requests.testing import FakeHttpClient
 
         fake = FakeHttpClient()
-        with pytest.raises(HttpError, match="no scripted responses"):
+        with raises(HttpError, match="no scripted responses"):
             fake.get("http://example.test/")
 
     def test_busy_during_in_flight(self):
@@ -1832,7 +1791,7 @@ class TestFakeHttpClient:
         fake = FakeHttpClient()
         fake.enqueue_response(body=b"")
         fake.get("http://example.test/")
-        with pytest.raises(HttpBusyError, match="busy"):
+        with raises(HttpBusyError, match="busy"):
             fake.get("http://example.test/two")
 
     def test_check_false_when_idle(self):

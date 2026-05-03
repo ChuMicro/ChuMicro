@@ -69,3 +69,19 @@ def test_raises_match_does_not_suppress_wrong_type():
     with pytest.raises(TypeError):
         with raises(ValueError, match="anything"):
             raise TypeError("wrong type")
+
+
+def test_raises_value_alias_mirrors_exception():
+    """`.value` is a pytest-compatible alias for `.exception`."""
+    with raises(ValueError) as ctx:
+        raise ValueError("hi")
+
+    assert ctx.value is ctx.exception
+    assert isinstance(ctx.value, ValueError)
+
+
+def test_raises_value_is_none_until_block_exits():
+    """`.value` mirrors `.exception` — both unset until __exit__ runs."""
+    ctx = raises(ValueError)
+    assert ctx.value is None
+    assert ctx.exception is None

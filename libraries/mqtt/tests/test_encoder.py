@@ -1,6 +1,5 @@
 """Tests for the packet encoders."""
 
-import pytest
 from chumicro_mqtt import (
     UnsupportedQoSError,
     encode_connect,
@@ -9,6 +8,7 @@ from chumicro_mqtt import (
     encode_subscribe,
     encode_unsubscribe,
 )
+from chumicro_test_harness.assertions import raises
 
 
 class TestEncodeConnect:
@@ -52,7 +52,7 @@ class TestEncodeConnect:
         assert b"goodbye" in packet
 
     def test_will_qos_two_raises(self) -> None:
-        with pytest.raises(UnsupportedQoSError):
+        with raises(UnsupportedQoSError):
             encode_connect(
                 client_id="abc",
                 keep_alive_seconds=60,
@@ -79,7 +79,7 @@ class TestEncodePublish:
         assert b"\x04\xd2" in packet
 
     def test_qos_one_without_packet_id_raises(self) -> None:
-        with pytest.raises(ValueError):
+        with raises(ValueError):
             encode_publish(topic="x", payload=b"y", qos=1)
 
     def test_retain_sets_low_bit(self) -> None:
@@ -91,7 +91,7 @@ class TestEncodePublish:
         assert packet.endswith(b"hello")
 
     def test_qos_two_raises(self) -> None:
-        with pytest.raises(UnsupportedQoSError):
+        with raises(UnsupportedQoSError):
             encode_publish(topic="x", payload=b"y", qos=2)
 
 
@@ -115,11 +115,11 @@ class TestEncodeSubscribe:
         assert b"b" in packet
 
     def test_empty_subscriptions_raises(self) -> None:
-        with pytest.raises(ValueError):
+        with raises(ValueError):
             encode_subscribe(packet_id=1, subscriptions=[])
 
     def test_qos_two_subscription_raises(self) -> None:
-        with pytest.raises(UnsupportedQoSError):
+        with raises(UnsupportedQoSError):
             encode_subscribe(packet_id=1, subscriptions=[("x", 2)])
 
 
@@ -135,7 +135,7 @@ class TestEncodeUnsubscribe:
         assert b"b" in packet
 
     def test_empty_raises(self) -> None:
-        with pytest.raises(ValueError):
+        with raises(ValueError):
             encode_unsubscribe(packet_id=1, topics=[])
 
 

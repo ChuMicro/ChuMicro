@@ -37,18 +37,50 @@ _MEM_FREE_AVAILABLE = _has_mem_free()
 
 
 def _iter_test_functions(module: object):
-	"""Yield `(name, function)` pairs for callable module attributes named `test_*`.
+	"""Yield `(qualified_name, callable)` pairs for tests in *module*.
+
+	Discovers two shapes — matching pytest's default collection rules:
+
+	1. Module-level functions whose name starts with ``test_``.
+	2. Methods named ``test_*`` on classes whose name starts with
+	``Test``.  The class is instantiated with no arguments, then
+	each method is bound to the instance.  Each test gets its own
+	instance, so per-test mutation can't leak between tests.
 
 	Args:
 		module: Module-like object to scan for test functions.
 	"""
 	for name in dir(module):
-		if not name.startswith("test_"):
+		candidate = getattr(module, name)
+
+		if name.startswith("test_") and callable(candidate):
+			yield name, candidate
 			continue
 
-		candidate = getattr(module, name)
-		if callable(candidate):
-			yield name, candidate
+		if name.startswith("Test") and isinstance(candidate, type):
+			yield from _iter_test_methods_on_class(name, candidate)
+
+
+def _iter_test_methods_on_class(class_name, test_class):
+	"""Yield `(qualified_name, bound_method)` pairs for ``test_*`` methods.
+
+	Each method is collected against a fresh instance of *test_class*,
+	mirroring pytest's per-test instance behaviour and ensuring that
+	state mutated in one test doesn't carry into the next.
+
+	Args:
+		class_name: The class's name as it appeared on the module.
+		test_class: The class object itself.
+	"""
+	for attr in dir(test_class):
+		if not attr.startswith("test_"):
+			continue
+		method = getattr(test_class, attr, None)
+		if not callable(method):
+			continue
+		# Fresh instance per test — match pytest semantics.
+		instance = test_class()
+		yield f"{class_name}.{attr}", getattr(instance, attr)
 
 
 def _print_exception(exception):
