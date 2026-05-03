@@ -504,8 +504,14 @@ class _TransportCache:
     def __init__(self) -> None:
         self._transports: dict[str, TransportProtocol] = {}
         self._last_staged: dict[str, tuple[str, str]] = {}
-        #: Device IDs that have been bulk-staged (flash/copy modes).
-        self._fully_staged: set[str] = set()
+        #: Library currently staged on each device (flash/copy modes).
+        #: Bulk staging is scoped to ONE library at a time so the
+        #: drive working-set stays bounded — a 491 KB Pi Pico W
+        #: CIRCUITPY drive can't hold every library's source +
+        #: every library's test files at once.  When a test for a
+        #: different library runs, the next stage rsync uses
+        #: ``--delete`` to clean the prior library off the drive.
+        self._staged_library: dict[str, str] = {}
         #: Cached batch results keyed by (device_id, library, file).
         #: Value is (parsed_result_or_None, raw_output_or_error).
         self._batch_results: dict[
@@ -603,27 +609,36 @@ class _TransportCache:
         """
         self._batch_results[batch_key] = (parsed_result, raw_output)
 
-    def is_fully_staged(self, device_id: str) -> bool:
-        """Check whether a device has been bulk-staged.
+    def current_staged_library(self, device_id: str) -> str | None:
+        """Return the library currently bulk-staged on a device.
 
-        In flash/copy modes, all sources and test files are staged in
-        one pass.  Once bulk-staged, per-file re-staging is skipped.
+        In flash/copy modes, staging is scoped to ONE library at a
+        time — the rsync payload (library src + that library's test
+        files) plus boot files must fit on the drive.  Pi Pico W
+        CIRCUITPY drives are 491 KB; staging every library at once
+        overflows.  Per-library staging keeps the drive working-set
+        bounded; rsync ``--delete`` cleans the prior library when
+        switching.
 
         Args:
             device_id: Device identifier.
 
         Returns:
-            ``True`` if the device has been bulk-staged.
+            The library name currently staged, or ``None`` when no
+            library is staged yet (i.e. fresh transport).
         """
-        return device_id in self._fully_staged
+        return self._staged_library.get(device_id)
 
-    def mark_fully_staged(self, device_id: str) -> None:
-        """Record that a device has been bulk-staged.
+    def mark_library_staged(self, device_id: str, library_name: str) -> None:
+        """Record that a library has been bulk-staged onto a device.
 
         Args:
             device_id: Device identifier.
+            library_name: The library whose source + test files now
+                live on the device.  Replaces any previously-staged
+                library marker.
         """
-        self._fully_staged.add(device_id)
+        self._staged_library[device_id] = library_name
 
     def invalidate_device(self, device_id: str) -> None:
         """Drop all cached state for a device after a fatal transport error.
@@ -646,7 +661,7 @@ class _TransportCache:
             except Exception:  # pragma: no cover - best-effort cleanup
                 pass
         self._last_staged.pop(device_id, None)
-        self._fully_staged.discard(device_id)
+        self._staged_library.pop(device_id, None)
 
     def disconnect_all(self) -> None:
         """Disconnect all cached transports.
@@ -673,7 +688,7 @@ class _TransportCache:
                 pass
         self._transports.clear()
         self._last_staged.clear()
-        self._fully_staged.clear()
+        self._staged_library.clear()
         self._batch_results.clear()
 
 
@@ -801,13 +816,27 @@ class DeviceRuntimeItem(pytest.Item):
             pytest.fail(f"Transport connection failed: {error}")
 
         # Flash/copy modes persist files on the device filesystem,
-        # so we bulk-stage ALL sources + ALL test files in one pass
-        # (one rsync) on first use.  RAM mode embeds source inline,
-        # so it re-stages per file.
+        # so we bulk-stage one library's sources + test files per
+        # rsync.  Per-library scope keeps the drive working-set
+        # bounded — Pi Pico W CIRCUITPY drives are 491 KB; staging
+        # every library at once overflows.  When switching libraries
+        # the next rsync ``--delete`` cleans the prior library off.
+        # RAM mode embeds source inline, so it re-stages per file.
         is_filesystem_mode = transport.mode not in ("ram", "mount")
-        if is_filesystem_mode and not cache.is_fully_staged(device_entry.identifier):
-            _bulk_stage_for_device(self.session, device_entry, transport)
-            cache.mark_fully_staged(device_entry.identifier)
+        if is_filesystem_mode:
+            current_library = cache.current_staged_library(
+                device_entry.identifier,
+            )
+            if current_library != self._library_name:
+                _bulk_stage_for_device(
+                    self.session,
+                    device_entry,
+                    transport,
+                    library_filter=self._library_name,
+                )
+                cache.mark_library_staged(
+                    device_entry.identifier, self._library_name,
+                )
         elif not is_filesystem_mode:
             staging_key = self._batch_key(device_entry)
             if cache.needs_staging(staging_key):
@@ -1069,23 +1098,34 @@ def _bulk_stage_for_device(
     session: pytest.Session,
     device_entry: DeviceEntry,
     transport: TransportProtocol,
+    *,
+    library_filter: str | None = None,
 ) -> None:
-    """Stage all sources and test files for a device in one pass.
+    """Stage one library's sources and test files for a device in one pass.
 
     In flash/copy modes, files persist on the device filesystem so
-    we can deploy everything once instead of re-staging per test file.
-    This reduces rsync (CircuitPython) or ``mpremote fs cp``
-    (MicroPython) invocations from N-per-file to 1-per-device.
+    we deploy a library's full source + every test file for that
+    library in one rsync (or ``mpremote fs cp``).  This reduces
+    invocations from N-per-file to 1-per-library — and per-library
+    scope keeps the drive working-set bounded, since a 491 KB Pi
+    Pico W CIRCUITPY drive can't hold every library's source + every
+    library's test files at once.  Switching libraries triggers a
+    fresh stage; rsync ``--delete`` cleans the prior library off.
 
-    Collects all :class:`DeviceTestItem` instances targeting the given
-    device from the session's collected items, deduplicates their
-    library source directories and test files, and calls
-    ``transport.stage()`` once.
+    Collects all :class:`DeviceTestItem` instances targeting the
+    given device + library from the session's collected items,
+    deduplicates their library source directories and test files,
+    and calls ``transport.stage()`` once.
 
     Args:
         session: The pytest session (provides ``items``).
         device_entry: The target device.
         transport: A connected transport instance.
+        library_filter: When set, only items whose ``library_dir.name``
+            matches are included.  Required in practice for
+            filesystem-mode staging — ``None`` collects every library
+            in the session, which only fits on devices with ample
+            spare flash.
     """
     seen_source_dirs: list[Path] = []
     seen_test_files: list[Path] = []
@@ -1098,6 +1138,8 @@ def _bulk_stage_for_device(
             continue
         target = item.target_device
         if target is None or target.identifier != device_entry.identifier:
+            continue
+        if library_filter is not None and item.library_dir.name != library_filter:
             continue
 
         # Collect source dirs for this item's library.

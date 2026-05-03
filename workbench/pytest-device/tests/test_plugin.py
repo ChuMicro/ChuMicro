@@ -269,11 +269,11 @@ class TestTransportCache:
         cache = pytest_device._TransportCache()
         cache.mark_staged(("dev1", "timing", "test_ticks.py"))
         cache.cache_batch_result(("dev1", "timing", "test_ticks.py"), "result", "output")
-        cache.mark_fully_staged("dev1")
+        cache.mark_library_staged("dev1", "timing")
         cache.disconnect_all()
         assert cache.needs_staging(("dev1", "timing", "test_ticks.py")) is True
         assert cache.get_batch_result(("dev1", "timing", "test_ticks.py")) is None
-        assert cache.is_fully_staged("dev1") is False
+        assert cache.current_staged_library("dev1") is None
 
     def test_batch_result_not_cached_initially(self) -> None:
         """A fresh cache should have no batch results."""
@@ -339,22 +339,29 @@ class TestTransportCache:
         finally:
             pytest_device.create_transport = original
 
-    def test_fully_staged_not_set_initially(self) -> None:
-        """A fresh cache should not report any device as fully staged."""
+    def test_current_staged_library_not_set_initially(self) -> None:
+        """A fresh cache should report no library staged on any device."""
         cache = pytest_device._TransportCache()
-        assert cache.is_fully_staged("dev1") is False
+        assert cache.current_staged_library("dev1") is None
 
-    def test_mark_fully_staged(self) -> None:
-        """After marking fully staged, is_fully_staged returns True."""
+    def test_mark_library_staged(self) -> None:
+        """After marking a library staged, current_staged_library returns it."""
         cache = pytest_device._TransportCache()
-        cache.mark_fully_staged("dev1")
-        assert cache.is_fully_staged("dev1") is True
+        cache.mark_library_staged("dev1", "timing")
+        assert cache.current_staged_library("dev1") == "timing"
 
-    def test_fully_staged_separate_per_device(self) -> None:
-        """Fully-staged state should be per-device."""
+    def test_mark_library_staged_replaces_prior(self) -> None:
+        """Marking a different library replaces the prior marker (drive cleanup is rsync's job)."""
         cache = pytest_device._TransportCache()
-        cache.mark_fully_staged("dev1")
-        assert cache.is_fully_staged("dev2") is False
+        cache.mark_library_staged("dev1", "timing")
+        cache.mark_library_staged("dev1", "kvstore")
+        assert cache.current_staged_library("dev1") == "kvstore"
+
+    def test_staged_library_separate_per_device(self) -> None:
+        """Staged-library state should be per-device."""
+        cache = pytest_device._TransportCache()
+        cache.mark_library_staged("dev1", "timing")
+        assert cache.current_staged_library("dev2") is None
 
     def test_invalidate_device_disconnects_and_drops_state(self) -> None:
         """invalidate_device should disconnect the cached transport and drop staging."""
@@ -371,8 +378,8 @@ class TestTransportCache:
         try:
             transport = cache.get_transport(device, None)
             cache.mark_staged(("dev1", "timing", "test_ticks.py"))
-            cache.mark_fully_staged("dev1")
-            assert cache.is_fully_staged("dev1") is True
+            cache.mark_library_staged("dev1", "timing")
+            assert cache.current_staged_library("dev1") == "timing"
             assert "dev1" in cache._transports
 
             cache.invalidate_device("dev1")
@@ -380,7 +387,7 @@ class TestTransportCache:
             # Transport gone, staging cleared.
             assert "dev1" not in cache._transports
             assert cache.has_staged_file("dev1") is False
-            assert cache.is_fully_staged("dev1") is False
+            assert cache.current_staged_library("dev1") is None
             # Disconnect was called on the transport.
             assert transport.calls[-1] == ("disconnect", ())
         finally:
@@ -790,10 +797,10 @@ def _make_functional_test_file(tmp_path: Path, library: str) -> Path:
 class TestEnsurePrepared:
     """Tests for DeviceRuntimeItem._ensure_prepared."""
 
-    def test_flash_mode_bulk_stages_once(
+    def test_flash_mode_bulk_stages_once_per_library(
         self, tmp_path, hot_path_session, hot_path_cache, monkeypatch,
     ) -> None:
-        """Flash mode triggers bulk staging on first use, then never again."""
+        """Flash mode bulk-stages on first use per library; same-library re-entry is a no-op."""
         device = _hot_path_device()
         transport = _HotPathTransport(mode="flash")
         _prime_cache_with_transport(hot_path_cache, device, transport)
@@ -801,8 +808,8 @@ class TestEnsurePrepared:
         bulk_calls: list[tuple] = []
         monkeypatch.setattr(
             pytest_device, "_bulk_stage_for_device",
-            lambda session, device_entry, transport: bulk_calls.append(
-                (session, device_entry.identifier),
+            lambda session, device_entry, transport, *, library_filter=None: bulk_calls.append(
+                (session, device_entry.identifier, library_filter),
             ),
         )
 
@@ -812,7 +819,38 @@ class TestEnsurePrepared:
         item._ensure_prepared(device)  # second call should not re-stage.
 
         assert len(bulk_calls) == 1
-        assert hot_path_cache.is_fully_staged(device.identifier)
+        assert bulk_calls[0] == (hot_path_session, device.identifier, "alpha")
+        assert hot_path_cache.current_staged_library(device.identifier) == "alpha"
+
+    def test_flash_mode_restages_on_library_switch(
+        self, tmp_path, hot_path_session, hot_path_cache, monkeypatch,
+    ) -> None:
+        """Flash mode re-stages when the next test belongs to a different library."""
+        device = _hot_path_device()
+        transport = _HotPathTransport(mode="flash")
+        _prime_cache_with_transport(hot_path_cache, device, transport)
+
+        bulk_calls: list[tuple] = []
+        monkeypatch.setattr(
+            pytest_device, "_bulk_stage_for_device",
+            lambda session, device_entry, transport, *, library_filter=None: bulk_calls.append(
+                (session, device_entry.identifier, library_filter),
+            ),
+        )
+
+        alpha_test = _make_functional_test_file(tmp_path, "alpha")
+        beta_test = _make_functional_test_file(tmp_path, "beta")
+        alpha_item = _make_prepare_item(hot_path_session, device, alpha_test)
+        beta_item = _make_prepare_item(hot_path_session, device, beta_test)
+
+        alpha_item._ensure_prepared(device)
+        beta_item._ensure_prepared(device)
+        beta_item._ensure_prepared(device)  # same library — no extra stage.
+        alpha_item._ensure_prepared(device)  # back to alpha — restage.
+
+        library_sequence = [call[2] for call in bulk_calls]
+        assert library_sequence == ["alpha", "beta", "alpha"]
+        assert hot_path_cache.current_staged_library(device.identifier) == "alpha"
 
     def test_ram_mode_stages_per_file(
         self, tmp_path, hot_path_session, hot_path_cache, monkeypatch,
@@ -1007,7 +1045,7 @@ class TestDevicePrepareItemRuntest:
         _prime_cache_with_transport(hot_path_cache, device, transport)
         monkeypatch.setattr(
             pytest_device, "_bulk_stage_for_device",
-            lambda session, device_entry, transport: None,
+            lambda session, device_entry, transport, *, library_filter=None: None,
         )
 
         test_file = _make_functional_test_file(tmp_path, "alpha")
