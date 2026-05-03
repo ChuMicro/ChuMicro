@@ -10,9 +10,10 @@ Run ``python scripts/run.py -h`` to see available tasks.
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from check_api import main as check_api_main
@@ -486,18 +487,41 @@ def build() -> int:
     for each build, which dramatically speeds up builds (~10x faster).
     This is safe because the development environment already has
     ``hatchling`` installed via ``requirements-dev.txt``.
+
+    Builds are fanned out across :data:`_DEFAULT_PACKAGE_PARALLEL_WORKERS`
+    threads — each ``python -m build`` is an independent subprocess
+    with its own per-package ``dist/`` output, no shared state.
     """
     packages = find_publishable_packages()
     if not packages:
         print("No publishable packages found (no VERSION + pyproject.toml pairs).")
         return 1
 
-    for package in packages:
-        print(f"== build {package} ==")
-        result = run_command([PYTHON, "-m", "build", "--no-isolation", package])
-        if result != 0:
-            print(f"Build failed: {package}")
-            return result
+    def build_one(package: str) -> Callable[[], tuple[int, str]]:
+        command = [PYTHON, "-m", "build", "--no-isolation", package]
+        printable = " ".join(command)
+
+        def run() -> tuple[int, str]:
+            completed = subprocess.run(
+                command, cwd=ROOT, capture_output=True, text=True,
+            )
+            output_parts = [f"+ {printable}"]
+            if completed.stdout:
+                output_parts.append(completed.stdout.rstrip("\n"))
+            if completed.stderr:
+                output_parts.append(completed.stderr.rstrip("\n"))
+            if completed.returncode != 0:
+                output_parts.append(f"Build failed: {package}")
+            return completed.returncode, "\n".join(output_parts) + "\n"
+
+        return run
+
+    phases = [(f"build {package}", build_one(package)) for package in packages]
+    result = _run_capture_phases_in_parallel(
+        phases, max_workers=_resolve_package_parallel_workers(),
+    )
+    if result != 0:
+        return result
 
     print(f"Built {len(packages)} package(s): {', '.join(packages)}")
     return 0
@@ -531,44 +555,69 @@ def docs(package_dirs: list[Path], *, serve: bool = False) -> int:
              "-f", str(library_dir / "mkdocs.yml")],
         )
 
-    overall_exit_code = 0
-    for library_dir in doc_dirs:
+    # Each library's zensical build is an independent subprocess with
+    # its own mkdocs.yml + site/ output, so we fan out across
+    # _DEFAULT_PACKAGE_PARALLEL_WORKERS to amortize the per-process
+    # warm-up.  The serial loop took ~25-30 s on an 18-package workspace;
+    # at 4-way fan-out it lands closer to 2-3 s.
+    phases: list[tuple[str, Callable[[], tuple[int, str]]]] = [
+        (
+            f"docs {library_dir.relative_to(ROOT)}",
+            _build_one_library_docs_factory(library_dir),
+        )
+        for library_dir in doc_dirs
+    ]
+    return _run_capture_phases_in_parallel(
+        phases, max_workers=_resolve_package_parallel_workers(),
+    )
+
+
+def _build_one_library_docs_factory(
+    library_dir: Path,
+) -> Callable[[], tuple[int, str]]:
+    """Return a closure that runs zensical on *library_dir* and returns its output.
+
+    Returns ``(exit_code, output_text)`` so the parallel helper can
+    replay each library's output under its label header without
+    relying on the process-global ``sys.stdout`` (which thread-stomps
+    when multiple per-library workers run concurrently).
+    """
+    def build_one() -> tuple[int, str]:
         relative_path = library_dir.relative_to(ROOT)
         site_dir = library_dir / "site"
-        print(f"== docs {relative_path} ==")
         command = [
             PYTHON, "-m", "zensical", "build",
             "-f", str(library_dir / "mkdocs.yml"),
         ]
         printable_command = " ".join(command)
-        print(f"+ {printable_command}")
         completed = subprocess.run(
             command, cwd=ROOT, capture_output=True, text=True,
         )
-        # Print stdout/stderr so the user sees build progress.
+        output_parts = [f"+ {printable_command}"]
         if completed.stdout:
-            print(completed.stdout, end="")
+            output_parts.append(completed.stdout.rstrip("\n"))
         if completed.stderr:
-            print(completed.stderr, end="")
+            output_parts.append(completed.stderr.rstrip("\n"))
 
         if completed.returncode != 0:
-            print(f"Docs build failed: {relative_path}")
-            overall_exit_code = completed.returncode
-        else:
-            # Fail on griffe warnings (Decision 0021).
-            griffe_warnings = [
-                line for line in completed.stderr.splitlines()
-                if "griffe" in line.lower()
-            ]
-            if griffe_warnings:
-                print(f"Docs build has griffe warnings: {relative_path}")
-                for warning in griffe_warnings:
-                    print(f"  {warning}")
-                overall_exit_code = 1
-            else:
-                print(f"  Built: {site_dir.relative_to(ROOT)}/")
+            output_parts.append(f"Docs build failed: {relative_path}")
+            return completed.returncode, "\n".join(output_parts) + "\n"
 
-    return overall_exit_code
+        # Fail on griffe warnings (Decision 0021).
+        griffe_warnings = [
+            line for line in completed.stderr.splitlines()
+            if "griffe" in line.lower()
+        ]
+        if griffe_warnings:
+            output_parts.append(f"Docs build has griffe warnings: {relative_path}")
+            for warning in griffe_warnings:
+                output_parts.append(f"  {warning}")
+            return 1, "\n".join(output_parts) + "\n"
+
+        output_parts.append(f"  Built: {site_dir.relative_to(ROOT)}/")
+        return 0, "\n".join(output_parts) + "\n"
+
+    return build_one
 
 
 def docs_preview(package_dirs: list[Path]) -> int:
@@ -871,7 +920,9 @@ def test_all_runtimes(
 
 
 def _run_phases_in_parallel(
-    phases: tuple[tuple[str, Callable[[], int]], ...],
+    phases: Sequence[tuple[str, Callable[[], int]]],
+    *,
+    max_workers: int | None = None,
 ) -> int:
     """Run the given phases concurrently with buffered output.
 
@@ -879,10 +930,22 @@ def _run_phases_in_parallel(
     submission order once all phases complete, so the on-screen log
     reads as if they ran sequentially.  Returns the first non-zero exit
     code (in submission order), or 0 if all phases succeed.
+
+    Args:
+        phases: ``(label, callable)`` pairs to run.  Order is the order
+            results print in — independent of which finishes first.
+        max_workers: Cap on concurrent phases.  ``None`` (default) means
+            ``len(phases)`` — every phase runs at once.  Pass an integer
+            to throttle for fan-outs that would oversubscribe CPU or
+            spawn too many subprocesses (e.g. one zensical-build per
+            library across 18 packages on a laptop).
     """
     import contextlib
     import io
     from concurrent.futures import ThreadPoolExecutor
+
+    if not phases:
+        return 0
 
     def run_phase(label: str, work: Callable[[], int]) -> tuple[int, str]:
         buffer = io.StringIO()
@@ -894,7 +957,9 @@ def _run_phases_in_parallel(
                 exit_code = 1
         return exit_code, buffer.getvalue()
 
-    with ThreadPoolExecutor(max_workers=len(phases)) as executor:
+    workers = max_workers if max_workers is not None else len(phases)
+    workers = max(1, min(workers, len(phases)))
+    with ThreadPoolExecutor(max_workers=workers) as executor:
         futures = [
             executor.submit(run_phase, label, work) for label, work in phases
         ]
@@ -905,6 +970,82 @@ def _run_phases_in_parallel(
         print(f"== {label} ==")
         if captured:
             print(captured, end="")
+        if exit_code != 0 and first_failure == 0:
+            first_failure = exit_code
+            print(f"Step failed: {label}")
+    return first_failure
+
+
+#: Cap on concurrent per-package subprocesses for build / docs fan-out.
+#: Each task spawns one external process (``python -m build`` or
+#: ``python -m zensical build``); 4 keeps a ~10-core laptop responsive
+#: while still cutting the serial wall time roughly 4× on an 18-package
+#: workspace.  CI tunes via ``CHUMICRO_PARALLEL_PACKAGES`` if a runner
+#: has more cores to spare.
+_DEFAULT_PACKAGE_PARALLEL_WORKERS = 4
+
+
+def _resolve_package_parallel_workers() -> int:
+    """Return the per-package fan-out cap from env or default."""
+    raw = os.environ.get("CHUMICRO_PARALLEL_PACKAGES")
+    if not raw:
+        return _DEFAULT_PACKAGE_PARALLEL_WORKERS
+    try:
+        value = int(raw)
+    except ValueError:
+        print(
+            f"WARNING: CHUMICRO_PARALLEL_PACKAGES={raw!r} is not an integer — "
+            f"falling back to default ({_DEFAULT_PACKAGE_PARALLEL_WORKERS})."
+        )
+        return _DEFAULT_PACKAGE_PARALLEL_WORKERS
+    return max(1, value)
+
+
+def _run_capture_phases_in_parallel(
+    phases: Sequence[tuple[str, Callable[[], tuple[int, str]]]],
+    *,
+    max_workers: int | None = None,
+) -> int:
+    """Fan out phases that capture-and-return their own output.
+
+    Sister of :func:`_run_phases_in_parallel`, but for work functions
+    that return ``(exit_code, output_text)`` directly instead of
+    relying on the parent's stdout.  This avoids the
+    :func:`contextlib.redirect_stdout` thread-stomp the other helper
+    is exposed to: ``redirect_stdout`` rebinds the *process-global*
+    ``sys.stdout``, so fan-out > 2 threads scramble each other's
+    captures.  The 2-thread MP/CP usage hides it; per-package fan-out
+    across 18 libraries makes it visible immediately.
+
+    Each phase gets called on a worker thread, returns its own
+    captured output, and the helper replays results in *submission*
+    order so the on-screen log reads as if the loop ran serially.
+
+    Args:
+        phases: ``(label, callable)`` pairs.  Each callable returns
+            ``(exit_code, output_text)``.  Output text is printed
+            verbatim under the label header — include trailing
+            newline if you want one.
+        max_workers: Cap on concurrent phases.  ``None`` means
+            ``len(phases)`` — every phase runs at once.  Tune for
+            CPU / subprocess oversubscription.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    if not phases:
+        return 0
+
+    workers = max_workers if max_workers is not None else len(phases)
+    workers = max(1, min(workers, len(phases)))
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = [executor.submit(work) for _, work in phases]
+        results = [future.result() for future in futures]
+
+    first_failure = 0
+    for (label, _), (exit_code, output) in zip(phases, results, strict=True):
+        print(f"== {label} ==")
+        if output:
+            print(output, end="" if output.endswith("\n") else "\n")
         if exit_code != 0 and first_failure == 0:
             first_failure = exit_code
             print(f"Step failed: {label}")
