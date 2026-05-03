@@ -234,6 +234,189 @@ class TestFlashModeRsyncGuard:
         assert result.success is True
 
 
+class TestPreflightAutoSwitch:
+    """Decision 0047 — RAM-mode deploys auto-switch to flash when the deploy
+    graph contains a library declaring ``[tool.chumicro] requires_flash = true``.
+    """
+
+    def _stage_library(
+        self,
+        tmp_path,
+        *,
+        name: str,
+        project_name: str,
+        requires_flash: bool,
+    ):
+        """Write a minimal ``libraries/<name>/`` tree with a pyproject + a single
+        importable module under ``src/<name>/``.
+        """
+        from pathlib import Path
+
+        lib = tmp_path / name
+        source_dir = lib / "src" / name
+        source_dir.mkdir(parents=True)
+        (source_dir / "__init__.py").write_text("VALUE = 1\n")
+        pyproject_lines = [
+            "[project]",
+            f'name = "{project_name}"',
+            'version = "0.0.0"',
+        ]
+        if requires_flash:
+            pyproject_lines.extend(
+                [
+                    "",
+                    "[tool.chumicro]",
+                    "requires_flash = true",
+                ],
+            )
+        (lib / "pyproject.toml").write_text("\n".join(pyproject_lines) + "\n")
+        return lib, Path(source_dir)
+
+    def _stage_entrypoint(self, tmp_path, import_targets: list[str]):
+        """Write a `main.py` entrypoint that imports the listed module names."""
+        entry = tmp_path / "main.py"
+        body = "\n".join(f"import {target}" for target in import_targets) + "\n"
+        entry.write_text(body)
+        return entry
+
+    def test_auto_switch_when_flagged_library_in_graph(self, tmp_path):
+        """RAM-mode deploy + flagged library => effective deploy proceeds in flash mode."""
+        from chumicro_deploy import ImportGraphSource
+
+        _, src_dir = self._stage_library(
+            tmp_path,
+            name="mylib",
+            project_name="chumicro-mylib",
+            requires_flash=True,
+        )
+        entry = self._stage_entrypoint(tmp_path, ["mylib"])
+        source = ImportGraphSource(entry, search_paths=[src_dir.parent])
+
+        deployer, fake = _make_deployer_with_fake(execute_output="ok\n")
+        # Set the device into RAM mode by re-binding through the dataclass.
+        ram_device = deployer.device.__class__(
+            transport=deployer.device.transport,
+            address=deployer.device.address,
+            deploy_mode="ram",
+        )
+        # The fake transport-creation closure captures `fake`; rebind a fresh
+        # Deployer over it.
+        ram_device.create_transport = lambda: fake  # type: ignore[method-assign]
+        deployer = Deployer(ram_device)
+
+        messages: list[str] = []
+        result = deployer.deploy(
+            source,
+            on_preflight_message=messages.append,
+        )
+
+        assert result.success is True
+        # The pre-flight message names the flagged library.
+        assert len(messages) == 1
+        assert "chumicro-mylib" in messages[0]
+        assert "switching to flash mode" in messages[0]
+
+    def test_no_switch_when_no_flagged_library(self, tmp_path):
+        """RAM-mode deploy + no flagged library => stays in RAM mode silently."""
+        from chumicro_deploy import ImportGraphSource
+
+        _, src_dir = self._stage_library(
+            tmp_path,
+            name="lightlib",
+            project_name="chumicro-lightlib",
+            requires_flash=False,
+        )
+        entry = self._stage_entrypoint(tmp_path, ["lightlib"])
+        source = ImportGraphSource(entry, search_paths=[src_dir.parent])
+
+        fake = FakeTransport(execute_output="ok\n")
+
+        class RamDevice(Device):
+            def create_transport(self):  # type: ignore[override]
+                return fake
+
+        device = RamDevice(
+            transport="micropython",
+            address="/dev/fake",
+            deploy_mode="ram",
+        )
+        deployer = Deployer(device)
+        messages: list[str] = []
+        result = deployer.deploy(source, on_preflight_message=messages.append)
+
+        assert result.success is True
+        assert messages == []  # silent when nothing to switch
+
+    def test_force_deploy_mode_bypasses_preflight(self, tmp_path):
+        """Even with a flagged library in the graph, ``force_deploy_mode='ram'``
+        skips the auto-switch.
+        """
+        from chumicro_deploy import ImportGraphSource
+
+        _, src_dir = self._stage_library(
+            tmp_path,
+            name="heavy",
+            project_name="chumicro-heavy",
+            requires_flash=True,
+        )
+        entry = self._stage_entrypoint(tmp_path, ["heavy"])
+        source = ImportGraphSource(entry, search_paths=[src_dir.parent])
+
+        fake = FakeTransport(execute_output="ok\n")
+
+        class RamDevice(Device):
+            def create_transport(self):  # type: ignore[override]
+                return fake
+
+        device = RamDevice(
+            transport="micropython",
+            address="/dev/fake",
+            deploy_mode="ram",
+        )
+        deployer = Deployer(device)
+        messages: list[str] = []
+        # Force RAM mode despite the flagged library — caller's choice.
+        result = deployer.deploy(
+            source,
+            force_deploy_mode="ram",
+            on_preflight_message=messages.append,
+        )
+
+        assert result.success is True
+        assert messages == []  # force-flag silences the pre-flight message
+
+    def test_preflight_message_defaults_to_stderr(self, tmp_path, capsys):
+        """When no callback supplied, the explanation goes to stderr."""
+        from chumicro_deploy import ImportGraphSource
+
+        _, src_dir = self._stage_library(
+            tmp_path,
+            name="mylib",
+            project_name="chumicro-mylib",
+            requires_flash=True,
+        )
+        entry = self._stage_entrypoint(tmp_path, ["mylib"])
+        source = ImportGraphSource(entry, search_paths=[src_dir.parent])
+
+        fake = FakeTransport(execute_output="ok\n")
+
+        class RamDevice(Device):
+            def create_transport(self):  # type: ignore[override]
+                return fake
+
+        device = RamDevice(
+            transport="micropython",
+            address="/dev/fake",
+            deploy_mode="ram",
+        )
+        deployer = Deployer(device)
+        deployer.deploy(source)
+
+        captured = capsys.readouterr()
+        assert "switching to flash mode" in captured.err
+        assert "chumicro-mylib" in captured.err
+
+
 class TestTracebackExtraction:
     def test_extract_takes_last_traceback(self):
         output = (

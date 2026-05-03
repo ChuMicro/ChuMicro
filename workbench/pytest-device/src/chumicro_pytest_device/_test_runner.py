@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from chumicro_deploy import (
+    DEFAULT_DEPLOY_MODE,
     Device,
     DeviceEntry,
     ExtendedTransportProtocol,
@@ -227,9 +228,11 @@ def resolve_effective_deploy_mode(
     1. CLI ``--chumicro-deploy-mode`` override (highest precedence).
     2. Per-device ``deploy_mode`` from ``devices.yml``.
     3. Global ``defaults.deploy_mode`` (folded into the entry by the loader).
-    4. ``"ram"`` as a last-resort default.
+    4. ``DEFAULT_DEPLOY_MODE`` as the last-resort default (Decision 0047 —
+       flash is the production-shaped path; RAM mode is opt-in for
+       unit-style tests).
     """
-    return deploy_mode_override or device_entry.deploy_mode or "ram"
+    return deploy_mode_override or device_entry.deploy_mode or DEFAULT_DEPLOY_MODE
 
 
 def create_transport(

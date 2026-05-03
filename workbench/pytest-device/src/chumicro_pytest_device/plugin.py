@@ -16,7 +16,7 @@ report pass/fail to pytest.
    defaults:
      micropython: my-mp-board
      circuitpython: my-cp-board
-     deploy_mode: ram
+     deploy_mode: flash      # ram | flash; flash is the default per Decision 0047
      ide_runtime: both       # or micropython, or circuitpython
 
 When ``ide_runtime`` is ``both``, each test function is collected
@@ -47,6 +47,8 @@ from typing import Any, cast
 
 import pytest
 from chumicro_deploy import (
+    DEFAULT_DEPLOY_MODE,
+    DeployMode,
     DeviceConfigError,
     DeviceDefaults,
     DeviceEntry,
@@ -147,7 +149,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     )
     group.addoption(
         "--chumicro-deploy-mode",
-        choices=("ram", "flash"),
+        choices=tuple(mode.value for mode in DeployMode),
         default=None,
         help="override per-device deploy_mode (ram / flash)",
     )
@@ -338,7 +340,7 @@ class _PRSummaryCollector:
                 failed=total_failed,
                 errors=total_errors,
                 implementation=self._implementations.get(device_id),
-                deploy_mode=self._deploy_modes.get(device_id, "ram"),
+                deploy_mode=self._deploy_modes.get(device_id, DEFAULT_DEPLOY_MODE),
                 duration_seconds=duration,
                 files=files,
             ))

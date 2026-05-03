@@ -39,7 +39,7 @@ from .config.default import (
     resolve_ide_devices,
 )
 from .deployer import Deployer
-from .device import Device
+from .device import DEFAULT_DEPLOY_MODE, Device
 from .firmware import (
     FlashFirmwareError,
     flash_firmware,
@@ -87,6 +87,7 @@ __all__ = [
     "CircuitpythonMidDeployDisconnected",
     "CircuitpythonTransport",
     "CircuitpythonTransportError",
+    "DEFAULT_DEPLOY_MODE",
     "DEFAULT_DEVICES_FILENAME",
     "DEPLOY_SCOPE_FILES",
     "DEPLOY_SCOPE_PREFIXES",
