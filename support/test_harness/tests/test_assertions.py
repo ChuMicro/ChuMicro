@@ -37,3 +37,35 @@ def test_raises_catches_subclass():
     """raises() should catch subclasses of the expected type."""
     with raises(Exception):
         raise ValueError("subclass of Exception")
+
+
+def test_raises_match_accepts_when_message_matches():
+    """raises(match=...) suppresses when the regex hits the message."""
+    with raises(ValueError, match="bad input"):
+        raise ValueError("got bad input value")
+
+
+def test_raises_match_uses_search_not_fullmatch():
+    """``match`` semantics mirror pytest — re.search, not re.fullmatch."""
+    with raises(RuntimeError, match="oops"):
+        raise RuntimeError("prefix oops suffix")
+
+
+def test_raises_match_supports_regex_metacharacters():
+    """Patterns are real regexes, not literal substrings."""
+    with raises(ValueError, match=r"port \d+"):
+        raise ValueError("port 8080 is busy")
+
+
+def test_raises_match_fails_when_message_does_not_match():
+    """raises(match=...) must raise AssertionError when the regex misses."""
+    with pytest.raises(AssertionError, match="matching 'expected'"):
+        with raises(ValueError, match="expected"):
+            raise ValueError("something else entirely")
+
+
+def test_raises_match_does_not_suppress_wrong_type():
+    """A type mismatch still propagates even with match= set."""
+    with pytest.raises(TypeError):
+        with raises(ValueError, match="anything"):
+            raise TypeError("wrong type")
