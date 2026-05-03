@@ -132,7 +132,9 @@ class FakeConnection:
             raise BlockingIOError(11, "no data ready")
         take = min(cap, len(self.inbound))
         buffer[:take] = self.inbound[:take]
-        del self.inbound[:take]
+        # CircuitPython doesn't support `del bytearray[start:stop]` —
+        # slice-rebind works on every runtime.
+        self.inbound = bytearray(self.inbound[take:])
         return take
 
     def close(self) -> None:
