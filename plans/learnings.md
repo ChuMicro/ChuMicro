@@ -29,6 +29,16 @@ Detector lives at `workbench/deploy/src/chumicro_deploy/macos_fskit.py`. Fails o
 
 After `MACOS_FSKIT_WEDGED` recovery, drives mount cleanly and tools see them, but Finder's Locations sidebar may still hide them. AppleScript, CLI tools, Finder Computer view, and the deploy tool all see the volumes — only the sidebar classifier filters them out. No userspace command fixes it. Tell the user, don't chase it. Workarounds: Shift+Cmd+C → drag to Favorites. Commit `6fdc132`.
 
+### rsync to CIRCUITPY can hang in uninterruptible kernel I/O
+
+Surfaced 2026-05-03 during a `test-libraries-functional --library websockets --deploy-mode flash` run that pivoted from Pi Pico W to Lolin S2 mid-session. The Pi Pico W half passed; the Lolin S2 rsync started, then the rsync subprocess hung in D-state. `kill -9` was impossible — only a board reboot (unplug + replug) cleared it. `diskarbitrationd` was healthy throughout; this is **not** the FSKit wedge from the section above.
+
+What happens: when the board's USB-CDC firmware hiccups mid-write (CP runtime got into a bad state, the previous test left state lingering, or an ESP32-S2 USB driver glitch), the next `write()` syscall against the CIRCUITPY mount enters uninterruptible kernel I/O wait. The rsync subprocess inherits that state. SIGTERM/SIGKILL only fire when the process can be reaped — a child stuck in D-state is unkillable until the kernel I/O resolves (often only when the underlying USB connection is forcibly closed via board reset).
+
+Fix: every CIRCUITPY-touching subprocess in `chumicro_deploy.flash_drive` now passes a `timeout=` kwarg (`RSYNC_TIMEOUT_SECONDS=90`, `SYNC_TIMEOUT_SECONDS=30`, `METADATA_HELPER_TIMEOUT_SECONDS=10`). On `subprocess.TimeoutExpired` the deploy raises `FlashDriveError` with the recovery procedure ("reboot the board"). The timeout enforcement is best-effort on the most pathological cases — if the parent's `waitpid` itself blocks, the timeout can't fire — but for the common "rsync got 95% through and the next `write()` hangs" pattern it converts a process wedge into a clean error. Commit `<TODO-this-commit>`.
+
+Detection-only signals like "warn when more than one CIRCUITPY mount" are useless in our rig because the normal state is two boards plugged in simultaneously (Lolin S2 + Pi Pico W) — both labeled CIRCUITPY, macOS auto-numbers the second to `CIRCUITPY 1`. UID-based identity matching (already implemented in `_verify_drive_for_board`) is the real disambiguator.
+
 ### Lolin S2 Mini gets stranded after esptool default `--after hard_reset`
 
 Single-invocation `esptool.py erase-flash write-flash …` left the Lolin S2 momentarily un-enumerable on macOS. Fix: run erase and write as two invocations, `--after no_reset` on erase, one-second settle, then write. esptool v5 also refuses chained `erase-flash` + `write-flash` in one call regardless. See `chumicro_deploy/firmware.py`. Commits `5c5ef53`, in slice 1e.2 round 2.

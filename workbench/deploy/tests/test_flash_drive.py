@@ -166,6 +166,60 @@ class TestRsync:
             with pytest.raises(FlashDriveError, match="rsync is required"):
                 flash_drive.rsync(source, destination)
 
+    def test_raises_on_timeout_with_recovery_hint(self, tmp_path: Path) -> None:
+        """A wedged rsync (TimeoutExpired) raises a clear FlashDriveError.
+
+        Regression guard: without the timeout, a hung USB write on
+        CIRCUITPY puts the rsync subprocess into uninterruptible
+        kernel I/O wait — ``kill -9`` is impossible until the board
+        is power-cycled.  The error message must point at the
+        recovery procedure (board reboot) and reference the learnings
+        entry.
+        """
+        source = tmp_path / "source"
+        source.mkdir()
+        destination = tmp_path / "destination"
+        destination.mkdir()
+
+        with patch(
+            "chumicro_deploy.flash_drive.subprocess.run",
+            side_effect=subprocess.TimeoutExpired(
+                cmd="rsync", timeout=flash_drive.RSYNC_TIMEOUT_SECONDS,
+            ),
+        ):
+            with pytest.raises(FlashDriveError) as exc_info:
+                flash_drive.rsync(source, destination)
+        message = str(exc_info.value)
+        assert "hung past" in message
+        assert "Reboot the board" in message
+        assert "plans/learnings.md" in message
+
+    def test_passes_timeout_to_subprocess_run(self, tmp_path: Path) -> None:
+        """rsync invocation passes a ``timeout=`` keyword to subprocess.run.
+
+        The hard cap matches :data:`RSYNC_TIMEOUT_SECONDS`.  Catches
+        a regression where someone refactors the call and drops the
+        timeout — leading right back to the wedged-D-state bug.
+        """
+        source = tmp_path / "source"
+        source.mkdir()
+        destination = tmp_path / "destination"
+        destination.mkdir()
+
+        captured_kwargs: dict[str, object] = {}
+
+        def fake_run(_command, **kwargs):
+            captured_kwargs.update(kwargs)
+            return subprocess.CompletedProcess(args=_command, returncode=0)
+
+        with patch(
+            "chumicro_deploy.flash_drive.subprocess.run",
+            side_effect=fake_run,
+        ):
+            flash_drive.rsync(source, destination)
+
+        assert captured_kwargs.get("timeout") == flash_drive.RSYNC_TIMEOUT_SECONDS
+
     def test_default_excludes(self, tmp_path: Path) -> None:
         """Default rsync command carries the base exclude set + ``--delete``.
 
@@ -559,3 +613,101 @@ class TestFlushVolume:
             )
 
         assert sleep_durations == [0.123]
+
+
+class TestMetadataHelpersHaveTimeouts:
+    """Regression: every CIRCUITPY-touching subprocess call passes a
+    ``timeout=`` kwarg.  Sister of TestRsync.test_passes_timeout — these
+    are smaller helpers but a wedged USB stack hangs them too.
+    """
+
+    def test_strip_extended_attributes_passes_timeout(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(
+            "chumicro_deploy.flash_drive._sys_module.platform",
+            "darwin",
+        )
+        captured_kwargs: dict[str, object] = {}
+
+        def fake_run(_command, **kwargs):
+            captured_kwargs.update(kwargs)
+            return subprocess.CompletedProcess(args=_command, returncode=0)
+
+        with patch(
+            "chumicro_deploy.flash_drive.subprocess.run",
+            side_effect=fake_run,
+        ):
+            flash_drive.strip_extended_attributes(tmp_path)
+        assert (
+            captured_kwargs.get("timeout")
+            == flash_drive.METADATA_HELPER_TIMEOUT_SECONDS
+        )
+
+    def test_clean_dot_files_passes_timeout(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(
+            "chumicro_deploy.flash_drive._sys_module.platform",
+            "darwin",
+        )
+        captured_kwargs: dict[str, object] = {}
+
+        def fake_run(_command, **kwargs):
+            captured_kwargs.update(kwargs)
+            return subprocess.CompletedProcess(args=_command, returncode=0)
+
+        with patch(
+            "chumicro_deploy.flash_drive.subprocess.run",
+            side_effect=fake_run,
+        ):
+            flash_drive.clean_dot_files(tmp_path)
+        assert (
+            captured_kwargs.get("timeout")
+            == flash_drive.METADATA_HELPER_TIMEOUT_SECONDS
+        )
+
+    def test_disable_spotlight_indexing_passes_timeout(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(
+            "chumicro_deploy.flash_drive._sys_module.platform",
+            "darwin",
+        )
+        captured_kwargs: dict[str, object] = {}
+
+        def fake_run(_command, **kwargs):
+            captured_kwargs.update(kwargs)
+            return subprocess.CompletedProcess(args=_command, returncode=0)
+
+        with patch(
+            "chumicro_deploy.flash_drive.subprocess.run",
+            side_effect=fake_run,
+        ):
+            flash_drive.disable_spotlight_indexing(tmp_path)
+        assert (
+            captured_kwargs.get("timeout")
+            == flash_drive.METADATA_HELPER_TIMEOUT_SECONDS
+        )
+
+    def test_flush_volume_passes_timeout_to_sync(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(
+            "chumicro_deploy.flash_drive._sys_module.platform",
+            "darwin",
+        )
+        captured_kwargs: dict[str, object] = {}
+
+        def fake_run(_command, **kwargs):
+            captured_kwargs.update(kwargs)
+            return subprocess.CompletedProcess(args=_command, returncode=0)
+
+        with patch(
+            "chumicro_deploy.flash_drive.subprocess.run",
+            side_effect=fake_run,
+        ):
+            flash_drive.flush_volume(tmp_path, sleep=lambda _seconds: None)
+        assert (
+            captured_kwargs.get("timeout") == flash_drive.SYNC_TIMEOUT_SECONDS
+        )

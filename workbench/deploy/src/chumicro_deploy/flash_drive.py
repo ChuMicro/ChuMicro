@@ -49,6 +49,65 @@ class FlashDriveError(Exception):
 #: read stale content even after sync returns.
 FLUSH_SETTLE_DELAY = 0.5
 
+#: Hard cap on rsync to a CIRCUITPY drive.  A healthy deploy of the
+#: full chumicro library bundle finishes in 5-15 s; even a slow
+#: re-checksum sweep wraps in under 30 s.  If we hit 90 s, the most
+#: likely cause is the USB-stack stuck in an uninterruptible kernel
+#: I/O wait — board mid-reset, FSKit confused by a stale mount, or
+#: macOS auto-mounting a duplicate ``CIRCUITPY 1`` while the original
+#: handle still pins the bus.  Without this cap, the rsync subprocess
+#: enters D-state and ``kill -9`` is impossible — only board reboot
+#: clears it.  See `plans/learnings.md` "rsync to CIRCUITPY can hang
+#: in uninterruptible kernel I/O".
+RSYNC_TIMEOUT_SECONDS = 90.0
+
+#: Hard cap on ``sync``.  A clean flush wraps in single-digit seconds
+#: even with 1 MB pending; 30 s is the same "USB stack wedged" guard
+#: as :data:`RSYNC_TIMEOUT_SECONDS`.
+SYNC_TIMEOUT_SECONDS = 30.0
+
+#: Hard cap on the small metadata helpers (``xattr``, ``mdutil``,
+#: ``dot_clean``).  These touch the staging tree (xattr) or the drive
+#: at the root level (mdutil / dot_clean) — a healthy invocation
+#: returns immediately.  10 s catches the wedged-USB case without
+#: penalizing slow USB enumeration.
+METADATA_HELPER_TIMEOUT_SECONDS = 10.0
+
+
+def _run_subprocess_with_timeout(
+    command: list[str],
+    *,
+    timeout: float,
+    on_timeout_message: str,
+    error_class: type[Exception],
+    capture_output: bool = True,
+    text: bool = False,
+    check: bool = True,
+) -> subprocess.CompletedProcess:
+    """Run *command* with a hard timeout and a clear timeout-message.
+
+    Wraps :func:`subprocess.run` with the timeout-as-error pattern so
+    every USB-touching subprocess gets the same diagnostic when the
+    USB stack wedges.  ``TimeoutExpired`` is raised by
+    :func:`subprocess.run` only when the *child* process can be reaped
+    — if the child is in D-state on a stuck USB I/O, ``run()`` itself
+    hangs in ``waitpid``, so the timeout enforcement is best-effort
+    on the most pathological cases.  But for the common
+    "rsync got 95% through and the next ``write()`` hangs" scenario
+    the timeout fires correctly and we surface a recoverable error
+    instead of a wedged process.
+    """
+    try:
+        return subprocess.run(
+            command,
+            capture_output=capture_output,
+            text=text,
+            check=check,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as timeout_error:
+        raise error_class(on_timeout_message) from timeout_error
+
 
 def merge_packages(
     source_directory: Path,
@@ -188,7 +247,24 @@ def rsync(
     command.append(str(source) + "/")
     command.append(str(destination) + "/")
     try:
-        subprocess.run(command, capture_output=True, text=True, check=True)
+        _run_subprocess_with_timeout(
+            command,
+            timeout=RSYNC_TIMEOUT_SECONDS,
+            on_timeout_message=(
+                f"rsync to {destination} hung past "
+                f"{RSYNC_TIMEOUT_SECONDS:.0f}s.  Most common cause is the "
+                "board's USB-CDC firmware hung mid-write (the CP runtime "
+                "got into a bad state during the previous test, or the "
+                "board's USB stack hiccupped).  Reboot the board (unplug + "
+                "replug) and re-run.  Without this timeout the rsync "
+                "subprocess would have entered uninterruptible kernel I/O "
+                "wait, where ``kill -9`` is impossible until the board is "
+                "physically power-cycled.  See plans/learnings.md "
+                "'rsync to CIRCUITPY can hang in uninterruptible kernel I/O'."
+            ),
+            error_class=FlashDriveError,
+            text=True,
+        )
     except FileNotFoundError as not_found_error:
         raise FlashDriveError(
             "rsync is required for flash deploy mode but was not found.  "
@@ -233,9 +309,15 @@ def strip_extended_attributes(path: Path) -> None:
             ["xattr", "-cr", str(path)],
             capture_output=True,
             check=False,
+            timeout=METADATA_HELPER_TIMEOUT_SECONDS,
         )
     except FileNotFoundError:
         print("WARNING: xattr not found — skipping extended attribute removal")
+    except subprocess.TimeoutExpired:  # pragma: no cover — defensive
+        print(
+            "WARNING: xattr -cr hung past "
+            f"{METADATA_HELPER_TIMEOUT_SECONDS:.0f}s — continuing without it"
+        )
 
 
 def clean_dot_files(drive_path: Path) -> None:
@@ -258,9 +340,15 @@ def clean_dot_files(drive_path: Path) -> None:
             ["dot_clean", str(drive_path)],
             capture_output=True,
             check=False,
+            timeout=METADATA_HELPER_TIMEOUT_SECONDS,
         )
     except FileNotFoundError:
         print("WARNING: dot_clean not found — skipping ._ file cleanup")
+    except subprocess.TimeoutExpired:  # pragma: no cover — defensive
+        print(
+            "WARNING: dot_clean hung past "
+            f"{METADATA_HELPER_TIMEOUT_SECONDS:.0f}s — continuing without it"
+        )
 
 
 def disable_spotlight_indexing(drive_path: Path) -> None:
@@ -285,9 +373,15 @@ def disable_spotlight_indexing(drive_path: Path) -> None:
             ["mdutil", "-i", "off", str(drive_path)],
             capture_output=True,
             check=False,
+            timeout=METADATA_HELPER_TIMEOUT_SECONDS,
         )
     except FileNotFoundError:
         print("WARNING: mdutil not found — skipping Spotlight indexing disable")
+    except subprocess.TimeoutExpired:  # pragma: no cover — defensive
+        print(
+            "WARNING: mdutil -i off hung past "
+            f"{METADATA_HELPER_TIMEOUT_SECONDS:.0f}s — continuing without it"
+        )
 
 
 #: Sentinel files / directories macOS recognises to skip a volume.  Planted
@@ -402,7 +496,18 @@ def flush_volume(
     """
     if _sys_module.platform == "darwin":
         try:
-            subprocess.run(["sync"], check=True, capture_output=True)
+            subprocess.run(
+                ["sync"],
+                check=True,
+                capture_output=True,
+                timeout=SYNC_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired:  # pragma: no cover — defensive
+            print(
+                f"WARNING: sync hung past {SYNC_TIMEOUT_SECONDS:.0f}s — "
+                "USB stack may be wedged.  Falling back to os.sync()"
+            )
+            os.sync()
         except Exception:  # pragma: no cover
             print("WARNING: sync command failed — falling back to os.sync()")
             os.sync()
