@@ -160,6 +160,137 @@ reallocation to one per ~half buffer of consumption, and is
 cross-runtime safe (CP rejects `del bytearray[:n]`, MP lacks
 `bytearray.clear()` — see learnings.md).
 
+## `_buf` + cached `_buf_view` for accumulating data
+
+Every long-lived bytearray that gets sliced more than once should ship
+with a cached `memoryview` companion.  Construct the view once at the
+same time as the bytearray; refresh the view only when the underlying
+bytearray rebinds or extends.
+
+```python
+# ✅ Cached view — one memoryview struct alloc, reused
+class Parser:
+    def __init__(self, capacity=256):
+        self._body = bytearray(capacity)
+        self._body_view = memoryview(self._body)
+        self._body_write_offset = 0
+
+    @property
+    def body(self):
+        # One bytes(N) copy; the slice through _body_view is zero-copy.
+        return bytes(self._body_view[:self._body_write_offset])
+
+# ❌ Per-access memoryview — small struct alloc on every property read
+@property
+def body(self):
+    return bytes(memoryview(self._body)[:self._body_write_offset])
+
+# ❌❌ Double-copy — bytearray slice copies, then bytes() copies again
+@property
+def body(self):
+    return bytes(self._body[:self._body_write_offset])
+```
+
+**Refresh discipline.**  The cached view holds an export of the
+underlying bytearray.  CPython refuses to resize a bytearray with a
+held export (`BufferError: Existing exports of data: object cannot
+be re-sized`); MicroPython doesn't track exports but a stale
+`memoryview` after a resize points at freed memory and may read
+garbage.  So before any operation that *might* extend or rebind the
+underlying bytearray:
+
+```python
+self._body_view = None  # release the export (CPython); MP no-op
+self._body.extend(chunk)  # or `self._body = bytearray(N)` rebind
+self._body_view = memoryview(self._body)  # refresh
+```
+
+Detect "might extend" via `end_offset > len(self._body_view)` — the
+cached view's length equals the bytearray capacity at construction
+time, so a write past it implies a resize.  In-place writes that fit
+inside the existing buffer don't invalidate the view.
+
+## Reuse buffers; only allocate fresh when the size genuinely changes
+
+Per-frame / per-iteration `bytearray(N)` allocations are worse than
+holding onto a fixed-size buffer that handles the common case, even
+when the steady-state buffer pins more bytes than the workload needs.
+On CircuitPython and MicroPython small-heap allocators, `bytearray.extend`
+is essentially "alloc bigger, copy old, copy new, free old" — three
+allocations per logical write — whereas a fixed buffer with slice-assign
+(`buf[a:b] = data`) is one in-place memcpy.  And tear-down/realloc
+cycles fragment the heap.
+
+The shape:
+
+* Pre-allocate a steady-state buffer at construction, sized to handle
+  the **common** case — not the maximum.  Pick a default that covers
+  ~80–95 % of expected payloads (e.g. 256 B for short text frames,
+  1024 B for typical HTTP headers).
+* When a request fits in the steady-state buffer, **reuse** it via
+  slice-assign.  Track logical length with a write cursor
+  (`_write_offset`); the bytearray's `len()` stays at capacity.
+* When a request *exceeds* the steady-state capacity, allocate a
+  one-shot `bytearray(actual_size)` for that request only.  Drop it
+  on the next reset / done state and rebind the active reference back
+  to the steady-state buffer.
+
+```python
+# ✅ Steady-state + one-shot oversized
+class FrameParser:
+    def __init__(self, *, payload_buffer_size=256):
+        self._payload_buffer = bytearray(payload_buffer_size)
+        self._payload_buffer_view = memoryview(self._payload_buffer)
+        self._payload_capacity = payload_buffer_size
+        # Active references — alias the steady-state buffer by default.
+        self._payload = self._payload_buffer
+        self._payload_view = self._payload_buffer_view
+        self._payload_write_offset = 0
+
+    def _after_mask(self):
+        if self._payload_length > self._payload_capacity:
+            # Oversized — one-shot allocation just for this frame.
+            self._payload = bytearray(self._payload_length)
+            self._payload_view = memoryview(self._payload)
+        # else: keep aliasing the steady-state buffer (no alloc).
+        self._payload_write_offset = 0
+
+    def reset(self):
+        # Rebind to steady-state — drops any one-shot from the prior frame.
+        self._payload = self._payload_buffer
+        self._payload_view = self._payload_buffer_view
+        self._payload_write_offset = 0
+```
+
+This applies anywhere in library code that handles repeated
+work-of-similar-shape: per-frame, per-tick, per-message, per-request
+(when the parser is reused).
+
+When *not* to apply: per-instance buffers where the instance itself is
+short-lived (HTTP `ResponseParser` is constructed per request and
+discarded — pre-allocating to exact `Content-Length` upfront is the
+right call there because there's no reuse cycle to amortize over).
+
+## `struct.unpack` accepts memoryview directly
+
+`struct.unpack(fmt, view[a:b])` works on every supported runtime — no
+`bytes()` wrap needed.  The wrap costs one bytearray copy per integer
+field, which adds up across a parser's hot path:
+
+```python
+# ✅
+length = struct.unpack(">H", view[0:2])[0]
+
+# ❌ — costs one tier-2 alloc per call
+length = struct.unpack(">H", bytes(view[0:2]))[0]
+```
+
+This applies wherever the parser already holds a memoryview into the
+input buffer (`PacketDecoder._buffer_view` in `chumicro_mqtt`,
+`_body_view` in the HTTP parsers, etc.).  When you genuinely need
+bytes for a downstream `.decode("utf-8")` or hashing, the wrap stays
+— memoryview lacks `.decode()`.
+
 ## Constructor injection
 
 Accept dependencies (time, I/O, network) as constructor parameters.  Never

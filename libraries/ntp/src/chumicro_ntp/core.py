@@ -324,8 +324,11 @@ class NTPClient:
                 )
             return
         try:
+            # ``bytes(memoryview(buf)[:n])`` is one copy; the prior
+            # ``bytes(buf[:n])`` was two (slice creates a new bytearray,
+            # bytes() copies that).
             unix_seconds = _parse_response(
-                bytes(self._recv_buffer[:received_count]),
+                bytes(memoryview(self._recv_buffer)[:received_count]),
             )
         except NTPError as parse_error:
             result._fail(parse_error)
