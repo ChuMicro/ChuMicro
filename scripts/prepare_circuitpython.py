@@ -78,15 +78,26 @@ def prepare_circuitpython() -> int:
             #    Make-level conditionals in ``extmod/extmod.mk``).
             #    Enables ``hashlib.sha1`` + ``hashlib.md5`` (gated on
             #    ``MICROPY_PY_SSL`` in
-            #    ``ports/unix/variants/mpconfigvariant_common.h``) and
-            #    the ``ssl`` module — both present on every real CP
-            #    board (which ship per-board mbedTLS configs) but
-            #    absent on the default unix-port build.  Aligns the
-            #    test environment with what real CP boards expose so
-            #    cross-runtime tests don't silently SKIP behind
-            #    ``ImportError`` on the unix-port.  See ``plans/
-            #    learnings.md`` §"CP unix-port hashlib + ssl gated on
-            #    SSL build flag".
+            #    ``ports/unix/variants/mpconfigvariant_common.h``).
+            #
+            #    We'd prefer mbedTLS here — every real CP board ships
+            #    it, and it's what the CP ``ssl.py`` shim under
+            #    ``lib/micropython-lib/python-stdlib/ssl/`` expects
+            #    (``import tls``, where ``tls`` is the
+            #    ``extmod/modtls_mbedtls.c`` C module).  But CP 10.1.4's
+            #    source tree is internally inconsistent: ``lib/mbedtls``
+            #    is pinned at v2.28.3 (the older 2.x source layout)
+            #    while ``extmod/extmod.mk`` lists 3.x file names
+            #    (``ssl_client.c``, ``rsa_alt_helpers.c``,
+            #    ``bignum_core.c``, etc.) that don't exist in 2.x.  The
+            #    link step fails with "no such file or directory".
+            #    Updating the CP mbedtls submodule is a CP-side
+            #    decision (would affect every CP board's per-board
+            #    build, not just the unix-port).  Until that lands
+            #    upstream we live with axtls and the resulting
+            #    ``ssl``-module gap on the CP unix-port.  See
+            #    ``plans/learnings.md`` §"CP unix-port hashlib + ssl
+            #    gated on ``MICROPY_PY_SSL`` build flag".
             RuntimePrepStep(
                 [
                     "make", "-C", source_dir / "ports/unix",
