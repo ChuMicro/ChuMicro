@@ -21,7 +21,7 @@ Covers the public wire-level surface from
 
 import struct
 
-import pytest
+from chumicro_test_harness.assertions import raises
 from chumicro_websockets import (
     CLOSE_BAD_DATA,
     CLOSE_GOING_AWAY,
@@ -131,7 +131,7 @@ class TestCaseInsensitiveDict:
 
     def test_getitem_raises_keyerror_on_missing(self):
         headers = CaseInsensitiveDict()
-        with pytest.raises(KeyError):
+        with raises(KeyError):
             headers["missing"]
 
 
@@ -182,35 +182,35 @@ class TestParseWsUrl:
         )
 
     def test_non_string_raises(self):
-        with pytest.raises(WebSocketURLError, match="must be str"):
+        with raises(WebSocketURLError, match="must be str"):
             parse_ws_url(b"ws://example.com/")
 
     def test_unsupported_scheme_raises(self):
-        with pytest.raises(WebSocketURLError, match="ws:// or wss://"):
+        with raises(WebSocketURLError, match="ws:// or wss://"):
             parse_ws_url("http://example.com/")
 
     def test_missing_host_raises(self):
-        with pytest.raises(WebSocketURLError, match="missing host"):
+        with raises(WebSocketURLError, match="missing host"):
             parse_ws_url("ws://")
 
     def test_missing_host_before_path_raises(self):
-        with pytest.raises(WebSocketURLError, match="missing host"):
+        with raises(WebSocketURLError, match="missing host"):
             parse_ws_url("ws:///path")
 
     def test_missing_host_before_port_raises(self):
-        with pytest.raises(WebSocketURLError, match="missing host"):
+        with raises(WebSocketURLError, match="missing host"):
             parse_ws_url("ws://:8080/")
 
     def test_non_integer_port_raises(self):
-        with pytest.raises(WebSocketURLError, match="non-integer port"):
+        with raises(WebSocketURLError, match="non-integer port"):
             parse_ws_url("ws://h:abc/")
 
     def test_port_out_of_range_zero_raises(self):
-        with pytest.raises(WebSocketURLError, match="out of range"):
+        with raises(WebSocketURLError, match="out of range"):
             parse_ws_url("ws://h:0/")
 
     def test_port_out_of_range_high_raises(self):
-        with pytest.raises(WebSocketURLError, match="out of range"):
+        with raises(WebSocketURLError, match="out of range"):
             parse_ws_url("ws://h:99999/")
 
 
@@ -219,33 +219,12 @@ class TestParseWsUrl:
 # ---------------------------------------------------------------------------
 
 
-class TestSha1Dispatch:
-    """The two-tier dispatch hits the right backend on every runtime.
-
-    The fast path (``hashlib.sha1``) covers CPython + every supported
-    MicroPython port.  The fallback path (``hashlib.new("sha1", ...)``)
-    covers CircuitPython, where ``hashlib.sha1`` itself is gated off
-    by default.  Live-board verified on Pi Pico W CP — see
-    `b7a98b8` commit message for the probe transcript.
-    """
-
-    def test_dispatcher_uses_hashlib_new_when_sha1_attr_missing(self):
-        """CircuitPython simulation: ``hashlib.sha1`` absent, ``hashlib.new`` present."""
-        import hashlib as real_hashlib
-
-        from chumicro_websockets import _wire
-
-        original_sha1 = getattr(real_hashlib, "sha1", None)
-        try:
-            if hasattr(real_hashlib, "sha1"):
-                del real_hashlib.sha1
-            digest = _wire._sha1_digest(b"abc")
-            assert digest == bytes.fromhex(
-                "a9993e364706816aba3e25717850c26c9cd0d89d",
-            )
-        finally:
-            if original_sha1 is not None:
-                real_hashlib.sha1 = original_sha1
+# TestSha1Dispatch lives in test_websockets_pytest.py — it simulates
+# the CP fallback path by deleting ``hashlib.sha1`` and exercising the
+# ``hashlib.new("sha1", ...)`` branch, but MP / CP unix-ports lack
+# ``hashlib.new`` so the fallback can't be exercised on them.  The
+# real fast-path (``hashlib.sha1`` present) is exercised by every
+# other handshake test in this file.
 
 
 class TestKeyDerivation:
@@ -501,23 +480,23 @@ class TestHandshakeResponseParser:
 
     def test_non_101_status_raises(self):
         parser = HandshakeResponseParser(self.EXPECTED_ACCEPT)
-        with pytest.raises(WebSocketHandshakeError, match="404"):
+        with raises(WebSocketHandshakeError, match="404"):
             parser.feed(b"HTTP/1.1 404 Not Found\r\n\r\n")
         assert parser.state == HandshakeParseState.ERROR
 
     def test_malformed_status_line_raises(self):
         parser = HandshakeResponseParser(self.EXPECTED_ACCEPT)
-        with pytest.raises(WebSocketHandshakeError, match="malformed status"):
+        with raises(WebSocketHandshakeError, match="malformed status"):
             parser.feed(b"HTTP/1.1\r\n\r\n")
 
     def test_non_integer_status_raises(self):
         parser = HandshakeResponseParser(self.EXPECTED_ACCEPT)
-        with pytest.raises(WebSocketHandshakeError, match="non-integer status"):
+        with raises(WebSocketHandshakeError, match="non-integer status"):
             parser.feed(b"HTTP/1.1 OK Oops\r\n\r\n")
 
     def test_non_ascii_status_line_raises(self):
         parser = HandshakeResponseParser(self.EXPECTED_ACCEPT)
-        with pytest.raises(WebSocketHandshakeError, match="non-ASCII"):
+        with raises(WebSocketHandshakeError, match="non-ASCII"):
             parser.feed(b"HTTP/1.1 101 \xe9\r\n\r\n")
 
     def test_missing_upgrade_header_raises(self):
@@ -528,7 +507,7 @@ class TestHandshakeResponseParser:
             b"\r\n"
         )
         parser = HandshakeResponseParser(self.EXPECTED_ACCEPT)
-        with pytest.raises(WebSocketHandshakeError, match="Upgrade: websocket"):
+        with raises(WebSocketHandshakeError, match="Upgrade: websocket"):
             parser.feed(bad)
 
     def test_missing_connection_header_raises(self):
@@ -539,7 +518,7 @@ class TestHandshakeResponseParser:
             b"\r\n"
         )
         parser = HandshakeResponseParser(self.EXPECTED_ACCEPT)
-        with pytest.raises(WebSocketHandshakeError, match="Connection: Upgrade"):
+        with raises(WebSocketHandshakeError, match="Connection: Upgrade"):
             parser.feed(bad)
 
     def test_wrong_accept_raises(self):
@@ -551,24 +530,24 @@ class TestHandshakeResponseParser:
             b"\r\n"
         )
         parser = HandshakeResponseParser(self.EXPECTED_ACCEPT)
-        with pytest.raises(WebSocketHandshakeError, match="Accept mismatch"):
+        with raises(WebSocketHandshakeError, match="Accept mismatch"):
             parser.feed(bad)
 
     def test_header_without_colon_raises(self):
         bad = b"HTTP/1.1 101 OK\r\nNoColonHere\r\n\r\n"
         parser = HandshakeResponseParser(self.EXPECTED_ACCEPT)
-        with pytest.raises(WebSocketHandshakeError, match="missing colon"):
+        with raises(WebSocketHandshakeError, match="missing colon"):
             parser.feed(bad)
 
     def test_empty_header_name_raises(self):
         bad = b"HTTP/1.1 101 OK\r\n: value\r\n\r\n"
         parser = HandshakeResponseParser(self.EXPECTED_ACCEPT)
-        with pytest.raises(WebSocketHandshakeError, match="empty header name"):
+        with raises(WebSocketHandshakeError, match="empty header name"):
             parser.feed(bad)
 
     def test_oversize_buffer_raises(self):
         parser = HandshakeResponseParser(self.EXPECTED_ACCEPT, max_header_bytes=20)
-        with pytest.raises(WebSocketHandshakeError, match="max_header_bytes"):
+        with raises(WebSocketHandshakeError, match="max_header_bytes"):
             parser.feed(b"HTTP/1.1 101 OK\r\nX-Long: " + b"a" * 100)
 
     def test_feeding_after_done_is_noop(self):
@@ -580,7 +559,7 @@ class TestHandshakeResponseParser:
 
     def test_feeding_after_error_is_noop(self):
         parser = HandshakeResponseParser(self.EXPECTED_ACCEPT)
-        with pytest.raises(WebSocketHandshakeError):
+        with raises(WebSocketHandshakeError):
             parser.feed(b"HTTP/1.1 500 Server Error\r\n\r\n")
         # Already in ERROR — second feed must not raise again or advance.
         parser.feed(b"more")
@@ -596,7 +575,7 @@ class TestHandshakeResponseParser:
             b"\r\n"
         )
         parser = HandshakeResponseParser(self.EXPECTED_ACCEPT)
-        with pytest.raises(WebSocketHandshakeError, match="Connection: Upgrade"):
+        with raises(WebSocketHandshakeError, match="Connection: Upgrade"):
             parser.feed(bad)
 
 
@@ -647,35 +626,35 @@ class TestHandshakeRequestParser:
     def test_post_method_rejected(self):
         bad = self._good_request().replace(b"GET ", b"POST ", 1)
         parser = HandshakeRequestParser()
-        with pytest.raises(WebSocketHandshakeError, match="method must be GET"):
+        with raises(WebSocketHandshakeError, match="method must be GET"):
             parser.feed(bad)
 
     def test_http_2_rejected(self):
         bad = self._good_request().replace(b"HTTP/1.1\r\n", b"HTTP/2.0\r\n", 1)
         parser = HandshakeRequestParser()
-        with pytest.raises(WebSocketHandshakeError, match="HTTP/1.1"):
+        with raises(WebSocketHandshakeError, match="HTTP/1.1"):
             parser.feed(bad)
 
     def test_malformed_request_line_rejected(self):
         parser = HandshakeRequestParser()
-        with pytest.raises(WebSocketHandshakeError, match="malformed request"):
+        with raises(WebSocketHandshakeError, match="malformed request"):
             parser.feed(b"GETONLY\r\n\r\n")
 
     def test_non_ascii_request_line_rejected(self):
         parser = HandshakeRequestParser()
-        with pytest.raises(WebSocketHandshakeError, match="non-ASCII"):
+        with raises(WebSocketHandshakeError, match="non-ASCII"):
             parser.feed(b"GET /\xe9 HTTP/1.1\r\n\r\n")
 
     def test_missing_upgrade_rejected(self):
         bad = self._good_request().replace(b"Upgrade: websocket\r\n", b"")
         parser = HandshakeRequestParser()
-        with pytest.raises(WebSocketHandshakeError, match="Upgrade: websocket"):
+        with raises(WebSocketHandshakeError, match="Upgrade: websocket"):
             parser.feed(bad)
 
     def test_missing_connection_rejected(self):
         bad = self._good_request().replace(b"Connection: Upgrade\r\n", b"")
         parser = HandshakeRequestParser()
-        with pytest.raises(WebSocketHandshakeError, match="Connection: Upgrade"):
+        with raises(WebSocketHandshakeError, match="Connection: Upgrade"):
             parser.feed(bad)
 
     def test_wrong_version_rejected(self):
@@ -684,7 +663,7 @@ class TestHandshakeRequestParser:
             b"Sec-WebSocket-Version: 8\r\n",
         )
         parser = HandshakeRequestParser()
-        with pytest.raises(WebSocketHandshakeError, match="Sec-WebSocket-Version"):
+        with raises(WebSocketHandshakeError, match="Sec-WebSocket-Version"):
             parser.feed(bad)
 
     def test_missing_key_rejected(self):
@@ -693,35 +672,35 @@ class TestHandshakeRequestParser:
             b"",
         )
         parser = HandshakeRequestParser()
-        with pytest.raises(WebSocketHandshakeError, match="Sec-WebSocket-Key"):
+        with raises(WebSocketHandshakeError, match="Sec-WebSocket-Key"):
             parser.feed(bad)
 
     def test_invalid_base64_key_rejected(self):
         bad = self._good_request(key="!!!notbase64!!!")
         parser = HandshakeRequestParser()
-        with pytest.raises(WebSocketHandshakeError, match="not valid base64"):
+        with raises(WebSocketHandshakeError, match="not valid base64"):
             parser.feed(bad)
 
     def test_wrong_length_key_rejected(self):
         # base64("abc") = "YWJj" decodes to 3 bytes, not 16.
         bad = self._good_request(key="YWJj")
         parser = HandshakeRequestParser()
-        with pytest.raises(WebSocketHandshakeError, match="16 bytes"):
+        with raises(WebSocketHandshakeError, match="16 bytes"):
             parser.feed(bad)
 
     def test_header_without_colon_rejected(self):
         parser = HandshakeRequestParser()
-        with pytest.raises(WebSocketHandshakeError, match="missing colon"):
+        with raises(WebSocketHandshakeError, match="missing colon"):
             parser.feed(b"GET / HTTP/1.1\r\nNoColonHere\r\n\r\n")
 
     def test_empty_header_name_rejected(self):
         parser = HandshakeRequestParser()
-        with pytest.raises(WebSocketHandshakeError, match="empty header name"):
+        with raises(WebSocketHandshakeError, match="empty header name"):
             parser.feed(b"GET / HTTP/1.1\r\n: value\r\n\r\n")
 
     def test_oversize_buffer_rejected(self):
         parser = HandshakeRequestParser(max_header_bytes=20)
-        with pytest.raises(WebSocketHandshakeError, match="max_header_bytes"):
+        with raises(WebSocketHandshakeError, match="max_header_bytes"):
             parser.feed(b"GET / HTTP/1.1\r\nX-Long: " + b"a" * 100)
 
     def test_feed_after_done_is_noop(self):
@@ -732,7 +711,7 @@ class TestHandshakeRequestParser:
 
     def test_feed_after_error_is_noop(self):
         parser = HandshakeRequestParser()
-        with pytest.raises(WebSocketHandshakeError):
+        with raises(WebSocketHandshakeError):
             parser.feed(b"POST / HTTP/1.1\r\n\r\n")
         parser.feed(b"more")
         assert parser.state == HandshakeParseState.ERROR
@@ -743,7 +722,7 @@ class TestHandshakeRequestParser:
             b"Connection: keep-alive\r\n",
         )
         parser = HandshakeRequestParser()
-        with pytest.raises(WebSocketHandshakeError, match="Connection: Upgrade"):
+        with raises(WebSocketHandshakeError, match="Connection: Upgrade"):
             parser.feed(bad)
 
     def test_headers_accessor_exposes_parsed_headers(self):
@@ -880,47 +859,47 @@ class TestFrameParserErrors:
     def test_rsv_bits_set_raises(self):
         # First byte 0xc1 has RSV1 set with FIN+TEXT.
         parser = FrameParser()
-        with pytest.raises(WebSocketProtocolError, match="RSV"):
+        with raises(WebSocketProtocolError, match="RSV"):
             parser.feed(b"\xc1\x00")
 
     def test_reserved_data_opcode_raises(self):
         # Opcode 0x3 is reserved.
         parser = FrameParser()
-        with pytest.raises(WebSocketProtocolError, match="reserved opcode"):
+        with raises(WebSocketProtocolError, match="reserved opcode"):
             parser.feed(b"\x83\x00")
 
     def test_reserved_control_opcode_raises(self):
         # Opcode 0xb is reserved control-space.
         parser = FrameParser()
-        with pytest.raises(WebSocketProtocolError, match="reserved opcode"):
+        with raises(WebSocketProtocolError, match="reserved opcode"):
             parser.feed(b"\x8b\x00")
 
     def test_control_frame_with_fin_zero_raises(self):
         # PING (0x9) with FIN=0 is a protocol violation.
         parser = FrameParser()
-        with pytest.raises(WebSocketProtocolError, match="must be FIN=1"):
+        with raises(WebSocketProtocolError, match="must be FIN=1"):
             parser.feed(b"\x09\x00")
 
     def test_control_frame_payload_over_125_raises(self):
         # PING with 126-byte payload — uses the 16-bit length form which
         # itself is illegal for control frames.
         parser = FrameParser()
-        with pytest.raises(WebSocketProtocolError, match="125"):
+        with raises(WebSocketProtocolError, match="125"):
             parser.feed(b"\x89\x7e" + struct.pack("!H", 126))
 
     def test_payload_over_max_raises(self):
         parser = FrameParser(max_payload_bytes=100)
-        with pytest.raises(WebSocketProtocolError, match="max_payload_bytes"):
+        with raises(WebSocketProtocolError, match="max_payload_bytes"):
             parser.feed(b"\x82\x7e" + struct.pack("!H", 500))
 
     def test_payload_over_max_via_64bit_length_raises(self):
         parser = FrameParser(max_payload_bytes=100)
-        with pytest.raises(WebSocketProtocolError, match="max_payload_bytes"):
+        with raises(WebSocketProtocolError, match="max_payload_bytes"):
             parser.feed(b"\x82\x7f" + struct.pack("!Q", 1 << 40))
 
     def test_feed_after_error_returns_zero_consumed(self):
         parser = FrameParser()
-        with pytest.raises(WebSocketProtocolError):
+        with raises(WebSocketProtocolError):
             parser.feed(b"\xc1\x00")
         consumed = parser.feed(b"more")
         assert consumed == 0
@@ -935,7 +914,7 @@ class TestFrameParserErrors:
 
     def test_error_accessor_exposes_failure_reason(self):
         parser = FrameParser()
-        with pytest.raises(WebSocketProtocolError):
+        with raises(WebSocketProtocolError):
             parser.feed(b"\xc1\x00")  # RSV bit set
         assert parser.state == FrameParseState.ERROR
         assert "RSV" in parser.error
@@ -982,11 +961,11 @@ class TestEncodeFrame:
         assert encoded[0] == OPCODE_TEXT  # high bit cleared
 
     def test_control_frame_oversize_raises(self):
-        with pytest.raises(WebSocketProtocolError, match="125"):
+        with raises(WebSocketProtocolError, match="125"):
             encode_frame(OPCODE_PING, b"X" * 126)
 
     def test_invalid_mask_length_raises(self):
-        with pytest.raises(WebSocketProtocolError, match="mask"):
+        with raises(WebSocketProtocolError, match="mask"):
             encode_frame(OPCODE_TEXT, b"hi", mask=b"abc")
 
     def test_empty_payload_unmasked(self):
@@ -1016,7 +995,7 @@ class TestEncodeClosePayload:
         assert encode_close_payload(None) == b""
 
     def test_reason_without_code_raises(self):
-        with pytest.raises(WebSocketProtocolError, match="without a code"):
+        with raises(WebSocketProtocolError, match="without a code"):
             encode_close_payload(None, "bye")
 
     def test_normal_close_with_reason(self):
@@ -1025,11 +1004,11 @@ class TestEncodeClosePayload:
         assert encoded[2:] == b"bye"
 
     def test_reserved_code_rejected(self):
-        with pytest.raises(WebSocketProtocolError, match="reserved"):
+        with raises(WebSocketProtocolError, match="reserved"):
             encode_close_payload(CLOSE_ABNORMAL, "")
 
     def test_oversize_reason_rejected(self):
-        with pytest.raises(WebSocketProtocolError, match="125"):
+        with raises(WebSocketProtocolError, match="125"):
             encode_close_payload(CLOSE_NORMAL, "X" * 200)
 
 
@@ -1040,7 +1019,7 @@ class TestParseClosePayload:
         assert parse_close_payload(b"") == (None, "")
 
     def test_one_byte_payload_rejected(self):
-        with pytest.raises(WebSocketProtocolError, match="1 byte"):
+        with raises(WebSocketProtocolError, match="1 byte"):
             parse_close_payload(b"\x03")
 
     def test_code_and_reason(self):
@@ -1053,12 +1032,12 @@ class TestParseClosePayload:
 
     def test_reserved_code_rejected(self):
         body = struct.pack("!H", CLOSE_ABNORMAL)
-        with pytest.raises(WebSocketProtocolError, match="reserved"):
+        with raises(WebSocketProtocolError, match="reserved"):
             parse_close_payload(body)
 
     def test_invalid_utf8_reason_rejected(self):
         body = struct.pack("!H", CLOSE_NORMAL) + b"\xff\xfe"
-        with pytest.raises(WebSocketProtocolError, match="UTF-8"):
+        with raises(WebSocketProtocolError, match="UTF-8"):
             parse_close_payload(body)
 
 
@@ -1078,7 +1057,7 @@ class TestValidateTextPayload:
         assert validate_text_payload(b"\xe2\x98\x83") == "☃"
 
     def test_invalid_utf8_raises(self):
-        with pytest.raises(WebSocketProtocolError, match="UTF-8"):
+        with raises(WebSocketProtocolError, match="UTF-8"):
             validate_text_payload(b"\xff\xfe")
 
 

@@ -16,7 +16,7 @@ slice 4).  Exercises:
 
 import struct
 
-import pytest
+from chumicro_test_harness.assertions import raises
 from chumicro_websockets import (
     CLOSE_BAD_DATA,
     CLOSE_GOING_AWAY,
@@ -374,11 +374,11 @@ class TestSendReceive:
             ticks_diff_func=clock.diff,
             on_connection_callback=lambda _c: None,
         )
-        with pytest.raises(WebSocketStateError, match="OPEN"):
+        with raises(WebSocketStateError, match="OPEN"):
             connection.send_text("hi")
-        with pytest.raises(WebSocketStateError, match="OPEN"):
+        with raises(WebSocketStateError, match="OPEN"):
             connection.send_binary(b"hi")
-        with pytest.raises(WebSocketStateError, match="OPEN"):
+        with raises(WebSocketStateError, match="OPEN"):
             connection.send_ping()
 
     def test_send_binary_rejects_non_bytes(self):
@@ -387,7 +387,7 @@ class TestSendReceive:
             on_connection=lambda connection: observed.append(connection),
         )
         _drive_server_handshake(server, listener, clock)
-        with pytest.raises(TypeError):
+        with raises(TypeError):
             observed[0].send_binary(["not", "bytes"])
 
     def test_outbound_text_is_unmasked(self):
@@ -427,7 +427,7 @@ class TestSendReceive:
         _drive_server_handshake(server, listener, clock)
         observed[0].send_text("a")
         observed[0].send_text("b")
-        with pytest.raises(WebSocketBackpressureError):
+        with raises(WebSocketBackpressureError):
             observed[0].send_text("c")
 
     def test_invalid_utf8_text_closes(self):
@@ -592,7 +592,7 @@ class TestCloseHandshake:
         _drive_server_handshake(server, listener, clock)
         connection = observed[0]
         connection.close()
-        with pytest.raises(WebSocketStateError):
+        with raises(WebSocketStateError):
             connection.close()
 
     def test_close_timeout_forces_finalize(self):
@@ -779,7 +779,7 @@ class TestConnectionEdges:
         listener.queue_accept(peer)
         peer.feed_inbound(_client_handshake_bytes())
         server.handle(clock.now())  # accepts + reads request + transitions to SENDING_RESPONSE
-        peer.raise_on_send = BlockingIOError(11, "would block")
+        peer.raise_on_send = OSError(11, "would block")
         server.handle(clock.now())  # send EAGAIN — state unchanged
         connection = server.connections[0]
         assert connection.state == WebSocketState.CONNECTING
@@ -829,7 +829,7 @@ class TestConnectionEdges:
             on_connection=lambda connection: observed.append(connection),
         )
         _drive_server_handshake(server, listener, clock)
-        with pytest.raises(WebSocketProtocolError, match="125"):
+        with raises(WebSocketProtocolError, match="125"):
             observed[0].send_ping(b"X" * 200)
 
     def test_connection_check_returns_false_when_closed(self):

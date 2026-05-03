@@ -9,7 +9,7 @@ exercised without a real TCP/TLS stack.
 
 import struct
 
-import pytest
+from chumicro_test_harness.assertions import raises
 from chumicro_websockets import (
     CLOSE_BAD_DATA,
     CLOSE_GOING_AWAY,
@@ -180,13 +180,13 @@ class TestConnect:
 
     def test_url_must_be_ws_or_wss(self):
         client, _socket, _clock, _ = _make_client()
-        with pytest.raises(WebSocketURLError):
+        with raises(WebSocketURLError):
             client.connect("http://example.com/")
 
     def test_double_connect_raises(self):
         client, _socket, _clock, _ = _make_client()
         client.connect("ws://example.com/")
-        with pytest.raises(WebSocketStateError, match="only be called once"):
+        with raises(WebSocketStateError, match="only be called once"):
             client.connect("ws://other.example.com/")
 
     def test_state_is_connecting_after_connect(self):
@@ -231,7 +231,7 @@ class TestHandshakeSend:
 
     def test_eagain_during_send_keeps_state(self):
         socket = FakeSocket()
-        socket.raise_on_send = BlockingIOError(11, "would block")
+        socket.raise_on_send = OSError(11, "would block")
         client, _socket, clock, _ = _make_client(socket=socket)
         client.connect("ws://example.com/")
         client.handle(clock.now())
@@ -374,26 +374,26 @@ class TestSendOpenStateGate:
     def test_send_text_pre_open_raises(self):
         client, _socket, _clock, _ = _make_client()
         client.connect("ws://example.com/")
-        with pytest.raises(WebSocketStateError, match="OPEN"):
+        with raises(WebSocketStateError, match="OPEN"):
             client.send_text("hi")
 
     def test_send_binary_pre_open_raises(self):
         client, _socket, _clock, _ = _make_client()
         client.connect("ws://example.com/")
-        with pytest.raises(WebSocketStateError, match="OPEN"):
+        with raises(WebSocketStateError, match="OPEN"):
             client.send_binary(b"hi")
 
     def test_send_ping_pre_open_raises(self):
         client, _socket, _clock, _ = _make_client()
         client.connect("ws://example.com/")
-        with pytest.raises(WebSocketStateError, match="OPEN"):
+        with raises(WebSocketStateError, match="OPEN"):
             client.send_ping()
 
     def test_send_binary_rejects_non_bytes(self):
         client, socket, clock, _ = _make_client()
         client.connect("ws://example.com/")
         _drive_handshake(client, socket, clock)
-        with pytest.raises(TypeError, match="send_binary"):
+        with raises(TypeError, match="send_binary"):
             client.send_binary(["not", "bytes"])
 
     def test_send_binary_accepts_bytearray(self):
@@ -442,7 +442,7 @@ class TestSendQueuesAndDrains:
         _drive_handshake(client, socket, clock)
         client.send_text("a")
         client.send_text("b")
-        with pytest.raises(WebSocketBackpressureError, match="TX queue is full"):
+        with raises(WebSocketBackpressureError, match="TX queue is full"):
             client.send_text("c")
 
     def test_partial_send_resumes_next_tick(self):
@@ -650,7 +650,7 @@ class TestControlFrames:
         client, socket, clock, _ = _make_client()
         client.connect("ws://example.com/")
         _drive_handshake(client, socket, clock)
-        with pytest.raises(WebSocketProtocolError, match="125"):
+        with raises(WebSocketProtocolError, match="125"):
             client.send_ping(b"X" * 200)
 
 
@@ -726,7 +726,7 @@ class TestCloseHandshake:
         client.handle(clock.now())
         client.handle(clock.now())
         assert client.state == WebSocketState.CLOSED
-        with pytest.raises(WebSocketStateError):
+        with raises(WebSocketStateError):
             client.close()
 
     def test_close_timeout_forces_closed(self):
@@ -954,7 +954,7 @@ class TestClientEdges:
         client.connect("ws://example.com/")
         _drive_handshake(client, socket, clock)
         client.send_text("hi")
-        socket.raise_on_send = BlockingIOError(11, "would block")
+        socket.raise_on_send = OSError(11, "would block")
         client.handle(clock.now())
         assert client.state == WebSocketState.OPEN
         # Frame still queued.
