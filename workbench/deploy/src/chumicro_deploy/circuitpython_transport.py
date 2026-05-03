@@ -772,23 +772,31 @@ class CircuitpythonTransport:
         )
         return Path(corrected)
 
-    def _resolve_circuitpy_drive(self) -> Path:
+    def _resolve_circuitpy_drive(
+        self, *, probe_writable: bool = False,
+    ) -> Path:
         """Return the CIRCUITPY drive path, raising if it isn't usable.
 
         Uses the configured ``circuitpy_drive_path`` when set, otherwise
         falls back to :func:`find_circuitpy_drive`.  Raises when no drive
-        can be found, the resolved path is not a directory, or the mount
-        is stale/unwritable (e.g. the board was ejected from Finder and
-        ``/Volumes/CIRCUITPY`` remains as an inaccessible placeholder —
-        ``is_dir()`` returns True but file I/O fails with EACCES).
-        The probe writes a tiny marker, so we catch the error up-front
-        rather than halfway through the rsync / write-bytes pass.
+        can be found or the resolved path is not a directory.
 
-        The probe-error message distinguishes drive-state failures
-        (full / read-only / I/O error) from "found-but-stale-mount"
-        EACCES so the recovery classifier and the user both see
-        accurate text.  A disk-full drive is *found* — it just can't
-        accept the write.
+        *probe_writable* (default ``False``) — when ``True``, additionally
+        write+unlink a ``.chu-probe`` marker to confirm the mount is
+        actually writable.  Only the wipe-and-wait path
+        (:meth:`_wait_for_writable_drive_after_wipe`) uses this — it
+        polls until ``storage.erase_filesystem()`` finishes and the
+        FAT remounts cleanly, which requires actually testing
+        writability.
+
+        Normal staging / deploy paths leave it ``False``: the rsync
+        that follows is itself a write probe, and skipping the
+        ``.chu-probe`` removes one host-side drive write before rsync
+        starts (each write before rsync is a wedge-risk vector — see
+        plans/learnings.md "rsync to CIRCUITPY can hang...").  When
+        the drive is genuinely unwritable, the rsync subprocess
+        surfaces the OS error in its stderr and ``flash_drive.rsync``
+        wraps it as :class:`FlashDriveError`.
         """
         drive_path_str = self.circuitpy_drive_path or find_circuitpy_drive()
         if not drive_path_str:
@@ -801,14 +809,15 @@ class CircuitpythonTransport:
             raise CircuitpythonTransportError(
                 f"CIRCUITPY drive not found: {drive_path}"
             )
-        probe = drive_path / ".chu-probe"
-        try:
-            probe.write_bytes(b"")
-            probe.unlink()
-        except OSError as error:
-            raise CircuitpythonTransportError(
-                _format_probe_error(drive_path, error),
-            ) from error
+        if probe_writable:
+            probe = drive_path / ".chu-probe"
+            try:
+                probe.write_bytes(b"")
+                probe.unlink()
+            except OSError as error:
+                raise CircuitpythonTransportError(
+                    _format_probe_error(drive_path, error),
+                ) from error
         return drive_path
 
     def _build_local_staging_tree(
@@ -933,17 +942,17 @@ class CircuitpythonTransport:
         drive_path = self._resolve_circuitpy_drive()
         drive_path = self._verify_drive_for_board(drive_path)
 
-        # macOS hygiene: disable Spotlight + plant persistent skip
-        # sentinels + remove noise directories, before the rsync runs.
-        flash_drive.disable_spotlight_indexing(drive_path)
-        flash_drive.neuter_macos_metadata(drive_path)
-
         with tempfile.TemporaryDirectory() as staging_directory:
             staging_path = Path(staging_directory)
             self._build_local_staging_tree(
                 staging_path, source_dirs, test_files, harness_source,
                 extra_modules=extra_modules,
             )
+            # macOS skip-sentinels go into the staging tree so they
+            # ride along in the rsync — not as separate on-drive
+            # writes that would compound the wedge risk
+            # (`plans/learnings.md` "rsync to CIRCUITPY can hang...").
+            flash_drive.plant_macos_sentinels_in_staging(staging_path)
             try:
                 flash_drive.rsync(
                     staging_path,
@@ -958,6 +967,10 @@ class CircuitpythonTransport:
             except flash_drive.FlashDriveError as error:
                 raise CircuitpythonTransportError(str(error)) from error
 
+        # Post-rsync cleanup of legacy noise dirs — only fires on
+        # already-contaminated drives; idempotent once the sentinels
+        # have prevented re-creation.
+        flash_drive.cleanup_macos_noise_dirs_post_rsync(drive_path)
         # Remove ._ resource fork files that macOS may have created
         # on the FAT32 volume despite rsync's --exclude=._* flag.
         flash_drive.clean_dot_files(drive_path)
@@ -1241,23 +1254,16 @@ class CircuitpythonTransport:
             )
 
         # Order is load-bearing.  Enter raw REPL FIRST + disable
-        # autoreload BEFORE any host-side drive write —
-        # ``_resolve_circuitpy_drive`` writes a ``.chu-probe`` marker
-        # and with autoreload ON the board would soft-reboot on that
-        # write, re-enumerate USB-CDC, and the subsequent rsync may
-        # land in uninterruptible kernel I/O wait.  See
+        # autoreload BEFORE any host-side drive write — see
         # `plans/learnings.md` "rsync to CIRCUITPY can hang...".
+        # Drive prep is now ENTIRELY part of the rsync staging tree
+        # (sentinels are planted into the local staging dir alongside
+        # the deploy payload), so rsync ships everything in one pass
+        # rather than triggering N separate on-drive writes.
         self._enter_raw_repl()
         self._disable_autoreload_before_drive_writes()
         drive_path = self._resolve_circuitpy_drive()
         drive_path = self._verify_drive_for_board(drive_path)
-        # macOS hygiene before the writes: disable Spotlight, plant
-        # persistent skip sentinels, remove noise directories.  Without
-        # this, macOS creates ._foo AppleDouble resource forks for every
-        # file written through a FAT mount — the board's os.listdir
-        # sees ~2x the file count, doubling apparent on-disk footprint.
-        flash_drive.disable_spotlight_indexing(drive_path)
-        flash_drive.neuter_macos_metadata(drive_path)
 
         # Build a local staging tree mirroring the desired drive
         # layout, then rsync it onto the drive.  Single primitive both
@@ -1279,6 +1285,7 @@ class CircuitpythonTransport:
                     staging_destination.write_bytes(files[device_path])
                     if on_file_staged is not None:
                         on_file_staged(device_path)
+                flash_drive.plant_macos_sentinels_in_staging(staging_path)
                 flash_drive.strip_extended_attributes(staging_path)
                 flash_drive.rsync(
                     staging_path,
@@ -1291,15 +1298,18 @@ class CircuitpythonTransport:
             ) from rsync_error
         except OSError as error:
             # The host-side staging-tree build can still hit OSError
-            # (out of /tmp space, etc.); the probe-pass guarantee
-            # covered the drive itself.  Re-raise with the same
-            # wrapper the probe path uses so the classifier routes
+            # (out of /tmp space, etc.).  Re-raise with the
+            # ``_format_probe_error`` wrapper so the classifier routes
             # disk-full / RO to FLASH_COPY_FAILED instead of
             # CIRCUITPY_DRIVE_MISSING.
             raise CircuitpythonTransportError(
                 _format_probe_error(drive_path, error),
             ) from error
 
+        # Post-rsync cleanup of legacy noise dirs — only fires on
+        # already-contaminated drives; idempotent once the sentinels
+        # have prevented re-creation.
+        flash_drive.cleanup_macos_noise_dirs_post_rsync(drive_path)
         # Strip macOS AppleDouble (._foo) companions before flushing.
         flash_drive.clean_dot_files(drive_path)
         flash_drive.flush_volume(drive_path, sleep=self._time.sleep)
@@ -1475,7 +1485,11 @@ class CircuitpythonTransport:
         last_error: Exception | None = None
         while self._time.monotonic() < deadline:
             try:
-                self._resolve_circuitpy_drive()
+                # probe_writable=True: this wait loop's whole purpose
+                # is detecting when the drive becomes writable again
+                # post-erase_filesystem.  ``is_dir()`` would lie during
+                # the FAT-recreation window.
+                self._resolve_circuitpy_drive(probe_writable=True)
                 return
             except CircuitpythonTransportError as resolve_error:
                 last_error = resolve_error

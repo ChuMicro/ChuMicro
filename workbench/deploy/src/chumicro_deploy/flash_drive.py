@@ -15,8 +15,15 @@ Contents:
   rsync to prevent ``._`` resource fork files from reaching FAT32.
 - :func:`clean_dot_files` — macOS-only: ``dot_clean`` to merge or
   remove leftover ``._`` files on the drive after rsync.
-- :func:`disable_spotlight_indexing` — macOS-only: turn off Spotlight
-  indexing on the volume to prevent index metadata slowing writes.
+- :func:`plant_macos_sentinels_in_staging` — macOS-only: write the
+  three skip-sentinels into the local rsync staging tree so they
+  ride along in the single rsync pass instead of being separate
+  on-drive writes (which compounded the wedge risk in
+  `plans/learnings.md`).
+- :func:`cleanup_macos_noise_dirs_post_rsync` — macOS-only:
+  best-effort ``rmtree`` of legacy noise dirs (``.Spotlight-V100``,
+  ``.TemporaryItems``, ``.DocumentRevisions-V100``) on already-
+  contaminated drives.  Runs *after* rsync; idempotent.
 - :func:`flush_volume` — ``sync`` + settle-delay so FAT32 media is
   consistent before the device reads new content.
 
@@ -167,8 +174,9 @@ def merge_packages(
 
 #: Excludes every CP rsync uses regardless of caller — build artifacts,
 #: macOS file-level detritus, and the macOS volume-level noise dirs +
-#: skip-sentinels :func:`neuter_macos_metadata` plants.  See the
-#: docstring on each block in :func:`rsync` for the rationale.
+#: skip-sentinels :func:`plant_macos_sentinels_in_staging` ships in
+#: source.  See the docstring on each block in :func:`rsync` for the
+#: rationale.
 _BASE_RSYNC_EXCLUDES: tuple[str, ...] = (
     "__pycache__",
     "*.pyc",
@@ -351,39 +359,6 @@ def clean_dot_files(drive_path: Path) -> None:
         )
 
 
-def disable_spotlight_indexing(drive_path: Path) -> None:
-    """Disable Spotlight indexing on a mounted volume.
-
-    Spotlight indexing creates ``.Spotlight-V100`` metadata and slows
-    down FAT32 writes.  ``mdutil -i off`` is idempotent but resets on
-    remount, so it is called each time the drive is used.
-
-    May require elevated privileges on some macOS versions; if the
-    command fails, indexing continues and no error is raised.
-
-    No-op on non-macOS platforms.
-
-    Args:
-        drive_path: Mount point of the volume.
-    """
-    if _sys_module.platform != "darwin":
-        return  # pragma: no cover — tests run on macOS
-    try:
-        subprocess.run(
-            ["mdutil", "-i", "off", str(drive_path)],
-            capture_output=True,
-            check=False,
-            timeout=METADATA_HELPER_TIMEOUT_SECONDS,
-        )
-    except FileNotFoundError:
-        print("WARNING: mdutil not found — skipping Spotlight indexing disable")
-    except subprocess.TimeoutExpired:  # pragma: no cover — defensive
-        print(
-            "WARNING: mdutil -i off hung past "
-            f"{METADATA_HELPER_TIMEOUT_SECONDS:.0f}s — continuing without it"
-        )
-
-
 #: Sentinel files / directories macOS recognises to skip a volume.  Planted
 #: at the drive root so subsequent remounts inherit the suppression — the
 #: equivalent of ``mdutil -i off`` (which resets on remount) but persistent.
@@ -419,55 +394,72 @@ _MACOS_NOISE_DIRS = (
 )
 
 
-def neuter_macos_metadata(drive_path: Path) -> None:
-    """Suppress macOS auto-created metadata files / dirs on a FAT volume.
+def plant_macos_sentinels_in_staging(staging_path: Path) -> None:
+    """Plant macOS skip-sentinels into a local staging directory.
 
-    Belt-and-suspenders prevention paired with :func:`disable_spotlight_indexing`
-    and :func:`clean_dot_files`.  Plants three sentinel files macOS honours
-    persistently across remounts, then removes any noise directories that
-    have already accumulated:
+    The three sentinels live at the staging-tree root so rsync ships
+    them onto the CIRCUITPY drive in the same pass as the actual
+    payload — no host-side write to the live drive before rsync starts
+    (every such write is a wedge-risk vector documented in
+    `plans/learnings.md` "rsync to CIRCUITPY can hang in
+    uninterruptible kernel I/O").
 
-    * ``.metadata_never_index`` — Spotlight skips this volume entirely.
+    The sentinels:
+
+    * ``.metadata_never_index`` — Spotlight skips this volume.  This
+      replaces the old ``mdutil -i off`` invocation; the file form
+      survives remount whereas the mdutil state does not.
     * ``.fseventsd/no_log`` — FSEvents daemon skips logging.
-    * ``.Trashes`` (as a *file*) — kernel cannot ``mkdir`` it into the
-      preemptively-created ``.Trashes/<UID>/`` directory macOS would
-      otherwise plant on every FAT mount and lock down with
-      kernel-level read-only perms (the EPERM-on-``unlinkat`` that
-      breaks ``rsync --delete``).
-    * removes ``.Spotlight-V100`` / ``.TemporaryItems`` /
-      ``.DocumentRevisions-V100`` if present.
+    * ``.Trashes`` planted as a *file* — kernel cannot ``mkdir`` over
+      a non-directory entry, so macOS can't create the
+      ``.Trashes/<UID>/`` it would otherwise lock read-only at the
+      kernel level (the EPERM-on-``unlinkat`` that breaks
+      ``rsync --delete``).
 
-    Sentinels survive remount (unlike ``mdutil -i off``), so a
-    once-deployed CIRCUITPY drive carries the suppression forward
-    even if the host changes Spotlight policy mid-session.  Cluster
-    cost on FAT12 (Pi Pico W: ~870 KB / 4 KB clusters): three clusters
-    for the sentinels, dwarfed by the .Spotlight-V100 directory it
-    prevents (often hundreds of KB on a busy host).
+    Cluster cost on FAT12 (Pi Pico W: ~870 KB / 4 KB clusters): three
+    clusters total, dwarfed by the noise dirs they suppress (often
+    hundreds of KB).
+
+    No-op on non-macOS platforms — the sentinels target macOS-specific
+    daemons that Linux + Windows hosts don't run.
+
+    Args:
+        staging_path: Local staging-tree root.  rsync will copy
+            everything under this into the CIRCUITPY drive root.
+    """
+    if _sys_module.platform != "darwin":
+        return  # pragma: no cover — tests run on macOS
+    for relative in _MACOS_SKIP_SENTINELS:
+        target = staging_path / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.touch()
+
+
+def cleanup_macos_noise_dirs_post_rsync(drive_path: Path) -> None:
+    """Remove already-accumulated macOS noise directories from the drive.
+
+    Called *after* rsync (not before) so all the wedge-risky on-drive
+    writes happen inside the single rsync pass.  Idempotent: when the
+    sentinels from :func:`plant_macos_sentinels_in_staging` are in
+    place, macOS doesn't recreate these dirs, so subsequent runs hit
+    the missing-path branch and exit cleanly.
+
+    Targets the legacy-drive case: a CIRCUITPY drive that was used
+    on macOS before the sentinels landed will have ``.Spotlight-V100``,
+    ``.TemporaryItems``, ``.DocumentRevisions-V100`` directories
+    accumulated from previous mounts.  ``rsync --delete`` can't be
+    used because they're listed in ``_BASE_RSYNC_EXCLUDES`` (some of
+    their contents are macOS-locked on FAT volumes — the
+    EPERM-on-``unlinkat`` failure mode).  ``shutil.rmtree`` with
+    ``ignore_errors=True`` walks them best-effort.
 
     No-op on non-macOS platforms.
 
     Args:
-        drive_path: Mount point of the FAT volume.
+        drive_path: Mount point of the CIRCUITPY drive.
     """
     if _sys_module.platform != "darwin":
         return  # pragma: no cover — tests run on macOS
-
-    # Plant sentinels first; cheap and idempotent.
-    for relative in _MACOS_SKIP_SENTINELS:
-        target = drive_path / relative
-        try:
-            target.parent.mkdir(parents=True, exist_ok=True)
-            if not target.exists():
-                target.touch()
-        except OSError:
-            # Drive may be RO this tick (USB-MSC handoff race) — the
-            # caller's normal write path will surface a clearer error
-            # than this best-effort sentinel write.
-            return
-
-    # Remove already-accumulated noise directories.  shutil.rmtree
-    # ignores missing paths; ignore_errors keeps us going if macOS is
-    # holding a handle open mid-cleanup.
     for noise_relative in _MACOS_NOISE_DIRS:
         shutil.rmtree(drive_path / noise_relative, ignore_errors=True)
 

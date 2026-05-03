@@ -416,67 +416,39 @@ class TestMacOSHelpers:
         ):
             flash_drive.clean_dot_files(tmp_path)  # must not raise
 
-    def test_disable_spotlight_indexing_calls_mdutil(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """On macOS, disable_spotlight_indexing runs mdutil -i off."""
-        monkeypatch.setattr(
-            "chumicro_deploy.flash_drive._sys_module.platform",
-            "darwin",
-        )
-        captured: list[list[str]] = []
 
-        def fake_run(command, **kwargs):
-            captured.append(command)
-            return subprocess.CompletedProcess(args=command, returncode=0)
+class TestPlantMacosSentinelsInStaging:
+    """Tests for flash_drive.plant_macos_sentinels_in_staging.
 
-        with patch(
-            "chumicro_deploy.flash_drive.subprocess.run",
-            side_effect=fake_run,
-        ):
-            flash_drive.disable_spotlight_indexing(tmp_path)
-
-        assert ["mdutil", "-i", "off", str(tmp_path)] in captured
-
-    def test_disable_spotlight_indexing_tolerates_missing_mdutil(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """Missing mdutil binary does not raise."""
-        monkeypatch.setattr(
-            "chumicro_deploy.flash_drive._sys_module.platform",
-            "darwin",
-        )
-        with patch(
-            "chumicro_deploy.flash_drive.subprocess.run",
-            side_effect=FileNotFoundError("mdutil"),
-        ):
-            flash_drive.disable_spotlight_indexing(tmp_path)  # must not raise
-
-
-class TestNeuterMacosMetadata:
-    """Tests for flash_drive.neuter_macos_metadata."""
+    The new shape (post-wedge cleanup): sentinels go into a local
+    staging tree so rsync ships them in the same pass as the deploy
+    payload — no host-side write to the live CIRCUITPY drive before
+    rsync starts.  See `plans/learnings.md` "rsync to CIRCUITPY can
+    hang in uninterruptible kernel I/O".
+    """
 
     def test_no_op_off_darwin(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Linux / Windows runs are a no-op."""
+        """Linux / Windows runs are a no-op — the sentinels target
+        macOS-specific daemons.
+        """
         monkeypatch.setattr(
             "chumicro_deploy.flash_drive._sys_module.platform",
             "linux",
         )
-        flash_drive.neuter_macos_metadata(tmp_path)
-        # Nothing planted, nothing removed.
+        flash_drive.plant_macos_sentinels_in_staging(tmp_path)
         assert list(tmp_path.iterdir()) == []
 
-    def test_plants_skip_sentinels_on_darwin(
+    def test_plants_three_sentinels_on_darwin(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Spotlight + FSEvents + Trash skip sentinels are planted at the drive root."""
+        """Spotlight + FSEvents + Trash skip sentinels land in the staging root."""
         monkeypatch.setattr(
             "chumicro_deploy.flash_drive._sys_module.platform",
             "darwin",
         )
-        flash_drive.neuter_macos_metadata(tmp_path)
+        flash_drive.plant_macos_sentinels_in_staging(tmp_path)
 
         assert (tmp_path / ".metadata_never_index").is_file()
         assert (tmp_path / ".fseventsd" / "no_log").is_file()
@@ -485,31 +457,32 @@ class TestNeuterMacosMetadata:
         # otherwise locks down with read-only perms.
         assert (tmp_path / ".Trashes").is_file()
 
-    def test_idempotent(
+
+class TestCleanupMacosNoiseDirsPostRsync:
+    """Tests for flash_drive.cleanup_macos_noise_dirs_post_rsync."""
+
+    def test_no_op_off_darwin(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Running twice does not re-create or error on existing sentinels."""
         monkeypatch.setattr(
             "chumicro_deploy.flash_drive._sys_module.platform",
-            "darwin",
+            "linux",
         )
-        flash_drive.neuter_macos_metadata(tmp_path)
-        # Mutate the sentinel to confirm a re-run doesn't clobber.
-        (tmp_path / ".metadata_never_index").write_text("intact\n")
-        flash_drive.neuter_macos_metadata(tmp_path)
-        assert (tmp_path / ".metadata_never_index").read_text() == "intact\n"
+        # Even if a noise dir exists (it shouldn't on Linux), no-op.
+        (tmp_path / ".Spotlight-V100").mkdir()
+        flash_drive.cleanup_macos_noise_dirs_post_rsync(tmp_path)
+        assert (tmp_path / ".Spotlight-V100").exists()
 
-    def test_removes_existing_noise_directories(
+    def test_removes_legacy_noise_directories(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """``.Spotlight-V100`` / ``.TemporaryItems`` / ``.DocumentRevisions-V100`` get removed.
-
-        ``.Trashes`` is intentionally NOT in this list — once macOS has
-        created ``.Trashes/<UID>/`` the kernel sets it read-only and
-        even ``shutil.rmtree`` cannot remove it (verified live: rsync
-        ``--delete`` fails with ``unlinkat: Operation not permitted``).
-        Prevention via the file sentinel is the only working strategy
-        for that one; see ``test_plants_skip_sentinels_on_darwin``.
+        """``.Spotlight-V100`` / ``.TemporaryItems`` / ``.DocumentRevisions-V100``
+        get rmtree'd.  ``.Trashes`` is intentionally NOT in the rmtree
+        set — once macOS created ``.Trashes/<UID>/`` the kernel sets it
+        read-only and even ``shutil.rmtree`` cannot remove it.
+        Prevention via the file sentinel
+        (:func:`plant_macos_sentinels_in_staging`) is the only working
+        strategy for that one.
         """
         monkeypatch.setattr(
             "chumicro_deploy.flash_drive._sys_module.platform",
@@ -522,22 +495,22 @@ class TestNeuterMacosMetadata:
             noise_dir.mkdir()
             (noise_dir / "data").write_bytes(b"junk")
 
-        flash_drive.neuter_macos_metadata(tmp_path)
+        flash_drive.cleanup_macos_noise_dirs_post_rsync(tmp_path)
 
         assert not (tmp_path / ".Spotlight-V100").exists()
         assert not (tmp_path / ".TemporaryItems").exists()
         assert not (tmp_path / ".DocumentRevisions-V100").exists()
 
-    def test_silent_on_readonly_drive(
+    def test_idempotent_when_dirs_absent(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Sentinel write failure (RO drive) is swallowed — caller surfaces it."""
+        """Common case (sentinels already prevent re-creation): no-op."""
         monkeypatch.setattr(
             "chumicro_deploy.flash_drive._sys_module.platform",
             "darwin",
         )
-        with patch.object(Path, "touch", side_effect=OSError("read-only fs")):
-            flash_drive.neuter_macos_metadata(tmp_path)  # must not raise
+        flash_drive.cleanup_macos_noise_dirs_post_rsync(tmp_path)  # must not raise
+        assert list(tmp_path.iterdir()) == []
 
 
 class TestFlushVolume:
@@ -662,29 +635,6 @@ class TestMetadataHelpersHaveTimeouts:
             side_effect=fake_run,
         ):
             flash_drive.clean_dot_files(tmp_path)
-        assert (
-            captured_kwargs.get("timeout")
-            == flash_drive.METADATA_HELPER_TIMEOUT_SECONDS
-        )
-
-    def test_disable_spotlight_indexing_passes_timeout(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        monkeypatch.setattr(
-            "chumicro_deploy.flash_drive._sys_module.platform",
-            "darwin",
-        )
-        captured_kwargs: dict[str, object] = {}
-
-        def fake_run(_command, **kwargs):
-            captured_kwargs.update(kwargs)
-            return subprocess.CompletedProcess(args=_command, returncode=0)
-
-        with patch(
-            "chumicro_deploy.flash_drive.subprocess.run",
-            side_effect=fake_run,
-        ):
-            flash_drive.disable_spotlight_indexing(tmp_path)
         assert (
             captured_kwargs.get("timeout")
             == flash_drive.METADATA_HELPER_TIMEOUT_SECONDS

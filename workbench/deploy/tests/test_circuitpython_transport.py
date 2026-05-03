@@ -947,21 +947,25 @@ class TestFlashMode:
 
         transport.disconnect()
 
-    def test_flash_stage_raises_when_drive_is_unwritable(
-        self, tmp_path: Path,
+    def test_flash_stage_raises_when_rsync_fails_writability(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """stage() should catch a stale/unwritable mount via the probe.
+        """stage() surfaces a writability failure via the rsync error path.
 
-        On macOS, ejecting CIRCUITPY from Finder can leave
-        ``/Volumes/CIRCUITPY`` as a directory that ``is_dir()`` accepts
-        but that raises ``PermissionError`` on write.  Simulated here
-        by chmod-ing tmp_path to read-only so the probe's
-        ``write_bytes()`` fails.  The wrapped error preserves the
-        "CIRCUITPY drive not found" substring so
-        :func:`classify_deploy_failure` routes it to
-        :attr:`DeployFailureKind.CIRCUITPY_DRIVE_MISSING`.
+        Pre-wedge-cleanup, ``_resolve_circuitpy_drive`` wrote a
+        ``.chu-probe`` marker to detect stale/unwritable mounts up
+        front.  That extra on-drive write was a wedge-risk vector and
+        was dropped (`plans/learnings.md` "rsync to CIRCUITPY can
+        hang ..."); rsync's own write failure is now the writability
+        signal — its stderr surfaces the OS error and
+        ``flash_drive.rsync`` wraps it as :class:`FlashDriveError`.
+
+        Simulated by mocking ``subprocess.run`` to raise
+        ``CalledProcessError`` with a permission-denied stderr (the
+        signature of a stale Finder-eject mount).
         """
         import os
+        import subprocess as _subprocess
 
         drive = tmp_path / "CIRCUITPY"
         drive.mkdir()
@@ -981,12 +985,26 @@ class TestFlashMode:
         harness_dir = tmp_path / "harness"
         harness_dir.mkdir()
 
+        # Mock rsync to fail with permission denied; pass other
+        # subprocess calls (xattr, mdutil, dot_clean, sync) through
+        # cleanly so they don't masquerade as the failing call.
+        original_run = _subprocess.run
+
+        def fake_run(command, **kwargs):
+            if command and str(command[0]) == "rsync":
+                raise _subprocess.CalledProcessError(
+                    1, "rsync", stderr="rsync: permission denied",
+                )
+            return original_run(command, **kwargs)
+        monkeypatch.setattr(
+            "chumicro_deploy.flash_drive.subprocess.run", fake_run,
+        )
+
         original_mode = drive.stat().st_mode
-        os.chmod(drive, 0o500)
         try:
             with pytest.raises(
                 CircuitpythonTransportError,
-                match="CIRCUITPY drive not found or not writable",
+                match="rsync failed",
             ):
                 transport.stage([source_dir], [], harness_dir)
         finally:
@@ -1107,7 +1125,8 @@ class TestFlashMode:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Order regression: the autoreload-off REPL command MUST land on
-        the wire BEFORE the host writes anything to the CIRCUITPY drive.
+        the wire BEFORE rsync (or any other host-side write to the
+        CIRCUITPY drive) starts.
 
         With autoreload ON (the default), the board's filesystem
         watcher fires a soft-reboot on the first file change.  Each
@@ -1115,15 +1134,16 @@ class TestFlashMode:
         in rapid succession can put the kernel-side write into D-state
         — the wedged-rsync failure documented in plans/learnings.md.
 
-        The fix lives in :meth:`_disable_autoreload_before_drive_writes`,
-        called as the FIRST thing in ``_stage_to_flash`` (and
-        ``deploy_files``).  This test snapshots the order of:
+        Post-cleanup: there is now only ONE host-side drive write —
+        the rsync itself.  Drive prep (sentinel plants) goes into
+        the local staging tree; the ``.chu-probe`` marker write was
+        dropped from ``_resolve_circuitpy_drive`` in the default path.
+        This test snapshots the order of:
 
         1. Wire write of the autoreload command
-        2. Filesystem write of the ``.chu-probe`` marker
-        3. Filesystem write of the ``.metadata_never_index`` sentinel
+        2. Subprocess invocation of ``rsync``
 
-        and asserts (1) precedes (2) and (3).
+        and asserts (1) precedes (2).
         """
         drive_path = tmp_path / "CIRCUITPY"
         drive_path.mkdir()
@@ -1132,8 +1152,6 @@ class TestFlashMode:
         harness_dir = tmp_path / "harness"
         harness_dir.mkdir()
 
-        # Reusable timestamp to give every event a strictly-increasing
-        # ordinal — deterministic on CPython, no clock jitter to mock.
         events: list[tuple[int, str]] = []
 
         def event(label: str) -> None:
@@ -1146,8 +1164,8 @@ class TestFlashMode:
             ],
         )
 
-        # Wrap the FakeSerialPort.write to record when "autoreload"
-        # crosses the wire.
+        # Wrap FakeSerialPort.write to record when "autoreload" + "False"
+        # cross the wire (the autoreload-off command).
         original_write = port.write
 
         def recording_write(data: bytes) -> int:
@@ -1156,19 +1174,17 @@ class TestFlashMode:
             return original_write(data)
         port.write = recording_write  # type: ignore[assignment]
 
-        # Wrap Path.write_bytes (used by .chu-probe) and Path.touch
-        # (used by the macOS sentinel plants).  .chu-probe is the
-        # FIRST drive write in the sequence, so its ordinal alone is
-        # sufficient — if autoreload-off lands after .chu-probe, every
-        # subsequent drive op (including the sentinel plants and the
-        # rsync itself) is unprotected.
-        original_write_bytes = Path.write_bytes
+        # Wrap subprocess.run to record when rsync is invoked.  Other
+        # subprocess calls (xattr, dot_clean, sync) come AFTER rsync —
+        # tracking rsync alone is sufficient for the order assertion.
+        import subprocess as _subprocess
+        original_run = _subprocess.run
 
-        def recording_write_bytes(self_path, data):  # type: ignore[no-untyped-def]
-            if self_path.name == ".chu-probe":
-                event("fs: .chu-probe write")
-            return original_write_bytes(self_path, data)
-        monkeypatch.setattr(Path, "write_bytes", recording_write_bytes)
+        def recording_run(command, **kwargs):
+            if command and str(command[0]) == "rsync":
+                event("subprocess: rsync invoked")
+            return original_run(command, **kwargs)
+        monkeypatch.setattr(_subprocess, "run", recording_run)
 
         transport = self._make_flash_transport(port, str(drive_path))
         transport.connect()
@@ -1177,13 +1193,13 @@ class TestFlashMode:
 
         labels_in_order = [label for _ordinal, label in events]
         autoreload_index = labels_in_order.index("wire: autoreload off")
-        probe_index = labels_in_order.index("fs: .chu-probe write")
-        assert autoreload_index < probe_index, (
-            "regression: .chu-probe (the first drive write) happens "
-            f"BEFORE autoreload off; order was {labels_in_order}.  "
-            "The board's autoreload watcher will fire on the probe "
-            "write and re-enumerate USB-CDC, leaving the next "
-            "host-side write at risk of D-state."
+        rsync_index = labels_in_order.index("subprocess: rsync invoked")
+        assert autoreload_index < rsync_index, (
+            "regression: rsync runs BEFORE autoreload off; "
+            f"order was {labels_in_order}.  The board's autoreload "
+            "watcher will fire on the first rsync write and "
+            "re-enumerate USB-CDC, leaving subsequent writes at risk "
+            "of D-state."
         )
 
     def test_flash_disconnect_restores_autoreload(
