@@ -145,12 +145,47 @@ def _exec_as_namespace(file_path, name="__main__", package=""):
     return result
 
 
-def run_all(root_dir=".", libraries=None):
+def run_one_file(test_file, root_dir="."):
+    """Run a single test file in the current process; return shell exit code.
+
+    Used by worker subprocesses spawned by :func:`run_all` in isolated
+    mode, but also callable directly when something needs to run one
+    file inline (e.g. a debugger session, or the legacy non-isolated
+    path).  Sets up ``sys.path`` first so library imports resolve.
+    """
+    setup_source_paths(root_dir)
+    print(f"== {test_file} ==")
+    try:
+        test_module = _exec_as_namespace(test_file)
+    except ImportError as error:
+        # ImportError usually means the file depends on a pytest-only
+        # fixture or a CPython-only module.  Skip gracefully — the
+        # caller treats this as success (skipped, not failed).
+        print(f"SKIP {test_file} (import failed: {error})")
+        return 0
+    except Exception as error:
+        print(f"ERROR loading {test_file}: {error}")
+        return 1
+    return run_module(test_module)
+
+
+def run_all(root_dir=".", libraries=None, isolate_per_file=True):
     """Discover and run all cross-runtime unit tests, returning a shell exit code.
 
     Args:
         root_dir: Workspace root directory.
         libraries: Optional list of library names to include.
+        isolate_per_file: When ``True`` (the default), spawns a fresh
+            unix-port subprocess for every test file via
+            :func:`os.system`.  Each subprocess starts with a clean
+            heap, mirroring real-board behaviour where modules are
+            frozen in flash and don't accumulate per-file in RAM.
+            Eliminates the order-dependent fragmentation /
+            memory-pressure interactions documented in
+            ``plans/next-up.md`` §"Heap-fragmentation test methodology".
+            When ``False``, runs every test file in this process — the
+            legacy behaviour, useful when the caller needs to share
+            state across files (rare).
 
     Returns:
         ``0`` for all-pass, ``1`` for any failure.
@@ -162,6 +197,37 @@ def run_all(root_dir=".", libraries=None):
         print("NO TESTS FOUND")
         return 0
 
+    if isolate_per_file:
+        return _run_all_isolated(root_dir, test_files)
+    return _run_all_inline(test_files)
+
+
+def _run_all_isolated(root_dir, test_files):
+    """Spawn one unix-port subprocess per test file via :func:`os.system`."""
+    binary = sys.executable
+    harness_script = (
+        root_dir + "/support/test_harness/run_cross_runtime.py"
+        if root_dir != "."
+        else "support/test_harness/run_cross_runtime.py"
+    )
+    total_failed = 0
+    for test_file in test_files:
+        # ``os.system`` is the only spawn primitive available on MP /
+        # CP unix-port (no ``subprocess``, no ``os.popen``).  The child
+        # writes its own PASS / FAIL / SKIP / HEAP / SUMMARY lines
+        # straight to stdout; we only collect the exit status.  Quote
+        # arguments to handle paths with spaces.
+        command = (
+            '"' + binary + '" "' + harness_script + '" --worker "' + test_file + '"'
+        )
+        status = os.system(command)
+        if status != 0:
+            total_failed += 1
+    return 1 if total_failed else 0
+
+
+def _run_all_inline(test_files):
+    """Run every test file in this process — legacy path for ``isolate_per_file=False``."""
     total_failed = 0
     skipped = 0
     for test_file in test_files:
@@ -169,15 +235,10 @@ def run_all(root_dir=".", libraries=None):
         try:
             test_module = _exec_as_namespace(test_file)
         except ImportError as error:
-            # ImportError usually means the file depends on a pytest-only
-            # fixture or a CPython-only module.  Skip gracefully so the
-            # remaining test files still run.
             skipped += 1
             print(f"SKIP {test_file} (import failed: {error})")
             continue
         except Exception as error:
-            # Non-import errors (SyntaxError, RuntimeError, etc.) indicate
-            # a genuine problem in the test file — count as a failure.
             total_failed += 1
             print(f"ERROR loading {test_file}: {error}")
             continue

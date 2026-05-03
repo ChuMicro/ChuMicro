@@ -208,7 +208,7 @@ def test_run_all_returns_zero_when_no_tests(tmp_path, capsys):
 
     original_path = sys.path.copy()
     try:
-        result = discovery.run_all(root)
+        result = discovery.run_all(root, isolate_per_file=False)
     finally:
         sys.path[:] = original_path
 
@@ -227,7 +227,7 @@ def test_run_all_runs_discovered_tests(tmp_path, capsys):
 
     original_path = sys.path.copy()
     try:
-        result = discovery.run_all(root)
+        result = discovery.run_all(root, isolate_per_file=False)
     finally:
         sys.path[:] = original_path
 
@@ -246,7 +246,7 @@ def test_run_all_skips_import_errors(tmp_path, capsys):
 
     original_path = sys.path.copy()
     try:
-        result = discovery.run_all(root)
+        result = discovery.run_all(root, isolate_per_file=False)
     finally:
         sys.path[:] = original_path
 
@@ -266,7 +266,7 @@ def test_run_all_reports_load_errors(tmp_path, capsys):
 
     original_path = sys.path.copy()
     try:
-        result = discovery.run_all(root)
+        result = discovery.run_all(root, isolate_per_file=False)
     finally:
         sys.path[:] = original_path
 
@@ -285,10 +285,135 @@ def test_run_all_counts_failed_test_modules(tmp_path, capsys):
 
     original_path = sys.path.copy()
     try:
-        result = discovery.run_all(root)
+        result = discovery.run_all(root, isolate_per_file=False)
     finally:
         sys.path[:] = original_path
 
     assert result == 1
     output = capsys.readouterr().out
     assert "FAIL test_boom" in output
+
+
+# ---------------------------------------------------------------------------
+# run_one_file (worker entry point)
+# ---------------------------------------------------------------------------
+
+
+def test_run_one_file_runs_passing_test(tmp_path, capsys):
+    """run_one_file should execute one file in-process and return 0 on pass."""
+    root = str(tmp_path)
+    _make_library(root, "demo", ["test_demo.py"])
+    test_file = os.path.join(root, "libraries", "demo", "tests", "test_demo.py")
+    with open(test_file, "w") as file:
+        file.write("def test_pass(): assert True\n")
+
+    original_path = sys.path.copy()
+    try:
+        result = discovery.run_one_file(test_file, root_dir=root)
+    finally:
+        sys.path[:] = original_path
+
+    assert result == 0
+    output = capsys.readouterr().out
+    assert "PASS test_pass" in output
+
+
+def test_run_one_file_skips_import_errors(tmp_path, capsys):
+    """run_one_file returns 0 (skip) when the file fails to import."""
+    root = str(tmp_path)
+    _make_library(root, "broken", ["test_broken.py"])
+    test_file = os.path.join(
+        root, "libraries", "broken", "tests", "test_broken.py",
+    )
+    with open(test_file, "w") as file:
+        file.write("import nonexistent_module_xyz\n")
+
+    original_path = sys.path.copy()
+    try:
+        result = discovery.run_one_file(test_file, root_dir=root)
+    finally:
+        sys.path[:] = original_path
+
+    assert result == 0
+    assert "SKIP" in capsys.readouterr().out
+
+
+def test_run_one_file_reports_load_errors(tmp_path, capsys):
+    """run_one_file returns 1 on non-ImportError load failures."""
+    root = str(tmp_path)
+    _make_library(root, "bad", ["test_bad.py"])
+    test_file = os.path.join(root, "libraries", "bad", "tests", "test_bad.py")
+    with open(test_file, "w") as file:
+        file.write("raise RuntimeError('load boom')\n")
+
+    original_path = sys.path.copy()
+    try:
+        result = discovery.run_one_file(test_file, root_dir=root)
+    finally:
+        sys.path[:] = original_path
+
+    assert result == 1
+    assert "ERROR loading" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# run_all isolated (subprocess-per-file) path
+# ---------------------------------------------------------------------------
+
+
+def test_run_all_isolated_spawns_one_subprocess_per_file(monkeypatch, tmp_path):
+    """Default ``isolate_per_file=True`` spawns one subprocess per discovered file."""
+    root = str(tmp_path)
+    _make_library(root, "demo", ["test_a.py", "test_b.py"])
+    for entry in ("test_a.py", "test_b.py"):
+        path = os.path.join(root, "libraries", "demo", "tests", entry)
+        with open(path, "w") as file:
+            file.write("def test_ok(): assert True\n")
+
+    spawned = []
+
+    def fake_system(command):
+        spawned.append(command)
+        return 0  # all subprocesses report success
+
+    monkeypatch.setattr(discovery.os, "system", fake_system)
+
+    original_path = sys.path.copy()
+    try:
+        result = discovery.run_all(root)  # default: isolated
+    finally:
+        sys.path[:] = original_path
+
+    assert result == 0
+    assert len(spawned) == 2
+    # Each command should reference --worker and the test file path.
+    assert any("--worker" in command and "test_a.py" in command for command in spawned)
+    assert any("--worker" in command and "test_b.py" in command for command in spawned)
+
+
+def test_run_all_isolated_aggregates_subprocess_failures(monkeypatch, tmp_path):
+    """When any subprocess returns non-zero, run_all returns 1."""
+    root = str(tmp_path)
+    _make_library(root, "demo", ["test_a.py", "test_b.py"])
+    for entry in ("test_a.py", "test_b.py"):
+        path = os.path.join(root, "libraries", "demo", "tests", entry)
+        with open(path, "w") as file:
+            file.write("def test_ok(): assert True\n")
+
+    call_count = [0]
+
+    def fake_system(_command):
+        call_count[0] += 1
+        # First subprocess passes, second fails.
+        return 0 if call_count[0] == 1 else 256  # shell-encoded exit 1
+
+    monkeypatch.setattr(discovery.os, "system", fake_system)
+
+    original_path = sys.path.copy()
+    try:
+        result = discovery.run_all(root)
+    finally:
+        sys.path[:] = original_path
+
+    assert result == 1
+    assert call_count[0] == 2  # all files attempted, no early exit

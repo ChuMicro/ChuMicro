@@ -1,31 +1,42 @@
-"""Cross-runtime heap-fragmentation regression tests for the response parser.
+"""Cross-runtime heap-fragmentation regression tests for ResponseParser.
 
 Runs on every runtime via the chumicro test harness (MicroPython /
-CircuitPython unix-port) and via pytest (CPython).  The
-fragmentation-specific assertions only fire on runtimes that expose
-``gc.mem_free`` — i.e. MP and CP — because heap fragmentation is a
-property of those allocators, not of CPython's pymalloc.
+CircuitPython unix-port) and via pytest (CPython).  Heap-state
+assertions only fire on runtimes that expose ``gc.mem_free`` —
+i.e. MP and CP — because this is a property of those allocators,
+not of CPython's pymalloc.
 
-Why this exists separately from :mod:`test_memory_pressure`:
-:mod:`test_memory_pressure` uses :mod:`tracemalloc` to attribute
-allocations on CPython; that catches Python-level leaks.  But the
-failure mode the user actually worries about — "lots of free RAM but
-no contiguous block big enough to allocate 10 bytes" — is a property
-of the non-moving mark-sweep GC in MP/CP.  Only those runtimes can
-detect it, and only via :func:`gc.mem_free` plus a bisect-allocate
-probe for the largest contiguous free block.
+Methodology — delta-based assertions on baseline-after-setup
+-----------------------------------------------------------
 
-What each test asserts:
+Captures the heap baseline AFTER the test's fixture setup but
+BEFORE the workload loop.  The assertions then measure ONLY what
+the workload itself contributes — bytes consumed and bytes of
+new fragmentation holes added — independent of whatever heap
+state the test inherited from the harness.
 
-* **No leak**: after N parser cycles + ``gc.collect()``, ``mem_free``
-  returns to within a tolerance of the baseline.
-* **No fragmentation**: after N parser cycles + ``gc.collect()``, the
-  largest allocatable contiguous block is at least *fragmentation_floor*
-  of total free memory.
+This matters because the unix-port test harness runs all
+libraries' tests in a single process: prior libraries' test
+imports leave permanent allocations in ``sys.modules`` (test
+data, canned bytes literals, test functions), and that residue
+fragments the heap before any test runs.  An assertion like
+``final_largest / final_free ≥ 0.85`` would be dominated by that
+inherited fragmentation, not by anything the workload did.
+Probe data confirmed: a fresh-process unix-port heap has
+baseline ratio 0.9559; after the requests test files are
+imported (no tests run), the ratio drops to 0.8463; and the
+parser workload itself adds **0 bytes** of holes on top of
+either baseline.
 
-The tests deliberately exercise the parser's high-churn paths:
+This pattern is unique to the test harness — on a real board
+modules are frozen in flash (not heap), test files don't ship,
+and there are no test fixtures.  See ``plans/next-up.md``
+§"Heap-fragmentation test methodology" for the investigation.
+
+Hot paths exercised: ``_try_parse_status_line``,
 ``_try_parse_headers`` (slice-reassignment), ``_absorb_body_bytes``
-(bytearray.extend growth), and chunked decode (per-chunk staging).
+(bytearray.extend growth), and chunked decode (per-chunk
+staging).
 """
 
 import gc
@@ -36,32 +47,22 @@ from chumicro_requests import ParseState, ResponseParser
 # Runtime capability detection
 # ---------------------------------------------------------------------------
 
-# ``gc.mem_free`` is only defined on MicroPython / CircuitPython.  On
-# CPython this attribute is missing; the fragmentation assertions
-# silently no-op (the parser drive still runs as a smoke check).
 _HAS_MEM_FREE = hasattr(gc, "mem_free")
 
 
 # ---------------------------------------------------------------------------
-# Fragmentation probe
+# Largest-contiguous-block probe
 # ---------------------------------------------------------------------------
 
 
 def _largest_free_block(upper_hint):
     """Return the largest currently-allocatable bytearray size in bytes.
 
-    Uses bisection between 0 and *upper_hint* (typically ``gc.mem_free``).
-    Each probe allocates a candidate bytearray; on success the binding
-    is dropped *and* ``gc.collect()`` runs before the next iteration,
-    because MicroPython / CircuitPython are non-refcounting — ``del``
-    only unbinds the name, leaving the bytearray live in the heap until
-    the next collection.  Without the per-iteration collect each
-    successful probe would permanently consume free space and the
-    bisect would converge on ``free / 2``.
-
-    On CPython this would always return *upper_hint* (pymalloc has no
-    fragmentation in this sense), so the probe is only meaningful on
-    MP/CP.  Caller is responsible for skipping the probe on CPython.
+    Bisects between 0 and *upper_hint* (typically ``gc.mem_free``).
+    Each successful sub-allocation is followed by ``gc.collect()``
+    because MP/CP don't refcount — without the per-iteration collect
+    each successful probe would permanently consume the space it
+    just measured and the bisect would converge on free / 2.
     """
     gc.collect()
     low = 0
@@ -76,18 +77,17 @@ def _largest_free_block(upper_hint):
         else:
             best = mid
             del probe
-            gc.collect()  # MP/CP don't refcount; force the probe to release.
+            gc.collect()
             low = mid + 1
     return best
 
 
 # ---------------------------------------------------------------------------
-# Parser-driving helpers (mirror test_memory_pressure)
+# Builders + parser driver
 # ---------------------------------------------------------------------------
 
 
-def _build_response(body_size, header_count=5):
-    """Build a Content-Length response with extra headers for parsing churn."""
+def _build_response(*, body_size, header_count=5):
     parts = [b"HTTP/1.1 200 OK\r\n"]
     for index in range(header_count):
         parts.append(f"X-Custom-{index}: value-{index}\r\n".encode())
@@ -98,7 +98,6 @@ def _build_response(body_size, header_count=5):
 
 
 def _build_chunked_response(chunks):
-    """Build a chunked-encoded response carrying *chunks* (list of bytes)."""
     parts = [b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n"]
     for chunk in chunks:
         parts.append(f"{len(chunk):x}\r\n".encode())
@@ -109,7 +108,6 @@ def _build_chunked_response(chunks):
 
 
 def _drive_parser(response_bytes, chunk_size=512):
-    """Run a fresh parser to ``DONE`` over *response_bytes*."""
     parser = ResponseParser()
     offset = 0
     length = len(response_bytes)
@@ -122,29 +120,22 @@ def _drive_parser(response_bytes, chunk_size=512):
     return parser
 
 
-def _run_workload_and_probe(
-    response_bytes,
-    iterations,
-    chunk_size=512,
-    leak_tolerance_bytes=4096,
-    fragmentation_floor=0.85,
-):
-    """Drive the parser *iterations* times and assert the heap is healthy.
+def _probe_workload_delta(workload, iterations,
+                          leak_tolerance=4096,
+                          fragmentation_tolerance=4096):
+    """Assert *workload* contributes ≤ tolerance bytes consumed + fragmented.
 
-    Two assertions, both gated on ``_HAS_MEM_FREE``:
-    1. ``mem_free`` after the workload is within *leak_tolerance_bytes*
-       of the baseline (no leak).
-    2. The ratio ``largest_free_block / mem_free`` after the workload
-       is at least *fragmentation_floor* (no severe fragmentation).
+    Baseline captured *after* the test's fixture setup, so the delta
+    reflects only the workload itself — not whatever the test
+    environment had already allocated.  See module docstring for
+    the methodology rationale.
 
-    On CPython (no ``mem_free``), the workload still runs as a
-    functional smoke check but no heap assertions fire.
+    On CPython (no ``mem_free``) the workload still runs as a
+    smoke check but no heap assertions fire.
     """
     if not _HAS_MEM_FREE:
-        # CPython smoke: just prove the workload completes cleanly.
         for _ in range(iterations):
-            parser = _drive_parser(response_bytes, chunk_size=chunk_size)
-            assert parser.state == ParseState.DONE
+            workload()
         return
 
     gc.collect()
@@ -152,130 +143,113 @@ def _run_workload_and_probe(
     baseline_largest = _largest_free_block(baseline_free)
 
     for _ in range(iterations):
-        parser = _drive_parser(response_bytes, chunk_size=chunk_size)
-        assert parser.state == ParseState.DONE
-    del parser  # release the last cycle's reference before the post-probe.
+        workload()
     gc.collect()
 
     final_free = gc.mem_free()
     final_largest = _largest_free_block(final_free)
 
-    # 1. Leak assertion.
-    leak = baseline_free - final_free
-    assert leak <= leak_tolerance_bytes, (
-        f"parser leaked {leak} bytes after {iterations} iterations "
-        f"(baseline_free={baseline_free}, final_free={final_free})"
-    )
+    bytes_consumed = baseline_free - final_free
+    holes_added = (baseline_free - baseline_largest) - (final_free - final_largest)
 
-    # 2. Fragmentation assertion (ratio of largest contiguous block).
-    ratio = final_largest / final_free if final_free else 1.0
-    baseline_ratio = (
-        baseline_largest / baseline_free if baseline_free else 1.0
+    assert bytes_consumed <= leak_tolerance, (
+        f"workload consumed {bytes_consumed} bytes over {iterations} iterations "
+        f"(baseline_free={baseline_free}, final_free={final_free}, "
+        f"leak_tolerance={leak_tolerance})"
     )
-    assert ratio >= fragmentation_floor, (
-        f"heap fragmented after {iterations} parser cycles: "
-        f"largest={final_largest} / free={final_free} = {ratio:.3f}, "
-        f"floor={fragmentation_floor:.3f}, baseline_ratio={baseline_ratio:.3f}"
+    assert holes_added <= fragmentation_tolerance, (
+        f"workload added {holes_added} bytes of fragmentation over {iterations} "
+        f"iterations (baseline_largest={baseline_largest}, "
+        f"final_largest={final_largest}, fragmentation_tolerance={fragmentation_tolerance})"
     )
 
 
 # ---------------------------------------------------------------------------
-# Tests — flat module-level functions for the chumicro test harness
+# Tests
 # ---------------------------------------------------------------------------
 
 
 def test_small_body_no_leak_no_fragmentation():
-    """50 small Content-Length cycles should not leak or fragment."""
+    """50 small Content-Length cycles — sensor poll path."""
     response = _build_response(body_size=128, header_count=5)
-    _run_workload_and_probe(response, iterations=50)
+
+    def workload():
+        parser = _drive_parser(response, chunk_size=512)
+        assert parser.state == ParseState.DONE
+
+    _probe_workload_delta(workload, iterations=50)
 
 
 def test_large_body_no_leak_no_fragmentation():
-    """30 8 KiB-body cycles should not leak or fragment.
-
-    Stresses the ``_absorb_body_bytes`` bytearray growth path —
-    each parser allocates an 8 KiB body bytearray that grows via
-    ``.extend()``.  If that growth pattern leaves dead bytearrays
-    scattered in the heap, the largest-free-block ratio will drop.
-    """
+    """30 8 KiB-body cycles — exercises ``_absorb_body_bytes`` growth."""
     response = _build_response(body_size=8192, header_count=10)
-    _run_workload_and_probe(response, iterations=30)
+
+    def workload():
+        parser = _drive_parser(response, chunk_size=512)
+        assert parser.state == ParseState.DONE
+
+    _probe_workload_delta(workload, iterations=30)
 
 
 def test_many_headers_no_leak_no_fragmentation():
-    """20 30-header cycles should not leak or fragment.
+    """30 cycles × 50 headers — slice-reassignment churn at full pressure.
 
-    Stresses ``_try_parse_headers`` — each header line triggers a
-    fresh ``self._buffer = bytearray(self._buffer[crlf+2:])`` slice
-    reassignment.  20 cycles × 30 headers = 600 transient bytearrays
+    Each header line triggers ``self._buffer = bytearray(self._buffer[crlf+2:])``
+    in ``_try_parse_headers``.  30 × 50 = 1500 transient bytearrays
     of decreasing size — the textbook small-fragment-generator
-    pattern, at a level that's a reliable regression guard without
-    exhausting the unix-port heap when the preflight has primed it
-    with module-load allocations from ~15 prior libraries.
+    pattern.  Earlier ratio-based test versions of this had to be
+    dialed down to 20 × 30 because the workload would crash with
+    MemoryError under late-preflight heap pressure (parser
+    couldn't allocate 474 bytes despite 1.9 MB free).  That crash
+    was an artifact of the test harness's fragmented heap, not of
+    the parser — measurement showed the parser itself adds 0 bytes
+    of fragmentation per cycle.
 
-    NOTE: at 30 cycles × 50 headers we observed actual MemoryError
-    (parser couldn't allocate 474 bytes despite 1.9 MB free) when
-    this test ran late in a CircuitPython unix-port preflight sweep
-    — i.e. the parser DOES fragment its working heap under enough
-    pressure.  This test deliberately stays under that threshold to
-    function as a regression guard rather than a stress test.  See
-    the "Memory Fragmentation in CP/MP" research note for context.
+    Restored to 30 × 50 with delta-based assertions so the
+    measurement is honest.  If this crashes in late-preflight, the
+    fix is subprocess-per-file isolation in the harness (see
+    ``plans/next-up.md`` §"Heap-fragmentation test methodology"),
+    not dialing the workload down.
     """
-    response = _build_response(body_size=64, header_count=30)
-    _run_workload_and_probe(response, iterations=20)
+    response = _build_response(body_size=64, header_count=50)
+
+    def workload():
+        parser = _drive_parser(response, chunk_size=128)
+        assert parser.state == ParseState.DONE
+        assert len(parser.headers) >= 50
+
+    _probe_workload_delta(workload, iterations=30)
 
 
 def test_chunked_no_leak_no_fragmentation():
-    """30 chunked-encoded cycles should not leak or fragment.
-
-    Stresses ``_try_parse_chunk_size`` + ``_try_consume_chunk_data``.
-    Per-chunk staging in ``self._buffer`` is the highest-churn allocation
-    path in chunked decode.
-    """
+    """30 chunked-encoded cycles — chunked decode + body assembly."""
     chunks = [b"a" * 256] * 10  # 2.5 KiB body in 10 chunks
     response = _build_chunked_response(chunks)
-    _run_workload_and_probe(response, iterations=30)
+
+    def workload():
+        parser = _drive_parser(response, chunk_size=128)
+        assert parser.state == ParseState.DONE
+        assert parser.body == b"a" * 2560
+
+    _probe_workload_delta(workload, iterations=30)
 
 
 def test_mixed_workload_no_leak_no_fragmentation():
-    """Alternating small / large / chunked cycles — combined fragmentation pressure.
-
-    Production traffic mixes response shapes; this covers the case
-    where alternating allocation sizes interleave free spans.  If the
-    parser were to retain anything across cycles, a mixed workload
-    would punch heterogeneous holes faster than any uniform workload.
-    """
-    if not _HAS_MEM_FREE:
-        # Smoke only — rely on the per-shape tests above for the
-        # functional coverage.
-        return
-
+    """Alternating small / large / chunked cycles — combined pressure."""
     small_response = _build_response(body_size=128, header_count=5)
     large_response = _build_response(body_size=4096, header_count=15)
     chunked_response = _build_chunked_response([b"a" * 256] * 5)
     responses = (small_response, large_response, chunked_response)
 
-    gc.collect()
-    baseline_free = gc.mem_free()
+    def workload_factory():
+        cycle_index = [0]
 
-    for cycle in range(30):
-        response = responses[cycle % 3]
-        parser = _drive_parser(response, chunk_size=256)
-        assert parser.state == ParseState.DONE
-    del parser
-    gc.collect()
+        def workload():
+            response = responses[cycle_index[0] % 3]
+            cycle_index[0] += 1
+            parser = _drive_parser(response, chunk_size=256)
+            assert parser.state == ParseState.DONE
 
-    final_free = gc.mem_free()
-    final_largest = _largest_free_block(final_free)
+        return workload
 
-    leak = baseline_free - final_free
-    assert leak <= 4096, (
-        f"mixed workload leaked {leak} bytes "
-        f"(baseline_free={baseline_free}, final_free={final_free})"
-    )
-
-    ratio = final_largest / final_free if final_free else 1.0
-    assert ratio >= 0.85, (
-        f"mixed workload fragmented heap: "
-        f"largest={final_largest} / free={final_free} = {ratio:.3f}"
-    )
+    _probe_workload_delta(workload_factory(), iterations=30)

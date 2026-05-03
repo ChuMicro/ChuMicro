@@ -296,6 +296,14 @@ CPython promotes `EAGAIN`/`EWOULDBLOCK` `OSError`s to the dedicated `BlockingIOE
 
 CPython allows `deque()` with no args (defaults to empty + unbounded).  MP's `deque` doesn't — `from collections import deque; deque()` raises `TypeError: function missing 2 required positional arguments`.  Use `deque((), 0)` for the same semantics.  Surfaced when running `chumicro_mqtt` fragmentation tests on MP unix-port via `chumicro_sockets.testing.FakeSocket`, which calls `deque()` at line 50.  Test helpers that aren't exercised on MP can ship CPython-only API uses without ever knowing.
 
+### CP unix-port `hashlib` only exposes sha256 — no sha1, no `hashlib.new()`
+
+`dir(hashlib)` on `circuitpython-10.1.4` unix-port returns `['__class__', '__name__', '__dict__', 'sha256']`.  Code that needs SHA-1 (e.g. `chumicro_websockets._wire._sha1_digest` for the RFC 6455 `Sec-WebSocket-Key` challenge) breaks with `AttributeError: 'module' object has no attribute 'sha1'`.  Hidden until now because no chumicro test had ever run on CP unix-port without skipping (every CP test imports pytest / tracemalloc / unittest, which all fail to import there).  Workaround for tests: detect with `_HAS_SHA1 = hasattr(hashlib, "sha1") or hasattr(hashlib, "new")` and early-return.  Real fix: bundle a pure-Python SHA-1 fallback in `chumicro_compat`.
+
+### Test-file imports fragment the unix-port heap as much as anything else
+
+Running the cross-runtime test harness on MP / CP unix-port loads every library's test files into a single Python process.  Each test module's body — function definitions, class fixtures, canned bytes literals, dict scripts — becomes permanent allocations rooted from `sys.modules`.  Measurement: importing `libraries/requests/tests/test_*.py` (~1000 lines, no tests run) drops the largest-contiguous-block ratio from 0.9559 to 0.8463 on a fresh MP unix-port heap.  That residue is the root cause of the order-dependent test failures in `chumicro_requests` (committed as test-environment fragmentation in 2026-05-03 investigation), and it doesn't represent real-board behaviour at all (frozen modules don't take heap, test files don't ship to devices).  Mitigation: subprocess-per-file isolation in the harness (shipped this commit), so each test file starts with a clean heap.
+
 ---
 
 ## Tooling and process
