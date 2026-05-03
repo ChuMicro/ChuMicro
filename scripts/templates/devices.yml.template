@@ -13,8 +13,11 @@ defaults:
   # Device IDs to use for each runtime (must match an id below).
   micropython: sample-micropython-board
   circuitpython: sample-circuitpython-board
-  # Deploy mode for all devices: "ram" (no flash wear) or "flash".
-  deploy_mode: ram
+  # Deploy mode for all devices: "flash" (production-shaped, default) or
+  # "ram" (no flash wear, opt-in for unit-style tests).  Decision 0047 —
+  # functional tests run in flash by default; specific suites can opt
+  # back to ram per-device or via --chumicro-deploy-mode ram.
+  deploy_mode: flash
   # Which runtimes IDE play buttons target: micropython, circuitpython, or both.
   ide_runtime: micropython
 

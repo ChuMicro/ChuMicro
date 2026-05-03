@@ -200,7 +200,7 @@ STATUS: FAIL_ACCEPT OSError(32,)
 Two facts that update the framing above:
 
 1. **The OSError(32) fires DURING the eager handshake inside `accept()`, not pre-handshake or post-handshake.** A real host TLS client connects (the probe's host poll loop running concurrent with the deploy hits the device while it's in the accept loop), the device's `common_hal_ssl_sslsocket_accept` runs `do_handshake` on the wrapped client socket, and the handshake fails with mbedTLS returning a small-negative error that the `mbedtls_raise_error` small-int trap renders as `OSError(32)`.  This is *not* the "post-handshake EPIPE" the original learnings text claimed — handshake bytes are still flying when it fires.
-2. **chumicro's `setblocking(False)` ordering is not the trigger.** The blocking-listener variant of the probe could not be tested in the same session because of side-effect (3) below; on theory grounds the eager `do_handshake` loops correctly on `WANT_READ`/`WANT_WRITE` regardless of listener-blocking mode (`shared-module/ssl/SSLSocket.c:389-421`).  Filing the upstream issue as "TLS server-side OSError(32) on rp2 / CYW43" without the listener-mode hypothesis attached.
+2. **chumicro's `setblocking(False)` ordering is not the trigger.** The blocking-listener variant of the probe could not be tested in the same session because of side-effect (3) below; on theory grounds the eager `do_handshake` loops correctly on `WANT_READ`/`WANT_WRITE` regardless of listener-blocking mode (`shared-module/ssl/SSLSocket.c:389-421`).
 
 3. **OSError(32) puts the CYW43 chip in a wedged state — every subsequent `wifi.radio.connect()` returns `ConnectionError("Unknown failure 1")`.** This is independently reproducible: direct `wifi.radio.connect("bench-ap", PASSWORD, timeout=15)` from the REPL (zero chumicro code in the path) fails identically after the probe runs and hits OSError(32).  The wedged state survives:
     * `microcontroller.reset()` (rp2040 hard reset) — the rp2040's reset doesn't toggle the CYW43's `WL_REG_ON` line, so the CYW43 chip's state persists.
@@ -215,7 +215,7 @@ The originally-quoted measurement "Heap was ~115 KB free at the time, so not a m
 
 Cross-reference: [adafruit/circuitpython#10339](https://github.com/adafruit/circuitpython/issues/10339) reports a *client-side* TLS bug on Pi Pico **2** W (rp2350) with a different error class (`MBEDTLS_ERR_X509_CERT_VERIFY_FAILED`).  Not our bug, but a sister datapoint of "CP TLS on rp2 + CYW43 is fragile in ways the espressif port is not."
 
-Filing-ready summary for an upstream issue: **TLS server-side `accept()` raises `OSError(32)` mid-handshake on Pi Pico W (rp2040 + CYW43439), CP 10.2.0-rc.0; failure additionally wedges CYW43 station-mode state until USB power-cycle.** Reproduce via `.scratch/run_cp_rp2_tls_listener_modes.py`.
+Status: **deal with what we have for now.**  No upstream issue is filed; the canonical guidance is to point users at ESP32-family or MicroPython-on-rp2 for HTTPS-server work.  The empirical findings above are kept here for future debug context if the bug ever blocks a real shipping project.  Reproduce via `.scratch/run_cp_rp2_tls_listener_modes.py` if/when re-investigation is needed.
 
 ### MicroPython TLS server *does* fit on Pi Pico W (Adafruit's "limited" framing was too pessimistic)
 

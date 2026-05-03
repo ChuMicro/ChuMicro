@@ -25,11 +25,13 @@ from .protocol import DeployMode, Runtime, TransportProtocol
 #: Default serial baudrate for CircuitPython raw-REPL sessions.
 DEFAULT_BAUDRATE = 115200
 
-#: Default deploy mode.  ``"ram"`` keeps edits off the board's flash
-#: (maps to ``mount`` on MicroPython / inline-exec on CircuitPython);
-#: ``"flash"`` writes files to the board (maps to ``copy`` on
-#: MicroPython / CIRCUITPY drive copy on CircuitPython).
-DEFAULT_DEPLOY_MODE = "ram"
+#: Default deploy mode.  ``"flash"`` writes files to the board (maps to
+#: ``copy`` on MicroPython / CIRCUITPY drive copy on CircuitPython) —
+#: this is the production-shaped path and matches how a real deploy
+#: behaves on the device.  ``"ram"`` is opt-in for fast iteration on
+#: single-library unit-style tests (maps to ``mount`` on MicroPython /
+#: inline-exec on CircuitPython).  See Decision 0047.
+DEFAULT_DEPLOY_MODE = "flash"
 
 #: On-device directory where deployed library files land by default.
 DEFAULT_RESOURCE_PREFIX = "/lib"

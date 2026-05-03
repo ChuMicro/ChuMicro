@@ -11,15 +11,28 @@ The transport-level primitive this builds on is
 Test orchestrators like ``scripts/device_testing.py`` stick with the
 richer ``stage()`` / ``execute()`` flow because they need per-file
 iteration and per-group resets.
+
+Per [Decision 0047](../../../plans/decisions/0047-deploy-mode-flash-default.md),
+both :meth:`Deployer.deploy` and :meth:`Deployer.deploy_diff` run a
+pre-flight pass before transport setup: when the device's
+``deploy_mode == "ram"`` and the source exposes ``host_paths()``
+referencing any library with ``[tool.chumicro] requires_flash = true``,
+the deploy auto-switches to flash mode for this run only and emits
+a human-readable explanation through the optional
+``on_preflight_message`` callback (or stderr by default).  The
+explicit ``force_deploy_mode`` parameter bypasses pre-flight entirely.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import re
+import sys
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from .host_platform import check_rsync_available, check_supported_platform
+from .preflight import find_libraries_requiring_flash
 from .protocol import DeployMode, Runtime
 from .result import DeployResult
 
@@ -63,15 +76,79 @@ class Deployer:
         """The target :class:`Device` this Deployer was constructed with."""
         return self._device
 
+    def _resolve_effective_device(
+        self,
+        source: FileSource,
+        *,
+        force_deploy_mode: str | None,
+        on_preflight_message: Callable[[str], None] | None,
+    ) -> Device:
+        """Apply the Decision 0047 pre-flight policy to pick the deploy mode
+        for this run.
+
+        Returns a :class:`Device` whose ``deploy_mode`` is the effective
+        mode for this deploy.  The original ``self._device`` is never
+        mutated — when an override is needed, ``dataclasses.replace``
+        produces a fresh frozen copy.
+
+        Resolution order:
+
+        1. *force_deploy_mode* set: override to that value, no further
+           pre-flight.  This is the explicit "I know what I'm doing"
+           escape hatch.
+        2. ``self._device.deploy_mode != "ram"``: the device already
+           wants flash (or some future mode); nothing to switch.
+        3. Source doesn't expose ``host_paths()``: we have no graph to
+           inspect — proceed in RAM mode silently
+           (:class:`~chumicro_deploy.sources.FileMapSource` is the
+           common case here).
+        4. No library in the graph carries ``[tool.chumicro]
+           requires_flash = true``: proceed in RAM mode silently.
+        5. At least one library is flagged: switch to flash mode and
+           emit a human-readable explanation through
+           *on_preflight_message* (or stderr when ``None``).
+        """
+        if force_deploy_mode is not None:
+            if force_deploy_mode == self._device.deploy_mode:
+                return self._device
+            return dataclasses.replace(self._device, deploy_mode=force_deploy_mode)
+
+        if self._device.deploy_mode != DeployMode.RAM:
+            return self._device
+
+        host_paths_method = getattr(source, "host_paths", None)
+        if host_paths_method is None:
+            return self._device
+
+        flagged = find_libraries_requiring_flash(host_paths_method())
+        if not flagged:
+            return self._device
+
+        message = (
+            f"chumicro-deploy: switching to flash mode — "
+            f"{', '.join(flagged)} declare `[tool.chumicro] "
+            f"requires_flash = true` (heavy parsers / state machines / "
+            f"recv buffers often OOM in RAM mode on smaller boards). "
+            f"Pass force_deploy_mode='ram' to bypass."
+        )
+        if on_preflight_message is not None:
+            on_preflight_message(message)
+        else:
+            print(message, file=sys.stderr)
+
+        return dataclasses.replace(self._device, deploy_mode=DeployMode.FLASH)
+
     def deploy_diff(
         self,
         source: FileSource,
         *,
         wipe: bool = False,
+        force_deploy_mode: str | None = None,
         on_progress: Callable[[float, str], None] | None = None,
         on_file_staged: Callable[[str], None] | None = None,
         on_file_deleted: Callable[[str], None] | None = None,
         on_execute_line: Callable[[str], None] | None = None,
+        on_preflight_message: Callable[[str], None] | None = None,
     ) -> DeployResult:
         """Diff-deploy *source* — delete stale in-scope files, then deploy.
 
@@ -127,13 +204,19 @@ class Deployer:
             if on_progress is not None:
                 on_progress(fraction, message)
 
+        effective_device = self._resolve_effective_device(
+            source,
+            force_deploy_mode=force_deploy_mode,
+            on_preflight_message=on_preflight_message,
+        )
+
         if (
-            self._device.transport == Runtime.CIRCUITPYTHON
-            and self._device.deploy_mode == DeployMode.FLASH
+            effective_device.transport == Runtime.CIRCUITPYTHON
+            and effective_device.deploy_mode == DeployMode.FLASH
         ):
             check_rsync_available()
 
-        transport = self._device.create_transport()
+        transport = effective_device.create_transport()
         _report(0.0, "connecting")
         transport.connect()
         try:
@@ -176,9 +259,11 @@ class Deployer:
         self,
         source: FileSource,
         *,
+        force_deploy_mode: str | None = None,
         on_progress: Callable[[float, str], None] | None = None,
         on_file_staged: Callable[[str], None] | None = None,
         on_execute_line: Callable[[str], None] | None = None,
+        on_preflight_message: Callable[[str], None] | None = None,
     ) -> DeployResult:
         """Deploy *source* to the configured device and run its entrypoint.
 
@@ -212,13 +297,19 @@ class Deployer:
             if on_progress is not None:
                 on_progress(fraction, message)
 
+        effective_device = self._resolve_effective_device(
+            source,
+            force_deploy_mode=force_deploy_mode,
+            on_preflight_message=on_preflight_message,
+        )
+
         if (
-            self._device.transport == Runtime.CIRCUITPYTHON
-            and self._device.deploy_mode == DeployMode.FLASH
+            effective_device.transport == Runtime.CIRCUITPYTHON
+            and effective_device.deploy_mode == DeployMode.FLASH
         ):
             check_rsync_available()
 
-        transport = self._device.create_transport()
+        transport = effective_device.create_transport()
         _report(0.0, "connecting")
         transport.connect()
         try:
