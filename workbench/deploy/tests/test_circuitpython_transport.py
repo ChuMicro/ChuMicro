@@ -883,9 +883,13 @@ class TestFlashMode:
             ".find_circuitpy_drive",
             lambda: None,
         )
-        # Extra responses for disconnect()'s _enter_raw_repl + autoreload restore.
+        # Sequence: connect (prompt), autoreload-off in stage (OK),
+        # disconnect's _enter_raw_repl (prompt), autoreload restore (OK).
         port = FakeSerialPort(
-            read_responses=[_RAW_REPL_PROMPT, _RAW_REPL_PROMPT, _OK_RESPONSE],
+            read_responses=[
+                _RAW_REPL_PROMPT, _OK_RESPONSE,
+                _RAW_REPL_PROMPT, _OK_RESPONSE,
+            ],
         )
 
         def factory(**kwargs):
@@ -916,9 +920,13 @@ class TestFlashMode:
         self, tmp_path: Path,
     ) -> None:
         """stage() in flash mode should raise when drive path doesn't exist."""
-        # Responses: connect + _enter_raw_repl + autoreload restore (disconnect).
+        # Sequence: connect (prompt), autoreload-off in stage (OK),
+        # disconnect's _enter_raw_repl (prompt), autoreload restore (OK).
         port = FakeSerialPort(
-            read_responses=[_RAW_REPL_PROMPT, _RAW_REPL_PROMPT, _OK_RESPONSE],
+            read_responses=[
+                _RAW_REPL_PROMPT, _OK_RESPONSE,
+                _RAW_REPL_PROMPT, _OK_RESPONSE,
+            ],
         )
 
         transport = self._make_flash_transport(
@@ -957,8 +965,13 @@ class TestFlashMode:
 
         drive = tmp_path / "CIRCUITPY"
         drive.mkdir()
+        # Sequence: connect (prompt), autoreload-off in stage (OK),
+        # disconnect's _enter_raw_repl (prompt), autoreload restore (OK).
         port = FakeSerialPort(
-            read_responses=[_RAW_REPL_PROMPT, _RAW_REPL_PROMPT, _OK_RESPONSE],
+            read_responses=[
+                _RAW_REPL_PROMPT, _OK_RESPONSE,
+                _RAW_REPL_PROMPT, _OK_RESPONSE,
+            ],
         )
         transport = self._make_flash_transport(port, str(drive))
         transport.connect()
@@ -1089,6 +1102,89 @@ class TestFlashMode:
         assert b"False" in written_data
 
         transport.disconnect()
+
+    def test_flash_stage_disables_autoreload_before_any_drive_write(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Order regression: the autoreload-off REPL command MUST land on
+        the wire BEFORE the host writes anything to the CIRCUITPY drive.
+
+        With autoreload ON (the default), the board's filesystem
+        watcher fires a soft-reboot on the first file change.  Each
+        soft-reboot re-enumerates USB-CDC.  Multiple re-enumerations
+        in rapid succession can put the kernel-side write into D-state
+        — the wedged-rsync failure documented in plans/learnings.md.
+
+        The fix lives in :meth:`_disable_autoreload_before_drive_writes`,
+        called as the FIRST thing in ``_stage_to_flash`` (and
+        ``deploy_files``).  This test snapshots the order of:
+
+        1. Wire write of the autoreload command
+        2. Filesystem write of the ``.chu-probe`` marker
+        3. Filesystem write of the ``.metadata_never_index`` sentinel
+
+        and asserts (1) precedes (2) and (3).
+        """
+        drive_path = tmp_path / "CIRCUITPY"
+        drive_path.mkdir()
+        source_dir = tmp_path / "src"
+        source_dir.mkdir()
+        harness_dir = tmp_path / "harness"
+        harness_dir.mkdir()
+
+        # Reusable timestamp to give every event a strictly-increasing
+        # ordinal — deterministic on CPython, no clock jitter to mock.
+        events: list[tuple[int, str]] = []
+
+        def event(label: str) -> None:
+            events.append((len(events), label))
+
+        port = FakeSerialPort(
+            read_responses=[
+                _RAW_REPL_PROMPT, _OK_RESPONSE,                # connect + autoreload off
+                _RAW_REPL_PROMPT, _OK_RESPONSE,                # disconnect raw REPL + restore
+            ],
+        )
+
+        # Wrap the FakeSerialPort.write to record when "autoreload"
+        # crosses the wire.
+        original_write = port.write
+
+        def recording_write(data: bytes) -> int:
+            if b"autoreload" in data and b"False" in data:
+                event("wire: autoreload off")
+            return original_write(data)
+        port.write = recording_write  # type: ignore[assignment]
+
+        # Wrap Path.write_bytes (used by .chu-probe) and Path.touch
+        # (used by the macOS sentinel plants).  .chu-probe is the
+        # FIRST drive write in the sequence, so its ordinal alone is
+        # sufficient — if autoreload-off lands after .chu-probe, every
+        # subsequent drive op (including the sentinel plants and the
+        # rsync itself) is unprotected.
+        original_write_bytes = Path.write_bytes
+
+        def recording_write_bytes(self_path, data):  # type: ignore[no-untyped-def]
+            if self_path.name == ".chu-probe":
+                event("fs: .chu-probe write")
+            return original_write_bytes(self_path, data)
+        monkeypatch.setattr(Path, "write_bytes", recording_write_bytes)
+
+        transport = self._make_flash_transport(port, str(drive_path))
+        transport.connect()
+        transport.stage([source_dir], [], harness_dir)
+        transport.disconnect()
+
+        labels_in_order = [label for _ordinal, label in events]
+        autoreload_index = labels_in_order.index("wire: autoreload off")
+        probe_index = labels_in_order.index("fs: .chu-probe write")
+        assert autoreload_index < probe_index, (
+            "regression: .chu-probe (the first drive write) happens "
+            f"BEFORE autoreload off; order was {labels_in_order}.  "
+            "The board's autoreload watcher will fire on the probe "
+            "write and re-enumerate USB-CDC, leaving the next "
+            "host-side write at risk of D-state."
+        )
 
     def test_flash_disconnect_restores_autoreload(
         self, tmp_path: Path,
@@ -1779,7 +1875,14 @@ class TestDeployFiles:
             "chumicro_deploy.circuitpython_transport.find_circuitpy_drive",
             lambda: None,
         )
-        transport, _ = self._connect(drive_path=None)
+        # deploy_files in flash mode now does:
+        #   _enter_raw_repl   -> consumes a prompt
+        #   _disable_autoreload_before_drive_writes -> consumes an OK
+        #   _resolve_circuitpy_drive  -> raises (find returns None)
+        transport, _ = self._connect(
+            drive_path=None,
+            extra_responses=[_RAW_REPL_PROMPT, _OK_RESPONSE],
+        )
         with pytest.raises(CircuitpythonTransportError, match="CIRCUITPY drive not found"):
             transport.deploy_files({"/code.py": b"pass"}, "/code.py")
 

@@ -594,6 +594,38 @@ class CircuitpythonTransport:
                 f"Did not receive raw REPL prompt.  Got: {response!r}"
             )
 
+    def _disable_autoreload_before_drive_writes(self) -> None:
+        """Send the autoreload-off REPL command — order-load-bearing.
+
+        Every flash-mode entry point (``_stage_to_flash``,
+        ``deploy_files``) calls this **immediately** after
+        :meth:`_enter_raw_repl` and **before** any host-side drive
+        operation — ``.chu-probe``, ``neuter_macos_metadata`` sentinels,
+        the rsync itself.  Otherwise the board's autoreload watcher
+        sees the first file change, schedules a soft-reboot, the
+        USB-CDC link re-enumerates, and the next host-side ``write()``
+        may land in uninterruptible kernel I/O wait — the "wedged
+        rsync" failure mode documented in `plans/learnings.md`
+        ("rsync to CIRCUITPY can hang in uninterruptible kernel I/O").
+
+        Symmetric with :meth:`_restore_autoreload` (called from
+        :meth:`disconnect`).
+        """
+        self._send_repl_command(
+            "import supervisor; supervisor.runtime.autoreload = False",
+        )
+
+    def _restore_autoreload(self) -> None:
+        """Send the autoreload-on REPL command.
+
+        Symmetric with :meth:`_disable_autoreload_before_drive_writes`.
+        Called from :meth:`disconnect` so the board returns to its
+        default behaviour after every flash-mode session.
+        """
+        self._send_repl_command(
+            "import supervisor; supervisor.runtime.autoreload = True",
+        )
+
     def stage(
         self,
         source_dirs: list[Path],
@@ -889,6 +921,15 @@ class CircuitpythonTransport:
             CircuitpythonTransportError: If the CIRCUITPY drive cannot
                 be found or is not writable.
         """
+        # Order is load-bearing.  Disable autoreload BEFORE any
+        # host-side drive write — see the helper docstring + the
+        # learnings entry "rsync to CIRCUITPY can hang ...".  We're
+        # already in raw REPL from ``connect()`` (or re-entered after
+        # a previous batch's soft-reboot via the pytest-device
+        # cache); the helper just sends the supervisor command on
+        # the open serial channel.
+        self._disable_autoreload_before_drive_writes()
+
         drive_path = self._resolve_circuitpy_drive()
         drive_path = self._verify_drive_for_board(drive_path)
 
@@ -896,22 +937,6 @@ class CircuitpythonTransport:
         # sentinels + remove noise directories, before the rsync runs.
         flash_drive.disable_spotlight_indexing(drive_path)
         flash_drive.neuter_macos_metadata(drive_path)
-
-        # Disable autoreload to prevent the board restarting mid-copy.
-        # Restoration is intentionally NOT local to this method: the
-        # symmetric ``autoreload = True`` lives in :meth:`disconnect`,
-        # which always runs (Deployer wraps deploy_files in a
-        # try/finally → disconnect()).  Locality was rejected because
-        # disconnect() must restore anyway — it follows a soft-reboot
-        # that needs autoreload back on, and after a soft-reboot raw
-        # REPL is gone so the inline send would race the re-enter.
-        # Two restores per deploy was the cost of doing it locally
-        # too.  If you call this transport directly without going
-        # through Deployer, call ``disconnect()`` to restore.
-        self._send_repl_command(
-            "import supervisor; "
-            "supervisor.runtime.autoreload = False"
-        )
 
         with tempfile.TemporaryDirectory() as staging_directory:
             staging_path = Path(staging_directory)
@@ -1215,9 +1240,16 @@ class CircuitpythonTransport:
                 on_execute_line=on_execute_line,
             )
 
-        drive_path = self._resolve_circuitpy_drive()
-
+        # Order is load-bearing.  Enter raw REPL FIRST + disable
+        # autoreload BEFORE any host-side drive write —
+        # ``_resolve_circuitpy_drive`` writes a ``.chu-probe`` marker
+        # and with autoreload ON the board would soft-reboot on that
+        # write, re-enumerate USB-CDC, and the subsequent rsync may
+        # land in uninterruptible kernel I/O wait.  See
+        # `plans/learnings.md` "rsync to CIRCUITPY can hang...".
         self._enter_raw_repl()
+        self._disable_autoreload_before_drive_writes()
+        drive_path = self._resolve_circuitpy_drive()
         drive_path = self._verify_drive_for_board(drive_path)
         # macOS hygiene before the writes: disable Spotlight, plant
         # persistent skip sentinels, remove noise directories.  Without
@@ -1226,21 +1258,6 @@ class CircuitpythonTransport:
         # sees ~2x the file count, doubling apparent on-disk footprint.
         flash_drive.disable_spotlight_indexing(drive_path)
         flash_drive.neuter_macos_metadata(drive_path)
-        # Disable autoreload to prevent the board restarting mid-copy.
-        # Restoration is intentionally NOT local to this method: the
-        # symmetric ``autoreload = True`` lives in :meth:`disconnect`,
-        # which always runs (Deployer wraps deploy_files in a
-        # try/finally → disconnect()).  Locality was rejected because
-        # disconnect() must restore anyway — it follows the
-        # Ctrl-B/Ctrl-D soft-reboot below that needs autoreload back
-        # on, and the soft-reboot tears down raw REPL so any inline
-        # send here would race the re-enter.  Two restores per deploy
-        # was the cost of doing it locally too.  If you call this
-        # transport directly without going through Deployer, call
-        # ``disconnect()`` to restore.
-        self._send_repl_command(
-            "import supervisor; supervisor.runtime.autoreload = False"
-        )
 
         # Build a local staging tree mirroring the desired drive
         # layout, then rsync it onto the drive.  Single primitive both
@@ -1672,10 +1689,7 @@ class CircuitpythonTransport:
             try:
                 self._enter_raw_repl()
                 if self.mode == "flash":
-                    self._send_repl_command(
-                        "import supervisor; "
-                        "supervisor.runtime.autoreload = True"
-                    )
+                    self._restore_autoreload()
                 # Exit raw REPL back to normal REPL.
                 self._port.write(_CTRL_B)
                 self._time.sleep(_ENTER_DELAY)
