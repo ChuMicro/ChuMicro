@@ -8,12 +8,40 @@ promise (Decision 0045): an LED can keep blinking on the same board
 through the opening handshake, frame I/O, control-frame interleave,
 and the close handshake.
 
-Slice 1 of Decision 0045 ships the wire-format primitives — URL
-parser, opening-handshake encoders / parsers (both directions), the
-streaming :class:`FrameParser`, the :func:`encode_frame` encoder,
-the close-payload codec, and the exception hierarchy.  The
-:class:`WebSocketClient` and :class:`WebSocketServer` orchestrators
-land in slices 2 + 3.
+Public API::
+
+    from chumicro_websockets import WebSocketClient, WebSocketState
+
+    def make_socket(host, port, use_tls):
+        from chumicro_sockets import tcp_client_socket
+        return tcp_client_socket(host, port)
+
+    client = WebSocketClient(connection_factory=make_socket)
+    client.on_text = lambda text: print(text)
+    client.connect("ws://api.example.com/stream")
+
+    while client.state != WebSocketState.CLOSED:
+        if client.check(now_ms()):
+            client.handle(now_ms())
+
+Slices shipped (Decision 0045 §12):
+
+* **Slice 1** — ``_wire`` layer (URL parser, handshake encoders +
+  parsers, :class:`FrameParser`, :func:`encode_frame`, close-payload
+  codec, exception hierarchy).
+* **Slice 2** (this commit) — :class:`WebSocketClient` runner-shaped
+  client + :class:`WhenOversized` policy.
+
+Coming up:
+
+* **Slice 3** — :class:`WebSocketServer`.
+* **Slice 4** — ``chumicro_websockets.testing`` fakes
+  (``FakeConnection`` / ``FakeListener``).
+* **Slice 5** — ``chumicro_websockets.sockets_factory`` helper +
+  README + ``docs/guide.md`` polish + examples per Decision 0042
+  Class 1 sub-rule.
+* **Slice 6** — live-board functional tests against a host CPython
+  ``websockets`` PyPI server.
 """
 
 from chumicro_websockets._wire import (
@@ -75,6 +103,11 @@ from chumicro_websockets._wire import (
     parse_ws_url,
     validate_text_payload,
 )
+from chumicro_websockets.client import (
+    ConnectingPhase,
+    WebSocketClient,
+    WhenOversized,
+)
 
 __all__ = [
     "CLOSE_ABNORMAL",
@@ -109,12 +142,14 @@ __all__ = [
     "WS_MAGIC_GUID",
     "WS_VERSION",
     "CaseInsensitiveDict",
+    "ConnectingPhase",
     "FrameParser",
     "FrameParseState",
     "HandshakeParseState",
     "HandshakeRequestParser",
     "HandshakeResponseParser",
     "WebSocketBackpressureError",
+    "WebSocketClient",
     "WebSocketError",
     "WebSocketHandshakeError",
     "WebSocketOversizedError",
@@ -123,6 +158,7 @@ __all__ = [
     "WebSocketStateError",
     "WebSocketTimeoutError",
     "WebSocketURLError",
+    "WhenOversized",
     "derive_accept_key",
     "encode_client_handshake",
     "encode_close_payload",

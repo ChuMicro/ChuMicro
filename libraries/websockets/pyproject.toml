@@ -25,6 +25,10 @@ classifiers = [
     "Topic :: System :: Hardware",
     "Operating System :: OS Independent",
 ]
+dependencies = [
+    "chumicro-sockets",
+    "chumicro-timing",
+]
 
 [project.urls]
 Homepage = "https://github.com/ChuMicro/ChuMicro"
