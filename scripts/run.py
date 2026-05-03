@@ -30,6 +30,7 @@ from new_library_scaffold import new_library
 from prepare_circuitpython import prepare_circuitpython
 from prepare_micropython import prepare_micropython
 from prepare_mpy_cross import prepare_mpy_cross
+from render_dep_graph import main as render_dep_graph_main
 from shared import (
     install_workspace,
     resolve_circuitpython_binary,
@@ -723,6 +724,7 @@ def preflight(
         ),
         ("test-scripts", test_scripts),
         ("verify-examples", lambda: verify_examples(all_packages)),
+        ("check-dep-graph", check_dep_graph),
         ("check-version", check_version),
         ("check-api", check_api),
         (
@@ -1207,6 +1209,15 @@ def check_version() -> int:
 def check_api() -> int:
     """Check API breakages against last release tag (PR check)."""
     return check_api_main([])
+
+
+def check_dep_graph() -> int:
+    """Verify the committed dependency-graph SVG matches the current
+    ``libraries/*/pyproject.toml`` deps.  Fails if a contributor changed
+    a library's deps without re-running ``python scripts/render_dep_graph.py``
+    and committing the regenerated SVG.
+    """
+    return render_dep_graph_main(["--check"])
 
 
 # ---------------------------------------------------------------------------

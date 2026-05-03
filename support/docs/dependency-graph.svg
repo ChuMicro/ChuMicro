@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 720" width="1120" height="720" font-family="system-ui, -apple-system, Helvetica, Arial, sans-serif" font-size="13">
+  <defs>
+    <marker id="arrow-strict" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#3b6db5" />
+    </marker>
+    <marker id="arrow-di" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#999" />
+    </marker>
+    <style>
+      .node rect { fill: #ffffff; stroke: #1f2937; stroke-width: 1.5; }
+      .node text { fill: #1f2937; font-weight: 500; }
+      .node.standalone rect { fill: #f3f4f6; stroke: #9ca3af; stroke-dasharray: 3 2; }
+      .node.standalone text { fill: #6b7280; }
+      .edge-strict { stroke: #3b6db5; stroke-width: 1.5; fill: none; }
+      .edge-di { stroke: #999; stroke-width: 1.2; stroke-dasharray: 5 4; fill: none; }
+      .legend-label { fill: #1f2937; font-size: 12px; }
+      .legend-title { fill: #1f2937; font-size: 13px; font-weight: 600; }
+      .row-label { fill: #6b7280; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+    </style>
+  </defs>
+
+  <!-- Row labels -->
+  <text x="20" y="50" class="row-label">Services</text>
+  <text x="20" y="290" class="row-label">Building blocks</text>
+  <text x="20" y="530" class="row-label">Foundation</text>
+  <text x="20" y="630" class="row-label">Standalone</text>
+
+  <!-- Strict-dep arrows (pyproject.toml dependencies) -->
+  <g>
+  <line x1="165.0" y1="336" x2="205.0" y2="540" class="edge-strict" marker-end="url(#arrow-strict)" />
+  <line x1="645.0" y1="96" x2="905.0" y2="540" class="edge-strict" marker-end="url(#arrow-strict)" />
+  <line x1="645.0" y1="96" x2="545.0" y2="540" class="edge-strict" marker-end="url(#arrow-strict)" />
+  <line x1="365.0" y1="336" x2="205.0" y2="540" class="edge-strict" marker-end="url(#arrow-strict)" />
+  <line x1="825.0" y1="96" x2="905.0" y2="540" class="edge-strict" marker-end="url(#arrow-strict)" />
+  <line x1="825.0" y1="96" x2="545.0" y2="540" class="edge-strict" marker-end="url(#arrow-strict)" />
+  <line x1="285.0" y1="96" x2="905.0" y2="540" class="edge-strict" marker-end="url(#arrow-strict)" />
+  <line x1="465.0" y1="96" x2="905.0" y2="540" class="edge-strict" marker-end="url(#arrow-strict)" />
+  <line x1="465.0" y1="96" x2="545.0" y2="540" class="edge-strict" marker-end="url(#arrow-strict)" />
+  <line x1="585.0" y1="336" x2="545.0" y2="540" class="edge-strict" marker-end="url(#arrow-strict)" />
+  <line x1="1005.0" y1="96" x2="905.0" y2="540" class="edge-strict" marker-end="url(#arrow-strict)" />
+  <line x1="1005.0" y1="96" x2="545.0" y2="540" class="edge-strict" marker-end="url(#arrow-strict)" />
+  <line x1="105.0" y1="96" x2="165.0" y2="300" class="edge-strict" marker-end="url(#arrow-strict)" />
+  <line x1="105.0" y1="96" x2="545.0" y2="540" class="edge-strict" marker-end="url(#arrow-strict)" />
+  </g>
+
+  <!-- DI / typical-wiring arrows (constructor injection) -->
+  <g>
+  <line x1="105.0" y1="96" x2="585.0" y2="300" class="edge-di" marker-end="url(#arrow-di)" />
+  <line x1="285.0" y1="96" x2="585.0" y2="300" class="edge-di" marker-end="url(#arrow-di)" />
+  <line x1="285.0" y1="96" x2="545.0" y2="540" class="edge-di" marker-end="url(#arrow-di)" />
+  <line x1="465.0" y1="96" x2="585.0" y2="300" class="edge-di" marker-end="url(#arrow-di)" />
+  <line x1="645.0" y1="96" x2="585.0" y2="300" class="edge-di" marker-end="url(#arrow-di)" />
+  <line x1="825.0" y1="96" x2="585.0" y2="300" class="edge-di" marker-end="url(#arrow-di)" />
+  <line x1="1005.0" y1="96" x2="585.0" y2="300" class="edge-di" marker-end="url(#arrow-di)" />
+  </g>
+
+  <!-- Library boxes -->
+  <g>
+  <g class="node default">
+    <rect x="40" y="60" width="130" height="36" rx="6" ry="6" />
+    <text x="105.0" y="83.0" text-anchor="middle">chumicro-wifi</text>
+  </g>
+  <g class="node default">
+    <rect x="220" y="60" width="130" height="36" rx="6" ry="6" />
+    <text x="285.0" y="83.0" text-anchor="middle">chumicro-ntp</text>
+  </g>
+  <g class="node default">
+    <rect x="400" y="60" width="130" height="36" rx="6" ry="6" />
+    <text x="465.0" y="83.0" text-anchor="middle">chumicro-requests</text>
+  </g>
+  <g class="node default">
+    <rect x="580" y="60" width="130" height="36" rx="6" ry="6" />
+    <text x="645.0" y="83.0" text-anchor="middle">chumicro-http_server</text>
+  </g>
+  <g class="node default">
+    <rect x="760" y="60" width="130" height="36" rx="6" ry="6" />
+    <text x="825.0" y="83.0" text-anchor="middle">chumicro-mqtt</text>
+  </g>
+  <g class="node default">
+    <rect x="940" y="60" width="130" height="36" rx="6" ry="6" />
+    <text x="1005.0" y="83.0" text-anchor="middle">chumicro-websockets</text>
+  </g>
+  <g class="node default">
+    <rect x="100" y="300" width="130" height="36" rx="6" ry="6" />
+    <text x="165.0" y="323.0" text-anchor="middle">chumicro-config</text>
+  </g>
+  <g class="node default">
+    <rect x="300" y="300" width="130" height="36" rx="6" ry="6" />
+    <text x="365.0" y="323.0" text-anchor="middle">chumicro-kvstore</text>
+  </g>
+  <g class="node default">
+    <rect x="520" y="300" width="130" height="36" rx="6" ry="6" />
+    <text x="585.0" y="323.0" text-anchor="middle">chumicro-runner</text>
+  </g>
+  <g class="node default">
+    <rect x="140" y="540" width="130" height="36" rx="6" ry="6" />
+    <text x="205.0" y="563.0" text-anchor="middle">chumicro-msgpack</text>
+  </g>
+  <g class="node default">
+    <rect x="480" y="540" width="130" height="36" rx="6" ry="6" />
+    <text x="545.0" y="563.0" text-anchor="middle">chumicro-timing</text>
+  </g>
+  <g class="node default">
+    <rect x="840" y="540" width="130" height="36" rx="6" ry="6" />
+    <text x="905.0" y="563.0" text-anchor="middle">chumicro-sockets</text>
+  </g>
+  <g class="node standalone">
+    <rect x="40" y="640" width="130" height="36" rx="6" ry="6" />
+    <text x="105.0" y="663.0" text-anchor="middle">chumicro-compat</text>
+  </g>
+  <g class="node standalone">
+    <rect x="220" y="640" width="130" height="36" rx="6" ry="6" />
+    <text x="285.0" y="663.0" text-anchor="middle">chumicro-logging</text>
+  </g>
+  <g class="node standalone">
+    <rect x="400" y="640" width="130" height="36" rx="6" ry="6" />
+    <text x="465.0" y="663.0" text-anchor="middle">chumicro-events</text>
+  </g>
+  </g>
+
+  <!-- Legend -->
+  <g transform="translate(740, 620)">
+    <text class="legend-title" x="0" y="0">Legend</text>
+    <line x1="0" y1="20" x2="40" y2="20" class="edge-strict" marker-end="url(#arrow-strict)" />
+    <text x="50" y="24" class="legend-label">strict dependency (pyproject.toml)</text>
+    <line x1="0" y1="44" x2="40" y2="44" class="edge-di" marker-end="url(#arrow-di)" />
+    <text x="50" y="48" class="legend-label">typical wiring (constructor injection)</text>
+  </g>
+
+</svg>
