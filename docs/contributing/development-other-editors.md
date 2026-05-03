@@ -23,7 +23,7 @@ source .venv/bin/activate
 
 ## Why imports work without extra configuration
 
-The workspace setup does two projects that make imports resolve in any editor:
+The workspace setup does two things that make imports resolve in any editor:
 
 1. **Editable installs** — `prepare_workspace.py` runs `pip install -e` for every library. This registers each package with Python's import system, so `from chumicro_timing import ticks_ms` works in any tool that uses the venv's interpreter — debuggers, REPLs, linters, test runners, and language servers. (PyCharm uses source-root configuration instead of relying on editable installs; for most other editors, the editable installs are what make imports work.)
 
