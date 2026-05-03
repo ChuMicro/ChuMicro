@@ -997,6 +997,68 @@ class TestRecvErrors:
 # ---------------------------------------------------------------------------
 
 
+class TestClientEdges:
+    """Additional defensive paths and runtime-checked branches."""
+
+    def test_check_returns_false_after_closed(self):
+        client, socket, clock, _ = _make_client()
+        client.connect("ws://example.com/")
+        _drive_handshake(client, socket, clock)
+        client.close()
+        socket.feed_inbound(
+            _client_frame(OPCODE_CLOSE, encode_close_payload(CLOSE_NORMAL, "")),
+        )
+        client.handle(clock.now())
+        client.handle(clock.now())
+        assert client.state == WebSocketState.CLOSED
+        assert client.check(clock.now()) is False
+
+    def test_check_returns_true_when_tx_partial_set(self):
+        socket = FakeSocket()
+        socket.send_chunk_cap = 4
+        client, _socket, clock, _ = _make_client(
+            socket=socket,
+            send_budget_per_tick=4,
+        )
+        client.connect("ws://example.com/")
+        _drive_handshake(client, socket, clock)
+        client.send_text("hello world")
+        # First tick partially sends; client._tx_partial is now non-None.
+        client.handle(clock.now())
+        assert client._tx_partial is not None
+        assert client.check(clock.now()) is True
+
+    def test_drain_outbound_eagain_keeps_open(self):
+        client, socket, clock, _ = _make_client()
+        client.connect("ws://example.com/")
+        _drive_handshake(client, socket, clock)
+        client.send_text("hi")
+        socket.raise_on_send = BlockingIOError(11, "would block")
+        client.handle(clock.now())
+        assert client.state == WebSocketState.OPEN
+        # Frame still queued.
+        assert client._tx_queue or client._tx_partial is not None
+
+    def test_drain_outbound_send_returns_zero(self):
+        client, socket, clock, _ = _make_client()
+        client.connect("ws://example.com/")
+        _drive_handshake(client, socket, clock)
+        client.send_text("hi")
+        original_send = socket.send
+        socket.send = lambda _data: 0
+        client.handle(clock.now())
+        assert client.state == WebSocketState.OPEN
+        socket.send = original_send
+
+    def test_handshake_send_returns_zero_keeps_state(self):
+        client, socket, clock, _ = _make_client()
+        client.connect("ws://example.com/")
+        socket.send = lambda _data: 0
+        client.handle(clock.now())
+        assert client.state == WebSocketState.CONNECTING
+        assert client._connecting_phase == ConnectingPhase.SENDING_HANDSHAKE
+
+
 class TestRequestShape:
     def test_request_carries_correct_accept_derivation(self):
         # Verify the request-response coupling: client's key produces the
