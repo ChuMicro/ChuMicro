@@ -3390,6 +3390,196 @@ class TestAddDevice:
 
 
 # ---------------------------------------------------------------------------
+# add-device — auto-fill ``defaults.<runtime>`` on first registration
+# of a runtime (gap 6 of the workspace-template
+# dev-and-regular-mode-gaps audit).
+# ---------------------------------------------------------------------------
+
+
+class TestAddDeviceAutoDefaults:
+    def test_first_device_of_runtime_fills_default(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Adding the first MP device sets ``defaults.micropython``."""
+        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        import chumicro_deploy
+        monkeypatch.setattr(
+            chumicro_deploy, "probe_device", lambda _device: _fake_probe_info(),
+        )
+        exit_code = cli.main([
+            "add-device", "--workspace-dir", str(tmp_path),
+            "--address", "/dev/cu.fake", "--runtime", "micropython", "lolin-s2",
+        ])
+        assert exit_code == 0
+        body = (tmp_path / "devices.yml").read_text()
+        assert "micropython: lolin-s2" in body
+
+    def test_first_device_with_null_default_slot_fills_it(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The materialized template has ``micropython:`` (null) — fill on first add.
+
+        Repro for gap #6's exact symptom: the user runs
+        ``chumicro-workspace setup`` (which materializes a
+        devices.yml.template carrying ``defaults.micropython: null``),
+        then runs ``add-device``.  Pre-fix, the slot stayed null
+        because the existence check (``runtime not in defaults``)
+        skipped present-but-null keys.  Post-fix, the null is
+        treated as "no default set" and the new device fills it.
+        """
+        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        # Pre-create a devices.yml mirroring the template materializer's output.
+        (tmp_path / "devices.yml").write_text(
+            "defaults:\n"
+            "  micropython:\n"
+            "  circuitpython:\n",
+        )
+        import chumicro_deploy
+        monkeypatch.setattr(
+            chumicro_deploy, "probe_device", lambda _device: _fake_probe_info(),
+        )
+        cli.main([
+            "add-device", "--workspace-dir", str(tmp_path),
+            "--address", "/dev/cu.fake", "--runtime", "micropython", "lolin-s2",
+        ])
+        body = (tmp_path / "devices.yml").read_text()
+        assert "micropython: lolin-s2" in body
+
+    def test_second_device_of_same_runtime_does_not_overwrite_default(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Adding a 2nd MP device leaves the existing default alone."""
+        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        import chumicro_deploy
+        # First add — fills defaults.
+        monkeypatch.setattr(
+            chumicro_deploy,
+            "probe_device",
+            lambda _device: _fake_probe_info(uid="UID-A"),
+        )
+        cli.main([
+            "add-device", "--workspace-dir", str(tmp_path),
+            "--address", "/dev/cu.A", "--runtime", "micropython", "first",
+        ])
+        # Second add — same runtime, different board.
+        monkeypatch.setattr(
+            chumicro_deploy,
+            "probe_device",
+            lambda _device: _fake_probe_info(uid="UID-B"),
+        )
+        cli.main([
+            "add-device", "--workspace-dir", str(tmp_path),
+            "--address", "/dev/cu.B", "--runtime", "micropython", "second",
+        ])
+        body = (tmp_path / "devices.yml").read_text()
+        # Still the first device — the auto-fill happened on add 1, not 2.
+        assert "micropython: first" in body
+        assert "micropython: second" not in body
+
+    def test_different_runtime_fills_its_own_slot(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """MP and CP each get their own auto-fill on first registration."""
+        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        import chumicro_deploy
+        # First add MP.
+        monkeypatch.setattr(
+            chumicro_deploy,
+            "probe_device",
+            lambda _device: _fake_probe_info(runtime="micropython"),
+        )
+        cli.main([
+            "add-device", "--workspace-dir", str(tmp_path),
+            "--address", "/dev/cu.mp", "--runtime", "micropython", "lolin-s2",
+        ])
+        # Then add CP.
+        monkeypatch.setattr(
+            chumicro_deploy,
+            "probe_device",
+            lambda _device: _fake_probe_info(
+                runtime="circuitpython", uid="CP-UID", version="9.2.0",
+            ),
+        )
+        cli.main([
+            "add-device", "--workspace-dir", str(tmp_path),
+            "--address", "/dev/cu.cp", "--runtime", "circuitpython", "pico-w",
+        ])
+        body = (tmp_path / "devices.yml").read_text()
+        assert "micropython: lolin-s2" in body
+        assert "circuitpython: pico-w" in body
+
+    def test_existing_default_not_overwritten(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A user-set ``defaults.micropython`` survives a fresh add-device."""
+        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        # Pre-existing devices.yml with a default already named.
+        (tmp_path / "devices.yml").write_text(
+            "defaults:\n"
+            "  micropython: preset-default\n"
+            "devices:\n"
+            "  - id: preset-default\n"
+            "    runtime: micropython\n"
+            "    address: /dev/cu.old\n",
+        )
+        import chumicro_deploy
+        monkeypatch.setattr(
+            chumicro_deploy,
+            "probe_device",
+            lambda _device: _fake_probe_info(uid="NEW-UID"),
+        )
+        cli.main([
+            "add-device", "--workspace-dir", str(tmp_path),
+            "--address", "/dev/cu.new", "--runtime", "micropython", "newcomer",
+        ])
+        body = (tmp_path / "devices.yml").read_text()
+        # Default unchanged.
+        assert "micropython: preset-default" in body
+        assert "micropython: newcomer" not in body
+
+    def test_force_re_probe_does_not_auto_fill(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Re-probing with --force shouldn't touch defaults — first-add territory only."""
+        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        # Pre-existing entry with defaults explicitly cleared.
+        (tmp_path / "devices.yml").write_text(
+            "defaults:\n"
+            "  micropython:\n"  # null
+            "devices:\n"
+            "  - id: lolin-s2\n"
+            "    runtime: micropython\n"
+            "    address: /dev/cu.old\n"
+            "    hardware:\n"
+            "      uid: ABCD1234\n",
+        )
+        import chumicro_deploy
+        monkeypatch.setattr(
+            chumicro_deploy, "probe_device", lambda _device: _fake_probe_info(),
+        )
+        cli.main([
+            "add-device", "--workspace-dir", str(tmp_path),
+            "--address", "/dev/cu.new", "--runtime", "micropython",
+            "--force", "lolin-s2",
+        ])
+        body = (tmp_path / "devices.yml").read_text()
+        # Defaults stays null (user cleared it; --force re-probe doesn't restore).
+        assert "micropython:\n" in body or "micropython: null" in body
+
+
+# ---------------------------------------------------------------------------
 # add-device — firmware-version floor (Decision 0039)
 # ---------------------------------------------------------------------------
 
