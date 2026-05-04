@@ -4,7 +4,7 @@
 <h1 align="center">ChuMicro</h1>
 
 <p align="center">
-  <strong><big>The status LED keeps blinking, even through a slow network call.</big></strong>
+  <strong><big>Keep a status LED blinking, even through a slow network call.</big></strong>
 </p>
 
 <p align="center">

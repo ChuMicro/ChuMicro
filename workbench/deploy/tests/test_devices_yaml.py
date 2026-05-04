@@ -245,6 +245,33 @@ class TestAddDevice:
         # Default stays pinned to whoever was already there.
         assert data["defaults"]["micropython"] == "existing-default"
 
+    def test_seeds_default_when_runtime_key_present_but_null(
+        self, tmp_path: Path,
+    ) -> None:
+        """Gap #6 — present-but-null default slot is treated as "no default set".
+
+        The materialized devices.yml.template ships with::
+
+            defaults:
+              micropython:
+              circuitpython:
+
+        Both keys exist with null values.  Pre-fix, ``add_device``'s
+        existence check (``runtime not in defaults``) saw the keys
+        present and skipped seeding — so the slot stayed null after
+        the first add.  Post-fix, ``defaults.get(runtime) is None``
+        treats null as "unset" and the slot gets filled.
+        """
+        path = tmp_path / "x.yml"
+        path.write_text(
+            "defaults:\n  micropython:\n  circuitpython:\n",
+        )
+        data = load_devices(path)
+        add_device(data, device_id="pico", runtime="micropython", address="/a")
+        assert data["defaults"]["micropython"] == "pico"
+        # The other-runtime null slot stays null until its own add.
+        assert data["defaults"]["circuitpython"] is None
+
     def test_set_default_false_skips_default_seed(self, tmp_path: Path) -> None:
         data = load_devices(tmp_path / "x.yml")
         add_device(
