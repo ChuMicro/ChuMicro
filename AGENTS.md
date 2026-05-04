@@ -22,7 +22,7 @@ Before proposing a structural or pattern change, check `plans/decisions/` first.
 - **Disable pagers:** Use `git --no-pager` or `| cat`.
 - **Use per-library pytest via `python scripts/run.py test`** — never run bare `pytest` from the repository root.
 - **Maintain the coverage gate** per library — the human baseline is 85 % (configured in `pyproject.toml`). **Agents must pass `--coverage-threshold 94`** on every `test` and `preflight` invocation (Decision 0025). Use `# pragma: no cover` where code genuinely cannot be exercised in CPython tests (runtime-only branches, hardware fallbacks) — see the [coverage exclusions](docs/contributing/style-guide.md#coverage-exclusions) section in the style guide.
-- **No `async`/`await`, no ISRs** — use the tick-based runner pattern from Decision 0014.
+- **No `async`/`await`, no ISRs** — use the tick-based runner pattern from Decision 0014.  Every device library that owns time or I/O must be runner-shaped per [Decision 0051](plans/decisions/0051-runner-shaped-as-project-policy.md) (no `time.sleep(N)` for `N > 0.005`, no `select.poll(timeout > 0)`, no synchronous DNS that doesn't yield).
 - **Use constructor injection** for time, I/O, and network dependencies. Put fakes in the library's `testing.py` submodule. See Decision 0010.
 - **Use f-strings everywhere.** Use `const()`, `memoryview`, and pre-allocated buffers in library code only.
 - **No single-letter variable names or abbreviated names we spell out** — `_` is the only exception for single-letter names. Human contributors may use single-letter for-loop targets (e.g., `for i in range(10)`), but **agents must always use descriptive names** like `index`, `key`, `value` even in loops. Abbreviations we spell out: `env`, `buf`, `src`, `cmd`, `msg`, `err`, `ref`, `addr`, `exc`, `exec`. Enforced by `CHU001` in `scripts/check_names.py`. Suppress with `# noqa: CHU001` only when matching an upstream API. See Decision 0022.
@@ -31,6 +31,8 @@ Before proposing a structural or pattern change, check `plans/decisions/` first.
 - **Mark runtime-specific files with `__chumicro_runtimes__`.** Files under `libraries/*/src/` whose body only makes sense on one runtime (e.g. an adapter that does `import wifi`, a backend that does `import esp32`) declare a module-level `__chumicro_runtimes__ = ("circuitpython",)` (or `("micropython",)`, `("cpython",)`, etc.).  The marker is read via AST (no execution) by both the bundle pipeline (universal source bundle + per-runtime mpy bundles for circup / mip) **and** every host-side deploy path (`chumicro_workspace deploy`, `chumicro_deploy` CLI, pytest-device staging, examples, functional tests) — the wrong-runtime file never lands on the device.  Files without a marker ship everywhere (default-safe).  Test fakes go in `testing.py`, which declares `__chumicro_runtimes__ = ("cpython",)` so it lands only in the PyPI sdist / wheel — not in any bundle, not in any device deploy.  PyPI sdists and wheels always ship every file under `src/` unfiltered (every adapter, every backend, every fake) — `pip install chumicro-foo` on a CPython host gets the complete library.  See [Decision 0037](plans/decisions/0037-runtime-file-marking.md) and [Decision 0044](plans/decisions/0044-deploy-time-runtime-filtering.md).
 - **Do not hard-code secrets.**
 - **Minimize dependencies** — prefer pure-Python implementations compatible with all three runtimes.
+- **Workbench packages do not import library packages** — `workbench/<name>/src/` files must not `import chumicro_<libname>` from `libraries/`.  Use third-party PyPI equivalents (`pyserial`, `pyyaml`, `ruamel.yaml`, `msgpack`, etc.).  Templates / on-device payloads embedded as bytes are fine — that's payload, not import.  See [Decision 0052](plans/decisions/0052-workbench-no-library-imports.md).
+- **Workbench tools that touch hardware classify failures** — every host-side tool exposes a closed-set failure-kind enum + classifier + recovery plans in `<package>.recovery`, and CLIs wrap entry points in coaching loops.  Generic `raise Exception` in workbench code is a UX defect.  See [Decision 0053](plans/decisions/0053-recovery-layer-philosophy.md); concrete instances in [Decision 0033](plans/decisions/0033-macos-circuitpy-deploy-hardening.md) and [Decision 0039](plans/decisions/0039-firmware-version-floor.md).
 - **Do not use heredocs, `echo`, `printf`, or `cat` to create multi-line content** — write files with file tools, then reference them from the terminal.
 - **Do not leave docs, templates, CI, and plans stale** — a feature that exists only in code is incomplete. When you add or change a task, command, library, config, pattern, or behavior, ask: *"If someone reads the docs tomorrow, will they find correct information about this?"* Update whatever your change makes wrong — READMEs, contributing guides, style guide, cheat sheet, CI workflows, scaffold templates, planning docs. Don't limit yourself to a fixed list of files.
 
@@ -84,10 +86,10 @@ Commit history is the primary fallback when planning docs are stale. Write commi
 
 ChuMicro is a family of open-source Python libraries targeting three runtimes:
 
-- **CircuitPython** and **MicroPython** for embedded boards
-- **CPython** for desktop development, testing, and standard tooling
+- **CircuitPython** and **MicroPython** for embedded boards (deployment runtimes).
+- **CPython** for desktop development, testing, fakes, and the workbench tooling — the host-test seam, not a deployment target.  See [Decision 0049](plans/decisions/0049-three-runtime-trinity.md).
 
-Libraries must be compatible across all three runtimes. If a third-party library does not support CircuitPython or MicroPython, prefer a compatible pure-Python implementation rather than adding a runtime-specific dependency.
+Libraries must be compatible across all three runtimes.  If a third-party library does not support CircuitPython or MicroPython, prefer a compatible pure-Python implementation rather than adding a runtime-specific dependency.  The full inclusion test for "should this be a chumicro library" lives in [Decision 0050](plans/decisions/0050-library-inclusion-test.md).
 
 ## Libraries (cross-runtime, run on a microcontroller)
 

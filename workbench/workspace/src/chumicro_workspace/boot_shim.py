@@ -576,10 +576,21 @@ def project_boot_with_import_graph_source(
         project_dir=project_dir,
     )
 
+    # Library roots derived from the import-graph search paths so
+    # ``WithRuntimeConfig`` validates the merged config against
+    # each library's manifest before writing the msgpack.  See
+    # ``chumicro_workspace.config_manifest`` and Phase 2 of the
+    # unification workstream.
+    from chumicro_workspace.config_manifest import (  # noqa: PLC0415
+        find_library_roots,
+    )
+    library_roots = find_library_roots(search_paths)
+
     return WithRuntimeConfig(
         combined,
         workspace_yaml=workspace_yaml,
         project_config=find_project_config(project_dir),
         secrets_yaml=secrets_yaml,
         output_path=project_dir / GENERATED_DIRNAME / "runtime_config.msgpack",
+        library_roots=library_roots,
     )

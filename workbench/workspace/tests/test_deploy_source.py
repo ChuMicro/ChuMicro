@@ -173,6 +173,86 @@ class TestWithRuntimeConfig:
                 secrets_yaml=secrets_yaml,
             )
 
+    def test_skips_validation_when_no_library_roots(
+        self, tmp_path: Path,
+    ) -> None:
+        # Default ``library_roots=None`` keeps the pre-Phase-2
+        # behaviour: no manifest reads, no validation.  Existing
+        # callers that don't yet plumb the import-graph library
+        # list through stay unaffected.
+        workspace_yaml, project_config, secrets_yaml = _seed_paths(tmp_path)
+        inner = FileMapSource({"/code.py": ""}, entrypoint="/code.py")
+        decorated = WithRuntimeConfig(
+            inner,
+            workspace_yaml=workspace_yaml,
+            project_config=project_config,
+            secrets_yaml=secrets_yaml,
+        )
+        # Would fail validation if it ran (no chumicro-wifi
+        # manifest reachable, but project config has wifi).
+        decorated.files()  # no exception
+
+    def test_validates_when_library_roots_supplied_with_manifest(
+        self, tmp_path: Path,
+    ) -> None:
+        # Plumb a library root with a manifest — validation reads
+        # the manifest, unions with itself, and checks the merged
+        # config against the union.  Wifi config is complete, so
+        # validation passes.
+        workspace_yaml, project_config, secrets_yaml = _seed_paths(tmp_path)
+        wifi_lib = tmp_path / "libraries" / "wifi"
+        wifi_lib.mkdir(parents=True)
+        (wifi_lib / "pyproject.toml").write_text(
+            '[project]\nname = "chumicro-wifi"\n'
+            "[tool.chumicro.config.sections.wifi]\n"
+            'required = ["ssid", "password"]\n'
+        )
+        inner = FileMapSource({"/code.py": ""}, entrypoint="/code.py")
+        decorated = WithRuntimeConfig(
+            inner,
+            workspace_yaml=workspace_yaml,
+            project_config=project_config,
+            secrets_yaml=secrets_yaml,
+            library_roots=(wifi_lib,),
+        )
+        decorated.files()  # no exception — config has ssid + password
+
+    def test_raises_when_library_roots_manifest_finds_missing_required(
+        self, tmp_path: Path,
+    ) -> None:
+        # Project config drops ``password`` — validation must fire
+        # at deploy time, before the msgpack lands on the device.
+        from chumicro_workspace import ConfigManifestError  # noqa: PLC0415
+
+        workspace_yaml = tmp_path / "workspace.yml"
+        workspace_yaml.write_text("defaults: {}\n")
+        project_dir = tmp_path / "projects" / "back-porch"
+        project_dir.mkdir(parents=True)
+        project_config = project_dir / "config.toml"
+        # ssid present, password missing.
+        project_config.write_text("[wifi]\nssid = 'HomeNet'\n")
+        secrets_yaml = tmp_path / "secrets.yml"
+        secrets_yaml.write_text("")
+
+        wifi_lib = tmp_path / "libraries" / "wifi"
+        wifi_lib.mkdir(parents=True)
+        (wifi_lib / "pyproject.toml").write_text(
+            '[project]\nname = "chumicro-wifi"\n'
+            "[tool.chumicro.config.sections.wifi]\n"
+            'required = ["ssid", "password"]\n'
+        )
+
+        inner = FileMapSource({"/code.py": ""}, entrypoint="/code.py")
+        decorated = WithRuntimeConfig(
+            inner,
+            workspace_yaml=workspace_yaml,
+            project_config=project_config,
+            secrets_yaml=secrets_yaml,
+            library_roots=(wifi_lib,),
+        )
+        with pytest.raises(ConfigManifestError, match="password"):
+            decorated.files()
+
     def test_files_regenerates_msgpack_each_call(self, tmp_path: Path) -> None:
         """Edits to project config show up on the next deploy without manual rebuild."""
         workspace_yaml, project_config, secrets_yaml = _seed_paths(tmp_path)
