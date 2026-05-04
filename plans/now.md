@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **pytest-device runtime-marker support — done.**  Functional tests for runtime-specific backends (CP NVM, MP LittleFS / NVS, CP / MP wifi adapters) were generating 34 spurious `ImportError`s every full `test-libraries-functional` sweep when `defaults.ide_runtime: both` parametrized them with the wrong runtime.  Plugin now reads each test file's `__chumicro_runtimes__` marker (same convention as device-side source files per Decisions 0037 / 0044) and filters target devices accordingly; a second hook (`pytest_pycollect_makemodule`) returns a no-import stub for `libraries/<name>/functional_tests/test_*.py` paths so pytest's default Module factory never tries to import them on the host.  Five test files lost their dead `if not _IS_X: return` short-circuits in the same commit.
-- **Last shipped:** `chumicro-pytest-device + kvstore/wifi functional tests: honor __chumicro_runtimes__ marker; suppress host-side Module collection` (this commit).  Validated against pi-pico-w MP + CP boards: kvstore 43 passed (was 22 spurious ImportErrors), wifi 41 passed (was 13 spurious ImportErrors).
-- **In flight:** idle.
-- **Blocked on:** —.  Pre-existing `test_pre_release_floor_skips_bump_requirement` failure flagged via spawn_task — not in scope for this slice.
-- **Last touched:** workbench/pytest-device/{src,tests}, libraries/{kvstore,wifi}/functional_tests/, plans/now.md.
+- **Phase:** **scripts/workbench/template-repo audit — gaps-doc cleanup landed.**  End-to-end re-audit of how `scripts/`, `workbench/*` packages, and the `ChuMicro-Workspace-Template` repo intersect.  Confirmed gaps-doc items #1 (cryptography) + #2 (doc links) landed as `8bcfb6b`/`d9d039e` (struck through in the doc), and verified gap #6 (`add-device` defaults) still open in code.  Two new architectural observations surfaced beyond the existing gaps doc, queued as follow-ups: (a) `chumicro_deploy._runtime_marker` is private-by-name but public-by-Decision-0044 with three external callers (scripts/bundle_manager.py, workbench/pytest-device, workbench/workspace.boot_shim) — promote to `runtime_marker` and re-export; (b) `scripts/workspace.py` shares its module name with the `chumicro_workspace` package (18 sibling `from workspace import …` callsites) — rename to `scripts/repo_layout.py`.  My initial recommendation to fold `prepare_workspace.py` into `scripts/run.py` was already considered and rejected (Item B in `plans/next-up.md` L52, commit `318516a` — split is load-bearing, not cosmetic).
+- **Last shipped:** `plans/workspace-template-dev-and-regular-mode-gaps.md: strike landed items, confirm gap #6 still open` (this commit).
+- **In flight:** idle.  Two audit follow-ups awaiting user pick: `_runtime_marker` promotion (3 external callers + Decision 0044 prose), `scripts/workspace.py` → `scripts/repo_layout.py` rename (18 importers).
+- **Blocked on:** —.
+- **Last touched:** `plans/workspace-template-dev-and-regular-mode-gaps.md`, `plans/now.md`.
 
 ---
 
