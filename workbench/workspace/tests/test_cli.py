@@ -783,25 +783,47 @@ class TestDeploy:
         assert "/lib/projects/back-porch/app.py" in files
         assert b'"back-porch"' in files["/active.py"]
 
-    def test_boot_shim_and_import_graph_mutually_exclusive(
+    def test_boot_shim_and_import_graph_compose(
         self,
         tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        """The two layouts can't combine — they ship different on-device shapes."""
+        """Gap 5: the two flags compose via project_boot_with_import_graph_source.
+
+        Dry-run output proves the combined layout shipped: the boot-shim
+        layer (``/code.py`` shim, ``/active.py``, ``workspace_runtime``,
+        project files under ``/lib/projects/back-porch/``) AND a library
+        the project imports from ``shared/`` at ``/lib/<name>.py``.
+        """
         root = _seed_workspace(tmp_path)
+        # Library the project will import — must reach the device under /lib/.
+        shared = root / "shared"
+        shared.mkdir()
+        (shared / "external_lib.py").write_text("def helper(): pass\n")
         project_dir = root / "projects" / "back-porch"
         project_dir.mkdir(parents=True)
         (project_dir / "config.toml").write_text("[wifi]\nssid = 'x'\n")
-        (project_dir / "app.py").write_text("def run(): pass\n")
-        (project_dir / "main.py").write_text("import x\n")
+        (project_dir / "app.py").write_text(
+            "import external_lib\ndef run(): pass\n",
+        )
 
         exit_code = cli.main([
             "deploy", "--workspace-dir", str(root),
             "--boot-shim", "--import-graph", "back-porch",
+            "--dry-run",
         ])
-        assert exit_code == 2
-        assert "mutually exclusive" in capsys.readouterr().err
+        assert exit_code == 0
+        captured = capsys.readouterr().out
+        # Layout label proves the new dispatch branch fired.
+        assert "boot-shim+import-graph" in captured
+        # Boot-shim layer present (seed defaults to MP, so /main.py
+        # is the entrypoint shim).
+        assert "/main.py" in captured
+        assert "/active.py" in captured
+        assert "/lib/workspace_runtime/__init__.py" in captured
+        assert "/lib/projects/back-porch/app.py" in captured
+        # Import-graph contribution present.
+        assert "/lib/external_lib.py" in captured
 
     def test_import_graph_flag_uses_ast_walker(
         self,
