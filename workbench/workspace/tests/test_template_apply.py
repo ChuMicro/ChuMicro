@@ -24,7 +24,7 @@ def fake_template_repo(tmp_path: Path) -> Path:
     """A local git repo populated like the canonical workspace template.
 
     Layout mirrors the post-Decision-0038 ChuMicro-Workspace-Template
-    repo: tool-owned files at the root, a tool-owned `_templates/`
+    repo: tool-owned files at the root, a tool-owned `_workspace_template/`
     directory, user-owned `workspace.yml`, init-only `README.md`.
 
     Returns the absolute path to the repo (suitable as a
@@ -39,7 +39,7 @@ def fake_template_repo(tmp_path: Path) -> Path:
     )
     (repo / "README.md").write_text("# init-only readme\n")
     # Anchor `secrets.yml` to the workspace root so the
-    # `_templates/secrets.yml` template source still gets tracked.
+    # `_workspace_template/secrets.yml` template source still gets tracked.
     (repo / ".gitignore").write_text(".venv/\n/secrets.yml\n")
     (repo / "workspace.yml").write_text("environment: dev\n")
     (repo / "projects").mkdir()
@@ -50,8 +50,8 @@ def fake_template_repo(tmp_path: Path) -> Path:
     (repo / "projects" / "_template" / "config.toml").write_text(
         '[project]\nname = "_template"\n',
     )
-    (repo / "_templates").mkdir()
-    (repo / "_templates" / "secrets.yml").write_text(
+    (repo / "_workspace_template").mkdir()
+    (repo / "_workspace_template" / "secrets.yml").write_text(
         "# fill in your secrets here\nwifi_password: \n",
     )
     _git("init", "-b", "main", cwd=repo)
@@ -82,11 +82,11 @@ class TestInit:
         report = init(target, template_url=str(fake_template_repo))
         assert (target / "run.py").is_file()
         assert (target / "workspace.yml").is_file()
-        assert (target / "_templates" / "secrets.yml").is_file()
+        assert (target / "_workspace_template" / "secrets.yml").is_file()
         # All files reported as WRITTEN.
         actions = _files(report)
         assert actions["run.py"] == ApplyAction.WRITTEN
-        assert actions["_templates/secrets.yml"] == ApplyAction.WRITTEN
+        assert actions["_workspace_template/secrets.yml"] == ApplyAction.WRITTEN
 
     def test_strips_dot_git_and_reinitializes(
         self, fake_template_repo: Path, tmp_path: Path,
@@ -189,20 +189,20 @@ class TestUpdate:
         assert actions["README.md"] == ApplyAction.SKIPPED
         assert (target / "README.md").read_text() == "# my custom readme\n"
 
-    def test_refreshes_templates_directory(
+    def test_refreshes_workspace_template_directory(
         self, fake_template_repo: Path, tmp_path: Path,
     ) -> None:
-        """Decision 0038 §5: `_templates/` is tool-owned and flows on
+        """Decision 0038 §5: `_workspace_template/` is tool-owned and flows on
         update so newer template skeletons reach existing workspaces."""
         target = tmp_path / "my-house"
         init(target, template_url=str(fake_template_repo))
-        # Mutate the _templates source — update should restore it.
-        (target / "_templates" / "secrets.yml").write_text(
+        # Mutate the _workspace_template source — update should restore it.
+        (target / "_workspace_template" / "secrets.yml").write_text(
             "# stale local edit\n",
         )
         report = update(target, template_url=str(fake_template_repo))
         actions = _files(report)
-        assert actions["_templates/secrets.yml"] == ApplyAction.REFRESHED
+        assert actions["_workspace_template/secrets.yml"] == ApplyAction.REFRESHED
 
     def test_missing_target_raises(self, tmp_path: Path) -> None:
         with pytest.raises(FileNotFoundError):
@@ -216,12 +216,12 @@ class TestUpdate:
 
 
 class TestMaterializeTemplates:
-    def test_materializes_missing_files_from_templates_dir(
+    def test_materializes_missing_files_from_workspace_template_dir(
         self, tmp_path: Path,
     ) -> None:
         workspace = tmp_path / "ws"
         workspace.mkdir()
-        templates = workspace / "_templates"
+        templates = workspace / "_workspace_template"
         templates.mkdir()
         (templates / "secrets.yml").write_text("wifi_password: \n")
         report = materialize_templates(workspace)
@@ -232,7 +232,7 @@ class TestMaterializeTemplates:
     def test_skips_existing_files(self, tmp_path: Path) -> None:
         workspace = tmp_path / "ws"
         workspace.mkdir()
-        templates = workspace / "_templates"
+        templates = workspace / "_workspace_template"
         templates.mkdir()
         (templates / "secrets.yml").write_text("from template\n")
         (workspace / "secrets.yml").write_text("user-edited\n")
@@ -242,7 +242,7 @@ class TestMaterializeTemplates:
         # User edits preserved.
         assert (workspace / "secrets.yml").read_text() == "user-edited\n"
 
-    def test_no_templates_dir_returns_empty_report(
+    def test_no_workspace_template_dir_returns_empty_report(
         self, tmp_path: Path,
     ) -> None:
         workspace = tmp_path / "ws"
@@ -253,7 +253,7 @@ class TestMaterializeTemplates:
     def test_handles_nested_template_files(self, tmp_path: Path) -> None:
         workspace = tmp_path / "ws"
         workspace.mkdir()
-        templates = workspace / "_templates"
+        templates = workspace / "_workspace_template"
         (templates / "config" / "deep").mkdir(parents=True)
         (templates / "config" / "deep" / "settings.yml").write_text(
             "key: value\n",
@@ -267,7 +267,7 @@ class TestMaterializeTemplates:
         self, tmp_path: Path,
     ) -> None:
         workspace = tmp_path / "ws"
-        templates = workspace / "_templates"
+        templates = workspace / "_workspace_template"
         templates.mkdir(parents=True)
         (templates / "secrets.yml").write_text("placeholder\n")
 

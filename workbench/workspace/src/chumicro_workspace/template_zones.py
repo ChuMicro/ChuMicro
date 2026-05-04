@@ -4,7 +4,7 @@ Generalizes Decision 0029 §9's `devices.yml` ownership model to the
 whole workspace tree.  Every file falls into one of three zones:
 
 * **Tool-owned** — `run.py`, `AGENTS.md`, `CONTRIBUTING.md`,
-  `pyproject.toml`, `projects/_template/`, `_templates/`
+  `pyproject.toml`, `projects/_template/`, `_workspace_template/`
   (template-source files used to materialize user-edited config
   like `secrets.yml` per Decision 0038 §5), `examples/` (Slice 5
   reading-material demos shipped from the canonical template), and
@@ -51,7 +51,7 @@ TOOL_OWNED_PATHS: frozenset[str] = frozenset({
 #: a listed prefix is rewritten on ``update``.
 TOOL_OWNED_PREFIXES: tuple[str, ...] = (
     "projects/_template/",
-    "_templates/",
+    "_workspace_template/",
     ".github/skills/",
     "examples/",
 )
@@ -88,9 +88,9 @@ def classify(target_path: str) -> Zone:
     ``workspace.yml`` is never clobbered by ``update``), user-owned
     prefixes (``shared/`` / ``packages/``), exact-match init-only,
     exact-match tool-owned, tool-owned prefixes (``projects/_template/``
-    / ``_templates/``).  Anything that falls through — typically
-    ``projects/<a-real-project>/...`` files the user created post-init —
-    counts as user-owned.
+    / ``_workspace_template/``).  Anything that falls through —
+    typically ``projects/<a-real-project>/...`` files the user
+    created post-init — counts as user-owned.
     """
     posix = PurePosixPath(target_path).as_posix()
     if posix in USER_OWNED_PATHS:
