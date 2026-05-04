@@ -34,8 +34,8 @@ from pathlib import Path
 # so its siblings (check_api, check_version, …) import as bare modules.
 import check_api
 import check_version
+import repo_layout
 import verify_examples
-import workspace
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
 ROOT = SCRIPTS_DIR.parent
@@ -328,9 +328,9 @@ def audit_verify_examples_broken_import() -> Result:
         # verify_examples computes relative_to(ROOT); patch so it points
         # at our workdir for the duration of this scenario.
         monkey_root = workdir
-        old_workspace_root = workspace.ROOT
+        old_workspace_root = repo_layout.ROOT
         old_module_root = verify_examples.ROOT
-        workspace.ROOT = monkey_root
+        repo_layout.ROOT = monkey_root
         verify_examples.ROOT = monkey_root
         try:
             from io import StringIO
@@ -343,7 +343,7 @@ def audit_verify_examples_broken_import() -> Result:
                 sys.stdout = old_stdout
             output = buffer.getvalue()
         finally:
-            workspace.ROOT = old_workspace_root
+            repo_layout.ROOT = old_workspace_root
             verify_examples.ROOT = old_module_root
     fired = exit_code != 0 and "FAIL" in output
     return _scenario("verify_examples (broken import)", fired, output.strip())
@@ -362,8 +362,8 @@ def audit_check_version_workbench_no_bump() -> Result:
         _git(repo, "add", "-A")
         _git(repo, "commit", "--quiet", "-m", "src change without bump")
 
-        old_root = workspace.ROOT
-        workspace.ROOT = repo
+        old_root = repo_layout.ROOT
+        repo_layout.ROOT = repo
         try:
             from io import StringIO
             buffer = StringIO()
@@ -375,7 +375,7 @@ def audit_check_version_workbench_no_bump() -> Result:
                 sys.stdout = old_stdout
             output = buffer.getvalue()
         finally:
-            workspace.ROOT = old_root
+            repo_layout.ROOT = old_root
     fired = exit_code == 1 and "FAIL: workbench/deploy/" in output
     return _scenario(
         "check_version workbench (src no-bump → fail)", fired, output.strip()
@@ -391,8 +391,8 @@ def audit_check_version_workbench_with_bump_passes() -> Result:
         _git(repo, "add", "-A")
         _git(repo, "commit", "--quiet", "-m", "src change with bump")
 
-        old_root = workspace.ROOT
-        workspace.ROOT = repo
+        old_root = repo_layout.ROOT
+        repo_layout.ROOT = repo
         try:
             from io import StringIO
             buffer = StringIO()
@@ -404,7 +404,7 @@ def audit_check_version_workbench_with_bump_passes() -> Result:
                 sys.stdout = old_stdout
             output = buffer.getvalue()
         finally:
-            workspace.ROOT = old_root
+            repo_layout.ROOT = old_root
     fired = exit_code == 0 and "OK: workbench/deploy/" in output
     return _scenario(
         "check_version workbench (src + bump → pass)", fired, output.strip()
@@ -426,9 +426,9 @@ def audit_check_api_workbench_breakage_patch_fails() -> Result:
         _git(repo, "add", "-A")
         _git(repo, "commit", "--quiet", "-m", "remove symbol; patch bump")
 
-        old_workspace_root = workspace.ROOT
+        old_workspace_root = repo_layout.ROOT
         old_module_root = check_api.ROOT
-        workspace.ROOT = repo
+        repo_layout.ROOT = repo
         check_api.ROOT = repo
         try:
             from io import StringIO
@@ -441,7 +441,7 @@ def audit_check_api_workbench_breakage_patch_fails() -> Result:
                 sys.stdout = old_stdout
             output = buffer.getvalue()
         finally:
-            workspace.ROOT = old_workspace_root
+            repo_layout.ROOT = old_workspace_root
             check_api.ROOT = old_module_root
     fired = (
         exit_code == 1
@@ -463,9 +463,9 @@ def audit_check_api_workbench_breakage_minor_passes() -> Result:
         _git(repo, "add", "-A")
         _git(repo, "commit", "--quiet", "-m", "remove symbol; minor bump")
 
-        old_workspace_root = workspace.ROOT
+        old_workspace_root = repo_layout.ROOT
         old_module_root = check_api.ROOT
-        workspace.ROOT = repo
+        repo_layout.ROOT = repo
         check_api.ROOT = repo
         try:
             from io import StringIO
@@ -478,7 +478,7 @@ def audit_check_api_workbench_breakage_minor_passes() -> Result:
                 sys.stdout = old_stdout
             output = buffer.getvalue()
         finally:
-            workspace.ROOT = old_workspace_root
+            repo_layout.ROOT = old_workspace_root
             check_api.ROOT = old_module_root
     fired = exit_code == 0 and "minor bump sufficient" in output
     return _scenario(
@@ -500,9 +500,9 @@ def audit_check_api_libraries_breakage_patch_fails() -> Result:
         _git(repo, "add", "-A")
         _git(repo, "commit", "--quiet", "-m", "remove symbol; patch bump")
 
-        old_workspace_root = workspace.ROOT
+        old_workspace_root = repo_layout.ROOT
         old_module_root = check_api.ROOT
-        workspace.ROOT = repo
+        repo_layout.ROOT = repo
         check_api.ROOT = repo
         try:
             from io import StringIO
@@ -515,7 +515,7 @@ def audit_check_api_libraries_breakage_patch_fails() -> Result:
                 sys.stdout = old_stdout
             output = buffer.getvalue()
         finally:
-            workspace.ROOT = old_workspace_root
+            repo_layout.ROOT = old_workspace_root
             check_api.ROOT = old_module_root
     fired = (
         exit_code == 1

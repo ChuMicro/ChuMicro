@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **scripts/workbench/template-repo audit — runtime-marker promotion landed.**  Second cleanup pass from the cross-tree audit: `chumicro_deploy._runtime_marker` was private-by-name but designated by Decision 0044 as a public cross-package contract (3 external callers in scripts/bundle_manager.py, workbench/pytest-device, workbench/workspace.boot_shim).  Renamed to `chumicro_deploy.runtime_marker`, re-exported `read_runtime_marker` + `file_targets_runtime` from `chumicro_deploy.__init__`, updated all 7 callers (4 internal, 3 external) + test module + Decision 0044 prose.  VERSION bumps: deploy 0.5.0 → 0.6.0 (minor — new public surface), pytest-device 0.3.1 → 0.3.2 (patch — consumer path), workspace 0.3.0 → 0.3.1 (patch — consumer path).
-- **Last shipped:** `chumicro-deploy + chumicro-pytest-device + chumicro-workspace: promote _runtime_marker to public chumicro_deploy.runtime_marker` (this commit).
-- **In flight:** idle.  One audit follow-up still queued: rename `scripts/workspace.py` → `scripts/repo_layout.py` to kill the module-name collision with the `chumicro_workspace` package (18 sibling `from workspace import …` callsites + bare `import workspace` in `audit_gates.py`).
+- **Phase:** **scripts/workbench/template-repo audit — module-name collision resolved.**  Third cleanup pass from the cross-tree audit: renamed `scripts/workspace.py` -> `scripts/repo_layout.py` (and the test file `test_workspace.py` -> `test_repo_layout.py`) via `git mv` to disambiguate from the `chumicro_workspace` workbench package.  18 sibling scripts in `scripts/` updated to `from repo_layout import …`; `audit_gates.py`'s bare `import workspace` + dotted access; the renamed test file's bare import + `from` import + `monkeypatch.setattr(workspace, …)` patches; lazy imports inside `test_bundle_manager.py`; docstring prose in `repo_layout.py`, `test_ide_sync.py`, and Decision 0032.  Conceptual prose ("workspace state", "workspace fixture") left as-is — those refer to the mono-repo concept, not the module.  No VERSION bumps — `scripts/` is mono-repo internal, not published.
+- **Last shipped:** `scripts: rename workspace.py -> repo_layout.py to disambiguate from chumicro_workspace package` (this commit).
+- **In flight:** idle.  Audit follow-up queue from `plans/workspace-template-dev-and-regular-mode-gaps.md` is the natural next; the three cleanup items I queued are now all landed (`326651e` gaps-doc strike, `96bddcd` runtime_marker promotion, this commit).
 - **Blocked on:** —.
-- **Last touched:** `workbench/deploy/{src,tests,VERSION}`, `workbench/pytest-device/{src,tests,VERSION}`, `workbench/workspace/{src,VERSION}`, `scripts/bundle_manager.py`, `plans/decisions/0044-deploy-time-runtime-filtering.md`, `plans/now.md`.
+- **Last touched:** `scripts/{repo_layout.py,run.py,*.py}`, `scripts/tests/{test_repo_layout.py,test_bundle_manager.py,test_ide_sync.py}`, `plans/decisions/0032-workbench-host-tools.md`, `plans/now.md`.
 
 ---
 

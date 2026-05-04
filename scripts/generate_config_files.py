@@ -19,8 +19,8 @@ Called by ``python scripts/run.py setup``.
 
 from __future__ import annotations
 
+from repo_layout import ROOT
 from shared import TEMPLATES_DIR
-from workspace import ROOT
 
 #: Files to generate: (relative path, template filename).
 _CONFIGS: list[tuple[str, str]] = [

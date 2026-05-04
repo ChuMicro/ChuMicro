@@ -40,8 +40,8 @@ import sys
 import venv
 from pathlib import Path
 
+from repo_layout import ROOT
 from shared import install_workspace, running_on_native_windows
-from workspace import ROOT
 
 VENV_DIR = ROOT / ".venv"
 #: Minimum Python for the workspace (pytest 8, hatchling, griffe need 3.8+;

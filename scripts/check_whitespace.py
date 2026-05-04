@@ -26,7 +26,7 @@ import re
 import sys
 from pathlib import Path
 
-from workspace import ROOT, discover_ruff_paths
+from repo_layout import ROOT, discover_ruff_paths
 
 _EXTENSIONS = {".py", ".md", ".yml", ".yaml", ".toml", ".txt", ".cfg", ".ini", ".json"}
 _SKIP_DIRS = {"__pycache__", "site", ".git", ".tools", "node_modules"}

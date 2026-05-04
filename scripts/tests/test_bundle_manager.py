@@ -439,7 +439,7 @@ class TestCollectLibraryMetadata:
 
     def test_finds_libraries(self):
         """Discovers metadata for existing libraries."""
-        from workspace import ROOT
+        from repo_layout import ROOT
 
         metadata = _collect_library_metadata(ROOT)
         assert len(metadata) > 0
@@ -448,7 +448,7 @@ class TestCollectLibraryMetadata:
 
     def test_metadata_has_expected_keys(self):
         """Each metadata entry has the expected keys."""
-        from workspace import ROOT
+        from repo_layout import ROOT
 
         metadata = _collect_library_metadata(ROOT)
         for entry in metadata:
@@ -463,7 +463,7 @@ class TestGenerateBundleReadme:
 
     def test_stable_readme(self):
         """Stable README contains expected content."""
-        from workspace import ROOT
+        from repo_layout import ROOT
 
         readme = generate_bundle_readme(ROOT)
         assert STABLE_BUNDLE_REPO in readme
@@ -473,7 +473,7 @@ class TestGenerateBundleReadme:
 
     def test_experimental_readme(self):
         """Experimental README contains warning banner."""
-        from workspace import ROOT
+        from repo_layout import ROOT
 
         readme = generate_bundle_readme(ROOT, experimental=True)
         assert EXPERIMENTAL_BUNDLE_REPO in readme

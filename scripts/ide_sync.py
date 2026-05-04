@@ -18,8 +18,8 @@ from __future__ import annotations
 import json
 import sys
 
+from repo_layout import ROOT, discover_package_dirs, discover_source_roots
 from shared import load_template
-from workspace import ROOT, discover_package_dirs, discover_source_roots
 
 # ---------------------------------------------------------------------------
 # Managed task definitions — shared between PyCharm and VS Code

@@ -149,7 +149,7 @@ CPython packages.  The three folders now have clean, independent axes:
 
 ## Consequences
 
-- `scripts/workspace.py` discovery grows a third source folder:
+- `scripts/repo_layout.py` discovery grows a third source folder:
   `discover_package_dirs()` must scan `workbench/` alongside
   `libraries/` and `support/`.  `discover_library_dirs()` stays
   libraries-only (used by bundle/docs/cross-runtime gates, which

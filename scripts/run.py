@@ -26,8 +26,7 @@ from pathlib import Path
 # meant every phase that subprocess-re-invokes ``python scripts/run.py``
 # (Decision 0048) paid the full import-time tax even when running a
 # task that didn't touch them.
-from shared import run_command
-from workspace import (
+from repo_layout import (
     ROOT,
     coverage_args_for,
     detect_changed_packages,
@@ -42,6 +41,7 @@ from workspace import (
     pythonpath_environment,
     resolve_scope,
 )
+from shared import run_command
 
 PYTHON = sys.executable
 # Script that runs a library's tests/ directory under a non-CPython interpreter

@@ -21,8 +21,8 @@ from chumicro_workspace.scaffold import (
     scaffold_library,
 )
 from ide_sync import sync_ide
+from repo_layout import ROOT
 from shared import install_editable
-from workspace import ROOT
 
 
 def _scaffold_library(name: str) -> int:

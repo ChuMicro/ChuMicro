@@ -1,10 +1,10 @@
-"""Tests for workspace.py — workspace discovery, scope resolution, and helpers.
+"""Tests for repo_layout.py — workspace discovery, scope resolution, and helpers.
 
 Every test that touches workspace state runs against a synthetic
 workspace materialized under ``tmp_path``: the ``synthetic_workspace``
 fixture stands up a controlled set of fake packages (``libraries/lib_a``,
 ``libraries/lib_b``, ``workbench/tool_x``, ``support/helper``) and pins
-``workspace.ROOT`` to the temp tree.  No test reads the real on-disk
+``repo_layout.ROOT`` to the temp tree.  No test reads the real on-disk
 state of any real package — that would couple test outcomes to
 whichever packages happened to live in the workspace on the day the
 test was written, and the same partial-mock smell that broke
@@ -15,8 +15,8 @@ here as soon as a real package was renamed or a new one added.
 from pathlib import Path
 
 import pytest
-import workspace
-from workspace import (
+import repo_layout
+from repo_layout import (
     ALL_PLATFORMS,
     GITHUB_ORG,
     PUBLISHABLE_ROOTS,
@@ -48,7 +48,7 @@ from workspace import (
 @pytest.fixture
 def synthetic_workspace(tmp_path: Path, monkeypatch):
     """Materialize a synthetic workspace under ``tmp_path`` and pin
-    ``workspace.ROOT`` to it.
+    ``repo_layout.ROOT`` to it.
 
     The layout (intentionally diverse so tests can exercise filters):
 
@@ -61,7 +61,7 @@ def synthetic_workspace(tmp_path: Path, monkeypatch):
     * ``support/helper/`` — pyproject + ``src/chumicro_helper/`` (no
       VERSION; support packages aren't published)
 
-    Clears ``workspace._package_dirs_cache`` so the cached real-workspace
+    Clears ``repo_layout._package_dirs_cache`` so the cached real-workspace
     discovery from a prior test (or other code path) doesn't bleed in.
     """
     layout = [
@@ -86,8 +86,8 @@ def synthetic_workspace(tmp_path: Path, monkeypatch):
         if with_tests:
             (package_dir / "tests").mkdir()
 
-    monkeypatch.setattr(workspace, "ROOT", tmp_path)
-    monkeypatch.setattr(workspace, "_package_dirs_cache", None)
+    monkeypatch.setattr(repo_layout, "ROOT", tmp_path)
+    monkeypatch.setattr(repo_layout, "_package_dirs_cache", None)
 
     return tmp_path
 
@@ -212,7 +212,7 @@ class TestFilterByPlatform:
 
 
 class TestDiscoverPackageDirs:
-    """Tests for discover_package_dirs against a synthetic workspace."""
+    """Tests for discover_package_dirs against a synthetic repo_layout."""
 
     def test_returns_list_of_paths(self, synthetic_workspace):
         """Returns a list of Paths covering every synthetic package."""
@@ -240,8 +240,8 @@ class TestDiscoverPackageDirs:
         (tmp_path / "libraries" / "lone").mkdir(parents=True)
         (tmp_path / "libraries" / "lone" / "pyproject.toml").touch()
 
-        monkeypatch.setattr(workspace, "ROOT", tmp_path)
-        monkeypatch.setattr(workspace, "_package_dirs_cache", None)
+        monkeypatch.setattr(repo_layout, "ROOT", tmp_path)
+        monkeypatch.setattr(repo_layout, "_package_dirs_cache", None)
 
         names = {directory.name for directory in discover_package_dirs()}
         assert names == {"lone"}
@@ -383,7 +383,7 @@ class TestChangedPublishablePackages:
     def test_library_src_change_detected(self, monkeypatch):
         """A change under libraries/<name>/src/ is release-relevant."""
         monkeypatch.setattr(
-            "workspace.changed_files",
+            "repo_layout.changed_files",
             lambda _base: ["libraries/syn_lib/src/chumicro_syn_lib/core.py"],
         )
         result = changed_publishable_packages("origin/main")
@@ -392,7 +392,7 @@ class TestChangedPublishablePackages:
     def test_library_pyproject_change_detected(self, monkeypatch):
         """A change to libraries/<name>/pyproject.toml is release-relevant."""
         monkeypatch.setattr(
-            "workspace.changed_files",
+            "repo_layout.changed_files",
             lambda _base: ["libraries/syn_lib/pyproject.toml"],
         )
         result = changed_publishable_packages("origin/main")
@@ -401,7 +401,7 @@ class TestChangedPublishablePackages:
     def test_workbench_src_change_detected(self, monkeypatch):
         """A change under workbench/<name>/src/ is release-relevant."""
         monkeypatch.setattr(
-            "workspace.changed_files",
+            "repo_layout.changed_files",
             lambda _base: ["workbench/syn_tool/src/chumicro_syn_tool/core.py"],
         )
         result = changed_publishable_packages("origin/main")
@@ -410,7 +410,7 @@ class TestChangedPublishablePackages:
     def test_workbench_pyproject_change_detected(self, monkeypatch):
         """A change to workbench/<name>/pyproject.toml is release-relevant."""
         monkeypatch.setattr(
-            "workspace.changed_files",
+            "repo_layout.changed_files",
             lambda _base: ["workbench/syn_tool/pyproject.toml"],
         )
         result = changed_publishable_packages("origin/main")
@@ -419,7 +419,7 @@ class TestChangedPublishablePackages:
     def test_test_change_not_detected(self, monkeypatch):
         """A change under <root>/<name>/tests/ is NOT release-relevant."""
         monkeypatch.setattr(
-            "workspace.changed_files",
+            "repo_layout.changed_files",
             lambda _base: [
                 "libraries/syn_lib/tests/test_a.py",
                 "workbench/syn_tool/tests/test_b.py",
@@ -431,7 +431,7 @@ class TestChangedPublishablePackages:
     def test_docs_change_not_detected(self, monkeypatch):
         """A change under <root>/<name>/docs/ is NOT release-relevant."""
         monkeypatch.setattr(
-            "workspace.changed_files",
+            "repo_layout.changed_files",
             lambda _base: ["libraries/syn_lib/docs/guide.md"],
         )
         result = changed_publishable_packages("origin/main")
@@ -440,7 +440,7 @@ class TestChangedPublishablePackages:
     def test_mixed_roots(self, monkeypatch):
         """Changes across libraries/ and workbench/ are both detected."""
         monkeypatch.setattr(
-            "workspace.changed_files",
+            "repo_layout.changed_files",
             lambda _base: [
                 "libraries/syn_lib/src/chumicro_syn_lib/core.py",
                 "workbench/syn_tool/src/chumicro_syn_tool/core.py",
@@ -452,7 +452,7 @@ class TestChangedPublishablePackages:
     def test_support_paths_ignored(self, monkeypatch):
         """Paths under support/ are not publishable and are ignored."""
         monkeypatch.setattr(
-            "workspace.changed_files",
+            "repo_layout.changed_files",
             lambda _base: [
                 "support/syn_helper/src/syn_helper/core.py",
                 "scripts/run.py",
@@ -485,7 +485,7 @@ class TestDetectChangedPackages:
     def test_infrastructure_change_returns_none(self, monkeypatch):
         """Changes to scripts/ trigger all-packages testing."""
         monkeypatch.setattr(
-            "workspace.subprocess.run",
+            "repo_layout.subprocess.run",
             lambda *_args, **_kwargs: type(
                 "R", (), {"returncode": 0, "stdout": "scripts/run.py\n"},
             )(),
@@ -495,7 +495,7 @@ class TestDetectChangedPackages:
     def test_conftest_change_returns_none(self, monkeypatch):
         """Changes to root conftest.py trigger all-packages testing."""
         monkeypatch.setattr(
-            "workspace.subprocess.run",
+            "repo_layout.subprocess.run",
             lambda *_args, **_kwargs: type(
                 "R", (), {"returncode": 0, "stdout": "conftest.py\n"},
             )(),
@@ -505,7 +505,7 @@ class TestDetectChangedPackages:
     def test_github_change_returns_none(self, monkeypatch):
         """Changes to .github/ trigger all-packages testing."""
         monkeypatch.setattr(
-            "workspace.subprocess.run",
+            "repo_layout.subprocess.run",
             lambda *_args, **_kwargs: type(
                 "R", (), {"returncode": 0, "stdout": ".github/workflows/ci.yml\n"},
             )(),
@@ -515,7 +515,7 @@ class TestDetectChangedPackages:
     def test_no_changes_returns_none(self, monkeypatch):
         """No changed files returns None (run everything)."""
         monkeypatch.setattr(
-            "workspace.subprocess.run",
+            "repo_layout.subprocess.run",
             lambda *_args, **_kwargs: type("R", (), {"returncode": 0, "stdout": ""})(),
         )
         assert detect_changed_packages() is None
@@ -523,7 +523,7 @@ class TestDetectChangedPackages:
     def test_library_change_detected(self, synthetic_workspace, monkeypatch):
         """Library changes return the affected package directories."""
         monkeypatch.setattr(
-            "workspace.subprocess.run",
+            "repo_layout.subprocess.run",
             lambda *_args, **_kwargs: type(
                 "R", (),
                 {
@@ -542,7 +542,7 @@ class TestDetectChangedPackages:
         def raise_not_found(*_args, **_kwargs):
             raise FileNotFoundError("git not found")
 
-        monkeypatch.setattr("workspace.subprocess.run", raise_not_found)
+        monkeypatch.setattr("repo_layout.subprocess.run", raise_not_found)
         assert detect_changed_packages() is None
 
 

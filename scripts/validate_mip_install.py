@@ -55,8 +55,7 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 
 from bundle_layout import MPY_FORMAT_FOLDER as _MPY_FORMAT_FOLDER
-from shared import resolve_micropython_binary
-from workspace import (
+from repo_layout import (
     GITHUB_ORG,
     ROOT,
     discover_library_dirs,
@@ -64,6 +63,7 @@ from workspace import (
     load_tomllib,
     order_libraries_by_dependency,
 )
+from shared import resolve_micropython_binary
 
 
 def _intra_workspace_deps(library_name: str) -> list[str]:

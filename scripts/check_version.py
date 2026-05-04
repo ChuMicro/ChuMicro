@@ -22,7 +22,7 @@ non-release-relevant files changed, or when the package is at the
 
 from __future__ import annotations
 
-from workspace import (
+from repo_layout import (
     PUBLISHABLE_ROOTS,
     RELEASE_RELEVANT,
     ROOT,

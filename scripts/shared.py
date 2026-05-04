@@ -23,7 +23,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
-from workspace import (
+from repo_layout import (
     ROOT,
     TOOLS,
     find_publishable_packages,
