@@ -4310,3 +4310,201 @@ class TestCommandDumpConfig:
             cli.main([
                 "dump-config", "--workspace-dir", str(root), "ghost-project",
             ])
+
+
+# ---------------------------------------------------------------------------
+# install-libraries — gap 4 (regular-mode bundle install)
+# ---------------------------------------------------------------------------
+
+
+class TestInstallLibrariesCommand:
+    """End-to-end tests for ``install-libraries`` via the CLI dispatcher.
+
+    Monkey-patches ``subprocess.run`` to capture the commands the CLI
+    would have invoked without actually shelling out to circup /
+    mpremote (which require network + a real board respectively).
+    """
+
+    def _seed_workspace_and_project(
+        self, tmp_path: Path, *, runtime: str = "micropython",
+        app_source: str = "import chumicro_wifi\nimport chumicro_mqtt\n",
+    ) -> tuple[Path, list[list[str]]]:
+        """Stage a workspace + project + return (root, captured_commands).
+
+        The returned ``captured_commands`` list is mutated by the
+        monkey-patched ``subprocess.run`` — caller asserts on its
+        contents after invoking the CLI.
+        """
+        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "devices.yml").write_text(
+            "defaults:\n"
+            f"  {runtime}: target-board\n"
+            "devices:\n"
+            "  - id: target-board\n"
+            f"    runtime: {runtime}\n"
+            "    address: /dev/cu.fake\n",
+        )
+        project_dir = tmp_path / "projects" / "back-porch"
+        project_dir.mkdir(parents=True)
+        (project_dir / "config.toml").write_text("[wifi]\nssid = 'x'\n")
+        (project_dir / "app.py").write_text(app_source)
+        return tmp_path, []
+
+    def _install_capturing_subprocess(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        captured_commands: list[list[str]],
+        *,
+        return_code: int = 0,
+    ) -> None:
+        """Replace ``subprocess.run`` in cli with a capture-and-return fake."""
+        from chumicro_workspace import cli as cli_module
+
+        def fake_run(command, **_kwargs):  # noqa: ANN001, ANN003
+            captured_commands.append(list(command))
+            return subprocess.CompletedProcess(command, return_code)
+
+        monkeypatch.setattr(cli_module.subprocess, "run", fake_run)
+
+    def test_micropython_runs_one_mip_install_per_chumicro_import(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root, captured = self._seed_workspace_and_project(
+            tmp_path, runtime="micropython",
+        )
+        self._install_capturing_subprocess(monkeypatch, captured)
+
+        exit_code = cli.main([
+            "install-libraries", "--workspace-dir", str(root), "back-porch",
+        ])
+        assert exit_code == 0
+        # Two chumicro imports → two mip install commands.
+        assert len(captured) == 2
+        for command in captured:
+            assert command[0] == "mpremote"
+            assert "mip" in command and "install" in command
+            assert "/dev/cu.fake" in command
+            assert "github:ChuMicro/ChuMicro-Bundle/" in command[-1]
+        # Sorted: chumicro_mqtt < chumicro_wifi alphabetically.
+        assert "chumicro_mqtt" in captured[0][-1]
+        assert "chumicro_wifi" in captured[1][-1]
+        out = capsys.readouterr().out
+        assert "chumicro-mqtt" in out
+        assert "chumicro-wifi" in out
+        assert "installed 2 libraries" in out
+
+    def test_circuitpython_runs_one_circup_invocation(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        root, captured = self._seed_workspace_and_project(
+            tmp_path, runtime="circuitpython",
+        )
+        self._install_capturing_subprocess(monkeypatch, captured)
+
+        exit_code = cli.main([
+            "install-libraries", "--workspace-dir", str(root), "back-porch",
+        ])
+        assert exit_code == 0
+        # circup takes a list — one invocation total.
+        assert len(captured) == 1
+        command = captured[0]
+        assert command[0] == "circup"
+        assert "install" in command
+        # Both packages on the same circup install line.
+        assert "chumicro-mqtt" in command
+        assert "chumicro-wifi" in command
+
+    def test_dry_run_prints_commands_without_executing(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root, captured = self._seed_workspace_and_project(tmp_path)
+        self._install_capturing_subprocess(monkeypatch, captured)
+
+        exit_code = cli.main([
+            "install-libraries", "--workspace-dir", str(root),
+            "--dry-run", "back-porch",
+        ])
+        assert exit_code == 0
+        assert captured == []  # subprocess.run NOT called under --dry-run
+        out = capsys.readouterr().out
+        assert "--dry-run" in out
+        assert "mpremote" in out  # commands still printed
+        assert "github:ChuMicro/ChuMicro-Bundle/" in out
+
+    def test_experimental_swaps_bundle_repo_on_micropython(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        root, captured = self._seed_workspace_and_project(tmp_path)
+        self._install_capturing_subprocess(monkeypatch, captured)
+
+        cli.main([
+            "install-libraries", "--workspace-dir", str(root),
+            "--experimental", "back-porch",
+        ])
+        for command in captured:
+            assert "ChuMicro-Bundle-Experimental" in command[-1]
+            assert "ChuMicro-Bundle/" not in command[-1]
+
+    def test_drive_path_forwarded_to_circup(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        root, captured = self._seed_workspace_and_project(
+            tmp_path, runtime="circuitpython",
+        )
+        self._install_capturing_subprocess(monkeypatch, captured)
+
+        cli.main([
+            "install-libraries", "--workspace-dir", str(root),
+            "--drive-path", "/Volumes/CIRCUITPY", "back-porch",
+        ])
+        assert captured[0] == [
+            "circup", "--path", "/Volumes/CIRCUITPY",
+            "install", "chumicro-mqtt", "chumicro-wifi",
+        ]
+
+    def test_no_chumicro_imports_returns_zero_without_subprocess(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root, captured = self._seed_workspace_and_project(
+            tmp_path, app_source="import os\ndef run(): pass\n",
+        )
+        self._install_capturing_subprocess(monkeypatch, captured)
+
+        exit_code = cli.main([
+            "install-libraries", "--workspace-dir", str(root), "back-porch",
+        ])
+        assert exit_code == 0
+        assert captured == []
+        assert "no chumicro imports found" in capsys.readouterr().out
+
+    def test_subprocess_failure_propagates_exit_code(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        root, captured = self._seed_workspace_and_project(tmp_path)
+        self._install_capturing_subprocess(
+            monkeypatch, captured, return_code=42,
+        )
+
+        exit_code = cli.main([
+            "install-libraries", "--workspace-dir", str(root), "back-porch",
+        ])
+        assert exit_code == 42
+        assert "command failed" in capsys.readouterr().err
