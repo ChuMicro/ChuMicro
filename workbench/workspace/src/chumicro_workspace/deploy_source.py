@@ -112,6 +112,7 @@ class WithRuntimeConfig:
         secrets_yaml: Path,
         output_path: Path | None = None,
         device_path: str = RUNTIME_CONFIG_DEVICE_PATH,
+        library_roots: tuple[Path, ...] | list[Path] | None = None,
     ) -> None:
         self._inner = inner
         self._workspace_yaml = workspace_yaml
@@ -123,6 +124,22 @@ class WithRuntimeConfig:
             if output_path is not None
             else project_config.parent / GENERATED_DIRNAME / "runtime_config.msgpack"
         )
+        # ``library_roots`` enables Phase 2 of the unification
+        # workstream's manifest validation: each path is a library
+        # checkout (``libraries/<name>/`` with a ``pyproject.toml``);
+        # ``files()`` reads each one's
+        # ``[tool.chumicro.config.sections.<name>]`` block, unions
+        # them, and validates the merged-and-resolved config dict
+        # against the union before writing the msgpack.  Missing
+        # required keys surface as a precise
+        # :class:`ConfigManifestError` instead of a cryptic
+        # ``MissingConfigKey`` at device boot.
+        # ``None`` (the default) skips validation — preserves
+        # backwards-compat for callers that don't yet plumb the
+        # import-graph library list through.
+        self._library_roots: tuple[Path, ...] = (
+            tuple(library_roots) if library_roots else ()
+        )
         if device_path in inner.files():
             raise ValueError(
                 f"inner source already provides {device_path!r}; "
@@ -131,16 +148,36 @@ class WithRuntimeConfig:
 
     def files(self) -> dict[str, bytes]:
         """Regenerate the msgpack and merge it into the inner file map."""
-        build_runtime_config(
+        resolved = build_runtime_config(
             workspace_yaml=self._workspace_yaml,
             project_config=self._project_config,
             secrets_yaml=self._secrets_yaml,
             output_path=self._output_path,
         )
+        if self._library_roots:
+            self._validate_against_manifests(resolved)
         msgpack_bytes = self._output_path.read_bytes()
         files = self._inner.files()
         files[self._device_path] = msgpack_bytes
         return files
+
+    def _validate_against_manifests(self, resolved: dict) -> None:
+        """Validate *resolved* against the union manifest of *library_roots*."""
+        # Local import: ``config_manifest`` pulls in ``tomllib`` and
+        # the dataclass machinery; keep ``deploy_source``'s import
+        # cost flat for the no-validation path.
+        from chumicro_workspace.config_manifest import (  # noqa: PLC0415
+            aggregate_manifests,
+            read_manifest,
+            validate_runtime_config,
+        )
+
+        manifests = (
+            read_manifest(library_root) for library_root in self._library_roots
+        )
+        union = aggregate_manifests(manifests)
+        if union:
+            validate_runtime_config(resolved, union)
 
     def entrypoint(self) -> str:
         """Forward the inner source's entrypoint unchanged."""

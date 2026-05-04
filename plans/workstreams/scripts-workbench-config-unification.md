@@ -128,23 +128,25 @@ Adopt the workspace-template's flows as the canonical pattern; the mono-repo dog
 
 **Files touched (mono-repo):** ~6.  Estimated 1 session.
 
-### Phase 2 — library config manifests
+### Phase 2 — library config manifests *(done)*
 
-**Scope:**
-- Add `[tool.chumicro.config]` to each of the 8 networking-or-config-touching libraries' `pyproject.toml` files: `wifi`, `requests`, `http_server`, `mqtt`, `sockets`, `websockets` (if it has one), `ntp`, plus any other library that calls `load_section`.  The schema:
+**Scope (executed):**
+- The plan's "8 libraries" estimate was wrong — only `chumicro-wifi` actually consumes `chumicro-config.load_section` today.  Per the no-speculative-API rule, the manifest format applies only where there's a real consumer.  Phase 4 will add manifests as it migrates more libraries onto the runtime-config pipeline.
+- `[tool.chumicro.config]` block added to `libraries/wifi/pyproject.toml`.  Schema (simplified mid-implementation when TOML's "same key declared twice" rule made the `sections = [...]` array + `[...sections.<name>]` table forms collide):
   ```toml
-  [tool.chumicro.config]
-  sections = ["wifi"]
-
   [tool.chumicro.config.sections.wifi]
   required = ["ssid", "password"]
-  optional = ["hostname"]
+  optional = ["hostname", "connect_timeout_ms", ...]
   ```
-- New `chumicro_workspace.config_manifest` module: reads manifests via `tomllib` from the import-graph of a project; aggregates required / optional keys.
-- Wire `chumicro-workspace deploy` to validate project `config.toml` (after merge + secrets resolve, before msgpack write) against the union manifest.  Missing required key → `ConfigManifestError` with precise message.
-- Tests: golden-files for manifest aggregation; deploy-time validation pass / fail cases.
+  Section names inferred from the table keys.  Empty section table is valid (forward-compat).
+- New `chumicro_workspace.config_manifest` module — `read_manifest`, `aggregate_manifests`, `validate_runtime_config`, `find_library_roots` plus dataclasses (`SectionManifest`, `ConfigManifest`) + error type (`ConfigManifestError`).  Aggregator unions `required` sets across libraries (any library's "must have" wins) and promotes optional→required when libraries disagree (correctness over permissiveness).  Validator collects every problem in one multi-line error so deploy-time failures don't ping-pong.
+- `WithRuntimeConfig` extended with optional `library_roots` parameter.  When provided, `files()` reads each library's manifest, unions, and validates the merged-and-resolved config dict before writing the msgpack — turning "config mismatch lands on device, fails at boot with cryptic `MissingConfigKey`" into precise deploy-time failures.
+- `project_import_graph_source` and `project_boot_with_import_graph_source` extract library roots from their search paths via `find_library_roots()` and pass them through to `WithRuntimeConfig`.  Real consumer for the validator from day one — every import-graph deploy in mono-repo + workspace-template now validates against installed library manifests.
+- Tests: 31 new in `test_config_manifest.py`; 2 new in `test_deploy_source.py` (validation pass + validation fail); 1 cross-cutting in `test_config_manifest.py::TestRealMonoRepoManifests` reads the real `libraries/wifi/pyproject.toml` and asserts the manifest matches `WifiConfig.from_dict`'s required/optional surface — drift on either side fails this test.
 
-**Files touched:** ~8 pyproject.toml files + 1 new module + 1 new test file.  Estimated 1-2 sessions.
+**Phase 4 will extend this** — as more libraries gain `chumicro-config`-shaped from_dicts (when functional tests dogfood the runtime-config pipeline), each adds its own `[tool.chumicro.config.sections.<name>]` block.  No additional plumbing needed; the manifest module already aggregates across multiple libraries.
+
+**Known limitation (refine in Phase 4):** `find_library_roots` uses the import graph's static *search paths*, not the actually-imported modules.  A workspace with chumicro-wifi available but a project that doesn't import it would still validate against wifi's manifest.  Today this is correct (wifi is the only manifest holder; if it's available a project really should set wifi config).  Phase 4 refines this when validating against an "actually imported" subset becomes meaningful.
 
 ### Phase 3 — mono-repo workspace root config
 
