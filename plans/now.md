@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **ADR audit + cleanup sweep.**  Audited 48 ADRs (4 sub-agents in parallel) for date hygiene, status-enum compliance, banned dated-update sections, missing `Related:` fields, stale path references, length bloat, and missing high-level ADRs.  Phase 1 (mechanical sweep) and Phase 2 (stale-path fixes) have landed.  Phase 2 corrected `scripts/pytest_device.py` → `chumicro-pytest-device`, `support/device_transport/` → `workbench/deploy/`, `things/` → `projects/`, `_adapters/mp_esp32.py + mp_rp2.py` → `mp.py`; fixed 4 hallucinated intra-ADR link targets (0010, 0014, 0015, 0029 file basenames); past-tensed 0006 and 0008 Decision bodies; dropped 0042's "Pending decision" in-body blockquote.
-- **Last shipped:** `plans/decisions: phase 2 audit cleanup — fix stale path refs and broken intra-ADR links` (this commit).
-- **In flight:** ADR audit phases 3–4 — compact 12 length offenders (0035, 0034, 0041, 0036, 0048, 0042, 0040, 0032, 0013, 0033, 0027, 0045 — each over 150 lines, several reading as design docs), write 4–5 missing high-level ADRs (three-runtime philosophy, library inclusion test, runner-shaped policy, workbench/library import boundary, recovery philosophy).
+- **Phase:** **ADR audit + cleanup sweep.**  Phases 1, 2, and 2.5 landed.  Phase 2.5 sharpened the README's "edit the body in place" rule (four-status enum now: `proposed` / `accepted` / `superseded` / `deferred`; dropped `revised` because it invited changelog accumulation), and reverted my phase-1 mistakes — 0029 + 0037 status flipped back from `revised` → `accepted`, the "This decision has been revised twice" Note block removed from 0029, §7 edited in place to cross-link 0046's resolution order; 0046's "Decision 0029 gets a second `Revised:` annotation" Consequences bullet rewritten to the correct in-place-edit pattern.
+- **Last shipped:** `plans/decisions: README sharpens "edit body in place" rule; drop revised status; revert phase-1 meta-commentary` (this commit).
+- **In flight:** ADR audit phases 3–4 — compact 12 length offenders (0035, 0034, 0041, 0036, 0048, 0042, 0040, 0032, 0013, 0033, 0027, 0045), write 4–5 missing high-level ADRs (three-runtime philosophy, library inclusion test, runner-shaped policy, workbench/library import boundary, recovery philosophy).
 - **Blocked on:** —.
-- **Last touched:** 0006/0008 (past-tense), 0027/0028/0029/0030/0031/0032/0033/0035/0036/0038 (stale paths), 0039/0040/0041/0042/0045 (link targets).
+- **Last touched:** `plans/decisions/README.md` (load-bearing principle update), 0029 + 0037 (revert phase-1 meta-commentary), 0046 (Consequences bullet rewrite).
 
 ---
 

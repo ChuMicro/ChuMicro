@@ -95,8 +95,9 @@ each step skips silently when its path doesn't exist:
 * **Mono-repo (`chumicro-workspace`)**: `libs_dir` → `shared_dir`
   in `WorkspaceLayout`; `import_graph.build_search_paths` updated
   reference; `template_zones.py` zone-classifier "libs/" prefix
-  → "shared/"; tests + docs flipped; `Decision 0029` gets a
-  second `Revised:` annotation pointing here.
+  → "shared/"; tests + docs flipped; `Decision 0029` §1 + §7
+  edited in place to describe the current layout, with cross-links
+  to this ADR for the rationale.
 * **`workspace.yml`**: schema unchanged — `library_sources:`
   still the override mechanism.
 * **chumicro-workspace bumps 0.1.0 → 0.2.0** (CLI behavior

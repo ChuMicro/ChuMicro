@@ -1,10 +1,8 @@
 # Decision 0029: Project workspace shape
 
-Status: `revised`
+Status: `accepted`
 Date: `2026-04-21`
 Related: Decision 0026, Decision 0027, Decision 0028, Decision 0030, Decision 0031, Decision 0046 (supersedes §1 default layout + §7 resolution order)
-
-> **Note:** This decision has been revised twice. (1) Vocabulary: `thing` → `project` (directory `things/` → `projects/`; CLI flag `--thing` → `--project`). (2) Workspace folder shape: §1's default layout and §7's resolution order were superseded by [Decision 0046](0046-shared-and-lazy-libraries.md) (`libs/` → `shared/`; `libraries/` is no longer pre-existing — it materialises on `python run.py new --library`). The body prose below has been updated to reflect both revisions.
 
 ## Context
 
@@ -66,7 +64,7 @@ A small per-chip-family reflash table (`esp32* → esptool`, `rp2040/rp2350/nrf5
 
 ### 7. Local library overrides via `library_sources:`
 
-`workspace.yml` accepts a `library_sources:` map of package name (or mono-repo root) to local path.  Resolution order: explicit single-package override → mono-repo auto-discovery → published source → error.  `run.py sync` does a `pip install -e <path>` into `.venv` for the CPython side (reuses the Decision 0026 editable-install pattern); device deploy reads source directly from the local path.
+`workspace.yml` accepts a `library_sources:` map of package name (or mono-repo root) to local path.  Overrides take priority over every other resolution path; the full search order is documented in [Decision 0046](0046-shared-and-lazy-libraries.md) (workspace.yml overrides → `shared/` → each `libraries/<name>/src/` → `packages/` → caller-supplied extras).  `run.py sync` does a `pip install -e <path>` into `.venv` for the CPython side (reuses the Decision 0026 editable-install pattern); device deploy reads source directly from the local path.
 
 **Rejected:** published-only resolution.  Blocks chumicro developers from dogfooding library changes against a downstream workspace.
 

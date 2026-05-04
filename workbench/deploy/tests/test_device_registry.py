@@ -87,10 +87,14 @@ devices:
         with pytest.raises(DeviceConfigError, match="invalid runtime"):
             load_devices(devices_file)
 
-    def test_missing_devices_key_raises(self, tmp_path) -> None:
+    def test_missing_devices_key_returns_empty(self, tmp_path) -> None:
+        # An absent ``devices:`` key is the same valid empty-registry
+        # state as ``devices: []`` — workspace-template repo + mono-repo
+        # both ship this shape at clone time and let ``add-device``
+        # populate it.  See unification workstream
+        # ``scripts-workbench-config-unification.md``.
         devices_file = _write_yaml(tmp_path / "devices.yml", "something_else: true\n")
-        with pytest.raises(DeviceConfigError, match="'devices' list"):
-            load_devices(devices_file)
+        assert load_devices(devices_file) == []
 
     def test_invalid_per_device_deploy_mode_raises(self, tmp_path) -> None:
         devices_file = _write_yaml(tmp_path / "devices.yml", """
@@ -187,6 +191,42 @@ devices:
         assert defaults.micropython is None
         assert defaults.circuitpython is None
         assert devices[0].deploy_mode == "flash"
+
+    def test_empty_registry_returns_empty_list_with_defaults(self, tmp_path) -> None:
+        # The workspace-template repo's _workspace_template/devices.yml ships
+        # ``devices: []`` and lets ``chumicro-workspace add-device`` populate
+        # it on first registration.  The mono-repo's setup flow does the same
+        # after the scripts/workbench/template-repo unification (workstream
+        # ``scripts-workbench-config-unification.md``).  An empty registry
+        # must therefore be a valid state — not an error — so that
+        # `python scripts/run.py preflight` can run on a fresh clone before
+        # any board is registered.
+        devices_file = _write_yaml(tmp_path / "devices.yml", """
+defaults:
+  micropython: null
+  circuitpython: null
+  deploy_mode: flash
+  ide_runtime: micropython
+devices: []
+""")
+        devices, defaults = load_device_registry(devices_file)
+        assert devices == []
+        assert defaults.micropython is None
+        assert defaults.circuitpython is None
+        assert defaults.deploy_mode == "flash"
+        assert defaults.ide_runtime == "micropython"
+
+    def test_missing_devices_key_returns_empty_list(self, tmp_path) -> None:
+        # Same valid-empty contract when the ``devices:`` key is omitted
+        # altogether (defaults-only file).  ``load_raw_entries`` already
+        # treats absent and empty-list identically.
+        devices_file = _write_yaml(tmp_path / "devices.yml", """
+defaults:
+  deploy_mode: flash
+""")
+        devices, defaults = load_device_registry(devices_file)
+        assert devices == []
+        assert defaults.deploy_mode == "flash"
 
 
 class TestParseDefaults:

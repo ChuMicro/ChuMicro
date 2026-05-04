@@ -1,57 +1,41 @@
-# Device registry for local/CI device testing.
+# devices.yml — board registry for mono-repo functional tests.
+# Three-zone shape (matches the workspace-template repo):
 #
-# Fill in your board details below.
+#   USER-OWNED      Never overwritten without --force.  Edit freely.
+#   HARDWARE-ONCE   Written on first probe; prompts before re-overwriting
+#                   (the "did you swap boards?" guard).
+#   PROBED-ALWAYS   Tool-owned and silently refreshed (e.g., address:).
+#
+# `chumicro-workspace add-device`, `rename`, and `probe` edit this file
+# via ruamel.yaml; user comments + key order survive every round-trip.
+#
 # This file is gitignored — it will not be committed.
-#
-# See Decision 0027 for the full schema.
 
-# ── Global defaults ──────────────────────────────────────────────
-# Controls which boards the IDE play button targets and the default
-# deploy mode.  Change ide_runtime to "both" to run every functional
-# test on both boards.
 defaults:
-  # Device IDs to use for each runtime (must match an id below).
-  micropython: sample-micropython-board
-  circuitpython: sample-circuitpython-board
+  # Pin which device id each runtime defaults to when no --device-id
+  # flag is passed.  Filled by `add-device` on first registration.
+  micropython: null
+  circuitpython: null
   # Deploy mode for all devices: "flash" (production-shaped, default) or
-  # "ram" (no flash wear, opt-in for unit-style tests).  Decision 0047 —
-  # functional tests run in flash by default; specific suites can opt
-  # back to ram per-device or via --chumicro-deploy-mode ram.
+  # "ram" (no flash wear; only useful for unit-style tests).  Decision 0047 —
+  # ram mode isn't a reflection of reality deployments, so flash is the
+  # default for projects, examples, and most functional tests.  Override
+  # per-device in the entries below, or per-deploy with `--deploy-mode ram`.
   deploy_mode: flash
-  # Which runtimes IDE play buttons target: micropython, circuitpython, or both.
+  # Which runtimes IDE play buttons target: "micropython", "circuitpython",
+  # or "both".  Mono-repo-only field — drives `chumicro-pytest-device`'s
+  # IDE-targeting collection.  Workspace-template doesn't use this field;
+  # the schema reader silently passes unknown keys through.
   ide_runtime: micropython
 
-# ── Device registry ──────────────────────────────────────────────
-devices:
-  - id: sample-circuitpython-board
-    description: Example CircuitPython board entry for local device validation.
-    runtime: circuitpython
-    connection_type: serial
-    address: /dev/cu.usbmodemEXAMPLE
-    serial_baudrate: 115200
-    setup_command: null
-    # Override the global deploy_mode for this board (e.g. if RAM
-    # testing is unreliable on this device):
-    # deploy_mode: flash
-    # Path to the CIRCUITPY USB drive mount point on the host.
-    # Used for flash deploy mode.
-    # OPTIONAL — leave this commented out.  chumicro-deploy probes
-    # `microcontroller.cpu.uid` over raw REPL and matches it against
-    # each mounted CIRCUITPY*/boot_out.txt UID line, so the right
-    # drive is auto-selected even when macOS assigned `CIRCUITPY 1` /
-    # `CIRCUITPY 2` in a different order this session.  Set this only
-    # when UID matching can't disambiguate — two physically identical
-    # boards connected at once, or a non-standard mount point.  If
-    # set and wrong, chumicro-deploy auto-corrects and prints a
-    # warning nudging you to remove the override.
-    # circuitpy_drive_path: /Volumes/CIRCUITPY
-
-  - id: sample-micropython-board
-    description: Example MicroPython board entry for local device validation.
-    runtime: micropython
-    connection_type: serial
-    address: /dev/cu.usbserial-EXAMPLE
-    serial_baudrate: 115200
-    setup_command: null
-    # Override the global deploy_mode for this board:
-    # deploy_mode: flash
+devices: []
+  # Example shape (uncomment + edit, or use `add-device`):
+  #
+  # - id: back-porch                                # USER-OWNED
+  #   description: Pi Pico W on the back porch      # USER-OWNED
+  #   runtime: micropython                          # USER-OWNED
+  #   address: /dev/cu.usbmodem1101                 # PROBED-ALWAYS
+  #   hardware:                                     # HARDWARE-ONCE
+  #     uid: ABCD0123
+  #     machine: Raspberry Pi Pico W with rp2040
+  #     board_id: raspberry_pi_pico_w

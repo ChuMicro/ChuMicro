@@ -46,7 +46,9 @@ Open the integrated terminal (`⌃\`` / `` Ctrl+` ``) and run:
 python scripts/run.py setup
 ```
 
-This installs dependencies, runs editable installs for every library and support package, regenerates IDE configs, and creates starter `devices.yml` / `device-config.yml` if they are missing. It produces a lot of output — look for this at the end:
+This installs dependencies, runs editable installs for every library and support package, regenerates IDE configs, and creates starter `devices.yml` / `chumicro-dev-config.toml` if they are missing.  The starter `devices.yml` ships an empty registry — register a connected board with `python scripts/run.py add-device <id> --address <port>` (a thin shim around `chumicro-workspace add-device` that probes hardware identity and fills in defaults on first registration).  See [device-testing.md](device-testing.md) for the full add-device flow.
+
+`setup` produces a lot of output — look for this at the end:
 
 ```
 ============================================================
@@ -114,8 +116,9 @@ For real-board `functional_tests/`, the same Testing panel can target the explic
 To enable that workflow:
 
 1. Run `python scripts/run.py setup`
-2. Fill in `devices.yml` and `device-config.yml`
-3. Open a `libraries/<name>/functional_tests/test_*.py` file and use the normal VS Code play button
+2. Register a board: `python scripts/run.py add-device <id> --address <port>` (probes the connected hardware and fills in defaults on first registration)
+3. Fill in real-network creds in `chumicro-dev-config.toml` if your tests need wifi
+4. Open a `libraries/<name>/functional_tests/test_*.py` file and use the normal VS Code play button
 
 If no device is configured yet, pytest skips the run with a message telling you to generate or fill in `devices.yml`. See [Device Testing](device-testing.md) for the schema and CLI options.
 

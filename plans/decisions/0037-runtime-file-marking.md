@@ -1,6 +1,6 @@
 # Decision 0037: Per-runtime file marking and bundle filtering
 
-Status: `revised`
+Status: `accepted`
 Date: `2026-04-26`
 Related: Decision 0015 (supported board class), Decision 0018 (distribution bundle repo), Decision 0021 (annotations), Decision 0010 (testing fakes), Decision 0044 (deploy-time runtime filtering)
 
