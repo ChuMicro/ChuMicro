@@ -105,6 +105,14 @@ _DEFAULT_PACKAGE_PARALLEL_WORKERS = _DEFAULT_PACKAGE_WORKERS
 #: ``[label] [inner-label] line`` framing.
 _RAW_OUTPUT_ENV_VAR = "CHUMICRO_RAW_OUTPUT"
 
+#: Explicit user override for the output mode.  When set, takes
+#: precedence over TTY / IDE auto-detection (but not over
+#: ``CHUMICRO_RAW_OUTPUT`` — that's an internal subprocess signal).
+#: Useful in IDE Run-config environments where ``isatty()`` is False
+#: but the user is reading the output live in an interactive console.
+#: Accepted values: ``status``, ``interleave``, ``quiet``.
+_OUTPUT_MODE_ENV_VAR = "CHUMICRO_OUTPUT_MODE"
+
 
 # ---------------------------------------------------------------------------
 # Output dispatcher: routes parallel-phase output to the user.
@@ -316,21 +324,52 @@ class _RawDispatcher(_Dispatcher):
         print(text, flush=True)
 
 
+_DISPATCHERS_BY_NAME: dict[str, type[_Dispatcher]] = {
+    "status": _StatusDispatcher,
+    "interleave": _InterleaveDispatcher,
+    "quiet": _QuietDispatcher,
+}
+
+
+def _is_interactive_console() -> bool:
+    """Return True if a human is reading the output in an interactive console.
+
+    `sys.stdout.isatty()` is the obvious signal, but IDEs (PyCharm,
+    IntelliJ) capture stdout through a pipe to render it in their own
+    Run console pane — `isatty()` returns False even though the user is
+    watching live.  Detect those by env var so the IDE Run button shows
+    the same status output the user gets in a real terminal.
+    """
+    if sys.stdout.isatty():
+        return True
+    # PyCharm / IntelliJ Run configurations.  Set by the IDE in every
+    # script's environment, including for ``Preflight`` (Ctrl+Shift+B).
+    if os.environ.get("PYCHARM_HOSTED"):
+        return True
+    return False
+
+
 def _pick_dispatcher(*, quiet: bool) -> _Dispatcher:
     """Construct the right dispatcher for this invocation context.
 
     Resolution order:
       1. ``CHUMICRO_RAW_OUTPUT`` env var → raw (we're a child of a
-         parent dispatcher).
-      2. ``--quiet`` flag → quiet (caller wants buffered replay).
-      3. ``sys.stdout.isatty()`` → status (interactive human).
-      4. otherwise → interleave (non-interactive CI / log capture).
+         parent dispatcher; never user-set).
+      2. ``--quiet`` flag → quiet.
+      3. ``CHUMICRO_OUTPUT_MODE`` env var → the named dispatcher.
+         Lets IDEs and CI configs pin a mode without changing the
+         CLI invocation.
+      4. interactive console (TTY or PyCharm Run pane) → status.
+      5. otherwise → interleave (non-interactive CI / log capture).
     """
     if os.environ.get(_RAW_OUTPUT_ENV_VAR):
         return _RawDispatcher()
     if quiet:
         return _QuietDispatcher()
-    if sys.stdout.isatty():
+    explicit = os.environ.get(_OUTPUT_MODE_ENV_VAR, "").lower()
+    if explicit in _DISPATCHERS_BY_NAME:
+        return _DISPATCHERS_BY_NAME[explicit]()
+    if _is_interactive_console():
         return _StatusDispatcher()
     return _InterleaveDispatcher()
 

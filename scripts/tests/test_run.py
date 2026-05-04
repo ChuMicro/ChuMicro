@@ -1180,27 +1180,72 @@ class TestRunParallelPhases:
 class TestPickDispatcher:
     """Tests for the TTY + env-var-based dispatcher selection."""
 
-    def test_quiet_flag_picks_quiet_dispatcher(self, monkeypatch):
+    def _clear_dispatcher_environment(self, monkeypatch):
         monkeypatch.delenv(run._RAW_OUTPUT_ENV_VAR, raising=False)
+        monkeypatch.delenv(run._OUTPUT_MODE_ENV_VAR, raising=False)
+        monkeypatch.delenv("PYCHARM_HOSTED", raising=False)
+
+    def test_quiet_flag_picks_quiet_dispatcher(self, monkeypatch):
+        self._clear_dispatcher_environment(monkeypatch)
         dispatcher = run._pick_dispatcher(quiet=True)
         assert isinstance(dispatcher, run._QuietDispatcher)
 
     def test_raw_env_var_overrides_quiet_flag(self, monkeypatch):
+        self._clear_dispatcher_environment(monkeypatch)
         monkeypatch.setenv(run._RAW_OUTPUT_ENV_VAR, "1")
         dispatcher = run._pick_dispatcher(quiet=True)
         assert isinstance(dispatcher, run._RawDispatcher)
 
     def test_non_tty_picks_interleave_dispatcher(self, monkeypatch):
-        monkeypatch.delenv(run._RAW_OUTPUT_ENV_VAR, raising=False)
+        self._clear_dispatcher_environment(monkeypatch)
         monkeypatch.setattr(run.sys.stdout, "isatty", lambda: False)
         dispatcher = run._pick_dispatcher(quiet=False)
         assert isinstance(dispatcher, run._InterleaveDispatcher)
 
     def test_tty_picks_status_dispatcher(self, monkeypatch):
-        monkeypatch.delenv(run._RAW_OUTPUT_ENV_VAR, raising=False)
+        self._clear_dispatcher_environment(monkeypatch)
         monkeypatch.setattr(run.sys.stdout, "isatty", lambda: True)
         dispatcher = run._pick_dispatcher(quiet=False)
         assert isinstance(dispatcher, run._StatusDispatcher)
+
+    def test_pycharm_env_var_picks_status_even_without_tty(self, monkeypatch):
+        """PyCharm Run-config console isn't a TTY but should get status mode."""
+        self._clear_dispatcher_environment(monkeypatch)
+        monkeypatch.setattr(run.sys.stdout, "isatty", lambda: False)
+        monkeypatch.setenv("PYCHARM_HOSTED", "1")
+        dispatcher = run._pick_dispatcher(quiet=False)
+        assert isinstance(dispatcher, run._StatusDispatcher)
+
+    def test_output_mode_env_var_overrides_tty(self, monkeypatch):
+        """CHUMICRO_OUTPUT_MODE=interleave forces interleave even in a TTY."""
+        self._clear_dispatcher_environment(monkeypatch)
+        monkeypatch.setattr(run.sys.stdout, "isatty", lambda: True)
+        monkeypatch.setenv(run._OUTPUT_MODE_ENV_VAR, "interleave")
+        dispatcher = run._pick_dispatcher(quiet=False)
+        assert isinstance(dispatcher, run._InterleaveDispatcher)
+
+    def test_output_mode_env_var_picks_status_in_pipe(self, monkeypatch):
+        """CHUMICRO_OUTPUT_MODE=status forces status even when piped."""
+        self._clear_dispatcher_environment(monkeypatch)
+        monkeypatch.setattr(run.sys.stdout, "isatty", lambda: False)
+        monkeypatch.setenv(run._OUTPUT_MODE_ENV_VAR, "status")
+        dispatcher = run._pick_dispatcher(quiet=False)
+        assert isinstance(dispatcher, run._StatusDispatcher)
+
+    def test_output_mode_env_var_unknown_value_falls_through(self, monkeypatch):
+        """An unrecognized CHUMICRO_OUTPUT_MODE silently falls through to TTY logic."""
+        self._clear_dispatcher_environment(monkeypatch)
+        monkeypatch.setattr(run.sys.stdout, "isatty", lambda: True)
+        monkeypatch.setenv(run._OUTPUT_MODE_ENV_VAR, "nonsense")
+        dispatcher = run._pick_dispatcher(quiet=False)
+        assert isinstance(dispatcher, run._StatusDispatcher)
+
+    def test_quiet_flag_beats_output_mode_env_var(self, monkeypatch):
+        """--quiet wins over CHUMICRO_OUTPUT_MODE=status (explicit user intent)."""
+        self._clear_dispatcher_environment(monkeypatch)
+        monkeypatch.setenv(run._OUTPUT_MODE_ENV_VAR, "status")
+        dispatcher = run._pick_dispatcher(quiet=True)
+        assert isinstance(dispatcher, run._QuietDispatcher)
 
 
 # ---------------------------------------------------------------------------
