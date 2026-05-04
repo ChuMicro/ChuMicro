@@ -842,15 +842,18 @@ class TestTestCpython:
 
         commands: list[list[str]] = []
 
-        def fake_run_command(command, **kwargs):
+        def fake_run_pytest(command, environment):
             commands.append(command)
-            return 0
+            return 0, ""
 
-        monkeypatch.setattr(run, "run_command", fake_run_command)
+        monkeypatch.setattr(run, "_run_pytest_capturing", fake_run_pytest)
         result = run.test_cpython([package_a, package_b], no_cov=True)
         assert result == 0
         # Two pytest runs (one per package).
-        pytest_runs = [command for command in commands if "pytest" in command[0] or "-m" in command]
+        pytest_runs = [
+            command for command in commands
+            if "pytest" in command[0] or "-m" in command
+        ]
         assert len(pytest_runs) == 2
 
     def test_unknown_filter_library_returns_one(self, monkeypatch, fake_root):
@@ -905,7 +908,10 @@ class TestTestCpython:
         """Non-zero non-5 exit codes from pytest propagate as the function's return."""
         package_dir = _make_test_package(fake_root, "timing")
 
-        monkeypatch.setattr(run, "run_command", lambda command, **kwargs: 17)
+        monkeypatch.setattr(
+            run, "_run_pytest_capturing",
+            lambda command, environment: (17, ""),
+        )
         result = run.test_cpython([package_dir], no_cov=True)
         assert result == 17
 
@@ -915,14 +921,16 @@ class TestTestCpython:
 
         recorded: list[list[str]] = []
 
-        def fake_run_command(command, **kwargs):
+        def fake_run_pytest(command, environment):
             recorded.append(command)
-            return 0
+            return 0, ""
 
-        monkeypatch.setattr(run, "run_command", fake_run_command)
+        monkeypatch.setattr(run, "_run_pytest_capturing", fake_run_pytest)
         run.test_cpython([package_dir], coverage_threshold=94)
 
-        pytest_calls = [command for command in recorded if "-m" in command and "pytest" in command]
+        pytest_calls = [
+            command for command in recorded if "-m" in command and "pytest" in command
+        ]
         assert any("--cov-fail-under=94" in command for command in pytest_calls)
 
     def test_elevated_packages_only_apply_threshold_to_listed_packages(
@@ -934,11 +942,11 @@ class TestTestCpython:
 
         recorded: list[list[str]] = []
 
-        def fake_run_command(command, **kwargs):
+        def fake_run_pytest(command, environment):
             recorded.append(command)
-            return 0
+            return 0, ""
 
-        monkeypatch.setattr(run, "run_command", fake_run_command)
+        monkeypatch.setattr(run, "_run_pytest_capturing", fake_run_pytest)
         run.test_cpython(
             [package_a, package_b],
             coverage_threshold=94,
@@ -988,14 +996,16 @@ class TestTestCpython:
 
         recorded: list[list[str]] = []
         monkeypatch.setattr(
-            run, "run_command",
-            lambda command, **kwargs: (recorded.append(command), 0)[1],
+            run, "_run_pytest_capturing",
+            lambda command, environment: (recorded.append(command), (0, ""))[1],
         )
 
         run.test_cpython(
             [package_dir], filter_expression="timing/test_thing",
         )
-        pytest_calls = [command for command in recorded if "-m" in command and "pytest" in command]
+        pytest_calls = [
+            command for command in recorded if "-m" in command and "pytest" in command
+        ]
         assert any("--cov-fail-under=0" in command for command in pytest_calls)
 
     def test_exit_first_passes_x_flag(self, monkeypatch, fake_root):
@@ -1003,11 +1013,13 @@ class TestTestCpython:
         package_dir = _make_test_package(fake_root, "timing")
         recorded: list[list[str]] = []
         monkeypatch.setattr(
-            run, "run_command",
-            lambda command, **kwargs: (recorded.append(command), 0)[1],
+            run, "_run_pytest_capturing",
+            lambda command, environment: (recorded.append(command), (0, ""))[1],
         )
         run.test_cpython([package_dir], exit_first=True, no_cov=True)
-        pytest_calls = [command for command in recorded if "-m" in command and "pytest" in command]
+        pytest_calls = [
+            command for command in recorded if "-m" in command and "pytest" in command
+        ]
         assert any("-x" in command for command in pytest_calls)
 
     def test_verbose_passes_v_flag(self, monkeypatch, fake_root):
@@ -1015,11 +1027,13 @@ class TestTestCpython:
         package_dir = _make_test_package(fake_root, "timing")
         recorded: list[list[str]] = []
         monkeypatch.setattr(
-            run, "run_command",
-            lambda command, **kwargs: (recorded.append(command), 0)[1],
+            run, "_run_pytest_capturing",
+            lambda command, environment: (recorded.append(command), (0, ""))[1],
         )
         run.test_cpython([package_dir], verbose=True, no_cov=True)
-        pytest_calls = [command for command in recorded if "-m" in command and "pytest" in command]
+        pytest_calls = [
+            command for command in recorded if "-m" in command and "pytest" in command
+        ]
         assert any("-v" in command for command in pytest_calls)
 
 
