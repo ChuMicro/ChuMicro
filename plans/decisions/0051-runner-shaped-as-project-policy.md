@@ -8,7 +8,7 @@ Related: Decision 0014 (runner pattern as the contract), Decision 0010 (construc
 
 Decision 0014 introduced the gate-based runner pattern (`check(now_ms) -> bool` + `handle(now_ms)`) inside `chumicro-runner`.  In practice, every downstream chumicro library that owns time or I/O — `chumicro-mqtt`, `chumicro-requests`, `chumicro-http-server`, `chumicro-websockets`, `chumicro-wifi`, `chumicro-ntp` — implements the same contract.  This is what makes "the LED keeps blinking through a TLS handshake" possible: nothing in the library blocks the main loop.
 
-But Decision 0014 framed the contract as a chumicro-runner concern.  The cross-cutting rule — *every* library obeys the contract; blocking is grounds for rejection — is enforced by review and tracemalloc tests, but isn't named as a project-level policy.  A future contributor adding a synchronous library would have to rediscover the rule from review feedback.
+But Decision 0014 framed the contract as a chumicro-runner concern.  The cross-cutting rule — *every* library obeys the contract — is enforced by review and tracemalloc tests, but isn't named as a project-level policy.  A contributor proposing a synchronous library would discover the rule from review feedback rather than from a documented commitment.
 
 ## Decision
 
@@ -40,7 +40,7 @@ These rules apply to libraries.  Workbench packages (`workbench/*/`) run on CPyt
 
 ## Consequences
 
-- Library code reviews include a "does any path block more than a few ms?" check.  Reviewer rejects on found blocking unless flagged with a doc comment + workstream-level discussion.
+- Library code reviews include a "does any path block more than a few ms?" check.  Blocking paths get flagged for rework or a documented exception (workstream-level discussion + a doc comment).
 - Tracemalloc-based heap-drift tests (established by `chumicro-mqtt`) become the standard verification — every long-lived service library has a heap-stability test under `tests/`.
 - New libraries that own time or I/O document their per-tick budget knobs (e.g., `recv_budget_per_tick`, `max_tx_queue_size`) up front.
 - The runner library (`chumicro-runner`) is still optional for users who orchestrate services manually; the contract the runner consumes is duck-typed and works either way.
