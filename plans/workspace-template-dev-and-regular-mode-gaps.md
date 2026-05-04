@@ -13,8 +13,8 @@ Each gap below is listed with severity (**P0** = blocks the documented happy-pat
 
 | # | Severity | Fix surface | One-line |
 |---|----------|-------------|----------|
-| 1 | P0 | mono-repo | Declare `cryptography` in `requirements-dev.txt` (already committed locally — `5950b2f`). |
-| 2 | P0 | mono-repo | Convert remaining cross-tree relative doc links (`../../../plans/...`, `../README.md`) to absolute GitHub URLs; fix two slug mismatches in `workbench/deploy/docs/guide.md` (already committed locally — `b71e242`). |
+| 1 | ~~P0~~ | mono-repo | ~~Declare `cryptography` in `requirements-dev.txt`.~~ Done — landed in `8bcfb6b`. |
+| 2 | ~~P0~~ | mono-repo | ~~Convert remaining cross-tree relative doc links (`../../../plans/...`, `../README.md`) to absolute GitHub URLs; fix two slug mismatches in `workbench/deploy/docs/guide.md`.~~ Done — landed in `d9d039e`. |
 | 3 | P0 | template + mono-repo | Wire **on-device** library shipping for dev mode. Today, `chumicro-dev.toml` only affects the host venv; the boards still need libs from somewhere. Two concrete options below — both require a small change in the deploy CLI. |
 | 4 | P0 | template | Document and scaffold **regular mode**. Today the template README jumps straight to `deploy example_sensor` with no mention of installing the chumicro libs onto the board first via `circup`/`mip`. |
 | 5 | P1 | mono-repo | Make `--import-graph` and `--boot-shim` composable, or pick one canonical "thing with `def run()` + chumicro lib deps" deploy path. |
@@ -39,7 +39,7 @@ The test file even has an inline comment claiming it's "already a dev dep for ou
 
 **Fix surface:** mono-repo `requirements-dev.txt`.
 
-**Status:** committed locally (`5950b2f`), unpushed.
+**Status:** Done — landed in `8bcfb6b` ("requirements-dev: declare cryptography test dep").
 
 ---
 
@@ -53,7 +53,7 @@ The slug mismatches in `workbench/deploy/docs/guide.md` are independent: `Device
 
 **Fix surface:** mono-repo docs.
 
-**Status:** committed locally (`b71e242`), unpushed.
+**Status:** Done — landed in `d9d039e` ("docs: convert cross-tree links to absolute github urls + fix slug mismatches").
 
 **Suggested follow-up:** pin zensical in `requirements-dev.txt` (`zensical==0.0.39` or whatever CI runs) to keep this from drifting again. Today the file just says `zensical`.
 
@@ -192,6 +192,8 @@ defaults:
 This forces every `deploy`/`repl`/`probe` to pass `--device <id>` even when there's only one MP and one CP board in the workspace.
 
 **Fix surface:** mono-repo `chumicro_workspace.cli._cmd_add_device` (or wherever the `devices.yml` write happens) — fill `defaults.<runtime>` with the new device id when the slot is null *and* this is the first device of that runtime.
+
+**Status:** Confirmed still open as of 2026-05-03. `chumicro_workspace.cli._cmd_add_device` does not call `set_runtime_default` even though the symbol is imported and re-exported from `chumicro_workspace.__init__`. The reading side at `cli.py` already honors `defaults.<runtime>`; only the writing side (initial `add-device` registration) is missing.
 
 ---
 
