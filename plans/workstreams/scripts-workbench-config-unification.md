@@ -42,66 +42,9 @@ The two flows are **different solutions to the same problem**: "what wifi (or mq
 
 ---
 
-## Embedded ADR proposal
+## Decision record
 
-> **Filing note (2026-05-04):**  An ADR-cleanup agent is currently active.  This proposal is held inline rather than promoted to a numbered ADR until that work lands.  When the cleanup completes, lift this section into `plans/decisions/NNNN-config-pipeline-unification.md` (next available number) and update `## Status` to `accepted`.
-
-### Title
-
-Unify mono-repo and template-repo around shared `devices.yml` (probe-driven) + `workspace.yml + config.toml + secrets.yml` (chumicro-config-baked) flows owned by workbench packages.
-
-### Status
-
-`proposed`
-
-### Date
-
-2026-05-04
-
-### Related decisions
-
-- 0027 — device-testing infrastructure (`devices.yml` schema origin)
-- 0029 — project workspace (three-zone shape; workspace-template's source)
-- 0030 — config-and-state (host TOML / device msgpack split)
-- 0032 — workbench host tools (decides what *can* live in `workbench/`)
-- 0035 — runtime-config structure (section-namespaced shape)
-- 0036 — `chumicro-config` library (`load_runtime_config` + `load_section`)
-- 0044 — deploy-time runtime-file filtering (precedent: workbench-owned filter applied uniformly across every deploy path)
-- 0047 — `deploy_mode: flash` default (precedent: shared default flowed via `chumicro-deploy` constant rather than duplicated per-repo template)
-
-### Context
-
-The mono-repo and the workspace-template repo manage the same two artifacts (`devices.yml`, runtime config) with two different file shapes and two different population mechanisms.  The workbench packages already own the primitives that *could* drive both — `chumicro_deploy.config.devices_yaml` for the three-zone probe-aware reader/writer, `chumicro_workspace.pipeline.build_runtime_config` for the workspace-yaml + config.toml + secrets.yml + msgpack pipeline, `chumicro_config.load_runtime_config` for the on-device read.  The mono-repo's functional tests bypass all of this with hand-rolled `tomllib` reads of `chumicro-dev-config.toml` and a materialized `_test_creds.py` import shim.  This is the only consumer of `chumicro-config`-shaped data in the entire ecosystem that doesn't flow through `chumicro-config`.
-
-### Decision
-
-Adopt the workspace-template's flows as the canonical pattern; the mono-repo dogfoods them.  Specifically:
-
-1. **`devices.yml`** — Mono-repo drops the two `sample-*-board` pre-fills.  Initial state matches the template repo's three-zone-headed empty registry.  Population is driven by `chumicro-workspace add-device` (already implemented in `chumicro_deploy.config.devices_yaml.add_device`).  The `ide_runtime` field is part of the unified schema in **both** repos (corrected 2026-05-04 after user pushback) — workspace-template users who scaffold their own libraries via `python run.py new --library <name>` need IDE play-button targeting just like mono-repo contributors.  The schema reader already accepts `ide_runtime`; the workspace-template repo's `_workspace_template/devices.yml` gains the field as a small follow-up after Phase 1's mono-repo work lands.
-
-2. **Library config manifests** — Each library's `pyproject.toml` declares a `[tool.chumicro.config]` section listing the runtime-config sections it reads and their required / optional keys.  The schema is read by `chumicro-workspace deploy` for deploy-time validation (clear error messages instead of cryptic boot-time `MissingConfigKey`) and by README-generation tooling so config docs stay in sync with code.
-
-3. **Mono-repo workspace root config** — Add `workspace.yml` + `secrets.yml.template` at the mono-repo root.  Same shape as the workspace-template's files.  Functional-test creds live in `secrets.yml` (gitignored, edited once per clone, same UX as today's `chumicro-dev-config.toml`); shared defaults (`[defaults.wifi].ssid`, `[defaults.mqtt].broker`, etc.) live in `workspace.yml` (committed, references secrets via `!secret <name>`).
-
-4. **Functional tests dogfood `chumicro-config`** — Each library's `functional_tests/` becomes a thin "project": a `config.toml` (often empty — inherits all defaults from `workspace.yml`) and on-device test code that calls `chumicro_config.load_runtime_config()`.  `chumicro-pytest-device` gains an opt-in flag that bakes a `runtime_config.msgpack` per test session via `chumicro_workspace.pipeline.build_runtime_config()` and stages it onto the device.  The hand-rolled `_test_creds.py` materialization across every networking library's conftest is deleted.  `scripts/templates/chumicro-dev-config.toml.template` is deleted.
-
-5. **What stays divergent** — Mono-repo's CI / preflight / bundle-release scripts (gates, mip validation, runtime preparation, docs deploy) are unaffected — this workstream is config + device-registry only.  Those scripts have no equivalent in the workspace-template repo and shouldn't grow one.
-
-### Consequences
-
-**Positive:**
-- Single source of truth for runtime config across the entire ecosystem.  Mono-repo functional tests behave like user projects.  Bug-or-improvement to the config pipeline lands once, benefits both repos.
-- Mono-repo gains hardware-identity tracking (catches "wrong board plugged in" silently-wrong-test failures).
-- Library config requirements become machine-readable — `chumicro-workspace deploy` can refuse to ship a project that imports `chumicro_wifi` but has no `[wifi]` section, with a precise error.
-- `chumicro-config` gets dogfooded by the same humans maintaining it — improvements driven by daily use, not by hypothetical user reports.
-
-**Negative:**
-- One-time migration cost across five-plus library `functional_tests/conftest.py` files.  Estimated ~300 LOC deleted, ~150 LOC added (the conftest cleanup is net-negative; the new `workspace.yml` + per-library `config.toml` files are small).
-- Contributors must learn the `add-device` flow.  Mitigated by the three-zone header comments + a one-time prompt in `python scripts/run.py setup`.
-- Per-library `functional_tests/config.toml` files will exist even when often empty.  Tradeoff against the alternative (ad-hoc divergence between libraries).
-
-**Neutral:**
-- ABI / API: no library or workbench package's *public* surface changes.  All movement is in mono-repo internals + new opt-in flag on `chumicro-pytest-device`.
+The decision this workstream executed has been promoted to [Decision 0055](../decisions/0055-config-pipeline-unification.md) (`accepted`, 2026-05-04).  See that ADR for the structural commitment + rationale + open follow-ups (Phase 4.5a `!secret` simplification, Phase 4.5b on-device dogfooding via transport-API extension).  This workstream document captures the per-phase execution detail; the ADR captures the durable why.
 
 ---
 
