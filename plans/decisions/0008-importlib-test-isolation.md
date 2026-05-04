@@ -1,8 +1,9 @@
 # Decision 0008: importlib test isolation for multi-library workspace
 
 Status: `superseded`
-Superseded by: [Decision 0009](0009-per-library-test-runs.md)
 Date: `2026-04-01`
+Related: Decision 0001 (mono-workspace layout)
+Superseded by: [Decision 0009](0009-per-library-test-runs.md)
 
 ## Context
 

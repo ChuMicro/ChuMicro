@@ -1,6 +1,8 @@
 # Decision 0012 — IDE type stubs for platform-specific modules
 
-Status: `accepted` (revised)
+Status: `accepted`
+Date: `2026-04-02`
+Related: Decision 0007 (cross-platform deps — §3 prefigures this)
 
 ## Context
 
@@ -61,7 +63,4 @@ Both packages are installed by `python scripts/run.py setup` alongside other dev
 - Stubs stay in sync with pinned runtime versions automatically via `target-runtimes.toml`.
 - Two additional PyPI dependencies in the dev environment.
 - The `micropython` module conflict is documented and has a clear mitigation path.
-
-## Supersedes
-
-This revision replaces the original `typings/` approach.  The `typings/` directory has been removed and `sync-ide` no longer references it.
+- Replaces an earlier hand-written `typings/` directory; that directory has been removed.

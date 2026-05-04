@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-02`
+Related: Decision 0011 (platform targeting determines doc-publishing), Decision 0021 (docstring type policy)
 
 ## Context
 

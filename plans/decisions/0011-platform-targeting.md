@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-02`
+Related: Decision 0007 (cross-platform deps), Decision 0015 (board support tiers), Decision 0037 (per-runtime file marking)
 
 ## Context
 

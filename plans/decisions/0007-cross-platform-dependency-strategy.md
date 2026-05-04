@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-01`
+Related: Decision 0011 (platform targeting), Decision 0012 (IDE type stubs), Decision 0018 (distribution channels)
 
 ## Context
 

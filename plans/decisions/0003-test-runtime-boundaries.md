@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-03-28`
+Related: Decision 0010 (testability), Decision 0016 (cross-runtime unit tests), Decision 0027 (device tests)
 
 ## Context
 

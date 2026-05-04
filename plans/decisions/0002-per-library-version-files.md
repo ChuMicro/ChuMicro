@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-03-31`
+Related: Decision 0020 (API breakage detection enforces level)
 
 ## Context
 

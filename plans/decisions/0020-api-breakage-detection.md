@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-05`
+Related: Decision 0002 (per-library version files)
 
 ## Context
 

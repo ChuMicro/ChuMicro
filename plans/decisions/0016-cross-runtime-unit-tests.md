@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-03`
+Related: Decision 0006 (supersedes), Decision 0010 (testability), Decision 0027 (device tests)
 
 ## Context
 

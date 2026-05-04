@@ -1,8 +1,8 @@
 # Decision 0037: Per-runtime file marking and bundle filtering
 
-Status: `accepted`
-Date: `2026-04-26` (amended `2026-05-04` — see "Amendments" below)
-Related: Decision 0015 (supported board class), Decision 0018 (distribution bundle repo), Decision 0021 (annotations), Decision 0010 (testing fakes), the 2026-04-26 Pi Pico W flash-footprint learning in `plans/learnings.md`.
+Status: `revised`
+Date: `2026-04-26`
+Related: Decision 0015 (supported board class), Decision 0018 (distribution bundle repo), Decision 0021 (annotations), Decision 0010 (testing fakes), Decision 0044 (deploy-time runtime filtering)
 
 > **Note:** See also [Decision 0044](0044-deploy-time-runtime-filtering.md), which extends the marker filter to every host-side deploy path (workspace deploy, `chumicro_deploy` CLI, pytest-device staging, examples, functional tests).
 
@@ -95,20 +95,3 @@ def _find_bundle_modules(
 - The marker declaration is plain Python — readable by humans, parseable by the bundle pipeline, and ignored by the runtime (just an unused module attribute).  No new tooling, no registry, no manifest.
 - `_adapters/fake.py` per library disappears in the same change; existing imports of `chumicro_*._adapters.fake.*` move to `chumicro_*.testing.*`.  Public API (`chumicro_wifi.testing.FakeWifi` etc.) is unchanged.
 - Users on PyPI (`pip install chumicro-foo` on any CPython host) get a complete install — every adapter, every backend, every fake.  Users on mip / circup get the bundle-filtered subset matching their device runtime, with `testing.py` and any other `("cpython",)`-marked files dropped.
-
-## Amendments
-
-### 2026-05-04 — `testing.py` exits the universal source bundle too
-
-Original Decision (2026-04-26) said the universal source bundle was "every non-host-only file unfiltered" and used a name-based `_HOST_ONLY_MODULES = {"testing.py"}` filter to keep `testing.py` out of it.  That left two problems:
-
-1. Two parallel mechanisms (name list + marker filter) drifting independently.
-2. `testing.py` was being added to the universal source bundle anyway when the bundle pipeline was bypassed (e.g. workspace deploy via `DirectorySource` walks of a library `src/` tree didn't apply `_HOST_ONLY_MODULES`).  Decision 0044 closed the deploy-side gap, but only for runtime-marked files — `testing.py` had no marker, so deploy paths still shipped it.
-
-The amendment:
-
-- Every `testing.py` declares `__chumicro_runtimes__ = ("cpython",)`.
-- `_find_bundle_modules` accepts a frozenset of target runtimes.  The universal source bundle now passes `DEVICE_RUNTIMES = frozenset({"circuitpython", "micropython"})`, which drops any file marked exclusively for `cpython`.
-- `_HOST_ONLY_MODULES` is removed.  The marker is the single source of truth.
-
-Consequences: `testing.py` (and any future CPython-only file) ships only in the PyPI sdist / wheel.  No bundle, no device deploy.  The marker mechanism gains slightly more expressiveness (set-of-acceptable-runtimes in addition to single-runtime) without changing the per-file declaration form.

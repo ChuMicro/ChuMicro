@@ -1,8 +1,8 @@
-# 0021 — Type Documentation Policy
+# Decision 0021: Type Documentation Policy
 
-**Status:** accepted
-**Date:** 2026-04-07
-**Revised:** 2026-04-08
+Status: `accepted`
+Date: `2026-04-07`
+Related: Decision 0022 (naming conventions)
 
 ## Context
 

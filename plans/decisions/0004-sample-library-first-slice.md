@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-03-29`
+Related: Decision 0003 (test boundaries), Decision 0007 (cross-platform deps)
 
 ## Context
 

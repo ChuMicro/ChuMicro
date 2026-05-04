@@ -1,7 +1,8 @@
 # Decision 0015 — Board architecture support tiers
 
 Status: `accepted`
-Date: `2026-04-03` (revised `2026-04-04`, baseline lowered `2026-04-04`)
+Date: `2026-04-03`
+Related: Decision 0011 (platform targeting), Decision 0039 (firmware version floor)
 
 ## Context
 

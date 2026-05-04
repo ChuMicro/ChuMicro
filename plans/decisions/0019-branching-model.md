@@ -1,7 +1,8 @@
 # Decision 0019: Branching model — single branch with tags
 
 Status: `accepted`
-Date: `2026-04-06` (revised from `2026-04-05`)
+Date: `2026-04-06`
+Related: none
 
 ## Context
 
