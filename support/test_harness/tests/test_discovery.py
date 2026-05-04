@@ -237,7 +237,7 @@ def test_run_all_runs_discovered_tests(tmp_path, capsys):
 
 
 def test_run_all_fails_on_import_errors(tmp_path, capsys):
-    """Per Decision 0016: a non-``_pytest`` file that fails to import is FAIL, not SKIP.
+    """A non-``_pytest`` file that fails to import is FAIL, not SKIP.
 
     The harness used to swallow ``ImportError`` as a silent SKIP — that
     let mis-classified files (genuinely cross-runtime in name, but
@@ -261,7 +261,8 @@ def test_run_all_fails_on_import_errors(tmp_path, capsys):
     output = capsys.readouterr().out
     assert "FAIL" in output
     assert "test_broken.py" in output
-    assert "Decision 0016" in output
+    assert "import failed" in output
+    assert "test_<name>_pytest.py" in output
 
 
 def test_run_all_reports_load_errors(tmp_path, capsys):
@@ -327,7 +328,7 @@ def test_run_one_file_runs_passing_test(tmp_path, capsys):
 
 
 def test_run_one_file_fails_on_import_errors(tmp_path, capsys):
-    """run_one_file returns 1 (FAIL) when the file fails to import — Decision 0016."""
+    """run_one_file returns 1 (FAIL) when the file fails to import."""
     root = str(tmp_path)
     _make_library(root, "broken", ["test_broken.py"])
     test_file = os.path.join(
@@ -345,7 +346,8 @@ def test_run_one_file_fails_on_import_errors(tmp_path, capsys):
     assert result == 1
     output = capsys.readouterr().out
     assert "FAIL" in output
-    assert "Decision 0016" in output
+    assert "import failed" in output
+    assert "test_<name>_pytest.py" in output
 
 
 def test_run_one_file_reports_load_errors(tmp_path, capsys):

@@ -1089,19 +1089,19 @@ def _load_fallback_device(session: pytest.Session) -> DeviceEntry:
         error_message = str(error)
         if "not found" in error_message:
             pytest.skip(
-                "No devices.yml found.  Run `setup` then `add-device <id> "
-                "--address <port>` (via your workspace's run.py) to register "
-                "your board for functional tests."
+                "No devices.yml found.  Run "
+                "`chumicro-workspace add-device <id> --address <port>` "
+                "to register a board for functional tests."
             )
         pytest.fail(f"Device config error: {error}")
 
     targets = resolve_ide_devices(devices, defaults)
     if not targets:
         pytest.skip(
-            "No devices registered in devices.yml.  Run `add-device <id> "
-            "--address <port>` (via your workspace's run.py) to register "
-            "your board — probes hardware identity + fills in defaults on "
-            "first registration."
+            "No devices registered in devices.yml.  Run "
+            "`chumicro-workspace add-device <id> --address <port>` "
+            "to register a board — probes hardware identity + fills in "
+            "defaults on first registration."
         )
 
     return targets[0]

@@ -77,8 +77,7 @@ def load_section(
     for key in required:
         if key not in data:
             raise MissingConfigKey(
-                f"required config key {key!r} is missing — check the merged "
-                f"config on the host with `python run.py dump-config <project>`"
+                f"required config key {key!r} is missing"
             )
         kwargs[key] = data[key]
 
