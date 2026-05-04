@@ -136,19 +136,6 @@ devices:
         assert device.setup_command is None
         assert device.description == ""
 
-    def test_environment_variable_override(self, tmp_path, monkeypatch) -> None:
-        """``CHUMICRO_DEVICES`` should override the default path."""
-        devices_file = _write_yaml(tmp_path / "custom.yml", """
-devices:
-  - id: env-board
-    runtime: micropython
-    address: /dev/ttyUSB9
-""")
-        monkeypatch.setenv("CHUMICRO_DEVICES", str(devices_file))
-        devices = load_devices()
-        assert devices[0].identifier == "env-board"
-
-
 class TestLoadDeviceRegistry:
     """Tests for ``load_device_registry``."""
 

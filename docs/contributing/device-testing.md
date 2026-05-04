@@ -267,14 +267,11 @@ A dedicated live end-to-end VS Code validation pass remains on `plans/next-up.md
 | Workbench hardware-gated tests | `workbench/<name>/functional_tests/` | `python scripts/run.py test-workbench-functional --workbench <name>` |
 | Cross-runtime unix-port tests | reuses `tests/` | `python scripts/run.py test-all-runtimes` |
 
-## 9. CI and environment overrides
+## 9. Alternate `devices.yml` locations
 
-Two environment variables are supported for file-path overrides:
-
-- `CHUMICRO_DEVICES` — alternate path to `devices.yml`
-- `CHUMICRO_DEVICE_CONFIG` — alternate path to `device-config.yml`
-
-These are intended for CI or unusual local layouts. They do **not** replace the normal per-runtime board selection flow in `devices.yml`.
+`devices.yml` is always resolved at `<workspace_root>/devices.yml`. CI or
+unusual local layouts can drop a `devices.yml` at the workspace root
+before running tests; nothing else is needed.
 
 ## Troubleshooting
 
