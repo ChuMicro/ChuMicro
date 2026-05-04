@@ -77,41 +77,9 @@ calls the helper).  The dep **is** avoidable at *deploy-time* — what
 ships to the board — if the helper is structured so the AST-walking
 import-graph deploy (Decision 0029) doesn't follow it.
 
-**Rule:** the `chumicro_<infra>_factory(...)` helper lives in its own
-submodule (e.g. `chumicro_requests/sockets_factory.py`).  The library's
-`__init__.py` and core implementation modules **must not import the
-helper**.  Users opt in to the default wiring by importing the
-submodule explicitly:
+**Rule:** the `chumicro_<infra>_factory(...)` helper lives in its own submodule (e.g. `chumicro_requests/sockets_factory.py`).  The library's `__init__.py` and core implementation modules **must not import the helper**.  Users opt in to the default wiring by importing the submodule explicitly (`from chumicro_requests.sockets_factory import chumicro_sockets_factory`); users supplying a custom transport never reference the submodule.
 
-```python
-# default wiring — chumicro-sockets ships to the device
-from chumicro_requests import HttpClient
-from chumicro_requests.sockets_factory import chumicro_sockets_factory
-client = HttpClient(connection_factory=chumicro_sockets_factory(radio=wifi.radio))
-
-# custom transport — chumicro-sockets does NOT ship to the device
-from chumicro_requests import HttpClient
-client = HttpClient(connection_factory=my_custom_factory)
-```
-
-Why this works: the deploy tool walks AST imports starting from the
-user's app.  If the app never references `chumicro_requests.sockets_factory`,
-the AST walker never enters that module, so the lazy `import
-chumicro_sockets` inside it is never observed, so `chumicro_sockets` is
-never shipped to the device.  Lazy imports inside `client.py` (or
-anything `__init__.py` pulls in) **don't** give the user this opt-out
-— the walker still sees them when it analyzes `client.py`.
-
-**Audit follow-up.**  Today's `chumicro-requests` defines
-`chumicro_sockets_factory` in `client.py` and re-exports it from
-`__init__.py`.  This was correct under the prior, looser policy.  Under
-this rule it's a structural defect: a user injecting a custom transport
-still pays the deploy cost for `chumicro-sockets`.  Fix in a follow-up:
-move the helper to `chumicro_requests/sockets_factory.py`, drop the
-`__init__.py` re-export, update README + docs + functional-test
-imports.  Same fix shape will be needed for any future
-`chumicro-mqtt` / `chumicro-http-server` factory helpers — none exist
-today.
+The AST-walking import-graph deploy (Decision 0029) starts from the user's app.  If the app never imports `chumicro_requests.sockets_factory`, the walker never enters that module, so the `import chumicro_sockets` inside it is never observed, and `chumicro_sockets` is never shipped to the device.  Lazy imports inside `client.py` (or anything `__init__.py` pulls in) do NOT give the user this opt-out — the walker still sees them when it analyzes `client.py`.
 
 #### What the rule does not solve
 
@@ -203,28 +171,4 @@ the upstream-side counterpart to the downstream-side factory helper.
   bundles a "wired-up" starter so beginners don't write the
   boilerplate.
 
-### Audit checklist (on next release-prep cycle)
-
-- [ ] `chumicro-mqtt` `pyproject.toml`: hard deps on `chumicro-sockets`,
-      `chumicro-timing`, `chumicro-runner`. Confirm no `chumicro-logging`
-      / `chumicro-events` deps.
-- [ ] `chumicro-requests`: same.
-- [ ] `chumicro-http-server`: same.
-- [ ] `chumicro-wifi`, `chumicro-kvstore`, `chumicro-config`: no
-      decoration deps.
-- [ ] `chumicro-mqtt`, `chumicro-requests`, `chumicro-http-server`:
-      each ships a `chumicro_sockets_factory(...)` helper or
-      equivalent — and that helper lives in its **own submodule**
-      (per sub-rule), not in `__init__.py` or `client.py`.
-- [ ] `chumicro-requests` follow-up: move existing
-      `chumicro_sockets_factory` from `client.py` into
-      `sockets_factory.py`, drop the `__init__.py` re-export.
-- [ ] All libraries expose an `on_state_change` callback or
-      equivalent hook shape.
-- [ ] `chumicro-logging` (when shipped): no chumicro deps.
-- [ ] `chumicro-events` (when shipped): no chumicro deps.
-- [ ] `chumicro-presence` (when shipped): hard deps on the *output*
-      libraries it composes (`chumicro-pixels`, `chumicro-input`,
-      `chumicro-tone` if any wired); **no** dep on `chumicro-events`
-      (it accepts an event source via its constructor); **no** dep
-      on `chumicro-logging`.
+The implementation punch-list (auditing existing libraries' `pyproject.toml` deps and factory-helper submodule placement, plus the open `chumicro-requests` follow-up to move `chumicro_sockets_factory` from `client.py` into its own `sockets_factory.py`) lives in `plans/next-up.md`, not here.

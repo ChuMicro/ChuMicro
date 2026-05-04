@@ -82,48 +82,19 @@ Behavior locked by this ADR (so libraries can't drift):
 
 ### 3. Library access pattern: thin `from_dict` wrapper
 
-Each library declares its required + optional keys and calls
-`load_section`:
+Each library declares its required + optional keys and calls `load_section` from a `from_dict` classmethod on a `<Name>Config` dataclass.  The required / optional vocabulary is duplicated in `__init__`'s parameter defaults and `from_dict`'s call — on purpose, so both construction paths (direct kwargs in tests, dict-based in production) agree without a metaclass deriving one from the other.
 
 ```python
-# In chumicro_wifi.config:
-from chumicro_config import load_section
-
-
 class WifiConfig:
-    def __init__(
-        self,
-        ssid: str,
-        password: str,
-        hostname: str | None = None,
-        connect_timeout_ms: int = 15_000,
-    ) -> None:
-        self.ssid = ssid
-        self.password = password
-        self.hostname = hostname
-        self.connect_timeout_ms = connect_timeout_ms
+    def __init__(self, ssid: str, password: str, hostname: str | None = None, connect_timeout_ms: int = 15_000) -> None:
+        ...
 
     @classmethod
     def from_dict(cls, data: dict) -> "WifiConfig":
-        return load_section(
-            cls,
-            data,
-            required=("ssid", "password"),
-            optional={"hostname": None, "connect_timeout_ms": 15_000},
-        )
+        return load_section(cls, data, required=("ssid", "password"), optional={"hostname": None, "connect_timeout_ms": 15_000})
 ```
 
-The required / optional vocabulary is duplicated in `__init__`'s
-parameter defaults and `from_dict`'s call — on purpose.  Both
-construction paths (direct kwargs in tests, dict-based in
-production) must agree, and writing them twice locally is more
-readable than a metaclass that derives one from the other.
-
-**Rejected:** a `ConfigBase` mixin that introspects `_REQUIRED` /
-`_OPTIONAL` class attributes and auto-generates `from_dict`.  The
-inheritance + class-attribute indirection saves three lines per
-library and adds magic the next reader has to chase.  Three lines
-per library is fine.
+**Rejected:** a `ConfigBase` mixin that introspects `_REQUIRED` / `_OPTIONAL` class attributes and auto-generates `from_dict`.  The inheritance + class-attribute indirection saves three lines per library and adds magic the next reader has to chase.
 
 ### 4. `load_runtime_config` reads + decodes the on-device file
 
@@ -153,98 +124,13 @@ scenarios can point elsewhere.
 
 ### 5. Templating convention: each library ships `_templates/config.toml`
 
-For the workspace template flow to scaffold `projects/<name>/config.toml`
-with sections matching the libraries the user has installed, each
-consumer library ships a TOML snippet at::
+Every library that consumes runtime config ships a starter TOML snippet at `src/chumicro_<name>/_templates/config.toml` containing a `[<section>]` block with required keys spelled out and optional keys commented inline.  The template ships inside `src/` so it lands in the wheel and is discoverable via `importlib.resources` after `pip install`.  ~200 bytes per library; the file rides along to device and is never read there.
 
-    libraries/<name>/src/chumicro_<name>/_templates/config.toml
+`chumicro_config.templates.get_section_template(library_name) -> str` reads the snippet (CPython-only — `importlib.resources` doesn't exist on the embedded runtimes, and template collection is a host-side workspace-tooling concern).  `chumicro-workspace` consumes this from its `add-library` flow to assemble starter `projects/<name>/config.toml` files.
 
-The snippet contains a starter `[<section>]` block with every
-required key (commented values explaining what each field is) and
-optional keys with their defaults inlined as comments.  Example for
-chumicro-wifi::
+### 6. `chumicro-deploy`'s `devices.yml` is out of scope
 
-    # chumicro-wifi configuration.
-    # See https://chumicro.github.io/ChuMicro/wifi/ for the full reference.
-    [wifi]
-    ssid = ""                            # required: AP SSID to connect to
-    password = "!secret wifi_password"   # required: WPA passphrase (use !secret)
-    # hostname = "thing-1"               # optional: hostname advertised on the AP
-    # connect_timeout_ms = 15000         # optional: max wait on the blocking connect
-    # reconnect_backoff_max_ms = 60000   # optional: cap on exponential reconnect backoff
-
-The template ships inside `src/` (not as a sibling of `pyproject.toml`)
-so it lands in the wheel and is discoverable via
-`importlib.resources` once the library is `pip install`ed in the
-workspace's `.venv`.  ~200 bytes per library; the file rides along
-to device and is never read there — trivial flash cost vs. the
-heavier alternatives (PyPI metadata, a separate template registry,
-fetching from GitHub).
-
-`chumicro_config.templates.get_section_template(library_name)`
-reads the snippet:
-
-```python
-def get_section_template(library_name: str) -> str:
-    """Return the TOML snippet a library ships for its config section.
-
-    Args:
-        library_name: Library basename, e.g. ``"wifi"`` or ``"mqtt"``.
-            Maps to package ``chumicro_<library_name>``.
-    """
-    from importlib.resources import files
-    package = f"chumicro_{library_name}"
-    return (files(package) / "_templates" / "config.toml").read_text()
-```
-
-CPython-only — `importlib.resources` doesn't exist on MicroPython
-or CircuitPython, but template-collection is a host-side workspace-
-tooling concern, not a device-runtime one.  The helper lives in
-`chumicro_config.templates` rather than `chumicro_config.host` so
-"templates" stays a clear sub-concept name even after the broader
-host-helpers module lands.
-
-Adoption: every library that consumes runtime config (starting with
-chumicro-wifi in Phase 3a) ships a `_templates/config.toml` and gets
-this scaffolding flow for free.  Libraries that don't consume
-runtime config don't need the template.
-
-Workspace tooling (Phase 4a, `chumicro-workspace`) will use
-this helper to assemble starter `projects/<name>/config.toml` files
-when a user runs `python run.py add-library wifi` (or similar) —
-collect templates from installed consumer libraries, concatenate
-into the project's config, prompt the user to fill in required
-values.  Out of scope for this commit; the convention + helper
-land here so Phase 4a can build on a stable contract.
-
-### 6. Workbench helpers deferred
-
-A future `chumicro_config.host` module could carry CPython-only
-helpers — TOML / YAML loaders, deep-merge, `!secret` resolution —
-for workbench packages that want to consume the same conventions
-on the host side (e.g. a future deploy-time validator that
-previews what `/runtime_config.msgpack` will look like).  Out of
-scope for this commit; add when a workbench package actually
-needs it.  When it lands it lives inside the same library so
-"chumicro-config = the config convention" stays a single brand.
-
-`chumicro-deploy`'s `devices.yml` reader stays separate — that file
-is deploy-infrastructure config, not runtime app config; using
-`load_section` for it would conflate two distinct contracts.
-
-### 7. Adoption: every config-consuming library uses it
-
-`chumicro-wifi` (Phase 3a) ships with `chumicro-config` as a runtime
-dependency from day one **and** ships a `_templates/config.toml`
-per §5.  Future libraries (`chumicro-mqtt` Phase 6, sensor drivers
-in Phase 7) follow the same pattern.
-
-Existing libraries (`chumicro-timing`, `chumicro-runner`,
-`chumicro-msgpack`, `chumicro-compat`, `chumicro-kvstore`) don't
-consume runtime config and don't add the dependency.  If any later
-grows config (e.g. a future `chumicro-kvstore` that exposes
-`backend="auto"` via `[kvstore]`), it adopts `load_section` at that
-point.
+`devices.yml` is deploy-infrastructure config, not runtime app config — `chumicro-deploy` reads it through its own loader (Decision 0029 §8).  Using `load_section` for it would conflate two distinct contracts.
 
 ## Consequences
 
@@ -252,19 +138,6 @@ point.
   lines).  Tiny scope, but distinct from existing libraries —
   doesn't fit `chumicro-compat` (compat is polyfills) or
   `chumicro-msgpack` (msgpack is the codec).
-- ADR 0035 §3 is amended to name `chumicro-config` as the home of
-  `from_dict` — the library's `load_section` is now the canonical
-  implementation.  The "no magic dispatcher" rejection in §3 still
-  stands; this library is helpers, not a dispatcher.
-- Every config-consuming library gains one dependency
-  (`chumicro-config`).  The dep is workspace-internal and resolves
-  through the existing topological-sort path in `validate-mip`.
-- `chumicro-wifi` (Phase 3a) is the first adopter; lands with
-  `WifiConfig.from_dict` calling `load_section` per §3 above.
-- Future evolution lives in one place: env-var fallbacks, layered
-  defaults, per-key validators, type coercion (if we ever want it),
-  workbench host helpers — all extend `chumicro-config` rather than
-  forking each library's hand-rolled implementation.
-- Scaffolding: `python scripts/run.py new-library config`
-  generates the standard layout; manual fill-in of `section.py` +
-  `runtime.py` content + tests + dep on `chumicro-msgpack`.
+- Decision 0035 §3 names `chumicro-config` as the home of `from_dict` — the library's `load_section` is the canonical implementation.  The "no magic dispatcher" rejection in 0035 §3 still stands; this library is helpers, not a dispatcher.
+- Every config-consuming library gains a dependency on `chumicro-config`.  The dep is workspace-internal and resolves through the existing topological-sort path in `validate-mip`.
+- Future evolution (env-var fallbacks, layered defaults, per-key validators, type coercion, workbench host helpers) extends `chumicro-config` rather than forking each library's hand-rolled implementation.

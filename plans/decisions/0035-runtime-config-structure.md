@@ -115,69 +115,13 @@ about the *default*, not a constraint.
 
 ### 3. Library access pattern: dataclass + `from_dict` classmethod backed by `chumicro-config`
 
-The `from_dict` *implementation* lives in a shared library (`chumicro-config`, Decision 0036) so every consumer library calls the same standardized factory and the convention can't drift.  Every library that consumes runtime config ships a `<Name>Config` dataclass plus a `from_dict(d: dict) -> <Name>Config` classmethod.
+Every library that consumes runtime config ships a `<Name>Config` dataclass plus a `from_dict(d: dict) -> <Name>Config` classmethod.  The classmethod delegates to `chumicro_config.load_section`, which owns the canonical missing-required / missing-optional / unknown-key / non-dict-input semantics — see [Decision 0036](0036-chumicro-config-library.md) for the implementation contract and the worked `WifiConfig` example.
 
-The classmethod calls `chumicro_config.load_section`, which
-implements the canonical missing-required / missing-optional /
-unknown-key / non-dict-input semantics:
+User code wires sections to libraries explicitly (`WifiService(WifiConfig.from_dict(config["wifi"]))`) — no magic dispatcher.  Tests construct `WifiConfig(ssid="...", password="...")` directly without going through the dict path.
 
-```python
-# In chumicro_wifi:
-from chumicro_config import load_section
+**Rejected:** a generic `chumicro-config-runtime` library that loads the file + dispatches to libraries.  Adds a published package for a three-line user code path; doesn't earn its keep.
 
-
-class WifiConfig:
-    def __init__(
-        self,
-        ssid: str,
-        password: str,
-        hostname: str | None = None,
-        connect_timeout_ms: int = 15_000,
-    ) -> None:
-        self.ssid = ssid
-        self.password = password
-        self.hostname = hostname
-        self.connect_timeout_ms = connect_timeout_ms
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "WifiConfig":
-        return load_section(
-            cls,
-            data,
-            required=("ssid", "password"),
-            optional={"hostname": None, "connect_timeout_ms": 15_000},
-        )
-```
-
-User code in `app.py` is:
-
-```python
-from chumicro_config import load_runtime_config
-from chumicro_wifi import WifiService, WifiConfig
-
-config = load_runtime_config()
-wifi = WifiService(WifiConfig.from_dict(config["wifi"]))
-```
-
-(`load_runtime_config` is the on-device reader for
-`/runtime_config.msgpack`, also part of `chumicro-config`.)
-
-No magic.  The user explicitly wires sections to libraries — code
-remains greppable, debuggable, and refactor-safe.  Tests construct
-`WifiConfig(ssid="...", password="...")` directly without going
-through the dict path.
-
-**Rejected:** a generic `chumicro-config-runtime` library that loads
-the file + dispatches to libraries.  Adds a published package for a
-3-line user code path; doesn't earn its keep.  `chumicro-config`
-(per Decision 0036) is helpers, not a dispatcher — the user still
-explicitly wires `config["wifi"]` to `WifiConfig.from_dict`.
-
-**Rejected:** each library shipping a `from_config_file()` helper
-that reads `/runtime_config.msgpack` itself.  Forces every consumer
-library to know about the on-device path + the file format, which
-creates a dependency on the workspace-runtime ABI.  `from_dict` keeps
-libraries config-source-agnostic.
+**Rejected:** each library shipping a `from_config_file()` helper that reads `/runtime_config.msgpack` itself.  Forces every consumer library to know about the on-device path + file format, creating a dependency on the workspace-runtime ABI.
 
 ### 4. Required vs optional keys
 
@@ -193,59 +137,9 @@ production) get the same defaults without one path leaking.
 
 ### 5. Deep-merge semantics: per-key, not per-section
 
-The deployer merges three sources into the final dict:
+The deployer merges three sources into the final dict, in increasing precedence: `workspace.yml` defaults → `projects/<name>/config.toml` → `secrets.yml` entries resolved via `!secret <name>` references inside either of the above.
 
-1. **`workspace.yml` defaults** (lowest precedence) — shared across
-   every thing in the workspace.
-2. **`projects/<name>/config.toml`** (overrides workspace defaults).
-3. **`secrets.yml`** entries resolved via `!secret <name>`
-   references inside any of the above.
-
-Merge is **deep, key-level** within sections: workspace's `[wifi]`
-section + thing's `[wifi]` section combine key-by-key, with the
-thing's keys winning.
-
-```yaml
-# workspace.yml
-defaults:
-  wifi:
-    hostname_prefix: "chu-"
-  mqtt:
-    port: 1883
-```
-
-```toml
-# projects/back-porch/config.toml
-[wifi]
-ssid = "HomeNet"
-password = "!secret wifi_password"
-hostname = "back-porch"
-
-[mqtt]
-broker = "mqtt.home"
-client_id = "back-porch"
-```
-
-```python
-# Merged result on device:
-{
-    "wifi": {
-        "hostname_prefix": "chu-",     # from workspace.yml
-        "ssid": "HomeNet",             # from thing
-        "password": "<resolved>",      # from secrets.yml
-        "hostname": "back-porch",      # from thing
-    },
-    "mqtt": {
-        "port": 1883,                  # from workspace.yml
-        "broker": "mqtt.home",         # from thing
-        "client_id": "back-porch",     # from thing
-    },
-}
-```
-
-Top-level sections present in either source carry through.  Sections
-present only in workspace.yml become global defaults the thing
-inherits without restating.
+Merge is **deep, key-level** within sections: workspace's `[wifi]` section + project's `[wifi]` section combine key-by-key, with the project's keys winning.  Sections present only in `workspace.yml` become global defaults the project inherits without restating.  A worked example with concrete TOML/YAML/Python lives in `docs/contributing/runtime-config.md`.
 
 ### 6. Schema validation policy: each library owns its own
 

@@ -126,68 +126,15 @@ CPython packages.  The three folders now have clean, independent axes:
 
 ### Alternatives considered
 
-- **Publish from `support/`** (relax the "support is internal" rule).
-  Smallest structural diff.  Rejected — "support" as a word then stops
-  meaning anything concrete, and the runtime-target separation
-  readers care about stays invisible.
-- **Single `libraries/` with classifiers or tier labels in
-  `pyproject.toml`.** Minimal tree churn.  Rejected — readers lose
-  the visual separation at browse time, and every script that scans
-  `libraries/` has to learn to filter.  The separation is worth a
-  folder boundary, not a metadata field.
-- **Separate repo per host tool.** Strongest isolation.  Rejected —
-  heavy release/CI/versioning overhead for a handful of tools that
-  share the chumicro dev workflow and benefit from mono-repo testing.
-- **Top-level name `tools/`, `host/`, `dock/`, `bridge/`, `console/`.**
-  `tools/` is generic-safe but boring; `host/` is correct but jargon;
-  `dock/` is evocative but narrower than the workspace-runtime case;
-  `bridge/` and `console/` are overloaded.  `workbench/` best captures
-  "where the developer works *on* the project," pairs with the
-  already-used "workspace" terminology (workspace = user's project;
-  workbench = tool shelf) without colliding, and scales to future host
-  tools beyond the initial three.
+- **Publish from `support/`** (relax "support is internal").  Rejected: "support" stops meaning anything concrete and the runtime-target separation stays invisible to readers.
+- **Single `libraries/` with `pyproject.toml` classifiers or tier labels.**  Rejected: every script scanning `libraries/` has to learn to filter, and readers lose the visual separation at browse time.
+- **Separate repo per host tool.**  Rejected: heavy release/CI/versioning overhead for tools that share the chumicro dev workflow and benefit from mono-repo testing.
+- **Names `tools/` / `host/` / `dock/` / `bridge/` / `console/`.**  `workbench/` best captures "where the developer works *on* the project," pairs with the existing "workspace" terminology (workspace = user's project, workbench = tool shelf), and scales to future host tools.
 
 ## Consequences
 
-- `scripts/repo_layout.py` discovery grows a third source folder:
-  `discover_package_dirs()` must scan `workbench/` alongside
-  `libraries/` and `support/`.  `discover_library_dirs()` stays
-  libraries-only (used by bundle/docs/cross-runtime gates, which
-  remain device-library concerns).  A new helper exposes the set of
-  workbench packages when the distinction matters.
-- `scripts/shared.py::install_editable()` installs workbench packages
-  in editable mode the same way it already installs libraries and
-  support packages.
-- `scripts/check_version.py`, `check_api.py`, and lint/coverage
-  checks treat workbench packages as publishable — VERSION gate,
-  API-breakage gate, coverage gate all apply.
-- Bundle staging (`scripts/bundle_manager.py`) and the cross-runtime
-  test matrix remain scoped to `libraries/` only — workbench packages
-  are skipped.
-- Release pipeline has full parity minus bundle mechanics.
-  `release.yml` gains a parallel workbench-wheel job that publishes
-  to PyPI under `-experimental` names on every VERSION bump on
-  `main`; `promote.yml` gains a parallel job that publishes the
-  stable names (`chumicro-deploy`, etc.) when a workbench VERSION is
-  tagged for release.  `check-version` and `check-api` gate workbench
-  packages the same way they gate libraries.  Neither workflow
-  touches `mpy-cross`, bundle repos, or docs deploys for workbench
-  packages.
-- Docs: workbench packages ship the same `mkdocs.yml` + `docs/`
-  layout as device libraries (Zensical + mkdocstrings + mike for
-  versioning).  `scripts/run.py docs --libraries <name>` discovers
-  and builds them via the existing `discover_doc_dirs` helper; the
-  versioned-docs deploy pipeline routes workbench packages the same
-  way it routes libraries, onto the same `https://chumicro.github.io/
-  ChuMicro/<package>/` URL space.  This matches the
-  release-lifecycle parity rule (Rule 4) — workbench packages
-  ship to PyPI and the docs site, just not the bundle.
-- Scaffolding: `python scripts/run.py new-library <name>` stays
-  device-library-shaped.  A sibling command (likely
-  `new-workbench <name>`) scaffolds the host-tool variant.  Scope
-  of the sibling scaffolder is TBD in the Phase 1 implementation
-  slice that actually needs it — until then, workbench packages
-  can be created by hand using `workbench/deploy/` as the
-  reference layout.
-- `AGENTS.md` "File routing" table and workspace-structure section
-  update to name the third folder and its rule.
+- Discovery + editable-install + VERSION/API/coverage gates apply to workbench packages identically to libraries (`scripts/repo_layout.py`, `scripts/shared.py::install_editable()`, `check_version.py`, `check_api.py`).  Bundle staging and the cross-runtime test matrix stay scoped to `libraries/` only.
+- Release pipeline parity minus bundle mechanics: `release.yml` publishes `-experimental` wheels on every VERSION bump; `promote.yml` publishes stable names on tag.  Neither workflow touches `mpy-cross`, bundle repos, or device deploys for workbench packages.
+- Docs ship via the same Zensical + mkdocstrings + mike pipeline as libraries, on the same `https://chumicro.github.io/ChuMicro/<package>/` URL space.
+- Scaffolding: `python scripts/run.py new-library` stays device-library-shaped; a future `new-workbench` will mirror it.  Until then, `workbench/deploy/` is the reference layout.
+- `AGENTS.md`'s "File routing" table and workspace-structure section name the third folder and its rule.

@@ -31,84 +31,35 @@ One library, two top-level public classes:
 
 Both classes satisfy `check(now_ms) -> bool` + `handle(now_ms)`.  No `async`/`await`.  No threads.  Per-tick budgets keep the LED blinking through frame I/O, opening handshakes, fragmented-message reassembly, and close handshakes.
 
-### 3. Client API
+### 3. Client + server API shape
 
 ```python
-from chumicro_websockets import WebSocketClient, WebSocketState
+from chumicro_websockets import WebSocketClient
 from chumicro_websockets.sockets_factory import chumicro_sockets_factory
-from chumicro_timing import ticks_ms
 
 client = WebSocketClient(connection_factory=chumicro_sockets_factory(radio=wifi.radio))
-client.on_open = lambda: print("open")
-client.on_text = lambda text: print(f"got text: {text}")
-client.on_binary = lambda data: print(f"got {len(data)} bytes")
-client.on_close = lambda code, reason: print(f"closed {code} {reason}")
-
+client.on_text = lambda text: print(text)
 client.connect("ws://api.example.com/stream", timeout_ms=5000)
-
-while client.state != WebSocketState.CLOSED:
-    if client.check(ticks_ms()):
-        client.handle(ticks_ms())
-    if client.state == WebSocketState.OPEN and want_to_send_now:
-        client.send_text("hello")
-        want_to_send_now = False
-
-# graceful shutdown:
-client.close(code=1000, reason="bye")
-while client.state != WebSocketState.CLOSED:
-    if client.check(ticks_ms()):
-        client.handle(ticks_ms())
+# pump check/handle until client.state == CLOSED; client.send_text("...") while OPEN
 ```
-
-### 4. Server API
 
 ```python
 from chumicro_websockets import WebSocketServer
 from chumicro_sockets import tcp_listening_socket
-from chumicro_timing import ticks_ms
 
 def on_connection(connection):
     connection.on_text = lambda text: connection.send_text(f"echo: {text}")
-    connection.on_binary = lambda data: connection.send_binary(data)
-    connection.on_close = lambda code, reason: print(f"client gone: {code}")
 
-listener = tcp_listening_socket("0.0.0.0", 8080)
-server = WebSocketServer(
-    listener=listener,
-    on_connection=on_connection,
-    max_connections=2,
-    accept_path="/ws",  # optional — only accept WS upgrade on this path
-)
-
-while True:
-    if server.check(ticks_ms()):
-        server.handle(ticks_ms())
+server = WebSocketServer(listener=tcp_listening_socket("0.0.0.0", 8080),
+                        on_connection=on_connection, max_connections=2, accept_path="/ws")
+# pump server.check / server.handle in the main loop
 ```
 
-The "share a port with chumicro-http-server" question is sidestepped: `WebSocketServer` either owns its own port or it filters by URI path on a port nothing else listens on.  Mounting WS as a route inside a `chumicro-http-server` `Server` is a v2 ask — wait for a real consumer.  v1 supports the standalone-port shape only.
+The "share a port with chumicro-http-server" question is sidestepped: `WebSocketServer` owns its own port (or filters by URI path on a port nothing else listens on).  Mounting WS as a route inside a `chumicro-http-server` `Server` is a v2 ask.
 
 ### 5. State machine (both classes)
 
-```
-        ┌─────────────┐
-        │ CONNECTING  │   client: DNS → TCP → TLS → handshake send + recv
-        └──────┬──────┘   server: per-conn READING_REQUEST → SENDING_RESPONSE
-               │
-               ▼
-        ┌─────────────┐
-        │    OPEN     │   bidirectional framing; auto-pong on PING;
-        └──────┬──────┘   optional auto-ping; oversized → close(1009)
-               │
-               ▼
-        ┌─────────────┐
-        │   CLOSING   │   sent close, waiting for peer close
-        └──────┬──────┘   (close_timeout_ms watchdog)
-               │
-               ▼
-        ┌─────────────┐
-        │   CLOSED    │   socket closed; `last_close_code` / `last_error` set
-        └─────────────┘
-```
+`CONNECTING → OPEN → CLOSING → CLOSED`.  CONNECTING covers DNS / TCP / TLS / handshake (per side); OPEN handles bidirectional framing with auto-pong on PING and optional auto-ping; CLOSING waits for peer close under `close_timeout_ms`; CLOSED sets `last_close_code` / `last_error`.
 
 ### 6. Per-tick budgets and policies
 
@@ -157,22 +108,7 @@ The "share a port with chumicro-http-server" question is sidestepped: `WebSocket
 
 ### 11. Testing strategy
 
-* `chumicro_websockets.testing.FakeConnection` — bidirectional in-memory pipe with `feed_inbound(bytes)` + `read_outbound() -> bytes`.  Reuses the FakeSocket pattern from `chumicro_sockets.testing`.
-* Frame-level tests use raw byte arrays per RFC 6455 §5.7 sample frames + control-frame examples.
-* Cross-runtime compatibility verified via `python scripts/run.py test-all-runtimes`.
-* Autobahn's full test suite is too big to ship; we cover RFC 6455 §5 (framing), §7 (close), §8 (UTF-8 validation), and §10 (security / masking) by hand-written cases.
-* Live-board verification (slice 6 below) connects to a host-side CPython `websockets` PyPI server.
-
-### 12. Implementation slices
-
-Each slice ends with green preflight (`python scripts/run.py preflight --coverage-threshold 94`) + `task-checkpoint` commit.
-
-* **Slice 1 — `_wire.py` + frame tests.**  Constants, exception hierarchy, URL parser, opening-handshake encoder + Sec-WebSocket-Accept derivation (`sha1` + `b2a_base64`), `FrameParser` (streaming, EAGAIN, fragmentation, 64-bit length, mask validation, UTF-8 validation), `FrameEncoder` (masked + unmasked), `CaseInsensitiveDict` (inlined copy from `chumicro-requests` per the copy-don't-couple rule until the third HTTP consumer triggers `chumicro-http` extraction).  Tests cover RFC 6455 §5.7 sample frames + control-frame interleaving + fragmentation + oversize rejection + UTF-8 rejection.
-* **Slice 2 — `WebSocketClient` + tests.**  State machine, `connect()` (DNS → TCP → TLS → handshake send + parse → OPEN), `send_text` / `send_binary` / `close`, callbacks, auto-pong, optional auto-ping, handshake timeout, close timeout.  `FakeConnection`-driven tests.
-* **Slice 3 — `WebSocketServer` + tests.**  Accept loop, per-`Connection` state machine (READING_REQUEST → SENDING_RESPONSE → OPEN → CLOSING → CLOSED), `Connection` object with the same send / close / callback shape as `WebSocketClient`, `on_connection` user hook, `max_connections`, `accept_path` filter (responds `404` to non-matching paths).  `FakeListener`-driven tests.
-* **Slice 4 — `testing.py` + integration tests.**  Public fakes (`FakeConnection`, `FakeListener`), end-to-end client↔server in-process tests proving the framing wires up.
-* **Slice 5 — `__init__.py` public API + `sockets_factory.py` + `README.md` + `docs/guide.md` + `examples/`.**  Per the `new-library` skill checklist.
-* **Slice 6 — Live-board verification (`functional_tests/`).**  Loopback tests against a host-CPython `websockets` PyPI package server; hardware-gated via `devices.yml` defaults.  Mirrors the `chumicro-requests` slice 3c live-board pattern.
+`chumicro_websockets.testing.FakeConnection` is a bidirectional in-memory pipe — reuses the `FakeSocket` pattern from `chumicro_sockets.testing`.  Frame-level tests use raw byte arrays per RFC 6455 §5.7 sample frames + control-frame examples.  Coverage targets §5 (framing), §7 (close), §8 (UTF-8 validation), §10 (security / masking) by hand-written cases — Autobahn's full suite is too large to ship.  Live-board verification connects to a host-side CPython `websockets` PyPI server, mirroring `chumicro-requests`'s slice 3c live-board pattern.
 
 ## Consequences
 
