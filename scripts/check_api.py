@@ -15,7 +15,6 @@ Exits 0 when all changed packages pass.  Exits 1 on enforcement failure.
 
 from __future__ import annotations
 
-import os
 import re
 import subprocess
 import sys
@@ -31,20 +30,10 @@ from repo_layout import (
 
 #: Cap on concurrent ``griffe check`` invocations — each is an
 #: independent subprocess against a different package + tag, no
-#: shared state.  Mirrors ``scripts/run.py``'s
-#: ``_DEFAULT_PACKAGE_PARALLEL_WORKERS`` and respects the same
-#: ``CHUMICRO_PARALLEL_PACKAGES`` env override so CI tunes once.
+#: shared state.  Override via ``--max-workers`` (mirrors
+#: ``scripts/run.py``'s ``--package-workers`` for the same fan-out
+#: shape).
 _DEFAULT_GRIFFE_PARALLEL_WORKERS = 4
-
-
-def _resolve_parallel_workers() -> int:
-    raw = os.environ.get("CHUMICRO_PARALLEL_PACKAGES")
-    if not raw:
-        return _DEFAULT_GRIFFE_PARALLEL_WORKERS
-    try:
-        return max(1, int(raw))
-    except ValueError:
-        return _DEFAULT_GRIFFE_PARALLEL_WORKERS
 
 
 def _parse_version(version: str) -> tuple[int, int, int] | None:
@@ -201,18 +190,18 @@ def _check_one_package(
     return False, output_lines
 
 
-def _check(base_reference: str) -> int:
+def _check(base_reference: str, *, max_workers: int) -> int:
     """Run the API breakage check.
 
     Each per-package griffe invocation is independent (different
     package, different tag, no shared state), so we fan out across
-    :data:`_DEFAULT_GRIFFE_PARALLEL_WORKERS` threads.  Output is
-    collected per package and replayed in alphabetical (submission)
-    order so the on-screen log stays deterministic regardless of
-    which subprocess finishes first.
+    *max_workers* threads.  Output is collected per package and
+    replayed in alphabetical (submission) order so the on-screen log
+    stays deterministic regardless of which subprocess finishes first.
 
     Args:
         base_reference: Git ref to detect changed packages against.
+        max_workers: Cap on concurrent griffe subprocesses.
 
     Returns:
         Exit code (0 for success, 1 for failure).
@@ -228,7 +217,7 @@ def _check(base_reference: str) -> int:
         return 0
 
     sorted_packages = sorted(packages)
-    workers = max(1, min(_resolve_parallel_workers(), len(sorted_packages)))
+    workers = max(1, min(max_workers, len(sorted_packages)))
     with ThreadPoolExecutor(max_workers=workers) as executor:
         futures = [
             executor.submit(_check_one_package, parent_dir, basename)
@@ -261,8 +250,16 @@ def main(argv: list[str] | None = None) -> int:
         default="origin/main",
         help="Base ref to detect changed packages (default: origin/main)",
     )
+    parser.add_argument(
+        "--max-workers", type=int, metavar="N",
+        default=_DEFAULT_GRIFFE_PARALLEL_WORKERS,
+        help=(
+            f"cap on concurrent griffe subprocesses "
+            f"(default: {_DEFAULT_GRIFFE_PARALLEL_WORKERS})"
+        ),
+    )
     args = parser.parse_args(argv)
-    return _check(args.base)
+    return _check(args.base, max_workers=args.max_workers)
 
 
 if __name__ == "__main__":
