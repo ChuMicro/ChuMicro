@@ -114,59 +114,18 @@ returns whatever socket the factory builds — `chumicro-sockets`'
 
 | Concern | adafruit_requests | chumicro-requests |
 |---------|-------------------|-------------------|
-| Programming model | Synchronous; `Session.get()` blocks the caller through every phase. `_readinto` assumes blocking I/O. | Runner-shaped (`check` / `handle`); per-tick recv budget; LED-friendly. |
-| TLS | `socket_pool` + `ssl_context` injected into `Session`. | Indirect via `connection_factory` (which itself sits on `chumicro-sockets`). |
+| Programming model | Synchronous; `Session.get()` blocks the caller through every phase. | Runner-shaped (`check` / `handle`); per-tick recv budget; LED-friendly. |
+| TLS | `socket_pool` + `ssl_context` injected into `Session`. | Indirect via `connection_factory` (sits on `chumicro-sockets`). |
 | Body | `.content` (full) **and** `.iter_content(chunk_size)` (streaming). | Full-buffer only in v1. |
 | Connection reuse | Manager caches sockets per `(host, port)`. | None in v1. |
 | EAGAIN handling | `_send` retries; `_readinto` does not. | Both paths handle EAGAIN — must, since both are non-blocking. |
 
-Cited from `adafruit_requests.py` (main branch as of 2026-04-26):
-`Session.__init__` ll. ~120, `Session.request` ll. 545–680, `_send`
-ll. 559–577, `_readinto` ll. 330–347, `Response.content` l. 374,
-`Response.iter_content` ll. 411–427.
+### 9. Live-board operating constraints
 
-## Live-board limitations (slice 3c)
+Two constraints of the embedded TLS stack (not of `chumicro-requests` per se) that callers must know about:
 
-These showed up only on real hardware; they're constraints of the
-embedded TLS stack, not of `chumicro-requests` per se.  Documented
-here because slice 3c is when they bite.
-
-* **HTTPS requires flash deploy mode on Pi Pico W class boards.**
-  RAM-mode keeps the full library bootstrap on the heap and leaves
-  < 50 KB for the mbedTLS handshake → `OSError(12)`.  Flash-mode
-  bootstraps from disk; ~150 KB free heap available for the
-  handshake.  The four-board canonical matrix (Pi Pico W CP/MP,
-  Lolin S2 CP/MP) was verified live with `--deploy-mode flash`.
-  ESP32-S3 with > 200 KB free heap after wifi can run HTTPS in
-  RAM-mode; document and let the user choose.
-* **TLS context must be CA-pinned — but for different reasons per
-  runtime.**  Probed live on Pi Pico W in flash mode:
-    - **MicroPython 1.28.0 / rp2:** `ssl.create_default_context()`
-      *doesn't exist* — `AttributeError("'module' object has no
-      attribute 'create_default_context'")`.  You must build a
-      context yourself via `ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)`
-      or use `chumicro_sockets.ssl_context_with_ca(pem)`.
-    - **CircuitPython 10.2.0-rc.0:** `ssl.create_default_context()`
-      *does* exist and constructs cheaply (~80 bytes of heap), but
-      the returned context has `check_hostname=False` and no CAs
-      loaded — handshake against any real cert would fail.  The
-      "100-200 KB trust store doesn't fit" intuition from CPython
-      doesn't apply: CP simply doesn't bundle a trust store at all.
-    - The earlier RAM-mode `MemoryError`/`OSError(12)` symptoms were
-      the **mbedTLS handshake itself** OOMing, not the context
-      construction.  Flash mode gives the handshake the headroom
-      it needs; the context-must-be-CA-pinned rule remains
-      independent of deploy mode because both runtimes need
-      caller-supplied CAs to verify against.
-
-  Use `chumicro_sockets.ssl_context_with_ca(pem)` on both runtimes —
-  it returns a `CERT_REQUIRED` context with the supplied CA
-  loaded.  Same pattern Phase 7 TLS-MQTT proved.
-* **Device RTC must be set before TLS.**  mbedTLS `CERT_REQUIRED`
-  rejects every cert with "validity starts in the future" if the
-  RTC is at boot default (2021-01-01 on rp2, epoch elsewhere).
-  Caller's responsibility to NTP-sync before issuing HTTPS;
-  documented in `docs/guide.md` §Platform notes.
+- **HTTPS requires flash deploy mode on Pi Pico W class boards.**  RAM-mode keeps the library bootstrap on the heap and leaves < 50 KB for the mbedTLS handshake → `OSError(12)`.  Flash-mode bootstraps from disk; ~150 KB free heap available.  ESP32-S3 with > 200 KB free heap after wifi can run HTTPS in RAM-mode.
+- **TLS context must be CA-pinned, RTC must be set.**  Neither MP nor CP ships a trust store; both need caller-supplied CAs.  Use `chumicro_sockets.ssl_context_with_ca(pem)` on both runtimes — it returns a `CERT_REQUIRED` context with the supplied CA loaded.  mbedTLS `CERT_REQUIRED` also rejects certs as "validity starts in the future" if the RTC is at boot default — NTP-sync before issuing HTTPS.
 
 ## Consequences
 
@@ -175,20 +134,6 @@ here because slice 3c is when they bite.
   (transport) and `chumicro-timing` (ticks).  Optional `chumicro-runner`
   hook: `HttpClient` satisfies `check(now_ms) -> bool` so `Runner` can
   drive it directly.
-- The "fetch weather" demo and the eventual two-thing demo (sensor →
-  HTTP server) become writable.  Until slices 3c + 3d land (HTTPS
-  + POST/JSON), demos stick to plain-HTTP GET.
-- Implementation phases in slices, each green-preflight + commit:
-    * **3a** plain HTTP GET against `FakeSocket` — status line + header
-      parse, no body decode.
-    * **3b** body decode for `Content-Length` responses (bytes + str).
-    * **3c** HTTPS via `chumicro-sockets` TLS path.
-    * **3d** `POST` + body + `request.json()` / `client.post(..., json=...)`.
-    * **3e** redirect following with `max_redirects` budget.
-    * **3f** chunked transfer-encoding decode.
-- `WhenOversized` enum lives in `chumicro_requests`, parallel to
-  `chumicro_mqtt.WhenOversized`.  Tempted to factor a shared one out;
-  not yet — copy first, abstract on the third user.
-- The single-in-flight constraint may bite users who want to fan
-  out N concurrent requests.  Documented; v2 can add a pool if a
-  consumer asks.
+- The "fetch weather" demo and the two-thing demo (sensor → HTTP server) become writable.
+- `WhenOversized` enum lives in `chumicro_requests`, parallel to `chumicro_mqtt.WhenOversized`.  Tempted to factor a shared one out; not yet — copy first, abstract on the third user.
+- The single-in-flight constraint may bite users who want to fan out N concurrent requests.  Documented; v2 can add a pool if a consumer asks.

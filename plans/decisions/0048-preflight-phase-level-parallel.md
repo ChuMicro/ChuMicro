@@ -66,44 +66,9 @@ was still warming up.
 
 ### 3. Mechanism: subprocess re-invocation
 
-Each phase becomes a `subprocess.run([PYTHON, "scripts/run.py",
-<subcommand>, *flags], capture_output=True, text=True)` call.
-The phase-runner closure captures stdout + stderr into a single
-buffer and returns `(returncode, captured_text)`, which is exactly
-the contract `_run_capture_phases_in_parallel` expects.
+Each phase runs as `subprocess.run([PYTHON, "scripts/run.py", <subcommand>, *flags], capture_output=True, text=True)`.  Subprocess (rather than in-thread `redirect_stdout`) because most phase output comes from child processes that write to the parent's stdout fd directly, which `redirect_stdout` cannot intercept; subprocess re-invocation gives each phase its own pipe-backed stdout that the helper can collect deterministically.
 
-**Why subprocess and not in-thread `redirect_stdout`:**
-
-- `run_command` (the helper most phases use) calls
-  `subprocess.run(...)` *without* `capture_output=True`, so child
-  output goes straight to the parent's actual stdout file
-  descriptor.  `contextlib.redirect_stdout` on the parent's
-  `sys.stdout` only catches Python-level `print()` calls — the
-  bulk of phase output (pytest, ruff, zensical, mpy/cp test
-  runners) bypasses it entirely.
-- `redirect_stdout` rebinds the *process-global* `sys.stdout`,
-  which is unsafe for >2 worker threads (the docstring on
-  `_run_phases_in_parallel` already calls this out).
-- Subprocess re-invocation inherits no `sys.stdout` from the
-  parent — each child has its own pipe-backed stdout, and
-  `subprocess.run(..., capture_output=True)` collects each
-  child's output deterministically.
-
-Subprocess re-invocation requires every phase to be reachable as a
-top-level CLI subcommand.  All ten of the existing phases already
-were; **`check-dep-graph` was the one exception** — it was registered
-as a phase callable but not as a CLI subcommand.  This ADR's
-implementation adds the missing `check-dep-graph` subparser
-registration.
-
-The `test` subcommand also gains a **`--elevated-packages NAMES`
-CSV flag** so preflight can preserve its existing
-"elevated-coverage-only-on-changed-libraries" behavior across the
-subprocess boundary.  Without this flag, subprocess re-invocation
-would apply `--coverage-threshold 94` to every package, causing
-agents to fail on pre-existing low coverage in libraries they
-didn't touch.  The flag is internal — preflight is the only
-caller — but it's a real CLI addition, not a hidden side door.
+Subprocess re-invocation requires every phase to be reachable as a top-level CLI subcommand.  `check-dep-graph` was registered as a phase callable but not as a CLI subcommand; this ADR's implementation adds the missing subparser.  The `test` subcommand also gains a `--elevated-packages NAMES` CSV flag so preflight can preserve its "elevated-coverage-only-on-changed-libraries" behavior across the subprocess boundary — internal flag, preflight is the only caller.
 
 ### 4. Cancel-on-first-failure: not in this ADR
 
@@ -168,11 +133,7 @@ individual subcommands when invoked directly
 
 ### 6. Helper reuse
 
-The Bucket 3 helper `_run_capture_phases_in_parallel` already
-implements the "submission-order replay of captured output"
-semantics this ADR needs.  Reuse it as-is — no extension needed.
-The older 2-thread `_run_phases_in_parallel` stays where it is
-(used by `test_all_runtimes`); deprecation is out of scope.
+Reuse the Bucket 3 helper `_run_capture_phases_in_parallel` (commit `ffe50bc`) as-is — it already implements submission-order replay of captured output.  The older 2-thread `_run_phases_in_parallel` stays where it is (used by `test_all_runtimes`); deprecation is out of scope.
 
 ## Consequences
 
@@ -222,37 +183,7 @@ The older 2-thread `_run_phases_in_parallel` stays where it is
 
 ## Alternatives considered
 
-**A. Thread-local `sys.stdout` proxy.** Replace `sys.stdout` with
-a per-thread-routing object during the parallel block, so phase
-functions can call `print()` and have output captured per worker.
-Rejected: most phase output comes from child subprocesses that
-write to the actual fd, not `sys.stdout` — the proxy would only
-catch a tiny fraction of output.
-
-**B. Capture inside `run_command`.** Modify the shared
-`run_command` helper to capture output instead of inheriting the
-parent's stdout, then thread the capture buffer through.
-Rejected: invasive change to a helper used by dozens of paths,
-many of which depend on streaming output to the user (e.g.
-`docs --serve`).
-
-**C. `multiprocessing.Pool`.** Rejected: heavier than threads for
-work that's already subprocess-bound at the phase level, and the
-existing helper already uses `ThreadPoolExecutor` correctly for
-this shape.
-
-**D. CI YAML matrix change.** Out of scope.  This ADR is about
-the local `preflight` command; CI parallelism is a separate
-concern.
-
-## Validation
-
-- Wall time before and after on the same laptop, same git state.
-- All 470 tests under `scripts/tests/` pass.
-- Log replay order is deterministic — phase headers appear in
-  the documented sequence regardless of which phase finishes
-  first.
-- `--with-functional` still appends both functional phases serially.
-- `coverage_threshold` flag still flows to the `test` phase.
-- `--micropython-binary` / `--circuitpython-binary` still flow to
-  the relevant phases.
+- **Thread-local `sys.stdout` proxy.** Rejected: most phase output comes from child subprocesses that write to the actual fd, not `sys.stdout` — the proxy would catch only a tiny fraction.
+- **Capture inside `run_command`.** Rejected: invasive change to a helper used by dozens of paths, many of which depend on streaming output to the user (e.g. `docs --serve`).
+- **`multiprocessing.Pool`.** Rejected: heavier than threads for work that's already subprocess-bound at the phase level.
+- **CI YAML matrix change.** Out of scope — this ADR is about the local `preflight` command.

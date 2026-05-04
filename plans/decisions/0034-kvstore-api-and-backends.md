@@ -85,67 +85,17 @@ strings exist so users aren't locked in.
 
 ### 3. Mapping-shaped API, plus three explicit lifecycle methods
 
-```python
-store["boot_count"] = store.get("boot_count", 0) + 1
-store["last_seen_ms"] = ticks_ms()
-del store["stale_token"]
+`KVStore` implements the full `MutableMapping` surface (`__getitem__` / `__setitem__` / `__delitem__` / `__contains__` / `__iter__` / `__len__` / `get` / `keys` / `items` / `values` / `pop` / `clear` / `update`).  Excludes `setdefault` (footgun on backends with side-effecting writes) and `popitem` (no defined order; would imply one).  Full method reference lives in `libraries/kvstore/docs/`.
 
-if "provisioned" in store:
-    ...
+The three lifecycle methods are explicit because flash writes are too expensive to do per-`__setitem__`:
 
-for key in store:
-    print(key, store[key])
-
-store.commit()                              # flush to backend
-store.commit_if_changed()                   # no-op if nothing changed
-store.reload()                              # discard in-memory + reread
-```
-
-`KVStore` implements `__getitem__`, `__setitem__`, `__delitem__`,
-`__contains__`, `__iter__`, `__len__`, `get`, `keys`, `items`, `values`,
-`pop`, `clear`, `update`.  No `setdefault` (footgun on backends with
-side-effecting writes).  No `popitem` (no defined order; would imply
-one).
-
-The lifecycle methods are explicit because flash writes are too
-expensive to do per-`__setitem__`:
-
-- `commit()` — encode the in-memory dict to the backend payload, write,
-  fsync.  Raises `KVStoreFull` if the encoded size exceeds capacity.
-- `commit_if_changed()` — compare the encoded payload against the last
-  successfully-persisted bytes (cached by the store).  If identical, no
-  write.  This is the **first-line wear defense** on raw-flash CP
-  backends — repeated `commit()`s of unchanged state would otherwise
-  burn flash cycles.
-- `reload()` — discard in-memory state and reread from backend.  Used
-  after a known external write (e.g. another core, a recovery layer).
-  Surfaces `is_corrupt=True` if the reread fails CRC.
+- `commit()` — encode in-memory dict, write to backend, fsync.  Raises `KVStoreFull` if encoded size exceeds capacity.
+- `commit_if_changed()` — compare encoded payload against last successfully-persisted bytes; skip the write if identical.  First-line wear defense on raw-flash backends.
+- `reload()` — discard in-memory state and reread.  Surfaces `is_corrupt=True` if the reread fails the CRC check.
 
 ### 4. Properties expose the constraints honestly
 
-```python
-store.capacity                              # int — bytes available on this backend
-store.bytes_used                            # int — current encoded payload size
-store.is_corrupt                            # bool — last load failed integrity check
-store.backend_name                          # str — "nvm" | "nvs" | "littlefs" | "memory"
-```
-
-`capacity` is per-backend.  `MemoryBackend.capacity == sys.maxsize`
-(unbounded).  `CpNvmBackend.capacity == len(microcontroller.nvm) -
-HEADER_SIZE`.  `MpNvsBackend.capacity ≈ 24_000` (NVS partition size
-varies; query at construction).  `MpLittlefsBackend.capacity` reflects
-the partition's free bytes at probe time (filesystem-bounded).
-
-`bytes_used` is the size of the *encoded* payload, not the dict.
-Callers that want to bound state explicitly can guard
-`store.bytes_used + estimate_size(value) < store.capacity` before
-inserting.
-
-`is_corrupt` is sticky for one session.  When `reload()` fails CRC, the
-store resets to empty (so the app keeps running) and `is_corrupt`
-becomes `True`.  The next successful `commit()` clears it.  Callers can
-log the event, increment a soft-error counter, or wipe state
-deliberately.
+`store.capacity`, `store.bytes_used`, `store.is_corrupt`, `store.backend_name` — all read-only.  `capacity` is computed per-backend at construction (e.g. `len(microcontroller.nvm) - HEADER_SIZE` for CP NVM; partition free bytes for LittleFS; `sys.maxsize` for memory).  `is_corrupt` is sticky for one session and clears on the next successful `commit()` — so the app can log the event without losing the ability to keep running on a fresh empty state.
 
 ### 5. CP NVM payload framing: `MAGIC | LEN | CRC32 | MSGPACK`
 
@@ -173,17 +123,7 @@ capacity, read LEN payload bytes, verify CRC.  Any check failing →
 `is_corrupt = True`, store resets to empty in-memory, `commit()` then
 overwrites the corrupt slab cleanly.
 
-Why MAGIC + LEN + CRC and not just CRC: a freshly-initialised slab is
-all `0xFF` (or `0x00` depending on flash chip).  Without MAGIC the
-library has no way to distinguish "blank flash" from "corrupted
-write" — on a blank slab it would compute a CRC over `LEN` random
-bytes and almost-always fail, which is correct but logs a corruption
-event on every first boot.  MAGIC lets the library report blank slab
-as `is_corrupt=False, bytes_used=0` — the honest first-boot answer.
-
-Why uint16 LEN: largest CP NVM is 8 KB, well under 65536.  Saves 2
-bytes vs uint32.  The library raises at construction if a future
-backend exposes >64 KB of NVM (no current platform does).
+MAGIC distinguishes "blank flash" from "corrupted write" — without it, a freshly-initialised slab (all `0xFF` or `0x00`) computes a CRC over random bytes and reports a corruption event on every first boot.  uint16 LEN saves 2 bytes vs uint32; the library raises at construction if a future backend exposes >64 KB of NVM.
 
 ### 6. MP NVS encoding: single payload blob under a fixed key
 
@@ -201,24 +141,7 @@ one msgpack blob under the fixed NVS key `"payload"`.
 NVS namespace is fixed at `"chu_kv"`.  Co-existing apps using their
 own NVS namespaces are unaffected.
 
-**Why single-blob-not-per-key:** an earlier sketch had one
-`set_blob` per dict key, mirroring NVS's per-key wear leveling.
-That design needed key enumeration to rebuild the dict on load —
-and the MicroPython `esp32.NVS` wrapper does not expose ESP-IDF's
-`nvs_entry_find` iterator.  Maintaining a manifest blob that
-listed the live dict keys would have layered another small read +
-write cycle onto every commit for marginal wear-leveling gain
-(NVS already wear-levels at the partition level regardless of how
-many keys the namespace holds, and our expected write cadence is
-"a handful per boot").  The single-payload shape mirrors CP NVM,
-keeps the Backend abstraction clean, and lets `KVStore` own the
-msgpack codec uniformly.
-
-`get_blob` requires a pre-allocated buffer ≥ the stored value's
-size.  The library allocates `bytearray(self.capacity)` once at
-load time.  Looking up a missing key raises `OSError(2)` (ENOENT)
-on MP — caught by `load()` and reported as a blank substrate
-(`b""`).
+**Why single-blob-not-per-key:** the MicroPython `esp32.NVS` wrapper does not expose ESP-IDF's `nvs_entry_find` iterator, so per-key blobs would need a manifest to rebuild the dict on load — extra read + write per commit for marginal wear-leveling gain (NVS already wear-levels at the partition level).  Single payload mirrors the CP NVM shape and lets `KVStore` own the msgpack codec uniformly.  `get_blob` requires a pre-allocated buffer ≥ stored value size; the library allocates `bytearray(self.capacity)` once at load time.
 
 ### 7. MP LittleFS encoding: tmpfile + rename, single file per store
 
@@ -286,20 +209,7 @@ as "not-this-tick-but-maybe-next-tick"; the recovery is identical
 
 ### 10. Values round-trip via `chumicro-msgpack`
 
-`KVStore` uses `chumicro_msgpack` for all encoding — no per-backend
-serialisation.  Value types supported:
-
-- `int`, `bool`, `float`
-- `str`, `bytes`
-- `list`, `tuple` (decoded back as `list`)
-- `dict` (str keys only)
-- `None`
-
-Nested structures work; cycles raise `TypeError` from msgpack's encoder.
-
-The msgpack dependency is declared in `libraries/kvstore/pyproject.toml`
-(`dependencies = ["chumicro-msgpack>=0.1"]`).  Workspace-internal dep,
-ordered correctly in `validate_mip_install` topological sort.
+`KVStore` uses `chumicro_msgpack` for all encoding — no per-backend serialisation.  Supported types: `int`, `bool`, `float`, `str`, `bytes`, `list`/`tuple` (decoded back as `list`), `dict` (str keys only), `None`.  Cycles raise `TypeError` from msgpack's encoder.
 
 ## Consequences
 

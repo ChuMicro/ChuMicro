@@ -92,14 +92,7 @@ Two changes pin the sync point to the board side:
   title-bar escapes) can otherwise land inside this cycle's
   capture window.
 
-Polling has a ceiling (`_BOARD_FILE_VISIBLE_POLL_ATTEMPTS` ×
-`_BOARD_FILE_VISIBLE_POLL_INTERVAL`); if the board never sees
-the new size the deploy fails loudly rather than silently
-capturing last cycle's output.  A belt-and-suspenders
-`_BOARD_FILE_VISIBLE_POST_SETTLE` sleep after the poll lets the
-board's in-flight flash program/erase and FAT bookkeeping
-quiesce before Ctrl-D — hardware-level races the polling
-layer can't observe.
+Polling has a ceiling (`_BOARD_FILE_VISIBLE_POLL_ATTEMPTS` × `_BOARD_FILE_VISIBLE_POLL_INTERVAL`); if the board never sees the new size, the deploy fails loudly rather than silently capturing last cycle's output.  A short post-poll sleep (`_BOARD_FILE_VISIBLE_POST_SETTLE`) covers hardware-level races the polling layer can't observe (in-flight flash program/erase and FAT bookkeeping).
 
 ### 4. Detect and recover from the FSKit wedge
 
@@ -112,41 +105,9 @@ Commit `6fdc132`.  Recent macOS replaced the in-kernel `msdosfs` driver with a u
 
 ### 5. Probe the mount before staging; re-raise uniformly
 
-Also commit `6fdc132` (transport side) and classifier
-reordering in the same commit.  `/Volumes/CIRCUITPY` can
-exist as a directory (`is_dir()` returns `True`) but be
-unwritable — the classic Finder-eject-leaves-placeholder case
-and the FSKit-wedge case both produce this state.  Rather
-than letting the rsync halfway through the copy hit
-`EACCES` on the first file and leave a partial state on the
-drive, `_resolve_circuitpy_drive()` writes a small
-`.chu-probe` marker up-front:
+Also commit `6fdc132` (transport side) and classifier reordering in the same commit.  `/Volumes/CIRCUITPY` can exist as a directory (`is_dir()` returns `True`) but be unwritable — the classic Finder-eject-leaves-placeholder case and the FSKit-wedge case both produce this state.  Rather than letting `rsync` hit `EACCES` halfway through and leave a partial state on the drive, `_resolve_circuitpy_drive()` writes and unlinks a `.chu-probe` marker up-front; on `OSError` it raises `CircuitpythonTransportError` with a uniform message.
 
-```python
-probe = drive_path / ".chu-probe"
-try:
-    probe.write_bytes(b"")
-    probe.unlink()
-except OSError as error:
-    raise CircuitpythonTransportError(
-        f"CIRCUITPY drive not found or not writable: "
-        f"{drive_path} ({error.__class__.__name__}: {error})"
-    ) from error
-```
-
-The classifier routes this message to `CIRCUITPY_DRIVE_MISSING`
-(not `PORT_UNAVAILABLE`, despite the nested `"permission
-denied"` string — see the classifier ordering fix in the
-same commit).  `CIRCUITPY_DRIVE_MISSING` then gets promoted to
-`MACOS_FSKIT_WEDGED` on a match per §4.  End-to-end, the user
-sees the right coaching regardless of which layer first
-detected the problem.
-
-A belt-and-suspenders `try/except OSError` wraps the actual
-file-copy loop too — the drive can eject between the probe
-and the copy (user hits eject mid-deploy, board reboots
-mid-rsync), and raising with the same message keeps the
-classifier's hook wired.
+The classifier routes that message to `CIRCUITPY_DRIVE_MISSING` (not `PORT_UNAVAILABLE`, despite the nested `"permission denied"` string), and §4's promotion turns it into `MACOS_FSKIT_WEDGED` when the wedge detector matches.  End-to-end, the user sees the right coaching regardless of which layer first detected the problem.  The actual file-copy loop is also wrapped — the drive can eject between probe and copy.
 
 ## Alternatives considered
 

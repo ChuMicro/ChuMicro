@@ -113,35 +113,9 @@ takes a precompiled `re` object instead of a string).
 
 ### 5. Inlined HTTP/1.1 primitives (no `chumicro-requests` dep)
 
-The wire format primitives we built for the client are exactly what
-the server-side parser needs:
+`chumicro-http-server` does **not** import `chumicro-requests`.  The wire-format primitives the server needs (`CaseInsensitiveDict`, `parse_charset`, the chunked-decoder state-machine pattern) are inlined as ~125-line `_wire.py` siblings of `chumicro-requests`'s copies.  Pulling in all of `chumicro-requests` (~1.8K lines) onto a server-only board for ~125 lines of shared code roughly doubles the deploy footprint for near-zero benefit — the RFCs are stable, both copies stay byte-for-byte equivalent, and tests in both libraries lock the equivalence in.
 
-* `CaseInsensitiveDict` — header dict shape (RFC 7230 §3.2)
-* `parse_charset` — Content-Type charset sniff (RFC 7231 §3.1.1.5)
-* The chunked-decoder state-machine pattern (lifted into a
-  `_RequestBodyParser` analogous to `ResponseParser` for v2; v1 only
-  buffers Content-Length bodies)
-
-**Original v1 plan (2026-04-26): import from `chumicro-requests`.**
-The dep direction (server → client) was mildly weird but matched the
-`WhenOversized` precedent — share working code, extract a third
-package only when a third consumer surfaces.
-
-**Decoupling (2026-04-27, post-v1):** the import felt cheap until we
-measured the flash cost.  Pulling all of `chumicro-requests` (~1.8K
-lines: `client.py` 900 + `_wire.py` 908) onto a server-only board
-for ~125 lines of shared primitives is wrong.  Inlining the two
-primitives (and giving the server its own `ServerError` base) cuts
-the device footprint of a server-only deploy roughly in half with
-near-zero drift cost — the RFCs are stable; both copies stay
-byte-for-byte equivalent.  Tests in both libraries lock the
-equivalence in.
-
-The `_wire.py` files in client and server are now sibling
-implementations of the same RFC, not one-imports-the-other.  Should
-a third HTTP-aware library appear, extracting a `chumicro-http`
-package becomes the right move; until then, two ~125-line copies is
-cheaper than one extra package on PyPI + the bundle.
+If a third HTTP-aware library appears (e.g. WebSockets-with-shared-framing), extracting a `chumicro-http` package becomes the right move.  Until then, two small RFC-stable copies cost less than one extra package on PyPI + the bundle.
 
 ### 6. Listener factory + new `chumicro-sockets` helper
 
@@ -188,57 +162,17 @@ Caller `headers=` overrides the defaults.
 
 ### 8. TLS server — supported on every runtime/board pair *except* CP-rp2
 
-Slice 7t / 7d investigation (2026-04-26) verified TLS server on
-Pi Pico W MicroPython and on Lolin S2 / ESP32-S2 CircuitPython.
-Adafruit's "HTTPS only on ESP32-S3" framing in the ``httpserver``
-README overstates the constraint.
+TLS server works on Pi Pico W MicroPython, Lolin S2 / ESP32-S2 CircuitPython, and CPython.  Adafruit's "HTTPS only on ESP32-S3" framing in the `httpserver` README overstates the constraint.
 
-**Live measurements on Pi Pico W MicroPython 1.28.0 (rp2 port):**
-* SSLContext build (RSA-2048, DER): ~8 KB heap.
-* Per-connection handshake: ~25 KB heap.
-* Free heap remaining post-handshake: ~130 KB.
-* Full HTTPS round-trip succeeded.
+The CP path differs from MP / CPython in that `load_cert_chain` requires filesystem paths, not in-memory bytes — `chumicro_sockets.ssl_context_with_cert_and_key_paths` is the cross-runtime helper.
 
-**Live measurements on Lolin S2 / CP 10.2.0-rc.0:**
-* SSLContext build + cert load: ~6 KB heap.
-* Per-connection handshake: ~35 KB heap.
-* Free heap remaining post-handshake: ~1.99 MB.
-* Full HTTPS round-trip succeeded.
-
-The CP path differs from the MP / CPython one in that
-``load_cert_chain`` requires filesystem paths, not in-memory
-bytes — see
-:func:`chumicro_sockets.ssl_context_with_cert_and_key_paths` for
-the cross-runtime helper.
-
-**Pi Pico W (rp2) / CP 10.2.0-rc.0 — refused.**  Live-reproduced
-2026-05-02: ``wrap_socket(server_side=True) + accept()`` raises
-``OSError(32)`` mid-handshake when a real host TLS client
-connects, and the failure additionally wedges the CYW43 chip's
-station-mode state — every subsequent ``wifi.radio.connect()``
-returns ``ConnectionError("Unknown failure 1")`` until USB
-power-cycle.  ``microcontroller.reset()`` is *not* sufficient
-(the rp2040 reset doesn't toggle the CYW43's WL_REG_ON line).
-
-Cross-reference: [adafruit/circuitpython#10339](https://github.com/adafruit/circuitpython/issues/10339)
-is a sister TLS-client bug on Pi Pico 2 W (rp2350); same
-"CP TLS on rp2 + CYW43 is fragile" neighborhood, different error class.
+**Pi Pico W (rp2) / CircuitPython is the one excluded combination.**  `wrap_socket(server_side=True) + accept()` raises `OSError(32)` mid-handshake when a real client connects, and the failure additionally wedges the CYW43 chip's station-mode state until USB power-cycle.  `microcontroller.reset()` does not recover.  Cross-reference: [adafruit/circuitpython#10339](https://github.com/adafruit/circuitpython/issues/10339).
 
 **Shipping policy:**
-* `chumicro_sockets.tls_listening_socket(...)` works on
-  CP-ESP32 + MP (every port) + CPython.
-* On CP-rp2 (Pi Pico W / Pi Pico 2 W) it raises
-  `UnsupportedSSLConfigError` up-front so the bug doesn't
-  corrupt the chip's wifi state.  Detection via
-  `sys.platform.upper().startswith("RP2")`.
-* `chumicro_sockets.ssl_context_with_cert_and_key(cert_pem, key_pem)`
-  works on MP + CPython; raises `UnsupportedSSLConfigError` on CP
-  (CP's `load_cert_chain` needs paths) — use the `_paths` variant
-  on CP.
-* For HTTPS on CP-rp2 boards, the workaround is unchanged
-  from the surveyed prior art: terminate TLS in front of the board
-  with a proxy (Caddy / nginx / Cloudflare Tunnel) and let the
-  board speak plain HTTP on the LAN behind it.
+* `chumicro_sockets.tls_listening_socket(...)` works on CP-ESP32 + MP (every port) + CPython.
+* On CP-rp2 it raises `UnsupportedSSLConfigError` up-front so the bug doesn't corrupt the chip's wifi state.  Detection via `sys.platform.upper().startswith("RP2")`.
+* `chumicro_sockets.ssl_context_with_cert_and_key(cert_pem, key_pem)` works on MP + CPython; raises `UnsupportedSSLConfigError` on CP — use the `_paths` variant on CP.
+* For HTTPS on CP-rp2 boards, terminate TLS in front of the board with a proxy (Caddy / nginx / Cloudflare Tunnel) and let the board speak plain HTTP on the LAN behind it.
 
 **Other v1 non-goals (unchanged):**
 * **WebSockets / SSE.**  Connection-upgrade dance + long-lived
@@ -272,22 +206,5 @@ is a sister TLS-client bug on Pi Pico 2 W (rp2350); same
 * `chumicro-sockets` 0.1.6 adds `tcp_listening_socket` per-runtime.
   The chumicro-sockets package picks up server-side concerns for
   the first time — kept narrow (no TLS server, no UDP, no SOCKS).
-* The two-thing demo (Step 8) becomes writable: a sensor thing
-  POSTs JSON to a server thing's `/sensor` endpoint over LAN.
-  Both run on Pi Pico W class boards.
-* Implementation phases in slices, each green-preflight + commit:
-  * **7a** — `chumicro-sockets` listener + `HttpServer` accept
-    loop + request line + header parser + canned 200 response.
-    Single connection at a time.
-  * **7b** — Two-dict router + decorator + per-route dispatch +
-    `respond()` helpers (text / html / json / body).
-    `request.json()`, `request.query`, `request.path_params`.
-  * **7c** — Bounded multi-connection (`max_connections` >= 1);
-    per-tick budgets; `request_timeout_ms`.
-  * **7d** — Live-board verification on Pi Pico W (CP + MP).
-* Decision 0040's "extract shared HTTP wire primitives" follow-up:
-  decided post-v1 (2026-04-27) to inline rather than depend.  See
-  §5 for the flash-cost rationale.  When a third HTTP-aware
-  consumer appears (e.g. a `chumicro-websocket`) the case for a
-  shared `chumicro-http` package gets stronger; until then, two
-  small RFC-stable copies cost less than one extra package.
+* The two-thing demo (Step 8) becomes writable: a sensor thing POSTs JSON to a server thing's `/sensor` endpoint over LAN.  Both run on Pi Pico W class boards.
+* Decision 0040's "extract shared HTTP wire primitives" follow-up: decided to inline rather than depend (§5).  When a third HTTP-aware consumer appears (`chumicro-websockets` arrived as Decision 0045 and made the same call), the case for a shared `chumicro-http` package strengthens; until a fourth, the duplicated primitives cost less than one extra package.
