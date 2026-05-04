@@ -242,7 +242,7 @@ def _cmd_setup(args: argparse.Namespace) -> int:
     """Install workspace dependencies and materialize template files.
 
     Runs ``pip install -e .`` in the workspace root when a
-    ``pyproject.toml`` is present, then walks ``_templates/`` and
+    ``pyproject.toml`` is present, then walks ``_workspace_template/`` and
     creates any missing files at the workspace root (Decision 0038
     §5).  Idempotent — re-running is safe.
     """
@@ -269,7 +269,7 @@ def _cmd_setup(args: argparse.Namespace) -> int:
     report = materialize_templates(workspace.root)
     new_files = report.count(ApplyAction.MATERIALIZED)
     if new_files:
-        print(f"setup: materialized {new_files} file(s) from _templates/")
+        print(f"setup: materialized {new_files} file(s) from _workspace_template/")
         for path, action in report:
             if action == ApplyAction.MATERIALIZED:
                 print(f"  {path}")

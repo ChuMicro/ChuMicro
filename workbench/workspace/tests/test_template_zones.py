@@ -16,8 +16,8 @@ class TestClassify:
             "pyproject.toml",
             "projects/_template/config.toml",
             "projects/_template/app.py",
-            "_templates/secrets.yml",
-            "_templates/nested/file.txt",
+            "_workspace_template/secrets.yml",
+            "_workspace_template/nested/file.txt",
             ".github/skills/deploy-and-debug/SKILL.md",
             ".github/skills/add-new-project/SKILL.md",
             ".github/skills/register-board/SKILL.md",
@@ -72,6 +72,6 @@ class TestClassify:
 
     def test_secrets_yml_user_owned_not_init_only(self) -> None:
         """Decision 0038 §5: `secrets.yml` is the materialized output
-        of `_templates/secrets.yml`; `update` must never touch it."""
+        of `_workspace_template/secrets.yml`; `update` must never touch it."""
         assert classify("secrets.yml") is Zone.USER_OWNED
-        assert classify("_templates/secrets.yml") is Zone.TOOL_OWNED
+        assert classify("_workspace_template/secrets.yml") is Zone.TOOL_OWNED

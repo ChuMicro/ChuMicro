@@ -12,6 +12,118 @@ Questions that lead to structural tradeoffs should become decisions in
 
 ## Active
 
+### Workspace-template `run.py` self-bootstrap pattern
+
+**Surfaced 2026-05-02 by the user** during the audit-of-the-audit
+follow-up.  Quote: *"i actually dont like what the workspace template
+is doing.  i dont like running python through python like that.  it
+should be importing and calling modules and methods.  so its the
+workspace that is wrong."*
+
+The pattern under question lives in
+[`ChuMicro-Workspace-Template/run.py`](https://github.com/ChuMicro/ChuMicro-Workspace-Template/blob/main/run.py)
+— a single file that self-bootstraps a venv on first run, pip-installs
+the workspace tooling editable, then `os.execv`'s into the new venv's
+interpreter to dispatch to `chumicro_workspace.cli.main()`.
+
+#### Why the current shape exists
+
+`os.execv` is in there because **a Python interpreter that's already
+running can't easily load packages from a different Python
+installation** — the system Python that launched `run.py` doesn't
+share `site-packages` with the freshly-created venv.  Three real
+constraints:
+
+1. Cross-version skew: system Python 3.12 + venv created with 3.11 →
+   compiled extensions (PyYAML, ruff, msgpack) won't load.
+2. `sys.path` manipulation to add the venv's `site-packages` is
+   fragile against ABI mismatch.
+3. The "self-bootstrap in a single invocation" UX requires the
+   bootstrap process to *become* the dispatcher process at the end,
+   which means an interpreter switch.
+
+`os.execv` is the one mechanism that does exactly that: replace the
+running process image with the venv's Python and re-run the script.
+There's no in-process equivalent.
+
+#### What the user's pushback implicitly proposes
+
+"It should be importing and calling modules and methods" suggests
+splitting bootstrap from dispatch:
+
+* `run.py` becomes a thin dispatcher that imports
+  `chumicro_workspace.cli` and calls its main.  Only runs after the
+  venv exists and is on the user's `PYTHONPATH`.
+* Bootstrap becomes a separate step the user does explicitly —
+  either standard Python tool conventions (`python -m venv .venv`,
+  `.venv/bin/pip install -e .`, `.venv/bin/python run.py setup`)
+  or a separate one-shot script (the mono-repo's
+  `prepare_workspace.py` pattern).
+
+This is what the chumicro mono-repo already does:
+`scripts/prepare_workspace.py` for fresh-clone bootstrap (302 lines,
+stdlib + subprocess only at top), `scripts/run.py setup` for the
+idempotent everyday refresh (heavy imports at top).
+
+#### Honest evaluation (Claude, 2026-05-02)
+
+The user's instinct that "running python through python feels off"
+is aesthetically fair, but the technical claim "import and call
+modules" can't directly replace the `os.execv` step — the running
+interpreter genuinely can't switch to a different Python's
+site-packages mid-execution.  However, the user's *deeper* point is
+valid: the workspace template chose "self-bootstrap in one
+invocation" as the UX, and that choice forces the exec-dance.  An
+alternative UX ("user creates the venv themselves, then runs
+`run.py`") sidesteps the dance entirely and matches every other
+Python project's bootstrap convention.
+
+So the open question is **whether the convenience of one-command
+self-bootstrap is worth the architectural quirk of the exec-dance**,
+or whether the workspace template should align with conventional
+Python project bootstrap (mono-repo's pattern: separate
+`prepare_workspace.py`).
+
+#### Research questions for a future agent
+
+1. Is `os.execv` truly the only way to self-bootstrap in a single
+   Python invocation, or is there a mechanism (interpreter-swap
+   library, `importlib` reload tricks) that avoids it?  (My read:
+   no, but a focused research pass should confirm.)
+2. What do other Python projects with self-bootstrapping entry
+   points (e.g. poetry's `poetry install`, hatch's `hatch env`,
+   Django's `django-admin startproject`) actually do?  Do any of
+   them avoid the exec-dance?
+3. If we keep the self-bootstrap UX, can the exec-dance be made
+   less visible (e.g. wrapped in a single helper that hides the
+   `subprocess.run` + `os.execv` chain)?
+4. If we drop the self-bootstrap and align with mono-repo's
+   pattern (separate `prepare_workspace.py` + `run.py setup`),
+   what does the workspace-template README's quickstart look like?
+   Three commands instead of one?  Is that acceptable for the
+   beginner audience the workspace template is aimed at?
+5. Is the user's concern partly about *audibility* — the
+   subprocess output ("creating .venv at ...", "upgrading pip",
+   "installing workspace ...") being noisy vs. an import-and-call
+   shape that runs silently?  If so, suppressing or restructuring
+   the bootstrap output might address the surface concern without
+   restructuring the architecture.
+
+#### Constraints any future change must respect
+
+* Mono-repo `scripts/run.py` — the chicken-and-egg that
+  `prepare_workspace.py` solves there is the same problem the
+  workspace template's `run.py` solves with `os.execv`.  Any
+  change should pick a shape that works for both, or document
+  why they need to differ.
+* Decision 0046 left the workspace template's `run.py` as
+  "tool-owned, rewritten by `update`" — changes to its shape
+  flow to every existing workspace via `update`.  The change
+  must be compatible with that update flow.
+* The user's broader direction (Decision 0046, 2026-05-02
+  audit) is "less doc volume, fewer entry points" — a change
+  that *adds* steps to the quickstart cuts against that.
+
 ### Library dependency policy (hard-injection vs. lazy default vs. hard dep)
 
 Today every chumicro service takes its dependencies via constructor injection
