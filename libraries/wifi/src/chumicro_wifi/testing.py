@@ -18,9 +18,13 @@ Example::
 This module hosts both the test fakes (``FakeWifi``,
 ``FakeWifiAdapter``) and the CPython-default adapter the production
 ``WifiService`` falls back to when no real runtime adapter applies.
-The bundle pipeline excludes ``testing.py`` from device deploys, so
-the adapter is host-only — exactly where it's needed.
+The ``__chumicro_runtimes__ = ("cpython",)`` marker below keeps the
+file out of every bundle and every device deploy, so the adapter is
+host-only — exactly where it's needed.
 """
+
+#: Source bundle / sdist only -- never lands on a device.
+__chumicro_runtimes__ = ("cpython",)
 
 from chumicro_wifi._adapters.base import WifiAdapter
 from chumicro_wifi.config import WifiConfig

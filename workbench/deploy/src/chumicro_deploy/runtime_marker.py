@@ -12,6 +12,11 @@ the per-runtime transports), so wrong-runtime files no longer land on
 a board during ``chumicro_deploy`` / ``chumicro_workspace deploy`` /
 ``pytest-device`` staging.
 
+:func:`file_targets_runtime` accepts a single runtime name (concrete
+target) or a frozenset of runtimes (set-of-acceptable-targets — used by
+the source bundle to drop CPython-only files while keeping everything
+device-bound).
+
 The reader uses :func:`ast.parse` (no execution) — runtime-specific
 files commonly import device-only modules at top level
 (``import wifi``, ``import esp32``) that fail on the host.
@@ -32,6 +37,12 @@ KNOWN_RUNTIMES: frozenset[str] = frozenset({
     "micropython_esp32", "micropython_rp2",
     "cpython",
 })
+
+#: Runtimes that land on a microcontroller.  The source bundle passes
+#: this set as *target_runtime* so files marked exclusively for
+#: ``cpython`` drop out — they only belong in the PyPI sdist / wheel,
+#: which doesn't go through the bundle pipeline.
+DEVICE_RUNTIMES: frozenset[str] = frozenset({"circuitpython", "micropython"})
 
 
 def read_runtime_marker(python_file: Path) -> frozenset[str] | None:
@@ -69,26 +80,39 @@ def read_runtime_marker(python_file: Path) -> frozenset[str] | None:
 def file_targets_runtime(
     python_file: Path,
     *,
-    target_runtime: str | None,
+    target_runtime: str | frozenset[str] | None,
 ) -> bool:
     """Return ``True`` when *python_file* should ship to *target_runtime*.
 
-    ``target_runtime=None`` is the universal (unfiltered) case — every
-    file matches.  This matches the source bundle / sdist behavior per
-    Decision 0037.
+    ``target_runtime=None`` is the unfiltered case — every file matches.
+    This is the legacy default for deploy paths that want the prior
+    "ship everything" behavior; PyPI sdist / wheel building doesn't
+    pass through this function.
 
-    Otherwise, a file with no marker matches every target (default-safe);
-    a file with a marker matches only when *target_runtime* appears in
-    the marker.  Sub-runtime markers (``micropython_esp32`` etc.) fold
-    into ``micropython`` since both MP variants share one bundle today.
+    A string target (``"circuitpython"`` / ``"micropython"`` /
+    ``"cpython"``) means "this single concrete runtime" — a marked file
+    matches only when its marker contains the target.  Used by per-
+    runtime mpy bundles and by transports that know their target.
+
+    A frozenset target means "any of these runtimes" — a marked file
+    matches when its marker overlaps the set.  Used by the source
+    bundle (:data:`DEVICE_RUNTIMES`) to drop ``("cpython",)``-only
+    files while keeping every CP- and MP-bound file.
+
+    Files without a marker match every target (default-safe).
+    Sub-runtime markers (``micropython_esp32`` etc.) fold into
+    ``micropython`` since both MP variants share one bundle today.
     """
     if target_runtime is None:
         return True
     marker = read_runtime_marker(python_file)
     if marker is None:
         return True  # Default-safe: unmarked files ship everywhere.
-    folded = {
+    folded = frozenset(
         name.split("_", 1)[0] if name.startswith("micropython_") else name
         for name in marker
-    }
-    return target_runtime in folded
+    )
+    targets = (
+        frozenset({target_runtime}) if isinstance(target_runtime, str) else target_runtime
+    )
+    return bool(folded & targets)

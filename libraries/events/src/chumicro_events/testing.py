@@ -6,8 +6,8 @@ own ``handle`` is the natural drain point.  This module ships one
 helper that's broadly useful when downstream libraries want to assert
 against bus traffic without writing one-off mocks.
 
-Excluded from per-runtime mpy bundles by the standard ``testing.py``
-rule.
+Excluded from every bundle and every device deploy by the
+``__chumicro_runtimes__ = ("cpython",)`` marker below.
 
 Usage::
 
@@ -21,6 +21,9 @@ Usage::
     bus.handle(now_ms=0)
     assert recorder.events == [("wifi.state", "connected")]
 """
+
+#: Source bundle / sdist only -- never lands on a device.
+__chumicro_runtimes__ = ("cpython",)
 
 
 class RecordingSubscriber:

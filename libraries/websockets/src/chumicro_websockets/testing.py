@@ -31,6 +31,9 @@ are also used by the in-process integration tests in
 ``tests/test_integration.py``.
 """
 
+#: Source bundle / sdist only -- never lands on a device.
+__chumicro_runtimes__ = ("cpython",)
+
 
 class FakeConnection:
     """Bidirectional in-memory pipe modelling :class:`TCPClientSocket`.

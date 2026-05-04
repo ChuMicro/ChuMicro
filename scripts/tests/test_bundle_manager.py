@@ -7,6 +7,7 @@ from pathlib import Path
 
 from bundle_manager import (
     CP_MPY_FOLDER,
+    DEVICE_RUNTIMES,
     EXPERIMENTAL_BUNDLE_REPO,
     MPY_FORMAT_FOLDER,
     STABLE_BUNDLE_REPO,
@@ -42,12 +43,11 @@ class TestFindBundleModules:
     """Tests for _find_bundle_modules."""
 
     def test_finds_python_files(self, tmp_path: Path):
-        """Discovers deployable .py files; host-only testing.py is excluded."""
+        """Discovers deployable .py files under the package."""
         package_dir = tmp_path / "src" / "chumicro_example"
         package_dir.mkdir(parents=True)
         (package_dir / "__init__.py").write_text("")
         (package_dir / "core.py").write_text("# core")
-        (package_dir / "testing.py").write_text("# testing")
 
         name, found_dir, files = _find_bundle_modules(tmp_path)
         assert name == "chumicro_example"
@@ -67,17 +67,25 @@ class TestFindBundleModules:
         _, _, files = _find_bundle_modules(tmp_path)
         assert len(files) == 1  # only __init__.py
 
-    def test_skips_host_only_testing_module(self, tmp_path: Path):
-        """testing.py is a CPython-only host fake; it must not ship to devices."""
+    def test_cpython_marker_drops_testing_py_from_every_bundle(
+        self, tmp_path: Path,
+    ):
+        """testing.py declares ``__chumicro_runtimes__ = ("cpython",)`` so
+        it's filtered out of every bundle (CP-mpy, MP-mpy, source) by the
+        marker mechanism.  Only the PyPI sdist / wheel ships testing.py."""
         package_dir = tmp_path / "src" / "chumicro_example"
         package_dir.mkdir(parents=True)
         (package_dir / "__init__.py").write_text("")
-        (package_dir / "testing.py").write_text("# host fake")
+        (package_dir / "testing.py").write_text(
+            '__chumicro_runtimes__ = ("cpython",)\n',
+        )
 
-        _, _, files = _find_bundle_modules(tmp_path)
-        filenames = {file.name for file in files}
-        assert "testing.py" not in filenames
-        assert filenames == {"__init__.py"}
+        for target in ("circuitpython", "micropython", DEVICE_RUNTIMES):
+            _, _, files = _find_bundle_modules(tmp_path, target_runtime=target)
+            filenames = {file.name for file in files}
+            assert filenames == {"__init__.py"}, (
+                f"testing.py leaked into target_runtime={target!r}"
+            )
 
     def test_filters_by_runtime_marker_for_circuitpython(self, tmp_path: Path):
         """Decision 0037: __chumicro_runtimes__ filters per-runtime bundles."""
@@ -140,8 +148,13 @@ class TestFindBundleModules:
                 f"unmarked files should ship to bundle target_runtime={runtime!r}"
             )
 
-    def test_source_bundle_ignores_runtime_markers(self, tmp_path: Path):
-        """target_runtime=None ships every non-host-only file regardless of marker."""
+    def test_source_bundle_keeps_device_marked_files_drops_cpython_only(
+        self, tmp_path: Path,
+    ):
+        """The source bundle uses ``target_runtime=DEVICE_RUNTIMES`` so any
+        CP- or MP-marked file rides along (it'll be useful on at least one
+        device runtime), but ``("cpython",)``-marked files drop out — they
+        belong only in the PyPI sdist / wheel."""
         package_dir = tmp_path / "src" / "chumicro_example"
         package_dir.mkdir(parents=True)
         (package_dir / "__init__.py").write_text("")
@@ -151,11 +164,30 @@ class TestFindBundleModules:
         (package_dir / "mp_only.py").write_text(
             '__chumicro_runtimes__ = ("micropython",)\n',
         )
+        (package_dir / "cpython_only.py").write_text(
+            '__chumicro_runtimes__ = ("cpython",)\n',
+        )
+
+        _, _, files = _find_bundle_modules(
+            tmp_path, target_runtime=DEVICE_RUNTIMES,
+        )
+        filenames = {file.name for file in files}
+        assert filenames == {"__init__.py", "cp_only.py", "mp_only.py"}
+
+    def test_target_runtime_none_is_unfiltered(self, tmp_path: Path):
+        """``target_runtime=None`` (legacy default) ships every file
+        regardless of marker — preserved so external callers that haven't
+        opted into a target still get the prior behavior."""
+        package_dir = tmp_path / "src" / "chumicro_example"
+        package_dir.mkdir(parents=True)
+        (package_dir / "__init__.py").write_text("")
+        (package_dir / "cpython_only.py").write_text(
+            '__chumicro_runtimes__ = ("cpython",)\n',
+        )
 
         _, _, files = _find_bundle_modules(tmp_path, target_runtime=None)
         filenames = {file.name for file in files}
-        # Source bundle is universal — all marked files come along.
-        assert filenames == {"__init__.py", "cp_only.py", "mp_only.py"}
+        assert filenames == {"__init__.py", "cpython_only.py"}
 
     def test_micropython_submarker_folds_into_micropython(self, tmp_path: Path):
         """Sub-runtime markers (micropython_esp32, micropython_rp2) match 'micropython'."""

@@ -20,6 +20,9 @@ tests will catch code that accidentally uses plain subtraction instead
 of ``ticks_diff``.
 """
 
+#: Source bundle / sdist only -- never lands on a device.
+__chumicro_runtimes__ = ("cpython",)
+
 # Define tick constants directly rather than importing from ticks.py.
 # On CircuitPython, const()-decorated private names in ticks.py may be
 # compiled away and not importable.  These are mathematical constants

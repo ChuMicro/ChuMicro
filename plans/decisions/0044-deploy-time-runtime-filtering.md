@@ -6,7 +6,7 @@ Related: [Decision 0037](0037-runtime-file-marking.md) (per-runtime file marking
 
 ## Context
 
-Decision 0037 introduced the `__chumicro_runtimes__` marker so the bundle pipeline (`scripts/bundle_manager.py`) could ship only matching files into per-runtime mpy bundles consumed via `circup` / `mip`.  Decision 0037 §"Source bundle continues to ship every non-testing file unfiltered" left the source-distribution path explicitly unfiltered — PyPI sdists ship every file regardless of marker, and the on-device runtime selector (`_select_adapter`, `_select_backend`) decides which adapter to import.
+Decision 0037 introduced the `__chumicro_runtimes__` marker so the bundle pipeline (`scripts/bundle_manager.py`) could ship only matching files into per-runtime mpy bundles consumed via `circup` / `mip`.  At the time the universal source bundle (mip-installable from the bundle root) was left unfiltered, and PyPI sdists ship every file regardless of marker — the on-device runtime selector (`_select_adapter`, `_select_backend`) decides which adapter to import.
 
 That left a gap: every other on-device deploy path also shipped unfiltered.  When `chumicro_workspace deploy` pushes a thing to a CircuitPython board, when `chumicro_deploy` flashes a bundle of files, when `pytest-device` stages a library for a functional test, when an example gets copied to a board — wrong-runtime adapter source still landed on the device.  Default-safe in the sense that the runtime selector imports only the matching adapter, but wasted flash and surprising for users who reasonably assumed `__chumicro_runtimes__` controlled what reached the device.
 
@@ -25,7 +25,7 @@ def read_runtime_marker(path: Path) -> frozenset[str] | None: ...
 def file_targets_runtime(path: Path, *, target_runtime: str | None) -> bool: ...
 ```
 
-`target_runtime=None` means "no filter" — preserved as the source-bundle / sdist behavior per Decision 0037 §"Source bundle".  Every other consumer passes a concrete runtime.
+`target_runtime=None` means "no filter" — the legacy default kept for callers that haven't opted into a target.  Every other consumer passes a concrete runtime (transports, deploy CLIs) or a frozenset of acceptable runtimes (the universal source bundle in `bundle_manager`, see [Decision 0037 amendment 2026-05-04](0037-runtime-file-marking.md#2026-05-04--testingpy-exits-the-universal-source-bundle-too)).
 
 ### Where filtering applies
 
@@ -49,7 +49,7 @@ Sub-runtime markers (`micropython_esp32`, `micropython_rp2`) fold into `"micropy
 
 ### What stays unchanged
 
-- **PyPI sdist / wheel** — `bundle_manager` keeps shipping every non-host-only file in the source bundle.  Decision 0037 §"Source bundle" still applies.
+- **PyPI sdist / wheel** — built by `python -m build` (not `bundle_manager`); ships every file under `src/` including `testing.py` and every runtime adapter.  `pip install chumicro-foo` on a CPython host gets the complete library.
 - **circup / mip per-runtime bundles** — already filtered by `bundle_manager`, no change.
 - **`FileMapSource`** — caller already chose bytes; no walk to filter.
 - **Runtime selector code** — `_select_adapter` / `_select_backend` are unchanged.  They remain the device-side counterpart; the deploy filter is the host-side counterpart.

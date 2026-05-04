@@ -58,7 +58,8 @@ from bundle_layout import (
     STABLE_BUNDLE_REPO,
 )
 from chumicro_deploy.runtime_marker import (
-    file_targets_runtime as _file_targets_runtime,
+    DEVICE_RUNTIMES,
+    file_targets_runtime,
 )
 from repo_layout import (
     GITHUB_ORG,
@@ -71,31 +72,29 @@ from repo_layout import (
 )
 from shared import TEMPLATES_DIR, resolve_cp_mpy_cross, resolve_mp_mpy_cross
 
-#: Module basenames excluded from the deployable bundle.  ``testing.py``
-#: is a CPython-only test fake used by host pytest — shipping it to a
-#: device wastes a FAT cluster (≥4 KB) per library that has one.
-_HOST_ONLY_MODULES = frozenset({"testing.py"})
-
 
 def _find_bundle_modules(
     library_dir: Path,
     *,
-    target_runtime: str | None = None,
+    target_runtime: str | frozenset[str] | None = None,
 ) -> tuple[str, Path, list[Path]]:
     """Discover the package name, package dir, and deployable .py files.
 
     Args:
         library_dir: Root directory of the library.
-        target_runtime: ``None`` for the universal source bundle (every
-            file except host-only).  ``"circuitpython"`` / ``"micropython"``
-            for per-runtime mpy bundles — files with a
-            ``__chumicro_runtimes__`` marker are filtered to the target
-            runtime; files without a marker ship everywhere (Decision 0037).
+        target_runtime: Runtime selector applied via the
+            ``__chumicro_runtimes__`` marker (Decisions 0037 + 0044).
+            ``"circuitpython"`` / ``"micropython"`` for per-runtime mpy
+            bundles.  :data:`DEVICE_RUNTIMES` (frozenset of both MCU
+            runtimes) for the universal source bundle — drops files
+            marked exclusively for ``cpython`` so they land only in the
+            PyPI sdist / wheel.  ``None`` is "no filter" (legacy).
+            Files without a marker always ship (default-safe).
 
     Returns:
         ``(package_name, package_dir, python_files)`` where *python_files*
         are the ``.py`` modules destined for the requested bundle.
-        ``__pycache__`` and ``testing.py`` are always excluded.
+        ``__pycache__`` is always excluded.
     """
     package_dir = find_package_dir(library_dir)
     if package_dir is None:
@@ -105,8 +104,7 @@ def _find_bundle_modules(
         py_file
         for py_file in sorted(package_dir.rglob("*.py"))
         if "__pycache__" not in py_file.relative_to(package_dir).parts
-        and py_file.name not in _HOST_ONLY_MODULES
-        and _file_targets_runtime(py_file, target_runtime=target_runtime)
+        and file_targets_runtime(py_file, target_runtime=target_runtime)
     ]
     return package_dir.name, package_dir, python_files
 
@@ -200,7 +198,9 @@ def build_bundle(
         experimental: When True, package.json URLs point to the
             experimental bundle repo.
     """
-    package_name, package_dir, python_files = _find_bundle_modules(library_dir)
+    package_name, package_dir, python_files = _find_bundle_modules(
+        library_dir, target_runtime=DEVICE_RUNTIMES,
+    )
     if not python_files:
         sys.exit(f"No deployable .py files found in {package_dir}")
 

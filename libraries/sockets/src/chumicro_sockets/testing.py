@@ -28,6 +28,9 @@ flips a flag so subsequent operations raise the same ``OSError`` a
 real closed socket would.
 """
 
+#: Source bundle / sdist only -- never lands on a device.
+__chumicro_runtimes__ = ("cpython",)
+
 
 from collections import deque
 

@@ -13,6 +13,9 @@ Example::
     store.simulate_corrupt()                 # force is_corrupt next load
 """
 
+#: Source bundle / sdist only -- never lands on a device.
+__chumicro_runtimes__ = ("cpython",)
+
 from chumicro_kvstore._backends.memory import MemoryBackend
 from chumicro_kvstore.core import KVStore
 
