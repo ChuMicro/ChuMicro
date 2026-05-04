@@ -41,7 +41,6 @@ YAML layout) can register their own loader via the
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -122,23 +121,13 @@ class DeviceDefaults:
     ide_runtime: str = "micropython"
 
 
-def _resolve_devices_path(
-    workspace_root: Path | None = None,
-    *,
-    environment_variable: str = "CHUMICRO_DEVICES",
-) -> Path:
-    """Resolve a ``devices.yml`` path from env var or workspace root.
+def _resolve_devices_path(workspace_root: Path | None = None) -> Path:
+    """Resolve a ``devices.yml`` path under *workspace_root*.
 
     Args:
         workspace_root: Directory that contains ``devices.yml``.
             Defaults to :func:`Path.cwd`.
-        environment_variable: Env var that overrides the default
-            location when set.  ``CHUMICRO_DEVICES`` is the
-            chumicro convention.
     """
-    override = os.environ.get(environment_variable)
-    if override:
-        return Path(override)
     root = workspace_root if workspace_root is not None else Path.cwd()
     return root / DEFAULT_DEVICES_FILENAME
 
@@ -222,9 +211,8 @@ def load_device_registry(
     transport.
 
     Args:
-        path: Explicit path to ``devices.yml``.  When ``None``, checks
-            the ``CHUMICRO_DEVICES`` env var, then falls back to
-            ``workspace_root / devices.yml``.
+        path: Explicit path to ``devices.yml``.  When ``None``,
+            falls back to ``workspace_root / devices.yml``.
         workspace_root: Directory that contains ``devices.yml``.
             Defaults to :func:`Path.cwd`.
 

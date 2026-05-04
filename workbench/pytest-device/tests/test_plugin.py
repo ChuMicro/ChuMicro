@@ -521,15 +521,14 @@ class TestTransportCache:
 class TestLoadFallbackDevice:
     """Tests for _load_fallback_device."""
 
-    def test_skips_when_no_devices_file(self, monkeypatch, tmp_path) -> None:
+    def test_skips_when_no_devices_file(self, tmp_path) -> None:
         """Should skip with setup instructions when devices.yml is missing."""
-        monkeypatch.setenv("CHUMICRO_DEVICES", str(tmp_path / "nope.yml"))
         with pytest.raises(pytest.skip.Exception, match="No devices.yml found"):
             pytest_device._load_fallback_device(
                 _FakeSession(pytest_device._TransportCache(), rootpath=tmp_path),
             )
 
-    def test_skips_when_no_devices_configured(self, monkeypatch, tmp_path) -> None:
+    def test_skips_when_no_devices_configured(self, tmp_path) -> None:
         """Should skip when no devices match the ide_runtime."""
         devices_file = tmp_path / "devices.yml"
         devices_file.write_text(
@@ -540,13 +539,12 @@ class TestLoadFallbackDevice:
             "    runtime: micropython\n"
             "    address: /dev/ttyUSB0\n"
         )
-        monkeypatch.setenv("CHUMICRO_DEVICES", str(devices_file))
         with pytest.raises(pytest.skip.Exception, match="No devices configured"):
             pytest_device._load_fallback_device(
                 _FakeSession(pytest_device._TransportCache(), rootpath=tmp_path),
             )
 
-    def test_returns_target_device(self, monkeypatch, tmp_path) -> None:
+    def test_returns_target_device(self, tmp_path) -> None:
         """Should return the device matching ide_runtime defaults."""
         devices_file = tmp_path / "devices.yml"
         devices_file.write_text(
@@ -561,7 +559,6 @@ class TestLoadFallbackDevice:
             "    runtime: micropython\n"
             "    address: /dev/ttyUSB1\n"
         )
-        monkeypatch.setenv("CHUMICRO_DEVICES", str(devices_file))
         device = pytest_device._load_fallback_device(
             _FakeSession(pytest_device._TransportCache(), rootpath=tmp_path),
         )

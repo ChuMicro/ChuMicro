@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **scripts/workbench audit — Python-in-Python and env-var-as-arg pushback (1c, 2a).**  User flagged two patterns they don't like across `scripts/` + `workbench/`: Python invoking Python (kept where reasonable — `python -m <tool>` for griffe / pytest / build / ruff / coverage / zensical / pip; the `run.py` → `run.py` self-respawn for preflight phase capture stays per Decision 0048 since the alternative is a 200-300 line writer-threading refactor across 8 files for marginal gain) and env-var-as-arg (dropped where flags are equivalent — `CHUMICRO_PARALLEL_PACKAGES` / `CHUMICRO_PARALLEL_PREFLIGHT_PHASES` replaced with `--package-workers` / `--phase-workers` / `--max-workers` flags on `preflight`, `build`, `docs`, `test`, and `check-api`; `CHUMICRO_DEVICES` left alone since CI is the documented consumer).  Also dropped the `.venv/bin/python` lookup in `audit_gates.py` — `sys.executable` is already the right interpreter.  Decision 0048 §5 + `plans/next-up.md` Done entry updated to match.
-- **Last shipped:** `scripts: drop CHUMICRO_PARALLEL_* env vars and .venv lookup; flags-only` (this commit).
-- **In flight:** idle.
+- **Phase:** **scripts/workbench audit — env-var-as-arg pushback continued (2c follow-up).**  User asked "ci could provide its own devices.yml?" after noting CI is "a wasteland."  Verified: zero CI workflows reference `CHUMICRO_DEVICES`, `devices.yml` is gitignored, and every production caller passes an explicit path or `workspace_root`.  Sibling `CHUMICRO_DEVICE_CONFIG` was orphaned (docs + ADR referenced it; zero code).  Both env vars deleted.  `_resolve_devices_path()` simplified to just `<workspace_root>/devices.yml`.  Three test cases that exercised the env var dropped (one in `workbench/deploy/tests/test_device_registry.py`; the three pytest-device cases now rely on `_FakeSession(rootpath=tmp_path)` which already pointed at the right path).  Docs section §9 rewritten: "CI just drops a devices.yml at the workspace root."  ADR 0027 line 22 strikethroughed with a 2026-05-03 deletion note.
+- **Last shipped:** `workbench/deploy + workbench/pytest-device + docs: drop CHUMICRO_DEVICES env var (anticipatory, no live consumers)` (this commit).  Earlier today: `49fb45e` (CHUMICRO_PARALLEL_* env vars dropped for `--phase-workers` / `--package-workers` / `--max-workers` flags), `ed6b595` (`scripts/workspace.py` -> `scripts/repo_layout.py`).
+- **In flight:** idle on my side.  Note: there's pre-existing uncommitted WIP from a parallel session on `chumicro_workspace.boot_shim` (new file + tests + VERSION bump in `workbench/workspace/`); not mine, left alone.
 - **Blocked on:** —.
-- **Last touched:** `scripts/{run.py,check_api.py,audit_gates.py}`, `scripts/tests/test_run.py`, `plans/decisions/0048-preflight-phase-level-parallel.md`, `plans/next-up.md`, `plans/now.md`.
+- **Last touched:** `workbench/deploy/{src/chumicro_deploy/config/default.py,tests/test_device_registry.py}`, `workbench/pytest-device/tests/test_plugin.py`, `docs/contributing/device-testing.md`, `plans/decisions/0027-device-testing-infrastructure.md`, `plans/now.md`.
 
 ---
 
