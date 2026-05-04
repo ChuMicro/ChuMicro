@@ -10,7 +10,6 @@ Run ``python scripts/run.py -h`` to see available tasks.
 from __future__ import annotations
 
 import argparse
-import os
 import subprocess
 import sys
 from collections.abc import Callable, Sequence
@@ -47,6 +46,25 @@ PYTHON = sys.executable
 # Script that runs a library's tests/ directory under a non-CPython interpreter
 # (MicroPython or CircuitPython unix-port) to verify cross-runtime compatibility.
 COMPAT_SCRIPT = "support/test_harness/run_cross_runtime.py"
+
+
+#: Default cap on concurrent per-package subprocesses for build /
+#: docs / test fan-out.  Each task spawns one external process
+#: (``python -m build``, ``python -m zensical build``, or pytest); 4
+#: keeps a ~10-core laptop responsive while still cutting serial wall
+#: time roughly 4× on an 18-package workspace.  CI runners with more
+#: cores can override via ``--package-workers``.
+_DEFAULT_PACKAGE_PARALLEL_WORKERS = 4
+
+
+#: Default cap on concurrent ``preflight`` *phases*.  Each phase is
+#: its own ``python scripts/run.py <subcommand>`` subprocess that may
+#: itself fan out internally (build / docs at 4×, test_cpython via
+#: pytest, etc.), so a higher phase-level cap multiplies subprocess
+#: count.  4 keeps the laptop responsive at roughly 16 peak concurrent
+#: subprocesses; CI runners with more cores can override via
+#: ``--phase-workers``.  See Decision 0048.
+_DEFAULT_PREFLIGHT_PHASE_PARALLEL_WORKERS = 4
 
 
 # ---------------------------------------------------------------------------
@@ -333,6 +351,7 @@ def test_cpython(
     no_cov: bool = False,
     coverage_threshold: int | None = None,
     elevated_packages: set[str] | None = None,
+    package_workers: int = _DEFAULT_PACKAGE_PARALLEL_WORKERS,
 ) -> int:
     """Run the CPython test suite for the given packages.
 
@@ -460,7 +479,7 @@ def test_cpython(
             )
 
     overall_exit_code = _run_capture_phases_in_parallel(
-        phases, max_workers=_resolve_package_parallel_workers(),
+        phases, max_workers=package_workers,
     )
 
     if no_cov:
@@ -571,7 +590,10 @@ def _selected_library_dirs(package_dirs: list[Path] | None) -> list[Path]:
     ]
 
 
-def build() -> int:
+def build(
+    *,
+    package_workers: int = _DEFAULT_PACKAGE_PARALLEL_WORKERS,
+) -> int:
     """Build all publishable package distributions.
 
     Uses ``--no-isolation`` to skip creating fresh virtual environments
@@ -579,9 +601,9 @@ def build() -> int:
     This is safe because the development environment already has
     ``hatchling`` installed via ``requirements-dev.txt``.
 
-    Builds are fanned out across :data:`_DEFAULT_PACKAGE_PARALLEL_WORKERS`
-    threads — each ``python -m build`` is an independent subprocess
-    with its own per-package ``dist/`` output, no shared state.
+    Builds are fanned out across *package_workers* threads — each
+    ``python -m build`` is an independent subprocess with its own
+    per-package ``dist/`` output, no shared state.
     """
     packages = find_publishable_packages()
     if not packages:
@@ -609,7 +631,7 @@ def build() -> int:
 
     phases = [(f"build {package}", build_one(package)) for package in packages]
     result = _run_capture_phases_in_parallel(
-        phases, max_workers=_resolve_package_parallel_workers(),
+        phases, max_workers=package_workers,
     )
     if result != 0:
         return result
@@ -618,7 +640,12 @@ def build() -> int:
     return 0
 
 
-def docs(package_dirs: list[Path], *, serve: bool = False) -> int:
+def docs(
+    package_dirs: list[Path],
+    *,
+    serve: bool = False,
+    package_workers: int = _DEFAULT_PACKAGE_PARALLEL_WORKERS,
+) -> int:
     """Build docs for selected libraries using Zensical.
 
     If *serve* is True, starts a live-reload dev server for the first
@@ -649,9 +676,9 @@ def docs(package_dirs: list[Path], *, serve: bool = False) -> int:
 
     # Each library's zensical build is an independent subprocess with
     # its own mkdocs.yml + site/ output, so we fan out across
-    # _DEFAULT_PACKAGE_PARALLEL_WORKERS to amortize the per-process
-    # warm-up.  The serial loop took ~25-30 s on an 18-package workspace;
-    # at 4-way fan-out it lands closer to 2-3 s.
+    # *package_workers* to amortize the per-process warm-up.  The
+    # serial loop took ~25-30 s on an 18-package workspace; at 4-way
+    # fan-out it lands closer to 2-3 s.
     phases: list[tuple[str, Callable[[], tuple[int, str]]]] = [
         (
             f"docs {library_dir.relative_to(ROOT)}",
@@ -660,7 +687,7 @@ def docs(package_dirs: list[Path], *, serve: bool = False) -> int:
         for library_dir in doc_dirs
     ]
     return _run_capture_phases_in_parallel(
-        phases, max_workers=_resolve_package_parallel_workers(),
+        phases, max_workers=package_workers,
     )
 
 
@@ -810,6 +837,8 @@ def preflight(
     circuitpython_binary: str | None = None,
     coverage_threshold: int | None = None,
     with_functional: bool = False,
+    phase_workers: int = _DEFAULT_PREFLIGHT_PHASE_PARALLEL_WORKERS,
+    package_workers: int = _DEFAULT_PACKAGE_PARALLEL_WORKERS,
 ) -> int:
     """Run the full check suite that CI requires on every pull request.
 
@@ -868,7 +897,15 @@ def preflight(
     # output in submission order, so the log keeps the documented
     # "lint first, test-circuitpython last" shape regardless of
     # which phase actually finishes first.
-    test_args = ["test", "--all"]
+    # Forward --package-workers to subcommands whose internal fan-out
+    # honors the cap (test, build, docs, check-api).  Phases that don't
+    # fan out per-package (lint, test-scripts, verify-examples,
+    # check-dep-graph, check-version, test-micropython,
+    # test-circuitpython) ignore it.
+    package_workers_args = ["--package-workers", str(package_workers)]
+    check_api_workers_args = ["--max-workers", str(package_workers)]
+
+    test_args = ["test", "--all", *package_workers_args]
     if coverage_threshold is not None:
         test_args.extend(["--coverage-threshold", str(coverage_threshold)])
     if elevated_package_names is not None:
@@ -888,14 +925,17 @@ def preflight(
 
     parallel_specs: list[tuple[str, list[str] | None]] = [
         ("lint", ["lint"]),
-        ("build", ["build"]),
-        ("docs", ["docs", "--all"]),
+        ("build", ["build", *package_workers_args]),
+        ("docs", ["docs", "--all", *package_workers_args]),
         (f"test (python {python_version})", test_args),
         ("test-scripts", ["test-scripts"]),
         ("verify-examples", ["verify-examples", "--all"]),
         ("check-dep-graph", ["check-dep-graph"]),
         ("check-version", ["check-version"] if can_diff else None),
-        ("check-api", ["check-api"] if can_diff else None),
+        (
+            "check-api",
+            ["check-api", *check_api_workers_args] if can_diff else None,
+        ),
         ("test-micropython", test_micropython_args),
         ("test-circuitpython", test_circuitpython_args),
     ]
@@ -917,7 +957,9 @@ def preflight(
         print(f"== {label} ==")
         print(f"  SKIP: {base_reference} not reachable (fetch or set --base).")
 
-    parallel_result = _preflight_run_parallel_phases(parallel_phases)
+    parallel_result = _preflight_run_parallel_phases(
+        parallel_phases, max_workers=phase_workers,
+    )
     if parallel_result != 0:
         # `_run_capture_phases_in_parallel` already printed each
         # phase's banner and a "Step failed: <label>" line for the
@@ -1118,58 +1160,6 @@ def _run_phases_in_parallel(
     return first_failure
 
 
-#: Cap on concurrent per-package subprocesses for build / docs fan-out.
-#: Each task spawns one external process (``python -m build`` or
-#: ``python -m zensical build``); 4 keeps a ~10-core laptop responsive
-#: while still cutting the serial wall time roughly 4× on an 18-package
-#: workspace.  CI tunes via ``CHUMICRO_PARALLEL_PACKAGES`` if a runner
-#: has more cores to spare.
-_DEFAULT_PACKAGE_PARALLEL_WORKERS = 4
-
-
-def _resolve_package_parallel_workers() -> int:
-    """Return the per-package fan-out cap from env or default."""
-    raw = os.environ.get("CHUMICRO_PARALLEL_PACKAGES")
-    if not raw:
-        return _DEFAULT_PACKAGE_PARALLEL_WORKERS
-    try:
-        value = int(raw)
-    except ValueError:
-        print(
-            f"WARNING: CHUMICRO_PARALLEL_PACKAGES={raw!r} is not an integer — "
-            f"falling back to default ({_DEFAULT_PACKAGE_PARALLEL_WORKERS})."
-        )
-        return _DEFAULT_PACKAGE_PARALLEL_WORKERS
-    return max(1, value)
-
-
-#: Cap on concurrent ``preflight`` *phases*.  Each phase is its own
-#: ``python scripts/run.py <subcommand>`` subprocess that may itself
-#: fan out internally (build / docs at 4×, test_cpython via pytest,
-#: etc.), so a higher phase-level cap multiplies subprocess count.
-#: 4 keeps the laptop responsive at roughly 16 peak concurrent
-#: subprocesses; CI runners with more cores can crank this up via
-#: ``CHUMICRO_PARALLEL_PREFLIGHT_PHASES``.  See Decision 0048.
-_DEFAULT_PREFLIGHT_PHASE_PARALLEL_WORKERS = 4
-
-
-def _resolve_preflight_phase_parallel_workers() -> int:
-    """Return the preflight phase-level fan-out cap from env or default."""
-    raw = os.environ.get("CHUMICRO_PARALLEL_PREFLIGHT_PHASES")
-    if not raw:
-        return _DEFAULT_PREFLIGHT_PHASE_PARALLEL_WORKERS
-    try:
-        value = int(raw)
-    except ValueError:
-        print(
-            f"WARNING: CHUMICRO_PARALLEL_PREFLIGHT_PHASES={raw!r} is not an "
-            f"integer — falling back to default "
-            f"({_DEFAULT_PREFLIGHT_PHASE_PARALLEL_WORKERS})."
-        )
-        return _DEFAULT_PREFLIGHT_PHASE_PARALLEL_WORKERS
-    return max(1, value)
-
-
 def _run_capture_phases_in_parallel(
     phases: Sequence[tuple[str, Callable[[], tuple[int, str]]]],
     *,
@@ -1266,18 +1256,16 @@ def _preflight_phase_subprocess_factory(
 
 def _preflight_run_parallel_phases(
     phases: Sequence[tuple[str, Callable[[], tuple[int, str]]]],
+    *,
+    max_workers: int = _DEFAULT_PREFLIGHT_PHASE_PARALLEL_WORKERS,
 ) -> int:
     """Dispatch the parallel preflight phase block.
 
     Thin wrapper over :func:`_run_capture_phases_in_parallel` that
-    applies the preflight-specific worker cap from
-    :func:`_resolve_preflight_phase_parallel_workers`.  The wrapper
     exists as a named seam so tests can monkeypatch the parallel block
     without forking the subprocess invocations on every preflight test.
     """
-    return _run_capture_phases_in_parallel(
-        phases, max_workers=_resolve_preflight_phase_parallel_workers(),
-    )
+    return _run_capture_phases_in_parallel(phases, max_workers=max_workers)
 
 
 def test_functional(
@@ -1578,10 +1566,13 @@ def check_version() -> int:
     return check_version_main([])
 
 
-def check_api() -> int:
+def check_api(
+    *,
+    max_workers: int = _DEFAULT_PACKAGE_PARALLEL_WORKERS,
+) -> int:
     """Check API breakages against last release tag (PR check)."""
     from check_api import main as check_api_main
-    return check_api_main([])
+    return check_api_main(["--max-workers", str(max_workers)])
 
 
 def check_dep_graph() -> int:
@@ -1642,7 +1633,17 @@ def _build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("setup", help="install dependencies and regenerate IDE configuration")
     subparsers.add_parser("sync-ide", help="regenerate IDE configuration files")
     subparsers.add_parser("lint", help="run Ruff across the workspace")
-    subparsers.add_parser("build", help="build all publishable packages")
+    build_parser = subparsers.add_parser(
+        "build", help="build all publishable packages",
+    )
+    build_parser.add_argument(
+        "--package-workers", type=int, metavar="N",
+        default=_DEFAULT_PACKAGE_PARALLEL_WORKERS,
+        help=(
+            f"cap on concurrent per-package build subprocesses "
+            f"(default: {_DEFAULT_PACKAGE_PARALLEL_WORKERS})"
+        ),
+    )
     preflight_parser = subparsers.add_parser(
         "preflight", parents=[binary],
         help="lint + test + examples + compatibility + build",
@@ -1660,6 +1661,23 @@ def _build_parser() -> argparse.ArgumentParser:
             "also run test-libraries-functional and "
             "test-workbench-functional after the unit-test phases "
             "(requires connected hardware)"
+        ),
+    )
+    preflight_parser.add_argument(
+        "--phase-workers", type=int, metavar="N",
+        default=_DEFAULT_PREFLIGHT_PHASE_PARALLEL_WORKERS,
+        help=(
+            f"cap on concurrent preflight phases "
+            f"(default: {_DEFAULT_PREFLIGHT_PHASE_PARALLEL_WORKERS})"
+        ),
+    )
+    preflight_parser.add_argument(
+        "--package-workers", type=int, metavar="N",
+        default=_DEFAULT_PACKAGE_PARALLEL_WORKERS,
+        help=(
+            f"cap on concurrent per-package subprocesses inside each "
+            f"phase that fans out by package "
+            f"(default: {_DEFAULT_PACKAGE_PARALLEL_WORKERS})"
         ),
     )
     subparsers.add_parser("prepare-micropython", help="prepare MicroPython unix-port")
@@ -1796,7 +1814,17 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     subparsers.add_parser("check-version", help="check VERSION enforcement for changed libraries")
-    subparsers.add_parser("check-api", help="check API breakages against last release tag")
+    check_api_parser = subparsers.add_parser(
+        "check-api", help="check API breakages against last release tag",
+    )
+    check_api_parser.add_argument(
+        "--max-workers", type=int, metavar="N",
+        default=_DEFAULT_PACKAGE_PARALLEL_WORKERS,
+        help=(
+            f"cap on concurrent griffe subprocesses "
+            f"(default: {_DEFAULT_PACKAGE_PARALLEL_WORKERS})"
+        ),
+    )
     subparsers.add_parser(
         "check-dep-graph",
         help="verify support/docs/dependency-graph.svg matches current pyproject deps",
@@ -1909,11 +1937,27 @@ def _build_parser() -> argparse.ArgumentParser:
             "in untouched ones."
         ),
     )
+    test_parser.add_argument(
+        "--package-workers", type=int, metavar="N",
+        default=_DEFAULT_PACKAGE_PARALLEL_WORKERS,
+        help=(
+            f"cap on concurrent per-package pytest subprocesses "
+            f"(default: {_DEFAULT_PACKAGE_PARALLEL_WORKERS})"
+        ),
+    )
     subparsers.add_parser("verify-examples", parents=[scope], help="import-check examples")
 
     docs_parser = subparsers.add_parser("docs", parents=[scope], help="build library docs")
     docs_parser.add_argument(
         "--serve", action="store_true", help="start live-reload dev server",
+    )
+    docs_parser.add_argument(
+        "--package-workers", type=int, metavar="N",
+        default=_DEFAULT_PACKAGE_PARALLEL_WORKERS,
+        help=(
+            f"cap on concurrent per-library docs builds "
+            f"(default: {_DEFAULT_PACKAGE_PARALLEL_WORKERS})"
+        ),
     )
 
     subparsers.add_parser(
@@ -1983,13 +2027,18 @@ def main(argv: list[str]) -> int:
             no_cov=args.no_cov,
             coverage_threshold=args.coverage_threshold,
             elevated_packages=elevated_packages,
+            package_workers=args.package_workers,
         )
 
     if args.task == "verify-examples":
         return verify_examples(_resolve_scoped_packages(args))
 
     if args.task == "docs":
-        return docs(_resolve_scoped_packages(args), serve=args.serve)
+        return docs(
+            _resolve_scoped_packages(args),
+            serve=args.serve,
+            package_workers=args.package_workers,
+        )
 
     if args.task == "docs-preview":
         return docs_preview(_resolve_scoped_packages(args))
@@ -2020,6 +2069,8 @@ def main(argv: list[str]) -> int:
             args.circuitpython_binary,
             coverage_threshold=args.coverage_threshold,
             with_functional=args.with_functional,
+            phase_workers=args.phase_workers,
+            package_workers=args.package_workers,
         )
 
     if args.task == "test-micropython":
@@ -2061,17 +2112,21 @@ def main(argv: list[str]) -> int:
             exit_first=args.exit_first,
         )
 
+    if args.task == "build":
+        return build(package_workers=args.package_workers)
+
+    if args.task == "check-api":
+        return check_api(max_workers=args.max_workers)
+
     # --- no-arg tasks ---
     no_arg: dict[str, Callable[[], int]] = {
         "setup": setup,
         "sync-ide": sync_ide,
         "lint": lint,
-        "build": build,
         "prepare-micropython": prepare_micropython,
         "prepare-circuitpython": prepare_circuitpython,
         "prepare-mpy-cross": prepare_mpy_cross,
         "check-version": check_version,
-        "check-api": check_api,
         "check-dep-graph": check_dep_graph,
     }
 

@@ -93,12 +93,10 @@ class TestMainDispatch:
             ("setup", "setup"),
             ("sync-ide", "sync_ide"),
             ("lint", "lint"),
-            ("build", "build"),
             ("prepare-micropython", "prepare_micropython"),
             ("prepare-circuitpython", "prepare_circuitpython"),
             ("prepare-mpy-cross", "prepare_mpy_cross"),
             ("check-version", "check_version"),
-            ("check-api", "check_api"),
         ],
     )
     def test_no_argument_tasks_dispatch(
@@ -112,6 +110,26 @@ class TestMainDispatch:
 
         assert result == 23
         assert calls == [((), {})]
+
+    def test_build_dispatches_package_workers(self, monkeypatch) -> None:
+        """``build`` forwards ``--package-workers`` to ``build()``."""
+        calls, fake_build = _make_fake_command(return_value=24)
+        monkeypatch.setattr(run, "build", fake_build)
+
+        result = run.main(["run.py", "build", "--package-workers", "8"])
+
+        assert result == 24
+        assert calls == [((), {"package_workers": 8})]
+
+    def test_check_api_dispatches_max_workers(self, monkeypatch) -> None:
+        """``check-api`` forwards ``--max-workers`` to ``check_api()``."""
+        calls, fake_check_api = _make_fake_command(return_value=25)
+        monkeypatch.setattr(run, "check_api", fake_check_api)
+
+        result = run.main(["run.py", "check-api", "--max-workers", "6"])
+
+        assert result == 25
+        assert calls == [((), {"max_workers": 6})]
 
     def test_test_command_without_filter_uses_resolved_scope(
         self, monkeypatch,
@@ -140,6 +158,7 @@ class TestMainDispatch:
                 "no_cov": True,
                 "coverage_threshold": None,
                 "elevated_packages": None,
+                "package_workers": 4,
             }),
         ]
 
@@ -166,6 +185,7 @@ class TestMainDispatch:
                 "no_cov": False,
                 "coverage_threshold": None,
                 "elevated_packages": None,
+                "package_workers": 4,
             }),
         ]
 
@@ -234,7 +254,9 @@ class TestMainDispatch:
         result = run.main(["run.py", "docs", "--libraries", "timing", "--serve"])
 
         assert result == 7
-        assert command_calls == [((resolved_packages,), {"serve": True})]
+        assert command_calls == [
+            ((resolved_packages,), {"serve": True, "package_workers": 4}),
+        ]
 
     def test_docs_preview_dispatches_resolved_scope(self, monkeypatch) -> None:
         """docs-preview should receive the resolved package list."""
@@ -325,7 +347,12 @@ class TestMainDispatch:
         assert command_calls == [
             (
                 ("/tmp/mpy", "/tmp/cpy"),
-                {"coverage_threshold": 94, "with_functional": False},
+                {
+                    "coverage_threshold": 94,
+                    "with_functional": False,
+                    "phase_workers": 4,
+                    "package_workers": 4,
+                },
             ),
         ]
 
@@ -416,7 +443,15 @@ class TestMainDispatch:
 
         assert result == 42
         assert command_calls == [
-            ((None, None), {"coverage_threshold": None, "with_functional": True}),
+            (
+                (None, None),
+                {
+                    "coverage_threshold": None,
+                    "with_functional": True,
+                    "phase_workers": 4,
+                    "package_workers": 4,
+                },
+            ),
         ]
 
     def test_test_functional_dispatches_flags(self, monkeypatch) -> None:
@@ -775,7 +810,7 @@ class TestCompositeTestCommands:
         """
         monkeypatch.setattr(
             run, "_preflight_run_parallel_phases",
-            lambda phases: 0,
+            lambda phases, **_kwargs: 0,
         )
         monkeypatch.setattr(run, "is_ref_reachable", lambda *_args, **_kwargs: True)
 
@@ -1210,33 +1245,6 @@ class TestPreflightPhaseSubprocessFactory:
         ]
 
 
-class TestResolvePreflightPhaseParallelWorkers:
-    """Tests for the env-var override of the phase-level worker cap."""
-
-    def test_default_when_unset(self, monkeypatch):
-        """No env var means the documented default (4)."""
-        monkeypatch.delenv("CHUMICRO_PARALLEL_PREFLIGHT_PHASES", raising=False)
-        assert run._resolve_preflight_phase_parallel_workers() == 4
-
-    def test_env_var_overrides(self, monkeypatch):
-        """A valid integer env var is honored verbatim."""
-        monkeypatch.setenv("CHUMICRO_PARALLEL_PREFLIGHT_PHASES", "8")
-        assert run._resolve_preflight_phase_parallel_workers() == 8
-
-    def test_invalid_env_var_falls_back_to_default(self, monkeypatch, capsys):
-        """A non-integer env var emits a warning and uses the default."""
-        monkeypatch.setenv("CHUMICRO_PARALLEL_PREFLIGHT_PHASES", "not-an-int")
-        assert run._resolve_preflight_phase_parallel_workers() == 4
-        warning = capsys.readouterr().out
-        assert "WARNING" in warning
-        assert "not-an-int" in warning
-
-    def test_negative_value_clamped_to_one(self, monkeypatch):
-        """Zero or negative gets clamped to 1 to keep the pool runnable."""
-        monkeypatch.setenv("CHUMICRO_PARALLEL_PREFLIGHT_PHASES", "0")
-        assert run._resolve_preflight_phase_parallel_workers() == 1
-
-
 class TestPreflightParallelDispatch:
     """Tests for preflight()'s phase-list construction and dispatch."""
 
@@ -1248,7 +1256,7 @@ class TestPreflightParallelDispatch:
 
         captured_phases: list[list[str]] = []
 
-        def fake_run(phases):
+        def fake_run(phases, **_kwargs):
             captured_phases.extend([label for label, _ in phases])
             return 0
 
@@ -1277,7 +1285,7 @@ class TestPreflightParallelDispatch:
 
         captured_labels: list[str] = []
 
-        def fake_run(phases):
+        def fake_run(phases, **_kwargs):
             captured_labels.extend([label for label, _ in phases])
             return 0
 
@@ -1310,7 +1318,8 @@ class TestPreflightParallelDispatch:
             run, "_preflight_phase_subprocess_factory", capturing_factory,
         )
         monkeypatch.setattr(
-            run, "_preflight_run_parallel_phases", lambda phases: 0,
+            run, "_preflight_run_parallel_phases",
+            lambda phases, **_kwargs: 0,
         )
 
         run.preflight(coverage_threshold=94)
@@ -1336,7 +1345,8 @@ class TestPreflightParallelDispatch:
             run, "_preflight_phase_subprocess_factory", capturing_factory,
         )
         monkeypatch.setattr(
-            run, "_preflight_run_parallel_phases", lambda phases: 0,
+            run, "_preflight_run_parallel_phases",
+            lambda phases, **_kwargs: 0,
         )
 
         run.preflight(
@@ -1359,7 +1369,8 @@ class TestPreflightParallelDispatch:
         """A failing parallel block short-circuits before the functional tail."""
         monkeypatch.setattr(run, "is_ref_reachable", lambda *_a, **_kw: True)
         monkeypatch.setattr(
-            run, "_preflight_run_parallel_phases", lambda phases: 13,
+            run, "_preflight_run_parallel_phases",
+            lambda phases, **_kwargs: 13,
         )
 
         functional_calls: list[str] = []

@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **scripts/workbench/template-repo audit — module-name collision resolved.**  Third cleanup pass from the cross-tree audit: renamed `scripts/workspace.py` -> `scripts/repo_layout.py` (and the test file `test_workspace.py` -> `test_repo_layout.py`) via `git mv` to disambiguate from the `chumicro_workspace` workbench package.  18 sibling scripts in `scripts/` updated to `from repo_layout import …`; `audit_gates.py`'s bare `import workspace` + dotted access; the renamed test file's bare import + `from` import + `monkeypatch.setattr(workspace, …)` patches; lazy imports inside `test_bundle_manager.py`; docstring prose in `repo_layout.py`, `test_ide_sync.py`, and Decision 0032.  Conceptual prose ("workspace state", "workspace fixture") left as-is — those refer to the mono-repo concept, not the module.  No VERSION bumps — `scripts/` is mono-repo internal, not published.
-- **Last shipped:** `scripts: rename workspace.py -> repo_layout.py to disambiguate from chumicro_workspace package` (this commit).
-- **In flight:** idle.  Audit follow-up queue from `plans/workspace-template-dev-and-regular-mode-gaps.md` is the natural next; the three cleanup items I queued are now all landed (`326651e` gaps-doc strike, `96bddcd` runtime_marker promotion, this commit).
+- **Phase:** **scripts/workbench audit — Python-in-Python and env-var-as-arg pushback (1c, 2a).**  User flagged two patterns they don't like across `scripts/` + `workbench/`: Python invoking Python (kept where reasonable — `python -m <tool>` for griffe / pytest / build / ruff / coverage / zensical / pip; the `run.py` → `run.py` self-respawn for preflight phase capture stays per Decision 0048 since the alternative is a 200-300 line writer-threading refactor across 8 files for marginal gain) and env-var-as-arg (dropped where flags are equivalent — `CHUMICRO_PARALLEL_PACKAGES` / `CHUMICRO_PARALLEL_PREFLIGHT_PHASES` replaced with `--package-workers` / `--phase-workers` / `--max-workers` flags on `preflight`, `build`, `docs`, `test`, and `check-api`; `CHUMICRO_DEVICES` left alone since CI is the documented consumer).  Also dropped the `.venv/bin/python` lookup in `audit_gates.py` — `sys.executable` is already the right interpreter.  Decision 0048 §5 + `plans/next-up.md` Done entry updated to match.
+- **Last shipped:** `scripts: drop CHUMICRO_PARALLEL_* env vars and .venv lookup; flags-only` (this commit).
+- **In flight:** idle.
 - **Blocked on:** —.
-- **Last touched:** `scripts/{repo_layout.py,run.py,*.py}`, `scripts/tests/{test_repo_layout.py,test_bundle_manager.py,test_ide_sync.py}`, `plans/decisions/0032-workbench-host-tools.md`, `plans/now.md`.
+- **Last touched:** `scripts/{run.py,check_api.py,audit_gates.py}`, `scripts/tests/test_run.py`, `plans/decisions/0048-preflight-phase-level-parallel.md`, `plans/next-up.md`, `plans/now.md`.
 
 ---
 

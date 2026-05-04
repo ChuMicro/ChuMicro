@@ -39,7 +39,6 @@ import verify_examples
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
 ROOT = SCRIPTS_DIR.parent
-VENV_PYTHON = ROOT / ".venv" / "bin" / "python"
 
 
 @contextmanager
@@ -53,10 +52,14 @@ def _tmp_dir(label: str) -> Iterator[Path]:
 
 
 def _python(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess:
-    """Run a Python subprocess with the venv interpreter when available."""
-    interpreter = str(VENV_PYTHON if VENV_PYTHON.exists() else sys.executable)
+    """Run a Python subprocess using the running interpreter.
+
+    The audit script only runs from a venv with ``griffe`` and friends
+    installed, so ``sys.executable`` is already the right interpreter —
+    no separate ``.venv/bin/python`` lookup needed.
+    """
     return subprocess.run(
-        [interpreter, *args],
+        [sys.executable, *args],
         cwd=cwd or ROOT,
         capture_output=True,
         text=True,

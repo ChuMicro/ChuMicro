@@ -132,7 +132,7 @@ Reasons:
 If a user really wants fail-fast semantics, the existing serial
 loop is one revert away.
 
-### 5. Concurrency cap: 4 workers default, env-var override
+### 5. Concurrency cap: 4 workers default, CLI-flag override
 
 Default cap: **4 concurrent phases**.
 
@@ -150,16 +150,21 @@ Reasoning: each phase already fans out internally —
 without a phase-level cap.  4 phase-level workers keeps the laptop
 responsive at ~16 concurrent subprocesses peak.
 
-Override via env var **`CHUMICRO_PARALLEL_PREFLIGHT_PHASES`**.
-Naming follows the Bucket 3 precedent (`CHUMICRO_PARALLEL_PACKAGES`):
+Override via CLI flags:
 
 ```
-CHUMICRO_PARALLEL_PREFLIGHT_PHASES=8 python scripts/run.py preflight
+python scripts/run.py preflight --phase-workers 8 --package-workers 8
 ```
 
-A 16-core CI runner can crank this up; a 4-core laptop can drop
-to 2.  Invalid values fall back to the default with a warning,
-matching `_resolve_package_parallel_workers`'s pattern.
+`--phase-workers` caps concurrent phases.  `--package-workers`
+caps the per-package fan-out *inside* phases that fan out by
+package (`build`, `docs`, `test`); `preflight` forwards it as
+`--package-workers` to those subcommands and as `--max-workers`
+to `check-api`.  A 16-core CI runner can crank both up; a 4-core
+laptop can drop both to 2.  Both flags also exist on the
+individual subcommands when invoked directly
+(`python scripts/run.py build --package-workers 8`,
+`python scripts/check_api.py --max-workers 8`).
 
 ### 6. Helper reuse
 
