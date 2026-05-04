@@ -89,7 +89,7 @@ ChuMicro is a family of open-source Python libraries targeting three runtimes:
 - **CircuitPython** and **MicroPython** for embedded boards (deployment runtimes).
 - **CPython** for desktop development, testing, fakes, and the workbench tooling — the host-test seam, not a deployment target.  See [Decision 0049](plans/decisions/0049-three-runtime-trinity.md).
 
-Libraries must be compatible across all three runtimes.  If a third-party library does not support CircuitPython or MicroPython, prefer a compatible pure-Python implementation rather than adding a runtime-specific dependency.  The full inclusion test for "should this be a chumicro library" lives in [Decision 0050](plans/decisions/0050-library-inclusion-test.md).
+Libraries must be compatible across all three runtimes.  If a third-party library does not support CircuitPython or MicroPython, prefer a compatible pure-Python implementation rather than adding a runtime-specific dependency.
 
 ## Libraries (cross-runtime, run on a microcontroller)
 

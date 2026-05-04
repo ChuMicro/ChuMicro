@@ -2,7 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-04`
-Related: Decision 0014 (runner pattern as the contract), Decision 0010 (constructor injection), Decision 0042 (library dependency policy), Decision 0050 (library inclusion test).
+Related: Decision 0014 (runner pattern as the contract), Decision 0010 (constructor injection), Decision 0042 (library dependency policy).
 
 ## Context
 
@@ -42,6 +42,6 @@ These rules apply to libraries.  Workbench packages (`workbench/*/`) run on CPyt
 
 - Library code reviews include a "does any path block more than a few ms?" check.  Reviewer rejects on found blocking unless flagged with a doc comment + workstream-level discussion.
 - Tracemalloc-based heap-drift tests (established by `chumicro-mqtt`) become the standard verification — every long-lived service library has a heap-stability test under `tests/`.
-- New libraries added under Decision 0050 must show their per-tick budget knobs (e.g., `recv_budget_per_tick`, `max_tx_queue_size`) in the proposal.
+- New libraries that own time or I/O document their per-tick budget knobs (e.g., `recv_budget_per_tick`, `max_tx_queue_size`) up front.
 - The runner library (`chumicro-runner`) is still optional for users who orchestrate services manually; the contract the runner consumes is duck-typed and works either way.
 - This rule is what gives "LED keeps blinking" its teeth.  Without it, the project's ergonomic promise breaks.
