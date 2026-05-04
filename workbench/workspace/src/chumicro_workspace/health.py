@@ -39,7 +39,7 @@ if TYPE_CHECKING:  # pragma: no cover — type-only
     from chumicro_workspace.workspace import WorkspaceLayout
 
 #: Sentinel string the canonical workspace template ships in
-#: ``_templates/secrets.yml`` for every credential entry.  When a
+#: ``_workspace_template/secrets.yml`` for every credential entry.  When a
 #: user runs ``setup`` and the materialized ``secrets.yml`` still
 #: carries this value, the deploy-time ``!secret`` resolution will
 #: hand the literal ``"replace-me"`` to the device — almost
@@ -121,7 +121,7 @@ def check_devices_yaml(workspace: WorkspaceLayout) -> HealthFinding:
             label="DEVICES.YML",
             level=HealthLevel.ERROR,
             message=f"malformed: {exception}",
-            hint="check the YAML structure against `_templates/devices.yml`.",
+            hint="check the YAML structure against `_workspace_template/devices.yml`.",
         )
     devices = data.get("devices", []) or []
     count = len(devices)
@@ -160,7 +160,7 @@ def check_secrets_yaml(workspace: WorkspaceLayout) -> HealthFinding:
             message="not present",
             hint=(
                 "run `chumicro-workspace setup` to materialize it from "
-                "_templates/secrets.yml."
+                "_workspace_template/secrets.yml."
             ),
         )
     try:
@@ -172,7 +172,7 @@ def check_secrets_yaml(workspace: WorkspaceLayout) -> HealthFinding:
             message=f"malformed: {exception}",
             hint=(
                 "expected a flat top-level mapping of name → value. "
-                "Check the file against `_templates/secrets.yml`."
+                "Check the file against `_workspace_template/secrets.yml`."
             ),
         )
     placeholders = sorted(

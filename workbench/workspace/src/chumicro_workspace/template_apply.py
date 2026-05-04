@@ -5,7 +5,7 @@ target directory.  `update` fetches a fresh copy of the template
 upstream and re-flows tool-owned files (Decision 0029 §9 zones,
 generalized by :mod:`chumicro_workspace.template_zones`) without
 touching user-owned ones.  `materialize_templates` walks a workspace's
-`_templates/` directory and creates any missing files at the workspace
+`_workspace_template/` directory and creates any missing files at the workspace
 root — invoked by ``setup`` so users edit the materialized files
 directly instead of doing manual ``cp`` from a ``.example`` (Decision
 0038 §5).
@@ -42,7 +42,7 @@ class ApplyAction(str):
     """One of: ``"written"`` (file landed), ``"skipped"`` (zone-skipped
     or already existed), ``"refreshed"`` (tool-owned, rewritten on
     update), ``"unchanged"`` (write would have produced identical
-    bytes), ``"materialized"`` (created from ``_templates/`` source).
+    bytes), ``"materialized"`` (created from ``_workspace_template/`` source).
     """
 
     WRITTEN = "written"
@@ -168,9 +168,9 @@ def update(
 
 
 def materialize_templates(workspace_root: Path) -> ApplyReport:
-    """Materialize ``_templates/`` sources into the workspace root.
+    """Materialize ``_workspace_template/`` sources into the workspace root.
 
-    For each file under ``<workspace_root>/_templates/<relative>``,
+    For each file under ``<workspace_root>/_workspace_template/<relative>``,
     check if ``<workspace_root>/<relative>`` exists.  If not, copy
     the bytes through.  Existing files are never overwritten — this
     is a one-time-per-file generation step that runs idempotently
@@ -178,11 +178,11 @@ def materialize_templates(workspace_root: Path) -> ApplyReport:
 
     Returns a report whose entries are ``MATERIALIZED`` for each
     newly created file and ``UNCHANGED`` for each that already
-    existed.  An empty or missing ``_templates/`` directory is a
-    no-op.
+    existed.  An empty or missing ``_workspace_template/`` directory
+    is a no-op.
     """
     report = ApplyReport()
-    templates_root = workspace_root / "_templates"
+    templates_root = workspace_root / "_workspace_template"
     if not templates_root.is_dir():
         return report
     for source_file in _walk_tracked_files(templates_root):

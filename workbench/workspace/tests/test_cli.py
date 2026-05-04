@@ -130,17 +130,17 @@ class TestSetup:
             [sys.executable, "-m", "pip", "install", "-e", str(root)],
         ]
 
-    def test_materializes_templates_on_setup(
+    def test_materializes_workspace_template_on_setup(
         self,
         tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        """Decision 0038 §5: setup walks `_templates/` and materializes
+        """Decision 0038 §5: setup walks `_workspace_template/` and materializes
         any missing files at the workspace root.  No pyproject means
         the install path short-circuits, but materialization still runs.
         """
         root = _seed_workspace(tmp_path)
-        templates = root / "_templates"
+        templates = root / "_workspace_template"
         templates.mkdir()
         (templates / "secrets.yml").write_text(
             "# fill in your wifi password\nwifi_password: \n",
@@ -150,7 +150,7 @@ class TestSetup:
         exit_code = cli.main(["setup", "--workspace-dir", str(root)])
         assert exit_code == 0
         assert (root / "secrets.yml").read_text().startswith("# fill in your")
-        assert "materialized 1 file(s) from _templates/" in capsys.readouterr().out
+        assert "materialized 1 file(s) from _workspace_template/" in capsys.readouterr().out
 
 
 # ---------------------------------------------------------------------------
