@@ -1,6 +1,6 @@
 # Workstream: scripts/ ↔ workbench/ ↔ workspace-template config unification
 
-Status: **proposed** (drafted 2026-05-04, awaiting kickoff after ADR-cleanup agent finishes).
+Status: **closed** — Phases 1, 2, 3, 4, 5 shipped 2026-05-04 (mono-repo) plus the matching workspace-template repo half ([`a9bb4bd`](https://github.com/ChuMicro/ChuMicro-Workspace-Template/commit/a9bb4bd)).  Two phases deferred to separate sessions: 4.5a (`!secret` simplification — user weighing "drop in mono-repo only" vs "drop everywhere"), 4.5b (transport-API extension for binary file staging + on-device `load_runtime_config()` migration).
 
 ## Premise
 
@@ -205,14 +205,22 @@ Two paths the user is weighing:
 
 **Why this is deferred:** the lift is small (one workspace.yml content edit + drop the secrets.yml materialisation in `generate_config_files.py` + delete the secrets.yml.starter payload + update gitignore + update tests), but it's a structural call about the unification premise — different from Phase 4's mechanical conftest migration.  Doing them together would muddy the commit story.  Phase 4 lands first using the current `!secret` shape; Phase 4.5 walks it back if/when the user picks path 1.
 
-### Phase 5 — IDE wiring + final cleanup
+### Phase 5 — IDE wiring + final cleanup *(done)*
 
-**Scope:**
-- Verify pytest-device IDE play button still resolves devices correctly with the new empty-defaults-until-first-add-device shape (`defaults.{micropython,circuitpython}: null` until populated).  May need a polite "no devices registered yet — run `add-device` first" hint.
-- Documentation pass: README, AGENTS, CONTRIBUTING, every `docs/contributing/*.md` references the new flow.
-- Move resolved entry into `plans/next-up.md` Done.
+**Scope (executed):**
 
-**Files touched:** ~5.  Estimated 1 session.
+- Verified pytest-device's empty-registry path through `_pick_single_device` / `_load_fallback_device`: `resolve_ide_devices` returns an empty list when `defaults.{micropython,circuitpython}` are null and no devices are registered, and the plugin already routes that to a `pytest.skip` (line 1098).  The two skip messages updated to point users at the unified `add-device` flow:
+  - "No devices.yml found" → suggests running `setup` then `add-device <id> --address <port>` via the workspace's `run.py`.
+  - "No devices configured" → suggests running `add-device <id> --address <port>` (probes hardware identity + fills in defaults on first registration).
+  - Both messages stay neutral about the entry-point command (`python scripts/run.py` in mono-repo vs `python run.py` in the workspace-template) by referring to "your workspace's run.py" rather than pinning a specific path.
+- Final docs sweep:
+  - `docs/contributing/development-pycharm.md`'s functional-test setup paragraph rewritten to walk through `setup` → `add-device` → fill-in-secrets.yml.
+  - `docs/contributing/development-other-editors.md`'s setup paragraph updated to mention the workbench-owned starters + `add-device` flow.
+  - `plans/next-up.md`'s parked CI-device-testing line updated to reference `secrets.yml` (the post-Phase-3 shape) instead of the never-existed `device-config.yml`.
+  - Frozen historical entries in `plans/next-up.md` Done (line 167 etc.) intentionally left referencing the old `device-config.yml` name — they describe what was true at the time.
+- This workstream's entry in `plans/next-up.md` moved from "Now" to "Done."
+
+**Files touched (this phase):** 4.
 
 ---
 

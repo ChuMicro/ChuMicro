@@ -2,7 +2,14 @@
 
 ## Now
 
-- [ ] **scripts/ ↔ workbench/ ↔ workspace-template config unification** (drafted 2026-05-04 after user pushback that the two repos manage `devices.yml` + workspace config with different shapes despite shared workbench primitives).  Five-phase plan to converge the mono-repo onto the workspace-template's flows, owned by workbench packages, with `chumicro-config` dogfooded by mono-repo functional tests.  Detail + embedded ADR proposal: [`plans/workstreams/scripts-workbench-config-unification.md`](workstreams/scripts-workbench-config-unification.md).  Starting Phase 1 (drop the two `sample-*-board` pre-fills; mono-repo adopts empty-registry + `add-device`-driven population) immediately after the ADR-cleanup agent finishes, so the embedded ADR can be promoted to a numbered file without collision.
+- [x] ~~**scripts/ ↔ workbench/ ↔ workspace-template config unification** — **shipped 2026-05-04** across both repos.  Five phases plus mid-flight workbench-payload consolidation:~~
+    - **Phase 1** ([69fec7f](https://github.com/ChuMicro/ChuMicro/commit/69fec7f), [`e345ef3`](https://github.com/ChuMicro/ChuMicro/commit/e345ef3), [`963b23a`](https://github.com/ChuMicro/ChuMicro/commit/963b23a)) — `devices.yml` convergence: empty-registry shape, `add-device` shim, `chumicro-deploy` accepts empty registry, canonical content moved to `chumicro-workspace`'s `_payloads/devices_yml/starter.yml.template`.
+    - **Phase 2** ([`7f486f9`](https://github.com/ChuMicro/ChuMicro/commit/7f486f9)) — library config manifests + deploy-time validation.  `[tool.chumicro.config.sections.<name>]` in pyproject.toml; `chumicro_workspace.config_manifest` reader/aggregator/validator; wired into `WithRuntimeConfig` for every import-graph deploy.
+    - **Phase 3** ([`47ca752`](https://github.com/ChuMicro/ChuMicro/commit/47ca752)) — `workspace.yml` body + `secrets.yml` workbench-owned starter at mono-repo root.
+    - **Phase 4** ([`e6f0f9b`](https://github.com/ChuMicro/ChuMicro/commit/e6f0f9b)) — every networking-library functional-test conftest reads the unified config sources via `compose_runtime_config()`; `chumicro-dev-config.toml` retired.
+    - **Phase 5** (this commit) — pytest-device skip-message updates for the new `add-device` flow + final docs sweep.
+    - **Workspace-template half** ([`27f6de2`](https://github.com/ChuMicro/ChuMicro/commit/27f6de2) mono-repo / [`a9bb4bd`](https://github.com/ChuMicro/ChuMicro-Workspace-Template/commit/a9bb4bd) template repo) — `chumicro-workspace 0.7.0` exposes `materialize_workbench_starters`; template repo deletes the two static `_workspace_template/` files and pins `chumicro-workspace>=0.7.0`.  Single source of truth across both repos.
+  Two phases deferred to separate sessions: **4.5a** (`!secret` simplification — user weighing "drop in mono-repo only" vs "drop everywhere"), **4.5b** (transport-API extension for binary file staging + on-device `chumicro_config.load_runtime_config()` migration).  Detail: [`plans/workstreams/scripts-workbench-config-unification.md`](workstreams/scripts-workbench-config-unification.md).
 
 - [x] ~~**Workspace ecosystem umbrella closed** (Phases 1, 2, 4, 5, 6, 7 closed 2026-04-27; Phase 3 per-environment deploys dropped 2026-04-29 per user direction — speculative dev/staging/prod seam with no concrete consumer yet, no plan to revisit).~~  Detail: `plans/workstreams/workspace-ecosystem.md`.
 
@@ -90,7 +97,7 @@ Independent items.  The **`workspace-ecosystem` umbrella** in `## Now` is essent
 
 ## Out of scope (until revisited)
 
-- CI-hosted device testing (`device-test.yml` / `workflow_dispatch`, CI-injected `devices.yml` / `device-config.yml`). Parked over security concerns around shared-runner device access; bring back up before any design work resumes.
+- CI-hosted device testing (`device-test.yml` / `workflow_dispatch`, CI-injected `devices.yml` / `workspace.yml` / `secrets.yml`). Parked over security concerns around shared-runner device access; bring back up before any design work resumes.
 - CI simulation/emulation path (renode etc.). Not being explored until the above is revisited.
 
 ## Investigations

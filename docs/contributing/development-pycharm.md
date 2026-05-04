@@ -99,7 +99,7 @@ python scripts/run.py test --libraries timing
 
 Right-click a test file or test function in the editor → **Run 'test_...'**. PyCharm runs it with pytest using the source roots from `.idea/chumicro.iml`. This is fast for iterating on a single test but does not produce coverage data.
 
-For real-board `functional_tests/`, the same play buttons route to hardware once `devices.yml` is configured. Run `python scripts/run.py setup`, fill in `devices.yml` and `device-config.yml`, then right-click a `libraries/<name>/functional_tests/test_*.py` file, function, or the whole `functional_tests/` directory.
+For real-board `functional_tests/`, the same play buttons route to hardware once `devices.yml` is configured.  Run `python scripts/run.py setup` (materialises `devices.yml` + `secrets.yml` from the workbench's canonical starters), then `python scripts/run.py add-device <id> --address <port>` to register your board.  Fill in `secrets.yml` with your wifi password (referenced from `workspace.yml` via `!secret wifi_password`), then right-click a `libraries/<name>/functional_tests/test_*.py` file, function, or the whole `functional_tests/` directory.
 
 For device-backed `functional_tests/`, the test tree includes synthetic nodes such as `Setup — MicroPython`, `Run overhead — MicroPython`, `Setup — CircuitPython`, and `Run overhead — CircuitPython`. The setup node owns staging time. Individual test functions show the durations reported by the on-device harness, while the run-overhead node keeps only the remaining batch overhead that is not attributable to a single test.
 
