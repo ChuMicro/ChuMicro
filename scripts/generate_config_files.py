@@ -34,6 +34,7 @@ def generate_config_files() -> int:
 
     Returns 0 always (missing configs are not errors).
     """
+    devices_yml_was_created = False
     for relative_path, template_name in _CONFIGS:
         target = ROOT / relative_path
         if target.exists():
@@ -42,6 +43,22 @@ def generate_config_files() -> int:
             content = (TEMPLATES_DIR / template_name).read_text()
             target.write_text(content)
             print(f"  Created {relative_path}")
+            if relative_path == "devices.yml":
+                devices_yml_was_created = True
+
+    if devices_yml_was_created:
+        # The starter ``devices.yml`` ships with an empty ``devices: []``
+        # registry — same shape as the workspace-template repo's
+        # ``_workspace_template/devices.yml``.  Point the contributor at
+        # the unified ``add-device`` flow so functional tests can target
+        # real hardware without hand-editing YAML.  See workstream
+        # `plans/workstreams/scripts-workbench-config-unification.md`.
+        print(
+            "\n  next: register a board with "
+            "`python scripts/run.py add-device <id> --address <port>` "
+            "(probes hardware identity + fills in defaults on first "
+            "registration).",
+        )
     return 0
 
 

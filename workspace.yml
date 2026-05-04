@@ -1,0 +1,19 @@
+# workspace.yml — mono-repo workspace root marker.
+#
+# Phase 1 (this file): bare-minimum so chumicro-workspace's discovery
+# walk (`WorkspaceLayout.from_dir`) finds the mono-repo root, which
+# unblocks `python scripts/run.py add-device` (a thin shim around
+# `chumicro-workspace add-device`).  The file's mere existence is
+# enough — content is checked lazily, per subcommand.
+#
+# Phase 3 of `plans/workstreams/scripts-workbench-config-unification.md`
+# fills this file with the real `defaults:` block (workspace-wide wifi
+# defaults, mqtt broker, library_sources, deploy_targets, quality
+# knobs) so the mono-repo's functional tests can dogfood the same
+# workspace.yml + per-project config.toml + secrets.yml pipeline that
+# the workspace-template repo's user projects use.
+#
+# This file is committed (it carries no secrets — credentials live in
+# the gitignored `secrets.yml` referenced via `!secret <name>`).
+
+defaults: {}

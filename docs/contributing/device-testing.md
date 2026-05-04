@@ -28,7 +28,21 @@ python scripts/run.py setup
 
 If the files already exist, setup leaves them alone.
 
-## 2. Configure `devices.yml`
+The starter `devices.yml` ships with an empty `devices: []` registry — same shape as the workspace-template repo's `_workspace_template/devices.yml`.  Use the `add-device` flow (next section) to populate it; hand-editing the YAML is still supported but no longer the primary path.
+
+## 2. Register your boards via `add-device`
+
+```bash
+python scripts/run.py add-device pi-pico-w-mp --address /dev/cu.usbmodem1101
+```
+
+This is a thin shim around `chumicro-workspace add-device`.  It probes the connected board (UID, machine type, board_id), writes the entry to `devices.yml` with three-zone awareness (USER-OWNED / HARDWARE-ONCE / PROBED-ALWAYS), and fills in `defaults.{micropython,circuitpython}` on first registration of each runtime.
+
+Pass `--runtime` if you want to skip the auto-detect probe (faster), or `--description "Desk board"` to add a free-form note.  See `python scripts/run.py add-device --help` for the full flag set.
+
+## 3. Configure `devices.yml`
+
+The `add-device` flow handles the common case.  Hand-editing is still useful for tuning defaults or reading what `add-device` wrote.
 
 `devices.yml` has two parts:
 

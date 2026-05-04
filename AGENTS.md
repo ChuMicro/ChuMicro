@@ -160,6 +160,7 @@ Conventions:
 | Command | Purpose |
 |---------|---------|
 | `python scripts/run.py setup` | Install dependencies and regenerate IDE configs |
+| `python scripts/run.py add-device <id> --address <port>` | Register a board in `devices.yml` (probes hardware identity + fills in defaults on first registration).  Thin shim around `chumicro-workspace add-device` |
 | `python scripts/run.py preflight` | Full CI mirror (lint + build + docs + unit tests on all runtimes + checks). Add `--with-functional` to also run hardware-gated functional tests at the end. |
 | `python scripts/run.py test` | CPython unit tests (only changed packages by default; pass `--all` for the full sweep) |
 | `python scripts/run.py test-scripts` | Run scripts infrastructure tests |

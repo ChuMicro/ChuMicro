@@ -130,7 +130,7 @@ If it prints `Preflight passed`, CI will pass too.  That's the only command you 
 
 ## Device testing
 
-Device testing is **optional**.  Most contributions don't need it — docs-only, test-only, infrastructure, and trivial fixes are exempt.  When you do want real-board coverage, run `python scripts/run.py setup` to generate `devices.yml`, fill it in, then `python scripts/run.py test-libraries-functional [--library <name>]`.  See **[Device Testing](docs/contributing/device-testing.md)** for the full workflow.
+Device testing is **optional**.  Most contributions don't need it — docs-only, test-only, infrastructure, and trivial fixes are exempt.  When you do want real-board coverage, run `python scripts/run.py setup` to generate an empty `devices.yml`, register a board with `python scripts/run.py add-device <id> --address <port>` (probes hardware identity + fills in defaults), then `python scripts/run.py test-libraries-functional [--library <name>]`.  See **[Device Testing](docs/contributing/device-testing.md)** for the full workflow.
 
 ## Commit messages
 

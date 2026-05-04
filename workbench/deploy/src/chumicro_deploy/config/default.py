@@ -236,9 +236,6 @@ def load_device_registry(
         # the underlying parser type.
         raise DeviceConfigError(str(error)) from error
 
-    if not entries:
-        raise DeviceConfigError(f"Expected a 'devices' list in {resolved}")
-
     defaults = _parse_defaults(raw_defaults)
     return (
         [

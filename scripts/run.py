@@ -1633,6 +1633,23 @@ def _build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("setup", help="install dependencies and regenerate IDE configuration")
     subparsers.add_parser("sync-ide", help="regenerate IDE configuration files")
     subparsers.add_parser("lint", help="run Ruff across the workspace")
+    # ``add-device`` is a pass-through shim around ``chumicro-workspace
+    # add-device`` — keeps the mono-repo's ``run.py`` as the single
+    # entry-point contributors learn while reusing the workspace
+    # package's hardware-probe + three-zone-aware writer.  See
+    # ``plans/workstreams/scripts-workbench-config-unification.md``
+    # Phase 1.  ``parse_known_args`` semantics: every argv after
+    # ``add-device`` is forwarded verbatim to ``python -m
+    # chumicro_workspace add-device <argv>`` so flag drift is impossible.
+    subparsers.add_parser(
+        "add-device",
+        add_help=False,
+        help=(
+            "register a board in devices.yml (probes hardware identity, "
+            "fills in defaults on first registration); pass --help after "
+            "the subcommand for the full chumicro-workspace flag list"
+        ),
+    )
     build_parser = subparsers.add_parser(
         "build", help="build all publishable packages",
     )
@@ -1993,6 +2010,17 @@ def _resolve_optional_scope(args) -> list[Path] | None:
 
 def main(argv: list[str]) -> int:
     """Dispatch a named repository-level task."""
+    # ``add-device`` is a pass-through shim around ``chumicro-workspace
+    # add-device``.  Peeled off before argparse so the workspace
+    # package's flag set (which evolves independently of run.py) flows
+    # through verbatim — see Phase 1 of
+    # ``plans/workstreams/scripts-workbench-config-unification.md``.
+    if len(argv) >= 2 and argv[1] == "add-device":
+        return subprocess.run(
+            [PYTHON, "-m", "chumicro_workspace", "add-device", *argv[2:]],
+            check=False,
+        ).returncode
+
     parser = _build_parser()
     args = parser.parse_args(argv[1:])
 
