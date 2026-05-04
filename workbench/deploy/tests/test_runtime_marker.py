@@ -8,6 +8,7 @@ sub-runtime markers fold into ``micropython``.
 from pathlib import Path
 
 from chumicro_deploy.runtime_marker import (
+    DEVICE_RUNTIMES,
     KNOWN_RUNTIMES,
     file_targets_runtime,
     read_runtime_marker,
@@ -92,3 +93,33 @@ class TestFileTargetsRuntime:
         assert "circuitpython" in KNOWN_RUNTIMES
         assert "micropython" in KNOWN_RUNTIMES
         assert "cpython" in KNOWN_RUNTIMES
+
+    def test_device_runtimes_constant(self) -> None:
+        """``DEVICE_RUNTIMES`` is the source-bundle target — both MCU runtimes."""
+        assert DEVICE_RUNTIMES == frozenset({"circuitpython", "micropython"})
+
+    def test_frozenset_target_drops_cpython_only_marker(
+        self, tmp_path: Path,
+    ) -> None:
+        """A ``("cpython",)``-marked file does not match the device-runtimes set."""
+        file = tmp_path / "testing.py"
+        file.write_text('__chumicro_runtimes__ = ("cpython",)\n')
+        assert not file_targets_runtime(file, target_runtime=DEVICE_RUNTIMES)
+
+    def test_frozenset_target_keeps_cp_only_marker(self, tmp_path: Path) -> None:
+        """``("circuitpython",)``-marked files ride along in the source bundle."""
+        file = tmp_path / "cp.py"
+        file.write_text('__chumicro_runtimes__ = ("circuitpython",)\n')
+        assert file_targets_runtime(file, target_runtime=DEVICE_RUNTIMES)
+
+    def test_frozenset_target_keeps_unmarked_files(self, tmp_path: Path) -> None:
+        """Default-safe still applies for set targets."""
+        file = tmp_path / "shared.py"
+        file.write_text("# universal\n")
+        assert file_targets_runtime(file, target_runtime=DEVICE_RUNTIMES)
+
+    def test_frozenset_target_folds_sub_runtimes(self, tmp_path: Path) -> None:
+        """Sub-runtime markers fold against the device-runtime set too."""
+        file = tmp_path / "esp32.py"
+        file.write_text('__chumicro_runtimes__ = ("micropython_esp32",)\n')
+        assert file_targets_runtime(file, target_runtime=DEVICE_RUNTIMES)

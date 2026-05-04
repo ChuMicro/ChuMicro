@@ -27,3 +27,6 @@ Usage from any library's tests::
     from {import_name}.testing import Fake...
 """
 
+#: Source bundle / sdist only -- never lands on a device.
+__chumicro_runtimes__ = ("cpython",)
+

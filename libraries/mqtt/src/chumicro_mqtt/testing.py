@@ -10,6 +10,9 @@ hand-rolled byte literal in a test doesn't drift when the wire format
 gets a tweak.
 """
 
+#: Source bundle / sdist only -- never lands on a device.
+__chumicro_runtimes__ = ("cpython",)
+
 import struct
 
 

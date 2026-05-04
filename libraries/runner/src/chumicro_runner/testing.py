@@ -14,6 +14,9 @@ Example:
     ```
 """
 
+#: Source bundle / sdist only -- never lands on a device.
+__chumicro_runtimes__ = ("cpython",)
+
 
 class CallRecorder:
     """Callable that records each invocation for test assertions.

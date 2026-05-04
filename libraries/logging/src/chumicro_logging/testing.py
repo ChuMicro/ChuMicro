@@ -15,9 +15,13 @@ Usage::
     logger.info("hello")
     assert handler.records == [(20, "test", "hello")]
 
-The helpers are not bundled to devices — ``testing.py`` is excluded
-from every per-runtime mpy bundle.
+The helpers are not bundled to devices — the
+``__chumicro_runtimes__ = ("cpython",)`` marker below keeps this file
+out of every bundle and every device deploy.
 """
+
+#: Source bundle / sdist only -- never lands on a device.
+__chumicro_runtimes__ = ("cpython",)
 
 
 class RecordingHandler:
