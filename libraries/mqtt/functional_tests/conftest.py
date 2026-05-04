@@ -2,8 +2,10 @@
 
 Two responsibilities:
 
-1. Materialise ``_test_creds.py`` from ``chumicro-dev-config.toml``
-   so the on-device test inherits the LAN credentials.
+1. Materialise ``_test_creds.py`` from the unified config sources
+   (``workspace.yml`` + per-library ``functional_tests/config.toml``
+   + ``secrets.yml``) so the on-device test inherits the LAN
+   credentials.
 2. Spawn a host-side Mosquitto broker on the LAN interface so
    ``test_real_broker.py`` has a counterparty.  ``test.mosquitto.org``
    is unreachable from the Things Cat network and the public broker
@@ -18,6 +20,17 @@ Skips the broker fixture (and so the real-broker test) silently
 when ``mosquitto`` is not on ``PATH`` or the LAN IP can't be
 detected; the credential shim still gets materialised so other
 fixtures keep working.
+
+Phase 4 of the unification workstream
+(``plans/workstreams/scripts-workbench-config-unification.md``)
+retired the legacy ``chumicro-dev-config.toml`` source — every
+networking library's conftest reads from the same
+``workspace.yml`` + ``secrets.yml`` pair the workspace-template's
+user projects use.  The dynamic broker host/port from
+``_start_mosquitto_broker`` still get rendered into ``_test_creds.py``
+verbatim — workspace.yml's ``[mqtt.broker]`` defaults to
+``test.mosquitto.org`` (the public broker) but the host-side
+broker fixture overrides it for the duration of the pytest session.
 """
 
 from __future__ import annotations
@@ -27,24 +40,45 @@ import socket
 import subprocess
 import tempfile
 import time
-import tomllib
 from pathlib import Path
+
+from chumicro_workspace import compose_runtime_config
 
 _HERE = Path(__file__).resolve().parent
 _REPO_ROOT = _HERE.parents[2]
-_DEV_CONFIG = _REPO_ROOT / "chumicro-dev-config.toml"
+_WORKSPACE_YAML = _REPO_ROOT / "workspace.yml"
+_LIBRARY_CONFIG = _HERE / "config.toml"  # optional; absent → workspace defaults only
+_SECRETS_YAML = _REPO_ROOT / "secrets.yml"
 _SHIM_PATH = _HERE / "_test_creds.py"
 
 
 def _read_wifi_section() -> tuple[str, str] | None:
-    if not _DEV_CONFIG.exists():
+    """Return ``(ssid, password)`` from the unified config, or ``None``.
+
+    Silent-skip on every "creds not configured" path: missing
+    workspace.yml, missing wifi section, missing keys, secrets
+    resolution failure, placeholder SSID still in place.
+    """
+    if not _WORKSPACE_YAML.is_file():
         return None
     try:
-        data = tomllib.loads(_DEV_CONFIG.read_text())
-        wifi = data["wifi"]
-        return wifi["ssid"], wifi["password"]
-    except (KeyError, ValueError):
+        merged = compose_runtime_config(
+            workspace_yaml=_WORKSPACE_YAML,
+            project_config=_LIBRARY_CONFIG,
+            secrets_yaml=_SECRETS_YAML,
+        )
+    except Exception:  # noqa: BLE001 — silent skip on any config error
         return None
+    wifi = merged.get("wifi")
+    if not isinstance(wifi, dict):
+        return None
+    ssid = wifi.get("ssid")
+    password = wifi.get("password")
+    if not isinstance(ssid, str) or not isinstance(password, str):
+        return None
+    if ssid == "replace-with-your-ap-ssid":
+        return None
+    return ssid, password
 
 
 def _detect_lan_ip() -> str | None:

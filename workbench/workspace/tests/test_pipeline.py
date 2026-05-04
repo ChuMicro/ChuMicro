@@ -6,6 +6,7 @@ import pytest
 from chumicro_workspace import (
     UnresolvedSecretError,
     build_runtime_config,
+    compose_runtime_config,
     write_runtime_config,
 )
 from msgpack import unpackb
@@ -128,6 +129,61 @@ def test_build_runtime_config_raises_on_unresolved_secret(tmp_path: Path) -> Non
             secrets_yaml=secrets_yaml,
             output_path=output_path,
         )
+
+
+def test_compose_runtime_config_returns_dict_without_writing(
+    tmp_path: Path,
+) -> None:
+    """``compose_runtime_config`` is the dict-only sibling of build_runtime_config.
+
+    Functional-test conftests (Phase 4 of the unification workstream)
+    use this to read merged ``[wifi]`` / ``[mqtt]`` from
+    workspace.yml + secrets.yml without leaving an unused msgpack
+    file on disk.
+    """
+    workspace_yaml, project_config, secrets_yaml, output_path = _seed_workspace(tmp_path)
+
+    result = compose_runtime_config(
+        workspace_yaml=workspace_yaml,
+        project_config=project_config,
+        secrets_yaml=secrets_yaml,
+    )
+    assert result["wifi"]["ssid"] == "HomeNet"
+    assert result["wifi"]["password"] == "actual-password"
+    # No msgpack written — output_path was never passed.
+    assert not output_path.exists()
+
+
+def test_compose_runtime_config_treats_missing_project_config_as_empty(
+    tmp_path: Path,
+) -> None:
+    """Missing per-library config.toml is fine — workspace defaults pass through.
+
+    Per-library functional-test config.toml files are optional in
+    Phase 4: most libraries inherit everything from workspace.yml.
+    The ``project_config`` arg accepts ``None`` or a path that
+    doesn't exist; both yield "no project-level overrides".
+    """
+    workspace_yaml, _project_config, secrets_yaml, _output_path = _seed_workspace(tmp_path)
+
+    # Pass None — should still merge workspace defaults + secrets.
+    result_none = compose_runtime_config(
+        workspace_yaml=workspace_yaml,
+        project_config=None,
+        secrets_yaml=secrets_yaml,
+    )
+    assert result_none == {
+        "wifi": {"hostname_prefix": "chu-"},
+        "mqtt": {"port": 1883},
+    }
+
+    # Pass a path that doesn't exist — same result.
+    result_missing = compose_runtime_config(
+        workspace_yaml=workspace_yaml,
+        project_config=tmp_path / "does-not-exist" / "config.toml",
+        secrets_yaml=secrets_yaml,
+    )
+    assert result_missing == result_none
 
 
 def test_write_runtime_config_round_trips(tmp_path: Path) -> None:

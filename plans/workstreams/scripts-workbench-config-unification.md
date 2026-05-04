@@ -166,20 +166,44 @@ Adopt the workspace-template's flows as the canonical pattern; the mono-repo dog
 - `chumicro-dev-config.toml.template` deleted; the legacy materialisation in `generate_config_files.py` removed.
 - The `_test_creds.py` materialisation pattern across every networking-library conftest deleted in favour of `chumicro_config.load_runtime_config()`.
 
-### Phase 4 — functional tests dogfood `chumicro-config`
+### Phase 4 — functional tests dogfood the unified config sources *(done)*
 
-**Scope (the biggest phase):**
-- Add a `bake_runtime_config: bool = False` opt-in flag (or pytest CLI option `--chumicro-bake-config`) to `chumicro-pytest-device`.  When on, before staging test sources to a device, the plugin:
-  1. Locates the workspace root + project context for each test (default: per-library `functional_tests/` directory acts as a "project")
-  2. Calls `chumicro_workspace.pipeline.build_runtime_config()` — same path the user-facing `chumicro-workspace deploy` uses
-  3. Stages the resulting `runtime_config.msgpack` alongside the test files
-- Per-library `functional_tests/config.toml` files (often empty — inherits everything from `workspace.yml` defaults).  `mqtt` will have a `[mqtt.broker]` override if appropriate.
-- Rewrite each conftest.py (`libraries/{wifi,requests,mqtt,sockets,http_server}/functional_tests/conftest.py`) to remove the `_test_creds.py` materialization.  Test functions instead call `from chumicro_config import load_runtime_config; config = load_runtime_config()` and read sections directly.
-- Delete `scripts/templates/chumicro-dev-config.toml.template`.
-- Delete the `_test_creds.py` materialization fixtures.
-- Update `docs/contributing/style-guide.md` with the new pattern.
+**Scope (executed — narrower than the original draft):**
 
-**Files touched:** ~15 (5+ conftests, plugin, several test files, docs, deletions).  Estimated 2-3 sessions.
+The original draft had the on-device test code call `chumicro_config.load_runtime_config()` directly (full dogfooding of the user-facing path).  That requires `chumicro-pytest-device` to stage a binary `runtime_config.msgpack` onto the device alongside the test files, which means extending `transport.stage()`'s API to accept `extra_files: dict[str, bytes]` — a transport-API change that touches CP / MP / fake transports and warrants its own decision pass.  Splitting the cost-benefit by half:
+
+- **What landed in Phase 4:** every networking-library functional-test conftest now reads the unified config sources (`workspace.yml` + per-library `functional_tests/config.toml` + `secrets.yml` via `chumicro_workspace.compose_runtime_config`).  The `_test_creds.py` materialisation pattern stays, but the data flowing into it comes from the unified pipeline instead of the legacy `chumicro-dev-config.toml`.  Half the dogfooding (host-side data flow) — sufficient to retire the legacy file.
+- **Deferred to a follow-up phase:** the on-device test code dropping the `_test_creds.py` import in favour of `from chumicro_config import load_runtime_config; config = load_runtime_config()`.  Gated on the transport-API change.
+
+**Files touched (this phase):**
+
+- New `chumicro_workspace.pipeline.compose_runtime_config()` — the dict-only sibling of `build_runtime_config`.  Conftest fixtures need the merged dict in memory; the deployer needs the msgpack on disk.  Both call the same underlying loaders + merger + secrets resolver; `build_runtime_config` is now a thin wrapper.  2 new tests in `test_pipeline.py`.
+- Every networking-library conftest (`libraries/{wifi,requests,http_server,mqtt,sockets,websockets,ntp}/functional_tests/conftest.py`) rewired:
+  - Drops `tomllib.loads(_DEV_CONFIG.read_text())`.
+  - Adds `compose_runtime_config(workspace_yaml, library_config, secrets_yaml)` call.
+  - Reads `merged["wifi"]["ssid"]` / `merged["wifi"]["password"]` instead of `data["wifi"]["ssid"]`.
+  - Treats the placeholder SSID `"replace-with-your-ap-ssid"` as "no creds yet" (silent-skip path).
+  - Library-specific extras (mqtt broker spawn, sockets UDP echo, websockets PyPI server) preserved unchanged.
+- `scripts/templates/chumicro-dev-config.toml.template` deleted.  `scripts/generate_config_files.py` simplified — no more `_CONFIGS` list (devices.yml + secrets.yml are workbench-payload only).
+- `.gitignore` keeps `chumicro-dev-config.toml` for one cycle so contributors with a left-over copy don't accidentally commit it.
+- Docs refreshed: `docs/contributing/device-testing.md` drops the "Legacy: chumicro-dev-config.toml" subsection (no longer applies); `development-{pycharm,vscode}.md` stop mentioning the file; `libraries/wifi/functional_tests/test_acceptance.py`'s docstring updated.
+
+**Phase 4.5 (deferred, see above) does the second half:** transport-API extension for binary file staging + on-device `load_runtime_config()` migration + `_test_creds.py` deletion.  Splits cleanly because the transport API change is structural and warrants a decision pass; this phase keeps the on-device test signature stable while flipping the host-side data source.
+
+### Phase 4.5 — `!secret` simplification (deferred to a separate session)
+
+### Phase 4.5 — `!secret` simplification (deferred to a separate session)
+
+**User flagged 2026-05-04 (between Phase 3 + Phase 4):** the `!secret` indirection is over-engineered for the mono-repo's needs.  The pattern came from the workspace-template's "contributors commit their project structure but keep credentials local" use case; the mono-repo's "contributor wifi creds for functional tests" is a genuinely simpler problem and probably justifies a different shape.
+
+Two paths the user is weighing:
+
+1. **Drop in mono-repo only.**  Mono-repo's `workspace.yml` becomes gitignored, holds wifi/mqtt creds in plaintext, no `secrets.yml`, no `!secret` marker resolution.  Materialised from a workbench-owned starter the same way Phase 1 did `devices.yml`.  Walks back the Phase 3 design partially — drop `secrets.yml` materialisation, drop the `!secret wifi_password` marker, put `password: replace-with-your-wifi-password` directly in the workspace.yml starter.  Workspace-template repo retains the three-file split (`workspace.yml` committed + per-project `config.toml` committed + `secrets.yml` gitignored, with `!secret` markers).  Two patterns coexist; "unification" is partial.
+2. **Drop everywhere** (including the workspace-template's user-facing pattern).  Either user-facing `workspace.yml` + per-project `config.toml` become gitignored (loses the "commit your project structure, only secrets are local" property), or both repos accept that secrets travel with the same file as non-secret config.
+
+**Lean from the side-chat:** drop in mono-repo only, pending the user's call on the template.
+
+**Why this is deferred:** the lift is small (one workspace.yml content edit + drop the secrets.yml materialisation in `generate_config_files.py` + delete the secrets.yml.starter payload + update gitignore + update tests), but it's a structural call about the unification premise — different from Phase 4's mechanical conftest migration.  Doing them together would muddy the commit story.  Phase 4 lands first using the current `!secret` shape; Phase 4.5 walks it back if/when the user picks path 1.
 
 ### Phase 5 — IDE wiring + final cleanup
 

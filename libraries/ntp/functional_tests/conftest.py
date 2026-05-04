@@ -1,35 +1,63 @@
-"""Host-side fixture: materialise ``_test_creds.py`` from ``chumicro-dev-config.toml``.
+"""Host-side fixture: materialise ``_test_creds.py`` from the unified config sources.
 
 Mirrors ``libraries/requests/functional_tests/conftest.py`` — see that
 file for the shared rationale.  chumicro-ntp's tests only need the
 ``[wifi]`` section (the NTP server is a public hostname, no host-side
 counterparty fixture).
+
+Phase 4 of the unification workstream
+(``plans/workstreams/scripts-workbench-config-unification.md``)
+retired the legacy ``chumicro-dev-config.toml`` source — every
+networking library's conftest reads from the same
+``workspace.yml`` + ``secrets.yml`` pair the workspace-template's
+user projects use.
 """
 
 from __future__ import annotations
 
-import tomllib
 from pathlib import Path
+
+from chumicro_workspace import compose_runtime_config
 
 _HERE = Path(__file__).resolve().parent
 _REPO_ROOT = _HERE.parents[2]
-_DEV_CONFIG = _REPO_ROOT / "chumicro-dev-config.toml"
+_WORKSPACE_YAML = _REPO_ROOT / "workspace.yml"
+_LIBRARY_CONFIG = _HERE / "config.toml"  # optional; absent → workspace defaults only
+_SECRETS_YAML = _REPO_ROOT / "secrets.yml"
 _SHIM_PATH = _HERE / "_test_creds.py"
 
 
 def _read_wifi_section() -> tuple[str, str] | None:
-    if not _DEV_CONFIG.exists():
+    """Return ``(ssid, password)`` from the unified config, or ``None``.
+
+    Silent-skip on every "creds not configured" path: missing
+    workspace.yml, missing wifi section, missing keys, secrets
+    resolution failure, placeholder SSID still in place.
+    """
+    if not _WORKSPACE_YAML.is_file():
         return None
     try:
-        data = tomllib.loads(_DEV_CONFIG.read_text())
-        wifi = data["wifi"]
-        return wifi["ssid"], wifi["password"]
-    except (KeyError, ValueError):
+        merged = compose_runtime_config(
+            workspace_yaml=_WORKSPACE_YAML,
+            project_config=_LIBRARY_CONFIG,
+            secrets_yaml=_SECRETS_YAML,
+        )
+    except Exception:  # noqa: BLE001 — silent skip on any config error
         return None
+    wifi = merged.get("wifi")
+    if not isinstance(wifi, dict):
+        return None
+    ssid = wifi.get("ssid")
+    password = wifi.get("password")
+    if not isinstance(ssid, str) or not isinstance(password, str):
+        return None
+    if ssid == "replace-with-your-ap-ssid":
+        return None
+    return ssid, password
 
 
 def pytest_configure(config) -> None:  # noqa: ARG001 - pytest hook signature
-    """Write/refresh ``_test_creds.py`` from the dev config."""
+    """Write/refresh ``_test_creds.py`` from the unified config sources."""
     creds = _read_wifi_section()
     if creds is None:
         if _SHIM_PATH.exists():

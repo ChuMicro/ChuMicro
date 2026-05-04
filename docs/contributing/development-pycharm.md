@@ -32,7 +32,7 @@ Open the built-in terminal (**View → Tool Windows → Terminal**, or `⌥F12` 
 python scripts/run.py setup
 ```
 
-This installs dependencies, runs editable installs for every library and support package, regenerates IDE configs, and creates starter `devices.yml` / `chumicro-dev-config.toml` if they are missing.  The starter `devices.yml` ships an empty registry — register a connected board with `python scripts/run.py add-device <id> --address <port>` (a thin shim around `chumicro-workspace add-device` that probes hardware identity and fills in defaults on first registration).  See [device-testing.md](device-testing.md) for the full add-device flow.
+This installs dependencies, runs editable installs for every library and support package, regenerates IDE configs, and creates starter `devices.yml` / `secrets.yml` if they are missing.  The starter `devices.yml` ships an empty registry — register a connected board with `python scripts/run.py add-device <id> --address <port>` (a thin shim around `chumicro-workspace add-device` that probes hardware identity and fills in defaults on first registration).  Edit `secrets.yml` once to provide real-network credentials for functional tests; `workspace.yml` (committed) references them via `!secret <name>`.  See [device-testing.md](device-testing.md) for the full setup flow.
 
 `setup` produces a lot of output — look for this at the end:
 

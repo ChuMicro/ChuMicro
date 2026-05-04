@@ -17,15 +17,14 @@ Files generated:
   owned by ``chumicro-workspace`` (same source-of-truth pattern as
   devices.yml; shared with the workspace-template repo).  See
   ``chumicro_workspace.read_secrets_yml_starter``.
-* ``chumicro-dev-config.toml`` — *legacy* local-machine config for
-  contributors.  Phase 3 of
-  ``plans/workstreams/scripts-workbench-config-unification.md``
-  introduces ``workspace.yml`` + ``secrets.yml`` as the canonical
-  shape; Phase 4 retires this file when functional-test conftests
-  migrate onto the unified pipeline.  Materialised today so an
-  in-flight contributor's tests keep working through the migration.
 
 Called by ``python scripts/run.py setup``.
+
+Phase 4 of ``plans/workstreams/scripts-workbench-config-unification.md``
+retired ``chumicro-dev-config.toml`` — the unified
+``workspace.yml`` + ``secrets.yml`` pair (read via
+``chumicro_workspace.compose_runtime_config``) is the canonical
+shape every networking-library functional-test conftest now reads.
 """
 
 from __future__ import annotations
@@ -35,16 +34,6 @@ from chumicro_workspace import (
     read_secrets_yml_starter,
 )
 from repo_layout import ROOT
-from shared import TEMPLATES_DIR
-
-#: Mono-repo-only files to generate from ``scripts/templates/``.
-#: ``devices.yml`` and ``secrets.yml`` are *not* in this list —
-#: their content is owned by the ``chumicro-workspace`` workbench
-#: package so the same bytes ship from one source to both the
-#: mono-repo and the workspace-template repo.
-_CONFIGS: list[tuple[str, str]] = [
-    ("chumicro-dev-config.toml", "chumicro-dev-config.toml.template"),
-]
 
 
 def generate_config_files() -> int:
@@ -60,15 +49,6 @@ def generate_config_files() -> int:
         relative_path="secrets.yml",
         starter_reader=read_secrets_yml_starter,
     )
-
-    for relative_path, template_name in _CONFIGS:
-        target = ROOT / relative_path
-        if target.exists():
-            print(f"  {relative_path} already exists — skipped")
-        else:
-            content = (TEMPLATES_DIR / template_name).read_text()
-            target.write_text(content)
-            print(f"  Created {relative_path}")
 
     if devices_yml_was_created:
         # The starter ``devices.yml`` ships with an empty ``devices: []``
