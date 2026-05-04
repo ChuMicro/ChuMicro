@@ -87,6 +87,7 @@ from chumicro_workspace.deploy_source import (
     project_directory_source,
 )
 from chumicro_workspace.deploy_targets import read_deploy_targets
+from chumicro_workspace.devices_yml_starter import read_devices_yml_starter
 from chumicro_workspace.import_graph import (
     build_search_paths,
     project_import_graph_source,
@@ -148,9 +149,10 @@ __all__ = [
     "merge_configs",
     "micropython_board_for_machine",
     "read_deploy_targets",
-    "read_secrets_yaml",
+    "read_devices_yml_starter",
     "read_library_sources",
     "read_project_config",
+    "read_secrets_yaml",
     "read_workspace_yaml",
     "rename_device",
     "resolve_secrets",
