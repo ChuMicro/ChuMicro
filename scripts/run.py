@@ -16,30 +16,17 @@ import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from check_api import main as check_api_main
-from check_names import main as check_names_main
-from check_version import main as check_version_main
-from check_whitespace import main as check_whitespace_main
-from docs_deploy import (
-    MIKE,
-    copy_shared_docs_assets,
-    docs_deploy,
-    inject_landing_page,
-)
-from ide_sync import sync_ide
-from new_library_scaffold import new_library
-from prepare_circuitpython import prepare_circuitpython
-from prepare_micropython import prepare_micropython
-from prepare_mpy_cross import prepare_mpy_cross
-from render_dep_graph import main as render_dep_graph_main
-from shared import (
-    install_workspace,
-    resolve_circuitpython_binary,
-    resolve_micropython_binary,
-    run_command,
-)
-from validate_mip_install import validate_local_staging, validate_mip_install
-from verify_examples import verify_examples
+# Hot-path imports — touched by lint, run_command, ROOT-derived path
+# discovery on every invocation.  Heavier imports (check_api,
+# docs_deploy, prepare_*, validate_mip_install, verify_examples,
+# new_library_scaffold, ide_sync, render_dep_graph,
+# shared.install_workspace) are deferred into the task wrappers that
+# need them (Bucket 4 #5).  Each of those modules pulls in tomllib /
+# yaml / ast walkers / griffe / mike / etc.; eager-loading them
+# meant every phase that subprocess-re-invokes ``python scripts/run.py``
+# (Decision 0048) paid the full import-time tax even when running a
+# task that didn't touch them.
+from shared import run_command
 from workspace import (
     ROOT,
     coverage_args_for,
@@ -74,11 +61,56 @@ def setup() -> int:
     See [Decision 0012](../plans/decisions/0012-ide-type-stubs.md) for the
     runtime-pinned type-stub policy.
     """
+    from shared import install_workspace
     return install_workspace()
+
+
+def sync_ide() -> int:
+    """Regenerate IDE configuration files (no-op for the workspace itself)."""
+    from ide_sync import sync_ide as _sync_ide
+    return _sync_ide()
+
+
+def prepare_micropython() -> int:
+    """Build the MicroPython unix-port binary."""
+    from prepare_micropython import prepare_micropython as _prepare
+    return _prepare()
+
+
+def prepare_circuitpython() -> int:
+    """Build the CircuitPython unix-port binary."""
+    from prepare_circuitpython import prepare_circuitpython as _prepare
+    return _prepare()
+
+
+def prepare_mpy_cross() -> int:
+    """Build mpy-cross compilers for both runtimes."""
+    from prepare_mpy_cross import prepare_mpy_cross as _prepare
+    return _prepare()
+
+
+def verify_examples(package_dirs: list[Path]) -> int:
+    """Verify examples have valid syntax and resolvable imports."""
+    from verify_examples import verify_examples as _verify
+    return _verify(package_dirs)
+
+
+def new_library(name: str) -> int:
+    """Scaffold a new device library."""
+    from new_library_scaffold import new_library as _new_library
+    return _new_library(name)
+
+
+def docs_deploy(channel: str, libraries: list[str] | None = None) -> int:
+    """Deploy versioned docs for the selected libraries."""
+    from docs_deploy import docs_deploy as _docs_deploy
+    return _docs_deploy(channel, libraries=libraries)
 
 
 def lint() -> int:
     """Run Ruff, the single-letter name check, and whitespace checks across all source paths."""
+    from check_names import main as check_names_main
+    from check_whitespace import main as check_whitespace_main
     ruff_result = run_command([PYTHON, "-m", "ruff", "check", *discover_ruff_paths()])
     if ruff_result != 0:
         return ruff_result
@@ -358,9 +390,14 @@ def test_cpython(
     #   - no_cov is set (user explicitly opted out of coverage).
     skip_coverage_gate = bool(filter_expression) or no_cov
 
-    overall_exit_code = 0
+    # Build one phase per (library, test-target) pair so the fan-out
+    # below stays at the granularity Decision 0009 requires (per-
+    # library pytest invocation, distinct ``COVERAGE_FILE`` per run).
+    # Each phase captures its own stdout/stderr; ``_run_capture_phases_
+    # in_parallel`` replays results in submission order so the on-
+    # screen log reads as if the loop ran serially.
+    phases: list[tuple[str, Callable[[], tuple[int, str]]]] = []
     run_counter = 0
-
     for package_dir in testable:
         runs = _plan_test_runs_for_library(package_dir, per_library)
         if runs is None:
@@ -398,28 +435,33 @@ def test_cpython(
             # because they don't measure coverage of those modules.
             disable_plugin_args = ["-p", "no:chumicro_pytest_device"]
 
-            # Unique coverage file per run keeps data attributable.
+            # Unique coverage file per run keeps data attributable
+            # under parallel fan-out — every concurrent pytest writes
+            # to its own ``.coverage.<package>.<run>`` file before
+            # ``coverage combine`` merges them.
             coverage_name = f".coverage.{package_dir.name}.{run_counter}"
-            run_environment = {**environment, "COVERAGE_FILE": str(ROOT / coverage_name)}
             run_counter += 1
-
-            exit_code = run_command(
-                [
-                    PYTHON, "-m", "pytest",
-                    "-W", "error",
-                    *cov_args,
-                    "--cov-report=",
-                    *cov_gate_args,
-                    *disable_plugin_args,
-                    test_target,
-                    *extra_args,
-                ],
-                environment=run_environment,
+            command = [
+                PYTHON, "-m", "pytest",
+                "-W", "error",
+                *cov_args,
+                "--cov-report=",
+                *cov_gate_args,
+                *disable_plugin_args,
+                test_target,
+                *extra_args,
+            ]
+            run_environment = {
+                **environment, "COVERAGE_FILE": str(ROOT / coverage_name),
+            }
+            label = f"{package_dir.relative_to(ROOT)}/{Path(test_target).name}"
+            phases.append(
+                (label, _make_pytest_phase(command, run_environment)),
             )
-            # Exit code 5 means no tests were collected (e.g. -k filter
-            # matched nothing in this library) — not an error.
-            if exit_code not in (0, 5):
-                overall_exit_code = exit_code
+
+    overall_exit_code = _run_capture_phases_in_parallel(
+        phases, max_workers=_resolve_package_parallel_workers(),
+    )
 
     if no_cov:
         return overall_exit_code
@@ -429,6 +471,55 @@ def test_cpython(
         elevated_packages=elevated_packages,
         overall_exit_code=overall_exit_code,
     )
+
+
+def _run_pytest_capturing(
+    command: list[str], environment: dict[str, str],
+) -> tuple[int, str]:
+    """Run a pytest invocation and capture its stdout / stderr.
+
+    Single seam :func:`_make_pytest_phase` calls and tests monkey-
+    patch.  Captures output via ``subprocess.run(capture_output=True)``
+    so the parallel test_cpython fan-out can hand each result back
+    to the helper that replays in submission order — no
+    ``contextlib.redirect_stdout`` thread-stomp.
+
+    Pytest exit code 5 ("no tests collected" — typically when a
+    ``-k`` filter matches nothing in a given library) is normalised
+    to 0 so it doesn't fail the whole sweep.  The captured output
+    still surfaces the "no tests ran" line so the user sees it in
+    the on-screen log.
+    """
+    printable = " ".join(command)
+    completed = subprocess.run(
+        command,
+        cwd=ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    output_parts = [f"+ {printable}"]
+    if completed.stdout:
+        output_parts.append(completed.stdout.rstrip("\n"))
+    if completed.stderr:
+        output_parts.append(completed.stderr.rstrip("\n"))
+    normalised = 0 if completed.returncode == 5 else completed.returncode
+    return normalised, "\n".join(output_parts) + "\n"
+
+
+def _make_pytest_phase(
+    command: list[str], environment: dict[str, str],
+) -> Callable[[], tuple[int, str]]:
+    """Wrap a pytest invocation as a capture-and-return phase callable.
+
+    The returned closure is what
+    :func:`_run_capture_phases_in_parallel` schedules per package.
+    Delegates to :func:`_run_pytest_capturing` so tests can
+    monkeypatch one well-known seam to observe the constructed
+    pytest command line.
+    """
+    return lambda: _run_pytest_capturing(command, environment)
 
 
 def test_scripts(
@@ -543,6 +634,7 @@ def docs(package_dirs: list[Path], *, serve: bool = False) -> int:
         print("No libraries with mkdocs.yml found for the selected packages.")
         return 0
 
+    from docs_deploy import copy_shared_docs_assets
     copy_shared_docs_assets(doc_dirs)
 
     if serve:
@@ -640,6 +732,7 @@ def docs_preview(package_dirs: list[Path]) -> int:
         print("No libraries with mkdocs.yml found for the selected packages.")
         return 0
 
+    from docs_deploy import MIKE, copy_shared_docs_assets, inject_landing_page
     copy_shared_docs_assets(doc_dirs)
 
     # Delete any previous preview branch so we start fresh.
@@ -904,6 +997,8 @@ def test_micropython(
 
     Skips libraries that do not target MicroPython.
     """
+    from prepare_micropython import prepare_micropython
+    from shared import resolve_micropython_binary
     return _test_runtime_compat(
         "micropython", "MicroPython",
         lambda: resolve_micropython_binary(binary), prepare_micropython,
@@ -919,6 +1014,8 @@ def test_circuitpython(
 
     Skips libraries that do not target CircuitPython.
     """
+    from prepare_circuitpython import prepare_circuitpython
+    from shared import resolve_circuitpython_binary
     return _test_runtime_compat(
         "circuitpython", "CircuitPython",
         lambda: resolve_circuitpython_binary(binary), prepare_circuitpython,
@@ -1456,6 +1553,7 @@ def validate_mip(
         return 1
 
     if staging_dir:
+        from validate_mip_install import validate_local_staging
         return validate_local_staging(
             staging_dir=staging_dir,
             library_names=library_names,
@@ -1463,6 +1561,7 @@ def validate_mip(
         )
 
     if bundle_repo:
+        from validate_mip_install import validate_mip_install
         return validate_mip_install(
             bundle_repo=bundle_repo,
             library_names=library_names,
@@ -1475,11 +1574,13 @@ def validate_mip(
 
 def check_version() -> int:
     """Check VERSION enforcement for changed libraries (PR check)."""
+    from check_version import main as check_version_main
     return check_version_main([])
 
 
 def check_api() -> int:
     """Check API breakages against last release tag (PR check)."""
+    from check_api import main as check_api_main
     return check_api_main([])
 
 
@@ -1489,6 +1590,7 @@ def check_dep_graph() -> int:
     a library's deps without re-running ``python scripts/render_dep_graph.py``
     and committing the regenerated SVG.
     """
+    from render_dep_graph import main as render_dep_graph_main
     return render_dep_graph_main(["--check"])
 
 
