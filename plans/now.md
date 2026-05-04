@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **ADR audit + cleanup sweep.**  Phases 1, 2, and 2.5 landed.  Phase 2.5 sharpened the README's "edit the body in place" rule (four-status enum now: `proposed` / `accepted` / `superseded` / `deferred`; dropped `revised` because it invited changelog accumulation), and reverted my phase-1 mistakes — 0029 + 0037 status flipped back from `revised` → `accepted`, the "This decision has been revised twice" Note block removed from 0029, §7 edited in place to cross-link 0046's resolution order; 0046's "Decision 0029 gets a second `Revised:` annotation" Consequences bullet rewritten to the correct in-place-edit pattern.
-- **Last shipped:** `plans/decisions: README sharpens "edit body in place" rule; drop revised status; revert phase-1 meta-commentary` (this commit).
-- **In flight:** ADR audit phases 3–4 — compact 12 length offenders (0035, 0034, 0041, 0036, 0048, 0042, 0040, 0032, 0013, 0033, 0027, 0045), write 4–5 missing high-level ADRs (three-runtime philosophy, library inclusion test, runner-shaped policy, workbench/library import boundary, recovery philosophy).
+- **Phase:** **Streaming output + status modes for parallel tasks** ([Decision 0054](decisions/0054-streaming-output-and-status-modes.md)).  Replaced `subprocess.run(capture_output=True)` with `shared.stream_subprocess` (`Popen` + line-reader); built `_Sink` / `_Dispatcher` abstraction with quiet / interleave / status modes (TTY auto-detect; `--quiet` flag); collapsed `_run_phases_in_parallel` + `_run_capture_phases_in_parallel` into one helper; auto-sized `phase_workers` / `package_workers` from `cpu_count()` with product cap.  Decision 0048 §3 + §5 + §6 edited in place to reflect the new shape.
+- **Last shipped:** `scripts/{run,shared}: streaming output + status modes for parallel tasks (Decision 0054)` (commit `67cda99`).
+- **In flight:** idle — back to ADR audit phases 3–4 (compact length offenders, write missing high-level ADRs), or pick up something fresh from `## Next` of `plans/next-up.md`.
 - **Blocked on:** —.
-- **Last touched:** `plans/decisions/README.md` (load-bearing principle update), 0029 + 0037 (revert phase-1 meta-commentary), 0046 (Consequences bullet rewrite).
+- **Last touched:** `scripts/run.py`, `scripts/shared.py`, `scripts/tests/test_{run,shared}.py`, `plans/decisions/0054-streaming-output-and-status-modes.md`, `plans/decisions/0048-preflight-phase-level-parallel.md`.
 
 ---
 
