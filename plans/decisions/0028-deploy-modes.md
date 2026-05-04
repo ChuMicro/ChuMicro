@@ -64,9 +64,7 @@ Flash mode in `disconnect()`:
   resets `supervisor.runtime.autoreload` to default-on as a side effect)
   and intentionally left off on the functional-test path (the harness
   drove the raw REPL session itself; `code.py`-style reload-on-edit
-  isn't relevant during or after the session).  See
-  `plans/learnings.md` "rsync to CIRCUITPY can hang in uninterruptible
-  kernel I/O" for the failure mode that drove the simplification.
+  isn't relevant during or after the session).
 
 ### CircuitPython drive path configuration
 
@@ -74,14 +72,7 @@ A new optional `circuitpy_drive_path` field in `devices.yml` specifies where the
 
 ### Future: `chumicro-deploy` pip package
 
-The transport layer in `support/device_transport/` is shaped for eventual extraction into a standalone pip-installable package.  The envisioned package would:
-
-- Deploy user projects (from any repo) to MicroPython and CircuitPython boards.
-- Handle library dependency resolution from ChuMicro bundle repos.
-- Optionally compile `.mpy` bytecode when mpy-cross is available.
-- Provide a CLI: `chumicro-deploy flash --runtime circuitpython --port /dev/cu.usbmodem1234 ./my-project/`.
-
-This is intentionally deferred.  The current work shapes the transport API to make extraction straightforward when the time comes.  A project template repo (`chumicro-project-template`) is a natural companion but is also deferred.
+The transport layer is shaped for eventual extraction into a standalone pip-installable package.  Done in [Decision 0032](0032-workbench-host-tools.md): code lives in `workbench/deploy/` and ships as `chumicro-deploy`.
 
 ## Consequences
 

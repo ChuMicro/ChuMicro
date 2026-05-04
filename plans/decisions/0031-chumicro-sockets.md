@@ -29,8 +29,7 @@ chumicro_sockets/
   __init__.py           # tcp_client_socket() factory, TCPClientSocket protocol
   _adapters/
     cp.py               # CircuitPythonTCPSocket  (socketpool + radio.TLS_MODE)
-    mp_esp32.py         # MicroPythonTCPSocket    (socket + ssl module)
-    mp_rp2.py           # MicroPythonRP2TCPSocket (socket + radio TLS fallback)
+    mp.py               # MicroPythonTCPSocket    (socket + ssl module; substrate-aware: ESP-IDF vs CYW43)
     cpython.py          # CPythonTCPSocket        (socket + ssl stdlib)
   testing.py            # FakeSocket for unit tests
 ```

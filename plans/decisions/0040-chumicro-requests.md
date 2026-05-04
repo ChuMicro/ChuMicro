@@ -2,7 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-26`
-Related: [Decision 0014](0014-tick-based-runner.md) (runner pattern), [Decision 0031](0031-chumicro-sockets.md) (transport substrate), `plans/workstreams/beginner-onramp.md` Step 6.
+Related: [Decision 0014](0014-runner-pattern.md) (runner pattern), [Decision 0031](0031-chumicro-sockets.md) (transport substrate), `plans/workstreams/beginner-onramp.md` Step 6.
 
 ## Context
 

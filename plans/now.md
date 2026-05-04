@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **ADR audit + cleanup sweep.**  Audited 48 ADRs (4 sub-agents in parallel) for date hygiene, status-enum compliance, banned dated-update sections, missing `Related:` fields, stale path references, length bloat, and missing high-level ADRs.  Phase 1 (mechanical sweep) just landed: every ADR now has `Related:`, status values are clean enum, date decoration dropped (`(revised X)` / `Updated:` / `Re-verified:` / `## Amendments`), 0030 and 0031 flipped from `proposed` → `accepted` (libraries shipped), 0029 + 0037 marked `revised` and amend-section-style metadata folded into Note blocks, 0035 inline `> Amended` blockquote folded into prose.
-- **Last shipped:** `plans/decisions: phase 1 audit cleanup — Related fields, status enum, drop banned dated-update sections` (this commit).
-- **In flight:** ADR audit phases 2–4 — stale path refs (0027/0028/0029/0030/0031/0033/0035 + past-tense 0006/0008), compact 12 length offenders, write 4–5 missing high-level ADRs (three-runtime philosophy, library inclusion test, runner-shaped policy, workbench/library import boundary, recovery philosophy).
+- **Phase:** **ADR audit + cleanup sweep.**  Audited 48 ADRs (4 sub-agents in parallel) for date hygiene, status-enum compliance, banned dated-update sections, missing `Related:` fields, stale path references, length bloat, and missing high-level ADRs.  Phase 1 (mechanical sweep) and Phase 2 (stale-path fixes) have landed.  Phase 2 corrected `scripts/pytest_device.py` → `chumicro-pytest-device`, `support/device_transport/` → `workbench/deploy/`, `things/` → `projects/`, `_adapters/mp_esp32.py + mp_rp2.py` → `mp.py`; fixed 4 hallucinated intra-ADR link targets (0010, 0014, 0015, 0029 file basenames); past-tensed 0006 and 0008 Decision bodies; dropped 0042's "Pending decision" in-body blockquote.
+- **Last shipped:** `plans/decisions: phase 2 audit cleanup — fix stale path refs and broken intra-ADR links` (this commit).
+- **In flight:** ADR audit phases 3–4 — compact 12 length offenders (0035, 0034, 0041, 0036, 0048, 0042, 0040, 0032, 0013, 0033, 0027, 0045 — each over 150 lines, several reading as design docs), write 4–5 missing high-level ADRs (three-runtime philosophy, library inclusion test, runner-shaped policy, workbench/library import boundary, recovery philosophy).
 - **Blocked on:** —.
-- **Last touched:** every ADR header (Related normalization), 0029/0037 (banned-section removal), 0035 (inline amend fold), 0022 (editorial trim), 0012 (status enum + Related).
+- **Last touched:** 0006/0008 (past-tense), 0027/0028/0029/0030/0031/0032/0033/0035/0036/0038 (stale paths), 0039/0040/0041/0042/0045 (link targets).
 
 ---
 

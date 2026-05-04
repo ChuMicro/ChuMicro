@@ -2,7 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-26`
-Related: [Decision 0015](0015-board-support-tiers.md) (board support tiers), [Decision 0029](0029-project-workspace-architecture.md) (project workspace architecture), [`plans/workstreams/beginner-onramp.md`](../workstreams/beginner-onramp.md)
+Related: [Decision 0015](0015-board-architecture-support.md) (board support tiers), [Decision 0029](0029-project-workspace.md) (project workspace architecture), [`plans/workstreams/beginner-onramp.md`](../workstreams/beginner-onramp.md)
 
 ## Context
 

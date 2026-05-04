@@ -2,16 +2,7 @@
 
 Status: `proposed`
 Date: `2026-04-27`
-Related: [Decision 0010](0010-injection-and-fakes.md) (constructor injection + fakes), [Decision 0014](0014-tick-based-runner.md) (runner pattern), [Decision 0031](0031-chumicro-sockets.md) (sockets), [Decision 0040](0040-chumicro-requests.md) (requests + factory helper pattern), `plans/workstreams/library-pipeline.md` §"Dependency policy".
-
-> **Pending decision (2026-04-27).** This file captures the analysis and a
-> proposed split, but the call will be made *after* the Tier-A libraries
-> (`chumicro-logging`, `chumicro-events`, `chumicro-ntp`) land and we have
-> experience operating under the proposed rules. Do not treat the rules
-> below as binding for libraries shipping in the meantime — when in
-> doubt for those three, mirror the existing `chumicro-requests` pattern
-> (hard dep + factory helper + explicit constructor parameter) for any
-> *core infrastructure* deps and skip declaring any *decoration* deps.
+Related: [Decision 0010](0010-library-testability.md) (constructor injection + fakes), [Decision 0014](0014-runner-pattern.md) (runner pattern), [Decision 0031](0031-chumicro-sockets.md) (sockets), [Decision 0040](0040-chumicro-requests.md) (requests + factory helper pattern), `plans/workstreams/library-pipeline.md` §"Dependency policy".
 
 ## Context
 

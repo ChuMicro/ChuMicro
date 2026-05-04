@@ -26,7 +26,7 @@ Three things are wrong with that shape:
 
 ### 1. The canonical workspace template lives in a separate Git repo
 
-`ChuMicro/ChuMicro-Workspace-Template` (private, flagged as a GitHub template repo; goes public when the rest of ChuMicro goes public). The repo's tracked tree is the workspace skeleton — `run.py`, `workspace.yml`, `things/_template/`, `_templates/` (template sources for files like `secrets.yml`; see §5), etc. README and AGENTS.md at the repo root explain what the workspace is. Browsable on GitHub before any install.
+`ChuMicro/ChuMicro-Workspace-Template` (private, flagged as a GitHub template repo; goes public when the rest of ChuMicro goes public). The repo's tracked tree is the workspace skeleton — `run.py`, `workspace.yml`, `projects/_template/`, `_templates/` (template sources for files like `secrets.yml`; see §5), etc. README and AGENTS.md at the repo root explain what the workspace is. Browsable on GitHub before any install.
 
 Bootstrap is either:
 

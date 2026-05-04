@@ -2,7 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-02`
-Related: [Decision 0014](0014-tick-based-runner.md) (runner pattern), [Decision 0031](0031-chumicro-sockets.md) (transport substrate), [Decision 0040](0040-chumicro-requests.md) (HttpClient + factory pattern), [Decision 0041](0041-chumicro-http-server.md) (HttpServer + WS-deserves-its-own-library framing), [Decision 0042](0042-library-dependency-policy.md) (Class 1 / Class 2 dep policy + factory-helper sub-rule).
+Related: [Decision 0014](0014-runner-pattern.md) (runner pattern), [Decision 0031](0031-chumicro-sockets.md) (transport substrate), [Decision 0040](0040-chumicro-requests.md) (HttpClient + factory pattern), [Decision 0041](0041-chumicro-http-server.md) (HttpServer + WS-deserves-its-own-library framing), [Decision 0042](0042-library-dependency-policy.md) (Class 1 / Class 2 dep policy + factory-helper sub-rule).
 
 ## Context
 
@@ -12,7 +12,7 @@ Decision 0041 §v1-non-goals already deferred WS from `chumicro-http-server`: *"
 
 Two existing reference implementations were surveyed and rejected as direct vendor targets:
 * **MicroPython `extmod/modwebsocket.c`** (built into ESP32 + RP2 ports): incomplete — `assert(0)` on 64-bit length, fragmented frames disabled, PING/PONG silently dropped.  Useful as a future fast-path delegate (see §10 below) but not a substitute.
-* **`danni/uwebsockets`** (~314 LOC pure Python): synchronous, blocking — incompatible with [Decision 0014](0014-tick-based-runner.md)'s no-block contract.
+* **`danni/uwebsockets`** (~314 LOC pure Python): synchronous, blocking — incompatible with [Decision 0014](0014-runner-pattern.md)'s no-block contract.
 
 We write our own runner-shaped framing parser + encoder against `chumicro-sockets` non-blocking I/O.
 
