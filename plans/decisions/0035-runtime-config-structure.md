@@ -115,14 +115,8 @@ about the *default*, not a constraint.
 
 ### 3. Library access pattern: dataclass + `from_dict` classmethod backed by `chumicro-config`
 
-> **Amended 2026-04-25 by Decision 0036.**  The `from_dict`
-> *implementation* now lives in a shared library
-> (`chumicro-config`) so every consumer library calls the same
-> standardized factory and the convention can't drift.  The shape
-> below is unchanged — only the implementation moved.
+The `from_dict` *implementation* lives in a shared library (`chumicro-config`, Decision 0036) so every consumer library calls the same standardized factory and the convention can't drift.  Every library that consumes runtime config ships a `<Name>Config` dataclass plus a `from_dict(d: dict) -> <Name>Config` classmethod.
 
-Every library that consumes runtime config ships a `<Name>Config`
-dataclass plus a `from_dict(d: dict) -> <Name>Config` classmethod.
 The classmethod calls `chumicro_config.load_section`, which
 implements the canonical missing-required / missing-optional /
 unknown-key / non-dict-input semantics:

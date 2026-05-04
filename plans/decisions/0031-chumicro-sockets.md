@@ -1,8 +1,8 @@
 # Decision 0031: `chumicro-sockets` — thin protocol + per-runtime adapters
 
-Status: `proposed`
+Status: `accepted`
 Date: `2026-04-21`
-Related: Decision 0029
+Related: Decision 0029 (project workspace), Decision 0042 (library dependency policy), Decision 0043 (UDP), Decision 0040 (requests), Decision 0041 (http_server), Decision 0045 (websockets)
 
 ## Context
 

@@ -1,8 +1,8 @@
 # Decision 0030: Config vs persisted state — two problems, two mechanisms
 
-Status: `proposed`
+Status: `accepted`
 Date: `2026-04-21`
-Related: Decision 0029
+Related: Decision 0029 (project workspace), Decision 0034 (kvstore), Decision 0035 (runtime config), Decision 0036 (chumicro-config)
 
 ## Context
 

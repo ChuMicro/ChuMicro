@@ -2,7 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-04`
-Re-verified: `2026-05-03` (CP 10.2.0)
+Related: Decision 0014 (runner — heartbeat consumes the timing slice this affects)
 
 ## Context
 

@@ -2,6 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-01`
+Related: Decision 0014 (runner pattern uses injected ticks), Decision 0042 (library dependency policy), Decision 0044 (deploy-time runtime filtering keeps fakes out of bundles)
 
 ## Context
 

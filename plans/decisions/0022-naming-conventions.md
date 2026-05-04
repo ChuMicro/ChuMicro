@@ -20,7 +20,7 @@ Python's common abbreviations — `msg`, `err`, `exc`, `buf`, `cmd` — are trib
 
 The abbreviations save a few keystrokes per line.  The full words save every future reader a mental lookup.  We chose the side that scales.
 
-This is a deliberate tradeoff.  Some experienced developers will find it verbose.  That's fine — the linter tells you exactly what to type, so the cost in practice is near zero.  If spelling out `error` instead of `err` is a dealbreaker, this project may not be the right fit, and that's okay too.
+This is a deliberate tradeoff.  Some experienced developers will find it verbose; the linter tells you exactly what to type, so the cost in practice is near zero.
 
 A useful side effect: longer names push lines past the 100-character limit, which forces multi-line formatting.  That forced splitting consistently improves readability — each argument on its own line is easier to scan, diff, and annotate with `git blame`.
 

@@ -1,7 +1,8 @@
 # Decision 0014: Runner pattern
 
 Status: `accepted`
-Date: `2026-04-02` (revised `2026-04-04`)
+Date: `2026-04-02`
+Related: Decision 0010 (testability — `CallRecorder` in `testing.py`), Decision 0042 (library dependency policy)
 
 ## Context
 

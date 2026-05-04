@@ -2,7 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-04`
-Updated: `2026-04-11`
+Related: Decision 0007 (cross-platform deps), Decision 0023 (promote workflow), Decision 0024 (mip folder serving)
 
 > **Note:** See also [Decision 0024](0024-mip-mpy-folder-serving.md) which adds folder-based `.mpy` serving for mip users.
 

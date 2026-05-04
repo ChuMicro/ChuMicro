@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **`testing.py` exits every bundle and every device deploy.**  User noticed `testing.py` files riding along to the board on workspace-template deploys.  Investigation surfaced a four-list drift: `bundle_manager._HOST_ONLY_MODULES` filtered `testing.py` from circup/mip but `DirectorySource`, MP `_copy_tree` flash staging, and CP `flash_drive.rsync` did not.  Bundles also shipped `testing.py` in the universal source bundle (`mip install` from the bundle root would land it on a device).  Fix: every `testing.py` declares `__chumicro_runtimes__ = ("cpython",)`; `file_targets_runtime` accepts a frozenset target; bundle pipeline's universal source bundle now passes `DEVICE_RUNTIMES = frozenset({"circuitpython", "micropython"})`, dropping cpython-only marked files.  `_HOST_ONLY_MODULES` retired — the marker is the single source of truth.  PyPI sdist + wheel still ship every file unfiltered (every adapter, every fake) — `pip install chumicro-foo` on CPython hosts gets the complete library.  Decision 0037 amended (2026-05-04 §"Amendments"); 0044 cross-references updated; AGENTS.md tightened.
-- **Last shipped:** `chumicro: testing.py and cpython-only files exit every bundle and every device deploy via __chumicro_runtimes__ marker (Decision 0037 amendment)` (this commit).  Earlier today: `7720e46` (chumicro-workspace install-libraries CLI, gap 4), `48ac7e3` (add_device default-slot fix, gap 6), `e358442` (README hero pass 2).
-- **In flight:** idle.
+- **Phase:** **ADR audit + cleanup sweep.**  Audited 48 ADRs (4 sub-agents in parallel) for date hygiene, status-enum compliance, banned dated-update sections, missing `Related:` fields, stale path references, length bloat, and missing high-level ADRs.  Phase 1 (mechanical sweep) just landed: every ADR now has `Related:`, status values are clean enum, date decoration dropped (`(revised X)` / `Updated:` / `Re-verified:` / `## Amendments`), 0030 and 0031 flipped from `proposed` → `accepted` (libraries shipped), 0029 + 0037 marked `revised` and amend-section-style metadata folded into Note blocks, 0035 inline `> Amended` blockquote folded into prose.
+- **Last shipped:** `plans/decisions: phase 1 audit cleanup — Related fields, status enum, drop banned dated-update sections` (this commit).
+- **In flight:** ADR audit phases 2–4 — stale path refs (0027/0028/0029/0030/0031/0033/0035 + past-tense 0006/0008), compact 12 length offenders, write 4–5 missing high-level ADRs (three-runtime philosophy, library inclusion test, runner-shaped policy, workbench/library import boundary, recovery philosophy).
 - **Blocked on:** —.
-- **Last touched:** Decision 0037, Decision 0044, AGENTS.md, `bundle_manager.py`, `runtime_marker.py`, every `libraries/*/src/chumicro_*/testing.py`, scaffold template.
+- **Last touched:** every ADR header (Related normalization), 0029/0037 (banned-section removal), 0035 (inline amend fold), 0022 (editorial trim), 0012 (status enum + Related).
 
 ---
 
