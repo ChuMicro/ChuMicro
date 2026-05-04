@@ -16,7 +16,7 @@ Each gap below is listed with severity (**P0** = blocks the documented happy-pat
 | 1 | ~~P0~~ | mono-repo | ~~Declare `cryptography` in `requirements-dev.txt`.~~ Done — landed in `8bcfb6b`. |
 | 2 | ~~P0~~ | mono-repo | ~~Convert remaining cross-tree relative doc links (`../../../plans/...`, `../README.md`) to absolute GitHub URLs; fix two slug mismatches in `workbench/deploy/docs/guide.md`.~~ Done — landed in `d9d039e`. |
 | 3 | ~~P0~~ | mono-repo | ~~Wire **on-device** library shipping for dev mode.~~ Done — (a) `setup` auto-emits `library_sources:` from `chumicro-dev.toml` (`chumicro_workspace.chumicro_dev` module); (b) `deploy --boot-shim --import-graph` ships both the boot-shim layout and import-graph-discovered libraries (closed by gap 5's combiner). |
-| 4 | P0 | template | Document and scaffold **regular mode**. Today the template README jumps straight to `deploy example_sensor` with no mention of installing the chumicro libs onto the board first via `circup`/`mip`. |
+| 4 | ~~P0~~ | mono-repo + template | ~~Document and scaffold **regular mode**.~~ Mono-repo half done — `chumicro-workspace install-libraries <project>` AST-walks the project for chumicro imports and shells out to `circup` (CP) or `mpremote mip install` (MP) per the device's runtime, with `--experimental` swapping bundle repos and `--dry-run` previewing without executing.  Template-side README quickstart update follows in a separate two-repo commit. |
 | 5 | ~~P1~~ | mono-repo | ~~Make `--import-graph` and `--boot-shim` composable, or pick one canonical "thing with `def run()` + chumicro lib deps" deploy path.~~ Done — combiner landed (`project_boot_with_import_graph_source`); CLI now accepts `--boot-shim --import-graph` and ships both the boot-shim layout and import-graph-discovered libraries in one deploy. |
 | 6 | ~~P1~~ | mono-repo | ~~`add-device` should populate `devices.yml`'s `defaults:` block on first registration per runtime — the existing comment claims it does.~~ Done — `chumicro_deploy.config.devices_yaml.add_device` already had `set_default=True` baked in but its existence check (`runtime not in defaults`) skipped present-but-null slots, which is exactly what the materialized template ships.  Switched to `defaults.get(runtime) is None` so null-valued and absent are treated identically. |
 | 7 | ~~P2~~ | mono-repo | ~~When `chumicro-dev.toml` is present, auto-derive `library_sources:` from `<chumicro_path>/libraries/*/src` instead of requiring the user to hand-list every package in `workspace.yml`.~~ Done — closed by gap 3(a) (`sync_library_sources` walks the sibling `libraries/` tree, writes a managed block into `workspace.yml`, idempotent re-write on re-run). |
@@ -171,6 +171,22 @@ mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_config \
 **(b) Document the manual fallback** in the template README *and* the workspace guide. Even if (a) lands, users on edge platforms (no internet on the host, custom registries, air-gapped) need the manual recipe.
 
 **Fix surface:** mono-repo (workspace CLI extension) + template repo (README + maybe a `_templates/install-libraries.sh` ready-to-run script for cold starts).
+
+**Status:** Mono-repo half done.
+
+* (a) — `chumicro_workspace.install_libraries` (new module) provides
+  `discover_chumicro_imports`, `import_name_to_package`,
+  `build_circup_command`, and `build_mip_commands`.  CLI command
+  `chumicro-workspace install-libraries <project>` AST-walks the
+  project's source tree, finds every `chumicro_<name>` top-level
+  import, maps to bundle package names, and shells out to the right
+  runtime tool: one `circup install` invocation for CP (with
+  optional `--drive-path` to pin a CIRCUITPY mount), one `mpremote
+  connect <addr> mip install` per package for MP.  `--experimental`
+  swaps to `ChuMicro-Bundle-Experimental`; `--dry-run` prints the
+  exact commands without executing — useful for air-gapped hosts.
+* (b) — manual recipe to land in the template repo's README in a
+  follow-up commit (cross-repo, not in this slice).
 
 ---
 
