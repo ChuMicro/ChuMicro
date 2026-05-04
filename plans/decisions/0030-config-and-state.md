@@ -8,7 +8,7 @@ Related: Decision 0029 (project workspace), Decision 0034 (kvstore), Decision 00
 
 The previously-planned `chumicro-settings` library (see prior `plans/next-up.md`) conflated two unrelated concerns:
 
-- **Config** — read-only settings shipped with the thing (wifi creds, MQTT broker, pin map, feature flags, timing knobs).
+- **Config** — read-only settings shipped with the project (wifi creds, MQTT broker, pin map, feature flags, timing knobs).
 - **Persisted state** — small mutable key-value storage that must survive reboot (boot counters, last-seen timestamps, provisioning tokens, retry counters).
 
 Source-level research against the pinned CP 10.1.4 and MP 1.26.0 trees plus vendor docs showed that a unified "rich settings" library is not buildable across the three substrates:
@@ -23,9 +23,9 @@ The substrates do not share semantics.  Any unified "rich settings" library eith
 
 ## Decisions
 
-### 1. App config is read-only, shipped with the thing
+### 1. App config is read-only, shipped with the project
 
-Every thing carries a `config.toml` (or `config.yml`).  The deployer merges workspace-level environment defaults, per-thing overrides, and secrets at deploy time into a single artifact baked onto the device.  User code reads it once at boot.  Mutating app config requires a redeploy.
+Every project carries a `config.toml` (or `config.yml`).  The deployer merges workspace-level environment defaults, per-project overrides, and secrets at deploy time into a single artifact baked onto the device.  User code reads it once at boot.  Mutating app config requires a redeploy.
 
 Layout:
 
@@ -53,7 +53,7 @@ Transform happens once at deploy time.  Device never parses TOML or YAML.
 
 ### 3. Never reuse `settings.toml` for app config
 
-`settings.toml` is reserved for CP's own `CIRCUITPY_*` environment keys the firmware cares about.  App config lives in the thing's `config.toml` (separate file), deployed to `/runtime_config.msgpack`.  The workspace template ships a `settings.toml` free of wifi keys (see Decision 0029, wifi ownership stance) and documents this in the template's `AGENTS.md`.
+`settings.toml` is reserved for CP's own `CIRCUITPY_*` environment keys the firmware cares about.  App config lives in the project's `config.toml` (separate file), deployed to `/runtime_config.msgpack`.  The workspace template ships a `settings.toml` free of wifi keys (see Decision 0029, wifi ownership stance) and documents this in the template's `AGENTS.md`.
 
 **Rejected:** mix app keys with CP keys in `settings.toml`.  CP-only, footgun-prone collisions, fails on MP.
 

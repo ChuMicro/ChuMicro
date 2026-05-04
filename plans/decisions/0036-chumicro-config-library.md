@@ -73,7 +73,7 @@ Behavior locked by this ADR (so libraries can't drift):
 - *data* is not a dict ⇒ `InvalidConfigType` (subclass of
   `ConfigError` only, same reason as above).
 - **Unknown keys are ignored**, matching ADR 0035 §7.  No warning
-  log, no exception — forward-compat for things that stage future
+  log, no exception — forward-compat for projects that stage future
   config keys.
 - **No type coercion.**  `"1883"` stays a string; if the library
   wants an int, the dataclass `__init__` (or a manual cast inside
