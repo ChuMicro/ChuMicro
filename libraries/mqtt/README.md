@@ -39,7 +39,7 @@ client = MQTTClient(sock, client_id="my-thing", keep_alive_seconds=60)
 client.on_message = lambda topic, payload: print(topic, payload)
 client.connect()
 
-# Drive from your tick loop — no threads, no async.
+# Drive from a tick loop.
 while True:
     now = ticks_ms()
     if client.check(now):
