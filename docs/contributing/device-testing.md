@@ -18,7 +18,6 @@ Host-side `tests/` still run through normal CPython pytest. Real-board validatio
 - `devices.yml` — your local board registry and default target selection
 - `workspace.yml` — workspace-wide defaults (committed) for wifi / mqtt / quality knobs.  Per-library `functional_tests/config.toml` overrides land on top.
 - `secrets.yml` — gitignored credential store referenced from `workspace.yml` via `!secret <name>` markers
-- `chumicro-dev-config.toml` — *legacy* dev config still consumed by today's `libraries/*/functional_tests/conftest.py`.  Phase 4 of the unification workstream retires this file in favour of `workspace.yml` + `secrets.yml`
 
 They are intentionally local-only. Fill them in for your machine and boards; do not commit them.
 
@@ -162,9 +161,6 @@ Typical uses:
 
 If a library does not need shared environment data, no override file is needed.
 
-### Legacy: `chumicro-dev-config.toml`
-
-Today's `libraries/*/functional_tests/conftest.py` still reads `chumicro-dev-config.toml` directly.  Phase 4 of the unification workstream migrates each conftest to read the merged `runtime_config.msgpack` produced by the `workspace.yml` + `secrets.yml` pipeline above.  Until then, both files coexist: `setup` materialises both, and you can fill in either (or both) depending on which library's tests you're running.
 
 ## 4. Run device tests from the CLI
 

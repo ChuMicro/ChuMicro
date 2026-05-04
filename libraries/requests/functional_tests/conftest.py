@@ -1,48 +1,65 @@
-"""Host-side fixture: materialise ``_test_creds.py`` from ``chumicro-dev-config.toml``.
+"""Host-side fixture: materialise ``_test_creds.py`` from the unified config sources.
 
-Functional tests in this directory want real wifi creds without
-checking them in.  This conftest writes a gitignored
-``_test_creds.py`` shim alongside the test files when the repo
-root has a ``chumicro-dev-config.toml`` with a ``[wifi]`` section,
-and removes the shim when the source goes away.
+Reads the merged + secrets-resolved runtime-config dict from
+``workspace.yml`` + this library's optional
+``functional_tests/config.toml`` + ``secrets.yml``, then renders the
+``[wifi]`` section into the gitignored ``_test_creds.py`` shim that
+the on-device test imports.
 
-Source path: ``<repo-root>/chumicro-dev-config.toml`` — generated
-by ``python scripts/run.py setup`` from
-``scripts/templates/chumicro-dev-config.toml.template``.
+Phase 4 of the unification workstream
+(``plans/workstreams/scripts-workbench-config-unification.md``)
+retired the legacy ``chumicro-dev-config.toml`` source — every
+networking library's conftest reads from the same
+``workspace.yml`` + ``secrets.yml`` pair the workspace-template's
+user projects use.
 
 Tests that import ``_test_creds`` skip silently when the shim
 isn't present, so committing this conftest is safe even on a
 clone without local credentials.
-
-Until ``pytest_device.py`` learns to deploy this sibling to the
-device automatically (see ``plans/next-up.md``), tests skip
-silently on hardware even when creds are configured.  Host-side
-``pytest`` runs that don't involve a device pick up the shim
-directly from the local filesystem.
 """
 
 from __future__ import annotations
 
-import tomllib
 from datetime import UTC, datetime
 from pathlib import Path
 
+from chumicro_workspace import compose_runtime_config
+
 _HERE = Path(__file__).resolve().parent
 _REPO_ROOT = _HERE.parents[2]
-_DEV_CONFIG = _REPO_ROOT / "chumicro-dev-config.toml"
+_WORKSPACE_YAML = _REPO_ROOT / "workspace.yml"
+_LIBRARY_CONFIG = _HERE / "config.toml"  # optional; absent → workspace defaults only
+_SECRETS_YAML = _REPO_ROOT / "secrets.yml"
 _SHIM_PATH = _HERE / "_test_creds.py"
 
 
 def _read_wifi_section() -> tuple[str, str] | None:
-    """Return ``(ssid, password)`` from the dev config, or ``None``."""
-    if not _DEV_CONFIG.exists():
+    """Return ``(ssid, password)`` from the unified config, or ``None``.
+
+    Silent-skip on every "creds not configured" path: missing
+    workspace.yml, missing wifi section, missing keys, secrets
+    resolution failure, placeholder SSID still in place.
+    """
+    if not _WORKSPACE_YAML.is_file():
         return None
     try:
-        data = tomllib.loads(_DEV_CONFIG.read_text())
-        wifi = data["wifi"]
-        return wifi["ssid"], wifi["password"]
-    except (KeyError, ValueError):
+        merged = compose_runtime_config(
+            workspace_yaml=_WORKSPACE_YAML,
+            project_config=_LIBRARY_CONFIG,
+            secrets_yaml=_SECRETS_YAML,
+        )
+    except Exception:  # noqa: BLE001 — silent skip on any config error
         return None
+    wifi = merged.get("wifi")
+    if not isinstance(wifi, dict):
+        return None
+    ssid = wifi.get("ssid")
+    password = wifi.get("password")
+    if not isinstance(ssid, str) or not isinstance(password, str):
+        return None
+    if ssid == "replace-with-your-ap-ssid":
+        return None
+    return ssid, password
 
 
 def pytest_configure(config) -> None:  # noqa: ARG001 - pytest hook signature

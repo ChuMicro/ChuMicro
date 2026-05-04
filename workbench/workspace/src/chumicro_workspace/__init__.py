@@ -115,7 +115,10 @@ from chumicro_workspace.onboarding import (
     detect_board_state,
     find_uf2_drive,
 )
-from chumicro_workspace.pipeline import build_runtime_config
+from chumicro_workspace.pipeline import (
+    build_runtime_config,
+    compose_runtime_config,
+)
 from chumicro_workspace.secrets import UnresolvedSecretError, resolve_secrets
 from chumicro_workspace.secrets_yml_starter import read_secrets_yml_starter
 from chumicro_workspace.writer import write_runtime_config
@@ -146,6 +149,7 @@ __all__ = [
     "build_active_py",
     "build_runtime_config",
     "build_search_paths",
+    "compose_runtime_config",
     "derive_firmware_url",
     "detect_board_state",
     "dump_devices",
