@@ -117,6 +117,7 @@ from chumicro_workspace.onboarding import (
 )
 from chumicro_workspace.pipeline import build_runtime_config
 from chumicro_workspace.secrets import UnresolvedSecretError, resolve_secrets
+from chumicro_workspace.secrets_yml_starter import read_secrets_yml_starter
 from chumicro_workspace.writer import write_runtime_config
 
 __all__ = [
@@ -168,6 +169,7 @@ __all__ = [
     "read_manifest",
     "read_project_config",
     "read_secrets_yaml",
+    "read_secrets_yml_starter",
     "read_workspace_yaml",
     "rename_device",
     "resolve_secrets",

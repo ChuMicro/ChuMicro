@@ -1,19 +1,71 @@
-# workspace.yml — mono-repo workspace root marker.
+# workspace.yml — root configuration for the ChuMicro mono-repo.
 #
-# Phase 1 (this file): bare-minimum so chumicro-workspace's discovery
-# walk (`WorkspaceLayout.from_dir`) finds the mono-repo root, which
-# unblocks `python scripts/run.py add-device` (a thin shim around
-# `chumicro-workspace add-device`).  The file's mere existence is
-# enough — content is checked lazily, per subcommand.
+# Mono-repo's "projects" are the per-library ``functional_tests/``
+# directories that deploy onto real boards via ``chumicro-pytest-device``.
+# This file is the workspace-wide defaults that those tests inherit at
+# deploy time, deep-merged with each library's
+# ``functional_tests/config.toml`` (added in Phase 4 of the unification
+# workstream).
 #
-# Phase 3 of `plans/workstreams/scripts-workbench-config-unification.md`
-# fills this file with the real `defaults:` block (workspace-wide wifi
-# defaults, mqtt broker, library_sources, deploy_targets, quality
-# knobs) so the mono-repo's functional tests can dogfood the same
-# workspace.yml + per-project config.toml + secrets.yml pipeline that
-# the workspace-template repo's user projects use.
+# Five top-level blocks (all optional):
 #
-# This file is committed (it carries no secrets — credentials live in
-# the gitignored `secrets.yml` referenced via `!secret <name>`).
+#   defaults:        Workspace-wide defaults that every project inherits.
+#                    Per-library config under
+#                    ``libraries/<name>/functional_tests/config.toml``
+#                    deep-merges over this — values in the per-library
+#                    file win at any nesting depth.
+#
+#   library_sources: Local paths or pinned overrides for shared libraries.
+#                    Empty by default — falls through to the libraries/
+#                    tree's ``<name>/src/`` and any installed packages.
+#
+#   deploy_targets:  Per-project → per-device default mapping.  Bare
+#                    ``deploy <project>`` (no --device) picks the project's
+#                    mapped target.  Empty by default — single-project
+#                    deploys fall back to devices.yml's ``defaults:`` block.
+#
+#   quality:         Workspace-level lint / coverage knobs.
+#
+#   environments:    Reserved for the env / use commands (planned).
 
-defaults: {}
+defaults:
+  # Real-network functional tests in libraries/{wifi, requests,
+  # http_server, mqtt, sockets, websockets} connect to this AP.
+  # SSID is committed (not secret); password lives in the gitignored
+  # secrets.yml referenced via the !secret marker — secrets get
+  # resolved at deploy time before the msgpack write so the on-device
+  # runtime never sees the literal "!secret ..." token.
+  #
+  # Phase 3 ships this shape; Phase 4 will retire
+  # chumicro-dev-config.toml in favour of this pipeline (per-library
+  # functional_tests/config.toml + this workspace.yml + secrets.yml).
+  wifi:
+    ssid: replace-with-your-ap-ssid
+    password: "!secret wifi_password"
+
+  # MQTT broker default for libraries/mqtt/functional_tests/test_real_*.py.
+  # Public test broker by default (no auth, no TLS) so a fresh-clone
+  # contributor can run mqtt acceptance tests without standing up
+  # their own broker.  Override per-test via
+  # libraries/mqtt/functional_tests/config.toml when targeting a
+  # private broker.
+  mqtt:
+    broker:
+      host: test.mosquitto.org
+      port: 1883
+
+# library_sources:
+#   chumicro-deploy: ../chumicro-deploy   # example: editable local clone
+
+# deploy_targets:
+#   # Per-library functional-test → board-id mapping.  Phase 4 wires
+#   # this to chumicro-pytest-device's bake-config flag.
+#   # libraries/wifi/functional_tests: pi-pico-w-circuitpython-board
+
+# quality:
+#   # Workspace-level coverage gate (forwarded to pytest as
+#   # --cov-fail-under).  Mono-repo's gate is 94 (Decision 0025);
+#   # left commented because pyproject.toml carries the canonical
+#   # value via [tool.coverage.report].fail_under and run.py's
+#   # --coverage-threshold flag is the active mechanism.
+#   # coverage_threshold: 94

@@ -148,16 +148,23 @@ Adopt the workspace-template's flows as the canonical pattern; the mono-repo dog
 
 **Known limitation (refine in Phase 4):** `find_library_roots` uses the import graph's static *search paths*, not the actually-imported modules.  A workspace with chumicro-wifi available but a project that doesn't import it would still validate against wifi's manifest.  Today this is correct (wifi is the only manifest holder; if it's available a project really should set wifi config).  Phase 4 refines this when validating against an "actually imported" subset becomes meaningful.
 
-### Phase 3 — mono-repo workspace root config
+### Phase 3 — mono-repo workspace root config *(done)*
 
-**Scope:**
-- Create `workspace.yml` at mono-repo root.  Body mirrors template repo's shape: `defaults.wifi.{ssid, password (with `!secret`)}`, `defaults.mqtt.{broker, port}`, optional `defaults.quality.*`.
-- Create `scripts/templates/secrets.yml.template` (gitignored target, generated once at setup).
-- `python scripts/run.py setup` materializes both files on first clone.
-- Add `workspace.yml` + `secrets.yml` to `.gitignore` patterns (workspace.yml shouldn't be — it's committed; only `secrets.yml`).
-- Document the migration: contributors with an existing `chumicro-dev-config.toml` get a one-time message pointing them at the new shape.
+**Scope (executed):**
+- `workspace.yml` at mono-repo root populated with `[defaults.wifi]` (ssid + `!secret wifi_password` reference), `[defaults.mqtt.broker]` (host: `test.mosquitto.org`, port: 1883), commented-out `library_sources:` / `deploy_targets:` / `quality:` blocks documenting the full shape.  Mirror of the workspace-template repo's `workspace.yml` plus mono-repo-specific defaults (`mqtt.broker` for `libraries/mqtt/functional_tests/test_real_*.py`).
+- New `secrets.yml` starter content owned by `chumicro-workspace` at `_payloads/secrets_yml/starter.yml.template`, exposed via `chumicro_workspace.read_secrets_yml_starter()`.  Same workbench-payload pattern Phase 1 applied to `devices.yml` — single source of truth shared between the mono-repo and the workspace-template repo.
+- `scripts/generate_config_files.py` materialises both `devices.yml` and `secrets.yml` from the workbench payloads (de-duplicated via a shared `_materialise_from_workbench` helper).  `chumicro-dev-config.toml` still materialised from `scripts/templates/` until Phase 4 retires it.
+- `.gitignore` gains `secrets.yml`.  `workspace.yml` is *not* gitignored (committed — no secrets in it; secrets live in `secrets.yml` referenced via `!secret`).
+- Tests: 4 new in `test_secrets_yml_starter.py`; 1 new in `test_generate_config_files.py` covering the workbench-payload materialisation.
+- `docs/contributing/device-testing.md` rewritten — old "device-config.yml" section (which was already stale; the actual file was `chumicro-dev-config.toml`) replaced with the unified workspace.yml + secrets.yml flow plus a "Legacy: chumicro-dev-config.toml" subsection explaining the Phase 4 migration.
 
-**Files touched:** ~5.  Estimated 1 session.
+**Workspace-template half (small follow-up after Phase 3 lands):**
+- The workspace-template's `_workspace_template/secrets.yml` is now stale residue.  Once the template repo's setup flow gains a call to `chumicro_workspace.read_secrets_yml_starter()`, that static file can be deleted.  Mirrors the equivalent follow-up for `_workspace_template/devices.yml` (Phase 1's deferred half).
+
+**Phase 4 next steps that this enables:**
+- Functional-test conftests (`libraries/{wifi,requests,http_server,mqtt,sockets}/functional_tests/conftest.py`) migrate from `chumicro-dev-config.toml` → `workspace.yml + secrets.yml + per-library config.toml + chumicro-pytest-device's bake-config flag`.
+- `chumicro-dev-config.toml.template` deleted; the legacy materialisation in `generate_config_files.py` removed.
+- The `_test_creds.py` materialisation pattern across every networking-library conftest deleted in favour of `chumicro_config.load_runtime_config()`.
 
 ### Phase 4 — functional tests dogfood `chumicro-config`
 
