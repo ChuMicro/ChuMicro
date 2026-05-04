@@ -21,7 +21,7 @@ import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
 
-from workspace import (
+from repo_layout import (
     ROOT,
     changed_publishable_packages,
     find_package_dir,

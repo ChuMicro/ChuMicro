@@ -25,8 +25,8 @@ from __future__ import annotations
 from pathlib import Path
 from string import Template
 
+from repo_layout import discover_doc_dirs, read_pyproject_description
 from shared import TEMPLATES_DIR
-from workspace import discover_doc_dirs, read_pyproject_description
 
 
 def _package_metadata(package_dir: Path) -> dict:

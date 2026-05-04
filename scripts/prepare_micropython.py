@@ -16,6 +16,7 @@ that ``resolve_micropython_binary()`` can find it without recompiling.
 
 from __future__ import annotations
 
+from repo_layout import TOOLS
 from shared import (
     RuntimePrep,
     RuntimePrepStep,
@@ -24,7 +25,6 @@ from shared import (
     prepare_runtime,
     runtime_versions,
 )
-from workspace import TOOLS
 
 #: Repository for the MicroPython upstream source tree.
 _REPO_URL = "https://github.com/micropython/micropython.git"

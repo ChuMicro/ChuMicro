@@ -345,7 +345,7 @@ def run_git(
 
     Workspace-wide wrapper that consolidates the dozen+ inline
     ``subprocess.run(["git", ...])`` call sites scattered across
-    ``workspace.py``, ``bundle_manager.py``, ``docs_deploy.py``, and
+    ``repo_layout.py``, ``bundle_manager.py``, ``docs_deploy.py``, and
     ``run.py``.  Defaults match the most common usage:
 
     - ``cwd`` defaults to :data:`ROOT`

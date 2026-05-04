@@ -60,8 +60,7 @@ from bundle_layout import (
 from chumicro_deploy.runtime_marker import (
     file_targets_runtime as _file_targets_runtime,
 )
-from shared import TEMPLATES_DIR, resolve_cp_mpy_cross, resolve_mp_mpy_cross
-from workspace import (
+from repo_layout import (
     GITHUB_ORG,
     ROOT,
     find_package_dir,
@@ -70,6 +69,7 @@ from workspace import (
     run_git,
     strip_pip_dependency_version,
 )
+from shared import TEMPLATES_DIR, resolve_cp_mpy_cross, resolve_mp_mpy_cross
 
 #: Module basenames excluded from the deployable bundle.  ``testing.py``
 #: is a CPython-only test fake used by host pytest — shipping it to a

@@ -27,7 +27,7 @@ def synthetic_workspace(tmp_path: Path, monkeypatch):
     so ``_sync_pycharm_iml`` finds the test source root.  Patches
     ``ide_sync.discover_package_dirs`` and ``ide_sync.discover_source_roots``
     so they return paths relative to the synthetic tree (the real
-    discovery functions read ``workspace.ROOT``, not ``ide_sync.ROOT``,
+    discovery functions read ``repo_layout.ROOT``, not ``ide_sync.ROOT``,
     and would otherwise hand back real-workspace paths that
     ``relative_to(ROOT)`` would reject).
     """

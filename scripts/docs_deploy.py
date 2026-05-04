@@ -20,8 +20,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from repo_layout import ROOT, discover_doc_dirs, read_version
 from shared import run_command
-from workspace import ROOT, discover_doc_dirs, read_version
 
 # Absolute path to the mike CLI installed alongside the active interpreter.
 # mike manages versioned MkDocs deployments on a git branch (gh-pages).

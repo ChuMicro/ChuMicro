@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import sys
 
+from repo_layout import TOOLS
 from shared import (
     RuntimePrep,
     RuntimePrepStep,
@@ -33,7 +34,6 @@ from shared import (
     prepare_runtime,
     runtime_versions,
 )
-from workspace import TOOLS
 
 _CP_REPO_URL = "https://github.com/adafruit/circuitpython.git"
 _MP_REPO_URL = "https://github.com/micropython/micropython.git"
