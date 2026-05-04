@@ -57,7 +57,7 @@ from bundle_layout import (
     MPY_FORMAT_FOLDER,
     STABLE_BUNDLE_REPO,
 )
-from chumicro_deploy._runtime_marker import (
+from chumicro_deploy.runtime_marker import (
     file_targets_runtime as _file_targets_runtime,
 )
 from shared import TEMPLATES_DIR, resolve_cp_mpy_cross, resolve_mp_mpy_cross

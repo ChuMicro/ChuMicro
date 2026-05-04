@@ -18,7 +18,7 @@ The `__chumicro_runtimes__` marker filters every host-side path that copies libr
 
 ### Layering
 
-The marker reader lives in `chumicro_deploy._runtime_marker` (extracted from `bundle_manager.py` so the bundle pipeline and the deploy paths share one implementation).  Two functions:
+The marker reader lives in `chumicro_deploy.runtime_marker` (extracted from `bundle_manager.py` so the bundle pipeline and the deploy paths share one implementation; `read_runtime_marker` and `file_targets_runtime` are also re-exported from `chumicro_deploy.__init__`, so callers can `from chumicro_deploy import read_runtime_marker`).  Two functions:
 
 ```python
 def read_runtime_marker(path: Path) -> frozenset[str] | None: ...
@@ -60,5 +60,5 @@ Sub-runtime markers (`micropython_esp32`, `micropython_rp2`) fold into `"micropy
 - Wrong-runtime adapter files no longer land on the device for any deploy path: workspace `deploy`, `chumicro_deploy` CLI, `pytest-device` staging, examples, functional tests.  The `__chumicro_runtimes__` marker now matches user intuition end-to-end.
 - A few KB of flash / RAM saved per library on tier-floor boards.  More noticeable as workspaces grow; aligns with the Pi Pico W flash-footprint learning that drove Decision 0037.
 - Decision 0037's "default-safe" rule still applies: unmarked files ship to every target.  We do not enforce marker presence — a runtime-only file without a marker still ships everywhere (lint-rule territory if we want to tighten later).
-- The bundle pipeline and the deploy paths now share `chumicro_deploy._runtime_marker`.  Future changes to marker semantics (new sub-runtimes, fold rules, etc.) live in one place.
+- The bundle pipeline and the deploy paths now share `chumicro_deploy.runtime_marker`.  Future changes to marker semantics (new sub-runtimes, fold rules, etc.) live in one place.
 - The `ImportGraphSource` docstring used to document its deliberate "ship both adapters" behavior — that comment is preserved as the `target_runtime=None` semantics, since the runtime selector still demands both adapters be present when the host doesn't know the target.  Once `target_runtime` is set (the workspace / CLI default), only the matching adapter ships.

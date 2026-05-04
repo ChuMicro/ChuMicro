@@ -26,13 +26,13 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from ._runtime_marker import file_targets_runtime
 from .protocol import (
     PROBE_IMPLEMENTATION_SCRIPT,
     DeviceImplementation,
     parse_probe_output,
     validate_entrypoint_in_files,
 )
+from .runtime_marker import file_targets_runtime
 
 if TYPE_CHECKING:  # pragma: no cover - type-only
     from mpremote.transport_serial import SerialTransport

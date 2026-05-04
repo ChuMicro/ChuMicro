@@ -20,8 +20,8 @@ import ast
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
-from ._runtime_marker import file_targets_runtime
 from .protocol import validate_entrypoint_in_files
+from .runtime_marker import file_targets_runtime
 
 
 @runtime_checkable
