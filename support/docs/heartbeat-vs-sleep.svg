@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 260"
+     width="800" height="260" role="img"
+     aria-label="Side-by-side comparison: with blocking calls the LED freezes for 2 seconds during a network call, with chumicro-runner the LED keeps blinking the whole time">
+  <title>Blocking vs runner-shaped: which LED keeps blinking?</title>
+  <desc>Two boards side by side. Both LEDs blink at 2 Hz from 0–2 s.
+  At 2 s a "fetching sensor data..." caption appears.  The left board's LED
+  freezes (stuck on) until 4 s while the call runs, and the right board's
+  LED keeps blinking the whole time.  At 4 s the left LED resumes blinking
+  and the caption disappears.  6-second loop.</desc>
+
+  <defs>
+    <style>
+      .label   { font-family: -apple-system, system-ui, "Helvetica Neue", Arial, sans-serif;
+                 font-size: 16px; font-weight: 600; fill: #1f2937; }
+      .caption { font-family: -apple-system, system-ui, "Helvetica Neue", Arial, sans-serif;
+                 font-size: 13px; fill: #6b7280; }
+      .work    { font-family: -apple-system, system-ui, "Helvetica Neue", Arial, sans-serif;
+                 font-size: 15px; font-weight: 600; fill: #b91c1c;
+                 letter-spacing: 0.4px; }
+      .panel   { fill: #f9fafb; stroke: #d1d5db; stroke-width: 1.5; }
+    </style>
+  </defs>
+
+  <!-- ──────────────────────────────────────────────────────────────────
+       Left side: blocking call freezes the LED
+       ────────────────────────────────────────────────────────────────── -->
+
+  <text x="180" y="32" class="label" text-anchor="middle">with blocking calls</text>
+
+  <rect x="40" y="60" width="280" height="120" rx="10" class="panel" />
+
+  <!-- LED.  4 toggles/s for 0–2 s, frozen ON for 2 s, 4 toggles/s for 4–6 s.
+       calcMode="discrete" => no interpolation; values hold between keyTimes.
+       Freeze period: keyTimes 0.333 (=2 s) holds ON until 0.708 (=4.25 s). -->
+  <circle cx="180" cy="120" r="22" fill="#4ade80">
+    <animate attributeName="fill"
+             calcMode="discrete"
+             values="#4ade80;#1f2937;#4ade80;#1f2937;#4ade80;#1f2937;#4ade80;#1f2937;#4ade80;#1f2937;#4ade80;#1f2937;#4ade80;#1f2937;#4ade80;#1f2937"
+             keyTimes="0;0.042;0.083;0.125;0.167;0.208;0.25;0.292;0.333;0.708;0.75;0.792;0.833;0.875;0.917;0.958"
+             dur="6s"
+             repeatCount="indefinite" />
+  </circle>
+
+  <text x="180" y="210" class="caption" text-anchor="middle">LED freezes during the call</text>
+
+  <!-- ──────────────────────────────────────────────────────────────────
+       Right side: runner-shaped, LED keeps cadence
+       ────────────────────────────────────────────────────────────────── -->
+
+  <text x="620" y="32" class="label" text-anchor="middle">with chumicro-runner</text>
+
+  <rect x="480" y="60" width="280" height="120" rx="10" class="panel" />
+
+  <!-- LED.  4 toggles/s the whole 6 s — 24 keyframes evenly spaced. -->
+  <circle cx="620" cy="120" r="22" fill="#4ade80">
+    <animate attributeName="fill"
+             calcMode="discrete"
+             values="#4ade80;#1f2937;#4ade80;#1f2937;#4ade80;#1f2937;#4ade80;#1f2937;#4ade80;#1f2937;#4ade80;#1f2937;#4ade80;#1f2937;#4ade80;#1f2937;#4ade80;#1f2937;#4ade80;#1f2937;#4ade80;#1f2937;#4ade80;#1f2937"
+             keyTimes="0;0.042;0.083;0.125;0.167;0.208;0.25;0.292;0.333;0.375;0.417;0.458;0.5;0.542;0.583;0.625;0.667;0.708;0.75;0.792;0.833;0.875;0.917;0.958"
+             dur="6s"
+             repeatCount="indefinite" />
+  </circle>
+
+  <text x="620" y="210" class="caption" text-anchor="middle">LED keeps cadence</text>
+
+  <!-- ──────────────────────────────────────────────────────────────────
+       "fetching sensor data..." appears during the 2-second freeze
+       window (33% – 67% of the 6-second loop).
+       ────────────────────────────────────────────────────────────────── -->
+
+  <text x="400" y="245" class="work" text-anchor="middle" opacity="0">
+    fetching sensor data ...
+    <animate attributeName="opacity"
+             values="0;0;1;1;0;0"
+             keyTimes="0;0.32;0.34;0.66;0.68;1"
+             dur="6s"
+             repeatCount="indefinite" />
+  </text>
+
+</svg>

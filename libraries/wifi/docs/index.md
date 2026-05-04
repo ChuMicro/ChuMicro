@@ -1,6 +1,6 @@
 # chumicro-wifi
 
-Unified wifi supervisor across CircuitPython, MicroPython, and CPython. Sole-supervisor model — no `CIRCUITPY_WIFI_*` keys, no firmware-level auto-reconnect.
+**Wifi that auto-reconnects without freezing your loop.**  One service across CircuitPython, MicroPython, and CPython — register it with `chumicro-runner` and your LED keeps blinking through every connect, drop, and reconnect.  This library owns the radio (no `CIRCUITPY_WIFI_*` settings, no firmware-level auto-reconnect competing with you).
 
 ## Quick example
 

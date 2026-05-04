@@ -1,8 +1,6 @@
 # chumicro-mqtt
 
-Non-blocking MQTT 3.1.1 client (QoS 0 + 1) for CircuitPython, MicroPython, and CPython.
-
-Built on `chumicro-sockets` (TCP + TLS) and `chumicro-timing` (ticks).  Runner-shaped: `check(now_ms) -> bool` + `handle(now_ms)` from your tick loop — no threads, no async, no blocking on network I/O.
+**Non-blocking MQTT 3.1.1 client (QoS 0 + 1)** for CircuitPython, MicroPython, and CPython.  Runner-shaped: `check(now_ms) -> bool` + `handle(now_ms)` from your tick loop — your LED keeps blinking through CONNECT, SUBSCRIBE, PUBLISH, and PUBACK round-trips.  Built on `chumicro-sockets` (TCP + TLS) and `chumicro-timing` (ticks).
 
 ## Quick example
 
@@ -11,15 +9,15 @@ from chumicro_sockets import tcp_client_socket
 from chumicro_timing import ticks_ms
 from chumicro_mqtt import MQTTClient
 
-# CP needs `radio=wifi.radio`; MP / CPython ignore the kwarg.
-sock = tcp_client_socket("broker.example.com", 1883, radio=None)
+# CP auto-detects `wifi.radio`; MP / CPython have no radio.
+sock = tcp_client_socket("broker.example.com", 1883)
 sock.setblocking(False)
 client = MQTTClient(sock, client_id="my-thing", keep_alive_seconds=60)
 
 client.on_message = lambda topic, payload: print(topic, payload)
 client.connect()
 
-# Drive from your tick loop — no threads, no async.
+# Drive from your tick loop — runner-shaped.
 while True:
     now = ticks_ms()
     if client.check(now):

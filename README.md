@@ -21,6 +21,10 @@
 
 ## Eight lines, no freeze
 
+<p align="center">
+  <img src="support/docs/heartbeat-vs-sleep.svg" alt="Side-by-side: with blocking calls the LED freezes during a 2-second network call; with chumicro-runner the LED keeps blinking the whole time" width="720" />
+</p>
+
 ```python
 from chumicro_timing import Heartbeat, ticks_ms
 
