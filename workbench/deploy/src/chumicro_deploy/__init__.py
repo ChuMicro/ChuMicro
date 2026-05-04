@@ -79,6 +79,7 @@ from .recovery import (
     recovery_plan_for,
 )
 from .result import DeployError, DeployResult
+from .runtime_marker import file_targets_runtime, read_runtime_marker
 from .sources import DirectorySource, FileMapSource, FileSource, ImportGraphSource
 from .testing import FakeTransport
 
@@ -126,12 +127,14 @@ __all__ = [
     "build_circuitpython_deploy_scripts",
     "classify_deploy_failure",
     "detect_fskit_wedge",
+    "file_targets_runtime",
     "find_circuitpy_drive",
     "flash_firmware",
     "is_in_deploy_scope",
     "load_device_registry",
     "load_devices",
     "probe_device",
+    "read_runtime_marker",
     "recovery_plan_for",
     "resolve_firmware_url",
     "resolve_ide_devices",

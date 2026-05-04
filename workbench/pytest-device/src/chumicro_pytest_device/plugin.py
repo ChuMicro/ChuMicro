@@ -57,7 +57,7 @@ from chumicro_deploy import (
     load_device_registry,
     resolve_ide_devices,
 )
-from chumicro_deploy._runtime_marker import read_runtime_marker
+from chumicro_deploy.runtime_marker import read_runtime_marker
 
 from ._test_runner import (
     build_device_bootstrap,
@@ -415,7 +415,7 @@ def _filter_targets_by_marker(
     The marker is read via :func:`read_runtime_marker` (AST-only,
     same path the deploy pipeline uses).  Sub-runtime names like
     ``micropython_esp32`` fold into their base (``micropython``),
-    matching :func:`chumicro_deploy._runtime_marker.file_targets_runtime`.
+    matching :func:`chumicro_deploy.runtime_marker.file_targets_runtime`.
 
     Files without a marker keep every target — the default-safe path
     for runtime-agnostic tests.

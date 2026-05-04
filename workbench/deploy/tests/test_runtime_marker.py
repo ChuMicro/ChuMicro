@@ -1,4 +1,4 @@
-"""Tests for ``chumicro_deploy._runtime_marker``.
+"""Tests for ``chumicro_deploy.runtime_marker``.
 
 Decisions 0037 + 0044 — the marker is read via AST (no module
 execution), unmarked files match every target (default-safe), and
@@ -7,7 +7,7 @@ sub-runtime markers fold into ``micropython``.
 
 from pathlib import Path
 
-from chumicro_deploy._runtime_marker import (
+from chumicro_deploy.runtime_marker import (
     KNOWN_RUNTIMES,
     file_targets_runtime,
     read_runtime_marker,

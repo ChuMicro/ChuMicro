@@ -30,7 +30,6 @@ from pathlib import Path
 from typing import Protocol, cast
 
 from . import flash_drive
-from ._runtime_marker import file_targets_runtime
 from .circuitpython_bootstrap import build_circuitpython_deploy_scripts
 from .protocol import (
     PROBE_IMPLEMENTATION_SCRIPT,
@@ -38,6 +37,7 @@ from .protocol import (
     parse_probe_output,
     validate_entrypoint_in_files,
 )
+from .runtime_marker import file_targets_runtime
 
 _CTRL_A = b"\x01"
 _CTRL_B = b"\x02"

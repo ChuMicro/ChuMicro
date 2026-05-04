@@ -43,8 +43,8 @@ import sys as _sys_module
 from collections.abc import Callable
 from pathlib import Path
 
-from ._runtime_marker import file_targets_runtime
 from .host_platform import install_hint_for_rsync
+from .runtime_marker import file_targets_runtime
 
 
 class FlashDriveError(Exception):

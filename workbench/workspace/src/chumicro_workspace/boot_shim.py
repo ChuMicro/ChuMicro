@@ -50,7 +50,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from chumicro_deploy._runtime_marker import file_targets_runtime
+from chumicro_deploy.runtime_marker import file_targets_runtime
 
 from chumicro_workspace.deploy_source import (
     GENERATED_DIRNAME,

@@ -160,7 +160,7 @@ class TestFilterTargetsByMarker:
     ) -> None:
         """``("micropython_esp32",)`` matches generic ``micropython`` targets.
 
-        Folds the same way :func:`chumicro_deploy._runtime_marker.file_targets_runtime`
+        Folds the same way :func:`chumicro_deploy.runtime_marker.file_targets_runtime`
         does — both MP variants share one bundle today.
         """
         test_file = tmp_path / "test_mp_esp32_only.py"
