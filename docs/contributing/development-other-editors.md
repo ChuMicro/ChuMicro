@@ -53,7 +53,7 @@ python scripts/run.py setup
 python scripts/run.py test-libraries-functional
 ```
 
-`setup` generates local `devices.yml` and `device-config.yml` starter files if they do not exist yet. Fill those in, then use:
+`setup` materialises local `devices.yml` and `secrets.yml` starter files if they do not exist yet (from the workbench package's canonical starters).  Register a board with `python scripts/run.py add-device <id> --address <port>`, fill in `secrets.yml` with your wifi password, then use:
 
 ```bash
 python scripts/run.py test-libraries-functional --library timing

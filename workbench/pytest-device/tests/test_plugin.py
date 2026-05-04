@@ -539,7 +539,7 @@ class TestLoadFallbackDevice:
             "    runtime: micropython\n"
             "    address: /dev/ttyUSB0\n"
         )
-        with pytest.raises(pytest.skip.Exception, match="No devices configured"):
+        with pytest.raises(pytest.skip.Exception, match="No devices registered"):
             pytest_device._load_fallback_device(
                 _FakeSession(pytest_device._TransportCache(), rootpath=tmp_path),
             )
