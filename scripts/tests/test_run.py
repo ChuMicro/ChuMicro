@@ -119,7 +119,7 @@ class TestMainDispatch:
         result = run.main(["run.py", "build", "--package-workers", "8"])
 
         assert result == 24
-        assert calls == [((), {"package_workers": 8})]
+        assert calls == [((), {"package_workers": 8, "quiet": False})]
 
     def test_check_api_dispatches_max_workers(self, monkeypatch) -> None:
         """``check-api`` forwards ``--max-workers`` to ``check_api()``."""
@@ -158,7 +158,8 @@ class TestMainDispatch:
                 "no_cov": True,
                 "coverage_threshold": None,
                 "elevated_packages": None,
-                "package_workers": 4,
+                "package_workers": run._DEFAULT_PACKAGE_PARALLEL_WORKERS,
+                "quiet": False,
             }),
         ]
 
@@ -185,7 +186,8 @@ class TestMainDispatch:
                 "no_cov": False,
                 "coverage_threshold": None,
                 "elevated_packages": None,
-                "package_workers": 4,
+                "package_workers": run._DEFAULT_PACKAGE_PARALLEL_WORKERS,
+                "quiet": False,
             }),
         ]
 
@@ -255,7 +257,11 @@ class TestMainDispatch:
 
         assert result == 7
         assert command_calls == [
-            ((resolved_packages,), {"serve": True, "package_workers": 4}),
+            ((resolved_packages,), {
+                "serve": True,
+                "package_workers": run._DEFAULT_PACKAGE_PARALLEL_WORKERS,
+                "quiet": False,
+            }),
         ]
 
     def test_docs_preview_dispatches_resolved_scope(self, monkeypatch) -> None:
@@ -350,8 +356,9 @@ class TestMainDispatch:
                 {
                     "coverage_threshold": 94,
                     "with_functional": False,
-                    "phase_workers": 4,
-                    "package_workers": 4,
+                    "phase_workers": run._DEFAULT_PREFLIGHT_PHASE_PARALLEL_WORKERS,
+                    "package_workers": run._DEFAULT_PACKAGE_PARALLEL_WORKERS,
+                    "quiet": False,
                 },
             ),
         ]
@@ -448,8 +455,9 @@ class TestMainDispatch:
                 {
                     "coverage_threshold": None,
                     "with_functional": True,
-                    "phase_workers": 4,
-                    "package_workers": 4,
+                    "phase_workers": run._DEFAULT_PREFLIGHT_PHASE_PARALLEL_WORKERS,
+                    "package_workers": run._DEFAULT_PACKAGE_PARALLEL_WORKERS,
+                    "quiet": False,
                 },
             ),
         ]
@@ -749,9 +757,17 @@ class TestCompositeTestCommands:
         )
 
         assert result == 0
+        # cpython runs first in-process; mp + cp each receive a sink
+        # injected by the parallel-phase runner.
         assert cpython_calls == [((package_dirs,), {})]
-        assert micropython_calls == [(("/tmp/mpy", package_dirs), {})]
-        assert circuitpython_calls == [(("/tmp/cpy", package_dirs), {})]
+        assert len(micropython_calls) == 1
+        mpy_args, mpy_kwargs = micropython_calls[0]
+        assert mpy_args == ("/tmp/mpy", package_dirs)
+        assert isinstance(mpy_kwargs.get("sink"), run._Sink)
+        assert len(circuitpython_calls) == 1
+        cpy_args, cpy_kwargs = circuitpython_calls[0]
+        assert cpy_args == ("/tmp/cpy", package_dirs)
+        assert isinstance(cpy_kwargs.get("sink"), run._Sink)
 
     def test_test_functional_runs_libraries_then_workbench(
         self, monkeypatch,
@@ -877,9 +893,9 @@ class TestTestCpython:
 
         commands: list[list[str]] = []
 
-        def fake_run_pytest(command, environment):
+        def fake_run_pytest(command, environment, sink):
             commands.append(command)
-            return 0, ""
+            return 0
 
         monkeypatch.setattr(run, "_run_pytest_capturing", fake_run_pytest)
         result = run.test_cpython([package_a, package_b], no_cov=True)
@@ -924,14 +940,16 @@ class TestTestCpython:
         package_dir = _make_test_package(fake_root, "timing")
         monkeypatch.setattr(run, "discover_package_dirs", lambda: [package_dir])
 
-        def fake_run_command(command, **kwargs):
-            # Pytest invocations have "pytest" as the third element
-            # (PYTHON, "-m", "pytest", ...); coverage runs use "coverage".
-            if len(command) > 2 and command[2] == "pytest":
-                return 5
-            return 0
+        # _run_pytest_capturing normalises pytest exit code 5 ("no tests
+        # collected") to 0, mimicking what stream_subprocess + the
+        # downstream remap would do for a real pytest run.
+        def fake_stream(command, **_kwargs):
+            return 5, ""
 
-        monkeypatch.setattr(run, "run_command", fake_run_command)
+        monkeypatch.setattr(run, "stream_subprocess", fake_stream)
+        # Coverage post-processing also shells out via run_command;
+        # short-circuit it so the test focuses on the exit-code remap.
+        monkeypatch.setattr(run, "run_command", lambda *_a, **_kw: 0)
         result = run.test_cpython(
             [package_dir],
             filter_expression="timing/test_nothing_matches",
@@ -945,7 +963,7 @@ class TestTestCpython:
 
         monkeypatch.setattr(
             run, "_run_pytest_capturing",
-            lambda command, environment: (17, ""),
+            lambda command, environment, sink: 17,
         )
         result = run.test_cpython([package_dir], no_cov=True)
         assert result == 17
@@ -956,9 +974,9 @@ class TestTestCpython:
 
         recorded: list[list[str]] = []
 
-        def fake_run_pytest(command, environment):
+        def fake_run_pytest(command, environment, sink):
             recorded.append(command)
-            return 0, ""
+            return 0
 
         monkeypatch.setattr(run, "_run_pytest_capturing", fake_run_pytest)
         run.test_cpython([package_dir], coverage_threshold=94)
@@ -977,9 +995,9 @@ class TestTestCpython:
 
         recorded: list[list[str]] = []
 
-        def fake_run_pytest(command, environment):
+        def fake_run_pytest(command, environment, sink):
             recorded.append(command)
-            return 0, ""
+            return 0
 
         monkeypatch.setattr(run, "_run_pytest_capturing", fake_run_pytest)
         run.test_cpython(
@@ -1009,9 +1027,10 @@ class TestTestCpython:
 
         recorded: list[list[str]] = []
         monkeypatch.setattr(
-            run, "run_command",
-            lambda command, **kwargs: (recorded.append(command), 0)[1],
+            run, "_run_pytest_capturing",
+            lambda command, environment, sink: (recorded.append(command), 0)[1],
         )
+        monkeypatch.setattr(run, "run_command", lambda *_a, **_kw: 0)
 
         run.test_cpython([package_dir], no_cov=True)
         pytest_calls = [command for command in recorded if "-m" in command and "pytest" in command]
@@ -1032,7 +1051,7 @@ class TestTestCpython:
         recorded: list[list[str]] = []
         monkeypatch.setattr(
             run, "_run_pytest_capturing",
-            lambda command, environment: (recorded.append(command), (0, ""))[1],
+            lambda command, environment, sink: (recorded.append(command), 0)[1],
         )
 
         run.test_cpython(
@@ -1049,7 +1068,7 @@ class TestTestCpython:
         recorded: list[list[str]] = []
         monkeypatch.setattr(
             run, "_run_pytest_capturing",
-            lambda command, environment: (recorded.append(command), (0, ""))[1],
+            lambda command, environment, sink: (recorded.append(command), 0)[1],
         )
         run.test_cpython([package_dir], exit_first=True, no_cov=True)
         pytest_calls = [
@@ -1063,7 +1082,7 @@ class TestTestCpython:
         recorded: list[list[str]] = []
         monkeypatch.setattr(
             run, "_run_pytest_capturing",
-            lambda command, environment: (recorded.append(command), (0, ""))[1],
+            lambda command, environment, sink: (recorded.append(command), 0)[1],
         )
         run.test_cpython([package_dir], verbose=True, no_cov=True)
         pytest_calls = [
@@ -1073,36 +1092,51 @@ class TestTestCpython:
 
 
 # ---------------------------------------------------------------------------
-# Tests for _run_phases_in_parallel (parallel test_all_runtimes)
+# Tests for _run_parallel_phases (the unified runner) and the dispatchers
 # ---------------------------------------------------------------------------
 
 
-class TestRunPhasesInParallel:
-    """Tests for _run_phases_in_parallel buffered-output behavior."""
+class TestRunParallelPhases:
+    """Tests for _run_parallel_phases shape + dispatcher contract."""
 
-    def test_runs_all_phases_concurrently(self, capsys):
-        """All phases run; their outputs appear in submission order."""
+    def test_runs_all_phases_concurrently(self):
+        """Every submitted phase callable is invoked with a sink."""
         log: list[str] = []
 
-        def phase_one() -> int:
-            print("from phase one")
+        def phase_one(sink) -> int:
+            sink.line("from phase one")
             log.append("one")
             return 0
 
-        def phase_two() -> int:
-            print("from phase two")
+        def phase_two(sink) -> int:
+            sink.line("from phase two")
             log.append("two")
             return 0
 
-        result = run._run_phases_in_parallel((
-            ("first", phase_one),
-            ("second", phase_two),
-        ))
+        result = run._run_parallel_phases(
+            (("first", phase_one), ("second", phase_two)),
+            dispatcher=run._QuietDispatcher(),
+        )
         assert result == 0
-        # Both phases ran.
         assert sorted(log) == ["one", "two"]
-        # Output order matches submission order regardless of scheduling.
+
+    def test_quiet_dispatcher_replays_in_submission_order(self, capsys):
+        """The quiet dispatcher prints headers + captured output in order."""
+
+        def phase_one(sink) -> int:
+            sink.line("from phase one")
+            return 0
+
+        def phase_two(sink) -> int:
+            sink.line("from phase two")
+            return 0
+
+        run._run_parallel_phases(
+            (("first", phase_one), ("second", phase_two)),
+            dispatcher=run._QuietDispatcher(),
+        )
         out = capsys.readouterr().out
+        # Output order matches submission order regardless of scheduling.
         first_index = out.index("from phase one")
         second_index = out.index("from phase two")
         assert first_index < second_index
@@ -1110,133 +1144,132 @@ class TestRunPhasesInParallel:
         assert "== second ==" in out
 
     def test_first_failure_short_circuits_return_value(self):
-        """A failing phase's exit code (in submission order) becomes the return."""
-
-        def phase_failing() -> int:
-            return 7
-
-        def phase_succeeding() -> int:
-            return 0
-
-        result = run._run_phases_in_parallel((
-            ("succeeded", phase_succeeding),
-            ("failed", phase_failing),
-        ))
+        """A failing phase's exit code becomes the run's return value."""
+        result = run._run_parallel_phases(
+            (
+                ("succeeded", lambda sink: 0),
+                ("failed", lambda sink: 7),
+            ),
+            dispatcher=run._QuietDispatcher(),
+        )
         assert result == 7
 
     def test_first_failure_in_submission_order(self):
         """When two phases fail, the first one in submission order wins."""
-
-        def phase_a() -> int:
-            return 11
-
-        def phase_b() -> int:
-            return 13
-
-        result = run._run_phases_in_parallel((
-            ("a", phase_a),
-            ("b", phase_b),
-        ))
+        result = run._run_parallel_phases(
+            (
+                ("a", lambda sink: 11),
+                ("b", lambda sink: 13),
+            ),
+            dispatcher=run._QuietDispatcher(),
+        )
         assert result == 11
 
-    def test_phase_crash_treated_as_failure(self, capsys):
+    def test_phase_crash_treated_as_failure(self):
         """An exception in a phase is captured and treated as exit code 1."""
-
-        def phase_crashes() -> int:
+        def phase_crashes(sink) -> int:
             raise RuntimeError("oh no")
 
-        result = run._run_phases_in_parallel((
-            ("crashy", phase_crashes),
-        ))
-        assert result == 1
-        out = capsys.readouterr().out
-        assert "crashed" in out
-
-
-# ---------------------------------------------------------------------------
-# Tests for the Decision 0048 preflight phase-level parallel block
-# ---------------------------------------------------------------------------
-
-
-class TestPreflightPhaseSubprocessFactory:
-    """Tests for the subprocess-runner closure built per phase."""
-
-    def test_returns_completed_subprocess_output_on_success(self, monkeypatch):
-        """Stdout + stderr + a leading ``+ <cmd>`` banner all flow back."""
-        captured: dict[str, list[str]] = {}
-
-        class _FakeCompleted:
-            returncode = 0
-            stdout = "hello stdout\n"
-            stderr = "hello stderr\n"
-
-        def fake_subprocess_run(command, **kwargs):
-            captured["command"] = list(command)
-            captured["kwargs"] = kwargs
-            return _FakeCompleted()
-
-        monkeypatch.setattr(run.subprocess, "run", fake_subprocess_run)
-
-        factory = run._preflight_phase_subprocess_factory(
-            "lint", ["lint"],
+        result = run._run_parallel_phases(
+            (("crashy", phase_crashes),),
+            dispatcher=run._QuietDispatcher(),
         )
-        exit_code, output = factory()
+        assert result == 1
+
+
+class TestPickDispatcher:
+    """Tests for the TTY + env-var-based dispatcher selection."""
+
+    def test_quiet_flag_picks_quiet_dispatcher(self, monkeypatch):
+        monkeypatch.delenv(run._RAW_OUTPUT_ENV_VAR, raising=False)
+        dispatcher = run._pick_dispatcher(quiet=True)
+        assert isinstance(dispatcher, run._QuietDispatcher)
+
+    def test_raw_env_var_overrides_quiet_flag(self, monkeypatch):
+        monkeypatch.setenv(run._RAW_OUTPUT_ENV_VAR, "1")
+        dispatcher = run._pick_dispatcher(quiet=True)
+        assert isinstance(dispatcher, run._RawDispatcher)
+
+    def test_non_tty_picks_interleave_dispatcher(self, monkeypatch):
+        monkeypatch.delenv(run._RAW_OUTPUT_ENV_VAR, raising=False)
+        monkeypatch.setattr(run.sys.stdout, "isatty", lambda: False)
+        dispatcher = run._pick_dispatcher(quiet=False)
+        assert isinstance(dispatcher, run._InterleaveDispatcher)
+
+    def test_tty_picks_status_dispatcher(self, monkeypatch):
+        monkeypatch.delenv(run._RAW_OUTPUT_ENV_VAR, raising=False)
+        monkeypatch.setattr(run.sys.stdout, "isatty", lambda: True)
+        dispatcher = run._pick_dispatcher(quiet=False)
+        assert isinstance(dispatcher, run._StatusDispatcher)
+
+
+# ---------------------------------------------------------------------------
+# Tests for the Decision 0048 / 0054 preflight phase-level parallel block
+# ---------------------------------------------------------------------------
+
+
+class TestSubcommandPhaseFactory:
+    """Tests for the subprocess-runner closure built per preflight phase."""
+
+    def test_streams_subprocess_output_through_sink(self, monkeypatch):
+        """Each line of child output is delivered to the sink as it arrives."""
+        captured: dict[str, object] = {}
+
+        def fake_stream(command, *, cwd, environment, on_line):
+            captured["command"] = list(command)
+            captured["cwd"] = cwd
+            captured["environment"] = environment
+            on_line("hello stdout")
+            on_line("hello stderr")
+            return 0, "hello stdout\nhello stderr\n"
+
+        monkeypatch.setattr(run, "stream_subprocess", fake_stream)
+
+        factory = run._subcommand_phase_factory("lint", ["lint"])
+        sink = run._Sink(run._QuietDispatcher(), "lint")
+        exit_code = factory(sink)
 
         assert exit_code == 0
         assert captured["command"][1:] == ["scripts/run.py", "lint"]
-        assert captured["kwargs"]["capture_output"] is True
-        assert captured["kwargs"]["text"] is True
-        assert captured["kwargs"]["check"] is False
-        assert captured["kwargs"]["cwd"] == run.ROOT
-        # The banner ``+ <cmd>`` must come first (matches docs/build banners).
-        first_line = output.splitlines()[0]
-        assert first_line.startswith("+ ")
-        assert "scripts/run.py lint" in first_line
-        assert "hello stdout" in output
-        assert "hello stderr" in output
-        # On success no failure banner is appended.
-        assert "Phase failed" not in output
+        assert captured["cwd"] == run.ROOT
+        # Child runs with CHUMICRO_RAW_OUTPUT=1 so its dispatcher is raw.
+        assert captured["environment"][run._RAW_OUTPUT_ENV_VAR] == "1"
+        # Banner + every line flow through the sink.
+        lines = sink.captured.splitlines()
+        assert lines[0].startswith("+ ")
+        assert "scripts/run.py lint" in lines[0]
+        assert "hello stdout" in lines
+        assert "hello stderr" in lines
 
     def test_appends_failure_banner_on_nonzero_exit(self, monkeypatch):
         """A non-zero exit code produces a ``Phase failed: <label>`` line."""
-
-        class _FakeCompleted:
-            returncode = 7
-            stdout = ""
-            stderr = "error text\n"
-
         monkeypatch.setattr(
-            run.subprocess, "run", lambda *_a, **_kw: _FakeCompleted(),
+            run, "stream_subprocess",
+            lambda *_a, **_kw: (7, ""),
         )
-
-        factory = run._preflight_phase_subprocess_factory(
+        factory = run._subcommand_phase_factory(
             "test (python 3.13)", ["test", "--all"],
         )
-        exit_code, output = factory()
+        sink = run._Sink(run._QuietDispatcher(), "test (python 3.13)")
+        exit_code = factory(sink)
 
         assert exit_code == 7
-        assert "error text" in output
-        assert "Phase failed: test (python 3.13)" in output
+        assert "Phase failed: test (python 3.13)" in sink.captured
 
     def test_forwards_extra_subcommand_args(self, monkeypatch):
         """Extra args land after ``scripts/run.py <subcommand>`` verbatim."""
         seen_command: list[str] = []
 
-        class _FakeCompleted:
-            returncode = 0
-            stdout = ""
-            stderr = ""
-
-        def fake_subprocess_run(command, **_kwargs):
+        def fake_stream(command, **_kwargs):
             seen_command.extend(command)
-            return _FakeCompleted()
+            return 0, ""
 
-        monkeypatch.setattr(run.subprocess, "run", fake_subprocess_run)
-
-        factory = run._preflight_phase_subprocess_factory(
+        monkeypatch.setattr(run, "stream_subprocess", fake_stream)
+        factory = run._subcommand_phase_factory(
             "test", ["test", "--all", "--coverage-threshold", "94"],
         )
-        factory()
+        sink = run._Sink(run._QuietDispatcher(), "test")
+        factory(sink)
 
         # The first element is the running interpreter; the rest is
         # exactly what we asked for.
@@ -1312,7 +1345,7 @@ class TestPreflightParallelDispatch:
 
         def capturing_factory(label, args):
             seen.append([label, *args])
-            return lambda: (0, "")
+            return lambda sink: 0
 
         monkeypatch.setattr(
             run, "_preflight_phase_subprocess_factory", capturing_factory,
@@ -1339,7 +1372,7 @@ class TestPreflightParallelDispatch:
 
         def capturing_factory(label, args):
             seen.append([label, *args])
-            return lambda: (0, "")
+            return lambda sink: 0
 
         monkeypatch.setattr(
             run, "_preflight_phase_subprocess_factory", capturing_factory,

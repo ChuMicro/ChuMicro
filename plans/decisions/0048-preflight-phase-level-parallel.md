@@ -2,7 +2,8 @@
 
 Status: `accepted`
 Date: `2026-05-03`
-Related: Decision 0025 (coverage threshold), commit `ffe50bc`
+Related: Decision 0025 (coverage threshold), [Decision 0054](0054-streaming-output-and-status-modes.md)
+(supersedes §3 — output capture switched from `subprocess.run(capture_output=True)` to `Popen` + line-streaming dispatcher; subprocess re-invocation persists for resource isolation, not output capture), commit `ffe50bc`
 (Bucket 3 — per-package fan-out for `build` and `docs`),
 commit `cb4efa9` (older 2-thread MP/CP fan-out inside `test_all_runtimes`)
 
@@ -50,23 +51,27 @@ block**.  Both phases drive the same physical hardware via
 `devices.yml` defaults; running them concurrently would deadlock
 on board access.
 
-### 2. Submission order = log replay order
+### 2. Submission order matters for the quiet-mode log
 
 Phases are submitted in the same order the existing serial
-`preflight` runs them, and `_run_capture_phases_in_parallel`
-(commit `ffe50bc`) replays each phase's captured output in
-**submission order** under its `== <phase> ==` header once all
-phases complete.  The on-screen log reads as if the loop had run
-serially, so a user scanning for "lint" or "test-circuitpython"
-finds them in the expected slots.
+`preflight` runs them.  Under `--quiet` (the original Decision 0048
+shape), `_run_parallel_phases` replays each phase's captured output
+under its `== <phase> ==` header in submission order once all phases
+complete, so a user grepping the log finds "lint" and "test-circuitpython"
+in their expected slots.
 
-This preserves the "lint-first signal" UX even though, in
-wall-clock terms, lint may have finished while test-circuitpython
-was still warming up.
+Under the live dispatchers introduced by [Decision 0054](0054-streaming-output-and-status-modes.md)
+(status in a TTY, interleave in a pipe) phase events print in
+*completion* order — a 1-second `lint` finishes long before a
+20-second `test-circuitpython`.  Submission order still matters for
+the failure-only transcript dump in status mode, which prints failed
+phases under `== <phase> (failed) ==` headers in submission order.
 
 ### 3. Mechanism: subprocess re-invocation
 
-Each phase runs as `subprocess.run([PYTHON, "scripts/run.py", <subcommand>, *flags], capture_output=True, text=True)`.  Subprocess (rather than in-thread `redirect_stdout`) because most phase output comes from child processes that write to the parent's stdout fd directly, which `redirect_stdout` cannot intercept; subprocess re-invocation gives each phase its own pipe-backed stdout that the helper can collect deterministically.
+Each phase runs as `subprocess.Popen([PYTHON, "scripts/run.py", <subcommand>, *flags], stdout=PIPE, stderr=STDOUT)` with the child's env carrying `CHUMICRO_RAW_OUTPUT=1` so the child's own dispatcher resolves to `_RawDispatcher` (raw line passthrough).  The parent reads the child's stdout line-by-line via `shared.stream_subprocess` and routes each line through the per-phase sink to the active dispatcher.
+
+Subprocess re-invocation persists from the original Decision 0048 design but for a *different* reason than originally given.  The original ADR chose subprocess because it was the only way to capture child output cleanly (`subprocess.run(capture_output=True)` buffers; `redirect_stdout` only catches Python-level prints).  After [Decision 0054](0054-streaming-output-and-status-modes.md), `stream_subprocess` captures fd-level output directly, so re-invocation is no longer required for capture.  It persists because per-phase process isolation has independent value: OOM containment, import-time crash isolation, and the ability to run a phase against a different Python version trivially.
 
 Subprocess re-invocation requires every phase to be reachable as a top-level CLI subcommand.  `check-dep-graph` was registered as a phase callable but not as a CLI subcommand; this ADR's implementation adds the missing subparser.  The `test` subcommand also gains a `--elevated-packages NAMES` CSV flag so preflight can preserve its "elevated-coverage-only-on-changed-libraries" behavior across the subprocess boundary — internal flag, preflight is the only caller.
 
@@ -97,23 +102,22 @@ Reasons:
 If a user really wants fail-fast semantics, the existing serial
 loop is one revert away.
 
-### 5. Concurrency cap: 4 workers default, CLI-flag override
+### 5. Concurrency cap: host-aware defaults, CLI-flag override
 
-Default cap: **4 concurrent phases**.
+Default caps come from `_default_workers()` ([Decision 0054](0054-streaming-output-and-status-modes.md) §5),
+which sizes `(phase_workers, package_workers)` to keep the product
+near `cpu_count()` while reserving headroom for the OS and parent
+process.  A 12-core laptop gets `(3, 4) = 12` peak subprocess
+concurrency; a 4-core laptop gets `(2, 2) = 4`; a 24-core CI runner
+gets `(5, 4) = 20`.  The ADR's original "4 × 4 = 16" hardcoded pair
+oversubscribed 4-core hosts and underused 12-core hosts.
 
-Reasoning: each phase already fans out internally —
+Each phase still fans out internally where applicable —
 
-- `build` runs 4-way per-package fan-out (Bucket 3,
-  `_DEFAULT_PACKAGE_PARALLEL_WORKERS = 4`)
-- `docs` runs 4-way per-package fan-out
-- `test (cpython)` invokes pytest, which can use multiple cores
-  internally
-- `test-micropython` / `test-circuitpython` shell out to the
-  unix-port binaries
-
-11 phases × 4 internal workers = up to 44 concurrent subprocesses
-without a phase-level cap.  4 phase-level workers keeps the laptop
-responsive at ~16 concurrent subprocesses peak.
+- `build` runs per-package fan-out across `_DEFAULT_PACKAGE_PARALLEL_WORKERS` workers
+- `docs` runs per-package fan-out at the same width
+- `test (cpython)` invokes pytest, which can use multiple cores internally
+- `test-micropython` / `test-circuitpython` shell out to the unix-port binaries
 
 Override via CLI flags:
 
@@ -125,15 +129,13 @@ python scripts/run.py preflight --phase-workers 8 --package-workers 8
 caps the per-package fan-out *inside* phases that fan out by
 package (`build`, `docs`, `test`); `preflight` forwards it as
 `--package-workers` to those subcommands and as `--max-workers`
-to `check-api`.  A 16-core CI runner can crank both up; a 4-core
-laptop can drop both to 2.  Both flags also exist on the
-individual subcommands when invoked directly
-(`python scripts/run.py build --package-workers 8`,
-`python scripts/check_api.py --max-workers 8`).
+to `check-api`.  Both flags also exist on the individual
+subcommands when invoked directly (`python scripts/run.py build
+--package-workers 8`, `python scripts/check_api.py --max-workers 8`).
 
 ### 6. Helper reuse
 
-Reuse the Bucket 3 helper `_run_capture_phases_in_parallel` (commit `ffe50bc`) as-is — it already implements submission-order replay of captured output.  The older 2-thread `_run_phases_in_parallel` stays where it is (used by `test_all_runtimes`); deprecation is out of scope.
+The two pre-existing helpers (`_run_phases_in_parallel` for `test_all_runtimes`, `_run_capture_phases_in_parallel` for everywhere else) collapsed into a single `_run_parallel_phases` after [Decision 0054](0054-streaming-output-and-status-modes.md) unified the phase-callable shape on `(sink) -> int`.  `test_all_runtimes` now uses the unified runner with the in-process sink-threaded variant of `test_micropython` / `test_circuitpython` (avoiding a CLI-flag round-trip for `package_dirs`).
 
 ## Consequences
 

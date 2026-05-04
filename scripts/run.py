@@ -10,6 +10,7 @@ Run ``python scripts/run.py -h`` to see available tasks.
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from collections.abc import Callable, Sequence
@@ -40,7 +41,7 @@ from repo_layout import (
     pythonpath_environment,
     resolve_scope,
 )
-from shared import run_command
+from shared import run_command, stream_subprocess
 
 PYTHON = sys.executable
 # Script that runs a library's tests/ directory under a non-CPython interpreter
@@ -48,23 +49,290 @@ PYTHON = sys.executable
 COMPAT_SCRIPT = "support/test_harness/run_cross_runtime.py"
 
 
-#: Default cap on concurrent per-package subprocesses for build /
-#: docs / test fan-out.  Each task spawns one external process
-#: (``python -m build``, ``python -m zensical build``, or pytest); 4
-#: keeps a ~10-core laptop responsive while still cutting serial wall
-#: time roughly 4× on an 18-package workspace.  CI runners with more
-#: cores can override via ``--package-workers``.
-_DEFAULT_PACKAGE_PARALLEL_WORKERS = 4
+def _default_workers() -> tuple[int, int]:
+    """Return ``(phase_workers, package_workers)`` defaults sized for this host.
+
+    Sizing rule: total subprocess load (``phase × package``) stays roughly
+    at ``cpu_count()`` so we don't oversubscribe; per-dimension caps keep
+    each dimension in a sensible range (phases ≤ 11 — the preflight phase
+    count; package_workers ≤ 4 — diminishing returns past that since each
+    per-package job is a few seconds).
+
+    Worked examples:
+
+    ====  =====  =======  ========
+    cpu   phase  package  total
+    ====  =====  =======  ========
+      4    2      2          4
+      8    3      2          6
+     12    3      4         12
+     16    4      4         16
+     24    5      4         20
+    ====  =====  =======  ========
+
+    Override via ``--phase-workers`` and ``--package-workers``.
+    """
+    cores = max(2, os.cpu_count() or 4)
+    phase = max(2, min(11, round(cores ** 0.5)))
+    package = max(1, min(4, cores // phase))
+    return phase, package
+
+
+_DEFAULT_PHASE_WORKERS, _DEFAULT_PACKAGE_WORKERS = _default_workers()
 
 
 #: Default cap on concurrent ``preflight`` *phases*.  Each phase is
 #: its own ``python scripts/run.py <subcommand>`` subprocess that may
-#: itself fan out internally (build / docs at 4×, test_cpython via
-#: pytest, etc.), so a higher phase-level cap multiplies subprocess
-#: count.  4 keeps the laptop responsive at roughly 16 peak concurrent
-#: subprocesses; CI runners with more cores can override via
-#: ``--phase-workers``.  See Decision 0048.
-_DEFAULT_PREFLIGHT_PHASE_PARALLEL_WORKERS = 4
+#: itself fan out internally (build / docs, test_cpython via pytest,
+#: etc.), so a higher phase-level cap multiplies subprocess count.
+#: See :func:`_default_workers` for the host-aware sizing rule and
+#: Decision 0048.  Override via ``--phase-workers``.
+_DEFAULT_PREFLIGHT_PHASE_PARALLEL_WORKERS = _DEFAULT_PHASE_WORKERS
+
+
+#: Default cap on concurrent per-package subprocesses for build /
+#: docs / test fan-out.  Each task spawns one external process
+#: (``python -m build``, ``python -m zensical build``, or pytest).
+#: See :func:`_default_workers`; override via ``--package-workers``.
+_DEFAULT_PACKAGE_PARALLEL_WORKERS = _DEFAULT_PACKAGE_WORKERS
+
+
+#: Env var the parent dispatcher sets when re-invoking ``scripts/run.py``
+#: as a subprocess.  The child treats its presence as "I'm being driven
+#: by a parent dispatcher; print raw lines, the parent will re-frame
+#: them under the right phase header."  Without this signal the child
+#: would build its own dispatcher and the parent would see nested
+#: ``[label] [inner-label] line`` framing.
+_RAW_OUTPUT_ENV_VAR = "CHUMICRO_RAW_OUTPUT"
+
+
+# ---------------------------------------------------------------------------
+# Output dispatcher: routes parallel-phase output to the user.
+#
+# Three modes:
+#
+# - ``quiet``: every line is buffered; on finish() the dispatcher
+#   replays each phase's full transcript under a ``== <label> ==``
+#   header in submission order.  This is the original (pre-2026-05)
+#   behaviour and the default for ``--quiet`` / agent / log-capture
+#   contexts.
+# - ``interleave``: phase events (started / done) and every line of
+#   output print live, prefixed with ``[label]``.  Default for
+#   non-TTY contexts (CI logs, ``run.py preflight > out.log``).
+# - ``status``: phase events print live (``→ lint``, ``✓ lint
+#   (1.2s)``); per-line output is suppressed during the run; on
+#   finish(), failed phases get a full transcript dump under a
+#   ``== <label> (failed) ==`` header.  Default for TTY contexts.
+# - ``raw``: a fourth mode used only by the child of a subprocess
+#   re-invocation (when ``CHUMICRO_RAW_OUTPUT`` is set in the env).
+#   Lines print raw to stdout so the parent's pipe reader can frame
+#   them.  No phase events, no headers.
+#
+# The dispatcher is constructed by :func:`_pick_dispatcher` based on
+# CLI flag + TTY + env-var detection.
+# ---------------------------------------------------------------------------
+
+
+class _Sink:
+    """Per-phase output sink — passed into a phase callable.
+
+    Each phase callable receives a sink and emits lines through it via
+    ``sink.line(text)``.  The sink records every line into a local
+    buffer (so ``sink.captured`` returns the full transcript at the
+    end) *and* forwards it to the dispatcher for live routing.
+
+    The streaming subprocess helper :func:`shared.stream_subprocess`
+    accepts ``on_line=sink.line`` so phase callables can pipe child
+    output through the sink with one line of glue.
+    """
+
+    __slots__ = ("_dispatcher", "_label", "_buffer")
+
+    def __init__(self, dispatcher: _Dispatcher, label: str) -> None:
+        self._dispatcher = dispatcher
+        self._label = label
+        self._buffer: list[str] = []
+
+    def line(self, text: str) -> None:
+        """Record one line and forward it to the dispatcher."""
+        self._buffer.append(text)
+        self._dispatcher.phase_line(self._label, text)
+
+    @property
+    def captured(self) -> str:
+        """Return the full captured transcript with a trailing newline."""
+        if not self._buffer:
+            return ""
+        return "\n".join(self._buffer) + "\n"
+
+
+class _Dispatcher:
+    """Coordinates output from multiple parallel phases.
+
+    Lifecycle: ``start(labels)`` → many ``phase_started`` /
+    ``phase_line`` / ``phase_done`` calls (concurrent, from worker
+    threads) → ``finish()``.  Implementations must serialize their own
+    output (e.g. with a lock) — phase callbacks fire from worker
+    threads.
+    """
+
+    def start(self, labels: list[str]) -> None:
+        """Called once before any phase runs.  *labels* is submission order."""
+
+    def phase_started(self, label: str) -> None:
+        """Called when a phase begins running."""
+
+    def phase_line(self, label: str, text: str) -> None:
+        """Called for every line of output the phase emits."""
+
+    def phase_done(self, label: str, exit_code: int, captured: str) -> None:
+        """Called when a phase finishes.  *captured* is the full transcript."""
+
+    def finish(self) -> None:
+        """Called once after all phases complete.  Render finals."""
+
+
+class _QuietDispatcher(_Dispatcher):
+    """Buffer everything, replay at finish() in submission order.
+
+    The original (pre-2026-05) behaviour preserved as a fallback for
+    ``--quiet``, agent / log-capture contexts, and any consumer that
+    wants the deterministic per-phase header layout.
+    """
+
+    def __init__(self) -> None:
+        self._labels: list[str] = []
+        self._results: dict[str, tuple[int, str]] = {}
+
+    def start(self, labels: list[str]) -> None:
+        self._labels = list(labels)
+
+    def phase_done(self, label: str, exit_code: int, captured: str) -> None:
+        self._results[label] = (exit_code, captured)
+
+    def finish(self) -> None:
+        first_failure: str | None = None
+        for label in self._labels:
+            exit_code, captured = self._results.get(label, (0, ""))
+            print(f"== {label} ==")
+            if captured:
+                print(captured, end="" if captured.endswith("\n") else "\n")
+            if exit_code != 0 and first_failure is None:
+                first_failure = label
+                print(f"Step failed: {label}")
+
+
+class _InterleaveDispatcher(_Dispatcher):
+    """Live phase events + ``[label]``-prefixed lines.
+
+    Default for non-TTY contexts (CI, redirected stdout).  Lines from
+    different phases interleave but each is prefixed with its phase
+    label so log readers can grep / filter by phase.
+    """
+
+    def __init__(self) -> None:
+        import threading
+        self._lock = threading.Lock()
+
+    def start(self, labels: list[str]) -> None:
+        with self._lock:
+            print(f"Running {len(labels)} phase(s) in parallel...", flush=True)
+
+    def phase_started(self, label: str) -> None:
+        with self._lock:
+            print(f"  -> {label}", flush=True)
+
+    def phase_line(self, label: str, text: str) -> None:
+        with self._lock:
+            print(f"[{label}] {text}", flush=True)
+
+    def phase_done(self, label: str, exit_code: int, captured: str) -> None:
+        marker = "OK" if exit_code == 0 else "FAIL"
+        with self._lock:
+            print(f"  [{marker}] {label} (exit={exit_code})", flush=True)
+
+
+class _StatusDispatcher(_Dispatcher):
+    """Live phase events with elapsed time; failure logs dumped at end.
+
+    Default for TTY contexts.  Suppresses per-line output while phases
+    run (just shows ``->`` / ``OK`` / ``FAIL`` events), then dumps the
+    full transcript of any failed phase at finish() time so a developer
+    sees what broke without ten phases of noise scrolling by.
+    """
+
+    def __init__(self) -> None:
+        import threading
+        import time
+        self._lock = threading.Lock()
+        self._time = time
+        self._labels: list[str] = []
+        self._started: dict[str, float] = {}
+        self._results: dict[str, tuple[int, str]] = {}
+
+    def start(self, labels: list[str]) -> None:
+        self._labels = list(labels)
+        with self._lock:
+            print(f"Running {len(labels)} phase(s) in parallel...", flush=True)
+
+    def phase_started(self, label: str) -> None:
+        with self._lock:
+            self._started[label] = self._time.monotonic()
+            print(f"  -> {label}", flush=True)
+
+    def phase_done(self, label: str, exit_code: int, captured: str) -> None:
+        end = self._time.monotonic()
+        elapsed = end - self._started.get(label, end)
+        with self._lock:
+            self._results[label] = (exit_code, captured)
+            marker = "OK  " if exit_code == 0 else "FAIL"
+            print(f"  [{marker}] {label} ({elapsed:.1f}s)", flush=True)
+
+    def finish(self) -> None:
+        first_failure: str | None = None
+        for label in self._labels:
+            exit_code, captured = self._results.get(label, (0, ""))
+            if exit_code == 0:
+                continue
+            if first_failure is None:
+                first_failure = label
+            print(f"\n== {label} (failed) ==")
+            if captured:
+                print(captured, end="" if captured.endswith("\n") else "\n")
+        if first_failure is not None:
+            print(f"\nStep failed: {first_failure}")
+
+
+class _RawDispatcher(_Dispatcher):
+    """Used inside a child of a subprocess re-invocation.
+
+    The parent ran us via ``Popen`` with ``CHUMICRO_RAW_OUTPUT=1`` set
+    in the env.  We're one phase of the parent's run; the parent will
+    read our stdout line-by-line and re-frame each line under the right
+    phase header.  Emit raw lines, no phase events.
+    """
+
+    def phase_line(self, label: str, text: str) -> None:
+        print(text, flush=True)
+
+
+def _pick_dispatcher(*, quiet: bool) -> _Dispatcher:
+    """Construct the right dispatcher for this invocation context.
+
+    Resolution order:
+      1. ``CHUMICRO_RAW_OUTPUT`` env var → raw (we're a child of a
+         parent dispatcher).
+      2. ``--quiet`` flag → quiet (caller wants buffered replay).
+      3. ``sys.stdout.isatty()`` → status (interactive human).
+      4. otherwise → interleave (non-interactive CI / log capture).
+    """
+    if os.environ.get(_RAW_OUTPUT_ENV_VAR):
+        return _RawDispatcher()
+    if quiet:
+        return _QuietDispatcher()
+    if sys.stdout.isatty():
+        return _StatusDispatcher()
+    return _InterleaveDispatcher()
 
 
 # ---------------------------------------------------------------------------
@@ -352,6 +620,7 @@ def test_cpython(
     coverage_threshold: int | None = None,
     elevated_packages: set[str] | None = None,
     package_workers: int = _DEFAULT_PACKAGE_PARALLEL_WORKERS,
+    quiet: bool = False,
 ) -> int:
     """Run the CPython test suite for the given packages.
 
@@ -412,10 +681,10 @@ def test_cpython(
     # Build one phase per (library, test-target) pair so the fan-out
     # below stays at the granularity Decision 0009 requires (per-
     # library pytest invocation, distinct ``COVERAGE_FILE`` per run).
-    # Each phase captures its own stdout/stderr; ``_run_capture_phases_
-    # in_parallel`` replays results in submission order so the on-
-    # screen log reads as if the loop ran serially.
-    phases: list[tuple[str, Callable[[], tuple[int, str]]]] = []
+    # Each phase streams its stdout/stderr through the dispatcher,
+    # which routes the lines to the right place (live status, prefixed
+    # interleave, or buffered replay) based on TTY + ``--quiet``.
+    phases: list[tuple[str, Callable[[_Sink], int]]] = []
     run_counter = 0
     for package_dir in testable:
         runs = _plan_test_runs_for_library(package_dir, per_library)
@@ -478,8 +747,10 @@ def test_cpython(
                 (label, _make_pytest_phase(command, run_environment)),
             )
 
-    overall_exit_code = _run_capture_phases_in_parallel(
-        phases, max_workers=package_workers,
+    overall_exit_code = _run_parallel_phases(
+        phases,
+        dispatcher=_pick_dispatcher(quiet=quiet),
+        max_workers=package_workers,
     )
 
     if no_cov:
@@ -493,52 +764,41 @@ def test_cpython(
 
 
 def _run_pytest_capturing(
-    command: list[str], environment: dict[str, str],
-) -> tuple[int, str]:
-    """Run a pytest invocation and capture its stdout / stderr.
+    command: list[str], environment: dict[str, str], sink: _Sink,
+) -> int:
+    """Run a pytest invocation streaming output line-by-line through *sink*.
 
     Single seam :func:`_make_pytest_phase` calls and tests monkey-
-    patch.  Captures output via ``subprocess.run(capture_output=True)``
-    so the parallel test_cpython fan-out can hand each result back
-    to the helper that replays in submission order — no
-    ``contextlib.redirect_stdout`` thread-stomp.
+    patch.  Streams output via :func:`shared.stream_subprocess` so the
+    parallel test_cpython fan-out delivers lines to the dispatcher as
+    they arrive (rather than buffering until the subprocess exits).
 
     Pytest exit code 5 ("no tests collected" — typically when a
     ``-k`` filter matches nothing in a given library) is normalised
-    to 0 so it doesn't fail the whole sweep.  The captured output
-    still surfaces the "no tests ran" line so the user sees it in
-    the on-screen log.
+    to 0 so it doesn't fail the whole sweep.  The "no tests ran" line
+    still flows through the sink for log visibility.
     """
-    printable = " ".join(command)
-    completed = subprocess.run(
+    sink.line(f"+ {' '.join(command)}")
+    exit_code, _ = stream_subprocess(
         command,
         cwd=ROOT,
-        env=environment,
-        capture_output=True,
-        text=True,
-        check=False,
+        environment=environment,
+        on_line=sink.line,
     )
-    output_parts = [f"+ {printable}"]
-    if completed.stdout:
-        output_parts.append(completed.stdout.rstrip("\n"))
-    if completed.stderr:
-        output_parts.append(completed.stderr.rstrip("\n"))
-    normalised = 0 if completed.returncode == 5 else completed.returncode
-    return normalised, "\n".join(output_parts) + "\n"
+    return 0 if exit_code == 5 else exit_code
 
 
 def _make_pytest_phase(
     command: list[str], environment: dict[str, str],
-) -> Callable[[], tuple[int, str]]:
-    """Wrap a pytest invocation as a capture-and-return phase callable.
+) -> Callable[[_Sink], int]:
+    """Wrap a pytest invocation as a streaming phase callable.
 
-    The returned closure is what
-    :func:`_run_capture_phases_in_parallel` schedules per package.
-    Delegates to :func:`_run_pytest_capturing` so tests can
-    monkeypatch one well-known seam to observe the constructed
-    pytest command line.
+    The returned closure is what :func:`_run_parallel_phases`
+    schedules per package.  Delegates to :func:`_run_pytest_capturing`
+    so tests can monkeypatch one well-known seam to observe the
+    constructed pytest command line.
     """
-    return lambda: _run_pytest_capturing(command, environment)
+    return lambda sink: _run_pytest_capturing(command, environment, sink)
 
 
 def test_scripts(
@@ -593,6 +853,7 @@ def _selected_library_dirs(package_dirs: list[Path] | None) -> list[Path]:
 def build(
     *,
     package_workers: int = _DEFAULT_PACKAGE_PARALLEL_WORKERS,
+    quiet: bool = False,
 ) -> int:
     """Build all publishable package distributions.
 
@@ -610,28 +871,23 @@ def build(
         print("No publishable packages found (no VERSION + pyproject.toml pairs).")
         return 1
 
-    def build_one(package: str) -> Callable[[], tuple[int, str]]:
+    def build_one(package: str) -> Callable[[_Sink], int]:
         command = [PYTHON, "-m", "build", "--no-isolation", package]
-        printable = " ".join(command)
 
-        def run() -> tuple[int, str]:
-            completed = subprocess.run(
-                command, cwd=ROOT, capture_output=True, text=True,
-            )
-            output_parts = [f"+ {printable}"]
-            if completed.stdout:
-                output_parts.append(completed.stdout.rstrip("\n"))
-            if completed.stderr:
-                output_parts.append(completed.stderr.rstrip("\n"))
-            if completed.returncode != 0:
-                output_parts.append(f"Build failed: {package}")
-            return completed.returncode, "\n".join(output_parts) + "\n"
+        def run(sink: _Sink) -> int:
+            sink.line(f"+ {' '.join(command)}")
+            exit_code, _ = stream_subprocess(command, cwd=ROOT, on_line=sink.line)
+            if exit_code != 0:
+                sink.line(f"Build failed: {package}")
+            return exit_code
 
         return run
 
     phases = [(f"build {package}", build_one(package)) for package in packages]
-    result = _run_capture_phases_in_parallel(
-        phases, max_workers=package_workers,
+    result = _run_parallel_phases(
+        phases,
+        dispatcher=_pick_dispatcher(quiet=quiet),
+        max_workers=package_workers,
     )
     if result != 0:
         return result
@@ -645,6 +901,7 @@ def docs(
     *,
     serve: bool = False,
     package_workers: int = _DEFAULT_PACKAGE_PARALLEL_WORKERS,
+    quiet: bool = False,
 ) -> int:
     """Build docs for selected libraries using Zensical.
 
@@ -679,62 +936,60 @@ def docs(
     # *package_workers* to amortize the per-process warm-up.  The
     # serial loop took ~25-30 s on an 18-package workspace; at 4-way
     # fan-out it lands closer to 2-3 s.
-    phases: list[tuple[str, Callable[[], tuple[int, str]]]] = [
+    phases: list[tuple[str, Callable[[_Sink], int]]] = [
         (
             f"docs {library_dir.relative_to(ROOT)}",
             _build_one_library_docs_factory(library_dir),
         )
         for library_dir in doc_dirs
     ]
-    return _run_capture_phases_in_parallel(
-        phases, max_workers=package_workers,
+    return _run_parallel_phases(
+        phases,
+        dispatcher=_pick_dispatcher(quiet=quiet),
+        max_workers=package_workers,
     )
 
 
 def _build_one_library_docs_factory(
     library_dir: Path,
-) -> Callable[[], tuple[int, str]]:
-    """Return a closure that runs zensical on *library_dir* and returns its output.
+) -> Callable[[_Sink], int]:
+    """Return a phase callable that runs zensical on *library_dir*.
 
-    Returns ``(exit_code, output_text)`` so the parallel helper can
-    replay each library's output under its label header without
-    relying on the process-global ``sys.stdout`` (which thread-stomps
-    when multiple per-library workers run concurrently).
+    The closure streams every line of zensical output through the
+    sink, then post-processes the captured transcript to fail on
+    griffe warnings (Decision 0021).  Streaming means the dispatcher
+    sees output the moment zensical emits it — no buffer-and-replay
+    delay even on slow library builds.
     """
-    def build_one() -> tuple[int, str]:
+    def build_one(sink: _Sink) -> int:
         relative_path = library_dir.relative_to(ROOT)
         site_dir = library_dir / "site"
         command = [
             PYTHON, "-m", "zensical", "build",
             "-f", str(library_dir / "mkdocs.yml"),
         ]
-        printable_command = " ".join(command)
-        completed = subprocess.run(
-            command, cwd=ROOT, capture_output=True, text=True,
+        sink.line(f"+ {' '.join(command)}")
+        exit_code, captured = stream_subprocess(
+            command, cwd=ROOT, on_line=sink.line,
         )
-        output_parts = [f"+ {printable_command}"]
-        if completed.stdout:
-            output_parts.append(completed.stdout.rstrip("\n"))
-        if completed.stderr:
-            output_parts.append(completed.stderr.rstrip("\n"))
+        if exit_code != 0:
+            sink.line(f"Docs build failed: {relative_path}")
+            return exit_code
 
-        if completed.returncode != 0:
-            output_parts.append(f"Docs build failed: {relative_path}")
-            return completed.returncode, "\n".join(output_parts) + "\n"
-
-        # Fail on griffe warnings (Decision 0021).
+        # Fail on griffe warnings (Decision 0021).  Stderr is merged
+        # into stdout in the streaming path, so scan the full transcript.
         griffe_warnings = [
-            line for line in completed.stderr.splitlines()
+            line for line in captured.splitlines()
             if "griffe" in line.lower()
         ]
         if griffe_warnings:
-            output_parts.append(f"Docs build has griffe warnings: {relative_path}")
+            sink.line(f"Docs build has griffe warnings: {relative_path}")
             for warning in griffe_warnings:
-                output_parts.append(f"  {warning}")
-            return 1, "\n".join(output_parts) + "\n"
+                sink.line(f"  {warning}")
+            return 1
 
-        output_parts.append(f"  Built: {site_dir.relative_to(ROOT)}/")
-        return 0, "\n".join(output_parts) + "\n"
+        sink.line(f"  Built: {site_dir.relative_to(ROOT)}/")
+        return 0
 
     return build_one
 
@@ -796,6 +1051,15 @@ def docs_preview(package_dirs: list[Path]) -> int:
         )
         print(f"Seeded {preview_branch} from {source_branch}.")
 
+    # Per-library deploys are sequential because every ``mike deploy``
+    # commits to the same ``_docs-preview`` git branch — running them
+    # concurrently would race on the git index lock.  Unlike ``docs``
+    # (which fans out per library because each writes to its own
+    # ``site/`` directory), the ``mike`` workflow is a serialised git-
+    # plumbing pipeline by construction.  Worktree-per-library would
+    # let us parallelize, but the wall time of an interactive
+    # ``docs-preview`` is dominated by ``mike serve`` afterwards, so
+    # the speedup wouldn't be visible to the user.
     for library_dir in doc_dirs:
         relative_path = library_dir.relative_to(ROOT)
         library_name = library_dir.name
@@ -839,6 +1103,7 @@ def preflight(
     with_functional: bool = False,
     phase_workers: int = _DEFAULT_PREFLIGHT_PHASE_PARALLEL_WORKERS,
     package_workers: int = _DEFAULT_PACKAGE_PARALLEL_WORKERS,
+    quiet: bool = False,
 ) -> int:
     """Run the full check suite that CI requires on every pull request.
 
@@ -940,7 +1205,7 @@ def preflight(
         ("test-circuitpython", test_circuitpython_args),
     ]
 
-    parallel_phases: list[tuple[str, Callable[[], tuple[int, str]]]] = []
+    parallel_phases: list[tuple[str, Callable[[_Sink], int]]] = []
     skipped_phases: list[str] = []
     for label, args in parallel_specs:
         if args is None:
@@ -951,19 +1216,20 @@ def preflight(
         )
 
     # Print skip notices up-front so the user sees them before the
-    # parallel block (which can take 20-30 s to flush).  Order: same
-    # as in the spec list above.
+    # parallel block.  Order: same as in the spec list above.
     for label in skipped_phases:
         print(f"== {label} ==")
         print(f"  SKIP: {base_reference} not reachable (fetch or set --base).")
 
     parallel_result = _preflight_run_parallel_phases(
-        parallel_phases, max_workers=phase_workers,
+        parallel_phases,
+        max_workers=phase_workers,
+        dispatcher=_pick_dispatcher(quiet=quiet),
     )
     if parallel_result != 0:
-        # `_run_capture_phases_in_parallel` already printed each
-        # phase's banner and a "Step failed: <label>" line for the
-        # first failure; finish with the preflight-level banner.
+        # The dispatcher already printed phase events and (in status /
+        # quiet mode) the failing phase's transcript; finish with the
+        # preflight-level banner.
         print("Preflight failed.")
         return parallel_result
 
@@ -987,12 +1253,27 @@ def preflight(
     return 0
 
 
+def _emit(sink: _Sink | None, message: str) -> None:
+    """Write *message* to *sink* if set, otherwise to stdout.
+
+    Lets functions like :func:`_test_runtime_compat` produce output
+    that flows through a parallel-phase sink when run as a phase, or
+    straight to the user when run standalone.
+    """
+    if sink is not None:
+        sink.line(message)
+    else:
+        print(message)
+
+
 def _test_runtime_compat(
     platform: str,
     label: str,
     resolve_binary: Callable[[], str | None],
     prepare_function: Callable[[], int],
     package_dirs: list[Path] | None = None,
+    *,
+    sink: _Sink | None = None,
 ) -> int:
     """Run cross-runtime unit tests for a single runtime.
 
@@ -1000,22 +1281,29 @@ def _test_runtime_compat(
     :func:`test_circuitpython`.  Resolves the binary,
     auto-prepares when missing, then runs the compatibility script for libraries
     that target *platform*.
+
+    When *sink* is provided, every line of output (banners + child
+    process output) flows through it via :func:`stream_subprocess`,
+    so a parallel-phase dispatcher can route them.  When *sink* is
+    ``None``, output goes to the parent stdout via :func:`run_command`
+    — the standalone CLI path.
     """
     # Try to find an existing binary (CLI override → repository-local build → PATH).
     # If none is found, build the unix-port automatically on first use.
     binary = resolve_binary()
     if binary is None:
-        print(f"{label} binary not found. Preparing unix-port runtime first.")
+        _emit(sink, f"{label} binary not found. Preparing unix-port runtime first.")
         prepare_result = prepare_function()
         if prepare_result != 0:
-            print(f"{label} preparation failed.")
+            _emit(sink, f"{label} preparation failed.")
             return prepare_result
 
         binary = resolve_binary()
         if binary is None:
-            print(
+            _emit(
+                sink,
                 f"Preparation completed without the expected binary. "
-                f"Pass --{platform}-binary <path> and retry."
+                f"Pass --{platform}-binary <path> and retry.",
             )
             return 1
 
@@ -1025,43 +1313,54 @@ def _test_runtime_compat(
     library_dirs = _selected_library_dirs(package_dirs)
     platform_libraries = filter_by_platform(library_dirs, platform)
     if not platform_libraries:
-        print(f"No publishable {label} libraries selected for compatibility tests.")
+        _emit(sink, f"No publishable {label} libraries selected for compatibility tests.")
         return 0
     library_names = [library_dir.name for library_dir in platform_libraries]
-    return run_command([binary, COMPAT_SCRIPT, *library_names])
+    command = [binary, COMPAT_SCRIPT, *library_names]
+    if sink is not None:
+        sink.line(f"+ {' '.join(command)}")
+        exit_code, _ = stream_subprocess(command, on_line=sink.line)
+        return exit_code
+    return run_command(command)
 
 
 def test_micropython(
     binary: str | None = None,
     package_dirs: list[Path] | None = None,
+    *,
+    sink: _Sink | None = None,
 ) -> int:
     """Run the cross-runtime unit tests with the MicroPython Unix binary.
 
-    Skips libraries that do not target MicroPython.
+    Skips libraries that do not target MicroPython.  See
+    :func:`_test_runtime_compat` for the *sink* argument.
     """
     from prepare_micropython import prepare_micropython
     from shared import resolve_micropython_binary
     return _test_runtime_compat(
         "micropython", "MicroPython",
         lambda: resolve_micropython_binary(binary), prepare_micropython,
-        package_dirs,
+        package_dirs, sink=sink,
     )
 
 
 def test_circuitpython(
     binary: str | None = None,
     package_dirs: list[Path] | None = None,
+    *,
+    sink: _Sink | None = None,
 ) -> int:
     """Run the cross-runtime unit tests with a configured or repo-managed CircuitPython binary.
 
-    Skips libraries that do not target CircuitPython.
+    Skips libraries that do not target CircuitPython.  See
+    :func:`_test_runtime_compat` for the *sink* argument.
     """
     from prepare_circuitpython import prepare_circuitpython
     from shared import resolve_circuitpython_binary
     return _test_runtime_compat(
         "circuitpython", "CircuitPython",
         lambda: resolve_circuitpython_binary(binary), prepare_circuitpython,
-        package_dirs,
+        package_dirs, sink=sink,
     )
 
 
@@ -1086,186 +1385,155 @@ def test_all_runtimes(
         print("Step failed: test")
         return cpython_result
 
-    parallel_phases: tuple[tuple[str, Callable[[], int]], ...] = (
+    parallel_phases: tuple[tuple[str, Callable[[_Sink], int]], ...] = (
         (
             "test-micropython",
-            lambda: test_micropython(
-                micropython_binary, package_dirs,
+            lambda sink: test_micropython(
+                micropython_binary, package_dirs, sink=sink,
             ),
         ),
         (
             "test-circuitpython",
-            lambda: test_circuitpython(
-                circuitpython_binary, package_dirs,
+            lambda sink: test_circuitpython(
+                circuitpython_binary, package_dirs, sink=sink,
             ),
         ),
     )
-    return _run_phases_in_parallel(parallel_phases)
+    return _run_parallel_phases(
+        parallel_phases,
+        dispatcher=_pick_dispatcher(quiet=False),
+    )
 
 
-def _run_phases_in_parallel(
-    phases: Sequence[tuple[str, Callable[[], int]]],
+def _run_parallel_phases(
+    phases: Sequence[tuple[str, Callable[[_Sink], int]]],
     *,
+    dispatcher: _Dispatcher,
     max_workers: int | None = None,
 ) -> int:
-    """Run the given phases concurrently with buffered output.
+    """Run *phases* concurrently, routing output through *dispatcher*.
 
-    Each phase's print output is captured into a buffer and flushed in
-    submission order once all phases complete, so the on-screen log
-    reads as if they ran sequentially.  Returns the first non-zero exit
-    code (in submission order), or 0 if all phases succeed.
+    Each phase callable receives a per-phase :class:`_Sink`; the sink
+    forwards every line to the dispatcher (which decides what to do
+    with it — buffer, prefix-and-print, or render in a status block)
+    and also accumulates the full transcript on the sink object so the
+    runner can hand it back to the dispatcher on phase completion.
+
+    The dispatcher's lifecycle methods (``start`` / ``phase_started``
+    / ``phase_done`` / ``finish``) are invoked from worker threads;
+    implementations are expected to serialize their own output with a
+    lock.
 
     Args:
-        phases: ``(label, callable)`` pairs to run.  Order is the order
-            results print in — independent of which finishes first.
-        max_workers: Cap on concurrent phases.  ``None`` (default) means
-            ``len(phases)`` — every phase runs at once.  Pass an integer
-            to throttle for fan-outs that would oversubscribe CPU or
-            spawn too many subprocesses (e.g. one zensical-build per
-            library across 18 packages on a laptop).
+        phases: ``(label, callable)`` pairs.  Each callable takes a
+            :class:`_Sink` and returns the phase's exit code.
+        dispatcher: Routes phase events + lines to the user.
+        max_workers: Cap on concurrent phases.  ``None`` (default) is
+            ``len(phases)`` — every phase runs at once.  Pass an
+            integer to throttle for CPU / subprocess oversubscription.
+
+    Returns:
+        First non-zero exit code in submission order, or 0 if every
+        phase succeeded.
     """
-    import contextlib
-    import io
     from concurrent.futures import ThreadPoolExecutor
 
     if not phases:
         return 0
 
-    def run_phase(label: str, work: Callable[[], int]) -> tuple[int, str]:
-        buffer = io.StringIO()
-        with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
-            try:
-                exit_code = work()
-            except Exception as error:  # pragma: no cover - defensive
-                print(f"Phase {label!r} crashed: {error}")
-                exit_code = 1
-        return exit_code, buffer.getvalue()
+    labels = [label for label, _ in phases]
+    dispatcher.start(labels)
+
+    def run_one(label: str, work: Callable[[_Sink], int]) -> tuple[str, int]:
+        sink = _Sink(dispatcher, label)
+        dispatcher.phase_started(label)
+        try:
+            exit_code = work(sink)
+        except Exception as error:  # pragma: no cover - defensive
+            sink.line(f"Phase {label!r} crashed: {error}")
+            exit_code = 1
+        dispatcher.phase_done(label, exit_code, sink.captured)
+        return label, exit_code
 
     workers = max_workers if max_workers is not None else len(phases)
     workers = max(1, min(workers, len(phases)))
     with ThreadPoolExecutor(max_workers=workers) as executor:
         futures = [
-            executor.submit(run_phase, label, work) for label, work in phases
+            executor.submit(run_one, label, work) for label, work in phases
         ]
         results = [future.result() for future in futures]
 
-    first_failure: int = 0
-    for (label, _), (exit_code, captured) in zip(phases, results, strict=True):
-        print(f"== {label} ==")
-        if captured:
-            print(captured, end="")
-        if exit_code != 0 and first_failure == 0:
-            first_failure = exit_code
-            print(f"Step failed: {label}")
-    return first_failure
+    dispatcher.finish()
+
+    for _label, exit_code in results:
+        if exit_code != 0:
+            return exit_code
+    return 0
 
 
-def _run_capture_phases_in_parallel(
-    phases: Sequence[tuple[str, Callable[[], tuple[int, str]]]],
-    *,
-    max_workers: int | None = None,
-) -> int:
-    """Fan out phases that capture-and-return their own output.
-
-    Sister of :func:`_run_phases_in_parallel`, but for work functions
-    that return ``(exit_code, output_text)`` directly instead of
-    relying on the parent's stdout.  This avoids the
-    :func:`contextlib.redirect_stdout` thread-stomp the other helper
-    is exposed to: ``redirect_stdout`` rebinds the *process-global*
-    ``sys.stdout``, so fan-out > 2 threads scramble each other's
-    captures.  The 2-thread MP/CP usage hides it; per-package fan-out
-    across 18 libraries makes it visible immediately.
-
-    Each phase gets called on a worker thread, returns its own
-    captured output, and the helper replays results in *submission*
-    order so the on-screen log reads as if the loop ran serially.
-
-    Args:
-        phases: ``(label, callable)`` pairs.  Each callable returns
-            ``(exit_code, output_text)``.  Output text is printed
-            verbatim under the label header — include trailing
-            newline if you want one.
-        max_workers: Cap on concurrent phases.  ``None`` means
-            ``len(phases)`` — every phase runs at once.  Tune for
-            CPU / subprocess oversubscription.
-    """
-    from concurrent.futures import ThreadPoolExecutor
-
-    if not phases:
-        return 0
-
-    workers = max_workers if max_workers is not None else len(phases)
-    workers = max(1, min(workers, len(phases)))
-    with ThreadPoolExecutor(max_workers=workers) as executor:
-        futures = [executor.submit(work) for _, work in phases]
-        results = [future.result() for future in futures]
-
-    first_failure = 0
-    for (label, _), (exit_code, output) in zip(phases, results, strict=True):
-        print(f"== {label} ==")
-        if output:
-            print(output, end="" if output.endswith("\n") else "\n")
-        if exit_code != 0 and first_failure == 0:
-            first_failure = exit_code
-            print(f"Step failed: {label}")
-    return first_failure
-
-
-def _preflight_phase_subprocess_factory(
+def _subcommand_phase_factory(
     label: str,
     subcommand_args: list[str],
-) -> Callable[[], tuple[int, str]]:
-    """Build a phase closure that subprocess-runs ``python scripts/run.py``.
+) -> Callable[[_Sink], int]:
+    """Build a phase that subprocess-runs ``python scripts/run.py <args>``.
 
-    Each preflight phase becomes a self-contained ``python scripts/run.py
-    <subcommand> [flags]`` invocation whose stdout + stderr are captured
-    into a single buffer and returned alongside the exit code.  This is
-    the contract :func:`_run_capture_phases_in_parallel` expects.
+    The child runs with ``CHUMICRO_RAW_OUTPUT=1`` in its environment so
+    its own dispatcher resolves to :class:`_RawDispatcher` — the child
+    prints raw lines to its stdout, and our ``stream_subprocess`` reads
+    them line-by-line and routes them through this phase's sink, where
+    the parent's dispatcher decides how to render them (buffer, prefix,
+    status-line).
 
-    Subprocess re-invocation (rather than calling the Python-level phase
-    function in-thread) is the only way to safely capture child-process
-    output during phase-level parallelism: ``run_command`` lets child
-    output go straight to the parent's actual stdout fd, and
-    ``contextlib.redirect_stdout`` only catches Python-level ``print``
-    calls.  See Decision 0048.
+    Subprocess re-invocation (rather than an in-process call) keeps
+    each phase's resource footprint isolated and lets us cleanly
+    capture *all* of the phase's output at the fd level — the
+    in-process alternative would have to thread sinks through every
+    helper that prints.  Decision 0048 chose the same shape (then for
+    output-isolation reasons that this refactor solves differently);
+    the design persists because per-phase isolation still has value.
 
     Args:
-        label: Phase header to print under (also used in failure banner).
+        label: Phase header (used in failure banners).
         subcommand_args: Arguments to append after ``[python,
-            "scripts/run.py"]`` — e.g. ``["lint"]`` or
-            ``["test", "--all", "--coverage-threshold", "94"]``.
+            "scripts/run.py"]`` — e.g. ``["lint"]`` or ``["test",
+            "--all", "--coverage-threshold", "94"]``.
     """
     command = [PYTHON, "scripts/run.py", *subcommand_args]
-    printable_command = " ".join(command)
 
-    def run_phase() -> tuple[int, str]:
-        completed = subprocess.run(
-            command, cwd=ROOT, capture_output=True, text=True, check=False,
+    def run_phase(sink: _Sink) -> int:
+        sink.line(f"+ {' '.join(command)}")
+        environment = {**os.environ, _RAW_OUTPUT_ENV_VAR: "1"}
+        exit_code, _ = stream_subprocess(
+            command, cwd=ROOT, environment=environment, on_line=sink.line,
         )
-        output_parts = [f"+ {printable_command}"]
-        if completed.stdout:
-            output_parts.append(completed.stdout.rstrip("\n"))
-        if completed.stderr:
-            output_parts.append(completed.stderr.rstrip("\n"))
-        if completed.returncode != 0:
-            output_parts.append(f"Phase failed: {label}")
-        return completed.returncode, "\n".join(output_parts) + "\n"
+        if exit_code != 0:
+            sink.line(f"Phase failed: {label}")
+        return exit_code
 
     return run_phase
 
 
+# Backward-compatible alias kept for tests that monkeypatch this seam.
+_preflight_phase_subprocess_factory = _subcommand_phase_factory
+
+
 def _preflight_run_parallel_phases(
-    phases: Sequence[tuple[str, Callable[[], tuple[int, str]]]],
+    phases: Sequence[tuple[str, Callable[[_Sink], int]]],
     *,
     max_workers: int = _DEFAULT_PREFLIGHT_PHASE_PARALLEL_WORKERS,
+    dispatcher: _Dispatcher | None = None,
 ) -> int:
     """Dispatch the parallel preflight phase block.
 
-    Thin wrapper over :func:`_run_capture_phases_in_parallel` that
-    exists as a named seam so tests can monkeypatch the parallel block
-    without forking the subprocess invocations on every preflight test.
+    Thin wrapper over :func:`_run_parallel_phases` that exists as a
+    named seam so tests can monkeypatch the parallel block without
+    forking the subprocess invocations on every preflight test.
     """
-    return _run_capture_phases_in_parallel(phases, max_workers=max_workers)
+    return _run_parallel_phases(
+        phases,
+        dispatcher=dispatcher or _pick_dispatcher(quiet=False),
+        max_workers=max_workers,
+    )
 
 
 def test_functional(
@@ -1658,8 +1926,12 @@ def _build_parser() -> argparse.ArgumentParser:
         default=_DEFAULT_PACKAGE_PARALLEL_WORKERS,
         help=(
             f"cap on concurrent per-package build subprocesses "
-            f"(default: {_DEFAULT_PACKAGE_PARALLEL_WORKERS})"
+            f"(default: {_DEFAULT_PACKAGE_PARALLEL_WORKERS} for this host)"
         ),
+    )
+    build_parser.add_argument(
+        "--quiet", action="store_true",
+        help="buffer per-phase output; replay full transcript at end",
     )
     preflight_parser = subparsers.add_parser(
         "preflight", parents=[binary],
@@ -1685,7 +1957,7 @@ def _build_parser() -> argparse.ArgumentParser:
         default=_DEFAULT_PREFLIGHT_PHASE_PARALLEL_WORKERS,
         help=(
             f"cap on concurrent preflight phases "
-            f"(default: {_DEFAULT_PREFLIGHT_PHASE_PARALLEL_WORKERS})"
+            f"(default: {_DEFAULT_PREFLIGHT_PHASE_PARALLEL_WORKERS} for this host)"
         ),
     )
     preflight_parser.add_argument(
@@ -1694,7 +1966,15 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             f"cap on concurrent per-package subprocesses inside each "
             f"phase that fans out by package "
-            f"(default: {_DEFAULT_PACKAGE_PARALLEL_WORKERS})"
+            f"(default: {_DEFAULT_PACKAGE_PARALLEL_WORKERS} for this host)"
+        ),
+    )
+    preflight_parser.add_argument(
+        "--quiet", action="store_true",
+        help=(
+            "buffer per-phase output; replay full transcript under "
+            "== <phase> == headers in submission order at end "
+            "(useful for log capture and agent runs)"
         ),
     )
     subparsers.add_parser("prepare-micropython", help="prepare MicroPython unix-port")
@@ -1959,8 +2239,12 @@ def _build_parser() -> argparse.ArgumentParser:
         default=_DEFAULT_PACKAGE_PARALLEL_WORKERS,
         help=(
             f"cap on concurrent per-package pytest subprocesses "
-            f"(default: {_DEFAULT_PACKAGE_PARALLEL_WORKERS})"
+            f"(default: {_DEFAULT_PACKAGE_PARALLEL_WORKERS} for this host)"
         ),
+    )
+    test_parser.add_argument(
+        "--quiet", action="store_true",
+        help="buffer per-phase output; replay full transcript at end",
     )
     subparsers.add_parser("verify-examples", parents=[scope], help="import-check examples")
 
@@ -1973,8 +2257,12 @@ def _build_parser() -> argparse.ArgumentParser:
         default=_DEFAULT_PACKAGE_PARALLEL_WORKERS,
         help=(
             f"cap on concurrent per-library docs builds "
-            f"(default: {_DEFAULT_PACKAGE_PARALLEL_WORKERS})"
+            f"(default: {_DEFAULT_PACKAGE_PARALLEL_WORKERS} for this host)"
         ),
+    )
+    docs_parser.add_argument(
+        "--quiet", action="store_true",
+        help="buffer per-phase output; replay full transcript at end",
     )
 
     subparsers.add_parser(
@@ -2056,6 +2344,7 @@ def main(argv: list[str]) -> int:
             coverage_threshold=args.coverage_threshold,
             elevated_packages=elevated_packages,
             package_workers=args.package_workers,
+            quiet=args.quiet,
         )
 
     if args.task == "verify-examples":
@@ -2066,6 +2355,7 @@ def main(argv: list[str]) -> int:
             _resolve_scoped_packages(args),
             serve=args.serve,
             package_workers=args.package_workers,
+            quiet=args.quiet,
         )
 
     if args.task == "docs-preview":
@@ -2099,6 +2389,7 @@ def main(argv: list[str]) -> int:
             with_functional=args.with_functional,
             phase_workers=args.phase_workers,
             package_workers=args.package_workers,
+            quiet=args.quiet,
         )
 
     if args.task == "test-micropython":
@@ -2141,7 +2432,7 @@ def main(argv: list[str]) -> int:
         )
 
     if args.task == "build":
-        return build(package_workers=args.package_workers)
+        return build(package_workers=args.package_workers, quiet=args.quiet)
 
     if args.task == "check-api":
         return check_api(max_workers=args.max_workers)
