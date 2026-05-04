@@ -15,11 +15,11 @@ Each gap below is listed with severity (**P0** = blocks the documented happy-pat
 |---|----------|-------------|----------|
 | 1 | ~~P0~~ | mono-repo | ~~Declare `cryptography` in `requirements-dev.txt`.~~ Done — landed in `8bcfb6b`. |
 | 2 | ~~P0~~ | mono-repo | ~~Convert remaining cross-tree relative doc links (`../../../plans/...`, `../README.md`) to absolute GitHub URLs; fix two slug mismatches in `workbench/deploy/docs/guide.md`.~~ Done — landed in `d9d039e`. |
-| 3 | P0 | template + mono-repo | Wire **on-device** library shipping for dev mode. Today, `chumicro-dev.toml` only affects the host venv; the boards still need libs from somewhere. Two concrete options below — both require a small change in the deploy CLI. |
+| 3 | ~~P0~~ | mono-repo | ~~Wire **on-device** library shipping for dev mode.~~ Done — (a) `setup` auto-emits `library_sources:` from `chumicro-dev.toml` (`chumicro_workspace.chumicro_dev` module); (b) `deploy --boot-shim --import-graph` ships both the boot-shim layout and import-graph-discovered libraries (closed by gap 5's combiner). |
 | 4 | P0 | template | Document and scaffold **regular mode**. Today the template README jumps straight to `deploy example_sensor` with no mention of installing the chumicro libs onto the board first via `circup`/`mip`. |
 | 5 | ~~P1~~ | mono-repo | ~~Make `--import-graph` and `--boot-shim` composable, or pick one canonical "thing with `def run()` + chumicro lib deps" deploy path.~~ Done — combiner landed (`project_boot_with_import_graph_source`); CLI now accepts `--boot-shim --import-graph` and ships both the boot-shim layout and import-graph-discovered libraries in one deploy. |
 | 6 | P1 | mono-repo | `add-device` should populate `devices.yml`'s `defaults:` block on first registration per runtime — the existing comment claims it does. |
-| 7 | P2 | template | When `chumicro-dev.toml` is present, auto-derive `library_sources:` from `<chumicro_path>/libraries/*/src` instead of requiring the user to hand-list every package in `workspace.yml`. |
+| 7 | ~~P2~~ | mono-repo | ~~When `chumicro-dev.toml` is present, auto-derive `library_sources:` from `<chumicro_path>/libraries/*/src` instead of requiring the user to hand-list every package in `workspace.yml`.~~ Done — closed by gap 3(a) (`sync_library_sources` walks the sibling `libraries/` tree, writes a managed block into `workspace.yml`, idempotent re-write on re-run). |
 | 8 | P2 | mono-repo | Single-source the bootstrap entry point — `chumicro-workspace-template/run.py` solves the same chicken-and-egg as `chumicro/scripts/prepare_workspace.py`, with a cleaner one-file pattern. |
 | 9 | P2 | mono-repo | Tighten zensical version pin so a fresh `pip install -r requirements-dev.txt` produces the same docs result as CI. |
 
@@ -105,6 +105,27 @@ library_sources:
 **Fix surface:** template repo (`run.py setup` extension) + mono-repo (`chumicro_workspace.cli` if `setup` lives there).
 
 **(b) Make `deploy` ship libraries even with `--boot-shim`.** See gap #5.
+
+**Status:** Done.
+
+* (a) — `chumicro_workspace.chumicro_dev` (new module) provides
+  `read_chumicro_dev_path`, `discover_chumicro_libraries`, and
+  `sync_library_sources`.  Wired into `_cmd_setup`: when
+  `chumicro-dev.toml` is present at the workspace root, `setup`
+  walks `<chumicro_path>/libraries/`, builds the
+  `{chumicro_<name>: <chumicro_path>/libraries/<name>/src}` map,
+  and writes a managed block to `workspace.yml` with a marker
+  comment above (`managed by chumicro-workspace setup —
+  chumicro-dev.toml mode`).  Paths are written relative to the
+  workspace root when possible (sibling-checkout case yields
+  `../chumicro/libraries/<name>/src`).  Idempotent — re-running
+  `setup` after pulling new chumicro libraries refreshes the block;
+  re-running with an unchanged set is a no-op.  Also closes gap
+  #7 (P2 polish — same auto-derivation by a different framing).
+* (b) — closed by gap #5's `project_boot_with_import_graph_source`
+  combiner; `deploy --boot-shim --import-graph` now ships the
+  boot-shim layout AND the import-graph-discovered libraries in
+  one deploy.
 
 ---
 

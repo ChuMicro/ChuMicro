@@ -276,6 +276,51 @@ def _cmd_setup(args: argparse.Namespace) -> int:
         for path, action in report:
             if action == ApplyAction.MATERIALIZED:
                 print(f"  {path}")
+
+    # Gap 3(a): when chumicro-dev.toml points at a sibling chumicro
+    # checkout, sync workspace.yml's ``library_sources:`` block so
+    # ``deploy --import-graph`` (and the ``--boot-shim --import-graph``
+    # composition, gap 5) resolve ``import chumicro_<name>`` against
+    # the local checkout instead of the empty ``packages/`` dir.
+    from chumicro_workspace.chumicro_dev import (  # noqa: PLC0415
+        discover_chumicro_libraries,
+        read_chumicro_dev_path,
+        sync_library_sources,
+    )
+
+    chumicro_path = read_chumicro_dev_path(workspace.root)
+    if chumicro_path is not None:
+        if not chumicro_path.is_dir():
+            print(
+                f"setup: warning — chumicro-dev.toml points at "
+                f"{chumicro_path} which doesn't exist; "
+                "skipping library_sources sync.",
+                file=sys.stderr,
+            )
+        else:
+            libraries = discover_chumicro_libraries(chumicro_path)
+            if not libraries:
+                print(
+                    f"setup: warning — no chumicro libraries found at "
+                    f"{chumicro_path}/libraries/; "
+                    "skipping library_sources sync.",
+                    file=sys.stderr,
+                )
+            else:
+                changed = sync_library_sources(
+                    workspace.workspace_yaml, libraries,
+                )
+                if changed:
+                    print(
+                        f"setup: synced library_sources for "
+                        f"{len(libraries)} chumicro libraries from "
+                        f"{chumicro_path}",
+                    )
+                else:
+                    print(
+                        "setup: library_sources already in sync with "
+                        f"{chumicro_path}",
+                    )
     return 0
 
 
