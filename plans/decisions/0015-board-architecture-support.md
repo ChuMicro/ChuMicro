@@ -10,7 +10,7 @@ ChuMicro libraries may depend on `collections.deque` and other features that are
 
 A source-level audit of the pinned CircuitPython 10.1.4 and MicroPython v1.26.0 trees (`.tools/`) was performed to determine which architectures include `deque`.
 
-Beyond compile-time feature availability, boards also vary widely in RAM and flash.  Libraries that use networking, TLS, displays, or larger buffers need meaningful memory headroom.  A hardware resource baseline was established to complement the feature-flag analysis.
+Beyond compile-time feature availability, boards vary widely in RAM and flash.  Libraries that use networking, TLS, displays, or larger buffers need meaningful memory headroom.  The Pi Pico (RP2040, 264 KB SRAM) is the practical floor — even there, networking + TLS workloads are tight and cooperative-tick budgets matter.  Modern boards (ESP32-S3, RP2350, ESP32-C6) ship with 4–10× the headroom and are easier to write libraries for.  Setting the support floor anywhere below the Pi Pico would force every library author to design around 32–128 KB SAMD21-class boards that no longer represent where the project is headed.
 
 ## Findings
 

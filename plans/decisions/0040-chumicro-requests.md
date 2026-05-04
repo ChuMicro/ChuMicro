@@ -134,6 +134,6 @@ Two constraints of the embedded TLS stack (not of `chumicro-requests` per se) th
   (transport) and `chumicro-timing` (ticks).  Optional `chumicro-runner`
   hook: `HttpClient` satisfies `check(now_ms) -> bool` so `Runner` can
   drive it directly.
-- The "fetch weather" demo and the two-thing demo (sensor → HTTP server) become writable.
+- The "fetch weather" demo and the two-project demo (sensor → HTTP server) become writable.
 - `WhenOversized` enum lives in `chumicro_requests`, parallel to `chumicro_mqtt.WhenOversized`.  Tempted to factor a shared one out; not yet — copy first, abstract on the third user.
 - The single-in-flight constraint may bite users who want to fan out N concurrent requests.  Documented; v2 can add a pool if a consumer asks.

@@ -7,7 +7,7 @@ Related: [Decision 0014](0014-runner-pattern.md) (runner pattern), [Decision 003
 ## Context
 
 Step 7 of the beginner-onramp workstream needs an HTTP server so demos
-can do useful things — a sensor thing posts readings, a display thing
+can do useful things — a sensor project posts readings, a display project
 serves a status page, a board acts as a tiny web-config endpoint.
 
 A 2026-04-26 survey of the established MP/CP HTTP server libraries
@@ -206,5 +206,5 @@ The CP path differs from MP / CPython in that `load_cert_chain` requires filesys
 * `chumicro-sockets` 0.1.6 adds `tcp_listening_socket` per-runtime.
   The chumicro-sockets package picks up server-side concerns for
   the first time — kept narrow (no TLS server, no UDP, no SOCKS).
-* The two-thing demo (Step 8) becomes writable: a sensor thing POSTs JSON to a server thing's `/sensor` endpoint over LAN.  Both run on Pi Pico W class boards.
+* The two-project demo (Step 8) becomes writable: a sensor project POSTs JSON to a server project's `/sensor` endpoint over LAN.  Both run on Pi Pico W class boards.
 * Decision 0040's "extract shared HTTP wire primitives" follow-up: decided to inline rather than depend (§5).  When a third HTTP-aware consumer appears (`chumicro-websockets` arrived as Decision 0045 and made the same call), the case for a shared `chumicro-http` package strengthens; until a fourth, the duplicated primitives cost less than one extra package.

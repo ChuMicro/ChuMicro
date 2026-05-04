@@ -6,7 +6,7 @@ Related: Decision 0029 (project workspace), Decision 0030 (config vs persisted s
 
 ## Context
 
-Decision 0030 established that every thing carries one `config.toml`
+Decision 0030 established that every project carries one `config.toml`
 which the deployer merges with workspace defaults + secrets into a
 single `/runtime_config.msgpack` baked onto the device.  Decision
 0030 stops at "the deployer writes a merged dict" — it does not pin
@@ -19,18 +19,18 @@ code, sensor drivers) have to renegotiate.
 
 The constraint surface:
 
-- **One file per thing.**  Decision 0030 §1.  Adding a second config
+- **One file per project.**  Decision 0030 §1.  Adding a second config
   file per package would defeat the "one place users edit settings"
   principle.
 - **Each library finds its slice without colliding with others.**
   `chumicro-wifi` reads its keys; `chumicro-mqtt` reads its keys; the
-  app reads thing-specific keys.  Without a namespacing convention,
+  app reads project-specific keys.  Without a namespacing convention,
   flat keys like `ssid`, `port`, `broker` collide as soon as two
   libraries care about overlapping vocabulary.
 - **The user edits TOML / YAML by hand**, so the on-host format has
   to be obvious — the section a config block belongs to should be
   spelled out, not derived from key names.
-- **The deployer doesn't know what libraries the thing imports.**
+- **The deployer doesn't know what libraries the project imports.**
   Schema validation per-library at deploy time would require every
   library to ship a schema descriptor; out of scope for the
   workspace-runtime work.
@@ -88,11 +88,11 @@ Easy to remember, matches the import path (`chumicro_wifi` →
 consume runtime config (`chumicro-timing`, `chumicro-runner`,
 `chumicro-msgpack`) simply don't reserve a section.
 
-The `app` section is reserved for thing-specific config that no
+The `app` section is reserved for project-specific config that no
 library owns — sample periods, feature flags, calibration values,
 custom keys the user code reads directly.  Always available.
 
-**Multiple instances** (rare): a thing wanting two MQTT clients
+**Multiple instances** (rare): a project wanting two MQTT clients
 defines two sections with arbitrary names and wires them
 explicitly:
 
@@ -164,7 +164,7 @@ schema-level.
 
 A section in `config.toml` that no library consumes is **not** an
 error.  The merged dict carries it through to device; it's simply
-not read.  This matters for forward-compat: a thing that adds
+not read.  This matters for forward-compat: a project that adds
 `[mqtt_v2]` config in anticipation of a new library doesn't need
 the library to be installed yet for the deploy to succeed.
 
@@ -198,8 +198,8 @@ for internal keys — won't collide with user sections).
   + secrets resolution + msgpack write.  This ADR fixes the input
   shape (TOML / YAML sections) and the output shape (section-keyed
   dict on device).
-- The thing template's `AGENTS.md` documents the convention so
-  third-party authors writing things outside the mono-repo follow
+- The project template's `AGENTS.md` documents the convention so
+  third-party authors writing projects outside the mono-repo follow
   the same shape.  The template ships with example sections for
   `wifi` and `app`.
 - `kvstore` is **not** in this scheme — it's a runtime persistence
