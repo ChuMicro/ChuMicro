@@ -34,6 +34,7 @@ from .circuitpython_bootstrap import build_circuitpython_deploy_scripts
 from .protocol import (
     PROBE_IMPLEMENTATION_SCRIPT,
     DeviceImplementation,
+    UnsupportedExtraFilesError,
     parse_probe_output,
     validate_entrypoint_in_files,
 )
@@ -641,6 +642,7 @@ class CircuitpythonTransport:
         harness_source: Path,
         *,
         extra_modules: list[Path] | None = None,
+        extra_files: dict[str, bytes] | None = None,
     ) -> None:
         """Read source files into memory for inline execution.
 
@@ -666,7 +668,29 @@ class CircuitpythonTransport:
                 device alongside library sources.  In RAM mode they
                 join ``staged_sources``; in flash mode they land at the
                 drive root next to the test files.
+            extra_files: Non-Python files to land at named device paths
+                — typically ``{"/runtime_config.msgpack": <bytes>}`` so
+                test code can call ``chumicro_config.load_runtime_config()``
+                instead of importing ``_test_creds`` (Decision 0056).
+                **RAM mode raises** :class:`UnsupportedExtraFilesError`
+                because there's no writable device-side filesystem to
+                land bytes on; flash mode writes each file to the
+                CIRCUITPY drive alongside library sources.
+
+        Raises:
+            UnsupportedExtraFilesError: ``mode == "ram"`` and
+                *extra_files* is non-empty.  Switch the device's
+                ``deploy_mode`` to ``"flash"`` to fix.
         """
+        if extra_files and self.mode == "ram":
+            raise UnsupportedExtraFilesError(
+                "CircuitpythonTransport(mode='ram') cannot stage extra_files "
+                f"({sorted(extra_files.keys())!r}) — RAM mode bypasses the "
+                "CIRCUITPY filesystem entirely.  Set the device's deploy_mode "
+                "to 'flash' before staging tests that need a runtime_config "
+                "or other on-device file.",
+            )
+
         self._staged_sources = []
         # Collect library package sources (needed for both modes).
         for source_directory in source_dirs:
@@ -686,6 +710,7 @@ class CircuitpythonTransport:
             self._stage_to_flash(
                 source_dirs, test_files, harness_source,
                 extra_modules=extra_modules,
+                extra_files=extra_files,
             )
         self._staged = True
 
@@ -836,15 +861,18 @@ class CircuitpythonTransport:
         harness_source: Path,
         *,
         extra_modules: list[Path] | None = None,
+        extra_files: dict[str, bytes] | None = None,
     ) -> None:
         """Mirror the desired drive layout inside a local staging directory.
 
         Library and harness packages go under ``lib/``; test files and
-        sibling extra modules go at the root.  Building locally is
-        reliable (no FAT32 quirks) — only the rsync that follows has
-        to deal with the device drive.  macOS extended attributes are
-        stripped at the end so ``._`` resource forks don't end up on
-        the FAT32 volume.
+        sibling extra modules go at the root.  Binary ``extra_files``
+        (Decision 0056) land at their declared device paths inside the
+        staging tree — leading slashes stripped, parents created on
+        demand.  Building locally is reliable (no FAT32 quirks) —
+        only the rsync that follows has to deal with the device
+        drive.  macOS extended attributes are stripped at the end so
+        ``._`` resource forks don't end up on the FAT32 volume.
 
         ``__chumicro_runtimes__``-marked files for a different runtime
         are dropped at this stage (Decision 0044) — the transport's
@@ -869,6 +897,25 @@ class CircuitpythonTransport:
         if extra_modules:
             for module_path in extra_modules:
                 shutil.copy2(module_path, staging_path / module_path.name)
+
+        if extra_files:
+            for device_path, content in extra_files.items():
+                # Translate the leading-slash device path into a
+                # relative path under the staging dir so the
+                # subsequent rsync lands it at the matching device
+                # location.  Empty / "/" / "/." path values are
+                # nonsensical here — a non-empty key with no name
+                # component is a caller bug.
+                relative = device_path.lstrip("/")
+                if not relative:
+                    raise CircuitpythonTransportError(
+                        f"extra_files key {device_path!r} has no path "
+                        "component; expected a leading-slash path like "
+                        '"/runtime_config.msgpack"',
+                    )
+                target = staging_path / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(content)
 
         flash_drive.strip_extended_attributes(staging_path)
 
@@ -1008,6 +1055,7 @@ class CircuitpythonTransport:
         harness_source: Path,
         *,
         extra_modules: list[Path] | None = None,
+        extra_files: dict[str, bytes] | None = None,
     ) -> None:
         """Copy staged files to the CIRCUITPY USB drive via rsync.
 
@@ -1047,6 +1095,7 @@ class CircuitpythonTransport:
             self._build_local_staging_tree(
                 staging_path, source_dirs, test_files, harness_source,
                 extra_modules=extra_modules,
+                extra_files=extra_files,
             )
             drive_path = self._push_staging_to_drive(
                 staging_path,
