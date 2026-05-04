@@ -197,7 +197,7 @@ The deployer merges three sources into the final dict:
 
 1. **`workspace.yml` defaults** (lowest precedence) — shared across
    every thing in the workspace.
-2. **`things/<name>/config.toml`** (overrides workspace defaults).
+2. **`projects/<name>/config.toml`** (overrides workspace defaults).
 3. **`secrets.yml`** entries resolved via `!secret <name>`
    references inside any of the above.
 
@@ -215,7 +215,7 @@ defaults:
 ```
 
 ```toml
-# things/back-porch/config.toml
+# projects/back-porch/config.toml
 [wifi]
 ssid = "HomeNet"
 password = "!secret wifi_password"

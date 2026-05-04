@@ -13,26 +13,10 @@ The repo still needs one small, repeatable compatibility signal that humans, age
 
 ## Decision
 
-Use `support/test_harness/run_device_smoke.py` as the **canonical compatibility smoke runner** for the current workspace phase.
-
-This runner should stay:
-
-- shared across CPython, MicroPython unix-port, and CircuitPython unix-port
-- intentionally tiny
-- import-free enough to execute consistently across the supported interpreters
-- focused on one checked-in timing smoke behavior rather than pretending to be a full runtime test suite
+Used `support/test_harness/run_device_smoke.py` as the canonical compatibility smoke runner during the early workspace phase.  The runner stayed shared across CPython, MicroPython unix-port, and CircuitPython unix-port, intentionally tiny, and import-free enough to execute consistently — focused on one checked-in timing smoke behavior rather than pretending to be a full runtime test suite.
 
 ## Consequences
 
-- compatibility checks in `scripts/run.py` can use one canonical smoke path across interpreters
-- the smoke runner is a verified execution path, not a claim that normal package imports are already equivalent on every runtime
-- richer runtime-specific import checks can be added later without replacing this small baseline signal
-- planning and docs should refer to `support/test_harness/run_device_smoke.py` as canonical
-
-## Superseded note
-
-The current canonical cross-runtime entrypoint is
-`support/test_harness/run_cross_runtime.py` (see Decision 0016).  The
-`run_device_smoke.py` path described above no longer exists; it was
-folded into the broader cross-runtime test runner that also exercises
-real `tests/` files via the lightweight harness.
+- Compatibility checks in `scripts/run.py` used one canonical smoke path across interpreters.
+- The smoke runner was a verified execution path, not a claim that normal package imports were already equivalent on every runtime.
+- Replaced by the broader cross-runtime test runner ([Decision 0016](0016-cross-runtime-unit-tests.md)).  Current entrypoint: `support/test_harness/run_cross_runtime.py`; `run_device_smoke.py` no longer exists.

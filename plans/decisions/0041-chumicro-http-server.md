@@ -2,7 +2,7 @@
 
 Status: `accepted`
 Date: `2026-04-26`
-Related: [Decision 0014](0014-tick-based-runner.md) (runner pattern), [Decision 0031](0031-chumicro-sockets.md) (transport substrate), [Decision 0040](0040-chumicro-requests.md) (sibling client library), `plans/workstreams/beginner-onramp.md` Step 7.
+Related: [Decision 0014](0014-runner-pattern.md) (runner pattern), [Decision 0031](0031-chumicro-sockets.md) (transport substrate), [Decision 0040](0040-chumicro-requests.md) (sibling client library), `plans/workstreams/beginner-onramp.md` Step 7.
 
 ## Context
 
@@ -219,11 +219,6 @@ station-mode state — every subsequent ``wifi.radio.connect()``
 returns ``ConnectionError("Unknown failure 1")`` until USB
 power-cycle.  ``microcontroller.reset()`` is *not* sufficient
 (the rp2040 reset doesn't toggle the CYW43's WL_REG_ON line).
-Earlier framings of this entry blamed an "rp2-port mbedTLS
-feature-flag gap" — retired after a 2026-05-02 source dive
-verified the rp2 mbedtls config has every server-side flag.
-The full diagnosis lives in `plans/learnings.md`
-"CircuitPython rp2 (Pi Pico W) currently fails server-side TLS".
 
 Cross-reference: [adafruit/circuitpython#10339](https://github.com/adafruit/circuitpython/issues/10339)
 is a sister TLS-client bug on Pi Pico 2 W (rp2350); same

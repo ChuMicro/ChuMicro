@@ -50,8 +50,8 @@ around every flash-mode deploy:
   off on the volume takes one call.
 
 All three are best-effort: missing tool, permission error, or
-non-zero exit is logged at WARNING (per Decision 0033 §5 — no
-silent swallowing) and the deploy continues.
+non-zero exit is logged at WARNING (no silent swallowing) and
+the deploy continues.
 
 ### 2. Call `os.sync()` / `sync` and wait before reading back
 

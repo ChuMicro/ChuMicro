@@ -153,7 +153,7 @@ scenarios can point elsewhere.
 
 ### 5. Templating convention: each library ships `_templates/config.toml`
 
-For the workspace template flow to scaffold `things/<name>/config.toml`
+For the workspace template flow to scaffold `projects/<name>/config.toml`
 with sections matching the libraries the user has installed, each
 consumer library ships a TOML snippet at::
 
@@ -210,10 +210,10 @@ this scaffolding flow for free.  Libraries that don't consume
 runtime config don't need the template.
 
 Workspace tooling (Phase 4a, `chumicro-workspace`) will use
-this helper to assemble starter `things/<name>/config.toml` files
+this helper to assemble starter `projects/<name>/config.toml` files
 when a user runs `python run.py add-library wifi` (or similar) —
 collect templates from installed consumer libraries, concatenate
-into the thing's config, prompt the user to fill in required
+into the project's config, prompt the user to fill in required
 values.  Out of scope for this commit; the convention + helper
 land here so Phase 4a can build on a stable contract.
 

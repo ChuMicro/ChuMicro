@@ -186,8 +186,8 @@ CPython packages.  The three folders now have clean, independent axes:
   device-library-shaped.  A sibling command (likely
   `new-workbench <name>`) scaffolds the host-tool variant.  Scope
   of the sibling scaffolder is TBD in the Phase 1 implementation
-  slice that actually needs it — until then, the first workbench
-  package (`chumicro-deploy`) can be created by hand from the
-  existing lift-and-shift material under `support/device_transport/`.
+  slice that actually needs it — until then, workbench packages
+  can be created by hand using `workbench/deploy/` as the
+  reference layout.
 - `AGENTS.md` "File routing" table and workspace-structure section
   update to name the third folder and its rule.
