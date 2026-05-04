@@ -21,7 +21,7 @@ Each gap below is listed with severity (**P0** = blocks the documented happy-pat
 | 6 | P1 | mono-repo | `add-device` should populate `devices.yml`'s `defaults:` block on first registration per runtime — the existing comment claims it does. |
 | 7 | ~~P2~~ | mono-repo | ~~When `chumicro-dev.toml` is present, auto-derive `library_sources:` from `<chumicro_path>/libraries/*/src` instead of requiring the user to hand-list every package in `workspace.yml`.~~ Done — closed by gap 3(a) (`sync_library_sources` walks the sibling `libraries/` tree, writes a managed block into `workspace.yml`, idempotent re-write on re-run). |
 | 8 | P2 | mono-repo | Single-source the bootstrap entry point — `chumicro-workspace-template/run.py` solves the same chicken-and-egg as `chumicro/scripts/prepare_workspace.py`, with a cleaner one-file pattern. |
-| 9 | P2 | mono-repo | Tighten zensical version pin so a fresh `pip install -r requirements-dev.txt` produces the same docs result as CI. |
+| 9 | ~~P2~~ | mono-repo | ~~Tighten zensical version pin so a fresh `pip install -r requirements-dev.txt` produces the same docs result as CI.~~ Done — every host-tooling dep in `requirements-dev.txt` now pinned exact (`==X.Y.Z`); `mike` pinned to a specific commit hash on `squidfunk/mike` since it ships from a git URL.  Pin policy ("host tooling exact, library deps minimum-bound") documented in the file header. |
 
 ---
 
@@ -248,6 +248,8 @@ Symptom: docs phase passes on one machine, fails on another, because zensical wa
 Same risk applies to any other unpinned tool in `requirements-dev.txt` (`pytest`, `ruff`, `build`, `hatchling`, `griffe`, `pyserial`, `pyyaml`, `mpremote`, `mike`, `mkdocstrings`).
 
 **Fix surface:** mono-repo `requirements-dev.txt` — pin to whatever version CI uses (probably worth running `pip freeze` from a green CI run and pasting). Decision-record optional but useful: "we pin host tooling exact, library deps minimum-bound."
+
+**Status:** Done — every host-tooling dep pinned exact (`==X.Y.Z`).  Pinned versions match what was installed in the green-preflight venv on 2026-05-03 (already on latest PyPI release across the board, so no version-change bugs surfaced).  `mike` ships from a git URL (`squidfunk/mike`) — pinned to the specific commit hash on `main` for reproducibility.  Pin policy documented in the file header so future intentional upgrades follow the same shape.
 
 ---
 

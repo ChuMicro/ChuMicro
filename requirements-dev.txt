@@ -6,17 +6,28 @@
 #
 # pip/uv are assumed to be available already (bootstrapped by the
 # virtual environment or installed by the user).
-pytest
-pytest-cov
-ruff
-build
-hatchling
-griffe
-tomli; python_version < "3.11"
-zensical
-pyserial
-pyyaml
-mpremote
-cryptography
-mike @ git+https://github.com/squidfunk/mike.git
-mkdocstrings[python]
+#
+# Pin policy: host tooling pinned exact (==), library deps minimum-bound
+# (>=) in each package's pyproject.toml.  Unpinned host tooling caused
+# the docs-phase drift surfaced in
+# `plans/workspace-template-dev-and-regular-mode-gaps.md` gap #9 — two
+# machines resolved to different `zensical` versions, the newer one
+# fail-the-build'd on cross-tree links the older one tolerated.
+# Refresh these pins on intentional upgrade (re-run `pip index versions
+# <pkg>` and update last-refreshed below; preflight is the validation).
+# Last refreshed: 2026-05-03.
+
+pytest==9.0.3
+pytest-cov==7.1.0
+ruff==0.15.12
+build==1.5.0
+hatchling==1.29.0
+griffe==2.0.2
+tomli==2.4.1; python_version < "3.11"
+zensical==0.0.39
+pyserial==3.5
+pyyaml==6.0.3
+mpremote==1.28.0
+cryptography==47.0.0
+mike @ git+https://github.com/squidfunk/mike.git@2d4ad799442f4592db8ad53b179bfb33db8c69ac
+mkdocstrings[python]==1.0.4
