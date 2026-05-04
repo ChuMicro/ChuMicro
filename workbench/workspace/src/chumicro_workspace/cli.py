@@ -267,13 +267,34 @@ def _cmd_setup(args: argparse.Namespace) -> int:
     from chumicro_workspace.template_apply import (  # noqa: PLC0415
         ApplyAction,
         materialize_templates,
+        materialize_workbench_starters,
     )
 
+    # `_workspace_template/` first — repo-specific starter files
+    # (project templates, examples, README placeholders, custom
+    # devices.yml or secrets.yml shapes for forks of the canonical
+    # template).  When a fork ships its own `_workspace_template/
+    # devices.yml`, the customised version wins.
     report = materialize_templates(workspace.root)
     new_files = report.count(ApplyAction.MATERIALIZED)
     if new_files:
         print(f"setup: materialized {new_files} file(s) from _workspace_template/")
         for path, action in report:
+            if action == ApplyAction.MATERIALIZED:
+                print(f"  {path}")
+
+    # Workbench-owned starters as the fallback — fills in
+    # `devices.yml` / `secrets.yml` only when the
+    # `_workspace_template/` walker didn't.  Canonical content lives
+    # in the workbench package's `_payloads/` so the same bytes ship
+    # to the mono-repo and every workspace-template-derived workspace.
+    # See unification workstream
+    # `plans/workstreams/scripts-workbench-config-unification.md`.
+    workbench_report = materialize_workbench_starters(workspace.root)
+    workbench_new = workbench_report.count(ApplyAction.MATERIALIZED)
+    if workbench_new:
+        print(f"setup: materialized {workbench_new} workbench-owned starter(s)")
+        for path, action in workbench_report:
             if action == ApplyAction.MATERIALIZED:
                 print(f"  {path}")
 

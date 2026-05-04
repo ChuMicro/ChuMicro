@@ -12,6 +12,7 @@ from chumicro_workspace.template_apply import (
     ApplyAction,
     init,
     materialize_templates,
+    materialize_workbench_starters,
     update,
 )
 
@@ -278,4 +279,63 @@ class TestMaterializeTemplates:
         # Second invocation — file already exists, should be unchanged.
         second = materialize_templates(workspace)
         actions_second = _files(second)
+        assert actions_second["secrets.yml"] == ApplyAction.UNCHANGED
+
+
+class TestMaterializeWorkbenchStarters:
+    """Workbench-owned starters land at the workspace root from the package's payloads."""
+
+    def test_writes_devices_yml_from_workbench_payload(
+        self, tmp_path: Path,
+    ) -> None:
+        workspace = tmp_path / "ws"
+        workspace.mkdir()
+        report = materialize_workbench_starters(workspace)
+        actions = _files(report)
+        assert actions["devices.yml"] == ApplyAction.MATERIALIZED
+        # Content matches the canonical reader.
+        from chumicro_workspace import read_devices_yml_starter  # noqa: PLC0415
+
+        assert (workspace / "devices.yml").read_text() == read_devices_yml_starter()
+
+    def test_writes_secrets_yml_from_workbench_payload(
+        self, tmp_path: Path,
+    ) -> None:
+        workspace = tmp_path / "ws"
+        workspace.mkdir()
+        report = materialize_workbench_starters(workspace)
+        actions = _files(report)
+        assert actions["secrets.yml"] == ApplyAction.MATERIALIZED
+        from chumicro_workspace import read_secrets_yml_starter  # noqa: PLC0415
+
+        assert (workspace / "secrets.yml").read_text() == read_secrets_yml_starter()
+
+    def test_skips_existing_files(self, tmp_path: Path) -> None:
+        workspace = tmp_path / "ws"
+        workspace.mkdir()
+        (workspace / "devices.yml").write_text("user-edited devices\n")
+        (workspace / "secrets.yml").write_text("user-edited secrets\n")
+
+        report = materialize_workbench_starters(workspace)
+        actions = _files(report)
+        assert actions["devices.yml"] == ApplyAction.UNCHANGED
+        assert actions["secrets.yml"] == ApplyAction.UNCHANGED
+        # User edits preserved verbatim.
+        assert (workspace / "devices.yml").read_text() == "user-edited devices\n"
+        assert (workspace / "secrets.yml").read_text() == "user-edited secrets\n"
+
+    def test_idempotent_across_multiple_invocations(
+        self, tmp_path: Path,
+    ) -> None:
+        workspace = tmp_path / "ws"
+        workspace.mkdir()
+
+        first = materialize_workbench_starters(workspace)
+        actions_first = _files(first)
+        assert actions_first["devices.yml"] == ApplyAction.MATERIALIZED
+        assert actions_first["secrets.yml"] == ApplyAction.MATERIALIZED
+
+        second = materialize_workbench_starters(workspace)
+        actions_second = _files(second)
+        assert actions_second["devices.yml"] == ApplyAction.UNCHANGED
         assert actions_second["secrets.yml"] == ApplyAction.UNCHANGED
