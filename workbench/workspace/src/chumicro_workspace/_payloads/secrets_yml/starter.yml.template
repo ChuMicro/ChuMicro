@@ -1,0 +1,23 @@
+# secrets.yml — gitignored credential store referenced via `!secret <name>`.
+#
+# Materialised on first ``setup`` and never overwritten.  Edit it directly
+# — re-runs of setup will not clobber it.  Add credentials below as flat
+# key / value pairs:
+#
+#     wifi_password: my-real-wifi-password
+#     api_token: 1234abcd
+#
+# Reference them from anywhere a config file is loaded — workspace.yml's
+# ``defaults:`` block, a project's ``config.toml``, a library's
+# ``functional_tests/config.toml`` — as:
+#
+#     password: "!secret wifi_password"
+#
+# The deploy-time merge resolves ``!secret`` references against this
+# file *after* workspace.yml defaults and the project's own config
+# have been merged.  Secrets resolution is the last step before the
+# msgpack write — the on-device runtime never sees the literal
+# ``!secret ...`` token.
+
+# wifi_password: replace-me
+# api_token: replace-me

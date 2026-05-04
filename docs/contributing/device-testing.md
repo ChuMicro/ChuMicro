@@ -5,7 +5,7 @@ This guide covers the real-board testing workflow for ChuMicro libraries.
 Use it when you want to:
 
 - run `functional_tests/` on a connected MicroPython or CircuitPython board
-- understand how `devices.yml` and `device-config.yml` are structured
+- understand how `devices.yml`, `workspace.yml`, and `secrets.yml` are structured
 - use `python scripts/run.py test-libraries-functional`
 - use IDE play buttons for `functional_tests/`
 
@@ -16,7 +16,9 @@ Host-side `tests/` still run through normal CPython pytest. Real-board validatio
 `python scripts/run.py setup` creates two gitignored files when they do not already exist:
 
 - `devices.yml` — your local board registry and default target selection
-- `device-config.yml` — shared environment values for tests (WiFi, MQTT, NTP, and similar settings)
+- `workspace.yml` — workspace-wide defaults (committed) for wifi / mqtt / quality knobs.  Per-library `functional_tests/config.toml` overrides land on top.
+- `secrets.yml` — gitignored credential store referenced from `workspace.yml` via `!secret <name>` markers
+- `chumicro-dev-config.toml` — *legacy* dev config still consumed by today's `libraries/*/functional_tests/conftest.py`.  Phase 4 of the unification workstream retires this file in favour of `workspace.yml` + `secrets.yml`
 
 They are intentionally local-only. Fill them in for your machine and boards; do not commit them.
 
@@ -126,29 +128,43 @@ Supported fields today:
 
 Use `ram` for day-to-day functional-test iteration. Use `flash` when a board cannot hold the RAM-mode payload comfortably or when you need persistence semantics.
 
-## 3. Configure `device-config.yml`
+## 3. Configure `workspace.yml` + `secrets.yml`
 
-`device-config.yml` is a plain YAML mapping injected into device runs as `device_config`.
+Workspace-wide defaults that every functional test inherits at deploy time.  `workspace.yml` is committed (no secrets), `secrets.yml` is gitignored (real credentials).  Materialised by `setup`; the workbench package `chumicro-workspace` owns the canonical content (same source-of-truth that ships to the workspace-template repo).
 
-Example:
+Edit `secrets.yml` once per clone — uncomment and fill in:
 
 ```yaml
-wifi:
-  ssid: "YourNetworkName"
-  password: "YourNetworkPassword"
-
-mqtt:
-  broker: "192.168.1.100"
-  port: 1883
+wifi_password: my-real-wifi-password
+api_token: 1234abcd
 ```
+
+`workspace.yml` references those names via `!secret <name>` (already wired by the materialised starter):
+
+```yaml
+defaults:
+  wifi:
+    ssid: replace-with-your-ap-ssid
+    password: "!secret wifi_password"
+  mqtt:
+    broker:
+      host: test.mosquitto.org
+      port: 1883
+```
+
+The `!secret` marker is resolved at deploy time after merge — the on-device runtime never sees the literal `"!secret ..."` string.  Per-library overrides land in `libraries/<name>/functional_tests/config.toml` (Phase 4 wires those).
 
 Typical uses:
 
-- WiFi credentials for networking tests
+- WiFi credentials for networking tests (`libraries/{wifi,requests,http_server,mqtt,sockets,websockets}`)
 - broker addresses for MQTT tests
 - NTP servers or other environment-specific values
 
-If a library does not need shared environment data, the file can stay mostly empty.
+If a library does not need shared environment data, no override file is needed.
+
+### Legacy: `chumicro-dev-config.toml`
+
+Today's `libraries/*/functional_tests/conftest.py` still reads `chumicro-dev-config.toml` directly.  Phase 4 of the unification workstream migrates each conftest to read the merged `runtime_config.msgpack` produced by the `workspace.yml` + `secrets.yml` pipeline above.  Until then, both files coexist: `setup` materialises both, and you can fill in either (or both) depending on which library's tests you're running.
 
 ## 4. Run device tests from the CLI
 

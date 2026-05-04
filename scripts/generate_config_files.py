@@ -11,28 +11,37 @@ Files generated:
   of truth, shared with the workspace-template repo); schema owned
   by ``chumicro-deploy``.  See
   ``chumicro_workspace.read_devices_yml_starter``.
-* ``chumicro-dev-config.toml`` — local-machine config for
-  contributors: wifi creds for real-network functional tests,
-  MQTT broker overrides, etc.  Gitignored.  See the file header
-  for schema.  (Phase 4 of
+* ``secrets.yml`` — gitignored credential store referenced from
+  ``workspace.yml`` and per-library
+  ``functional_tests/config.toml`` via ``!secret <name>``.  Content
+  owned by ``chumicro-workspace`` (same source-of-truth pattern as
+  devices.yml; shared with the workspace-template repo).  See
+  ``chumicro_workspace.read_secrets_yml_starter``.
+* ``chumicro-dev-config.toml`` — *legacy* local-machine config for
+  contributors.  Phase 3 of
   ``plans/workstreams/scripts-workbench-config-unification.md``
-  retires this file in favour of the unified workspace.yml +
-  secrets.yml + per-library config.toml pipeline.)
+  introduces ``workspace.yml`` + ``secrets.yml`` as the canonical
+  shape; Phase 4 retires this file when functional-test conftests
+  migrate onto the unified pipeline.  Materialised today so an
+  in-flight contributor's tests keep working through the migration.
 
 Called by ``python scripts/run.py setup``.
 """
 
 from __future__ import annotations
 
-from chumicro_workspace import read_devices_yml_starter
+from chumicro_workspace import (
+    read_devices_yml_starter,
+    read_secrets_yml_starter,
+)
 from repo_layout import ROOT
 from shared import TEMPLATES_DIR
 
 #: Mono-repo-only files to generate from ``scripts/templates/``.
-#: ``devices.yml`` is *not* in this list — its content is owned by
-#: the ``chumicro-workspace`` workbench package (see
-#: ``read_devices_yml_starter``) so the same bytes ship from one
-#: source to both the mono-repo and the workspace-template repo.
+#: ``devices.yml`` and ``secrets.yml`` are *not* in this list —
+#: their content is owned by the ``chumicro-workspace`` workbench
+#: package so the same bytes ship from one source to both the
+#: mono-repo and the workspace-template repo.
 _CONFIGS: list[tuple[str, str]] = [
     ("chumicro-dev-config.toml", "chumicro-dev-config.toml.template"),
 ]
@@ -43,7 +52,14 @@ def generate_config_files() -> int:
 
     Returns 0 always (missing configs are not errors).
     """
-    devices_yml_was_created = _materialise_devices_yml()
+    devices_yml_was_created = _materialise_from_workbench(
+        relative_path="devices.yml",
+        starter_reader=read_devices_yml_starter,
+    )
+    _materialise_from_workbench(
+        relative_path="secrets.yml",
+        starter_reader=read_secrets_yml_starter,
+    )
 
     for relative_path, template_name in _CONFIGS:
         target = ROOT / relative_path
@@ -72,19 +88,24 @@ def generate_config_files() -> int:
     return 0
 
 
-def _materialise_devices_yml() -> bool:
-    """Write ``devices.yml`` from the workbench payload when missing.
+def _materialise_from_workbench(
+    *,
+    relative_path: str,
+    starter_reader,
+) -> bool:
+    """Write a workbench-owned starter file when the target is missing.
 
     Returns True when a fresh starter was written, False when the
-    file already exists (so callers don't print stale follow-up
-    hints to a contributor who already has a populated registry).
+    file already exists (so callers can suppress follow-up hints
+    that don't apply to contributors who already have populated
+    files).
     """
-    target = ROOT / "devices.yml"
+    target = ROOT / relative_path
     if target.exists():
-        print("  devices.yml already exists — skipped")
+        print(f"  {relative_path} already exists — skipped")
         return False
-    target.write_text(read_devices_yml_starter())
-    print("  Created devices.yml")
+    target.write_text(starter_reader())
+    print(f"  Created {relative_path}")
     return True
 
 

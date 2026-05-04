@@ -34,7 +34,10 @@ from chumicro_deploy.config.default import (
     DeviceConfigError,
     load_device_registry,
 )
-from chumicro_workspace import read_devices_yml_starter
+from chumicro_workspace import (
+    read_devices_yml_starter,
+    read_secrets_yml_starter,
+)
 
 
 def test_devices_yml_starter_validates_against_schema(tmp_path: Path) -> None:
@@ -81,8 +84,8 @@ def test_generate_config_files_idempotent(tmp_path: Path, monkeypatch) -> None:
     """Running ``generate_config_files`` twice doesn't overwrite existing files.
 
     The function's contract: write-if-missing, never clobber.  A
-    contributor who edits ``devices.yml`` after first ``setup`` and
-    later runs setup again must keep their edits.
+    contributor who edits ``devices.yml`` or ``secrets.yml`` after
+    first ``setup`` and later runs setup again must keep their edits.
     """
     import generate_config_files as module  # noqa: PLC0415
 
@@ -91,12 +94,38 @@ def test_generate_config_files_idempotent(tmp_path: Path, monkeypatch) -> None:
     # First run — creates files.
     assert module.generate_config_files() == 0
     devices_yml = tmp_path / "devices.yml"
+    secrets_yml = tmp_path / "secrets.yml"
     assert devices_yml.is_file()
+    assert secrets_yml.is_file()
     devices_yml.write_text("# user edited\ndevices: []\n")
+    secrets_yml.write_text("wifi_password: my-real-password\n")
 
-    # Second run — must not overwrite the edit.
+    # Second run — must not overwrite the edits.
     assert module.generate_config_files() == 0
     assert devices_yml.read_text() == "# user edited\ndevices: []\n"
+    assert secrets_yml.read_text() == "wifi_password: my-real-password\n"
+
+
+def test_secrets_yml_materialised_from_workbench_payload(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    """``setup`` writes ``secrets.yml`` from the workbench starter.
+
+    Belt-and-suspenders against an accidental shutil/copy layer
+    creeping in between ``read_secrets_yml_starter`` and the file
+    that lands at the repo root — same source-of-truth pattern as
+    devices.yml (Phase 1 of the unification workstream).
+    """
+    import generate_config_files as module  # noqa: PLC0415
+
+    monkeypatch.setattr(module, "ROOT", tmp_path)
+    assert module.generate_config_files() == 0
+
+    secrets_yml = tmp_path / "secrets.yml"
+    assert secrets_yml.is_file()
+    # The materialised file must come verbatim from the workbench
+    # starter — no template substitutions, no rendering layer.
+    assert secrets_yml.read_text() == read_secrets_yml_starter()
 
 
 def test_devices_yml_starter_invalid_runtime_caught_by_schema(
