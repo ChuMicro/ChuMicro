@@ -1,5 +1,4 @@
-# devices.yml — board registry for mono-repo functional tests.
-# Three-zone shape (matches the workspace-template repo):
+# devices.yml — board registry.  Three-zone shape:
 #
 #   USER-OWNED      Never overwritten without --force.  Edit freely.
 #   HARDWARE-ONCE   Written on first probe; prompts before re-overwriting
@@ -23,9 +22,11 @@ defaults:
   # per-device in the entries below, or per-deploy with `--deploy-mode ram`.
   deploy_mode: flash
   # Which runtimes IDE play buttons target: "micropython", "circuitpython",
-  # or "both".  Mono-repo-only field — drives `chumicro-pytest-device`'s
-  # IDE-targeting collection.  Workspace-template doesn't use this field;
-  # the schema reader silently passes unknown keys through.
+  # or "both".  Drives `chumicro-pytest-device`'s IDE-targeting collection
+  # for `functional_tests/` — relevant in any workspace where library
+  # authors run their tests through an IDE play button (mono-repo
+  # contributors and workspace-template users who scaffold their own
+  # libraries via `python run.py new --library <name>`).
   ide_runtime: micropython
 
 devices: []

@@ -119,8 +119,12 @@ Adopt the workspace-template's flows as the canonical pattern; the mono-repo dog
 - Update `scripts/tests/test_generate_config_files.py` to match the new empty-registry contract.
 - Update `docs/contributing/device-testing.md` + `CONTRIBUTING.md` for the new flow.
 
+**Workbench-payload consolidation (added mid-Phase-1 after user pushback):**
+- The user asked: "Why does the template repo need a devices.yml template?  Can't this be a shared workbench item with the mono-repo?"  Answer: yes.  The canonical starter content is now owned by `chumicro-workspace` at `_payloads/devices_yml/starter.yml.template`, exposed via `chumicro_workspace.read_devices_yml_starter()`.  Mono-repo's `scripts/generate_config_files.py` materialises `devices.yml` from this reader (no longer from `scripts/templates/devices.yml.template` — that file is deleted as residue).  Single source of truth.
+
 **Workspace-template half (small follow-up after this phase lands):**
 - Add `ide_runtime: micropython` to `_workspace_template/devices.yml`'s `defaults:` block so workspace-template users who scaffold their own libraries get the same IDE play-button targeting as mono-repo contributors.  Fully additive — schema reader already accepts the field.
+- Replace `_workspace_template/devices.yml` itself with a call to `chumicro_workspace.read_devices_yml_starter()` from the template repo's setup flow, so the template repo also materialises from the workbench payload instead of carrying its own static copy.  Deletes residue, completes the unification.
 
 **Files touched (mono-repo):** ~6.  Estimated 1 session.
 
