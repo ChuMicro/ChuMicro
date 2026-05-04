@@ -135,7 +135,7 @@ Grep survey (confirmed):
 
 - **996 occurrences** of `chumicro|ChuMicro|CHUMICRO` across **200 files**
 - Spread across: library READMEs, guides, CONTRIBUTING.md, AGENTS.md, CLAUDE.md (via AGENTS.md), all `plans/decisions/*.md`, `plans/history.md`, `plans/next-up.md`, `plans/open-questions.md`, `plans/patterns.md`, `docs/contributing/*`, `.github/skills/*/SKILL.md`, `.github/ISSUE_TEMPLATE/*`, `.github/workflows/*`, `.github/labels.yml`, `.idea/runConfigurations/*.xml`, `.idea/modules.xml`, `support/docs/extra.css`, `LICENSE`
-- Templates: `scripts/templates/api.md.template`, `guide.md.template`, `readme.md.template`, `bundle_readme.md.template`, `run_config.xml.template`, `testing.py.template`
+- Templates: `workbench/workspace/src/chumicro_workspace/_payloads/library_template/{api,guide,readme,testing}.md.template` and `testing.py.template` (library scaffolder); `scripts/templates/{bundle_readme.md,run_config.xml}.template` (mono-repo bundle + IDE)
 
 Substitutions (in prose, not code identifiers):
 - "ChuMicro" → "ChipPy"
@@ -214,7 +214,7 @@ Action: replace every bullet in each "What's new" section with a single entry ke
 - **0.1.0**: Initial release.
 ```
 
-Do this in the same atomic rename commit — don't leave dangling `0.1.25` mentions behind. The scaffold template at `scripts/templates/guide.md.template` already uses a `*No changes yet*` placeholder and stays as-is; new libraries scaffolded after the rename will fill in their own initial entry on first release.
+Do this in the same atomic rename commit — don't leave dangling `0.1.25` mentions behind. The scaffold template at `workbench/workspace/src/chumicro_workspace/_payloads/library_template/guide.md.template` already uses a `*No changes yet*` placeholder and stays as-is; new libraries scaffolded after the rename will fill in their own initial entry on first release.
 
 ### Phase 2 — Commit, preflight, push
 
