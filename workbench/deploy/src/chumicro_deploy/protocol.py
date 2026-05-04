@@ -248,6 +248,20 @@ def parse_probe_output(output: str) -> DeviceImplementation | None:
     )
 
 
+class UnsupportedExtraFilesError(NotImplementedError):
+    """Raised when ``transport.stage(extra_files=...)`` can't be honoured.
+
+    Today's only producer is CircuitPython RAM mode: there is no
+    writable device-side filesystem to land bytes on (RAM mode runs
+    inline-execed source via raw REPL; CIRCUITPY is host-write but
+    a host write while the device is running can trigger a soft reset
+    that wipes the in-memory test state).  Tests that need an
+    on-device file artifact — typically ``runtime_config.msgpack``
+    so test code can call ``chumicro_config.load_runtime_config()``
+    — must run on flash mode.  See Decision 0056.
+    """
+
+
 @runtime_checkable
 class TransportProtocol(Protocol):
     """Minimum transport contract every device transport must satisfy."""
@@ -269,6 +283,7 @@ class TransportProtocol(Protocol):
         harness_source: Path,
         *,
         extra_modules: list[Path] | None = None,
+        extra_files: dict[str, bytes] | None = None,
     ) -> None:
         """Prepare the host-side staging area and (mode-dependent) push to device.
 
@@ -279,6 +294,18 @@ class TransportProtocol(Protocol):
         sources: in RAM mode they join ``staged_sources`` so the inline
         bootstrap registers them; in flash / copy / mount modes they
         land at the device root next to the test files.
+
+        *extra_files* are non-Python files to land at named device paths.
+        Keys are absolute device paths (``"/runtime_config.msgpack"``);
+        values are the bytes to write.  The canonical use case is staging
+        a ``runtime_config.msgpack`` alongside test files so on-device
+        code can call :func:`chumicro_config.load_runtime_config`
+        (Decision 0056).  Per-mode semantics: flash and copy modes write
+        each file to the device's filesystem alongside library + test
+        sources; mount mode writes to the host directory mounted as the
+        device filesystem; RAM mode raises
+        :class:`UnsupportedExtraFilesError` because it has no writable
+        device-side filesystem to land bytes on.
         """
         ...
 

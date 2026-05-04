@@ -219,6 +219,14 @@ class FakeTransport:
     #: :meth:`deploy_files` accepts.  See ``plans/next-up.md`` "Replace
     #: multi-project staging with scoped diff-deploy".
     device_files: dict[str, bytes] = field(default_factory=dict)
+    #: Files staged via the ``extra_files`` keyword on :meth:`stage`.
+    #: Keys are the device paths (``"/runtime_config.msgpack"``);
+    #: values are the bytes the caller asked to land at that path.
+    #: Tests assert on this dict to verify pytest-device's binary
+    #: staging hook (Decision 0056).  In RAM mode (``mode == "ram"``)
+    #: a non-empty ``extra_files`` argument raises
+    #: :class:`UnsupportedExtraFilesError` and this dict stays empty.
+    staged_extra_files: dict[str, bytes] = field(default_factory=dict)
     calls: list[tuple[str, tuple]] = field(default_factory=list)
     connected: bool = False
 
@@ -234,6 +242,7 @@ class FakeTransport:
         harness_source: Path,
         *,
         extra_modules: list[Path] | None = None,
+        extra_files: dict[str, bytes] | None = None,
     ) -> None:
         """Record a stage call.
 
@@ -243,10 +252,37 @@ class FakeTransport:
             harness_source: Harness source directory.
             extra_modules: Sibling Python files (e.g. ``_test_creds.py``)
                 to register as importable on the device.
+            extra_files: Non-Python files to land at named device paths
+                (typically ``{"/runtime_config.msgpack": <bytes>}`` so
+                test code can call ``chumicro_config.load_runtime_config()``
+                without committing a credentials shim — Decision 0056).
+                A non-empty dict in RAM mode raises
+                :class:`UnsupportedExtraFilesError`.
+
+        Raises:
+            UnsupportedExtraFilesError: ``mode == "ram"`` and
+                *extra_files* is non-empty.  RAM mode bypasses the
+                device filesystem entirely — there's nowhere to land
+                bytes.  Caller should switch the device's
+                ``deploy_mode`` to ``"flash"`` before calling.
         """
+        from .protocol import UnsupportedExtraFilesError  # noqa: PLC0415
+
         self.calls.append(
-            ("stage", (source_dirs, test_files, harness_source, extra_modules)),
+            (
+                "stage",
+                (source_dirs, test_files, harness_source, extra_modules, extra_files),
+            ),
         )
+        if extra_files:
+            if self.mode == "ram":
+                raise UnsupportedExtraFilesError(
+                    "FakeTransport(mode='ram') cannot stage extra_files — "
+                    "RAM mode has no writable device-side filesystem.  "
+                    "Set mode='flash' before calling stage(extra_files=...).",
+                )
+            for device_path, content in extra_files.items():
+                self.staged_extra_files[device_path] = content
 
     def execute(self, bootstrap_script: str) -> str:
         """Record an execute call and return canned output.

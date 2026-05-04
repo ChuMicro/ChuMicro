@@ -327,6 +327,7 @@ class MicropythonTransport:
         harness_source: Path,
         *,
         extra_modules: list[Path] | None = None,
+        extra_files: dict[str, bytes] | None = None,
     ) -> None:
         """Prepare a staging directory with library sources, tests, and harness.
 
@@ -347,6 +348,16 @@ class MicropythonTransport:
             extra_modules: Optional sibling Python files to copy to
                 the staging root next to the test files (e.g.
                 ``_test_creds.py``).
+            extra_files: Non-Python files to land at named device paths
+                (typically ``{"/runtime_config.msgpack": <bytes>}``) so
+                test code can call ``chumicro_config.load_runtime_config()``
+                instead of importing ``_test_creds`` (Decision 0056).
+                Both ``copy`` and ``mount`` modes support this — the
+                staging-tree write below lands the bytes wherever the
+                mode-specific transfer step picks them up from.
+                MicroPython has a writable filesystem in both modes;
+                no equivalent of CircuitPython's ``UnsupportedExtraFilesError``
+                applies here.
         """
         # Drop any mount/tempdir left from a prior stage() on this
         # transport so re-staging is idempotent.
@@ -384,6 +395,25 @@ class MicropythonTransport:
             for module_path in extra_modules:
                 destination = staging_path / module_path.name
                 destination.write_bytes(module_path.read_bytes())
+
+        # Land binary extra_files at their declared device paths inside
+        # the staging tree (Decision 0056).  Copy mode rsync's the
+        # whole tree to flash; mount mode mounts the tree as the device
+        # filesystem.  Either way, the file appears at the requested
+        # device path.  Leading slash stripped to make the device-path
+        # → staging-path translation reversible.
+        if extra_files:
+            for device_path, content in extra_files.items():
+                relative = device_path.lstrip("/")
+                if not relative:
+                    raise MicropythonTransportError(
+                        f"extra_files key {device_path!r} has no path "
+                        "component; expected a leading-slash path like "
+                        '"/runtime_config.msgpack"',
+                    )
+                destination = staging_path / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_bytes(content)
 
         if self.mode == "copy":
             # Subprocess `fs cp -r` — release the serial port if held.

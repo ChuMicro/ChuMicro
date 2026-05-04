@@ -69,6 +69,7 @@ from .protocol import (
     ReflashMethod,
     Runtime,
     TransportProtocol,
+    UnsupportedExtraFilesError,
     is_in_deploy_scope,
 )
 from .recovery import (
@@ -122,6 +123,7 @@ __all__ = [
     "SerialPort",
     "TransportProtocol",
     "UnresolvedFirmwareError",
+    "UnsupportedExtraFilesError",
     "WindowsNotSupportedError",
     "build_circuitpython_bootstrap_scripts",
     "build_circuitpython_deploy_scripts",
