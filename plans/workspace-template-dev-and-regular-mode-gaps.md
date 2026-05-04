@@ -17,7 +17,7 @@ Each gap below is listed with severity (**P0** = blocks the documented happy-pat
 | 2 | ~~P0~~ | mono-repo | ~~Convert remaining cross-tree relative doc links (`../../../plans/...`, `../README.md`) to absolute GitHub URLs; fix two slug mismatches in `workbench/deploy/docs/guide.md`.~~ Done — landed in `d9d039e`. |
 | 3 | P0 | template + mono-repo | Wire **on-device** library shipping for dev mode. Today, `chumicro-dev.toml` only affects the host venv; the boards still need libs from somewhere. Two concrete options below — both require a small change in the deploy CLI. |
 | 4 | P0 | template | Document and scaffold **regular mode**. Today the template README jumps straight to `deploy example_sensor` with no mention of installing the chumicro libs onto the board first via `circup`/`mip`. |
-| 5 | P1 | mono-repo | Make `--import-graph` and `--boot-shim` composable, or pick one canonical "thing with `def run()` + chumicro lib deps" deploy path. |
+| 5 | ~~P1~~ | mono-repo | ~~Make `--import-graph` and `--boot-shim` composable, or pick one canonical "thing with `def run()` + chumicro lib deps" deploy path.~~ Done — combiner landed (`project_boot_with_import_graph_source`); CLI now accepts `--boot-shim --import-graph` and ships both the boot-shim layout and import-graph-discovered libraries in one deploy. |
 | 6 | P1 | mono-repo | `add-device` should populate `devices.yml`'s `defaults:` block on first registration per runtime — the existing comment claims it does. |
 | 7 | P2 | template | When `chumicro-dev.toml` is present, auto-derive `library_sources:` from `<chumicro_path>/libraries/*/src` instead of requiring the user to hand-list every package in `workspace.yml`. |
 | 8 | P2 | mono-repo | Single-source the bootstrap entry point — `chumicro-workspace-template/run.py` solves the same chicken-and-egg as `chumicro/scripts/prepare_workspace.py`, with a cleaner one-file pattern. |
@@ -174,6 +174,8 @@ Allow `--boot-shim --import-graph` to compose: keep the boot-shim layout for the
 Alternative if combining is too invasive: deprecate `--boot-shim` and bake the `app.py` + `def run()` convention into the import-graph path — the entrypoint shim writes itself when `app.py` is detected and no `main.py`/`code.py` exists.
 
 **Fix surface:** mono-repo `chumicro_workspace.cli._cmd_deploy` + a new combiner in `chumicro_workspace`.
+
+**Status:** Done — `project_boot_with_import_graph_source` in `chumicro_workspace.boot_shim` composes the two layouts; the boot-shim is authoritative on overlapping device paths (entrypoint shim, `active.py`, `workspace_runtime` payload, namespace markers, project files under `/lib/projects/<...>/<project>/`); the import-graph contribution fills `/lib/<package>/...` with libraries reachable from the project's `app.py`.  Project-local files the walker reaches via `project_dir`-as-search-path are filtered out post-hoc to avoid double-shipping under `/lib/<basename>.py`.  CLI dispatch in `_cmd_deploy` adds a third branch (`if args.boot_shim and args.import_graph: …`); the prior mutual-exclusion rejection is gone.  Deploy mode label in dry-run output: `boot-shim+import-graph`.  chumicro-workspace 0.3.1 → 0.4.0 (new public API).
 
 ---
 

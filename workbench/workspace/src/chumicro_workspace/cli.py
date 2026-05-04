@@ -57,7 +57,10 @@ from chumicro_deploy.firmware_url import (
     derive_firmware_url,
 )
 
-from chumicro_workspace.boot_shim import project_boot_source
+from chumicro_workspace.boot_shim import (
+    project_boot_source,
+    project_boot_with_import_graph_source,
+)
 from chumicro_workspace.deploy_source import project_directory_source
 from chumicro_workspace.deploy_targets import read_deploy_targets
 from chumicro_workspace.firmware_support import (
@@ -849,13 +852,6 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
             )
             return 2
 
-    if args.import_graph and args.boot_shim:
-        print(
-            "deploy: --import-graph and --boot-shim are mutually exclusive.",
-            file=sys.stderr,
-        )
-        return 2
-
     plan_or_exit = _build_deploy_plan(workspace, args)
     if isinstance(plan_or_exit, int):
         return plan_or_exit
@@ -875,7 +871,16 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
             # ``--target-runtime`` overrides; otherwise the device's
             # configured runtime drives the filter.
             target_runtime = args.target_runtime or str(device.transport)
-            if args.boot_shim:
+            if args.boot_shim and args.import_graph:
+                layout = "boot-shim+import-graph"
+                source = project_boot_with_import_graph_source(
+                    project_dir,
+                    workspace=workspace,
+                    project_name=project_name,
+                    entrypoint_filename=device.effective_entrypoint,
+                    target_runtime=target_runtime,
+                )
+            elif args.boot_shim:
                 layout = "boot-shim"
                 source = project_boot_source(
                     project_dir,
@@ -2394,7 +2399,9 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "AST-walk the entrypoint and ship only transitively-"
             "imported modules instead of the full project directory.  "
-            "Reads workspace.yml's library_sources: for overrides."
+            "Reads workspace.yml's library_sources: for overrides.  "
+            "Combines with --boot-shim to ship libraries alongside "
+            "the boot-shim layout (walk starts from app.py)."
         ),
     )
     deploy_parser.add_argument(
@@ -2403,7 +2410,9 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Ship the project under /lib/projects/<...>/<name>/ + write a "
             "fixed code.py shim + active.py + workspace_runtime "
-            "payload (Decision 0029 §3).  app.py must export run()."
+            "payload (Decision 0029 §3).  app.py must export run().  "
+            "Combines with --import-graph to also ship libraries the "
+            "project imports."
         ),
     )
     deploy_parser.add_argument(

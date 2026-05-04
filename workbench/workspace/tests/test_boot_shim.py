@@ -14,6 +14,7 @@ from chumicro_workspace import (
     build_active_py,
     load_workspace_runtime_payload,
     project_boot_source,
+    project_boot_with_import_graph_source,
 )
 from chumicro_workspace.workspace import WorkspaceLayout
 from msgpack import unpackb
@@ -513,3 +514,189 @@ class TestProjectBootSourceNested:
         project_name = "upstairs.bedroom_sensor"
         module_path = "projects." + project_name + ".app"
         assert module_path == "projects.upstairs.bedroom_sensor.app"
+
+
+# ---------------------------------------------------------------------------
+# Boot-shim + import-graph composition (gap 5 of the workspace-template
+# dev-and-regular-mode-gaps audit)
+# ---------------------------------------------------------------------------
+
+
+def _seed_workspace_with_libraries(
+    tmp_path: Path,
+) -> tuple[WorkspaceLayout, Path]:
+    """Workspace where the project imports libraries from ``shared/``.
+
+    Layout::
+
+        tmp_path/
+            workspace.yml          (defaults block + secrets path)
+            secrets.yml
+            shared/
+                external_lib.py    (importable as ``external_lib``)
+                unused_lib.py      (NOT imported — must not ship)
+            projects/back-porch/
+                config.toml
+                app.py             (imports external_lib + helpers)
+                helpers.py         (imports external_lib indirectly)
+    """
+    (tmp_path / "workspace.yml").write_text(
+        "defaults:\n  wifi:\n    hostname_prefix: chu-\n",
+    )
+    (tmp_path / "secrets.yml").write_text("wifi_password: shh\n")
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    (shared / "external_lib.py").write_text("def helper(): pass\n")
+    (shared / "unused_lib.py").write_text("# never imported\n")
+    project_dir = tmp_path / "projects" / "back-porch"
+    project_dir.mkdir(parents=True)
+    (project_dir / "config.toml").write_text(
+        "[wifi]\nssid = 'HomeNet'\npassword = '!secret wifi_password'\n",
+    )
+    (project_dir / "app.py").write_text(
+        "import external_lib\n"
+        "from . import helpers\n"
+        "def run():\n"
+        "    helpers.go()\n",
+    )
+    (project_dir / "helpers.py").write_text(
+        "import external_lib\n"
+        "def go(): pass\n",
+    )
+    return WorkspaceLayout(root=tmp_path), project_dir
+
+
+class TestProjectBootWithImportGraphSource:
+    """Gap 5: boot-shim layout + import-graph-discovered libraries."""
+
+    def test_includes_shim_layer(self, tmp_path: Path) -> None:
+        workspace, project_dir = _seed_workspace_with_libraries(tmp_path)
+        source = project_boot_with_import_graph_source(
+            project_dir, workspace=workspace,
+        )
+        files = source.files()
+        assert "/code.py" in files
+        assert "/active.py" in files
+        assert BOOT_MODULE_DEVICE_PATH in files
+        assert PROJECTS_PACKAGE_INIT_DEVICE_PATH in files
+        assert "/lib/projects/back-porch/__init__.py" in files
+
+    def test_ships_imported_library(self, tmp_path: Path) -> None:
+        """A `shared/` module reached from app.py lands at /lib/<name>.py."""
+        workspace, project_dir = _seed_workspace_with_libraries(tmp_path)
+        source = project_boot_with_import_graph_source(
+            project_dir, workspace=workspace,
+        )
+        files = source.files()
+        assert "/lib/external_lib.py" in files
+
+    def test_skips_unimported_library(self, tmp_path: Path) -> None:
+        """Modules outside the AST walk's reachable set don't ship."""
+        workspace, project_dir = _seed_workspace_with_libraries(tmp_path)
+        source = project_boot_with_import_graph_source(
+            project_dir, workspace=workspace,
+        )
+        files = source.files()
+        assert "/lib/unused_lib.py" not in files
+
+    def test_does_not_duplicate_project_local_files(
+        self, tmp_path: Path,
+    ) -> None:
+        """``helpers.py`` ships at /lib/projects/.../helpers.py only.
+
+        The import-graph walker reaches ``helpers.py`` because
+        ``project_dir`` is a search path, but its parallel
+        ``/lib/helpers.py`` landing is dead weight (the runtime
+        resolves project-local imports through the
+        ``projects.<name>`` package).  The combined source filters
+        it out.
+        """
+        workspace, project_dir = _seed_workspace_with_libraries(tmp_path)
+        source = project_boot_with_import_graph_source(
+            project_dir, workspace=workspace,
+        )
+        files = source.files()
+        assert "/lib/projects/back-porch/helpers.py" in files
+        assert "/lib/helpers.py" not in files
+
+    def test_app_py_not_duplicated(self, tmp_path: Path) -> None:
+        """``app.py`` ships at /lib/projects/.../app.py only — the
+        import-graph walker reads it as the entrypoint but its
+        parallel /lib/app.py landing is filtered.
+        """
+        workspace, project_dir = _seed_workspace_with_libraries(tmp_path)
+        source = project_boot_with_import_graph_source(
+            project_dir, workspace=workspace,
+        )
+        files = source.files()
+        assert "/lib/projects/back-porch/app.py" in files
+        assert "/lib/app.py" not in files
+
+    def test_entrypoint_is_boot_shim_code_py(self, tmp_path: Path) -> None:
+        """The combined entrypoint is the boot-shim's /code.py shim."""
+        workspace, project_dir = _seed_workspace_with_libraries(tmp_path)
+        source = project_boot_with_import_graph_source(
+            project_dir, workspace=workspace,
+        )
+        assert source.entrypoint() == "/code.py"
+
+    def test_main_py_entrypoint_for_micropython(self, tmp_path: Path) -> None:
+        workspace, project_dir = _seed_workspace_with_libraries(tmp_path)
+        source = project_boot_with_import_graph_source(
+            project_dir, workspace=workspace,
+            entrypoint_filename="main.py",
+        )
+        assert source.entrypoint() == "/main.py"
+        files = source.files()
+        assert "/main.py" in files
+        assert "/code.py" not in files
+
+    def test_runtime_config_msgpack_rides_along(self, tmp_path: Path) -> None:
+        workspace, project_dir = _seed_workspace_with_libraries(tmp_path)
+        source = project_boot_with_import_graph_source(
+            project_dir, workspace=workspace,
+        )
+        files = source.files()
+        assert RUNTIME_CONFIG_DEVICE_PATH in files
+        decoded = unpackb(files[RUNTIME_CONFIG_DEVICE_PATH])
+        assert decoded["wifi"]["password"] == "shh"
+
+    def test_missing_project_entrypoint_raises(self, tmp_path: Path) -> None:
+        """No app.py under the project directory is a clear failure."""
+        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "secrets.yml").write_text("\n")
+        project_dir = tmp_path / "projects" / "no-app"
+        project_dir.mkdir(parents=True)
+        (project_dir / "config.toml").write_text("[wifi]\n")
+        # No app.py.
+        workspace = WorkspaceLayout(root=tmp_path)
+        with pytest.raises(FileNotFoundError, match="app.py"):
+            project_boot_with_import_graph_source(
+                project_dir, workspace=workspace,
+            )
+
+    def test_target_runtime_filters_both_layers(self, tmp_path: Path) -> None:
+        """Decision 0044 — runtime marker drops files on both inner sources."""
+        workspace, project_dir = _seed_workspace_with_libraries(tmp_path)
+        # Runtime-marked sibling under the project — boot-shim should drop it.
+        (project_dir / "_mp_only.py").write_text(
+            '__chumicro_runtimes__ = ("micropython",)\n',
+        )
+        # Runtime-marked module in shared/ — import-graph should drop it
+        # (and not walk it, even if app.py imports it).
+        (tmp_path / "shared" / "mp_only_lib.py").write_text(
+            '__chumicro_runtimes__ = ("micropython",)\n'
+            "VALUE = 1\n",
+        )
+
+        source = project_boot_with_import_graph_source(
+            project_dir, workspace=workspace, target_runtime="circuitpython",
+        )
+        files = source.files()
+        # Boot-shim filter: project file with mp-only marker dropped.
+        assert "/lib/projects/back-porch/_mp_only.py" not in files
+        # Import-graph filter: mp-only library not shipped.
+        assert "/lib/mp_only_lib.py" not in files
+        # Universal entries still present.
+        assert "/lib/external_lib.py" in files
+        assert "/lib/projects/back-porch/app.py" in files

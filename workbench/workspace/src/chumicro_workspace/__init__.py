@@ -77,6 +77,7 @@ from chumicro_workspace.boot_shim import (
     build_active_py,
     load_workspace_runtime_payload,
     project_boot_source,
+    project_boot_with_import_graph_source,
 )
 from chumicro_workspace.deploy_source import (
     GENERATED_DIRNAME,
@@ -155,6 +156,7 @@ __all__ = [
     "resolve_secrets",
     "set_runtime_default",
     "project_boot_source",
+    "project_boot_with_import_graph_source",
     "project_directory_source",
     "project_import_graph_source",
     "update_device_address",

@@ -384,3 +384,202 @@ def project_boot_source(
         secrets_yaml=secrets_yaml,
         output_path=project_dir / GENERATED_DIRNAME / "runtime_config.msgpack",
     )
+
+
+# ---------------------------------------------------------------------------
+# Boot-shim + import-graph composition (gap 5 of the workspace-template
+# dev-and-regular-mode-gaps audit)
+# ---------------------------------------------------------------------------
+
+
+class _BootShimWithImportGraphSource:
+    """Combine the boot-shim file map with import-graph-discovered libraries.
+
+    Internal — :func:`project_boot_with_import_graph_source` returns
+    the public :class:`WithRuntimeConfig` wrapper around an instance.
+
+    The boot-shim source ships the entrypoint shim, ``active.py``, the
+    on-device ``workspace_runtime`` payload, namespace ``__init__.py``
+    markers, and the project's own files under
+    ``/lib/projects/<...>/<project>/``.  The import-graph source walks
+    the project's host-side entrypoint (``app.py`` by default), follows
+    every reachable ``import`` / ``from … import``, and ships each
+    resolved module under ``/lib/<package>/...``.
+
+    The two contributions land at disjoint device paths *except* for
+    the project-local modules the import-graph walker reaches via
+    ``project_dir`` as a search path (so it can follow project-internal
+    relative imports and keep walking through them to libraries those
+    sub-modules pull in).  Those modules are already shipped by the
+    boot-shim under ``/lib/projects/<...>/<project>/``; the import-graph's
+    parallel ``/lib/<basename>.py`` landing is dead weight on the device
+    (never imported, since the runtime resolves modules through the
+    ``projects.<name>`` package).  We drop them post-hoc.
+
+    Boot-shim wins on any other overlap (entrypoint, ``active.py``,
+    ``/lib/workspace_runtime/``, namespace ``__init__.py`` markers).
+    """
+
+    def __init__(
+        self,
+        *,
+        boot_shim_inner: _BootShimSource,
+        import_graph_inner: object,  # chumicro_deploy.ImportGraphSource
+        project_dir: Path,
+    ) -> None:
+        self._boot = boot_shim_inner
+        self._graph = import_graph_inner
+        self._project_dir = project_dir
+
+    def _project_local_device_paths(self) -> set[str]:
+        """Device paths the import-graph walker would assign to project-local files.
+
+        Mirrors :class:`chumicro_deploy.ImportGraphSource`'s
+        ``resource_prefix=/lib`` + ``relative_path_from_search_path``
+        rule for files under ``project_dir`` (which the combined
+        builder adds as the first search path so the walker can follow
+        project-internal relative imports).
+        """
+        local: set[str] = set()
+        for source_path in self._project_dir.rglob("*.py"):
+            if not source_path.is_file():
+                continue
+            relative = source_path.relative_to(self._project_dir).as_posix()
+            local.add(f"/lib/{relative}")
+        return local
+
+    def files(self) -> dict[str, bytes]:
+        boot_files = self._boot.files()
+        graph_files = self._graph.files()  # type: ignore[attr-defined]
+        local_paths = self._project_local_device_paths()
+        merged: dict[str, bytes] = {
+            path: data for path, data in graph_files.items()
+            if path not in local_paths
+        }
+        merged.update(boot_files)
+        return merged
+
+    def entrypoint(self) -> str:
+        return self._boot.entrypoint()
+
+
+def project_boot_with_import_graph_source(
+    project_dir: Path,
+    *,
+    workspace: WorkspaceLayout,
+    project_name: str | None = None,
+    entrypoint_filename: str = "code.py",
+    project_entrypoint: str = "app.py",
+    workspace_yaml: Path | None = None,
+    secrets_yaml: Path | None = None,
+    extra_excluded: Iterable[str] = (),
+    target_runtime: str | None = None,
+    extra_modules: list[str] | None = None,
+    extra_search_paths: list[Path] | None = None,
+) -> WithRuntimeConfig:
+    """Boot-shim layout PLUS import-graph-discovered libraries.
+
+    Use when a project authored for the boot-shim convention also
+    needs library code (chumicro / shared / packages / library_sources
+    overrides) shipped to the device.  Common case: dev mode with a
+    sibling ``chumicro/`` checkout configured via ``chumicro-dev.toml``
+    — without this composition, ``chumicro_*`` libraries the project
+    imports never reach the board.
+
+    Triggered from the CLI by ``deploy --boot-shim --import-graph``.
+    The two flags are no longer mutually exclusive.
+
+    Args:
+        project_dir: Project directory (same shape as for
+            :func:`project_boot_source`).
+        workspace: Resolved :class:`WorkspaceLayout`.
+        project_name: Active project name (bare / slash / dotted).
+            Defaults to ``project_dir.name``.
+        entrypoint_filename: Device-side shim entrypoint —
+            ``"code.py"`` (CP) or ``"main.py"`` (MP).  The shim is
+            written at ``/<entrypoint_filename>`` and calls
+            ``workspace_runtime.boot()``.
+        project_entrypoint: Host-side filename inside *project_dir*
+            that the import-graph walker uses as its starting point.
+            Defaults to ``"app.py"`` — the boot-shim convention's
+            entrypoint module.
+        workspace_yaml: Override ``workspace.yml`` path.
+        secrets_yaml: Override ``secrets.yml`` path.
+        extra_excluded: Additional filename / directory names to
+            skip on the project walk.
+        target_runtime: Decision 0044 — forwarded to both inner
+            sources so wrong-runtime files are dropped on either side.
+        extra_modules: Dotted module names to force-include even when
+            AST can't see them.  Forwarded to
+            :class:`chumicro_deploy.ImportGraphSource`.
+        extra_search_paths: Additional directories prepended to the
+            workspace-derived search-path tail (after ``project_dir``).
+
+    Raises:
+        FileNotFoundError: When *project_dir* contains no recognized
+            config file or *project_entrypoint* doesn't exist under it.
+        WorkspaceConfigError: When ``workspace.yml``'s
+            ``library_sources:`` block is malformed.
+    """
+    from chumicro_deploy import ImportGraphSource  # noqa: PLC0415
+
+    from chumicro_workspace.import_graph import (  # noqa: PLC0415
+        build_search_paths,
+        read_library_sources,
+    )
+
+    if workspace_yaml is None:
+        workspace_yaml = workspace.workspace_yaml
+    if secrets_yaml is None:
+        secrets_yaml = workspace.secrets_yaml
+    resolved_name = project_name if project_name is not None else project_dir.name
+
+    boot_inner = _BootShimSource(
+        project_dir=project_dir,
+        project_name=resolved_name,
+        entrypoint_filename=entrypoint_filename,
+        extra_excluded=extra_excluded,
+        target_runtime=target_runtime,
+    )
+
+    project_entrypoint_path = project_dir / project_entrypoint
+    if not project_entrypoint_path.is_file():
+        raise FileNotFoundError(
+            f"project entrypoint {project_entrypoint_path} not found "
+            f"(boot-shim+import-graph composition expects {project_entrypoint!r}; "
+            f"pass project_entrypoint to override)",
+        )
+
+    library_sources = read_library_sources(workspace_yaml)
+    search_paths = [project_dir]
+    search_paths.extend(
+        build_search_paths(
+            workspace,
+            library_sources_override=library_sources,
+            extra_search_paths=extra_search_paths,
+        ),
+    )
+    graph_inner = ImportGraphSource(
+        project_entrypoint_path,
+        search_paths=search_paths,
+        extra_modules=extra_modules,
+        # device_entrypoint of the graph walk; the boot-shim's shim at
+        # ``/<entrypoint_filename>`` overrides it in the merged file map.
+        device_entrypoint=f"/{entrypoint_filename}",
+        resource_prefix="/lib",
+        target_runtime=target_runtime,
+    )
+
+    combined = _BootShimWithImportGraphSource(
+        boot_shim_inner=boot_inner,
+        import_graph_inner=graph_inner,
+        project_dir=project_dir,
+    )
+
+    return WithRuntimeConfig(
+        combined,
+        workspace_yaml=workspace_yaml,
+        project_config=find_project_config(project_dir),
+        secrets_yaml=secrets_yaml,
+        output_path=project_dir / GENERATED_DIRNAME / "runtime_config.msgpack",
+    )
