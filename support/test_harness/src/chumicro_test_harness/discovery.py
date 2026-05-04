@@ -8,7 +8,9 @@ Avoids ``os.path`` (unavailable on some CircuitPython builds) and keeps
 the import footprint minimal so it can execute under CPython, MicroPython
 unix-port, and CircuitPython unix-port.
 
-See ``plans/decisions/0016-cross-runtime-unit-tests.md``.
+A non-``_pytest`` file that fails to import is a hard FAIL, not a silent
+SKIP — files that pull in pytest / unittest / tracemalloc must either be
+converted to cross-runtime or renamed to ``test_<name>_pytest.py``.
 """
 
 import os
@@ -88,7 +90,6 @@ def discover_tests(root_dir=".", libraries=None):
             if filename.startswith("test_") and filename.endswith(".py"):
                 # Skip pytest-only tests — they use fixtures or assertions
                 # that don't exist on MicroPython/CircuitPython runtimes.
-                # See Decision 0016 (referenced in module docstring).
                 if filename.endswith("_pytest.py"):
                     continue
                 test_files.append(tests_dir + "/" + filename)
@@ -148,16 +149,19 @@ def _exec_as_namespace(file_path, name="__main__", package=""):
 def run_one_file(test_file, root_dir="."):
     """Run a single test file in the current process; return shell exit code.
 
-    Per Decision 0016, an ImportError here is a hard FAIL, not a silent
-    SKIP — the offending file must either be converted to cross-runtime
-    or renamed to ``test_<name>_pytest.py``.
+    An ImportError here is a hard FAIL, not a silent SKIP — the offending
+    file must either be converted to cross-runtime or renamed to
+    ``test_<name>_pytest.py``.
     """
     setup_source_paths(root_dir)
     print(f"== {test_file} ==")
     try:
         test_module = _exec_as_namespace(test_file)
     except ImportError as error:
-        print(f"FAIL {test_file} — import failed: {error} (Decision 0016)")
+        print(
+            f"FAIL {test_file} — import failed: {error} "
+            f"(rename to test_<name>_pytest.py if intentionally CPython-only)"
+        )
         return 1
     except Exception as error:
         print(f"ERROR loading {test_file}: {error}")
@@ -231,7 +235,10 @@ def _run_all_inline(test_files):
             test_module = _exec_as_namespace(test_file)
         except ImportError as error:
             total_failed += 1
-            print(f"FAIL {test_file} — import failed: {error} (Decision 0016)")
+            print(
+                f"FAIL {test_file} — import failed: {error} "
+                f"(rename to test_<name>_pytest.py if intentionally CPython-only)"
+            )
             continue
         except Exception as error:
             total_failed += 1
