@@ -18,6 +18,7 @@ from shared import (
     resolve_mp_mpy_cross,
     run_command,
     running_on_native_windows,
+    stream_subprocess,
 )
 
 
@@ -44,6 +45,52 @@ class TestRunCommand:
         run_command([sys.executable, "-c", "pass"])
         captured = capsys.readouterr().out
         assert f"+ {sys.executable} -c pass" in captured
+
+
+class TestStreamSubprocess:
+    """Tests for stream_subprocess — the live line-streaming helper."""
+
+    def test_returns_exit_code_and_captured_text(self):
+        """Both the exit code and the joined captured transcript come back."""
+        exit_code, captured = stream_subprocess(
+            [sys.executable, "-c", "print('hello'); print('world')"],
+        )
+        assert exit_code == 0
+        assert "hello" in captured
+        assert "world" in captured
+        assert captured.endswith("\n")
+
+    def test_failing_command_returns_nonzero(self):
+        """Non-zero exit code propagates."""
+        exit_code, _ = stream_subprocess(
+            [sys.executable, "-c", "raise SystemExit(7)"],
+        )
+        assert exit_code == 7
+
+    def test_on_line_callback_fires_per_line(self):
+        """Each line read from the child invokes ``on_line`` once."""
+        lines: list[str] = []
+        stream_subprocess(
+            [
+                sys.executable, "-c",
+                "import sys; print('one'); print('two'); print('three')",
+            ],
+            on_line=lines.append,
+        )
+        assert lines == ["one", "two", "three"]
+
+    def test_stderr_merged_into_stdout_stream(self):
+        """Stderr lines arrive on the same line stream as stdout."""
+        lines: list[str] = []
+        stream_subprocess(
+            [
+                sys.executable, "-c",
+                "import sys; print('out'); print('err', file=sys.stderr)",
+            ],
+            on_line=lines.append,
+        )
+        assert "out" in lines
+        assert "err" in lines
 
 
 class TestInstallCommand:

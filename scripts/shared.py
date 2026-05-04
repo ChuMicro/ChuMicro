@@ -63,6 +63,61 @@ def run_command(command: list[str], environment: dict[str, str] | None = None) -
     return subprocess.run(command, cwd=ROOT, env=environment, check=False).returncode
 
 
+def stream_subprocess(
+    command: list[str],
+    *,
+    cwd: Path | None = None,
+    environment: dict[str, str] | None = None,
+    on_line: Callable[[str], None] | None = None,
+) -> tuple[int, str]:
+    """Run *command* and stream its merged stdout/stderr line-by-line.
+
+    Each line read from the child is delivered to *on_line* (if set) the
+    moment it arrives, and also accumulated into the returned buffer so
+    callers that need the full transcript get it for free.
+
+    The child's stderr is merged into stdout (``stderr=subprocess.STDOUT``)
+    so a single line stream preserves the order the child emitted output —
+    important when a tool interleaves "running test_foo" on stdout with
+    "WARNING: …" on stderr.
+
+    Args:
+        command: Command + arguments to run.
+        cwd: Working directory.  Defaults to the repository root.
+        environment: Environment variables.  Defaults to inheriting the
+            parent's environment.
+        on_line: Per-line callback fired the moment each line is read.
+            Receives the line *without* its trailing newline.  Pass
+            ``None`` to suppress streaming and only collect the buffer.
+
+    Returns:
+        ``(exit_code, captured_text)``.  The captured text is the
+        concatenation of every line the child printed, joined with
+        newlines, with a trailing newline iff the child printed one.
+    """
+    captured: list[str] = []
+    with subprocess.Popen(
+        command,
+        cwd=cwd or ROOT,
+        env=environment,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        bufsize=1,
+        text=True,
+    ) as process:
+        assert process.stdout is not None
+        for raw_line in process.stdout:
+            line = raw_line.rstrip("\n")
+            captured.append(line)
+            if on_line is not None:
+                on_line(line)
+        exit_code = process.wait()
+    text = "\n".join(captured)
+    if captured:
+        text += "\n"
+    return exit_code, text
+
+
 def install_command(python: str | Path | None = None) -> list[str]:
     """Return the pip-install command prefix, preferring uv when available.
 
