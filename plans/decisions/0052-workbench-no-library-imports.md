@@ -2,7 +2,7 @@
 
 Status: `accepted`
 Date: `2026-05-04`
-Related: Decision 0032 (workbench host tools), Decision 0049 (three runtimes — CPython is the testing seam, not a production target for workbench), Decision 0050 (library inclusion test).
+Related: Decision 0032 (workbench host tools), Decision 0049 (three runtimes — CPython is the testing seam, not a production target for workbench).
 
 ## Context
 
