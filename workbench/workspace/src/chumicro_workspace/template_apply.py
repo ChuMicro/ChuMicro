@@ -167,6 +167,54 @@ def update(
     return report
 
 
+#: Workbench-owned starter files materialised on every workspace's
+#: first ``setup``.  Each entry maps a relative target path to the
+#: reader function in :mod:`chumicro_workspace` that returns the
+#: canonical content as a string.  Both the mono-repo's
+#: ``scripts/generate_config_files.py`` and the workspace-template
+#: repo's setup flow share the same bytes — single source of truth
+#: per the unification workstream
+#: (``plans/workstreams/scripts-workbench-config-unification.md``).
+_WORKBENCH_STARTERS: tuple[tuple[str, str], ...] = (
+    ("devices.yml", "read_devices_yml_starter"),
+    ("secrets.yml", "read_secrets_yml_starter"),
+)
+
+
+def materialize_workbench_starters(workspace_root: Path) -> ApplyReport:
+    """Materialise workbench-owned starter files into the workspace root.
+
+    Walks :data:`_WORKBENCH_STARTERS` and writes each missing target
+    from its corresponding reader.  Existing files are never
+    overwritten.  Always idempotent — re-running on a populated
+    workspace produces a report of ``UNCHANGED`` entries.
+
+    Decoupled from :func:`materialize_templates` so the mono-repo's
+    setup flow (which has no ``_workspace_template/`` directory of
+    its own) can call this without paying the directory-walk cost.
+
+    Returns a report whose entries are ``MATERIALIZED`` for each
+    newly created file and ``UNCHANGED`` for each that already
+    existed.
+    """
+    # Local import: keep the module-level import surface flat and
+    # avoid a circular dependency through ``chumicro_workspace``'s
+    # top-level re-exports.
+    import chumicro_workspace  # noqa: PLC0415
+
+    report = ApplyReport()
+    for relative_path, reader_name in _WORKBENCH_STARTERS:
+        target_path = workspace_root / relative_path
+        if target_path.exists():
+            report.add(relative_path, ApplyAction.UNCHANGED)
+            continue
+        reader = getattr(chumicro_workspace, reader_name)
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_text(reader(), encoding="utf-8")
+        report.add(relative_path, ApplyAction.MATERIALIZED)
+    return report
+
+
 def materialize_templates(workspace_root: Path) -> ApplyReport:
     """Materialize ``_workspace_template/`` sources into the workspace root.
 
@@ -175,6 +223,12 @@ def materialize_templates(workspace_root: Path) -> ApplyReport:
     the bytes through.  Existing files are never overwritten — this
     is a one-time-per-file generation step that runs idempotently
     on every ``setup``.
+
+    Workbench-owned starters (``devices.yml``, ``secrets.yml``) are
+    materialised separately by :func:`materialize_workbench_starters`
+    so the workspace-template repo no longer ships static copies
+    under ``_workspace_template/``; the workbench package owns the
+    canonical content for those files.
 
     Returns a report whose entries are ``MATERIALIZED`` for each
     newly created file and ``UNCHANGED`` for each that already
