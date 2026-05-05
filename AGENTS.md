@@ -281,7 +281,7 @@ Planning docs under `plans/` are part of the repository's working state. See `pl
 
 Key files:
 
-- `plans/decisions/` — durable decisions affecting future work
+- `plans/decisions/` — durable decisions affecting future work; see [`plans/decisions/README.md`](plans/decisions/README.md) for ADR format and editing conventions
 - `plans/history.md` — build-up timeline and design history
 - `plans/next-up.md` — active execution queue
 - `plans/open-questions.md` — unresolved questions
@@ -291,7 +291,7 @@ Key files:
 Housekeeping rules:
 
 - Move checked-off items in `plans/next-up.md` into the top of `Done` in the same edit
-- When revisiting an earlier decision, reference it explicitly
+- **Edit ADR bodies in place when the decision changes** — rewrite affected paragraphs so a cold reader gets accurate info; do not add `Revised:` banners, `## Update (YYYY-MM-DD)` sections, or `> **Note:** Amended by...` blockquotes.  `Date:` is the original decision date.  Status enum is exactly four values: `proposed` / `accepted` / `superseded` / `deferred` — never `revised`, `partial`, `shipped`, or `in-progress`.  When Decision N+1 supersedes part of Decision N, edit the affected paragraph in N to describe the current rule and cross-link N+1 inline (no banner blockquote at the head of the section).  Full rules in [`plans/decisions/README.md`](plans/decisions/README.md).
 - When a decision resolves an open question, update `plans/open-questions.md`
 
 ## Contributing and code review
