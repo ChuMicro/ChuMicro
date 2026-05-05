@@ -216,15 +216,14 @@ class FakeTransport:
     #: (`list_files_in_scope` / `delete_files`).  Tests pre-populate this
     #: to assert what the deploy routine considers "stale" + verify
     #: deletion.  Mirrors the leading-slash device-path form
-    #: :meth:`deploy_files` accepts.  See ``plans/next-up.md`` "Replace
-    #: multi-project staging with scoped diff-deploy".
+    #: :meth:`deploy_files` accepts.
     device_files: dict[str, bytes] = field(default_factory=dict)
     #: Files staged via the ``extra_files`` keyword on :meth:`stage`.
     #: Keys are the device paths (``"/runtime_config.msgpack"``);
     #: values are the bytes the caller asked to land at that path.
     #: Tests assert on this dict to verify pytest-device's binary
-    #: staging hook (Decision 0056).  In RAM mode (``mode == "ram"``)
-    #: a non-empty ``extra_files`` argument raises
+    #: staging hook.  In RAM mode (``mode == "ram"``) a non-empty
+    #: ``extra_files`` argument raises
     #: :class:`UnsupportedExtraFilesError` and this dict stays empty.
     staged_extra_files: dict[str, bytes] = field(default_factory=dict)
     calls: list[tuple[str, tuple]] = field(default_factory=list)
@@ -255,7 +254,7 @@ class FakeTransport:
             extra_files: Non-Python files to land at named device paths
                 (typically ``{"/runtime_config.msgpack": <bytes>}`` so
                 test code can call ``chumicro_config.load_runtime_config()``
-                without committing a credentials shim — Decision 0056).
+                without committing a credentials shim).
                 A non-empty dict in RAM mode raises
                 :class:`UnsupportedExtraFilesError`.
 

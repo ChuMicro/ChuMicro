@@ -1,7 +1,7 @@
 """chumicro-repl — host-side serial REPL for embedded boards.
 
-Publishable workbench tool (Decision 0032) that talks to CircuitPython
-and MicroPython boards over pyserial.  Three surfaces:
+Publishable workbench tool that talks to CircuitPython and MicroPython
+boards over pyserial.  Three surfaces:
 
 - :func:`interactive` / ``python -m chumicro_repl`` — interactive TUI
   that forwards keystrokes to the board, with the same core

@@ -1,9 +1,9 @@
 """chumicro-deploy — host-side device transports and deploy tooling.
 
-Publishable workbench tool (Decision 0032) for deploying code and
-running tests on MicroPython and CircuitPython hardware.
+Publishable workbench tool for deploying code and running tests on
+MicroPython and CircuitPython hardware.
 
-Transport contract (Decision 0027) is captured in :mod:`protocol`:
+Transport contract is captured in :mod:`protocol`:
 
 - :class:`TransportProtocol` — minimum every transport must implement.
 - :class:`ExtendedTransportProtocol` — adds the CircuitPython RAM-mode

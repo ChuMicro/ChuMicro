@@ -18,8 +18,7 @@ Contents:
 - :func:`plant_macos_sentinels_in_staging` — macOS-only: write the
   three skip-sentinels into the local rsync staging tree so they
   ride along in the single rsync pass instead of being separate
-  on-drive writes (which compounded the wedge risk in
-  `plans/learnings.md`).
+  on-drive writes (which compound the wedge risk).
 - :func:`cleanup_macos_noise_dirs_post_rsync` — macOS-only:
   best-effort ``rmtree`` of legacy noise dirs (``.Spotlight-V100``,
   ``.TemporaryItems``, ``.DocumentRevisions-V100``) on already-
@@ -30,8 +29,7 @@ Contents:
 All helpers are module-level functions (not methods on a class) because
 they operate on filesystem paths or subprocess calls and have no
 transport state to carry.  :func:`flush_volume` takes an injected
-sleep callable so tests can skip the real settle delay
-(Decision 0010 — constructor injection).
+sleep callable so tests can skip the real settle delay.
 """
 
 from __future__ import annotations
@@ -194,11 +192,10 @@ def merge_packages(
     Args:
         source_directory: A ``src/`` directory containing packages.
         staging_destination: Local staging directory to merge into.
-        target_runtime: Decision 0044 — when set, ``.py`` files
-            carrying a ``__chumicro_runtimes__`` marker for a
-            different runtime are skipped (in addition to
-            ``__pycache__`` / ``*.pyc``).  ``None`` matches the prior
-            unfiltered behavior.
+        target_runtime: When set, ``.py`` files carrying a
+            ``__chumicro_runtimes__`` marker for a different runtime
+            are skipped (in addition to ``__pycache__`` / ``*.pyc``).
+            ``None`` matches the prior unfiltered behavior.
     """
     if not source_directory.is_dir():
         return
@@ -341,9 +338,7 @@ def rsync(
                 "in chumicro_deploy.flash_drive.  Without this timeout "
                 "the rsync subprocess would have entered uninterruptible "
                 "kernel I/O wait, where ``kill -9`` is impossible until "
-                "the board is physically power-cycled.  See "
-                "plans/learnings.md 'rsync to CIRCUITPY can hang in "
-                "uninterruptible kernel I/O'."
+                "the board is physically power-cycled."
             ),
             error_class=FlashDriveError,
             text=True,
@@ -475,9 +470,8 @@ def plant_macos_sentinels_in_staging(staging_path: Path) -> None:
     The three sentinels live at the staging-tree root so rsync ships
     them onto the CIRCUITPY drive in the same pass as the actual
     payload — no host-side write to the live drive before rsync starts
-    (every such write is a wedge-risk vector documented in
-    `plans/learnings.md` "rsync to CIRCUITPY can hang in
-    uninterruptible kernel I/O").
+    (every such write is a wedge-risk vector — rsync to CIRCUITPY
+    can hang in uninterruptible kernel I/O).
 
     The sentinels:
 
@@ -551,9 +545,9 @@ def flush_volume(
     ``os.sync()``.  Always waits briefly afterward to let the USB
     controller finish writing to FAT32 media.
 
-    The settle delay goes through the injected *sleep* callable (per
-    Decision 0010 — constructor injection) so tests can use a fake
-    time source to skip it without sleeping for real.
+    The settle delay goes through the injected *sleep* callable so
+    tests can use a fake time source to skip it without sleeping
+    for real.
 
     Args:
         drive_path: Path on the volume to flush.

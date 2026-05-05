@@ -1,7 +1,8 @@
 """Explicit transport protocol for ChuMicro device transports.
 
-Decision 0027 documents the duck-typed transport contract in prose.
-This module makes the same contract enforceable by type checkers.
+Captures the duck-typed transport contract that
+:class:`CircuitpythonTransport` and :class:`MicropythonTransport`
+both satisfy, in a form type checkers can enforce.
 
 Two protocols are defined:
 
@@ -146,9 +147,7 @@ PROBE_IMPLEMENTATION_SCRIPT = (
 #: A diff-deploy that doesn't see one of these in the new payload
 #: removes the existing copy from the device.  Outside-scope files
 #: (user-uploaded images, hand-edited boot.py, etc.) are never
-#: touched.  Replaces the multi-project-staging path retired in
-#: workspace-ecosystem Slice 7 (`plans/next-up.md` "Replace
-#: multi-project staging with scoped diff-deploy").
+#: touched.
 DEPLOY_SCOPE_FILES: frozenset[str] = frozenset(
     {
         "/code.py",
@@ -167,8 +166,7 @@ DEPLOY_SCOPE_PREFIXES: tuple[str, ...] = ("/lib/",)
 def is_in_deploy_scope(device_path: str) -> bool:
     """Return True when *device_path* falls inside the deploy's managed scope.
 
-    Scope rule (Slice 7 follow-on, ``plans/next-up.md`` "Replace
-    multi-project staging with scoped diff-deploy"):
+    Scope rule:
 
     * The four canonical entrypoint / state files
       (``/code.py``, ``/main.py``, ``/active.py``,
@@ -258,7 +256,7 @@ class UnsupportedExtraFilesError(NotImplementedError):
     that wipes the in-memory test state).  Tests that need an
     on-device file artifact — typically ``runtime_config.msgpack``
     so test code can call ``chumicro_config.load_runtime_config()``
-    — must run on flash mode.  See Decision 0056.
+    — must run on flash mode.
     """
 
 
@@ -299,8 +297,8 @@ class TransportProtocol(Protocol):
         Keys are absolute device paths (``"/runtime_config.msgpack"``);
         values are the bytes to write.  The canonical use case is staging
         a ``runtime_config.msgpack`` alongside test files so on-device
-        code can call :func:`chumicro_config.load_runtime_config`
-        (Decision 0056).  Per-mode semantics: flash and copy modes write
+        code can call :func:`chumicro_config.load_runtime_config`.
+        Per-mode semantics: flash and copy modes write
         each file to the device's filesystem alongside library + test
         sources; mount mode writes to the host directory mounted as the
         device filesystem; RAM mode raises
@@ -401,8 +399,7 @@ class TransportProtocol(Protocol):
 
         Transports that don't support persistent state (RAM-mode
         deploys: nothing survives across deploys to be diffed) return
-        an empty list.  See ``plans/next-up.md`` "Replace multi-project
-        staging with scoped diff-deploy" for the design rationale.
+        an empty list.
         """
         ...
 

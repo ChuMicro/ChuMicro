@@ -8,12 +8,10 @@ returns a :class:`~chumicro_deploy.result.DeployResult`.
 
 The transport-level primitive this builds on is
 :meth:`~chumicro_deploy.protocol.TransportProtocol.deploy_files`.
-Test orchestrators like ``scripts/device_testing.py`` stick with the
-richer ``stage()`` / ``execute()`` flow because they need per-file
-iteration and per-group resets.
+Test orchestrators that need per-file iteration and per-group resets
+stick with the richer ``stage()`` / ``execute()`` flow.
 
-Per [Decision 0047](../../../plans/decisions/0047-deploy-mode-flash-default.md),
-both :meth:`Deployer.deploy` and :meth:`Deployer.deploy_diff` run a
+Both :meth:`Deployer.deploy` and :meth:`Deployer.deploy_diff` run a
 pre-flight pass before transport setup: when the device's
 ``deploy_mode == "ram"`` and the source exposes ``host_paths()``
 referencing any library with ``[tool.chumicro] requires_flash = true``,
@@ -83,8 +81,8 @@ class Deployer:
         force_deploy_mode: str | None,
         on_preflight_message: Callable[[str], None] | None,
     ) -> Device:
-        """Apply the Decision 0047 pre-flight policy to pick the deploy mode
-        for this run.
+        """Apply the requires_flash pre-flight policy to pick the deploy
+        mode for this run.
 
         Returns a :class:`Device` whose ``deploy_mode`` is the effective
         mode for this deploy.  The original ``self._device`` is never
@@ -151,10 +149,6 @@ class Deployer:
         on_preflight_message: Callable[[str], None] | None = None,
     ) -> DeployResult:
         """Diff-deploy *source* — delete stale in-scope files, then deploy.
-
-        Replaces the multi-project-staging flow retired in workspace-
-        ecosystem Slice 7.  Per the design in ``plans/next-up.md``
-        ("Replace multi-project staging with scoped diff-deploy"):
 
         1. Connect.
         2. Ask the transport for every in-scope file currently on the

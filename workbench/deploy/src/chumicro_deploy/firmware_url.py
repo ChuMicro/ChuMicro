@@ -1,4 +1,4 @@
-"""Firmware URL derivation per Decision 0029 §5.
+"""Firmware URL derivation for CircuitPython and MicroPython boards.
 
 Two runtimes, two strategies:
 

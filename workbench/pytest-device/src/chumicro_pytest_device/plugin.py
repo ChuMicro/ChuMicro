@@ -16,7 +16,7 @@ report pass/fail to pytest.
    defaults:
      micropython: my-mp-board
      circuitpython: my-cp-board
-     deploy_mode: flash      # ram | flash; flash is the default per Decision 0047
+     deploy_mode: flash      # ram | flash; flash is the default
      ide_runtime: both       # or micropython, or circuitpython
 
 When ``ide_runtime`` is ``both``, each test function is collected
@@ -29,11 +29,9 @@ tests at file and function granularity — just click play.
 Functional test files that exercise a single-runtime backend can
 opt out of the wrong-runtime parametrization with a module-level
 ``__chumicro_runtimes__`` marker — same convention the bundle and
-deploy pipelines use for source files (Decisions 0037 / 0044)::
+deploy pipelines use for source files::
 
     __chumicro_runtimes__ = ("circuitpython",)
-
-See Decision 0027 (IDE integration section).
 """
 
 from __future__ import annotations
@@ -400,8 +398,7 @@ def _filter_targets_by_marker(
 
     Functional test files that exercise a single-runtime backend
     (``test_cp_nvm_backend.py``, ``test_mp_adapter_on_device.py``)
-    declare a module-level marker matching the source-file convention
-    introduced by Decision 0037 / 0044::
+    declare a module-level marker matching the source-file convention::
 
         __chumicro_runtimes__ = ("circuitpython",)
 
@@ -1306,7 +1303,7 @@ def pytest_collect_file(
     Activates only for ``test_*.py`` under
     ``libraries/<name>/functional_tests/`` — the test-harness-based
     on-device flow (stage/execute, result_parser).  Workbench
-    packages (Decision 0032) also keep hardware-gated tests under a
+    packages also keep hardware-gated tests under a
     ``functional_tests/`` directory, but those are plain host-side
     pytest that call ``chumicro_deploy`` against a real board; they
     must not be routed through the library test harness and are left

@@ -192,7 +192,7 @@ class TestRsync:
         message = str(exc_info.value)
         assert "hung past" in message
         assert "Reboot the board" in message
-        assert "plans/learnings.md" in message
+        assert "uninterruptible kernel I/O" in message
 
     def test_passes_computed_timeout_to_subprocess_run(self, tmp_path: Path) -> None:
         """rsync invocation passes a ``timeout=`` keyword to subprocess.run.

@@ -1,8 +1,5 @@
 """Line-mode REPL — prompt_toolkit-driven input + per-device history.
 
-Phase 7 of the workspace-ecosystem workstream (Slice 1a of the
-REPL playground roadmap, `plans/workstreams/repl-playground.md`).
-
 The default `chumicro-repl` interactive loop is byte-passthrough:
 keystrokes go straight to the device, output streams back.  That's
 right for raw-REPL framing, paste-mode, and other byte-exact
