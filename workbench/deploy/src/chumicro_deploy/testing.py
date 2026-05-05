@@ -249,8 +249,8 @@ class FakeTransport:
             source_dirs: Library source directories.
             test_files: Test file paths.
             harness_source: Harness source directory.
-            extra_modules: Sibling Python files (e.g. ``_test_creds.py``)
-                to register as importable on the device.
+            extra_modules: Sibling Python files to register as
+                importable on the device.
             extra_files: Non-Python files to land at named device paths
                 (typically ``{"/runtime_config.msgpack": <bytes>}`` so
                 test code can call ``chumicro_config.load_runtime_config()``

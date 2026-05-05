@@ -85,3 +85,60 @@ def load_section(
         kwargs[key] = data.get(key, default)
 
     return target_class(**kwargs)
+
+
+def try_load_section(
+    target_class: type,
+    runtime_config: dict | None,
+    section_name: str,
+    *,
+    required: tuple = (),
+    optional: dict | None = None,
+) -> object | None:
+    """Soft-load a section from the runtime config.  Returns ``None`` on miss.
+
+    Unlike :func:`load_section`, the input is the **whole runtime
+    config dict** (the value of ``chumicro_config.config``), not a
+    pre-extracted section.  Three short-circuit "skip" paths return
+    ``None`` instead of raising:
+
+    * *runtime_config* is ``None`` (no ``/runtime_config.msgpack``
+      deployed — fresh-clone state on a board with no creds yet).
+    * The named section is absent from *runtime_config*, or its
+      value isn't a dict.
+    * The section is present but a required key is missing or the
+      value isn't a dict (mirrors :class:`MissingConfigKey` /
+      :class:`InvalidConfigType`).
+
+    Use this when a caller wants to gate test or app code on
+    "config is configured for this section" without writing a
+    try/except block.  The canonical pattern is a per-library
+    ``Config.try_from_dict`` classmethod that wraps this helper —
+    see :class:`chumicro_wifi.WifiConfig.try_from_dict`.
+
+    Args:
+        target_class: Class to instantiate when the section is
+            present + valid — same role as in :func:`load_section`.
+        runtime_config: The whole runtime config dict (typically
+            ``chumicro_config.config``), or ``None``.
+        section_name: Top-level key in *runtime_config* whose value
+            holds the per-library section dict.
+        required: Tuple of key names that must be present in the
+            section.  Missing keys → ``None`` return (not raise).
+        optional: Mapping of key name → default value.
+
+    Returns:
+        Instance of *target_class*, or ``None`` if any short-circuit
+        path fired.
+    """
+    if runtime_config is None:
+        return None
+    section = runtime_config.get(section_name)
+    if not isinstance(section, dict):
+        return None
+    try:
+        return load_section(
+            target_class, section, required=required, optional=optional,
+        )
+    except (MissingConfigKey, InvalidConfigType):
+        return None

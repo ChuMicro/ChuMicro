@@ -286,12 +286,12 @@ class TransportProtocol(Protocol):
         """Prepare the host-side staging area and (mode-dependent) push to device.
 
         *extra_modules* are additional Python files that the test files
-        import as top-level modules — typically siblings like
-        ``_test_creds.py`` that materialize secrets at fixture time.
-        Each is registered as importable on the device alongside library
-        sources: in RAM mode they join ``staged_sources`` so the inline
-        bootstrap registers them; in flash / copy / mount modes they
-        land at the device root next to the test files.
+        import as top-level modules — host-fixture-materialised siblings
+        a conftest writes alongside its test files.  Each is registered
+        as importable on the device alongside library sources: in RAM
+        mode they join ``staged_sources`` so the inline bootstrap
+        registers them; in flash / copy / mount modes they land at the
+        device root next to the test files.
 
         *extra_files* are non-Python files to land at named device paths.
         Keys are absolute device paths (``"/runtime_config.msgpack"``);

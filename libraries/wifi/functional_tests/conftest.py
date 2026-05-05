@@ -1,40 +1,38 @@
-"""Host-side fixture: materialise ``_test_creds.py`` from the unified config sources.
+"""Host-side fixture: register the merged runtime-config dict for staging.
 
 Reads the merged runtime-config dict from the gitignored
-``workspace.yml`` (workspace-wide defaults + credentials in one
-place per Decision 0057) deep-merged with this library's optional
-``functional_tests/config.toml``, then renders the ``[wifi]``
-section into the gitignored ``_test_creds.py`` shim that the
-on-device test imports.
+``workspace.yml`` (Decision 0057 — workspace-wide defaults +
+credentials in one place) deep-merged with this library's optional
+``functional_tests/config.toml``, then hands it to
+``chumicro_pytest_device.set_runtime_config`` so the plugin
+msgpack-encodes it once and stages it at
+``/runtime_config.msgpack`` on the device.  On-device tests read
+the same payload via ``chumicro_config.load_runtime_config()`` —
+the same API user code uses.
 
-Per Decision 0057, credentials live in the gitignored
-``workspace.yml`` directly — no ``!secret`` marker, no resolver,
-the file never reaches git.
-
-The on-device side is unchanged — tests still ``from _test_creds
-import SSID, PASSWORD``.  A follow-up will extend
-``chumicro-pytest-device`` to stage a binary
-``runtime_config.msgpack`` so on-device tests can call
-``chumicro_config.load_runtime_config()`` directly (full
-dogfooding of the user-facing path); gated on a transport-API
-change.
+When the merged config has no usable wifi credentials (fresh-clone
+state, placeholder SSID still in the starter), nothing is
+registered — staging is suppressed and the on-device test's
+import block falls through to the silent-skip path
+(``OSError`` from ``open()``).
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+from chumicro_pytest_device.runtime_config import set_runtime_config
 from chumicro_workspace import compose_runtime_config
 
 _HERE = Path(__file__).resolve().parent
 _REPO_ROOT = _HERE.parents[2]
 _WORKSPACE_YAML = _REPO_ROOT / "workspace.yml"
 _LIBRARY_CONFIG = _HERE / "config.toml"  # optional; absent → workspace defaults only
-_SHIM_PATH = _HERE / "_test_creds.py"
 
 
-def _read_wifi_section() -> tuple[str, str] | None:
-    """Return ``(ssid, password)`` from the unified config, or ``None``.
+def _merged_runtime_config() -> dict | None:
+    """Return the deep-merged runtime-config dict, or ``None`` to silent-skip.
 
     Returns ``None`` when:
 
@@ -66,19 +64,9 @@ def _read_wifi_section() -> tuple[str, str] | None:
     # starter — treat it as "no creds yet".
     if ssid == "replace-with-your-ap-ssid":
         return None
-    return ssid, password
+    return merged
 
 
-def pytest_configure(config) -> None:  # noqa: ARG001 - pytest hook signature
-    """Write/refresh ``_test_creds.py`` from the unified config sources."""
-    creds = _read_wifi_section()
-    if creds is None:
-        if _SHIM_PATH.exists():
-            _SHIM_PATH.unlink()
-        return
-    ssid, password = creds
-    _SHIM_PATH.write_text(
-        '"""Auto-generated test creds shim — do not check in."""\n'
-        f"SSID = {ssid!r}\n"
-        f"PASSWORD = {password!r}\n",
-    )
+def pytest_configure(config: pytest.Config) -> None:
+    """Register the runtime-config payload pytest-device will stage."""
+    set_runtime_config(config, _merged_runtime_config())

@@ -343,12 +343,10 @@ class MicropythonTransport:
             test_files: Test files to stage.
             harness_source: Path to the test harness ``src/`` directory.
             extra_modules: Optional sibling Python files to copy to
-                the staging root next to the test files (e.g.
-                ``_test_creds.py``).
+                the staging root next to the test files.
             extra_files: Non-Python files to land at named device paths
                 (typically ``{"/runtime_config.msgpack": <bytes>}``) so
-                test code can call ``chumicro_config.load_runtime_config()``
-                instead of importing ``_test_creds``.
+                test code can call ``chumicro_config.load_runtime_config()``.
                 Both ``copy`` and ``mount`` modes support this — the
                 staging-tree write below lands the bytes wherever the
                 mode-specific transfer step picks them up from.
@@ -385,9 +383,9 @@ class MicropythonTransport:
             destination = staging_path / test_file.name
             destination.write_bytes(test_file.read_bytes())
 
-        # Copy extra sibling modules (e.g. _test_creds.py) into staging
-        # root so the test source's `from _test_creds import ...` line
-        # resolves against a real file on the device.
+        # Copy extra sibling modules into the staging root so the test
+        # source's `from _foo import ...` line resolves against a real
+        # file on the device.
         if extra_modules:
             for module_path in extra_modules:
                 destination = staging_path / module_path.name

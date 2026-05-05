@@ -1,38 +1,27 @@
-"""Host-side fixture: materialise ``_test_creds.py`` from the unified config sources.
+"""Host-side fixture: register the merged runtime-config dict for staging.
 
-Mirrors ``libraries/requests/functional_tests/conftest.py`` — see that
+Mirrors ``libraries/wifi/functional_tests/conftest.py`` — see that
 file for the shared rationale.  chumicro-ntp's tests only need the
 ``[wifi]`` section (the NTP server is a public hostname, no host-side
 counterparty fixture).
-
-Phase 4 of the unification workstream
-(``plans/workstreams/scripts-workbench-config-unification.md``)
-retired the legacy ``chumicro-dev-config.toml`` source — every
-networking library's conftest reads from the same
-gitignored ``workspace.yml`` the workspace-template's
-user projects use.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+from chumicro_pytest_device.runtime_config import set_runtime_config
 from chumicro_workspace import compose_runtime_config
 
 _HERE = Path(__file__).resolve().parent
 _REPO_ROOT = _HERE.parents[2]
 _WORKSPACE_YAML = _REPO_ROOT / "workspace.yml"
 _LIBRARY_CONFIG = _HERE / "config.toml"  # optional; absent → workspace defaults only
-_SHIM_PATH = _HERE / "_test_creds.py"
 
 
-def _read_wifi_section() -> tuple[str, str] | None:
-    """Return ``(ssid, password)`` from the unified config, or ``None``.
-
-    Silent-skip on every "creds not configured" path: missing
-    workspace.yml, missing wifi section, missing keys,
-    parse failure, placeholder SSID still in place.
-    """
+def _merged_runtime_config() -> dict | None:
+    """Return the deep-merged runtime-config dict, or ``None`` to silent-skip."""
     if not _WORKSPACE_YAML.is_file():
         return None
     try:
@@ -51,19 +40,9 @@ def _read_wifi_section() -> tuple[str, str] | None:
         return None
     if ssid == "replace-with-your-ap-ssid":
         return None
-    return ssid, password
+    return merged
 
 
-def pytest_configure(config) -> None:  # noqa: ARG001 - pytest hook signature
-    """Write/refresh ``_test_creds.py`` from the unified config sources."""
-    creds = _read_wifi_section()
-    if creds is None:
-        if _SHIM_PATH.exists():
-            _SHIM_PATH.unlink()
-        return
-    ssid, password = creds
-    _SHIM_PATH.write_text(
-        '"""Auto-generated test creds shim — do not check in."""\n'
-        f"SSID = {ssid!r}\n"
-        f"PASSWORD = {password!r}\n",
-    )
+def pytest_configure(config: pytest.Config) -> None:
+    """Register the runtime-config payload pytest-device will stage."""
+    set_runtime_config(config, _merged_runtime_config())

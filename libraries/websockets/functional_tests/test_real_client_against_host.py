@@ -27,25 +27,13 @@ multi-stack-too-heavy rule from ``plans/learnings.md`` — same
 constraint as ``test_real_loopback.py``.
 """
 
-import sys
 import time
 
+from chumicro_config import config
 from chumicro_websockets import WebSocketClient, WebSocketState
 from chumicro_websockets.sockets_factory import chumicro_sockets_factory
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 
-try:
-    from _test_creds import PASSWORD, SSID, WS_SERVER_HOST, WS_SERVER_PORT
-    _HAS_CREDS = True
-except ImportError:
-    SSID = ""
-    PASSWORD = ""
-    WS_SERVER_HOST = None
-    WS_SERVER_PORT = None
-    _HAS_CREDS = False
-
-
-_IS_DEVICE_RUNTIME = sys.implementation.name in ("circuitpython", "micropython")
 _DEADLINE_MS = 30_000
 _WIFI_CONNECT_TIMEOUT_MS = 15_000
 _HANDSHAKE_TIMEOUT_MS = 10_000
@@ -65,14 +53,9 @@ def _sleep_ms(duration_ms: int) -> None:
     time.sleep(duration_ms / 1000)
 
 
-def _bring_wifi_up() -> WifiService:
-    wifi = WifiService(
-        WifiConfig(
-            ssid=SSID,
-            password=PASSWORD,
-            connect_timeout_ms=_WIFI_CONNECT_TIMEOUT_MS,
-        ),
-    )
+def _bring_wifi_up(wifi_config: WifiConfig) -> WifiService:
+    wifi_config.connect_timeout_ms = _WIFI_CONNECT_TIMEOUT_MS
+    wifi = WifiService(wifi_config)
     deadline = _ticks_ms() + _WIFI_CONNECT_TIMEOUT_MS
     while wifi.state != WifiState.CONNECTED:
         if _ticks_ms() > deadline:
@@ -88,16 +71,19 @@ def _bring_wifi_up() -> WifiService:
 
 def test_real_client_round_trip_against_host_echo_server() -> None:
     """Device client connects to host echo server, round-trips 3 messages."""
-    if not (_HAS_CREDS and _IS_DEVICE_RUNTIME):
+    wifi_cfg = WifiConfig.try_from_dict(config)
+    if wifi_cfg is None:
         return
-    if WS_SERVER_HOST is None or WS_SERVER_PORT is None:
+    server_host = config["websockets"]["server"]["host"]
+    server_port = config["websockets"]["server"]["port"]
+    if server_host is None or server_port is None:
         # Host fixture didn't bring up the echo server (websockets PyPI
         # missing, LAN detection failed, etc.).  Skip silently — the
         # in-memory integration suite still validates the wire.
         print("WS_HOST_SKIP no host echo-server fixture available")
         return
 
-    wifi = _bring_wifi_up()
+    wifi = _bring_wifi_up(wifi_cfg)
     print(f"WIFI_OK ip={wifi.ip}")
 
     received_text = []
@@ -112,7 +98,7 @@ def test_real_client_round_trip_against_host_echo_server() -> None:
     client.on_text = lambda text: received_text.append(text)
     client.on_close = lambda code, reason: close_observed.append((code, reason))
 
-    target_url = f"ws://{WS_SERVER_HOST}:{WS_SERVER_PORT}/"
+    target_url = f"ws://{server_host}:{server_port}/"
     client.connect(target_url, timeout_ms=_HANDSHAKE_TIMEOUT_MS)
     print(f"CLIENT_CONNECT url={target_url}")
 
@@ -172,9 +158,3 @@ def test_real_client_round_trip_against_host_echo_server() -> None:
         f"LED counter only ticked {led_counter} times — "
         f"somebody block-called against the host server"
     )
-
-
-def test_real_client_against_host_skip_when_no_host_fixture() -> None:
-    """Document the no-host-fixture path; always passes."""
-    if WS_SERVER_HOST is not None and WS_SERVER_PORT is not None:
-        return

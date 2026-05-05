@@ -54,25 +54,14 @@ The test passes on Lolin S2 (MP + CP) and any board with > 200 KB
 post-wifi free heap.
 """
 
-import sys
 import time
 
+from chumicro_config import config
 from chumicro_requests import HttpClient, chumicro_sockets_factory
 from chumicro_sockets import ssl_context_with_ca
 from chumicro_timing import ticks_ms as _ticks_ms
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 
-try:
-    from _test_creds import NOW_UTC_TUPLE, PASSWORD, SSID
-    _HAS_CREDS = True
-except ImportError:
-    SSID = ""
-    PASSWORD = ""
-    NOW_UTC_TUPLE = (2025, 1, 1, 0, 0, 0)
-    _HAS_CREDS = False
-
-
-_IS_DEVICE_RUNTIME = sys.implementation.name in ("circuitpython", "micropython")
 _TARGET_URL = "https://example.com/"
 _REQUEST_TIMEOUT_MS = 20_000
 _WIFI_CONNECT_TIMEOUT_MS = 15_000
@@ -145,14 +134,11 @@ def _seed_rtc(now_utc_tuple: tuple) -> None:
         pass
 
 
-def _bring_wifi_up(timeout_ms: int = _WIFI_CONNECT_TIMEOUT_MS) -> WifiService:
-    wifi = WifiService(
-        WifiConfig(
-            ssid=SSID,
-            password=PASSWORD,
-            connect_timeout_ms=timeout_ms,
-        ),
-    )
+def _bring_wifi_up(
+    wifi_config: WifiConfig, timeout_ms: int = _WIFI_CONNECT_TIMEOUT_MS,
+) -> WifiService:
+    wifi_config.connect_timeout_ms = timeout_ms
+    wifi = WifiService(wifi_config)
     deadline = _ticks_ms() + timeout_ms
     while wifi.state != WifiState.CONNECTED:
         if _ticks_ms() > deadline:
@@ -168,12 +154,13 @@ def _bring_wifi_up(timeout_ms: int = _WIFI_CONNECT_TIMEOUT_MS) -> WifiService:
 
 def test_real_https_get_completes_runner_shaped() -> None:
     """Live HTTPS GET drives to completion via pinned-CA TLS context."""
-    if not (_HAS_CREDS and _IS_DEVICE_RUNTIME):
+    wifi_cfg = WifiConfig.try_from_dict(config)
+    if wifi_cfg is None:
         return
 
-    _seed_rtc(NOW_UTC_TUPLE)
+    _seed_rtc(config["requests"]["now_utc_tuple"])
 
-    wifi = _bring_wifi_up()
+    wifi = _bring_wifi_up(wifi_cfg)
     print(f"WIFI_OK ip={wifi.ip}")
 
     ssl_context = ssl_context_with_ca(_CA_PEM)
@@ -220,9 +207,3 @@ def test_real_https_get_completes_runner_shaped() -> None:
     # response can complete in 1–2 outer ticks.  The cooperative
     # invariant for plain HTTP is verified by test_real_get.py;
     # this test's job is the HTTPS round-trip itself.
-
-
-def test_real_https_get_skip_when_no_creds_configured() -> None:
-    """Document the no-creds path; always passes."""
-    if _HAS_CREDS:
-        return

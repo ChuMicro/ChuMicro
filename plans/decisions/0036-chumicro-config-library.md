@@ -35,13 +35,24 @@ Two-module API:
 
 - `chumicro_config.section.load_section(cls, data, *, required, optional)`
   — the standardized factory every library's `from_dict` calls.
-- `chumicro_config.runtime.load_runtime_config(path=...)` — reads +
-  decodes `/runtime_config.msgpack` into the section-namespaced dict.
+- `chumicro_config.section.try_load_section(cls, runtime_config, section_name, *, required, optional)`
+  — the soft-load sibling that returns ``None`` instead of raising
+  on missing/invalid input.  See §4 for the consumer pattern.
+- `chumicro_config.runtime.load_runtime_config(path=...)` — explicit
+  reader; raises `OSError` on missing file, `InvalidConfigType` on
+  malformed payload.  Used when callers want precise error semantics
+  or read a non-default path.
+- `chumicro_config.runtime.config` — module-level attribute carrying
+  the loaded `/runtime_config.msgpack` dict (or `None` when the file
+  is missing).  Lazy-loaded on first access via PEP 562 module-level
+  `__getattr__` and cached for the lifetime of the import; subsequent
+  accesses return the same dict reference.  See §4 for the user
+  pattern.
 - `chumicro_config.MissingConfigKey` / `InvalidConfigType` /
   `ConfigError` — exception hierarchy.
 
 Public surface re-exported from the package root so consumers write
-`from chumicro_config import load_section, load_runtime_config`.
+`from chumicro_config import config, load_section, load_runtime_config, try_load_section`.
 
 Depends on `chumicro-msgpack` for the decode in `load_runtime_config`.
 
@@ -80,9 +91,33 @@ Behavior locked by this ADR (so libraries can't drift):
   the library's wrapper) does the conversion.  Keeps `load_section`
   predictable.
 
-### 3. Library access pattern: thin `from_dict` wrapper
+### 3. Library access pattern: thin `from_dict` + `try_from_dict` wrappers
 
-Each library declares its required + optional keys and calls `load_section` from a `from_dict` classmethod on a `<Name>Config` dataclass.  The required / optional vocabulary is duplicated in `__init__`'s parameter defaults and `from_dict`'s call — on purpose, so both construction paths (direct kwargs in tests, dict-based in production) agree without a metaclass deriving one from the other.
+Each library declares its required + optional keys and exposes two
+classmethods on its `<Name>Config` dataclass:
+
+- `from_dict(section_data)` — wraps `load_section`.  Takes a *section*
+  dict (typically `config["wifi"]`).  Raises on missing required keys.
+- `try_from_dict(runtime_config)` — wraps `try_load_section`.  Takes
+  the **whole runtime config dict** (typically the value of
+  `chumicro_config.config`) and returns `None` when the section is
+  missing/invalid.  The skip-friendly gate for app + test code:
+
+  ```python
+  from chumicro_config import config
+  from chumicro_wifi import WifiConfig, WifiService
+
+  wifi_cfg = WifiConfig.try_from_dict(config)
+  if wifi_cfg is None:
+      return  # not configured — skip / use defaults
+  service = WifiService(wifi_cfg)
+  ```
+
+The required / optional vocabulary is duplicated in `__init__`'s
+parameter defaults and the two factory calls — on purpose, so all
+three construction paths (direct kwargs, section dict, whole
+runtime config) agree without a metaclass deriving one from the
+other.
 
 ```python
 class WifiConfig:
@@ -92,11 +127,40 @@ class WifiConfig:
     @classmethod
     def from_dict(cls, data: dict) -> "WifiConfig":
         return load_section(cls, data, required=("ssid", "password"), optional={"hostname": None, "connect_timeout_ms": 15_000})
+
+    @classmethod
+    def try_from_dict(cls, runtime_config: dict | None) -> "WifiConfig | None":
+        return try_load_section(cls, runtime_config, section_name="wifi", required=("ssid", "password"), optional={"hostname": None, "connect_timeout_ms": 15_000})
 ```
 
-**Rejected:** a `ConfigBase` mixin that introspects `_REQUIRED` / `_OPTIONAL` class attributes and auto-generates `from_dict`.  The inheritance + class-attribute indirection saves three lines per library and adds magic the next reader has to chase.
+**Rejected:** a `ConfigBase` mixin that introspects `_REQUIRED` / `_OPTIONAL` class attributes and auto-generates `from_dict` / `try_from_dict`.  The inheritance + class-attribute indirection saves three lines per library and adds magic the next reader has to chase.
 
-### 4. `load_runtime_config` reads + decodes the on-device file
+### 4. Reading the deployed runtime config — `config` attribute + `load_runtime_config()`
+
+Two surfaces, picked by the calling pattern:
+
+**`config` — the canonical user-facing attribute.**  Module-level
+`dict | None` lazy-loaded on first access via PEP 562
+`__getattr__`; cached for the lifetime of the import.  Apps that
+import `chumicro_config` for `InvalidConfigType` / `load_section`
+without touching `config` pay no file-read cost.  `None` when
+`/runtime_config.msgpack` is missing — apps gate on that to handle
+the no-deployed-config path.  `InvalidConfigType` (file present
+but malformed) is *not* caught at import: corruption is a hard
+deploy failure that surfaces loudly on first access rather than
+silently degrading to `config = None`.
+
+```python
+from chumicro_config import config
+from chumicro_wifi import WifiConfig, WifiService
+
+if config is None:
+    return  # no runtime config deployed — skip / use defaults
+
+wifi = WifiService(WifiConfig.from_dict(config["wifi"]))
+```
+
+**`load_runtime_config(path=...)` — the explicit reader.**
 
 ```python
 def load_runtime_config(path: str = "/runtime_config.msgpack") -> dict:
@@ -108,19 +172,16 @@ def load_runtime_config(path: str = "/runtime_config.msgpack") -> dict:
     """
 ```
 
-Centralises the path constant + msgpack decode so user code is:
+Used when callers need precise `OSError` semantics, want to
+re-read after a fresh deploy, or read a non-default path (tests
+typically monkey-patch `DEFAULT_RUNTIME_CONFIG_PATH` or pass an
+explicit `path=`).
 
-```python
-from chumicro_config import load_runtime_config
-from chumicro_wifi import WifiConfig, WifiService
-
-config = load_runtime_config()
-wifi = WifiService(WifiConfig.from_dict(config["wifi"]))
-```
-
-Saves the user from importing `msgpack` directly and from typing
-the path.  The `path=` parameter exists so tests + multi-config
-scenarios can point elsewhere.
+PEP 562 module-level `__getattr__` is supported on CPython,
+MicroPython, and CircuitPython flash mode.  CircuitPython RAM mode
+wraps source modules in a class-stub that bypasses PEP 562 — but
+runtime configs aren't shipped in RAM mode anyway (the
+`extra_files` staging path requires flash).
 
 ### 5. Templating convention: each library ships `_templates/config.toml`
 

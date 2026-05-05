@@ -17,10 +17,10 @@ keyword.  Three concrete transports + the host-side
 * :class:`FakeTransport`: stores the bytes in
   ``staged_extra_files`` for assert-on by tests.
 
-The on-device migration that consumes this API (``_test_creds.py``
-→ ``runtime_config.msgpack`` + ``chumicro_config.load_runtime_config``)
-ships in a follow-up session — see
-``plans/workstreams/phase-4-5b-on-device-config-dogfooding.md``.
+The on-device migration that consumes this API (drop the
+host-fixture credentials shim → stage ``runtime_config.msgpack`` +
+read via ``chumicro_config.load_runtime_config``) lives in
+``plans/workstreams/on-device-config-dogfooding.md``.
 """
 
 from __future__ import annotations
