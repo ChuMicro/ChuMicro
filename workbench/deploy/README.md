@@ -74,7 +74,7 @@ For a workspace project that already has a `devices.yml`, swap the `Device(...)`
 
 ### `devices.yml` writer surface
 
-`chumicro_deploy.config.devices_yaml` (separate submodule) — round-trip read/write of the device registry with comments and key order preserved, three-zone classification (user-owned / hardware-once / probed-always) per Decision 0029 §9.  This is what `chumicro-workspace add-device` and friends sit on; consumers building their own onboarding flow against `devices.yml` use this surface directly.
+`chumicro_deploy.config.devices_yaml` (separate submodule) — round-trip read/write of the device registry with comments and key order preserved, three-zone classification (user-owned / hardware-once / probed-always).  This is what `chumicro-workspace add-device` and friends sit on; consumers building their own onboarding flow against `devices.yml` use this surface directly.
 
 | Symbol | What it does |
 |---|---|
@@ -109,7 +109,7 @@ For a workspace project that already has a `devices.yml`, swap the `Device(...)`
 
 ### Status
 
-> Pre-alpha.  Decision 0029 Phase 1 complete: host-side device transports, `Device` / `Deployer` facade, `FileSource` pluggability, `probe_device`, `flash_firmware` (UF2 + esptool), the `chumicro-deploy` CLI, and the `InteractiveDeployer` recovery layer are all shipped and hardware-verified on ESP32-S2, ESP32-S3, and Pi Pico W across CircuitPython and MicroPython.  See [the project-workspace workstream](https://github.com/ChuMicro/ChuMicro/blob/main/plans/workstreams/project-workspace.md) for what's ahead.
+> Pre-alpha.  Host-side device transports, `Device` / `Deployer` facade, `FileSource` pluggability, `probe_device`, `flash_firmware` (UF2 + esptool), the `chumicro-deploy` CLI, and the `InteractiveDeployer` recovery layer are all shipped and hardware-verified on ESP32-S2, ESP32-S3, and Pi Pico W across CircuitPython and MicroPython.
 
 ## Companion: chumicro-repl
 
@@ -129,11 +129,12 @@ For a workspace project that already has a `devices.yml`, swap the `Device(...)`
 Host-side tests live in `tests/`; real-board functional tests live in `functional_tests/`.
 
 ```bash
-python scripts/run.py test --libraries deploy
-python scripts/run.py test-workbench-functional --workbench deploy
+pip install -e .[test]
+pytest tests/
+pytest functional_tests/   # needs a registered board in devices.yml
 ```
 
-Before running device tests, generate local board config files with `python scripts/run.py setup`, then fill in `devices.yml`. See the [contributing guide](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md) and the [device testing guide](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/device-testing.md) for the full workflow.
+Before running functional tests, register a board with `chumicro-workspace add-device <id> --address <port>` (or hand-write a `devices.yml` entry).
 
 ## Docs
 

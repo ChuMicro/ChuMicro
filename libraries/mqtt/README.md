@@ -73,7 +73,7 @@ Two `MQTTClient(...)` constructor knobs let you trade tick fairness for throughp
 | `recv_budget_per_tick` | `1024` (bytes) | Soft cap on bytes drained from the socket in one `handle()` call.  Without this, a 100 KB blob in a fat kernel TCP buffer (lwIP on rp2 holds 16–32 KB) would monopolize the tick until drained — visibly stuttering a concurrent LED blink or sub-second control loop.  Raise for fast big-blob ingestion at the cost of LED smoothness. |
 | `max_tx_queue_size` | `100` packets | Hard cap on pending outbound packets.  Appending past the cap raises `MQTTBackpressureError`; protocol-internal traffic (PUBACK responses, retransmits, PINGREQ) bypasses the cap so QoS-1 / keepalive contracts hold.  Failed QoS-1 publishes roll back the `packet_id` allocation cleanly so the id pool isn't leaked on backpressure.  Raise for bursty publishers; lower for memory-tight boards. |
 
-See `plans/learnings.md` §"A naive `recv_into` loop can starve cooperative tasks" for the full root-cause analysis that motivated `recv_budget_per_tick`.
+A naive `recv_into` loop without `recv_budget_per_tick` can starve cooperative tasks when the kernel TCP buffer is full.
 
 ## Platform support
 
@@ -88,30 +88,9 @@ Works on CPython, MicroPython, and CircuitPython.
 
 ## Configuring wifi + broker for examples and functional tests
 
-Real-network functional tests in `functional_tests/test_real_*.py` and the hardware-prefixed examples in `examples/circuitpython_*.py` need wifi credentials (and optionally a broker override).  How you supply them depends on whether you're inside the chumicro mono-repo or using this library in your own project.
+Real-network functional tests in `functional_tests/test_real_*.py` and the hardware-prefixed examples in `examples/circuitpython_*.py` need wifi credentials (and optionally a broker override).  Two paths, depending on whether you're using a `chumicro-workspace`:
 
-### Inside the chumicro mono-repo
-
-`python scripts/run.py setup` generates `chumicro-dev-config.toml` at the repo root (gitignored).  Uncomment and fill in:
-
-```toml
-[wifi]
-ssid = "your-wifi-ssid"
-password = "your-wifi-password"
-
-# Optional — defaults to test.mosquitto.org:1883 when omitted.
-[mqtt.broker]
-host = "test.mosquitto.org"
-port = 1883
-```
-
-The library's `functional_tests/conftest.py` reads this file and materialises a `_test_creds.py` shim alongside the test.  Without it, the real-network tests skip silently.
-
-### Using `chumicro-mqtt` outside the mono-repo
-
-Two paths, depending on whether you're using a `chumicro-workspace`:
-
-* **With a workspace (recommended).**  Put wifi + broker config in your workspace's `secrets.yml` and per-thing `config.toml`, run `chumicro-workspace deploy --thing <name>`, and the example reads them via `chumicro_config.load_runtime_config()`.  The telemetry example reads `[wifi]` for credentials and `[telemetry]` for the broker host/port/topic — see the example file for keys.
+* **With a workspace (recommended).**  Put wifi + broker config in your workspace's `workspace.local.yml` and per-thing `config.toml`, run `chumicro-workspace deploy --thing <name>`, and the example reads them via `chumicro_config.load_runtime_config()`.  The telemetry example reads `[wifi]` for credentials and `[telemetry]` for the broker host/port/topic — see the example file for keys.
 * **Raw single-file deploy** (no workspace).  Edit the `WIFI_SSID` / `WIFI_PASSWORD` / `BROKER_HOST` / `BROKER_PORT` / `TOPIC` constants near the top of the example file before copying it to `/code.py` (CP) or `/main.py` (MP).  The constants are the fallback when no `runtime_config.msgpack` is present.
 
 The library itself never reads either source — it takes a `chumicro-sockets` socket and goes.  The config wiring is application-layer.
@@ -127,11 +106,12 @@ For real-board fragmentation testing, `.scratch/run_mqtt_perf.py` deploys a long
 Host-side tests live in `tests/`; real-board functional tests belong in `functional_tests/`.
 
 ```bash
-python scripts/run.py test --libraries mqtt
-python scripts/run.py test-libraries-functional --library mqtt
+pip install -e .[test]
+pytest tests/
+pytest functional_tests/   # needs a registered board in devices.yml
 ```
 
-Before running device tests, generate local board config files with `python scripts/run.py setup`, then fill in `devices.yml`. See the [contributing guide](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md) and the [device testing guide](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/device-testing.md) for the full workflow.
+Before running functional tests, register a board with `chumicro-workspace add-device <id> --address <port>`.
 
 ## Docs
 
