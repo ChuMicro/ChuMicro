@@ -88,7 +88,7 @@ _HINT_TABLE: tuple[tuple[re.Pattern[str], str, str], ...] = (
         (
             "missing config key `{0}` — check projects/<project>/config.toml "
             "or workspace.yml's `defaults:` block (the gitignored workspace "
-            "config carrying defaults + credentials per Decision 0057).  Use "
+            "config carrying defaults + credentials).  Use "
             "`python run.py deploy <project> --dry-run` to inspect what "
             "the merged runtime config carries."
         ),

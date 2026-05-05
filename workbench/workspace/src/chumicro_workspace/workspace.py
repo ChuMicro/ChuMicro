@@ -8,8 +8,7 @@ the workspace tree (typical Git / monorepo ergonomics).
 
 Projects may be nested arbitrarily deep under ``projects/`` —
 ``projects/upstairs/bedroom_sensor/``, ``projects/garage/sensors/door_open/``,
-and so on (Phase 1 of ``plans/workstreams/workspace-ecosystem.md``).
-A directory is classified by walking its contents:
+and so on.  A directory is classified by walking its contents:
 
 * **project** — leaf containing an entry-point file
   (``app.py`` / ``code.py`` / ``main.py``).  Deployable.
@@ -19,12 +18,11 @@ A directory is classified by walking its contents:
   ``docs/``, design notes, etc. anywhere in the tree without flagging
   them.
 
-The layout is documented in ``plans/workstreams/project-workspace.md``
-and reified by the canonical template at
-``ChuMicro/ChuMicro-Workspace-Template`` (Decision 0038)::
+The layout reified by the canonical
+``ChuMicro/ChuMicro-Workspace-Template`` repo::
 
     <root>/
-        workspace.yml          # gitignored defaults + credentials (Decisions 0035 + 0057)
+        workspace.yml          # gitignored defaults + credentials
         devices.yml            # board entries (chumicro_deploy.config.default)
         projects/<...>/<name>/ # one directory per "project", optionally nested
         shared/                # shared library code
@@ -43,11 +41,12 @@ WORKSPACE_MARKER: str = "workspace.yml"
 #: Default subdirectory that contains one directory per project.
 PROJECTS_DIRNAME: str = "projects"
 
-#: Filenames that mark a directory as a deployable "project".  Order is
-#: irrelevant — any single one is enough.  ``app.py`` is the
-#: workspace-runtime convention (Decision 0029); ``code.py`` /
-#: ``main.py`` are accepted so users with bare CircuitPython /
-#: MicroPython entry-points still see their project classified.
+#: Filenames that mark a directory as a deployable "project".  Order
+#: is irrelevant — any single one is enough.  ``app.py`` is the
+#: workspace convention (the workspace boot shim looks for it);
+#: ``code.py`` / ``main.py`` are accepted so users with bare
+#: CircuitPython / MicroPython entry-points still see their project
+#: classified.
 ENTRY_POINT_FILENAMES: tuple[str, ...] = ("app.py", "code.py", "main.py")
 
 
@@ -171,8 +170,8 @@ class WorkspaceLayout:
         proper chumicro library package — ``src/<name>/``, ``tests/``,
         optional ``docs/`` and ``examples/``, ``pyproject.toml``,
         ``VERSION``.  Created by ``chumicro-workspace new --library``.
-        Use this when you intend to publish (or later might) — you get
-        the same scaffolding the chumicro mono-repo uses.
+        Use this when the library is meant to be publishable — you
+        get the same scaffolding chumicro libraries themselves use.
 
         ``import_graph.build_search_paths`` includes
         ``libraries/<name>/src/`` for every entry so projects can ``import

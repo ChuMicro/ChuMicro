@@ -13,7 +13,7 @@
 
      Libraries that accept dependencies via constructor injection (time,
      I/O, network) should provide ready-made fakes so downstream tests
-     don't have to invent their own mocks (Decision 0010).
+     don't have to invent their own mocks.
 
      To fill this in, read:
        1. `src/{import_name}/testing.py` — the fake classes/functions

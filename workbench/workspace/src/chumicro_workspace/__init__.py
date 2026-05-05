@@ -2,22 +2,21 @@
 
 Combines:
 
-* **Config merge** (Decisions 0035 + 0057) — gitignored
-  ``workspace.yml`` (defaults + credentials in one place) +
-  per-project ``config.{toml,yml,yaml}`` →
-  ``/runtime_config.msgpack``.  Pure structural deep-merge; no
-  ``!secret`` marker, no resolver — both layers are gitignored and
-  share the section-namespaced shape.
+* **Config merge** — gitignored ``workspace.yml`` (defaults +
+  credentials in one place) + per-project ``config.{toml,yml,yaml}``
+  → ``/runtime_config.msgpack``.  Pure structural deep-merge; both
+  layers are gitignored and share the section-namespaced shape.
 * **Deploy integration** — :class:`WithRuntimeConfig` plus
   :func:`project_directory_source` / :func:`project_import_graph_source`
   / :func:`project_boot_source` compose with ``chumicro-deploy``'s
   ``FileSource``\\ s so a single ``Deployer.deploy(...)`` call ships
   app code + the merged config + (optional) boot shim in one shot.
-* **``devices.yml`` round-trip** — three-zone writer (Decision 0029 §9).
+* **``devices.yml`` round-trip** — three-zone writer (USER_OWNED /
+  HARDWARE_ONCE / PROBED_ALWAYS).
 * **Onboarding** — board-state detection, firmware URL derivation
   (CP S3 listing + MP curated machine→BOARD map).
-* **Init / update** (Decision 0038) — clone the canonical workspace
-  template repo and re-flow tool-owned files.
+* **Init / update** — clone the canonical workspace template repo
+  and re-flow tool-owned files.
 * **CLI dispatch** — :func:`chumicro_workspace.cli.main` powers the
   ``chumicro-workspace`` entry-point and the workspace ``run.py`` shim.
 
@@ -33,16 +32,16 @@ Public API::
         WithRuntimeConfig,           # FileSource decorator that injects the msgpack
         project_directory_source,      # convenience: DirectorySource + WithRuntimeConfig
         find_project_config,           # locate config.toml/.yml/.yaml under a project dir
-        RUNTIME_CONFIG_DEVICE_PATH,  # canonical on-device path (Decision 0035 §8)
+        RUNTIME_CONFIG_DEVICE_PATH,  # canonical on-device path
         GENERATED_DIRNAME,           # canonical host-side _generated/ dir name
         WorkspaceConfigError,        # YAML/TOML top-level shape malformed
         read_workspace_yml_starter,  # canonical workspace.yml content
     )
 
 Workbench-only — runs on CPython only; never lands on a
-microcontroller.  Workbench tools and scripts (the workspace's
-``run.py`` shim) consume this package; the on-device side is
-``chumicro-config`` (Decision 0036).
+microcontroller.  Workbench tools and the workspace's ``run.py``
+shim consume this package; the on-device counterpart is
+``chumicro-config``.
 """
 
 from chumicro_deploy.config.devices_yaml import (

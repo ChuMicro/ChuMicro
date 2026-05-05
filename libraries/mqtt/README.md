@@ -90,7 +90,7 @@ Works on CPython, MicroPython, and CircuitPython.
 
 Real-network functional tests in `functional_tests/test_real_*.py` and the hardware-prefixed examples in `examples/circuitpython_*.py` need wifi credentials (and optionally a broker override).  Two paths, depending on whether you're using a `chumicro-workspace`:
 
-* **With a workspace (recommended).**  Put wifi + broker config in your workspace's gitignored `workspace.yml` and per-thing `config.toml`, run `chumicro-workspace deploy --thing <name>`, and the example reads them via `chumicro_config.load_runtime_config()`.  The telemetry example reads `[wifi]` for credentials and `[telemetry]` for the broker host/port/topic — see the example file for keys.
+* **With a workspace (recommended).**  Put wifi + broker config in your workspace's gitignored `workspace.yml` and per-project `config.toml`, run `chumicro-workspace deploy <project>`, and the example reads them via `chumicro_config.load_runtime_config()`.  The telemetry example reads `[wifi]` for credentials and `[telemetry]` for the broker host/port/topic — see the example file for keys.
 * **Raw single-file deploy** (no workspace).  Edit the `WIFI_SSID` / `WIFI_PASSWORD` / `BROKER_HOST` / `BROKER_PORT` / `TOPIC` constants near the top of the example file before copying it to `/code.py` (CP) or `/main.py` (MP).  The constants are the fallback when no `runtime_config.msgpack` is present.
 
 The library itself never reads either source — it takes a `chumicro-sockets` socket and goes.  The config wiring is application-layer.

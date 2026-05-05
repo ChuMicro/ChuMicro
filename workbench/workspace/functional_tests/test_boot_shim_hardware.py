@@ -44,11 +44,10 @@ def _build_device(entry: DeviceEntry) -> Device:
 
 
 def _seed_workspace(tmp_path: Path) -> WorkspaceLayout:
-    """Create a minimal workspace.yml + secrets.yml under *tmp_path*."""
+    """Create a minimal workspace.yml under *tmp_path*."""
     (tmp_path / "workspace.yml").write_text(
         "defaults:\n  app_marker_prefix: chu-bootshim\n",
     )
-    (tmp_path / "secrets.yml").write_text("dummy: ok\n")
     return WorkspaceLayout(root=tmp_path)
 
 

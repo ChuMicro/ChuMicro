@@ -35,9 +35,8 @@ class WorkspaceConfigError(ValueError):
     underlying parser errors (ruamel ``YAMLError``) so callers
     (most importantly ``check_workspace_yaml`` in :mod:`health`)
     only need to catch one exception type to render a clean error.
-    File-level validation only (Decision 0035 §6) — schema-level
-    checks happen at the library boundary when each `from_dict`
-    fires on device.
+    File-level validation only — schema-level checks happen at the
+    library boundary when each `from_dict` fires on device.
     """
 
 

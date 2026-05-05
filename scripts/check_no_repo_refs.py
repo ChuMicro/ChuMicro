@@ -20,8 +20,8 @@ Flagged patterns:
 * ``chumicro mono-repo`` / ``chumicro monorepo`` — frames the package
   as a derivative of an upstream repo the consumer doesn't have.
 
-Suppression: ``# noqa: CHU002`` on the offending line, or
-``<!-- noqa: CHU002 -->`` for Markdown.
+Suppression: ``# noqa: CHU006`` on the offending line, or
+``<!-- noqa: CHU006 -->`` for Markdown.
 
 Usage::
 
@@ -38,7 +38,7 @@ from pathlib import Path
 
 from repo_layout import ROOT
 
-_RULE_CODE = "CHU002"
+_RULE_CODE = "CHU006"
 
 _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (
@@ -77,9 +77,7 @@ _NOQA_PATTERNS = (
 #: Roots whose contents are temporarily skipped while a parallel
 #: refactor catches up.  Drop entries here once the refactor lands and
 #: those files have been cleansed of mono-repo references.
-_SKIPPED_ROOTS: tuple[Path, ...] = (
-    Path("workbench") / "workspace" / "src",
-)
+_SKIPPED_ROOTS: tuple[Path, ...] = ()
 
 
 def _scan_roots() -> list[Path]:
@@ -104,7 +102,7 @@ def _scan_roots() -> list[Path]:
 
 
 def _is_suppressed(line: str) -> bool:
-    """Return True when *line* carries a ``CHU002``-suppressing noqa."""
+    """Return True when *line* carries a ``CHU006``-suppressing noqa."""
     for pattern in _NOQA_PATTERNS:
         match = pattern.search(line)
         if match is None:

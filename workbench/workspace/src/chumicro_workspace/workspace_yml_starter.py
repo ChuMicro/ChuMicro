@@ -1,14 +1,9 @@
 """Canonical ``workspace.yml`` starter content.
 
 Owned by ``chumicro-workspace`` so the same gitignored-workspace.yml
-starter ships from one source to:
-
-* the ChuMicro mono-repo's ``python scripts/run.py setup`` (via
-  ``scripts/generate_config_files.py``)
-* the workspace-template repo's first-clone setup flow (via
-  ``chumicro-workspace setup`` materialising user workspaces)
-* any other consumer that needs to materialise an empty
-  ``workspace.yml``
+starter ships from one source to every consumer that needs to
+materialise an empty ``workspace.yml`` — most commonly
+``chumicro-workspace setup`` on first run.
 
 The actual file content travels with the wheel inside
 ``_payloads/workspace_yml/starter.yml.template`` so reads work in both
@@ -23,10 +18,9 @@ Pairs with :mod:`chumicro_workspace.devices_yml_starter` — same
 pattern, same reason: workbench packages own the canonical content
 that consumer repos materialise.
 
-Per Decision 0057 there is one gitignored ``workspace.yml``
-carrying defaults + credentials in one place; this starter carries
-the schema as commented examples plus the minimal placeholders a
-fresh user fills in.
+The starter is a complete ``workspace.yml`` carrying defaults +
+credentials in one place: schema as commented examples plus the
+minimal placeholders a fresh user fills in.
 """
 
 from __future__ import annotations

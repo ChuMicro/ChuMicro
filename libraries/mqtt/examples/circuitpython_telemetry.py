@@ -33,7 +33,7 @@ Deploying
 
 Recommended (workspace-managed)::
 
-    chumicro-workspace deploy --thing telemetry
+    chumicro-workspace deploy telemetry
 
 Raw (single-file copy)::
 

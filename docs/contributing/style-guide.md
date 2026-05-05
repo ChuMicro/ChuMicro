@@ -305,4 +305,13 @@ Covered lines show in green, missed lines in red. Much easier than reading line 
 | `CHU004` | Trailing whitespace on any line |
 | `CHU005` | Blank line immediately after a block opener (`def`, `class`, `if:`, `for:`, etc.) |
 
+**`scripts/check_no_repo_refs.py` — `CHU006`** catches mono-repo references that have leaked into publishable `src/` trees (`libraries/*/src/`, `workbench/*/src/`, `support/*/src/`).  Those trees ship to PyPI / CircuitPython-bundle consumers who have no `plans/` directory and no `scripts/run.py`.  Flagged shapes:
+
+- `Decision NNNN` — ADR pointers; ADRs live in `plans/decisions/` and aren't shipped.
+- `plans/...md` paths — the mono-repo planning tree.
+- `scripts/run.py` — the mono-repo's developer command runner (a workspace's own `run.py` shim is fine).
+- `chumicro mono-repo` / `chumicro monorepo` framing.
+
+Inline the prose instead of cross-linking.  Suppress with `# noqa: CHU006` (or `<!-- noqa: CHU006 -->` in Markdown) only when the reference is genuinely load-bearing.
+
 If lint passes, your style is correct. You don't need to memorize any of this — the error messages tell you exactly what to fix and why.

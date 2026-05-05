@@ -11,8 +11,8 @@ side — the libraries the *board* runs (``chumicro_kvstore``,
 import-graph walker has to know to resolve ``import chumicro_<name>``
 against the sibling checkout's ``libraries/<name>/src/`` instead of
 ``packages/`` (which is empty in dev mode) or the user's own
-``shared/``.  Decision 0029 §7 gives that knob: ``library_sources:``
-in ``workspace.yml`` maps importable names to host search paths,
+``shared/``.  The ``library_sources:`` block in ``workspace.yml``
+maps importable names to host search paths,
 and :func:`chumicro_workspace.import_graph.read_library_sources`
 plumbs them into :class:`chumicro_deploy.ImportGraphSource`.
 

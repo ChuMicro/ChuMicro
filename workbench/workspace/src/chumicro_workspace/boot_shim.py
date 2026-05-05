@@ -1,4 +1,4 @@
-"""Boot-shim deploy pattern per Decision 0029 §3.
+"""Boot-shim deploy pattern.
 
 The boot shim layer is a fixed set of files written onto the
 device alongside the project's app code:
@@ -17,14 +17,12 @@ device alongside the project's app code:
   ``projects.<seg1>.<seg2>...<project>.app`` resolve.
 
 The project's own files land at
-``/lib/projects/<seg1>/<seg2>/.../<project>/`` (rather than the top-of-filesystem
-layout the simpler :func:`project_directory_source` produces).  Single-project
-shape only: the ``multi_project_boot_source`` / ``switch_source`` flow
-from the original Phase 4a sketch was retired in Slice 7 of the
-nested-projects-and-examples workstream — multi-project staging blew the
-flash budget on Decision 0015 minimum boards and the "instant switch"
-pitch wasn't worth the cost.  See ``plans/next-up.md`` for the
-follow-on workstream that replaces it with scoped diff-deploy.
+``/lib/projects/<seg1>/<seg2>/.../<project>/`` (rather than the
+top-of-filesystem layout the simpler
+:func:`project_directory_source` produces).  Single-project shape
+only: an earlier multi-project staging flow was retired because it
+blew the flash budget on minimum-tier boards and the "instant
+switch" pitch wasn't worth the cost.
 
 Two pieces:
 
@@ -39,9 +37,8 @@ Two pieces:
 The CLI ``deploy --boot-shim`` flag opts into this pattern;
 default deploys still use the flat
 :func:`project_directory_source` layout.  Opt-in because the boot
-shim is workspace-runtime convention — workspaces / templates
-that don't follow it (third-party templates per Decision 0032)
-keep working unchanged.
+shim is a workspace-template convention — workspaces / templates
+that don't follow it keep working unchanged.
 """
 
 from __future__ import annotations
@@ -61,9 +58,9 @@ from chumicro_workspace.deploy_source import (
 if TYPE_CHECKING:  # pragma: no cover — type-only
     from chumicro_workspace.workspace import WorkspaceLayout
 
-#: On-device path of the boot module the shim imports.  Decision
-#: 0029 §3's contract — every workspace template's ``code.py``
-#: ends up calling :func:`workspace_runtime.boot`.
+#: On-device path of the boot module the shim imports.  Every
+#: workspace template's ``code.py`` ends up calling
+#: :func:`workspace_runtime.boot`.
 BOOT_MODULE_DEVICE_PATH = "/lib/workspace_runtime/__init__.py"
 
 #: On-device path of the ``projects/`` namespace marker.  Empty file
@@ -71,8 +68,8 @@ BOOT_MODULE_DEVICE_PATH = "/lib/workspace_runtime/__init__.py"
 PROJECTS_PACKAGE_INIT_DEVICE_PATH = "/lib/projects/__init__.py"
 
 #: One-line ``code.py`` (CP) / ``main.py`` (MP) shim.  Contents
-#: are stable across deploys — Decision 0029 §3 calls this out
-#: explicitly: ``code.py — shipped by template; do not edit``.
+#: are stable across deploys — ``code.py`` is shipped by the
+#: template; users should not edit it.
 SHIM_ENTRYPOINT_SOURCE = (
     "# Shipped by chumicro-workspace; do not edit.\n"
     "import workspace_runtime\n"
@@ -246,9 +243,9 @@ def _walk_project_files(
     on-device prefix via :func:`_device_project_dir` so nested project
     names produce nested paths.
 
-    Decision 0044 — when *target_runtime* is set, ``.py`` files
-    carrying a ``__chumicro_runtimes__`` marker for a different
-    runtime are dropped before they reach the device.
+    When *target_runtime* is set, ``.py`` files carrying a
+    ``__chumicro_runtimes__`` marker for a different runtime are
+    dropped before they reach the device.
     """
     excluded = _DEFAULT_EXCLUDED_DIRS | set(extra_excluded)
     device_prefix = _device_project_dir(project_name)
@@ -352,11 +349,11 @@ def project_boot_source(
         workspace_yaml: Override ``workspace_yaml`` path.
         extra_excluded: Additional filename / directory names to
             skip on the project walk.
-        target_runtime: Decision 0044 — when set, ``.py`` files in
-            the project directory whose ``__chumicro_runtimes__`` marker
-            excludes this runtime are dropped.  ``None`` (the default)
-            preserves the prior behavior; the workspace ``deploy``
-            CLI fills this in from the device's runtime.
+        target_runtime: When set, ``.py`` files in the project
+            directory whose ``__chumicro_runtimes__`` marker
+            excludes this runtime are dropped.  ``None`` (the
+            default) ships every file unfiltered; the workspace
+            ``deploy`` CLI fills this in from the device's runtime.
 
     Raises:
         FileNotFoundError: When *project_dir* contains no
@@ -500,8 +497,8 @@ def project_boot_with_import_graph_source(
         workspace_yaml: Override ``workspace.yml`` path.
         extra_excluded: Additional filename / directory names to
             skip on the project walk.
-        target_runtime: Decision 0044 — forwarded to both inner
-            sources so wrong-runtime files are dropped on either side.
+        target_runtime: Forwarded to both inner sources so
+            wrong-runtime files are dropped on either side.
         extra_modules: Dotted module names to force-include even when
             AST can't see them.  Forwarded to
             :class:`chumicro_deploy.ImportGraphSource`.

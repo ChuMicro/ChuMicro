@@ -66,7 +66,7 @@ class SectionManifest:
     Attributes:
         name: The section key in the merged config dict — typically
             the library's basename without the ``chumicro-`` prefix
-            (Decision 0035 §section key convention).
+            (e.g. ``chumicro-wifi`` reads from section ``wifi``).
         required: Keys that must be present in this section.  Missing
             any of them at deploy time raises :class:`ConfigManifestError`.
         optional: Keys the library reads but tolerates missing —

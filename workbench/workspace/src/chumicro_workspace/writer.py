@@ -1,13 +1,12 @@
 """Write the merged runtime config as msgpack at the canonical path.
 
-Per Decision 0030 §2 + Decision 0035 §8: device format is msgpack;
-canonical on-device path is ``/runtime_config.msgpack``.  This
-module writes the host-side artifact at
-``projects/<name>/_generated/runtime_config.msgpack`` (deployer
-overlays it onto device flash later); the path constant for the
-on-device location lives in ``chumicro_config.runtime``
-(Decision 0036) so the write side and the read side stay in sync
-through one source of truth.
+Device format is msgpack; the canonical on-device path is
+``/runtime_config.msgpack``.  This module writes the host-side
+artifact at ``projects/<name>/_generated/runtime_config.msgpack``
+(deployer overlays it onto device flash later); the path constant
+for the on-device location lives in ``chumicro_config.runtime`` so
+the write side and the read side stay in sync through one source
+of truth.
 
 Encoder choice: standard ``msgpack`` from PyPI (the well-maintained
 host-side library).  Workbench packages don't import from
@@ -39,16 +38,16 @@ def write_runtime_config(merged: dict[str, Any], output_path: Path) -> None:
 
     Args:
         merged: The merged section-namespaced dict, post
-            :func:`merge_configs` (Decision 0057 — no separate
-            secrets-resolution step; the gitignored ``workspace.yml``
-            carries credentials directly).
+            :func:`merge_configs`.  Credentials in the gitignored
+            ``workspace.yml`` flow through verbatim — there is no
+            separate secrets-resolution step.
         output_path: Where to write the msgpack file on the host.
             The deployer reads this and overlays it onto device
             flash at ``/runtime_config.msgpack``.
 
     Raises:
         TypeError: *merged* contains a value msgpack can't encode
-            (cycles, sets, custom classes — see Decision 0034 §10
+            (cycles, sets, custom classes — see ``chumicro-kvstore``
             for the supported value types).
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)

@@ -36,7 +36,7 @@ Deploying
 
 Recommended (workspace-managed)::
 
-    chumicro-workspace deploy --thing two_thing_server
+    chumicro-workspace deploy two_thing_server
 
 Raw (single-file copy)::
 

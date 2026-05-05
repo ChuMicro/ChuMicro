@@ -6,9 +6,11 @@ class {class_name}:
 
     Replace this with your real implementation.  This placeholder shows:
 
-    - Constructor injection (Decision 0010)
-    - Type annotations with description-only docstrings (Decision 0021)
-    - A ``check(now_ms)`` method for Runner integration (Decision 0014)
+    - Constructor injection for time / I/O dependencies (so tests
+      can pass in fakes)
+    - PEP 604 / 585 type annotations with description-only docstrings
+    - A ``check(now_ms)`` method for Runner integration (the
+      runner ticks every registered service once per loop)
 
     Args:
         value: Initial value.

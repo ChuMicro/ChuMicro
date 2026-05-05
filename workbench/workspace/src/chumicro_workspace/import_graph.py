@@ -1,4 +1,4 @@
-"""Import-graph deploy source per Decision 0029 §6 + §7.
+"""Import-graph deploy source for the workspace.
 
 ``chumicro_deploy.ImportGraphSource`` already performs the AST walk
 (parses an entrypoint, follows ``import`` / ``from ... import``
@@ -12,11 +12,11 @@ msgpack rides the deploy alongside the AST-resolved app code.
 Two pieces:
 
 * :func:`read_library_sources` — parses ``workspace.yml``'s
-  ``library_sources:`` map into ``{package_name: Path}``.  Decision
-  0029 §7 makes these explicit overrides for "use the local
-  checkout instead of the published copy"; the value is a search
-  path that the import-graph walker tries before the workspace's
-  ``shared/`` / ``packages/`` defaults.
+  ``library_sources:`` map into ``{package_name: Path}``.  These
+  are explicit overrides for "use the local checkout instead of
+  the published copy"; the value is a search path that the
+  import-graph walker tries before the workspace's ``shared/`` /
+  ``packages/`` defaults.
 * :func:`project_import_graph_source` — convenience that builds the
   search-path list, constructs an :class:`ImportGraphSource` for
   the project's entrypoint, and wraps with :class:`WithRuntimeConfig`.
@@ -46,11 +46,11 @@ if TYPE_CHECKING:  # pragma: no cover — type-only
 def read_library_sources(workspace_yaml: Path) -> dict[str, Path]:
     """Parse ``library_sources:`` out of *workspace_yaml*.
 
-    Returns ``{package_or_root_name: Path}``.  Decision 0029 §7's
-    semantics: the key is what a Python ``import`` statement would
-    spell (e.g. ``chumicro_wifi`` or ``my_house_libs``); the value
-    points at a directory whose children are importable under that
-    name.  Typical local-checkout case: ``chumicro_wifi:
+    Returns ``{package_or_root_name: Path}``.  The key is what a
+    Python ``import`` statement would spell (e.g. ``chumicro_wifi``
+    or ``my_house_libs``); the value points at a directory whose
+    children are importable under that name.  Typical
+    local-checkout case: ``chumicro_wifi:
     /home/me/dev/chumicro/libraries/wifi/src``.
 
     Returns an empty dict when ``workspace.yml`` has no
@@ -108,13 +108,12 @@ def build_search_paths(
     """Compose the import-resolution search path list for *workspace*.
 
     Order matters — first match wins inside
-    :class:`ImportGraphSource`.  Decision 0029 §7's intent: explicit
-    overrides beat workspace-internal sources beat third-party
-    packages.
+    :class:`ImportGraphSource`.  Explicit overrides beat
+    workspace-internal sources beat third-party packages.
 
     Resolution order::
 
-        1. library_sources_override values (Decision 0029 §7)
+        1. library_sources_override values
         2. workspace/shared/         (user-authored shared modules — flat layout)
         3. workspace/libraries/<name>/src/  (full chumicro-style library
                                              packages, scaffolded via
@@ -225,12 +224,12 @@ def project_import_graph_source(
             :class:`ImportGraphSource`.
         extra_search_paths: Additional directories prepended to the
             workspace-derived search path tail.
-        target_runtime: Decision 0044 — forwarded to
-            :class:`ImportGraphSource` so modules marked for a
-            different runtime via ``__chumicro_runtimes__`` are
-            dropped (and their imports not walked).  ``None`` (the
-            default) preserves the prior behavior; the workspace
-            ``deploy`` CLI fills this in from the device's runtime.
+        target_runtime: Forwarded to :class:`ImportGraphSource` so
+            modules marked for a different runtime via
+            ``__chumicro_runtimes__`` are dropped (and their
+            imports not walked).  ``None`` (the default) ships
+            every module unfiltered; the workspace ``deploy`` CLI
+            fills this in from the device's runtime.
 
     Raises:
         FileNotFoundError: When *project_dir* doesn't contain a
