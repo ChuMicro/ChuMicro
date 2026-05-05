@@ -192,10 +192,10 @@ def _stage_layer2_workspace(
     Returns (workspace_layout, sensor_project_dir).
     """
     (tmp_path / "workspace.yml").write_text(
-        "defaults:\n  app_marker_prefix: layer2-sensor\n",
-    )
-    (tmp_path / "workspace.local.yml").write_text(
-        "defaults:\n  wifi:\n    password: bogus-test-password\n",
+        "defaults:\n"
+        "  app_marker_prefix: layer2-sensor\n"
+        "  wifi:\n"
+        "    password: bogus-test-password\n",
     )
     projects_dir = tmp_path / "projects"
     projects_dir.mkdir()
@@ -521,12 +521,14 @@ def test_sensor_project_publishes_to_live_broker(
     environment = _layer3_required_environment()
 
     # Stage workspace BEFORE Mosquitto spawn: real wifi creds in the
-    # gitignored workspace.local.yml overlay (Decision 0057), sensor
-    # pointing at a placeholder broker that we'll overwrite with the
-    # real port after Mosquitto comes up.
+    # gitignored workspace.yml (Decision 0057), sensor pointing
+    # at a placeholder broker that we'll overwrite with the real port
+    # after Mosquitto comes up.
     workspace, sensor_dir = _stage_layer2_workspace(tmp_path, template_repo)
-    (tmp_path / "workspace.local.yml").write_text(
+    # Overwrite workspace.yml with the real password for layer 3.
+    (tmp_path / "workspace.yml").write_text(
         "defaults:\n"
+        "  app_marker_prefix: layer2-sensor\n"
         "  wifi:\n"
         f'    password: "{environment["password"]}"\n',
     )

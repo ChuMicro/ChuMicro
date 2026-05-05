@@ -2,7 +2,7 @@
 
 Status: `planned` (not yet executed)
 Filed: 2026-05-04
-Related: [`plans/workstreams/two-file-config-simplification.md`](two-file-config-simplification.md) — the two-file simplification leaves `workspace.yml` and `projects/<name>/config.toml` as user-edited files materialized from a starter; this workstream covers what happens when the starter gains new schema entries after the user has already materialized + edited.
+Related: [Decision 0057](../decisions/0057-two-file-config.md) — the two-file workspace config leaves `workspace.yml` and `projects/<name>/config.toml` as user-edited files materialized from a starter; this workstream covers what happens when the starter gains new schema entries after the user has already materialized + edited.
 
 ## Goal
 
@@ -10,7 +10,7 @@ When a user has materialized a `workspace.yml` (or per-project `config.toml`) fr
 
 Today: `materialize_workbench_starters` and `materialize_templates` only write missing files; once materialized, the file is frozen at materialization-time content.  `update` refreshes tool-owned files by wholesale replacement but never touches user-owned files.  So a workspace that materialized last month doesn't see this month's schema additions; the user has to know to re-read the upstream starter and copy in the new bits manually.
 
-The two-file simplification (sister workstream) makes this gap more visible because *both* user-editable files are now starter-materialized.  Pre-two-file, only the gitignored `secrets.yml` (and later `workspace.local.yml`) had this problem and they were narrow flat-key files.  Post-two-file, the schema-bearing `workspace.yml` is the file that needs schema updates to flow.
+Both user-editable files (`workspace.yml` and per-project `config.toml`) are now starter-materialized (Decision 0057).  The schema-bearing `workspace.yml` is the file that needs schema updates to flow without clobbering user edits.
 
 ## Design space
 

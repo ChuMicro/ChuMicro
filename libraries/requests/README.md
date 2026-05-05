@@ -86,7 +86,7 @@ on `chumicro-sockets` (TCP/TLS transport) and `chumicro-timing` (ticks).
 
 Real-network functional tests in `functional_tests/test_real_*.py` and the hardware-prefixed examples in `examples/circuitpython_*.py` need wifi credentials.  Two paths, depending on whether you're using a `chumicro-workspace`:
 
-* **With a workspace (recommended).**  Put wifi creds in your workspace's `workspace.local.yml`, run `chumicro-workspace deploy --thing <name>`, and the example reads them via `chumicro_config.load_runtime_config()`.
+* **With a workspace (recommended).**  Put wifi creds in your workspace's gitignored `workspace.yml`, run `chumicro-workspace deploy --thing <name>`, and the example reads them via `chumicro_config.load_runtime_config()`.
 * **Raw single-file deploy** (no workspace).  Edit the `WIFI_SSID` / `WIFI_PASSWORD` constants near the top of the example file before copying it to `/code.py` (CP) or `/main.py` (MP).  The constants are the fallback when no `runtime_config.msgpack` is present.
 
 The library itself never reads either source — it takes a `connection_factory` and goes.  The config wiring is application-layer; see `chumicro-config` + `chumicro-wifi` for the standard pattern.

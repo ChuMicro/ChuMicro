@@ -2,11 +2,13 @@
 
 Combines:
 
-* **Config merge** (Decisions 0035 + 0057) — workspace defaults +
-  per-developer ``workspace.local.yml`` overlay + per-project config
-  + optional per-project ``config.local.<suffix>`` overlay →
+* **Config merge** (Decisions 0035 + 0057) — gitignored
+  ``workspace.yml`` (defaults + credentials in one place) +
+  per-project ``config.{toml,yml,yaml}`` →
   ``/runtime_config.msgpack``.  Pure structural deep-merge; no
-  ``!secret`` marker (Decision 0057 retired the indirection).
+  ``!secret`` marker (Decision 0057 retired the indirection); no
+  separate ``workspace.local.yml`` overlay (Decision 0057 collapsed
+  the file split that 0057 had introduced).
 * **Deploy integration** — :class:`WithRuntimeConfig` plus
   :func:`project_directory_source` / :func:`project_import_graph_source`
   / :func:`project_boot_source` compose with ``chumicro-deploy``'s
@@ -35,7 +37,7 @@ Public API::
         RUNTIME_CONFIG_DEVICE_PATH,  # canonical on-device path (Decision 0035 §8)
         GENERATED_DIRNAME,           # canonical host-side _generated/ dir name
         WorkspaceConfigError,        # YAML/TOML top-level shape malformed
-        read_workspace_local_yml_starter,  # canonical workspace.local.yml content
+        read_workspace_yml_starter,  # canonical workspace.yml content
     )
 
 Workbench-only — runs on CPython only; never lands on a
@@ -120,8 +122,8 @@ from chumicro_workspace.pipeline import (
     build_runtime_config,
     compose_runtime_config,
 )
-from chumicro_workspace.workspace_local_yml_starter import (
-    read_workspace_local_yml_starter,
+from chumicro_workspace.workspace_yml_starter import (
+    read_workspace_yml_starter,
 )
 from chumicro_workspace.writer import write_runtime_config
 
@@ -173,8 +175,8 @@ __all__ = [
     "read_library_sources",
     "read_manifest",
     "read_project_config",
-    "read_workspace_local_yml_starter",
     "read_workspace_yaml",
+    "read_workspace_yml_starter",
     "rename_device",
     "set_runtime_default",
     "project_boot_source",

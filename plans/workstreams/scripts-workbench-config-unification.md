@@ -1,6 +1,6 @@
 # Workstream: scripts/ ↔ workbench/ ↔ workspace-template config unification
 
-Status: **closed** — Phases 1, 2, 3, 4, 5 shipped 2026-05-04 (mono-repo) plus the matching workspace-template repo half ([`a9bb4bd`](https://github.com/ChuMicro/ChuMicro-Workspace-Template/commit/a9bb4bd)).  Two phases deferred to separate sessions: 4.5a (`!secret` simplification — user weighing "drop in mono-repo only" vs "drop everywhere"), 4.5b (transport-API extension for binary file staging + on-device `load_runtime_config()` migration).
+Status: **closed** — Phases 1, 2, 3, 4, 5 shipped 2026-05-04 (mono-repo) plus the matching workspace-template repo half ([`a9bb4bd`](https://github.com/ChuMicro/ChuMicro-Workspace-Template/commit/a9bb4bd)).  Phase 4.5a (`!secret` simplification) closed by [Decision 0057](../decisions/0057-two-file-config.md).  Phase 4.5b (on-device test code dropping `_test_creds.py`) deferred — transport `extra_files` API foundation already shipped; on-device migration covered in [`plans/workstreams/phase-4-5b-on-device-config-dogfooding.md`](phase-4-5b-on-device-config-dogfooding.md).
 
 ## Premise
 
@@ -44,7 +44,7 @@ The two flows are **different solutions to the same problem**: "what wifi (or mq
 
 ## Decision record
 
-The decision this workstream executed has been promoted to [Decision 0055](../decisions/0055-config-pipeline-unification.md) (`accepted`, 2026-05-04).  See that ADR for the structural commitment + rationale + open follow-ups (Phase 4.5a `!secret` simplification, Phase 4.5b on-device dogfooding via transport-API extension).  This workstream document captures the per-phase execution detail; the ADR captures the durable why.
+The decision this workstream executed has been promoted to [Decision 0055](../decisions/0055-config-pipeline-unification.md) (`accepted`, 2026-05-04).  Phase 4.5a (`!secret` simplification) was promoted to its own [Decision 0057](../decisions/0057-two-file-config.md).  Phase 4.5b on-device dogfooding is in flight (transport `extra_files` API already shipped).  This workstream document captures the per-phase execution detail; the ADRs capture the durable why.
 
 ---
 

@@ -1,15 +1,16 @@
 """Host-side fixture: materialise ``_test_creds.py`` from the unified config sources.
 
-Reads the merged runtime-config dict from ``workspace.yml`` +
-``workspace.local.yml`` (gitignored credential overlay) + this
-library's optional ``functional_tests/config.toml``, then renders
-the ``[wifi]`` section into the gitignored ``_test_creds.py`` shim
-that the on-device test imports.
+Reads the merged runtime-config dict from the gitignored
+``workspace.yml`` (workspace-wide defaults + credentials in one
+place per Decision 0057) deep-merged with this library's optional
+``functional_tests/config.toml``, then renders the ``[wifi]``
+section into the gitignored ``_test_creds.py`` shim that the
+on-device test imports.
 
-Decision 0057 retired the ``!secret`` marker + ``secrets.yml``;
-credentials live in ``workspace.local.yml`` as a structural
-deep-merge layer (same shape as ``workspace.yml``) instead of a
-flat key store walked via custom marker syntax.
+Decision 0057 retired the ``!secret`` marker + the
+``workspace.local.yml`` overlay split; credentials live in
+``workspace.yml`` directly (the file is gitignored and never
+reaches git).
 
 The on-device side is unchanged — tests still ``from _test_creds
 import SSID, PASSWORD``.  A follow-up will extend
@@ -30,7 +31,6 @@ _HERE = Path(__file__).resolve().parent
 _REPO_ROOT = _HERE.parents[2]
 _WORKSPACE_YAML = _REPO_ROOT / "workspace.yml"
 _LIBRARY_CONFIG = _HERE / "config.toml"  # optional; absent → workspace defaults only
-_WORKSPACE_LOCAL_YAML = _REPO_ROOT / "workspace.local.yml"
 _SHIM_PATH = _HERE / "_test_creds.py"
 
 
@@ -41,8 +41,8 @@ def _read_wifi_section() -> tuple[str, str] | None:
 
     * ``workspace.yml`` is missing (fresh-clone before ``setup``).
     * The merged config has no ``[wifi]`` section, or it lacks
-      ``ssid`` / ``password`` (typically because
-      ``workspace.local.yml`` hasn't been filled in yet).
+      ``ssid`` / ``password`` (typically because the gitignored
+      ``workspace.yml`` hasn't been filled in yet).
     * The merged config carries the placeholder SSID — same
       silent-skip path so a fresh-clone contributor isn't
       surprised by a "real network error" against a nonsense SSID.
@@ -53,7 +53,6 @@ def _read_wifi_section() -> tuple[str, str] | None:
         merged = compose_runtime_config(
             workspace_yaml=_WORKSPACE_YAML,
             project_config=_LIBRARY_CONFIG,
-            workspace_local_yaml=_WORKSPACE_LOCAL_YAML,
         )
     except Exception:  # noqa: BLE001 — silent skip on any config error
         return None

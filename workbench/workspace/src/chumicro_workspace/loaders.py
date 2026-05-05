@@ -1,20 +1,18 @@
 """Host-side file readers for the runtime-config pipeline.
 
-Three input shapes per Decision 0035 (revised by Decision 0057 — drop
-``!secret`` marker, replace with structural overlay):
+Two input shapes per Decision 0035 (revised by Decision 0057
+— the ``!secret`` marker is gone; both layers are gitignored):
 
-* ``workspace.yml`` — workspace-wide defaults (YAML).  ``defaults:``
-  block holds the section-namespaced dict that flows into every
-  project's merged config as the lowest-precedence layer.  Committed.
-* ``workspace.local.yml`` — gitignored personal overrides (YAML).
-  Same shape as ``workspace.yml``; ``defaults:`` block deep-merged
-  on top so credentials and per-developer values win without landing
-  in git.
+* ``workspace.yml`` — workspace-wide defaults + credentials (YAML).
+  Gitignored, materialised on first ``setup`` from a workbench-owned
+  starter.  ``defaults:`` block holds the section-namespaced dict that
+  flows into every project's merged config as the lowest-precedence
+  layer.
 * ``projects/<name>/config.toml`` (or ``.yml``) — per-project config
-  (TOML default; YAML accepted opt-in).  Sections override workspace
-  defaults key-by-key.  Optional sibling ``config.local.toml`` (or
-  ``.yml``) overrides on top — same gitignored-overlay pattern at
-  the project level.
+  (TOML default; YAML accepted opt-in).  Gitignored when scaffolded
+  by ``new``; tracked when shipped as part of the workspace template
+  (gitignore patterns don't untrack already-tracked files).  Sections
+  override workspace defaults key-by-key on deep-merge.
 
 All readers return plain dicts.  TOML uses stdlib ``tomllib``
 (CPython 3.11+); YAML uses ruamel.yaml (declared as a workbench dep
@@ -76,16 +74,14 @@ def read_workspace_yaml(path: Path) -> dict[str, Any]:
     dict when the file lacks a ``defaults:`` block — that's the
     "no shared defaults" case, not an error.
 
-    Also used to read ``workspace.local.yml`` (Decision 0057) — the
-    gitignored overlay shares the same shape, so the same reader
-    suits.  Missing files return an empty dict (callers check
-    existence themselves when they need a different signal).
-
     Args:
-        path: Path to ``workspace.yml`` or ``workspace.local.yml``.
+        path: Path to ``workspace.yml``.
+
+    Raises:
+        FileNotFoundError: When *path* does not exist.  Workspace.yml
+            is the load-bearing config file; callers that want to
+            tolerate its absence should check ``path.is_file()`` first.
     """
-    if not path.is_file():
-        return {}
     data = _read_yaml(path)
     defaults = data.get("defaults", {})
     if not isinstance(defaults, dict):
@@ -100,8 +96,7 @@ def read_project_config(path: Path) -> dict[str, Any]:
 
     Args:
         path: Path to ``config.toml`` or ``config.yml`` /
-            ``config.yaml`` (or the gitignored ``config.local.*``
-            sibling).  Suffix decides the parser.
+            ``config.yaml``.  Suffix decides the parser.
 
     Raises:
         WorkspaceConfigError: Unrecognized suffix or malformed top

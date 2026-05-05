@@ -39,10 +39,11 @@ def fake_template_repo(tmp_path: Path) -> Path:
         '[project]\nname = "my-workspace"\n',
     )
     (repo / "README.md").write_text("# init-only readme\n")
-    # Anchor `workspace.local.yml` to the workspace root so the
-    # `_workspace_template/workspace.local.yml` template source still gets tracked.
-    (repo / ".gitignore").write_text(".venv/\n/workspace.local.yml\n")
-    (repo / "workspace.yml").write_text("environment: dev\n")
+    # `workspace.yml` at root is gitignored under Decision 0057 — the
+    # template never tracks it.  Setup materializes it from
+    # `_workspace_template/workspace.yml` (this repo's override) or
+    # the workbench-owned starter.
+    (repo / ".gitignore").write_text(".venv/\n/workspace.yml\n")
     (repo / "projects").mkdir()
     (repo / "projects" / "_template").mkdir()
     (repo / "projects" / "_template" / "app.py").write_text(
@@ -52,7 +53,7 @@ def fake_template_repo(tmp_path: Path) -> Path:
         '[project]\nname = "_template"\n',
     )
     (repo / "_workspace_template").mkdir()
-    (repo / "_workspace_template" / "workspace.local.yml").write_text(
+    (repo / "_workspace_template" / "workspace.yml").write_text(
         "# fill in your overrides here\ndefaults: {}\n",
     )
     _git("init", "-b", "main", cwd=repo)
@@ -82,12 +83,14 @@ class TestInit:
         target = tmp_path / "my-house"
         report = init(target, template_url=str(fake_template_repo))
         assert (target / "run.py").is_file()
-        assert (target / "workspace.yml").is_file()
-        assert (target / "_workspace_template" / "workspace.local.yml").is_file()
+        # workspace.yml at root is gitignored (Decision 0057) — init
+        # clones what's tracked; setup materializes the rest.
+        assert not (target / "workspace.yml").is_file()
+        assert (target / "_workspace_template" / "workspace.yml").is_file()
         # All files reported as WRITTEN.
         actions = _files(report)
         assert actions["run.py"] == ApplyAction.WRITTEN
-        assert actions["_workspace_template/workspace.local.yml"] == ApplyAction.WRITTEN
+        assert actions["_workspace_template/workspace.yml"] == ApplyAction.WRITTEN
 
     def test_strips_dot_git_and_reinitializes(
         self, fake_template_repo: Path, tmp_path: Path,
@@ -150,20 +153,30 @@ class TestUpdate:
         assert actions["run.py"] == ApplyAction.REFRESHED
         assert (target / "run.py").read_text() == "# tool-owned shim\n"
 
-    def test_skips_user_owned_paths(
+    def test_does_not_clobber_user_workspace_yml(
         self, fake_template_repo: Path, tmp_path: Path,
     ) -> None:
+        """User's gitignored workspace.yml at root survives update.
+
+        Decision 0057: workspace.yml at root is gitignored; the
+        template repo never tracks it, so update never walks it.
+        It can't end up in the report at all — neither REFRESHED
+        nor SKIPPED — and the user's content stays put.
+        """
         target = tmp_path / "my-house"
         init(target, template_url=str(fake_template_repo))
-        # User edits workspace.yml — update must not clobber it.
+        # User materializes / fills in workspace.yml after init.
         (target / "workspace.yml").write_text(
-            "environment: production\nuser: edited\n",
+            "defaults:\n  wifi:\n    password: user-edited\n",
         )
         report = update(target, template_url=str(fake_template_repo))
         actions = _files(report)
-        assert actions["workspace.yml"] == ApplyAction.SKIPPED
+        # Upstream doesn't carry workspace.yml at root (gitignored),
+        # so update never visits it.
+        assert "workspace.yml" not in actions
+        # User content untouched on disk.
         assert (target / "workspace.yml").read_text() == (
-            "environment: production\nuser: edited\n"
+            "defaults:\n  wifi:\n    password: user-edited\n"
         )
 
     def test_unchanged_when_tool_owned_files_match_upstream(
@@ -198,12 +211,12 @@ class TestUpdate:
         target = tmp_path / "my-house"
         init(target, template_url=str(fake_template_repo))
         # Mutate the _workspace_template source — update should restore it.
-        (target / "_workspace_template" / "workspace.local.yml").write_text(
+        (target / "_workspace_template" / "workspace.yml").write_text(
             "# stale local edit\n",
         )
         report = update(target, template_url=str(fake_template_repo))
         actions = _files(report)
-        assert actions["_workspace_template/workspace.local.yml"] == ApplyAction.REFRESHED
+        assert actions["_workspace_template/workspace.yml"] == ApplyAction.REFRESHED
 
     def test_missing_target_raises(self, tmp_path: Path) -> None:
         with pytest.raises(FileNotFoundError):
@@ -224,24 +237,24 @@ class TestMaterializeTemplates:
         workspace.mkdir()
         templates = workspace / "_workspace_template"
         templates.mkdir()
-        (templates / "workspace.local.yml").write_text("defaults: {}\n")
+        (templates / "workspace.yml").write_text("defaults: {}\n")
         report = materialize_templates(workspace)
         actions = _files(report)
-        assert actions["workspace.local.yml"] == ApplyAction.MATERIALIZED
-        assert (workspace / "workspace.local.yml").read_text() == "defaults: {}\n"
+        assert actions["workspace.yml"] == ApplyAction.MATERIALIZED
+        assert (workspace / "workspace.yml").read_text() == "defaults: {}\n"
 
     def test_skips_existing_files(self, tmp_path: Path) -> None:
         workspace = tmp_path / "ws"
         workspace.mkdir()
         templates = workspace / "_workspace_template"
         templates.mkdir()
-        (templates / "workspace.local.yml").write_text("from template\n")
-        (workspace / "workspace.local.yml").write_text("user-edited\n")
+        (templates / "workspace.yml").write_text("from template\n")
+        (workspace / "workspace.yml").write_text("user-edited\n")
         report = materialize_templates(workspace)
         actions = _files(report)
-        assert actions["workspace.local.yml"] == ApplyAction.UNCHANGED
+        assert actions["workspace.yml"] == ApplyAction.UNCHANGED
         # User edits preserved.
-        assert (workspace / "workspace.local.yml").read_text() == "user-edited\n"
+        assert (workspace / "workspace.yml").read_text() == "user-edited\n"
 
     def test_no_workspace_template_dir_returns_empty_report(
         self, tmp_path: Path,
@@ -270,16 +283,16 @@ class TestMaterializeTemplates:
         workspace = tmp_path / "ws"
         templates = workspace / "_workspace_template"
         templates.mkdir(parents=True)
-        (templates / "workspace.local.yml").write_text("placeholder\n")
+        (templates / "workspace.yml").write_text("placeholder\n")
 
         first = materialize_templates(workspace)
         actions_first = _files(first)
-        assert actions_first["workspace.local.yml"] == ApplyAction.MATERIALIZED
+        assert actions_first["workspace.yml"] == ApplyAction.MATERIALIZED
 
         # Second invocation — file already exists, should be unchanged.
         second = materialize_templates(workspace)
         actions_second = _files(second)
-        assert actions_second["workspace.local.yml"] == ApplyAction.UNCHANGED
+        assert actions_second["workspace.yml"] == ApplyAction.UNCHANGED
 
 
 class TestMaterializeWorkbenchStarters:
@@ -298,34 +311,34 @@ class TestMaterializeWorkbenchStarters:
 
         assert (workspace / "devices.yml").read_text() == read_devices_yml_starter()
 
-    def test_writes_workspace_local_yml_from_workbench_payload(
+    def test_writes_workspace_yml_from_workbench_payload(
         self, tmp_path: Path,
     ) -> None:
         workspace = tmp_path / "ws"
         workspace.mkdir()
         report = materialize_workbench_starters(workspace)
         actions = _files(report)
-        assert actions["workspace.local.yml"] == ApplyAction.MATERIALIZED
-        from chumicro_workspace import read_workspace_local_yml_starter  # noqa: PLC0415
+        assert actions["workspace.yml"] == ApplyAction.MATERIALIZED
+        from chumicro_workspace import read_workspace_yml_starter  # noqa: PLC0415
 
         assert (
-            (workspace / "workspace.local.yml").read_text()
-            == read_workspace_local_yml_starter()
+            (workspace / "workspace.yml").read_text()
+            == read_workspace_yml_starter()
         )
 
     def test_skips_existing_files(self, tmp_path: Path) -> None:
         workspace = tmp_path / "ws"
         workspace.mkdir()
         (workspace / "devices.yml").write_text("user-edited devices\n")
-        (workspace / "workspace.local.yml").write_text("user-edited overlay\n")
+        (workspace / "workspace.yml").write_text("user-edited overlay\n")
 
         report = materialize_workbench_starters(workspace)
         actions = _files(report)
         assert actions["devices.yml"] == ApplyAction.UNCHANGED
-        assert actions["workspace.local.yml"] == ApplyAction.UNCHANGED
+        assert actions["workspace.yml"] == ApplyAction.UNCHANGED
         # User edits preserved verbatim.
         assert (workspace / "devices.yml").read_text() == "user-edited devices\n"
-        assert (workspace / "workspace.local.yml").read_text() == "user-edited overlay\n"
+        assert (workspace / "workspace.yml").read_text() == "user-edited overlay\n"
 
     def test_idempotent_across_multiple_invocations(
         self, tmp_path: Path,
@@ -336,9 +349,9 @@ class TestMaterializeWorkbenchStarters:
         first = materialize_workbench_starters(workspace)
         actions_first = _files(first)
         assert actions_first["devices.yml"] == ApplyAction.MATERIALIZED
-        assert actions_first["workspace.local.yml"] == ApplyAction.MATERIALIZED
+        assert actions_first["workspace.yml"] == ApplyAction.MATERIALIZED
 
         second = materialize_workbench_starters(workspace)
         actions_second = _files(second)
         assert actions_second["devices.yml"] == ApplyAction.UNCHANGED
-        assert actions_second["workspace.local.yml"] == ApplyAction.UNCHANGED
+        assert actions_second["workspace.yml"] == ApplyAction.UNCHANGED

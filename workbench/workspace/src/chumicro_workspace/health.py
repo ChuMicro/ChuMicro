@@ -130,48 +130,6 @@ def check_devices_yaml(workspace: WorkspaceLayout) -> HealthFinding:
     )
 
 
-def check_workspace_local_yaml(workspace: WorkspaceLayout) -> HealthFinding:
-    """Validate ``workspace.local.yml`` parses as the overlay shape.
-
-    Decision 0057: the gitignored overlay carries credentials and
-    per-developer overrides as a structural deep-merge layer over
-    ``workspace.yml``.  Empty / absent is fine — projects simply
-    inherit committed defaults.  Malformed YAML or a non-mapping
-    ``defaults:`` block earns an ERROR.
-    """
-    if not workspace.workspace_local_yaml.is_file():
-        return HealthFinding(
-            label="WORKSPACE.LOCAL.YML",
-            level=HealthLevel.OK,
-            message="not present (no local overrides)",
-        )
-    try:
-        defaults = read_workspace_yaml(workspace.workspace_local_yaml)
-    except WorkspaceConfigError as exception:
-        return HealthFinding(
-            label="WORKSPACE.LOCAL.YML",
-            level=HealthLevel.ERROR,
-            message=f"malformed: {exception}",
-            hint=(
-                "expected a top-level mapping with optional `defaults:` "
-                "block matching workspace.yml's shape."
-            ),
-        )
-    if not defaults:
-        return HealthFinding(
-            label="WORKSPACE.LOCAL.YML",
-            level=HealthLevel.OK,
-            message="present, no overrides set",
-        )
-    section_count = len(defaults)
-    plural = "" if section_count == 1 else "s"
-    return HealthFinding(
-        label="WORKSPACE.LOCAL.YML",
-        level=HealthLevel.OK,
-        message=f"{section_count} section{plural} overriding workspace defaults",
-    )
-
-
 def count_projects(workspace: WorkspaceLayout) -> HealthFinding:
     """Summarize the projects tree (count + first few names)."""
     projects = workspace.list_projects()
@@ -205,7 +163,6 @@ def collect_health_findings(
     return [
         check_workspace_yaml(workspace),
         check_devices_yaml(workspace),
-        check_workspace_local_yaml(workspace),
         count_projects(workspace),
     ]
 

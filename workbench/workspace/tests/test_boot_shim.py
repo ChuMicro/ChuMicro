@@ -295,10 +295,7 @@ class TestOnDeviceBoot:
 
 def _seed_project_for_boot(tmp_path: Path) -> tuple[WorkspaceLayout, Path]:
     (tmp_path / "workspace.yml").write_text(
-        "defaults:\n  wifi:\n    hostname_prefix: chu-\n"
-    )
-    (tmp_path / "workspace.local.yml").write_text(
-        "defaults:\n  wifi:\n    password: shh\n"
+        "defaults:\n  wifi:\n    hostname_prefix: chu-\n    password: shh\n"
     )
     project_dir = tmp_path / "projects" / "back-porch"
     project_dir.mkdir(parents=True)
@@ -433,10 +430,7 @@ class TestProjectBootSource:
 def _seed_nested_project_for_boot(tmp_path: Path) -> tuple[WorkspaceLayout, Path]:
     """Two-level nested project fixture for boot-shim path tests."""
     (tmp_path / "workspace.yml").write_text(
-        "defaults:\n  wifi:\n    hostname_prefix: chu-\n",
-    )
-    (tmp_path / "workspace.local.yml").write_text(
-        "defaults:\n  wifi:\n    password: shh\n"
+        "defaults:\n  wifi:\n    hostname_prefix: chu-\n    password: shh\n",
     )
     project_dir = tmp_path / "projects" / "upstairs" / "bedroom_sensor"
     project_dir.mkdir(parents=True)
@@ -534,8 +528,7 @@ def _seed_workspace_with_libraries(
     Layout::
 
         tmp_path/
-            workspace.yml          (defaults block)
-            workspace.local.yml    (gitignored credential overlay)
+            workspace.yml          (gitignored defaults + credentials)
             shared/
                 external_lib.py    (importable as ``external_lib``)
                 unused_lib.py      (NOT imported — must not ship)
@@ -545,10 +538,7 @@ def _seed_workspace_with_libraries(
                 helpers.py         (imports external_lib indirectly)
     """
     (tmp_path / "workspace.yml").write_text(
-        "defaults:\n  wifi:\n    hostname_prefix: chu-\n",
-    )
-    (tmp_path / "workspace.local.yml").write_text(
-        "defaults:\n  wifi:\n    password: shh\n"
+        "defaults:\n  wifi:\n    hostname_prefix: chu-\n    password: shh\n",
     )
     shared = tmp_path / "shared"
     shared.mkdir()
