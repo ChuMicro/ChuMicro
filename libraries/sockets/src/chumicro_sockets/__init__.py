@@ -231,7 +231,6 @@ def tls_listening_socket(
     The TLS handshake happens **synchronously** inside ``accept()`` —
     on Pi Pico W class boards this can take 100-500 ms per
     connection and visibly stall the runner during that window.
-    Decision 0041 §8 + slice 7t document the design tradeoff.
     Acceptable when ``max_connections=1`` and the handshake budget
     is bounded; if the LED-blink invariant matters for your use
     case more than TLS, terminate TLS in front of the board with a

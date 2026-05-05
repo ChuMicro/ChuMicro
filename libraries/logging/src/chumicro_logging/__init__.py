@@ -5,9 +5,10 @@ CircuitPython, MicroPython, and CPython: integer levels, named loggers,
 a handler protocol, and a buffered handler that defers I/O to the runner
 tick so emission never blocks a hot path.
 
-This package has no chumicro dependencies and **no chumicro library imports
-it** (Decision 0042's "decoration / observability" rule).  Apps wire it
-in by passing a logger callable to libraries that accept an optional
+This package has no chumicro dependencies and **no chumicro library
+imports it** — by policy, decoration / observability libraries don't
+appear in another library's dependency graph.  Apps wire it in by
+passing a logger callable to libraries that accept an optional
 ``logger=`` parameter, or by attaching their own loggers to runtime
 events.
 

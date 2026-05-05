@@ -1,7 +1,7 @@
 """``FakeHttpClient`` — drive downstream code without a real network.
 
 Designed for tests of code that takes an :class:`HttpClient` as a
-constructor-injected dependency (Decision 0010).  Mirrors the
+constructor-injected dependency.  Mirrors the
 production client's external surface (``get`` / ``check`` / ``handle``
 / ``busy`` / ``on_oversized``) but completes each request from a
 scripted response queue instead of opening a socket.

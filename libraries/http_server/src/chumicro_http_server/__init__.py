@@ -5,12 +5,12 @@ sockets) and :mod:`chumicro_timing` (ticks) only — the shared
 HTTP/1.1 wire primitives (case-insensitive header dict, charset
 parsing) are inlined into :mod:`chumicro_http_server._wire` so a
 server-only board doesn't need to ship the full client library.
-No async, no threads — Decision 0014's runner pattern:
+No async, no threads — a tick-based runner contract:
 :meth:`HttpServer.check(now_ms) -> bool` reports whether work is
 pending; :meth:`handle(now_ms)` does one tick of progress.  The
-canonical promise (Decision 0041): an LED can keep blinking on the
-same board while requests are being served, even through a slow
-upload or a stalled client.
+canonical promise: an LED can keep blinking on the same board while
+requests are being served, even through a slow upload or a stalled
+client.
 
 Public API::
 
@@ -34,7 +34,7 @@ Public API::
         if server.check(ticks_ms()):
             server.handle(ticks_ms())
 
-Source layout (mirrors chumicro-requests' post-Decision-0029 split):
+Source layout:
 
 * :mod:`chumicro_http_server._wire` — `RequestParser` streaming
   state machine, request-target helpers, exception classes,
@@ -42,12 +42,6 @@ Source layout (mirrors chumicro-requests' post-Decision-0029 split):
 * :mod:`chumicro_http_server.server` — `HttpServer`, `Request`,
   `Response`, per-connection state machine, response writer,
   `build_response()` helper.
-
-v1 (Decision 0041) shipped across slices 7a–7d: listener + request
-line + header parser + canned response (7a), `@server.route`
-decorator + JSON helpers + multi-method dispatch (7b), bounded
-multi-connection + per-tick budgets + request_timeout_ms (7c),
-and live-board verification on Pi Pico W (7d).
 
 TLS-server support is provided transport-side by
 :func:`chumicro_sockets.ssl_context_with_cert_and_key_paths` —
@@ -58,8 +52,7 @@ with ``UnsupportedSSLConfigError`` (use ESP32-family or
 MicroPython on the same Pi Pico W for HTTPS).
 
 v1 non-goals: WebSockets, sessions / cookies / auth helpers,
-multipart upload, sub-app mounting, async handlers.  See
-Decision 0041 §8.
+multipart upload, sub-app mounting, async handlers.
 """
 
 from chumicro_http_server._wire import (

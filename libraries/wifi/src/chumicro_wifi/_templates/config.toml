@@ -1,6 +1,5 @@
 # chumicro-wifi configuration.
 # See https://chumicro.github.io/ChuMicro/wifi/ for the full reference.
-# Convention: Decision 0035 (runtime config structure) + 0036 §5 (per-library template).
 
 [wifi]
 ssid = ""                              # required: AP SSID to associate with

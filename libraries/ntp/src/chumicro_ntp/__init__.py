@@ -19,13 +19,14 @@ Public API::
             client.handle(now_ms())
     print("unix seconds:", request.unix_seconds)
 
-By Decision 0042's "decoration / observability" rule, no other chumicro
-library imports this one.  ``chumicro-sockets`` is a hard dep declared
-in ``pyproject.toml`` (Decision 0042 "core infrastructure" rule); the
-factory helper that wires it lives in ``chumicro_ntp.sockets_factory``,
-a separate submodule users only import when they want the default
-wiring (so consumers with a custom UDP transport don't pull
-``chumicro-sockets`` into their deploy graph).
+No other chumicro library imports this one — by policy, decoration /
+observability libraries don't appear in another library's dependency
+graph.  ``chumicro-sockets`` is a hard dep declared in
+``pyproject.toml`` (core-infrastructure rule); the factory helper that
+wires it lives in ``chumicro_ntp.sockets_factory``, a separate
+submodule users only import when they want the default wiring (so
+consumers with a custom UDP transport don't pull ``chumicro-sockets``
+into their deploy graph).
 """
 
 from chumicro_ntp.core import NTPClient, NTPError, NTPResult

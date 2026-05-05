@@ -1,8 +1,8 @@
 """Default :mod:`chumicro_sockets` wiring for :class:`chumicro_websockets.WebSocketClient`.
 
-Per [Decision 0042 §Sub-rule](../../plans/decisions/0042-library-dependency-policy.md)
-this helper lives in its own submodule — the package's ``__init__.py``
-does **not** import it.  Users who want the default wiring opt in
+Helpers that import a chumicro core-infrastructure library live in
+their own submodule — the package's ``__init__.py`` does **not**
+import this one.  Users who want the default wiring opt in
 explicitly::
 
     from chumicro_websockets import WebSocketClient
@@ -12,15 +12,9 @@ explicitly::
     client.connect("wss://api.example.com/stream")
 
 Users injecting a custom transport simply skip the import — the
-deploy-time AST walker (Decision 0029) won't follow what isn't
-referenced, so :mod:`chumicro_sockets` doesn't ship to the device
-even though it sits in ``[project].dependencies``.
-
-This is the first chumicro library to ship the helper in its own
-submodule from day 1; :mod:`chumicro_requests` retrofits the same
-shape in a follow-up audit per the
-[Decision 0042](../../plans/decisions/0042-library-dependency-policy.md)
-audit checklist.
+deploy-time AST walker won't follow what isn't referenced, so
+:mod:`chumicro_sockets` doesn't ship to the device even though it
+sits in ``[project].dependencies``.
 """
 
 
@@ -42,8 +36,9 @@ def chumicro_sockets_factory(*, radio=None, ssl_context=None):
             ``wss://`` connections.  Build via
             :func:`chumicro_sockets.ssl_context_with_ca` for the
             CA-pinned shape :class:`chumicro_websockets.WebSocketClient`
-            recommends (see Decision 0040 §"Live-board limitations"
-            for why CA pinning is required on every supported runtime).
+            recommends (CA pinning is required on every supported
+            runtime since live-board TLS without it can't validate
+            the chain end-to-end on constrained boards).
 
     Returns:
         A ``callable(host, port, use_tls)`` ready to pass into

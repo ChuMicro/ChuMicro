@@ -3,14 +3,13 @@
 Consolidates URL parsing, opening-handshake encoders and parsers
 (both client- and server-side), the case-insensitive header dict,
 the streaming binary frame parser, the frame encoder, the close
-payload codec, and the exception hierarchy.  Mirrors the post-
-Decision-0029 :mod:`chumicro_requests._wire` shape — one file of
-bytes-on-the-wire, one file of orchestration.
+payload codec, and the exception hierarchy.  Wire-format primitives
+in one file (bytes-on-the-wire); orchestration in another.
 
 No socket I/O here.  The client / server drives the socket and
 feeds bytes in.
 
-v1 scope (Decision 0045):
+v1 scope:
 
 * RFC 6455 framing — opcodes 0/1/2/8/9/A, 7 / 16 / 64-bit length,
   client masking, inbound fragmentation, control-frame interleave.
@@ -115,20 +114,19 @@ CRLF = b"\r\n"
 #: Header / body separator.
 CRLF_CRLF = b"\r\n\r\n"
 
-#: Default per-tick recv cap — Decision 0045 §6.  Mirrors
-#: :data:`chumicro_mqtt.MQTTClient` and
-#: :data:`chumicro_requests.HttpClient`; keeps tick latency
+#: Default per-tick recv cap.  Mirrors :data:`chumicro_mqtt.MQTTClient`
+#: and :data:`chumicro_requests.HttpClient`; keeps tick latency
 #: LED-friendly.
 DEFAULT_RECV_BUDGET_PER_TICK = const(1024)
 
-#: Default per-tick send cap — Decision 0045 §6.
+#: Default per-tick send cap.
 DEFAULT_SEND_BUDGET_PER_TICK = const(1024)
 
-#: Default cap on inbound message size — Decision 0045 §6.  16 KB
-#: leaves headroom on a Decision 0015 minimum board (256 KB MCU RAM).
+#: Default cap on inbound message size.  16 KB leaves headroom on a
+#: 256 KB MCU RAM minimum board.
 DEFAULT_MAX_MESSAGE_BYTES = const(16384)
 
-#: Default bound on the outbound TX queue — Decision 0045 §6.
+#: Default bound on the outbound TX queue.
 DEFAULT_MAX_TX_QUEUE_SIZE = const(8)
 
 #: Default steady-state payload buffer size for :class:`FrameParser`.
@@ -138,13 +136,13 @@ DEFAULT_MAX_TX_QUEUE_SIZE = const(8)
 #: :data:`chumicro_mqtt._wire.DEFAULT_RX_BUFFER_SIZE`.
 DEFAULT_PAYLOAD_BUFFER_SIZE = const(256)
 
-#: Default opening-handshake budget in ms — Decision 0045 §6.
+#: Default opening-handshake budget in ms.
 DEFAULT_HANDSHAKE_TIMEOUT_MS = const(10000)
 
-#: Default close-handshake budget in ms — Decision 0045 §6.
+#: Default close-handshake budget in ms.
 DEFAULT_CLOSE_TIMEOUT_MS = const(5000)
 
-#: Default pong-after-ping budget in ms — Decision 0045 §6.
+#: Default pong-after-ping budget in ms.
 DEFAULT_PONG_TIMEOUT_MS = const(30000)
 
 #: RFC 6455 §5.5 — control payloads MUST be <=125 bytes.
@@ -195,7 +193,7 @@ RESERVED_CLOSE_CODES = frozenset({
 
 
 class WebSocketState:
-    """Lifecycle states for a websocket session (Decision 0045 §5).
+    """Lifecycle states for a websocket session.
 
     Forward-only ``CONNECTING -> OPEN -> CLOSING -> CLOSED``; either
     side may shortcut to ``CLOSED`` if the opening handshake fails.
@@ -221,8 +219,7 @@ class CaseInsensitiveDict:
     ``upgrade``) keyed off the lowercased form.  Inlined from
     :class:`chumicro_requests._wire.CaseInsensitiveDict` per the
     copy-don't-couple rule until a third HTTP/1.1-aware consumer
-    triggers extracting a shared ``chumicro-http`` package
-    (Decision 0040/0041 §Consequences).
+    triggers extracting a shared ``chumicro-http`` package.
     """
 
     def __init__(self):
@@ -1116,8 +1113,8 @@ def encode_frame(
             ``OPCODE_CONTINUATION``).
         payload: Frame payload as ``bytes``.  Empty allowed.
         fin: Whether this is the final frame of a message.  Always
-            ``True`` in v1 outbound (Decision 0045 §9 — no outbound
-            fragmentation).  Exposed for tests.
+            ``True`` in v1 outbound (no outbound fragmentation).
+            Exposed for tests.
         mask: ``None`` for server-side (no masking).  4-byte key
             (typically from :func:`make_mask_key`) for client-side.
             Per RFC 6455 §5.1, clients MUST mask outbound frames and

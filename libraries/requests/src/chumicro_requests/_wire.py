@@ -2,22 +2,20 @@
 
 Consolidates URL parsing, request encoding, response parsing, the
 case-insensitive header dict, exception hierarchy, and protocol
-constants.  Keeping wire-format primitives in one module mirrors
-the post-Decision-0029 :mod:`chumicro_mqtt._wire` shape — one file
-of bytes-on-the-wire, one file of orchestration.
+constants.  Wire-format primitives live in one file
+(bytes-on-the-wire); orchestration lives in another (``client.py``).
 
 The response parser is a streaming state machine fed raw bytes via
 :meth:`ResponseParser.feed`; it transitions
 ``STATUS -> HEADERS -> BODY -> DONE`` as bytes arrive.  No socket I/O
 here — the client drives the socket and feeds bytes in.
 
-v1 scope (Decision 0040):
+v1 scope:
 
-* Plain HTTP only — ``https://`` URLs parse, but the client refuses
-  to dial them until slice 3c lands.
+* HTTP and HTTPS via :mod:`chumicro_sockets` TLS.
 * Body is buffered in full (capped by ``max_body_bytes``).
-* ``Content-Length``-framed responses + read-until-close.  Chunked
-  transfer-encoding decode lands in slice 3f.
+* ``Content-Length``-framed responses, read-until-close, and
+  chunked transfer-encoding decode.
 * No header folding (RFC 7230 deprecates it); multi-value headers
   join with ``, `` per RFC 7230 §3.2.2.
 """
@@ -56,8 +54,8 @@ class HttpBusyError(HttpError):
     """Caller issued a request while another was still in flight.
 
     Mirrors :class:`chumicro_mqtt.MQTTBackpressureError`.  v1 of
-    chumicro-requests is single-in-flight (Decision 0040 §1) — the
-    caller must wait for ``handle.done`` before issuing another.
+    chumicro-requests is single-in-flight — the caller must wait
+    for ``handle.done`` before issuing another.
     """
 
 
@@ -68,9 +66,9 @@ class HttpURLError(HttpError):
 class HttpOversizedError(HttpError):
     """Response body exceeded ``max_body_bytes``.
 
-    Raised when ``when_oversized=DISCONNECT`` (Decision 0040 §3).
-    The other policies (``DROP_SILENT``, ``DROP_WITH_EVENT``) drop
-    the payload silently or fire an event without raising.
+    Raised when ``when_oversized=DISCONNECT``.  The other policies
+    (``DROP_SILENT``, ``DROP_WITH_EVENT``) drop the payload silently
+    or fire an event without raising.
     """
 
 
@@ -78,13 +76,12 @@ class HttpOversizedError(HttpError):
 # Constants
 # ---------------------------------------------------------------------------
 
-#: Default max buffered response body — Decision 0040 §3.  64 KB
-#: leaves headroom on a Decision 0015 minimum board (256 KB MCU RAM).
+#: Default max buffered response body.  64 KB leaves headroom on a
+#: 256 KB MCU RAM minimum board.
 DEFAULT_MAX_BODY_BYTES = const(65536)
 
-#: Default per-tick recv cap — Decision 0040 §3.  Mirrors
-#: :data:`chumicro_mqtt.MQTTClient` default; keeps tick latency
-#: LED-friendly.
+#: Default per-tick recv cap.  Mirrors :data:`chumicro_mqtt.MQTTClient`
+#: default; keeps tick latency LED-friendly.
 DEFAULT_RECV_BUDGET_PER_TICK = const(1024)
 
 #: Default initial capacity for chunked-decode body buffer.  Covers
@@ -101,10 +98,10 @@ DEFAULT_CHUNKED_BODY_CAPACITY = const(256)
 #: :data:`chumicro_websockets._wire.DEFAULT_PAYLOAD_BUFFER_SIZE` in shape.
 DEFAULT_BODY_BUFFER_SIZE = const(1024)
 
-#: Default per-request timeout in ms — Decision 0040 §3.
+#: Default per-request timeout in ms.
 DEFAULT_TIMEOUT_MS = const(10000)
 
-#: Default per-request redirect budget — Decision 0040 §3.
+#: Default per-request redirect budget.
 DEFAULT_MAX_REDIRECTS = const(5)
 
 #: Status codes that the client follows when a ``Location`` header is
@@ -435,7 +432,7 @@ def encode_request(
     merged["Host"] = host
     merged["User-Agent"] = user_agent or "chumicro-requests/0.1"
     merged["Accept"] = "*/*"
-    # Decision 0040 §7 — no gzip in v1; require identity from peers.
+    # No gzip in v1; require identity from peers.
     merged["Accept-Encoding"] = "identity"
     # No keep-alive in v1 — one socket per request.  The peer will
     # close after the response; our parser uses that as the

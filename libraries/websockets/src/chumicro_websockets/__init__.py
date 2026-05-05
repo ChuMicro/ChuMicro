@@ -1,12 +1,12 @@
 """Non-blocking WebSocket client + server for CircuitPython, MicroPython, and CPython.
 
 Built on :mod:`chumicro_sockets` (TCP + TLS) and :mod:`chumicro_timing`
-(ticks).  No async, no threads — Decision 0014's runner pattern:
-both :class:`WebSocketClient` and :class:`WebSocketServer` satisfy
+(ticks).  No async, no threads — a tick-based runner contract: both
+:class:`WebSocketClient` and :class:`WebSocketServer` satisfy
 ``check(now_ms) -> bool`` + ``handle(now_ms)``.  The canonical
-promise (Decision 0045): an LED can keep blinking on the same board
-through the opening handshake, frame I/O, control-frame interleave,
-and the close handshake.
+promise: an LED can keep blinking on the same board through the
+opening handshake, frame I/O, control-frame interleave, and the
+close handshake.
 
 Public API::
 
