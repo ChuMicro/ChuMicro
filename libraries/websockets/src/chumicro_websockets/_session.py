@@ -8,10 +8,6 @@ modulo two policies:
   Subclasses implement :meth:`_outbound_mask`.
 * Inbound mask validation — clients reject masked inbound, servers
   reject unmasked.  Subclasses set :attr:`_inbound_mask_required`.
-
-This is "Slice G" of `plans/workstreams/websockets-cleanup.md` —
-~600 LOC of duplicated state-machine code collapses to one base
-class + role-specific subclass deltas.
 """
 
 from collections import deque
@@ -80,8 +76,7 @@ def _new_tx_queue(maxlen):
     MicroPython / CircuitPython require ``flags=1`` to enable
     ``appendleft`` (used to push close-frames to the front of the
     queue so they jump the line); CPython's deque needs no flag.
-    Mirrors :func:`chumicro_mqtt.client._new_tx_queue` —
-    `plans/patterns.md` §"FIFO queues use ``deque``, not ``list``".
+    Mirrors :func:`chumicro_mqtt.client._new_tx_queue`.
     """
     try:
         return deque((), maxlen, 1)
@@ -105,8 +100,7 @@ def _force_non_blocking(socket):
         pass
 
 
-# MicroPython does not expose ``BlockingIOError`` as a built-in (see
-# plans/learnings.md §"MP doesn't expose BlockingIOError as a built-in").
+# MicroPython does not expose ``BlockingIOError`` as a built-in.
 # Define a local fallback subclass of ``OSError`` so the
 # ``isinstance(..., BlockingIOError)`` check below works on every runtime.
 try:

@@ -255,7 +255,9 @@ def listen_tls(host, port, *, context, backlog=4, radio):
     on Lolin S2 ESP32-S2 / CP 10.2.0-rc.0.
 
     Refused on CP-rp2 (Pi Pico W / Pi Pico 2 W) — raises
-    :class:`UnsupportedSSLConfigError`.  See plans/learnings.md.
+    :class:`UnsupportedSSLConfigError`.  CP-rp2 lacks the
+    ``server_side=True`` SSL wrap path; the adapter fails fast
+    instead of letting the user discover that mid-handshake.
     """
     import sys  # noqa: PLC0415 - runtime detection only
     if sys.platform.upper().startswith("RP2"):

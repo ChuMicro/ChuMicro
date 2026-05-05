@@ -199,8 +199,6 @@ def _new_tx_queue(maxlen):
     the MP/CP shape first so embedded gets the cheaper path; fall back
     to the 2-arg shape on CPython.
 
-    See ``plans/patterns.md`` §"FIFO queues use ``deque``, not
-    ``list``" for the cross-runtime rules.
     """
     try:
         return deque((), maxlen, 1)
@@ -382,8 +380,7 @@ class MQTTClient:
         # overrun — don't silently lose in-flight packets when the
         # queue is full; the public ``_enqueue`` ``len() >= max``
         # check (line below in this file) remains the sole
-        # backpressure-rejection signal.  See ``plans/patterns.md``
-        # §"FIFO queues use ``deque``, not ``list``" for the rule.
+        # backpressure-rejection signal.
         self._tx_queue = _new_tx_queue(max_tx_queue_size + 64)
         self._tx_queue_overrun_headroom = 64  # for documentation / introspection
         self._partial_send = None  # (bytes, offset) when last send was short.
