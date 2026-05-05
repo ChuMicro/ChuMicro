@@ -78,11 +78,10 @@ _KNOWN_KEYS: frozenset[str] = ALL_TOP_LEVEL_ENTRY_FIELDS | _DEPLOY_ONLY_FIELDS
 #
 # Sits one level above :class:`Device`: a registry record with
 # description, setup_command, and arbitrary extra metadata that
-# orchestration layers (the chumicro mono-repo's IDE-test
-# orchestration, future project-workspace template loaders) want to
-# carry alongside the deploy-relevant fields.  :class:`Device` is the
-# transport-construction primitive; :class:`DeviceEntry` is the
-# devices.yml record.
+# orchestration layers (IDE-test orchestrators, project-workspace
+# template loaders) carry alongside the deploy-relevant fields.
+# :class:`Device` is the transport-construction primitive;
+# :class:`DeviceEntry` is the devices.yml record.
 # ---------------------------------------------------------------------------
 
 
@@ -228,7 +227,8 @@ def load_device_registry(
     except FileNotFoundError as error:
         raise DeviceConfigError(
             f"Config file not found: {resolved}\n"
-            "Run 'python scripts/run.py setup' to generate it."
+            "Run 'chumicro-workspace add-device <id> --address <port>' to "
+            "register a board, or hand-write a devices.yml entry."
         ) from error
     except ValueError as error:
         # ``load_raw_entries`` already wraps ruamel.yaml's parse errors

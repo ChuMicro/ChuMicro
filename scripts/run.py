@@ -433,8 +433,9 @@ def docs_deploy(channel: str, libraries: list[str] | None = None) -> int:
 
 
 def lint() -> int:
-    """Run Ruff, the single-letter name check, and whitespace checks across all source paths."""
+    """Run Ruff plus the chumicro-specific name / whitespace / repo-ref checks."""
     from check_names import main as check_names_main
+    from check_no_repo_refs import main as check_no_repo_refs_main
     from check_whitespace import main as check_whitespace_main
     ruff_result = run_command([PYTHON, "-m", "ruff", "check", *discover_ruff_paths()])
     if ruff_result != 0:
@@ -442,7 +443,10 @@ def lint() -> int:
     names_result = check_names_main()
     if names_result != 0:
         return names_result
-    return check_whitespace_main()
+    whitespace_result = check_whitespace_main()
+    if whitespace_result != 0:
+        return whitespace_result
+    return check_no_repo_refs_main()
 
 
 def _parse_library_filters(
