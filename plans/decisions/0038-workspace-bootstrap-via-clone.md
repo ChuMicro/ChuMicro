@@ -71,7 +71,7 @@ After migration, `workbench/workspace-template/` is deleted from the mono-repo. 
 
 ### 5. Templated config files generated at setup, never copied by hand
 
-Files the user owns and edits — `secrets.yml` is the canonical example — should not ship as `.example` files the user has to copy. Same pattern as the chumicro mono-repo's `scripts/generate_config_files.py`: ship a *template source* and have the tooling materialize the *user-edited file* at preparation time.
+Files the user owns and edits — `workspace.local.yml` is the canonical example (Decision 0057 retired the original `secrets.yml` design but the materialise-from-template pattern still applies) — should not ship as `.example` files the user has to copy. Same pattern as the chumicro mono-repo's `scripts/generate_config_files.py`: ship a *template source* and have the tooling materialize the *user-edited file* at preparation time.
 
 Concretely, the template repo carries a top-level `_templates/` directory:
 

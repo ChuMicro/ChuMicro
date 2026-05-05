@@ -3,7 +3,12 @@
 
 [wifi]
 ssid = ""                              # required: AP SSID to associate with
-password = "!secret wifi_password"     # required: WPA passphrase (use !secret to keep it out of git)
+password = ""                          # required: WPA passphrase
+
+# Tip: keep the password out of git by setting it under
+# ``defaults.wifi.password`` in your workspace's gitignored
+# ``workspace.local.yml`` instead of inlining here.  The deploy-time
+# deep-merge picks up the overlay automatically.
 
 # hostname = "thing-1"                 # optional: hostname advertised on the AP
 # connect_timeout_ms = 15000           # optional: max wait per single connect attempt

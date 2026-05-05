@@ -4,7 +4,7 @@
 
 **One-stop host CLI for ChuMicro project workspaces — onboard a board, write app code, deploy to one or many targets, watch the REPL.**
 
-Wraps `chumicro-deploy` and `chumicro-repl` with the workspace-shaped pieces those packages don't own: a deploy-time config-merge pipeline (`workspace.yml` + `projects/*/config.toml` + `secrets.yml` → `runtime_config.msgpack`), a CLI that reads `workspace.yml`, three-zone `devices.yml` round-trip, board-state onboarding, firmware URL derivation, and the boot-shim layout that lets a single board host one project without you writing a `code.py`.
+Wraps `chumicro-deploy` and `chumicro-repl` with the workspace-shaped pieces those packages don't own: a deploy-time config-merge pipeline (`workspace.yml` + `workspace.local.yml` + `projects/*/config.toml` + optional `config.local.<suffix>` → `runtime_config.msgpack`), a CLI that reads `workspace.yml`, three-zone `devices.yml` round-trip, board-state onboarding, firmware URL derivation, and the boot-shim layout that lets a single board host one project without you writing a `code.py`.
 
 <br clear="left">
 
@@ -49,30 +49,32 @@ python run.py repl my_project --tail 30               # deploy + tail for 30 s
 
 ### How config flows from your edits to the device
 
-The runtime config a project receives at boot is the merge of three host-side sources, with secret references resolved at deploy time:
+The runtime config a project receives at boot is the deep-merge of four host-side sources, all sharing the same section-namespaced shape (Decision 0057):
 
 ```
-secrets.yml                workspace.yml              projects/<name>/config.toml
-   (host)                     (host)                          (host)
-      │                          │                              │
-      └──────────────┬───────────┴──────────────────────────────┘
-                     ▼
-                 merge_configs                  ← chumicro_workspace.merge
-                     │                              (deep per-key merge: project
-                     ▼                               wins over workspace defaults)
-                 resolve_secrets                ← chumicro_workspace.secrets
-                     │                              (replaces "!secret <name>"
-                     ▼                               → secrets.yml value)
-                 packb (msgpack)                ← chumicro_workspace.writer
-                     │                              (use_single_float=True so
-                     ▼                               CircuitPython's native
-       /runtime_config.msgpack on device            msgpack module accepts it)
-                     │
-                     ▼
-              chumicro_config.runtime           ← READS the msgpack on the device
+workspace.yml ──► workspace.local.yml ──► projects/<name>/config.toml ──► projects/<name>/config.local.<suffix>
+  (committed)        (gitignored)               (committed)                       (gitignored, optional)
+
+  defaults that      your wifi password,        per-project knobs                 per-project credential
+  every project      broker auth, anything      (sample period, mqtt topic,       override (rare; same shape)
+  inherits           private to your machine    sensor pins)                      wins over the others
+
+                            │
+                            ▼
+                        merge_configs                  ← chumicro_workspace.merge
+                            │                              (deep per-key merge:
+                            ▼                               higher-precedence layer
+                                                            wins at any key)
+                        packb (msgpack)                ← chumicro_workspace.writer
+                            │                              (use_single_float=True so
+                            ▼                               CircuitPython's native
+              /runtime_config.msgpack on device            msgpack module accepts it)
+                            │
+                            ▼
+                     chumicro_config.runtime           ← READS the msgpack on the device
 ```
 
-`chumicro-workspace dump-config <project>` prints the merged dict your project would receive without actually deploying — useful when debugging which config section a key landed in or whether a `!secret` resolved to what you expected.
+`chumicro-workspace dump-config <project>` prints the merged dict your project would receive without actually deploying — useful when debugging which layer a key landed in.
 
 ## What's included
 
@@ -130,9 +132,10 @@ Three layers, three responsibilities: `code.py` is the firmware entrypoint (stab
 ```python
 from chumicro_workspace import (
     # Config merge
-    build_runtime_config, merge_configs, resolve_secrets,
-    read_workspace_yaml, read_project_config, read_secrets_yaml,
-    write_runtime_config, UnresolvedSecretError, WorkspaceConfigError,
+    build_runtime_config, compose_runtime_config, merge_configs,
+    read_workspace_yaml, read_project_config,
+    write_runtime_config, WorkspaceConfigError,
+    read_workspace_local_yml_starter,
 
     # Deploy sources
     WithRuntimeConfig, project_directory_source,

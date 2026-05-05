@@ -11,27 +11,30 @@ Files generated:
   of truth, shared with the workspace-template repo); schema owned
   by ``chumicro-deploy``.  See
   ``chumicro_workspace.read_devices_yml_starter``.
-* ``secrets.yml`` — gitignored credential store referenced from
-  ``workspace.yml`` and per-library
-  ``functional_tests/config.toml`` via ``!secret <name>``.  Content
-  owned by ``chumicro-workspace`` (same source-of-truth pattern as
-  devices.yml; shared with the workspace-template repo).  See
-  ``chumicro_workspace.read_secrets_yml_starter``.
+* ``workspace.local.yml`` — gitignored credential overlay (Decision
+  0057).  Same section-namespaced shape as ``workspace.yml``;
+  deep-merged on top so any key set here wins over the committed
+  defaults.  Content owned by ``chumicro-workspace`` (same
+  source-of-truth pattern as devices.yml; shared with the
+  workspace-template repo).  See
+  ``chumicro_workspace.read_workspace_local_yml_starter``.
 
 Called by ``python scripts/run.py setup``.
 
 Phase 4 of ``plans/workstreams/scripts-workbench-config-unification.md``
 retired ``chumicro-dev-config.toml`` — the unified
-``workspace.yml`` + ``secrets.yml`` pair (read via
+``workspace.yml`` + ``workspace.local.yml`` pair (read via
 ``chumicro_workspace.compose_runtime_config``) is the canonical
 shape every networking-library functional-test conftest now reads.
+Decision 0057 then retired the ``!secret`` marker + ``secrets.yml``
+in favour of the structural overlay this script materialises.
 """
 
 from __future__ import annotations
 
 from chumicro_workspace import (
     read_devices_yml_starter,
-    read_secrets_yml_starter,
+    read_workspace_local_yml_starter,
 )
 from repo_layout import ROOT
 
@@ -46,8 +49,8 @@ def generate_config_files() -> int:
         starter_reader=read_devices_yml_starter,
     )
     _materialise_from_workbench(
-        relative_path="secrets.yml",
-        starter_reader=read_secrets_yml_starter,
+        relative_path="workspace.local.yml",
+        starter_reader=read_workspace_local_yml_starter,
     )
 
     if devices_yml_was_created:

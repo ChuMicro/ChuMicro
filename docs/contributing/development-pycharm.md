@@ -32,7 +32,7 @@ Open the built-in terminal (**View → Tool Windows → Terminal**, or `⌥F12` 
 python scripts/run.py setup
 ```
 
-This installs dependencies, runs editable installs for every library and support package, regenerates IDE configs, and creates starter `devices.yml` / `secrets.yml` if they are missing.  The starter `devices.yml` ships an empty registry — register a connected board with `python scripts/run.py add-device <id> --address <port>` (a thin shim around `chumicro-workspace add-device` that probes hardware identity and fills in defaults on first registration).  Edit `secrets.yml` once to provide real-network credentials for functional tests; `workspace.yml` (committed) references them via `!secret <name>`.  See [device-testing.md](device-testing.md) for the full setup flow.
+This installs dependencies, runs editable installs for every library and support package, regenerates IDE configs, and creates starter `devices.yml` / `workspace.local.yml` if they are missing.  The starter `devices.yml` ships an empty registry — register a connected board with `python scripts/run.py add-device <id> --address <port>` (a thin shim around `chumicro-workspace add-device` that probes hardware identity and fills in defaults on first registration).  Edit `workspace.local.yml` once to provide real-network credentials for functional tests; the committed `workspace.yml` carries the schema and the SSID placeholder, and the gitignored overlay deep-merges on top (Decision 0057).  See [device-testing.md](device-testing.md) for the full setup flow.
 
 `setup` produces a lot of output — look for this at the end:
 
@@ -99,7 +99,7 @@ python scripts/run.py test --libraries timing
 
 Right-click a test file or test function in the editor → **Run 'test_...'**. PyCharm runs it with pytest using the source roots from `.idea/chumicro.iml`. This is fast for iterating on a single test but does not produce coverage data.
 
-For real-board `functional_tests/`, the same play buttons route to hardware once `devices.yml` is configured.  Run `python scripts/run.py setup` (materialises `devices.yml` + `secrets.yml` from the workbench's canonical starters), then `python scripts/run.py add-device <id> --address <port>` to register your board.  Fill in `secrets.yml` with your wifi password (referenced from `workspace.yml` via `!secret wifi_password`), then right-click a `libraries/<name>/functional_tests/test_*.py` file, function, or the whole `functional_tests/` directory.
+For real-board `functional_tests/`, the same play buttons route to hardware once `devices.yml` is configured.  Run `python scripts/run.py setup` (materialises `devices.yml` + `workspace.local.yml` from the workbench's canonical starters), then `python scripts/run.py add-device <id> --address <port>` to register your board.  Fill in `workspace.local.yml` with your wifi password under `defaults.wifi.password` (deep-merged over `workspace.yml`'s committed defaults — Decision 0057), then right-click a `libraries/<name>/functional_tests/test_*.py` file, function, or the whole `functional_tests/` directory.
 
 For device-backed `functional_tests/`, the test tree includes synthetic nodes such as `Setup — MicroPython`, `Run overhead — MicroPython`, `Setup — CircuitPython`, and `Run overhead — CircuitPython`. The setup node owns staging time. Individual test functions show the durations reported by the on-device harness, while the run-overhead node keeps only the remaining batch overhead that is not attributable to a single test.
 

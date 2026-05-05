@@ -6,11 +6,11 @@ filesystem / YAML / counting operations.  Each check returns a
 it found, and (when relevant) a hint the user can act on.
 
 The two consumers are :func:`chumicro_workspace.cli._cmd_status`
-(prints a one-liner per check) and the planned ``doctor`` command
-(stricter, prints remediation hints).  This module is the single
-source of truth for "what looks OK / off about this workspace
-right now"; both commands route through the same checks so they
-stay consistent.
+(prints a one-liner per check) and :func:`_cmd_doctor` (stricter,
+prints remediation hints).  This module is the single source of
+truth for "what looks OK / off about this workspace right now";
+both commands route through the same checks so they stay
+consistent.
 """
 
 from __future__ import annotations
@@ -23,28 +23,15 @@ from typing import TYPE_CHECKING
 
 from chumicro_deploy.config.devices_yaml import load_devices
 
-from chumicro_workspace.deploy_source import find_project_config
 from chumicro_workspace.loaders import (
     WorkspaceConfigError,
-    read_project_config,
-    read_secrets_yaml,
     read_workspace_yaml,
 )
-from chumicro_workspace.merge import merge_configs
-from chumicro_workspace.secrets import UnresolvedSecretError, resolve_secrets
 
 if TYPE_CHECKING:  # pragma: no cover — type-only
     from pathlib import Path
 
     from chumicro_workspace.workspace import WorkspaceLayout
-
-#: Sentinel string the canonical workspace template ships in
-#: ``_workspace_template/secrets.yml`` for every credential entry.  When a
-#: user runs ``setup`` and the materialized ``secrets.yml`` still
-#: carries this value, the deploy-time ``!secret`` resolution will
-#: hand the literal ``"replace-me"`` to the device — almost
-#: certainly not what the user wanted.
-SECRET_PLACEHOLDER: str = "replace-me"
 
 
 class HealthLevel(Enum):
@@ -79,15 +66,15 @@ class HealthFinding:
 
 def check_workspace_yaml(workspace: WorkspaceLayout) -> HealthFinding:
     """Verify ``workspace.yml`` parses as the expected shape."""
-    try:
-        read_workspace_yaml(workspace.workspace_yaml)
-    except FileNotFoundError:
+    if not workspace.workspace_yaml.is_file():
         return HealthFinding(
             label="WORKSPACE.YML",
             level=HealthLevel.ERROR,
             message=f"missing at {workspace.workspace_yaml}",
             hint="run `chumicro-workspace init` to scaffold the workspace.",
         )
+    try:
+        read_workspace_yaml(workspace.workspace_yaml)
     except WorkspaceConfigError as exception:
         return HealthFinding(
             label="WORKSPACE.YML",
@@ -143,64 +130,45 @@ def check_devices_yaml(workspace: WorkspaceLayout) -> HealthFinding:
     )
 
 
-def check_secrets_yaml(workspace: WorkspaceLayout) -> HealthFinding:
-    """Spot un-edited template placeholders in ``secrets.yml``.
+def check_workspace_local_yaml(workspace: WorkspaceLayout) -> HealthFinding:
+    """Validate ``workspace.local.yml`` parses as the overlay shape.
 
-    A freshly-materialized ``secrets.yml`` (Decision 0038 §5) ships
-    every entry as ``<name>: replace-me``.  When the user
-    forgets to edit a key and then deploys a project that references
-    it via ``!secret``, the runtime config carries the literal
-    string ``"replace-me"`` to the device — usually surfacing as a
-    failed wifi connect or auth error.  Catch it before deploy.
+    Decision 0057: the gitignored overlay carries credentials and
+    per-developer overrides as a structural deep-merge layer over
+    ``workspace.yml``.  Empty / absent is fine — projects simply
+    inherit committed defaults.  Malformed YAML or a non-mapping
+    ``defaults:`` block earns an ERROR.
     """
-    if not workspace.secrets_yaml.is_file():
+    if not workspace.workspace_local_yaml.is_file():
         return HealthFinding(
-            label="SECRETS.YML",
-            level=HealthLevel.WARN,
-            message="not present",
-            hint=(
-                "run `chumicro-workspace setup` to materialize it from "
-                "_workspace_template/secrets.yml."
-            ),
+            label="WORKSPACE.LOCAL.YML",
+            level=HealthLevel.OK,
+            message="not present (no local overrides)",
         )
     try:
-        secrets = read_secrets_yaml(workspace.secrets_yaml)
+        defaults = read_workspace_yaml(workspace.workspace_local_yaml)
     except WorkspaceConfigError as exception:
         return HealthFinding(
-            label="SECRETS.YML",
+            label="WORKSPACE.LOCAL.YML",
             level=HealthLevel.ERROR,
             message=f"malformed: {exception}",
             hint=(
-                "expected a flat top-level mapping of name → value. "
-                "Check the file against `_workspace_template/secrets.yml`."
+                "expected a top-level mapping with optional `defaults:` "
+                "block matching workspace.yml's shape."
             ),
         )
-    placeholders = sorted(
-        name for name, value in secrets.items()
-        if isinstance(value, str) and value == SECRET_PLACEHOLDER
-    )
-    if placeholders:
-        listed = ", ".join(placeholders)
+    if not defaults:
         return HealthFinding(
-            label="SECRETS.YML",
-            level=HealthLevel.WARN,
-            message=f"placeholder values: {listed}",
-            hint=(
-                f"edit secrets.yml — replace `{SECRET_PLACEHOLDER}` "
-                "with real values before deploying projects that use them."
-            ),
-        )
-    if not secrets:
-        return HealthFinding(
-            label="SECRETS.YML",
+            label="WORKSPACE.LOCAL.YML",
             level=HealthLevel.OK,
-            message="empty (no credentials registered yet)",
+            message="present, no overrides set",
         )
-    plural = "" if len(secrets) == 1 else "s"
+    section_count = len(defaults)
+    plural = "" if section_count == 1 else "s"
     return HealthFinding(
-        label="SECRETS.YML",
+        label="WORKSPACE.LOCAL.YML",
         level=HealthLevel.OK,
-        message=f"{len(secrets)} key{plural} set",
+        message=f"{section_count} section{plural} overriding workspace defaults",
     )
 
 
@@ -237,7 +205,7 @@ def collect_health_findings(
     return [
         check_workspace_yaml(workspace),
         check_devices_yaml(workspace),
-        check_secrets_yaml(workspace),
+        check_workspace_local_yaml(workspace),
         count_projects(workspace),
     ]
 
@@ -352,79 +320,12 @@ def check_project_run_functions(workspace: WorkspaceLayout) -> HealthFinding:
     )
 
 
-def check_secret_references(workspace: WorkspaceLayout) -> HealthFinding:
-    """Try to resolve ``!secret`` references in each project's merged config.
-
-    Runs the same merge pipeline the deployer uses (workspace.yml +
-    project config + secrets.yml) but skips writing the msgpack — pure
-    static check.  Catches the canonical "user forgot to fill in
-    secrets.yml" case before deploy time.
-    """
-    projects = workspace.list_projects()
-    if not projects:
-        return HealthFinding(
-            label="SECRET refs",
-            level=HealthLevel.OK,
-            message="no projects to check",
-        )
-    try:
-        workspace_defaults = read_workspace_yaml(workspace.workspace_yaml)
-    except (FileNotFoundError, WorkspaceConfigError):
-        # The workspace.yml check already flagged this.  Skip silently.
-        return HealthFinding(
-            label="SECRET refs",
-            level=HealthLevel.WARN,
-            message="skipped — workspace.yml check failed first",
-        )
-    secrets: dict = {}
-    if workspace.secrets_yaml.is_file():
-        try:
-            secrets = read_secrets_yaml(workspace.secrets_yaml)
-        except WorkspaceConfigError:
-            return HealthFinding(
-                label="SECRET refs",
-                level=HealthLevel.WARN,
-                message="skipped — secrets.yml check failed first",
-            )
-    failing: list[tuple[str, str]] = []
-    for project_name in projects:
-        try:
-            project_config_path = find_project_config(workspace.project_dir(project_name))
-        except FileNotFoundError:
-            # No config file → no !secret references possible.  Skip.
-            continue
-        try:
-            project_data = read_project_config(project_config_path)
-            merged = merge_configs(workspace_defaults, project_data)
-            resolve_secrets(merged, secrets)
-        except UnresolvedSecretError as exception:
-            failing.append((project_name, str(exception).strip("'")))
-        except WorkspaceConfigError as exception:
-            failing.append((project_name, f"malformed config: {exception}"))
-    if failing:
-        listed = "; ".join(f"{name} ({reason})" for name, reason in failing)
-        return HealthFinding(
-            label="SECRET refs",
-            level=HealthLevel.ERROR,
-            message=f"{len(failing)} project(s) have unresolved secrets",
-            hint=(
-                f"add the missing key(s) to secrets.yml.  Failures: {listed}"
-            ),
-        )
-    return HealthFinding(
-        label="SECRET refs",
-        level=HealthLevel.OK,
-        message="all references resolve",
-    )
-
-
 def collect_doctor_findings(
     workspace: WorkspaceLayout,
 ) -> list[HealthFinding]:
-    """Run the strict (status + AST + config-merge) check set."""
+    """Run the strict (status + Python version + AST) check set."""
     return [
         check_python_version(),
         *collect_health_findings(workspace),
         check_project_run_functions(workspace),
-        check_secret_references(workspace),
     ]

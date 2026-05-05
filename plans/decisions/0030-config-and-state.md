@@ -59,9 +59,9 @@ Transform happens once at deploy time.  Device never parses TOML or YAML.
 
 ### 4. Wifi credentials never in a KV store
 
-Wifi creds live in the config pipeline above, not in any persisted-state store.  Credentials rotate at redeploy, travel with the secrets pipeline (workspace `secrets.yml` gitignored + env merge), and never touch NVM / NVS / filesystem as mutable values.
+Wifi creds live in the config pipeline above, not in any persisted-state store.  Credentials rotate at redeploy, travel with the workspace's gitignored credential overlay (`workspace.local.yml`; Decision 0057 retired the older `secrets.yml` + `!secret` design in favour of a structural deep-merge layer), and never touch NVM / NVS / filesystem as mutable values.
 
-**Rejected:** storing creds in NVM for "first-boot provisioning."  Makes the workspace-level secrets pipeline redundant, creates a second source of truth, and strands creds on hardware that outlives the project.
+**Rejected:** storing creds in NVM for "first-boot provisioning."  Makes the workspace-level credential overlay redundant, creates a second source of truth, and strands creds on hardware that outlives the project.
 
 ### 5. Persisted runtime state gets a separate library — `chumicro-kvstore`
 

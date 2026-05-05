@@ -38,21 +38,6 @@ class TestDetectHints:
         assert "'WifiConfig'" in hints[0].hint
         assert "import" in hints[0].hint.lower()
 
-    def test_unresolved_secret_pattern(self) -> None:
-        traceback = (
-            "Traceback (most recent call last):\n"
-            "  File \".../secrets.py\", ...\n"
-            "ValueError: unresolved secret reference !secret wifi_password\n"
-        )
-        hints = detect_hints(traceback)
-        labels = [hint.pattern_label for hint in hints]
-        assert "unresolved-secret" in labels
-        secret_hint = next(
-            hint for hint in hints if hint.pattern_label == "unresolved-secret"
-        )
-        assert "wifi_password" in secret_hint.hint
-        assert "secrets.yml" in secret_hint.hint
-
     def test_ram_mode_runtime_config_pattern(self) -> None:
         traceback = (
             "Traceback (most recent call last):\n"
@@ -149,8 +134,8 @@ class TestHintTableShape:
         )
 
 
-class TestSecretsYamlMissingDoesNotMatchRamModeRule:
-    """A failure pointing at secrets.yml shouldn't fire the RAM-mode pattern.
+class TestUnrelatedOserrorDoesNotMatchRamModeRule:
+    """An OSError at a different path shouldn't fire the RAM-mode pattern.
 
     Regression guard: the RAM-mode hint is anchored on
     `runtime_config.msgpack` specifically — checking a similar
@@ -160,7 +145,7 @@ class TestSecretsYamlMissingDoesNotMatchRamModeRule:
     @pytest.mark.parametrize(
         "trace_line",
         [
-            "OSError: [Errno 2] ENOENT: '/secrets.yml'",
+            "OSError: [Errno 2] ENOENT: '/workspace.local.yml'",
             "OSError: [Errno 2] ENOENT: '/lib/projects/foo/app.py'",
         ],
     )

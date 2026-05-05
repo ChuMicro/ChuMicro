@@ -89,8 +89,9 @@ class WithRuntimeConfig:
         inner: The base ``FileSource`` (typically the project's app code).
         workspace_yaml: Path to ``workspace.yml``.
         project_config: Path to ``projects/<name>/config.{toml,yml,yaml}``.
-        secrets_yaml: Path to ``secrets.yml``.  May not exist —
-            ``read_secrets_yaml`` treats absence as "no secrets".
+        workspace_local_yaml: Path to ``workspace.local.yml``
+            (gitignored overlay; Decision 0057).  May not exist —
+            absence is treated as "no overrides".
         output_path: Where to write the msgpack on the host.  Defaults
             to ``project_config.parent / _generated / runtime_config.msgpack``.
         device_path: On-device path for the msgpack.  Defaults to
@@ -109,7 +110,7 @@ class WithRuntimeConfig:
         *,
         workspace_yaml: Path,
         project_config: Path,
-        secrets_yaml: Path,
+        workspace_local_yaml: Path | None = None,
         output_path: Path | None = None,
         device_path: str = RUNTIME_CONFIG_DEVICE_PATH,
         library_roots: tuple[Path, ...] | list[Path] | None = None,
@@ -117,7 +118,7 @@ class WithRuntimeConfig:
         self._inner = inner
         self._workspace_yaml = workspace_yaml
         self._project_config = project_config
-        self._secrets_yaml = secrets_yaml
+        self._workspace_local_yaml = workspace_local_yaml
         self._device_path = device_path
         self._output_path = (
             output_path
@@ -151,7 +152,7 @@ class WithRuntimeConfig:
         resolved = build_runtime_config(
             workspace_yaml=self._workspace_yaml,
             project_config=self._project_config,
-            secrets_yaml=self._secrets_yaml,
+            workspace_local_yaml=self._workspace_local_yaml,
             output_path=self._output_path,
         )
         if self._library_roots:
@@ -188,7 +189,7 @@ def project_directory_source(
     project_dir: Path,
     *,
     workspace_yaml: Path,
-    secrets_yaml: Path,
+    workspace_local_yaml: Path | None = None,
     entrypoint: str = "/code.py",
     resource_prefix: str = "/",
     extra_excluded: Iterable[str] = (),
@@ -204,7 +205,10 @@ def project_directory_source(
     Args:
         project_dir: ``projects/<name>/`` directory.
         workspace_yaml: Path to ``workspace.yml``.
-        secrets_yaml: Path to ``secrets.yml``.
+        workspace_local_yaml: Path to ``workspace.local.yml``
+            (gitignored overlay; Decision 0057).  ``None`` (default)
+            auto-discovers ``workspace.local.yml`` next to
+            *workspace_yaml*.
         entrypoint: On-device entrypoint path.  Defaults to
             ``"/code.py"`` (CircuitPython convention).  Override to
             ``"/main.py"`` for MicroPython projects.
@@ -246,5 +250,5 @@ def project_directory_source(
         inner,
         workspace_yaml=workspace_yaml,
         project_config=find_project_config(project_dir),
-        secrets_yaml=secrets_yaml,
+        workspace_local_yaml=workspace_local_yaml,
     )

@@ -3,9 +3,9 @@
 When a project's own code fails on the device, the deploy command's
 captured traceback is the only signal the user gets.  Raw tracebacks
 are precise about *what* broke but offer no guidance on *why* — the
-common workspace-shaped causes (missing `!secret`, un-merged config
-section, library not installed locally) all surface as terse stdlib
-errors that don't mention the workspace context that produced them.
+common workspace-shaped causes (missing required config key,
+library not installed locally) all surface as terse stdlib errors
+that don't mention the workspace context that produced them.
 
 This module pattern-matches against the captured traceback and
 returns one or more :class:`AppErrorHint` rows the CLI can display
@@ -60,15 +60,6 @@ _HINT_TABLE: tuple[tuple[re.Pattern[str], str, str], ...] = (
         ),
     ),
     (
-        re.compile(r"ValueError[^\n]*!secret\s+(\S+)"),
-        "unresolved-secret",
-        (
-            "secrets.yml has no entry for `{0}` — add the key with a "
-            "real value, or remove the `!secret {0}` reference from "
-            "config.toml / workspace.yml."
-        ),
-    ),
-    (
         re.compile(r"OSError:.*['\"]?/?runtime_config\.msgpack"),
         "ram-mode-config",
         (
@@ -95,8 +86,9 @@ _HINT_TABLE: tuple[tuple[re.Pattern[str], str, str], ...] = (
         re.compile(r"KeyError:\s*'([^']+)'"),
         "missing-config-key",
         (
-            "missing config key `{0}` — check projects/<project>/config.toml "
-            "or workspace.yml's `[defaults]` block.  Use "
+            "missing config key `{0}` — check projects/<project>/config.toml, "
+            "workspace.yml's `[defaults]` block, or workspace.local.yml for "
+            "the credential overlay (Decision 0057).  Use "
             "`python run.py deploy <project> --dry-run` to inspect what "
             "the merged runtime config carries."
         ),

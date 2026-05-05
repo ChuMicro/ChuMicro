@@ -10,9 +10,9 @@ A workspace has this shape:
 
 ```
 my-workspace/
-├── workspace.yml          # defaults + library_sources: + secrets: !secret refs
+├── workspace.yml          # defaults + library_sources: (committed)
+├── workspace.local.yml    # gitignored credential / per-developer overlay (Decision 0057)
 ├── devices.yml            # board registry — three-zone (Decision 0029 §9)
-├── secrets.yml            # gitignored — credentials referenced via !secret
 ├── run.py                 # tiny shim: from chumicro_workspace.cli import main
 ├── pyproject.toml
 ├── projects/
@@ -84,25 +84,24 @@ python run.py add-device back-porch --address /dev/cu.usbmodem1101 --runtime mic
 
 ## Workspace health
 
-`status` is the one-screen "is anything obviously broken" check.  Every `deploy` runs the same fast checks as a pre-flight gate — ERROR-level findings (malformed `workspace.yml` / `devices.yml` / `secrets.yml`) abort before sending bytes to the device; WARN-level findings (placeholder secrets, no devices registered yet) print but proceed.  Pass `deploy --skip-health-check` to skip the gate (CI / power-user flows).
+`status` is the one-screen "is anything obviously broken" check.  Every `deploy` runs the same fast checks as a pre-flight gate — ERROR-level findings (malformed `workspace.yml` / `devices.yml` / `workspace.local.yml`) abort before sending bytes to the device; WARN-level findings (no devices registered yet, etc.) print but proceed.  Pass `deploy --skip-health-check` to skip the gate (CI / power-user flows).
 
 Run it directly to see the snapshot:
 
 ```bash
 python run.py status
-# WORKSPACE       /Users/you/projects/my-house
-# WORKSPACE.YML   ✓ valid
-# DEVICES.YML     ✓ 2 devices registered
-# SECRETS.YML     ⚠ placeholder values: wifi_password
-#                   hint: edit secrets.yml — replace `replace-me` …
-# PROJECTS          ✓ 4 projects: garage/sensors/door_open, …
+# WORKSPACE              /Users/you/projects/my-house
+# WORKSPACE.YML          ✓ valid
+# DEVICES.YML            ✓ 2 devices registered
+# WORKSPACE.LOCAL.YML    ✓ 1 section overriding workspace defaults
+# PROJECTS               ✓ 4 projects: garage/sensors/door_open, …
 ```
 
-`doctor` is the strict sibling — runs every status check plus a Python-version probe, an AST scan for `def run` in each project's `app.py`, and a config-merge dry-run that catches `!secret` references with no matching key:
+`doctor` is the strict sibling — runs every status check plus a Python-version probe and an AST scan for `def run` in each project's `app.py`:
 
 ```bash
 python run.py doctor
-# Adds rows for PYTHON, PROJECT run() defs, SECRET refs.
+# Adds rows for PYTHON and PROJECT run() defs.
 # Exit code is 1 only on ERROR-level findings; warnings stay 0 so
 # the command composes cleanly with shell-pipe checks.
 ```
@@ -130,42 +129,50 @@ python run.py new gpio --library
 
 ### How config flows from your edits to the device
 
-The runtime config a project receives at boot is the merge of three host-side sources, with secret references resolved at deploy time:
+The runtime config a project receives at boot is the deep-merge of four host-side sources, all sharing the same section-namespaced shape (Decision 0057):
 
 ```
-secrets.yml                workspace.yml              projects/<name>/config.toml
-   (host)                     (host)                          (host)
-      │                          │                              │
-      └──────────────┬───────────┴──────────────────────────────┘
-                     ▼
-                 merge_configs                  ← chumicro_workspace.merge
-                     │                              (deep per-key merge: project
-                     ▼                               wins over workspace defaults)
-                 resolve_secrets                ← chumicro_workspace.secrets
-                     │                              (replaces "!secret <name>"
-                     ▼                               → secrets.yml value)
-                 packb (msgpack)                ← chumicro_workspace.writer
-                     │                              (use_single_float=True so
-                     ▼                               CircuitPython's native
-       /runtime_config.msgpack on device            msgpack module accepts it)
-                     │
-                     ▼
-              chumicro_config.runtime           ← READS the msgpack on the device
+workspace.yml ──► workspace.local.yml ──► projects/<name>/config.toml ──► projects/<name>/config.local.<suffix>
+  (committed)        (gitignored)               (committed)                       (gitignored, optional)
+
+  defaults that      your wifi password,        per-project knobs                 per-project credential
+  every project      broker auth, anything      (sample period, mqtt topic,       override (rare; same shape)
+  inherits           private to your machine    sensor pins)                      wins over the others
+
+                            │
+                            ▼
+                        merge_configs                  ← chumicro_workspace.merge
+                            │                              (deep per-key merge:
+                            ▼                               higher-precedence layer
+                                                            wins at any key)
+                        packb (msgpack)                ← chumicro_workspace.writer
+                            │                              (use_single_float=True so
+                            ▼                               CircuitPython's native
+              /runtime_config.msgpack on device            msgpack module accepts it)
+                            │
+                            ▼
+                     chumicro_config.runtime           ← READS the msgpack on the device
 ```
 
-Use `chumicro-workspace dump-config <project>` to print the merged dict your project would receive without actually deploying — useful for "is this `!secret` resolving to what I think it is?" debugging.
+Use `chumicro-workspace dump-config <project>` to print the merged dict your project would receive without actually deploying — useful for debugging which layer a key landed in.
 
-`config.toml` carries the per-project knobs.  Use `!secret <name>` to reference values from `secrets.yml`:
+`config.toml` carries the per-project knobs.  Keep credentials in `workspace.local.yml` (or, for per-project overrides, the gitignored `config.local.<suffix>` sibling):
 
 ```toml
-# projects/back-porch/config.toml
+# projects/back-porch/config.toml — committed
 [wifi]
 ssid = "HomeNet"
-password = "!secret wifi_password"
 
 [mqtt]
 host = "192.168.1.10"
 topic = "projects/back-porch/state"
+```
+
+```yaml
+# workspace.local.yml — gitignored, deep-merged on top of workspace.yml
+defaults:
+  wifi:
+    password: my-real-wifi-password
 ```
 
 `app.py` exports a `run()` function — `workspace_runtime.boot()` calls it after import:
@@ -244,7 +251,7 @@ python run.py deploy garage/sensors/door_open --boot-shim --dry-run
 
 Builds the source like a real deploy, but prints the file map (path / size / one-word category) instead of calling the transport.  Useful when:
 
-* The `!secret` merge produced something unexpected — the runtime config msgpack appears in the listing with its real size.
+* The structural overlay merge produced something unexpected — the runtime config msgpack appears in the listing with its real size.
 * You're sanity-checking a nested layout — every per-level `__init__.py` shows up classified as `namespace`, so a missing one is obvious.
 * You want to read what deploy actually does — the output's stable shape doubles as documentation.
 
@@ -292,10 +299,9 @@ CircuitPython drives `import storage; storage.erase_filesystem()` (which reforma
 When the deploy traceback matches a known workspace-shaped pattern, an indented `--- hints ---` block prints below it pointing at the fix:
 
 * `NameError: name '<sym>' is not defined` → "did you forget to import…"
-* `ValueError ... !secret <name>` → "secrets.yml has no entry for `<name>`…"
 * `OSError ... runtime_config.msgpack` → "RAM-mode deploys don't persist the config msgpack — switch to flash mode."
 * `ImportError`/`ModuleNotFoundError ... chumicro_*` → "library not installed in this venv — run `python run.py setup`."
-* `KeyError: '<key>'` → "missing config key — check `projects/<project>/config.toml` or `workspace.yml`'s `[defaults]` block."
+* `KeyError: '<key>'` → "missing config key — check `projects/<project>/config.toml`, `workspace.yml`'s `[defaults]` block, or `workspace.local.yml` for the credential overlay."
 
 Driven by [`detect_hints`](api.md) over the captured traceback + execute output.  Empty hints → no section header (so unmatched failures don't carry an empty heading).
 
@@ -360,16 +366,16 @@ Loader: [`load_quality_config`](api.md).  Missing block → permissive defaults 
 
 ## Config merge
 
-[`build_runtime_config`](api.md) is the deploy-time pipeline (Decision 0035):
+[`build_runtime_config`](api.md) is the deploy-time pipeline (Decisions 0035 + 0057):
 
 1. Read `workspace.yml`'s `defaults:` block.
-2. Read `projects/<name>/config.{toml,yml,yaml}`.
-3. Read `secrets.yml`.
-4. Deep-merge `defaults` ← `project_config` (project wins on conflict; lists replace wholesale; dicts recurse).
-5. Walk the merged dict, replace every `!secret <name>` string with `secrets[name]` (raises `UnresolvedSecretError` on miss).
-6. Pack as msgpack via `chumicro-msgpack`, write to `projects/<name>/_generated/runtime_config.msgpack`.
+2. Read `workspace.local.yml`'s `defaults:` block (gitignored overlay; absent → empty).
+3. Read `projects/<name>/config.{toml,yml,yaml}`.
+4. Read `projects/<name>/config.local.<suffix>` (gitignored sibling; absent → empty).
+5. Deep-merge in that order (later layers win at any nesting depth; lists replace wholesale; dicts recurse).
+6. Pack as msgpack via the standard `msgpack` library (with `use_single_float=True` for CircuitPython compatibility), write to `projects/<name>/_generated/runtime_config.msgpack`.
 
-The deploy then ships that msgpack to `/runtime_config.msgpack` on the device.  Apps read it with `chumicro-msgpack`'s `unpackb`.
+The deploy then ships that msgpack to `/runtime_config.msgpack` on the device.  Apps read it via `chumicro-config`'s `load_runtime_config()`.
 
 To regenerate the msgpack without deploying — useful in tests or pre-flight checks:
 
@@ -380,9 +386,10 @@ from chumicro_workspace import build_runtime_config
 build_runtime_config(
     workspace_yaml=Path("workspace.yml"),
     project_config=Path("projects/back-porch/config.toml"),
-    secrets_yaml=Path("secrets.yml"),
     output_path=Path("projects/back-porch/_generated/runtime_config.msgpack"),
 )
+# workspace_local_yaml defaults to ``workspace.local.yml`` next to
+# *workspace_yaml*; pass it explicitly to override.
 ```
 
 ## Firmware

@@ -22,7 +22,7 @@ WiFi config
 
 Reads wifi credentials via the standard chumicro pipeline:
 :func:`chumicro_config.load_runtime_config` reads
-``/runtime_config.msgpack`` (baked from ``secrets.yml`` at deploy
+``/runtime_config.msgpack`` (baked from workspace.local.yml at deploy
 time by ``chumicro-workspace``).  The ``[wifi]`` section is fed to
 :meth:`chumicro_wifi.WifiConfig.from_dict`.
 
@@ -63,7 +63,7 @@ from chumicro_wifi import WifiConfig, WifiService, WifiState
 
 # Fallback constants used only when runtime_config.msgpack is absent.
 # Edit before raw single-file deployments; harmless when chumicro-
-# workspace bakes runtime_config.msgpack from secrets.yml.
+# workspace bakes runtime_config.msgpack from workspace.local.yml.
 WIFI_SSID = "your-wifi-ssid"  # noqa: S105 — replace before deploying
 WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 — replace before deploying
 LISTEN_PORT = 8080

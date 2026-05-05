@@ -137,7 +137,9 @@ production) get the same defaults without one path leaking.
 
 ### 5. Deep-merge semantics: per-key, not per-section
 
-The deployer merges three sources into the final dict, in increasing precedence: `workspace.yml` defaults → `projects/<name>/config.toml` → `secrets.yml` entries resolved via `!secret <name>` references inside either of the above.
+> **Update — Decision 0057 retired the `!secret` marker** in favour of a structural overlay (`workspace.local.yml`, optionally `projects/<name>/config.local.<suffix>`) that deep-merges as one more layer.  The merge is now four sources rather than three, all sharing the same section-namespaced shape.
+
+The deployer merges sources into the final dict, in increasing precedence: `workspace.yml` defaults → `workspace.local.yml` (gitignored overlay; Decision 0057) → `projects/<name>/config.toml` → `projects/<name>/config.local.<suffix>` (gitignored, optional; Decision 0057).
 
 Merge is **deep, key-level** within sections: workspace's `[wifi]` section + project's `[wifi]` section combine key-by-key, with the project's keys winning.  Sections present only in `workspace.yml` become global defaults the project inherits without restating.  A worked example with concrete TOML/YAML/Python lives in `docs/contributing/runtime-config.md`.
 
@@ -156,9 +158,10 @@ runtime; the library raises a clear `KeyError` or `TypeError` at
 boot, which is good enough for the workspace-template flow.
 
 The deployer **does** validate the *file-level* shape: TOML/YAML
-parses cleanly, top-level structure is a dict of dicts, no `!secret`
-reference is unresolved.  These are format-level checks, not
-schema-level.
+parses cleanly, top-level structure is a dict of dicts.  These are
+format-level checks, not schema-level.  (The "no unresolved
+`!secret` reference" check was retired alongside the marker
+itself; see Decision 0057.)
 
 ### 7. Unknown sections are ignored
 

@@ -6,7 +6,6 @@ import pytest
 from chumicro_workspace import (
     WorkspaceConfigError,
     read_project_config,
-    read_secrets_yaml,
     read_workspace_yaml,
 )
 
@@ -42,6 +41,17 @@ class TestReadWorkspaceYaml:
         path.write_text("")
         assert read_workspace_yaml(path) == {}
 
+    def test_missing_file_returns_empty_dict(self, tmp_path: Path) -> None:
+        """Decision 0057 reuses this reader for ``workspace.local.yml``.
+
+        The overlay file is optional — absence must collapse to "no
+        overrides", not raise, so the pipeline can deep-merge an
+        empty dict in.
+        """
+        path = tmp_path / "workspace.local.yml"
+        # File deliberately not created.
+        assert read_workspace_yaml(path) == {}
+
     def test_top_level_list_raises(self, tmp_path: Path) -> None:
         path = tmp_path / "workspace.yml"
         path.write_text("- one\n- two\n")
@@ -66,14 +76,13 @@ class TestReadProjectConfig:
         path.write_text(
             "[wifi]\n"
             'ssid = "HomeNet"\n'
-            'password = "!secret wifi_password"\n'
             "\n"
             "[app]\n"
             "sample_period_ms = 30000\n"
         )
         result = read_project_config(path)
         assert result == {
-            "wifi": {"ssid": "HomeNet", "password": "!secret wifi_password"},
+            "wifi": {"ssid": "HomeNet"},
             "app": {"sample_period_ms": 30000},
         }
 
@@ -82,7 +91,6 @@ class TestReadProjectConfig:
         path.write_text(
             "wifi:\n"
             "  ssid: HomeNet\n"
-            "  password: '!secret wifi_password'\n"
             "app:\n"
             "  sample_period_ms: 30000\n"
         )
@@ -108,39 +116,3 @@ class TestReadProjectConfig:
         path.write_text("- one\n- two\n")
         with pytest.raises(WorkspaceConfigError):
             read_project_config(path)
-
-
-# ---------------------------------------------------------------------------
-# read_secrets_yaml
-# ---------------------------------------------------------------------------
-
-
-class TestReadSecretsYaml:
-    def test_returns_secrets_dict(self, tmp_path: Path) -> None:
-        path = tmp_path / "secrets.yml"
-        path.write_text(
-            "wifi_password: actual-password\n"
-            "mqtt_token: abc123\n"
-        )
-        result = read_secrets_yaml(path)
-        assert result == {
-            "wifi_password": "actual-password",
-            "mqtt_token": "abc123",
-        }
-
-    def test_missing_file_returns_empty_dict(self, tmp_path: Path) -> None:
-        """The 'no secrets configured' case — not an error."""
-        path = tmp_path / "secrets.yml"
-        # File deliberately not created.
-        assert read_secrets_yaml(path) == {}
-
-    def test_empty_file_returns_empty_dict(self, tmp_path: Path) -> None:
-        path = tmp_path / "secrets.yml"
-        path.write_text("")
-        assert read_secrets_yaml(path) == {}
-
-    def test_top_level_list_raises(self, tmp_path: Path) -> None:
-        path = tmp_path / "secrets.yml"
-        path.write_text("- one\n- two\n")
-        with pytest.raises(WorkspaceConfigError):
-            read_secrets_yaml(path)

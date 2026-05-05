@@ -324,7 +324,7 @@ def project_boot_source(
     project_name: str | None = None,
     entrypoint_filename: str = "code.py",
     workspace_yaml: Path | None = None,
-    secrets_yaml: Path | None = None,
+    workspace_local_yaml: Path | None = None,
     extra_excluded: Iterable[str] = (),
     target_runtime: str | None = None,
 ) -> WithRuntimeConfig:
@@ -341,8 +341,8 @@ def project_boot_source(
             nested (``projects/garage/sensors/door_open/``); the
             on-device layout follows the same nesting.
         workspace: Resolved :class:`WorkspaceLayout`.  Used to
-            locate ``workspace.yml`` / ``secrets.yml`` defaults
-            when those args are ``None``.
+            locate ``workspace.yml`` / ``workspace.local.yml``
+            defaults when those args are ``None``.
         project_name: Bare, slash, or dotted name for the active project.
             Required for nested layouts (the directory's basename
             alone loses the namespace prefix).  Defaults to
@@ -351,7 +351,8 @@ def project_boot_source(
             for MP.  Decides the host-side filename for the shim
             stub written at the device root.
         workspace_yaml: Override ``workspace_yaml`` path.
-        secrets_yaml: Override ``secrets_yaml`` path.
+        workspace_local_yaml: Override ``workspace.local.yml`` path
+            (gitignored overlay; Decision 0057).
         extra_excluded: Additional filename / directory names to
             skip on the project walk.
         target_runtime: Decision 0044 — when set, ``.py`` files in
@@ -366,8 +367,8 @@ def project_boot_source(
     """
     if workspace_yaml is None:
         workspace_yaml = workspace.workspace_yaml
-    if secrets_yaml is None:
-        secrets_yaml = workspace.secrets_yaml
+    if workspace_local_yaml is None:
+        workspace_local_yaml = workspace.workspace_local_yaml
     resolved_name = project_name if project_name is not None else project_dir.name
 
     inner = _BootShimSource(
@@ -381,7 +382,7 @@ def project_boot_source(
         inner,
         workspace_yaml=workspace_yaml,
         project_config=find_project_config(project_dir),
-        secrets_yaml=secrets_yaml,
+        workspace_local_yaml=workspace_local_yaml,
         output_path=project_dir / GENERATED_DIRNAME / "runtime_config.msgpack",
     )
 
@@ -471,7 +472,7 @@ def project_boot_with_import_graph_source(
     entrypoint_filename: str = "code.py",
     project_entrypoint: str = "app.py",
     workspace_yaml: Path | None = None,
-    secrets_yaml: Path | None = None,
+    workspace_local_yaml: Path | None = None,
     extra_excluded: Iterable[str] = (),
     target_runtime: str | None = None,
     extra_modules: list[str] | None = None,
@@ -504,7 +505,8 @@ def project_boot_with_import_graph_source(
             Defaults to ``"app.py"`` — the boot-shim convention's
             entrypoint module.
         workspace_yaml: Override ``workspace.yml`` path.
-        secrets_yaml: Override ``secrets.yml`` path.
+        workspace_local_yaml: Override ``workspace.local.yml`` path
+            (gitignored overlay; Decision 0057).
         extra_excluded: Additional filename / directory names to
             skip on the project walk.
         target_runtime: Decision 0044 — forwarded to both inner
@@ -530,8 +532,8 @@ def project_boot_with_import_graph_source(
 
     if workspace_yaml is None:
         workspace_yaml = workspace.workspace_yaml
-    if secrets_yaml is None:
-        secrets_yaml = workspace.secrets_yaml
+    if workspace_local_yaml is None:
+        workspace_local_yaml = workspace.workspace_local_yaml
     resolved_name = project_name if project_name is not None else project_dir.name
 
     boot_inner = _BootShimSource(
@@ -590,7 +592,7 @@ def project_boot_with_import_graph_source(
         combined,
         workspace_yaml=workspace_yaml,
         project_config=find_project_config(project_dir),
-        secrets_yaml=secrets_yaml,
+        workspace_local_yaml=workspace_local_yaml,
         output_path=project_dir / GENERATED_DIRNAME / "runtime_config.msgpack",
         library_roots=library_roots,
     )

@@ -1,19 +1,23 @@
 """Host-side file readers for the runtime-config pipeline.
 
-Three input shapes per Decision 0035:
+Three input shapes per Decision 0035 (revised by Decision 0057 — drop
+``!secret`` marker, replace with structural overlay):
 
 * ``workspace.yml`` — workspace-wide defaults (YAML).  ``defaults:``
   block holds the section-namespaced dict that flows into every
-  project's merged config as the lowest-precedence layer.
+  project's merged config as the lowest-precedence layer.  Committed.
+* ``workspace.local.yml`` — gitignored personal overrides (YAML).
+  Same shape as ``workspace.yml``; ``defaults:`` block deep-merged
+  on top so credentials and per-developer values win without landing
+  in git.
 * ``projects/<name>/config.toml`` (or ``.yml``) — per-project config
-  (TOML default; YAML accepted opt-in).  Sections override
-  workspace defaults key-by-key.
-* ``secrets.yml`` — gitignored map of secret name → value (YAML).
-  Used to resolve ``!secret <name>`` references that appear in
-  either of the above.
+  (TOML default; YAML accepted opt-in).  Sections override workspace
+  defaults key-by-key.  Optional sibling ``config.local.toml`` (or
+  ``.yml``) overrides on top — same gitignored-overlay pattern at
+  the project level.
 
 All readers return plain dicts.  TOML uses stdlib ``tomllib``
-(CPython 3.11+); YAML uses PyYAML (declared as a workbench dep
+(CPython 3.11+); YAML uses ruamel.yaml (declared as a workbench dep
 in ``pyproject.toml``).
 """
 
@@ -72,9 +76,16 @@ def read_workspace_yaml(path: Path) -> dict[str, Any]:
     dict when the file lacks a ``defaults:`` block — that's the
     "no shared defaults" case, not an error.
 
+    Also used to read ``workspace.local.yml`` (Decision 0057) — the
+    gitignored overlay shares the same shape, so the same reader
+    suits.  Missing files return an empty dict (callers check
+    existence themselves when they need a different signal).
+
     Args:
-        path: Path to ``workspace.yml``.
+        path: Path to ``workspace.yml`` or ``workspace.local.yml``.
     """
+    if not path.is_file():
+        return {}
     data = _read_yaml(path)
     defaults = data.get("defaults", {})
     if not isinstance(defaults, dict):
@@ -89,7 +100,8 @@ def read_project_config(path: Path) -> dict[str, Any]:
 
     Args:
         path: Path to ``config.toml`` or ``config.yml`` /
-            ``config.yaml``.  Suffix decides the parser.
+            ``config.yaml`` (or the gitignored ``config.local.*``
+            sibling).  Suffix decides the parser.
 
     Raises:
         WorkspaceConfigError: Unrecognized suffix or malformed top
@@ -104,20 +116,3 @@ def read_project_config(path: Path) -> dict[str, Any]:
         f"{path}: unrecognized config suffix {suffix!r} "
         "(expected .toml, .yml, or .yaml)"
     )
-
-
-def read_secrets_yaml(path: Path) -> dict[str, Any]:
-    """Read a ``secrets.yml`` and return the secret-name → value dict.
-
-    Returns an empty dict when *path* doesn't exist — the "no
-    secrets configured" case.  Resolving a ``!secret <name>``
-    reference against an empty secrets dict will raise
-    :class:`UnresolvedSecretError` from the secrets module, which
-    is the right escalation point.
-
-    Args:
-        path: Path to ``secrets.yml``.
-    """
-    if not path.exists():
-        return {}
-    return _read_yaml(path)

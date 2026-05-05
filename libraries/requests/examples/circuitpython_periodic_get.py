@@ -8,7 +8,7 @@ request never block-calls the loop.
 
 WiFi config comes from the standard chumicro pipeline:
 :func:`chumicro_config.load_runtime_config` reads
-``/runtime_config.msgpack`` (baked from ``secrets.yml`` at deploy
+``/runtime_config.msgpack`` (baked from workspace.local.yml at deploy
 time by ``chumicro-workspace``).  The ``[wifi]`` section feeds
 :class:`chumicro_wifi.WifiConfig`.  Falls back to the
 ``WIFI_SSID`` / ``WIFI_PASSWORD`` constants below for raw

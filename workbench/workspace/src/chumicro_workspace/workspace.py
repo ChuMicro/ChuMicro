@@ -1,11 +1,11 @@
 """Workspace path resolution + project-tree classification.
 
 Locates the canonical files of a project workspace (workspace.yml,
-devices.yml, secrets.yml, ``projects/<...>/``) given a starting
-directory.  The CLI walks up from the current working directory
-until it finds a ``workspace.yml`` so users can invoke commands from
-anywhere inside the workspace tree (typical Git / monorepo
-ergonomics).
+workspace.local.yml, devices.yml, ``projects/<...>/``) given a
+starting directory.  The CLI walks up from the current working
+directory until it finds a ``workspace.yml`` so users can invoke
+commands from anywhere inside the workspace tree (typical Git /
+monorepo ergonomics).
 
 Projects may be nested arbitrarily deep under ``projects/`` —
 ``projects/upstairs/bedroom_sensor/``, ``projects/garage/sensors/door_open/``,
@@ -26,10 +26,10 @@ and reified by the canonical template at
 
     <root>/
         workspace.yml          # workspace defaults (Decision 0035)
+        workspace.local.yml    # gitignored overlay (Decision 0057)
         devices.yml            # board entries (chumicro_deploy.config.default)
-        secrets.yml            # gitignored, optional
-        projects/<...>/<name>/   # one directory per "project", optionally nested
-        shared/                  # shared library code
+        projects/<...>/<name>/ # one directory per "project", optionally nested
+        shared/                # shared library code
         packages/              # third-party packages (gitignored)
 """
 
@@ -148,9 +148,14 @@ class WorkspaceLayout:
         return self.root / "devices.yml"
 
     @property
-    def secrets_yaml(self) -> Path:
-        """Path to ``<root>/secrets.yml``.  Optional and gitignored."""
-        return self.root / "secrets.yml"
+    def workspace_local_yaml(self) -> Path:
+        """Path to ``<root>/workspace.local.yml``.  Optional and gitignored.
+
+        Decision 0057: structural overlay for credentials and
+        per-developer overrides.  Same shape as :attr:`workspace_yaml`;
+        deep-merged on top in the runtime-config pipeline.
+        """
+        return self.root / "workspace.local.yml"
 
     @property
     def projects_dir(self) -> Path:

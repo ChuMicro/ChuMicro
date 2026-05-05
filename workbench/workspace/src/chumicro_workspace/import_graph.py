@@ -180,7 +180,7 @@ def project_import_graph_source(
     *,
     workspace: WorkspaceLayout,
     workspace_yaml: Path | None = None,
-    secrets_yaml: Path | None = None,
+    workspace_local_yaml: Path | None = None,
     entrypoint_filename: str = "code.py",
     device_entrypoint: str = "/code.py",
     resource_prefix: str = "/lib",
@@ -207,13 +207,14 @@ def project_import_graph_source(
             project-local modules under the same dir resolve.
         workspace: Resolved :class:`WorkspaceLayout`.  Used to
             locate ``workspace.yml`` (defaults block + library_sources)
-            and ``secrets.yml`` when those args are ``None``.
+            and ``workspace.local.yml`` when those args are ``None``.
         workspace_yaml: Override the workspace.yml path.  Defaults
             to ``workspace.workspace_yaml``.  Tests inject when
             staging a workspace under tmp_path with a non-default
             layout.
-        secrets_yaml: Override the secrets.yml path.  Defaults to
-            ``workspace.secrets_yaml``.
+        workspace_local_yaml: Override the workspace.local.yml path
+            (gitignored overlay; Decision 0057).  Defaults to
+            ``workspace.workspace_local_yaml``.
         entrypoint_filename: Host-side filename of the project's
             entrypoint; must exist under *project_dir*.  Defaults to
             ``"code.py"`` (CircuitPython convention).  Override to
@@ -246,8 +247,8 @@ def project_import_graph_source(
 
     if workspace_yaml is None:
         workspace_yaml = workspace.workspace_yaml
-    if secrets_yaml is None:
-        secrets_yaml = workspace.secrets_yaml
+    if workspace_local_yaml is None:
+        workspace_local_yaml = workspace.workspace_local_yaml
 
     entrypoint_path = project_dir / entrypoint_filename
     if not entrypoint_path.is_file():
@@ -291,7 +292,7 @@ def project_import_graph_source(
         inner,
         workspace_yaml=workspace_yaml,
         project_config=find_project_config(project_dir),
-        secrets_yaml=secrets_yaml,
+        workspace_local_yaml=workspace_local_yaml,
         output_path=project_dir / GENERATED_DIRNAME / "runtime_config.msgpack",
         library_roots=library_roots,
     )
