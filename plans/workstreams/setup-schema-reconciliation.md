@@ -1,7 +1,8 @@
 # Setup: schema reconciliation for user-edited config files
 
-Status: `planned` (not yet executed)
+Status: `strategy-b-shipped` — `chumicro_workspace.starter_drift` lands the show-the-diff path on `setup`; C/D/E remain future work, gated on signal from B.
 Filed: 2026-05-04
+Strategy B shipped: 2026-05-04
 Related: [Decision 0057](../decisions/0057-two-file-config.md) — the two-file workspace config leaves `workspace.yml` and `projects/<name>/config.toml` as user-edited files materialized from a starter; this workstream covers what happens when the starter gains new schema entries after the user has already materialized + edited.
 
 ## Goal
@@ -89,12 +90,27 @@ Defer D and E until B's signal says they're worth it.
 
 ## Execution checklist (when picked up)
 
-1. Implement strategy B — `compute_missing_top_level_sections` + wiring into `materialize_*`.
-2. Add tests.
-3. Update docs.
-4. Ship.
-5. Use for ~a release cycle to gather signal on whether C earns its keep.
-6. If C is warranted, design the comment-preservation strategy + ship.
+1. ~~Implement strategy B — `compute_missing_top_level_sections` + wiring into `materialize_*`.~~  Shipped 2026-05-04 as `chumicro_workspace.starter_drift`.  Two public functions:
+    * `collect_missing_starter_paths(*, workspace_root)` returns dotted paths the user is missing (recursive, so addition-to-existing-section also surfaces, not just whole new top-level sections).
+    * `print_starter_drift_report(workspace_root, *, stream=None)` prints the report and returns the count.
+
+   Wired in two places:
+    * `chumicro_workspace.cli._cmd_setup` (workspace-template-derived workspaces — runs at the tail of every `chumicro-workspace setup`).
+    * `scripts/generate_config_files.py` (mono-repo's own `python scripts/run.py setup`).
+
+   Source resolution mirrors `materialize_templates` + `materialize_workbench_starters` precedence: `<workspace_root>/_workspace_template/workspace.yml` when present, else `read_workspace_yml_starter()`.
+2. ~~Add tests.~~  Shipped — `workbench/workspace/tests/test_starter_drift.py` covers diff semantics (top-level addition, nested addition, dotted-path output, user-extras-not-flagged, scalar-blocks-recursion, malformed-YAML fail-soft, no-override fallback) and the print path (no-drift silence, single-vs-multiple pluralisation, source-label correctness).  Module is at 100% line + branch coverage.
+3. ~~Update docs.~~ — workstream marked `strategy-b-shipped`; setup-walkthrough docs untouched (the new output is self-explanatory and only fires when there's drift, which happens once per starter change).
+4. ~~Ship.~~  Done.
+5. **(Pending)** Use for ~a release cycle to gather signal on whether C earns its keep.
+6. **(Pending)** If C is warranted, design the comment-preservation strategy + ship.
+
+### Implementation deviations from the original plan
+
+- Module name `starter_drift` (not `starter_diff`) — "drift" reads as a state (the user's file has drifted), "diff" reads as an operation; the public verb is `collect_missing_*` so the operation is named at the function, the module names the state being checked.
+- Output is a dotted-path list, not a YAML snippet — open question 1 picked dotted-path because (a) the recursive walker naturally produces it, (b) the actionable next step is "go look at the named field in the starter file", which a path locates faster than a snippet that may not match the user's existing structure.
+- Wired to fire at the tail of `setup` (not from inside `materialize_*` as the original sketch had it) — the `materialize_*` functions stay a pure shape, and `setup` orchestrates the side-effect.  Keeps the diff-vs-materialise concerns separable for the C/D/E follow-ups.
+- Per-project `config.toml` drift (open question 3) is still out of scope; only `workspace.yml` is reconciled in this slice.
 
 ## Why this is a separate workstream from two-file-config-simplification
 

@@ -120,6 +120,10 @@ from chumicro_workspace.pipeline import (
     build_runtime_config,
     compose_runtime_config,
 )
+from chumicro_workspace.starter_drift import (
+    collect_missing_starter_paths,
+    print_starter_drift_report,
+)
 from chumicro_workspace.workspace_yml_starter import (
     read_workspace_yml_starter,
 )
@@ -150,6 +154,7 @@ __all__ = [
     "build_active_py",
     "build_runtime_config",
     "build_search_paths",
+    "collect_missing_starter_paths",
     "compose_runtime_config",
     "derive_firmware_url",
     "detect_board_state",
@@ -168,6 +173,7 @@ __all__ = [
     "load_workspace_runtime_payload",
     "merge_configs",
     "micropython_board_for_machine",
+    "print_starter_drift_report",
     "read_deploy_targets",
     "read_devices_yml_starter",
     "read_library_sources",

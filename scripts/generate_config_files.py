@@ -39,6 +39,7 @@ gitignored guarantee, no marker, no resolver.
 
 from __future__ import annotations
 
+from chumicro_workspace.starter_drift import print_starter_drift_report
 from chumicro_workspace.template_apply import (
     ApplyAction,
     materialize_templates,
@@ -82,6 +83,13 @@ def generate_config_files() -> int:
             "(probes hardware identity + fills in defaults on first "
             "registration).",
         )
+
+    # Schema-drift surface: when the user's ``workspace.yml`` was
+    # materialised before a recent starter update, list the fields
+    # the upstream starter has gained.  No-op when the user's file
+    # already covers the starter's schema.  See workstream
+    # ``plans/workstreams/setup-schema-reconciliation.md``.
+    print_starter_drift_report(ROOT)
     return 0
 
 
