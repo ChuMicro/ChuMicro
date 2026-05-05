@@ -30,7 +30,7 @@ DEFAULT_BAUDRATE = 115200
 #: this is the production-shaped path and matches how a real deploy
 #: behaves on the device.  ``"ram"`` is opt-in for fast iteration on
 #: single-library unit-style tests (maps to ``mount`` on MicroPython /
-#: inline-exec on CircuitPython).  See Decision 0047.
+#: inline-exec on CircuitPython).
 DEFAULT_DEPLOY_MODE = "flash"
 
 #: On-device directory where deployed library files land by default.

@@ -13,7 +13,6 @@ Two execution paths:
   via the CLI.  The serial port is closed before these calls and
   reopened on the next ``execute()``.
 
-See Decision 0027 for the full transport protocol.
 """
 
 from __future__ import annotations
@@ -302,12 +301,11 @@ class MicropythonTransport:
         self._staging_path: Path | None = None
         self._serial: Any = None
         self._mounted: bool = False
-        #: Decision 0044 — selecting :class:`MicropythonTransport`
-        #: means the deployment target is MicroPython, so files marked
-        #: for another runtime via ``__chumicro_runtimes__`` are
-        #: filtered out of the staging tree.  Sub-runtime markers
-        #: (``micropython_esp32`` / ``micropython_rp2``) fold into
-        #: ``"micropython"`` per Decision 0037.
+        #: Selecting :class:`MicropythonTransport` means the deployment
+        #: target is MicroPython, so files marked for another runtime
+        #: via ``__chumicro_runtimes__`` are filtered out of the staging
+        #: tree.  Sub-runtime markers (``micropython_esp32`` /
+        #: ``micropython_rp2``) fold into ``"micropython"``.
         self._target_runtime: str = "micropython"
 
     def connect(self) -> None:
@@ -351,7 +349,7 @@ class MicropythonTransport:
             extra_files: Non-Python files to land at named device paths
                 (typically ``{"/runtime_config.msgpack": <bytes>}``) so
                 test code can call ``chumicro_config.load_runtime_config()``
-                instead of importing ``_test_creds`` (Decision 0056).
+                instead of importing ``_test_creds``.
                 Both ``copy`` and ``mount`` modes support this — the
                 staging-tree write below lands the bytes wherever the
                 mode-specific transfer step picks them up from.
@@ -397,11 +395,11 @@ class MicropythonTransport:
                 destination.write_bytes(module_path.read_bytes())
 
         # Land binary extra_files at their declared device paths inside
-        # the staging tree (Decision 0056).  Copy mode rsync's the
-        # whole tree to flash; mount mode mounts the tree as the device
-        # filesystem.  Either way, the file appears at the requested
-        # device path.  Leading slash stripped to make the device-path
-        # → staging-path translation reversible.
+        # the staging tree.  Copy mode rsync's the whole tree to flash;
+        # mount mode mounts the tree as the device filesystem.  Either
+        # way, the file appears at the requested device path.  Leading
+        # slash stripped to make the device-path → staging-path
+        # translation reversible.
         if extra_files:
             for device_path, content in extra_files.items():
                 relative = device_path.lstrip("/")
@@ -686,9 +684,7 @@ class MicropythonTransport:
 
         Mount-mode (RAM) deploys return an empty list — mount mode
         doesn't write to flash, so there's nothing persistent to
-        diff between deploys.  See ``plans/next-up.md`` "Replace
-        multi-project staging with scoped diff-deploy" for the design
-        rationale.
+        diff between deploys.
 
         Raises :class:`MicropythonTransportError` on raw-REPL failure
         — :meth:`Deployer.deploy_diff` translates this to "skip the
@@ -845,10 +841,9 @@ class MicropythonTransport:
         deploy of the requests stack triples in size from CPython
         3.14 .pyc files alone.
 
-        Decision 0044 — also drops ``.py`` files whose
-        ``__chumicro_runtimes__`` marker excludes MicroPython, so a
-        wrong-runtime adapter (e.g. ``cp.py``) never lands on the MP
-        device.
+        Also drops ``.py`` files whose ``__chumicro_runtimes__`` marker
+        excludes MicroPython, so a wrong-runtime adapter (e.g. ``cp.py``)
+        never lands on the MP device.
 
         Args:
             source: Source directory to copy from (e.g. a ``src/`` dir).

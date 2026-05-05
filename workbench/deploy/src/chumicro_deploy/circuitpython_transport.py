@@ -14,7 +14,6 @@ Raw REPL protocol:
 3. Send code bytes, terminated with Ctrl-D.
 4. Response: ``OK<stdout>\\x04<stderr>\\x04>``.
 
-See Decision 0027 and Decision 0028 for the full transport protocol.
 """
 
 from __future__ import annotations
@@ -333,9 +332,8 @@ def _walk_package_sources(
     every submodule so RAM-mode registration can resolve relative
     imports during the init block.
 
-    Decision 0044 — when *target_runtime* is set, ``.py`` files
-    carrying a ``__chumicro_runtimes__`` marker that doesn't match are
-    skipped.
+    When *target_runtime* is set, ``.py`` files carrying a
+    ``__chumicro_runtimes__`` marker that doesn't match are skipped.
     """
     if not source_directory.is_dir():
         return []
@@ -545,11 +543,11 @@ class CircuitpythonTransport:
         #: separate from ``_staged_sources`` so the deploy path does
         #: not have to pretend it staged modules it did not collect.
         self._staged: bool = False
-        #: Decision 0044 — the transport's identity *is* its target
-        #: runtime.  Selecting :class:`CircuitpythonTransport` means
-        #: the deployment target is CircuitPython, so files marked for
-        #: another runtime via ``__chumicro_runtimes__`` are filtered
-        #: out of every staging path (RAM mode + flash mode).
+        #: The transport's identity *is* its target runtime.  Selecting
+        #: :class:`CircuitpythonTransport` means the deployment target
+        #: is CircuitPython, so files marked for another runtime via
+        #: ``__chumicro_runtimes__`` are filtered out of every staging
+        #: path (RAM mode + flash mode).
         self._target_runtime: str = "circuitpython"
 
     @staticmethod
@@ -615,8 +613,8 @@ class CircuitpythonTransport:
         sees the first file change, schedules a soft-reboot, the
         USB-CDC link re-enumerates, and the next host-side ``write()``
         may land in uninterruptible kernel I/O wait — the "wedged
-        rsync" failure mode documented in `plans/learnings.md`
-        ("rsync to CIRCUITPY can hang in uninterruptible kernel I/O").
+        rsync" failure mode (rsync to CIRCUITPY can hang in
+        uninterruptible kernel I/O).
 
         ``supervisor.runtime.autoreload`` is process-lifetime state on
         the CP VM, so any soft-reboot resets it back to default-on —
@@ -671,7 +669,7 @@ class CircuitpythonTransport:
             extra_files: Non-Python files to land at named device paths
                 — typically ``{"/runtime_config.msgpack": <bytes>}`` so
                 test code can call ``chumicro_config.load_runtime_config()``
-                instead of importing ``_test_creds`` (Decision 0056).
+                instead of importing ``_test_creds``.
                 **RAM mode raises** :class:`UnsupportedExtraFilesError`
                 because there's no writable device-side filesystem to
                 land bytes on; flash mode writes each file to the
@@ -825,8 +823,9 @@ class CircuitpythonTransport:
         Normal staging / deploy paths leave it ``False``: the rsync
         that follows is itself a write probe, and skipping the
         ``.chu-probe`` removes one host-side drive write before rsync
-        starts (each write before rsync is a wedge-risk vector — see
-        plans/learnings.md "rsync to CIRCUITPY can hang...").  When
+        starts (each write before rsync is a wedge-risk vector —
+        rsync to CIRCUITPY can hang in uninterruptible kernel I/O on
+        macOS when the drive is wedged).  When
         the drive is genuinely unwritable, the rsync subprocess
         surfaces the OS error in its stderr and ``flash_drive.rsync``
         wraps it as :class:`FlashDriveError`.
@@ -867,16 +866,16 @@ class CircuitpythonTransport:
 
         Library and harness packages go under ``lib/``; test files and
         sibling extra modules go at the root.  Binary ``extra_files``
-        (Decision 0056) land at their declared device paths inside the
-        staging tree — leading slashes stripped, parents created on
-        demand.  Building locally is reliable (no FAT32 quirks) —
-        only the rsync that follows has to deal with the device
-        drive.  macOS extended attributes are stripped at the end so
-        ``._`` resource forks don't end up on the FAT32 volume.
+        land at their declared device paths inside the staging tree —
+        leading slashes stripped, parents created on demand.  Building
+        locally is reliable (no FAT32 quirks) — only the rsync that
+        follows has to deal with the device drive.  macOS extended
+        attributes are stripped at the end so ``._`` resource forks
+        don't end up on the FAT32 volume.
 
         ``__chumicro_runtimes__``-marked files for a different runtime
-        are dropped at this stage (Decision 0044) — the transport's
-        own ``_target_runtime`` flows into ``merge_packages`` so the
+        are dropped at this stage — the transport's own
+        ``_target_runtime`` flows into ``merge_packages`` so the
         wrong-runtime adapters never reach flash.
         """
         lib_staging = staging_path / "lib"
@@ -1006,8 +1005,8 @@ class CircuitpythonTransport:
                 verified, or the rsync subprocess fails / times out.
         """
         # Order is load-bearing.  Enter raw REPL FIRST + disable
-        # autoreload BEFORE any host-side drive write — see
-        # `plans/learnings.md` "rsync to CIRCUITPY can hang...".
+        # autoreload BEFORE any host-side drive write — otherwise
+        # rsync to CIRCUITPY can hang in uninterruptible kernel I/O.
         # ``_enter_raw_repl`` is idempotent (resends Ctrl-C / Ctrl-A)
         # so the second call from ``deploy_files`` after ``connect()``
         # is safe; ``_stage_to_flash`` benefits because its caller
@@ -1118,7 +1117,7 @@ class CircuitpythonTransport:
         Thin adaptor around :func:`_walk_package_sources` that keeps
         the transport's mutable state contained to this one method.
         Files marked for a runtime other than CircuitPython via
-        ``__chumicro_runtimes__`` are filtered out (Decision 0044).
+        ``__chumicro_runtimes__`` are filtered out.
         """
         assert self._staged_sources is not None
         self._staged_sources.extend(
@@ -1484,8 +1483,8 @@ class CircuitpythonTransport:
         on purpose: rsync's delete semantics are "remove anything in
         DEST not in SRC" — wrong shape for "delete these specific
         files."  Unlink also dodges FAT32's data-write reliability
-        concerns (Decision 0033) by only touching directory entries,
-        no payload bytes.  The diff layer recomputes the stale set
+        concerns by only touching directory entries, no payload
+        bytes.  The diff layer recomputes the stale set
         on every deploy, so a swallowed error here just retries
         next time.
         """

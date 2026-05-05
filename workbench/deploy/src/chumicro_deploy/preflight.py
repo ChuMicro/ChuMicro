@@ -4,10 +4,9 @@ Currently checks for libraries flagged as ``requires_flash`` in their
 ``pyproject.toml``'s ``[tool.chumicro]`` block.  When the user
 requested RAM mode but the deploy graph contains a flagged library,
 the deployer auto-switches to flash mode for the run and prints a
-human-readable explanation.
-
-See [Decision 0047](../../../plans/decisions/0047-deploy-mode-flash-default.md)
-for the design rationale.
+human-readable explanation — RAM-mode deploys exec each library's
+source inline and OOM on smaller boards once the deploy graph crosses
+a few hundred KB.
 
 Public API:
 

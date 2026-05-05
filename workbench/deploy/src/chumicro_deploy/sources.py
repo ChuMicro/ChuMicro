@@ -107,12 +107,12 @@ class DirectorySource:
         excluded_names: Filename / directory names to skip entirely
             (exact match, not glob).  Defaults to common artifacts
             (``__pycache__``, ``.DS_Store``, ``.git``, etc.).
-        target_runtime: Decision 0044 — when set
-            (``"circuitpython"`` / ``"micropython"`` / ``"cpython"``),
-            ``.py`` files carrying a ``__chumicro_runtimes__`` marker
-            are skipped if the marker doesn't include *target_runtime*.
-            ``None`` (the default) ships every file, matching the prior
-            unfiltered behavior.  Non-``.py`` files are unaffected.
+        target_runtime: When set (``"circuitpython"`` / ``"micropython"``
+            / ``"cpython"``), ``.py`` files carrying a
+            ``__chumicro_runtimes__`` marker are skipped if the marker
+            doesn't include *target_runtime*.  ``None`` (the default)
+            ships every file, matching the prior unfiltered behavior.
+            Non-``.py`` files are unaffected.
 
     Raises:
         NotADirectoryError: If *root* does not exist or is not a
@@ -210,11 +210,11 @@ class ImportGraphSource:
             ``/code.py``).
         resource_prefix: On-device prefix for every non-entrypoint
             module file (default ``/lib``).
-        target_runtime: Decision 0044 — when set
-            (``"circuitpython"`` / ``"micropython"`` / ``"cpython"``),
-            modules carrying a ``__chumicro_runtimes__`` marker for a
-            different runtime are dropped, and their imports are not
-            walked further.  ``None`` (the default) ships every
+        target_runtime: When set (``"circuitpython"`` / ``"micropython"``
+            / ``"cpython"``), modules carrying a ``__chumicro_runtimes__``
+            marker for a different runtime are dropped, and their
+            imports are not walked further.  ``None`` (the default)
+            ships every
             reachable module, matching the prior unfiltered behavior;
             this is the right setting when the runtime selector
             reaches both adapters at import time and you want the

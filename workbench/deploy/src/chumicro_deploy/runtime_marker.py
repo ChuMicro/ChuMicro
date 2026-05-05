@@ -1,16 +1,13 @@
 """Read ``__chumicro_runtimes__`` markers from library source files.
 
-Decision 0037 introduced a module-level marker that declares which
-runtimes a file is meant for::
+A module-level marker declares which runtimes a file is meant for::
 
     __chumicro_runtimes__ = ("circuitpython",)
 
-The bundle pipeline (``scripts/bundle_manager.py``) uses this marker to
-filter per-runtime ``.mpy`` bundles.  Decision 0044 extends the same
-filter to deploy paths (``DirectorySource`` / ``ImportGraphSource`` /
-the per-runtime transports), so wrong-runtime files no longer land on
-a board during ``chumicro_deploy`` / ``chumicro_workspace deploy`` /
-``pytest-device`` staging.
+The bundle pipeline uses this marker to filter per-runtime ``.mpy``
+bundles.  The same filter applies on deploy paths
+(``DirectorySource`` / ``ImportGraphSource`` / the per-runtime
+transports), so wrong-runtime files never land on a board.
 
 :func:`file_targets_runtime` accepts a single runtime name (concrete
 target) or a frozenset of runtimes (set-of-acceptable-targets — used by

@@ -20,8 +20,6 @@ call) — ``_register_stub`` and ``_populate_module`` are universal.
 Only the dynamic parts (module sources, entrypoint / test source,
 filter) are generated here.
 
-See Decision 0027 for the class-as-module pattern and CircuitPython
-constraints.
 """
 
 from __future__ import annotations

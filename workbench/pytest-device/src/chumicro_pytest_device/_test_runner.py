@@ -5,14 +5,9 @@ generation, transport construction, and the workspace-source
 discovery that staging depends on.  Orchestration (test selection,
 per-device loops, PR-summary rendering) lives in :mod:`plugin`.
 
-Migrated from ``scripts/device_testing.py`` (Decision 0032 §Rule 8)
-when the pytest plugin moved out of the chumicro mono-repo's
-``scripts/`` and into a publishable workbench package.
-
-The mono-repo-only ``ROOT`` constant was replaced with a
-``libraries_root`` parameter on :func:`resolve_library_source_dirs`
-so any pytest invocation can supply its own workspace layout via
-``pytest.Config.rootpath``.
+:func:`resolve_library_source_dirs` accepts a ``libraries_root``
+parameter so any pytest invocation can supply its own workspace
+layout via ``pytest.Config.rootpath``.
 """
 
 from __future__ import annotations
@@ -228,9 +223,9 @@ def resolve_effective_deploy_mode(
     1. CLI ``--chumicro-deploy-mode`` override (highest precedence).
     2. Per-device ``deploy_mode`` from ``devices.yml``.
     3. Global ``defaults.deploy_mode`` (folded into the entry by the loader).
-    4. ``DEFAULT_DEPLOY_MODE`` as the last-resort default (Decision 0047 —
-       flash is the production-shaped path; RAM mode is opt-in for
-       unit-style tests).
+    4. ``DEFAULT_DEPLOY_MODE`` as the last-resort default — flash is
+       the production-shaped path; RAM mode is opt-in for unit-style
+       tests.
     """
     return deploy_mode_override or device_entry.deploy_mode or DEFAULT_DEPLOY_MODE
 

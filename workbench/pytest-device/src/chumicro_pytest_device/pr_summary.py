@@ -282,7 +282,7 @@ def _device_summary_row(device: DeviceRunResult) -> list[str]:
 def _format_device_detail_section(device: DeviceRunResult) -> str:
     """Render the per-file or per-test detail section for one device.
 
-    Decision rule (preserved from the earlier bullet format):
+    Layout rule:
 
     - 0 files → no detail (device failed before running anything).
     - 1 file with test detail → per-test table.

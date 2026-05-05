@@ -1,7 +1,7 @@
 """Three-zone ``devices.yml`` reader/writer.
 
-Decision 0029 §9 partitions every field in a ``devices.yml`` device
-entry into three zones:
+Every field in a ``devices.yml`` device entry falls in one of three
+zones:
 
 * **user-owned** — workspace-identity stuff the user wrote by hand
   (``id``, ``description``, ``deploy_mode`` preference,
@@ -274,7 +274,7 @@ def add_device(
         firmware_version: Probed-always.  Dotted version string
             from ``sys.implementation.version``.  Captured at
             registration so future commands can read floor
-            compliance without re-probing (Decision 0039).
+            compliance without re-probing.
         set_default: When ``True`` (default) and ``defaults.<runtime>``
             is unset, also writes ``defaults.<runtime>: <device_id>``
             so the first registered board for a runtime becomes the
@@ -339,10 +339,9 @@ def update_device_address(
 
     Address is the canonical "moves around" field — macOS reassigns
     ``/dev/cu.usbmodem...`` numbers, and a board moved between ports
-    on the same hub looks like a fresh device unless we cache.  Per
-    Decision 0029 §4, identity follows ``hardware.uid``, not the
-    port; this updater is the silent-cache-refresh side of that
-    contract.
+    on the same hub looks like a fresh device unless we cache.
+    Identity follows ``hardware.uid``, not the port; this updater is
+    the silent-cache-refresh side of that contract.
 
     Raises:
         DeviceNotFoundError: No entry with that id.
@@ -364,7 +363,7 @@ def update_device_firmware_version(
     can be upgraded out of band (the user runs `install-firmware`,
     or flashes via a vendor tool), so a fresh probe just overwrites
     the cached value with no prompt.  Used by the ``add-device
-    --force`` re-probe path (Decision 0039).
+    --force`` re-probe path.
 
     Raises:
         DeviceNotFoundError: No entry with that id.

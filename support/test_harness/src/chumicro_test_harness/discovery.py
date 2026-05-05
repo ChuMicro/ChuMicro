@@ -180,9 +180,9 @@ def run_all(root_dir=".", libraries=None, isolate_per_file=True):
             :func:`os.system`.  Each subprocess starts with a clean
             heap, mirroring real-board behaviour where modules are
             frozen in flash and don't accumulate per-file in RAM.
-            Eliminates the order-dependent fragmentation /
-            memory-pressure interactions documented in
-            ``plans/next-up.md`` §"Heap-fragmentation test methodology".
+            Eliminates the order-dependent fragmentation and
+            memory-pressure interactions that surface when many test
+            files share one interpreter on a constrained runtime.
             When ``False``, runs every test file in this process — the
             legacy behaviour, useful when the caller needs to share
             state across files (rare).

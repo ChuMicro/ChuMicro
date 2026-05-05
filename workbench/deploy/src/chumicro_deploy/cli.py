@@ -209,9 +209,8 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
         return 2
 
     # Build the device first so we can derive the deploy-time runtime
-    # filter (Decision 0044): unless --target-runtime overrides, the
-    # filter is the device's configured runtime (--transport /
-    # --devices-file).
+    # filter: unless --target-runtime overrides, the filter is the
+    # device's configured runtime (--transport / --devices-file).
     device = _device_from_args(args)
     target_runtime = args.target_runtime or str(device.transport)
 
@@ -396,8 +395,8 @@ def build_parser() -> argparse.ArgumentParser:
             "Override which runtime's files are deployed.  Defaults to "
             "the device's configured runtime (--transport / "
             "--devices-file) — files marked for a different runtime "
-            "via __chumicro_runtimes__ are filtered out (Decision 0044).  "
-            "Set explicitly to override the auto-derived value."
+            "via __chumicro_runtimes__ are filtered out.  Set "
+            "explicitly to override the auto-derived value."
         ),
     )
     deploy_parser.add_argument(
