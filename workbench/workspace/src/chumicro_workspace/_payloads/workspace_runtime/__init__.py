@@ -13,10 +13,10 @@ the host-side deploy that names the active project), imports the
 matching ``projects.<name>.app`` module, and calls its
 ``run()`` function.
 
-Decision 0029 §3 pins down the contract: the shim is stable, the
-project's ``app.py`` is the user-facing edit surface, and
-``active.py`` is the deploy-time selector that lets a single
-device hold multiple project payloads but boot only one.
+The contract: the shim is stable, the project's ``app.py`` is the
+user-facing edit surface, and ``active.py`` is the deploy-time
+selector that lets a single device hold multiple project payloads
+but boot only one.
 
 Cross-runtime: this module runs on CircuitPython, MicroPython,
 and CPython.  No f-strings on hot paths is overkill (CP / MP

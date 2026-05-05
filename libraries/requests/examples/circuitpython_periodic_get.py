@@ -23,7 +23,7 @@ Deploying
 
 Recommended (workspace-managed)::
 
-    chumicro-workspace deploy --thing periodic_get
+    chumicro-workspace deploy periodic_get
 
 Raw (single-file copy)::
 

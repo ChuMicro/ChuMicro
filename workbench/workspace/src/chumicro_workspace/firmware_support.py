@@ -1,10 +1,9 @@
 """Firmware-version floor check for the workspace tool.
 
 A board that's reachable over serial REPL can still be running
-firmware *below* the workspace tool's tested matrix — see
-[Decision 0039](../../../plans/decisions/0039-firmware-version-floor.md)
-for the rationale.  This module owns the floor constants, parses
-the dotted version string the probe returns, and classifies a
+firmware *below* the workspace tool's tested matrix.  This module
+owns the floor constants, parses the dotted version string the
+probe returns, and classifies a
 :class:`chumicro_deploy.DeviceImplementation` against the floor.
 
 The classification is consumed by ``_cmd_add_device`` to print a
@@ -13,8 +12,8 @@ consumed by future commands (the bootstrap wizard) — both go
 through the same :func:`check_firmware_supported` + :func:`explain`
 pair so the policy stays in one place.
 
-Strictness is warn-not-block per Decision 0039.  ``add-device``
-proceeds on every status; the warning is informational.
+Strictness is warn-not-block.  ``add-device`` proceeds on every
+status; the warning is informational.
 """
 
 from dataclasses import dataclass
@@ -29,7 +28,7 @@ MIN_MICROPYTHON_VERSION: tuple[int, ...] = (1, 27, 0)
 """Minimum MicroPython version the workspace tool tests against.
 
 Bumping this is a non-breaking workspace-tool change — the floor
-moves forward as the test matrix moves forward (Decision 0039)."""
+moves forward as the test matrix moves forward."""
 
 MIN_CIRCUITPYTHON_VERSION: tuple[int, ...] = (10, 1, 0)
 """Minimum CircuitPython version the workspace tool tests against."""

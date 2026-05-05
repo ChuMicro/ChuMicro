@@ -1,20 +1,18 @@
 """Three-zone classification for workspace files.
 
-Generalizes Decision 0029 §9's `devices.yml` ownership model to the
-whole workspace tree.  Every file falls into one of three zones:
+Every file under the workspace tree falls into one of three zones:
 
 * **Tool-owned** — `run.py`, `AGENTS.md`, `CONTRIBUTING.md`,
   `pyproject.toml`, `projects/_template/`, `_workspace_template/`
   (template-source files used to materialize user-edited config
-  like `workspace.yml` per Decision 0038 §5 and Decision 0057),
-  `examples/` (Slice 5 reading-material demos shipped from the
-  canonical template), and the agent-skill documents under
+  like `workspace.yml`), `examples/` (reading-material demos shipped
+  from the canonical template), and the agent-skill documents under
   `.github/skills/`.  `init` writes them; `update` rewrites them so
   newer template releases flow in.
 
 * **User-owned** — `projects/<each-real-project>/`, `devices.yml`,
-  `shared/`, `packages/`, `workspace.yml` (gitignored under
-  Decision 0057).  `init` writes the starter version (only if
+  `shared/`, `packages/`, `workspace.yml` (gitignored — carries the
+  user's credentials).  `init` writes the starter version (only if
   absent); `update` never touches them.
 
 * **Init-only** — `.gitignore`, `README.md`.  `init` writes if

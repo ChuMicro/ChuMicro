@@ -16,10 +16,10 @@ defaults:
   micropython: null
   circuitpython: null
   # Deploy mode for all devices: "flash" (production-shaped, default) or
-  # "ram" (no flash wear; only useful for unit-style tests).  Decision 0047 —
-  # ram mode isn't a reflection of reality deployments, so flash is the
-  # default for projects, examples, and most functional tests.  Override
-  # per-device in the entries below, or per-deploy with `--deploy-mode ram`.
+  # "ram" (no flash wear; only useful for unit-style tests).  Ram mode
+  # isn't a reflection of real deployments, so flash is the default for
+  # projects, examples, and most functional tests.  Override per-device
+  # in the entries below, or per-deploy with `--deploy-mode ram`.
   deploy_mode: flash
   # Which runtimes IDE play buttons target: "micropython", "circuitpython",
   # or "both".  Drives `chumicro-pytest-device`'s IDE-targeting collection

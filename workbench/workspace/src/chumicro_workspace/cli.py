@@ -7,9 +7,7 @@ repos vendor a tiny ``run.py`` shim that simply calls
 (``python run.py deploy back-porch``, ``python run.py repl``, etc.)
 routes through this dispatcher.
 
-The full command set is documented in
-``plans/workstreams/project-workspace.md`` Phase 4a.  Commands are
-shipped at three depths:
+Commands are shipped at three depths:
 
 * **Implemented** — full behaviour wired to the underlying library
   (``deploy``, ``probe``, ``devices``, ``repl``, ``new``,
@@ -245,9 +243,9 @@ def _cmd_setup(args: argparse.Namespace) -> int:
     """Install workspace dependencies and materialize template files.
 
     Runs ``pip install -e .`` in the workspace root when a
-    ``pyproject.toml`` is present, then walks ``_workspace_template/`` and
-    creates any missing files at the workspace root (Decision 0038
-    §5).  Idempotent — re-running is safe.
+    ``pyproject.toml`` is present, then walks ``_workspace_template/``
+    and creates any missing files at the workspace root.  Idempotent —
+    re-running is safe.
     """
     workspace = _resolve_workspace(args)
     pyproject = workspace.root / "pyproject.toml"
@@ -287,9 +285,7 @@ def _cmd_setup(args: argparse.Namespace) -> int:
     # `devices.yml` / `workspace.yml` only when the
     # `_workspace_template/` walker didn't.  Canonical content lives
     # in the workbench package's `_payloads/` so the same bytes ship
-    # to the mono-repo and every workspace-template-derived workspace.
-    # See unification workstream
-    # `plans/workstreams/scripts-workbench-config-unification.md`.
+    # to every workspace-template-derived workspace.
     workbench_report = materialize_workbench_starters(workspace.root)
     workbench_new = workbench_report.count(ApplyAction.MATERIALIZED)
     if workbench_new:
@@ -556,10 +552,9 @@ def _cmd_new(args: argparse.Namespace) -> int:
     of ``projects/_template/``.
 
     Library mode (``--library``): creates a chumicro-style library
-    tree under ``libraries/<name>/`` (Phase 4 of the workspace-
-    ecosystem workstream — same scaffolder the chumicro mono-repo
-    uses, lifted into the workbench package).  ``--into <path>``
-    overrides the parent directory.
+    tree under ``libraries/<name>/`` — same scaffolder chumicro
+    libraries themselves use.  ``--into <path>`` overrides the
+    parent directory.
 
     Each path segment is validated against the Python identifier
     grammar (``_validate_project_name``).
@@ -868,9 +863,9 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
     candidates.
 
     When invoked with no positional name and the workspace contains
-    exactly one project, that project is deployed by default — covers the
-    "I only have one app" beginner case (Decision 0029).  Zero projects
-    or multiple projects both require an explicit positional.
+    exactly one project, that project is deployed by default — covers
+    the "I only have one app" beginner case.  Zero projects or
+    multiple projects both require an explicit positional.
 
     Multi-project deploys (``deploy <a> <b> <c>``) are not supported —
     Slice 7 of the nested-projects-and-examples workstream retired the
@@ -930,8 +925,8 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
                 print(
                     f"deploy: --- {device.transport}@{device.address} ---",
                 )
-            # Decision 0044 — every staging path filters out files
-            # marked ``__chumicro_runtimes__`` for a different runtime.
+            # Every staging path filters out files marked
+            # ``__chumicro_runtimes__`` for a different runtime.
             # ``--target-runtime`` overrides; otherwise the device's
             # configured runtime drives the filter.
             target_runtime = args.target_runtime or str(device.transport)
@@ -1353,8 +1348,7 @@ def _cmd_demo(args: argparse.Namespace) -> int:
     The payload is a runtime-agnostic print loop (no ``board`` /
     ``machine`` imports) so the demo works on any supported runtime
     + board.  An LED-blink variant is a future enhancement once the
-    LED-pin abstraction lands; see Decision 0029 for the workspace
-    LED contract sketch.
+    LED-pin abstraction lands.
     """
     workspace = _resolve_workspace(args)
     device = _resolve_device(workspace, args)
@@ -1502,8 +1496,8 @@ def _cmd_bootstrap(  # noqa: C901, PLR0912 — wizard branches stay flat for rea
     2. Probe with runtime auto-inference (Step 3 of the
        workstream).  Failure prints the same diagnosis hints
        ``add-device`` does and exits 1.
-    3. Display detected runtime + version + machine.  Firmware-
-       support floor (Decision 0039) is checked; OLD / UNKNOWN /
+    3. Display detected runtime + version + machine.  The
+       firmware-support floor is checked; OLD / UNKNOWN /
        UNPARSEABLE statuses print a warning but don't abort.
     4. Pick a device id.  ``--device-id <id>`` skips the prompt.
        The default suggestion is derived from the probed machine
@@ -1669,16 +1663,14 @@ def _cmd_preflight(args: argparse.Namespace) -> int:
     Composition of :func:`_cmd_lint` then :func:`_cmd_test` — same
     workspace, same ``quality:`` knobs from ``workspace.yml``
     (``lint.enabled`` / ``lint.select`` / ``coverage_threshold``),
-    no extra args forwarded.  Mirrors the chumicro mono-repo's
-    ``preflight`` shape for "all the fast static checks I'd want
-    before pushing" — without CI, this is the gate the user runs
-    by hand.
+    no extra args forwarded.  Aimed at "all the fast static checks
+    I'd want before pushing" — without CI, this is the gate the
+    user runs by hand.
 
     Returns nonzero on the first failing step (short-circuit) so
     a lint failure doesn't cost a test run.  Both steps respect
-    their disable knobs (``lint.enabled = false`` skips lint silently;
-    no equivalent disable for tests today — matches the chumicro
-    monorepo's preflight behaviour).
+    their disable knobs (``lint.enabled = false`` skips lint
+    silently; no equivalent disable for tests today).
     """
     workspace = _resolve_workspace(args)
     print(f"preflight: {workspace.root}")
@@ -1711,10 +1703,10 @@ def _cmd_dump_config(args: argparse.Namespace) -> int:
     """Print the merged runtime config a project would receive on deploy.
 
     Runs the deploy-time pipeline up to (but not through) the msgpack
-    write — workspace.yml defaults + project config (Decision 0057's
-    2-layer deep-merge) — then pretty-prints the result.  Lets users
-    see exactly what their on-device ``chumicro_config.runtime`` will
-    read without actually deploying.
+    write — ``workspace.yml`` defaults + project config deep-merged —
+    then pretty-prints the result.  Lets users see exactly what their
+    on-device ``chumicro_config.runtime`` will read without actually
+    deploying.
 
     Useful for: debugging which layer a key landed in after the merge,
     inspecting the shape before adding consumers on the device,
@@ -1755,9 +1747,9 @@ def _cmd_lint(args: argparse.Namespace) -> int:
 
     Picks up the workspace's ``[tool.ruff]`` config from
     ``pyproject.toml`` automatically — the canonical workspace
-    template ships a ruff config matching the chumicro mono-repo's
-    tone.  Extra args after ``--`` forward to ruff (e.g.
-    ``--fix``, ``--select`` overrides).
+    template ships a ruff config that matches chumicro's own tone.
+    Extra args after ``--`` forward to ruff (e.g. ``--fix``,
+    ``--select`` overrides).
 
     No-op (exit 0 with a hint) when ``ruff`` isn't installed —
     keeps the command discoverable in workspaces that haven't
@@ -2088,8 +2080,7 @@ def _cmd_install_libraries(args: argparse.Namespace) -> int:
 def _stub(slice_or_phase: str) -> int:
     """Emit a uniform "not implemented yet" message and return exit-code 2."""
     print(
-        f"not implemented yet — landing in {slice_or_phase}.  "
-        "See plans/workstreams/project-workspace.md.",
+        f"not implemented yet — landing in {slice_or_phase}.",
         file=sys.stderr,
     )
     return 2
@@ -2102,10 +2093,9 @@ def _cmd_add_device(args: argparse.Namespace) -> int:
     + ``hardware.uid`` + ``hardware.machine`` come from
     :func:`chumicro_deploy.probe_device`; ``address`` rides through
     as-is.  When ``--runtime`` is omitted, the runtime is inferred
-    by trying every candidate transport in turn (Decision 0039 +
-    Step 3 of the beginner-onramp workstream) — the user can plug a
-    fresh board in and register it without knowing what firmware it
-    runs.  Re-running with the same id triggers a re-probe and is
+    by trying every candidate transport in turn — the user can plug
+    a fresh board in and register it without knowing what firmware
+    it runs.  Re-running with the same id triggers a re-probe and is
     blocked unless ``--force`` is passed (the typical second
     invocation is "I swapped boards on this id" — make the user
     confirm).
@@ -2310,13 +2300,13 @@ def _cmd_use(_args: argparse.Namespace) -> int:
 
 def _cmd_sync(_args: argparse.Namespace) -> int:
     """Re-apply the workspace template (superseded by `update`)."""
-    return _stub("superseded by `chumicro-workspace update` (Decision 0038)")
+    return _stub("superseded by `chumicro-workspace update`")
 
 
 def _cmd_upgrade(_args: argparse.Namespace) -> int:
     """Pin to a newer workspace template version (superseded by `update --ref`)."""
     return _stub(
-        "superseded by `chumicro-workspace update --ref <ref>` (Decision 0038)",
+        "superseded by `chumicro-workspace update --ref <ref>`",
     )
 
 
@@ -2567,9 +2557,8 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Ship the project under /lib/projects/<...>/<name>/ + write a "
             "fixed code.py shim + active.py + workspace_runtime "
-            "payload (Decision 0029 §3).  app.py must export run().  "
-            "Combines with --import-graph to also ship libraries the "
-            "project imports."
+            "payload.  app.py must export run().  Combines with "
+            "--import-graph to also ship libraries the project imports."
         ),
     )
     deploy_parser.add_argument(
@@ -2642,10 +2631,10 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("circuitpython", "micropython"),
         default=None,
         help=(
-            "Override the deploy-time runtime filter (Decision 0044).  "
-            "Defaults to the device's configured runtime — files marked "
-            "for a different runtime via __chumicro_runtimes__ are "
-            "filtered out.  Set this to override the auto-derived value."
+            "Override the deploy-time runtime filter.  Defaults to "
+            "the device's configured runtime — files marked for a "
+            "different runtime via __chumicro_runtimes__ are filtered "
+            "out.  Set this to override the auto-derived value."
         ),
     )
     deploy_parser.set_defaults(func=_cmd_deploy)
@@ -2790,9 +2779,9 @@ def build_parser() -> argparse.ArgumentParser:
     preflight_parser = subparsers.add_parser(
         "preflight",
         help=(
-            "Run lint + tests as a single sanity gate (chumicro mono-repo's "
-            "preflight shape, scaled down for workspaces without CI).  "
-            "Respects workspace.yml's `quality:` knobs."
+            "Run lint + tests as a single sanity gate (the same shape "
+            "chumicro itself uses, scaled down for workspaces without "
+            "CI).  Respects workspace.yml's `quality:` knobs."
         ),
     )
     _add_workspace_arg(preflight_parser)
@@ -2803,8 +2792,8 @@ def build_parser() -> argparse.ArgumentParser:
         "dump-config",
         help=(
             "Print the merged runtime config a project would receive on "
-            "deploy (workspace.yml defaults + per-project config; "
-            "Decision 0057's 2-layer pipeline), without actually deploying."
+            "deploy (workspace.yml defaults + per-project config "
+            "deep-merged), without actually deploying."
         ),
     )
     _add_workspace_arg(dump_config_parser)

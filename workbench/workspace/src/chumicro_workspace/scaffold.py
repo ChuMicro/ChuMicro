@@ -1,15 +1,11 @@
 """Library scaffolder — creates a chumicro-style library tree.
 
-Phase 4 of the workspace-ecosystem workstream: lifts the library-
-scaffolding logic out of ``scripts/new_library_scaffold.py``
-(mono-repo-only contributor tool) into the workbench package so
-external users developing their own chumicro-style libraries get
-the same starter layout the chumicro mono-repo uses.
-
-The shipped templates live alongside this module under
+External users developing their own chumicro-style libraries get
+the same starter layout chumicro libraries themselves use.  The
+shipped templates live alongside this module under
 ``_payloads/library_template/`` and travel with the wheel.
 
-The output layout matches the chumicro convention::
+The output layout::
 
     libraries/<name>/
     ├── VERSION
@@ -32,10 +28,8 @@ The output layout matches the chumicro convention::
 
 The CLI exposes this as ``python run.py new --library <name>``
 (see :func:`chumicro_workspace.cli._cmd_new`).  Callers that need
-finer control (the chumicro mono-repo's
-``scripts/new_library_scaffold.py`` thin wrapper) construct an
-explicit target directory and call :func:`scaffold_library`
-directly.
+finer control construct an explicit target directory and call
+:func:`scaffold_library` directly.
 """
 
 from __future__ import annotations
@@ -113,8 +107,8 @@ def scaffold_library(
             point) and source URL pointing at ``workbench/<name>/``
             instead of ``libraries/<name>/``.  All other
             scaffolded files (src/tests/docs/examples/README/mkdocs)
-            are identical between kinds — the directory shape that
-            chumicro mono-repo uses for both.
+            are identical between kinds — same directory shape for
+            both.
 
     Returns:
         Path to the created library directory.
@@ -207,12 +201,11 @@ def scaffold_library(
     # AGENTS.md non-negotiables (CircuitPython RAM-mode `exec()`s
     # library modules without a `__package__` so leading-dot
     # relatives break at deploy).  Eager imports are correct for
-    # small-surface libraries (lazy-loading research's Tier A);
-    # if the library grows per-runtime adapters, push the lazy
-    # selection into a `_select_<project>` function rather than a
-    # module-level PEP 562 `__getattr__` (the deploy harness's
-    # CircuitPython RAM-mode wrapper bypasses PEP 562 — see
-    # plans/learnings.md).
+    # small-surface libraries; if the library grows per-runtime
+    # adapters, push the lazy selection into a `_select_<project>`
+    # function rather than a module-level PEP 562 `__getattr__`
+    # (the deploy harness's CircuitPython RAM-mode wrapper bypasses
+    # PEP 562).
     (library_dir / "src" / import_name / "__init__.py").write_text(
         f'"""Public exports for the chumicro-{name} package."""\n'
         f"\n"

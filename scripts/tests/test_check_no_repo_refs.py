@@ -1,4 +1,4 @@
-"""Tests for check_no_repo_refs.py — CHU002 mono-repo-reference rule."""
+"""Tests for check_no_repo_refs.py — CHU006 mono-repo-reference rule."""
 
 from __future__ import annotations
 
@@ -22,20 +22,24 @@ class TestIsSuppressed:
         assert _is_suppressed("Decision 0042 ref") is False
 
     def test_specific_suppression(self) -> None:
-        """``# noqa: CHU002`` suppresses CHU002."""
-        assert _is_suppressed("Decision 0042 ref  # noqa: CHU002") is True
+        """``# noqa: CHU006`` suppresses CHU006."""
+        assert _is_suppressed("Decision 0042 ref  # noqa: CHU006") is True
 
     def test_bare_noqa(self) -> None:
         """Bare ``# noqa`` suppresses every rule on the line."""
         assert _is_suppressed("Decision 0042 ref  # noqa") is True
 
     def test_unrelated_code_not_matched(self) -> None:
-        """``# noqa: CHU001`` does not suppress CHU002."""
+        """``# noqa: CHU001`` does not suppress CHU006."""
         assert _is_suppressed("Decision 0042 ref  # noqa: CHU001") is False
 
+    def test_chu002_does_not_suppress(self) -> None:
+        """``# noqa: CHU002`` (the whitespace rule's code) does not suppress CHU006."""
+        assert _is_suppressed("Decision 0042 ref  # noqa: CHU002") is False
+
     def test_html_comment_suppression(self) -> None:
-        """``<!-- noqa: CHU002 -->`` suppresses CHU002 in markdown."""
-        assert _is_suppressed("Decision 0042 ref <!-- noqa: CHU002 -->") is True
+        """``<!-- noqa: CHU006 -->`` suppresses CHU006 in markdown."""
+        assert _is_suppressed("Decision 0042 ref <!-- noqa: CHU006 -->") is True
 
     def test_html_comment_bare(self) -> None:
         """Bare ``<!-- noqa -->`` also suppresses every rule."""
@@ -145,10 +149,10 @@ class TestCheckFile:
         assert "scripts/run.py" in errors[0]
 
     def test_noqa_suppresses(self, tmp_path: Path) -> None:
-        """``# noqa: CHU002`` on the same line silences the lint hit."""
+        """``# noqa: CHU006`` on the same line silences the lint hit."""
         target = tmp_path / "src.py"
         target.write_text(
-            '"""Per Decision 0042, this ships."""  # noqa: CHU002\n',
+            '"""Per Decision 0042, this ships."""  # noqa: CHU006\n',
         )
         assert check_file(target) == []
 

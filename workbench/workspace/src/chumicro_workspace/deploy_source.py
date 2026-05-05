@@ -12,7 +12,7 @@ Two pieces:
 * :class:`WithRuntimeConfig` — a ``FileSource`` decorator that wraps
   any inner source (``DirectorySource``, ``FileMapSource``,
   ``ImportGraphSource``, custom) and injects the merged msgpack at
-  ``/runtime_config.msgpack`` per Decision 0035 §8.
+  ``/runtime_config.msgpack``.
 * :func:`project_directory_source` — convenience that builds a
   ``DirectorySource`` from ``projects/<name>/`` (skipping the host-side
   ``config.{toml,yml,yaml}``, ``_generated/`` output dir, and the
@@ -36,9 +36,9 @@ from chumicro_workspace.pipeline import build_runtime_config
 if TYPE_CHECKING:  # pragma: no cover — type-only
     from chumicro_deploy import FileSource
 
-#: Canonical on-device path for the merged runtime-config msgpack
-#: (Decision 0035 §8).  Every consumer library + the workspace
-#: template assumes this exact location; changing it is an ABI break.
+#: Canonical on-device path for the merged runtime-config msgpack.
+#: Every consumer library + the workspace template assumes this
+#: exact location; changing it is an ABI break.
 RUNTIME_CONFIG_DEVICE_PATH: str = "/runtime_config.msgpack"
 
 #: Default subdirectory under ``projects/<name>/`` where the generated
@@ -57,9 +57,9 @@ _SKIP_FILENAMES: frozenset[str] = frozenset(
 def find_project_config(project_dir: Path) -> Path:
     """Return the config file for *project_dir* — TOML wins over YAML.
 
-    Per Decision 0035 §1, every project carries one config file.  This
-    helper picks the canonical name in priority order: ``config.toml``,
-    then ``config.yml``, then ``config.yaml``.
+    Every project carries one config file.  This helper picks the
+    canonical name in priority order: ``config.toml``, then
+    ``config.yml``, then ``config.yaml``.
 
     Args:
         project_dir: Path to ``projects/<name>/``.
@@ -92,7 +92,7 @@ class WithRuntimeConfig:
         output_path: Where to write the msgpack on the host.  Defaults
             to ``project_config.parent / _generated / runtime_config.msgpack``.
         device_path: On-device path for the msgpack.  Defaults to
-            :data:`RUNTIME_CONFIG_DEVICE_PATH` (Decision 0035 §8).
+            :data:`RUNTIME_CONFIG_DEVICE_PATH`.
 
     Raises:
         ValueError: If *device_path* is already a key in the inner
@@ -206,12 +206,12 @@ def project_directory_source(
         extra_excluded: Additional filename / directory names to skip
             beyond the defaults (config files, ``_generated/``,
             ``__pycache__/``, etc.).
-        target_runtime: Decision 0044 — forwarded to
-            :class:`DirectorySource` so ``.py`` files marked for a
-            different runtime via ``__chumicro_runtimes__`` are
-            filtered out before staging.  ``None`` (the default)
-            preserves the prior unfiltered behavior; the workspace
-            ``deploy`` CLI fills this in from the device's runtime.
+        target_runtime: Forwarded to :class:`DirectorySource` so
+            ``.py`` files marked for a different runtime via
+            ``__chumicro_runtimes__`` are filtered out before
+            staging.  ``None`` (the default) ships every file
+            unfiltered; the workspace ``deploy`` CLI fills this in
+            from the device's runtime.
 
     Raises:
         FileNotFoundError: When *project_dir* contains no recognized

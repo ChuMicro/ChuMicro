@@ -1,0 +1,73 @@
+# workspace.yml — root configuration for the ChuMicro mono-repo.
+#
+# Gitignored.  Materialised on first ``setup`` from this template
+# (``_workspace_template/workspace.yml``) and never overwritten — edit
+# it freely; re-runs of setup will not clobber your changes.
+#
+# Mono-repo's "projects" are the per-library ``functional_tests/``
+# directories that deploy onto real boards via ``chumicro-pytest-device``.
+# This file is the workspace-wide defaults that those tests inherit at
+# deploy time, deep-merged with each library's
+# ``functional_tests/config.toml``.
+#
+# Five top-level blocks (all optional):
+#
+#   defaults:        Workspace-wide defaults that every project inherits.
+#                    Per-library config under
+#                    ``libraries/<name>/functional_tests/config.toml``
+#                    deep-merges over this — values in the per-library
+#                    file win at any nesting depth.
+#
+#   library_sources: Local paths or pinned overrides for shared libraries.
+#                    Empty by default — falls through to the libraries/
+#                    tree's ``<name>/src/`` and any installed packages.
+#
+#   deploy_targets:  Per-project → per-device default mapping.  Bare
+#                    ``deploy <project>`` (no --device) picks the project's
+#                    mapped target.  Empty by default — single-project
+#                    deploys fall back to devices.yml's ``defaults:`` block.
+#
+#   quality:         Workspace-level lint / coverage knobs.
+#
+#   environments:    Reserved for the env / use commands (planned).
+#
+# Credentials live here directly — the file is gitignored so your wifi
+# password / broker auth / etc. never reach git.  Decision 0057 collapsed
+# the older committed-workspace.yml + gitignored-overlay split into this
+# single gitignored file.
+
+defaults:
+  # Real-network functional tests in libraries/{wifi, requests,
+  # http_server, mqtt, sockets, websockets} connect to this AP.
+  # SSID is committed-shape but the file is gitignored, so your real
+  # SSID never reaches git.  Fill in both fields below.
+  wifi:
+    ssid: replace-with-your-ap-ssid
+    # password: replace-with-your-ap-password
+
+  # MQTT broker default for libraries/mqtt/functional_tests/test_real_*.py.
+  # Public test broker by default (no auth, no TLS) so a fresh-clone
+  # contributor can run mqtt acceptance tests without standing up
+  # their own broker.  Override per-test via
+  # libraries/mqtt/functional_tests/config.toml when targeting a
+  # private broker; add broker auth under
+  # ``defaults.mqtt.broker.auth.password`` here.
+  mqtt:
+    broker:
+      host: test.mosquitto.org
+      port: 1883
+
+# library_sources:
+#   chumicro-deploy: ../chumicro-deploy   # example: editable local clone
+
+# deploy_targets:
+#   # Per-library functional-test → board-id mapping.
+#   # libraries/wifi/functional_tests: pi-pico-w-circuitpython-board
+
+# quality:
+#   # Workspace-level coverage gate (forwarded to pytest as
+#   # --cov-fail-under).  Mono-repo's gate is 94 (Decision 0025);
+#   # left commented because pyproject.toml carries the canonical
+#   # value via [tool.coverage.report].fail_under and run.py's
+#   # --coverage-threshold flag is the active mechanism.
+#   # coverage_threshold: 94

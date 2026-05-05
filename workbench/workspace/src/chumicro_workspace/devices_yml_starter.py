@@ -1,13 +1,9 @@
 """Canonical ``devices.yml`` starter content.
 
 Owned by ``chumicro-workspace`` so the same empty-registry +
-three-zone-headed shape ships from one source to:
-
-* the ChuMicro mono-repo's ``python scripts/run.py setup`` (via
-  ``scripts/generate_config_files.py``)
-* the workspace-template repo's first-clone setup flow (via
-  ``chumicro-workspace setup`` materialising user workspaces)
-* any other consumer that needs to materialise an empty ``devices.yml``
+three-zone-headed shape ships from one source to every consumer
+that needs to materialise an empty ``devices.yml`` — most commonly
+``chumicro-workspace setup`` on first run.
 
 The actual file content travels with the wheel inside
 ``_payloads/devices_yml/starter.yml.template`` so reads work in

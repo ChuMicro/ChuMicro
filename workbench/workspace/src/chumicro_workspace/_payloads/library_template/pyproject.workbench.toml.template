@@ -30,8 +30,8 @@ classifiers = [
 ]
 dependencies = [
     # Workbench packages may freely depend on CPython-only third-party
-    # libraries (pyserial, pyyaml, ruamel, rich, etc.) per
-    # Decision 0032 §6.  Don't depend on chumicro libraries from
+    # libraries (pyserial, pyyaml, ruamel, rich, etc.) — workbench is
+    # CPython-only.  Don't depend on chumicro libraries from
     # libraries/ — those are for the device.
 ]
 
