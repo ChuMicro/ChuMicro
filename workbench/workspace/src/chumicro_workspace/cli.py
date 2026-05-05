@@ -338,6 +338,17 @@ def _cmd_setup(args: argparse.Namespace) -> int:
                         "setup: library_sources already in sync with "
                         f"{chumicro_path}",
                     )
+
+    # Schema-drift surface: print fields the upstream starter has
+    # gained since the user materialised their workspace.yml.  No
+    # auto-application — the user decides whether to copy the new
+    # fields in.  Empty (no-op) when the user's file already covers
+    # the starter's schema.
+    from chumicro_workspace.starter_drift import (  # noqa: PLC0415
+        print_starter_drift_report,
+    )
+
+    print_starter_drift_report(workspace.root)
     return 0
 
 
