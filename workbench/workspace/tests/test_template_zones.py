@@ -16,7 +16,7 @@ class TestClassify:
             "pyproject.toml",
             "projects/_template/config.toml",
             "projects/_template/app.py",
-            "_workspace_template/workspace.local.yml",
+            "_workspace_template/workspace.yml",
             "_workspace_template/nested/file.txt",
             ".github/skills/deploy-and-debug/SKILL.md",
             ".github/skills/add-new-project/SKILL.md",
@@ -37,7 +37,6 @@ class TestClassify:
         [
             "workspace.yml",
             "devices.yml",
-            "workspace.local.yml",
             "shared/my_lib.py",
             "shared/nested/deep/file.py",
             "packages/some_external/__init__.py",
@@ -70,11 +69,11 @@ class TestClassify:
         assert classify("projects/_template/app.py") is Zone.TOOL_OWNED
         assert classify("projects/back-porch/app.py") is Zone.USER_OWNED
 
-    def test_workspace_local_yml_user_owned_not_init_only(self) -> None:
-        """Decision 0038 §5 + Decision 0057: ``workspace.local.yml`` is
-        the materialized output of the workbench-owned starter; ``update``
-        must never touch it.  Forks may still ship an override under
-        ``_workspace_template/workspace.local.yml``; that template-source
+    def test_workspace_yml_user_owned_not_init_only(self) -> None:
+        """Decision 0038 §5 + Decision 0057: gitignored ``workspace.yml``
+        is the materialized output of the workbench-owned starter;
+        ``update`` must never touch it.  Forks may still ship an override
+        under ``_workspace_template/workspace.yml``; that template-source
         copy is tool-owned (re-flowed by ``update``)."""
-        assert classify("workspace.local.yml") is Zone.USER_OWNED
-        assert classify("_workspace_template/workspace.local.yml") is Zone.TOOL_OWNED
+        assert classify("workspace.yml") is Zone.USER_OWNED
+        assert classify("_workspace_template/workspace.yml") is Zone.TOOL_OWNED

@@ -272,7 +272,7 @@ def _cmd_setup(args: argparse.Namespace) -> int:
 
     # `_workspace_template/` first — repo-specific starter files
     # (project templates, examples, README placeholders, custom
-    # devices.yml or workspace.local.yml shapes for forks of the
+    # devices.yml or workspace.yml shapes for forks of the
     # canonical template).  When a fork ships its own
     # `_workspace_template/devices.yml`, the customised version wins.
     report = materialize_templates(workspace.root)
@@ -284,7 +284,7 @@ def _cmd_setup(args: argparse.Namespace) -> int:
                 print(f"  {path}")
 
     # Workbench-owned starters as the fallback — fills in
-    # `devices.yml` / `workspace.local.yml` only when the
+    # `devices.yml` / `workspace.yml` only when the
     # `_workspace_template/` walker didn't.  Canonical content lives
     # in the workbench package's `_payloads/` so the same bytes ship
     # to the mono-repo and every workspace-template-derived workspace.
@@ -880,9 +880,9 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
 
     # Pre-deploy fast health gate.  Catches the user-visible failure
     # modes that *would* deploy but ship junk to the device — missing
-    # workspace.yml, malformed devices.yml / workspace.local.yml,
-    # etc.  Skips the slower per-project AST checks that ``doctor``
-    # runs (those add latency to every deploy).
+    # workspace.yml, malformed devices.yml, etc.  Skips the slower
+    # per-project AST checks that ``doctor`` runs (those add latency
+    # to every deploy).
     # ``--skip-health-check`` opts out for power-users + CI.
     if not args.skip_health_check:
         gate_findings = collect_health_findings(workspace)
@@ -970,7 +970,6 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
                 source = project_directory_source(
                     project_dir,
                     workspace_yaml=workspace.workspace_yaml,
-                    workspace_local_yaml=workspace.workspace_local_yaml,
                     entrypoint=(
                         args.entrypoint or f"/{device.effective_entrypoint}"
                     ),
@@ -1288,11 +1287,11 @@ def _print_health_findings(
 def _cmd_status(args: argparse.Namespace) -> int:
     """Print a one-line-per-check workspace health snapshot.
 
-    Phase 2a of the workspace-ecosystem workstream.  Runs the four
+    Phase 2a of the workspace-ecosystem workstream.  Runs the three
     fast static checks (workspace.yml validity, devices.yml count,
-    workspace.local.yml overlay status, projects tree summary).
-    ``doctor`` (Phase 2b) is the stricter sibling that adds Python
-    version checking and per-project AST scans for ``run()``.
+    projects tree summary).  ``doctor`` (Phase 2b) is the stricter
+    sibling that adds Python version checking and per-project AST
+    scans for ``run()``.
     """
     workspace = _resolve_workspace(args)
     return _print_health_findings(workspace, collect_health_findings(workspace))
@@ -1712,11 +1711,10 @@ def _cmd_dump_config(args: argparse.Namespace) -> int:
     """Print the merged runtime config a project would receive on deploy.
 
     Runs the deploy-time pipeline up to (but not through) the msgpack
-    write — workspace defaults + workspace.local.yml overlay + project
-    config + optional config.local overlay (Decision 0057 deep-merge) —
-    then pretty-prints the result.  Lets users see exactly what their
-    on-device ``chumicro_config.runtime`` will read without actually
-    deploying.
+    write — workspace.yml defaults + project config (Decision 0057's
+    2-layer deep-merge) — then pretty-prints the result.  Lets users
+    see exactly what their on-device ``chumicro_config.runtime`` will
+    read without actually deploying.
 
     Useful for: debugging which layer a key landed in after the merge,
     inspecting the shape before adding consumers on the device,
@@ -1742,7 +1740,6 @@ def _cmd_dump_config(args: argparse.Namespace) -> int:
     resolved = compose_runtime_config(
         workspace_yaml=workspace.workspace_yaml,
         project_config=project_config_path,
-        workspace_local_yaml=workspace.workspace_local_yaml,
     )
 
     if args.repr:
@@ -2634,7 +2631,7 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Skip the pre-deploy fast health gate.  By default, deploy "
             "runs `status`-equivalent checks (workspace.yml / "
-            "devices.yml / workspace.local.yml shape) and aborts on "
+            "devices.yml shape) and aborts on "
             "ERROR-level findings before sending bytes to the device. "
             "Use this flag for power-user CLI runs or CI flows that "
             "have already validated the workspace state externally."
@@ -2675,7 +2672,7 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Print a one-line-per-check workspace health snapshot "
             "(workspace.yml validity, devices.yml count, "
-            "workspace.local.yml overlay status, projects tree summary)."
+            "projects tree summary)."
         ),
     )
     _add_workspace_arg(status_parser)
@@ -2806,9 +2803,8 @@ def build_parser() -> argparse.ArgumentParser:
         "dump-config",
         help=(
             "Print the merged runtime config a project would receive on "
-            "deploy (workspace defaults + workspace.local.yml overlay + "
-            "project config + optional config.local overlay), "
-            "without actually deploying."
+            "deploy (workspace.yml defaults + per-project config; "
+            "Decision 0057's 2-layer pipeline), without actually deploying."
         ),
     )
     _add_workspace_arg(dump_config_parser)

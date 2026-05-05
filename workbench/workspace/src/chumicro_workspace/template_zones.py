@@ -6,15 +6,15 @@ whole workspace tree.  Every file falls into one of three zones:
 * **Tool-owned** — `run.py`, `AGENTS.md`, `CONTRIBUTING.md`,
   `pyproject.toml`, `projects/_template/`, `_workspace_template/`
   (template-source files used to materialize user-edited config
-  like `workspace.local.yml` per Decision 0038 §5 and Decision 0057),
+  like `workspace.yml` per Decision 0038 §5 and Decision 0057),
   `examples/` (Slice 5 reading-material demos shipped from the
   canonical template), and the agent-skill documents under
   `.github/skills/`.  `init` writes them; `update` rewrites them so
   newer template releases flow in.
 
-* **User-owned** — `projects/<each-real-project>/`,
-  `workspace.local.yml`, `devices.yml`, `shared/`, `packages/`,
-  `workspace.yml`.  `init` writes the starter version (only if
+* **User-owned** — `projects/<each-real-project>/`, `devices.yml`,
+  `shared/`, `packages/`, `workspace.yml` (gitignored under
+  Decision 0057).  `init` writes the starter version (only if
   absent); `update` never touches them.
 
 * **Init-only** — `.gitignore`, `README.md`.  `init` writes if
@@ -60,7 +60,6 @@ TOOL_OWNED_PREFIXES: tuple[str, ...] = (
 #: Files / paths that are user-owned.  ``update`` never touches them.
 USER_OWNED_PATHS: frozenset[str] = frozenset({
     "workspace.yml",
-    "workspace.local.yml",
     "devices.yml",
 })
 

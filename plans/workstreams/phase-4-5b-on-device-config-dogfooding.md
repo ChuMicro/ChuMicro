@@ -8,14 +8,14 @@ Decision 0055 (config pipeline unification) shipped half the dogfooding goal: ev
 
 The other half — having on-device test code call `chumicro_config.load_runtime_config()` instead of importing `_test_creds` — needs to land too.  That's the migration this workstream covers.
 
-The transport-API foundation already shipped (Decision 0056): `transport.stage()` now accepts `extra_files: dict[str, bytes]`, so pytest-device can stage `runtime_config.msgpack` onto the device alongside library + harness + test sources.
+The transport-API foundation already shipped: `transport.stage()` now accepts `extra_files: dict[str, bytes]`, so pytest-device can stage `runtime_config.msgpack` onto the device alongside library + harness + test sources.
 
 ## Pre-conditions for the new session
 
 A fresh agent picking this up cold should:
 
 1. Read this file end to end.
-2. Read [Decision 0055](../decisions/0055-config-pipeline-unification.md) and [Decision 0056](../decisions/0056-transport-extra-files-staging.md) — those define the unification target and the transport hook this work consumes.
+2. Read [Decision 0055](../decisions/0055-config-pipeline-unification.md) — defines the unification target this work consumes.  The transport hook (`transport.stage(..., extra_files=...)`) is plain implementation; check `workbench/deploy/src/chumicro_deploy/transport/` and its tests for the current API.
 3. Read [`plans/workstreams/scripts-workbench-config-unification.md`](scripts-workbench-config-unification.md) for the broader workstream context (this is a deferred sub-phase of that workstream).
 4. Verify `transport.stage(..., extra_files=...)` works on the four-board canonical matrix before starting any conftest migration — the foundation should be hardware-validated first.
 5. **Boards required.**  Hardware-in-the-loop validation is mandatory; CPython unit tests can't catch the failure modes.  The four-board matrix is `pi-pico-w-circuitpython-board`, `pi-pico-w-micropython-board`, `lolin-s2-circuitpython-board`, `lolin-s2-micropython-board` (one of each runtime × two RP2040/ESP32 boards).
@@ -80,7 +80,7 @@ Library-specific extras (`BROKER_HOST` / `BROKER_PORT` / `ECHO_HOST` / `ECHO_POR
 
 ## Failure modes to watch for during hardware validation
 
-1. **CP RAM mode + functional tests with config requirements.**  Decision 0056 has CP RAM mode raise `UnsupportedExtraFilesError` for `extra_files`.  Functional tests that grow a config dependency must run on flash.  Surface this as an early `pytest.skip` or a clear error message — not a cryptic transport-level exception during staging.
+1. **CP RAM mode + functional tests with config requirements.**  CP RAM mode raises `UnsupportedExtraFilesError` for `extra_files` (no filesystem to write to).  Functional tests that grow a config dependency must run on flash.  Surface this as an early `pytest.skip` or a clear error message — not a cryptic transport-level exception during staging.
 2. **CIRCUITPY drive auto-reset on host write.**  Some CP firmware triggers a soft reset when the host writes to the drive while the device is running.  This may break the test mid-stage.  If it happens: bracket the `extra_files` write inside the existing flash-mode "soft reset before stage" window, or stage `runtime_config.msgpack` as the *first* file written (so the reset settles before test source lands).
 3. **MP mount mode subtlety.**  `mpremote mount_local` mounts a host directory; writes to that directory are visible to the device immediately, but the device's `os.listdir` may cache.  Verify `chumicro_config.load_runtime_config()` reads succeed first time on a freshly-staged msgpack.
 4. **Concurrent-broker dynamic config.**  MQTT's conftest spawns a host Mosquitto broker on a random port — the broker host/port can't be known until `pytest_configure` runs.  The conftest must mutate the merged config dict + re-encode the msgpack each session.  Verify the dynamic-broker path hardware-validates cleanly (the legacy `_test_creds.py` rendering didn't have this complexity since it was always written fresh).

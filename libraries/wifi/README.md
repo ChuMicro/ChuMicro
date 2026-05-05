@@ -73,7 +73,7 @@ Works on CPython, MicroPython, and CircuitPython.  Ships three adapters: Circuit
 
 The acceptance test in `functional_tests/test_acceptance.py` connects to a real AP and skips silently when no credentials are configured.
 
-Production apps load wifi config via `chumicro_config.load_runtime_config()` — see `chumicro-config`.  Put your creds in your workspace's `workspace.local.yml`, run `chumicro-workspace deploy`, and the bake-and-deploy pipeline lands them on the device as `runtime_config.msgpack`.
+Production apps load wifi config via `chumicro_config.load_runtime_config()` — see `chumicro-config`.  Put your creds in your workspace's gitignored `workspace.yml`, run `chumicro-workspace deploy`, and the bake-and-deploy pipeline lands them on the device as `runtime_config.msgpack`.
 
 The library itself never reads any TOML — it takes a `WifiConfig` and goes.  `WifiConfig.from_dict()` is the dict-construction path used by the standard pipeline.
 

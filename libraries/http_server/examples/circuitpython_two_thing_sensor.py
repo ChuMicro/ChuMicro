@@ -18,7 +18,7 @@ WiFi config + sensor target
 ===========================
 
 WiFi creds come from ``runtime_config.msgpack`` (baked from
-``workspace.local.yml`` by ``chumicro-workspace``) when present, or
+``workspace.yml`` by ``chumicro-workspace``) when present, or
 from the ``WIFI_SSID`` / ``WIFI_PASSWORD`` constants below for raw
 deploys.  The sensor's target server (``SERVER_HOST`` /
 ``SERVER_PORT``) is read from the ``[two_thing_sensor]`` section

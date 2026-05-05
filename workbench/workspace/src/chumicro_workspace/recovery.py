@@ -86,9 +86,9 @@ _HINT_TABLE: tuple[tuple[re.Pattern[str], str, str], ...] = (
         re.compile(r"KeyError:\s*'([^']+)'"),
         "missing-config-key",
         (
-            "missing config key `{0}` — check projects/<project>/config.toml, "
-            "workspace.yml's `[defaults]` block, or workspace.local.yml for "
-            "the credential overlay (Decision 0057).  Use "
+            "missing config key `{0}` — check projects/<project>/config.toml "
+            "or workspace.yml's `defaults:` block (the gitignored workspace "
+            "config carrying defaults + credentials per Decision 0057).  Use "
             "`python run.py deploy <project> --dry-run` to inspect what "
             "the merged runtime config carries."
         ),

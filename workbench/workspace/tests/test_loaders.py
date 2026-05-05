@@ -41,16 +41,19 @@ class TestReadWorkspaceYaml:
         path.write_text("")
         assert read_workspace_yaml(path) == {}
 
-    def test_missing_file_returns_empty_dict(self, tmp_path: Path) -> None:
-        """Decision 0057 reuses this reader for ``workspace.local.yml``.
+    def test_missing_file_raises(self, tmp_path: Path) -> None:
+        """Decision 0057 reverted the silent-absent shape.
 
-        The overlay file is optional — absence must collapse to "no
-        overrides", not raise, so the pipeline can deep-merge an
-        empty dict in.
+        Workspace.yml is the load-bearing config file; missing the
+        primary ``workspace.yml`` is a fresh-clone-before-setup
+        signal that callers want to surface, not silently swallow.
+        Callers that need to tolerate absence check ``path.is_file()``
+        themselves.
         """
-        path = tmp_path / "workspace.local.yml"
+        path = tmp_path / "workspace.yml"
         # File deliberately not created.
-        assert read_workspace_yaml(path) == {}
+        with pytest.raises(FileNotFoundError):
+            read_workspace_yaml(path)
 
     def test_top_level_list_raises(self, tmp_path: Path) -> None:
         path = tmp_path / "workspace.yml"

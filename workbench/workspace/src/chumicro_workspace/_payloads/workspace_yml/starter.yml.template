@@ -1,0 +1,62 @@
+# workspace.yml — root configuration for this workspace.
+#
+# Gitignored.  Materialised on first ``setup`` and never overwritten —
+# edit it freely; re-runs of setup will not clobber your changes.  The
+# workspace tree carries no committed copy; a fresh clone always lands
+# this starter via the workbench-owned canonical content (and any
+# repo-specific override under ``_workspace_template/workspace.yml``).
+#
+# Five top-level blocks (all optional):
+#
+#   defaults:        Workspace-wide defaults that every project inherits
+#                    via deep-merge with the per-project config file.
+#
+#   library_sources: Local paths or pinned overrides for shared libraries.
+#                    Empty by default — falls through to the workspace's
+#                    ``shared/`` / ``libraries/`` / ``packages/`` tree.
+#
+#   deploy_targets:  Per-project → per-device default mapping.  Bare
+#                    ``deploy <project>`` (no --device) picks the
+#                    project's mapped target.  Empty by default —
+#                    single-project deploys fall back to devices.yml's
+#                    ``defaults:`` block.
+#
+#   quality:         Workspace-level lint / coverage knobs.
+#
+#   environments:    Reserved for the env / use commands (planned).
+#
+# Credentials live here directly — the file is gitignored so your wifi
+# password / broker auth / etc. never reach git.  Deep-merge order
+# (lowest → highest precedence):
+#
+#   1. workspace.yml                 (this file — workspace-wide defaults)
+#   2. projects/<name>/config.toml   (per-project — gitignored when
+#                                     scaffolded by ``new``; tracked when
+#                                     it ships with the workspace template)
+#
+# Both layers share the same section-namespaced shape; merge is a
+# straight deep-merge with the higher-precedence layer winning at any key.
+
+# defaults:
+#   wifi:
+#     ssid: my-ap
+#     password: replace-me
+#   mqtt:
+#     broker:
+#       host: broker.example.com
+#       port: 1883
+#       auth:
+#         username: my-user
+#         password: replace-me
+
+# library_sources:
+#   chumicro-deploy: ../chumicro-deploy   # example: editable local clone
+
+# deploy_targets:
+#   # Per-project → board-id mapping for bare ``deploy <project>``.
+#   # my-project: pi-pico-w-circuitpython-board
+
+# quality:
+#   # Workspace-level coverage gate (forwarded to pytest as
+#   # --cov-fail-under).
+#   # coverage_threshold: 85

@@ -9,7 +9,6 @@ from chumicro_workspace.health import (
     check_devices_yaml,
     check_project_run_functions,
     check_python_version,
-    check_workspace_local_yaml,
     check_workspace_yaml,
     collect_doctor_findings,
     collect_health_findings,
@@ -107,62 +106,6 @@ class TestCheckDevicesYaml:
 
 
 # ---------------------------------------------------------------------------
-# check_workspace_local_yaml (Decision 0057)
-# ---------------------------------------------------------------------------
-
-
-class TestCheckWorkspaceLocalYaml:
-    def test_ok_when_absent(self, tmp_path: Path) -> None:
-        """Missing overlay file is fine — projects inherit committed defaults."""
-        workspace = _layout(tmp_path)
-        finding = check_workspace_local_yaml(workspace)
-        assert finding.level is HealthLevel.OK
-        assert "not present" in finding.message
-
-    def test_ok_when_empty(self, tmp_path: Path) -> None:
-        """A materialized-but-uncommented workspace.local.yml parses to no overrides."""
-        workspace = _layout(tmp_path)
-        workspace.workspace_local_yaml.write_text(
-            "# all entries commented out\n",
-        )
-        finding = check_workspace_local_yaml(workspace)
-        assert finding.level is HealthLevel.OK
-        assert "no overrides" in finding.message
-
-    def test_ok_with_overrides(self, tmp_path: Path) -> None:
-        workspace = _layout(tmp_path)
-        workspace.workspace_local_yaml.write_text(
-            "defaults:\n"
-            "  wifi:\n"
-            "    password: actual-password\n"
-            "  mqtt:\n"
-            "    broker:\n"
-            "      auth:\n"
-            "        password: another\n",
-        )
-        finding = check_workspace_local_yaml(workspace)
-        assert finding.level is HealthLevel.OK
-        assert "2 sections" in finding.message
-
-    def test_singular_when_one_section(self, tmp_path: Path) -> None:
-        workspace = _layout(tmp_path)
-        workspace.workspace_local_yaml.write_text(
-            "defaults:\n  wifi:\n    password: pw\n",
-        )
-        finding = check_workspace_local_yaml(workspace)
-        assert "1 section" in finding.message
-        assert "1 sections" not in finding.message
-
-    def test_error_when_malformed(self, tmp_path: Path) -> None:
-        workspace = _layout(tmp_path)
-        workspace.workspace_local_yaml.write_text("- not\n- a\n- mapping\n")
-        finding = check_workspace_local_yaml(workspace)
-        assert finding.level is HealthLevel.ERROR
-        assert "malformed" in finding.message
-        assert finding.hint is not None
-
-
-# ---------------------------------------------------------------------------
 # count_projects
 # ---------------------------------------------------------------------------
 
@@ -206,14 +149,13 @@ class TestCountProjects:
 
 
 class TestCollectHealthFindings:
-    def test_runs_all_four_checks_in_order(self, tmp_path: Path) -> None:
+    def test_runs_all_three_checks_in_order(self, tmp_path: Path) -> None:
         workspace = _layout(tmp_path)
         findings = collect_health_findings(workspace)
         labels = [finding.label for finding in findings]
         assert labels == [
             "WORKSPACE.YML",
             "DEVICES.YML",
-            "WORKSPACE.LOCAL.YML",
             "PROJECTS",
         ]
 
@@ -300,18 +242,18 @@ class TestCheckProjectRunFunctions:
 
 
 class TestCollectDoctorFindings:
-    def test_runs_all_six_checks_in_order(self, tmp_path: Path) -> None:
+    def test_runs_all_five_checks_in_order(self, tmp_path: Path) -> None:
         workspace = _layout(tmp_path)
         findings = collect_doctor_findings(workspace)
         labels = [finding.label for finding in findings]
-        # status's four checks are bracketed by python (front) +
+        # status's three checks are bracketed by python (front) +
         # project-run (back).  Decision 0057 retired the
-        # check_secret_references step.
+        # check_secret_references and check_workspace_local_yaml
+        # steps.
         assert labels == [
             "PYTHON",
             "WORKSPACE.YML",
             "DEVICES.YML",
-            "WORKSPACE.LOCAL.YML",
             "PROJECTS",
             "PROJECT run() defs",
         ]

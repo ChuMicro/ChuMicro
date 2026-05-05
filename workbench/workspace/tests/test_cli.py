@@ -21,10 +21,7 @@ from msgpack import unpackb
 def _seed_workspace(tmp_path: Path) -> Path:
     """Create a minimal workspace at *tmp_path* and return the root."""
     (tmp_path / "workspace.yml").write_text(
-        "defaults:\n  wifi:\n    hostname_prefix: chu-\n"
-    )
-    (tmp_path / "workspace.local.yml").write_text(
-        "defaults:\n  wifi:\n    password: shh\n"
+        "defaults:\n  wifi:\n    hostname_prefix: chu-\n    password: shh\n"
     )
     (tmp_path / "devices.yml").write_text(
         "defaults:\n"
@@ -144,14 +141,12 @@ class TestSetup:
         root = _seed_workspace(tmp_path)
         templates = root / "_workspace_template"
         templates.mkdir()
-        (templates / "workspace.local.yml").write_text(
-            "# fill in your overrides\ndefaults: {}\n",
+        (templates / "extra_starter.txt").write_text(
+            "this file lands at the workspace root via materialize_templates\n",
         )
-        # Remove the pre-seeded workspace.local.yml so materialize has work to do.
-        (root / "workspace.local.yml").unlink()
         exit_code = cli.main(["setup", "--workspace-dir", str(root)])
         assert exit_code == 0
-        assert (root / "workspace.local.yml").read_text().startswith("# fill in your")
+        assert (root / "extra_starter.txt").read_text().startswith("this file")
         assert "materialized 1 file(s) from _workspace_template/" in capsys.readouterr().out
 
 
@@ -921,10 +916,7 @@ class TestDeployAllDevices:
     def _seed_two_device_workspace(self, tmp_path: Path) -> Path:
         """Seed a workspace with two registered devices."""
         (tmp_path / "workspace.yml").write_text(
-            "defaults:\n  wifi:\n    hostname_prefix: chu-\n",
-        )
-        (tmp_path / "workspace.local.yml").write_text(
-            "defaults:\n  wifi:\n    password: shh\n"
+            "defaults:\n  wifi:\n    hostname_prefix: chu-\n    password: shh\n",
         )
         (tmp_path / "devices.yml").write_text(
             "defaults:\n"
@@ -1040,13 +1032,11 @@ class TestDeployTargetsMapping:
             "defaults:\n"
             "  wifi:\n"
             "    hostname_prefix: chu-\n"
+            "    password: shh\n"
         )
         if deploy_targets_block:
             workspace_yaml_body += deploy_targets_block
         (tmp_path / "workspace.yml").write_text(workspace_yaml_body)
-        (tmp_path / "workspace.local.yml").write_text(
-            "defaults:\n  wifi:\n    password: shh\n"
-        )
         (tmp_path / "devices.yml").write_text(
             "defaults:\n"
             "  micropython: lolin-s2\n"
@@ -1213,15 +1203,13 @@ class TestDeployAllProjects:
             "defaults:\n"
             "  wifi:\n"
             "    hostname_prefix: chu-\n"
+            "    password: shh\n"
             "deploy_targets:\n"
             "  back-porch: pico-w\n"
             "  garage/door: lolin-s2\n"
             "  garage/window:\n"
             "    - lolin-s2\n"
             "    - pico-w\n",
-        )
-        (tmp_path / "workspace.local.yml").write_text(
-            "defaults:\n  wifi:\n    password: shh\n"
         )
         (tmp_path / "devices.yml").write_text(
             "defaults:\n"
@@ -1321,11 +1309,9 @@ class TestDeployAllProjects:
     ) -> None:
         """A project in the mapping that doesn't exist on disk fails fast."""
         (tmp_path / "workspace.yml").write_text(
+            "defaults:\n  wifi:\n    password: shh\n"
             "deploy_targets:\n"
             "  ghost-project: lolin-s2\n",
-        )
-        (tmp_path / "workspace.local.yml").write_text(
-            "defaults:\n  wifi:\n    password: shh\n"
         )
         (tmp_path / "devices.yml").write_text(
             "defaults:\n  micropython: lolin-s2\n"
@@ -1406,7 +1392,7 @@ class TestDeployFailureHints:
         captured_stderr = capsys.readouterr().err
         assert "--- hints ---" in captured_stderr
         assert "wifi_password" in captured_stderr
-        assert "workspace.local.yml" in captured_stderr
+        assert "workspace.yml" in captured_stderr
 
     def test_no_hints_section_when_no_pattern_matches(
         self,
@@ -1707,8 +1693,8 @@ class TestStatus:
         exit_code = cli.main(["status", "--workspace-dir", str(root)])
         assert exit_code == 0
         out = capsys.readouterr().out
-        # All four labels appear; OK findings get the check glyph.
-        for label in ("WORKSPACE.YML", "DEVICES.YML", "WORKSPACE.LOCAL.YML", "PROJECTS"):
+        # All three labels appear; OK findings get the check glyph.
+        for label in ("WORKSPACE.YML", "DEVICES.YML", "PROJECTS"):
             assert label in out
         assert "✓" in out
 
@@ -1758,7 +1744,6 @@ class TestDoctor:
             "PYTHON",
             "WORKSPACE.YML",
             "DEVICES.YML",
-            "WORKSPACE.LOCAL.YML",
             "PROJECTS",
             "PROJECT run() defs",
         ):
@@ -4268,9 +4253,10 @@ class TestCommandDumpConfig:
         assert exit_code == 0
         import json
         printed = json.loads(capsys.readouterr().out)
-        # Workspace defaults + workspace.local.yml overlay + project config.
+        # Workspace.yml defaults + project config.toml — Decision 0057's
+        # 2-layer pipeline.
         assert printed["wifi"]["ssid"] == "HomeNet"
-        assert printed["wifi"]["password"] == "shh"  # from overlay
+        assert printed["wifi"]["password"] == "shh"  # from workspace.yml
         assert printed["wifi"]["hostname_prefix"] == "chu-"
 
     def test_repr_mode_uses_python_repr(

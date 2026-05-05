@@ -4,7 +4,7 @@
 
 **One-stop host CLI for ChuMicro project workspaces — onboard a board, write app code, deploy to one or many targets, watch the REPL.**
 
-Wraps `chumicro-deploy` and `chumicro-repl` with the workspace-shaped pieces those packages don't own: a deploy-time config-merge pipeline (`workspace.yml` + `workspace.local.yml` + `projects/*/config.toml` + optional `config.local.<suffix>` → `runtime_config.msgpack`), a CLI that reads `workspace.yml`, three-zone `devices.yml` round-trip, board-state onboarding, firmware URL derivation, and the boot-shim layout that lets a single board host one project without you writing a `code.py`.
+Wraps `chumicro-deploy` and `chumicro-repl` with the workspace-shaped pieces those packages don't own: a deploy-time config-merge pipeline (gitignored `workspace.yml` + `projects/*/config.toml` → `runtime_config.msgpack`), a CLI that reads `workspace.yml`, three-zone `devices.yml` round-trip, board-state onboarding, firmware URL derivation, and the boot-shim layout that lets a single board host one project without you writing a `code.py`.
 
 <br clear="left">
 
@@ -49,15 +49,14 @@ python run.py repl my_project --tail 30               # deploy + tail for 30 s
 
 ### How config flows from your edits to the device
 
-The runtime config a project receives at boot is the deep-merge of four host-side sources, all sharing the same section-namespaced shape (Decision 0057):
+The runtime config a project receives at boot is the deep-merge of two gitignored host-side sources, both sharing the same section-namespaced shape (Decision 0057):
 
 ```
-workspace.yml ──► workspace.local.yml ──► projects/<name>/config.toml ──► projects/<name>/config.local.<suffix>
-  (committed)        (gitignored)               (committed)                       (gitignored, optional)
-
-  defaults that      your wifi password,        per-project knobs                 per-project credential
-  every project      broker auth, anything      (sample period, mqtt topic,       override (rare; same shape)
-  inherits           private to your machine    sensor pins)                      wins over the others
+workspace.yml ──────────────────► projects/<name>/config.toml
+  (gitignored — workspace-wide       (gitignored when scaffolded by `new`;
+   defaults + your credentials        tracked when shipped with the workspace
+   in one place; deep-merge           template; per-project knobs — sample
+   loser to per-project)              period, mqtt topic, sensor pins)
 
                             │
                             ▼
@@ -135,7 +134,7 @@ from chumicro_workspace import (
     build_runtime_config, compose_runtime_config, merge_configs,
     read_workspace_yaml, read_project_config,
     write_runtime_config, WorkspaceConfigError,
-    read_workspace_local_yml_starter,
+    read_workspace_yml_starter,
 
     # Deploy sources
     WithRuntimeConfig, project_directory_source,

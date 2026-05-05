@@ -119,7 +119,7 @@ runner-shaped, LED-blink-friendly progression.
 
 Real-network functional tests in `functional_tests/test_real_*.py` and the hardware-prefixed examples in `examples/circuitpython_*.py` need wifi credentials.  Two paths, depending on whether you're using a `chumicro-workspace`:
 
-* **With a workspace (recommended).**  Put wifi creds in your workspace's `workspace.local.yml`, run `chumicro-workspace deploy --thing <name>`, and the example reads them via `chumicro_config.load_runtime_config()`.  The two-thing demo's `runtime_config` schema also accepts `[two_thing_sensor]` for the sensor's target server overrides — see the example file for keys.
+* **With a workspace (recommended).**  Put wifi creds in your workspace's gitignored `workspace.yml`, run `chumicro-workspace deploy --thing <name>`, and the example reads them via `chumicro_config.load_runtime_config()`.  The two-thing demo's `runtime_config` schema also accepts `[two_thing_sensor]` for the sensor's target server overrides — see the example file for keys.
 * **Raw single-file deploy** (no workspace).  Edit the `WIFI_SSID` / `WIFI_PASSWORD` constants (and `SERVER_HOST` on the sensor side) near the top of the example file before copying it to `/code.py` (CP) or `/main.py` (MP).  The constants are the fallback when no `runtime_config.msgpack` is present.
 
 The library itself never reads either source — it takes a `listener_factory` and goes.  The config wiring is application-layer.

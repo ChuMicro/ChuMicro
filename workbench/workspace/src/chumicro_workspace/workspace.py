@@ -1,11 +1,10 @@
 """Workspace path resolution + project-tree classification.
 
 Locates the canonical files of a project workspace (workspace.yml,
-workspace.local.yml, devices.yml, ``projects/<...>/``) given a
-starting directory.  The CLI walks up from the current working
-directory until it finds a ``workspace.yml`` so users can invoke
-commands from anywhere inside the workspace tree (typical Git /
-monorepo ergonomics).
+devices.yml, ``projects/<...>/``) given a starting directory.  The
+CLI walks up from the current working directory until it finds a
+``workspace.yml`` so users can invoke commands from anywhere inside
+the workspace tree (typical Git / monorepo ergonomics).
 
 Projects may be nested arbitrarily deep under ``projects/`` —
 ``projects/upstairs/bedroom_sensor/``, ``projects/garage/sensors/door_open/``,
@@ -25,8 +24,7 @@ and reified by the canonical template at
 ``ChuMicro/ChuMicro-Workspace-Template`` (Decision 0038)::
 
     <root>/
-        workspace.yml          # workspace defaults (Decision 0035)
-        workspace.local.yml    # gitignored overlay (Decision 0057)
+        workspace.yml          # gitignored defaults + credentials (Decisions 0035 + 0057)
         devices.yml            # board entries (chumicro_deploy.config.default)
         projects/<...>/<name>/ # one directory per "project", optionally nested
         shared/                # shared library code
@@ -146,16 +144,6 @@ class WorkspaceLayout:
     def devices_yaml(self) -> Path:
         """Path to ``<root>/devices.yml``.  May not exist on a fresh workspace."""
         return self.root / "devices.yml"
-
-    @property
-    def workspace_local_yaml(self) -> Path:
-        """Path to ``<root>/workspace.local.yml``.  Optional and gitignored.
-
-        Decision 0057: structural overlay for credentials and
-        per-developer overrides.  Same shape as :attr:`workspace_yaml`;
-        deep-merged on top in the runtime-config pipeline.
-        """
-        return self.root / "workspace.local.yml"
 
     @property
     def projects_dir(self) -> Path:

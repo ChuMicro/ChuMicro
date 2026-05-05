@@ -22,10 +22,17 @@ populates on first registration — same shape as the workspace-template
 repo — and moved the canonical content into the workbench package
 so both repos materialise from one source of truth.
 
-Decision 0057 then retired the ``secrets.yml`` + ``!secret`` marker
-in favour of a structural ``workspace.local.yml`` overlay; the
+Decision 0057 collapsed the prior 4-layer overlay (committed
+``workspace.yml`` + gitignored ``workspace.local.yml`` + per-project
+config + optional config.local) to two gitignored files; the
 materialise-from-workbench-payload pattern is unchanged, just with
-a different starter file.
+``workspace.yml`` as the starter file the workbench package owns.
+
+The mono-repo's ``_workspace_template/workspace.yml`` carries this
+repo's specific opinions (``mqtt.broker.host = test.mosquitto.org``,
+``wifi.ssid`` placeholder); ``generate_config_files`` runs
+``materialize_templates`` first so that override wins, then falls
+through to the workbench starter for any file the override skipped.
 """
 
 from __future__ import annotations
@@ -39,7 +46,7 @@ from chumicro_deploy.config.default import (
 )
 from chumicro_workspace import (
     read_devices_yml_starter,
-    read_workspace_local_yml_starter,
+    read_workspace_yml_starter,
 )
 
 
@@ -74,9 +81,8 @@ def test_generate_config_files_idempotent(tmp_path: Path, monkeypatch) -> None:
     """Running ``generate_config_files`` twice doesn't overwrite existing files.
 
     The function's contract: write-if-missing, never clobber.  A
-    contributor who edits ``devices.yml`` or ``workspace.local.yml``
-    after first ``setup`` and later runs setup again must keep their
-    edits.
+    contributor who edits ``devices.yml`` or ``workspace.yml`` after
+    first ``setup`` and later runs setup again must keep their edits.
     """
     import generate_config_files as module  # noqa: PLC0415
 
@@ -85,46 +91,68 @@ def test_generate_config_files_idempotent(tmp_path: Path, monkeypatch) -> None:
     # First run — creates files.
     assert module.generate_config_files() == 0
     devices_yml = tmp_path / "devices.yml"
-    workspace_local_yml = tmp_path / "workspace.local.yml"
+    workspace_yml = tmp_path / "workspace.yml"
     assert devices_yml.is_file()
-    assert workspace_local_yml.is_file()
+    assert workspace_yml.is_file()
     devices_yml.write_text("# user edited\ndevices: []\n")
-    workspace_local_yml.write_text(
+    workspace_yml.write_text(
         "defaults:\n  wifi:\n    password: my-real-password\n",
     )
 
     # Second run — must not overwrite the edits.
     assert module.generate_config_files() == 0
     assert devices_yml.read_text() == "# user edited\ndevices: []\n"
-    assert workspace_local_yml.read_text() == (
+    assert workspace_yml.read_text() == (
         "defaults:\n  wifi:\n    password: my-real-password\n"
     )
 
 
-def test_workspace_local_yml_materialised_from_workbench_payload(
+def test_workspace_yml_materialised_from_workbench_payload(
     tmp_path: Path, monkeypatch,
 ) -> None:
-    """``setup`` writes ``workspace.local.yml`` from the workbench starter.
+    """``setup`` writes ``workspace.yml`` from the workbench starter
+    when the repo has no ``_workspace_template/workspace.yml`` override.
 
     Belt-and-suspenders against an accidental shutil/copy layer
-    creeping in between ``read_workspace_local_yml_starter`` and the
-    file that lands at the repo root — same source-of-truth pattern
-    as devices.yml (Phase 1 of the unification workstream; Decision
-    0057 swapped which file the pattern materialises).
+    creeping in between ``read_workspace_yml_starter`` and the file
+    that lands at the repo root.
     """
     import generate_config_files as module  # noqa: PLC0415
 
     monkeypatch.setattr(module, "ROOT", tmp_path)
     assert module.generate_config_files() == 0
 
-    workspace_local_yml = tmp_path / "workspace.local.yml"
-    assert workspace_local_yml.is_file()
-    # The materialised file must come verbatim from the workbench
-    # starter — no template substitutions, no rendering layer.
-    assert (
-        workspace_local_yml.read_text()
-        == read_workspace_local_yml_starter()
+    workspace_yml = tmp_path / "workspace.yml"
+    assert workspace_yml.is_file()
+    # No _workspace_template/ override — the materialised file must
+    # come verbatim from the workbench starter.
+    assert workspace_yml.read_text() == read_workspace_yml_starter()
+
+
+def test_workspace_template_override_wins_over_workbench_starter(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    """``_workspace_template/workspace.yml`` overrides the workbench starter.
+
+    The mono-repo carries its own opinions (``mqtt.broker.host =
+    test.mosquitto.org``, ``wifi.ssid`` placeholder).  Setup runs
+    ``materialize_templates`` first so the repo's override lands at
+    the workspace root before the workbench-starter fallback gets a
+    chance to fire.
+    """
+    import generate_config_files as module  # noqa: PLC0415
+
+    monkeypatch.setattr(module, "ROOT", tmp_path)
+    template_dir = tmp_path / "_workspace_template"
+    template_dir.mkdir()
+    (template_dir / "workspace.yml").write_text(
+        "# repo-specific override\ndefaults: {}\n",
     )
+
+    assert module.generate_config_files() == 0
+
+    workspace_yml = tmp_path / "workspace.yml"
+    assert workspace_yml.read_text() == "# repo-specific override\ndefaults: {}\n"
 
 
 def test_devices_yml_starter_invalid_runtime_caught_by_schema(

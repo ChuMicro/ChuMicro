@@ -7,7 +7,7 @@ password = ""                          # required: WPA passphrase
 
 # Tip: keep the password out of git by setting it under
 # ``defaults.wifi.password`` in your workspace's gitignored
-# ``workspace.local.yml`` instead of inlining here.  The deploy-time
+# ``workspace.yml`` instead of inlining here.  The deploy-time
 # deep-merge picks up the overlay automatically.
 
 # hostname = "thing-1"                 # optional: hostname advertised on the AP

@@ -4,37 +4,46 @@ When the listed files do not exist, this module writes them with
 sensible placeholder content so the contributor can fill in their
 values immediately.  Existing files are never overwritten.
 
-Files generated:
+Two-phase materialisation (matches ``chumicro-workspace setup``):
+
+1. ``materialize_templates`` walks ``_workspace_template/`` and
+   materialises any file under it whose target at the workspace
+   root is missing.  The mono-repo's ``_workspace_template/workspace.yml``
+   carries this repo's opinions (wifi.ssid placeholder, mqtt broker =
+   ``test.mosquitto.org``) and lands at ``./workspace.yml``.
+
+2. ``materialize_workbench_starters`` then fills in any remaining
+   workbench-owned starters (``devices.yml``, ``workspace.yml``)
+   from the canonical content in ``chumicro_workspace``'s
+   ``_payloads/``.  Acts as the fallback when
+   ``_workspace_template/`` doesn't carry a copy.
+
+Files generated (lowest-precedence content shown — the
+``_workspace_template/`` override wins when present):
 
 * ``devices.yml`` — board registry used by the functional-test
   runner.  Content owned by ``chumicro-workspace`` (single source
   of truth, shared with the workspace-template repo); schema owned
-  by ``chumicro-deploy``.  See
-  ``chumicro_workspace.read_devices_yml_starter``.
-* ``workspace.local.yml`` — gitignored credential overlay (Decision
-  0057).  Same section-namespaced shape as ``workspace.yml``;
-  deep-merged on top so any key set here wins over the committed
-  defaults.  Content owned by ``chumicro-workspace`` (same
-  source-of-truth pattern as devices.yml; shared with the
-  workspace-template repo).  See
-  ``chumicro_workspace.read_workspace_local_yml_starter``.
+  by ``chumicro-deploy``.
+* ``workspace.yml`` — gitignored workspace-wide defaults +
+  credentials in one file (Decisions 0035 + 0057).  Content
+  owned by ``chumicro-workspace``; the mono-repo overrides via its
+  own ``_workspace_template/workspace.yml``.
 
 Called by ``python scripts/run.py setup``.
 
-Phase 4 of ``plans/workstreams/scripts-workbench-config-unification.md``
-retired ``chumicro-dev-config.toml`` — the unified
-``workspace.yml`` + ``workspace.local.yml`` pair (read via
-``chumicro_workspace.compose_runtime_config``) is the canonical
-shape every networking-library functional-test conftest now reads.
-Decision 0057 then retired the ``!secret`` marker + ``secrets.yml``
-in favour of the structural overlay this script materialises.
+Decision 0057 retired the ``!secret`` marker and collapsed the
+runtime-config pipeline to two gitignored files: ``workspace.yml`` +
+per-project ``config.toml``.  Same gitignored guarantee, no marker,
+no resolver.
 """
 
 from __future__ import annotations
 
-from chumicro_workspace import (
-    read_devices_yml_starter,
-    read_workspace_local_yml_starter,
+from chumicro_workspace.template_apply import (
+    ApplyAction,
+    materialize_templates,
+    materialize_workbench_starters,
 )
 from repo_layout import ROOT
 
@@ -44,14 +53,20 @@ def generate_config_files() -> int:
 
     Returns 0 always (missing configs are not errors).
     """
-    devices_yml_was_created = _materialise_from_workbench(
+    template_report = materialize_templates(ROOT)
+    workbench_report = materialize_workbench_starters(ROOT)
+
+    devices_yml_was_created = _was_materialised(
         relative_path="devices.yml",
-        starter_reader=read_devices_yml_starter,
+        reports=(template_report, workbench_report),
     )
-    _materialise_from_workbench(
-        relative_path="workspace.local.yml",
-        starter_reader=read_workspace_local_yml_starter,
-    )
+
+    for report in (template_report, workbench_report):
+        for relative_path, action in report:
+            if action == ApplyAction.MATERIALIZED:
+                print(f"  Created {relative_path}")
+            elif action == ApplyAction.UNCHANGED:
+                print(f"  {relative_path} already exists — skipped")
 
     if devices_yml_was_created:
         # The starter ``devices.yml`` ships with an empty ``devices: []``
@@ -71,25 +86,13 @@ def generate_config_files() -> int:
     return 0
 
 
-def _materialise_from_workbench(
-    *,
-    relative_path: str,
-    starter_reader,
-) -> bool:
-    """Write a workbench-owned starter file when the target is missing.
-
-    Returns True when a fresh starter was written, False when the
-    file already exists (so callers can suppress follow-up hints
-    that don't apply to contributors who already have populated
-    files).
-    """
-    target = ROOT / relative_path
-    if target.exists():
-        print(f"  {relative_path} already exists — skipped")
-        return False
-    target.write_text(starter_reader())
-    print(f"  Created {relative_path}")
-    return True
+def _was_materialised(*, relative_path: str, reports: tuple) -> bool:
+    """Return True when *relative_path* was MATERIALIZED in any report."""
+    for report in reports:
+        for path, action in report:
+            if path == relative_path and action == ApplyAction.MATERIALIZED:
+                return True
+    return False
 
 
 if __name__ == "__main__":

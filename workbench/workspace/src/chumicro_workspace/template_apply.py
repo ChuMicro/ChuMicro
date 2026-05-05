@@ -8,7 +8,9 @@ touching user-owned ones.  `materialize_templates` walks a workspace's
 `_workspace_template/` directory and creates any missing files at the workspace
 root — invoked by ``setup`` so users edit the materialized files
 directly instead of doing manual ``cp`` from a ``.example`` (Decision
-0038 §5).
+0038 §5).  ``materialize_workbench_starters`` then fills in any
+remaining workbench-owned starters (``devices.yml``, ``workspace.yml``)
+from the canonical content in this package's ``_payloads/``.
 """
 
 from __future__ import annotations
@@ -177,7 +179,7 @@ def update(
 #: (``plans/workstreams/scripts-workbench-config-unification.md``).
 _WORKBENCH_STARTERS: tuple[tuple[str, str], ...] = (
     ("devices.yml", "read_devices_yml_starter"),
-    ("workspace.local.yml", "read_workspace_local_yml_starter"),
+    ("workspace.yml", "read_workspace_yml_starter"),
 )
 
 
@@ -224,11 +226,15 @@ def materialize_templates(workspace_root: Path) -> ApplyReport:
     is a one-time-per-file generation step that runs idempotently
     on every ``setup``.
 
-    Workbench-owned starters (``devices.yml``, ``workspace.local.yml``)
-    are materialised separately by :func:`materialize_workbench_starters`
+    Workbench-owned starters (``devices.yml``, ``workspace.yml``) are
+    materialised separately by :func:`materialize_workbench_starters`
     so the workspace-template repo no longer ships static copies
     under ``_workspace_template/``; the workbench package owns the
-    canonical content for those files.
+    canonical content for those files.  A repo-specific
+    ``_workspace_template/workspace.yml`` (mono-repo's case — carrying
+    its own MQTT broker default + wifi.ssid placeholder) wins because
+    :func:`materialize_templates` runs before
+    :func:`materialize_workbench_starters` in the setup flow.
 
     Returns a report whose entries are ``MATERIALIZED`` for each
     newly created file and ``UNCHANGED`` for each that already

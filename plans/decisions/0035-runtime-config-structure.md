@@ -137,9 +137,7 @@ production) get the same defaults without one path leaking.
 
 ### 5. Deep-merge semantics: per-key, not per-section
 
-> **Update — Decision 0057 retired the `!secret` marker** in favour of a structural overlay (`workspace.local.yml`, optionally `projects/<name>/config.local.<suffix>`) that deep-merges as one more layer.  The merge is now four sources rather than three, all sharing the same section-namespaced shape.
-
-The deployer merges sources into the final dict, in increasing precedence: `workspace.yml` defaults → `workspace.local.yml` (gitignored overlay; Decision 0057) → `projects/<name>/config.toml` → `projects/<name>/config.local.<suffix>` (gitignored, optional; Decision 0057).
+The deployer merges sources into the final dict, in increasing precedence: `workspace.yml` defaults (gitignored — workspace-wide defaults + credentials in one place per Decision 0057) → `projects/<name>/config.{toml,yml,yaml}` (per-project; gitignored when scaffolded by `chumicro-workspace new`).
 
 Merge is **deep, key-level** within sections: workspace's `[wifi]` section + project's `[wifi]` section combine key-by-key, with the project's keys winning.  Sections present only in `workspace.yml` become global defaults the project inherits without restating.  A worked example with concrete TOML/YAML/Python lives in `docs/contributing/runtime-config.md`.
 
