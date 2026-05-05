@@ -40,9 +40,9 @@ def compose_runtime_config(
     The host-side composition step.  Same flow ``build_runtime_config``
     runs minus the final ``write_runtime_config`` call.  Useful when
     a caller needs the resolved dict for in-memory consumption
-    (e.g. mono-repo functional-test conftests reading ``[wifi]`` /
-    ``[mqtt]`` for the ``_test_creds.py`` shim) without leaving an
-    unused msgpack file on disk.
+    (e.g. networking-library functional-test conftests handing the
+    merged dict to ``chumicro_pytest_device.runtime_config.set_runtime_config``)
+    without leaving an unused msgpack file on disk.
 
     Merge precedence (lowest → highest):
 

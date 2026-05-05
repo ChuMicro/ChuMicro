@@ -2,25 +2,19 @@
 
 Two responsibilities:
 
-1. Materialise ``_test_creds.py`` from the unified config sources
-   (``workspace.yml`` + per-library
-   ``functional_tests/config.toml``) so the on-device test inherits the LAN
-   credentials.
+1. Register the merged runtime-config dict (workspace.yml +
+   per-library overrides) with pytest-device so it stages at
+   ``/runtime_config.msgpack`` on the device — on-device tests read
+   wifi creds + the dynamic ``websockets.server`` host/port from there.
 2. Spawn a host-side ``websockets`` PyPI echo server on the LAN
    interface so ``test_real_client_against_host.py`` has a battle-
    tested third-party counterparty.
 
 Skips the echo-server fixture (and so the host-counterparty test)
 silently when the ``websockets`` PyPI package isn't installed in
-the host venv or the LAN IP can't be detected; the credential shim
-still gets materialised so the loopback test keeps working.
-
-Phase 4 of the unification workstream
-(``plans/workstreams/scripts-workbench-config-unification.md``)
-retired the legacy ``chumicro-dev-config.toml`` source — every
-networking library's conftest reads from the same
-gitignored ``workspace.yml`` the workspace-template's
-user projects use.
+the host venv or the LAN IP can't be detected; the loopback test
+still runs against the on-device server using the staged
+credentials.
 """
 
 from __future__ import annotations
@@ -31,23 +25,19 @@ import sys
 import time
 from pathlib import Path
 
+import pytest
+from chumicro_pytest_device.runtime_config import set_runtime_config
 from chumicro_workspace import compose_runtime_config
 
 _HERE = Path(__file__).resolve().parent
 _REPO_ROOT = _HERE.parents[2]
 _WORKSPACE_YAML = _REPO_ROOT / "workspace.yml"
 _LIBRARY_CONFIG = _HERE / "config.toml"  # optional; absent → workspace defaults only
-_SHIM_PATH = _HERE / "_test_creds.py"
 _HOST_ECHO_SCRIPT = _HERE / "_host_echo_server.py"
 
 
-def _read_wifi_section() -> tuple[str, str] | None:
-    """Return ``(ssid, password)`` from the unified config, or ``None``.
-
-    Silent-skip on every "creds not configured" path: missing
-    workspace.yml, missing wifi section, missing keys,
-    parse failure, placeholder SSID still in place.
-    """
+def _merged_runtime_config_with_creds() -> dict | None:
+    """Return the deep-merged runtime-config dict, or ``None`` to silent-skip."""
     if not _WORKSPACE_YAML.is_file():
         return None
     try:
@@ -66,7 +56,7 @@ def _read_wifi_section() -> tuple[str, str] | None:
         return None
     if ssid == "replace-with-your-ap-ssid":
         return None
-    return ssid, password
+    return merged
 
 
 def _detect_lan_ip() -> str | None:
@@ -145,48 +135,34 @@ def _start_host_echo_server(
 _ECHO_PROCESS: subprocess.Popen[bytes] | None = None
 
 
-def pytest_configure(config) -> None:  # noqa: ARG001 - pytest hook signature
-    """Refresh ``_test_creds.py``; spin up the host echo-server fixture."""
+def pytest_configure(config: pytest.Config) -> None:
+    """Spin up the host echo server; register the runtime-config payload.
+
+    Always shapes ``websockets.server`` with ``host``/``port`` keys when a
+    payload is registered — values are ``None`` when the fixture didn't
+    spawn, so on-device test code can read
+    ``config["websockets"]["server"]["host"]`` directly without
+    defensive ``.get()`` chaining.
+    """
     global _ECHO_PROCESS
 
-    creds = _read_wifi_section()
-    echo_host: str | None = None
-    echo_port: int | None = None
+    merged = _merged_runtime_config_with_creds()
 
-    if creds is not None:
+    if merged is not None:
+        server_host: str | None = None
+        server_port: int | None = None
         lan_ip = _detect_lan_ip()
         if lan_ip is not None:
             spawned = _start_host_echo_server(lan_ip)
             if spawned is not None:
-                _ECHO_PROCESS, echo_port = spawned
-                echo_host = lan_ip
+                _ECHO_PROCESS, server_port = spawned
+                server_host = lan_ip
+        merged.setdefault("websockets", {})["server"] = {
+            "host": server_host,
+            "port": server_port,
+        }
 
-    if creds is None:
-        if _SHIM_PATH.exists():
-            _SHIM_PATH.unlink()
-        return
-
-    ssid, password = creds
-    lines = [
-        '"""Auto-generated test creds shim — do not check in."""\n',
-        f"SSID = {ssid!r}\n",
-        f"PASSWORD = {password!r}\n",
-    ]
-    if echo_host is not None and echo_port is not None:
-        lines.extend(
-            (
-                f"WS_SERVER_HOST = {echo_host!r}\n",
-                f"WS_SERVER_PORT = {echo_port!r}\n",
-            ),
-        )
-    else:
-        lines.extend(
-            (
-                "WS_SERVER_HOST = None\n",
-                "WS_SERVER_PORT = None\n",
-            ),
-        )
-    _SHIM_PATH.write_text("".join(lines))
+    set_runtime_config(config, merged)
 
 
 def pytest_sessionfinish(session, exitstatus) -> None:  # noqa: ARG001

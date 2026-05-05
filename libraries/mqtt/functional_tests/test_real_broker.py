@@ -4,9 +4,10 @@ End-to-end: bring wifi up on the device, connect to a public MQTT
 broker, publish + subscribe to a unique topic, verify the inbound
 PUBLISH round-trips back via QoS 1.
 
-Skips silently when no credentials are configured (see
-``conftest.py`` for the ``_test_creds`` shim materialised from
-the top-level ``chumicro-dev-config.toml``).
+Skips silently when no credentials are configured.  Credentials +
+the dynamic broker host/port ship from the host conftest as
+``/runtime_config.msgpack`` and are read here via
+``chumicro_config.load_runtime_config()``.
 
 Verifies the canonical promise (Decision 0014): an LED-style
 counter keeps incrementing on the same loop while the publish is
@@ -26,26 +27,14 @@ fails with a clear timeout — that's a real network issue, not a
 test bug.
 """
 
-import sys
 import time
 
+from chumicro_config import config
 from chumicro_mqtt import MQTTClient
 from chumicro_sockets import tcp_client_socket
 from chumicro_timing import ticks_ms as _chumicro_ticks_ms
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 
-try:
-    from _test_creds import BROKER_HOST, BROKER_PORT, PASSWORD, SSID
-    _HAS_CREDS = True
-except ImportError:
-    SSID = ""
-    PASSWORD = ""
-    BROKER_HOST = None
-    BROKER_PORT = None
-    _HAS_CREDS = False
-
-
-_IS_DEVICE_RUNTIME = sys.implementation.name in ("circuitpython", "micropython")
 _DEADLINE_MS = 30_000
 _WIFI_CONNECT_TIMEOUT_MS = 15_000
 
@@ -71,14 +60,9 @@ def _sleep_ms(duration_ms: int) -> None:
 _ticks_ms = _chumicro_ticks_ms
 
 
-def _bring_wifi_up() -> WifiService:
-    wifi = WifiService(
-        WifiConfig(
-            ssid=SSID,
-            password=PASSWORD,
-            connect_timeout_ms=_WIFI_CONNECT_TIMEOUT_MS,
-        ),
-    )
+def _bring_wifi_up(wifi_config: WifiConfig) -> WifiService:
+    wifi_config.connect_timeout_ms = _WIFI_CONNECT_TIMEOUT_MS
+    wifi = WifiService(wifi_config)
     deadline = _ticks_ms() + _WIFI_CONNECT_TIMEOUT_MS
     while wifi.state != WifiState.CONNECTED:
         if _ticks_ms() > deadline:
@@ -103,21 +87,18 @@ def _unique_topic_root() -> str:
 
 def test_real_mqtt_publish_subscribe_round_trip() -> None:
     """Connect to a real broker, publish QoS 1, confirm receipt."""
-    if not (_HAS_CREDS and _IS_DEVICE_RUNTIME):
+    wifi_cfg = WifiConfig.try_from_dict(config)
+    if wifi_cfg is None:
         return
-    if BROKER_HOST is None or BROKER_PORT is None:
-        # Host fixture didn't bring up a broker (mosquitto missing,
-        # LAN detection failed, etc.).  Skip silently — the unit test
-        # suite still validates the wire format end-to-end.
-        print("MQTT_SKIP no host broker fixture available")
-        return
+    broker_host = config["mqtt"]["broker"]["host"]
+    broker_port = config["mqtt"]["broker"]["port"]
 
-    wifi = _bring_wifi_up()
+    wifi = _bring_wifi_up(wifi_cfg)
     print(f"WIFI_OK ip={wifi.ip}")
 
     sock = tcp_client_socket(
-        BROKER_HOST,
-        BROKER_PORT,
+        broker_host,
+        broker_port,
         radio=wifi.adapter.radio,
     )
     client = MQTTClient(
@@ -217,9 +198,3 @@ def test_real_mqtt_publish_subscribe_round_trip() -> None:
     )
 
     client.disconnect()
-
-
-def test_real_mqtt_skip_when_no_creds_configured() -> None:
-    """Document the no-creds path; always passes."""
-    if _HAS_CREDS:
-        return

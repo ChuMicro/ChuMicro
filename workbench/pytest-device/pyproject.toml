@@ -29,6 +29,12 @@ classifiers = [
 dependencies = [
     "pytest>=8.0",
     "chumicro-deploy>=0.1.0",
+    # Used to msgpack-encode the runtime-config dict registered via
+    # ``set_runtime_config()`` before staging it at
+    # ``/runtime_config.msgpack`` on the device.  ``use_single_float=True``
+    # keeps the wire shape compatible with CircuitPython's native
+    # ``msgpack`` decoder (no float64 support).
+    "msgpack>=1.0",
 ]
 
 [project.urls]

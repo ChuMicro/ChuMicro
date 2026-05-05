@@ -92,6 +92,30 @@ def test_wifi_config_from_dict_unknown_keys_ignored() -> None:
     assert not hasattr(config, "future_key")
 
 
+def test_wifi_config_try_from_dict_returns_config_when_section_present() -> None:
+    """``try_from_dict`` builds the config when the wifi section is present + valid."""
+    runtime_config = {"wifi": {"ssid": "Net", "password": "pw"}}
+    result = WifiConfig.try_from_dict(runtime_config)
+    assert result is not None
+    assert result.ssid == "Net"
+    assert result.password == "pw"
+
+
+def test_wifi_config_try_from_dict_returns_none_when_runtime_config_is_none() -> None:
+    """``runtime_config=None`` → ``None`` (no /runtime_config.msgpack deployed)."""
+    assert WifiConfig.try_from_dict(None) is None
+
+
+def test_wifi_config_try_from_dict_returns_none_when_section_missing() -> None:
+    """A runtime config without a ``[wifi]`` section returns ``None``."""
+    assert WifiConfig.try_from_dict({"mqtt": {"broker": "x"}}) is None
+
+
+def test_wifi_config_try_from_dict_returns_none_when_required_key_missing() -> None:
+    """A wifi section without ``ssid``/``password`` returns ``None``."""
+    assert WifiConfig.try_from_dict({"wifi": {"hostname": "x"}}) is None
+
+
 # ---------------------------------------------------------------------------
 # WifiState — sentinel constants
 # ---------------------------------------------------------------------------

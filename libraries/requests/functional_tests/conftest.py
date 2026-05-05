@@ -1,21 +1,18 @@
-"""Host-side fixture: materialise ``_test_creds.py`` from the unified config sources.
+"""Host-side fixture: register the merged runtime-config dict for staging.
 
 Reads the merged runtime-config dict from
 ``workspace.yml`` + this library's optional
-``functional_tests/config.toml`` , then renders the
-``[wifi]`` section into the gitignored ``_test_creds.py`` shim that
-the on-device test imports.
+``functional_tests/config.toml``, then hands it to
+``chumicro_pytest_device.runtime_config.set_runtime_config`` so the
+plugin msgpack-encodes it once and stages it at
+``/runtime_config.msgpack`` on the device.  On-device tests read it
+back via ``chumicro_config.load_runtime_config()``.
 
-Phase 4 of the unification workstream
-(``plans/workstreams/scripts-workbench-config-unification.md``)
-retired the legacy ``chumicro-dev-config.toml`` source — every
-networking library's conftest reads from the same
-gitignored ``workspace.yml`` the workspace-template's
-user projects use.
-
-Tests that import ``_test_creds`` skip silently when the shim
-isn't present, so committing this conftest is safe even on a
-clone without local credentials.
+Bakes the host's current UTC into ``requests.now_utc_tuple`` (a
+6-tuple) so the HTTPS test (``test_real_get_tls.py``) can seed the
+device RTC before TLS validation — boot RTC lands at 2021-01-01 on
+most ports, which makes mbedTLS reject any cert with NotBefore after
+that.  Real deployments NTP-sync; this is the bench-test equivalent.
 """
 
 from __future__ import annotations
@@ -23,21 +20,22 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+from chumicro_pytest_device.runtime_config import set_runtime_config
 from chumicro_workspace import compose_runtime_config
 
 _HERE = Path(__file__).resolve().parent
 _REPO_ROOT = _HERE.parents[2]
 _WORKSPACE_YAML = _REPO_ROOT / "workspace.yml"
 _LIBRARY_CONFIG = _HERE / "config.toml"  # optional; absent → workspace defaults only
-_SHIM_PATH = _HERE / "_test_creds.py"
 
 
-def _read_wifi_section() -> tuple[str, str] | None:
-    """Return ``(ssid, password)`` from the unified config, or ``None``.
+def _merged_runtime_config() -> dict | None:
+    """Return the deep-merged runtime-config dict, or ``None`` to silent-skip.
 
-    Silent-skip on every "creds not configured" path: missing
-    workspace.yml, missing wifi section, missing keys,
-    parse failure, placeholder SSID still in place.
+    Adds ``requests.now_utc_tuple`` — the bench-test RTC seed used by
+    the HTTPS test — into the merged dict so the on-device test reads
+    it via ``load_runtime_config()["requests"]["now_utc_tuple"]``.
     """
     if not _WORKSPACE_YAML.is_file():
         return None
@@ -57,30 +55,12 @@ def _read_wifi_section() -> tuple[str, str] | None:
         return None
     if ssid == "replace-with-your-ap-ssid":
         return None
-    return ssid, password
-
-
-def pytest_configure(config) -> None:  # noqa: ARG001 - pytest hook signature
-    """Write/refresh ``_test_creds.py`` from the dev config.
-
-    Also bakes the host's current UTC into ``NOW_UTC_TUPLE`` so the
-    HTTPS test (``test_real_get_tls.py``) can seed the device RTC
-    before TLS validation — boot RTC lands at 2021-01-01 on most
-    ports, which makes mbedTLS reject any cert with NotBefore after
-    that.  Real deployments NTP-sync; this is the bench-test
-    equivalent.
-    """
-    creds = _read_wifi_section()
-    if creds is None:
-        if _SHIM_PATH.exists():
-            _SHIM_PATH.unlink()
-        return
-    ssid, password = creds
     now = datetime.now(UTC)
     now_tuple = (now.year, now.month, now.day, now.hour, now.minute, now.second)
-    _SHIM_PATH.write_text(
-        '"""Auto-generated test creds shim — do not check in."""\n'
-        f"SSID = {ssid!r}\n"
-        f"PASSWORD = {password!r}\n"
-        f"NOW_UTC_TUPLE = {now_tuple!r}\n",
-    )
+    merged.setdefault("requests", {})["now_utc_tuple"] = now_tuple
+    return merged
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Register the runtime-config payload pytest-device will stage."""
+    set_runtime_config(config, _merged_runtime_config())

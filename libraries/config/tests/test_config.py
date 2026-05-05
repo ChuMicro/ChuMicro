@@ -21,6 +21,7 @@ from chumicro_config import (
     MissingConfigKey,
     load_runtime_config,
     load_section,
+    try_load_section,
 )
 from chumicro_msgpack import packb
 from chumicro_test_harness import raises
@@ -225,6 +226,74 @@ def test_library_from_dict_pattern_round_trips() -> None:
 
 
 # ---------------------------------------------------------------------------
+# try_load_section — soft-load wrapper (returns None instead of raising)
+# ---------------------------------------------------------------------------
+
+
+def test_try_load_section_returns_none_when_runtime_config_is_none() -> None:
+    """``runtime_config=None`` short-circuits — no creds deployed."""
+    result = try_load_section(
+        _ExampleConfig, None, "wifi",
+        required=("ssid", "password"),
+    )
+    assert result is None
+
+
+def test_try_load_section_returns_none_when_section_missing() -> None:
+    """A runtime config with no matching section returns ``None``, not KeyError."""
+    result = try_load_section(
+        _ExampleConfig, {"mqtt": {"broker": "x"}}, "wifi",
+        required=("ssid", "password"),
+    )
+    assert result is None
+
+
+def test_try_load_section_returns_none_when_section_not_a_dict() -> None:
+    """A non-dict section value returns ``None``, not InvalidConfigType."""
+    result = try_load_section(
+        _ExampleConfig, {"wifi": "scalar"}, "wifi",
+        required=("ssid", "password"),
+    )
+    assert result is None
+
+
+def test_try_load_section_returns_none_when_required_key_missing() -> None:
+    """Missing required key → ``None``, not MissingConfigKey."""
+    result = try_load_section(
+        _ExampleConfig, {"wifi": {"ssid": "Net"}}, "wifi",
+        required=("ssid", "password"),
+    )
+    assert result is None
+
+
+def test_try_load_section_returns_instance_when_section_valid() -> None:
+    """Section present + required keys present → built instance."""
+    result = try_load_section(
+        _ExampleConfig,
+        {"wifi": {"ssid": "Net", "password": "pw"}},
+        "wifi",
+        required=("ssid", "password"),
+    )
+    assert result is not None
+    assert result.ssid == "Net"
+    assert result.password == "pw"
+
+
+def test_try_load_section_applies_optional_defaults() -> None:
+    """Optional keys that are absent receive their declared defaults."""
+    result = try_load_section(
+        _ExampleConfig,
+        {"wifi": {"ssid": "Net", "password": "pw"}},
+        "wifi",
+        required=("ssid", "password"),
+        optional={"hostname": "fallback", "connect_timeout_ms": 99},
+    )
+    assert result is not None
+    assert result.hostname == "fallback"
+    assert result.connect_timeout_ms == 99
+
+
+# ---------------------------------------------------------------------------
 # load_runtime_config — file IO
 # ---------------------------------------------------------------------------
 
@@ -280,3 +349,85 @@ if _IS_CPYTHON:
         monkeypatch.setattr(runtime_module, "DEFAULT_RUNTIME_CONFIG_PATH", seed_path)
         loaded = load_runtime_config()
         assert loaded == {"app": {"key": "value"}}
+
+    # -----------------------------------------------------------------
+    # Module-level ``config`` attribute — PEP 562 lazy load + cache.
+    # -----------------------------------------------------------------
+
+    def _reset_config_cache(monkeypatch) -> None:
+        """Reset the module-level ``config`` cache so the next access reloads."""
+        import chumicro_config.runtime as runtime_module
+        monkeypatch.setattr(runtime_module, "_config_cache", None)
+        monkeypatch.setattr(runtime_module, "_config_loaded", False)
+
+    def test_config_attribute_lazy_loads_on_first_access(
+        monkeypatch, tmp_path,
+    ) -> None:
+        """``config`` reads the file only when first accessed."""
+        seed_path = str(tmp_path / "seeded.msgpack")
+        payload = {"wifi": {"ssid": "Net", "password": "pw"}}
+        with open(seed_path, "wb") as handle:
+            handle.write(packb(payload))
+        import chumicro_config.runtime as runtime_module
+        monkeypatch.setattr(runtime_module, "DEFAULT_RUNTIME_CONFIG_PATH", seed_path)
+        _reset_config_cache(monkeypatch)
+
+        # First access triggers the load.
+        from chumicro_config import config
+        assert config == payload
+
+    def test_config_attribute_caches_after_first_access(
+        monkeypatch, tmp_path,
+    ) -> None:
+        """Subsequent accesses don't re-read the file."""
+        seed_path = str(tmp_path / "seeded.msgpack")
+        with open(seed_path, "wb") as handle:
+            handle.write(packb({"wifi": {"ssid": "First"}}))
+        import chumicro_config.runtime as runtime_module
+        monkeypatch.setattr(runtime_module, "DEFAULT_RUNTIME_CONFIG_PATH", seed_path)
+        _reset_config_cache(monkeypatch)
+
+        # First access loads "First".
+        from chumicro_config import config as first
+        assert first["wifi"]["ssid"] == "First"
+
+        # Mutate the file on disk; the cache should still hold the
+        # original load.
+        with open(seed_path, "wb") as handle:
+            handle.write(packb({"wifi": {"ssid": "Second"}}))
+
+        from chumicro_config import config as second
+        assert second["wifi"]["ssid"] == "First"
+
+    def test_config_is_none_when_file_missing(monkeypatch, tmp_path) -> None:
+        """A missing file resolves to ``config = None``, not OSError."""
+        missing = str(tmp_path / "nope.msgpack")
+        import chumicro_config.runtime as runtime_module
+        monkeypatch.setattr(runtime_module, "DEFAULT_RUNTIME_CONFIG_PATH", missing)
+        _reset_config_cache(monkeypatch)
+
+        from chumicro_config import config
+        assert config is None
+
+    def test_config_propagates_invalid_type(monkeypatch, tmp_path) -> None:
+        """A malformed payload propagates ``InvalidConfigType`` on first access.
+
+        Corruption is a hard deploy failure, not a silent skip — apps
+        gating on ``if config is None:`` shouldn't silently degrade
+        when the file lands corrupt.
+        """
+        path = str(tmp_path / "bad.msgpack")
+        with open(path, "wb") as handle:
+            handle.write(packb([1, 2, 3]))  # list, not dict
+        import chumicro_config.runtime as runtime_module
+        monkeypatch.setattr(runtime_module, "DEFAULT_RUNTIME_CONFIG_PATH", path)
+        _reset_config_cache(monkeypatch)
+
+        with raises(InvalidConfigType):
+            from chumicro_config import config  # noqa: F401
+
+    def test_unknown_attribute_raises_attribute_error() -> None:
+        """``__getattr__`` only handles ``config``; everything else raises."""
+        import chumicro_config
+        with raises(AttributeError):
+            chumicro_config.does_not_exist  # noqa: B018

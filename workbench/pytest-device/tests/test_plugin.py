@@ -761,9 +761,13 @@ class _HotPathTransport:
         harness_source,
         *,
         extra_modules=None,
+        extra_files=None,
     ) -> None:
         self.calls.append(
-            ("stage", (source_dirs, test_files, harness_source, extra_modules)),
+            (
+                "stage",
+                (source_dirs, test_files, harness_source, extra_modules, extra_files),
+            ),
         )
 
     def execute(self, bootstrap_script: str) -> str:
@@ -805,6 +809,13 @@ class _FakeConfig:
         # required — pinning a default to the chumicro mono-repo root
         # silently coupled tests to live workspace state.
         self.rootpath = rootpath
+        # ``Config.stash`` is the canonical place for plugin data.
+        # ``set_runtime_config`` writes to it; the plugin reads from it
+        # at stage time to encode the runtime-config payload.  Real
+        # pytest provides a ``Stash`` instance here; a plain dict
+        # exposes the same ``__setitem__`` / ``.get(...)`` surface the
+        # plugin uses.
+        self.stash: dict = {}
 
     def getoption(self, name: str, default=None):  # noqa: D401, ANN001
         return default

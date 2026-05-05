@@ -2,10 +2,10 @@
 
 Two responsibilities:
 
-1. Materialise ``_test_creds.py`` from the unified config sources
-   (``workspace.yml`` + per-library
-   ``functional_tests/config.toml``) so the on-device test inherits the LAN
-   credentials.
+1. Register the merged runtime-config dict (workspace.yml +
+   per-library overrides) with pytest-device so it stages at
+   ``/runtime_config.msgpack`` on the device — on-device tests read
+   wifi creds + the dynamic ``mqtt.broker`` host/port from there.
 2. Spawn a host-side Mosquitto broker on the LAN interface so
    ``test_real_broker.py`` has a counterparty.  ``test.mosquitto.org``
    is unreachable from the bench-ap network and the public broker
@@ -18,19 +18,9 @@ Apple Silicon.
 
 Skips the broker fixture (and so the real-broker test) silently
 when ``mosquitto`` is not on ``PATH`` or the LAN IP can't be
-detected; the credential shim still gets materialised so other
-fixtures keep working.
-
-Phase 4 of the unification workstream
-(``plans/workstreams/scripts-workbench-config-unification.md``)
-retired the legacy ``chumicro-dev-config.toml`` source — every
-networking library's conftest reads from the same
-gitignored ``workspace.yml`` the workspace-template's
-user projects use.  The dynamic broker host/port from
-``_start_mosquitto_broker`` still get rendered into ``_test_creds.py``
-verbatim — workspace.yml's ``[mqtt.broker]`` defaults to
-``test.mosquitto.org`` (the public broker) but the host-side
-broker fixture overrides it for the duration of the pytest session.
+detected; the workspace.yml-default broker host/port (typically
+``test.mosquitto.org:1883``) flow through unchanged for tests that
+can reach the public broker.
 """
 
 from __future__ import annotations
@@ -42,22 +32,18 @@ import tempfile
 import time
 from pathlib import Path
 
+import pytest
+from chumicro_pytest_device.runtime_config import set_runtime_config
 from chumicro_workspace import compose_runtime_config
 
 _HERE = Path(__file__).resolve().parent
 _REPO_ROOT = _HERE.parents[2]
 _WORKSPACE_YAML = _REPO_ROOT / "workspace.yml"
 _LIBRARY_CONFIG = _HERE / "config.toml"  # optional; absent → workspace defaults only
-_SHIM_PATH = _HERE / "_test_creds.py"
 
 
-def _read_wifi_section() -> tuple[str, str] | None:
-    """Return ``(ssid, password)`` from the unified config, or ``None``.
-
-    Silent-skip on every "creds not configured" path: missing
-    workspace.yml, missing wifi section, missing keys, parse
-    failure, placeholder SSID still in place.
-    """
+def _merged_runtime_config_with_creds() -> dict | None:
+    """Return the deep-merged runtime-config dict, or ``None`` to silent-skip."""
     if not _WORKSPACE_YAML.is_file():
         return None
     try:
@@ -76,7 +62,7 @@ def _read_wifi_section() -> tuple[str, str] | None:
         return None
     if ssid == "replace-with-your-ap-ssid":
         return None
-    return ssid, password
+    return merged
 
 
 def _detect_lan_ip() -> str | None:
@@ -163,15 +149,13 @@ _BROKER_PROCESS: subprocess.Popen[bytes] | None = None
 _BROKER_WORKDIR: Path | None = None
 
 
-def pytest_configure(config) -> None:  # noqa: ARG001 - pytest hook signature
-    """Refresh ``_test_creds.py``; spin up the host Mosquitto broker."""
+def pytest_configure(config: pytest.Config) -> None:
+    """Spin up the host Mosquitto broker; register the runtime-config payload."""
     global _BROKER_PROCESS, _BROKER_WORKDIR
 
-    creds = _read_wifi_section()
-    broker_host: str | None = None
-    broker_port: int | None = None
+    merged = _merged_runtime_config_with_creds()
 
-    if creds is not None:
+    if merged is not None:
         lan_ip = _detect_lan_ip()
         if lan_ip is not None:
             workdir = Path(tempfile.mkdtemp(prefix="chumicro_mqtt_broker_"))
@@ -179,36 +163,14 @@ def pytest_configure(config) -> None:  # noqa: ARG001 - pytest hook signature
             if broker is not None:
                 _BROKER_PROCESS, broker_port = broker
                 _BROKER_WORKDIR = workdir
-                broker_host = lan_ip
+                merged.setdefault("mqtt", {}).setdefault("broker", {}).update(
+                    host=lan_ip,
+                    port=broker_port,
+                )
             else:
                 shutil.rmtree(workdir, ignore_errors=True)
 
-    if creds is None:
-        if _SHIM_PATH.exists():
-            _SHIM_PATH.unlink()
-        return
-
-    ssid, password = creds
-    lines = [
-        '"""Auto-generated test creds shim — do not check in."""\n',
-        f"SSID = {ssid!r}\n",
-        f"PASSWORD = {password!r}\n",
-    ]
-    if broker_host is not None and broker_port is not None:
-        lines.extend(
-            (
-                f"BROKER_HOST = {broker_host!r}\n",
-                f"BROKER_PORT = {broker_port!r}\n",
-            ),
-        )
-    else:
-        lines.extend(
-            (
-                "BROKER_HOST = None\n",
-                "BROKER_PORT = None\n",
-            ),
-        )
-    _SHIM_PATH.write_text("".join(lines))
+    set_runtime_config(config, merged)
 
 
 def pytest_sessionfinish(session, exitstatus) -> None:  # noqa: ARG001 — pytest hook

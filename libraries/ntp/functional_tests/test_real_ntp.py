@@ -6,32 +6,20 @@ the host's clock.  Exercises chumicro-ntp's SNTP wire format,
 chumicro-sockets' UDP path, and the ``sockets_factory`` Decision-
 0042 deploy-rule submodule end-to-end on real hardware.
 
-Skips silently when no credentials are configured.  Credentials live
-in the gitignored ``_test_creds.py`` shim that
-``../../sockets/functional_tests/conftest.py`` materialises from
-``chumicro-dev-config.toml`` — chumicro-ntp shares it via the
-sibling-import shim below so the same wifi setup works without
-duplicating the conftest.
+Skips silently when no credentials are configured.  Credentials
+ship from the host conftest as ``/runtime_config.msgpack`` and are
+read here via ``chumicro_config.load_runtime_config()`` — the same
+API user code uses.
 """
 
-import sys
 import time
 
+from chumicro_config import config
 from chumicro_ntp import NTPClient
 from chumicro_ntp.sockets_factory import chumicro_sockets_factory
 from chumicro_timing import ticks_ms as _ticks_ms
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 
-try:
-    from _test_creds import PASSWORD, SSID
-    _HAS_CREDS = True
-except ImportError:
-    SSID = ""
-    PASSWORD = ""
-    _HAS_CREDS = False
-
-
-_IS_DEVICE_RUNTIME = sys.implementation.name in ("circuitpython", "micropython")
 #: Public NTP server used for validation.  pool.ntp.org rotates
 #: across many providers so a single down stratum-2 doesn't break
 #: the test.
@@ -54,14 +42,9 @@ def _sleep_ms(duration_ms: int) -> None:
     time.sleep(duration_ms / 1000)
 
 
-def _bring_wifi_up() -> WifiService:
-    wifi = WifiService(
-        WifiConfig(
-            ssid=SSID,
-            password=PASSWORD,
-            connect_timeout_ms=_WIFI_CONNECT_TIMEOUT_MS,
-        ),
-    )
+def _bring_wifi_up(wifi_config: WifiConfig) -> WifiService:
+    wifi_config.connect_timeout_ms = _WIFI_CONNECT_TIMEOUT_MS
+    wifi = WifiService(wifi_config)
     deadline = _ticks_ms() + _WIFI_CONNECT_TIMEOUT_MS
     while wifi.state != WifiState.CONNECTED:
         if _ticks_ms() > deadline:
@@ -77,10 +60,11 @@ def _bring_wifi_up() -> WifiService:
 
 def test_real_ntp_query_returns_plausible_timestamp() -> None:
     """SNTP exchange against pool.ntp.org returns a recent timestamp."""
-    if not (_HAS_CREDS and _IS_DEVICE_RUNTIME):
+    wifi_cfg = WifiConfig.try_from_dict(config)
+    if wifi_cfg is None:
         return
 
-    wifi = _bring_wifi_up()
+    wifi = _bring_wifi_up(wifi_cfg)
     print(f"WIFI_OK ip={wifi.ip}")
 
     sock = chumicro_sockets_factory(radio=wifi.adapter.radio)
@@ -125,10 +109,4 @@ def test_real_ntp_query_returns_plausible_timestamp() -> None:
 
     finally:
         sock.close()
-
-
-def test_real_ntp_skip_when_no_creds_configured() -> None:
-    """Document the no-creds path; always passes."""
-    if _HAS_CREDS:
-        return
     print("NTP_SKIP no creds")

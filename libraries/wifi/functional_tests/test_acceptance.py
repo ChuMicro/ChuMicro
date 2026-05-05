@@ -1,13 +1,15 @@
 """Phase 3a Slice 4 acceptance — connect to a real AP across all four boards.
 
-Reads credentials from the gitignored ``_test_creds.py`` shim that
-each library's ``functional_tests/conftest.py`` materialises from
-the unified config sources (``workspace.yml`` + per-library
-``functional_tests/config.toml`` + ``workspace.yml``, read
-via ``chumicro_workspace.compose_runtime_config``).  When the shim
-isn't present (the steady-state for any clone without local
-credentials) every test in this file early-returns cleanly so the
-suite stays committable.
+Reads credentials from ``/runtime_config.msgpack`` on the device via
+``WifiConfig.try_from_dict(config)`` — same surface user app code
+uses.  The host-side ``functional_tests/conftest.py`` builds the
+merged config dict (workspace defaults + per-library overrides) and
+hands it to ``chumicro_pytest_device.set_runtime_config()``; the
+plugin encodes + stages the file alongside the test sources.
+
+When the wifi section isn't deployed (fresh-clone without
+credentials, RAM-mode skip) ``try_from_dict`` returns ``None`` and
+every test early-returns cleanly so the suite stays committable.
 
 The test source itself never contains credentials — only the
 loader pattern + assertions about the resulting state machine.
@@ -30,21 +32,10 @@ the password.  Commit messages + history.md never reference the
 SSID or password values either.
 """
 
-import sys
 import time
 
+from chumicro_config import config
 from chumicro_wifi import WifiConfig, WifiService, WifiState
-
-try:
-    from _test_creds import PASSWORD, SSID
-    _HAS_CREDS = True
-except ImportError:
-    SSID = ""
-    PASSWORD = ""
-    _HAS_CREDS = False
-
-
-_IS_DEVICE_RUNTIME = sys.implementation.name in ("circuitpython", "micropython")
 
 
 def _sleep_ms(duration_ms):
@@ -75,32 +66,29 @@ def _drive_until(service, predicate, *, deadline_ms):
         _sleep_ms(50)
 
 
-def _make_service():
-    """Construct a WifiService with the configured AP credentials.
+def _make_service(wifi_config):
+    """Tighten timeouts on the loaded ``WifiConfig`` and wrap in a ``WifiService``.
 
     Uses the runtime's auto-detected adapter (CP / MP-ESP32 /
-    MP-RP2 / fake on host).  Tighter timeouts than production to
-    keep the test suite snappy.
+    MP-RP2 / fake on host).  Tighter timeouts than production keep
+    the test suite snappy.
     """
-    config = WifiConfig(
-        ssid=SSID,
-        password=PASSWORD,
-        connect_timeout_ms=10_000,
-        reconnect_backoff_start_ms=500,
-        reconnect_backoff_max_ms=5_000,
-    )
-    return WifiService(config)
+    wifi_config.connect_timeout_ms = 10_000
+    wifi_config.reconnect_backoff_start_ms = 500
+    wifi_config.reconnect_backoff_max_ms = 5_000
+    return WifiService(wifi_config)
 
 
 def test_connects_to_real_ap() -> None:
     """End-to-end: associate with the configured AP, observe linked state."""
-    if not (_HAS_CREDS and _IS_DEVICE_RUNTIME):
+    wifi_cfg = WifiConfig.try_from_dict(config)
+    if wifi_cfg is None:
         return
-    service = _make_service()
+    service = _make_service(wifi_cfg)
     assert service.state == WifiState.DISCONNECTED
 
     # Drive the service until linked or 15 s elapses.
-    print(f"Connecting to SSID {SSID!r}...")
+    print(f"Connecting to SSID {wifi_cfg.ssid!r}...")
     ok = _drive_until(
         service,
         lambda svc: svc.state == WifiState.CONNECTED,
@@ -115,9 +103,10 @@ def test_connects_to_real_ap() -> None:
 
 def test_reconnect_after_deliberate_disconnect() -> None:
     """Drop the link via ``adapter.disconnect``, watch the reconnect cycle."""
-    if not (_HAS_CREDS and _IS_DEVICE_RUNTIME):
+    wifi_cfg = WifiConfig.try_from_dict(config)
+    if wifi_cfg is None:
         return
-    service = _make_service()
+    service = _make_service(wifi_cfg)
     ok = _drive_until(
         service,
         lambda svc: svc.state == WifiState.CONNECTED,
@@ -151,10 +140,11 @@ def test_reconnect_after_deliberate_disconnect() -> None:
 
 def test_state_callback_observes_transitions() -> None:
     """Registered ``on_state_change`` listener sees the full transition sequence."""
-    if not (_HAS_CREDS and _IS_DEVICE_RUNTIME):
+    wifi_cfg = WifiConfig.try_from_dict(config)
+    if wifi_cfg is None:
         return
     transitions = []
-    service = _make_service()
+    service = _make_service(wifi_cfg)
     service.on_state_change(lambda old, new: transitions.append((old, new)))
 
     ok = _drive_until(
@@ -168,14 +158,3 @@ def test_state_callback_observes_transitions() -> None:
     # for; assert it's in the captured sequence.
     print(f"Captured {len(transitions)} transitions: {transitions}")
     assert (WifiState.CONNECTING, WifiState.CONNECTED) in transitions
-
-
-def test_skip_when_no_creds_configured() -> None:
-    """Sanity check that the no-creds path stays quiet.
-
-    Always passes; documents the skip behavior so a CI run without
-    credentials doesn't flag false negatives.
-    """
-    if _HAS_CREDS:
-        return
-    # No assertion needed — the early-returns above handle it.

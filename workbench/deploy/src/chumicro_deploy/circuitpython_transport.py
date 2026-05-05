@@ -661,15 +661,13 @@ class CircuitpythonTransport:
             test_files: Test files to stage (stored for bootstrap
                 generation).
             harness_source: Path to the test harness ``src/`` directory.
-            extra_modules: Optional sibling Python files (e.g.
-                ``_test_creds.py``) to register as importable on the
-                device alongside library sources.  In RAM mode they
-                join ``staged_sources``; in flash mode they land at the
-                drive root next to the test files.
+            extra_modules: Optional sibling Python files to register as
+                importable on the device alongside library sources.
+                In RAM mode they join ``staged_sources``; in flash mode
+                they land at the drive root next to the test files.
             extra_files: Non-Python files to land at named device paths
                 — typically ``{"/runtime_config.msgpack": <bytes>}`` so
-                test code can call ``chumicro_config.load_runtime_config()``
-                instead of importing ``_test_creds``.
+                test code can call ``chumicro_config.load_runtime_config()``.
                 **RAM mode raises** :class:`UnsupportedExtraFilesError`
                 because there's no writable device-side filesystem to
                 land bytes on; flash mode writes each file to the

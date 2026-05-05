@@ -8,8 +8,9 @@ ships a connection on the device, not just that the protocol
 factory imports.
 
 Skips silently when no credentials are configured.  Credentials
-live in a gitignored ``_test_creds.py`` shim that ``conftest.py``
-materialises from the top-level ``chumicro-dev-config.toml``.
+ship from the host conftest as ``/runtime_config.msgpack`` and are
+read here via ``chumicro_config.load_runtime_config()`` — the same
+API user code uses.
 
 Endpoint: plain HTTP on ``example.com:80`` so this test runs even
 on Pi Pico W CP (which has the post-handshake EPIPE issue
@@ -24,23 +25,13 @@ cause buried.  A direct socket test catches the regression at the
 transport layer where the message is unambiguous.
 """
 
-import sys
 import time
 
+from chumicro_config import config
 from chumicro_sockets import tcp_client_socket
 from chumicro_timing import ticks_ms as _ticks_ms
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 
-try:
-    from _test_creds import PASSWORD, SSID
-    _HAS_CREDS = True
-except ImportError:
-    SSID = ""
-    PASSWORD = ""
-    _HAS_CREDS = False
-
-
-_IS_DEVICE_RUNTIME = sys.implementation.name in ("circuitpython", "micropython")
 _TARGET_HOST = "example.com"
 _TARGET_PORT = 80
 _WIFI_CONNECT_TIMEOUT_MS = 15_000
@@ -55,14 +46,9 @@ def _sleep_ms(duration_ms: int) -> None:
     time.sleep(duration_ms / 1000)
 
 
-def _bring_wifi_up() -> WifiService:
-    wifi = WifiService(
-        WifiConfig(
-            ssid=SSID,
-            password=PASSWORD,
-            connect_timeout_ms=_WIFI_CONNECT_TIMEOUT_MS,
-        ),
-    )
+def _bring_wifi_up(wifi_config: WifiConfig) -> WifiService:
+    wifi_config.connect_timeout_ms = _WIFI_CONNECT_TIMEOUT_MS
+    wifi = WifiService(wifi_config)
     deadline = _ticks_ms() + _WIFI_CONNECT_TIMEOUT_MS
     while wifi.state != WifiState.CONNECTED:
         if _ticks_ms() > deadline:
@@ -78,10 +64,11 @@ def _bring_wifi_up() -> WifiService:
 
 def test_real_tcp_connect_and_recv() -> None:
     """Open a TCP connection, send HTTP/1.0, read the response."""
-    if not (_HAS_CREDS and _IS_DEVICE_RUNTIME):
+    wifi_cfg = WifiConfig.try_from_dict(config)
+    if wifi_cfg is None:
         return
 
-    wifi = _bring_wifi_up()
+    wifi = _bring_wifi_up(wifi_cfg)
     print(f"WIFI_OK ip={wifi.ip}")
 
     socket = tcp_client_socket(
@@ -145,9 +132,3 @@ def test_real_tcp_connect_and_recv() -> None:
         f"LED counter only ticked {led_counter} times — somebody "
         f"block-called during the recv loop"
     )
-
-
-def test_real_tcp_skip_when_no_creds_configured() -> None:
-    """Document the no-creds path; always passes."""
-    if _HAS_CREDS:
-        return

@@ -5,9 +5,9 @@ on a real :func:`chumicro_sockets.tcp_listening_socket`, connect a
 :class:`WebSocketClient` to it via the device's own LAN IP, drive
 both runners through bidirectional traffic and the close handshake.
 
-Skips silently when no credentials are configured (see ``conftest.py``
-for the ``_test_creds`` shim materialised from the top-level
-``chumicro-dev-config.toml``).
+Skips silently when no credentials are configured.  Credentials
+ship from the host conftest as ``/runtime_config.msgpack`` and are
+read here via ``chumicro_config.load_runtime_config()``.
 
 Verifies the canonical promise (Decision 0045): an LED-style counter
 keeps incrementing on the same loop while the handshake, the frame
@@ -33,21 +33,12 @@ has ~2 MB free heap and runs fine in either mode.
 import sys
 import time
 
+from chumicro_config import config
 from chumicro_sockets import tcp_client_socket, tcp_listening_socket
 from chumicro_timing import ticks_ms as _ticks_ms
 from chumicro_websockets import WebSocketClient, WebSocketServer, WebSocketState
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 
-try:
-    from _test_creds import PASSWORD, SSID
-    _HAS_CREDS = True
-except ImportError:
-    SSID = ""
-    PASSWORD = ""
-    _HAS_CREDS = False
-
-
-_IS_DEVICE_RUNTIME = sys.implementation.name in ("circuitpython", "micropython")
 _LISTEN_PORT = 8766
 _DEADLINE_MS = 30_000
 _WIFI_CONNECT_TIMEOUT_MS = 15_000
@@ -61,14 +52,9 @@ def _sleep_ms(duration_ms: int) -> None:
     time.sleep(duration_ms / 1000)
 
 
-def _bring_wifi_up() -> WifiService:
-    wifi = WifiService(
-        WifiConfig(
-            ssid=SSID,
-            password=PASSWORD,
-            connect_timeout_ms=_WIFI_CONNECT_TIMEOUT_MS,
-        ),
-    )
+def _bring_wifi_up(wifi_config: WifiConfig) -> WifiService:
+    wifi_config.connect_timeout_ms = _WIFI_CONNECT_TIMEOUT_MS
+    wifi = WifiService(wifi_config)
     deadline = _ticks_ms() + _WIFI_CONNECT_TIMEOUT_MS
     while wifi.state != WifiState.CONNECTED:
         if _ticks_ms() > deadline:
@@ -112,7 +98,8 @@ def _is_pi_pico_w_rp2() -> bool:
 
 def test_real_websocket_loopback_round_trip() -> None:
     """Server + client on the same device exchange messages over real wifi."""
-    if not (_HAS_CREDS and _IS_DEVICE_RUNTIME):
+    wifi_cfg = WifiConfig.try_from_dict(config)
+    if wifi_cfg is None:
         return
     if _is_pi_pico_w_rp2():
         print(
@@ -122,7 +109,7 @@ def test_real_websocket_loopback_round_trip() -> None:
         )
         return
 
-    wifi = _bring_wifi_up()
+    wifi = _bring_wifi_up(wifi_cfg)
     print(f"WIFI_OK ip={wifi.ip}")
 
     # --- Server side ---------------------------------------------------
@@ -241,9 +228,3 @@ def test_real_websocket_loopback_round_trip() -> None:
         f"somebody block-called during loopback"
     )
     server.close()
-
-
-def test_real_websocket_loopback_skip_when_no_creds_configured() -> None:
-    """Document the no-creds path; always passes."""
-    if _HAS_CREDS:
-        return

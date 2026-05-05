@@ -6,9 +6,9 @@ exchange one datagram with the host-side echo server materialised by
 
 Skips silently when no credentials are configured or the host
 echo-server fixture didn't come up (e.g. running outside the LAN
-fixture machine).  Credentials live in a gitignored ``_test_creds.py``
-shim that ``conftest.py`` materialises from
-``chumicro-dev-config.toml``.
+fixture machine).  Credentials + the dynamic echo host/port ship
+from the host conftest as ``/runtime_config.msgpack`` and are read
+here via the lazy-loaded ``chumicro_config.config`` attribute.
 
 Why a sockets-direct UDP test even though chumicro-ntp will exercise
 UDP transitively?  Same rationale as ``test_real_tcp.py``: when an
@@ -18,25 +18,13 @@ the transport-layer regression at the layer where the message is
 unambiguous.
 """
 
-import sys
 import time
 
+from chumicro_config import config
 from chumicro_sockets import udp_socket
 from chumicro_timing import ticks_ms as _ticks_ms
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 
-try:
-    from _test_creds import ECHO_HOST, ECHO_PORT, PASSWORD, SSID
-    _HAS_CREDS = True
-except ImportError:
-    SSID = ""
-    PASSWORD = ""
-    ECHO_HOST = None
-    ECHO_PORT = None
-    _HAS_CREDS = False
-
-
-_IS_DEVICE_RUNTIME = sys.implementation.name in ("circuitpython", "micropython")
 _WIFI_CONNECT_TIMEOUT_MS = 15_000
 _RECV_DEADLINE_MS = 5_000
 _PAYLOAD = b"chumicro-udp-echo"
@@ -50,14 +38,9 @@ def _sleep_ms(duration_ms: int) -> None:
     time.sleep(duration_ms / 1000)
 
 
-def _bring_wifi_up() -> WifiService:
-    wifi = WifiService(
-        WifiConfig(
-            ssid=SSID,
-            password=PASSWORD,
-            connect_timeout_ms=_WIFI_CONNECT_TIMEOUT_MS,
-        ),
-    )
+def _bring_wifi_up(wifi_config: WifiConfig) -> WifiService:
+    wifi_config.connect_timeout_ms = _WIFI_CONNECT_TIMEOUT_MS
+    wifi = WifiService(wifi_config)
     deadline = _ticks_ms() + _WIFI_CONNECT_TIMEOUT_MS
     while wifi.state != WifiState.CONNECTED:
         if _ticks_ms() > deadline:
@@ -73,16 +56,19 @@ def _bring_wifi_up() -> WifiService:
 
 def test_real_udp_echo_round_trip() -> None:
     """Send one datagram to the host echo server, read it back."""
-    if not (_HAS_CREDS and _IS_DEVICE_RUNTIME):
+    wifi_cfg = WifiConfig.try_from_dict(config)
+    if wifi_cfg is None:
         return
-    if ECHO_HOST is None or ECHO_PORT is None:
+    echo_host = config["sockets"]["echo"]["host"]
+    echo_port = config["sockets"]["echo"]["port"]
+    if echo_host is None or echo_port is None:
         # Fixture didn't bring up an echo server (host wasn't on a
         # LAN, or detection failed).  Skip silently — TCP test still
         # validates wifi + sockets.
         print("UDP_SKIP no host echo fixture available")
         return
 
-    wifi = _bring_wifi_up()
+    wifi = _bring_wifi_up(wifi_cfg)
     print(f"WIFI_OK ip={wifi.ip}")
 
     sock = udp_socket(radio=wifi.adapter.radio)
@@ -91,8 +77,8 @@ def test_real_udp_echo_round_trip() -> None:
     try:
         sock.setblocking(False)
 
-        sock.sendto(_PAYLOAD, ECHO_HOST, ECHO_PORT)
-        print(f"SENT bytes={len(_PAYLOAD)} dst={ECHO_HOST}:{ECHO_PORT}")
+        sock.sendto(_PAYLOAD, echo_host, echo_port)
+        print(f"SENT bytes={len(_PAYLOAD)} dst={echo_host}:{echo_port}")
 
         # Drain with a recv loop so a slow echo doesn't time out the
         # tick budget.  An LED-blink counter increments alongside so
@@ -134,13 +120,13 @@ def test_real_udp_echo_round_trip() -> None:
             f"echoed payload should match sent payload; sent={_PAYLOAD!r} "
             f"got={echo!r}"
         )
-        assert sender_address[0] == ECHO_HOST, (
+        assert sender_address[0] == echo_host, (
             f"sender host should be the echo server; "
-            f"expected={ECHO_HOST!r} got={sender_address[0]!r}"
+            f"expected={echo_host!r} got={sender_address[0]!r}"
         )
-        assert sender_address[1] == ECHO_PORT, (
+        assert sender_address[1] == echo_port, (
             f"sender port should be the echo server; "
-            f"expected={ECHO_PORT!r} got={sender_address[1]!r}"
+            f"expected={echo_port!r} got={sender_address[1]!r}"
         )
         assert led_counter > 1, (
             f"LED counter only ticked {led_counter} times — somebody "
@@ -149,10 +135,3 @@ def test_real_udp_echo_round_trip() -> None:
 
     finally:
         sock.close()
-
-
-def test_real_udp_skip_when_no_creds_configured() -> None:
-    """Document the no-creds path; always passes."""
-    if _HAS_CREDS:
-        return
-    print("UDP_SKIP no creds")

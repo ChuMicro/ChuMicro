@@ -6,7 +6,7 @@ parameter defaults and ``from_dict``'s call: both construction paths
 writing them twice is clearer than deriving one from the other.
 """
 
-from chumicro_config import load_section
+from chumicro_config import load_section, try_load_section
 
 
 class WifiConfig:
@@ -68,6 +68,49 @@ class WifiConfig:
         return load_section(
             cls,
             data,
+            required=("ssid", "password"),
+            optional={
+                "hostname": None,
+                "connect_timeout_ms": 15_000,
+                "reconnect_backoff_start_ms": 1_000,
+                "reconnect_backoff_max_ms": 60_000,
+                "reconnect_max": None,
+                "power_save": False,
+            },
+        )
+
+    @classmethod
+    def try_from_dict(cls, runtime_config: dict | None) -> "WifiConfig | None":
+        """Soft-load a ``WifiConfig`` from the whole runtime config.
+
+        Unlike :meth:`from_dict` (which expects a section dict and
+        raises on missing keys), this method takes the **whole
+        runtime config dict** — typically ``chumicro_config.config``
+        — and returns ``None`` whenever the wifi section is missing,
+        non-dict, or lacks the required ``ssid`` / ``password`` keys.
+
+        Use this as a "skip if not configured" gate in app or test
+        code::
+
+            from chumicro_config import config
+            from chumicro_wifi import WifiConfig, WifiService
+
+            wifi_cfg = WifiConfig.try_from_dict(config)
+            if wifi_cfg is None:
+                return  # not configured — skip / use defaults
+            service = WifiService(wifi_cfg)
+
+        Args:
+            runtime_config: The whole runtime config dict, or ``None``.
+
+        Returns:
+            A ``WifiConfig`` instance, or ``None`` if any short-circuit
+            "skip" path fires.
+        """
+        return try_load_section(
+            cls,
+            runtime_config,
+            section_name="wifi",
             required=("ssid", "password"),
             optional={
                 "hostname": None,

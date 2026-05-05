@@ -19,23 +19,13 @@ failure documents the issue rather than hiding it.  All other
 combinations in the four-board canonical matrix pass.
 """
 
-import sys
 import time
 
+from chumicro_config import config
 from chumicro_sockets import tls_client_socket
 from chumicro_timing import ticks_ms as _ticks_ms
 from chumicro_wifi import WifiConfig, WifiService, WifiState
 
-try:
-    from _test_creds import PASSWORD, SSID
-    _HAS_CREDS = True
-except ImportError:
-    SSID = ""
-    PASSWORD = ""
-    _HAS_CREDS = False
-
-
-_IS_DEVICE_RUNTIME = sys.implementation.name in ("circuitpython", "micropython")
 _TARGET_HOST = "example.com"
 _TARGET_PORT = 443
 _WIFI_CONNECT_TIMEOUT_MS = 15_000
@@ -50,14 +40,9 @@ def _sleep_ms(duration_ms: int) -> None:
     time.sleep(duration_ms / 1000)
 
 
-def _bring_wifi_up() -> WifiService:
-    wifi = WifiService(
-        WifiConfig(
-            ssid=SSID,
-            password=PASSWORD,
-            connect_timeout_ms=_WIFI_CONNECT_TIMEOUT_MS,
-        ),
-    )
+def _bring_wifi_up(wifi_config: WifiConfig) -> WifiService:
+    wifi_config.connect_timeout_ms = _WIFI_CONNECT_TIMEOUT_MS
+    wifi = WifiService(wifi_config)
     deadline = _ticks_ms() + _WIFI_CONNECT_TIMEOUT_MS
     while wifi.state != WifiState.CONNECTED:
         if _ticks_ms() > deadline:
@@ -73,10 +58,11 @@ def _bring_wifi_up() -> WifiService:
 
 def test_real_tls_handshake_and_recv() -> None:
     """Open TLS, send HTTPS GET, read response."""
-    if not (_HAS_CREDS and _IS_DEVICE_RUNTIME):
+    wifi_cfg = WifiConfig.try_from_dict(config)
+    if wifi_cfg is None:
         return
 
-    wifi = _bring_wifi_up()
+    wifi = _bring_wifi_up(wifi_cfg)
     print(f"WIFI_OK ip={wifi.ip}")
 
     # Default TLS context (CA-validated against the runtime's
@@ -131,9 +117,3 @@ def test_real_tls_handshake_and_recv() -> None:
         f"LED counter only ticked {led_counter} times — somebody "
         f"block-called during the TLS recv loop"
     )
-
-
-def test_real_tls_skip_when_no_creds_configured() -> None:
-    """Document the no-creds path; always passes."""
-    if _HAS_CREDS:
-        return

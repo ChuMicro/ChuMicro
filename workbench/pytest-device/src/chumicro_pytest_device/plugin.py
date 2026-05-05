@@ -63,7 +63,6 @@ from ._test_runner import (
     execute_device_bootstrap,
     resolve_effective_deploy_mode,
     resolve_library_source_dirs,
-    resolve_test_sibling_modules,
 )
 from .pr_summary import (
     DeviceRunResult,
@@ -71,6 +70,40 @@ from .pr_summary import (
     format_pr_summary_block,
 )
 from .result_parser import RunResult, TestResult, parse_output
+from .runtime_config import get_runtime_config
+
+#: Canonical on-device path for the staged runtime-config payload —
+#: matches :data:`chumicro_config.runtime.DEFAULT_RUNTIME_CONFIG_PATH`.
+#: Hard-coded here rather than imported because workbench packages
+#: don't import device libraries (they ship to host-side users via
+#: PyPI, libraries ship to boards via circup / mip).
+_RUNTIME_CONFIG_DEVICE_PATH = "/runtime_config.msgpack"
+
+
+def _encode_runtime_config_extra_files(
+    config: pytest.Config,
+) -> dict[str, bytes] | None:
+    """Return the ``extra_files`` dict to pass to ``transport.stage()``.
+
+    Returns ``None`` when no conftest registered a payload (default
+    state for libraries with no runtime-config requirements, plus the
+    silent-skip path when credentials aren't configured).  Returns a
+    one-entry dict mapping :data:`_RUNTIME_CONFIG_DEVICE_PATH` to the
+    msgpack-encoded payload otherwise.
+
+    Encoding uses ``use_single_float=True`` so float values round-trip
+    through CircuitPython's native ``msgpack`` decoder (CP doesn't
+    support float64).  Mirrors :func:`chumicro_workspace.writer.write_runtime_config`'s
+    encoding contract.
+    """
+    payload = get_runtime_config(config)
+    if payload is None:
+        return None
+    from msgpack import packb  # noqa: PLC0415 — defer until first stage call
+
+    return {
+        _RUNTIME_CONFIG_DEVICE_PATH: packb(payload, use_single_float=True),
+    }
 
 
 def _workspace_root(session: pytest.Session) -> Path:
@@ -914,7 +947,9 @@ class DeviceRuntimeItem(pytest.Item):
                     source_dirs,
                     [self.test_file],
                     _harness_source_dir(self.session),
-                    extra_modules=resolve_test_sibling_modules(self.test_file),
+                    extra_files=_encode_runtime_config_extra_files(
+                        self.session.config,
+                    ),
                 )
                 cache.mark_staged(staging_key)
 
@@ -1191,8 +1226,6 @@ def _bulk_stage_for_device(
     seen_source_dirs: list[Path] = []
     seen_test_files: list[Path] = []
     seen_test_file_ids: set[str] = set()
-    seen_extra_modules: list[Path] = []
-    seen_extra_module_ids: set[str] = set()
 
     for item in session.items:
         if not isinstance(item, DeviceTestItem):
@@ -1218,19 +1251,11 @@ def _bulk_stage_for_device(
             seen_test_file_ids.add(test_file_key)
             seen_test_files.append(item.test_file)
 
-        # Collect sibling helper modules (e.g. _test_creds.py) so the
-        # bulk stage covers every test file's import surface.
-        for sibling in resolve_test_sibling_modules(item.test_file):
-            sibling_key = str(sibling)
-            if sibling_key not in seen_extra_module_ids:
-                seen_extra_module_ids.add(sibling_key)
-                seen_extra_modules.append(sibling)
-
     transport.stage(
         seen_source_dirs,
         seen_test_files,
         _harness_source_dir(session),
-        extra_modules=seen_extra_modules,
+        extra_files=_encode_runtime_config_extra_files(session.config),
     )
 
 

@@ -2,22 +2,14 @@
 
 Two responsibilities:
 
-1. Materialise ``_test_creds.py`` from the unified config sources
-   (``workspace.yml`` + per-library
-   ``functional_tests/config.toml``) so the on-device tests can
-   ``from _test_creds import SSID, PASSWORD, ECHO_HOST, ECHO_PORT``
-   without committing secrets.
+1. Register the merged runtime-config dict (workspace.yml +
+   per-library overrides) with pytest-device so it stages at
+   ``/runtime_config.msgpack`` on the device — on-device tests read
+   wifi creds + the dynamic ``sockets.echo`` host/port from there.
 2. Start a host-side UDP echo server on the LAN interface so the
    board's UDP smoke test has a counterparty.  The server runs in a
    daemon thread for the duration of the pytest session and echoes
    any datagram it receives straight back to the sender.
-
-Phase 4 of the unification workstream
-(``plans/workstreams/scripts-workbench-config-unification.md``)
-retired the legacy ``chumicro-dev-config.toml`` source — every
-networking library's conftest reads from the same
-gitignored ``workspace.yml`` the workspace-template's
-user projects use.
 """
 
 from __future__ import annotations
@@ -26,13 +18,14 @@ import socket
 import threading
 from pathlib import Path
 
+import pytest
+from chumicro_pytest_device.runtime_config import set_runtime_config
 from chumicro_workspace import compose_runtime_config
 
 _HERE = Path(__file__).resolve().parent
 _REPO_ROOT = _HERE.parents[2]
 _WORKSPACE_YAML = _REPO_ROOT / "workspace.yml"
 _LIBRARY_CONFIG = _HERE / "config.toml"  # optional; absent → workspace defaults only
-_SHIM_PATH = _HERE / "_test_creds.py"
 
 #: Maximum datagram size the echo server accepts.  Generous for any
 #: chumicro library traffic (NTP is 48 bytes, mDNS/SSDP query
@@ -40,12 +33,12 @@ _SHIM_PATH = _HERE / "_test_creds.py"
 _MAX_DATAGRAM = 1500
 
 
-def _read_wifi_section() -> tuple[str, str] | None:
-    """Return ``(ssid, password)`` from the unified config, or ``None``.
+def _merged_runtime_config_with_creds() -> dict | None:
+    """Return the deep-merged runtime-config dict, or ``None`` to silent-skip.
 
-    Silent-skip on every "creds not configured" path: missing
-    workspace.yml, missing wifi section, missing keys,
-    parse failure, placeholder SSID still in place.
+    Returns the dict only when wifi credentials are configured —
+    matches the pre-migration behaviour where the on-device tests
+    silently skipped on missing creds.
     """
     if not _WORKSPACE_YAML.is_file():
         return None
@@ -65,7 +58,7 @@ def _read_wifi_section() -> tuple[str, str] | None:
         return None
     if ssid == "replace-with-your-ap-ssid":
         return None
-    return ssid, password
+    return merged
 
 
 def _detect_lan_ip() -> str | None:
@@ -123,45 +116,30 @@ def _start_echo_server(bind_host: str) -> tuple[str, int, threading.Event]:
 _ECHO_STOP: threading.Event | None = None
 
 
-def pytest_configure(config) -> None:  # noqa: ARG001 — pytest hook signature
-    """Refresh ``_test_creds.py``; spin up the host UDP echo server."""
+def pytest_configure(config: pytest.Config) -> None:
+    """Spin up the host UDP echo server; register the runtime-config payload.
+
+    Always shapes ``sockets.echo`` with ``host``/``port`` keys when a
+    payload is registered — values are ``None`` when the fixture didn't
+    spawn, so on-device test code can read ``config["sockets"]["echo"]["host"]``
+    directly without defensive ``.get()`` chaining.
+    """
     global _ECHO_STOP
 
-    creds = _read_wifi_section()
-    echo_host: str | None = None
-    echo_port: int | None = None
+    merged = _merged_runtime_config_with_creds()
 
-    if creds is not None:
+    if merged is not None:
+        echo_host: str | None = None
+        echo_port: int | None = None
         lan_ip = _detect_lan_ip()
         if lan_ip is not None:
             echo_host, echo_port, _ECHO_STOP = _start_echo_server(lan_ip)
+        merged.setdefault("sockets", {})["echo"] = {
+            "host": echo_host,
+            "port": echo_port,
+        }
 
-    if creds is None:
-        if _SHIM_PATH.exists():
-            _SHIM_PATH.unlink()
-        return
-
-    ssid, password = creds
-    lines = [
-        '"""Auto-generated test creds shim — do not check in."""\n',
-        f"SSID = {ssid!r}\n",
-        f"PASSWORD = {password!r}\n",
-    ]
-    if echo_host is not None and echo_port is not None:
-        lines.extend(
-            (
-                f"ECHO_HOST = {echo_host!r}\n",
-                f"ECHO_PORT = {echo_port!r}\n",
-            ),
-        )
-    else:
-        lines.extend(
-            (
-                "ECHO_HOST = None\n",
-                "ECHO_PORT = None\n",
-            ),
-        )
-    _SHIM_PATH.write_text("".join(lines))
+    set_runtime_config(config, merged)
 
 
 def pytest_sessionfinish(session, exitstatus) -> None:  # noqa: ARG001 — pytest hook
