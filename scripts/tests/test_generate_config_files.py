@@ -22,11 +22,10 @@ populates on first registration — same shape as the workspace-template
 repo — and moved the canonical content into the workbench package
 so both repos materialise from one source of truth.
 
-Decision 0057 collapsed the prior 4-layer overlay (committed
-``workspace.yml`` + gitignored ``workspace.local.yml`` + per-project
-config + optional config.local) to two gitignored files; the
-materialise-from-workbench-payload pattern is unchanged, just with
-``workspace.yml`` as the starter file the workbench package owns.
+The materialise-from-workbench-payload pattern is the same one
+Phase 1 applied to ``devices.yml``: the workbench package owns the
+canonical ``workspace.yml`` starter (Decision 0057), shared with
+the workspace-template repo so both materialise from one source.
 
 The mono-repo's ``_workspace_template/workspace.yml`` carries this
 repo's specific opinions (``mqtt.broker.host = test.mosquitto.org``,

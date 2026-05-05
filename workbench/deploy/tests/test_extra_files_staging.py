@@ -1,6 +1,6 @@
-"""Tests for ``transport.stage(extra_files=...)`` — Decision 0056.
+"""Tests for ``transport.stage(extra_files=...)``.
 
-Verifies the per-transport behaviour of the new ``extra_files``
+Verifies the per-transport behaviour of the ``extra_files``
 keyword.  Three concrete transports + the host-side
 :class:`FakeTransport` each get a slice:
 
@@ -92,8 +92,8 @@ class TestFakeTransportExtraFiles:
     def test_ram_mode_with_no_extra_files_passes_through(
         self, tmp_path: Path,
     ) -> None:
-        # Bare RAM-mode stage call (the common case before Decision 0056)
-        # must not regress — only non-empty extra_files raises.
+        # Bare RAM-mode stage call (the common case before extra_files
+        # existed) must not regress — only non-empty extra_files raises.
         fake = FakeTransport(mode="ram")
         fake.stage(
             source_dirs=[],

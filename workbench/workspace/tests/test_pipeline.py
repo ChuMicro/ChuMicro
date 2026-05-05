@@ -1,11 +1,9 @@
 """End-to-end pipeline tests — read all sources + deep-merge + write.
 
-Decision 0057 collapsed the prior 4-layer overlay (committed
-``workspace.yml`` + gitignored ``workspace.local.yml`` + committed
-``config.toml`` + gitignored ``config.local.<suffix>``) to two
-gitignored layers — ``workspace.yml`` (defaults + credentials in one
-place) and ``projects/<name>/config.{toml,yml,yaml}`` (per-project).
-Both share the same section-namespaced shape and deep-merge with
+Per Decision 0057, the pipeline is two gitignored layers:
+``workspace.yml`` (defaults + credentials in one place) and
+``projects/<name>/config.{toml,yml,yaml}`` (per-project).  Both
+share the section-namespaced shape and deep-merge with
 last-layer-wins precedence at any nesting depth.
 """
 

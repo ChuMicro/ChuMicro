@@ -12,10 +12,11 @@ artifact.  Mono-repo functional-test conftests use this to read
 ``[wifi]`` / ``[mqtt]`` from the unified config sources without
 materialising an unused msgpack file.
 
-Decision 0057 retired the ``!secret`` marker and collapsed the
-runtime-config pipeline to two gitignored files: ``workspace.yml``
-carrying defaults + credentials in one place, plus the per-project
-``config.toml``.  See that ADR for the rationale.
+Decision 0057 fixed the runtime-config pipeline at two gitignored
+files: ``workspace.yml`` carrying defaults + credentials in one
+place, plus the per-project ``config.toml``.  No ``!secret`` marker,
+no resolver — both layers are gitignored and share the
+section-namespaced shape.  See that ADR for the rationale.
 """
 
 from __future__ import annotations

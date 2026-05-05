@@ -7,10 +7,9 @@ place per Decision 0057) deep-merged with this library's optional
 section into the gitignored ``_test_creds.py`` shim that the
 on-device test imports.
 
-Decision 0057 retired the ``!secret`` marker + the
-``workspace.local.yml`` overlay split; credentials live in
-``workspace.yml`` directly (the file is gitignored and never
-reaches git).
+Per Decision 0057, credentials live in the gitignored
+``workspace.yml`` directly — no ``!secret`` marker, no resolver,
+the file never reaches git.
 
 The on-device side is unchanged — tests still ``from _test_creds
 import SSID, PASSWORD``.  A follow-up will extend

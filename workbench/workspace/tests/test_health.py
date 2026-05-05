@@ -247,9 +247,7 @@ class TestCollectDoctorFindings:
         findings = collect_doctor_findings(workspace)
         labels = [finding.label for finding in findings]
         # status's three checks are bracketed by python (front) +
-        # project-run (back).  Decision 0057 retired the
-        # check_secret_references and check_workspace_local_yaml
-        # steps.
+        # project-run (back).
         assert labels == [
             "PYTHON",
             "WORKSPACE.YML",

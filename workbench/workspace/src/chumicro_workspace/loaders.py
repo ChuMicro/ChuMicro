@@ -1,7 +1,7 @@
 """Host-side file readers for the runtime-config pipeline.
 
-Two input shapes per Decision 0035 (revised by Decision 0057
-— the ``!secret`` marker is gone; both layers are gitignored):
+Two input shapes per Decisions 0035 and 0057 (no ``!secret``
+marker; both layers are gitignored):
 
 * ``workspace.yml`` — workspace-wide defaults + credentials (YAML).
   Gitignored, materialised on first ``setup`` from a workbench-owned
