@@ -177,7 +177,7 @@ def update(
 #: (``plans/workstreams/scripts-workbench-config-unification.md``).
 _WORKBENCH_STARTERS: tuple[tuple[str, str], ...] = (
     ("devices.yml", "read_devices_yml_starter"),
-    ("secrets.yml", "read_secrets_yml_starter"),
+    ("workspace.local.yml", "read_workspace_local_yml_starter"),
 )
 
 
@@ -224,8 +224,8 @@ def materialize_templates(workspace_root: Path) -> ApplyReport:
     is a one-time-per-file generation step that runs idempotently
     on every ``setup``.
 
-    Workbench-owned starters (``devices.yml``, ``secrets.yml``) are
-    materialised separately by :func:`materialize_workbench_starters`
+    Workbench-owned starters (``devices.yml``, ``workspace.local.yml``)
+    are materialised separately by :func:`materialize_workbench_starters`
     so the workspace-template repo no longer ships static copies
     under ``_workspace_template/``; the workbench package owns the
     canonical content for those files.

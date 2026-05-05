@@ -145,7 +145,6 @@ class TestBuildSearchPaths:
 def _seed_project_with_imports(tmp_path: Path) -> WorkspaceLayout:
     """Stage a workspace with a project that imports from shared/."""
     (tmp_path / "workspace.yml").write_text("defaults: {}\n")
-    (tmp_path / "secrets.yml").write_text("\n")
     shared = tmp_path / "shared"
     shared.mkdir()
     (shared / "shared_helper.py").write_text(
@@ -214,7 +213,6 @@ class TestProjectImportGraphSource:
             "library_sources:\n"
             f"  shared_helper: {external}\n"
         )
-        (tmp_path / "secrets.yml").write_text("\n")
         shared = tmp_path / "shared"
         shared.mkdir()
         (shared / "shared_helper.py").write_text("MARKER = 'from-shared'\n")
@@ -237,7 +235,6 @@ class TestProjectImportGraphSource:
     ) -> None:
         """Override entrypoint_filename + device_entrypoint for MP."""
         (tmp_path / "workspace.yml").write_text("defaults: {}\n")
-        (tmp_path / "secrets.yml").write_text("\n")
         project_dir = tmp_path / "projects" / "mp-project"
         project_dir.mkdir(parents=True)
         (project_dir / "config.toml").write_text("[app]\n")
@@ -269,7 +266,6 @@ class TestProjectImportGraphSource:
     ) -> None:
         """Caller-supplied tail search path resolves modules not under shared/."""
         (tmp_path / "workspace.yml").write_text("defaults: {}\n")
-        (tmp_path / "secrets.yml").write_text("\n")
         external = tmp_path / "external"
         external.mkdir()
         (external / "extra_module.py").write_text("X = 1\n")
@@ -291,7 +287,6 @@ class TestProjectImportGraphSource:
     def test_extra_modules_force_included(self, tmp_path: Path) -> None:
         """extra_modules forwards through to ImportGraphSource."""
         (tmp_path / "workspace.yml").write_text("defaults: {}\n")
-        (tmp_path / "secrets.yml").write_text("\n")
         shared = tmp_path / "shared"
         shared.mkdir()
         (shared / "dynamic_target.py").write_text("Y = 2\n")
@@ -316,7 +311,6 @@ class TestProjectImportGraphSource:
     ) -> None:
         """Decision 0044 — wrong-runtime adapters do not ride the import graph."""
         (tmp_path / "workspace.yml").write_text("defaults: {}\n")
-        (tmp_path / "secrets.yml").write_text("\n")
         shared = tmp_path / "shared"
         shared.mkdir()
         adapters = shared / "_adapters"

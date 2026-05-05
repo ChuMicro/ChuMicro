@@ -129,7 +129,6 @@ _FAIL_FAST_CONFIG_TOML = """\
 # deploy returns within seconds, letting us assert phase markers.
 [wifi]
 ssid = "chumicro-layer2-test-bogus"
-password = "!secret wifi_password"
 connect_timeout_ms = 2000
 reconnect_max = 0
 
@@ -195,7 +194,9 @@ def _stage_layer2_workspace(
     (tmp_path / "workspace.yml").write_text(
         "defaults:\n  app_marker_prefix: layer2-sensor\n",
     )
-    (tmp_path / "secrets.yml").write_text("wifi_password: bogus-test-password\n")
+    (tmp_path / "workspace.local.yml").write_text(
+        "defaults:\n  wifi:\n    password: bogus-test-password\n",
+    )
     projects_dir = tmp_path / "projects"
     projects_dir.mkdir()
     sensor_dir = projects_dir / "example_sensor"
@@ -493,7 +494,6 @@ def _live_broker_config_toml(environment: dict[str, str], port: int) -> str:
     return (
         "[wifi]\n"
         f'ssid = "{environment["ssid"]}"\n'
-        'password = "!secret wifi_password"\n'
         "connect_timeout_ms = 15000\n"
         "\n"
         "[mqtt]\n"
@@ -520,12 +520,15 @@ def test_sensor_project_publishes_to_live_broker(
     _skip_unless_flash_mode(micropython_device)
     environment = _layer3_required_environment()
 
-    # Stage workspace BEFORE Mosquitto spawn: real wifi creds in secrets,
-    # sensor pointing at a placeholder broker that we'll overwrite with
-    # the real port after Mosquitto comes up.
+    # Stage workspace BEFORE Mosquitto spawn: real wifi creds in the
+    # gitignored workspace.local.yml overlay (Decision 0057), sensor
+    # pointing at a placeholder broker that we'll overwrite with the
+    # real port after Mosquitto comes up.
     workspace, sensor_dir = _stage_layer2_workspace(tmp_path, template_repo)
-    (tmp_path / "secrets.yml").write_text(
-        f'wifi_password: "{environment["password"]}"\n',
+    (tmp_path / "workspace.local.yml").write_text(
+        "defaults:\n"
+        "  wifi:\n"
+        f'    password: "{environment["password"]}"\n',
     )
 
     broker_workdir = tmp_path / "mosquitto"

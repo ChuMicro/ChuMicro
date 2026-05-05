@@ -272,9 +272,9 @@ def _cmd_setup(args: argparse.Namespace) -> int:
 
     # `_workspace_template/` first — repo-specific starter files
     # (project templates, examples, README placeholders, custom
-    # devices.yml or secrets.yml shapes for forks of the canonical
-    # template).  When a fork ships its own `_workspace_template/
-    # devices.yml`, the customised version wins.
+    # devices.yml or workspace.local.yml shapes for forks of the
+    # canonical template).  When a fork ships its own
+    # `_workspace_template/devices.yml`, the customised version wins.
     report = materialize_templates(workspace.root)
     new_files = report.count(ApplyAction.MATERIALIZED)
     if new_files:
@@ -284,7 +284,7 @@ def _cmd_setup(args: argparse.Namespace) -> int:
                 print(f"  {path}")
 
     # Workbench-owned starters as the fallback — fills in
-    # `devices.yml` / `secrets.yml` only when the
+    # `devices.yml` / `workspace.local.yml` only when the
     # `_workspace_template/` walker didn't.  Canonical content lives
     # in the workbench package's `_payloads/` so the same bytes ship
     # to the mono-repo and every workspace-template-derived workspace.
@@ -704,9 +704,9 @@ def _emit_failure_hints(deploy_result: Any) -> None:
     The deploy result's ``traceback`` and ``execute_output`` are
     both scanned for known patterns (Phase 2d's hint table); any
     matching hints append below the traceback under a "--- hints ---"
-    section so users who hit a common failure (missing `!secret`,
-    un-merged config key, library not installed) get the workspace-
-    shaped pointer instead of just the raw stdlib error.
+    section so users who hit a common failure (missing config key,
+    library not installed) get the workspace-shaped pointer instead
+    of just the raw stdlib error.
 
     Skip the hints section silently when no pattern matches —
     showing an empty block reads worse than showing nothing.
@@ -879,13 +879,11 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
     workspace = _resolve_workspace(args)
 
     # Pre-deploy fast health gate.  Catches the user-visible failure
-    # modes that *would* deploy but ship junk to the device — most
-    # importantly, secrets.yml carrying ``replace-me`` placeholder
-    # values that would land on the board verbatim and silently
-    # break wifi-connect / auth flows.  Skips the slower per-project
-    # AST + config-merge checks that ``doctor`` runs (those add
-    # latency to every deploy).  ``--skip-health-check`` opts out
-    # for power-users + CI.
+    # modes that *would* deploy but ship junk to the device — missing
+    # workspace.yml, malformed devices.yml / workspace.local.yml,
+    # etc.  Skips the slower per-project AST checks that ``doctor``
+    # runs (those add latency to every deploy).
+    # ``--skip-health-check`` opts out for power-users + CI.
     if not args.skip_health_check:
         gate_findings = collect_health_findings(workspace)
         gate_blockers = [
@@ -972,7 +970,7 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
                 source = project_directory_source(
                     project_dir,
                     workspace_yaml=workspace.workspace_yaml,
-                    secrets_yaml=workspace.secrets_yaml,
+                    workspace_local_yaml=workspace.workspace_local_yaml,
                     entrypoint=(
                         args.entrypoint or f"/{device.effective_entrypoint}"
                     ),
@@ -1292,17 +1290,16 @@ def _cmd_status(args: argparse.Namespace) -> int:
 
     Phase 2a of the workspace-ecosystem workstream.  Runs the four
     fast static checks (workspace.yml validity, devices.yml count,
-    secrets.yml placeholder detection, projects tree summary).
+    workspace.local.yml overlay status, projects tree summary).
     ``doctor`` (Phase 2b) is the stricter sibling that adds Python
-    version, per-project AST scans for ``run()``, and a config-merge
-    dry-run that catches unresolved ``!secret`` references.
+    version checking and per-project AST scans for ``run()``.
     """
     workspace = _resolve_workspace(args)
     return _print_health_findings(workspace, collect_health_findings(workspace))
 
 
 def _cmd_doctor(args: argparse.Namespace) -> int:
-    """Strict sibling of ``status`` — adds AST + config-merge checks.
+    """Strict sibling of ``status`` — adds AST + Python-version checks.
 
     On top of ``status``'s four checks, ``doctor`` runs:
 
@@ -1311,9 +1308,6 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     * ``check_project_run_functions`` — AST-walks each project's
       ``app.py`` and verifies a top-level ``run()`` definition
       exists (the workspace_runtime boot contract).
-    * ``check_secret_references`` — performs a config-merge
-      dry-run for every project and catches ``!secret`` references
-      that don't resolve against ``secrets.yml``.
 
     Same renderer + exit-code rules as ``status``: errors flip exit
     to 1, warnings stay at 0.  Per-project failures list the failing
@@ -1718,51 +1712,38 @@ def _cmd_dump_config(args: argparse.Namespace) -> int:
     """Print the merged runtime config a project would receive on deploy.
 
     Runs the deploy-time pipeline up to (but not through) the msgpack
-    write — workspace defaults + project config + secrets resolution —
+    write — workspace defaults + workspace.local.yml overlay + project
+    config + optional config.local overlay (Decision 0057 deep-merge) —
     then pretty-prints the result.  Lets users see exactly what their
     on-device ``chumicro_config.runtime`` will read without actually
     deploying.
 
-    Useful for: "is this !secret resolving to what I expect?",
-    debugging which config section a key landed in after the merge,
-    inspecting the shape before adding consumers on the device.
+    Useful for: debugging which layer a key landed in after the merge,
+    inspecting the shape before adding consumers on the device,
+    confirming that gitignored credential overrides flowed through.
 
     Output format defaults to JSON (sorted keys, indent 2) for
     diffability; ``--repr`` switches to ``repr()`` for cases where
     the raw Python types matter (e.g. seeing ``bytes`` vs ``str``).
     """
     from chumicro_workspace.deploy_source import find_project_config  # noqa: PLC0415
-    from chumicro_workspace.loaders import (  # noqa: PLC0415
-        read_project_config,
-        read_secrets_yaml,
-        read_workspace_yaml,
-    )
-    from chumicro_workspace.merge import merge_configs  # noqa: PLC0415
-    from chumicro_workspace.secrets import (  # noqa: PLC0415
-        UnresolvedSecretError,
-        resolve_secrets,
-    )
+    from chumicro_workspace.pipeline import compose_runtime_config  # noqa: PLC0415
 
     workspace = _resolve_workspace(args)
     project_dir = workspace.project_dir(_resolve_project_name(workspace, args.project))
     if not project_dir.is_dir():
         raise SystemExit(f"error: project {project_dir} not found")
 
-    workspace_dict = read_workspace_yaml(workspace.workspace_yaml)
-    project_config_path = find_project_config(project_dir)
-    project_dict = (
-        read_project_config(project_config_path) if project_config_path else {}
-    )
-    secrets = (
-        read_secrets_yaml(workspace.secrets_yaml)
-        if workspace.secrets_yaml.is_file() else {}
-    )
-    merged = merge_configs(workspace_dict, project_dict)
     try:
-        resolved = resolve_secrets(merged, secrets)
-    except UnresolvedSecretError as exception:
-        print(f"error: {exception}", file=sys.stderr)
-        return 1
+        project_config_path = find_project_config(project_dir)
+    except FileNotFoundError:
+        project_config_path = None
+
+    resolved = compose_runtime_config(
+        workspace_yaml=workspace.workspace_yaml,
+        project_config=project_config_path,
+        workspace_local_yaml=workspace.workspace_local_yaml,
+    )
 
     if args.repr:
         print(repr(resolved))
@@ -2653,11 +2634,10 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Skip the pre-deploy fast health gate.  By default, deploy "
             "runs `status`-equivalent checks (workspace.yml / "
-            "devices.yml / secrets.yml shape, secret-placeholder "
-            "detection) and aborts on ERROR-level findings before "
-            "sending bytes to the device.  Use this flag for power-"
-            "user CLI runs or CI flows that have already validated "
-            "the workspace state externally."
+            "devices.yml / workspace.local.yml shape) and aborts on "
+            "ERROR-level findings before sending bytes to the device. "
+            "Use this flag for power-user CLI runs or CI flows that "
+            "have already validated the workspace state externally."
         ),
     )
     deploy_parser.add_argument(
@@ -2694,8 +2674,8 @@ def build_parser() -> argparse.ArgumentParser:
         "status",
         help=(
             "Print a one-line-per-check workspace health snapshot "
-            "(workspace.yml validity, devices.yml count, secrets.yml "
-            "placeholders, projects tree summary)."
+            "(workspace.yml validity, devices.yml count, "
+            "workspace.local.yml overlay status, projects tree summary)."
         ),
     )
     _add_workspace_arg(status_parser)
@@ -2705,9 +2685,8 @@ def build_parser() -> argparse.ArgumentParser:
     doctor_parser = subparsers.add_parser(
         "doctor",
         help=(
-            "Strict sibling of `status` — adds Python version check, "
-            "per-project AST scan for `run()`, and a config-merge "
-            "dry-run that catches unresolved !secret references."
+            "Strict sibling of `status` — adds Python version check "
+            "and a per-project AST scan for `run()`."
         ),
     )
     _add_workspace_arg(doctor_parser)
@@ -2827,7 +2806,8 @@ def build_parser() -> argparse.ArgumentParser:
         "dump-config",
         help=(
             "Print the merged runtime config a project would receive on "
-            "deploy (workspace defaults + project config + resolved secrets), "
+            "deploy (workspace defaults + workspace.local.yml overlay + "
+            "project config + optional config.local overlay), "
             "without actually deploying."
         ),
     )

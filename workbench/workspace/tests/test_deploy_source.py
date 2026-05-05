@@ -3,6 +3,10 @@
 Covers :class:`WithRuntimeConfig`, :func:`project_directory_source`,
 :func:`find_project_config`, and the end-to-end "Deployer ships the
 msgpack alongside app code" path through ``FakeTransport``.
+
+Decision 0057 retired the ``!secret`` marker + ``secrets.yml``;
+gitignored credentials live in a deep-merged ``workspace.local.yml``
+overlay (and, optionally, a per-project ``config.local.<suffix>``).
 """
 
 from pathlib import Path
@@ -59,7 +63,7 @@ class TestFindProjectConfig:
 
 
 def _seed_paths(tmp_path: Path) -> tuple[Path, Path, Path]:
-    """Lay out workspace.yml, projects/back-porch/config.toml, secrets.yml."""
+    """Lay out workspace.yml, projects/back-porch/config.toml, workspace.local.yml."""
     workspace_yaml = tmp_path / "workspace.yml"
     workspace_yaml.write_text(
         "defaults:\n"
@@ -72,23 +76,24 @@ def _seed_paths(tmp_path: Path) -> tuple[Path, Path, Path]:
     project_config.write_text(
         "[wifi]\n"
         'ssid = "HomeNet"\n'
-        'password = "!secret wifi_password"\n'
     )
-    secrets_yaml = tmp_path / "secrets.yml"
-    secrets_yaml.write_text("wifi_password: shh\n")
-    return workspace_yaml, project_config, secrets_yaml
+    workspace_local_yaml = tmp_path / "workspace.local.yml"
+    workspace_local_yaml.write_text(
+        "defaults:\n  wifi:\n    password: shh\n"
+    )
+    return workspace_yaml, project_config, workspace_local_yaml
 
 
 class TestWithRuntimeConfig:
     def test_injects_msgpack_at_canonical_device_path(self, tmp_path: Path) -> None:
-        workspace_yaml, project_config, secrets_yaml = _seed_paths(tmp_path)
+        workspace_yaml, project_config, workspace_local_yaml = _seed_paths(tmp_path)
         inner = FileMapSource({"/code.py": "print('hi')\n"}, entrypoint="/code.py")
 
         decorated = WithRuntimeConfig(
             inner,
             workspace_yaml=workspace_yaml,
             project_config=project_config,
-            secrets_yaml=secrets_yaml,
+            workspace_local_yaml=workspace_local_yaml,
         )
         files = decorated.files()
 
@@ -104,52 +109,52 @@ class TestWithRuntimeConfig:
         }
 
     def test_forwards_inner_entrypoint(self, tmp_path: Path) -> None:
-        workspace_yaml, project_config, secrets_yaml = _seed_paths(tmp_path)
+        workspace_yaml, project_config, workspace_local_yaml = _seed_paths(tmp_path)
         inner = FileMapSource({"/main.py": ""}, entrypoint="/main.py")
         decorated = WithRuntimeConfig(
             inner,
             workspace_yaml=workspace_yaml,
             project_config=project_config,
-            secrets_yaml=secrets_yaml,
+            workspace_local_yaml=workspace_local_yaml,
         )
         assert decorated.entrypoint() == "/main.py"
 
     def test_default_output_path_lands_in_generated_dir(self, tmp_path: Path) -> None:
         """Convention from ADR 0035 §5: generated artifact under _generated/."""
-        workspace_yaml, project_config, secrets_yaml = _seed_paths(tmp_path)
+        workspace_yaml, project_config, workspace_local_yaml = _seed_paths(tmp_path)
         inner = FileMapSource({"/code.py": ""}, entrypoint="/code.py")
         decorated = WithRuntimeConfig(
             inner,
             workspace_yaml=workspace_yaml,
             project_config=project_config,
-            secrets_yaml=secrets_yaml,
+            workspace_local_yaml=workspace_local_yaml,
         )
         decorated.files()  # triggers the write
         expected = project_config.parent / GENERATED_DIRNAME / "runtime_config.msgpack"
         assert expected.exists()
 
     def test_explicit_output_path_used(self, tmp_path: Path) -> None:
-        workspace_yaml, project_config, secrets_yaml = _seed_paths(tmp_path)
+        workspace_yaml, project_config, workspace_local_yaml = _seed_paths(tmp_path)
         custom = tmp_path / "elsewhere" / "out.msgpack"
         inner = FileMapSource({"/code.py": ""}, entrypoint="/code.py")
         decorated = WithRuntimeConfig(
             inner,
             workspace_yaml=workspace_yaml,
             project_config=project_config,
-            secrets_yaml=secrets_yaml,
+            workspace_local_yaml=workspace_local_yaml,
             output_path=custom,
         )
         decorated.files()
         assert custom.exists()
 
     def test_explicit_device_path_used(self, tmp_path: Path) -> None:
-        workspace_yaml, project_config, secrets_yaml = _seed_paths(tmp_path)
+        workspace_yaml, project_config, workspace_local_yaml = _seed_paths(tmp_path)
         inner = FileMapSource({"/code.py": ""}, entrypoint="/code.py")
         decorated = WithRuntimeConfig(
             inner,
             workspace_yaml=workspace_yaml,
             project_config=project_config,
-            secrets_yaml=secrets_yaml,
+            workspace_local_yaml=workspace_local_yaml,
             device_path="/lib/_chu_config.msgpack",
         )
         files = decorated.files()
@@ -157,7 +162,7 @@ class TestWithRuntimeConfig:
         assert RUNTIME_CONFIG_DEVICE_PATH not in files
 
     def test_collision_with_inner_path_raises(self, tmp_path: Path) -> None:
-        workspace_yaml, project_config, secrets_yaml = _seed_paths(tmp_path)
+        workspace_yaml, project_config, workspace_local_yaml = _seed_paths(tmp_path)
         inner = FileMapSource(
             {
                 "/code.py": "",
@@ -170,7 +175,7 @@ class TestWithRuntimeConfig:
                 inner,
                 workspace_yaml=workspace_yaml,
                 project_config=project_config,
-                secrets_yaml=secrets_yaml,
+                workspace_local_yaml=workspace_local_yaml,
             )
 
     def test_skips_validation_when_no_library_roots(
@@ -180,13 +185,13 @@ class TestWithRuntimeConfig:
         # behaviour: no manifest reads, no validation.  Existing
         # callers that don't yet plumb the import-graph library
         # list through stay unaffected.
-        workspace_yaml, project_config, secrets_yaml = _seed_paths(tmp_path)
+        workspace_yaml, project_config, workspace_local_yaml = _seed_paths(tmp_path)
         inner = FileMapSource({"/code.py": ""}, entrypoint="/code.py")
         decorated = WithRuntimeConfig(
             inner,
             workspace_yaml=workspace_yaml,
             project_config=project_config,
-            secrets_yaml=secrets_yaml,
+            workspace_local_yaml=workspace_local_yaml,
         )
         # Would fail validation if it ran (no chumicro-wifi
         # manifest reachable, but project config has wifi).
@@ -199,7 +204,7 @@ class TestWithRuntimeConfig:
         # the manifest, unions with itself, and checks the merged
         # config against the union.  Wifi config is complete, so
         # validation passes.
-        workspace_yaml, project_config, secrets_yaml = _seed_paths(tmp_path)
+        workspace_yaml, project_config, workspace_local_yaml = _seed_paths(tmp_path)
         wifi_lib = tmp_path / "libraries" / "wifi"
         wifi_lib.mkdir(parents=True)
         (wifi_lib / "pyproject.toml").write_text(
@@ -212,7 +217,7 @@ class TestWithRuntimeConfig:
             inner,
             workspace_yaml=workspace_yaml,
             project_config=project_config,
-            secrets_yaml=secrets_yaml,
+            workspace_local_yaml=workspace_local_yaml,
             library_roots=(wifi_lib,),
         )
         decorated.files()  # no exception — config has ssid + password
@@ -220,8 +225,9 @@ class TestWithRuntimeConfig:
     def test_raises_when_library_roots_manifest_finds_missing_required(
         self, tmp_path: Path,
     ) -> None:
-        # Project config drops ``password`` — validation must fire
-        # at deploy time, before the msgpack lands on the device.
+        # Project config drops ``password`` and there's no overlay —
+        # validation must fire at deploy time, before the msgpack
+        # lands on the device.
         from chumicro_workspace import ConfigManifestError  # noqa: PLC0415
 
         workspace_yaml = tmp_path / "workspace.yml"
@@ -231,8 +237,6 @@ class TestWithRuntimeConfig:
         project_config = project_dir / "config.toml"
         # ssid present, password missing.
         project_config.write_text("[wifi]\nssid = 'HomeNet'\n")
-        secrets_yaml = tmp_path / "secrets.yml"
-        secrets_yaml.write_text("")
 
         wifi_lib = tmp_path / "libraries" / "wifi"
         wifi_lib.mkdir(parents=True)
@@ -247,7 +251,6 @@ class TestWithRuntimeConfig:
             inner,
             workspace_yaml=workspace_yaml,
             project_config=project_config,
-            secrets_yaml=secrets_yaml,
             library_roots=(wifi_lib,),
         )
         with pytest.raises(ConfigManifestError, match="password"):
@@ -255,20 +258,19 @@ class TestWithRuntimeConfig:
 
     def test_files_regenerates_msgpack_each_call(self, tmp_path: Path) -> None:
         """Edits to project config show up on the next deploy without manual rebuild."""
-        workspace_yaml, project_config, secrets_yaml = _seed_paths(tmp_path)
+        workspace_yaml, project_config, workspace_local_yaml = _seed_paths(tmp_path)
         inner = FileMapSource({"/code.py": ""}, entrypoint="/code.py")
         decorated = WithRuntimeConfig(
             inner,
             workspace_yaml=workspace_yaml,
             project_config=project_config,
-            secrets_yaml=secrets_yaml,
+            workspace_local_yaml=workspace_local_yaml,
         )
 
         first = unpackb(decorated.files()[RUNTIME_CONFIG_DEVICE_PATH])
         project_config.write_text(
             "[wifi]\n"
             'ssid = "OtherNet"\n'
-            'password = "!secret wifi_password"\n'
         )
         second = unpackb(decorated.files()[RUNTIME_CONFIG_DEVICE_PATH])
 
@@ -282,29 +284,29 @@ class TestWithRuntimeConfig:
 
 
 def _seed_project_dir(tmp_path: Path) -> tuple[Path, Path, Path]:
-    """Lay out a typical projects/<name>/ directory + workspace + secrets."""
+    """Lay out a typical projects/<name>/ directory + workspace + overlay."""
     workspace_yaml = tmp_path / "workspace.yml"
     workspace_yaml.write_text("defaults:\n  wifi:\n    hostname_prefix: chu-\n")
-    secrets_yaml = tmp_path / "secrets.yml"
-    secrets_yaml.write_text("wifi_password: shh\n")
+    workspace_local_yaml = tmp_path / "workspace.local.yml"
+    workspace_local_yaml.write_text("defaults:\n  wifi:\n    password: shh\n")
 
     project_dir = tmp_path / "projects" / "back-porch"
     project_dir.mkdir(parents=True)
     (project_dir / "config.toml").write_text(
-        "[wifi]\nssid = 'HomeNet'\npassword = '!secret wifi_password'\n"
+        "[wifi]\nssid = 'HomeNet'\n"
     )
     (project_dir / "code.py").write_text("print('hello')\n")
     (project_dir / "helpers.py").write_text("def add(left, right):\n    return left + right\n")
-    return project_dir, workspace_yaml, secrets_yaml
+    return project_dir, workspace_yaml, workspace_local_yaml
 
 
 class TestProjectDirectorySource:
     def test_ships_app_code_plus_msgpack(self, tmp_path: Path) -> None:
-        project_dir, workspace_yaml, secrets_yaml = _seed_project_dir(tmp_path)
+        project_dir, workspace_yaml, workspace_local_yaml = _seed_project_dir(tmp_path)
         source = project_directory_source(
             project_dir,
             workspace_yaml=workspace_yaml,
-            secrets_yaml=secrets_yaml,
+            workspace_local_yaml=workspace_local_yaml,
         )
         files = source.files()
 
@@ -313,17 +315,17 @@ class TestProjectDirectorySource:
         assert RUNTIME_CONFIG_DEVICE_PATH in files
 
     def test_skips_host_only_config_file(self, tmp_path: Path) -> None:
-        project_dir, workspace_yaml, secrets_yaml = _seed_project_dir(tmp_path)
+        project_dir, workspace_yaml, workspace_local_yaml = _seed_project_dir(tmp_path)
         source = project_directory_source(
             project_dir,
             workspace_yaml=workspace_yaml,
-            secrets_yaml=secrets_yaml,
+            workspace_local_yaml=workspace_local_yaml,
         )
         files = source.files()
         assert "/config.toml" not in files
 
     def test_skips_generated_dir(self, tmp_path: Path) -> None:
-        project_dir, workspace_yaml, secrets_yaml = _seed_project_dir(tmp_path)
+        project_dir, workspace_yaml, workspace_local_yaml = _seed_project_dir(tmp_path)
         # Pre-create a stale generated artifact — must not ship.
         generated = project_dir / GENERATED_DIRNAME
         generated.mkdir()
@@ -332,40 +334,40 @@ class TestProjectDirectorySource:
         source = project_directory_source(
             project_dir,
             workspace_yaml=workspace_yaml,
-            secrets_yaml=secrets_yaml,
+            workspace_local_yaml=workspace_local_yaml,
         )
         files = source.files()
         assert f"/{GENERATED_DIRNAME}/stale.msgpack" not in files
 
     def test_default_entrypoint_is_circuitpython_code_py(self, tmp_path: Path) -> None:
-        project_dir, workspace_yaml, secrets_yaml = _seed_project_dir(tmp_path)
+        project_dir, workspace_yaml, workspace_local_yaml = _seed_project_dir(tmp_path)
         source = project_directory_source(
             project_dir,
             workspace_yaml=workspace_yaml,
-            secrets_yaml=secrets_yaml,
+            workspace_local_yaml=workspace_local_yaml,
         )
         assert source.entrypoint() == "/code.py"
 
     def test_micropython_entrypoint_override(self, tmp_path: Path) -> None:
-        project_dir, workspace_yaml, secrets_yaml = _seed_project_dir(tmp_path)
+        project_dir, workspace_yaml, workspace_local_yaml = _seed_project_dir(tmp_path)
         (project_dir / "main.py").write_text("print('mp')\n")
         source = project_directory_source(
             project_dir,
             workspace_yaml=workspace_yaml,
-            secrets_yaml=secrets_yaml,
+            workspace_local_yaml=workspace_local_yaml,
             entrypoint="/main.py",
         )
         assert source.entrypoint() == "/main.py"
         assert "/main.py" in source.files()
 
     def test_extra_excluded_skips_named_dir(self, tmp_path: Path) -> None:
-        project_dir, workspace_yaml, secrets_yaml = _seed_project_dir(tmp_path)
+        project_dir, workspace_yaml, workspace_local_yaml = _seed_project_dir(tmp_path)
         (project_dir / "notes").mkdir()
         (project_dir / "notes" / "draft.md").write_text("draft\n")
         source = project_directory_source(
             project_dir,
             workspace_yaml=workspace_yaml,
-            secrets_yaml=secrets_yaml,
+            workspace_local_yaml=workspace_local_yaml,
             extra_excluded=("notes",),
         )
         files = source.files()
@@ -379,14 +381,13 @@ class TestProjectDirectorySource:
             project_directory_source(
                 empty_project,
                 workspace_yaml=tmp_path / "workspace.yml",
-                secrets_yaml=tmp_path / "secrets.yml",
             )
 
     def test_target_runtime_drops_wrong_runtime_files(
         self, tmp_path: Path,
     ) -> None:
         """Decision 0044 — wrong-runtime ``.py`` files are filtered out."""
-        project_dir, workspace_yaml, secrets_yaml = _seed_project_dir(tmp_path)
+        project_dir, workspace_yaml, workspace_local_yaml = _seed_project_dir(tmp_path)
         # Add a CP-only adapter beside the project's app code.
         (project_dir / "_cp_only.py").write_text(
             '__chumicro_runtimes__ = ("circuitpython",)\n',
@@ -398,7 +399,7 @@ class TestProjectDirectorySource:
         source = project_directory_source(
             project_dir,
             workspace_yaml=workspace_yaml,
-            secrets_yaml=secrets_yaml,
+            workspace_local_yaml=workspace_local_yaml,
             target_runtime="micropython",
         )
         files = source.files()
@@ -421,11 +422,11 @@ class TestDeployerIntegration:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        project_dir, workspace_yaml, secrets_yaml = _seed_project_dir(tmp_path)
+        project_dir, workspace_yaml, workspace_local_yaml = _seed_project_dir(tmp_path)
         source = project_directory_source(
             project_dir,
             workspace_yaml=workspace_yaml,
-            secrets_yaml=secrets_yaml,
+            workspace_local_yaml=workspace_local_yaml,
         )
 
         transport = FakeTransport(execute_output="")

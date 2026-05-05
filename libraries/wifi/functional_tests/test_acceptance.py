@@ -3,8 +3,8 @@
 Reads credentials from the gitignored ``_test_creds.py`` shim that
 each library's ``functional_tests/conftest.py`` materialises from
 the unified config sources (``workspace.yml`` + per-library
-``functional_tests/config.toml`` + ``secrets.yml``, read via
-``chumicro_workspace.compose_runtime_config``).  When the shim
+``functional_tests/config.toml`` + ``workspace.local.yml``, read
+via ``chumicro_workspace.compose_runtime_config``).  When the shim
 isn't present (the steady-state for any clone without local
 credentials) every test in this file early-returns cleanly so the
 suite stays committable.

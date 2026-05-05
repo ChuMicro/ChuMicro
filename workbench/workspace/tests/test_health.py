@@ -5,13 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from chumicro_workspace.health import (
-    SECRET_PLACEHOLDER,
     HealthLevel,
     check_devices_yaml,
     check_project_run_functions,
     check_python_version,
-    check_secret_references,
-    check_secrets_yaml,
+    check_workspace_local_yaml,
     check_workspace_yaml,
     collect_doctor_findings,
     collect_health_findings,
@@ -109,69 +107,59 @@ class TestCheckDevicesYaml:
 
 
 # ---------------------------------------------------------------------------
-# check_secrets_yaml
+# check_workspace_local_yaml (Decision 0057)
 # ---------------------------------------------------------------------------
 
 
-class TestCheckSecretsYaml:
-    def test_warns_when_absent(self, tmp_path: Path) -> None:
+class TestCheckWorkspaceLocalYaml:
+    def test_ok_when_absent(self, tmp_path: Path) -> None:
+        """Missing overlay file is fine — projects inherit committed defaults."""
         workspace = _layout(tmp_path)
-        finding = check_secrets_yaml(workspace)
-        assert finding.level is HealthLevel.WARN
+        finding = check_workspace_local_yaml(workspace)
+        assert finding.level is HealthLevel.OK
         assert "not present" in finding.message
 
     def test_ok_when_empty(self, tmp_path: Path) -> None:
-        """A materialized-but-uncommented secrets.yml parses to empty."""
+        """A materialized-but-uncommented workspace.local.yml parses to no overrides."""
         workspace = _layout(tmp_path)
-        workspace.secrets_yaml.write_text("# all entries commented out\n")
-        finding = check_secrets_yaml(workspace)
-        assert finding.level is HealthLevel.OK
-        assert "empty" in finding.message
-
-    def test_ok_with_real_values(self, tmp_path: Path) -> None:
-        workspace = _layout(tmp_path)
-        workspace.secrets_yaml.write_text(
-            "wifi_password: actual-password\nmqtt_token: tok\n",
+        workspace.workspace_local_yaml.write_text(
+            "# all entries commented out\n",
         )
-        finding = check_secrets_yaml(workspace)
+        finding = check_workspace_local_yaml(workspace)
         assert finding.level is HealthLevel.OK
-        assert "2 keys set" in finding.message
+        assert "no overrides" in finding.message
 
-    def test_warns_on_placeholder_value(self, tmp_path: Path) -> None:
+    def test_ok_with_overrides(self, tmp_path: Path) -> None:
         workspace = _layout(tmp_path)
-        workspace.secrets_yaml.write_text(
-            f"wifi_password: {SECRET_PLACEHOLDER}\n"
-            "api_token: real-token\n",
+        workspace.workspace_local_yaml.write_text(
+            "defaults:\n"
+            "  wifi:\n"
+            "    password: actual-password\n"
+            "  mqtt:\n"
+            "    broker:\n"
+            "      auth:\n"
+            "        password: another\n",
         )
-        finding = check_secrets_yaml(workspace)
-        assert finding.level is HealthLevel.WARN
-        assert "wifi_password" in finding.message
-        assert "api_token" not in finding.message
+        finding = check_workspace_local_yaml(workspace)
+        assert finding.level is HealthLevel.OK
+        assert "2 sections" in finding.message
+
+    def test_singular_when_one_section(self, tmp_path: Path) -> None:
+        workspace = _layout(tmp_path)
+        workspace.workspace_local_yaml.write_text(
+            "defaults:\n  wifi:\n    password: pw\n",
+        )
+        finding = check_workspace_local_yaml(workspace)
+        assert "1 section" in finding.message
+        assert "1 sections" not in finding.message
+
+    def test_error_when_malformed(self, tmp_path: Path) -> None:
+        workspace = _layout(tmp_path)
+        workspace.workspace_local_yaml.write_text("- not\n- a\n- mapping\n")
+        finding = check_workspace_local_yaml(workspace)
+        assert finding.level is HealthLevel.ERROR
+        assert "malformed" in finding.message
         assert finding.hint is not None
-        assert SECRET_PLACEHOLDER in finding.hint
-
-    def test_warns_with_multiple_placeholders_sorted(
-        self, tmp_path: Path,
-    ) -> None:
-        """Placeholder names appear sorted so output is deterministic."""
-        workspace = _layout(tmp_path)
-        workspace.secrets_yaml.write_text(
-            f"wifi_password: {SECRET_PLACEHOLDER}\n"
-            f"api_token: {SECRET_PLACEHOLDER}\n"
-            f"mqtt_token: {SECRET_PLACEHOLDER}\n",
-        )
-        finding = check_secrets_yaml(workspace)
-        assert finding.level is HealthLevel.WARN
-        # alphabetical
-        listed_index = {
-            name: finding.message.index(name)
-            for name in ("api_token", "mqtt_token", "wifi_password")
-        }
-        assert (
-            listed_index["api_token"]
-            < listed_index["mqtt_token"]
-            < listed_index["wifi_password"]
-        )
 
 
 # ---------------------------------------------------------------------------
@@ -225,7 +213,7 @@ class TestCollectHealthFindings:
         assert labels == [
             "WORKSPACE.YML",
             "DEVICES.YML",
-            "SECRETS.YML",
+            "WORKSPACE.LOCAL.YML",
             "PROJECTS",
         ]
 
@@ -311,68 +299,19 @@ class TestCheckProjectRunFunctions:
         assert "no app.py" in finding.message
 
 
-def _write_secrets(workspace: WorkspaceLayout, body: str) -> None:
-    workspace.secrets_yaml.write_text(body)
-
-
-class TestCheckSecretReferences:
-    def test_no_projects_returns_ok(self, tmp_path: Path) -> None:
-        workspace = _layout(tmp_path)
-        finding = check_secret_references(workspace)
-        assert finding.level is HealthLevel.OK
-        assert "no projects" in finding.message
-
-    def test_all_resolve(self, tmp_path: Path) -> None:
-        workspace = _layout(tmp_path)
-        _write_secrets(workspace, "wifi_password: real-pw\n")
-        project_dir = workspace.project_dir("alpha")
-        project_dir.mkdir(parents=True)
-        (project_dir / "config.toml").write_text(
-            "[wifi]\nssid = 'home'\npassword = '!secret wifi_password'\n",
-        )
-        (project_dir / "app.py").write_text("def run(): pass\n")
-        finding = check_secret_references(workspace)
-        assert finding.level is HealthLevel.OK
-
-    def test_unresolved_secret_flagged(self, tmp_path: Path) -> None:
-        workspace = _layout(tmp_path)
-        _write_secrets(workspace, "wifi_password: real-pw\n")
-        project_dir = workspace.project_dir("alpha")
-        project_dir.mkdir(parents=True)
-        (project_dir / "config.toml").write_text(
-            "[mqtt]\ntoken = '!secret mqtt_token'\n",
-        )
-        (project_dir / "app.py").write_text("def run(): pass\n")
-        finding = check_secret_references(workspace)
-        assert finding.level is HealthLevel.ERROR
-        assert "1 project(s)" in finding.message
-        assert finding.hint is not None
-        assert "alpha" in finding.hint
-        assert "mqtt_token" in finding.hint
-
-    def test_project_without_config_skipped(self, tmp_path: Path) -> None:
-        """A project dir with only app.py (no config) has no secrets to check."""
-        workspace = _layout(tmp_path)
-        project_dir = workspace.project_dir("alpha")
-        project_dir.mkdir(parents=True)
-        (project_dir / "app.py").write_text("def run(): pass\n")
-        finding = check_secret_references(workspace)
-        assert finding.level is HealthLevel.OK
-
-
 class TestCollectDoctorFindings:
-    def test_runs_all_seven_checks_in_order(self, tmp_path: Path) -> None:
+    def test_runs_all_six_checks_in_order(self, tmp_path: Path) -> None:
         workspace = _layout(tmp_path)
         findings = collect_doctor_findings(workspace)
         labels = [finding.label for finding in findings]
         # status's four checks are bracketed by python (front) +
-        # project-run + secret-refs (back).
+        # project-run (back).  Decision 0057 retired the
+        # check_secret_references step.
         assert labels == [
             "PYTHON",
             "WORKSPACE.YML",
             "DEVICES.YML",
-            "SECRETS.YML",
+            "WORKSPACE.LOCAL.YML",
             "PROJECTS",
             "PROJECT run() defs",
-            "SECRET refs",
         ]

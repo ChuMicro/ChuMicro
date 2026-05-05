@@ -23,7 +23,9 @@ def _seed_workspace(tmp_path: Path) -> Path:
     (tmp_path / "workspace.yml").write_text(
         "defaults:\n  wifi:\n    hostname_prefix: chu-\n"
     )
-    (tmp_path / "secrets.yml").write_text("wifi_password: shh\n")
+    (tmp_path / "workspace.local.yml").write_text(
+        "defaults:\n  wifi:\n    password: shh\n"
+    )
     (tmp_path / "devices.yml").write_text(
         "defaults:\n"
         "  micropython: lolin-s2\n"
@@ -49,7 +51,7 @@ def _seed_project(workspace_root: Path, name: str = "back-porch") -> Path:
     project_dir = workspace_root / "projects" / name
     project_dir.mkdir(parents=True)
     (project_dir / "config.toml").write_text(
-        "[wifi]\nssid = 'HomeNet'\npassword = '!secret wifi_password'\n"
+        "[wifi]\nssid = 'HomeNet'\n"
     )
     (project_dir / "code.py").write_text("print('hello from project')\n")
     (project_dir / "main.py").write_text("print('hello from project')\n")
@@ -142,14 +144,14 @@ class TestSetup:
         root = _seed_workspace(tmp_path)
         templates = root / "_workspace_template"
         templates.mkdir()
-        (templates / "secrets.yml").write_text(
-            "# fill in your wifi password\nwifi_password: \n",
+        (templates / "workspace.local.yml").write_text(
+            "# fill in your overrides\ndefaults: {}\n",
         )
-        # Remove the pre-seeded secrets.yml so materialize has work to do.
-        (root / "secrets.yml").unlink()
+        # Remove the pre-seeded workspace.local.yml so materialize has work to do.
+        (root / "workspace.local.yml").unlink()
         exit_code = cli.main(["setup", "--workspace-dir", str(root)])
         assert exit_code == 0
-        assert (root / "secrets.yml").read_text().startswith("# fill in your")
+        assert (root / "workspace.local.yml").read_text().startswith("# fill in your")
         assert "materialized 1 file(s) from _workspace_template/" in capsys.readouterr().out
 
 
@@ -761,7 +763,7 @@ class TestDeploy:
         project_dir = root / "projects" / "back-porch"
         project_dir.mkdir(parents=True)
         (project_dir / "config.toml").write_text(
-            "[wifi]\nssid = 'HomeNet'\npassword = '!secret wifi_password'\n"
+            "[wifi]\nssid = 'HomeNet'\n"
         )
         (project_dir / "app.py").write_text("def run(): print('hi')\n")
 
@@ -841,7 +843,7 @@ class TestDeploy:
         project_dir = root / "projects" / "back-porch"
         project_dir.mkdir(parents=True)
         (project_dir / "config.toml").write_text(
-            "[wifi]\nssid = 'HomeNet'\npassword = '!secret wifi_password'\n"
+            "[wifi]\nssid = 'HomeNet'\n"
         )
         # MP runtime in seed → effective_entrypoint == 'main.py'.
         (project_dir / "main.py").write_text(
@@ -921,7 +923,9 @@ class TestDeployAllDevices:
         (tmp_path / "workspace.yml").write_text(
             "defaults:\n  wifi:\n    hostname_prefix: chu-\n",
         )
-        (tmp_path / "secrets.yml").write_text("wifi_password: shh\n")
+        (tmp_path / "workspace.local.yml").write_text(
+            "defaults:\n  wifi:\n    password: shh\n"
+        )
         (tmp_path / "devices.yml").write_text(
             "defaults:\n"
             "  micropython: lolin-s2\n"
@@ -1040,7 +1044,9 @@ class TestDeployTargetsMapping:
         if deploy_targets_block:
             workspace_yaml_body += deploy_targets_block
         (tmp_path / "workspace.yml").write_text(workspace_yaml_body)
-        (tmp_path / "secrets.yml").write_text("wifi_password: shh\n")
+        (tmp_path / "workspace.local.yml").write_text(
+            "defaults:\n  wifi:\n    password: shh\n"
+        )
         (tmp_path / "devices.yml").write_text(
             "defaults:\n"
             "  micropython: lolin-s2\n"
@@ -1214,7 +1220,9 @@ class TestDeployAllProjects:
             "    - lolin-s2\n"
             "    - pico-w\n",
         )
-        (tmp_path / "secrets.yml").write_text("wifi_password: shh\n")
+        (tmp_path / "workspace.local.yml").write_text(
+            "defaults:\n  wifi:\n    password: shh\n"
+        )
         (tmp_path / "devices.yml").write_text(
             "defaults:\n"
             "  micropython: lolin-s2\n"
@@ -1316,7 +1324,9 @@ class TestDeployAllProjects:
             "deploy_targets:\n"
             "  ghost-project: lolin-s2\n",
         )
-        (tmp_path / "secrets.yml").write_text("wifi_password: shh\n")
+        (tmp_path / "workspace.local.yml").write_text(
+            "defaults:\n  wifi:\n    password: shh\n"
+        )
         (tmp_path / "devices.yml").write_text(
             "defaults:\n  micropython: lolin-s2\n"
             "devices:\n"
@@ -1371,19 +1381,20 @@ class TestDeployAllProjects:
 class TestDeployFailureHints:
     """Phase 2d — failed deploys carry app-level recovery hints to stderr."""
 
-    def test_unresolved_secret_traceback_prints_hint(
+    def test_missing_config_key_traceback_prints_hint(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
+        """A KeyError on a config section flags the missing key with workspace context."""
         root = _seed_workspace(tmp_path)
         _seed_project(root)
         transport = FakeTransport(
             execute_output=(
                 "Traceback (most recent call last):\n"
                 "  File \"/code.py\", ...\n"
-                "ValueError: unresolved secret reference !secret wifi_password\n"
+                "KeyError: 'wifi_password'\n"
             ),
         )
         monkeypatch.setattr(Device, "create_transport", lambda self: transport)
@@ -1395,7 +1406,7 @@ class TestDeployFailureHints:
         captured_stderr = capsys.readouterr().err
         assert "--- hints ---" in captured_stderr
         assert "wifi_password" in captured_stderr
-        assert "secrets.yml" in captured_stderr
+        assert "workspace.local.yml" in captured_stderr
 
     def test_no_hints_section_when_no_pattern_matches(
         self,
@@ -1697,25 +1708,25 @@ class TestStatus:
         assert exit_code == 0
         out = capsys.readouterr().out
         # All four labels appear; OK findings get the check glyph.
-        for label in ("WORKSPACE.YML", "DEVICES.YML", "SECRETS.YML", "PROJECTS"):
+        for label in ("WORKSPACE.YML", "DEVICES.YML", "WORKSPACE.LOCAL.YML", "PROJECTS"):
             assert label in out
         assert "✓" in out
 
     def test_warn_finding_prints_hint_below(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
     ) -> None:
-        """A placeholder-secrets warning carries a remediation hint."""
+        """A devices.yml warning (no devices registered) carries a remediation hint."""
         root = _seed_workspace(tmp_path)
-        # Overwrite the seeded secrets.yml with a placeholder value.
-        (root / "secrets.yml").write_text("wifi_password: replace-me\n")
+        # Overwrite the seeded devices.yml with an empty registry to trigger the warn.
+        (root / "devices.yml").write_text("devices: []\n")
         exit_code = cli.main(["status", "--workspace-dir", str(root)])
         # A warning alone keeps exit 0 — only ERROR flips it.
         assert exit_code == 0
         out = capsys.readouterr().out
         assert "⚠" in out
-        assert "wifi_password" in out
+        assert "no devices" in out
         assert "hint:" in out
-        assert "replace-me" in out
+        assert "add-device" in out
 
     def test_error_finding_returns_exit_one(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
@@ -1747,10 +1758,9 @@ class TestDoctor:
             "PYTHON",
             "WORKSPACE.YML",
             "DEVICES.YML",
-            "SECRETS.YML",
+            "WORKSPACE.LOCAL.YML",
             "PROJECTS",
             "PROJECT run() defs",
-            "SECRET refs",
         ):
             assert label in out
 
@@ -1767,21 +1777,6 @@ class TestDoctor:
         out = capsys.readouterr().out
         assert "✗" in out
         assert "back-porch" in out
-
-    def test_unresolved_secret_flips_exit_to_one(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str],
-    ) -> None:
-        root = _seed_workspace(tmp_path)
-        project_dir = _seed_project(root, name="back-porch")
-        (project_dir / "app.py").write_text("def run(): pass\n")
-        # _seed_project's config.toml references !secret wifi_password
-        # which the seeded secrets.yml fulfills.  Wipe secrets.yml so
-        # the reference becomes unresolved.
-        (root / "secrets.yml").write_text("")
-        exit_code = cli.main(["doctor", "--workspace-dir", str(root)])
-        assert exit_code == 1
-        out = capsys.readouterr().out
-        assert "SECRET refs" in out
 
 
 class TestProjectsTreeView:
@@ -4170,11 +4165,18 @@ class TestDeployHealthGate:
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        """Placeholder secrets are WARN — printed but deploy proceeds."""
+        """A devices.yml warn (no entries) prints but doesn't block deploy."""
         root = _seed_workspace(tmp_path)
         _seed_project(root)
-        # secrets.yml carries a placeholder.
-        (root / "secrets.yml").write_text("wifi_password: replace-me\n")
+        # Wipe devices.yml's entries so check_devices_yaml emits a WARN —
+        # deploy itself still picks up the device-id we pass explicitly.
+        (root / "devices.yml").write_text(
+            "defaults:\n  micropython: lolin-s2\n"
+            "devices:\n"
+            "  - id: lolin-s2\n"
+            "    runtime: micropython\n"
+            "    address: /dev/cu.fake\n",
+        )
 
         transport = FakeTransport(execute_output="proceeded\n")
         monkeypatch.setattr(Device, "create_transport", lambda self: transport)
@@ -4186,7 +4188,8 @@ class TestDeployHealthGate:
         ])
         assert exit_code == 0
         captured = capsys.readouterr()
-        assert "WARN SECRETS.YML" in captured.err
+        # No ERROR-level findings → deploy proceeds.
+        assert "aborting before sending bytes" not in captured.err
         assert "proceeded" in captured.out
 
 
@@ -4249,7 +4252,7 @@ class TestCommandPreflight:
 
 
 class TestCommandDumpConfig:
-    """dump-config prints the merged + secret-resolved config for a project."""
+    """dump-config prints the merged config (workspace + overlay + project) for a project."""
 
     def test_prints_merged_config_as_json(
         self,
@@ -4265,9 +4268,9 @@ class TestCommandDumpConfig:
         assert exit_code == 0
         import json
         printed = json.loads(capsys.readouterr().out)
-        # Workspace defaults merged with project config; secret resolved.
+        # Workspace defaults + workspace.local.yml overlay + project config.
         assert printed["wifi"]["ssid"] == "HomeNet"
-        assert printed["wifi"]["password"] == "shh"
+        assert printed["wifi"]["password"] == "shh"  # from overlay
         assert printed["wifi"]["hostname_prefix"] == "chu-"
 
     def test_repr_mode_uses_python_repr(
@@ -4285,24 +4288,6 @@ class TestCommandDumpConfig:
         out = capsys.readouterr().out
         assert out.startswith("{")
         assert "'wifi'" in out
-
-    def test_unresolved_secret_returns_nonzero_with_message(
-        self,
-        tmp_path: Path,
-        capsys: pytest.CaptureFixture[str],
-    ) -> None:
-        root = _seed_workspace(tmp_path)
-        project_dir = root / "projects" / "back-porch"
-        project_dir.mkdir(parents=True)
-        (project_dir / "config.toml").write_text(
-            "[wifi]\npassword = '!secret missing_key'\n",
-        )
-
-        exit_code = cli.main([
-            "dump-config", "--workspace-dir", str(root), "back-porch",
-        ])
-        assert exit_code == 1
-        assert "missing_key" in capsys.readouterr().err
 
     def test_missing_project_raises(self, tmp_path: Path) -> None:
         root = _seed_workspace(tmp_path)

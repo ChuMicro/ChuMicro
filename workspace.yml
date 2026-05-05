@@ -4,8 +4,7 @@
 # directories that deploy onto real boards via ``chumicro-pytest-device``.
 # This file is the workspace-wide defaults that those tests inherit at
 # deploy time, deep-merged with each library's
-# ``functional_tests/config.toml`` (added in Phase 4 of the unification
-# workstream).
+# ``functional_tests/config.toml``.
 #
 # Five top-level blocks (all optional):
 #
@@ -27,28 +26,29 @@
 #   quality:         Workspace-level lint / coverage knobs.
 #
 #   environments:    Reserved for the env / use commands (planned).
+#
+# Per-developer credentials (your wifi password, broker auth, …) live in
+# the gitignored ``workspace.local.yml`` sibling.  It carries the same
+# section-namespaced shape as this file and deep-merges on top, so any
+# key set there wins over the committed defaults below — no marker
+# syntax, no resolver, just one more layer in the merge.  See Decision
+# 0057 for the rationale.
 
 defaults:
   # Real-network functional tests in libraries/{wifi, requests,
   # http_server, mqtt, sockets, websockets} connect to this AP.
-  # SSID is committed (not secret); password lives in the gitignored
-  # secrets.yml referenced via the !secret marker — secrets get
-  # resolved at deploy time before the msgpack write so the on-device
-  # runtime never sees the literal "!secret ..." token.
-  #
-  # Phase 3 ships this shape; Phase 4 will retire
-  # chumicro-dev-config.toml in favour of this pipeline (per-library
-  # functional_tests/config.toml + this workspace.yml + secrets.yml).
+  # SSID is committed (not secret); the AP password lives under
+  # ``defaults.wifi.password`` in the gitignored workspace.local.yml.
   wifi:
     ssid: replace-with-your-ap-ssid
-    password: "!secret wifi_password"
 
   # MQTT broker default for libraries/mqtt/functional_tests/test_real_*.py.
   # Public test broker by default (no auth, no TLS) so a fresh-clone
   # contributor can run mqtt acceptance tests without standing up
   # their own broker.  Override per-test via
   # libraries/mqtt/functional_tests/config.toml when targeting a
-  # private broker.
+  # private broker; put broker auth under
+  # ``defaults.mqtt.broker.auth.password`` in workspace.local.yml.
   mqtt:
     broker:
       host: test.mosquitto.org
@@ -58,8 +58,7 @@ defaults:
 #   chumicro-deploy: ../chumicro-deploy   # example: editable local clone
 
 # deploy_targets:
-#   # Per-library functional-test → board-id mapping.  Phase 4 wires
-#   # this to chumicro-pytest-device's bake-config flag.
+#   # Per-library functional-test → board-id mapping.
 #   # libraries/wifi/functional_tests: pi-pico-w-circuitpython-board
 
 # quality:

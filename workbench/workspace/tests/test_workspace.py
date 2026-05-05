@@ -34,7 +34,7 @@ class TestWorkspaceLayout:
         layout = WorkspaceLayout(root=root)
         assert layout.workspace_yaml == root / "workspace.yml"
         assert layout.devices_yaml == root / "devices.yml"
-        assert layout.secrets_yaml == root / "secrets.yml"
+        assert layout.workspace_local_yaml == root / "workspace.local.yml"
         assert layout.projects_dir == root / "projects"
         assert layout.shared_dir == root / "shared"
         assert layout.packages_dir == root / "packages"

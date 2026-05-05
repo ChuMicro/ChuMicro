@@ -46,7 +46,7 @@ Open the integrated terminal (`⌃\`` / `` Ctrl+` ``) and run:
 python scripts/run.py setup
 ```
 
-This installs dependencies, runs editable installs for every library and support package, regenerates IDE configs, and creates starter `devices.yml` / `secrets.yml` if they are missing.  The starter `devices.yml` ships an empty registry — register a connected board with `python scripts/run.py add-device <id> --address <port>` (a thin shim around `chumicro-workspace add-device` that probes hardware identity and fills in defaults on first registration).  Edit `secrets.yml` once to provide real-network credentials for functional tests; `workspace.yml` (committed) references them via `!secret <name>`.  See [device-testing.md](device-testing.md) for the full setup flow.
+This installs dependencies, runs editable installs for every library and support package, regenerates IDE configs, and creates starter `devices.yml` / `workspace.local.yml` if they are missing.  The starter `devices.yml` ships an empty registry — register a connected board with `python scripts/run.py add-device <id> --address <port>` (a thin shim around `chumicro-workspace add-device` that probes hardware identity and fills in defaults on first registration).  Edit `workspace.local.yml` once to provide real-network credentials for functional tests; the committed `workspace.yml` carries the schema and the SSID placeholder, and the gitignored overlay deep-merges on top (Decision 0057).  See [device-testing.md](device-testing.md) for the full setup flow.
 
 `setup` produces a lot of output — look for this at the end:
 
@@ -117,7 +117,7 @@ To enable that workflow:
 
 1. Run `python scripts/run.py setup`
 2. Register a board: `python scripts/run.py add-device <id> --address <port>` (probes the connected hardware and fills in defaults on first registration)
-3. Fill in real-network creds in `secrets.yml` if your tests need wifi (set `wifi_password: <your-password>`; the SSID lives in `workspace.yml`)
+3. Fill in real-network creds in `workspace.local.yml` if your tests need wifi (set `defaults.wifi.password: <your-password>`; the SSID lives in the committed `workspace.yml`)
 4. Open a `libraries/<name>/functional_tests/test_*.py` file and use the normal VS Code play button
 
 If no device is configured yet, pytest skips the run with a message telling you to generate or fill in `devices.yml`. See [Device Testing](device-testing.md) for the schema and CLI options.

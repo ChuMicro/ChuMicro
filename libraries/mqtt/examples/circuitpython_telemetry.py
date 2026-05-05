@@ -14,7 +14,7 @@ for PUBACK.
 WiFi + broker config
 ====================
 
-Reads from ``runtime_config.msgpack`` (baked from ``secrets.yml``
+Reads from ``runtime_config.msgpack`` (baked from workspace.local.yml
 by ``chumicro-workspace``):
 
 * ``[wifi]`` — SSID + password

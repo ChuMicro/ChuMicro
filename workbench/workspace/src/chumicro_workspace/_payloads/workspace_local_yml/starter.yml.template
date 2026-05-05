@@ -1,0 +1,34 @@
+# workspace.local.yml — gitignored personal overrides for workspace.yml.
+#
+# Materialised on first ``setup`` and never overwritten.  Edit it directly —
+# re-runs of setup will not clobber it.  Same shape as workspace.yml; deep-
+# merged on top so any key set here wins over the committed defaults.
+#
+# Use this for credentials and any other values that are private to your
+# checkout (your AP password, MQTT broker auth, per-developer overrides).
+# The committed workspace.yml carries the schema + harmless defaults; this
+# file fills in the values that shouldn't be in git.
+#
+# Example — fill in your wifi password so the functional tests can reach
+# the network the committed workspace.yml's defaults.wifi.ssid points at:
+#
+#     defaults:
+#       wifi:
+#         password: my-real-wifi-password
+#       mqtt:
+#         broker:
+#           auth:
+#             password: my-mqtt-password
+#
+# The deploy-time merge order (lowest → highest precedence):
+#   1. workspace.yml                    (committed defaults)
+#   2. workspace.local.yml              (this file — your overrides)
+#   3. projects/<name>/config.toml      (committed per-project)
+#   4. projects/<name>/config.local.toml  (optional gitignored override)
+#
+# All four layers share the same section-namespaced shape; the merge is a
+# straight deep-merge with the higher-precedence layer winning at any key.
+
+# defaults:
+#   wifi:
+#     password: replace-me

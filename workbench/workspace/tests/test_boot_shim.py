@@ -297,11 +297,13 @@ def _seed_project_for_boot(tmp_path: Path) -> tuple[WorkspaceLayout, Path]:
     (tmp_path / "workspace.yml").write_text(
         "defaults:\n  wifi:\n    hostname_prefix: chu-\n"
     )
-    (tmp_path / "secrets.yml").write_text("wifi_password: shh\n")
+    (tmp_path / "workspace.local.yml").write_text(
+        "defaults:\n  wifi:\n    password: shh\n"
+    )
     project_dir = tmp_path / "projects" / "back-porch"
     project_dir.mkdir(parents=True)
     (project_dir / "config.toml").write_text(
-        "[wifi]\nssid = 'HomeNet'\npassword = '!secret wifi_password'\n"
+        "[wifi]\nssid = 'HomeNet'\n"
     )
     (project_dir / "app.py").write_text(
         "def run():\n    print('back-porch running')\n"
@@ -433,11 +435,13 @@ def _seed_nested_project_for_boot(tmp_path: Path) -> tuple[WorkspaceLayout, Path
     (tmp_path / "workspace.yml").write_text(
         "defaults:\n  wifi:\n    hostname_prefix: chu-\n",
     )
-    (tmp_path / "secrets.yml").write_text("wifi_password: shh\n")
+    (tmp_path / "workspace.local.yml").write_text(
+        "defaults:\n  wifi:\n    password: shh\n"
+    )
     project_dir = tmp_path / "projects" / "upstairs" / "bedroom_sensor"
     project_dir.mkdir(parents=True)
     (project_dir / "config.toml").write_text(
-        "[wifi]\nssid = 'HomeNet'\npassword = '!secret wifi_password'\n",
+        "[wifi]\nssid = 'HomeNet'\n",
     )
     (project_dir / "app.py").write_text(
         "def run():\n    print('bedroom sensor running')\n",
@@ -530,8 +534,8 @@ def _seed_workspace_with_libraries(
     Layout::
 
         tmp_path/
-            workspace.yml          (defaults block + secrets path)
-            secrets.yml
+            workspace.yml          (defaults block)
+            workspace.local.yml    (gitignored credential overlay)
             shared/
                 external_lib.py    (importable as ``external_lib``)
                 unused_lib.py      (NOT imported — must not ship)
@@ -543,7 +547,9 @@ def _seed_workspace_with_libraries(
     (tmp_path / "workspace.yml").write_text(
         "defaults:\n  wifi:\n    hostname_prefix: chu-\n",
     )
-    (tmp_path / "secrets.yml").write_text("wifi_password: shh\n")
+    (tmp_path / "workspace.local.yml").write_text(
+        "defaults:\n  wifi:\n    password: shh\n"
+    )
     shared = tmp_path / "shared"
     shared.mkdir()
     (shared / "external_lib.py").write_text("def helper(): pass\n")
@@ -551,7 +557,7 @@ def _seed_workspace_with_libraries(
     project_dir = tmp_path / "projects" / "back-porch"
     project_dir.mkdir(parents=True)
     (project_dir / "config.toml").write_text(
-        "[wifi]\nssid = 'HomeNet'\npassword = '!secret wifi_password'\n",
+        "[wifi]\nssid = 'HomeNet'\n",
     )
     (project_dir / "app.py").write_text(
         "import external_lib\n"
@@ -664,7 +670,6 @@ class TestProjectBootWithImportGraphSource:
     def test_missing_project_entrypoint_raises(self, tmp_path: Path) -> None:
         """No app.py under the project directory is a clear failure."""
         (tmp_path / "workspace.yml").write_text("defaults: {}\n")
-        (tmp_path / "secrets.yml").write_text("\n")
         project_dir = tmp_path / "projects" / "no-app"
         project_dir.mkdir(parents=True)
         (project_dir / "config.toml").write_text("[wifi]\n")

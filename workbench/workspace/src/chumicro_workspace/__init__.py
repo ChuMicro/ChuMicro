@@ -2,8 +2,11 @@
 
 Combines:
 
-* **Config merge** (Decision 0035) — workspace defaults + per-project
-  config + secrets → ``/runtime_config.msgpack``.
+* **Config merge** (Decisions 0035 + 0057) — workspace defaults +
+  per-developer ``workspace.local.yml`` overlay + per-project config
+  + optional per-project ``config.local.<suffix>`` overlay →
+  ``/runtime_config.msgpack``.  Pure structural deep-merge; no
+  ``!secret`` marker (Decision 0057 retired the indirection).
 * **Deploy integration** — :class:`WithRuntimeConfig` plus
   :func:`project_directory_source` / :func:`project_import_graph_source`
   / :func:`project_boot_source` compose with ``chumicro-deploy``'s
@@ -21,19 +24,18 @@ Public API::
 
     from chumicro_workspace import (
         build_runtime_config,        # read all sources, merge, write msgpack
+        compose_runtime_config,      # same as above without the msgpack write
         merge_configs,               # deep per-key merge of two or more dicts
-        resolve_secrets,             # walk a value, replace !secret <name> refs
         read_workspace_yaml,         # parse workspace.yml -> defaults dict
         read_project_config,           # parse projects/<name>/config.{toml,yml,yaml}
-        read_secrets_yaml,           # parse secrets.yml -> dict (empty when absent)
         write_runtime_config,        # write merged dict to msgpack at given path
         WithRuntimeConfig,           # FileSource decorator that injects the msgpack
         project_directory_source,      # convenience: DirectorySource + WithRuntimeConfig
         find_project_config,           # locate config.toml/.yml/.yaml under a project dir
         RUNTIME_CONFIG_DEVICE_PATH,  # canonical on-device path (Decision 0035 §8)
         GENERATED_DIRNAME,           # canonical host-side _generated/ dir name
-        UnresolvedSecretError,       # !secret <name> resolved against missing key
         WorkspaceConfigError,        # YAML/TOML top-level shape malformed
+        read_workspace_local_yml_starter,  # canonical workspace.local.yml content
     )
 
 Workbench-only — runs on CPython only; never lands on a
@@ -105,7 +107,6 @@ from chumicro_workspace.import_graph import (
 from chumicro_workspace.loaders import (
     WorkspaceConfigError,
     read_project_config,
-    read_secrets_yaml,
     read_workspace_yaml,
 )
 from chumicro_workspace.merge import merge_configs
@@ -119,8 +120,9 @@ from chumicro_workspace.pipeline import (
     build_runtime_config,
     compose_runtime_config,
 )
-from chumicro_workspace.secrets import UnresolvedSecretError, resolve_secrets
-from chumicro_workspace.secrets_yml_starter import read_secrets_yml_starter
+from chumicro_workspace.workspace_local_yml_starter import (
+    read_workspace_local_yml_starter,
+)
 from chumicro_workspace.writer import write_runtime_config
 
 __all__ = [
@@ -140,7 +142,6 @@ __all__ = [
     "OnboardingDiagnosis",
     "SectionManifest",
     "UnresolvedFirmwareError",
-    "UnresolvedSecretError",
     "WithRuntimeConfig",
     "WorkspaceConfigError",
     "add_device",
@@ -172,11 +173,9 @@ __all__ = [
     "read_library_sources",
     "read_manifest",
     "read_project_config",
-    "read_secrets_yaml",
-    "read_secrets_yml_starter",
+    "read_workspace_local_yml_starter",
     "read_workspace_yaml",
     "rename_device",
-    "resolve_secrets",
     "set_runtime_default",
     "project_boot_source",
     "project_boot_with_import_graph_source",
