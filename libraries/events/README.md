@@ -32,7 +32,7 @@ from chumicro_events import EventBus
 bus = EventBus()
 bus.subscribe("wifi.state", lambda topic, payload: print(topic, "=", payload))
 
-# Wire a service callback to a publisher (Decision 0042 pattern):
+# Wire a service callback to a publisher:
 wifi.on_state_change = bus.publisher("wifi.state")
 
 # Inside the runner tick:
@@ -60,29 +60,30 @@ Test helpers in `chumicro_events.testing`:
 | `RecordingSubscriber(topic_filter)` | Captures `(topic, payload)` tuples for assertions; optional exact-match filter. |
 | `FailingSubscriber(exception)` | Raises on every dispatch — exercises `handler_errors` paths. |
 
-Internally the queue is a `collections.deque(iterable, maxlen)` rather than a list — `append` and `popleft` are O(1) and the deque's native `maxlen` enforcement gives drop-oldest without the O(n) shift cost of `list.pop(0)` on small VMs.  See [`plans/patterns.md`](../../plans/patterns.md) for the project-wide convention.
+Internally the queue is a `collections.deque(iterable, maxlen)` rather than a list — `append` and `popleft` are O(1) and the deque's native `maxlen` enforcement gives drop-oldest without the O(n) shift cost of `list.pop(0)` on small VMs.
 
 ## Platform support
 
-Pure-Python; runs identically on CPython, MicroPython, and CircuitPython.  No chumicro dependencies and **no other chumicro library imports it** ([Decision 0042](../../plans/decisions/0042-library-dependency-policy.md) — the "decoration / observability" rule).  Apps wire bus publishers into service callbacks themselves.
+Pure-Python; runs identically on CPython, MicroPython, and CircuitPython.  No chumicro dependencies and **no other chumicro library imports it** — by policy, decoration / observability libraries don't appear in another library's dependency graph.  Apps wire bus publishers into service callbacks themselves.
 
 ## Examples
 
 | Example | What it shows |
 |---|---|
 | [`examples/quickstart.py`](examples/quickstart.py) | `EventBus` minimal end-to-end: publish, check, handle. |
-| [`examples/wiring_services.py`](examples/wiring_services.py) | The Decision 0042 wiring pattern — bind service `on_state_change` callbacks to `bus.publisher(topic)`. |
+| [`examples/wiring_services.py`](examples/wiring_services.py) | Wiring pattern — bind service `on_state_change` callbacks to `bus.publisher(topic)`. |
 
 ## Developing this library
 
 Host-side tests live in `tests/`; real-board functional tests belong in `functional_tests/`.
 
 ```bash
-python scripts/run.py test --libraries events
-python scripts/run.py test-libraries-functional --library events
+pip install -e .[test]
+pytest tests/
+pytest functional_tests/   # needs a registered board in devices.yml
 ```
 
-Before running device tests, generate local board config files with `python scripts/run.py setup`, then fill in `devices.yml`. See the [contributing guide](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md) and the [device testing guide](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/device-testing.md) for the full workflow.
+Before running functional tests, register a board with `chumicro-workspace add-device <id> --address <port>`.
 
 ## Docs
 

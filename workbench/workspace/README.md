@@ -98,14 +98,14 @@ Both hold code your projects can `import`.  Pick by *weight*:
 | Want to ship… | Drop it under | Imports look like | Notes |
 |---|---|---|---|
 | A 50-line helper your projects share | `libs/foo.py` | `from libs.foo import bar` | No tests, no version, no scaffolding. |
-| A full chumicro-style library you might publish someday | `libraries/<name>/` (via `new --library`) | `import <name>` | Gets `src/`, `tests/`, `docs/`, `examples/`, `pyproject.toml`, `VERSION` — same shape the chumicro mono-repo uses. |
+| A full chumicro-style library you might publish someday | `libraries/<name>/` (via `new --library`) | `import <name>` | Gets `src/`, `tests/`, `docs/`, `examples/`, `pyproject.toml`, `VERSION` — the publishable-library layout. |
 | A third-party package | `packages/` (via `sync`) | `import <name>` | Gitignored mirror cache. |
 
 The import-graph search path resolves explicit `library_sources:` overrides → `libs/` → every `libraries/<name>/src/` (auto-discovered) → `packages/`.
 
 ### Boot-shim layout
 
-`deploy --boot-shim <name>` ships the [Decision 0029 §3](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0029-project-workspace.md) on-device shape:
+`deploy --boot-shim <name>` ships this on-device shape:
 
 ```
 /code.py                              # two-line shim: import workspace_runtime; boot()
@@ -123,13 +123,13 @@ Three layers, three responsibilities: `code.py` is the firmware entrypoint (stab
 
 ### Status
 
-> Project-workspace Phase 4a feature-complete + workspace-ecosystem Phases 1, 2, 4, 5 shipped (2026-04-27); Phase 2f closed 2026-05-01.  The package consolidates everything Decision 0029 / 0035 / 0038 specified plus the user-friendliness pass that followed: nested project namespaces, an `examples/` folder for read-and-scaffold demos, `status` / `doctor` health snapshots (now also a pre-deploy gate), `deploy --dry-run`, `deploy --all-devices`, `deploy --all-projects` + per-project `deploy_targets:` defaults, `repl <project>` one-shot deploy + tail, app-level deploy-failure recovery hints, `new --library` for chumicro-style libraries, `workspace.yml` `quality:` knob wiring, `preflight` + `dump-config` commands.
+> Pre-alpha but feature-complete on the day-zero surface: nested project namespaces, an `examples/` folder for read-and-scaffold demos, `status` / `doctor` health snapshots (also a pre-deploy gate), `deploy --dry-run`, `deploy --all-devices`, `deploy --all-projects` + per-project `deploy_targets:` defaults, `repl <project>` one-shot deploy + tail, app-level deploy-failure recovery hints, `new --library` for publishable-library scaffolding, `workspace.yml` `quality:` knob wiring, `preflight` + `dump-config` commands.
 
 ## Public Python API
 
 ```python
 from chumicro_workspace import (
-    # Config merge (Decision 0035)
+    # Config merge
     build_runtime_config, merge_configs, resolve_secrets,
     read_workspace_yaml, read_project_config, read_secrets_yaml,
     write_runtime_config, UnresolvedSecretError, WorkspaceConfigError,
@@ -138,22 +138,22 @@ from chumicro_workspace import (
     WithRuntimeConfig, project_directory_source,
     project_boot_source, project_import_graph_source,
 
-    # devices.yml three-zone round-trip (Decision 0029 §9)
+    # devices.yml three-zone round-trip
     add_device, update_device_address, update_device_hardware,
     rename_device, set_runtime_default, load_devices, dump_devices,
 
-    # Onboarding (Decision 0029 §4)
+    # Onboarding
     BoardState, OnboardingDiagnosis, detect_board_state, find_uf2_drive,
 
-    # Firmware URL derivation (Decision 0029 §5)
+    # Firmware URL derivation
     derive_firmware_url, latest_circuitpython_url, latest_micropython_url,
     list_circuitpython_versions, list_micropython_builds,
     micropython_board_for_machine, UnresolvedFirmwareError,
 
-    # Import-graph (Decision 0029 §6+§7)
+    # Import-graph
     build_search_paths, read_library_sources,
 
-    # Per-project → per-device mapping (Phase 2f)
+    # Per-project → per-device mapping
     read_deploy_targets,
 
     # Constants
@@ -182,11 +182,12 @@ The Python API surface (the `from chumicro_workspace import ...` block above) ex
 ## Developing this library
 
 ```bash
-python scripts/run.py test --libraries workspace
-python scripts/run.py test-workbench-functional --workbench workspace
+pip install -e .[test]
+pytest tests/
+pytest functional_tests/   # needs a registered board in devices.yml
 ```
 
-Functional tests need a real board and `devices.yml` populated — `python scripts/run.py setup` materializes the local config files.
+Before running functional tests, register a board: `chumicro-workspace add-device <id> --address <port>`.
 
 ## Docs
 

@@ -70,13 +70,13 @@ while True:
 | `parse_query` / `split_target` | URL helpers. |
 | `ServerError` + subclasses | Typed exception hierarchy (subclasses `chumicro_requests.HttpError`). |
 
-v1 (Decision 0041) shipped end-to-end across slices 7a–7d: listener +
-parser + canned response, `@server.route` decorator + JSON helpers +
-multi-method dispatch, bounded multi-connection + per-tick budgets +
-`request_timeout_ms`, and live-board verification on Pi Pico W.
+v1 ships end-to-end: listener + parser + canned response,
+`@server.route` decorator + JSON helpers + multi-method dispatch,
+bounded multi-connection + per-tick budgets + `request_timeout_ms`,
+and live-board verification on Pi Pico W.
 
 v1 non-goals: WebSockets, sessions / cookies / auth helpers, multipart
-upload, sub-app mounting, async handlers.  See Decision 0041 §8.
+upload, sub-app mounting, async handlers.
 
 ## Platform support
 
@@ -91,7 +91,7 @@ locally — no `chumicro-requests` dependency on the device.
 listener from
 [`chumicro_sockets.ssl_context_with_cert_and_key_paths`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets)
 into `listener_factory` and the same `HttpServer` runs HTTPS.  Live
-verification across the supported board matrix (`plans/learnings.md`):
+verification across the supported board matrix:
 
 | Runtime + board | TLS server status | Notes |
 |---|---|---|
@@ -100,7 +100,7 @@ verification across the supported board matrix (`plans/learnings.md`):
 | MicroPython on ESP32-S2 | ✅ Works | Hardware-accelerated handshake; ~1 KB heap. |
 | MicroPython on rp2 (Pi Pico W) | ✅ Works (RSA-2048 only) | DER-encoded key; ~25 KB handshake heap; ECC keys fail at context build. |
 
-> **Why the CP-on-rp2 row?**  The CYW43 stack's TLS server path raises `OSError(32)` mid-handshake and wedges the chip's station state until a USB power-cycle.  The empirical findings + reproduction probe live in [`plans/learnings.md`](https://github.com/ChuMicro/ChuMicro/blob/main/plans/learnings.md) under "circuitpython-rp2 / Pi Pico W — server-side TLS."  No upstream fix is in flight; for HTTPS server work on rp2, use MicroPython.
+> **Why the CP-on-rp2 row?**  The CYW43 stack's TLS server path raises `OSError(32)` mid-handshake and wedges the chip's station state until a USB power-cycle.  No upstream fix is in flight; for HTTPS server work on rp2, use MicroPython.
 
 The TLS handshake is synchronous inside `wrap_socket(..., server_side=True)`;
 budget for a ~100–500 ms listener stall during accept.  Once the
@@ -117,25 +117,9 @@ runner-shaped, LED-blink-friendly progression.
 
 ## Configuring wifi for examples and functional tests
 
-Real-network functional tests in `functional_tests/test_real_*.py` and the hardware-prefixed examples in `examples/circuitpython_*.py` need wifi credentials.  How you supply them depends on whether you're inside the chumicro mono-repo or using this library in your own project.
+Real-network functional tests in `functional_tests/test_real_*.py` and the hardware-prefixed examples in `examples/circuitpython_*.py` need wifi credentials.  Two paths, depending on whether you're using a `chumicro-workspace`:
 
-### Inside the chumicro mono-repo
-
-`python scripts/run.py setup` generates `chumicro-dev-config.toml` at the repo root (gitignored).  Uncomment and fill in the `[wifi]` block:
-
-```toml
-[wifi]
-ssid = "your-wifi-ssid"
-password = "your-wifi-password"
-```
-
-The library's `functional_tests/conftest.py` reads this file and materialises a `_test_creds.py` shim alongside the test.  Without the file (or section), the real-network tests skip silently.
-
-### Using `chumicro-http-server` outside the mono-repo
-
-Two paths, depending on whether you're using a `chumicro-workspace`:
-
-* **With a workspace (recommended).**  Put wifi creds in your workspace's `secrets.yml`, run `chumicro-workspace deploy --thing <name>`, and the example reads them via `chumicro_config.load_runtime_config()`.  The two-thing demo's `runtime_config` schema also accepts `[two_thing_sensor]` for the sensor's target server overrides — see the example file for keys.
+* **With a workspace (recommended).**  Put wifi creds in your workspace's `workspace.local.yml`, run `chumicro-workspace deploy --thing <name>`, and the example reads them via `chumicro_config.load_runtime_config()`.  The two-thing demo's `runtime_config` schema also accepts `[two_thing_sensor]` for the sensor's target server overrides — see the example file for keys.
 * **Raw single-file deploy** (no workspace).  Edit the `WIFI_SSID` / `WIFI_PASSWORD` constants (and `SERVER_HOST` on the sensor side) near the top of the example file before copying it to `/code.py` (CP) or `/main.py` (MP).  The constants are the fallback when no `runtime_config.msgpack` is present.
 
 The library itself never reads either source — it takes a `listener_factory` and goes.  The config wiring is application-layer.
@@ -145,11 +129,12 @@ The library itself never reads either source — it takes a `listener_factory` a
 Host-side tests live in `tests/`; real-board functional tests belong in `functional_tests/`.
 
 ```bash
-python scripts/run.py test --libraries http_server
-python scripts/run.py test-libraries-functional --library http_server
+pip install -e .[test]
+pytest tests/
+pytest functional_tests/   # needs a registered board in devices.yml
 ```
 
-See the [contributing guide](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md).
+Before running functional tests, register a board with `chumicro-workspace add-device <id> --address <port>`.
 
 ## Docs
 

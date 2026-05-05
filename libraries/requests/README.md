@@ -65,11 +65,10 @@ print(response.json())            # parsed JSON when Content-Type is application
 | `HttpError` + subclasses | `HttpBusyError`, `HttpTimeoutError`, `HttpProtocolError`, `HttpURLError`, `HttpOversizedError`. |
 | `chumicro_requests.testing.FakeHttpClient` | Host-only fake for downstream test suites. |
 
-v1 scope (Decision 0040), all shipped 2026-04-26: plain HTTP GET (3a),
-body decode + `.text` / `.json()` / charset sniff (3b), HTTPS via TLS
-(3c, live-verified on Pi Pico W), POST + PUT + PATCH + DELETE + JSON
-helper (3d), 301 / 302 / 303 / 307 / 308 redirects with per-request
-budget (3e), `Transfer-Encoding: chunked` decode (3f).  v1 complete.
+v1 ships: plain HTTP GET, body decode + `.text` / `.json()` / charset
+sniff, HTTPS via TLS (live-verified on Pi Pico W), POST + PUT + PATCH +
+DELETE + JSON helper, 301 / 302 / 303 / 307 / 308 redirects with
+per-request budget, and `Transfer-Encoding: chunked` decode.
 
 ## Platform support
 
@@ -85,25 +84,9 @@ on `chumicro-sockets` (TCP/TLS transport) and `chumicro-timing` (ticks).
 
 ## Configuring wifi for examples and functional tests
 
-Real-network functional tests in `functional_tests/test_real_*.py` and the hardware-prefixed examples in `examples/circuitpython_*.py` need wifi credentials.  How you supply them depends on whether you're inside the chumicro mono-repo or using this library in your own project.
+Real-network functional tests in `functional_tests/test_real_*.py` and the hardware-prefixed examples in `examples/circuitpython_*.py` need wifi credentials.  Two paths, depending on whether you're using a `chumicro-workspace`:
 
-### Inside the chumicro mono-repo
-
-`python scripts/run.py setup` generates `chumicro-dev-config.toml` at the repo root (gitignored).  Uncomment and fill in the `[wifi]` block:
-
-```toml
-[wifi]
-ssid = "your-wifi-ssid"
-password = "your-wifi-password"
-```
-
-Each library's `functional_tests/conftest.py` reads this file and materialises a `_test_creds.py` shim alongside the test.  Without the file (or section), the real-network tests skip silently — the rest of the suite stays committable.
-
-### Using `chumicro-requests` outside the mono-repo
-
-Two paths, depending on whether you're using a `chumicro-workspace`:
-
-* **With a workspace (recommended).**  Put wifi creds in your workspace's `secrets.yml`, run `chumicro-workspace deploy --thing <name>`, and the example reads them via `chumicro_config.load_runtime_config()`.  This is the path Decision 0030 documents.
+* **With a workspace (recommended).**  Put wifi creds in your workspace's `workspace.local.yml`, run `chumicro-workspace deploy --thing <name>`, and the example reads them via `chumicro_config.load_runtime_config()`.
 * **Raw single-file deploy** (no workspace).  Edit the `WIFI_SSID` / `WIFI_PASSWORD` constants near the top of the example file before copying it to `/code.py` (CP) or `/main.py` (MP).  The constants are the fallback when no `runtime_config.msgpack` is present.
 
 The library itself never reads either source — it takes a `connection_factory` and goes.  The config wiring is application-layer; see `chumicro-config` + `chumicro-wifi` for the standard pattern.
@@ -113,11 +96,12 @@ The library itself never reads either source — it takes a `connection_factory`
 Host-side tests live in `tests/`; real-board functional tests belong in `functional_tests/`.
 
 ```bash
-python scripts/run.py test --libraries requests
-python scripts/run.py test-libraries-functional --library requests
+pip install -e .[test]
+pytest tests/
+pytest functional_tests/   # needs a registered board in devices.yml
 ```
 
-Before running device tests, generate local board config files with `python scripts/run.py setup`, then fill in `devices.yml`. See the [contributing guide](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md) and the [device testing guide](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/device-testing.md) for the full workflow.
+Before running functional tests, register a board with `chumicro-workspace add-device <id> --address <port>`.
 
 ## Docs
 

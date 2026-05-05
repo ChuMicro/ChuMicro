@@ -39,7 +39,7 @@ while not request.done:
 print("unix seconds:", request.unix_seconds)
 ```
 
-`chumicro_sockets_factory` lives in its own submodule (Decision 0042 deploy-rule) so apps with a custom UDP transport don't pull `chumicro-sockets` into their device deploy.  Pass any `chumicro_sockets.UDPSocket`-shaped object to `NTPClient(socket=...)`.
+`chumicro_sockets_factory` lives in its own submodule so apps with a custom UDP transport don't pull `chumicro-sockets` into their device deploy.  Pass any `chumicro_sockets.UDPSocket`-shaped object to `NTPClient(socket=...)`.
 
 ## What's included
 
@@ -55,7 +55,7 @@ print("unix seconds:", request.unix_seconds)
 
 ## Platform support
 
-Pure-Python; runs identically on CPython, MicroPython, and CircuitPython.  Hard dependency: `chumicro-sockets` (Decision 0042 "core infrastructure" rule — single `pip install chumicro-ntp` brings the stack).
+Pure-Python; runs identically on CPython, MicroPython, and CircuitPython.  Hard dependency: `chumicro-sockets` (a single `pip install chumicro-ntp` brings the stack).
 
 ## Examples
 
@@ -69,11 +69,12 @@ Pure-Python; runs identically on CPython, MicroPython, and CircuitPython.  Hard 
 Host-side tests live in `tests/`; real-board functional tests belong in `functional_tests/`.
 
 ```bash
-python scripts/run.py test --libraries ntp
-python scripts/run.py test-libraries-functional --library ntp
+pip install -e .[test]
+pytest tests/
+pytest functional_tests/   # needs a registered board in devices.yml
 ```
 
-Before running device tests, generate local board config files with `python scripts/run.py setup`, then fill in `devices.yml`. See the [contributing guide](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md) and the [device testing guide](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/device-testing.md) for the full workflow.
+Before running functional tests, register a board with `chumicro-workspace add-device <id> --address <port>`.
 
 ## Docs
 

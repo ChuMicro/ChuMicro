@@ -70,7 +70,7 @@ The plugin discovers the board, stages `chumicro_timing/src/` + the test, execut
 
 ### Status
 
-> Pre-alpha.  Carved out of the chumicro mono-repo's `scripts/{pytest_device,pr_summary,result_parser,device_testing}.py` (~2270 lines) per Decision 0032 §8 ("scripts consume workbench packages, not the other way around").  Auto-registers via `pytest11` so the mono-repo's root conftest.py no longer needs an explicit plugin import.
+> Pre-alpha.  Auto-registers via `pytest11` — no explicit plugin import is needed in your `conftest.py`.
 
 ## Companions
 
@@ -83,10 +83,11 @@ The plugin discovers the board, stages `chumicro_timing/src/` + the test, execut
 ## Developing this library
 
 ```bash
-python scripts/run.py test --libraries pytest-device
+pip install -e .[test]
+pytest tests/
 ```
 
-No hardware-side functional tests for this package itself — its job is to drive the libraries' functional tests, which run via `python scripts/run.py test-libraries-functional` (which uses this plugin).
+No hardware-side functional tests for this package itself — its job is to drive consumer libraries' functional tests via `pytest libraries/<name>/functional_tests/` against a board registered in `devices.yml`.
 
 ## Find this library
 

@@ -72,7 +72,7 @@ Test helpers in `chumicro_logging.testing`:
 
 ## Platform support
 
-Pure-Python; runs identically on CPython, MicroPython, and CircuitPython.  No chumicro dependencies and **no other chumicro library imports it** ([Decision 0042](../../plans/decisions/0042-library-dependency-policy.md) — the "decoration / observability" rule).  Apps wire logging in by passing the logger to libraries that accept an optional `logger=` parameter.
+Pure-Python; runs identically on CPython, MicroPython, and CircuitPython.  No chumicro dependencies and **no other chumicro library imports it** — by policy, decoration / observability libraries don't appear in another library's dependency graph.  Apps wire logging in by passing the logger to libraries that accept an optional `logger=` parameter.
 
 ## Examples
 
@@ -86,11 +86,12 @@ Pure-Python; runs identically on CPython, MicroPython, and CircuitPython.  No ch
 Host-side tests live in `tests/`; real-board functional tests belong in `functional_tests/`.
 
 ```bash
-python scripts/run.py test --libraries logging
-python scripts/run.py test-libraries-functional --library logging
+pip install -e .[test]
+pytest tests/
+pytest functional_tests/   # needs a registered board in devices.yml
 ```
 
-Before running device tests, generate local board config files with `python scripts/run.py setup`, then fill in `devices.yml`. See the [contributing guide](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md) and the [device testing guide](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/device-testing.md) for the full workflow.
+Before running functional tests, register a board with `chumicro-workspace add-device <id> --address <port>`.
 
 ## Docs
 

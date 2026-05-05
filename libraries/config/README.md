@@ -3,7 +3,7 @@
 <img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png"
 align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-Standardized runtime-config helpers for ChuMicro libraries. One file per thing, section-namespaced dict, typed `<Name>Config.from_dict()` per consumer. See [Decision 0035](../../plans/decisions/0035-runtime-config-structure.md) for the convention and [Decision 0036](../../plans/decisions/0036-chumicro-config-library.md) for why this lives in its own library.
+Standardized runtime-config helpers for ChuMicro libraries.  One file per thing, section-namespaced dict, typed `<Name>Config.from_dict()` per consumer.
 
 <br clear="left">
 
@@ -75,11 +75,12 @@ No standalone examples — see any consumer library (starting with `chumicro-wif
 Host-side tests live in `tests/`; real-board functional tests belong in `functional_tests/`.
 
 ```bash
-python scripts/run.py test --libraries config
-python scripts/run.py test-libraries-functional --library config
+pip install -e .[test]
+pytest tests/
+pytest functional_tests/   # needs a registered board in devices.yml
 ```
 
-Before running device tests, generate local board config files with `python scripts/run.py setup`, then fill in `devices.yml`. See the [contributing guide](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md) and the [device testing guide](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/device-testing.md) for the full workflow.
+Before running functional tests, register a board with `chumicro-workspace add-device <id> --address <port>`.
 
 ## Docs
 

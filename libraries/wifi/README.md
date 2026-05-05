@@ -53,11 +53,11 @@ wifi.on_state_change(lambda old, new: print(f"{old} -> {new}"))
 
 | Symbol | What it does |
 |---|---|
-| `WifiConfig` | Typed connection settings (`ssid`, `password`, hostname, timeouts, reconnect tuning) with `from_dict` factory per [Decision 0036](../../plans/decisions/0036-chumicro-config-library.md). |
+| `WifiConfig` | Typed connection settings (`ssid`, `password`, hostname, timeouts, reconnect tuning) with a `from_dict` factory matching the chumicro-config convention. |
 | `WifiService` | State machine + reconnect supervisor; implements `Runner.add()`-compatible `check`/`handle`. Auto-detects the runtime adapter at construction time (`FakeWifiAdapter` on CPython, `CpWifiAdapter` on CircuitPython, substrate-aware `MpWifiAdapter` on MicroPython — handles ESP-IDF + CYW43 transparently). |
 | `WifiState` | String-sentinel state names: `DISCONNECTED`, `CONNECTING`, `CONNECTED`, `RECONNECTING`, `FAILED`. |
 | `chumicro_wifi.testing.FakeWifi` | Drop-in `WifiService` wrapping a `FakeWifiAdapter` with `set_connect_outcome`, `drop_link`, `calls` hooks for downstream library tests. |
-| `_templates/config.toml` | Per-library config template ([ADR 0036 §5](../../plans/decisions/0036-chumicro-config-library.md)) consumed by workspace tooling to scaffold a thing's `config.toml`. |
+| `_templates/config.toml` | Per-library config template consumed by workspace tooling to scaffold a thing's `config.toml`. |
 
 ## Platform support
 
@@ -73,21 +73,7 @@ Works on CPython, MicroPython, and CircuitPython.  Ships three adapters: Circuit
 
 The acceptance test in `functional_tests/test_acceptance.py` connects to a real AP and skips silently when no credentials are configured.
 
-### Inside the chumicro mono-repo
-
-`python scripts/run.py setup` generates `chumicro-dev-config.toml` at the repo root (gitignored).  Uncomment and fill in:
-
-```toml
-[wifi]
-ssid = "your-wifi-ssid"
-password = "your-wifi-password"
-```
-
-`functional_tests/conftest.py` reads this file and materialises a `_test_creds.py` shim alongside the test.
-
-### Using `chumicro-wifi` outside the mono-repo
-
-Production apps load wifi config via `chumicro_config.load_runtime_config()` — see `chumicro-config` and Decision 0030.  Put your creds in your workspace's `secrets.yml`, run `chumicro-workspace deploy`, and the bake-and-deploy pipeline lands them on the device as `runtime_config.msgpack`.
+Production apps load wifi config via `chumicro_config.load_runtime_config()` — see `chumicro-config`.  Put your creds in your workspace's `workspace.local.yml`, run `chumicro-workspace deploy`, and the bake-and-deploy pipeline lands them on the device as `runtime_config.msgpack`.
 
 The library itself never reads any TOML — it takes a `WifiConfig` and goes.  `WifiConfig.from_dict()` is the dict-construction path used by the standard pipeline.
 
@@ -96,11 +82,12 @@ The library itself never reads any TOML — it takes a `WifiConfig` and goes.  `
 Host-side tests live in `tests/`; real-board functional tests belong in `functional_tests/`.
 
 ```bash
-python scripts/run.py test --libraries wifi
-python scripts/run.py test-libraries-functional --library wifi
+pip install -e .[test]
+pytest tests/
+pytest functional_tests/   # needs a registered board in devices.yml
 ```
 
-Before running device tests, generate local board config files with `python scripts/run.py setup`, then fill in `devices.yml`. See the [contributing guide](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md) and the [device testing guide](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/device-testing.md) for the full workflow.
+Before running functional tests, register a board with `chumicro-workspace add-device <id> --address <port>`.
 
 ## Docs
 
