@@ -23,7 +23,7 @@ The workspace-template's flows are the canonical pattern; the mono-repo dogfoods
 ## Open follow-ups
 
 - **Phase 4.5a — `!secret` simplification.** ✅ Closed by Decision 0057 — `!secret` marker retired; `workspace.yml` and per-project `config.toml` are both gitignored and share the section-namespaced shape.  Walks back §3 of this decision into a simpler 2-layer shape.
-- **Phase 4.5b — on-device dogfooding.** Pending.  `transport.stage()` already accepts `extra_files: dict[str, bytes]` so `chumicro-pytest-device` can stage `runtime_config.msgpack` alongside test files; the on-device test code migration (drop `_test_creds.py`, call `chumicro_config.load_runtime_config()` directly) is the remaining work.  Detail in `plans/workstreams/phase-4-5b-on-device-config-dogfooding.md`.
+- **On-device dogfooding.** Pending.  Decision 0056 shipped `transport.stage(extra_files=...)` so `chumicro-pytest-device` can stage `runtime_config.msgpack` alongside test files; the conftest + plugin + on-device test migration (drop `_test_creds.py`, call `chumicro_config.load_runtime_config()` directly) is the remaining work.  Detail in `plans/workstreams/on-device-config-dogfooding.md` (originally filed as Phase 4.5b of this workstream; promoted to peer status 2026-05-05).
 
 ## Consequences
 

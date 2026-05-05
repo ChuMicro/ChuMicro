@@ -46,6 +46,6 @@ Naming locked to `extra_files` rather than `extra_binaries` / `extra_resources` 
 
 ## Out of scope
 
-* The migration of conftests + on-device test code from `_test_creds.py` → `runtime_config.msgpack` + `load_runtime_config()` lives in a separate session (Phase 4.5b workstream detail in `plans/workstreams/phase-4-5b-on-device-config-dogfooding.md`).  This ADR ships the transport API extension + unit tests + `FakeTransport` extension; the on-device migration consumes it.
+* The migration of conftests + on-device test code from `_test_creds.py` → `runtime_config.msgpack` + `load_runtime_config()` lives in a separate session (workstream detail in `plans/workstreams/on-device-config-dogfooding.md`).  This ADR ships the transport API extension + unit tests + `FakeTransport` extension; the on-device migration consumes it.
 * `extra_files` content-type negotiation (msgpack vs JSON vs raw bytes) — out of scope; the parameter is type-agnostic, callers decide how to encode.
 * Cross-transport file mode (`0o644` vs `0o755`) — every host-staged file lands with the host's default permissions; the device's filesystem semantics dictate what's reachable.  No CP / MP transport currently reads file permissions.
