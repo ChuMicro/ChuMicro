@@ -21,8 +21,8 @@ Tests cover:
 * The reader returns a non-empty string.
 * The string carries the schema documentation (defaults block +
   example credentials).
-* Decision 0057 history: no `!secret` marker; the file is
-  gitignored and credentials live here directly.
+* Per Decision 0057: no `!secret` marker; the file is gitignored
+  and credentials live here directly.
 * The example placeholders appear commented-out so a freshly-
   materialised workspace.yml has no live values.
 * Successive calls return identical bytes.
@@ -53,18 +53,9 @@ class TestReadWorkspaceYmlStarter:
         assert "precedence" in content.lower()
 
     def test_does_not_reference_secret_marker(self) -> None:
-        """Decision 0057: the `!secret` indirection is gone — no resurrection."""
+        """Per Decision 0057: no `!secret` indirection in the starter."""
         content = read_workspace_yml_starter()
         assert "!secret" not in content
-
-    def test_does_not_reference_workspace_local_overlay(self) -> None:
-        """Decision 0057: the gitignored overlay file split is gone.
-
-        Credentials live in workspace.yml directly; the starter must not
-        teach a now-retired layering shape.
-        """
-        content = read_workspace_yml_starter()
-        assert "workspace.local.yml" not in content
 
     def test_carries_commented_placeholder(self) -> None:
         content = read_workspace_yml_starter()

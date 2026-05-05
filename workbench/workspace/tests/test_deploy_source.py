@@ -4,9 +4,8 @@ Covers :class:`WithRuntimeConfig`, :func:`project_directory_source`,
 :func:`find_project_config`, and the end-to-end "Deployer ships the
 msgpack alongside app code" path through ``FakeTransport``.
 
-Decision 0057 retired the ``!secret`` marker + the
-``workspace.local.yml`` overlay split; gitignored credentials live
-in ``workspace.yml`` directly.
+Per Decision 0057, gitignored credentials live in
+``workspace.yml`` directly — no marker, no resolver, no overlay.
 """
 
 from pathlib import Path

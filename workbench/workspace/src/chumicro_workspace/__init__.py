@@ -6,9 +6,8 @@ Combines:
   ``workspace.yml`` (defaults + credentials in one place) +
   per-project ``config.{toml,yml,yaml}`` →
   ``/runtime_config.msgpack``.  Pure structural deep-merge; no
-  ``!secret`` marker (Decision 0057 retired the indirection); no
-  separate ``workspace.local.yml`` overlay (Decision 0057 collapsed
-  the file split that 0057 had introduced).
+  ``!secret`` marker, no resolver — both layers are gitignored and
+  share the section-namespaced shape.
 * **Deploy integration** — :class:`WithRuntimeConfig` plus
   :func:`project_directory_source` / :func:`project_import_graph_source`
   / :func:`project_boot_source` compose with ``chumicro-deploy``'s

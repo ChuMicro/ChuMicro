@@ -23,10 +23,10 @@ Pairs with :mod:`chumicro_workspace.devices_yml_starter` — same
 pattern, same reason: workbench packages own the canonical content
 that consumer repos materialise.
 
-Decision 0057 collapsed the prior committed-workspace.yml +
-gitignored-workspace.local.yml split into a single gitignored
-``workspace.yml``; this starter carries the schema as commented
-examples plus the minimal placeholders a fresh user fills in.
+Per Decision 0057 there is one gitignored ``workspace.yml``
+carrying defaults + credentials in one place; this starter carries
+the schema as commented examples plus the minimal placeholders a
+fresh user fills in.
 """
 
 from __future__ import annotations

@@ -145,7 +145,7 @@ class TestUnrelatedOserrorDoesNotMatchRamModeRule:
     @pytest.mark.parametrize(
         "trace_line",
         [
-            "OSError: [Errno 2] ENOENT: '/workspace.local.yml'",
+            "OSError: [Errno 2] ENOENT: '/lib/projects/foo/some_other.yml'",
             "OSError: [Errno 2] ENOENT: '/lib/projects/foo/app.py'",
         ],
     )

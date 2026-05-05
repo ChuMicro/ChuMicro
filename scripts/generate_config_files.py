@@ -32,10 +32,9 @@ Files generated (lowest-precedence content shown — the
 
 Called by ``python scripts/run.py setup``.
 
-Decision 0057 retired the ``!secret`` marker and collapsed the
-runtime-config pipeline to two gitignored files: ``workspace.yml`` +
-per-project ``config.toml``.  Same gitignored guarantee, no marker,
-no resolver.
+Decision 0057 fixed the runtime-config pipeline at two gitignored
+files: ``workspace.yml`` + per-project ``config.toml``.  Same
+gitignored guarantee, no marker, no resolver.
 """
 
 from __future__ import annotations

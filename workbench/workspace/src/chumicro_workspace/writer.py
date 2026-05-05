@@ -40,8 +40,8 @@ def write_runtime_config(merged: dict[str, Any], output_path: Path) -> None:
     Args:
         merged: The merged section-namespaced dict, post
             :func:`merge_configs` (Decision 0057 — no separate
-            secrets-resolution step; gitignored overlay is just
-            another merge layer).
+            secrets-resolution step; the gitignored ``workspace.yml``
+            carries credentials directly).
         output_path: Where to write the msgpack file on the host.
             The deployer reads this and overlays it onto device
             flash at ``/runtime_config.msgpack``.
