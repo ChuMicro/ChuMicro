@@ -76,9 +76,8 @@ from .result_parser import RunResult, TestResult, parse_output
 def _workspace_root(session: pytest.Session) -> Path:
     """Return the root of the workspace pytest was invoked against.
 
-    Replaces the pre-extraction ``scripts/workspace.ROOT`` constant —
-    derived from ``pytest.Config.rootpath`` so the plugin works
-    inside any workspace, not just the chumicro mono-repo.
+    Derived from ``pytest.Config.rootpath`` so the plugin works inside
+    any workspace, not just one specific layout.
     """
     return Path(session.config.rootpath)
 
@@ -86,13 +85,10 @@ def _workspace_root(session: pytest.Session) -> Path:
 def _harness_source_dir(session: pytest.Session) -> Path:
     """Return ``support/test_harness/src`` for the on-device test harness.
 
-    chumicro's mono-repo ships a lightweight test harness at this
-    path; the plugin stages it alongside library sources so
-    ``import chumicro_test_harness`` resolves on the device.
-
+    The plugin stages a lightweight test harness alongside library
+    sources so ``import chumicro_test_harness`` resolves on the device.
     Workspaces without this directory won't run harness-shaped
-    functional tests — that's a documented mono-repo convention,
-    not a plugin contract.
+    functional tests.
     """
     return _workspace_root(session) / "support" / "test_harness" / "src"
 
@@ -105,11 +101,10 @@ def _libraries_root(session: pytest.Session) -> Path:
 def pytest_addoption(parser: pytest.Parser) -> None:
     """Register ``--chumicro-*`` command-line options on the pytest CLI.
 
-    These are the knobs the ``scripts/run.py test-libraries-functional`` task turns
-    into pytest flags.  They all override the corresponding
-    ``defaults:`` entries in ``devices.yml`` when supplied; when
-    omitted, ``devices.yml`` defaults still drive selection so IDE
-    play-button runs keep working with zero configuration.
+    Each option overrides the corresponding ``defaults:`` entry in
+    ``devices.yml`` when supplied; when omitted, ``devices.yml``
+    defaults still drive selection so IDE play-button runs keep
+    working with zero configuration.
 
     Options:
 
