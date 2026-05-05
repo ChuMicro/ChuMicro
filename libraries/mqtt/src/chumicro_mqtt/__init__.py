@@ -1,7 +1,7 @@
 """Non-blocking MQTT 3.1.1 client for CircuitPython, MicroPython, and CPython.
 
 Built on :mod:`chumicro_sockets` (TCP + TLS) and :mod:`chumicro_timing`
-(ticks).  No async, no threads — Decision 0014's runner pattern:
+(ticks).  No async, no threads — a tick-based runner contract:
 :meth:`MQTTClient.check(now_ms) -> bool` reports whether work is
 pending; :meth:`handle(now_ms)` does one tick of progress.
 
@@ -21,8 +21,7 @@ Public API::
 
 QoS 0 + QoS 1 are implemented; QoS 2 raises :class:`UnsupportedQoSError`.
 
-Source layout (per Decision 0029 Phase 6 — see git history for the
-pre-consolidation per-concern split):
+Source layout:
 
 * :mod:`chumicro_mqtt._wire` — wire-format primitives, packet
   encoders/decoder, and protocol exceptions.

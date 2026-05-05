@@ -1,7 +1,7 @@
 """MQTT 3.1.1 client built on chumicro-sockets + chumicro-timing.
 
-:class:`MQTTClient` is the entry point.  Runner-shaped per Decision
-0014 — :meth:`check(now_ms) -> bool` reports whether work is pending;
+:class:`MQTTClient` is the entry point.  Runner-shaped —
+:meth:`check(now_ms) -> bool` reports whether work is pending;
 :meth:`handle(now_ms)` performs one tick of progress.  No threads,
 no async — cooperative dispatch in the caller's tick loop.
 
@@ -612,7 +612,7 @@ class MQTTClient:
         self._pattern_handlers.append((pattern, handler))
 
     # ------------------------------------------------------------------
-    # Runner contract — Decision 0014
+    # Runner contract
     # ------------------------------------------------------------------
 
     def check(self, now_ms):  # noqa: ARG002 — runner contract uses now_ms
@@ -641,15 +641,13 @@ class MQTTClient:
 
         *now_ms* is the per-tick timestamp the runner captured once
         and passes to every registered service so they all see the
-        same instant — the runner contract from Decision 0014.
-        Callers must source it from ``chumicro_timing.ticks_ms()``
-        (or whatever the client's injected ``ticks_ms_func`` resolves
-        to) so the value is in the same domain as the deadlines this
-        client computed at ``connect()`` / ``publish()`` time.
-        ``chumicro-runner.Runner`` handles this automatically; tests
-        that roll their own poll loops must do the same — see
-        ``libraries/mqtt/functional_tests/test_real_broker.py`` for
-        the canonical pattern.
+        same instant — the runner contract.  Callers must source it
+        from ``chumicro_timing.ticks_ms()`` (or whatever the client's
+        injected ``ticks_ms_func`` resolves to) so the value is in
+        the same domain as the deadlines this client computed at
+        ``connect()`` / ``publish()`` time.  ``chumicro-runner.Runner``
+        handles this automatically; tests that roll their own poll
+        loops must do the same.
         """
         if self._state == ProtocolState.FAILED:
             if self._socket_factory is None or not self._user_wants_connected:

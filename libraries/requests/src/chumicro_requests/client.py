@@ -1,13 +1,13 @@
 """HTTP/1.1 client built on chumicro-sockets + chumicro-timing.
 
-:class:`HttpClient` is the entry point.  Runner-shaped per Decision
-0014 — :meth:`check(now_ms) -> bool` reports whether work is pending;
+:class:`HttpClient` is the entry point.  Runner-shaped —
+:meth:`check(now_ms) -> bool` reports whether work is pending;
 :meth:`handle(now_ms)` performs one tick of progress.  No threads,
 no async — cooperative dispatch in the caller's tick loop.
 
-Single-in-flight in v1 (Decision 0040 §1): :meth:`HttpClient.get` /
-``post`` / etc. while a request is still running raises
-:class:`HttpBusyError`.  The user pattern::
+Single-in-flight in v1: :meth:`HttpClient.get` / ``post`` / etc.
+while a request is still running raises :class:`HttpBusyError`.  The
+user pattern::
 
     client = HttpClient(connection_factory=...)
     handle = client.get("http://api.example.com/now", timeout_ms=5000)
@@ -328,7 +328,7 @@ class RequestHandle:
 
 
 class _RequestState:
-    """Internal request-pipeline states (Decision 0040 §1)."""
+    """Internal request-pipeline states."""
 
     IDLE = "idle"
     SENDING = "sending"
@@ -380,8 +380,8 @@ class HttpClient:
                 blink, control loop) keep getting CPU time.  Mirrors
                 :data:`chumicro_mqtt.MQTTClient` default.
             max_body_bytes: Cap on a single response body.  Default
-                64 KB — Decision 0015 minimum board has 256 KB MCU
-                RAM, so 64 KB leaves headroom.
+                64 KB — minimum supported board has 256 KB MCU RAM,
+                so 64 KB leaves headroom.
             when_oversized: Policy for responses above the cap.  See
                 :class:`WhenOversized`.
             default_timeout_ms: Default per-request timeout in ms.
@@ -432,8 +432,8 @@ class HttpClient:
         self._tx_offset = 0
         self._parser = None
         # Long-lived body buffer reused across requests — the parser is
-        # constructed per-request (Decision 0040 §1: single-in-flight)
-        # but the body buffer is the only per-request alloc big enough
+        # constructed per-request (single-in-flight) but the body
+        # buffer is the only per-request alloc big enough
         # to fragment small-tier free lists on Lolin S2.  We hold the
         # buffer here and hand it to each parser so per-request body
         # alloc happens only when ``Content-Length > body_buffer_size``.
@@ -592,7 +592,7 @@ class HttpClient:
         )
 
     # ------------------------------------------------------------------
-    # Runner contract — Decision 0014
+    # Runner contract
     # ------------------------------------------------------------------
 
     def check(self, now_ms):  # noqa: ARG002 — runner contract uses now_ms

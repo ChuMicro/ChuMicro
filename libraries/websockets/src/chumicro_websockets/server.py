@@ -7,11 +7,11 @@ the user's ``on_connection`` callback, and drives the per-connection
 state machines from its own :meth:`check` / :meth:`handle` runner
 contract.
 
-Standalone-port shape only in v1 (Decision 0045 §4) — sharing a
-port with :class:`chumicro_http_server.HttpServer` is a v2 ask
-(would require peek-then-route on the HTTP request line).  The
-optional *accept_path* knob lets a server filter inbound upgrades
-by URI path.
+Standalone-port shape only in v1 — sharing a port with
+:class:`chumicro_http_server.HttpServer` is a v2 ask (would require
+peek-then-route on the HTTP request line).  The optional
+*accept_path* knob lets a server filter inbound upgrades by URI
+path.
 
 The OPEN/CLOSING/CLOSED machinery — frame dispatch, oversize policy,
 control-frame handling, close handshake, send queue, pong watchdog —
@@ -343,9 +343,8 @@ class WebSocketServer:
     fires once per inbound connection at handshake completion; it
     wires ``connection.on_text`` / ``on_binary`` / ``on_close`` etc.
     before any frames arrive.  Raising from the callback rejects with
-    :data:`CLOSE_INTERNAL_ERROR`.  Standalone-port shape only in v1
-    (Decision 0045 §4); ``accept_path`` filters by URI path with 404
-    on mismatch.
+    :data:`CLOSE_INTERNAL_ERROR`.  Standalone-port shape only in v1;
+    ``accept_path`` filters by URI path with 404 on mismatch.
 
     Knobs: ``max_connections`` (default 2; inbound accepts past the
     cap close immediately to bound heap + per-tick work);

@@ -66,9 +66,8 @@ class Logger:
     """A named logger with a level threshold and a list of handlers.
 
     Loggers are not registered globally — the caller owns the instance
-    and passes it explicitly to subsystems that want to emit (the
-    decoration rule from Decision 0042).  This avoids import-order
-    surprises and keeps the library stateless.
+    and passes it explicitly to subsystems that want to emit.  This
+    avoids import-order surprises and keeps the library stateless.
 
     Records below the configured level are dropped before any handler
     is consulted.  Each handler decides independently whether to emit.

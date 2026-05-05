@@ -25,8 +25,8 @@ Six methods cover the substrate's lifecycle:
 class WifiAdapter:
     """Concrete adapters inherit and override the six members below.
 
-    Class rather than ``Protocol`` because library code cannot
-    import ``typing`` (Decision 0021).
+    Class rather than ``Protocol`` because MicroPython has no
+    ``typing`` module — library code cannot import it.
     """
 
     name = "base"

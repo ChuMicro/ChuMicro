@@ -1,11 +1,11 @@
 """HTTP/1.1 server built on chumicro-sockets + chumicro-timing.
 
-:class:`HttpServer` is the entry point.  Runner-shaped per Decision
-0014 — :meth:`check(now_ms) -> bool` reports whether work is pending;
+:class:`HttpServer` is the entry point.  Runner-shaped —
+:meth:`check(now_ms) -> bool` reports whether work is pending;
 :meth:`handle(now_ms)` performs one tick of progress.  No threads,
 no async — cooperative dispatch in the caller's tick loop.
 
-Per-connection state machine (Decision 0041 §2)::
+Per-connection state machine::
 
     WANT_REQUEST_LINE
       -> WANT_HEADERS
@@ -191,7 +191,7 @@ class Response:
 
 
 class _ConnState:
-    """Per-connection states (Decision 0041 §2)."""
+    """Per-connection states."""
 
     WANT_REQUEST_LINE = "want_request_line"
     WANT_HEADERS = "want_headers"
@@ -552,8 +552,8 @@ class HttpServer:
         self._listener = None
         self._connections = []
 
-        # Routing tables (Decision 0041 §3 — two-dict router lifted
-        # from tinyweb's pattern).
+        # Routing tables — two-dict router lifted from tinyweb's
+        # pattern.
         # _explicit_routes: (method, path) -> handler.  No path
         # parameters.  O(1) lookup.
         # _pattern_routes: list of (method, prefix, param_name, handler)
@@ -748,7 +748,7 @@ class HttpServer:
             self._listener = None
 
     # ------------------------------------------------------------------
-    # Runner contract — Decision 0014
+    # Runner contract
     # ------------------------------------------------------------------
 
     def check(self, now_ms):  # noqa: ARG002 — runner contract uses now_ms
@@ -760,7 +760,7 @@ class HttpServer:
         if self._listener is None:
             self._listener = self._listener_factory()
             _force_non_blocking(self._listener)
-        # Try to accept up to one new connection per tick (Decision 0041 §4).
+        # Try to accept up to one new connection per tick.
         if len(self._connections) < self._max_connections:
             self._try_accept(now_ms)
         # Advance every in-flight connection.  Iterate over a copy so

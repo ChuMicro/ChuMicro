@@ -9,14 +9,13 @@ The shared HTTP/1.1 primitives needed by both client and server —
 :class:`CaseInsensitiveDict` (case-insensitive header dict, RFC 7230
 §3.2) and :func:`parse_charset` (Content-Type charset, RFC 7231
 §3.1.1.5) — are inlined here rather than imported from
-:mod:`chumicro_requests`.  Decision 0041 §5 originally took the dep
-to share these primitives, but the dep pulled the full client (~1.8K
-lines) onto server-only boards for ~125 lines of shared code; the
-inline copy halves the flash footprint of a server-only deploy.  The
-RFCs are stable, so the duplication has near-zero drift cost.
+:mod:`chumicro_requests`: pulling the full client (~1.8K lines)
+onto server-only boards for ~125 lines of shared code roughly
+doubles the flash footprint of a server-only deploy.  The RFCs
+are stable, so the duplication has near-zero drift cost.
 
-v1 scope (Decision 0041): request line + headers + ``Content-Length``
-body buffering.  Chunked request bodies and streaming-via-chunk-
+v1 scope: request line + headers + ``Content-Length`` body
+buffering.  Chunked request bodies and streaming-via-chunk-
 callback are v2.
 """
 
@@ -31,13 +30,13 @@ except ImportError:
 # Constants
 # ---------------------------------------------------------------------------
 
-#: Default per-connection recv cap — Decision 0041 §4.
+#: Default per-connection recv cap.
 DEFAULT_RECV_BUDGET_PER_TICK = const(1024)
 
-#: Default per-connection send cap — Decision 0041 §4.
+#: Default per-connection send cap.
 DEFAULT_SEND_BUDGET_PER_TICK = const(4096)
 
-#: Default per-request body cap — Decision 0041 §4.
+#: Default per-request body cap.
 DEFAULT_MAX_REQUEST_BODY_BYTES = const(16384)
 
 #: Default steady-state body buffer size for :class:`RequestParser`.
@@ -47,10 +46,10 @@ DEFAULT_MAX_REQUEST_BODY_BYTES = const(16384)
 #: Mirrors :data:`chumicro_requests._wire.DEFAULT_BODY_BUFFER_SIZE`.
 DEFAULT_BODY_BUFFER_SIZE = const(1024)
 
-#: Default per-connection deadline — Decision 0041 §4.
+#: Default per-connection deadline.
 DEFAULT_REQUEST_TIMEOUT_MS = const(10000)
 
-#: Default in-flight connection cap — Decision 0041 §4.
+#: Default in-flight connection cap.
 DEFAULT_MAX_CONNECTIONS = const(4)
 
 #: HTTP/1.1 line terminator.

@@ -7,9 +7,9 @@ topic; the bus dispatches everything in batches when the runner ticks
 the bus's ``handle``.
 
 This package has no chumicro dependencies and **no chumicro library
-imports it** (Decision 0042's "decoration / observability" rule).
-Apps that want service state changes to reach a single place wire it
-themselves::
+imports it** — by policy, decoration / observability libraries don't
+appear in another library's dependency graph; apps that want service
+state changes to reach a single place wire it themselves::
 
     from chumicro_events import EventBus
 

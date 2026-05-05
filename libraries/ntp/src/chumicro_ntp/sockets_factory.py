@@ -1,8 +1,8 @@
 """Default UDP-socket wiring for ``chumicro-ntp``.
 
 Lives in its own submodule so callers with a custom UDP transport
-never trigger the ``chumicro-sockets`` deploy.  Decision 0042
-"core infrastructure" sub-rule: factory helpers must be importable
+never trigger the ``chumicro-sockets`` deploy.  Factory helpers that
+import a chumicro core-infrastructure library must be importable
 *only* by users who opt into the default wiring.
 
 Import explicitly when you want the default::

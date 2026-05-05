@@ -328,7 +328,7 @@ def listen_tls(host, port, *, context, backlog=4):  # pragma: no cover - device 
     The TLS handshake happens synchronously inside `accept()` —
     MP's `wrap_socket(server_side=True)` blocks until the handshake
     completes.  HttpServer accepts that as the per-tick latency
-    cost (Decision 0041 §8 / slice 7t investigation).
+    cost.
     """
     raw_listener = listen_tcp(host, port, backlog=backlog)
     return _MpTLSListenerWrapper(raw_listener, context)

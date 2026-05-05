@@ -24,8 +24,8 @@ line.  Backends also expose a stable ``name`` string used by the
 class Backend:
     """Concrete backends inherit and override the four members below.
 
-    Kept as a class rather than a ``Protocol`` because library code
-    cannot import ``typing`` (Decision 0021).
+    Kept as a class rather than a ``Protocol`` because MicroPython has
+    no ``typing`` module — library code cannot import it.
     """
 
     name: str = "base"

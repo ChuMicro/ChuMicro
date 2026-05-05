@@ -1,17 +1,15 @@
 """Runner-shaped WebSocket client built on chumicro-sockets + chumicro-timing.
 
-:class:`WebSocketClient` is the entry point.  Runner-shaped per
-Decision 0014 — :meth:`check(now_ms) -> bool` reports whether work is
-pending; :meth:`handle(now_ms)` performs one tick of progress.  No
-threads, no async — cooperative dispatch in the caller's tick loop.
-The canonical promise (Decision 0045): an LED can keep blinking on
-the same board through the opening handshake, frame I/O, and the
-close handshake.
+:class:`WebSocketClient` is the entry point.  Runner-shaped —
+:meth:`check(now_ms) -> bool` reports whether work is pending;
+:meth:`handle(now_ms)` performs one tick of progress.  No threads,
+no async — cooperative dispatch in the caller's tick loop.  The
+canonical promise: an LED can keep blinking on the same board
+through the opening handshake, frame I/O, and the close handshake.
 
-Single-connection per client (Decision 0045 §1): two parallel
-websocket sessions need two :class:`WebSocketClient` instances.
-Mirrors :class:`chumicro_mqtt.MQTTClient`'s "one broker per client"
-shape.
+Single-connection per client: two parallel websocket sessions need
+two :class:`WebSocketClient` instances.  Mirrors
+:class:`chumicro_mqtt.MQTTClient`'s "one broker per client" shape.
 
 The OPEN/CLOSING/CLOSED machinery — frame dispatch, oversize policy,
 control-frame handling, close handshake, send queue, pong watchdog —

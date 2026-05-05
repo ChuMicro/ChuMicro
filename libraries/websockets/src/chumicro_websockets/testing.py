@@ -1,9 +1,9 @@
 """Test helpers for libraries that depend on chumicro-websockets.
 
 Three fakes parallel to the patterns proven in
-:mod:`chumicro_sockets.testing` and :mod:`chumicro_timing.testing`
-(Decision 0010 — fakes ship in the upstream library so consumers
-don't write their own):
+:mod:`chumicro_sockets.testing` and :mod:`chumicro_timing.testing` —
+fakes ship in the upstream library so consumers don't write their
+own:
 
 * :class:`FakeConnection` — bidirectional in-memory pipe satisfying
   the :class:`chumicro_sockets.TCPClientSocket` shape consumed by
@@ -25,10 +25,9 @@ don't write their own):
   constructor parameters; :meth:`advance` jumps the simulated time
   forward to drive timeouts and auto-ping cadences.
 
-Lifted from the inline definitions in ``tests/test_client.py`` +
-``tests/test_server.py`` per Decision 0045 §11.  All three fakes
-are also used by the in-process integration tests in
-``tests/test_integration.py``.
+Lifted from inline definitions originally in the test suite so
+downstream consumers can reuse the same fakes without duplicating
+them.  All three are also used by the in-process integration tests.
 """
 
 #: Source bundle / sdist only -- never lands on a device.
