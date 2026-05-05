@@ -4,8 +4,6 @@ Status: `accepted`
 Date: `2026-04-26`
 Related: Decision 0015 (supported board class), Decision 0018 (distribution bundle repo), Decision 0021 (annotations), Decision 0010 (testing fakes), Decision 0044 (deploy-time runtime filtering)
 
-> **Note:** See also [Decision 0044](0044-deploy-time-runtime-filtering.md), which extends the marker filter to every host-side deploy path (workspace deploy, `chumicro_deploy` CLI, pytest-device staging, examples, functional tests).
-
 ## Context
 
 Pi Pico W ships ~870 KB of CIRCUITPY space on FAT12 with 4 KB clusters.  Every `.py` or `.mpy` file pays ≥ 4 KB on disk regardless of content size.  At 51 source files in the workspace (after the 2026-04-26 MQTT 8 → 4 consolidation and `testing.py` exclusion), per-file FAT cluster overhead alone consumes ~204 KB.
@@ -46,7 +44,7 @@ The marker is a tuple of canonical runtime names:
 | `("circuitpython", "micropython")` | both device bundles + source bundle + PyPI       |
 | absent / not declared | every bundle + every deploy + PyPI (default-safe)         |
 
-The PyPI sdist / wheel always ships every file under `src/` regardless of marker — `pip install chumicro-foo` on a CPython host gets the complete library, including host-only fakes and runtime-specific adapters.  Build pipelines that produce the bundle artifacts (mip / circup consumers) and every host-side deploy path apply the marker filter.
+The PyPI sdist / wheel always ships every file under `src/` regardless of marker — `pip install chumicro-foo` on a CPython host gets the complete library, including host-only fakes and runtime-specific adapters.  Build pipelines that produce the bundle artifacts (mip / circup consumers) and every host-side deploy path (`chumicro_workspace deploy`, `chumicro_deploy` CLI, pytest-device staging, examples, functional tests) apply the marker filter — see [Decision 0044](0044-deploy-time-runtime-filtering.md) for the deploy-time wiring.
 
 The bundle pipeline reads the marker via a small AST walk (no module execution — `ast.parse` + `ast.Assign` to top-level `__chumicro_runtimes__`).  No execution because the file may itself import runtime-only modules (`import wifi`, `import esp32`) that fail at parse-execute time on the host.
 
