@@ -131,10 +131,9 @@ class FakeConnection:
             if self.eof:
                 return 0
             # ``OSError(EAGAIN)`` rather than ``BlockingIOError`` —
-            # MicroPython lacks the latter (see plans/learnings.md
-            # §"MP doesn't expose BlockingIOError").  Real adapters
-            # raise ``OSError`` too on every runtime, so this is
-            # closer to what production sees.
+            # MicroPython lacks the latter.  Real adapters raise
+            # ``OSError`` too on every runtime, so this is closer to
+            # what production sees.
             raise OSError(11, "no data ready")
         take = min(cap, len(self.inbound))
         buffer[:take] = self.inbound[:take]
