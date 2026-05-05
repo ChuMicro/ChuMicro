@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** **Streaming output + status modes for parallel tasks** ([Decision 0054](decisions/0054-streaming-output-and-status-modes.md)).  Replaced `subprocess.run(capture_output=True)` with `shared.stream_subprocess` (`Popen` + line-reader); built `_Sink` / `_Dispatcher` abstraction with quiet / interleave / status modes (TTY auto-detect; `--quiet` flag); collapsed `_run_phases_in_parallel` + `_run_capture_phases_in_parallel` into one helper; auto-sized `phase_workers` / `package_workers` from `cpu_count()` with product cap.  Decision 0048 §3 + §5 + §6 edited in place to reflect the new shape.
-- **Last shipped:** `scripts/{run,shared}: streaming output + status modes for parallel tasks (Decision 0054)` (commit `67cda99`).
-- **In flight:** idle — back to ADR audit phases 3–4 (compact length offenders, write missing high-level ADRs), or pick up something fresh from `## Next` of `plans/next-up.md`.
+- **Phase:** ADR / skill bookkeeping fix.  Restored Decision 0056 (deleted as collateral in commit `6ab0a40`'s 4→2-layer cleanup; the implementation it documents is shipped and live).  AGENTS.md now points at `plans/decisions/README.md` + inlines the load-bearing rules (edit-in-place, four-value status enum, no banner blockquotes / `## Update` sections / `Revised:` lines).
+- **Last shipped:** `Restore Decision 0056 + surface ADR conventions in AGENTS.md`.
+- **In flight:** Phase 4.5b plan validation surfaced concrete edits (stale `secrets.yml` premise, exception list off-by-one, plugin wiring not yet implemented, `NOW_UTC_TUPLE` in scope, missing device-side `extra_files` round-trip functional test, `chumicro-pytest-device` VERSION bump).  Pending user confirmation on whether to apply them, and on whether plugin-side `extra_files` wiring should be split out as foundation pre-work or kept inside 4.5b's scope.  Side-task chip open: fix `new-decision` skill's drift with `plans/decisions/README.md`.
 - **Blocked on:** —.
-- **Last touched:** `scripts/run.py`, `scripts/shared.py`, `scripts/tests/test_{run,shared}.py`, `plans/decisions/0054-streaming-output-and-status-modes.md`, `plans/decisions/0048-preflight-phase-level-parallel.md`.
+- **Last touched:** `plans/decisions/0056-transport-extra-files-staging.md`, `AGENTS.md`.
 
 ---
 
@@ -25,6 +25,7 @@ This is the front door. Everything else is deeper read.
 
 | Candidate | Where | Notes |
 |---|---|---|
+| Phase 4.5b plan edits + scope decision | `plans/workstreams/phase-4-5b-on-device-config-dogfooding.md` | Audit findings ready to apply; open question: split plugin-wiring out as foundation or keep inside 4.5b. |
 | Anything in `## Next` of `next-up.md` | `plans/next-up.md` | Rebrand to ChipPy, OTA workstream (`plans/workstreams/ota.md`), digital I/O library, performance benchmarking infrastructure, etc.  All are unscoped or trigger-gated. |
 
 ## Hard rules to remember (non-negotiables)
