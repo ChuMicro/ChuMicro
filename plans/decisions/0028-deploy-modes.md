@@ -4,8 +4,6 @@ Status: `accepted`
 Date: `2026-04-18`
 Related: Decision 0027, Decision 0029
 
-> **Note:** See also [Decision 0029](0029-project-workspace.md) which extends the "future `chumicro-deploy` package" section with the full project-workspace scope (template repo, UID-based identity, onboarding, import-graph deploy, REPL TUI).
-
 ## Context
 
 Decision 0027 established the device testing infrastructure with two transport strategies per runtime: RAM-based execution for fast test iteration, and flash-based deployment for persistent code.  Both strategies were validated on hardware but the implementation only exposed the RAM path for CircuitPython and conflated mount/copy mode semantics in MicroPython.
@@ -15,7 +13,7 @@ Users need a clear `--deploy-mode ram|flash` flag to choose between:
 - **RAM mode** — for running tests.  Fast, no flash wear, no persistence.
 - **Flash mode** — for deploying projects or tests that require persistence.
 
-The flash deployment path also lays groundwork for a future `chumicro-deploy` pip package that helps users deploy their own projects (not just tests) to boards.
+The flash deployment path also lays groundwork for a `chumicro-deploy` pip package that helps users deploy their own projects (not just tests) to boards — the full project-workspace scope (template repo, UID-based identity, onboarding, import-graph deploy, REPL TUI) is defined in [Decision 0029](0029-project-workspace.md), with the package split itself handled in [Decision 0032](0032-workbench-host-tools.md).
 
 ## Decision
 

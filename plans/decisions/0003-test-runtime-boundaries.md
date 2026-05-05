@@ -16,7 +16,7 @@ The working test pyramid is:
 
 - required: CPython-hosted `pytest` tests with coverage
 - required: cross-runtime unit tests on MicroPython and CircuitPython unix-ports via the lightweight harness (see [Decision 0016](0016-cross-runtime-unit-tests.md))
-- targeted: real-device `functional_tests/` run through a small ChuMicro harness
+- targeted: real-device `functional_tests/` run through a small ChuMicro harness — the transport layer, `devices.yml` schema, and IDE integration are defined in [Decision 0027](0027-device-testing-infrastructure.md)
 
 ## Consequences
 
@@ -24,5 +24,3 @@ The working test pyramid is:
 - cross-runtime unit tests run on unix-ports using plain asserts and constructor-injected fakes (Decision 0016)
 - real-device workflows remain important but should stay opt-in until stable
 - `pytest` remains the primary host framework, but it is not assumed to run directly on constrained boards
-
-> **Note:** See also [Decision 0027](0027-device-testing-infrastructure.md) which defines the transport layer, config schema, and IDE integration for real-device functional tests.

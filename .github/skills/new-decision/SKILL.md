@@ -69,8 +69,9 @@ Related: <!-- Decision numbers, open questions, or "none" -->
 | `proposed` | Written up for review — not yet committed to |
 | `accepted` | Active and enforced |
 | `superseded` | Replaced by a newer decision (link to it) |
-| `revised` | Updated in-place (note the revision date) |
 | `deferred` | Evaluated but not yet decided |
+
+These four are the entire enum.  No `in-progress`, no `partial`, no `shipped`, no `revised` — see [`plans/decisions/README.md`](../../../plans/decisions/README.md) for why.  An ADR whose body has been edited to reflect a changed reality is still `accepted`; edits don't bump it to a fifth state.
 
 ### 4. Cross-reference
 
@@ -81,13 +82,21 @@ If the decision affects rules in `AGENTS.md`, update the relevant section there.
 - **Testing strategy** — changes to test patterns
 - **Memory & performance** — new embedded code patterns
 
-If the decision affects an existing decision, add a note to the old one:
+If the new decision extends, narrows, or partially supersedes an existing one, **edit the affected paragraphs of the older ADR in place** so a cold reader gets the current rule, and cross-link the new decision inline (e.g. `... — see [Decision NNNN](NNNN-slug.md)`).  Do not add a `> **Note:** See also Decision NNNN ...` blockquote at the head of the older ADR — that pattern is forbidden by the README.  If the change is too large to absorb without distorting the original reasoning, mark the old ADR `superseded` instead and write a fresh one.
 
-```markdown
-> **Note:** See also [Decision NNNN](NNNN-slug.md) which extends/revises this.
-```
+### 5. Edit the body in place
 
-### 5. Verify
+This rule from [`plans/decisions/README.md`](../../../plans/decisions/README.md) is load-bearing — the difference between an ADR that helps future contributors and one that misleads them.  When a decision changes, rewrite the affected paragraphs of the existing ADR so a reader landing cold gets accurate information.  Specifically:
+
+- **No dated revision banners** (no `Revised: YYYY-MM-DD — ...`).  Edit the prose; let `git log` carry history.
+- **No `## Amendments` / `## Update (YYYY-MM-DD)` / `## Progress notes` sections.**  Status updates belong in `plans/history.md` or `plans/workstreams/<name>.md`.
+- **No "this decision has been revised twice" preambles.**  If you find yourself writing one, stop and edit the body.
+- **The `Date:` field is the original decision date.**  Never parenthesize it (`Date: 2026-04-21 (revised 2026-05-02)`).
+- **No "Amended by Decision NNNN" blockquotes** — as covered in step 4, use inline cross-links instead.
+
+The README is the source of truth for these rules; mirror its language when in doubt.
+
+### 6. Verify
 
 - [ ] File exists at `plans/decisions/NNNN-<slug>.md`
 - [ ] Number is sequential (no gaps, no duplicates)

@@ -4,8 +4,6 @@ Status: `accepted`
 Date: `2026-04-04`
 Related: Decision 0007 (cross-platform deps), Decision 0023 (promote workflow), Decision 0024 (mip folder serving)
 
-> **Note:** See also [Decision 0024](0024-mip-mpy-folder-serving.md) which adds folder-based `.mpy` serving for mip users.
-
 ## Context
 
 Decision 0007 established that ChuMicro publishes to three distribution channels (PyPI, mip, circup).  The ci-release workstream confirmed that the ChuMicro GitHub org hosts a circup-compatible repository and that release artifacts include both `.py` source and `.mpy` compiled bytecode.
@@ -56,7 +54,7 @@ Each library directory contains both `.py` and `.mpy` for every module, plus a `
 
 ### 3. `mip` installation via `package.json`
 
-Each library's `package.json` lists `.py` source files as the targets.  MicroPython compiles `.py` to bytecode on import, so source works on all mpy versions.  The `.mpy` bytecode files in the bundle are consumed by circup (which handles version matching via the zip naming convention), not by mip.  Users install the stable channel with:
+Each library's root `package.json` lists `.py` source files as the targets.  MicroPython compiles `.py` to bytecode on import, so source works on all mpy versions.  The `.mpy` bytecode files in the bundle are consumed by circup (which handles version matching via the zip naming convention); mip users opt into pre-compiled `.mpy` via the per-runtime folder layout described in [Decision 0024](0024-mip-mpy-folder-serving.md).  Users install the stable channel with:
 
 ```
 mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_runner
