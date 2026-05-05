@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** ADR / skill bookkeeping fix.  Restored Decision 0056 (deleted as collateral in commit `6ab0a40`'s 4→2-layer cleanup; the implementation it documents is shipped and live).  AGENTS.md now points at `plans/decisions/README.md` + inlines the load-bearing rules (edit-in-place, four-value status enum, no banner blockquotes / `## Update` sections / `Revised:` lines).
-- **Last shipped:** `Restore Decision 0056 + surface ADR conventions in AGENTS.md`.
-- **In flight:** Phase 4.5b plan validation surfaced concrete edits (stale `secrets.yml` premise, exception list off-by-one, plugin wiring not yet implemented, `NOW_UTC_TUPLE` in scope, missing device-side `extra_files` round-trip functional test, `chumicro-pytest-device` VERSION bump).  Pending user confirmation on whether to apply them, and on whether plugin-side `extra_files` wiring should be split out as foundation pre-work or kept inside 4.5b's scope.  Side-task chip open: fix `new-decision` skill's drift with `plans/decisions/README.md`.
+- **Phase:** Promoted on-device-config-dogfooding to peer workstream.  Renamed `phase-4-5b-on-device-config-dogfooding.md` → `on-device-config-dogfooding.md`, applied audit-driven edits (corrected exception list to `(OSError, InvalidConfigType)`, struck stale `secrets.yml` premise per Decision 0057, sequenced plugin wiring + first consumer + hardware validation as Step 1, added `NOW_UTC_TUPLE` to Step 2 scope, added VERSION-bump + conftest-sweep to Step 4 / pre-conditions).  Cross-references in Decisions 0055/0056, parent workstream, and `next-up.md` updated.
+- **Last shipped:** `Restore Decision 0056 + surface ADR conventions in AGENTS.md` (commit `7892f52`).
+- **In flight:** idle — the on-device-config-dogfooding workstream is now ready to pick up cold; needs hardware-in-the-loop session.  Side-task chip open: fix `new-decision` skill's drift with `plans/decisions/README.md`.
 - **Blocked on:** —.
-- **Last touched:** `plans/decisions/0056-transport-extra-files-staging.md`, `AGENTS.md`.
+- **Last touched:** `plans/workstreams/on-device-config-dogfooding.md` (renamed + rewritten), `plans/workstreams/scripts-workbench-config-unification.md`, `plans/decisions/0055-config-pipeline-unification.md`, `plans/decisions/0056-transport-extra-files-staging.md`, `plans/next-up.md`.
 
 ---
 
@@ -25,7 +25,7 @@ This is the front door. Everything else is deeper read.
 
 | Candidate | Where | Notes |
 |---|---|---|
-| Phase 4.5b plan edits + scope decision | `plans/workstreams/phase-4-5b-on-device-config-dogfooding.md` | Audit findings ready to apply; open question: split plugin-wiring out as foundation or keep inside 4.5b. |
+| On-device config dogfooding (was Phase 4.5b) | `plans/workstreams/on-device-config-dogfooding.md` | Plan validated + edited; ready to pick up cold.  Step 1 = plugin hook design + wifi as first consumer + 4-board hardware validation; Steps 2-4 mechanical. |
 | Anything in `## Next` of `next-up.md` | `plans/next-up.md` | Rebrand to ChipPy, OTA workstream (`plans/workstreams/ota.md`), digital I/O library, performance benchmarking infrastructure, etc.  All are unscoped or trigger-gated. |
 
 ## Hard rules to remember (non-negotiables)
