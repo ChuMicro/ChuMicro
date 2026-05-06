@@ -3,7 +3,7 @@
 The module is a single-function payload reader — the contract is
 narrow: return the canonical ``devices.yml`` starter content as a
 string, identical bytes every call, sourced from the wheel-bundled
-``_payloads/devices_yml/starter.yml.template``.
+``_payloads/devices.yml.template``.
 
 Two consumers in the ChuMicro ecosystem ride on this:
 

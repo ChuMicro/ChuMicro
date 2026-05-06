@@ -6,9 +6,9 @@ that needs to materialise an empty ``devices.yml`` — most commonly
 ``chumicro-workspace setup`` on first run.
 
 The actual file content travels with the wheel inside
-``_payloads/devices_yml/starter.yml.template`` so reads work in
-both editable installs (live source tree) and pip-installed wheels
-(unpacked into site-packages).
+``_payloads/devices.yml.template`` so reads work in both editable
+installs (live source tree) and pip-installed wheels (unpacked into
+site-packages).
 
 The only public surface is :func:`read_devices_yml_starter` —
 returning the file's content as a string.  Callers decide where
@@ -25,8 +25,7 @@ from pathlib import Path
 _DEVICES_YML_STARTER_PATH = (
     Path(__file__).resolve().parent
     / "_payloads"
-    / "devices_yml"
-    / "starter.yml.template"
+    / "devices.yml.template"
 )
 
 

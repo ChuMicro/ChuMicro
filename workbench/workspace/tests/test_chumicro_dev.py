@@ -256,7 +256,7 @@ class TestSyncLibrarySources:
         on first sync.  The string-level rewrite preserves every byte
         outside the managed block.
 
-        This mirrors the actual ``_payloads/workspace_yml/starter.yml.template``
+        This mirrors the actual ``_payloads/workspace.yml.template``
         shape — a long comment header + several fully-commented-out
         example blocks (no real keys).
         """
