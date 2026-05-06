@@ -56,6 +56,7 @@ from chumicro_deploy.firmware_url import (
 )
 
 from chumicro_workspace.boot_shim import (
+    project_app_exports_run,
     project_boot_source,
     project_boot_with_import_graph_source,
 )
@@ -758,25 +759,22 @@ def _format_size(num_bytes: int) -> str:
     return f"{num_bytes / mib:.1f} MiB"
 
 
-def _classify_dry_run_path(path: str, content: bytes) -> str:
+def _classify_dry_run_path(path: str, content: bytes) -> str:  # noqa: ARG001
     """Return a one-word category for *path* in the deploy file map.
 
     Drives the right-column annotation of ``deploy --dry-run`` so
     the reader can scan "what's shim infrastructure vs my code"
     without parsing paths by eye.
+
+    The classifier still returns ``shim`` for ``/code.py`` and
+    ``/main.py`` even when those are user-owned in plain mode —
+    they're always the firmware entrypoint, regardless of who
+    authored them.
     """
     if path in ("/code.py", "/main.py"):
         return "shim"
-    if path == "/active.py":
-        return "shim"
-    if path == "/lib/workspace_runtime/__init__.py":
-        return "shim"
     if path == "/runtime_config.msgpack":
         return "config"
-    if path.startswith("/lib/projects/"):
-        if path.endswith("/__init__.py") and content == b"":
-            return "namespace"
-        return "project"
     if path.startswith("/lib/"):
         return "library"
     return "file"
@@ -869,15 +867,116 @@ def _resolve_project_name(workspace: WorkspaceLayout, name: str) -> str:
     return name
 
 
+def _auto_detect_deploy_mode(
+    *,
+    project_dir: Path,
+    target_entrypoint: str,
+    user_passed_boot_shim: bool,
+    user_passed_import_graph: bool,
+) -> str:
+    """Pick the right deploy layout when the user passes no layout flags.
+
+    Returns one of:
+
+    * ``"shim"`` — project ships ``app.py`` with ``run()`` and no
+      runtime-specific entrypoint; deploy synthesises ``/code.py``
+      or ``/main.py`` and routes through boot-shim + import-graph.
+    * ``"plain"`` — project ships the runtime-matching entrypoint
+      (``code.py`` for CP, ``main.py`` for MP); ship as-is, no shim.
+    * ``"_user_error"`` — project shape doesn't match the target
+      runtime (e.g., ``code.py`` only but target is MP, or no
+      entrypoint at all).  An actionable message has already been
+      printed; the caller treats this as exit code 2.
+    * ``"flag_set"`` — the user explicitly passed ``--boot-shim``
+      or ``--import-graph``; auto-detect is a no-op.
+
+    Decision matrix (verification finding #5, 2026-05-06):
+
+        code.py     main.py     app.py:run()   target   →  result
+        ----------  ----------  -------------  -------     ----------
+        Yes         *           *              CP          plain
+        *           Yes         *              MP          plain
+        Yes         No          *              MP          USER ERROR
+        No          Yes         *              CP          USER ERROR
+        No          No          Yes            any         shim
+        No          No          No             any         USER ERROR
+    """
+    if user_passed_boot_shim or user_passed_import_graph:
+        return "flag_set"
+
+    has_code_py = (project_dir / "code.py").is_file()
+    has_main_py = (project_dir / "main.py").is_file()
+    has_app_run = project_app_exports_run(project_dir)
+
+    target_is_cp = target_entrypoint == "code.py"
+    target_is_mp = target_entrypoint == "main.py"
+
+    # Plain deploy when the runtime-matching entrypoint is present.
+    if target_is_cp and has_code_py:
+        return "plain"
+    if target_is_mp and has_main_py:
+        return "plain"
+
+    # Wrong-runtime entrypoint present: user intended this project for
+    # the *other* runtime and targeted the wrong board.  Surface as a
+    # clear error rather than silently shimming around it.
+    if target_is_mp and has_code_py and not has_main_py:
+        print(
+            f"deploy: project {project_dir.name!r} has code.py "
+            "(CircuitPython entrypoint) but you targeted a MicroPython "
+            "board.\n"
+            "  Fix: rename code.py → main.py for MicroPython, or "
+            "deploy --runtime circuitpython.",
+            file=sys.stderr,
+        )
+        return "_user_error"
+    if target_is_cp and has_main_py and not has_code_py:
+        print(
+            f"deploy: project {project_dir.name!r} has main.py "
+            "(MicroPython entrypoint) but you targeted a CircuitPython "
+            "board.\n"
+            "  Fix: rename main.py → code.py for CircuitPython, or "
+            "deploy --runtime micropython.",
+            file=sys.stderr,
+        )
+        return "_user_error"
+
+    # No runtime-specific entrypoint — try shim mode.
+    if has_app_run:
+        return "shim"
+
+    # Nothing to dispatch on.
+    app_py_present = (project_dir / "app.py").is_file()
+    app_clause = (
+        "app.py present but has no top-level run() callable"
+        if app_py_present
+        else "no app.py with run() callable"
+    )
+    print(
+        f"deploy: project {project_dir.name!r} has no entrypoint "
+        "chumicro-deploy can use:\n"
+        "  - no code.py at the project root (CircuitPython entrypoint)\n"
+        "  - no main.py at the project root (MicroPython entrypoint)\n"
+        f"  - {app_clause} (boot-shim mode requires app.py to "
+        "export run())\n"
+        "\n"
+        "  Fix: name your script code.py (CP) or main.py (MP), OR\n"
+        "       wrap your top-level code in `def run(): ...` in app.py.",
+        file=sys.stderr,
+    )
+    return "_user_error"
+
+
 def _cmd_deploy(args: argparse.Namespace) -> int:
     """Deploy a project to a device.
 
     Single-project default uses :func:`project_directory_source` — the
     flat layout where the project's files land at the device root.
     ``--import-graph`` ships only transitively-imported modules.
-    ``--boot-shim`` ships under ``/lib/projects/<...>/<name>/``; combine
-    with the workspace-runtime convention (``app.py`` exporting
-    ``def run()``).
+    ``--boot-shim`` ships project files at the device root plus a
+    synthesised ``/code.py`` (CP) or ``/main.py`` (MP) that imports
+    the project's ``app.run``.  Auto-detected when the project ships
+    ``app.py`` + ``run()`` and no runtime-specific entrypoint.
 
     Positional name accepts bare (``"door_open"``), slash
     (``"garage/sensors/door_open"``), or dotted forms; bare names that
@@ -952,12 +1051,37 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
             # ``--target-runtime`` overrides; otherwise the device's
             # configured runtime drives the filter.
             target_runtime = args.target_runtime or str(device.transport)
+            # Auto-detect deploy layout when the user passed no
+            # layout flags.  Project shape determines the mode:
+            #
+            # * ``code.py`` at root    → plain (CP entrypoint, user-owned).
+            # * ``main.py`` at root    → plain (MP entrypoint, user-owned).
+            # * ``app.py`` with run()  → boot-shim + import-graph (deploy
+            #   synthesises ``/code.py`` or ``/main.py`` and ships imported
+            #   libraries from ``library_sources`` and ``shared/``).
+            # * Runtime mismatch (e.g. ``code.py`` only, but target is MP)
+            #   surfaces as a user error before any bytes leave the host.
+            #
+            # See finding #5 of the 2026-05-06 verification pass.
+            auto_detected_mode = _auto_detect_deploy_mode(
+                project_dir=project_dir,
+                target_entrypoint=device.effective_entrypoint,
+                user_passed_boot_shim=args.boot_shim,
+                user_passed_import_graph=args.import_graph,
+            )
+            if auto_detected_mode == "_user_error":
+                # Detector already printed the actionable message.
+                exit_code = 2
+                continue
+            if auto_detected_mode == "shim":
+                args.boot_shim = True
+                args.import_graph = True
+
             if args.boot_shim and args.import_graph:
                 layout = "boot-shim+import-graph"
                 source = project_boot_with_import_graph_source(
                     project_dir,
                     workspace=workspace,
-                    project_name=project_name,
                     entrypoint_filename=device.effective_entrypoint,
                     target_runtime=target_runtime,
                 )
@@ -966,7 +1090,6 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
                 source = project_boot_source(
                     project_dir,
                     workspace=workspace,
-                    project_name=project_name,
                     entrypoint_filename=device.effective_entrypoint,
                     target_runtime=target_runtime,
                 )
@@ -1870,7 +1993,6 @@ def _cmd_repl(args: argparse.Namespace) -> int:
         source = project_boot_source(
             project_dir,
             workspace=workspace,
-            project_name=resolved_name,
             entrypoint_filename=device.effective_entrypoint,
         )
         print(f"repl: deploying {resolved_name} ...")
@@ -2630,10 +2752,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--boot-shim",
         action="store_true",
         help=(
-            "Ship the project under /lib/projects/<...>/<name>/ + write a "
-            "fixed code.py shim + active.py + workspace_runtime "
-            "payload.  app.py must export run().  Combines with "
-            "--import-graph to also ship libraries the project imports."
+            "Ship project files at the device root + synthesise "
+            "/code.py (CP) or /main.py (MP) that imports app.run.  "
+            "app.py must export run().  Combines with --import-graph "
+            "to also ship libraries the project imports.  Auto-detected "
+            "when the project ships app.py with run() and no code.py / "
+            "main.py — passing --boot-shim explicitly is rarely needed."
         ),
     )
     deploy_parser.add_argument(

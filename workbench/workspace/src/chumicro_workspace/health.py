@@ -266,8 +266,8 @@ def check_project_run_functions(workspace: WorkspaceLayout) -> HealthFinding:
             level=HealthLevel.ERROR,
             message=f"{len(missing)} of {checked} projects missing run(): {listed}",
             hint=(
-                "define `def run():` in app.py — the workspace_runtime "
-                "boot shim imports `projects.<name>.app` and calls run()."
+                "define `def run():` in app.py — the synthesised boot "
+                "shim imports `app.run` and calls it."
             ),
         )
     return HealthFinding(

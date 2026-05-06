@@ -106,21 +106,19 @@ The import-graph search path resolves explicit `library_sources:` overrides → 
 
 ### Boot-shim layout
 
-`deploy --boot-shim <name>` ships this on-device shape:
+When the project ships `app.py` with a `run()` callable and no `code.py` / `main.py` of its own, `deploy` auto-detects boot-shim mode and ships this on-device shape:
 
 ```
-/code.py                              # two-line shim: import workspace_runtime; boot()
-/active.py                            # PROJECT_NAME = "garage.sensors.door_open"
-/runtime_config.msgpack               # merged config (see pipeline above)
-/lib/workspace_runtime/__init__.py    # boot module — imports projects.<dotted>.app and calls run()
-/lib/projects/__init__.py               # package marker
-/lib/projects/garage/__init__.py        # one per nested namespace level
-/lib/projects/garage/sensors/door_open/ # the project's files
-    __init__.py
-    app.py                            # def run(): ...  ← your code
+/code.py                  # synthesised three-line shim: from app import run; run()
+                          # (or /main.py on MicroPython — only the runtime-matching file lands)
+/app.py                   # your code — def run(): ...
+/runtime_config.msgpack   # merged config (see pipeline above)
+/lib/<chumicro_libs>/...  # libraries the project imports (when --import-graph composes)
 ```
 
-Three layers, three responsibilities: `code.py` is the firmware entrypoint (stable across deploys), `active.py` names which project is current (regenerated per deploy), `app.py` is your code (lives inside the project dir).  None of these names is a CircuitPython convention except `code.py` itself — `app.py` is workspace's name for "the project's entrypoint module exporting `run()`".
+Two responsibilities, one synthesised shim file: deploy owns `/code.py` (or `/main.py`) at the device root and the user owns everything else.  One project per board — switch by redeploying.
+
+When the project ships its own `code.py` / `main.py`, plain mode kicks in and deploy ships project files at the device root verbatim, no shim synthesis.  The runtime-matching filename declares intent: deploying a `code.py`-only project to a MicroPython board (or `main.py`-only to CircuitPython) surfaces as a clear user error before any bytes leave the host.
 
 ### Status
 
