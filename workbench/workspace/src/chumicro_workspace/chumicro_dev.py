@@ -38,11 +38,9 @@ dev-and-regular-mode-gaps audit.
 
 from __future__ import annotations
 
+import re
 import tomllib
 from pathlib import Path
-
-from ruamel.yaml import YAML
-from ruamel.yaml.comments import CommentedMap
 
 #: Filename consulted in the workspace root.  Same name the template's
 #: ``run.py`` reads — keeps the user's mental model "one toml controls
@@ -56,6 +54,17 @@ CHUMICRO_DEV_FILENAME = "chumicro-dev.toml"
 #: opening the file).
 MANAGED_MARKER = (
     "managed by chumicro-workspace setup — chumicro-dev.toml mode"
+)
+
+#: Match a top-level ``library_sources:`` block plus its indented
+#: children (zero or more).  ``(?m)^`` anchors at line starts so we
+#: don't catch ``library_sources:`` references inside comments or
+#: nested under another key.  Used for string-level surgery in
+#: :func:`sync_library_sources` — see that function's docstring for
+#: why we don't round-trip through ruamel.
+_LIB_SOURCES_BLOCK_RE = re.compile(
+    r"(?m)^library_sources:[ \t]*\n"
+    r"(?:[ \t]+[^\n]*\n)*",
 )
 
 
@@ -152,11 +161,24 @@ def sync_library_sources(
     existing block already matched the desired state (idempotent
     re-run).
 
-    Round-trips the YAML so non-managed top-level keys (``defaults:``,
-    custom user blocks) keep their comments and ordering.  The
-    managed block REPLACES any existing top-level ``library_sources:``
-    — the contract is "dev mode owns this key when ``chumicro-dev.toml``
-    is present."
+    Implementation note — string-level surgery, no YAML parser:
+
+    The previous implementation round-tripped the entire
+    ``workspace.yml`` through ruamel-rt, which dropped the file's
+    leading comment header on the first sync against an
+    all-comments-no-keys starter (ruamel attaches comments to keys;
+    a leading header with no key under it has nothing to anchor to).
+    This rewrite instead locates the existing ``library_sources:``
+    block (with or without our marker comment) via a regex against
+    the raw bytes, replaces it byte-identically, and leaves every
+    other byte of the file untouched — comments, blank lines,
+    quoting, indentation choices.  The managed block REPLACES any
+    existing top-level ``library_sources:``; the contract is "dev
+    mode owns this key when ``chumicro-dev.toml`` is present."
+
+    Decoupling from the YAML parser is a side benefit: the same
+    logic works unchanged if the file ever migrates to TOML (config-
+    shape research workstream, [Decision pending]).
 
     Paths in *libraries* are written relative to the workspace root
     when possible (sibling-checkout case produces
@@ -169,45 +191,53 @@ def sync_library_sources(
         libraries: ``{import_name: host_path}`` mapping — typically
             from :func:`discover_chumicro_libraries`.
     """
-    yaml = YAML(typ="rt")
-    yaml.indent(mapping=2, sequence=4, offset=2)
-    yaml.preserve_quotes = True
-
-    if workspace_yaml.is_file():
-        with workspace_yaml.open("r", encoding="utf-8") as handle:
-            data = yaml.load(handle)
-        if data is None:
-            data = CommentedMap()
-    else:
-        data = CommentedMap()
-
     workspace_dir = workspace_yaml.parent
-    new_block = CommentedMap()
+
+    new_block_lines = [
+        f"# {MANAGED_MARKER}",
+        "library_sources:",
+    ]
     for name in sorted(libraries):
-        new_block[name] = _relative_to_or_absolute(
-            libraries[name], workspace_dir,
+        rel_path = _relative_to_or_absolute(libraries[name], workspace_dir)
+        new_block_lines.append(f"  {name}: {rel_path}")
+    new_block = "\n".join(new_block_lines) + "\n"
+
+    existing_text = (
+        workspace_yaml.read_text(encoding="utf-8")
+        if workspace_yaml.is_file()
+        else ""
+    )
+
+    match = _LIB_SOURCES_BLOCK_RE.search(existing_text)
+    if match is not None:
+        # Extend the replacement span backward to absorb our marker
+        # comment when it sits immediately above ``library_sources:``,
+        # so re-runs don't accumulate stale marker lines.
+        replace_start = match.start()
+        marker_with_newline = f"# {MANAGED_MARKER}\n"
+        if existing_text[:replace_start].endswith(marker_with_newline):
+            replace_start -= len(marker_with_newline)
+        replace_end = match.end()
+        if existing_text[replace_start:replace_end] == new_block:
+            return False
+        new_text = (
+            existing_text[:replace_start]
+            + new_block
+            + existing_text[replace_end:]
         )
+    else:
+        # No existing block — append.  Add a separating blank line
+        # before the new block when the existing tail isn't already
+        # a blank line (so re-runs against an empty file produce
+        # ``new_block`` alone, but re-runs against a populated file
+        # leave a visible separator from the previous content).
+        prefix = existing_text
+        if prefix and not prefix.endswith("\n"):
+            prefix += "\n"
+        if prefix and not prefix.endswith("\n\n"):
+            prefix += "\n"
+        new_text = prefix + new_block
 
-    existing = data.get("library_sources")
-    existing_normalized = (
-        {key: str(value) for key, value in existing.items()}
-        if existing else {}
-    )
-    new_normalized = {key: str(value) for key, value in new_block.items()}
-    if existing_normalized == new_normalized:
-        return False
-
-    data["library_sources"] = new_block
-    # Place the marker comment immediately above the key.  ruamel's
-    # round-trip API attaches the comment to the *next* key — exactly
-    # what we want.  The leading newline in the comment string
-    # produces a visible blank-line separator between the previous
-    # block (``defaults:`` etc.) and the managed block.
-    data.yaml_set_comment_before_after_key(
-        "library_sources",
-        before=f"\n{MANAGED_MARKER}",
-    )
-
-    with workspace_yaml.open("w", encoding="utf-8") as handle:
-        yaml.dump(data, handle)
+    workspace_yaml.parent.mkdir(parents=True, exist_ok=True)
+    workspace_yaml.write_text(new_text, encoding="utf-8")
     return True
