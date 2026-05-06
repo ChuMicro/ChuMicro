@@ -246,3 +246,77 @@ class TestSyncLibrarySources:
         sync_library_sources(workspace_yaml, libraries)
         parsed = read_library_sources(workspace_yaml)
         assert "chumicro_timing" in parsed
+
+    def test_preserves_all_comments_starter_header(
+        self, tmp_path: Path,
+    ) -> None:
+        """Regression for 2026-05-06: the all-comments starter has no
+        keys for ruamel-rt to anchor comments to, so the previous
+        round-trip implementation dropped the entire didactic header
+        on first sync.  The string-level rewrite preserves every byte
+        outside the managed block.
+
+        This mirrors the actual ``_payloads/workspace_yml/starter.yml.template``
+        shape — a long comment header + several fully-commented-out
+        example blocks (no real keys).
+        """
+        workspace_yaml = tmp_path / "workspace.yml"
+        starter = (
+            "# workspace.yml — root configuration for this workspace.\n"
+            "#\n"
+            "# Gitignored.  Materialised on first ``setup`` and never\n"
+            "# overwritten.\n"
+            "#\n"
+            "# Five top-level blocks (all optional):\n"
+            "#\n"
+            "#   defaults:        Workspace-wide defaults.\n"
+            "#   library_sources: Local paths or pinned overrides.\n"
+            "\n"
+            "# defaults:\n"
+            "#   wifi:\n"
+            "#     ssid: my-ap\n"
+            "#     password: replace-me\n"
+            "\n"
+            "# library_sources:\n"
+            "#   chumicro-deploy: ../chumicro-deploy\n"
+        )
+        workspace_yaml.write_text(starter)
+        libraries = {"chumicro_timing": tmp_path / "chumicro/libraries/timing/src"}
+        sync_library_sources(workspace_yaml, libraries)
+        body = workspace_yaml.read_text()
+        # Every line of the original header must survive byte-identical.
+        for header_line in (
+            "# workspace.yml — root configuration for this workspace.",
+            "# Gitignored.  Materialised on first ``setup`` and never",
+            "# Five top-level blocks (all optional):",
+            "#   defaults:        Workspace-wide defaults.",
+            "# defaults:",
+            "#   wifi:",
+            "#     ssid: my-ap",
+            "# library_sources:",
+            "#   chumicro-deploy: ../chumicro-deploy",
+        ):
+            assert header_line in body, f"missing header line: {header_line!r}"
+        # The new managed block must also be present.
+        assert MANAGED_MARKER in body
+        assert "chumicro_timing:" in body
+
+    def test_does_not_accumulate_marker_on_repeat_sync(
+        self, tmp_path: Path,
+    ) -> None:
+        """Re-running sync with a changed library set replaces (not
+        appends) — the marker comment must appear exactly once.
+        """
+        workspace_yaml = tmp_path / "workspace.yml"
+        sync_library_sources(
+            workspace_yaml,
+            {"chumicro_alpha": tmp_path / "chumicro/libraries/alpha/src"},
+        )
+        sync_library_sources(
+            workspace_yaml,
+            {"chumicro_beta": tmp_path / "chumicro/libraries/beta/src"},
+        )
+        body = workspace_yaml.read_text()
+        assert body.count(MANAGED_MARKER) == 1
+        assert "chumicro_alpha" not in body
+        assert "chumicro_beta" in body

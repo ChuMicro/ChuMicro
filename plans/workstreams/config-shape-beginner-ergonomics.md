@@ -565,6 +565,77 @@ The unification workstream landed correctly: the pipeline works end-to-end on re
 
 ---
 
+## Direction set 2026-05-06 — user clarifications post-verification
+
+User responses after the verification pass.  These supersede the earlier "lean" calls on Q1, Q10, and Q11; the rest stay open.
+
+### File-purpose split — both files stay, but with distinct roles
+
+Verbatim user direction:
+
+> "if the workspace is itself saving data here that is not relevant to configuration keys and values needed on a circuitpython or micropython board, those configs should go to another file.  That would define a clearer reason for a workspace.yml and a secrets.yml i think, which would mean having both but with different purposes"
+
+This **resolves Q1** — and reframes it.  The original Q1 question was "rename `workspace.yml` to `secrets.toml`?"  The answer is **no, but split**.  Two files, each with a purpose visible in its name:
+
+| File | Role | What lives here | Reaches a board? |
+|---|---|---|---|
+| `workspace.yml` | **Workspace machinery** | `library_sources` (dev-mode editable overrides), `deploy_targets` (per-project → device mapping), `quality` (lint / coverage knobs) | **Never.** Host-only. |
+| `secrets.toml` | **Device runtime config** | `wifi.ssid`, `wifi.password`, `mqtt.broker.host`, anything else that gets baked into `runtime_config.msgpack` | **Yes** — flows through `compose_runtime_config` to the device. |
+| `<project>/config.toml` | **Per-project device override** | Same shape as `secrets.toml`, project-specific values | Yes — deep-merges over `secrets.toml`'s defaults. |
+
+The misnamed file isn't `workspace.yml` — it's the wifi/mqtt creds that are misnamed *while inside* `workspace.yml`.  Move them out, and `workspace.yml`'s name becomes accurate (it really does hold workspace machinery now).
+
+This is a strictly cleaner answer than the original "rename to `secrets.toml`" because:
+
+- Each file's role is self-evident from the filename.
+- `workspace.yml` continues to be parsed by the existing reader (no migration for `library_sources` / `deploy_targets`).
+- `secrets.toml` is purely device-bound config — no machine-managed blocks living inside it, so the comment-strip bug class can't recur there.
+- TOML stdlib parsing applies to `secrets.toml` (the file format question collapses to this one file — `workspace.yml` can stay YAML for one cycle if we want, since it's not the file beginners interact with).
+
+Q1 resolved: **two files, distinct purposes, names that reflect roles.**  Q3 (on-disk shape) and Q4 (key naming) now apply to `secrets.toml` only — `workspace.yml`'s shape is determined by the existing readers.
+
+### Q10 — ship real placeholders + additive re-apply (no clobbering)
+
+Verbatim user direction:
+
+> "for q10, we should ship real placeholders, it could even be a fake/bogus wifi for example purposes.  though i would hope we maintain comments when re-applying the template.  if re-applying the template breaks things like this or what the user edited and we can't fix it then we shouldn't re-apply at all?"
+
+> "really all the re-apply has to do is add new keys that have been put into the template (commented out or not) and append them to the users existing config"
+
+This locks Q10 and adds a hard requirement on the setup re-apply behaviour.  Two parts:
+
+1. **Starter ships real placeholder values** (e.g., `"wifi.ssid" = "replace-with-your-ssid"`, `"wifi.password" = "replace-with-your-password"`).  Bogus enough that nothing can accidentally use them at runtime; real enough to survive parser round-trip; visible enough to invite editing.  *Implication: manifest validation needs to also reject placeholder values* (a key being "present" with `replace-with-your-ssid` shouldn't satisfy the manifest).  Two ways to enforce: a sentinel value the manifest validator knows to reject, OR a runtime check at `from_dict` time.  Lean: sentinel rejection at deploy time, since that's where the rest of the validation already lives.
+
+2. **Setup re-apply is additive, never destructive.**  When the upstream template gains a new key (commented or not), `setup` adds it to the user's existing config file.  When it doesn't gain anything, `setup` is a no-op.  Existing user edits are NEVER touched.  Re-apply has exactly two outcomes:
+   - **No new template keys** → no-op.  User file untouched.
+   - **New template keys** → append the new keys (in the same order the template introduces them, with their comments).  User file's existing content untouched.
+
+This is **strategy C** of the [`setup-schema-reconciliation.md`](setup-schema-reconciliation.md) workstream — promoted from "natural follow-up" to **the canonical setup re-apply behaviour**.  The user's framing ("if we can't preserve, we shouldn't re-apply at all") makes additive-only the contract.
+
+This also implicitly **rejects strategy B** (show a diff, no auto-apply): the user's read is that re-apply should be silent + safe, not interactive.
+
+Q10 resolved: **real placeholders, additive-only re-apply, no clobbering.**
+
+### Q11 — CI applies its own configs locally + a generic validator
+
+Verbatim user direction:
+
+> "yes ci can and should apply its own configs locally prior to executing tests.  that is the current plan at least.  is there a better way to think about this for ci?"
+
+CI applying its own config is fine.  The "better way" question has one structural answer worth considering:
+
+**Add a standalone `chumicro-workspace config-validate <config-file>` CLI** that reads the union of installed library manifests and lints any config file against them.  This is the same logic that already runs at deploy time (`WithRuntimeConfig.files()` calls `validate_runtime_config`); exposing it as a standalone CLI:
+
+- **Decouples** "what the libraries need" (declared in pyproject manifests, single source of truth) from "how CI provides it" (env vars, side files, secrets store, whatever).
+- **CI step becomes**: `apply-test-config && chumicro-workspace config-validate workspace.yml secrets.toml && pytest`.  The middle step catches schema drift instantly — if a library adds a required key tomorrow, CI fails on the validate step rather than mid-test with a confusing `MissingConfigKey`.
+- **Local dev gets the same tool**: a contributor can run `chumicro-workspace config-validate` before `deploy` to catch problems without burning a board cycle.
+
+This isn't an alternative to "CI applies its own config" — it's a **lint step** that pairs with it.  Cheap to build (the validator already exists internally), cheap to maintain (no new code path for CI to special-case), and gives every contributor a fast feedback loop on "is my config complete?"
+
+Q11 resolved: **CI applies its own config + new standalone `config-validate` CLI as the missing lint step.**  Track as a Phase-2-follow-up alongside the broader manifest declaration push.
+
+---
+
 ## Pre-conditions for a fresh agent picking this up
 
 A fresh agent starting this design pass cold should:
