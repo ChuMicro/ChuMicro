@@ -26,7 +26,7 @@ from chumicro_workspace import compose_runtime_config
 
 _HERE = Path(__file__).resolve().parent
 _REPO_ROOT = _HERE.parents[2]
-_WORKSPACE_YAML = _REPO_ROOT / "workspace.yml"
+_SECRETS_TOML = _REPO_ROOT / "secrets.toml"
 _LIBRARY_CONFIG = _HERE / "config.toml"  # optional; absent → workspace defaults only
 
 
@@ -37,11 +37,11 @@ def _merged_runtime_config() -> dict | None:
     the HTTPS test — into the flat dict so the on-device test reads
     it via ``config["requests.now_utc_tuple"]``.
     """
-    if not _WORKSPACE_YAML.is_file():
+    if not _SECRETS_TOML.is_file():
         return None
     try:
         merged = compose_runtime_config(
-            workspace_yaml=_WORKSPACE_YAML,
+            secrets_toml=_SECRETS_TOML,
             project_config=_LIBRARY_CONFIG,
         )
     except Exception:  # noqa: BLE001 — silent skip on any config error

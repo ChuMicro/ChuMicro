@@ -25,7 +25,7 @@ from chumicro_deploy.config.devices_yaml import load_devices
 
 from chumicro_workspace.loaders import (
     WorkspaceConfigError,
-    read_workspace_yaml,
+    read_secrets_toml,
 )
 
 if TYPE_CHECKING:  # pragma: no cover — type-only
@@ -65,7 +65,13 @@ class HealthFinding:
 
 
 def check_workspace_yaml(workspace: WorkspaceLayout) -> HealthFinding:
-    """Verify ``workspace.yml`` parses as the expected shape."""
+    """Verify ``workspace.yml`` parses as the expected shape.
+
+    Only confirms the file exists and parses to a mapping — schema
+    validation for the ``library_sources:`` / ``deploy_targets:`` /
+    ``quality:`` blocks happens lazily inside the modules that
+    consume each one.
+    """
     if not workspace.workspace_yaml.is_file():
         return HealthFinding(
             label="WORKSPACE.YML",
@@ -74,16 +80,66 @@ def check_workspace_yaml(workspace: WorkspaceLayout) -> HealthFinding:
             hint="run `chumicro-workspace init` to scaffold the workspace.",
         )
     try:
-        read_workspace_yaml(workspace.workspace_yaml)
-    except WorkspaceConfigError as exception:
+        from ruamel.yaml import YAML, YAMLError  # noqa: PLC0415
+
+        with workspace.workspace_yaml.open("r", encoding="utf-8") as handle:
+            loaded = YAML(typ="safe").load(handle)
+    except YAMLError as exception:
         return HealthFinding(
             label="WORKSPACE.YML",
             level=HealthLevel.ERROR,
             message=f"malformed: {exception}",
             hint="fix the YAML structure; expected a top-level mapping.",
         )
+    if loaded is not None and not isinstance(loaded, dict):
+        return HealthFinding(
+            label="WORKSPACE.YML",
+            level=HealthLevel.ERROR,
+            message=f"top-level must be a mapping, got {type(loaded).__name__}",
+            hint="fix the YAML structure; expected a top-level mapping.",
+        )
     return HealthFinding(
         label="WORKSPACE.YML",
+        level=HealthLevel.OK,
+        message="valid",
+    )
+
+
+def check_secrets_toml(workspace: WorkspaceLayout) -> HealthFinding:
+    """Verify ``secrets.toml`` exists and parses cleanly.
+
+    ``secrets.toml`` is gitignored and materialised on first
+    ``setup`` — its absence on a fresh clone is a setup-not-yet-run
+    state rather than a configuration error.
+    """
+    if not workspace.secrets_toml.is_file():
+        return HealthFinding(
+            label="SECRETS.TOML",
+            level=HealthLevel.WARN,
+            message="not present",
+            hint=(
+                "run `chumicro-workspace setup` to materialise the "
+                "starter, then edit it with your wifi / broker credentials."
+            ),
+        )
+    try:
+        read_secrets_toml(workspace.secrets_toml)
+    except WorkspaceConfigError as exception:
+        return HealthFinding(
+            label="SECRETS.TOML",
+            level=HealthLevel.ERROR,
+            message=f"malformed: {exception}",
+            hint="fix the TOML structure; expected nested tables of strings.",
+        )
+    except Exception as exception:  # noqa: BLE001 — tomllib raises various
+        return HealthFinding(
+            label="SECRETS.TOML",
+            level=HealthLevel.ERROR,
+            message=f"parse error: {exception}",
+            hint="fix the TOML structure; expected nested tables of strings.",
+        )
+    return HealthFinding(
+        label="SECRETS.TOML",
         level=HealthLevel.OK,
         message="valid",
     )
@@ -162,6 +218,7 @@ def collect_health_findings(
     """Run every status check and return the findings in display order."""
     return [
         check_workspace_yaml(workspace),
+        check_secrets_toml(workspace),
         check_devices_yaml(workspace),
         count_projects(workspace),
     ]

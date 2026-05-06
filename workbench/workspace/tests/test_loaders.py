@@ -6,66 +6,51 @@ import pytest
 from chumicro_workspace import (
     WorkspaceConfigError,
     read_project_config,
-    read_workspace_yaml,
+    read_secrets_toml,
 )
 
 # ---------------------------------------------------------------------------
-# read_workspace_yaml
+# read_secrets_toml
 # ---------------------------------------------------------------------------
 
 
-class TestReadWorkspaceYaml:
-    def test_returns_defaults_block(self, tmp_path: Path) -> None:
-        path = tmp_path / "workspace.yml"
+class TestReadSecretsToml:
+    def test_returns_full_nested_dict(self, tmp_path: Path) -> None:
+        path = tmp_path / "secrets.toml"
         path.write_text(
-            "defaults:\n"
-            "  wifi:\n"
-            "    hostname_prefix: chu-\n"
-            "  mqtt:\n"
-            "    port: 1883\n"
+            "[wifi]\n"
+            'ssid = "HomeNet"\n'
+            'password = "shh"\n'
+            "\n"
+            "[mqtt.broker]\n"
+            'host = "test.mosquitto.org"\n'
+            "port = 1883\n"
         )
-        result = read_workspace_yaml(path)
+        result = read_secrets_toml(path)
         assert result == {
-            "wifi": {"hostname_prefix": "chu-"},
-            "mqtt": {"port": 1883},
+            "wifi": {"ssid": "HomeNet", "password": "shh"},
+            "mqtt": {"broker": {"host": "test.mosquitto.org", "port": 1883}},
         }
 
-    def test_missing_defaults_block_returns_empty_dict(self, tmp_path: Path) -> None:
-        """No 'defaults:' section is fine — that's the no-shared-defaults case."""
-        path = tmp_path / "workspace.yml"
-        path.write_text("other_top_level_key: 1\n")
-        assert read_workspace_yaml(path) == {}
-
     def test_empty_file_returns_empty_dict(self, tmp_path: Path) -> None:
-        path = tmp_path / "workspace.yml"
+        path = tmp_path / "secrets.toml"
         path.write_text("")
-        assert read_workspace_yaml(path) == {}
+        assert read_secrets_toml(path) == {}
+
+    def test_comment_only_file_returns_empty_dict(self, tmp_path: Path) -> None:
+        path = tmp_path / "secrets.toml"
+        path.write_text("# only comments\n")
+        assert read_secrets_toml(path) == {}
 
     def test_missing_file_raises(self, tmp_path: Path) -> None:
-        """Decision 0057 reverted the silent-absent shape.
-
-        Workspace.yml is the load-bearing config file; missing the
-        primary ``workspace.yml`` is a fresh-clone-before-setup
-        signal that callers want to surface, not silently swallow.
-        Callers that need to tolerate absence check ``path.is_file()``
-        themselves.
+        """``secrets.toml`` is the load-bearing device-config file;
+        missing it is a fresh-clone-before-setup signal callers want
+        to surface, not silently swallow.  Callers that need to
+        tolerate absence check ``path.is_file()`` themselves.
         """
-        path = tmp_path / "workspace.yml"
-        # File deliberately not created.
+        path = tmp_path / "secrets.toml"
         with pytest.raises(FileNotFoundError):
-            read_workspace_yaml(path)
-
-    def test_top_level_list_raises(self, tmp_path: Path) -> None:
-        path = tmp_path / "workspace.yml"
-        path.write_text("- one\n- two\n")
-        with pytest.raises(WorkspaceConfigError):
-            read_workspace_yaml(path)
-
-    def test_defaults_must_be_a_mapping(self, tmp_path: Path) -> None:
-        path = tmp_path / "workspace.yml"
-        path.write_text("defaults: not-a-mapping\n")
-        with pytest.raises(WorkspaceConfigError):
-            read_workspace_yaml(path)
+            read_secrets_toml(path)
 
 
 # ---------------------------------------------------------------------------
@@ -75,7 +60,7 @@ class TestReadWorkspaceYaml:
 
 class TestReadProjectConfig:
     def test_toml_round_trips(self, tmp_path: Path) -> None:
-        path = tmp_path / "config.toml"
+        path = tmp_path / "project_config.toml"
         path.write_text(
             "[wifi]\n"
             'ssid = "HomeNet"\n'
@@ -88,6 +73,13 @@ class TestReadProjectConfig:
             "wifi": {"ssid": "HomeNet"},
             "app": {"sample_period_ms": 30000},
         }
+
+    def test_legacy_config_toml_filename_works(self, tmp_path: Path) -> None:
+        """``config.toml`` parses the same — accepted as a legacy name."""
+        path = tmp_path / "config.toml"
+        path.write_text("[wifi]\nssid = 'HomeNet'\n")
+        result = read_project_config(path)
+        assert result["wifi"]["ssid"] == "HomeNet"
 
     def test_yaml_round_trips(self, tmp_path: Path) -> None:
         path = tmp_path / "config.yml"
@@ -116,6 +108,22 @@ class TestReadProjectConfig:
 
     def test_yaml_top_level_list_raises(self, tmp_path: Path) -> None:
         path = tmp_path / "config.yml"
-        path.write_text("- one\n- two\n")
+        path.write_text("- one\n: two\n")
         with pytest.raises(WorkspaceConfigError):
             read_project_config(path)
+
+    def test_yaml_parse_error_wraps_in_workspace_config_error(
+        self, tmp_path: Path,
+    ) -> None:
+        # Malformed YAML — ruamel raises ``YAMLError`` which the
+        # loader wraps in ``WorkspaceConfigError`` so callers only
+        # catch one exception type.
+        path = tmp_path / "config.yml"
+        path.write_text("wifi: ssid: nested colon mid-flow\n  - badly indented\n")
+        with pytest.raises(WorkspaceConfigError, match="parse error"):
+            read_project_config(path)
+
+    def test_yaml_empty_file_returns_empty_dict(self, tmp_path: Path) -> None:
+        path = tmp_path / "config.yml"
+        path.write_text("")
+        assert read_project_config(path) == {}

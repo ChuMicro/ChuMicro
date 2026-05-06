@@ -54,8 +54,9 @@ def fake_template_repo(tmp_path: Path) -> Path:
     )
     (repo / "_workspace_template").mkdir()
     (repo / "_workspace_template" / "workspace.yml").write_text(
-        "# fill in your overrides here\ndefaults: {}\n",
+        "# machinery only\n",
     )
+    (repo / "_workspace_template" / "secrets.toml").write_text("")
     _git("init", "-b", "main", cwd=repo)
     _git("add", "-A", cwd=repo)
     _git("-c", "user.email=test@example.com", "-c", "user.name=Test",
@@ -153,30 +154,29 @@ class TestUpdate:
         assert actions["run.py"] == ApplyAction.REFRESHED
         assert (target / "run.py").read_text() == "# tool-owned shim\n"
 
-    def test_does_not_clobber_user_workspace_yml(
+    def test_does_not_clobber_user_secrets_toml(
         self, fake_template_repo: Path, tmp_path: Path,
     ) -> None:
-        """User's gitignored workspace.yml at root survives update.
+        """User's gitignored secrets.toml at root survives update.
 
-        Decision 0057: workspace.yml at root is gitignored; the
-        template repo never tracks it, so update never walks it.
-        It can't end up in the report at all — neither REFRESHED
-        nor SKIPPED — and the user's content stays put.
+        secrets.toml at root is gitignored; the template repo never
+        tracks it, so update never walks it.  It can't end up in the
+        report at all — neither REFRESHED nor SKIPPED — and the
+        user's content stays put.
         """
         target = tmp_path / "my-house"
         init(target, template_url=str(fake_template_repo))
-        # User materializes / fills in workspace.yml after init.
-        (target / "workspace.yml").write_text(
-            "defaults:\n  wifi:\n    password: user-edited\n",
-        )
+        # User materializes / fills in secrets.toml after init.
+        (target / "workspace.yml").write_text("# machinery only\n")
+        (target / "secrets.toml").write_text('[wifi]\npassword = "user-edited"\n')
         report = update(target, template_url=str(fake_template_repo))
         actions = _files(report)
-        # Upstream doesn't carry workspace.yml at root (gitignored),
+        # Upstream doesn't carry secrets.toml at root (gitignored),
         # so update never visits it.
-        assert "workspace.yml" not in actions
+        assert "secrets.toml" not in actions
         # User content untouched on disk.
-        assert (target / "workspace.yml").read_text() == (
-            "defaults:\n  wifi:\n    password: user-edited\n"
+        assert (target / "secrets.toml").read_text() == (
+            '[wifi]\npassword = "user-edited"\n'
         )
 
     def test_unchanged_when_tool_owned_files_match_upstream(
@@ -237,11 +237,12 @@ class TestMaterializeTemplates:
         workspace.mkdir()
         templates = workspace / "_workspace_template"
         templates.mkdir()
-        (templates / "workspace.yml").write_text("defaults: {}\n")
+        (templates / "workspace.yml").write_text('# machinery only\n')
+        (templates / "secrets.toml").write_text('')
         report = materialize_templates(workspace)
         actions = _files(report)
         assert actions["workspace.yml"] == ApplyAction.MATERIALIZED
-        assert (workspace / "workspace.yml").read_text() == "defaults: {}\n"
+        assert (workspace / "workspace.yml").read_text() == "# machinery only\n"
 
     def test_skips_existing_files(self, tmp_path: Path) -> None:
         workspace = tmp_path / "ws"

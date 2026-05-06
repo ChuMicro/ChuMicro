@@ -2,7 +2,8 @@
 
 Strategy B from the setup-schema-reconciliation workstream — surface
 fields the upstream starter has gained since the user materialised
-their ``workspace.yml``.  No auto-application; pure print.
+their ``workspace.yml`` / ``secrets.toml``.  No auto-application;
+pure print.
 
 Coverage focuses on the diff semantics (what counts as "missing")
 and the source-resolution logic (repo-specific override vs
@@ -18,7 +19,7 @@ from pathlib import Path
 from chumicro_workspace import (
     collect_missing_starter_paths,
     print_starter_drift_report,
-    read_workspace_yml_starter,
+    read_secrets_toml_starter,
 )
 
 
@@ -27,10 +28,21 @@ def _write_workspace_yml(workspace_root: Path, content: str) -> None:
     (workspace_root / "workspace.yml").write_text(content, encoding="utf-8")
 
 
+def _write_secrets_toml(workspace_root: Path, content: str) -> None:
+    workspace_root.mkdir(parents=True, exist_ok=True)
+    (workspace_root / "secrets.toml").write_text(content, encoding="utf-8")
+
+
 def _write_repo_override(workspace_root: Path, content: str) -> None:
     override_dir = workspace_root / "_workspace_template"
     override_dir.mkdir(parents=True, exist_ok=True)
     (override_dir / "workspace.yml").write_text(content, encoding="utf-8")
+
+
+def _write_secrets_override(workspace_root: Path, content: str) -> None:
+    override_dir = workspace_root / "_workspace_template"
+    override_dir.mkdir(parents=True, exist_ok=True)
+    (override_dir / "secrets.toml").write_text(content, encoding="utf-8")
 
 
 class TestCollectMissingStarterPaths:
@@ -238,19 +250,112 @@ class TestPrintStarterDriftReport:
         # no override to copy from.
         assert "_workspace_template/workspace.yml" not in output
 
-    def test_workbench_starter_is_strict_superset_of_today(
+    def test_workbench_workspace_yml_starter_has_no_live_keys(
         self, tmp_path: Path,
     ) -> None:
-        # Sanity: the workbench-owned starter currently has no live
-        # uncommented top-level keys, so a user file with any
-        # uncommented top-level key shows zero drift against it.
-        # This guards against a future refactor that accidentally
-        # makes the workbench starter live without updating the
-        # diff source.  Read the starter directly so we're not
-        # asserting against a separately-maintained fixture.
-        assert "defaults:" in read_workspace_yml_starter()
+        # The workbench-owned workspace.yml starter has no live
+        # uncommented top-level keys (it's purely commented-out
+        # examples for library_sources / deploy_targets / quality /
+        # environments) — a user file with any uncommented top-level
+        # key shows zero drift against it.
         _write_workspace_yml(
             tmp_path,
-            "defaults:\n  wifi:\n    ssid: ap\n",
+            "library_sources:\n  some-lib: ./path\n",
         )
         assert collect_missing_starter_paths(workspace_root=tmp_path) == []
+
+
+class TestSecretsTomlDrift:
+    """Same drift semantics as workspace.yml, against secrets.toml."""
+
+    def test_no_user_file_returns_empty(self, tmp_path: Path) -> None:
+        assert (
+            collect_missing_starter_paths(
+                workspace_root=tmp_path, filename="secrets.toml",
+            )
+            == []
+        )
+
+    def test_top_level_addition_surfaces(self, tmp_path: Path) -> None:
+        # Starter gained a [mqtt] table; user only had [wifi].  The
+        # diff convention reports the missing TOP-LEVEL key (``mqtt``)
+        # rather than every leaf under it — same shape as the
+        # workspace.yml diff.
+        _write_secrets_override(
+            tmp_path,
+            '[wifi]\nssid = "x"\n[mqtt.broker]\nhost = "test.mosquitto.org"\n',
+        )
+        _write_secrets_toml(tmp_path, '[wifi]\nssid = "x"\n')
+        missing = collect_missing_starter_paths(
+            workspace_root=tmp_path, filename="secrets.toml",
+        )
+        assert missing == ["mqtt"]
+
+    def test_nested_addition_surfaces_with_dotted_path(
+        self, tmp_path: Path,
+    ) -> None:
+        # When the user already has the parent table, an addition
+        # within it surfaces with the full dotted path.
+        _write_secrets_override(
+            tmp_path,
+            '[wifi]\nssid = "x"\npassword = "y"\nhostname = "name"\n',
+        )
+        _write_secrets_toml(
+            tmp_path, '[wifi]\nssid = "x"\npassword = "y"\n',
+        )
+        missing = collect_missing_starter_paths(
+            workspace_root=tmp_path, filename="secrets.toml",
+        )
+        assert missing == ["wifi.hostname"]
+
+    def test_user_matches_starter_returns_empty(self, tmp_path: Path) -> None:
+        _write_secrets_override(tmp_path, '[wifi]\nssid = "x"\n')
+        _write_secrets_toml(tmp_path, '[wifi]\nssid = "x"\n')
+        assert (
+            collect_missing_starter_paths(
+                workspace_root=tmp_path, filename="secrets.toml",
+            )
+            == []
+        )
+
+    def test_workbench_starter_ships_real_placeholder_keys(
+        self, tmp_path: Path,
+    ) -> None:
+        # The workbench-owned secrets.toml starter ships with real
+        # ``wifi.ssid`` / ``wifi.password`` placeholder keys (not
+        # commented examples) so the additive setup re-apply path
+        # (Strategy C, future) can append new starter keys to a
+        # user file without round-trip data loss.
+        starter_text = read_secrets_toml_starter()
+        assert "[wifi]" in starter_text
+        assert "ssid" in starter_text
+
+    def test_unparseable_user_file_returns_empty(
+        self, tmp_path: Path,
+    ) -> None:
+        # Malformed TOML — fail-soft so a bad file never breaks setup.
+        _write_secrets_override(tmp_path, '[wifi]\nssid = "x"\n')
+        _write_secrets_toml(tmp_path, "not [valid] = toml-anywhere\n[")
+        assert (
+            collect_missing_starter_paths(
+                workspace_root=tmp_path, filename="secrets.toml",
+            )
+            == []
+        )
+
+    def test_print_drift_report_includes_secrets_toml(
+        self, tmp_path: Path,
+    ) -> None:
+        # Drift in secrets.toml shows up under its own header in the
+        # combined drift report.
+        _write_secrets_override(
+            tmp_path,
+            '[mqtt.broker]\nhost = "test.mosquitto.org"\n',
+        )
+        _write_secrets_toml(tmp_path, "")
+        stream = io.StringIO()
+        count = print_starter_drift_report(tmp_path, stream=stream)
+        assert count >= 1
+        output = stream.getvalue()
+        assert "secrets.toml" in output
+        assert "mqtt" in output

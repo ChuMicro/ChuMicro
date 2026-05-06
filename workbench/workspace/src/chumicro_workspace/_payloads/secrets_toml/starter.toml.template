@@ -1,0 +1,37 @@
+# secrets.toml — workspace-wide credentials + device defaults.
+#
+# Gitignored.  Materialised on first ``setup`` and never overwritten —
+# edit it freely; re-runs of setup will not clobber your changes.
+#
+# This file holds the values that flow onto a board through
+# ``runtime_config.msgpack``.  Per-project ``project_config.toml`` files
+# deep-merge over these defaults at deploy time.
+#
+# Structure: nested TOML tables on disk, flat dotted keys on the
+# board.  ``[wifi] ssid = "x"`` becomes ``config["wifi.ssid"]`` on
+# device.  Nested tables stay readable for humans; the compose-time
+# flatten produces the wire format for memory-constrained runtimes.
+#
+# What lives here:
+#   * Wifi credentials (ssid, password)
+#   * MQTT broker host / port / auth
+#   * Any other workspace-wide default a project might inherit.
+#
+# What does NOT live here (lives in ``workspace.yml`` instead):
+#   * Workspace machinery: ``library_sources``, ``deploy_targets``,
+#     ``quality`` knobs, future ``environments`` block.
+#   * Anything host-only that never reaches a board.
+#
+# Replace the placeholder values below with your real network /
+# broker / etc. settings — they're intentionally bogus so a fresh
+# clone can't accidentally use them at runtime.
+
+[wifi]
+ssid = "replace-with-your-ap-ssid"
+password = "replace-with-your-password"
+
+[mqtt.broker]
+host = "test.mosquitto.org"
+port = 1883
+# username = ""
+# password = ""

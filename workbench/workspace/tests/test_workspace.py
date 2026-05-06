@@ -12,7 +12,8 @@ from chumicro_workspace.workspace import (
 
 def _seed_root(tmp_path: Path) -> Path:
     """Drop a workspace.yml at *tmp_path* so it counts as a root."""
-    (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+    (tmp_path / "workspace.yml").write_text('# machinery only\n')
+    (tmp_path / "secrets.toml").write_text('')
     return tmp_path
 
 

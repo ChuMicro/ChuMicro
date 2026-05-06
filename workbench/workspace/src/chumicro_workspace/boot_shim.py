@@ -234,7 +234,7 @@ def project_boot_source(
     *,
     workspace: WorkspaceLayout,
     entrypoint_filename: str = "code.py",
-    workspace_yaml: Path | None = None,
+    secrets_toml: Path | None = None,
     extra_excluded: Iterable[str] = (),
     target_runtime: str | None = None,
 ) -> WithRuntimeConfig:
@@ -247,12 +247,12 @@ def project_boot_source(
     Args:
         project_dir: Filesystem path to the project directory.
         workspace: Resolved :class:`WorkspaceLayout`.  Used to
-            locate ``workspace.yml`` defaults when *workspace_yaml* is
-            ``None``.
+            locate ``secrets.toml`` when *secrets_toml* is ``None``.
         entrypoint_filename: ``"code.py"`` for CP, ``"main.py"``
             for MP.  Decides the host-side filename for the shim
             stub written at the device root.
-        workspace_yaml: Override ``workspace_yaml`` path.
+        secrets_toml: Override ``secrets.toml`` path (workspace-wide
+            credentials + device defaults).
         extra_excluded: Additional filename / directory names to
             skip on the project walk.
         target_runtime: When set, ``.py`` files in the project
@@ -265,8 +265,8 @@ def project_boot_source(
         FileNotFoundError: When *project_dir* contains no
             recognized config file.
     """
-    if workspace_yaml is None:
-        workspace_yaml = workspace.workspace_yaml
+    if secrets_toml is None:
+        secrets_toml = workspace.secrets_toml
 
     inner = _BootShimSource(
         project_dir=project_dir,
@@ -276,7 +276,7 @@ def project_boot_source(
     )
     return WithRuntimeConfig(
         inner,
-        workspace_yaml=workspace_yaml,
+        secrets_toml=secrets_toml,
         project_config=find_project_config(project_dir),
         output_path=project_dir / GENERATED_DIRNAME / "runtime_config.msgpack",
     )
@@ -362,6 +362,7 @@ def project_boot_with_import_graph_source(
     entrypoint_filename: str = "code.py",
     project_entrypoint: str = "app.py",
     workspace_yaml: Path | None = None,
+    secrets_toml: Path | None = None,
     extra_excluded: Iterable[str] = (),
     target_runtime: str | None = None,
     extra_modules: list[str] | None = None,
@@ -392,7 +393,12 @@ def project_boot_with_import_graph_source(
             that the import-graph walker uses as its starting point.
             Defaults to ``"app.py"`` — the boot-shim convention's
             entrypoint module.
-        workspace_yaml: Override ``workspace.yml`` path.
+        workspace_yaml: Override ``workspace.yml`` path — used by the
+            import-graph walker to resolve the ``library_sources:``
+            block.
+        secrets_toml: Override ``secrets.toml`` path — used by
+            ``WithRuntimeConfig`` to read workspace-wide credentials
+            and device defaults.
         extra_excluded: Additional filename / directory names to
             skip on the project walk.
         target_runtime: Forwarded to both inner sources so
@@ -418,6 +424,8 @@ def project_boot_with_import_graph_source(
 
     if workspace_yaml is None:
         workspace_yaml = workspace.workspace_yaml
+    if secrets_toml is None:
+        secrets_toml = workspace.secrets_toml
 
     boot_inner = _BootShimSource(
         project_dir=project_dir,
@@ -462,9 +470,7 @@ def project_boot_with_import_graph_source(
 
     # Library roots derived from the import-graph search paths so
     # ``WithRuntimeConfig`` validates the merged config against
-    # each library's manifest before writing the msgpack.  See
-    # ``chumicro_workspace.config_manifest`` and Phase 2 of the
-    # unification workstream.
+    # each library's manifest before writing the msgpack.
     from chumicro_workspace.config_manifest import (  # noqa: PLC0415
         find_library_roots,
     )
@@ -472,7 +478,7 @@ def project_boot_with_import_graph_source(
 
     return WithRuntimeConfig(
         combined,
-        workspace_yaml=workspace_yaml,
+        secrets_toml=secrets_toml,
         project_config=find_project_config(project_dir),
         output_path=project_dir / GENERATED_DIRNAME / "runtime_config.msgpack",
         library_roots=library_roots,
