@@ -246,8 +246,19 @@ def _cmd_setup(args: argparse.Namespace) -> int:
     ``pyproject.toml`` is present, then walks ``_workspace_template/``
     and creates any missing files at the workspace root.  Idempotent —
     re-running is safe.
+
+    Setup is the one command that *materialises* ``workspace.yml`` —
+    it cannot use :func:`_resolve_workspace`'s walk-up-and-find-marker
+    discovery, because on a fresh clone the marker doesn't exist yet.
+    Resolve the workspace root directly from ``--workspace-dir`` or
+    ``cwd``; every other command continues to use the marker-based
+    discovery so they keep working from any subdirectory inside an
+    already-set-up workspace.
     """
-    workspace = _resolve_workspace(args)
+    starting_dir = (
+        args.workspace_dir if args.workspace_dir is not None else Path.cwd()
+    ).resolve()
+    workspace = WorkspaceLayout(root=starting_dir)
     pyproject = workspace.root / "pyproject.toml"
     if pyproject.is_file():
         print(f"setup: installing {workspace.root} (editable)")
