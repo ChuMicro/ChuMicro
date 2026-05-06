@@ -1,8 +1,51 @@
 # Library pipeline — what to add next
 
-**Status:** captured, no implementation yet. Awaiting batch selection and a dependency-policy decision.
+**Status:** Tier A + dep-policy + UDP all shipped between 2026-04-27 and 2026-05-06; Tier B (macropad-validated libs) and the device-feedback layer (`chumicro-presence`) are the open slices.  See **Findings from the 2026-05-06 review** below for what's actually pickup-able vs. still hardware-gated.
 
 **Origin:** strategy conversation 2026-04-27. Survey of the Adafruit bundle + micropython-lib + existing chumicro libraries to identify cross-runtime gaps worth filling. Folds in and widens the **LED / UX hooks for service state** open question from `plans/workstreams/archive/phase-7-integration.md` §"LED / UX hooks for service state".
+
+## Findings from the 2026-05-06 review
+
+The body below was written 2026-04-27 when the doc said "captured, no implementation yet."  Most of Tier A and the prereqs have shipped since.  Concrete state:
+
+* **Tier A — all three libraries shipped:**
+  * `chumicro-logging` — VERSION 0.1.1.  Levelled logging, runner-friendly, optional callable injection rather than required dep (the rule the workstream proposed).
+  * `chumicro-ntp` — VERSION 0.1.1.  Runner-shaped SNTP client over an injected UDP socket; cross-runtime.
+  * `chumicro-events` — VERSION 0.1.0.  Runner-shaped pub/sub event bus (bounded, drop-oldest); zero chumicro deps and no other library imports it (per [Decision 0042](../decisions/0042-library-dependency-policy.md)).
+* **Dependency policy resolved as [Decision 0042](../decisions/0042-library-dependency-policy.md)** (`proposed`, 2026-04-27).  The "core infrastructure = hard dep + factory helper" / "decoration = optional callback" split this workstream proposed is now the formal contract.  `chumicro-requests` (Decision 0040) had already established the workable shape: hard `chumicro-sockets` dep + `chumicro_sockets_factory(radio=…)` helper + explicit constructor parameter.  Each new library starts under the right rules.
+* **UDP for sockets shipped as [Decision 0043](../decisions/0043-chumicro-sockets-udp.md)** (`accepted`).  The "first check whether sockets exposes UDP" prereq the workstream flagged for ntp is closed — `chumicro_sockets.udp_socket` exists and ntp consumes it.
+* **`presence` / device-feedback layer — still open.**  The orchestrator described in §"Device-feedback layer" hasn't been started.  No events bus consumer beyond wifi → mqtt indirection has materialised; the third-consumer trigger the workstream named hasn't fired yet.
+* **Tier B (input / pixels / tone) — still hardware-gated** on the macropad.  The libraries themselves don't depend on the macropad — they're constructor-injected backends — but the validation matrix needs the board plugged in to land them with a functional-test floor.  Macropad isn't on the bench in the current setup.
+* **Tier C — still hardware-gated.**  Antennas not yet for LoRa, no GPS hardware wired, no stepper drivers.
+
+### What's actually pickup-able now
+
+In rough priority order:
+
+1. **Plug in the macropad and ship Tier B.**  `chumicro-input` + `chumicro-pixels` + (optional) `chumicro-tone`.  The libraries are board-agnostic — macropad is just the dev fixture for functional tests.  Each follows the established DNA (constructor-injected adapter, per-runtime selection ladder, `testing.py` fake, runner-shaped service).  No design decisions remaining; this is implementation.
+2. **`chumicro-presence` (device-feedback layer)** — the third-consumer trigger to make `chumicro-events` valuable beyond its current zero-consumer state.  Open shape question still in §"Device-feedback layer" below: subsume the StatusIndicator HAL or coexist?  Recommended subsume.  Pickable now without macropad — `chumicro-pixels` is the only dependency for the LED output, and a no-op pixels backend works for testing.
+3. **Promote Decision 0042 from `proposed` → `accepted`.**  The libraries shipping under it (logging, events, ntp) confirm the policy works; no edits needed, just the status flip after a quick review pass.  Trivial.
+4. **Audit existing libraries' `pyproject.toml` against Decision 0042.**  Check that `mqtt` / `requests` / `http_server` declare `chumicro-sockets` as a hard dep (they do, per Decision 0040) and that no library accidentally hard-depends on the decoration set (events / logging / future presence).  Quick verification, not redesign.
+5. **Tier C as hardware arrives.**  Antennas for LoRa, a GPS module, a stepper driver — when any of these land on the bench, the corresponding library's research-then-ship slice unblocks.
+
+### Reframe — what this workstream is now about
+
+The original framing was *"survey + tier picks + dep-policy decision"*.  The survey paid out, the dep-policy decision shipped, Tier A is done.  Remaining workstream slice is:
+
+* **Macropad picks (Tier B)** when the macropad is on the bench.
+* **`chumicro-presence`** as the next net-new library, pickable without hardware.
+* **Tier C** as hardware arrives, library by library.
+* **Decision 0042 status flip** to `accepted` (housekeeping).
+
+A fresh agent picking this up should NOT re-do the Tier A surveys — they shipped.  The body below is preserved for the macropad design notes (§"Tier B"), the device-feedback layer design (§"Device-feedback layer"), and the dependency-policy rationale (§"Dependency policy") which is now codified in Decision 0042 but still useful as the why-we-decided-this-way source.
+
+### Related workstreams + decisions
+
+* [Decision 0042](../decisions/0042-library-dependency-policy.md) — codifies the dep-policy split this workstream proposed.
+* [Decision 0043](../decisions/0043-chumicro-sockets-udp.md) — UDP support that ntp consumes.
+* [Decision 0040](../decisions/0040-chumicro-requests.md) — earlier-shipped pattern that Decision 0042 generalised.
+* [`archive/phase-7-integration.md`](archive/phase-7-integration.md) §"LED / UX hooks for service state" — original StatusIndicator HAL idea that the device-feedback layer here supersedes.
+* [`beginner-onramp.md`](beginner-onramp.md) — references `chumicro-requests` and `chumicro-http-server` (both shipped) as part of the demo story; future Tier B / presence work would feed into the same beginner flow.
 
 ## Context
 
@@ -123,13 +166,15 @@ This keeps the dependency graph a strict DAG with `presence` and `events` and `l
 
 ## Suggested batches
 
-Three reasonable picks:
+**Historical — what was actually picked.** Of the three options below (drafted 2026-04-27), the project ended up shipping option 3 ("ambitious") incrementally rather than as a single batch: logging shipped first, then ntp + UDP-for-sockets together, then events alongside Decision 0042.  Three new libraries + one ADR landed across the next ~10 days without overwhelming the cycle.
+
+Three reasonable picks (preserved as the original survey):
 
 1. **Conservative.** A1 (logging) alone.  No new decisions, smallest risk.
-2. **Balanced (recommended).** A1 (logging) + decide dependency policy.  Logging is the natural place to live-test the "decoration dep" rule (it must not become a required dep).
-3. **Ambitious.** A1 + A3 (events) + start on presence/feedback skeleton + decide dep policy.  Three new libraries' worth of design at once — expect 2–3 decision files and a slower cycle.
+2. **Balanced.** A1 (logging) + decide dependency policy.  Logging is the natural place to live-test the "decoration dep" rule (it must not become a required dep).
+3. **Ambitious.** A1 + A3 (events) + start on presence/feedback skeleton + decide dep policy.  ← *what shipped.*
 
-Tier B (input, pixels) is gated on plugging in the macropad.  Tier C is gated on hardware.
+Tier B (input, pixels) is still gated on plugging in the macropad.  Tier C is still gated on hardware.
 
 ## Critical files when implementation begins
 
