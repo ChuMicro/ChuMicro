@@ -62,9 +62,3 @@ chumicro-dev-config.toml
 # Root-anchored so `_workspace_template/secrets.toml` stays trackable.
 /secrets.toml
 
-# Legacy `_test_creds.py` shim retired by the on-device-config-dogfooding
-# workstream — networking-library conftests no longer materialise it.
-# Kept gitignored as defense-in-depth so a contributor with leftover
-# files from the pre-migration era can't accidentally commit credentials.
-**/_test_creds.py
-
