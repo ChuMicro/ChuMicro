@@ -6,7 +6,7 @@ Related: Decision 0029 (project workspace), Decision 0042 (library dependency po
 
 ## Context
 
-`chumicro-mqtt` (Phase 6 of `plans/workstreams/project-workspace.md`) and a future `chumicro-requests` HTTP client both need portable TCP sockets with non-blocking semantics and optional TLS.  Source-level research confirmed the runtimes diverge in ways a library cannot paper over implicitly:
+`chumicro-mqtt` (Phase 6 of `plans/workstreams/archive/project-workspace.md`) and a future `chumicro-requests` HTTP client both need portable TCP sockets with non-blocking semantics and optional TLS.  Source-level research confirmed the runtimes diverge in ways a library cannot paper over implicitly:
 
 - **CircuitPython** has no raw `socket` module.  Sockets come from `socketpool.SocketPool(radio)`.  **CircuitPython has no `recv()`** — only `recv_into()`.  There is no `ssl` module; TLS is delivered via a radio-specific `TLS_MODE` flag, typically abstracted by `adafruit_connection_manager`.
 - **MicroPython** exposes stdlib-style `import socket`.  `recv()` and `recv_into()` both available on most ports.  TLS: `ssl` module present on both ESP32 and Pi Pico W builds — `MICROPY_SSL_MBEDTLS=1` + `MICROPY_PY_SSL=1` are set in `ports/rp2/mpconfigport.h` (confirmed in MP 1.26.0).  Older builds (~MP 1.21 era) lacked mbedTLS on Pico W, which is where the "no TLS on Pico W" folklore came from; current-LTS and newer builds have it.

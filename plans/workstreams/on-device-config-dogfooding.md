@@ -2,7 +2,7 @@
 
 Status: **proposed.**  Foundation (Decision 0056 — `transport.stage(extra_files=...)` API) shipped 2026-05-04; conftest + plugin + on-device test migration is the next session's lift.
 
-(Originally filed as Phase 4.5b of the [`scripts-workbench-config-unification`](scripts-workbench-config-unification.md) workstream; promoted to peer status 2026-05-05 once the parent closed and the upstream config-shape questions — Decision 0057 (two-file collapse) and `setup-schema-reconciliation` Strategy B — landed.)
+(Originally filed as Phase 4.5b of the [`scripts-workbench-config-unification`](archive/scripts-workbench-config-unification.md) workstream; promoted to peer status 2026-05-05 once the parent closed and the upstream config-shape questions — Decision 0057 (two-file collapse) and `setup-schema-reconciliation` Strategy B — landed.)
 
 ## Premise
 

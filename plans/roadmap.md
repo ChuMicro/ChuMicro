@@ -80,7 +80,7 @@ Status: `mostly-done` — phases 1, 2, 3a, 3b, 4a, 4b, 5, 6 shipped 2026-04-22 �
 
 Goal: ship a template-repo project workspace that unifies CircuitPython, MicroPython, and CPython at project scope — onboard a board, write app code, deploy to one or many targets, watch the REPL — and the libraries downstream things rely on.
 
-See [`workstreams/project-workspace.md`](workstreams/project-workspace.md) for the per-phase acceptance log and [Decision 0029](decisions/0029-project-workspace.md) for the design.
+See [`workstreams/archive/project-workspace.md`](workstreams/archive/project-workspace.md) for the per-phase acceptance log and [Decision 0029](decisions/0029-project-workspace.md) for the design.
 
 Shipped in this milestone:
 

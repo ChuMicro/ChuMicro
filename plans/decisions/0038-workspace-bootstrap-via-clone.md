@@ -107,5 +107,5 @@ This is independent of the template pivot but is bundled into the same change be
 - The bootstrap docs change: the canonical README path becomes "git clone + setup," not "pip install + init."
 - `python run.py update-template` (or equivalent) becomes a `chumicro-workspace update` invocation rather than a `chumicro-workspace-template update` invocation.
 - Decision 0029 §1's "the workspace is a git repo" promise is restored; Phase 4b's pip-install-scaffolder shape is retired.
-- Phase 4b in `plans/workstreams/project-workspace.md` gets a closing-summary update reflecting the pivot; Phase 4c is dissolved into this decision (no separate "companion repo phase" — the repo IS the bootstrap).
+- Phase 4b in `plans/workstreams/archive/project-workspace.md` gets a closing-summary update reflecting the pivot; Phase 4c is dissolved into this decision (no separate "companion repo phase" — the repo IS the bootstrap).
 - Phase 7 (first sensor project template) executes against the new shape.

@@ -12,7 +12,7 @@ Status: **Closed.**  Phases 1, 2, 4, 5, 6, 7 shipped 2026-04-27.  Phase 3 (per-e
 | 4 — Library scaffolder migration | **shipped** | `scripts/new_library_scaffold.py` → `chumicro_workspace.scaffold` + `python run.py new --library <name>` CLI mode.  Templates moved to `_payloads/library_template/`. |
 | 5 — Wire `workspace.yml` quality knobs | **shipped** | New `chumicro_workspace.quality` module + CLI wiring (lint enable / select, coverage_threshold).  Originally also accepted an `agent_strictness` knob but the field had no consumer and was dropped 2026-05-01 per the no-speculative-public-API rule. |
 | 6 — Documentation audit | **shipped** | Cross-repo doc-freshness sweep — both repos' commands tables, README / guide / AGENTS / CONTRIBUTING refreshed for Phases 1, 2, 4, 5 surface; `docs/contributing/new-library.md` notes the Phase 4 scaffolder migration. |
-| 7 — Richer REPL (parallel track) | **shipped** | Slices 1a (`chumicro_repl.line_mode` + `--mode line`), 1b (`:edit` / `:save` / `:load` / `:snippets`), 1c (tab-completion infrastructure: keyword catalog + pluggable device source).  Detail in [`repl-playground.md`](repl-playground.md). |
+| 7 — Richer REPL (parallel track) | **shipped** | Slices 1a (`chumicro_repl.line_mode` + `--mode line`), 1b (`:edit` / `:save` / `:load` / `:snippets`), 1c (tab-completion infrastructure: keyword catalog + pluggable device source).  Detail in [`../repl-playground.md`](../repl-playground.md). |
 
 ## Premise
 
@@ -259,7 +259,7 @@ Estimated scope: ~10–20 file edits.  Half a session.
 
 ### Phase 7 (parallel track) — Richer REPL
 
-[`plans/workstreams/repl-playground.md`](repl-playground.md) Phase 1a/b/c.  Independent of Phases 1–6; can run in parallel.
+[`plans/workstreams/repl-playground.md`](../repl-playground.md) Phase 1a/b/c.  Independent of Phases 1–6; can run in parallel.
 
 * **1a** — line mode + persistent per-device history (~250 LOC)
 * **1b** — `:edit` / `:save` / `:load` / `:snippets` (~150 LOC)

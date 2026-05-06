@@ -18,7 +18,8 @@ Project knowledge base — decisions, roadmap, and active work.
 | `next-up.md` | Active work queue (Now / Next / Blocked / Investigations / recent Done log) | When picking up work or checking priorities |
 | `open-questions.md` | Unresolved questions that need thought but aren't blocking | When exploring design tradeoffs or looking for things to investigate |
 | `roadmap.md` | Milestone status and trajectory | When you need the big picture of project phases |
-| `workstreams/` | Active bodies of work (only in-progress workstreams live here; archive on completion). Pair a `<name>.md` (the plan) with a `<name>-research.md` sibling (source-pinned facts, file:line references, URL list, alternatives surveyed) when research material would otherwise be re-derived each session. Pattern from `project-workspace-research.md` (commit `4f59c0d`). | When working on a tracked initiative |
+| `workstreams/` | Active bodies of work (only in-progress workstreams live at the top level; closed / shipped ones move to `workstreams/archive/`). Pair a `<name>.md` (the plan) with a `<name>-research.md` sibling (source-pinned facts, file:line references, URL list, alternatives surveyed) when research material would otherwise be re-derived each session. | When working on a tracked initiative |
+| `workstreams/archive/` | Historical record of closed / shipped workstreams. Read-only — preserved so future contributors can trace why a decision was made or how a phase rolled out. Cross-references from active docs and ADRs point here when the relevant work has shipped. | When tracing the history of a shipped feature |
 
 **Session warm-up (cold pickup):** read `now.md` → `git --no-pager log --oneline -20` → `next-up.md`. That's it. The other files are deep-dive on demand.
 

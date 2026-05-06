@@ -1,6 +1,6 @@
 # Workstream: scripts/ ↔ workbench/ ↔ workspace-template config unification
 
-Status: **closed** — Phases 1, 2, 3, 4, 5 shipped 2026-05-04 (mono-repo) plus the matching workspace-template repo half ([`a9bb4bd`](https://github.com/ChuMicro/ChuMicro-Workspace-Template/commit/a9bb4bd)).  Phase 4.5a (`!secret` simplification) closed by [Decision 0057](../decisions/0057-two-file-config.md).  Phase 4.5b (on-device test code dropping `_test_creds.py`) carved out as its own peer workstream 2026-05-05 once this parent closed and the upstream config-shape questions landed; transport `extra_files` API foundation shipped via [Decision 0056](../decisions/0056-transport-extra-files-staging.md); conftest + plugin + on-device migration covered in [`plans/workstreams/on-device-config-dogfooding.md`](on-device-config-dogfooding.md).
+Status: **closed** — Phases 1, 2, 3, 4, 5 shipped 2026-05-04 (mono-repo) plus the matching workspace-template repo half ([`a9bb4bd`](https://github.com/ChuMicro/ChuMicro-Workspace-Template/commit/a9bb4bd)).  Phase 4.5a (`!secret` simplification) closed by [Decision 0057](../decisions/0057-two-file-config.md).  Phase 4.5b (on-device test code dropping `_test_creds.py`) carved out as its own peer workstream 2026-05-05 once this parent closed and the upstream config-shape questions landed; transport `extra_files` API foundation shipped via [Decision 0056](../decisions/0056-transport-extra-files-staging.md); conftest + plugin + on-device migration covered in [`plans/workstreams/on-device-config-dogfooding.md`](../on-device-config-dogfooding.md).
 
 ## Premise
 
@@ -44,7 +44,7 @@ The two flows are **different solutions to the same problem**: "what wifi (or mq
 
 ## Decision record
 
-The decision this workstream executed has been promoted to [Decision 0055](../decisions/0055-config-pipeline-unification.md) (`accepted`, 2026-05-04).  Phase 4.5a (`!secret` simplification) was promoted to its own [Decision 0057](../decisions/0057-two-file-config.md).  Phase 4.5b on-device dogfooding is now its own peer workstream — [`on-device-config-dogfooding.md`](on-device-config-dogfooding.md) — with transport `extra_files` API foundation shipped via [Decision 0056](../decisions/0056-transport-extra-files-staging.md).  This workstream document captures the per-phase execution detail; the ADRs capture the durable why.
+The decision this workstream executed has been promoted to [Decision 0055](../decisions/0055-config-pipeline-unification.md) (`accepted`, 2026-05-04).  Phase 4.5a (`!secret` simplification) was promoted to its own [Decision 0057](../decisions/0057-two-file-config.md).  Phase 4.5b on-device dogfooding is now its own peer workstream — [`../on-device-config-dogfooding.md`](../on-device-config-dogfooding.md) — with transport `extra_files` API foundation shipped via [Decision 0056](../decisions/0056-transport-extra-files-staging.md).  This workstream document captures the per-phase execution detail; the ADRs capture the durable why.
 
 ---
 

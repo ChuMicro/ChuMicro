@@ -190,8 +190,8 @@ Sub-questions still open:
   versus what the underlying YAML library actually preserves?
 
 Related: Decision 0028, Decision 0029, Decision 0038,
-`plans/workstreams/project-workspace.md`,
-`plans/workstreams/phase-7-integration.md`.
+`plans/workstreams/archive/project-workspace.md`,
+`plans/workstreams/archive/phase-7-integration.md`.
 
 
 ### Is ESP32 NVS worth a dedicated backend?

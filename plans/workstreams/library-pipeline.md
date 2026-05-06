@@ -2,7 +2,7 @@
 
 **Status:** captured, no implementation yet. Awaiting batch selection and a dependency-policy decision.
 
-**Origin:** strategy conversation 2026-04-27. Survey of the Adafruit bundle + micropython-lib + existing chumicro libraries to identify cross-runtime gaps worth filling. Folds in and widens the **LED / UX hooks for service state** open question from `plans/workstreams/phase-7-integration.md` §"LED / UX hooks for service state".
+**Origin:** strategy conversation 2026-04-27. Survey of the Adafruit bundle + micropython-lib + existing chumicro libraries to identify cross-runtime gaps worth filling. Folds in and widens the **LED / UX hooks for service state** open question from `plans/workstreams/archive/phase-7-integration.md` §"LED / UX hooks for service state".
 
 ## Context
 
@@ -136,7 +136,7 @@ Tier B (input, pixels) is gated on plugging in the macropad.  Tier C is gated on
 - **`libraries/wifi/src/chumicro_wifi/`** — canonical example of constructor-injected adapter + per-runtime selection ladder + `testing.py` fake.  Mirror for `chumicro-input` backends.
 - **`libraries/mqtt/src/chumicro_mqtt/`** — canonical runner-shaped service with check/handle and event callbacks.  Mirror for `chumicro-input` event emission.
 - **`libraries/sockets/src/chumicro_sockets/__init__.py`** — confirm UDP availability before scoping `chumicro-ntp`; current scope is TCP+TLS per Decision 0031.
-- **`plans/workstreams/phase-7-integration.md` §"LED / UX hooks for service state"** — original StatusIndicator HAL idea; superseded by the device-feedback layer above when this workstream proceeds.
+- **`plans/workstreams/archive/phase-7-integration.md` §"LED / UX hooks for service state"** — original StatusIndicator HAL idea; superseded by the device-feedback layer above when this workstream proceeds.
 
 ## Verification (per library, when implementation begins)
 

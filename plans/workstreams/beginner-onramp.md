@@ -1,6 +1,6 @@
 # Workstream: Beginner On-Ramp UX
 
-Status: `proposed` (2026-04-26) — captures the target user flow + library gaps surfaced during the post-Phase-7 audit.  Not yet sequenced; awaiting prioritization against `rename-to-chippy` and the deferred Phase 8 OTA work.
+Status: `proposed` (2026-04-26) — captures the target user flow + library gaps surfaced during the post-Phase-7 audit.  Not yet sequenced; awaiting prioritization against the deferred Phase 8 OTA work.
 
 ## Purpose
 
@@ -55,7 +55,6 @@ We are **not there yet**.  Concrete gaps, ordered by impact:
 **Out of scope (this workstream):**
 
 - Phase 8 OTA (`chumicro-update`) — separate, deferred.
-- The ChuMicro → ChipPy rename — separate workstream.
 - A full mqtt-broker host fixture for a board-to-board MQTT demo — nice-to-have, defer until requested.
 - Web UI on the host (for served pages) — out of scope; demo serves over plain HTTP and the user's browser hits the device directly.
 
@@ -164,7 +163,7 @@ Reasonable to do steps 1+2 immediately as a small, self-contained slice.  Step 3
 
 ## Cross-references
 
-- `plans/workstreams/project-workspace.md` — the umbrella workstream this builds on.  Phases 1–7 shipped; this is post-Phase-7 polish + new libraries.
+- `plans/workstreams/archive/project-workspace.md` — the umbrella workstream this builds on.  Phases 1–7 shipped; this is post-Phase-7 polish + new libraries.
 - `plans/next-up.md` — `discover` enhancement entry should fold into Step 3 here.
 - `plans/decisions/0038-workspace-template-pivot.md` — the template-repo bootstrap shape this layers UX onto.
 - `libraries/mqtt/` — reference implementation for non-blocking + check/handle + budgets in `chumicro-requests` and `chumicro-http-server`.
