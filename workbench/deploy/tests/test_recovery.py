@@ -1028,3 +1028,383 @@ class TestFakeSerialPortScriptedDisconnects:
         assert port.read(1) == b"once"
         assert port.in_waiting == 0
         assert port.read(1) == b""
+
+
+# ---------------------------------------------------------------------------
+# F6 — port-holder diagnosis (2026-05-06 verification finding)
+# ---------------------------------------------------------------------------
+
+
+class TestExtractPortPathFromError:
+    """``_extract_port_path_from_error`` pulls the serial port path
+    out of transport-error text so the recovery printer can drive
+    lsof against it.
+    """
+
+    def test_finds_macos_cu_usbmodem_path(self) -> None:
+        from chumicro_deploy.recovery import _extract_port_path_from_error  # noqa: PLC0415
+
+        error = Exception(
+            "mpremote: failed to access /dev/cu.usbmodem112401 "
+            "(it may be in use by another program)",
+        )
+        assert _extract_port_path_from_error(error) == "/dev/cu.usbmodem112401"
+
+    def test_finds_linux_ttyacm_path(self) -> None:
+        from chumicro_deploy.recovery import _extract_port_path_from_error  # noqa: PLC0415
+
+        error = Exception(
+            "Failed to open serial port /dev/ttyACM0: Resource busy",
+        )
+        assert _extract_port_path_from_error(error) == "/dev/ttyACM0"
+
+    def test_finds_linux_ttyusb_path(self) -> None:
+        from chumicro_deploy.recovery import _extract_port_path_from_error  # noqa: PLC0415
+
+        error = Exception(
+            "could not open port '/dev/ttyUSB0': permission denied",
+        )
+        assert _extract_port_path_from_error(error) == "/dev/ttyUSB0"
+
+    def test_returns_none_when_no_path(self) -> None:
+        from chumicro_deploy.recovery import _extract_port_path_from_error  # noqa: PLC0415
+
+        assert _extract_port_path_from_error(
+            Exception("mpremote command failed (exit 1)"),
+        ) is None
+        assert _extract_port_path_from_error(Exception("")) is None
+
+
+class TestDiagnosePortHolders:
+    """``diagnose_port_holders`` calls ``lsof`` and parses ``-F pcn``
+    output into :class:`PortHolder` records.
+    """
+
+    def test_returns_empty_on_unsupported_platform(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from chumicro_deploy import recovery  # noqa: PLC0415
+
+        monkeypatch.setattr(recovery.sys, "platform", "win32")
+        assert recovery.diagnose_port_holders("/dev/cu.fake") == []
+
+    def test_returns_empty_when_lsof_missing(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from chumicro_deploy import recovery  # noqa: PLC0415
+
+        def fake_run(*_args, **_kwargs):
+            raise FileNotFoundError("lsof: command not found")
+
+        monkeypatch.setattr(recovery.subprocess, "run", fake_run)
+        assert recovery.diagnose_port_holders("/dev/cu.fake") == []
+
+    def test_returns_empty_when_lsof_returns_nothing(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Free port → lsof exits non-zero with empty stdout."""
+        from chumicro_deploy import recovery  # noqa: PLC0415
+
+        def fake_run(args, **_kwargs):
+            class _Result:
+                returncode = 1
+                stdout = ""
+                stderr = ""
+            return _Result()
+
+        monkeypatch.setattr(recovery.subprocess, "run", fake_run)
+        assert recovery.diagnose_port_holders("/dev/cu.fake") == []
+
+    def test_parses_single_holder(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Realistic single-holder output gets parsed into a PortHolder."""
+        from chumicro_deploy import recovery  # noqa: PLC0415
+
+        def fake_run(args, **_kwargs):
+            if args[0] == "lsof":
+                stdout = "p11421\ncPython\nf3\nn/dev/cu.usbmodem112401\n"
+            else:  # ps -p <pid> -o command=
+                stdout = "/usr/bin/python /path/run.py deploy hello_world"
+
+            class _Result:
+                returncode = 0
+
+            result = _Result()
+            result.stdout = stdout  # type: ignore[attr-defined]
+            return result
+
+        monkeypatch.setattr(recovery.subprocess, "run", fake_run)
+        holders = recovery.diagnose_port_holders("/dev/cu.usbmodem112401")
+        assert len(holders) == 1
+        assert holders[0].pid == 11421
+        # ps fallout — full command line preferred over lsof's short ``c``.
+        assert "run.py deploy" in holders[0].command
+
+    def test_parses_multiple_holders(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Multiple processes on the same port (rare but possible)."""
+        from chumicro_deploy import recovery  # noqa: PLC0415
+
+        # ps lookups return per-PID command strings.
+        ps_responses = {
+            "111": "Mu --port /dev/cu.x",
+            "222": "/usr/bin/python /path/mpremote connect /dev/cu.x",
+        }
+
+        def fake_run(args, **_kwargs):
+            class _Result:
+                returncode = 0
+                stdout = ""
+
+            if args[0] == "lsof":
+                _Result.stdout = (
+                    "p111\ncMu\nn/dev/cu.x\n"
+                    "p222\ncPython\nn/dev/cu.x\n"
+                )
+            else:
+                pid = args[args.index("-p") + 1]
+                _Result.stdout = ps_responses.get(pid, "") + "\n"
+            return _Result()
+
+        monkeypatch.setattr(recovery.subprocess, "run", fake_run)
+        holders = recovery.diagnose_port_holders("/dev/cu.x")
+        assert {holder.pid for holder in holders} == {111, 222}
+        assert any("Mu" in holder.command for holder in holders)
+        assert any("mpremote" in holder.command for holder in holders)
+
+    def test_falls_back_to_lsof_command_when_ps_fails(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """When ``ps`` returns non-zero, use lsof's short ``c`` field."""
+        from chumicro_deploy import recovery  # noqa: PLC0415
+
+        def fake_run(args, **_kwargs):
+            class _Result:
+                returncode = 0
+                stdout = ""
+
+            if args[0] == "lsof":
+                _Result.stdout = "p999\ncPython\nn/dev/cu.x\n"
+            else:  # ps fails (process exited between lsof and ps)
+                _Result.returncode = 1
+                _Result.stdout = ""
+            return _Result()
+
+        monkeypatch.setattr(recovery.subprocess, "run", fake_run)
+        holders = recovery.diagnose_port_holders("/dev/cu.x")
+        assert len(holders) == 1
+        assert holders[0].pid == 999
+        assert holders[0].command == "Python"  # lsof short field
+
+
+class TestLooksLikeChumicro:
+    """The chumicro-process heuristic distinguishes stale orphans
+    (which the user can safely kill) from external apps the user
+    explicitly opened (which need different handling).
+    """
+
+    def _holder(self, command: str):
+        from chumicro_deploy.recovery import PortHolder  # noqa: PLC0415
+
+        return PortHolder(pid=12345, command=command)
+
+    def test_chumicro_deploy_subprocess_is_recognised(self) -> None:
+        from chumicro_deploy.recovery import _looks_like_chumicro  # noqa: PLC0415
+
+        assert _looks_like_chumicro(self._holder(
+            "/usr/bin/python /path/.venv/bin/chumicro-deploy ...",
+        ))
+
+    def test_run_py_deploy_is_recognised(self) -> None:
+        from chumicro_deploy.recovery import _looks_like_chumicro  # noqa: PLC0415
+
+        assert _looks_like_chumicro(self._holder(
+            "/usr/bin/python /workspace/run.py deploy hello_world",
+        ))
+
+    def test_mpremote_subprocess_is_recognised(self) -> None:
+        from chumicro_deploy.recovery import _looks_like_chumicro  # noqa: PLC0415
+
+        assert _looks_like_chumicro(self._holder(
+            "/usr/bin/python /path/mpremote connect /dev/cu.x exec ...",
+        ))
+
+    def test_external_apps_are_not_recognised(self) -> None:
+        from chumicro_deploy.recovery import _looks_like_chumicro  # noqa: PLC0415
+
+        for command in (
+            "/Applications/Mu.app/Contents/MacOS/Mu",
+            "thonny --port /dev/cu.x",
+            "screen /dev/cu.x 115200",
+            "/Applications/Visual Studio Code.app/Contents/MacOS/Electron",
+        ):
+            assert not _looks_like_chumicro(self._holder(command)), (
+                f"unexpectedly classified {command!r} as chumicro"
+            )
+
+
+class TestReportFailureWithPortHolders:
+    """End-to-end coaching output for ``PORT_UNAVAILABLE`` includes
+    the lsof diagnosis when something is holding the port.
+    """
+
+    def test_port_unavailable_with_holder_includes_pid(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from chumicro_deploy import recovery  # noqa: PLC0415
+
+        # Stub the diagnose call so we don't actually shell out.
+        monkeypatch.setattr(
+            recovery, "diagnose_port_holders",
+            lambda _p: [
+                recovery.PortHolder(
+                    pid=11421,
+                    command=(
+                        "/usr/bin/python "
+                        "/workspace/run.py deploy wifi_only"
+                    ),
+                ),
+            ],
+        )
+
+        fake = _FakeDeployer(
+            [
+                MicropythonTransportError(
+                    "mpremote: failed to access /dev/cu.usbmodem112401 "
+                    "(it may be in use by another program)",
+                ),
+            ] * 3,
+        )
+        sink, lines = _capturing_output()
+        prompt = _ScriptedPrompt(["", ""])
+        interactive = recovery.InteractiveDeployer(
+            fake,  # type: ignore[arg-type]
+            prompt=prompt,
+            output=sink,
+        )
+        with pytest.raises(MicropythonTransportError):
+            interactive.deploy(_DUMMY_SOURCE)  # type: ignore[arg-type]
+
+        joined = "\n".join(lines)
+        # The PID + command must appear so the user can kill it.
+        assert "11421" in joined
+        assert "run.py deploy" in joined
+        # The chumicro-stale heuristic must fire and surface the
+        # actionable kill suggestion.
+        assert "stale chumicro-deploy or mpremote" in joined
+        assert "kill 11421" in joined
+
+    def test_port_unavailable_with_external_holder_no_kill_hint(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """External app holding the port → list it but don't suggest
+        ``kill`` (user might be deliberately running Mu / Thonny).
+        """
+        from chumicro_deploy import recovery  # noqa: PLC0415
+
+        monkeypatch.setattr(
+            recovery, "diagnose_port_holders",
+            lambda _p: [
+                recovery.PortHolder(
+                    pid=4242,
+                    command="/Applications/Mu.app/Contents/MacOS/Mu",
+                ),
+            ],
+        )
+
+        fake = _FakeDeployer(
+            [
+                MicropythonTransportError(
+                    "mpremote: failed to access /dev/cu.x "
+                    "(it may be in use by another program)",
+                ),
+            ] * 3,
+        )
+        sink, lines = _capturing_output()
+        prompt = _ScriptedPrompt(["", ""])
+        interactive = recovery.InteractiveDeployer(
+            fake,  # type: ignore[arg-type]
+            prompt=prompt,
+            output=sink,
+        )
+        with pytest.raises(MicropythonTransportError):
+            interactive.deploy(_DUMMY_SOURCE)  # type: ignore[arg-type]
+
+        joined = "\n".join(lines)
+        # PID still surfaces so the user knows what's there.
+        assert "4242" in joined
+        assert "Mu" in joined
+        # No kill suggestion for external apps.
+        assert "kill 4242" not in joined
+        assert "stale chumicro" not in joined
+
+    def test_port_unavailable_with_no_holders_falls_through(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """No holders detected (e.g., USB unplug) → no diagnosis
+        section, just the canonical recovery steps.
+        """
+        from chumicro_deploy import recovery  # noqa: PLC0415
+
+        monkeypatch.setattr(
+            recovery, "diagnose_port_holders", lambda _p: [],
+        )
+
+        fake = _FakeDeployer(
+            [
+                MicropythonTransportError(
+                    "mpremote: failed to access /dev/cu.x",
+                ),
+            ] * 3,
+        )
+        sink, lines = _capturing_output()
+        prompt = _ScriptedPrompt(["", ""])
+        interactive = recovery.InteractiveDeployer(
+            fake,  # type: ignore[arg-type]
+            prompt=prompt,
+            output=sink,
+        )
+        with pytest.raises(MicropythonTransportError):
+            interactive.deploy(_DUMMY_SOURCE)  # type: ignore[arg-type]
+
+        joined = "\n".join(lines)
+        # No diagnosis section; canonical recovery hints still present.
+        assert "is currently held by" not in joined
+        assert "Close any app" in joined
+
+    def test_diagnosis_silent_on_subprocess_failure(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Best-effort: if diagnose_port_holders raises, swallow it
+        and fall through to the canonical recovery steps.
+        """
+        from chumicro_deploy import recovery  # noqa: PLC0415
+
+        def boom(_port):
+            raise RuntimeError("lsof exploded")
+
+        monkeypatch.setattr(recovery, "diagnose_port_holders", boom)
+
+        fake = _FakeDeployer(
+            [
+                MicropythonTransportError(
+                    "mpremote: failed to access /dev/cu.x",
+                ),
+            ] * 3,
+        )
+        sink, lines = _capturing_output()
+        prompt = _ScriptedPrompt(["", ""])
+        interactive = recovery.InteractiveDeployer(
+            fake,  # type: ignore[arg-type]
+            prompt=prompt,
+            output=sink,
+        )
+        with pytest.raises(MicropythonTransportError):
+            interactive.deploy(_DUMMY_SOURCE)  # type: ignore[arg-type]
+
+        joined = "\n".join(lines)
+        # No diagnosis section emitted; canonical hints still present.
+        assert "is currently held by" not in joined
+        assert "Close any app" in joined

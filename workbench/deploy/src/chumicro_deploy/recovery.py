@@ -28,6 +28,9 @@ shim, direct human invocation) opts in by instantiating
 
 from __future__ import annotations
 
+import re
+import subprocess
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
@@ -277,6 +280,138 @@ class RecoveryPlan:
     headline: str
     fix_steps: tuple[str, ...]
     retryable: bool
+
+
+@dataclass(frozen=True)
+class PortHolder:
+    """A process currently holding a serial port open.
+
+    Returned by :func:`diagnose_port_holders` so the recovery
+    printer can show the user which process is blocking the deploy
+    instead of the generic "close the app holding the port" hint.
+
+    Attributes:
+        pid: Process id reported by ``lsof``.
+        command: Full command line via ``ps -o command=``.  More
+            informative than ``lsof``'s short ``c`` field for
+            distinguishing stale chumicro processes from an external
+            app the user explicitly opened.
+    """
+
+    pid: int
+    command: str
+
+
+#: Recognise ``/dev/cu.X`` (macOS) and ``/dev/ttyACM0`` /
+#: ``/dev/ttyUSB0`` (Linux) paths embedded in transport-error text.
+#: Used by :func:`_extract_port_path_from_error` to drive the
+#: post-failure ``lsof`` lookup.  The character class is restricted
+#: to alphanumerics + ``.`` / ``_`` / ``-`` so trailing ``:`` (from
+#: ``"/dev/ttyACM0: Resource busy"``) and ``'`` / ``"`` (from
+#: quoted error strings) don't get pulled into the captured path.
+_PORT_PATH_RE = re.compile(r"/dev/(?:cu|tty)[A-Za-z0-9._-]+")
+
+#: Substrings that flag a port-holding process as "probably ours" —
+#: a stale chumicro-deploy or mpremote subprocess from a previous
+#: run, vs. an external app the user explicitly opened (Mu, Thonny,
+#: VS Code's serial console).  Used to tailor the recovery message.
+_LIKELY_CHUMICRO_KEYWORDS = (
+    "chumicro-deploy",
+    "chumicro_workspace",
+    "mpremote",
+    "run.py deploy",
+)
+
+
+def _extract_port_path_from_error(error: BaseException) -> str | None:
+    """Find the first ``/dev/(cu|tty)*`` path in an error's text.
+
+    Transport errors embed the port path in their message
+    (mpremote's stderr, pyserial's ``SerialException``).  Pulling
+    it back out lets the recovery printer probe ``lsof`` against
+    that exact port.  Returns ``None`` when no path is found.
+    """
+    match = _PORT_PATH_RE.search(str(error))
+    return match.group(0) if match else None
+
+
+def _full_command_for_pid(pid: int) -> str | None:
+    """Return the full command line for *pid* via ``ps``, or ``None``.
+
+    ``ps -p <pid> -o command=`` is portable across macOS and Linux.
+    ``None`` covers the common races (process exited between lsof
+    and ps), unsupported platforms, and missing ``ps`` binary.
+    """
+    try:
+        result = subprocess.run(  # noqa: S603 — args fully controlled
+            ["ps", "-p", str(pid), "-o", "command="],
+            capture_output=True, text=True, check=False, timeout=2,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return None
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip() or None
+
+
+def diagnose_port_holders(port_path: str) -> list[PortHolder]:
+    """Return processes currently holding *port_path* open.
+
+    Uses ``lsof -F pcn <port>`` on POSIX — output format is one
+    field per line tagged with a single character (``p`` for PID,
+    ``c`` for short command, ``n`` for path).  Each PID record
+    starts with a ``p`` line; subsequent ``c`` / ``n`` lines belong
+    to it until the next ``p`` or EOF.
+
+    Returns an empty list on Windows (no portable equivalent
+    without ``handle.exe``), when ``lsof`` isn't installed, when
+    the port is not held, or on any subprocess failure — the
+    caller treats absence of holders as "we couldn't tell, fall
+    through to the generic recovery hint" rather than an error.
+
+    F6 of the 2026-05-06 verification pass — beginners hit
+    "failed to access ... it may be in use by another program"
+    after a SIGINT'd deploy left an orphan chumicro-deploy /
+    mpremote subprocess holding the port.  Surfacing the PID in
+    the recovery message lets the user kill the right thing
+    without having to run ``lsof`` themselves.
+    """
+    if sys.platform.startswith("win"):
+        return []
+    try:
+        result = subprocess.run(  # noqa: S603 — args fully controlled
+            ["lsof", "-F", "pcn", port_path],
+            capture_output=True, text=True, check=False, timeout=2,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return []
+    holders: list[PortHolder] = []
+    current_pid: int | None = None
+    for line in result.stdout.splitlines():
+        if not line:
+            continue
+        tag, value = line[0], line[1:]
+        if tag == "p":
+            try:
+                current_pid = int(value)
+            except ValueError:
+                current_pid = None
+        elif tag == "c" and current_pid is not None:
+            full_command = _full_command_for_pid(current_pid)
+            holders.append(
+                PortHolder(
+                    pid=current_pid,
+                    command=full_command or value,
+                ),
+            )
+            current_pid = None
+    return holders
+
+
+def _looks_like_chumicro(holder: PortHolder) -> bool:
+    """Heuristic: is *holder* a stale chumicro-deploy / mpremote process?"""
+    command = holder.command
+    return any(keyword in command for keyword in _LIKELY_CHUMICRO_KEYWORDS)
 
 
 _PLANS: dict[DeployFailureKind, RecoveryPlan] = {
@@ -605,9 +740,48 @@ class InteractiveDeployer:
         )
         self._output(f"[chumicro-deploy] {plan.headline}")
         self._output(f"[chumicro-deploy] Underlying error: {error}")
+        if kind is DeployFailureKind.PORT_UNAVAILABLE:
+            self._report_port_holders(error)
         self._output("[chumicro-deploy] Try this:")
         for step in plan.fix_steps:
             self._output(f"  - {step}")
+
+    def _report_port_holders(self, error: Exception) -> None:
+        """Print the lsof diagnosis for ``PORT_UNAVAILABLE`` failures.
+
+        Pulls the port path out of *error*'s text, runs
+        :func:`diagnose_port_holders`, and emits a labelled section
+        when something is holding the port.  Silently no-ops when
+        the port can't be identified, lsof is unavailable, or the
+        port has no current holders (the user-action recovery
+        steps below will still surface the generic hint).
+
+        F6 of the 2026-05-06 verification pass.
+        """
+        port_path = _extract_port_path_from_error(error)
+        if port_path is None:
+            return
+        try:
+            holders = diagnose_port_holders(port_path)
+        except Exception:  # noqa: BLE001 — diagnosis is best-effort
+            return
+        if not holders:
+            return
+        self._output(
+            f"[chumicro-deploy] {port_path} is currently held by:",
+        )
+        for holder in holders:
+            self._output(f"  PID {holder.pid}: {holder.command}")
+        likely_ours = next(
+            (holder for holder in holders if _looks_like_chumicro(holder)),
+            None,
+        )
+        if likely_ours is not None:
+            self._output(
+                f"[chumicro-deploy] Looks like a stale chumicro-deploy "
+                f"or mpremote process from a previous run.  "
+                f"Terminate it with:  kill {likely_ours.pid}",
+            )
 
     def _report_traceback(
         self,
