@@ -8,7 +8,7 @@ Related: Decision 0026, Decision 0027, Decision 0028, Decision 0030, Decision 00
 
 Decision 0028 earmarked a future `chumicro-deploy` pip package plus a "companion project template repo" for deploying user projects.  Design conversation expanded that scope into a full project workspace: onboard a board, write app code, deploy to one or many targets, and watch the REPL.  A prior user attempt (`pythonProject3`) and an ecosystem survey (`micropy-cli`, `belay`, `PlatformIO`) confirmed the gap — no existing tool unifies CP + MP + CPython at project scope with multi-board support, shared config, and a cross-runtime test story.
 
-This decision records the non-obvious tradeoffs that shape the workstream.  The phases, library sequencing, and acceptance criteria live in `plans/workstreams/project-workspace.md`.
+This decision records the non-obvious tradeoffs that shape the workstream.  The phases, library sequencing, and acceptance criteria live in `plans/workstreams/archive/project-workspace.md`.
 
 ## Decisions
 
@@ -96,4 +96,4 @@ Three commented zones: user-owned (never overwritten without `--force` or prompt
 - A monthly scrape-and-cache job is needed for MicroPython BOARD names; the reflash family table is shipped and versioned with `chumicro-workspace`.
 - Decision 0028's "project template repo" is promoted from parenthetical future work to a top-line deliverable governed by this decision and its workstream.
 - No code lands from this ADR.  Hard rules in `AGENTS.md` land alongside the libraries as they are built.
-- Execution plan, phases, library sequencing, acceptance criteria: `plans/workstreams/project-workspace.md`.
+- Execution plan, phases, library sequencing, acceptance criteria: `plans/workstreams/archive/project-workspace.md`.

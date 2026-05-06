@@ -103,12 +103,12 @@ Key constraints the library enforces:
 - Values are round-tripped via `chumicro-msgpack` — strings, ints, bytes, lists, dicts all work; no i32-only restriction surfaces to the user.
 - Explicit size limits per backend are exported as class constants so tests and user code can guard accordingly.
 
-Detailed API, backend contracts, and corruption semantics will land in a follow-on decision when the library is built.  This ADR scopes the split; implementation lives in `plans/workstreams/project-workspace.md` Phase 3b.
+Detailed API, backend contracts, and corruption semantics will land in a follow-on decision when the library is built.  This ADR scopes the split; implementation lives in `plans/workstreams/archive/project-workspace.md` Phase 3b.
 
 ## Consequences
 
 - `plans/next-up.md`: the old `chumicro-settings` multi-bullet entry is replaced with a narrower `chumicro-kvstore` entry plus a note that app config does not need a library.
-- `plans/workstreams/project-workspace.md` Phase 3b: rewritten around `chumicro-kvstore` + the TOML→msgpack config pipeline.  The config pipeline is primarily `chumicro-workspace` work (deployer transform) and does not land a new library.
+- `plans/workstreams/archive/project-workspace.md` Phase 3b: rewritten around `chumicro-kvstore` + the TOML→msgpack config pipeline.  The config pipeline is primarily `chumicro-workspace` work (deployer transform) and does not land a new library.
 - Template `AGENTS.md`: documents "do not store wifi creds in the KV store" and "do not reuse settings.toml for app config."
 - The workspace-agnostic deploy rule from Decision 0029 §8 (deploy package source cannot mention `workspace.yml`, `projects/`, `library_sources:`) is unaffected — `chumicro-kvstore` is independent of that package too.
 - Four device-verification items carry into Phase 3b: exact `len(microcontroller.nvm)` on ESP32-S3 and Pico W CP; NVS commit-survives-hard-reset on MP ESP32; write latency across CP NVM vs MP NVS vs MP Pico W LittleFS for a 512 B blob.

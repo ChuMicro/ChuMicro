@@ -2,7 +2,7 @@
 
 Status: `unscoped` — placeholder for a potential future workstream.  Not in active scope.
 
-Carved out of `project-workspace.md` as Phase 8 on 2026-04-27 so the project-workspace workstream could close cleanly.  The idea is preserved here as a discrete thing-to-do without a current scope, sequence, or estimate.
+Carved out of `archive/project-workspace.md` as Phase 8 on 2026-04-27 so the project-workspace workstream could close cleanly.  The idea is preserved here as a discrete thing-to-do without a current scope, sequence, or estimate.
 
 ## Why this exists as a separate file
 
@@ -14,7 +14,7 @@ Revisit when a real thing has been deployed in the field for long enough that "d
 
 ## Where the prior thinking lives
 
-Design exploration sits in `plans/workstreams/project-workspace-research.md` §OTA — proposed shape (`chumicro-update` library, runner-shaped service over MQTT primary + HTTP later), CP CIRCUITPY-drive vs filesystem-writable boot-time auto-detect, security tier, scoped-out items.  Read that section first if you're picking this up.
+Design exploration sits in `plans/workstreams/archive/project-workspace-research.md` §OTA — proposed shape (`chumicro-update` library, runner-shaped service over MQTT primary + HTTP later), CP CIRCUITPY-drive vs filesystem-writable boot-time auto-detect, security tier, scoped-out items.  Read that section first if you're picking this up.
 
 ## What this workstream would NOT cover
 

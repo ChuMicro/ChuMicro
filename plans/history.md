@@ -451,7 +451,7 @@ Six threads landed: (1) review-sweep refactor of `chumicro-deploy` per a reuse/q
 
 ### 2026-04-25 — Phase 2 close + workbench release coverage + gate hardening + Phase 3b kick-off
 
-Phase 2 (`chumicro-repl`) shipped — `workbench/repl/` v0.0.0, 175 host tests at 94 %, 9 functional tests on Pi Pico W (CP+MP), recovery layer mirroring `chumicro_deploy`. See `plans/workstreams/project-workspace.md` Phase 2 for the slice-by-slice acceptance. Commits `1d20fb0..92200da`. Open Phase-4 prereq: `CircuitpythonTransport` still carries its own raw-REPL framing parallel to `chumicro_repl.session.ReplSession` — consolidation deferred until `chumicro-workspace` lands.
+Phase 2 (`chumicro-repl`) shipped — `workbench/repl/` v0.0.0, 175 host tests at 94 %, 9 functional tests on Pi Pico W (CP+MP), recovery layer mirroring `chumicro_deploy`. See `plans/workstreams/archive/project-workspace.md` Phase 2 for the slice-by-slice acceptance. Commits `1d20fb0..92200da`. Open Phase-4 prereq: `CircuitpythonTransport` still carries its own raw-REPL framing parallel to `chumicro_repl.session.ReplSession` — consolidation deferred until `chumicro-workspace` lands.
 
 VS Code Testing-panel on-device validation: closed 2026-04-24's deferred hardware-side check. Three side-gaps fixed: root `testpaths` widened to include `workbench/` with `--import-mode=importlib`; root `conftest.py` reworked into "show-but-deselect-on-default-sweep" so IDE Testing panels paint gutter ▶ buttons but bare `pytest` skips hardware; `test_public_api_alone_is_sufficient` rewritten to capture `sys.modules` delta. Commits `73e9270`, `95eefe8`. Lifted: Pattern (IDE Testing-panel show-but-deselect), Learnings (`sys.modules`-delta isolation, root-level `--import-mode=importlib` need).
 

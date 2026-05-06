@@ -9,7 +9,7 @@ testing-infrastructure audit shipped.
 
 Grow `chumicro-repl` from "serial TUI with traceback highlighting" into a side-portal experience for people who want to play with a CircuitPython or MicroPython board interactively — no project, no workspace, no saved scripts.  Also make it less tedious to author multi-line code in the REPL, which today is the single biggest friction in both `mpremote` and CP's default serial console.
 
-This workstream is **deliberately separate from `project-workspace.md`**.  The minimum-viable `chumicro-repl` core (in project-workspace Phase 2) is enough for deploy-tail and basic interactive use.  The playground features are valuable on their own terms but do not block the workspace template.  Sequencing, priority, and even whether to pursue some features at all can be decided independently.
+This workstream is **deliberately separate from `archive/project-workspace.md`**.  The minimum-viable `chumicro-repl` core (in project-workspace Phase 2) is enough for deploy-tail and basic interactive use.  The playground features are valuable on their own terms but do not block the workspace template.  Sequencing, priority, and even whether to pursue some features at all can be decided independently.
 
 ## Scope
 
@@ -187,4 +187,4 @@ A user `pip install chumicro-repl && chumicro-repl --device /dev/cu.usbmodem1101
 
 ## Resolved feedback
 
-- **Why split from `project-workspace.md`?**  Project workspace has a defined acceptance (a user onboards and deploys a thing).  REPL playground has no such gate — it's open-ended feature growth that benefits from its own prioritization.  Split on 2026-04-21 when the user flagged that Phase 2's scope was drifting beyond "what deploy tail needs."
+- **Why split from `archive/project-workspace.md`?**  Project workspace has a defined acceptance (a user onboards and deploys a thing).  REPL playground has no such gate — it's open-ended feature growth that benefits from its own prioritization.  Split on 2026-04-21 when the user flagged that Phase 2's scope was drifting beyond "what deploy tail needs."

@@ -10,7 +10,7 @@ This is the front door. Everything else is deeper read.
 - **Last shipped:** `Add config-validate CLI + additive setup re-apply; refresh ADRs 0036 / 0057` (commit `7d36f27`); template-repo `Migrate to flat-key runtime config + secrets.toml + project_config.toml` (commit `72c6ffb`).
 - **In flight:** idle.  Pickup candidates in `next-up.md` `## Next` — the on-device-config-dogfooding workstream remains ready (still needs the pytest-device plugin hook for late-binding broker / echo / WS-server values; the seven mono-repo conftests already use the flat-key shape this workstream landed).  Side-task chip open: declare `[tool.chumicro.config]` manifests in the six networking libraries that don't have one yet (Q11 follow-up).
 - **Blocked on:** —.
-- **Last touched:** `plans/workstreams/config-shape-beginner-ergonomics.md`, `plans/decisions/0036-chumicro-config-library.md`, `plans/decisions/0057-two-file-config.md`, `plans/next-up.md`, mono-repo + template repo per the commit list above.
+- **Last touched:** `plans/workstreams/archive/config-shape-beginner-ergonomics.md`, `plans/decisions/0036-chumicro-config-library.md`, `plans/decisions/0057-two-file-config.md`, `plans/next-up.md`, mono-repo + template repo per the commit list above.
 
 ---
 
@@ -25,9 +25,9 @@ This is the front door. Everything else is deeper read.
 
 | Candidate | Where | Notes |
 |---|---|---|
-| Declare `[tool.chumicro.config]` manifests in the six networking libraries that lack one (mqtt, requests, http_server, sockets, websockets, ntp) | `plans/workstreams/config-shape-beginner-ergonomics.md` Q11 follow-up | Mechanical — copy the wifi pyproject pattern; each library declares the flat keys its `from_config` reads.  Unblocks `chumicro-workspace config-validate` to actually catch missing config across the whole stack instead of only wifi. |
+| Declare `[tool.chumicro.config]` manifests in the six networking libraries that lack one (mqtt, requests, http_server, sockets, websockets, ntp) | `plans/workstreams/archive/config-shape-beginner-ergonomics.md` Q11 follow-up | Mechanical — copy the wifi pyproject pattern; each library declares the flat keys its `from_config` reads.  Unblocks `chumicro-workspace config-validate` to actually catch missing config across the whole stack instead of only wifi. |
 | On-device config dogfooding (was Phase 4.5b) | `plans/workstreams/on-device-config-dogfooding.md` | Plan validated + edited; ready to pick up cold.  Step 1 = plugin hook design + wifi as first consumer + 4-board hardware validation; Steps 2-4 mechanical.  (Note: the seven mono-repo conftests already use the flat-key shape — the remaining work is the late-binding broker / echo / WS-server plugin hook in chumicro-pytest-device.) |
-| Anything in `## Next` of `next-up.md` | `plans/next-up.md` | Rebrand to ChipPy, OTA workstream (`plans/workstreams/ota.md`), digital I/O library, performance benchmarking infrastructure, etc.  All are unscoped or trigger-gated. |
+| Anything in `## Next` of `next-up.md` | `plans/next-up.md` | OTA workstream (`plans/workstreams/ota.md`), digital I/O library, performance benchmarking infrastructure, etc.  All are unscoped or trigger-gated. |
 
 ## Hard rules to remember (non-negotiables)
 
