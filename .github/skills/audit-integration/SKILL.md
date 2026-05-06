@@ -70,6 +70,34 @@ The hardest pattern to spot.  Look for:
 * **Are the libraries' README / public-API sections aligned?**  If wifi's README says it returns `IpAddress` but sockets expects `tuple[int, int, int, int]`, one of them is wrong.
 * **Are there silent contracts?**  Things like "must call `.connect()` before `.send()`" enforced only by behaviour, not types.  Document or enforce.
 
+### 7. chumicro-specific cross-library checks
+
+These are non-negotiables that *only* surface at the boundary between libraries.
+
+* **Runner contract: one `now_ms` per tick** (Decision [0014](../../../plans/decisions/0014-runner-pattern.md)).  When library B calls into library A's `check(now_ms)` / `handle(now_ms)` method, B must pass the *same* `now_ms` the runner gave it — never call `ticks_ms()` mid-tick to get a "fresh" value.  Concrete bug from the repo's history: a CP MQTT functional test rolled its own `_ticks_ms()` helper that fell back to `time.monotonic() * 1000` (unwrapped float-derived ms), while `chumicro-mqtt` consumed deadlines computed via `chumicro-timing` (`supervisor.ticks_ms`, 29-bit-wrapped per Decision 0008).  The two clock domains misaligned and the connection failed on the very first tick.  Audit checklist:
+  * Does each tick-receiver use the supplied `now_ms` rather than re-fetching?
+  * If two libraries share a tick budget (e.g., wifi + mqtt), do they get the same `now_ms` value at every dispatch?
+  * Are tests rolling their own timer instead of using `chumicro_timing.ticks_ms`?
+
+* **chumicro-config manifest declarations** (Decision [0036](../../../plans/decisions/0036-chumicro-config-library.md)).  Every library that calls `chumicro_config.load_section(<name>)` or has a `<X>Config.from_dict()` method should declare `[tool.chumicro.config.sections.<name>]` in its `pyproject.toml` listing required + optional keys.  At deploy time, `chumicro_workspace.config_manifest` aggregates these and validates the merged config before bytes hit the device.
+
+  Today only `chumicro-wifi` declares a manifest.  Audit any pair of networking libraries (mqtt, requests, http_server, sockets, websockets, ntp) for missing manifests; flag for the config-shape research workstream's Q11 push.
+
+* **Per-runtime adapter parity** (Decision [0049](../../../plans/decisions/0049-three-runtime-trinity.md)).  Each device library should ship CP + MP + CPython adapters / fakes with the same surface.  When auditing a pair of libraries:
+  * Does each library have a `_adapters/{cp,mp,...}.py` (or `_adapters/base.py` + per-runtime subclass)?
+  * Does the testing.py fake match the public surface?  Per Decision [0010](../../../plans/decisions/0010-library-testability.md).
+  * Are runtime-specific files marked `__chumicro_runtimes__` (Decisions [0037](../../../plans/decisions/0037-runtime-file-marking.md), [0044](../../../plans/decisions/0044-deploy-time-runtime-filtering.md)) so they don't ship to the wrong runtime?
+
+* **Decision [0042](../../../plans/decisions/0042-library-dependency-policy.md) compliance** — some libraries have explicit zero-dep policies (e.g., `chumicro-events` has zero chumicro deps and no library imports it).  Verify any cross-library imports the audit proposes don't violate that decision.
+
+* **Pyproject deps match imports.**  Every `import chumicro_<name>` in `src/<libname>/` should appear in `<libname>/pyproject.toml` `dependencies = [...]`.  Run a quick grep to surface missing declarations — they're future packaging bugs.
+
+* **Per-runtime divergence** — when CP + MP behave differently for the same library operation (e.g., DNS resolution, exclusive serial-port access), is that documented in the README *and* covered by both runtimes' functional tests?  Cross-runtime API drift surfaces at integration boundaries first.
+
+* **Shared types crossing the boundary.**  When library A returns a chumicro-defined type (e.g., `chumicro_wifi.WifiState`), library B's import of that type creates a direct dep.  Verify the dep is intentional and declared.  Anonymous dicts / tuples crossing the boundary are usually fine; named types add coupling.
+
+* **Workbench / library boundary** (Decisions [0032](../../../plans/decisions/0032-workbench-folder-promotion.md), [0052](../../../plans/decisions/0052-workbench-no-library-imports.md)) — host-side `workbench/*` packages must NOT `import chumicro_<libname>` from `libraries/`.  Strict.  Workbench tools that need on-device-shaped logic embed it as payload bytes (templates, scaffolds), never imports.  Audit any audit pair that crosses workbench↔library for this rule.
+
 ## Process
 
 1. **Read each library's `src/<name>/` top-to-bottom** (lighter than `/audit-library`'s deep read, but enough to know the shapes).
@@ -83,7 +111,7 @@ The hardest pattern to spot.  Look for:
 3. **Run the audit dimensions** through that map.  The map is the reference; deviations from clean shapes get flagged.
 4. **Score by confidence** — same High / Medium / Low / Escalate as `/audit-library`.  Escalate to `/audit-workspace` if the finding implies a cross-cutting infrastructure concern.
 5. **Present the punch-list to the user.**
-6. **Execute high-confidence items as one cohesive commit per fix.**  Cross-library changes need to land atomically — don't ship a half-renamed function.  Run `python scripts/run.py test --libraries <name1>,<name2>,...` after each batch.
+6. **Execute high-confidence items as one cohesive commit per fix.**  Cross-library changes need to land atomically — don't ship a half-renamed function.  Run `python scripts/run.py test --libraries <name1>,<name2>,... --coverage-threshold 94` after each batch.  If the change touches device-runtime behaviour, also run `python scripts/run.py test-libraries-functional --library <name1>` against `devices.yml` defaults (Pi Pico W CP / MP).  Read the `git-commit` skill before each commit.
 
 ## Anti-patterns
 
