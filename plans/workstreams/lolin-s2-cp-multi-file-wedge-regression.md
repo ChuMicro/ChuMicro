@@ -24,16 +24,38 @@ Wedges the device's USB stack mid-run.  Symptoms:
 * The board's USB-CDC interface stays dead until physical power-cycle.
 * Host-side `/dev/cu.usbmodem487F301F02241` typically remains visible for several seconds *after* the device-side CDC has died, then disappears.  This is consistent with macOS IOKit lazily reaping a serial nub whose USB endpoint has stopped responding.
 
-## Reproducer
+## Reproducer (intermittent)
 
-The wedge reproduces on at least the first attempt after a fresh device power-on:
+**The wedge is intermittent, not deterministic.**  Direct observation in
+the filing session: the same `--library wifi --runtime circuitpython
+--deploy-mode flash --circuitpython-device lolin-s2-circuitpython-board`
+command produced **two wedge runs** (~35–45 s, 18 failed + 1 passed,
+USB stack dies) and **at least one clean PASS run** (12 s, 19 passed,
+port PRESENT throughout) within the same hour, on the same board, with
+the host environment unchanged between attempts.
 
-1. Power-cycle the Lolin S2 CP (or wait for the device to come back from a prior wedge).
-2. Confirm `/dev/cu.usbmodem487F301F02241` is on the USB bus.
-3. Run the command above.
-4. Expect **18 failed, 1 passed** (the 1 passed is the first file's `Setup` synthetic) within ~35–45 seconds.
+So the bug requires *some additional condition* beyond "run the
+multi-file sweep" — possibly recent device state, recent host state,
+or some external factor (USB-hub negotiation, kernel scheduling,
+thermal) we haven't yet pinned down.  This is the single biggest
+blocker for the bisect: **without a reliable reproducer, every "fix"
+candidate is a coin flip.**  Step 1 of the investigation plan is
+explicitly to lock that down before any code changes.
 
-The wedge may be sensitive to recent device state — see "What didn't reproduce" — so a reliable bisect should always start from a power-cycle.
+When the wedge does fire, the failure shape is consistent:
+
+* `Setup — CircuitPython` synthetic item passes.
+* `Run overhead — CircuitPython` for the first test file
+  (alphabetically `test_acceptance.py`) fails with
+  `[Errno 6] Device not configured` on a host CDC write inside
+  `transport.execute(bootstrap)`.
+* All subsequent items fail with `[Errno 6]` initially, then
+  `[Errno 2] No such file` once the host kernel removes the dead
+  serial nub (~7 s later).
+* The board's USB-CDC stays dead until physical power-cycle.
+
+Single-file runs of every wifi test file pass cleanly on Lolin S2 CP.
+Multi-file runs sometimes wedge, sometimes pass.
 
 ## What's been isolated
 
