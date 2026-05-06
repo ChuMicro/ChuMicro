@@ -77,6 +77,37 @@ The user's framing: "following the file should allow me to understand the logic 
 * **Early-exit guards first.**  `if not condition: raise / return` should land at the top of the function, not be buried.
 * **Docstrings explain *why*, not just *what*.**  The signature already says what.  The body already says how.  The docstring should say why this exists or what subtle invariant it maintains.
 
+### 7. chumicro project-policy compliance
+
+These are non-negotiables from `AGENTS.md` and the relevant Decisions.  Most should already pass via lint / preflight, but the audit catches edge cases.
+
+* **Runner-shape compliance** — any device library that owns time or I/O must be runner-shaped (Decisions [0014](../../../plans/decisions/0014-runner-pattern.md), [0051](../../../plans/decisions/0051-runner-shaped-as-project-policy.md)).  Grep for:
+  * `time.sleep(N)` where N > 0.005 — banned in `libraries/*/src/`.
+  * `select.poll(timeout=`<positive> — banned (use `timeout=0` for non-blocking poll).
+  * `await` / `async def` — banned everywhere in library code.
+  * Synchronous DNS calls (`socket.getaddrinfo` without yielding) — banned.
+  * `check(now_ms)` / `handle(now_ms)` methods that *re-call* `ticks_ms()` instead of using the supplied `now_ms`.  Per the MQTT-CP timing bug (commit `ec1d133`-era), every service in a tick must see the same `now_ms` for deterministic intra-tick ordering.
+* **Constructor injection** (Decision [0010](../../../plans/decisions/0010-library-testability.md)) — time / I/O / network dependencies should be passed in, not imported directly.  Fakes live in `src/<name>/testing.py` with `__chumicro_runtimes__ = ("cpython",)`.
+* **Runtime markers** (Decisions [0037](../../../plans/decisions/0037-runtime-file-marking.md), [0044](../../../plans/decisions/0044-deploy-time-runtime-filtering.md)) — files whose body only makes sense on one runtime (`import wifi`, `import esp32`, `import socketpool`, `import microcontroller`, `import machine`) need `__chumicro_runtimes__ = ("circuitpython",)` or similar at module top.  Grep for runtime-specific imports without the marker.
+* **No `__future__` / no `typing` imports in device-library code** (Decision [0021](../../../plans/decisions/0021-docstring-type-policy.md)) — `from __future__ import annotations` and `from typing import ...` are banned in `libraries/*/src/` and `support/test_harness/src/`.  PEP 604 / 585 syntax only.  CPython-only trees (tests, scripts, workbench) may keep them.
+* **Absolute imports only in device code** — `libraries/*/src/` and `support/test_harness/` must use `from chumicro_<name>.bar import baz`, never relative.  Relative imports break CircuitPython RAM-mode deploys.  Workbench packages and tests can use either style.
+* **Naming** (Decision [0022](../../../plans/decisions/0022-naming-conventions.md)) — no single-letter variable names except `_`.  Spell out abbreviations except those AGENTS.md whitelists (`env`, `buf`, `src`, `cmd`, `msg`, `err`, `ref`, `addr`, `exc`, `exec`).  Enforced by `CHU001`; `# noqa: CHU001` only when matching upstream API.
+* **No mono-repo references in publishable `src/` trees** (`CHU006`) — no `Decision NNNN`, no `plans/...md` paths, no `scripts/run.py` mentions, no "chumicro mono-repo" framing in `libraries/*/src/`, `workbench/*/src/`, or `support/*/src/`.  Inline a one-line summary instead.
+* **`f-strings` everywhere; `const()`, `memoryview`, pre-allocated buffers in hot paths.**  String building inside `runner.tick()` loops or `check`/`handle` methods is the most common hot-path allocation source.
+* **VERSION + check-version + check-api gates** — if behaviour changed, was `VERSION` bumped per SemVer?  `python scripts/run.py check-version` enforces this against the last release tag; `check-api` catches accidental public API breaks.
+* **Coverage gate** (Decision [0025](../../../plans/decisions/0025-dual-coverage-thresholds.md)) — agents pass `--coverage-threshold 94` on every test invocation.  If the library is below 94%, what's covered with `# pragma: no cover` and is each one justified (runtime-only branches, hardware fallbacks)?
+* **Speculative public API** — every export in the package's `__init__.py` `__all__`, grep across the mono-repo + `~/circuitpython/ChuMicro-Workspace-Template/`.  Zero callers → delete candidate.  Per the user-memory note `feedback_no_speculative_public_api.md`: until something ships to real users, "public API" means "us using it."
+
+### Recent cleanup patterns this repo has hit
+
+Reference these when calibrating the "honesty" lens — they're concrete examples of the patterns you're looking for:
+
+* **Class name lies about behaviour.**  Commit [`19405bd`](https://github.com/ChuMicro/ChuMicro/commit/19405bd) split `InteractiveDeployer(max_attempts=1, prompt=lambda)` into `NonInteractiveDeployer` + `InteractiveDeployer`.  Look for similar shapes — classes whose configuration disables what their name promises.
+* **Two-step state machine for one operation.**  Commit [`334ce44`](https://github.com/ChuMicro/ChuMicro/commit/334ce44) collapsed `sync_library_sources`'s "find block, then post-process to extend backward" into a single regex with optional prefix.  Look for find-then-fix-up patterns.
+* **String sentinels + caller-side mutation.**  Same commit replaced `"shim"` / `"plain"` / `"_user_error"` return strings + `args.boot_shim = True` mutation with a frozen `_ResolvedLayout` dataclass.  Look for return-string-then-mutate-args patterns.
+* **Parser round-trip dropping content.**  Commit [`8b21e18`](https://github.com/ChuMicro/ChuMicro/commit/8b21e18) replaced ruamel-rt round-trip with regex string-surgery for managed-block-in-user-file scenarios.  Look for files that load → modify-one-thing → dump that lose unrelated formatting.
+* **Multi-project layouts that don't earn complexity.**  Commit [`3fde27c`](https://github.com/ChuMicro/ChuMicro/commit/3fde27c) deleted `active.py` + `/lib/workspace_runtime/` + `/lib/projects/<name>/` namespace because nobody used multi-project-per-board.  Look for layered abstractions where the consumer count doesn't justify the indirection.
+
 ## Process
 
 1. **Read the library top-to-bottom first.**  One full pass through every `.py` under `src/` to build mental model.  Touch the tests too.  No edits yet.
@@ -87,7 +118,7 @@ The user's framing: "following the file should allow me to understand the logic 
    * **Medium** — method-shape changes, naming-style decisions, "this works but I'd structure it differently."  Benefit from a second opinion.
    * **Low** — cross-library coupling questions.  Escalate to `/audit-integration`, don't fix here.
 5. **Present the punch-list to the user.**  Group by dimension.  Flag taste calls separately.
-6. **Execute high-confidence items as one cohesive commit.**  Run `python scripts/run.py test --libraries <name>` after each batch of changes.  Hardware-verify if the change touches a deploy / probe / transport path.
+6. **Execute high-confidence items as one cohesive commit.**  Run `python scripts/run.py test --libraries <name> --coverage-threshold 94` after each batch of changes.  Hardware-verify if the change touches a deploy / probe / transport path (Pi Pico W CP / MP boards from `devices.yml` defaults).  Read the `git-commit` skill before each commit; write the message to `.scratch/commit-msg.txt` first.
 7. **Hand off remaining medium / low items to the user.**  Don't make taste calls without sign-off.
 
 ## Anti-patterns
@@ -103,7 +134,9 @@ The user's framing: "following the file should allow me to understand the logic 
 If the audit produced commits:
 
 * Bump the library's `VERSION` file per AGENTS.md (patch unless structural).
-* Run the `task-checkpoint` skill — `python scripts/run.py preflight --coverage-threshold 94` to confirm the broader sweep still passes.
+* Run the `task-checkpoint` skill: `python scripts/run.py preflight --coverage-threshold 94` to confirm the full sweep (lint + build + docs + unit tests on all runtimes + checks) still passes.
+* If the change touched device libraries that own time / I/O, also run `python scripts/run.py test-libraries-functional --library <name>` to hardware-verify against `devices.yml` defaults.
+* Run `python scripts/run.py check-version` and `python scripts/run.py check-api` if the library has a public API surface.
 * Update any docstrings the user-facing API rewrites invalidated.
 * Don't ship auto-fixes the user hasn't seen — taste-call findings stay in the punch-list output until the user signs off.
 
@@ -117,25 +150,39 @@ Library audit: chumicro_<name>
 
 HIGH-CONFIDENCE (safe to fix):
 
-  honesty   src/<name>/<file>.py:NN — <one-line description>
-  duplicate src/<name>/<file>.py:NN — <one-line description>
-  dead-code src/<name>/<file>.py:NN — <one-line description>
+  honesty    src/<name>/<file>.py:NN — <one-line description>
+  duplicate  src/<name>/<file>.py:NN — <one-line description>
+  dead-code  src/<name>/<file>.py:NN — <one-line description>
+  policy     src/<name>/<file>.py:NN — <Decision NNNN violation>
   ...
 
 MEDIUM-CONFIDENCE (sign-off needed):
 
-  shape     src/<name>/<file>.py:NN — <one-line description>
+  shape      src/<name>/<file>.py:NN — <one-line description>
+  perf       src/<name>/<file>.py:NN — <one-line description>
   ...
 
 TASTE-CALL (your call):
 
-  flow      src/<name>/<file>.py:NN — <one-line description>
+  flow       src/<name>/<file>.py:NN — <one-line description>
   ...
 
 ESCALATE:
 
-  cross-lib src/<name>/<file>.py:NN — interaction with chumicro_<other>
-            (route to /audit-integration <name>,<other>)
+  cross-lib  src/<name>/<file>.py:NN — interaction with chumicro_<other>
+             (route to /audit-integration <name>,<other>)
 ```
 
-The goal: fewer surprising lines, tests still pass, call sites read more honestly than before.
+Tag taxonomy:
+
+* `honesty` — class / arg / docstring lies about behaviour.
+* `duplicate` — same logic in multiple places.
+* `shape` — method-shape changes (split / inline / collapse).
+* `dead-code` — zero-caller code; safe to delete.
+* `wiring` — over-wiring or speculative public API.
+* `perf` — hot-path allocations, redundant I/O.
+* `flow` — top-to-bottom readability.
+* `policy` — chumicro project-policy compliance (Decisions [0010](../../../plans/decisions/0010-library-testability.md), [0014](../../../plans/decisions/0014-runner-pattern.md), [0021](../../../plans/decisions/0021-docstring-type-policy.md), [0022](../../../plans/decisions/0022-naming-conventions.md), [0025](../../../plans/decisions/0025-dual-coverage-thresholds.md), [0037](../../../plans/decisions/0037-runtime-file-marking.md), [0044](../../../plans/decisions/0044-deploy-time-runtime-filtering.md), [0051](../../../plans/decisions/0051-runner-shaped-as-project-policy.md)).
+* `cross-lib` — finding spans this library + at least one other; escalate to `/audit-integration`.
+
+The goal: fewer surprising lines, tests still pass, project-policy invariants are enforced, call sites read more honestly than before.

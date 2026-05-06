@@ -72,7 +72,53 @@ Per `plans/decisions/README.md`, structural decisions get an ADR.  Audit for:
 
 * **Build times.**  `python scripts/run.py preflight` should run in a sensible budget (~30 s or less for the full sweep on this hardware).  Anything materially slower deserves investigation.
 * **Test parallelism.**  Per AGENTS.md, tests should run via `python scripts/run.py test`.  Are slow tests using `--package-workers` correctly?
-* **Bundle size.**  For libraries that ship to PyPI / circup / mip, audit the `.mpy` size where applicable.  Boards with 256 KB RAM care.
+* **Bundle size.**  For libraries that ship to PyPI / circup / mip, audit the `.mpy` size where applicable.  Per Decision [0015](../../../plans/decisions/0015-board-architecture-support.md) the minimum supported tier is 256 KB MCU RAM + 4 MB flash.  Boards at the floor care about every kilobyte.
+
+### 7. chumicro workspace-policy compliance
+
+These cross-library invariants only show up at workspace scope.
+
+* **Three-runtime trinity** (Decision [0049](../../../plans/decisions/0049-three-runtime-trinity.md)) — every device library should ship CP + MP + CPython adapters / fakes.  Audit:
+  * Does every `libraries/<name>/src/chumicro_<name>/` have `_adapters/` for the runtimes it claims to support?
+  * Does every device library have a `testing.py` fake at CPython tier (marked `__chumicro_runtimes__ = ("cpython",)`)?
+  * Does the library's `pyproject.toml` `[tool.chumicro].platforms` declaration match what's actually shipped?
+  * Are there libraries that target only one runtime by accident — runtime-specific code without a CPython fake, blocking host-side testing?
+
+* **Workbench-vs-library boundary** (Decisions [0032](../../../plans/decisions/0032-workbench-folder-promotion.md), [0052](../../../plans/decisions/0052-workbench-no-library-imports.md)) — `workbench/*/src/` packages must NOT `import chumicro_<libname>` from `libraries/`.  Strict.  Templates / on-device payloads embedded as bytes are fine; live imports are not.  Run `grep -rn "^import chumicro_\|^from chumicro_" workbench/*/src/` and verify each hit imports another *workbench* package, not a library.
+
+* **Recovery layer** (Decision [0053](../../../plans/decisions/0053-recovery-layer-philosophy.md)) — every workbench tool that touches hardware must have a `<package>.recovery` module classifying failures into a closed-set enum + recovery plans.  Generic `raise Exception` in workbench code is a UX defect.  Concrete instances: Decisions [0033](../../../plans/decisions/0033-macos-circuitpy-deploy-hardening.md), [0039](../../../plans/decisions/0039-firmware-version-floor.md).  Audit each `workbench/<name>/` for a `recovery.py`; flag missing.
+
+* **No mono-repo references in publishable `src/` trees** (`CHU006`) — `libraries/*/src/`, `workbench/*/src/`, and `support/*/src/` ship to PyPI / bundle consumers who don't have the mono-repo checked out.  No `Decision NNNN`, no `plans/...md` paths, no `scripts/run.py` mentions, no "chumicro mono-repo" framing.  Inline a one-line summary instead.  Run `grep -rn "Decision \|plans/" libraries/*/src/ workbench/*/src/` to surface violations.
+
+* **No speculative public API across the workspace** — apply the audit-library lens at workspace scope: every export in every library's `__init__.py` `__all__` should have at least one consumer in:
+  * The mono-repo (other libraries, workbench, scripts, tests).
+  * The workspace-template repo (`/Users/chuxor/circuitpython/ChuMicro-Workspace-Template/`).
+  Zero callers in both → delete candidate.  Per the user-memory note `feedback_no_speculative_public_api.md`.
+
+* **Decision-ADR drift** — per `plans/decisions/README.md` and AGENTS.md:
+  * Every `accepted` ADR should describe the *current* state.  Audit for ADRs whose body describes behaviour the code no longer implements.
+  * No `# Update (YYYY-MM-DD)` sections, no `> **Note:** Amended by...` blockquotes, no `Status: revised` (status is exactly four values: `proposed` / `accepted` / `superseded` / `deferred`).
+  * When Decision N+1 supersedes part of Decision N, Decision N should be edited in place to reflect the new rule + cross-link N+1 inline.
+
+* **Stale plan files.**  AGENTS.md memory: "Don't leave docs, templates, CI, and plans stale."  Audit:
+  * `plans/next-up.md` `## Now` — items shipped should be in `## Done` with the commit reference.
+  * `plans/now.md` — should reflect the current in-flight workstream, not stale ones.
+  * `plans/workstreams/*.md` — closed workstreams should have `Status: closed` and a closing commit; open ones should still match active work.
+
+* **Coverage gate consistency** (Decision [0025](../../../plans/decisions/0025-dual-coverage-thresholds.md)) — agents pass `--coverage-threshold 94`.  If any library is materially below 94% AND has unjustified `# pragma: no cover` exclusions, flag for cleanup.
+
+* **Four-board canonical matrix.**  Hardware-touching changes verify against `devices.yml` defaults: Pi Pico W CP, Pi Pico W MP, Lolin S2 CP, Lolin S2 MP.  When the workspace audit surfaces a workstream that needs hardware verification, propose using this matrix unless there's a specific reason to subset.
+
+* **`requires_flash` flagging** (Decision [0047](../../../plans/decisions/0047-deploy-mode-flash-default.md)) — libraries that OOM in CP RAM-mode on minimum-tier boards should set `[tool.chumicro].requires_flash = true` in pyproject.  Audit which libraries have it; flag any large device libraries that don't but probably should.
+
+### Recent ecosystem-shaping commits worth referencing
+
+When proposing workstream candidates, cite analogous past work to calibrate scope:
+
+* **`config-shape research workstream`** — design pass complete 2026-05-06; nine-step implementation sequence in [`plans/workstreams/config-shape-beginner-ergonomics.md`](../../../plans/workstreams/config-shape-beginner-ergonomics.md).  Example of "design lock-down before mechanical execution" for cross-cutting refactors.
+* **F1‑F6 verification cleanup chain (`4ac81fd` through `224c489`)** — six small bug fixes from one verification pass, each its own commit.  Example of "spin findings into per-issue commits, not one mega-commit."
+* **Boot-shim simplification (`3fde27c`)** — deleted ~756 lines, 466 added; one feature dropped (multi-project-per-board) that nobody used.  Example of YAGNI cleanup with hardware verification.
+* **NonInteractiveDeployer split (`19405bd`)** — separated a class doing two jobs via parameter tricks.  Example of "honesty refactor" at workspace scale (touched both deploy + workspace packages).
 
 ## Process
 
@@ -86,7 +132,13 @@ Per `plans/decisions/README.md`, structural decisions get an ADR.  Audit for:
    * **Medium + small scope** — pattern-promotion candidates that don't break public API.  Sign-off then execute.
    * **Any confidence + large scope** — merge / split / delete / promote candidates, infrastructure proposals.  These are **workstream proposals**, not edits.  Add to `plans/next-up.md` as a new entry; don't execute.
 7. **Present the punch-list to the user.**  Heavily group by scope (small fixes first, big proposals last).
-8. **Execute small-scope items.**  Each commits separately if they're unrelated.
+8. **Execute small-scope items.**  Each commits separately if they're unrelated.  After each batch, run `python scripts/run.py preflight --coverage-threshold 94` to confirm the full sweep still passes.  Read the `git-commit` skill before each commit; write the message to `.scratch/commit-msg.txt` first.
+
+   For **proposal items** (merge / split / delete / promote candidates), don't execute — add an entry to `plans/next-up.md` with:
+   * The proposal headline.
+   * The evidence (consumer counts, code-at-boundary ratios, zero-caller greps).
+   * An estimated workstream size (small / medium / large).
+   * A pointer to the audit run that surfaced it.
 
 ## Anti-patterns
 
