@@ -29,7 +29,13 @@ workbench/*/docs/assets/
 
 .mypy_cache/
 .scratch/
-.claude/
+
+# Agent-tooling scratch dir (worktrees, per-user settings).  Track only the
+# `skills` symlink so Claude Code auto-discovers the canonical skills tree
+# at `.github/skills/` from the location it expects (`.claude/skills/`).
+.claude/*
+!.claude/skills
+
 devices.yml
 
 # Legacy: chumicro-dev-config.toml.  Retired in Phase 4 of the unification
