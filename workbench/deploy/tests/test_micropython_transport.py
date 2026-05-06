@@ -1180,68 +1180,105 @@ class TestDeleteFiles:
             transport.delete_files(["/lib/old.py"])
 
 
+class _RecordingTime:
+    """Fake ``time`` source — records sleep durations, no wall-clock wait."""
+
+    def __init__(self) -> None:
+        self.sleeps: list[float] = []
+        self._now: float = 0.0
+
+    def sleep(self, seconds: float) -> None:
+        self.sleeps.append(seconds)
+        self._now += seconds
+
+    def monotonic(self) -> float:
+        return self._now
+
+
 class TestWipeFilesystem:
-    """`wipe_filesystem()` walks `/` and removes every file + directory."""
+    """`wipe_filesystem()` reformats LittleFS via substrate-dispatched mkfs."""
 
     def test_mount_mode_no_op(self) -> None:
         """RAM/mount mode never wrote to flash → wipe is a silent no-op."""
         runner = FakeRunner()
+        recorder = _RecordingTime()
         transport = MicropythonTransport(
-            "/dev/ttyUSB0", runner=runner, mode="mount",
+            "/dev/ttyUSB0", runner=runner, mode="mount", time=recorder,
         )
         # No factory installed → if wipe tried to open serial it'd fail.
         transport.wipe_filesystem()
+        assert runner.calls == []
+        assert recorder.sleeps == []
 
-    def test_copy_mode_runs_wipe_script(self) -> None:
-        serial = FakeSerialTransport(
-            "/dev/ttyUSB0", exec_outputs=[b""],
-        )
+    def test_copy_mode_runs_mkfs_script_via_subprocess(self) -> None:
         runner = FakeRunner()
+        recorder = _RecordingTime()
         transport = MicropythonTransport(
             "/dev/ttyUSB0",
             runner=runner,
             mode="copy",
-            transport_factory=_factory_for(serial),
+            time=recorder,
         )
         transport.wipe_filesystem()
-        exec_calls = [call for call in serial.calls if call[0] == "exec_raw"]
-        assert len(exec_calls) == 1
-        script = exec_calls[0][1][0]
-        # Recursive walker that removes every file via os.remove.
-        assert "_rmrf" in script
-        assert "os.remove" in script
-        assert "_rmrf('/')" in script
+        assert len(runner.calls) == 1
+        command, _kwargs = runner.calls[0]
+        # mpremote exec — last arg is the script.
+        assert "exec" in command
+        script = command[-1]
+        # Substrate dispatch on sys.platform with both supported MP boards.
+        assert "sys.platform == 'rp2'" in script
+        assert "sys.platform == 'esp32'" in script
+        # rp2 → rp2.Flash() ; esp32 → vfs partition lookup.
+        assert "rp2.Flash()" in script
+        assert "esp32.Partition.find" in script
+        assert "label='vfs'" in script
+        # Must umount before mkfs and soft_reset after.
+        assert "os.umount('/')" in script
+        assert "os.VfsLfs2.mkfs" in script
+        assert "machine.soft_reset()" in script
+        # Other substrates must raise rather than silently no-op.
+        assert "RuntimeError" in script
+        # Settle before any next call grabs the serial port.
+        assert recorder.sleeps == [2.0]
 
     def test_copy_mode_unmounts_before_wipe(self) -> None:
         serial = FakeSerialTransport(
             "/dev/ttyUSB0", exec_outputs=[b""],
         )
         runner = FakeRunner()
+        recorder = _RecordingTime()
         transport = MicropythonTransport(
             "/dev/ttyUSB0",
             runner=runner,
             mode="copy",
             transport_factory=_factory_for(serial),
+            time=recorder,
         )
         transport._serial = serial
         transport._mounted = True
         transport.wipe_filesystem()
+        # umount_local is called before the persistent serial is closed.
         assert ("umount_local", ()) in serial.calls
+        # Persistent serial closed (so mpremote subprocess can grab the port).
+        assert ("close", ()) in serial.calls
+        # Then the subprocess runs the mkfs script.
+        assert len(runner.calls) == 1
 
     def test_copy_mode_exec_failure_raises(self) -> None:
-        serial = FakeSerialTransport(
-            "/dev/ttyUSB0",
-            raise_on_execute=RuntimeError("dropped"),
+        runner = FakeRunner(
+            results=[FakeSubprocessResult(returncode=1, stderr="device busy")]
         )
-        runner = FakeRunner()
+        recorder = _RecordingTime()
         transport = MicropythonTransport(
             "/dev/ttyUSB0",
             runner=runner,
             mode="copy",
-            transport_factory=_factory_for(serial),
+            time=recorder,
         )
         with pytest.raises(MicropythonTransportError, match="wipe_filesystem"):
             transport.wipe_filesystem()
+        # Failure path skips the post-reset settle.
+        assert recorder.sleeps == []
 
 
 class TestRuntimeFiltering:

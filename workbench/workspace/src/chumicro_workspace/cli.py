@@ -1970,6 +1970,59 @@ def _cmd_install_firmware(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_reset_board(args: argparse.Namespace) -> int:
+    """Erase the device's user filesystem and leave it idle.
+
+    Standalone counterpart to ``deploy --wipe`` — same destructive
+    primitive (:meth:`chumicro_deploy.TransportProtocol.wipe_filesystem`)
+    without coupling the wipe to a follow-up redeploy.  Used to recover
+    a board whose flash filled up with stage residue (LittleFS
+    metadata + wear-leveling artifacts that ``os.remove`` cannot
+    reclaim — see the :meth:`wipe_filesystem` docstring for the
+    per-runtime recipe matrix).
+
+    Destructive — every user file the runtime can see is gone after
+    this returns, including out-of-scope files like ``settings.toml``,
+    hand-edited ``boot.py``, and uploaded assets.  Gated behind
+    ``--yes`` to avoid wiping a board on a typoed device id.
+
+    No-op (with a printed note) when the device's effective deploy
+    mode is RAM / mount — those modes never wrote to flash so there's
+    nothing persistent to wipe.
+    """
+    workspace = _resolve_workspace(args)
+    device = _resolve_device(workspace, args)
+
+    transport = device.create_transport()
+    target = f"{device.transport}@{device.address}"
+    if transport.mode in ("ram", "mount"):
+        print(
+            f"reset-board: {target} is configured for {transport.mode} "
+            "mode — nothing in flash to wipe.  Re-run on a board whose "
+            "deploy_mode is flash / copy if you intended to clear "
+            "persistent state.",
+        )
+        return 0
+
+    if not args.yes:
+        print(
+            f"reset-board: refusing to wipe {target} without --yes.  "
+            "This destroys every user file on the board, including "
+            "settings.toml and any hand-edited boot.py.",
+            file=sys.stderr,
+        )
+        return 2
+
+    print(f"reset-board: wiping filesystem on {target}")
+    transport.connect()
+    try:
+        transport.wipe_filesystem()
+    finally:
+        transport.disconnect()
+    print(f"reset-board: {target} filesystem wiped.")
+    return 0
+
+
 def _cmd_install_libraries(args: argparse.Namespace) -> int:
     """Install chumicro libraries onto a device via circup (CP) / mip (MP).
 
@@ -2939,6 +2992,36 @@ def build_parser() -> argparse.ArgumentParser:
     _add_device_selector(install_firmware_parser)
     _add_firmware_args(install_firmware_parser)
     install_firmware_parser.set_defaults(func=_cmd_install_firmware)
+
+    # ----- reset-board ----------------------------------------------------
+    reset_board_parser = subparsers.add_parser(
+        "reset-board",
+        help=(
+            "Wipe the device's user filesystem (clean-slate, no redeploy)."
+        ),
+        description=(
+            "Erase every user file the runtime can see on the selected "
+            "board — including out-of-scope files like settings.toml and "
+            "hand-edited boot.py — without redeploying any project.  "
+            "Standalone counterpart to `deploy --wipe`.  Used to recover "
+            "a board whose flash filled up with stage residue (the "
+            "MicroPython path runs `os.VfsLfs2.mkfs`, which `os.remove` "
+            "alone cannot match — LittleFS metadata + wear-leveling "
+            "artifacts survive a file-walk).  No-op in RAM / mount mode."
+        ),
+    )
+    _add_workspace_arg(reset_board_parser)
+    _add_device_selector(reset_board_parser)
+    reset_board_parser.add_argument(
+        "--yes",
+        action="store_true",
+        help=(
+            "Confirm the destructive wipe.  Without this flag, the "
+            "command exits 2 without touching the board so a typoed "
+            "device id cannot accidentally erase production state."
+        ),
+    )
+    reset_board_parser.set_defaults(func=_cmd_reset_board)
 
     # ----- install-libraries ---------------------------------------------
     install_libraries_parser = subparsers.add_parser(
