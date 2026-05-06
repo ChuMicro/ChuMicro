@@ -44,6 +44,7 @@ from chumicro_deploy.config.devices_yaml import (
     add_device,
     dump_devices,
     find_device,
+    list_device_ids,
     load_devices,
     rename_device,
     update_device_address,
@@ -867,6 +868,56 @@ def _resolve_project_name(workspace: WorkspaceLayout, name: str) -> str:
     return name
 
 
+def _suggest_add_device_id(
+    *,
+    implementation: "DeviceImplementation",
+    existing_ids: set[str],
+) -> str:
+    """Default ``add-device`` id when the user omits the positional.
+
+    Composes :func:`_suggest_device_id` (the machine-string slug used
+    by the bootstrap wizard) with a runtime suffix and collision
+    resolution against the workspace's existing ``devices.yml``:
+
+    * ``"Raspberry Pi Pico W with rp2040"`` + circuitpython
+      → ``"raspberry-pi-pico-w-cp"``
+    * ``"S2Mini with ESP32S2-S2FN4R2"`` + circuitpython
+      → ``"s2mini-cp"``
+    * ``"LOLIN_S2_MINI with ESP32-S2FN4R2"`` + micropython
+      → ``"lolin-s2-mini-mp"``
+    * Empty machine string + circuitpython → ``"circuitpython-cp"``
+      (fallback shape from the underlying slug helper; rare —
+      indicates a probe that returned no machine identifier).
+
+    When the resulting id collides with *existing_ids*, append a
+    numeric suffix: ``"-2"``, ``"-3"``, etc.  The user can rename the
+    entry afterwards with ``rename --device <old> <new>``.
+
+    F4 of the 2026-05-06 verification pass — beginners running
+    ``add-device`` without a positional id had to invent one cold,
+    even though the probe already knows what board this is.
+
+    Args:
+        implementation: Probe's :class:`DeviceImplementation` (carries
+            the ``machine`` string + runtime ``name``).
+        existing_ids: All ids already in ``devices.yml`` — for
+            collision resolution.
+    """
+    base_slug = _suggest_device_id(implementation)
+    runtime_suffix_map = {"circuitpython": "cp", "micropython": "mp"}
+    suffix = runtime_suffix_map.get(
+        implementation.name, implementation.name.lower(),
+    )
+    base_id = f"{base_slug}-{suffix}"
+
+    if base_id not in existing_ids:
+        return base_id
+    counter = 2
+    while f"{base_id}-{counter}" in existing_ids:
+        counter += 1
+    return f"{base_id}-{counter}"
+
+
 def _auto_detect_deploy_mode(
     *,
     project_dir: Path,
@@ -1531,20 +1582,30 @@ def _stdin_prompt(prompt_text: str) -> str:
 def _suggest_device_id(implementation: DeviceImplementation) -> str:
     """Suggest a device id from the probed machine string.
 
-    Strips non-identifier characters and lowercases — a Pi Pico W
-    probing as ``"Raspberry Pi Pico W with rp2040"`` becomes
-    ``"raspberry-pi-pico-w"``.  Falls back to the runtime name
-    when ``machine`` is empty (older firmware) or sanitises to
-    nothing.
+    Strips the ``" with <chip>"`` SoC suffix and slugifies the
+    leading board identifier:
+
+    * ``"Raspberry Pi Pico W with rp2040"``     → ``"raspberry-pi-pico-w"``
+    * ``"S2Mini with ESP32S2-S2FN4R2"``         → ``"s2mini"``
+    * ``"LOLIN_S2_MINI with ESP32-S2FN4R2"``    → ``"lolin-s2-mini"``
+
+    The strip pattern is ``" with <anything-to-end-of-string>"``
+    rather than ``\\w+$`` — chip variants like ``ESP32S2-S2FN4R2``
+    contain hyphens and would otherwise survive into the slug as
+    ``s2mini-with-esp32s2-s2fn4r2`` (F4 of the 2026-05-06
+    verification pass).
+
+    Falls back to ``"board"`` when ``machine`` is empty (older
+    firmware) or sanitises to nothing — neutral default that the
+    user can rename via ``rename --device``.
     """
     machine = implementation.machine or ""
-    # Trim the trailing " with rp2040" / " with esp32s2" tail
-    # — common in CP machine strings, never present in the user's
-    # natural mental id for the board.
-    cleaned = re.sub(r"\s+with\s+\w+$", "", machine, flags=re.IGNORECASE)
+    # Trim the trailing " with <chip>" tail at end-of-string.  Anchored
+    # at $ so a board with the word "with" mid-name doesn't lose its tail.
+    cleaned = re.sub(r"\s+with\s+.*$", "", machine, flags=re.IGNORECASE)
     # Replace non-identifier runs with single hyphens, lowercase.
     slug = re.sub(r"[^a-zA-Z0-9]+", "-", cleaned).strip("-").lower()
-    return slug or implementation.name or "board"
+    return slug or "board"
 
 
 def _resolve_bootstrap_port(
@@ -2372,6 +2433,18 @@ def _cmd_add_device(args: argparse.Namespace) -> int:
     if info.board_id:
         hardware["board_id"] = info.board_id
 
+    # When the user didn't supply a positional id, derive one from the
+    # probe's machine + runtime (F4 of the 2026-05-06 verification).
+    # Suggested id collisions resolve via numeric suffix; the user can
+    # rename the entry afterwards via ``rename --device``.
+    if args.id is None:
+        existing_ids = set(list_device_ids(data))
+        args.id = _suggest_add_device_id(
+            implementation=info.implementation,
+            existing_ids=existing_ids,
+        )
+        print(f"add-device: using suggested id {args.id!r} (derived from probe)")
+
     try:
         add_device(
             data,
@@ -2654,7 +2727,16 @@ def build_parser() -> argparse.ArgumentParser:
     _add_workspace_arg(add_device_parser)
     add_device_parser.add_argument(
         "id",
-        help="User-friendly device id (e.g. 'back-porch-mp').",
+        nargs="?",
+        default=None,
+        help=(
+            "User-friendly device id (e.g. 'back-porch-mp').  Optional: "
+            "when omitted, a default is derived from the probe's "
+            "machine string + runtime suffix (e.g. "
+            "'raspberry-pi-pico-w-cp').  When the suggested id collides "
+            "with an existing entry in devices.yml, a numeric suffix "
+            "is appended (e.g. 'raspberry-pi-pico-w-cp-2')."
+        ),
     )
     add_device_parser.add_argument(
         "--address",

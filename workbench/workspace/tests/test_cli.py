@@ -1985,8 +1985,36 @@ class TestBootstrapHelpers:
         result = _suggest_device_id(DeviceImplementation(
             name="micropython", version="1.27.0", machine="", uid="",
         ))
-        # Blank machine + non-empty runtime → use runtime name.
-        assert result == "micropython"
+        # Blank machine → neutral "board" fallback (the user can
+        # rename via ``rename --device``).  F4 of 2026-05-06 changed
+        # this from "use runtime name" to "use 'board'" so the
+        # add-device suffix layer doesn't produce confusing results
+        # like "micropython-mp".
+        assert result == "board"
+
+    def test_suggest_device_id_strips_chip_with_hyphen(self) -> None:
+        """F4: chip variants with hyphens (``ESP32S2-S2FN4R2``) must
+        not survive into the slug as ``s2mini-with-esp32s2-s2fn4r2``.
+        The strip pattern matches `` with .*$`` (anchored at EOL).
+        """
+        from chumicro_deploy import DeviceImplementation
+        from chumicro_workspace.cli import _suggest_device_id
+
+        result = _suggest_device_id(DeviceImplementation(
+            name="circuitpython",
+            version="10.1.4",
+            machine="S2Mini with ESP32S2-S2FN4R2",
+            uid="84722E7490C3",
+        ))
+        assert result == "s2mini"
+
+        result = _suggest_device_id(DeviceImplementation(
+            name="micropython",
+            version="1.28.0",
+            machine="LOLIN_S2_MINI with ESP32-S2FN4R2",
+            uid="4827E24708D2",
+        ))
+        assert result == "lolin-s2-mini"
 
     def test_suggest_device_id_falls_back_to_board(self) -> None:
         from chumicro_deploy import DeviceImplementation
@@ -2096,6 +2124,98 @@ class TestBootstrapHelpers:
             None, "suggested", prompt_func=lambda _: "  porch  ",
         )
         assert result == "porch"
+
+
+class TestSuggestAddDeviceId:
+    """F4 of 2026-05-06 verification — ``add-device`` derives a
+    sensible default device id from the probe when the user omits
+    the positional id.
+    """
+
+    def _impl(self, machine: str, runtime: str) -> "DeviceImplementation":
+        from chumicro_deploy import DeviceImplementation  # noqa: PLC0415
+
+        return DeviceImplementation(
+            name=runtime, version="0.0.0", machine=machine, uid="",
+        )
+
+    def test_pi_pico_w_circuitpython(self) -> None:
+        from chumicro_workspace.cli import _suggest_add_device_id  # noqa: PLC0415
+
+        result = _suggest_add_device_id(
+            implementation=self._impl(
+                "Raspberry Pi Pico W with rp2040", "circuitpython",
+            ),
+            existing_ids=set(),
+        )
+        assert result == "raspberry-pi-pico-w-cp"
+
+    def test_lolin_s2_micropython(self) -> None:
+        from chumicro_workspace.cli import _suggest_add_device_id  # noqa: PLC0415
+
+        result = _suggest_add_device_id(
+            implementation=self._impl(
+                "LOLIN_S2_MINI with ESP32-S2FN4R2", "micropython",
+            ),
+            existing_ids=set(),
+        )
+        assert result == "lolin-s2-mini-mp"
+
+    def test_collision_appends_numeric_suffix(self) -> None:
+        from chumicro_workspace.cli import _suggest_add_device_id  # noqa: PLC0415
+
+        impl = self._impl(
+            "Raspberry Pi Pico W with rp2040", "micropython",
+        )
+        # First registration: base id.
+        assert _suggest_add_device_id(
+            implementation=impl, existing_ids=set(),
+        ) == "raspberry-pi-pico-w-mp"
+        # Second board, same model: ``-2``.
+        assert _suggest_add_device_id(
+            implementation=impl,
+            existing_ids={"raspberry-pi-pico-w-mp"},
+        ) == "raspberry-pi-pico-w-mp-2"
+        # Third board: ``-3``.
+        assert _suggest_add_device_id(
+            implementation=impl,
+            existing_ids={
+                "raspberry-pi-pico-w-mp", "raspberry-pi-pico-w-mp-2",
+            },
+        ) == "raspberry-pi-pico-w-mp-3"
+
+    def test_blank_machine_falls_back_to_board_runtime(self) -> None:
+        """Empty machine → ``"board-cp"`` / ``"board-mp"`` — neutral
+        default the user can rename.  Avoids confusing slugs like
+        ``"micropython-mp"`` that the suffix layer would produce if
+        the underlying helper still used the runtime name as fallback.
+        """
+        from chumicro_workspace.cli import _suggest_add_device_id  # noqa: PLC0415
+
+        assert _suggest_add_device_id(
+            implementation=self._impl("", "circuitpython"),
+            existing_ids=set(),
+        ) == "board-cp"
+        assert _suggest_add_device_id(
+            implementation=self._impl("", "micropython"),
+            existing_ids=set(),
+        ) == "board-mp"
+
+    def test_unknown_runtime_uses_runtime_name_as_suffix(self) -> None:
+        """Forward-compat: a third runtime probes its own name as
+        the suffix (no map entry).  Won't be reached today since
+        the probe only returns ``circuitpython`` / ``micropython``,
+        but kept defensive.
+        """
+        from chumicro_workspace.cli import _suggest_add_device_id  # noqa: PLC0415
+
+        result = _suggest_add_device_id(
+            implementation=self._impl(
+                "Some Board with chip", "wasipython",
+            ),
+            existing_ids=set(),
+        )
+        assert result == "some-board-wasipython"
 
 
 class TestBootstrapWizard:
@@ -3925,6 +4045,158 @@ class TestAddDeviceRuntimeInference:
         assert exit_code == 1
         captured = capsys.readouterr()
         assert "no runtime returned a probe marker" in captured.err
+
+
+class TestAddDeviceOmittedId:
+    """F4 of 2026-05-06 verification — ``add-device`` accepts no
+    positional id and derives a default from the probe.
+    """
+
+    def _seed(self, tmp_path: Path) -> None:
+        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+
+    def test_omitted_id_uses_suggested(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """No positional id → derive from machine + runtime + collision-resolve."""
+        self._seed(tmp_path)
+        from chumicro_workspace import onboarding
+
+        def fake_inference(address: str, **_kw):
+            return onboarding.RuntimeInferenceResult(
+                info=_fake_probe_info(
+                    runtime="circuitpython",
+                    machine="Raspberry Pi Pico W with rp2040",
+                    version="10.1.4",
+                ),
+                runtime="circuitpython",
+                transport_used="circuitpython",
+            )
+
+        monkeypatch.setattr(
+            onboarding, "probe_with_runtime_inference", fake_inference,
+        )
+        monkeypatch.setattr(cli, "probe_with_runtime_inference", fake_inference)
+
+        # No positional id passed.
+        exit_code = cli.main([
+            "add-device", "--workspace-dir", str(tmp_path),
+            "--address", "/dev/cu.x",
+        ])
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "using suggested id 'raspberry-pi-pico-w-cp'" in captured.out
+        body = (tmp_path / "devices.yml").read_text()
+        assert "id: raspberry-pi-pico-w-cp" in body
+
+    def test_omitted_id_collides_appends_counter(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Two probes of identical board models produce ``-cp`` and ``-cp-2``."""
+        self._seed(tmp_path)
+        from chumicro_workspace import onboarding
+
+        def fake_inference(address: str, **_kw):
+            return onboarding.RuntimeInferenceResult(
+                info=_fake_probe_info(
+                    runtime="circuitpython",
+                    machine="Raspberry Pi Pico W with rp2040",
+                    version="10.1.4",
+                    uid="ABCD1234",
+                ),
+                runtime="circuitpython",
+                transport_used="circuitpython",
+            )
+
+        monkeypatch.setattr(
+            onboarding, "probe_with_runtime_inference", fake_inference,
+        )
+        monkeypatch.setattr(cli, "probe_with_runtime_inference", fake_inference)
+
+        # First registration.
+        cli.main([
+            "add-device", "--workspace-dir", str(tmp_path),
+            "--address", "/dev/cu.x",
+        ])
+
+        # Second registration with the same probe shape — a different
+        # physical board (different uid) but the same model + runtime.
+        # Bumping uid via a fresh fake_inference closure isn't necessary:
+        # the suggested-id collision logic doesn't read uid, only the
+        # existing id set.
+        def fake_inference_second(address: str, **_kw):
+            return onboarding.RuntimeInferenceResult(
+                info=_fake_probe_info(
+                    runtime="circuitpython",
+                    machine="Raspberry Pi Pico W with rp2040",
+                    version="10.1.4",
+                    uid="EF567890",
+                ),
+                runtime="circuitpython",
+                transport_used="circuitpython",
+            )
+
+        monkeypatch.setattr(
+            onboarding,
+            "probe_with_runtime_inference",
+            fake_inference_second,
+        )
+        monkeypatch.setattr(
+            cli, "probe_with_runtime_inference", fake_inference_second,
+        )
+        capsys.readouterr()  # drain first run's output.
+        exit_code = cli.main([
+            "add-device", "--workspace-dir", str(tmp_path),
+            "--address", "/dev/cu.y",
+        ])
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "using suggested id 'raspberry-pi-pico-w-cp-2'" in captured.out
+        body = (tmp_path / "devices.yml").read_text()
+        assert "id: raspberry-pi-pico-w-cp" in body
+        assert "id: raspberry-pi-pico-w-cp-2" in body
+
+    def test_explicit_id_skips_suggestion(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Positional id wins; no "using suggested id" message printed."""
+        self._seed(tmp_path)
+        from chumicro_workspace import onboarding
+
+        def fake_inference(address: str, **_kw):
+            return onboarding.RuntimeInferenceResult(
+                info=_fake_probe_info(
+                    runtime="circuitpython",
+                    machine="Raspberry Pi Pico W with rp2040",
+                    version="10.1.4",
+                ),
+                runtime="circuitpython",
+                transport_used="circuitpython",
+            )
+
+        monkeypatch.setattr(
+            onboarding, "probe_with_runtime_inference", fake_inference,
+        )
+        monkeypatch.setattr(cli, "probe_with_runtime_inference", fake_inference)
+
+        exit_code = cli.main([
+            "add-device", "--workspace-dir", str(tmp_path),
+            "--address", "/dev/cu.x", "porch",
+        ])
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "using suggested id" not in captured.out
+        body = (tmp_path / "devices.yml").read_text()
+        assert "id: porch" in body
 
 
 # ---------------------------------------------------------------------------
