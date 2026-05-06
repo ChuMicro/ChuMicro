@@ -634,19 +634,189 @@ This isn't an alternative to "CI applies its own config" — it's a **lint step*
 
 Q11 resolved: **CI applies its own config + new standalone `config-validate` CLI as the missing lint step.**  Track as a Phase-2-follow-up alongside the broader manifest declaration push.
 
+### Q2 — per-project file is `project_config.toml`
+
+User direction:
+
+> "q2 - project_config.toml i think makes sense"
+
+Q2 resolved: **`project_config.toml`**, not `config.toml`.  Self-documenting filename — beginners reading the project directory understand the file's role from the name.  Migration touches the workspace-template repo's `projects/_template/`, the example projects, and the mono-repo's documentation pointers.
+
+### Q3 — nested on disk, flat on the board (compose-time flatten)
+
+User direction:
+
+> "q3 - nestable table that resolved to a dotted lookup in a flat dict when it gets into the board?  should we just do nested dicts?  Im really not sure.  I think the flat dict is technically better for circuitpython/micropython"
+
+Locked: **nested tables on disk, flat dict on the board, flatten at compose-time.**  Best of both worlds:
+
+- **`secrets.toml` on the host (beginner-readable)** —
+  ```toml
+  [wifi]
+  ssid = "bench-ap"
+  password = "..."
+
+  [mqtt.broker]
+  host = "test.mosquitto.org"
+  port = 1883
+  ```
+
+- **`compose_runtime_config` flattens during merge** —
+  ```python
+  {"wifi.ssid": "bench-ap",
+   "wifi.password": "...",
+   "mqtt.broker.host": "test.mosquitto.org",
+   "mqtt.broker.port": 1883}
+  ```
+
+- **`runtime_config.msgpack` ships the flat dict to the device** — single hash lookup, one dict allocation, no recursion to walk.  Honors the 256 KB-RAM floor.
+
+- **On-device** — `config = load_runtime_config()` returns the flat dict directly.  `config.get("wifi.password")` is one hop.
+
+Why this beats either pure-nested or pure-flat:
+
+- Pure nested costs N+1 dict allocations and two hash lookups per access on a memory-constrained board — measurable on a 256 KB target.
+- Pure flat (with literal dotted-string keys on disk) is uglier to read and edit.  `[wifi]\nssid = "..."` reads better than `"wifi.ssid" = "..."`.
+- Compose-time flattening lets the disk format optimise for human readability and the wire format optimise for device performance.  No tradeoff.
+
+Q3 resolved.
+
+### Q4 — lowercase snake within segments, dot-separated when flattened
+
+User direction:
+
+> "q4 - lower_case_snake but look at q3?  Are these basically the same question?"
+
+Q4 falls out of Q3.  On disk: `[wifi]\nssid = "..."` (lowercase snake within the segment, no dots — TOML's section header provides the namespace).  After flattening: `"wifi.ssid"` (lowercase snake segments joined by dots).  SCREAMING_SNAKE rejected — it's an env-var convention, and chumicro's file is a config file, not an env namespace.
+
+Q4 resolved: **lowercase snake-case within segments; dots are the segment separator after flattening.**
+
+### Q5 — no native `settings.toml`, but read it as a fallback if present
+
+User direction:
+
+> "q5 - not sure we should support settings.toml in this environment honestly.  we could read it if it exists on board (i think circuitpython does that on its own) so the config library should probably 'try' to aggregate data from it if it exists to be nice I guess"
+
+Locked: **chumicro-config does not write or require `settings.toml`.**  It does try to read it as a fallback when a key isn't found in the chumicro msgpack:
+
+```python
+def get(key: str, default: Any = None) -> Any:
+    if key in self._flat_dict:
+        return self._flat_dict[key]
+    # CircuitPython-only fallback: settings.toml via os.getenv
+    env_key = key.upper().replace(".", "_")
+    fallback = os.getenv(env_key)  # CP returns None on miss; MP doesn't have settings.toml
+    return fallback if fallback is not None else default
+```
+
+This gives CircuitPython users with existing `settings.toml` setups (`CIRCUITPY_WIFI_SSID = "..."`) a free migration path — they don't have to delete or migrate their existing config; chumicro-config picks it up as a fallback.  MicroPython users see no change (no `settings.toml` exists there).
+
+Q5 resolved: **`settings.toml` fallback on CP via `os.getenv`, no native support, no migration required.**  Implementation note for whoever builds the chumicro-config flat accessor: the upper-and-replace-dots transform (`"wifi.ssid"` → `"WIFI_SSID"`) is the bridge.
+
+### Q6 — `.get()` is the safe accessor; `[]` raises (Pythonic)
+
+User direction:
+
+> "q6 - i guess it makes more sense then to use get('key', default) and get('key') where if none, default is returned.  and since its flat you wont end up with .get('x', {}).get('y', {}) which is great"
+
+Locked: **standard Python dict semantics, made tractable by flat keys.**
+
+- `config.get("wifi.password")` — returns `None` on miss.  Standard `.get()`.
+- `config.get("wifi.password", default)` — returns `default` on miss.  Standard `.get()`.
+- `config["wifi.password"]` — raises `MissingConfigKey` (subclass of `KeyError`) on miss.  Standard `[]`, with our error type for a beginner-readable message.
+- `config.require("wifi.password")` — raises `MissingConfigKey` with extra context (which library declared the requirement).  Used by library code where the key is required.
+
+The flat-key shape eliminates the `.get("x", {}).get("y", {})` chain pain that drives some codebases toward `[]`-returns-None semantics — once keys are flat, a single `.get("x.y")` does the same job cleanly.  No reason to deviate from Python convention.
+
+Q6 resolved.
+
+### Q7 — manifest format follows Q3/Q4 (flat dotted in pyproject.toml)
+
+User direction:
+
+> "q7 - what is pyproject.toml? is that the name from q2? should follow same behavior as q3/q4?"
+
+Clarifying first: `pyproject.toml` is **the library's** packaging metadata file — different from `project_config.toml` (per-user-project) and `secrets.toml` (per-user-workspace).  Each library has one (e.g., `libraries/wifi/pyproject.toml`); it declares the library's name, version, dependencies, and now its config-key requirements via `[tool.chumicro.config]`.
+
+Locked: **manifest format follows Q3/Q4** — flat dotted keys in the pyproject metadata.  Today's nested form:
+
+```toml
+[tool.chumicro.config.sections.wifi]
+required = ["ssid", "password"]
+optional = ["hostname", "connect_timeout_ms", ...]
+```
+
+becomes:
+
+```toml
+[tool.chumicro.config]
+required_keys = ["wifi.ssid", "wifi.password"]
+optional_keys = [
+    "wifi.hostname",
+    "wifi.connect_timeout_ms",
+    ...
+]
+```
+
+Aligns with the runtime accessor (`config.get("wifi.password")`).  Aligns with the validator's failure message (already prints "missing required key 'wifi.password'").  No semantic change to validation — just same vocabulary, end to end.
+
+Q7 resolved.
+
+### Q8 — order of operations + cadence
+
+User direction:
+
+> "q8 the order looks ok but be careful.  and you dont have to commit as often, only if it helps with the next step and rolling back."
+
+Locked sequence (each step internally consistent; commit-cadence is "when rollback would be useful"):
+
+1. **Add the flat-key accessor to `chumicro-config`** alongside the existing nested API.  Both APIs callable; no file format change yet.  Forward-compatible: anything that wants the flat shape can opt in.
+2. **Add compose-time flattening to `compose_runtime_config`** so the msgpack wire format becomes flat.  On-device readers have to migrate atomically with this — see step 3.
+3. **Migrate libraries one at a time** to use the flat accessor.  WifiService first (already has the manifest).  Each library's migration is one commit.
+4. **Add `chumicro-workspace config-validate` CLI** (Q11 lint step).  Independent of file-shape work; can land any time after step 1.
+5. **Move credentials out of `workspace.yml` into `secrets.toml`** (host-side material).  Update the workbench payload, the materializer, and both repos.  Decision 0057 is updated or superseded here — needs an ADR.
+6. **Migrate per-project `config.toml` → `project_config.toml`** in the template repo.  Touches `examples/*/`, `projects/_template/`, `projects/example_sensor/`, and the mono-repo's functional-test conftests.
+7. **Migrate library manifests in pyproject.toml** to flat format.  Aligns with the Q11 push to declare manifests in the six libraries that don't have them yet.
+8. **Wire additive-only re-apply behaviour** into `setup` (strategy C — the Q10 contract).  Implementation detail: comment-preserving merge in TOML.  Open question 4 of `setup-schema-reconciliation.md` becomes the critical implementation challenge.
+9. **Drop the old nested API from `chumicro-config`.**  Final cleanup; no consumers left.
+
+No backward-compat burden — both repos can be updated atomically per step.  Commit cadence: one per step where the step is internally consistent and rollback-able; smaller commits inside a step only when an intermediate state needs preservation (debug, hardware verification, etc.).
+
+Q8 resolved.
+
+---
+
+## Status of all eleven questions
+
+| # | Question | Status (as of 2026-05-06) | Source |
+|---|---|---|---|
+| Q1 | File rename | ✅ Resolved — split, both files stay, distinct roles | User direction post-verification |
+| Q2 | Per-project filename | ✅ Resolved — `project_config.toml` | User direction |
+| Q3 | On-disk shape | ✅ Resolved — nested on disk, flat on board, flatten at compose | User direction |
+| Q4 | Key naming | ✅ Resolved — lowercase snake within segments, dots between | User direction (Q3 downstream) |
+| Q5 | `settings.toml` integration | ✅ Resolved — fallback only, no native support | User direction |
+| Q6 | Accessor patterns | ✅ Resolved — standard `.get()` / `[]`-raises / `require()` for libs | User direction |
+| Q7 | Manifest format | ✅ Resolved — flat dotted keys in pyproject `[tool.chumicro.config]` | User direction (Q3 downstream) |
+| Q8 | Migration sequence | ✅ Resolved — 9-step sequence, no backward-compat burden | User direction |
+| Q9 | (n/a — was reserved by an earlier finding) | — | — |
+| Q10 | Starter content + re-apply | ✅ Resolved — real placeholders + additive-only re-apply | User direction post-finding-2 |
+| Q11 | CI / manifest declaration | ✅ Resolved — CI applies own + add `config-validate` CLI | User direction |
+
+**All design questions resolved.**  Ready for implementation per the Q8 sequence; further design pass not required.
+
 ---
 
 ## Pre-conditions for a fresh agent picking this up
 
-A fresh agent starting this design pass cold should:
+The design pass is **complete** as of 2026-05-06 — all eleven questions resolved (see status table above).  A fresh agent picking this up is implementing, not designing.
 
-1. Read this file end-to-end.
-2. Read [Decision 0057](../decisions/0057-two-file-config.md) (current two-file shape) and [Decision 0036](../decisions/0036-chumicro-config-library.md) (`chumicro-config` library API).
-3. Read [`scripts-workbench-config-unification.md`](scripts-workbench-config-unification.md) (the unification that froze today's plumbing).
-4. Read [`setup-schema-reconciliation.md`](setup-schema-reconciliation.md) (the sister workstream on user-edits-vs-template-update — this workstream's migration path depends on its outcome).
-5. Skim the workspace-template repo's `examples/wifi_only/` and `projects/example_sensor/` to see how a beginner's first-and-second project look today.
-6. Run the verification scenarios in `docs/verification-board-config-pipeline-2026-05-06.md` (or whatever the verification log lands as) and read the **Findings** section above before answering Q1‑Q8.
-7. Pick up at the open-questions list.  Q1 (rename), Q3 (on-disk shape), and Q4 (key naming) are the three that block everything else; Q2 (project_config name), Q5 (CP settings.toml), Q6 (accessor patterns), Q7 (manifest flat shape), Q8 (migration sequence) are downstream of those.
+1. Read this file end-to-end.  Treat the **Status of all eleven questions** table + the **Direction set 2026-05-06** section as the spec; the upstream design discussion is context, not negotiable.
+2. Read [Decision 0057](../decisions/0057-two-file-config.md) (current two-file shape) — note that step 5 of the Q8 sequence either updates or supersedes this decision; an ADR pass is part of that step.
+3. Read [Decision 0036](../decisions/0036-chumicro-config-library.md) (`chumicro-config` library API) — the flat-accessor work in step 1 of the Q8 sequence extends this surface.
+4. Read [`scripts-workbench-config-unification.md`](scripts-workbench-config-unification.md) (the unification that froze today's plumbing).
+5. Read [`setup-schema-reconciliation.md`](setup-schema-reconciliation.md) — strategy C is now the canonical contract per Q10; that workstream's open question 4 (comment preservation in YAML/TOML round-trip) is the critical implementation challenge for Q8 step 8.
+6. Skim the workspace-template repo's `examples/wifi_only/` and `projects/example_sensor/` to see what migrating to `project_config.toml` looks like in practice.
+7. Pick up at **step 1 of the Q8 sequence**.  Steps 1–4 are host-only plumbing (no user-visible change yet); steps 5–6 land the file split + per-project rename; steps 7–9 finish the migration.  Each step is rollback-able on its own.
 
 ## Constraints
 

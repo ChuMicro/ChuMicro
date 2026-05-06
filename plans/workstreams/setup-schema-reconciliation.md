@@ -1,9 +1,10 @@
 # Setup: schema reconciliation for user-edited config files
 
-Status: `strategy-b-shipped` — `chumicro_workspace.starter_drift` lands the show-the-diff path on `setup`; C/D/E remain future work, gated on signal from B.
+Status: `strategy-c-canonical` — Strategy B shipped 2026-05-04 (`chumicro_workspace.starter_drift`).  **Strategy C promoted from "natural follow-up" to the canonical contract** on 2026-05-06 per user direction in [`config-shape-beginner-ergonomics.md`](config-shape-beginner-ergonomics.md) (Q10).  Strategies A / D / E rejected.
 Filed: 2026-05-04
 Strategy B shipped: 2026-05-04
-Related: [Decision 0057](../decisions/0057-two-file-config.md) — the two-file workspace config leaves `workspace.yml` and `projects/<name>/config.toml` as user-edited files materialized from a starter; this workstream covers what happens when the starter gains new schema entries after the user has already materialized + edited.
+Strategy C promoted to canonical: 2026-05-06
+Related: [Decision 0057](../decisions/0057-two-file-config.md) — the two-file workspace config leaves `workspace.yml` and `projects/<name>/config.toml` as user-edited files materialized from a starter; this workstream covers what happens when the starter gains new schema entries after the user has already materialized + edited.  Note: Decision 0057's two-file shape is itself superseded later in the config-shape workstream's Q8 sequence (workspace.yml + secrets.toml + project_config.toml), but the schema-reconciliation contract this workstream defines applies unchanged to whichever set of files the layout lands on.
 
 ## Goal
 
@@ -51,15 +52,27 @@ Cons: significant implementation effort (or pulling in a YAML 3-way-merge dep). 
 
 ## Recommended starting point
 
-**Strategy B for now (show the diff), with C as the natural follow-up.**  Reasons:
+**Updated 2026-05-06: Strategy C is the canonical contract; Strategy B stays in place as the user-facing diagnostic until C ships.**
 
-- B is ~50 lines and ships a useful behaviour change immediately.
-- B's "user manually copies from the starter" friction is the same friction users already have today (since they don't see the diff at all today, just nothing happens).  It's a strict improvement.
-- B's transcript tells us *which schema additions actually happen* in practice — gives data on whether C / D / E earns its keep.
-- C is a natural step up once B has surfaced enough "I keep manually copying section X" pain to justify the YAML-walk machinery.
-- E is overkill until we see real demand.  YAGNI.
+Per the user's direction in [`config-shape-beginner-ergonomics.md`](config-shape-beginner-ergonomics.md) Q10:
 
-Defer D and E until B's signal says they're worth it.
+> "really all the re-apply has to do is add new keys that have been put into the template (commented out or not) and append them to the users existing config"
+
+> "if re-applying the template breaks things like this or what the user edited and we can't fix it then we shouldn't re-apply at all?"
+
+This makes additive-only re-apply **the** contract, not a follow-up:
+
+- Setup re-apply is **silent + safe**, not interactive.  Strategy B (show-the-diff) is rejected as the long-term answer because users shouldn't have to act on output to keep their config current.
+- When the upstream template gains a new key (commented or not), `setup` appends it to the user's existing config in the same order the template introduces it, preserving its comments.  When it doesn't gain anything, `setup` is a no-op.
+- Existing user edits are NEVER touched.  If we can't preserve, we don't re-apply at all (the user's "if we can't fix it then we shouldn't re-apply" framing).
+
+Strategies A / D / E are explicitly rejected:
+
+- **A (status quo + manual diff)** — fails the "plug in a board and go" rubric the broader workstream is grounded in.
+- **D (field-level reconciliation within sections)** — over-engineered.  Comment-preserving append is sufficient; per-field merge is not the user's mental model.
+- **E (three-way merge with snapshot)** — YAGNI; rejected.
+
+Strategy B (`chumicro_workspace.starter_drift` shipped 2026-05-04) stays in place as the diagnostic surface — it tells the user what the upstream starter has that they don't.  When C ships, B's role narrows to the case where the user has explicitly opted out of additive re-apply (e.g., a future `--no-auto-apply` flag, if that's ever needed).
 
 ## What changes when this lands
 
