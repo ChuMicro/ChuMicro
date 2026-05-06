@@ -1,6 +1,6 @@
 # Workstream: Beginner On-Ramp UX
 
-Status: `proposed` (2026-04-26) — captures the target user flow + library gaps surfaced during the post-Phase-7 audit.  Not yet sequenced; awaiting prioritization against the deferred Phase 8 OTA work.
+Status: **eight-step sequence closed 2026-04-27** with Step 8.  The 2026-05-06 verification pass surfaced four follow-on beginner-onramp papercuts that aren't part of the original eight steps; they live in [`plans/next-up.md`](../next-up.md) `## Next` as standalone items but belong to the same UX domain.  See **Findings from the 2026-05-06 review** below.
 
 ## Purpose
 
@@ -23,9 +23,50 @@ The Phase 1–7 work shipped the *primitives* (probe, deploy, install-firmware, 
 > 11. User can make new things easily and deploy them.
 > 12. If user only has one thing, deploy is simpler — they don't even have to provide a thing name.
 
-## Audit verdict (2026-04-26)
+## Findings from the 2026-05-06 review
 
-We are **not there yet**.  Concrete gaps, ordered by impact:
+The doc was written 2026-04-26 with status "proposed" + the audit verdict below ("we are not there yet").  All eight steps shipped between 2026-04-26 and 2026-04-27 (status log near the foot has the per-step detail).  Concrete state on disk now:
+
+* **Step 1 — firmware floor.**  Decision 0039 (warn-not-block at registration) shipped; `chumicro_workspace.firmware_support` ships `MIN_MP_VERSION` / `MIN_CP_VERSION` constants + `FirmwareSupportStatus` enum + `check_firmware_supported` + `explain`; `firmware_version` now persists to `devices.yml` and `_cmd_add_device` warns on too-old.
+* **Step 2 — single-thing deploy default.**  `_cmd_deploy` deploys the lone project when no positional given; zero / multiple → exit 2 with helpful message.
+* **Step 3 — auto-runtime inference for `add-device`.**  `add-device --runtime` is optional now; `probe_with_runtime_inference` tries each candidate transport in order (`micropython`, `circuitpython`).
+* **Step 4 — `chumicro-workspace bootstrap` wizard.**  Walks pick-port → probe → display-detected-runtime → firmware-floor-warn → pick-device-id → register → optional `--with-demo`.  Three flags (`--port`, `--device-id`, `--with-demo`) skip prompts for non-interactive use.
+* **Step 5 — `chumicro-workspace demo`.**  Baked-in cross-runtime print-loop payload (`DEMO_PAYLOAD` constant) deploys to the active device + tails ~5s.  Stdlib-only so it works on any registered MP / CP board.
+* **Step 6 — `chumicro-requests` library.**  Six slices (3a–3f) shipped end-to-end: plain HTTP GET → body decode → HTTPS → POST/PUT/PATCH/DELETE + JSON helper → redirects → chunked decode.  Live-board verified on Pi Pico W CP + MP.  Decision 0040 (chumicro-requests + factory helper pattern) is the design ADR.
+* **Step 7 — `chumicro-http-server` library.**  Five slices (7a, 7b, 7d, 7t, 7-correction) shipped: scaffold + Decision 0041 + sockets `tcp_listening_socket` helper → routing decorator with `<param>` extraction → live-board verification across the four-board canonical matrix → TLS server investigation (works on MP rp2 + ESP32-S2 family on both runtimes; CP rp2 blocked at platform level).
+* **Step 8 — two-thing demo + examples organisation.**  `libraries/http_server/examples/circuitpython_two_thing_{server,sensor}.py` shipped — sensor POSTs sine-wave readings via `chumicro-requests` to a server displaying via `chumicro-http-server`.  Step 8's status log says: *"Step 8 closes out the beginner-onramp workstream's eight-step sequence."*
+
+### Follow-on papercuts surfaced 2026-05-06
+
+Four beginner-onramp papercuts surfaced during the verification pass that ran alongside the `config-shape-beginner-ergonomics` workstream.  They aren't part of the original eight steps — they're regressions / refinements caught only when a contributor walked through the full clone-to-deploy path on real hardware with the post-config-shape changes in flight.  All four currently live in [`plans/next-up.md`](../next-up.md) `## Next`:
+
+1. **Finding 3 — `add-device` firmware-version parser breaks on RC builds.**  Probing a CP board with `firmware_version: 10.2.0-rc.0` prints `Could not parse the firmware version` and writes a stripped `firmware_version: 10.2.0.` (trailing dot) into `devices.yml`.  Side effect: `requires_flash` floor checks silently disabled on every contributor running RC firmware.  Small fix — regex update in `chumicro_workspace.firmware_support` for `-rc.N` / `-beta.N` PEP-440-ish suffixes.  Closely related to **Step 1** of this workstream.
+2. **Finding 4 — `add-device` doesn't suggest IDs from probed `board_id`.**  Step 4's `bootstrap` wizard *does* derive a default device id from the probed machine string (it suggests `raspberry-pi-pico-w` for a CP Pi Pico W).  But the standalone `add-device <id> --address <port>` flow still requires the positional id.  A user invoking `add-device` directly has to invent one.  Better: `add-device --address /dev/cu.X` (no positional) prints `add-device: suggested id: raspberry-pi-pico-w-mp — accept (Y/n) or pass an id`.  Closely related to **Steps 3 + 4** of this workstream.
+3. **Finding 5 — `deploy <name>` should auto-detect boot-shim mode.**  Every example in the workspace-template ships `app.py` + `run()` (the boot-shim convention).  Bare `deploy <name>` defaults to non-boot-shim mode and expects `code.py` / `main.py` at the project root, so beginners hit `ValueError: entrypoint '/code.py' not produced by directory walk`.  Fix: when the project ships `app.py` with a `run()` callable AND no `code.py` / `main.py`, auto-detect to boot-shim + import-graph mode.  Highest-impact onramp papercut of the four findings.
+4. **Finding 6 — mpremote orphan port-holders block subsequent deploys.**  After a non-clean exit (SIGINT during deploy, `&` background interruption), the mpremote child can be left holding `/dev/cu.usbmodem...`; the next `deploy` fails with "in use by another program."  The recovery layer's classification + retry-prompt handles this correctly UX-wise, but the orphan itself shouldn't survive the parent.  Fix: deploy entry probes for orphan mpremote PIDs holding the target port and either kills them with a heads-up message or surfaces the PID for manual kill.
+
+### Reframe — what this workstream is now about
+
+The original framing was *"deliver an eight-step on-ramp"*.  All eight steps shipped.  The remaining workstream slice is:
+
+* **The four 2026-05-06 papercuts above** — each is small, scoped, and pickup-able independently.
+* **The two-thing-demo open question** about whether to ship a host-side server counterpart for users with only one board landed as "two CP boards" rather than "host-side server" (Step 8's two_thing_server.py is a CP server, not host).  If a user without two boards needs the demo to work, that's a follow-up not yet scoped.
+* **Phase 8 OTA** remains explicitly out of scope here — tracked in [`ota.md`](ota.md).
+
+A fresh agent picking this up should NOT re-do the eight-step on-ramp — it shipped.  The body below is preserved for the design rationale (especially §"Library design notes" for `chumicro-requests` / `chumicro-http-server`, both now shipped under Decisions 0040 / 0041) and the verbatim user vision (§"Source") that drove the original framing.
+
+### Related decisions + workstreams
+
+* [Decision 0039](../decisions/0039-firmware-version-floor.md) — codified the firmware floor + warn-not-block policy this workstream proposed.
+* [Decision 0040](../decisions/0040-chumicro-requests.md) — `chumicro-requests` design (factory helper pattern).
+* [Decision 0041](../decisions/0041-chumicro-http-server.md) — `chumicro-http-server` design (runner-shaped non-blocking server).
+* [`library-pipeline.md`](library-pipeline.md) — references `chumicro-requests` + `chumicro-http-server` (both shipped) as Tier-A demo dependencies; future Tier B (input/pixels/tone) + `chumicro-presence` work would feed into the same beginner flow.
+* [`archive/project-workspace.md`](archive/project-workspace.md) — Phases 1–7 of the umbrella workstream this builds on (every phase complete).
+* [`ota.md`](ota.md) — Phase 8 OTA, deferred from this workstream.
+
+## Audit verdict (2026-04-26 — historical)
+
+The original assessment that motivated the eight-step sequence.  Preserved as the "we are not there yet" framing the workstream solved; gaps 1–10 below all closed by Steps 1–8 except for the residual papercuts captured under "Follow-on papercuts" above.  Concrete gaps, ordered by impact:
 
 1. **No firmware-version gate.**  `probe_device` returns a `version` string but nothing compares it to a minimum.  Threshold to codify: MicroPython ≥ 1.27, CircuitPython ≥ 10.1.0.  No code path warns on too-old, no path detects "wrong runtime entirely" (factory Arduino, blank chip).
 2. **No automatic upgrade offer.**  `chumicro-workspace install-firmware` exists and works (UF2 + esptool, programmatic bootloader entry), but is never triggered by the workspace tool when a board fails a version check.  Users have to know to run it.
