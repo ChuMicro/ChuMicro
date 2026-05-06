@@ -1,10 +1,10 @@
 # Setup: schema reconciliation for user-edited config files
 
-Status: `strategy-c-canonical` — Strategy B shipped 2026-05-04 (`chumicro_workspace.starter_drift`).  **Strategy C promoted from "natural follow-up" to the canonical contract** on 2026-05-06 per user direction in [`config-shape-beginner-ergonomics.md`](config-shape-beginner-ergonomics.md) (Q10).  Strategies A / D / E rejected.
+Status: `closed` — both strategies shipped.  Strategy B shipped 2026-05-04 (`chumicro_workspace.starter_drift`); Strategy C shipped 2026-05-06 in mono-repo commit `7d36f27` as `chumicro_workspace.additive_apply`, walking both `workspace.yml` (ruamel) and `secrets.toml` (tomlkit) on every `setup` invocation.  Strategies A / D / E rejected.
 Filed: 2026-05-04
 Strategy B shipped: 2026-05-04
-Strategy C promoted to canonical: 2026-05-06
-Related: [Decision 0057](../decisions/0057-two-file-config.md) — the two-file workspace config leaves `workspace.yml` and `projects/<name>/config.toml` as user-edited files materialized from a starter; this workstream covers what happens when the starter gains new schema entries after the user has already materialized + edited.  Note: Decision 0057's two-file shape is itself superseded later in the config-shape workstream's Q8 sequence (workspace.yml + secrets.toml + project_config.toml), but the schema-reconciliation contract this workstream defines applies unchanged to whichever set of files the layout lands on.
+Strategy C shipped: 2026-05-06
+Related: [Decision 0057](../decisions/0057-two-file-config.md) covers the file shape this strategy reconciles against — currently three files (`workspace.yml` machinery + `secrets.toml` device-bound credentials/defaults + `<project>/project_config.toml` per-project knobs) post the config-shape-beginner-ergonomics workstream.  The schema-reconciliation contract here applies to both the gitignored root files (`workspace.yml`, `secrets.toml`); per-project `project_config.toml` drift is still out of scope.
 
 ## Goal
 
@@ -115,8 +115,7 @@ Strategy B (`chumicro_workspace.starter_drift` shipped 2026-05-04) stays in plac
 2. ~~Add tests.~~  Shipped — `workbench/workspace/tests/test_starter_drift.py` covers diff semantics (top-level addition, nested addition, dotted-path output, user-extras-not-flagged, scalar-blocks-recursion, malformed-YAML fail-soft, no-override fallback) and the print path (no-drift silence, single-vs-multiple pluralisation, source-label correctness).  Module is at 100% line + branch coverage.
 3. ~~Update docs.~~ — workstream marked `strategy-b-shipped`; setup-walkthrough docs untouched (the new output is self-explanatory and only fires when there's drift, which happens once per starter change).
 4. ~~Ship.~~  Done.
-5. **(Pending)** Use for ~a release cycle to gather signal on whether C earns its keep.
-6. **(Pending)** If C is warranted, design the comment-preservation strategy + ship.
+5. ~~Strategy C — additive comment-preserving append.~~  Shipped 2026-05-06 in `7d36f27` as `chumicro_workspace.additive_apply.additive_reapply`.  Walks `workspace.yml` (ruamel round-trip) and `secrets.toml` (tomlkit round-trip), uses the existing `starter_drift.collect_missing_starter_paths` to find the missing paths, then writes them in place — comments preserved, existing values untouched.  Wired into `_cmd_setup` *before* the `print_starter_drift_report` informational pass.  14 tests in `test_additive_apply.py`; chumicro-workspace 0.11.0 → 0.12.0.
 
 ### Implementation deviations from the original plan
 
