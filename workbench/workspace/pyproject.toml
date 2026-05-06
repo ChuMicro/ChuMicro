@@ -25,10 +25,18 @@ dependencies = [
     "msgpack>=1.0",
     # ruamel.yaml — comes transitively via chumicro-deploy for
     # devices.yml round-trip; workspace also uses it directly for
-    # workspace.yml / secrets.yml / thing config / quality config
+    # workspace.yml comment-preserving append + quality config
     # reads.  Single YAML library across the workbench (PyYAML
     # dropped when the deploy package switched to ruamel).
     "ruamel.yaml>=0.18",
+    # tomlkit — comment-preserving TOML round-trip used by the
+    # additive ``setup`` re-apply path: when the upstream starter
+    # gains new keys, append them to the user's secrets.toml /
+    # project_config.toml without clobbering edits or losing comments.
+    # The stdlib ``tomllib`` reads but can't write TOML; tomlkit fills
+    # the writer half.  Pure Python, ~80 KB, CPython-only — workbench
+    # scope only, never reaches a device.
+    "tomlkit>=0.13",
 ]
 keywords = [
     "circuitpython", "micropython", "microcontroller", "embedded",
