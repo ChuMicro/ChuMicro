@@ -699,11 +699,17 @@ def _cmd_devices(args: argparse.Namespace) -> int:
 def _make_deploy_runner(device: Any, *, non_interactive: bool) -> Any:
     """Construct the deploy runner for a CLI command.
 
-    Wraps a fresh :class:`chumicro_deploy.Deployer` in
-    :class:`chumicro_deploy.InteractiveDeployer` by default so transport
-    failures (port busy, drive missing, FSKit wedge) get classified and
-    coached.  ``--non-interactive`` opts out for CI / scripted flows
-    where the retry prompt has no stdin to answer.
+    Always returns an :class:`chumicro_deploy.InteractiveDeployer` so
+    transport failures (port busy, drive missing, FSKit wedge) get
+    classified, coached, and — F6 of 2026-05-06 — annotated with the
+    lsof diagnosis when something is holding the serial port.
+
+    ``--non-interactive`` configures the wrapper to print the
+    coaching once and re-raise without prompting (``max_attempts=1``
+    + a no-op prompt that's never reached).  CI / scripted flows
+    still get the diagnostic output before the failure propagates,
+    which is strictly more informative than the previous behaviour
+    of a bare traceback.
 
     Returns the runner; caller invokes ``.deploy()`` or
     ``.deploy_diff()`` as needed (both signatures are mirrored on the
@@ -713,7 +719,14 @@ def _make_deploy_runner(device: Any, *, non_interactive: bool) -> Any:
 
     deployer = Deployer(device)
     if non_interactive:
-        return deployer
+        return InteractiveDeployer(
+            deployer,
+            max_attempts=1,
+            # Prompt is unreachable when max_attempts=1 (the loop
+            # raises before asking) but pass a no-op anyway so the
+            # InteractiveDeployer constructor doesn't reach for stdin.
+            prompt=lambda _prompt_text: "quit",
+        )
     return InteractiveDeployer(deployer)
 
 
