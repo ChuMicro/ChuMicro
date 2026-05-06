@@ -781,7 +781,12 @@ class TestDeploy:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Slice 7: --boot-shim routes through project_boot_source."""
+        """``--boot-shim`` routes through project_boot_source.
+
+        Verifies the simplified layout (F5, 2026-05-06): synthesised
+        shim at the runtime-matching path, project files at the device
+        root, no ``active.py`` / ``workspace_runtime`` / ``lib/projects``.
+        """
         root = _seed_workspace(tmp_path)
         project_dir = root / "projects" / "back-porch"
         project_dir.mkdir(parents=True)
@@ -800,24 +805,24 @@ class TestDeploy:
         assert exit_code == 0
         deploy_calls = [call for call in transport.calls if call[0] == "deploy_files"]
         files, entrypoint = deploy_calls[0][1]
-        # Boot-shim layout: shim entrypoint at root, project under /lib/projects/.
+        # Boot-shim layout: synthesised entrypoint at root, project at root.
         assert entrypoint == "/main.py"  # MP runtime in seed
         assert "/main.py" in files
-        assert "/active.py" in files
-        assert "/lib/workspace_runtime/__init__.py" in files
-        assert "/lib/projects/back-porch/app.py" in files
-        assert b'"back-porch"' in files["/active.py"]
+        assert "/app.py" in files
+        # Legacy multi-project artefacts must not appear.
+        assert "/active.py" not in files
+        assert not any(path.startswith("/lib/workspace_runtime/") for path in files)
+        assert not any(path.startswith("/lib/projects/") for path in files)
 
     def test_boot_shim_and_import_graph_compose(
         self,
         tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        """Gap 5: the two flags compose via project_boot_with_import_graph_source.
+        """The two flags compose via project_boot_with_import_graph_source.
 
-        Dry-run output proves the combined layout shipped: the boot-shim
-        layer (``/code.py`` shim, ``/active.py``, ``workspace_runtime``,
-        project files under ``/lib/projects/back-porch/``) AND a library
+        Dry-run output proves the combined layout shipped: synthesised
+        entrypoint shim, project files at the device root, AND a library
         the project imports from ``shared/`` at ``/lib/<name>.py``.
         """
         root = _seed_workspace(tmp_path)
@@ -844,11 +849,13 @@ class TestDeploy:
         # Boot-shim layer present (seed defaults to MP, so /main.py
         # is the entrypoint shim).
         assert "/main.py" in captured
-        assert "/active.py" in captured
-        assert "/lib/workspace_runtime/__init__.py" in captured
-        assert "/lib/projects/back-porch/app.py" in captured
+        assert "/app.py" in captured
         # Import-graph contribution present.
         assert "/lib/external_lib.py" in captured
+        # Legacy multi-project artefacts must not appear.
+        assert "/active.py" not in captured
+        assert "workspace_runtime" not in captured
+        assert "/lib/projects/" not in captured
 
     def test_import_graph_flag_uses_ast_walker(
         self,
@@ -1651,8 +1658,16 @@ class TestDeployDryRun:
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
+        """Boot-shim dry-run shows shim + project files at the device root.
+
+        Verifies the simplified F5 layout (2026-05-06): synthesised shim
+        at the runtime-matching path, project files at root, no
+        ``/lib/projects/<name>/`` nesting.
+        """
         root = _seed_workspace(tmp_path)
-        project_dir = _seed_project(root, name="garage/sensors/door_open")
+        project_dir = root / "projects" / "back-porch"
+        project_dir.mkdir(parents=True)
+        (project_dir / "config.toml").write_text("[wifi]\nssid = 'x'\n")
         (project_dir / "app.py").write_text("def run(): pass\n")
 
         transport = FakeTransport(execute_output="")
@@ -1660,21 +1675,23 @@ class TestDeployDryRun:
 
         exit_code = cli.main([
             "deploy", "--workspace-dir", str(root),
-            "--boot-shim", "garage/sensors/door_open", "--dry-run",
+            "--boot-shim", "back-porch", "--dry-run",
         ])
         assert exit_code == 0
         out = capsys.readouterr().out
         # Layout label flagged.
         assert "boot-shim layout" in out
-        # Each per-level namespace init is present + classified.
-        assert "/lib/projects/garage/__init__.py" in out
-        assert "/lib/projects/garage/sensors/__init__.py" in out
-        assert "/lib/projects/garage/sensors/door_open/app.py" in out
-        # Categories appear at least once each.
+        # Synthesised shim at runtime-matching path (seed defaults to MP).
+        assert "/main.py" in out
+        # Project's app.py at the device root (no /lib/projects/ prefix).
+        assert "/app.py" in out
+        # Categories appear.
         assert "shim" in out
-        assert "namespace" in out
-        assert "project" in out
         assert "config" in out
+        # Legacy multi-project artefacts must not appear.
+        assert "/active.py" not in out
+        assert "workspace_runtime" not in out
+        assert "/lib/projects/" not in out
 
     def test_flat_layout_skips_namespace_inits(
         self,
@@ -2453,14 +2470,19 @@ class TestReplWithProject:
         assert exit_code == 0
         # Default tail window applied since --tail wasn't given.
         assert captured["seconds"] == 30.0
-        # Deploy ran via the boot-shim source: shim files in transport calls.
+        # Deploy ran via the boot-shim source: shim + project at root.
         deploy_calls = [
             call for call in transport.calls if call[0] == "deploy_files"
         ]
         assert len(deploy_calls) == 1
         files, _entrypoint = deploy_calls[0][1]
-        assert "/lib/projects/back-porch/app.py" in files
-        assert b'"back-porch"' in files["/active.py"]
+        # Project's app.py at the device root (no /lib/projects/ prefix).
+        assert "/app.py" in files
+        # Synthesised shim at runtime-matching path (seed defaults to MP).
+        assert "/main.py" in files
+        # Legacy multi-project artefacts must not appear.
+        assert "/active.py" not in files
+        assert not any(path.startswith("/lib/projects/") for path in files)
 
     def test_explicit_tail_seconds(
         self,
@@ -2516,8 +2538,12 @@ class TestReplWithProject:
             call for call in transport.calls if call[0] == "deploy_files"
         ]
         files, _entrypoint = deploy_calls[0][1]
-        assert "/lib/projects/garage/sensors/door_open/app.py" in files
-        assert b'"garage.sensors.door_open"' in files["/active.py"]
+        # Project files land at the device root regardless of host-side
+        # nesting depth — F5 dropped the /lib/projects/<name>/ namespace.
+        assert "/app.py" in files
+        assert "/main.py" in files  # synthesised shim
+        assert "/active.py" not in files
+        assert not any(path.startswith("/lib/projects/") for path in files)
 
     def test_failed_deploy_returns_one(
         self,

@@ -72,12 +72,9 @@ from chumicro_deploy.firmware_url import (
 )
 
 from chumicro_workspace.boot_shim import (
-    BOOT_MODULE_DEVICE_PATH,
-    PROJECTS_PACKAGE_INIT_DEVICE_PATH,
     SHIM_ENTRYPOINT_SOURCE,
     boot_shim_files,
-    build_active_py,
-    load_workspace_runtime_payload,
+    project_app_exports_run,
     project_boot_source,
     project_boot_with_import_graph_source,
 )
@@ -130,12 +127,10 @@ from chumicro_workspace.workspace_yml_starter import (
 from chumicro_workspace.writer import write_runtime_config
 
 __all__ = [
-    "BOOT_MODULE_DEVICE_PATH",
     "GENERATED_DIRNAME",
     "MICROPYTHON_BOARD_BY_MACHINE",
     "RUNTIME_CONFIG_DEVICE_PATH",
     "SHIM_ENTRYPOINT_SOURCE",
-    "PROJECTS_PACKAGE_INIT_DEVICE_PATH",
     "BoardState",
     "ConfigManifest",
     "ConfigManifestError",
@@ -151,7 +146,6 @@ __all__ = [
     "add_device",
     "aggregate_manifests",
     "boot_shim_files",
-    "build_active_py",
     "build_runtime_config",
     "build_search_paths",
     "collect_missing_starter_paths",
@@ -170,7 +164,6 @@ __all__ = [
     "list_device_ids",
     "list_micropython_builds",
     "load_devices",
-    "load_workspace_runtime_payload",
     "merge_configs",
     "micropython_board_for_machine",
     "print_starter_drift_report",
@@ -183,6 +176,7 @@ __all__ = [
     "read_workspace_yml_starter",
     "rename_device",
     "set_runtime_default",
+    "project_app_exports_run",
     "project_boot_source",
     "project_boot_with_import_graph_source",
     "project_directory_source",
