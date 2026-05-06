@@ -1408,3 +1408,167 @@ class TestReportFailureWithPortHolders:
         # No diagnosis section emitted; canonical hints still present.
         assert "is currently held by" not in joined
         assert "Close any app" in joined
+
+
+# ---------------------------------------------------------------------------
+# NonInteractiveDeployer — same recovery output as InteractiveDeployer
+# but without a retry loop.  CI / scripted flows.
+# ---------------------------------------------------------------------------
+
+
+class TestNonInteractiveDeployer:
+    """``NonInteractiveDeployer`` reports the failure once and re-raises.
+
+    Same coached output as :class:`InteractiveDeployer` (classify +
+    F6 lsof diagnosis when applicable + canonical fix steps), but
+    no retry loop and no prompt — for CI / scripted flows where
+    stdin has nowhere to go.
+    """
+
+    def test_returns_result_when_deploy_succeeds(self) -> None:
+        from chumicro_deploy.recovery import NonInteractiveDeployer  # noqa: PLC0415
+
+        ok = DeployResult(success=True, execute_output="hi\n")
+        fake = _FakeDeployer([ok])
+        sink, lines = _capturing_output()
+        runner = NonInteractiveDeployer(
+            fake,  # type: ignore[arg-type]
+            output=sink,
+        )
+
+        result = runner.deploy(_DUMMY_SOURCE)  # type: ignore[arg-type]
+
+        assert result is ok
+        assert fake.calls == 1
+        # Success path emits no coaching chatter.
+        assert lines == []
+
+    def test_reports_and_reraises_on_transport_failure(self) -> None:
+        """Single transport failure → one coached report, then re-raise."""
+        from chumicro_deploy.recovery import NonInteractiveDeployer  # noqa: PLC0415
+
+        fake = _FakeDeployer(
+            [
+                MicropythonTransportError(
+                    "mpremote: failed to access /dev/cu.x "
+                    "(it may be in use by another program)",
+                ),
+            ],
+        )
+        sink, lines = _capturing_output()
+        runner = NonInteractiveDeployer(
+            fake,  # type: ignore[arg-type]
+            output=sink,
+        )
+
+        with pytest.raises(MicropythonTransportError):
+            runner.deploy(_DUMMY_SOURCE)  # type: ignore[arg-type]
+
+        # Underlying deployer was called exactly once — no retry.
+        assert fake.calls == 1
+        joined = "\n".join(lines)
+        # The "1/1" header makes the no-retry contract explicit in
+        # the output a CI log captures.
+        assert "1/1" in joined
+        assert "port_unavailable" in joined
+        # Canonical fix hints still present.
+        assert "Close any app" in joined.lower() or "close any app" in joined.lower()
+
+    def test_does_not_prompt_for_retry(self) -> None:
+        """``NonInteractiveDeployer`` doesn't take a prompt parameter
+        and never reaches for stdin — the constructor signature
+        enforces the no-retry contract.
+        """
+        from chumicro_deploy.recovery import NonInteractiveDeployer  # noqa: PLC0415
+
+        # No ``prompt=`` kwarg in NonInteractiveDeployer's signature.
+        with pytest.raises(TypeError):
+            NonInteractiveDeployer(
+                object(),  # type: ignore[arg-type]
+                prompt=lambda _: "",  # type: ignore[call-arg]
+            )
+
+    def test_diff_signature_mirrors_deployer(self) -> None:
+        """``deploy_diff`` accepts wipe + on_file_deleted just like the
+        underlying :class:`Deployer`.
+        """
+        from chumicro_deploy.recovery import NonInteractiveDeployer  # noqa: PLC0415
+
+        ok = DeployResult(success=True)
+        fake = _FakeDeployer([ok])
+        sink, _lines = _capturing_output()
+        runner = NonInteractiveDeployer(
+            fake,  # type: ignore[arg-type]
+            output=sink,
+        )
+        result = runner.deploy_diff(
+            _DUMMY_SOURCE,  # type: ignore[arg-type]
+            wipe=True,
+            on_file_deleted=lambda _path: None,
+        )
+        assert result is ok
+        assert fake.last_wipe is True
+
+    def test_includes_port_holder_diagnosis(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """F6 diagnosis fires for ``PORT_UNAVAILABLE`` failures
+        in the non-interactive path too.
+        """
+        from chumicro_deploy import recovery  # noqa: PLC0415
+
+        monkeypatch.setattr(
+            recovery, "diagnose_port_holders",
+            lambda _port: [
+                recovery.PortHolder(
+                    pid=4242,
+                    command="/usr/bin/python /path/run.py deploy hello_world",
+                ),
+            ],
+        )
+
+        fake = _FakeDeployer(
+            [
+                MicropythonTransportError(
+                    "mpremote: failed to access /dev/cu.usbmodem112401 "
+                    "(it may be in use by another program)",
+                ),
+            ],
+        )
+        sink, lines = _capturing_output()
+        runner = recovery.NonInteractiveDeployer(
+            fake,  # type: ignore[arg-type]
+            output=sink,
+        )
+        with pytest.raises(MicropythonTransportError):
+            runner.deploy(_DUMMY_SOURCE)  # type: ignore[arg-type]
+
+        joined = "\n".join(lines)
+        assert "4242" in joined
+        assert "run.py deploy" in joined
+        assert "kill 4242" in joined  # chumicro-stale heuristic fires
+
+    def test_traceback_result_is_reported(self) -> None:
+        """A ``DeployResult`` with ``success=False`` + ``traceback``
+        gets reported (not raised) — same contract as InteractiveDeployer.
+        """
+        from chumicro_deploy.recovery import NonInteractiveDeployer  # noqa: PLC0415
+
+        bad = DeployResult(
+            success=False,
+            traceback="Traceback (most recent call last):\n  ZeroDivisionError",
+            execute_output="",
+        )
+        fake = _FakeDeployer([bad])
+        sink, lines = _capturing_output()
+        runner = NonInteractiveDeployer(
+            fake,  # type: ignore[arg-type]
+            output=sink,
+        )
+
+        result = runner.deploy(_DUMMY_SOURCE)  # type: ignore[arg-type]
+
+        assert result is bad
+        joined = "\n".join(lines)
+        assert "traceback" in joined.lower()
+        assert "ZeroDivisionError" in joined

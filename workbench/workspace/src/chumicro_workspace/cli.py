@@ -699,34 +699,33 @@ def _cmd_devices(args: argparse.Namespace) -> int:
 def _make_deploy_runner(device: Any, *, non_interactive: bool) -> Any:
     """Construct the deploy runner for a CLI command.
 
-    Always returns an :class:`chumicro_deploy.InteractiveDeployer` so
-    transport failures (port busy, drive missing, FSKit wedge) get
-    classified, coached, and — F6 of 2026-05-06 — annotated with the
-    lsof diagnosis when something is holding the serial port.
+    Returns one of two :class:`chumicro_deploy._RecoveringDeployer`
+    subclasses depending on whether the CLI has stdin to prompt
+    against.  Both surface the same coached recovery output (failure
+    classification, F6 lsof diagnosis when applicable, canonical
+    fix steps) — they differ only in whether they retry on
+    retryable failures:
 
-    ``--non-interactive`` configures the wrapper to print the
-    coaching once and re-raise without prompting (``max_attempts=1``
-    + a no-op prompt that's never reached).  CI / scripted flows
-    still get the diagnostic output before the failure propagates,
-    which is strictly more informative than the previous behaviour
-    of a bare traceback.
+    * ``non_interactive=True`` → :class:`NonInteractiveDeployer`.
+      Prints the report once and re-raises.  CI / scripted flows
+      where the retry prompt has nowhere to go.
+    * ``non_interactive=False`` → :class:`InteractiveDeployer`.
+      Prompts the user to fix the condition and press Enter to
+      retry (default ``max_attempts=3``).
 
     Returns the runner; caller invokes ``.deploy()`` or
-    ``.deploy_diff()`` as needed (both signatures are mirrored on the
-    interactive wrapper).
+    ``.deploy_diff()`` as needed (both signatures match
+    :class:`Deployer`'s exactly).
     """
-    from chumicro_deploy import Deployer, InteractiveDeployer  # noqa: PLC0415
+    from chumicro_deploy import (  # noqa: PLC0415
+        Deployer,
+        InteractiveDeployer,
+        NonInteractiveDeployer,
+    )
 
     deployer = Deployer(device)
     if non_interactive:
-        return InteractiveDeployer(
-            deployer,
-            max_attempts=1,
-            # Prompt is unreachable when max_attempts=1 (the loop
-            # raises before asking) but pass a no-op anyway so the
-            # InteractiveDeployer constructor doesn't reach for stdin.
-            prompt=lambda _prompt_text: "quit",
-        )
+        return NonInteractiveDeployer(deployer)
     return InteractiveDeployer(deployer)
 
 
