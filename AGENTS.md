@@ -68,6 +68,9 @@ Procedural knowledge lives in `.github/skills/`. Read the relevant skill file be
 | `new-decision` | When recording a structural or pattern decision |
 | `guide-generation` | When writing or refreshing `docs/guide.md` |
 | `validate-scripts` | When changing or validating `scripts/` infrastructure |
+| `audit-library` | Code-quality audit on one library — duplication, abstraction honesty, method shape, dead code, top-to-bottom readability |
+| `audit-integration` | Code-quality audit across two or more interacting libraries — boundary shapes, dependency direction, parallel implementations |
+| `audit-workspace` | Code-quality audit at the mono-repo / ecosystem level — library-shape inventory, cross-library patterns, decision-ADR drift, workstream candidates |
 
 `end-of-session` lives under `.github/skills/` for human contributors only — agents should use `task-checkpoint` after each unit of work instead.
 
