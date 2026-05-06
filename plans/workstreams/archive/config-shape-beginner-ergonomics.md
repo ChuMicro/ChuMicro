@@ -547,13 +547,13 @@ The unification workstream landed correctly: the pipeline works end-to-end on re
 
 | # | Finding | Bearing | Status |
 |---|---|---|---|
-| 1 | Setup chicken-and-egg in `_cmd_setup` | `[reinforces]` Q1 | **Fixed** in commit `4ac81fd` (mono-repo) |
-| 2 | Comment-only starter loses header on round-trip | `[reinforces]` Q3, raises Q10 | Not fixed; resolution depends on this workstream's outcome |
-| 3 | `add-device` firmware-version parser breaks on RC | `[orthogonal]` | Separate small workstream |
-| 4 | `add-device` doesn't suggest IDs from probe | `[orthogonal]` | Separate small workstream |
-| 5 | `deploy <name>` blocks on `app.py`/`code.py` mismatch | `[orthogonal]` | Separate small workstream |
-| 6 | mpremote leaves orphan port-holder after non-clean exit | `[orthogonal]` | Separate small workstream |
-| 7 | Manifest validation works well; only one library uses it | `[reinforces]` Q7, raises Q11 | Phase 2 follow-up to declare manifests in remaining libraries |
+| 1 | Setup chicken-and-egg in `_cmd_setup` | `[reinforces]` Q1 | **Shipped** 2026-05-06 in `4ac81fd` (mono-repo) |
+| 2 | Comment-only starter loses header on round-trip | `[reinforces]` Q3, raises Q10 | **Resolved** by Q10 direction (real placeholders) + Strategy C additive re-apply (`7d36f27`) |
+| 3 | `add-device` firmware-version parser breaks on RC | `[orthogonal]` | **Shipped** 2026-05-06 in `8ecf728` (probe + parser walk version tuple, stop at first non-int) |
+| 4 | `add-device` doesn't suggest IDs from probe | `[orthogonal]` | **Shipped** 2026-05-06 in `f5539e9` (`add-device --address` with no positional suggests an id from probe) |
+| 5 | `deploy <name>` blocks on `app.py`/`code.py` mismatch | `[orthogonal]` | **Shipped** 2026-05-06 in `3fde27c` (boot-shim simplification: deploy auto-synthesises three-line entrypoint when `app.py` exports `run`) |
+| 6 | mpremote leaves orphan port-holder after non-clean exit | `[orthogonal]` | **Shipped** 2026-05-06 in `224c489` (deploy surfaces the offending PID in the error message) |
+| 7 | Manifest validation works well; only one library uses it | `[reinforces]` Q7, raises Q11 | Phase 2 follow-up to declare manifests in remaining libraries (still open — only `chumicro-wifi` declares one) |
 
 **Conclusions for Q1‑Q11:**
 
