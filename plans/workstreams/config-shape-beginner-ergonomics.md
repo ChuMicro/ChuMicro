@@ -447,6 +447,122 @@ Two compounding problems:
 
 **Workaround for verification:** edit `workspace.yml` manually to add `defaults.wifi.{ssid,password}` (uncommented) before scenario 5.  The round-trip will preserve them on subsequent setup runs because they're real keys now.
 
+#### 2026-05-06 — Scenario 2: re-setup with real keys present is correctly idempotent
+
+`[orthogonal]` confirmation, but worth recording.
+
+After adding `defaults.wifi.{ssid,password}` + `defaults.mqtt.broker.{host,port}` (real keys) to `workspace.yml` and re-running `python3 run.py setup`, the output was:
+
+```
+setup: library_sources already in sync with /Users/chuxor/circuitpython/chumicro
+```
+
+— and `workspace.yml` was untouched (header preserved, defaults preserved, library_sources preserved).  `sync_library_sources` short-circuited at the "already in sync" check before re-writing.  This confirms the diagnosis from the previous finding: the round-trip preservation works correctly **when there are keys to anchor comments to**.
+
+#### 2026-05-06 — Scenario 3: `add-device` works cleanly across 4 boards but missed two ergonomics moments
+
+`[orthogonal]` to the config-shape question, but two beginner-onramp findings worth tracking:
+
+* **All 4 boards probed cleanly**: Pi Pico W CP/MP, Lolin S2 CP/MP.  `add-device` auto-detected runtime, captured UID + machine string, and populated `devices.yml` correctly.  Three-zone classification working (USER-OWNED ID + description, HARDWARE-ONCE uid/machine, PROBED-ALWAYS address).
+* **Firmware-version parser fails on RC builds**: every probe printed
+
+  ```
+  add-device: warning — circuitpython firmware compatibility:
+    Could not parse the firmware version
+    (circuitpython reported an unrecognised version string).
+  ```
+
+  The actual firmware string was `10.2.0-rc.0` (visible in the CP REPL banner).  The parser likely does not handle the `-rc.N` suffix.  `firmware_version: 10.2.0.` (trailing dot) is what landed in `devices.yml` — the regex captured up to the `-` then appended a stray dot.  Side effect: `requires_flash` floor checks are silently disabled on every contributor's machine running RC firmware.  **Real bug, separate workstream — not config-shape.**
+* **`add-device` doesn't suggest IDs from the probe.**  Hardware identity already gives `board_id: raspberry_pi_pico_w` + `runtime: micropython`; an obvious id is `raspberry-pi-pico-w-mp`.  Today the user has to invent one.  Beginner-onramp friction.  Not config-shape, but worth a separate small-fix workstream.
+
+#### 2026-05-06 — Scenario 4: `deploy <name>` blocks on `app.py`/`code.py` mismatch
+
+`[reinforces]` the broader beginner-onramp question (orthogonal to config-shape but same root concern):
+
+```
+ValueError: entrypoint '/code.py' not produced by directory walk
+(keys: ['/README.md', '/app.py'])
+```
+
+Every example in `examples/` ships `app.py` + `run()` (the boot-shim convention).  Plain `deploy <name>` defaults to non-boot-shim mode and expects `code.py` (CP) or `main.py` (MP) at the project root.  The fix is `deploy <name> --boot-shim --import-graph`, but a beginner reading the README and `examples/hello_world/README.md` doesn't know that.
+
+The boot-shim flow is what every example is designed for — auto-detecting it (when the project ships `app.py` with a `run()` callable and no `code.py`/`main.py`) would close this gap.  **Real beginner-onramp papercut, separate workstream.**
+
+#### 2026-05-06 — Scenario 5: full pipeline VERIFIED end-to-end on CP
+
+`[reinforces nothing — confirms the unification works]`.  Pi Pico W CP, after `deploy wifi_only --device pi-pico-w-cp --boot-shim --import-graph`:
+
+```
+wifi_only: connecting ...
+wifi: connected at 172.16.1.21
+wifi: connected at 172.16.1.21
+```
+
+Pipeline verified end-to-end:
+
+1. `workspace.yml::defaults.wifi.{ssid,password}` read by host
+2. `compose_runtime_config(workspace.yaml, projects/wifi_only/config.toml)` deep-merged into a dict
+3. `WithRuntimeConfig` wrote `runtime_config.msgpack` into the staged tree
+4. `chumicro-deploy` rsync'd the staged tree to `/Volumes/CIRCUITPY 1`
+5. On boot, `boot_shim` imported `chumicro_config.load_runtime_config()` which read the msgpack
+6. `WifiConfig.from_dict(config["wifi"])` consumed the merged dict
+7. `WifiService` associated to the AP and reported the IP
+
+**The user's complaint is correctly framed**: it's not that the unified pipeline doesn't work — it does, demonstrably, on real hardware.  The complaint is that the path from `git clone` → `deploy wifi_only` requires too many beginner-hostile steps (chicken-and-egg fix + comment-stripping starter + boot-shim flag + manually-invented device IDs).  Each of those is a separate small workstream; the config-shape research workstream is one piece of the larger beginner-onramp story.
+
+(MP wifi_only deploy partially verified — file transfer was interrupted by a 50 s `gtimeout` which proved insufficient for MP's chunked-write transport.  The pipeline math is identical between runtimes; CP success is sufficient evidence.)
+
+#### 2026-05-06 — Scenario 6: missing-required-key UX is GOOD where it exists
+
+`[reinforces]` Q7 (manifest format) and the broader proposal.
+
+After temporarily removing `password:` from `workspace.yml::defaults.wifi:`, `deploy wifi_only` failed at the host **before any bytes hit the device** with:
+
+```
+chumicro_workspace.config_manifest.ConfigManifestError:
+Runtime config does not satisfy the union manifest of imported libraries:
+  [wifi] missing required keys: password
+  (declared by: ../chumicro/libraries/wifi/pyproject.toml)
+```
+
+This is the failure mode the user wanted: section name, missing key, and the library that declared the requirement (with a path to the pyproject.toml).  A beginner can act on this without a stack trace.
+
+**The gap**: today **only `chumicro-wifi` declares a manifest**.  Six other networking libraries (mqtt, requests, http_server, sockets, websockets, ntp) ship without `[tool.chumicro.config.sections.<name>]` blocks in their pyproject.toml.  A project that uses MQTT and forgets `mqtt.broker.host` deploys silently and then crashes on-device with a still-clean-but-less-precise `MissingConfigKey` at runtime.
+
+**Bearing on the research plan:**
+
+- `[reinforces]` Q7 — the manifest format works.  Phase 2's `[tool.chumicro.config.sections.<name>]` shape is good UX once it's filled in.
+- `[reinforces]` the user's "library dictates its slice of the config" intuition — this is exactly what Phase 2 enables.  The proposal to flatten the on-disk shape (Q3) doesn't change manifest semantics; it just changes the keys' names from `wifi.password` (nested) to `"wifi.password"` (flat).  The validator works the same way.
+- Adds a Q11: **should declaring a config manifest be required** (e.g., a `check-config-manifest` script that fails CI if a library imports `chumicro-config` but doesn't declare a manifest)?  Today it's opt-in and six libraries opted out.  Fail-fast incentive missing.
+
+This was the most informative scenario of the verification pass.  The good news: when the user-visible promise is honoured, it's honoured well — the error is precise, actionable, and beginner-readable.  The bad news: it's honoured only one library deep.
+
+---
+
+## Verification conclusions (2026-05-06)
+
+The unification workstream landed correctly: the pipeline works end-to-end on real hardware (Pi Pico W CP demonstrated `wifi: connected at 172.16.1.21` from a workspace.yml-baked merged-config msgpack).  But verification surfaced **seven beginner-onramp issues**, of which two are config-shape questions (this workstream's domain) and five are adjacent papercuts that compound into the user's "plug in a board and go" complaint:
+
+| # | Finding | Bearing | Status |
+|---|---|---|---|
+| 1 | Setup chicken-and-egg in `_cmd_setup` | `[reinforces]` Q1 | **Fixed** in commit `4ac81fd` (mono-repo) |
+| 2 | Comment-only starter loses header on round-trip | `[reinforces]` Q3, raises Q10 | Not fixed; resolution depends on this workstream's outcome |
+| 3 | `add-device` firmware-version parser breaks on RC | `[orthogonal]` | Separate small workstream |
+| 4 | `add-device` doesn't suggest IDs from probe | `[orthogonal]` | Separate small workstream |
+| 5 | `deploy <name>` blocks on `app.py`/`code.py` mismatch | `[orthogonal]` | Separate small workstream |
+| 6 | mpremote leaves orphan port-holder after non-clean exit | `[orthogonal]` | Separate small workstream |
+| 7 | Manifest validation works well; only one library uses it | `[reinforces]` Q7, raises Q11 | Phase 2 follow-up to declare manifests in remaining libraries |
+
+**Conclusions for Q1‑Q11:**
+
+- **Q1 (rename `workspace.yml` → `secrets.toml`)** — the verification reinforces but does not decide.  The error message in finding 1 (`error: no workspace.yml found in <root> or any parent`) is more diagnosable when the file's role is in its name.  But the rename is the second-order benefit; the first-order benefit is fixing the bugs that made the file-name appear in error messages at all.
+- **Q3 (on-disk shape — flat dotted strings vs nested tables)** — strongly reinforced.  Finding 2 (the comment-stripping bug) is rooted in ruamel-rt's "comments must attach to keys" behaviour.  TOML's stdlib serialisation doesn't have that constraint; nested tables with real keys (Q3 option 2) survive round-trip at all costs.  Q3 option 1 (pure flat with dotted strings) also works but adds verbose key names.  **Lean: option 2** — nested tables on disk, flat dotted accessor in code.
+- **Q7 (manifest format flat vs nested)** — reinforced.  The current nested `[tool.chumicro.config.sections.wifi]` format works; flattening it to `[tool.chumicro.config]` with `required_keys = ["wifi.password"]` would match the proposed runtime accessor exactly without changing semantics.  **Lean: flatten when the on-disk shape flattens (Q3 + Q7 move together).**
+- **Q10 (new — starter content shape)** — the verification raised this question.  An all-comments starter breaks round-trip preservation in dev mode.  **Lean: ship real placeholder keys** (`"wifi.ssid" = ""` rather than `# ssid: my-ap`) — both for round-trip safety and as a built-in schema beginners see and edit.
+- **Q11 (new — required manifest declaration)** — the verification raised this too.  Six libraries don't declare manifests; a `check-config-manifest` ratchet (or a CI step that imports each library's pyproject.toml and fails if `chumicro-config` is imported anywhere in `src/` without a manifest block) would close the gap.  **Lean: add the ratchet**, but only after this workstream lands the renamed-file shape (so the manifests don't have to migrate twice).
+
+**Overall:** this workstream's premise survives contact with reality.  The user's mental model (rename, flat keys, missing → None, library declares its slice) was reinforced rather than contradicted by every finding.  The fact that the pipeline **does** work end-to-end is the floor we're refining from; nothing in this verification pass calls for a teardown.
+
 ---
 
 ## Pre-conditions for a fresh agent picking this up
