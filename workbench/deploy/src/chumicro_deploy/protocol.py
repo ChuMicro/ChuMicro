@@ -427,26 +427,38 @@ class TransportProtocol(Protocol):
         in-scope (``/lib/*``, ``/code.py`` / ``/main.py`` / etc.) and
         out-of-scope (``/settings.toml``, hand-edited ``boot.py``,
         user-uploaded assets).  Used by ``chumicro-workspace deploy
-        --wipe`` for clean-slate / corruption-recovery flows where
-        an ordinary diff-deploy isn't enough.
+        --wipe`` and ``chumicro-workspace reset-board`` for
+        clean-slate / corruption-recovery flows where an ordinary
+        diff-deploy isn't enough — and by functional-test runs that
+        filled the board's flash with stage residue and now hit
+        ``ENOSPC`` mid-deploy.
 
-        CircuitPython flash drives ``import storage;
-        storage.erase_filesystem()`` over the raw REPL, which
-        reformats the FAT volume and reboots the board — the
-        transport swallows the connection-drop and re-establishes
-        raw REPL afterwards.
+        Per-runtime recipe matrix:
 
-        MicroPython walks ``/`` and removes every file + directory
-        via ``os.remove`` / ``os.rmdir``.  Firmware partitions are
-        untouched.
+        - **CircuitPython** (any board): ``import storage;
+          storage.erase_filesystem()`` over the raw REPL.  Reformats
+          the FAT volume and triggers a hard reset; the transport
+          swallows the USB-CDC drop and re-establishes raw REPL after
+          the volume re-mounts.
+        - **MicroPython on rp2** (Pi Pico W et al.): ``os.umount('/');
+          os.VfsLfs2.mkfs(rp2.Flash()); machine.soft_reset()``.
+        - **MicroPython on esp32** (Lolin S2 family et al.):
+          ``os.umount('/'); os.VfsLfs2.mkfs(esp32.Partition.find(
+          TYPE_DATA, label='vfs')[0]); machine.soft_reset()``.
+        - Other MicroPython substrates: raise ``RuntimeError`` until
+          a verified recipe is added.
+
+        ``mkfs`` is required for MicroPython rather than a recursive
+        ``os.remove`` walk: LittleFS metadata + wear-leveling
+        artifacts survive a file-by-file delete, so a board with a
+        small partition (rp2's ~850 KB, esp32's 2 MB) can still hit
+        ``ENOSPC`` mid-deploy after a non-mkfs "wipe."  Firmware
+        partitions are untouched on every runtime.
 
         RAM-mode / mount-mode deploys (CP RAM, MP mount) are no-ops
         — neither writes to flash, so there's nothing persistent to
         wipe.  Callers don't need to gate on mode; the transport
-        does the right project.
-
-        Best-effort: per-file errors are tolerated silently so a
-        transient I/O hiccup doesn't block the deploy that follows.
+        does the right thing.
         """
         ...
 

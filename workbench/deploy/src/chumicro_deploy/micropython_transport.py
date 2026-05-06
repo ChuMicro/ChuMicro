@@ -21,9 +21,10 @@ import os
 import subprocess
 import sys
 import tempfile
+import time as _time_module
 from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from .protocol import (
     PROBE_IMPLEMENTATION_SCRIPT,
@@ -35,6 +36,8 @@ from .runtime_marker import file_targets_runtime
 
 if TYPE_CHECKING:  # pragma: no cover - type-only
     from mpremote.transport_serial import SerialTransport
+
+    from .circuitpython_transport import TimeSource
 
 
 #: Idle timeout (seconds) for ``exec_raw`` on the test-bootstrap path —
@@ -153,30 +156,57 @@ _LIST_SCOPE_SCRIPT: str = (
 )
 
 
-#: Wipe the user filesystem: walk ``/`` recursively and remove every
-#: file + directory.  Errors are tolerated silently — the deploy that
-#: follows still has to write the new payload, and a stale file is
-#: better than no deploy.  Firmware lives on a separate partition,
-#: untouched by the user-fs walk.
+#: Wipe the user filesystem by reformatting the LittleFS volume the
+#: runtime is mounted on, then soft-reset so the new (empty) volume
+#: gets remounted on boot.
+#:
+#: A plain recursive ``os.remove`` walk leaves LittleFS metadata
+#: blocks + wear-levelling artifacts on flash, so a board that
+#: filled up over many test runs (Pi Pico W LittleFS partition is
+#: ~850 KB; lolin-s2-mp's ``vfs`` partition is 2 MB) can still hit
+#: ``ENOSPC`` mid-deploy after a "wipe."  ``VfsLfs2.mkfs`` reformats
+#: the partition, which is the only reliable way to recover the
+#: full block budget.  Verified on rp2 (pi-pico-w-mp) and esp32
+#: (lolin-s2-mp) hardware 2026-05-05.
+#:
+#: Substrate-dispatched: each MicroPython port exposes its flash /
+#: data partition through a different module.  The dispatch covers
+#: the two substrates chumicro supports today (rp2, esp32); other
+#: ports raise ``RuntimeError`` so the failure has a name instead
+#: of surfacing as "mkfs got no block device."  Firmware lives on a
+#: separate partition (``factory`` on esp32, the bootloader region
+#: on rp2), untouched by the LFS-only reformat.
 _WIPE_FILESYSTEM_SCRIPT: str = (
-    "import os\n"
-    "def _rmrf(p):\n"
-    "    try:\n"
-    "        names = os.listdir(p)\n"
-    "    except OSError:\n"
-    "        return\n"
-    "    for name in names:\n"
-    "        full = p + '/' + name if p != '/' else '/' + name\n"
-    "        try:\n"
-    "            os.remove(full)\n"
-    "        except OSError:\n"
-    "            _rmrf(full)\n"
-    "            try:\n"
-    "                os.rmdir(full)\n"
-    "            except OSError:\n"
-    "                pass\n"
-    "_rmrf('/')\n"
+    "import os, sys, machine\n"
+    "if sys.platform == 'rp2':\n"
+    "    import rp2\n"
+    "    _block_dev = rp2.Flash()\n"
+    "elif sys.platform == 'esp32':\n"
+    "    import esp32\n"
+    "    _block_dev = esp32.Partition.find("
+    "esp32.Partition.TYPE_DATA, label='vfs')[0]\n"
+    "else:\n"
+    "    raise RuntimeError("
+    "'chumicro_deploy.wipe_filesystem: unsupported MicroPython "
+    "platform ' + sys.platform)\n"
+    "try:\n"
+    "    os.umount('/')\n"
+    "except OSError:\n"
+    "    pass\n"
+    "os.VfsLfs2.mkfs(_block_dev)\n"
+    "machine.soft_reset()\n"
 )
+
+
+#: Wall-clock pause between issuing ``machine.soft_reset()`` (inside
+#: :data:`_WIPE_FILESYSTEM_SCRIPT`) and re-opening the persistent
+#: serial transport.  rp2 and esp32 both keep their host-side USB-CDC
+#: alive across a soft reset, so this is just settle time for the
+#: runtime to remount ``/`` on the freshly-formatted volume — not a
+#: full USB-CDC re-enumeration like CircuitPython's
+#: ``storage.erase_filesystem`` triggers.  Two seconds is comfortable
+#: on hardware in practice (1 s also worked but had no margin).
+_WIPE_REBOOT_SETTLE_SECONDS: float = 2.0
 
 
 def _parse_scope_listing(output: str) -> list[str]:
@@ -280,6 +310,11 @@ class MicropythonTransport:
             given ``(address, baudrate)``.  Defaults to
             :func:`_default_transport_factory`.  Inject a fake to avoid
             opening real serial ports in tests.
+        time: Object providing ``monotonic()`` and ``sleep()``.  Defaults
+            to Python's ``time`` module.  Inject :class:`FakeTime` (from
+            :mod:`chumicro_deploy.testing`) to eliminate wall-clock waits
+            in tests that exercise :meth:`wipe_filesystem`'s post-reset
+            settle.
     """
 
     def __init__(
@@ -290,12 +325,14 @@ class MicropythonTransport:
         mode: str = "mount",
         runner: Callable[..., subprocess.CompletedProcess] | None = None,
         transport_factory: Callable[[str, int], Any] | None = None,
+        time: TimeSource | None = None,
     ) -> None:
         self.address = address
         self.baudrate = baudrate
         self.mode = mode
         self._runner = runner or subprocess.run
         self._transport_factory = transport_factory or _default_transport_factory
+        self._time: TimeSource = time or cast("TimeSource", _time_module)
         self._staging_dir: tempfile.TemporaryDirectory | None = None
         self._staging_path: Path | None = None
         self._serial: Any = None
@@ -745,30 +782,61 @@ class MicropythonTransport:
             ) from error
 
     def wipe_filesystem(self) -> None:
-        """Erase the entire user filesystem via a recursive walk.
+        """Reformat the LittleFS user partition and soft-reset the runtime.
 
         Mount-mode (RAM) is a no-op — nothing was written to flash.
-        Otherwise sends :data:`_WIPE_FILESYSTEM_SCRIPT` which walks
-        ``/`` and removes every file and directory.  Firmware lives
-        on a separate partition, untouched.  Per-file errors are
-        tolerated silently so the deploy that follows isn't blocked
-        by a transient I/O hiccup mid-walk.
+
+        Otherwise dispatches :data:`_WIPE_FILESYSTEM_SCRIPT` which
+        ``os.umount('/')`` s the live volume, calls
+        ``os.VfsLfs2.mkfs(<block_device>)`` for the running platform
+        (rp2 → ``rp2.Flash()``, esp32 → the ``vfs`` data partition),
+        and ends with ``machine.soft_reset()`` so the runtime
+        re-mounts the freshly formatted volume on boot.  An
+        ``os.remove`` walk would leave LittleFS metadata + wear-
+        leveling artifacts on flash, so a board that filled up over
+        many test runs can still hit ``ENOSPC`` mid-deploy after a
+        non-mkfs "wipe."  The mkfs path recovers the full block
+        budget every time.
+
+        Verified on hardware 2026-05-05: pi-pico-w-mp (rp2),
+        lolin-s2-mp (esp32) — both come back with an empty ``/`` and
+        full free-block count.
+
+        The script is dispatched as a one-shot ``mpremote exec``
+        subprocess rather than via the persistent :class:`SerialTransport`:
+        ``machine.soft_reset()`` clears interpreter state and the
+        ``raw_repl`` framing, so reusing the persistent transport
+        across the reset would leave it in an inconsistent state.
+        After the subprocess returns, the serial port is given
+        :data:`_WIPE_REBOOT_SETTLE_SECONDS` to settle so the next
+        :meth:`connect` / :meth:`stage` call sees a fully booted
+        runtime ready to accept a fresh raw-REPL session.
         """
         if self.mode != "copy":
             return
+        # Drop any active mount + persistent transport so the subprocess
+        # below can claim the serial port.  The soft_reset inside the
+        # script invalidates the raw-REPL framing on whatever transport
+        # owns the port at the time, so we deliberately don't try to
+        # reuse the persistent transport across the call.
         if self._mounted and self._serial is not None:
             try:
                 self._serial.umount_local()
-            except Exception:  # pragma: no cover — best-effort cleanup
+            except Exception:  # pragma: no cover - best-effort cleanup
                 pass
             self._mounted = False
-        self._ensure_serial()
+        self._close_serial()
         try:
-            self._serial.exec_raw(_WIPE_FILESYSTEM_SCRIPT, timeout=60)
-        except Exception as error:
+            self._run_mpremote(["exec", _WIPE_FILESYSTEM_SCRIPT])
+        except MicropythonTransportError as error:
             raise MicropythonTransportError(
                 f"wipe_filesystem failed: {error}",
             ) from error
+        # Let the runtime finish booting on the freshly-formatted volume
+        # before any follow-up call grabs the port.  rp2 and esp32 keep
+        # their host-side USB-CDC alive across machine.soft_reset(), so
+        # this is settle time for the runtime — not USB-CDC re-enumeration.
+        self._time.sleep(_WIPE_REBOOT_SETTLE_SECONDS)
 
     # ------------------------------------------------------------------
     # Internal helpers

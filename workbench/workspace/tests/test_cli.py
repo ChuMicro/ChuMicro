@@ -68,6 +68,7 @@ class TestParser:
         "discover", "devices", "deploy", "projects", "status", "doctor",
         "demo", "bootstrap", "sim", "test", "repl", "env", "use",
         "rename", "install-firmware", "upgrade-firmware", "sync", "upgrade",
+        "reset-board",
     )
 
     def test_all_commands_register(self) -> None:
@@ -4479,3 +4480,64 @@ class TestInstallLibrariesCommand:
         ])
         assert exit_code == 42
         assert "command failed" in capsys.readouterr().err
+
+
+class TestResetBoard:
+    """`chumicro-workspace reset-board` standalone wipe subcommand."""
+
+    def test_without_yes_refuses_and_exits_two(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Bare ``reset-board`` exits 2 and never touches the transport."""
+        root = _seed_workspace(tmp_path)
+        transport = FakeTransport(execute_output="", mode="copy")
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+
+        exit_code = cli.main([
+            "reset-board", "--workspace-dir", str(root),
+            "--device", "lolin-s2",
+        ])
+        assert exit_code == 2
+        assert ("wipe_filesystem", ()) not in transport.calls
+        assert "without --yes" in capsys.readouterr().err
+
+    def test_with_yes_invokes_wipe_filesystem(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """``--yes`` connects, wipes, and disconnects in order."""
+        root = _seed_workspace(tmp_path)
+        transport = FakeTransport(execute_output="", mode="copy")
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+
+        exit_code = cli.main([
+            "reset-board", "--workspace-dir", str(root),
+            "--device", "lolin-s2", "--yes",
+        ])
+        assert exit_code == 0
+        kinds = [call[0] for call in transport.calls]
+        assert kinds == ["connect", "wipe_filesystem", "disconnect"]
+
+    def test_ram_mode_is_a_printed_no_op(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """RAM / mount mode never wrote to flash → reset-board prints + exits 0."""
+        root = _seed_workspace(tmp_path)
+        transport = FakeTransport(execute_output="", mode="ram")
+        monkeypatch.setattr(Device, "create_transport", lambda self: transport)
+
+        exit_code = cli.main([
+            "reset-board", "--workspace-dir", str(root),
+            "--device", "lolin-s2", "--yes",
+        ])
+        assert exit_code == 0
+        # No-op: never reached connect/wipe.
+        assert ("wipe_filesystem", ()) not in transport.calls
+        assert "nothing in flash to wipe" in capsys.readouterr().out

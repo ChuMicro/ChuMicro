@@ -294,6 +294,53 @@ A dedicated live end-to-end VS Code validation pass remains on `plans/next-up.md
 unusual local layouts can drop a `devices.yml` at the workspace root
 before running tests; nothing else is needed.
 
+## Wiping a board's filesystem
+
+Functional-test runs accumulate stage residue on the device filesystem
+— `mpremote fs cp -r` (and `circup install`) are append-only, nothing
+pre-cleans.  Pi Pico W MP boards in particular fill up over time
+because the LittleFS partition is only ~850 KB; lolin-s2-mp is
+better-off at 2 MB but still eventually hits the wall.  When this
+happens, deploys fail with cryptic `mpremote: cp: ...: No space left
+on device` errors mid-test.
+
+Two ways to wipe a board:
+
+```bash
+# Wipe + redeploy in one step (the original "wipe" surface).
+chumicro-workspace deploy --wipe <project> [--device <id>]
+
+# Wipe only — leave the board idle, no follow-up deploy.
+# --yes is required; no flag = exit 2 + safety message.
+chumicro-workspace reset-board --device <id> --yes
+```
+
+Both routes call the same primitive
+(`chumicro_deploy.TransportProtocol.wipe_filesystem`).  Per-runtime
+recipe matrix:
+
+| Runtime / board family | Recipe |
+|---|---|
+| **CircuitPython** (any board) | `import storage; storage.erase_filesystem()` — reformats FAT, hard-resets the board, host re-enumerates USB-CDC |
+| **MicroPython on rp2** (Pi Pico W) | `os.umount('/'); os.VfsLfs2.mkfs(rp2.Flash()); machine.soft_reset()` |
+| **MicroPython on esp32** (Lolin S2 family) | `os.umount('/'); os.VfsLfs2.mkfs(esp32.Partition.find(TYPE_DATA, label='vfs')[0]); machine.soft_reset()` |
+| Other MicroPython substrates | `RuntimeError` until a verified recipe lands |
+
+The MicroPython path uses `mkfs` rather than a recursive `os.remove`
+walk: LittleFS metadata + wear-leveling artifacts survive a
+file-by-file delete, so a board with a small partition can still
+hit `ENOSPC` mid-deploy after a non-mkfs "wipe."  `mkfs` recovers
+the full block budget every time.  Verified on hardware
+(pi-pico-w-mp, lolin-s2-mp).
+
+Destructive on every runtime — wipes both managed scope (`/lib/*`,
+`/code.py` / `/main.py`, `runtime_config.msgpack`) **and** out-of-scope
+files (`settings.toml`, hand-edited `boot.py`, uploaded assets).
+Firmware partitions are untouched.
+
+RAM / mount mode is a no-op (printed) — those modes never wrote to
+flash so there's nothing persistent to wipe.
+
 ## Troubleshooting
 
 | Symptom | Likely cause | What to do |
@@ -303,6 +350,7 @@ before running tests; nothing else is needed.
 | CircuitPython RAM-mode run fails before tests start | Inline payload is too large for available heap | Re-run with `--deploy-mode flash` or set that board's `deploy_mode: flash` |
 | Flash mode cannot find CIRCUITPY | Host mount path not auto-detected | Set `circuitpy_drive_path` explicitly in `devices.yml` |
 | A normal `python scripts/run.py test` run ignores `functional_tests/` | Expected behavior | Use `test-libraries-functional` or explicitly target the `functional_tests/` path from your IDE |
+| `mpremote: cp: ...: No space left on device` mid-deploy | LittleFS partition full of stage residue from prior runs | `chumicro-workspace reset-board --device <id> --yes` — see "Wiping a board's filesystem" above |
 
 ## Related guides
 
