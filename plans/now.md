@@ -6,11 +6,11 @@ This is the front door. Everything else is deeper read.
 
 ---
 
-- **Phase:** Promoted on-device-config-dogfooding to peer workstream.  Renamed `phase-4-5b-on-device-config-dogfooding.md` → `on-device-config-dogfooding.md`, applied audit-driven edits (corrected exception list to `(OSError, InvalidConfigType)`, struck stale `secrets.yml` premise per Decision 0057, sequenced plugin wiring + first consumer + hardware validation as Step 1, added `NOW_UTC_TUPLE` to Step 2 scope, added VERSION-bump + conftest-sweep to Step 4 / pre-conditions).  Cross-references in Decisions 0055/0056, parent workstream, and `next-up.md` updated.
-- **Last shipped:** `Restore Decision 0056 + surface ADR conventions in AGENTS.md` (commit `7892f52`).
-- **In flight:** idle — the on-device-config-dogfooding workstream is now ready to pick up cold; needs hardware-in-the-loop session.  Side-task chip open: fix `new-decision` skill's drift with `plans/decisions/README.md`.
+- **Phase:** Shipped the config-shape-beginner-ergonomics workstream end-to-end.  Three files (workspace.yml machinery / secrets.toml device-bound / project_config.toml per-project), flat-key `RuntimeConfig` wrapper on the device, `WifiConfig.from_config(config)` replaces `from_dict`, `[tool.chumicro.config] required_keys = [...]` manifest format, `chumicro-workspace config-validate` CLI, additive setup re-apply preserves comments via tomlkit + ruamel round-trip.  ADRs 0036 + 0057 refreshed in place.  Hardware-validated on all four boards (Pi Pico W CP/MP + Lolin S2 CP/MP) — wifi acceptance 12/12 + MQTT round-trip 4/4.  VERSIONs: chumicro-config 0.2.0, chumicro-wifi 0.1.0, chumicro-workspace 0.12.0.
+- **Last shipped:** `Add config-validate CLI + additive setup re-apply; refresh ADRs 0036 / 0057` (commit `7d36f27`); template-repo `Migrate to flat-key runtime config + secrets.toml + project_config.toml` (commit `72c6ffb`).
+- **In flight:** idle.  Pickup candidates in `next-up.md` `## Next` — the on-device-config-dogfooding workstream remains ready (still needs the pytest-device plugin hook for late-binding broker / echo / WS-server values; the seven mono-repo conftests already use the flat-key shape this workstream landed).  Side-task chip open: declare `[tool.chumicro.config]` manifests in the six networking libraries that don't have one yet (Q11 follow-up).
 - **Blocked on:** —.
-- **Last touched:** `plans/workstreams/on-device-config-dogfooding.md` (renamed + rewritten), `plans/workstreams/scripts-workbench-config-unification.md`, `plans/decisions/0055-config-pipeline-unification.md`, `plans/decisions/0056-transport-extra-files-staging.md`, `plans/next-up.md`.
+- **Last touched:** `plans/workstreams/config-shape-beginner-ergonomics.md`, `plans/decisions/0036-chumicro-config-library.md`, `plans/decisions/0057-two-file-config.md`, `plans/next-up.md`, mono-repo + template repo per the commit list above.
 
 ---
 
@@ -25,7 +25,8 @@ This is the front door. Everything else is deeper read.
 
 | Candidate | Where | Notes |
 |---|---|---|
-| On-device config dogfooding (was Phase 4.5b) | `plans/workstreams/on-device-config-dogfooding.md` | Plan validated + edited; ready to pick up cold.  Step 1 = plugin hook design + wifi as first consumer + 4-board hardware validation; Steps 2-4 mechanical. |
+| Declare `[tool.chumicro.config]` manifests in the six networking libraries that lack one (mqtt, requests, http_server, sockets, websockets, ntp) | `plans/workstreams/config-shape-beginner-ergonomics.md` Q11 follow-up | Mechanical — copy the wifi pyproject pattern; each library declares the flat keys its `from_config` reads.  Unblocks `chumicro-workspace config-validate` to actually catch missing config across the whole stack instead of only wifi. |
+| On-device config dogfooding (was Phase 4.5b) | `plans/workstreams/on-device-config-dogfooding.md` | Plan validated + edited; ready to pick up cold.  Step 1 = plugin hook design + wifi as first consumer + 4-board hardware validation; Steps 2-4 mechanical.  (Note: the seven mono-repo conftests already use the flat-key shape — the remaining work is the late-binding broker / echo / WS-server plugin hook in chumicro-pytest-device.) |
 | Anything in `## Next` of `next-up.md` | `plans/next-up.md` | Rebrand to ChipPy, OTA workstream (`plans/workstreams/ota.md`), digital I/O library, performance benchmarking infrastructure, etc.  All are unscoped or trigger-gated. |
 
 ## Hard rules to remember (non-negotiables)

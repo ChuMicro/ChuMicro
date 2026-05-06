@@ -1,6 +1,8 @@
-# Workstream: config-shape beginner ergonomics — research + design pass
+# Workstream: config-shape beginner ergonomics — research + design + implementation
 
-Status: **research / design**, opened 2026-05-06.  No code changes yet — this is a structured pass to lock down what config files exist, what they're named, what shape they take, and how libraries and apps read them.  The previous unification (`scripts-workbench-config-unification`, closed 2026-05-04) and Decision [0057](../decisions/0057-two-file-config.md) (`!secret` retired, two-file split) collapsed the *plumbing*; this pass revisits the *shape* through a beginner-ergonomics lens.
+Status: **shipped 2026-05-06**.  Research + design pass landed in the same session (Q1–Q11 resolved); implementation followed in five commits across the mono-repo and workspace-template repo, then four-board hardware validation closed the loop.  See **Implementation log** at the foot for the rollout summary.
+
+The previous unification (`scripts-workbench-config-unification`, closed 2026-05-04) and Decision [0057](../decisions/0057-two-file-config.md) (`!secret` retired, two-file split) collapsed the *plumbing*; this workstream revisited the *shape* through a beginner-ergonomics lens and shipped it.
 
 > **One-line rubric:** "plug in a board and go, tweak and go, be happy with results and deploy for real."  Every decision in this workstream gets weighed against it.
 
@@ -825,3 +827,34 @@ The design pass is **complete** as of 2026-05-06 — all eleven questions resolv
 - Decision 0057 (two-file shape, no `!secret`) is the floor — any proposal here has to keep that property.
 - Coverage gate stays at 94 %.
 - Beginner-ergonomics rubric (the user's "plug in a board and go") is the tie-breaker on every Q above.
+
+---
+
+## Implementation log (2026-05-06)
+
+The Q8 sequence collapsed into five commits — three in the mono-repo, one in the workspace-template repo, and a hardware-validation pass on the four-board canonical matrix.
+
+### Mono-repo commits
+
+1. **`30e2878` — Flatten runtime-config wire shape; migrate chumicro-wifi to flat-key API.**  Picks up Q8 steps 1–3 + 7.  Adds `RuntimeConfig` wrapper to `chumicro-config`; `load_section` / `try_load_section` rewritten with a `prefix` parameter; `WifiConfig.from_config` / `try_from_config` replace `from_dict` / `try_from_dict`; `flatten_config` helper; `compose_runtime_config` / `build_runtime_config` flatten the deep-merged dict before write; `[tool.chumicro.config] required_keys = [...]` flat-key manifest format; seven mono-repo functional-test conftests + on-device tests use flat access (`config["wifi.ssid"]`).  Bumps chumicro-config 0.1.0→0.2.0, chumicro-wifi 0.0.4→0.1.0, chumicro-workspace 0.10.0→0.11.0.
+2. **`8303d17` — Split workspace.yml machinery from secrets.toml device-bound config.**  Q8 step 5.  `secrets.toml` becomes the device-bound credentials/defaults file; `workspace.yml` keeps machinery (`library_sources`, `deploy_targets`, `quality`).  New payload + `read_secrets_toml_starter` + `read_secrets_toml`; `compose_runtime_config(secrets_toml=…)` (was `workspace_yaml=`); `WorkspaceLayout.secrets_toml` property; `health.check_secrets_toml`; `starter_drift` walks both files; gitignore + mono-repo's `_workspace_template/` add `secrets.toml`.
+3. **`7d36f27` — config-validate CLI + additive setup re-apply + ADR refresh.**  Q8 steps 4 + 8.  New `chumicro-workspace config-validate [<project>...]` runs the manifest validator without deploying.  `additive_reapply` (new module, tomlkit + ruamel) appends upstream-starter keys missing from the user's `workspace.yml` / `secrets.toml` in place, comments preserved (Strategy C of `setup-schema-reconciliation.md` — the canonical contract).  Decisions 0036 + 0057 rewritten in place to describe the flat-key + three-file shape.  Bumps chumicro-workspace 0.11.0→0.12.0.
+
+### Workspace-template repo commit
+
+4. **`72c6ffb` (template repo) — Migrate to flat-key runtime config + secrets.toml + project_config.toml.**  Q8 step 6.  Four example apps + the worked-example sensor app use `WifiConfig.from_config(config)` and `config.require("mqtt.broker")` instead of pre-extracted section dicts.  All `config.toml` files renamed to `project_config.toml` (legacy filename still accepted via `find_project_config`'s fallback).  `.gitignore` adds `/secrets.toml`.  README / CONTRIBUTING / AGENTS / `add-new-project` skill updated for the two-file split.
+
+### Hardware validation (canonical four-board matrix)
+
+| Board | Runtime | wifi acceptance | MQTT round-trip |
+|---|---|---|---|
+| Pi Pico W | CircuitPython 10.2.0 | 3/3 ✓ | 1/1 ✓ |
+| Pi Pico W | MicroPython 1.28.0 | 3/3 ✓ | 1/1 ✓ |
+| Lolin S2 | CircuitPython 10.1.4 | 3/3 ✓ | 1/1 ✓ |
+| Lolin S2 | MicroPython 1.28.0 | 3/3 ✓ | 1/1 ✓ |
+
+Wifi acceptance exercises `WifiConfig.try_from_config(config)` end-to-end (associate, deliberate disconnect + reconnect, state-callback observation).  MQTT round-trip exercises `config["mqtt.broker.host"]` / `config["mqtt.broker.port"]` flat-key access plus the QoS-1 publish/subscribe loop.  Both cover the new `compose_runtime_config(secrets_toml=…)` host-side path through the on-device flat dict.
+
+### Workstream closed
+
+All eleven design questions resolved + implemented + hardware-validated.  No follow-up open from this workstream — Q11's "declare manifests in the remaining libraries" is its own future workstream (six libraries still ship without `[tool.chumicro.config]` blocks; the `config-validate` CLI lints what's declared, but currently only chumicro-wifi declares anything).
