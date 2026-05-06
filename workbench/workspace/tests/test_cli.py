@@ -150,6 +150,33 @@ class TestSetup:
         assert (root / "extra_starter.txt").read_text().startswith("this file")
         assert "materialized 1 file(s) from _workspace_template/" in capsys.readouterr().out
 
+    def test_setup_succeeds_without_existing_workspace_yml(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Setup must work on a fresh-clone workspace where ``workspace.yml``
+        does not exist yet.  Regression test for the chicken-and-egg
+        bug where ``_cmd_setup`` called ``_resolve_workspace`` (which
+        walks up looking for the ``workspace.yml`` marker and raises
+        when absent) before the materialiser could create the marker.
+
+        The fix resolves the workspace root from ``--workspace-dir`` /
+        ``cwd`` directly for the setup command, bypassing the
+        marker-required walk-up.  Every other command keeps the
+        marker-based discovery so they still work from any
+        subdirectory inside an already-set-up workspace.
+        """
+        # Empty tmp_path — no workspace.yml, no devices.yml, no pyproject.
+        exit_code = cli.main(["setup", "--workspace-dir", str(tmp_path)])
+        assert exit_code == 0
+        # Workbench-owned starters must materialise even when no
+        # workspace.yml existed at start.
+        assert (tmp_path / "workspace.yml").is_file()
+        assert (tmp_path / "devices.yml").is_file()
+        captured = capsys.readouterr().out
+        assert "materialized 2 workbench-owned starter(s)" in captured
+
 
 # ---------------------------------------------------------------------------
 # init / update
