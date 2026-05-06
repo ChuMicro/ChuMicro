@@ -20,8 +20,9 @@ from msgpack import unpackb
 
 def _seed_workspace(tmp_path: Path) -> Path:
     """Create a minimal workspace at *tmp_path* and return the root."""
-    (tmp_path / "workspace.yml").write_text(
-        "defaults:\n  wifi:\n    hostname_prefix: chu-\n    password: shh\n"
+    (tmp_path / "workspace.yml").write_text("# machinery only\n")
+    (tmp_path / "secrets.toml").write_text(
+        "[wifi]\nhostname_prefix = 'chu-'\npassword = 'shh'\n",
     )
     (tmp_path / "devices.yml").write_text(
         "defaults:\n"
@@ -47,7 +48,7 @@ def _seed_project(workspace_root: Path, name: str = "back-porch") -> Path:
     """
     project_dir = workspace_root / "projects" / name
     project_dir.mkdir(parents=True)
-    (project_dir / "config.toml").write_text(
+    (project_dir / "project_config.toml").write_text(
         "[wifi]\nssid = 'HomeNet'\n"
     )
     (project_dir / "code.py").write_text("print('hello from project')\n")
@@ -175,7 +176,8 @@ class TestSetup:
         assert (tmp_path / "workspace.yml").is_file()
         assert (tmp_path / "devices.yml").is_file()
         captured = capsys.readouterr().out
-        assert "materialized 2 workbench-owned starter(s)" in captured
+        assert "materialized 3 workbench-owned starter(s)" in captured
+        assert (tmp_path / "secrets.toml").is_file()
 
 
 # ---------------------------------------------------------------------------
@@ -679,7 +681,8 @@ class TestDevices:
         tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "workspace.yml").write_text('# machinery only\n')
+        (tmp_path / "secrets.toml").write_text('')
         exit_code = cli.main(["devices", "--workspace-dir", str(tmp_path)])
         assert exit_code == 0
         assert "does not exist yet" in capsys.readouterr().out
@@ -689,7 +692,8 @@ class TestDevices:
         tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "workspace.yml").write_text('# machinery only\n')
+        (tmp_path / "secrets.toml").write_text('')
         (tmp_path / "devices.yml").write_text("devices: []\n")
         exit_code = cli.main(["devices", "--workspace-dir", str(tmp_path)])
         assert exit_code == 0
@@ -950,8 +954,9 @@ class TestDeployAllDevices:
 
     def _seed_two_device_workspace(self, tmp_path: Path) -> Path:
         """Seed a workspace with two registered devices."""
-        (tmp_path / "workspace.yml").write_text(
-            "defaults:\n  wifi:\n    hostname_prefix: chu-\n    password: shh\n",
+        (tmp_path / "workspace.yml").write_text("# machinery only\n")
+        (tmp_path / "secrets.toml").write_text(
+            '[wifi]\nhostname_prefix = "chu-"\npassword = "shh"\n',
         )
         (tmp_path / "devices.yml").write_text(
             "defaults:\n"
@@ -1063,15 +1068,13 @@ class TestDeployTargetsMapping:
         self, tmp_path: Path, deploy_targets_block: str = "",
     ) -> Path:
         """Workspace with two registered devices + optional deploy_targets."""
-        workspace_yaml_body = (
-            "defaults:\n"
-            "  wifi:\n"
-            "    hostname_prefix: chu-\n"
-            "    password: shh\n"
-        )
+        workspace_yaml_body = "# machinery only\n"
         if deploy_targets_block:
             workspace_yaml_body += deploy_targets_block
         (tmp_path / "workspace.yml").write_text(workspace_yaml_body)
+        (tmp_path / "secrets.toml").write_text(
+            "[wifi]\nhostname_prefix = 'chu-'\npassword = 'shh'\n",
+        )
         (tmp_path / "devices.yml").write_text(
             "defaults:\n"
             "  micropython: lolin-s2\n"
@@ -1235,16 +1238,15 @@ class TestDeployAllProjects:
     def _seed_three_project_workspace(self, tmp_path: Path) -> Path:
         """Two devices, three projects, full deploy_targets coverage."""
         (tmp_path / "workspace.yml").write_text(
-            "defaults:\n"
-            "  wifi:\n"
-            "    hostname_prefix: chu-\n"
-            "    password: shh\n"
             "deploy_targets:\n"
             "  back-porch: pico-w\n"
             "  garage/door: lolin-s2\n"
             "  garage/window:\n"
             "    - lolin-s2\n"
             "    - pico-w\n",
+        )
+        (tmp_path / "secrets.toml").write_text(
+            "[wifi]\nhostname_prefix = 'chu-'\npassword = 'shh'\n",
         )
         (tmp_path / "devices.yml").write_text(
             "defaults:\n"
@@ -2222,7 +2224,8 @@ class TestBootstrapWizard:
     """End-to-end CLI tests for `chumicro-workspace bootstrap`."""
 
     def _seed(self, tmp_path: Path) -> Path:
-        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "workspace.yml").write_text('# machinery only\n')
+        (tmp_path / "secrets.toml").write_text('')
         return tmp_path
 
     def test_full_flow_with_explicit_flags(
@@ -2958,7 +2961,8 @@ class TestInstallFirmware:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Slice 5: --url optional, derived from hardware.firmware_source."""
-        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "workspace.yml").write_text('# machinery only\n')
+        (tmp_path / "secrets.toml").write_text('')
         (tmp_path / "devices.yml").write_text(
             "defaults:\n"
             "  micropython: pico\n"
@@ -3008,7 +3012,8 @@ class TestInstallFirmware:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """A device with no resolvable hardware fields → exit 2 with a hint."""
-        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "workspace.yml").write_text('# machinery only\n')
+        (tmp_path / "secrets.toml").write_text('')
         (tmp_path / "devices.yml").write_text(
             "devices:\n"
             "  - id: orphan\n"
@@ -3322,7 +3327,8 @@ class TestAddDevice:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         # Start with no devices.yml — typical fresh-workspace case.
-        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "workspace.yml").write_text('# machinery only\n')
+        (tmp_path / "secrets.toml").write_text('')
         import chumicro_deploy
         monkeypatch.setattr(
             chumicro_deploy, "probe_device", lambda _device: _fake_probe_info(),
@@ -3347,7 +3353,8 @@ class TestAddDevice:
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "workspace.yml").write_text('# machinery only\n')
+        (tmp_path / "secrets.toml").write_text('')
         import chumicro_deploy
         monkeypatch.setattr(
             chumicro_deploy, "probe_device", lambda _device: _fake_probe_info(),
@@ -3372,7 +3379,8 @@ class TestAddDevice:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "workspace.yml").write_text('# machinery only\n')
+        (tmp_path / "secrets.toml").write_text('')
         import chumicro_deploy
         monkeypatch.setattr(
             chumicro_deploy, "probe_device", lambda _device: _fake_probe_info(),
@@ -3398,7 +3406,8 @@ class TestAddDevice:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """--force allows hardware.uid to change ('I swapped boards')."""
-        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "workspace.yml").write_text('# machinery only\n')
+        (tmp_path / "secrets.toml").write_text('')
         import chumicro_deploy
 
         first_info = _fake_probe_info(uid="ORIGINAL")
@@ -3424,7 +3433,8 @@ class TestAddDevice:
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "workspace.yml").write_text('# machinery only\n')
+        (tmp_path / "secrets.toml").write_text('')
 
         class _NoMarker:
             implementation = None
@@ -3455,7 +3465,8 @@ class TestAddDevice:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """A probe exception falls through to detect_board_state for help."""
-        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "workspace.yml").write_text('# machinery only\n')
+        (tmp_path / "secrets.toml").write_text('')
 
         def raising_probe(_device):
             raise OSError("could not open port /dev/cu.absent")
@@ -3481,7 +3492,8 @@ class TestAddDevice:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """A board in UF2 bootloader gets the install-firmware --method uf2 hint."""
-        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "workspace.yml").write_text('# machinery only\n')
+        (tmp_path / "secrets.toml").write_text('')
         # Stage a fake UF2 mount under tmp_path.
         uf2_mount_root = tmp_path / "Volumes"
         uf2_mount_root.mkdir()
@@ -3518,7 +3530,8 @@ class TestAddDevice:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """The headline value of the round-trip writer."""
-        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "workspace.yml").write_text('# machinery only\n')
+        (tmp_path / "secrets.toml").write_text('')
         (tmp_path / "devices.yml").write_text(
             "# House sensors — keep this file checked in.\n"
             "defaults:\n"
@@ -3557,7 +3570,8 @@ class TestAddDeviceAutoDefaults:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Adding the first MP device sets ``defaults.micropython``."""
-        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "workspace.yml").write_text('# machinery only\n')
+        (tmp_path / "secrets.toml").write_text('')
         import chumicro_deploy
         monkeypatch.setattr(
             chumicro_deploy, "probe_device", lambda _device: _fake_probe_info(),
@@ -3585,7 +3599,8 @@ class TestAddDeviceAutoDefaults:
         skipped present-but-null keys.  Post-fix, the null is
         treated as "no default set" and the new device fills it.
         """
-        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "workspace.yml").write_text('# machinery only\n')
+        (tmp_path / "secrets.toml").write_text('')
         # Pre-create a devices.yml mirroring the template materializer's output.
         (tmp_path / "devices.yml").write_text(
             "defaults:\n"
@@ -3609,7 +3624,8 @@ class TestAddDeviceAutoDefaults:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Adding a 2nd MP device leaves the existing default alone."""
-        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "workspace.yml").write_text('# machinery only\n')
+        (tmp_path / "secrets.toml").write_text('')
         import chumicro_deploy
         # First add — fills defaults.
         monkeypatch.setattr(
@@ -3642,7 +3658,8 @@ class TestAddDeviceAutoDefaults:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """MP and CP each get their own auto-fill on first registration."""
-        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "workspace.yml").write_text('# machinery only\n')
+        (tmp_path / "secrets.toml").write_text('')
         import chumicro_deploy
         # First add MP.
         monkeypatch.setattr(
@@ -3676,7 +3693,8 @@ class TestAddDeviceAutoDefaults:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """A user-set ``defaults.micropython`` survives a fresh add-device."""
-        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "workspace.yml").write_text('# machinery only\n')
+        (tmp_path / "secrets.toml").write_text('')
         # Pre-existing devices.yml with a default already named.
         (tmp_path / "devices.yml").write_text(
             "defaults:\n"
@@ -3707,7 +3725,8 @@ class TestAddDeviceAutoDefaults:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Re-probing with --force shouldn't touch defaults — first-add territory only."""
-        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "workspace.yml").write_text('# machinery only\n')
+        (tmp_path / "secrets.toml").write_text('')
         # Pre-existing entry with defaults explicitly cleared.
         (tmp_path / "devices.yml").write_text(
             "defaults:\n"
@@ -3740,7 +3759,8 @@ class TestAddDeviceAutoDefaults:
 
 class TestAddDeviceFirmwareFloor:
     def _seed(self, tmp_path: Path) -> None:
-        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "workspace.yml").write_text('# machinery only\n')
+        (tmp_path / "secrets.toml").write_text('')
 
     def test_supported_firmware_emits_no_warning(
         self,
@@ -3878,7 +3898,8 @@ class TestAddDeviceRuntimeInference:
     """`--runtime` is optional; when omitted, runtime is probed."""
 
     def _seed(self, tmp_path: Path) -> None:
-        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "workspace.yml").write_text('# machinery only\n')
+        (tmp_path / "secrets.toml").write_text('')
 
     def test_omitted_runtime_is_inferred(
         self,
@@ -4053,7 +4074,8 @@ class TestAddDeviceOmittedId:
     """
 
     def _seed(self, tmp_path: Path) -> None:
-        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "workspace.yml").write_text('# machinery only\n')
+        (tmp_path / "secrets.toml").write_text('')
 
     def test_omitted_id_uses_suggested(
         self,
@@ -4372,7 +4394,8 @@ class TestRenameNested:
         tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "workspace.yml").write_text('# machinery only\n')
+        (tmp_path / "secrets.toml").write_text('')
         (tmp_path / "devices.yml").write_text(
             "devices:\n"
             "  - id: alpha\n"
@@ -4632,7 +4655,8 @@ class TestInstallLibrariesCommand:
         monkey-patched ``subprocess.run`` — caller asserts on its
         contents after invoking the CLI.
         """
-        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "workspace.yml").write_text('# machinery only\n')
+        (tmp_path / "secrets.toml").write_text('')
         (tmp_path / "devices.yml").write_text(
             "defaults:\n"
             f"  {runtime}: target-board\n"

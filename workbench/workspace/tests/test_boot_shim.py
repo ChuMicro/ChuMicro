@@ -129,12 +129,13 @@ class TestBootShimFiles:
 
 
 def _seed_project_for_boot(tmp_path: Path) -> tuple[WorkspaceLayout, Path]:
-    (tmp_path / "workspace.yml").write_text(
-        "defaults:\n  wifi:\n    hostname_prefix: chu-\n    password: shh\n",
+    (tmp_path / "workspace.yml").write_text("# workspace machinery only\n")
+    (tmp_path / "secrets.toml").write_text(
+        "[wifi]\nhostname_prefix = 'chu-'\npassword = 'shh'\n",
     )
     project_dir = tmp_path / "projects" / "back-porch"
     project_dir.mkdir(parents=True)
-    (project_dir / "config.toml").write_text(
+    (project_dir / "project_config.toml").write_text(
         "[wifi]\nssid = 'HomeNet'\n",
     )
     (project_dir / "app.py").write_text(
@@ -239,7 +240,8 @@ class TestProjectBootSource:
         assert "/notes/draft.md" not in files
 
     def test_missing_config_raises(self, tmp_path: Path) -> None:
-        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "workspace.yml").write_text("# machinery only\n")
+        (tmp_path / "secrets.toml").write_text("")
         project_dir = tmp_path / "projects" / "no-config"
         project_dir.mkdir(parents=True)
         (project_dir / "app.py").write_text("def run(): pass\n")
@@ -282,17 +284,19 @@ def _seed_workspace_with_libraries(
     Layout::
 
         tmp_path/
-            workspace.yml              (gitignored defaults + credentials)
+            workspace.yml              (workspace machinery — host-only)
+            secrets.toml               (gitignored device defaults + creds)
             shared/
                 external_lib.py        (importable as ``external_lib``)
                 unused_lib.py          (NOT imported — must not ship)
             projects/back-porch/
-                config.toml
+                project_config.toml
                 app.py                 (imports external_lib + helpers)
                 helpers.py             (imports external_lib indirectly)
     """
-    (tmp_path / "workspace.yml").write_text(
-        "defaults:\n  wifi:\n    hostname_prefix: chu-\n    password: shh\n",
+    (tmp_path / "workspace.yml").write_text("# machinery only\n")
+    (tmp_path / "secrets.toml").write_text(
+        "[wifi]\nhostname_prefix = 'chu-'\npassword = 'shh'\n",
     )
     shared = tmp_path / "shared"
     shared.mkdir()
@@ -300,7 +304,7 @@ def _seed_workspace_with_libraries(
     (shared / "unused_lib.py").write_text("# never imported\n")
     project_dir = tmp_path / "projects" / "back-porch"
     project_dir.mkdir(parents=True)
-    (project_dir / "config.toml").write_text(
+    (project_dir / "project_config.toml").write_text(
         "[wifi]\nssid = 'HomeNet'\n",
     )
     (project_dir / "app.py").write_text(
@@ -415,7 +419,8 @@ class TestProjectBootWithImportGraphSource:
 
     def test_missing_project_entrypoint_raises(self, tmp_path: Path) -> None:
         """No app.py under the project directory is a clear failure."""
-        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "workspace.yml").write_text('# machinery only\n')
+        (tmp_path / "secrets.toml").write_text('')
         project_dir = tmp_path / "projects" / "no-app"
         project_dir.mkdir(parents=True)
         (project_dir / "config.toml").write_text("[wifi]\n")

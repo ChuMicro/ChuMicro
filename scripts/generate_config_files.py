@@ -8,15 +8,15 @@ Two-phase materialisation (matches ``chumicro-workspace setup``):
 
 1. ``materialize_templates`` walks ``_workspace_template/`` and
    materialises any file under it whose target at the workspace
-   root is missing.  The mono-repo's ``_workspace_template/workspace.yml``
-   carries this repo's opinions (wifi.ssid placeholder, mqtt broker =
-   ``test.mosquitto.org``) and lands at ``./workspace.yml``.
+   root is missing.  The mono-repo's ``_workspace_template/secrets.toml``
+   carries this repo's opinions (wifi placeholder, mqtt broker =
+   ``test.mosquitto.org``) and lands at ``./secrets.toml``.
 
 2. ``materialize_workbench_starters`` then fills in any remaining
-   workbench-owned starters (``devices.yml``, ``workspace.yml``)
-   from the canonical content in ``chumicro_workspace``'s
-   ``_payloads/``.  Acts as the fallback when
-   ``_workspace_template/`` doesn't carry a copy.
+   workbench-owned starters (``devices.yml``, ``workspace.yml``,
+   ``secrets.toml``) from the canonical content in
+   ``chumicro_workspace``'s ``_payloads/``.  Acts as the fallback
+   when ``_workspace_template/`` doesn't carry a copy.
 
 Files generated (lowest-precedence content shown — the
 ``_workspace_template/`` override wins when present):
@@ -25,16 +25,12 @@ Files generated (lowest-precedence content shown — the
   runner.  Content owned by ``chumicro-workspace`` (single source
   of truth, shared with the workspace-template repo); schema owned
   by ``chumicro-deploy``.
-* ``workspace.yml`` — gitignored workspace-wide defaults +
-  credentials in one file (Decisions 0035 + 0057).  Content
-  owned by ``chumicro-workspace``; the mono-repo overrides via its
-  own ``_workspace_template/workspace.yml``.
-
-Called by ``python scripts/run.py setup``.
-
-Decision 0057 fixed the runtime-config pipeline at two gitignored
-files: ``workspace.yml`` + per-project ``config.toml``.  Same
-gitignored guarantee, no marker, no resolver.
+* ``workspace.yml`` — gitignored workspace machinery
+  (``library_sources``, ``deploy_targets``, ``quality``).  Host-only;
+  never reaches a device.
+* ``secrets.toml`` — gitignored workspace-wide credentials + device
+  defaults.  Flows through ``compose_runtime_config`` into
+  ``runtime_config.msgpack`` at deploy time.
 """
 
 from __future__ import annotations

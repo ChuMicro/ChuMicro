@@ -98,8 +98,10 @@ class WithRuntimeConfig:
 
     Args:
         inner: The base ``FileSource`` (typically the project's app code).
-        workspace_yaml: Path to ``workspace.yml``.
-        project_config: Path to ``projects/<name>/config.{toml,yml,yaml}``.
+        secrets_toml: Path to ``secrets.toml`` (workspace-wide
+            credentials + device defaults).
+        project_config: Path to ``projects/<name>/project_config.toml``
+            (or legacy ``config.toml`` / ``.yml`` / ``.yaml``).
         output_path: Where to write the msgpack on the host.  Defaults
             to ``project_config.parent / _generated / runtime_config.msgpack``.
         device_path: On-device path for the msgpack.  Defaults to
@@ -116,14 +118,14 @@ class WithRuntimeConfig:
         self,
         inner: FileSource,
         *,
-        workspace_yaml: Path,
+        secrets_toml: Path,
         project_config: Path,
         output_path: Path | None = None,
         device_path: str = RUNTIME_CONFIG_DEVICE_PATH,
         library_roots: tuple[Path, ...] | list[Path] | None = None,
     ) -> None:
         self._inner = inner
-        self._workspace_yaml = workspace_yaml
+        self._secrets_toml = secrets_toml
         self._project_config = project_config
         self._device_path = device_path
         self._output_path = (
@@ -154,7 +156,7 @@ class WithRuntimeConfig:
     def files(self) -> dict[str, bytes]:
         """Regenerate the msgpack and merge it into the inner file map."""
         resolved = build_runtime_config(
-            workspace_yaml=self._workspace_yaml,
+            secrets_toml=self._secrets_toml,
             project_config=self._project_config,
             output_path=self._output_path,
         )
@@ -191,7 +193,7 @@ class WithRuntimeConfig:
 def project_directory_source(
     project_dir: Path,
     *,
-    workspace_yaml: Path,
+    secrets_toml: Path,
     entrypoint: str = "/code.py",
     resource_prefix: str = "/",
     extra_excluded: Iterable[str] = (),
@@ -206,7 +208,8 @@ def project_directory_source(
 
     Args:
         project_dir: ``projects/<name>/`` directory.
-        workspace_yaml: Path to ``workspace.yml``.
+        secrets_toml: Path to ``secrets.toml`` (workspace-wide
+            credentials + device defaults).
         entrypoint: On-device entrypoint path.  Defaults to
             ``"/code.py"`` (CircuitPython convention).  Override to
             ``"/main.py"`` for MicroPython projects.
@@ -246,6 +249,6 @@ def project_directory_source(
     )
     return WithRuntimeConfig(
         inner,
-        workspace_yaml=workspace_yaml,
+        secrets_toml=secrets_toml,
         project_config=find_project_config(project_dir),
     )

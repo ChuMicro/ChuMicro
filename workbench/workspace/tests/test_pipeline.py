@@ -1,6 +1,6 @@
 """End-to-end pipeline tests — read all sources + deep-merge + flatten + write.
 
-The pipeline is two layers (workspace.yml + per-project config), deep-
+The pipeline is two layers (secrets.toml + per-project config), deep-
 merged with project-wins precedence, then **flattened** to dotted keys
 before the msgpack write so the on-device reader sees the wire shape
 it consumes natively.
@@ -18,15 +18,15 @@ from msgpack import unpackb
 
 def _seed_workspace(tmp_path: Path) -> tuple[Path, Path, Path]:
     """Lay out a typical workspace under *tmp_path*; return three key paths."""
-    workspace_yaml = tmp_path / "workspace.yml"
-    workspace_yaml.write_text(
-        "defaults:\n"
-        "  wifi:\n"
-        "    hostname_prefix: chu-\n"
-        "    password: actual-password\n"
-        "  mqtt:\n"
-        "    port: 1883\n"
-        "    auth_token: abc123\n"
+    secrets_toml = tmp_path / "secrets.toml"
+    secrets_toml.write_text(
+        "[wifi]\n"
+        'hostname_prefix = "chu-"\n'
+        'password = "actual-password"\n'
+        "\n"
+        "[mqtt]\n"
+        "port = 1883\n"
+        'auth_token = "abc123"\n'
     )
 
     project_dir = tmp_path / "projects" / "back-porch"
@@ -45,26 +45,26 @@ def _seed_workspace(tmp_path: Path) -> tuple[Path, Path, Path]:
     )
 
     output_path = project_dir / "_generated" / "runtime_config.msgpack"
-    return workspace_yaml, project_config, output_path
+    return secrets_toml, project_config, output_path
 
 
 def test_build_runtime_config_writes_flat_msgpack(tmp_path: Path) -> None:
-    """End-to-end: workspace.yml + project config → flat msgpack on disk."""
-    workspace_yaml, project_config, output_path = _seed_workspace(tmp_path)
+    """End-to-end: secrets.toml + project config → flat msgpack on disk."""
+    secrets_toml, project_config, output_path = _seed_workspace(tmp_path)
 
     result = build_runtime_config(
-        workspace_yaml=workspace_yaml,
+        secrets_toml=secrets_toml,
         project_config=project_config,
         output_path=output_path,
     )
 
     expected = {
-        "wifi.hostname_prefix": "chu-",       # from workspace.yml
-        "wifi.password": "actual-password",   # from workspace.yml
+        "wifi.hostname_prefix": "chu-",       # from secrets.toml
+        "wifi.password": "actual-password",   # from secrets.toml
         "wifi.ssid": "HomeNet",               # from project config
         "wifi.hostname": "back-porch",        # from project config
-        "mqtt.port": 1883,                    # from workspace.yml
-        "mqtt.auth_token": "abc123",          # from workspace.yml
+        "mqtt.port": 1883,                    # from secrets.toml
+        "mqtt.auth_token": "abc123",          # from secrets.toml
         "mqtt.broker": "mqtt.home",           # from project config
         "app.sample_period_ms": 30000,        # from project config
     }
@@ -76,10 +76,10 @@ def test_build_runtime_config_writes_flat_msgpack(tmp_path: Path) -> None:
 
 def test_build_runtime_config_creates_generated_dir(tmp_path: Path) -> None:
     """``_generated/`` is gitignored and may not exist before the first deploy."""
-    workspace_yaml, project_config, output_path = _seed_workspace(tmp_path)
+    secrets_toml, project_config, output_path = _seed_workspace(tmp_path)
     assert not output_path.parent.exists()
     build_runtime_config(
-        workspace_yaml=workspace_yaml,
+        secrets_toml=secrets_toml,
         project_config=project_config,
         output_path=output_path,
     )
@@ -91,7 +91,7 @@ def test_build_runtime_config_project_overrides_workspace_defaults(
     tmp_path: Path,
 ) -> None:
     """Per-project config wins over workspace defaults at any nesting depth."""
-    workspace_yaml, project_config, output_path = _seed_workspace(tmp_path)
+    secrets_toml, project_config, output_path = _seed_workspace(tmp_path)
     project_config.write_text(
         "[wifi]\n"
         'ssid = "HomeNet"\n'
@@ -99,7 +99,7 @@ def test_build_runtime_config_project_overrides_workspace_defaults(
     )
 
     result = build_runtime_config(
-        workspace_yaml=workspace_yaml,
+        secrets_toml=secrets_toml,
         project_config=project_config,
         output_path=output_path,
     )
@@ -112,10 +112,10 @@ def test_compose_runtime_config_returns_flat_dict_without_writing(
     tmp_path: Path,
 ) -> None:
     """``compose_runtime_config`` returns the flat dict, no msgpack written."""
-    workspace_yaml, project_config, output_path = _seed_workspace(tmp_path)
+    secrets_toml, project_config, output_path = _seed_workspace(tmp_path)
 
     result = compose_runtime_config(
-        workspace_yaml=workspace_yaml,
+        secrets_toml=secrets_toml,
         project_config=project_config,
     )
     assert result["wifi.ssid"] == "HomeNet"
@@ -128,10 +128,10 @@ def test_compose_runtime_config_treats_missing_project_config_as_empty(
     tmp_path: Path,
 ) -> None:
     """Missing per-library config is fine — workspace defaults pass through."""
-    workspace_yaml, _project_config, _output_path = _seed_workspace(tmp_path)
+    secrets_toml, _project_config, _output_path = _seed_workspace(tmp_path)
 
     result_none = compose_runtime_config(
-        workspace_yaml=workspace_yaml,
+        secrets_toml=secrets_toml,
         project_config=None,
     )
     assert result_none == {
@@ -142,7 +142,7 @@ def test_compose_runtime_config_treats_missing_project_config_as_empty(
     }
 
     result_missing = compose_runtime_config(
-        workspace_yaml=workspace_yaml,
+        secrets_toml=secrets_toml,
         project_config=tmp_path / "does-not-exist" / "project_config.toml",
     )
     assert result_missing == result_none
@@ -150,8 +150,8 @@ def test_compose_runtime_config_treats_missing_project_config_as_empty(
 
 def test_compose_runtime_config_yaml_project_config(tmp_path: Path) -> None:
     """``config.yml`` works the same as TOML (suffix decides parser)."""
-    workspace_yaml = tmp_path / "workspace.yml"
-    workspace_yaml.write_text("defaults:\n  wifi:\n    ssid: default\n")
+    secrets_toml = tmp_path / "secrets.toml"
+    secrets_toml.write_text("[wifi]\nssid = 'default'\n")
 
     project_dir = tmp_path / "projects" / "p1"
     project_dir.mkdir(parents=True)
@@ -159,7 +159,7 @@ def test_compose_runtime_config_yaml_project_config(tmp_path: Path) -> None:
     project_config.write_text("wifi:\n  ssid: from-project\n  password: yaml-secret\n")
 
     result = compose_runtime_config(
-        workspace_yaml=workspace_yaml,
+        secrets_toml=secrets_toml,
         project_config=project_config,
     )
     assert result == {"wifi.ssid": "from-project", "wifi.password": "yaml-secret"}

@@ -177,6 +177,7 @@ def update(
 _WORKBENCH_STARTERS: tuple[tuple[str, str], ...] = (
     ("devices.yml", "read_devices_yml_starter"),
     ("workspace.yml", "read_workspace_yml_starter"),
+    ("secrets.toml", "read_secrets_toml_starter"),
 )
 
 

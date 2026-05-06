@@ -2,7 +2,7 @@
 
 Two responsibilities:
 
-1. Register the merged runtime-config dict (workspace.yml +
+1. Register the merged runtime-config dict (secrets.toml +
    per-library overrides) with pytest-device so it stages at
    ``/runtime_config.msgpack`` on the device — on-device tests read
    wifi creds + the dynamic ``sockets.echo`` host/port from there.
@@ -24,7 +24,7 @@ from chumicro_workspace import compose_runtime_config
 
 _HERE = Path(__file__).resolve().parent
 _REPO_ROOT = _HERE.parents[2]
-_WORKSPACE_YAML = _REPO_ROOT / "workspace.yml"
+_SECRETS_TOML = _REPO_ROOT / "secrets.toml"
 _LIBRARY_CONFIG = _HERE / "config.toml"  # optional; absent → workspace defaults only
 
 #: Maximum datagram size the echo server accepts.  Generous for any
@@ -40,11 +40,11 @@ def _merged_runtime_config_with_creds() -> dict | None:
     matches the pre-migration behaviour where the on-device tests
     silently skipped on missing creds.
     """
-    if not _WORKSPACE_YAML.is_file():
+    if not _SECRETS_TOML.is_file():
         return None
     try:
         merged = compose_runtime_config(
-            workspace_yaml=_WORKSPACE_YAML,
+            secrets_toml=_SECRETS_TOML,
             project_config=_LIBRARY_CONFIG,
         )
     except Exception:  # noqa: BLE001 — silent skip on any config error

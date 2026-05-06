@@ -1191,7 +1191,7 @@ def _cmd_deploy(args: argparse.Namespace) -> int:
                 layout = "flat"
                 source = project_directory_source(
                     project_dir,
-                    workspace_yaml=workspace.workspace_yaml,
+                    secrets_toml=workspace.secrets_toml,
                     entrypoint=(
                         args.entrypoint or f"/{device.effective_entrypoint}"
                     ),
@@ -1967,7 +1967,7 @@ def _cmd_dump_config(args: argparse.Namespace) -> int:
         project_config_path = None
 
     resolved = compose_runtime_config(
-        workspace_yaml=workspace.workspace_yaml,
+        secrets_toml=workspace.secrets_toml,
         project_config=project_config_path,
     )
 

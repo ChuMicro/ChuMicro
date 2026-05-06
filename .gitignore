@@ -45,13 +45,22 @@ devices.yml
 # pre-Phase-4 era don't accidentally commit it.
 chumicro-dev-config.toml
 
-# Workspace-wide defaults + credentials in one gitignored file
-# (Decisions 0035 + 0057).  Materialised by `python scripts/run.py setup`
+# workspace.yml — workspace machinery (library_sources, deploy_targets,
+# quality, environments).  Materialised by ``python scripts/run.py setup``
 # from `_workspace_template/workspace.yml` (this repo's specific opinions
 # — tracked, ships as the starter) or chumicro-workspace's workbench-owned
-# starter.  Never committed — contains real wifi passwords / broker auth.
-# Root-anchored so `_workspace_template/workspace.yml` stays trackable.
+# starter.  Gitignored so the auto-populated ``library_sources:`` block
+# (paths into a sibling chumicro/ checkout) doesn't reach git.  Root-
+# anchored so `_workspace_template/workspace.yml` stays trackable.
 /workspace.yml
+
+# secrets.toml — workspace-wide credentials + device defaults that flow
+# into runtime_config.msgpack at deploy time.  Materialised on first
+# ``setup`` from `_workspace_template/secrets.toml` (this repo's specific
+# opinions — tracked, ships as the starter) or the workbench-owned
+# starter.  Never committed — contains real wifi passwords / broker auth.
+# Root-anchored so `_workspace_template/secrets.toml` stays trackable.
+/secrets.toml
 
 # Legacy `_test_creds.py` shim retired by the on-device-config-dogfooding
 # workstream — networking-library conftests no longer materialise it.

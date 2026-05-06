@@ -1,18 +1,22 @@
 """Host-side file readers for the runtime-config pipeline.
 
-Two input shapes per Decisions 0035 and 0057 (no ``!secret``
-marker; both layers are gitignored):
+Two input shapes:
 
-* ``workspace.yml`` — workspace-wide defaults + credentials (YAML).
-  Gitignored, materialised on first ``setup`` from a workbench-owned
-  starter.  ``defaults:`` block holds the section-namespaced dict that
-  flows into every project's merged config as the lowest-precedence
-  layer.
-* ``projects/<name>/config.toml`` (or ``.yml``) — per-project config
-  (TOML default; YAML accepted opt-in).  Gitignored when scaffolded
-  by ``new``; tracked when shipped as part of the workspace template
-  (gitignore patterns don't untrack already-tracked files).  Sections
-  override workspace defaults key-by-key on deep-merge.
+* ``secrets.toml`` — workspace-wide credentials + device defaults
+  (TOML, gitignored, materialised on first ``setup`` from the
+  workbench-owned starter).  The whole file is the device config —
+  no ``defaults:`` wrapper, no other top-level blocks.  Keys are
+  nested TOML tables (``[wifi] ssid = "x"``); compose-time flattening
+  produces the wire shape the on-device reader consumes.
+* ``projects/<name>/project_config.toml`` (or legacy ``config.toml``,
+  or ``config.yml`` / ``.yaml``) — per-project knobs that override
+  the workspace defaults at deploy time.
+
+``workspace.yml`` is the workspace **machinery** file (``library_sources``,
+``deploy_targets``, ``quality``, ``environments``) — separate concern,
+read by other modules (:mod:`chumicro_workspace.import_graph`,
+:mod:`chumicro_workspace.deploy_targets`).  It never flows onto a
+device; this module doesn't touch it.
 
 All readers return plain dicts.  TOML uses stdlib ``tomllib``
 (CPython 3.11+); YAML uses ruamel.yaml (declared as a workbench dep
@@ -36,7 +40,7 @@ class WorkspaceConfigError(ValueError):
     (most importantly ``check_workspace_yaml`` in :mod:`health`)
     only need to catch one exception type to render a clean error.
     File-level validation only — schema-level checks happen at the
-    library boundary when each `from_dict` fires on device.
+    library boundary when each ``from_config`` fires on device.
     """
 
 
@@ -64,38 +68,33 @@ def _read_toml(path: Path) -> dict[str, Any]:
         return tomllib.load(handle)
 
 
-def read_workspace_yaml(path: Path) -> dict[str, Any]:
-    """Read a ``workspace.yml`` and return its ``defaults:`` dict.
+def read_secrets_toml(path: Path) -> dict[str, Any]:
+    """Read a ``secrets.toml`` and return its contents as a nested dict.
 
-    The full workspace.yml carries other top-level sections too
-    (``library_sources:``, future ``environments:``); the runtime-
-    config pipeline only consumes ``defaults:``.  Returns an empty
-    dict when the file lacks a ``defaults:`` block — that's the
-    "no shared defaults" case, not an error.
+    The whole file is the device config — no ``defaults:`` wrapper.
+    Returns an empty dict when the file is empty.  TOML stdlib
+    guarantees the top level is a table, so no shape check is needed
+    on this side — malformed bytes raise :class:`tomllib.TOMLDecodeError`.
 
     Args:
-        path: Path to ``workspace.yml``.
+        path: Path to ``secrets.toml``.
 
     Raises:
-        FileNotFoundError: When *path* does not exist.  Workspace.yml
-            is the load-bearing config file; callers that want to
-            tolerate its absence should check ``path.is_file()`` first.
+        FileNotFoundError: When *path* does not exist.  Callers that
+            want to tolerate its absence should check ``path.is_file()``
+            first.
+        tomllib.TOMLDecodeError: File is malformed TOML.
     """
-    data = _read_yaml(path)
-    defaults = data.get("defaults", {})
-    if not isinstance(defaults, dict):
-        raise WorkspaceConfigError(
-            f"{path}: 'defaults' must be a mapping, got {type(defaults).__name__}"
-        )
-    return defaults
+    return _read_toml(path)
 
 
 def read_project_config(path: Path) -> dict[str, Any]:
     """Read a project's config file — TOML by default, YAML by suffix.
 
     Args:
-        path: Path to ``config.toml`` or ``config.yml`` /
-            ``config.yaml``.  Suffix decides the parser.
+        path: Path to ``project_config.toml`` (or legacy ``config.toml``,
+            or ``config.yml`` / ``config.yaml``).  Suffix decides the
+            parser.
 
     Raises:
         WorkspaceConfigError: Unrecognized suffix or malformed top

@@ -179,6 +179,7 @@ def project_import_graph_source(
     *,
     workspace: WorkspaceLayout,
     workspace_yaml: Path | None = None,
+    secrets_toml: Path | None = None,
     entrypoint_filename: str = "code.py",
     device_entrypoint: str = "/code.py",
     resource_prefix: str = "/lib",
@@ -204,12 +205,15 @@ def project_import_graph_source(
             of the entrypoint lookup *and* as a search path so
             project-local modules under the same dir resolve.
         workspace: Resolved :class:`WorkspaceLayout`.  Used to
-            locate ``workspace.yml`` (defaults block + library_sources)
-            when *workspace_yaml* is ``None``.
-        workspace_yaml: Override the workspace.yml path.  Defaults
-            to ``workspace.workspace_yaml``.  Tests inject when
-            staging a workspace under tmp_path with a non-default
-            layout.
+            locate ``workspace.yml`` (for ``library_sources:``) and
+            ``secrets.toml`` (for runtime config) when the explicit
+            overrides aren't supplied.
+        workspace_yaml: Override the workspace.yml path — used by the
+            import-graph walker to read ``library_sources:``.
+            Defaults to ``workspace.workspace_yaml``.
+        secrets_toml: Override the secrets.toml path — used by
+            ``WithRuntimeConfig`` to read workspace-wide credentials
+            and device defaults.  Defaults to ``workspace.secrets_toml``.
         entrypoint_filename: Host-side filename of the project's
             entrypoint; must exist under *project_dir*.  Defaults to
             ``"code.py"`` (CircuitPython convention).  Override to
@@ -242,6 +246,8 @@ def project_import_graph_source(
 
     if workspace_yaml is None:
         workspace_yaml = workspace.workspace_yaml
+    if secrets_toml is None:
+        secrets_toml = workspace.secrets_toml
 
     entrypoint_path = project_dir / entrypoint_filename
     if not entrypoint_path.is_file():
@@ -282,7 +288,7 @@ def project_import_graph_source(
 
     return WithRuntimeConfig(
         inner,
-        workspace_yaml=workspace_yaml,
+        secrets_toml=secrets_toml,
         project_config=find_project_config(project_dir),
         output_path=project_dir / GENERATED_DIRNAME / "runtime_config.msgpack",
         library_roots=library_roots,

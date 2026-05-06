@@ -104,7 +104,7 @@ from chumicro_workspace.import_graph import (
 from chumicro_workspace.loaders import (
     WorkspaceConfigError,
     read_project_config,
-    read_workspace_yaml,
+    read_secrets_toml,
 )
 from chumicro_workspace.merge import merge_configs
 from chumicro_workspace.onboarding import (
@@ -116,6 +116,9 @@ from chumicro_workspace.onboarding import (
 from chumicro_workspace.pipeline import (
     build_runtime_config,
     compose_runtime_config,
+)
+from chumicro_workspace.secrets_toml_starter import (
+    read_secrets_toml_starter,
 )
 from chumicro_workspace.starter_drift import (
     collect_missing_starter_paths,
@@ -172,7 +175,8 @@ __all__ = [
     "read_library_sources",
     "read_manifest",
     "read_project_config",
-    "read_workspace_yaml",
+    "read_secrets_toml",
+    "read_secrets_toml_starter",
     "read_workspace_yml_starter",
     "rename_device",
     "set_runtime_default",

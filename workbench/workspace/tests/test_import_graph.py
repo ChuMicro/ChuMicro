@@ -75,7 +75,8 @@ class TestReadLibrarySources:
 
 def _seed_workspace_root(tmp_path: Path, *, with_libs: bool = True,
                          with_packages: bool = True) -> WorkspaceLayout:
-    (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+    (tmp_path / "workspace.yml").write_text('# machinery only\n')
+    (tmp_path / "secrets.toml").write_text('')
     if with_libs:
         (tmp_path / "shared").mkdir()
     if with_packages:
@@ -144,7 +145,8 @@ class TestBuildSearchPaths:
 
 def _seed_project_with_imports(tmp_path: Path) -> WorkspaceLayout:
     """Stage a workspace with a project that imports from shared/."""
-    (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+    (tmp_path / "workspace.yml").write_text('# machinery only\n')
+    (tmp_path / "secrets.toml").write_text('')
     shared = tmp_path / "shared"
     shared.mkdir()
     (shared / "shared_helper.py").write_text(
@@ -213,13 +215,14 @@ class TestProjectImportGraphSource:
             "library_sources:\n"
             f"  shared_helper: {external}\n"
         )
+        (tmp_path / "secrets.toml").write_text("")
         shared = tmp_path / "shared"
         shared.mkdir()
         (shared / "shared_helper.py").write_text("MARKER = 'from-shared'\n")
 
         project_dir = tmp_path / "projects" / "back-porch"
         project_dir.mkdir(parents=True)
-        (project_dir / "config.toml").write_text("[wifi]\nssid = 'x'\n")
+        (project_dir / "project_config.toml").write_text("[wifi]\nssid = 'x'\n")
         (project_dir / "code.py").write_text("import shared_helper\n")
 
         workspace = WorkspaceLayout(root=tmp_path)
@@ -234,7 +237,8 @@ class TestProjectImportGraphSource:
         tmp_path: Path,
     ) -> None:
         """Override entrypoint_filename + device_entrypoint for MP."""
-        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "workspace.yml").write_text('# machinery only\n')
+        (tmp_path / "secrets.toml").write_text('')
         project_dir = tmp_path / "projects" / "mp-project"
         project_dir.mkdir(parents=True)
         (project_dir / "config.toml").write_text("[app]\n")
@@ -252,7 +256,8 @@ class TestProjectImportGraphSource:
         assert source.entrypoint() == "/main.py"
 
     def test_missing_entrypoint_raises(self, tmp_path: Path) -> None:
-        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "workspace.yml").write_text('# machinery only\n')
+        (tmp_path / "secrets.toml").write_text('')
         project_dir = tmp_path / "projects" / "empty"
         project_dir.mkdir(parents=True)
         (project_dir / "config.toml").write_text("[app]\n")
@@ -265,7 +270,8 @@ class TestProjectImportGraphSource:
         tmp_path: Path,
     ) -> None:
         """Caller-supplied tail search path resolves modules not under shared/."""
-        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "workspace.yml").write_text('# machinery only\n')
+        (tmp_path / "secrets.toml").write_text('')
         external = tmp_path / "external"
         external.mkdir()
         (external / "extra_module.py").write_text("X = 1\n")
@@ -286,7 +292,8 @@ class TestProjectImportGraphSource:
 
     def test_extra_modules_force_included(self, tmp_path: Path) -> None:
         """extra_modules forwards through to ImportGraphSource."""
-        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "workspace.yml").write_text('# machinery only\n')
+        (tmp_path / "secrets.toml").write_text('')
         shared = tmp_path / "shared"
         shared.mkdir()
         (shared / "dynamic_target.py").write_text("Y = 2\n")
@@ -310,7 +317,8 @@ class TestProjectImportGraphSource:
         self, tmp_path: Path,
     ) -> None:
         """Decision 0044 — wrong-runtime adapters do not ride the import graph."""
-        (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+        (tmp_path / "workspace.yml").write_text('# machinery only\n')
+        (tmp_path / "secrets.toml").write_text('')
         shared = tmp_path / "shared"
         shared.mkdir()
         adapters = shared / "_adapters"

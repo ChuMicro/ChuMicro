@@ -19,7 +19,8 @@ from chumicro_workspace.workspace import WorkspaceLayout
 
 def _layout(tmp_path: Path) -> WorkspaceLayout:
     """Drop a workspace.yml and return the layout."""
-    (tmp_path / "workspace.yml").write_text("defaults: {}\n")
+    (tmp_path / "workspace.yml").write_text("# machinery only\n")
+    (tmp_path / "secrets.toml").write_text("")
     return WorkspaceLayout(root=tmp_path)
 
 
@@ -55,7 +56,49 @@ class TestCheckWorkspaceYaml:
         workspace = WorkspaceLayout(root=tmp_path)
         finding = check_workspace_yaml(workspace)
         assert finding.level is HealthLevel.ERROR
+        assert "must be a mapping" in finding.message
+
+    def test_error_when_yaml_parse_fails(self, tmp_path: Path) -> None:
+        # Truly malformed YAML — ruamel raises ``YAMLError``.
+        (tmp_path / "workspace.yml").write_text("wifi: : :\n[broken\n")
+        workspace = WorkspaceLayout(root=tmp_path)
+        finding = check_workspace_yaml(workspace)
+        assert finding.level is HealthLevel.ERROR
         assert "malformed" in finding.message
+
+
+# ---------------------------------------------------------------------------
+# check_secrets_toml
+# ---------------------------------------------------------------------------
+
+
+class TestCheckSecretsToml:
+    def test_warns_when_absent(self, tmp_path: Path) -> None:
+        # Don't use _layout (which writes secrets.toml) — make a layout
+        # where secrets.toml is absent.
+        (tmp_path / "workspace.yml").write_text("# machinery\n")
+        workspace = WorkspaceLayout(root=tmp_path)
+        from chumicro_workspace.health import check_secrets_toml  # noqa: PLC0415
+        finding = check_secrets_toml(workspace)
+        assert finding.level is HealthLevel.WARN
+        assert "not present" in finding.message
+        assert "setup" in finding.hint
+
+    def test_ok_when_valid(self, tmp_path: Path) -> None:
+        workspace = _layout(tmp_path)
+        workspace.secrets_toml.write_text('[wifi]\nssid = "x"\n')
+        from chumicro_workspace.health import check_secrets_toml  # noqa: PLC0415
+        finding = check_secrets_toml(workspace)
+        assert finding.level is HealthLevel.OK
+
+    def test_error_when_malformed_toml(self, tmp_path: Path) -> None:
+        workspace = _layout(tmp_path)
+        # Malformed TOML — tomllib raises ``TOMLDecodeError``.
+        workspace.secrets_toml.write_text("[broken\nssid = \n")
+        from chumicro_workspace.health import check_secrets_toml  # noqa: PLC0415
+        finding = check_secrets_toml(workspace)
+        assert finding.level is HealthLevel.ERROR
+        assert "parse error" in finding.message or "malformed" in finding.message
 
 
 # ---------------------------------------------------------------------------
@@ -149,12 +192,13 @@ class TestCountProjects:
 
 
 class TestCollectHealthFindings:
-    def test_runs_all_three_checks_in_order(self, tmp_path: Path) -> None:
+    def test_runs_all_checks_in_order(self, tmp_path: Path) -> None:
         workspace = _layout(tmp_path)
         findings = collect_health_findings(workspace)
         labels = [finding.label for finding in findings]
         assert labels == [
             "WORKSPACE.YML",
+            "SECRETS.TOML",
             "DEVICES.YML",
             "PROJECTS",
         ]
@@ -242,15 +286,16 @@ class TestCheckProjectRunFunctions:
 
 
 class TestCollectDoctorFindings:
-    def test_runs_all_five_checks_in_order(self, tmp_path: Path) -> None:
+    def test_runs_all_checks_in_order(self, tmp_path: Path) -> None:
         workspace = _layout(tmp_path)
         findings = collect_doctor_findings(workspace)
         labels = [finding.label for finding in findings]
-        # status's three checks are bracketed by python (front) +
+        # status's checks are bracketed by python (front) +
         # project-run (back).
         assert labels == [
             "PYTHON",
             "WORKSPACE.YML",
+            "SECRETS.TOML",
             "DEVICES.YML",
             "PROJECTS",
             "PROJECT run() defs",
