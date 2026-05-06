@@ -6,9 +6,9 @@ materialise an empty ``workspace.yml`` — most commonly
 ``chumicro-workspace setup`` on first run.
 
 The actual file content travels with the wheel inside
-``_payloads/workspace_yml/starter.yml.template`` so reads work in both
-editable installs (live source tree) and pip-installed wheels (unpacked
-into site-packages).
+``_payloads/workspace.yml.template`` so reads work in both editable
+installs (live source tree) and pip-installed wheels (unpacked into
+site-packages).
 
 The only public surface is :func:`read_workspace_yml_starter` —
 returning the file's content as a string.  Callers decide where to
@@ -33,8 +33,7 @@ from pathlib import Path
 _WORKSPACE_YML_STARTER_PATH = (
     Path(__file__).resolve().parent
     / "_payloads"
-    / "workspace_yml"
-    / "starter.yml.template"
+    / "workspace.yml.template"
 )
 
 

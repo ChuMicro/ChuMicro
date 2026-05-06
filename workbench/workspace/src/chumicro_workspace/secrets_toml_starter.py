@@ -6,9 +6,9 @@ materialise an empty ``secrets.toml`` — most commonly
 ``chumicro-workspace setup`` on first run.
 
 The actual file content travels with the wheel inside
-``_payloads/secrets_toml/starter.toml.template`` so reads work in
-both editable installs (live source tree) and pip-installed wheels
-(unpacked into site-packages).
+``_payloads/secrets.toml.template`` so reads work in both editable
+installs (live source tree) and pip-installed wheels (unpacked into
+site-packages).
 
 The only public surface is :func:`read_secrets_toml_starter` —
 returning the file's content as a string.  Callers decide where to
@@ -35,8 +35,7 @@ from pathlib import Path
 _SECRETS_TOML_STARTER_PATH = (
     Path(__file__).resolve().parent
     / "_payloads"
-    / "secrets_toml"
-    / "starter.toml.template"
+    / "secrets.toml.template"
 )
 
 

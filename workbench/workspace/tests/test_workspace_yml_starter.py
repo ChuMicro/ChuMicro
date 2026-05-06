@@ -4,7 +4,7 @@ Pairs with :mod:`test_devices_yml_starter` — same workbench-owned-
 content pattern, narrower contract: return the canonical
 ``workspace.yml`` starter content as a string, identical bytes every
 call, sourced from the wheel-bundled
-``_payloads/workspace_yml/starter.yml.template``.
+``_payloads/workspace.yml.template``.
 
 Two consumers ride on this:
 
